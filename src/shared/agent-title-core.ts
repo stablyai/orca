@@ -58,8 +58,17 @@ export const BRAILLE_SPINNER_RE = /[\u2800-\u28ff]/g
 // Reserve the whole quarter-circle block so a later frame addition cannot regress this.
 export const QUARTER_CIRCLE_SPINNER_RE = /[\u25d0-\u25d3]/g
 
+export function hasGeminiStatusGlyph(title: string): boolean {
+  return (
+    title.includes(GEMINI_PERMISSION) ||
+    title.includes(GEMINI_WORKING) ||
+    title.includes(GEMINI_SILENT_WORKING) ||
+    title.includes(GEMINI_IDLE)
+  )
+}
+
 function computeIsGeminiTerminalTitle(title: string): boolean {
-  // Why first: see isDshTerminalTitle — the two agents share the `✦` glyph.
+  // Why: native Qoder and DSH markers own titles before the shared Gemini glyphs.
   if (isQoderTerminalTitle(title)) {
     return false
   }
@@ -67,12 +76,7 @@ function computeIsGeminiTerminalTitle(title: string): boolean {
     return false
   }
   // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
-  if (
-    title.includes(GEMINI_PERMISSION) ||
-    title.includes(GEMINI_WORKING) ||
-    title.includes(GEMINI_SILENT_WORKING) ||
-    title.includes(GEMINI_IDLE)
-  ) {
+  if (hasGeminiStatusGlyph(title)) {
     return true
   }
   // Why: Pi/OMP titles include cwd/session text; substring matching made

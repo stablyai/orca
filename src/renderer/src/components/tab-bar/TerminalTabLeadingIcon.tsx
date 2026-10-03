@@ -2,7 +2,7 @@ import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
 import { ShellIcon } from './shell-icons'
 import {
@@ -12,7 +12,7 @@ import {
 import { translate } from '@/i18n/i18n'
 
 type TerminalTabLeadingIconProps = {
-  agent: TuiAgent | null
+  agent: TerminalAgent | null
   activityStatus: TerminalTabActivityStatus
   shell: TerminalTab['shellOverride']
   showUnreadActivity: boolean
@@ -20,7 +20,7 @@ type TerminalTabLeadingIconProps = {
 }
 
 type TerminalTabAgentIdentityIconProps = {
-  agent: TuiAgent
+  agent: TerminalAgent
   isActive: boolean
   className?: string
 }

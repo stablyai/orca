@@ -7,7 +7,9 @@ import type { AgentStatusState } from '../../shared/agent-status-types'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 import { getSyntheticAgentTerminalTitle } from '../../shared/synthetic-agent-title'
 import { resolveExplicitTerminalTitleAgentType } from '../../shared/terminal-title-agent-type'
+import type { TerminalAgent } from '../../shared/terminal-agent'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import { getTuiAgentRestSignal } from '../../shared/tui-agent-rest-signal'
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { isOmpIdleStateTitle } from './omp-terminal-readiness'
@@ -134,12 +136,12 @@ export function nameOnlyIdleNeedsCorroboration(
   // Why the title fallback: an adopted pane carries no launch metadata, but its
   // name-only title is exactly the thing that names the agent.
   const resolved = agent ?? (title ? resolveExplicitTerminalTitleAgentType(title) : null)
-  if (resolved === null) {
+  // A DeepSeek Build title resolves to `dsb`, which is recognized but has no launch config.
+  // Idle-title policy applies only to launchable TUI agents.
+  if (!isTuiAgent(resolved)) {
     return false
   }
-  return (
-    idleTitleRequiresQuiet(resolved) ?? getSyntheticAgentTerminalTitle(resolved, 'done') !== null
-  )
+  return idleTitleRequiresQuiet(resolved) ?? getSyntheticAgentTerminalTitle(resolved, 'done') !== null
 }
 
 /** Tier 3: a title-derived idle, usable only once the stream has also gone quiet. */
@@ -179,8 +181,12 @@ function hasQuietOutput(record: TuiIdleEvidenceRecord, quiescenceMs: number): bo
  */
 export type QuietForegroundLane = 'closed' | 'after-paint' | 'open'
 
-function quietForegroundLane(agent: TuiAgent | null | undefined): QuietForegroundLane {
-  if (!agent) {
+export function quietForegroundLaneForTerminalAgent(
+  agent: TerminalAgent | null | undefined
+): QuietForegroundLane {
+  // A recognized manual `dsb` pane is a TerminalAgent, not a launchable TuiAgent.
+  // Looking up its missing launch config throws and rejects the tui-idle wait.
+  if (!isTuiAgent(agent)) {
     return 'open'
   }
   return getTuiAgentRestSignal(agent) === 'none' ? 'after-paint' : 'closed'
@@ -343,7 +349,9 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   return {
     kind: 'pending',
     quietForeground:
-      input.record.lastAgentStatus === null ? quietForegroundLane(input.agent) : 'closed'
+      input.record.lastAgentStatus === null
+        ? quietForegroundLaneForTerminalAgent(input.agent)
+        : 'closed'
   }
 }
 

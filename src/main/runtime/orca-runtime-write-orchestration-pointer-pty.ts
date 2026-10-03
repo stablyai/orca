@@ -6,6 +6,7 @@ import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalAgent } from '../../shared/terminal-agent'
 import { selectRuntimeHookAgentRowForPane } from './runtime-mobile-agent-status-projection'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { resolvePublishedPaneAgentIdentity } from '../../shared/published-pane-agent-identity'
@@ -89,10 +90,10 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
 
   protected resolvePaneAgentIdentityField(
     launchAgent: TuiAgent | null | undefined,
-    foregroundAgent: TuiAgent | null | undefined,
+    foregroundAgent: TerminalAgent | null | undefined,
     title: string | null,
     paneKey: string | null
-  ): { agentIdentity?: TuiAgent } {
+  ): { agentIdentity?: TerminalAgent } {
     const hookRow = paneKey
       ? selectRuntimeHookAgentRowForPane(this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? [])
       : null

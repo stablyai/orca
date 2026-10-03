@@ -32,7 +32,8 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   muse: 'Muse',
   zcode: 'ZCode',
   dsh: 'DeepSeek Harness',
-  jcode: 'Jcode'
+  jcode: 'Jcode',
+  dsb: 'DeepSeek Build'
 }
 
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {

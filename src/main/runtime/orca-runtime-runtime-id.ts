@@ -4,6 +4,7 @@ import { preserveTerminalRetirementProofs } from './mobile-session-terminal-reti
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeClientSettingsController } from './runtime-client-settings'
 import type { RuntimeAutomationController } from './runtime-automation-controller'
@@ -281,7 +282,8 @@ export class OrcaRuntimeWithRuntimeId {
       return null
     }
     const pty = this.ptysById.get(ptyId)
-    return pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    const agent = pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    return isTuiAgent(agent) ? agent : null
   }
 
   /** One-shot delivery retries, keyed by leaf. See checkDeliverySettledAndArmRecheck. */

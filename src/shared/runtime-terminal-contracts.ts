@@ -10,6 +10,7 @@ import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
+import type { TerminalAgent } from './terminal-agent'
 import type { TuiAgent } from './tui-agent'
 
 export type RuntimeTerminalSummary = {
@@ -33,8 +34,8 @@ export type RuntimeTerminalSummary = {
   writable: boolean
   lastOutputAt: number | null
   preview: string
-  /** Host-resolved agent identity for action consumers; absent when unknown or unsupported. */
-  agentIdentity?: TuiAgent
+  /** Host-resolved observed agent identity; absent when unknown. Does not imply launch support. */
+  agentIdentity?: TerminalAgent
   /** Absent while running or when the host predates the field; never infer a clean finish. */
   exitCause?: TerminalExitCause
   /** Absent when the host predates the field or could not name the execution host. */
