@@ -5,6 +5,7 @@ import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from './transport'
 import { createStaticWebClientHandler } from './static-web-client-handler'
 import { RemoteRuntimeServerHeartbeat } from './remote-runtime-server-heartbeat'
+import { isPortListenFallbackError, resolveBindPortCandidates } from './ws-bind-port-candidates'
 
 const MAX_WS_MESSAGE_BYTES = 1024 * 1024
 // Why: one desktop remote-host client can hold many concurrent streams, so keep the cap high enough that stale streams don't starve control RPCs.
@@ -41,6 +42,9 @@ export type WebSocketTransportOptions = {
   fallbackPort?: number
   // Why: serve --port clients dial the pinned port; prefer it first so a stale fallback can't steal the pin (issue #8535). Default keeps fallback-first (STA-1511).
   preferPinnedPort?: boolean
+  // Why: false drops port 0 from the candidate list, so an occupied port fails instead of relocating — see
+  // resolveBindPortCandidates (STA-7721). Default true, which is what a first bind wants.
+  allowOsAssignedPortFallback?: boolean
 }
 
 export class WebSocketTransport implements RpcTransport {
@@ -53,6 +57,7 @@ export class WebSocketTransport implements RpcTransport {
   private readonly staticRoot: string | undefined
   private readonly fallbackPort: number | undefined
   private readonly preferPinnedPort: boolean
+  private readonly allowOsAssignedPortFallback: boolean
   private httpServer: HttpsServer | HttpServer | null = null
   private wss: WebSocketServer | null = null
   private messageHandler: WebSocketMessageHandler | null = null
@@ -74,7 +79,8 @@ export class WebSocketTransport implements RpcTransport {
     preAuthTimeoutMs,
     staticRoot,
     fallbackPort,
-    preferPinnedPort
+    preferPinnedPort,
+    allowOsAssignedPortFallback
   }: WebSocketTransportOptions) {
     this.host = host
     this.port = port
@@ -89,6 +95,7 @@ export class WebSocketTransport implements RpcTransport {
     this.staticRoot = staticRoot
     this.fallbackPort = fallbackPort
     this.preferPinnedPort = preferPinnedPort === true
+    this.allowOsAssignedPortFallback = allowOsAssignedPortFallback !== false
   }
 
   onMessage(handler: WebSocketMessageHandler): void {
@@ -138,36 +145,36 @@ export class WebSocketTransport implements RpcTransport {
       return
     }
 
-    // Why: bind a persisted fallback first so devices paired to it aren't stranded (STA-1511); serve --port flips to pinned-first (issue #8535); on failure each candidate falls through to OS-assigned port 0.
-    const persistedFallbackPort =
-      this.fallbackPort !== undefined && this.fallbackPort !== 0 && this.fallbackPort !== this.port
-        ? this.fallbackPort
-        : undefined
-    const candidatePorts =
-      persistedFallbackPort === undefined
-        ? [this.port]
-        : this.preferPinnedPort
-          ? [this.port, persistedFallbackPort]
-          : [persistedFallbackPort, this.port]
-    for (const port of candidatePorts) {
+    const candidates = resolveBindPortCandidates({
+      port: this.port,
+      fallbackPort: this.fallbackPort,
+      preferPinnedPort: this.preferPinnedPort,
+      allowOsAssignedPortFallback: this.allowOsAssignedPortFallback
+    })
+    for (const [index, candidate] of candidates.entries()) {
       try {
-        await this.tryListen(port)
+        await this.tryListen(candidate.port)
+        // Why: STA-7721 — "nothing listening, nothing logged" was the field report, so say plainly whenever
+        // the listener is not on the configured port. Skipped for port 0, where relocation IS the request.
+        if (this.port !== 0 && this.resolvedPort !== this.port) {
+          console.warn(
+            `[ws-transport] Listening on ${this.host}:${this.resolvedPort}, not the configured port ${this.port}`
+          )
+        }
         return
       } catch (error: unknown) {
-        // Why: a persisted fallback may fail for any reason, while configured ports fall through only when their listen is occupied or denied.
+        const isLastCandidate = index === candidates.length - 1
         if (
-          port !== persistedFallbackPort &&
-          (!isPortListenFallbackError(error, port) || port === 0)
+          isLastCandidate ||
+          (!candidate.tolerateAnyError && !isPortListenFallbackError(error, candidate.port))
         ) {
           throw error
         }
         console.warn(
-          `[ws-transport] Failed to bind port ${port} (${error instanceof Error ? error.message : String(error)}), trying next candidate`
+          `[ws-transport] Failed to bind port ${candidate.port} (${error instanceof Error ? error.message : String(error)}), trying next candidate`
         )
       }
     }
-    console.warn('[ws-transport] All configured ports failed to bind, using an OS-assigned port')
-    await this.tryListen(0)
   }
 
   private createHttpServer(): HttpServer | HttpsServer {
@@ -336,20 +343,4 @@ export class WebSocketTransport implements RpcTransport {
       this.preAuthTimers.delete(ws)
     }
   }
-}
-
-function isPortListenFallbackError(error: unknown, port: number): boolean {
-  if (!(error instanceof Error) || !('code' in error)) {
-    return false
-  }
-  if (error.code === 'EADDRINUSE') {
-    return true
-  }
-  return (
-    error.code === 'EACCES' &&
-    'syscall' in error &&
-    error.syscall === 'listen' &&
-    'port' in error &&
-    error.port === port
-  )
 }
