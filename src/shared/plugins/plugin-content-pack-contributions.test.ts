@@ -120,11 +120,23 @@ describe('content-pack manifest contributions', () => {
 
   it.each([
     ['language pack', { languagePacks: [{ locale: 'en_US', path: 'locale.json' }] }],
+    // Shape-legal but not well-formed: the old regex let these through, and the
+    // pack then loaded with dates silently falling back to English.
+    ['duplicate region', { languagePacks: [{ locale: 'en-US-US', path: 'locale.json' }] }],
+    ['unknown subtag', { languagePacks: [{ locale: 'en-aaa', path: 'locale.json' }] }],
     ['language pack path', { languagePacks: [{ locale: 'pt-BR', path: '../outside.json' }] }],
     ['VM recipe', { vmRecipes: [{ path: '\\\\server\\recipe.json' }] }],
     ['agent profile', { agents: [{ path: 'agents/../profile.json' }] }]
   ])('rejects unsafe or malformed %s contributions', (_label, contributes) => {
     expect(parsePluginManifest(manifest(contributes)).ok).toBe(false)
+  })
+
+  it.each(['ru', 'pt-BR', 'zh-Hans-CN', 'en-US'])('accepts the well-formed locale %s', (locale) => {
+    expect(
+      parsePluginManifest(manifest({ languagePacks: [{ locale, path: 'locale.json' }] }))
+    ).toMatchObject({
+      ok: true
+    })
   })
 
   it('rejects duplicate ids, locales, paths, and bindings', () => {
