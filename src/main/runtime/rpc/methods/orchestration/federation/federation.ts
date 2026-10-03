@@ -1,9 +1,7 @@
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
-import {
-  buildDispatchPreamble,
-  dispatchPreambleSendOptions
-} from '../../../../orchestration/preamble'
+import { buildDispatchPreamble } from '../../../../orchestration/preamble'
+import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
 import { assertOrchestrationWorktreeCreationSupported } from '../worker/folder-worktree-placement'
@@ -251,22 +249,27 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           terminalOwnership: params.terminal ? 'external' : 'created'
         })
         failedStage = 'dispatch_input'
-        const prompt = await runtime.sendTerminalAgentPrompt(
-          terminalHandle,
-          buildDispatchPreamble({
-            taskId: params.taskId,
-            dispatchId: params.dispatchId,
-            taskSpec: params.taskSpec,
-            coordinatorHandle: 'Run home (relayed by Orca)',
-            workerHandle: terminalHandle,
-            devMode: params.devMode,
-            // Why the worker host's own setting: enforcement runs here, with this
-            // host's code, against this host's cap.
-            canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
-            cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
-          }),
-          dispatchPreambleSendOptions(orchestrationMutation.requestId)
-        )
+        const prompt = await sendAgentTurn({
+          kind: 'terminal',
+          runtime,
+          handle: terminalHandle,
+          turn: {
+            purpose: 'dispatch-preamble',
+            operationId: orchestrationMutation.requestId,
+            body: buildDispatchPreamble({
+              taskId: params.taskId,
+              dispatchId: params.dispatchId,
+              taskSpec: params.taskSpec,
+              coordinatorHandle: 'Run home (relayed by Orca)',
+              workerHandle: terminalHandle,
+              devMode: params.devMode,
+              // Why the worker host's own setting: enforcement runs here, with this
+              // host's code, against this host's cap.
+              canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
+              cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+            })
+          }
+        })
         effects.push({
           kind: 'dispatch_input',
           role: 'agent',

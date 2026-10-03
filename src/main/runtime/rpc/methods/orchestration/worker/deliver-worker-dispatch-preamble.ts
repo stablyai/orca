@@ -7,10 +7,8 @@ import {
 } from '../../../../../../shared/orca-session-address'
 import { canonicalOrcaSessionId } from '../../../../orchestration/canonical-orca-session-id'
 import { orcaSessionIdOrHandle } from '../../../../orchestration/orchestration-party'
-import {
-  buildDispatchPreamble,
-  dispatchPreambleSendOptions
-} from '../../../../orchestration/preamble'
+import { buildDispatchPreamble } from '../../../../orchestration/preamble'
+import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
 import { sendStructuredWorkerPreamble } from '../../orchestration-structured-worker-session'
 import type { WorkerTurnStartObservation } from './worker-start-turn-observation'
 import type { createStructuredWorkerSessionForWorktree } from './worker-topology'
@@ -82,11 +80,12 @@ export async function deliverWorkerDispatchPreamble(args: {
   }
   return {
     prompt: (
-      await runtime.sendTerminalAgentPrompt(
-        terminalHandle,
-        preamble,
-        dispatchPreambleSendOptions(args.requestId)
-      )
+      await sendAgentTurn({
+        kind: 'terminal',
+        runtime,
+        handle: terminalHandle,
+        turn: { purpose: 'dispatch-preamble', body: preamble, operationId: args.requestId }
+      })
     ).prompt
   }
 }

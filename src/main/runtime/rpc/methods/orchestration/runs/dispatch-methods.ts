@@ -1,9 +1,7 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import {
-  buildDispatchPreamble,
-  dispatchPreambleSendOptions
-} from '../../../../orchestration/preamble'
+import { buildDispatchPreamble } from '../../../../orchestration/preamble'
+import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
 import { resolveDispatchCreator } from './dispatch-creator'
 import {
   injectRejectedError,
@@ -156,11 +154,16 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
       let prompt
       if (params.inject) {
         try {
-          prompt = await runtime.sendTerminalAgentPrompt(
-            to,
-            preamble,
-            dispatchPreambleSendOptions(orchestrationMutation?.requestId ?? ctx.id)
-          )
+          prompt = await sendAgentTurn({
+            kind: 'terminal',
+            runtime,
+            handle: to,
+            turn: {
+              purpose: 'dispatch-preamble',
+              body: preamble,
+              operationId: orchestrationMutation?.requestId ?? ctx.id
+            }
+          })
           injected = true
         } catch (err) {
           db.failDispatch(ctx.id, err instanceof Error ? err.message : String(err))

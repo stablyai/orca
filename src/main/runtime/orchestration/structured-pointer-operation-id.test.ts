@@ -3,7 +3,6 @@ import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS
 } from '../../../shared/agent-session-host-authority'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import {
   decideStructuredPointerAttempt,
   mintAgentSessionOperationId,
@@ -13,10 +12,6 @@ import {
 
 const OPERATION_ID_PATTERN = /^\d{13}-[0-9a-f]{32}$/
 
-function body(text: string): AgentJournalMessageItem {
-  return { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
-}
-
 /** The id this batch resolves to, as this process sends it; unrecorded unless `submissions` say. */
 function resolveId(
   args: Omit<
@@ -25,7 +20,6 @@ function resolveId(
   > & { submissions?: StructuredPointerSubmission[] }
 ): {
   operationId: string
-  payloadFingerprint: string
 } {
   const resolved = resolveStructuredPointerOperation({
     ...args,
@@ -60,7 +54,6 @@ describe('structured pointer operation id', () => {
       db,
       mailboxHandle: 'dispatch:d1',
       sessionId: 's1',
-      body: body('2 messages'),
       messageIds: ['m1', 'm2'],
       now: 1_000
     })
@@ -68,12 +61,10 @@ describe('structured pointer operation id', () => {
       db,
       mailboxHandle: 'dispatch:d1',
       sessionId: 's1',
-      body: body('2 messages'),
       messageIds: ['m1', 'm2'],
       now: 2_000
     })
     expect(second.operationId).toBe(first.operationId)
-    expect(second.payloadFingerprint).toBe(first.payloadFingerprint)
   })
 
   it('re-mints when the batch grows', () => {
@@ -82,7 +73,6 @@ describe('structured pointer operation id', () => {
       db,
       mailboxHandle: 'dispatch:d1',
       sessionId: 's1',
-      body: body('2 messages'),
       messageIds: ['m1', 'm2'],
       now: 1_000
     })
@@ -90,7 +80,6 @@ describe('structured pointer operation id', () => {
       db,
       mailboxHandle: 'dispatch:d1',
       sessionId: 's1',
-      body: body('3 messages'),
       messageIds: ['m1', 'm2', 'm3'],
       now: 1_500
     })
@@ -104,7 +93,6 @@ describe('structured pointer operation id', () => {
       db,
       mailboxHandle: 'dispatch:d1',
       sessionId: 's1',
-      body: body('2 messages'),
       messageIds: ['m1', 'm2'],
       now: 1_000
     })
@@ -112,7 +100,6 @@ describe('structured pointer operation id', () => {
       db,
       mailboxHandle: 'dispatch:d1',
       sessionId: 's1',
-      body: body('2 messages'),
       messageIds: ['m1', 'm2'],
       submissions: [
         { clientMessageId: first.operationId, dispatchState: 'unknown', submittedAt: 1_000 }
@@ -132,7 +119,6 @@ describe('structured pointer operation id', () => {
       db,
       mailboxHandle: 'dispatch:d1',
       sessionId: 's1',
-      body: body('2 messages'),
       messageIds: ['m1', 'm2'],
       now: 1_000
     })
@@ -140,12 +126,10 @@ describe('structured pointer operation id', () => {
       db,
       mailboxHandle: 'dispatch:d1',
       sessionId: 's1',
-      body: body('2 messages'),
       messageIds: ['m3', 'm4'],
       now: 1_100
     })
     expect(different.operationId).not.toBe(first.operationId)
-    expect(different.payloadFingerprint).toBe(first.payloadFingerprint)
   })
 
   it('re-mints when a retained batch is reordered or partly consumed', () => {
@@ -154,7 +138,6 @@ describe('structured pointer operation id', () => {
       db,
       mailboxHandle: 'dispatch:d1',
       sessionId: 's1',
-      body: body('2 messages'),
       messageIds: ['m1', 'm2'],
       now: 1_000
     })
@@ -162,7 +145,6 @@ describe('structured pointer operation id', () => {
       db,
       mailboxHandle: 'dispatch:d1',
       sessionId: 's1',
-      body: body('2 messages'),
       messageIds: ['m2', 'm3'],
       now: 1_100
     })
@@ -175,7 +157,6 @@ describe('structured pointer operation id', () => {
       db,
       mailboxHandle: 'dispatch:d1',
       sessionId: 's1',
-      body: body('2 messages'),
       messageIds: ['m1', 'm2'],
       now: 1_000
     })
@@ -183,7 +164,6 @@ describe('structured pointer operation id', () => {
       db,
       mailboxHandle: 'dispatch:d1',
       sessionId: 's2',
-      body: body('2 messages'),
       messageIds: ['m1', 'm2'],
       now: 1_100
     })
