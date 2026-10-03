@@ -10,6 +10,7 @@ import {
 } from './task-page-github-work-item-mutation-composition'
 import {
   deletePendingTaskPageGitHubOp,
+  deleteUnconfirmedListSnapshot,
   getConfirmedListSnapshot,
   getPendingTaskPageGitHubOp,
   getTaskPageGitHubMutationQueryKey,
@@ -20,7 +21,8 @@ import {
   markTaskPageGitHubFamiliesDirty,
   isTaskPageGitHubMutationQueryKeyCurrent,
   taskPageGitHubItemKey,
-  type TaskPageGitHubMutationKey
+  type TaskPageGitHubMutationKey,
+  type TaskPageGitHubListFamily
 } from './task-page-github-work-item-mutation-registry'
 import type { TaskPageGitHubPatchWorkItem } from './task-page-github-work-item-mutation-types'
 function applyServerEntityIfPresent(
@@ -75,9 +77,9 @@ export function confirmTaskPageGitHubWorkItemMutation(
   key: TaskPageGitHubMutationKey,
   generation: number,
   opts: {
-    query: ParsedTaskQuery
-    queryKey: string
-    viewerLogin: string | null
+    query?: ParsedTaskQuery
+    queryKey?: string
+    viewerLogin?: string | null
     item: GitHubWorkItem
     serverEntity?: Partial<GitHubWorkItem>
     patchWorkItem?: TaskPageGitHubPatchWorkItem
@@ -119,33 +121,53 @@ export function confirmTaskPageGitHubWorkItemMutation(
   }
   deletePendingTaskPageGitHubOp(key)
   applyServerEntityIfPresent(key, opts)
-  const remaining = listPendingTaskPageGitHubOpsForItem(key.repoId, key.itemId, key.sourceScope)
   const merged = getRegistryMergedTaskPageGitHubWorkItem(opts.item, key.sourceScope)
-  if (opts.patchWorkItem && remaining.some((op) => op.listOp)) {
+  const listFamilies = new Set<TaskPageGitHubListFamily>()
+  if (listOp) {
+    listFamilies.add(listOp.family)
+  }
+  for (const remaining of listPendingTaskPageGitHubOpsForItem(
+    key.repoId,
+    key.itemId,
+    key.sourceScope
+  )) {
+    if (remaining.listOp) {
+      listFamilies.add(remaining.listOp.family)
+    }
+  }
+  for (const family of listFamilies) {
+    if (!opts.patchWorkItem) {
+      break
+    }
     opts.patchWorkItem(
       key.itemId,
-      { assignees: merged.assignees, reviewRequests: merged.reviewRequests },
+      family === 'assignees'
+        ? { assignees: merged.assignees }
+        : { reviewRequests: merged.reviewRequests },
       key.repoId,
       { sourceContext: opts.sourceContext }
     )
   }
-  if (isTaskPageGitHubMutationQueryKeyCurrent(opts.queryKey)) {
+  if (
+    opts.query &&
+    opts.queryKey !== undefined &&
+    isTaskPageGitHubMutationQueryKeyCurrent(opts.queryKey)
+  ) {
     recomputeSoftHideForItem({
       item: { ...opts.item, ...merged },
       sourceScope: key.sourceScope,
       query: opts.query,
       queryKey: opts.queryKey,
-      viewerLogin: opts.viewerLogin,
+      viewerLogin: opts.viewerLogin ?? null,
       skipMeQualifiers,
       updateSticky: true
     })
   }
   const itemKey = taskPageGitHubItemKey(key.repoId, key.itemId)
-  markTaskPageGitHubFamiliesDirty(
-    getTaskPageGitHubMutationQueryKey() ?? opts.queryKey,
-    itemKey,
-    familiesFromPendingOp(pending)
-  )
+  const queryKey = getTaskPageGitHubMutationQueryKey() ?? opts.queryKey
+  if (queryKey !== undefined && queryKey !== null) {
+    markTaskPageGitHubFamiliesDirty(queryKey, itemKey, familiesFromPendingOp(pending))
+  }
   notifyTaskPageGitHubMutationRegistry()
   return 'confirmed'
 }
@@ -154,9 +176,9 @@ export function rollbackTaskPageGitHubWorkItemMutation(args: {
   generation: number
   patchWorkItem: TaskPageGitHubPatchWorkItem
   sourceContext?: TaskSourceContext | null
-  query: ParsedTaskQuery
-  queryKey: string
-  viewerLogin: string | null
+  query?: ParsedTaskQuery
+  queryKey?: string
+  viewerLogin?: string | null
   item: GitHubWorkItem
 }): 'rolled_back' | 'stale' {
   const pending = getPendingTaskPageGitHubOp(args.key)
@@ -191,16 +213,38 @@ export function rollbackTaskPageGitHubWorkItemMutation(args: {
     )
   }
   const after = getRegistryMergedTaskPageGitHubWorkItem(args.item, args.key.sourceScope)
-  if (isTaskPageGitHubMutationQueryKeyCurrent(args.queryKey)) {
+  if (
+    args.query &&
+    args.queryKey !== undefined &&
+    isTaskPageGitHubMutationQueryKeyCurrent(args.queryKey)
+  ) {
     recomputeSoftHideForItem({
       item: { ...args.item, ...after },
       sourceScope: args.key.sourceScope,
       query: args.query,
       queryKey: args.queryKey,
-      viewerLogin: args.viewerLogin,
+      viewerLogin: args.viewerLogin ?? null,
       skipMeQualifiers,
       updateSticky: true
     })
+  }
+  if (listOp) {
+    // Why: mounted dialogs must see the recomposed rollback before the baseline is released.
+    notifyTaskPageGitHubMutationRegistry()
+    if (
+      !listPendingTaskPageGitHubOpsForItem(
+        args.key.repoId,
+        args.key.itemId,
+        args.key.sourceScope
+      ).some((op) => op.listOp?.family === listOp.family)
+    ) {
+      deleteUnconfirmedListSnapshot(
+        args.key.sourceScope,
+        args.key.repoId,
+        args.key.itemId,
+        listOp.family
+      )
+    }
   }
   notifyTaskPageGitHubMutationRegistry()
   return 'rolled_back'

@@ -15,9 +15,10 @@ export type BeginTaskPageGitHubWorkItemMutationArgs = {
   item: GitHubWorkItem
   intent: TaskPageGitHubMutationIntent
   sourceContext?: TaskSourceContext | null
-  query: ParsedTaskQuery
-  queryKey: string
-  viewerLogin: string | null
+  /** Dialogs share item operations without owning a Tasks filter. */
+  query?: ParsedTaskQuery
+  queryKey?: string
+  viewerLogin?: string | null
   /** Derived inside begin from item sourceContext if omitted. */
   skipMeQualifiers?: boolean
   patchWorkItem: TaskPageGitHubPatchWorkItem
