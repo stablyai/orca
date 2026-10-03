@@ -199,6 +199,30 @@ describe('FsHandler readFileStream', () => {
     expect(reassembled.equals(content)).toBe(true)
   })
 
+  it('advertises media mime metadata so remote audio/video previews stream chunked', async () => {
+    const filePath = path.join(tmpDir, 'clip.webm')
+    const content = Buffer.alloc(64 * 1024, 0x42)
+    content[0] = 0x1a
+    writeFileSync(filePath, content)
+
+    const meta = (await dispatcher.callRequest(
+      'fs.readFileStream',
+      { filePath },
+      { isStale: () => false }
+    )) as { isBinary: boolean; isImage?: boolean; mimeType?: string; resultEncoding?: string }
+    expect(meta.isBinary).toBe(true)
+    // Why: the renderer keys previewable-binary rendering off `isImage`, so media sets it too.
+    expect(meta.isImage).toBe(true)
+    expect(meta.mimeType).toBe('video/webm')
+    expect(meta.resultEncoding).toBe('base64')
+
+    await waitFor(() => collectStream(dispatcher).end !== null)
+    const { chunks, err } = collectStream(dispatcher)
+    expect(err).toBeNull()
+    const reassembled = Buffer.concat(chunks.map((c) => Buffer.from(c.data, 'base64')))
+    expect(reassembled.equals(content)).toBe(true)
+  })
+
   it('publishes fs.streamEnd after the final fs.streamChunk and targets the same client', async () => {
     const filePath = path.join(tmpDir, 'targeted.png')
     writeFileSync(filePath, Buffer.alloc(300 * 1024, 0x42))
