@@ -14,6 +14,8 @@ import {
 const execFileAsync = promisify(execFile)
 const GROK_HOME_MAX_LENGTH = 4096
 const GROK_HOME_PROBE_TIMEOUT_MS = 8_000
+const JUNIE_HOME_MAX_LENGTH = 4096
+const JUNIE_HOME_PROBE_TIMEOUT_MS = 8_000
 
 export type ManagedHookInstallSummary = {
   installers: number
@@ -35,6 +37,24 @@ function normalizeGrokHome(candidate: string): string | null {
   if (
     candidate.length === 0 ||
     candidate.length > GROK_HOME_MAX_LENGTH ||
+    candidate !== candidate.trim() ||
+    !candidate.startsWith('/') ||
+    candidate.includes('\\') ||
+    hasControlCharacter(candidate)
+  ) {
+    return null
+  }
+  return candidate.replace(/\/+$/, '') || '/'
+}
+
+function defaultJunieHome(home: string): string {
+  return `${home.replace(/\/+$/, '') || home}/.junie`
+}
+
+function normalizeJunieHome(candidate: string): string | null {
+  if (
+    candidate.length === 0 ||
+    candidate.length > JUNIE_HOME_MAX_LENGTH ||
     candidate !== candidate.trim() ||
     !candidate.startsWith('/') ||
     candidate.includes('\\') ||
@@ -73,6 +93,24 @@ export async function resolveRelayGrokHome(home: string, signal?: AbortSignal): 
   }
 }
 
+export async function resolveRelayJunieHome(home: string, signal?: AbortSignal): Promise<string> {
+  const fallback = defaultJunieHome(home)
+  try {
+    const shell = resolveLoginShell()
+    const shellName = basename(shell)
+    const mode = shellName === 'sh' || shellName === 'dash' ? '-c' : '-lc'
+    const { stdout } = await execFileAsync(
+      shell,
+      [mode, `printenv JUNIE_HOME | head -c ${JUNIE_HOME_MAX_LENGTH + 1}`],
+      { encoding: 'utf8', timeout: JUNIE_HOME_PROBE_TIMEOUT_MS, signal }
+    )
+    return normalizeJunieHome(stdout.split(/\r?\n/, 1)[0] ?? '') ?? fallback
+  } catch {
+    signal?.throwIfAborted()
+    return fallback
+  }
+}
+
 export async function installManagedHooks(options?: {
   signal?: AbortSignal
   hostKeyFingerprint?: string
@@ -87,6 +125,9 @@ export async function installManagedHooks(options?: {
   }
   const home = homedir()
   const grokHomeDir = await resolveRelayGrokHome(home, options?.signal)
+  const junieHomeDir = agents.includes('junie')
+    ? await resolveRelayJunieHome(home, options?.signal)
+    : undefined
   options?.signal?.throwIfAborted()
   const hostIdentity = scopeManagedHookHostIdentity(
     await readManagedHookHostIdentity(),
@@ -101,6 +142,7 @@ export async function installManagedHooks(options?: {
         home,
         {
           grokHomeDir,
+          ...(junieHomeDir ? { junieHomeDir } : {}),
           signal: options?.signal,
           agents,
           ...(options?.claudeVersion ? { claudeVersion: options.claudeVersion } : {})

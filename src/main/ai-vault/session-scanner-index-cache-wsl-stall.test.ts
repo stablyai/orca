@@ -5,6 +5,7 @@ const CODEX_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex'
 const CODEX_SESSION_FILE = `${CODEX_HOME}\\sessions\\2026\\01\\01\\rollout-1.jsonl`
 const SESSION_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 const KIMI_INDEX = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.kimi\\session_index.jsonl'
+const JUNIE_INDEX = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.junie\\sessions\\index.jsonl'
 
 const mocks = vi.hoisted(() => ({ stat: vi.fn(), open: vi.fn(), readFile: vi.fn() }))
 
@@ -25,6 +26,11 @@ import {
   hasKimiSessionIndexCacheEntryForTests,
   readKimiWorkDirBySessionId
 } from './session-scanner-kimi-paths'
+import {
+  clearJunieSessionIndexCache,
+  hasJunieSessionIndexCacheEntryForTests,
+  readJunieSummaryBySessionId
+} from './session-scanner-junie-paths'
 import { readJsonObjectIfExists } from './session-scanner-values'
 import {
   resetWslTranscriptFsGateForTests,
@@ -71,6 +77,7 @@ beforeEach(() => {
   resetWslTranscriptFsGateForTests()
   resetCodexSessionIndexTitleCacheForTests()
   clearKimiSessionIndexCache()
+  clearJunieSessionIndexCache()
   mocks.stat.mockReset()
   mocks.open.mockReset()
   mocks.readFile.mockReset()
@@ -120,6 +127,28 @@ describe('memoized WSL session indexes under a stalled mount', () => {
 
     expect(await readKimiWorkDirBySessionId(KIMI_INDEX)).toEqual(
       new Map([[SESSION_ID, '/repo/app']])
+    )
+  })
+
+  it('evicts the Junie session index instead of pinning "no title or cwd"', async () => {
+    mocks.open.mockResolvedValue({ read: vi.fn(stalls), close: vi.fn(async () => {}) })
+    const refused = readJunieSummaryBySessionId(JUNIE_INDEX)
+    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
+
+    expect(await refused).toEqual(new Map())
+    expect(hasJunieSessionIndexCacheEntryForTests(JUNIE_INDEX)).toBe(false)
+
+    await releaseAndSettle()
+    mocks.open.mockResolvedValue(
+      servingHandle(
+        `${JSON.stringify({ sessionId: SESSION_ID, projectDir: '/repo/app', taskName: 'Ship it', createdAt: 1, updatedAt: 2 })}\n`
+      )
+    )
+
+    expect(await readJunieSummaryBySessionId(JUNIE_INDEX)).toEqual(
+      new Map([
+        [SESSION_ID, { projectDir: '/repo/app', taskName: 'Ship it', createdAt: 1, updatedAt: 2 }]
+      ])
     )
   })
 

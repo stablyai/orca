@@ -393,7 +393,8 @@
           "muse_label": "Muse",
           "zcode_label": "ZCode",
           "codebuddy_label": "CodeBuddy",
-          "jcode_label": "Jcode"
+          "jcode_label": "Jcode",
+          "junie_label": "Junie"
         },
         "skill": {
           "cli": {

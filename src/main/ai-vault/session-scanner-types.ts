@@ -50,6 +50,7 @@ export type AiVaultScanOptions = {
   kimiSessionsDir?: string
   museSessionsDir?: string
   jcodeSessionsDir?: string
+  junieSessionsDir?: string
   limit?: number
   unlimited?: boolean
   limitPerAgent?: number

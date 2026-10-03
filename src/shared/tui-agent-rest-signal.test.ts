@@ -51,6 +51,7 @@ const EXPECTED_REST_SIGNALS: Record<TuiAgent, TuiAgentRestSignal> = {
   'command-code': 'none',
   continue: 'none',
   kimi: 'none',
+  junie: 'synthetic-title',
   'mistral-vibe': 'none',
   'qwen-code': 'none',
   rovo: 'none'

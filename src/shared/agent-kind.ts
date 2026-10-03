@@ -53,6 +53,7 @@ const TUI_AGENT_KIND_BY_AGENT = {
   copilot: 'copilot',
   grok: 'grok',
   devin: 'devin',
+  junie: 'junie',
   ante: 'ante',
   trae: 'trae',
   muse: 'muse',

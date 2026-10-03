@@ -76,6 +76,7 @@ describe('managed-hook local filesystem', () => {
     expect(results.find((result) => result.agent === 'openclaude')?.state).toBe('installed')
     expect(results.find((result) => result.agent === 'kimi')?.state).toBe('installed')
     expect(results.find((result) => result.agent === 'jcode')?.state).toBe('installed')
+    expect(results.find((result) => result.agent === 'junie')?.state).toBe('installed')
     expect(await readFile(claudeConfig, 'utf8')).toBe('{"hooks": }')
   })
 })

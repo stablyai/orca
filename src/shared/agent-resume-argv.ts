@@ -76,5 +76,9 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['dsh-tui', '--resume', id] : null
     case 'jcode':
       return providerSession.key === 'session_id' ? ['jcode', '--resume', id] : null
+    // Why: `--resume` alone picks the globally most-recent session; pin the id so the
+    // right pane's session comes back.
+    case 'junie':
+      return providerSession.key === 'session_id' ? ['junie', '--resume', '--session-id', id] : null
   }
 }

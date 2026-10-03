@@ -504,7 +504,8 @@
           "opencode2_label": "OpenCode 2",
           "codebuddy_label": "CodeBuddy",
           "zcode_label": "ZCode",
-          "jcode_label": "Jcode"
+          "jcode_label": "Jcode",
+          "junie_label": "Junie"
         },
         "skill": {
           "cli": {

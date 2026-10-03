@@ -19,7 +19,8 @@ export const SYNTHETIC_AGENT_TITLE_AGENTS = [
   'droid',
   'hermes',
   'devin',
-  'zcode'
+  'zcode',
+  'junie'
 ] as const satisfies readonly TuiAgent[]
 
 export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleProfile> = {
@@ -87,6 +88,14 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     // signal to settle on: ZCode also repaints its ASCII banner forever, so the quiescence
     // lane never fires either.
     synthesizeWorkingTitle: true
+  },
+  junie: {
+    workingLabel: 'Junie',
+    permissionLabel: 'Junie - action required',
+    idleLabel: 'Junie ready',
+    // Why: Junie writes the running task name as its own OSC 0 working title; only
+    // synthesize terminal states so that label survives.
+    synthesizeWorkingTitle: false
   }
 }
 

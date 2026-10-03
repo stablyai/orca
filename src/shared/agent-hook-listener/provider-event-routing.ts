@@ -87,6 +87,9 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       // prompt before the model generates — its real turn boundary. session_start
       // returns early in normalizeJcodeEvent and clears the cache itself.
       return eventName === 'turn_start'
+    case 'junie':
+      // Why: same shape as Devin — SessionStart early-returns in normalizeJunieEvent, so UserPromptSubmit is the new-turn boundary.
+      return eventName === 'UserPromptSubmit'
   }
 }
 
@@ -210,5 +213,8 @@ export function extractToolFields(
       return extractClaudeToolFields(eventName, hookPayload)
     case 'jcode':
       return extractJcodeToolFields(eventName, hookPayload)
+    case 'junie':
+      // Why: Junie's PreToolUse/PermissionRequest carry Claude-compatible tool_name/tool_input fields.
+      return extractClaudeToolFields(eventName, hookPayload)
   }
 }

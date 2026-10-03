@@ -1,7 +1,10 @@
 import { readAgentProcessIdentity } from './agent-process-presence'
 import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
-import { extractAgentProviderSession } from './agent-session-resume'
+import {
+  extractAgentProviderSession,
+  type AgentProviderSessionMetadata
+} from './agent-session-resume'
 import {
   canAcceptClaudeCompactCompletion,
   isClaudeCompactCompletionConsumed,
@@ -66,7 +69,7 @@ export function normalizeHookPayload(
     // Scoped so another provider's unrelated `event` key cannot become an event name.
     (source === 'jcode' ? hookPayloadRecord.event : undefined)
   // Codex child hooks expose the child's session_id on the parent's pane.
-  const providerSession =
+  let providerSession =
     source === 'codex' && readString(hookPayloadRecord, 'agent_id')
       ? null
       : extractAgentProviderSession(source, hookPayloadRecord)
@@ -90,6 +93,9 @@ export function normalizeHookPayload(
   // shared-server stamp overwrite the pane's live token; the resolved envelope
   // carries the stored token (or nothing) for bound sessions instead.
   trackOpenCodePaneLaunchToken(state, paneKey, launchToken)
+  if (source === 'junie') {
+    providerSession = resolveJunieProviderSession(state, paneKey, launchToken, providerSession)
+  }
   const providerPromptId =
     source === 'claude'
       ? normalizeClaudePromptId(hookPayloadRecord.prompt_id)
@@ -262,4 +268,28 @@ export function normalizeHookPayload(
     ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
     payload: transportPayload
   }
+}
+
+/**
+ * Junie reports `session_id` only on SessionStart and UserPromptSubmit; PreToolUse, Stop,
+ * StopFailure, SessionEnd and PermissionRequest omit it. Since each event replaces the pane's
+ * stored row wholesale, a finished turn would otherwise lose the identity `--resume` needs.
+ *
+ * Keyed by launch token as well as pane: a relaunch mints a new token, so a session whose
+ * SessionStart was missed can never inherit the previous session's id and silently resume the
+ * wrong conversation (Junie ids stay globally resolvable, so nothing would error).
+ */
+function resolveJunieProviderSession(
+  state: HookListenerState,
+  paneKey: string,
+  launchToken: string | undefined,
+  providerSession: AgentProviderSessionMetadata | null
+): AgentProviderSessionMetadata | null {
+  const cacheKey = launchToken ? `${paneKey}\0${launchToken}` : paneKey
+  if (providerSession) {
+    state.junieSessionByPaneKey.set(cacheKey, providerSession.id)
+    return providerSession
+  }
+  const cachedId = state.junieSessionByPaneKey.get(cacheKey)
+  return cachedId ? { key: 'session_id', id: cachedId } : null
 }

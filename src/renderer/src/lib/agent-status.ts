@@ -137,6 +137,7 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   copilot: true,
   grok: true,
   devin: true,
+  junie: true,
   ante: true,
   trae: true,
   muse: true,
