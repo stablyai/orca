@@ -28,8 +28,8 @@ import {
 import * as launchDraft from './structured-agent-session-launch-draft'
 import {
   deleteStructuredLaunchStateIfCurrent,
+  getJoinableStructuredLaunchState,
   getStructuredAgentSessionLaunchLifecycle,
-  getStructuredLaunchState,
   getStructuredLaunchStateBySessionId,
   markStructuredAgentSessionLaunchCancelled,
   notifyStructuredLaunchListeners,
@@ -43,7 +43,6 @@ import { trackLaunchSettlement } from './structured-agent-session-launch-outcome
 
 export type { StructuredAgentLaunchOptions, StructuredAgentLaunchReceipt }
 export {
-  getStructuredAgentLaunchStatus,
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredAgentSessionLaunchResumes,
   hasStructuredAgentSessionLaunchCancellationTombstone,
@@ -56,7 +55,7 @@ export {
   type StructuredAgentLaunchStatus,
   type StructuredAgentSessionLaunchLifecycle
 } from './structured-agent-session-launch-registry'
-export { useStructuredAgentLaunchStatus } from './structured-agent-session-launch-status'
+export * from './structured-agent-session-launch-status'
 export { useStructuredAgentSessionLaunchSelection } from './structured-agent-session-launch-options'
 
 type StructuredLaunchStateResult = {
@@ -155,14 +154,14 @@ function structuredAgentLaunchState(
   options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult {
   const identity = structuredLaunchIdentity(worktreeId, agent, options.resumeFrom)
-  const existing = getStructuredLaunchState(identity)
+  const existing = getJoinableStructuredLaunchState(identity)
   if (existing) {
-    const retrying = existing.visibilityUnknown || existing.callers.outcome === 'failed'
+    const retrying = existing.visibilityUnknown
     if (retrying) {
       restartStructuredLaunchState(existing)
     }
     const joined = joinLaunchDelivery(options, existing.promptDelivery)
-    // Why: failed launches keep their draft/outbox, so a retry must not stage the same prompt twice.
+    // Why: an unconfirmed launch keeps its draft/outbox, so a recheck must not stage it twice.
     const text = retrying ? '' : outboxPromptText(joined)
     const stagedPrompt = text
       ? enqueueStructuredAgentSessionLaunchPrompt(existing.intent.sessionId, text)

@@ -657,7 +657,7 @@ describe('startStructuredAgentLaunch', () => {
 
     startStructuredAgentLaunch(worktreeId, 'codex')
     await flushLaunchSettlement()
-    startStructuredAgentLaunch(worktreeId, 'codex')
+    expect(retryStructuredAgentSessionLaunch(worktreeId, first.sessionId)).toBe(true)
     await flushLaunchSettlement()
 
     expect(mocks.createIntent).toHaveBeenCalledOnce()
@@ -688,11 +688,9 @@ describe('startStructuredAgentLaunch', () => {
     await flushLaunchSettlement()
     expect(readOutbox(intent.sessionId)).toEqual([])
 
-    const retry = startStructuredAgentLaunch(worktreeId, 'codex', {
-      prompt: 'only once',
-      promptDelivery: 'draft'
-    })
-    await expect(retry.launchResult).resolves.toEqual({ sessionId: intent.sessionId, fence: 1 })
+    expect(retryStructuredAgentSessionLaunch(worktreeId, intent.sessionId)).toBe(true)
+    await flushLaunchSettlement()
+    expect(getStructuredAgentSessionLaunchLifecycle(worktreeId, intent.sessionId)).toBeNull()
 
     expect(readOutbox(intent.sessionId)).toEqual([])
     expect(mocks.seedDraft).toHaveBeenCalledOnce()
