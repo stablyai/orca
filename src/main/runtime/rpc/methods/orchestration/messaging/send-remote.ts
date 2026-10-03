@@ -9,6 +9,7 @@ import type { z } from 'zod'
 import { parseRemoteWorkerPayload } from '../schemas'
 import type { SendParams } from '../schemas'
 import { rejectFederatedExplicitTarget } from '../routing'
+import { federatedStubHomeRunId } from '../../../../orchestration/db/contract-constants'
 import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
 
 type SendParamsInput = z.infer<typeof SendParams>
@@ -17,6 +18,8 @@ type RemoteAttachment = {
   dispatch_id: string
   state: WorkerDispatchState
   protocol_version: number
+  home_run_id: string
+  home_peer_fingerprint: string
 }
 
 export async function sendRemoteMessage(args: {
@@ -106,6 +109,13 @@ export async function sendRemoteMessage(args: {
       sequence: relay.sequence,
       dispatchId: relay.dispatch_id,
       destination: 'run_home',
+      state: 'queued',
+      custody: 'worker_relay',
+      homeRunId:
+        remoteAttachment.home_run_id === federatedStubHomeRunId(remoteAttachment.dispatch_id)
+          ? null
+          : remoteAttachment.home_run_id,
+      homePeerFingerprint: remoteAttachment.home_peer_fingerprint,
       accepted: true
     },
     ...(lifecycle ? { lifecycle } : {})
