@@ -18,8 +18,24 @@ export function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAge
     ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
     agentArgs: config.agentArgs,
     agentEnv: { ...config.agentEnv },
-    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {})
+    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {}),
+    ...(config.claudeAccountId ? { claudeAccountId: config.claudeAccountId } : {})
   }
+}
+
+/**
+ * Main's pinned account for a Claude record whose launch config lacks one: after a restart this
+ * renderer's launch record is gone while main's pinned registry survives, so a later resume must
+ * not fall back to the project's current default. Kept apart from the launch config so current
+ * settings are never recorded as the session's original launch options.
+ */
+function mainPinnedClaudeAccountFallback(
+  entry: AgentStatusEntry,
+  launchConfig: SleepingAgentLaunchConfig | undefined
+): string | undefined {
+  return entry.agentType === 'claude' && !launchConfig?.claudeAccountId
+    ? entry.claudeAccountId
+    : undefined
 }
 
 export function sleepingRecordFromEntry(args: {
@@ -43,6 +59,7 @@ export function sleepingRecordFromEntry(args: {
     return null
   }
   const tab = args.tab ?? findTabForAgentEntry(args.state, args.worktreeId, args.entry)
+  const pinnedClaudeAccountId = mainPinnedClaudeAccountFallback(args.entry, args.launchConfig)
   return {
     paneKey: args.entry.paneKey,
     ...(tab ? { tabId: tab.id } : {}),
@@ -60,7 +77,16 @@ export function sleepingRecordFromEntry(args: {
     ...(args.entry.lastAssistantMessage
       ? { lastAssistantMessage: args.entry.lastAssistantMessage }
       : {}),
-    ...(args.launchConfig ? { launchConfig: copyLaunchConfig(args.launchConfig) } : {}),
+    ...(args.launchConfig
+      ? {
+          launchConfig: {
+            ...copyLaunchConfig(args.launchConfig),
+            ...(pinnedClaudeAccountId ? { claudeAccountId: pinnedClaudeAccountId } : {})
+          }
+        }
+      : pinnedClaudeAccountId
+        ? { claudeAccountId: pinnedClaudeAccountId }
+        : {}),
     ...agentVerdictFields(args.entry),
     ...(args.origin ? { origin: args.origin } : {})
   }

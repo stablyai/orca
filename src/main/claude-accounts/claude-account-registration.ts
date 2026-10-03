@@ -18,6 +18,10 @@ import {
   normalizeClaudeRuntimeSelection
 } from './runtime-selection'
 import type { ClaudeAccountSelection } from './claude-account-selection'
+import {
+  assertClaudeAccountNotPinned,
+  claimClaudeAccountForHostMutation
+} from './claude-account-host-mutation'
 
 type ClaudeAccountRegistrationDependencies = {
   store: Store
@@ -90,6 +94,8 @@ export class ClaudeAccountRegistration {
 
   async reauthenticate(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     const account = this.dependencies.selection.requireAccount(accountId)
+    // Why: fail before opening a browser login the write could never be allowed to apply.
+    assertClaudeAccountNotPinned(account, 'reauthenticate')
     const managedAuthPath = await this.dependencies.assertManagedAuth(
       account.managedAuthPath,
       accountId
@@ -121,6 +127,9 @@ export class ClaudeAccountRegistration {
         : entry
     )
     let wroteCredentials = false
+    // Why claimed only now: the login ran in a temp dir; from here until the rollback finishes,
+    // a pinned launch must not seed from, or run on, the credential being replaced.
+    const endHostMutation = claimClaudeAccountForHostMutation(account, 'reauthenticate')
     try {
       await this.dependencies.writeOauth(accountId, managedAuthPath, captured.oauthAccount)
       await this.dependencies.writeCredentials(accountId, managedAuthPath, captured.credentialsJson)
@@ -142,6 +151,8 @@ export class ClaudeAccountRegistration {
         wroteCredentials
       )
       throw error
+    } finally {
+      endHostMutation()
     }
   }
 

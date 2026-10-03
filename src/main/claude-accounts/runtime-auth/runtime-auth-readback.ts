@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { writeActiveClaudeKeychainCredentialsForRuntime } from '../keychain'
 import { ClaudeRuntimeAuthCredentialMatching } from './runtime-auth-credential-matching'
+import { countClaudePinnedAccountUsers } from '../claude-pinned-pty-registry'
+import { hasPendingPinnedClaudeSeed } from '../claude-pinned-credentials'
 import type {
   ClaudeReadBackMatch,
   ClaudeReadBackResult,
@@ -50,6 +52,14 @@ export class ClaudeRuntimeAuthReadback extends ClaudeRuntimeAuthCredentialMatchi
           continue
         }
         if (match.kind !== 'matched') {
+          continue
+        }
+        // Why: a pinned account refreshes through its own session's store; overwriting it from the
+        // host copy would leave two stores replaying one single-use refresh token.
+        if (
+          countClaudePinnedAccountUsers(match.account.id) > 0 ||
+          hasPendingPinnedClaudeSeed(match.account.id)
+        ) {
           continue
         }
         // Why: on cold start we can't tell a fresh CLI refresh from stale runtime creds; adopt only when expiry or a rotated refresh token proves runtime is newer than managed.

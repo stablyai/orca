@@ -59,6 +59,8 @@ type WorkerAgentPlacementArgs = {
   mode: WorkerStartModeReceipt
   agent: TuiAgent | undefined
   launchPreferences: AgentLaunchPreferences | undefined
+  /** `--account`: the resolved managed Claude account the agent terminal runs on. */
+  claudeAccountId?: string
   effects: WorkerEffect[]
   /** Attributes a throw to the step that was running, the way the caller's own stages do. */
   onStage: (stage: string) => void
@@ -120,6 +122,7 @@ async function placeInCreatedWorktree(
     agent: args.agent as TuiAgent,
     withAgentTerminal: args.mode.mode !== 'structured',
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+    ...(args.claudeAccountId ? { claudeAccountId: args.claudeAccountId } : {}),
     effects: args.effects
   })
   const worktree = requireWorktree(created.worktree)
@@ -170,6 +173,7 @@ async function createWorkerAgentSurface(
     worktreeId,
     agent: args.agent as TuiAgent,
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+    ...(args.claudeAccountId ? { claudeAccountId: args.claudeAccountId } : {}),
     taskId: args.taskId,
     effects: args.effects
   })

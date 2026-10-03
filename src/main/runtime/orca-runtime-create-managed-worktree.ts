@@ -2,7 +2,7 @@
 import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from './orca-runtime-get-worktree-terminal-provisioning-host'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
-import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { resolveRequestedStartupAgent } from './runtime-worktree-create-requested-agent'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { resolveWorktreeCreateRoute } from '../worktree-create-execution-host-route'
 import { ExecutionHostNotDispatchableError } from '../providers/execution-host-provider-dispatch'
@@ -43,21 +43,10 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
     const createSettings = this.store.getSettings()
-    const requestedAgent = args.startupAgent ?? args.createdWithAgent
-    const requestedAgentEnabled =
-      requestedAgent !== undefined
-        ? isTuiAgentEnabled(requestedAgent, createSettings.disabledTuiAgents)
-        : false
-    if ((args.startup || args.startupAgent) && requestedAgent && !requestedAgentEnabled) {
-      throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
-    }
-    if (
-      args.startup &&
-      args.startupDraftPaste &&
-      !isTuiAgentEnabled(args.startupDraftPaste.agent, createSettings.disabledTuiAgents)
-    ) {
-      throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
-    }
+    const { requestedAgent, requestedAgentEnabled } = resolveRequestedStartupAgent(
+      args,
+      createSettings.disabledTuiAgents
+    )
     const agentStartup =
       !args.startup && args.startupAgent
         ? this.buildStartupForAgent(
@@ -93,10 +82,12 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
     // an `executionHostId: 'ssh:*'`-only repo down the local path, which runs `git worktree add` on
     // the client against a remote path.
     const createRoute = resolveWorktreeCreateRoute(repo)
+    const startupClaudeAccountId = this.resolveStartupClaudeAccount(args, createRoute.kind)
     if (isFolderRepo(repo)) {
       // A folder workspace is a registration, not a filesystem create, so it is host-agnostic.
       return createRuntimeFolderWorktree({
         request: args,
+        startupClaudeAccountId,
         repo,
         startup: effectiveStartup,
         startupFollowup: effectiveStartupFollowup,
@@ -238,6 +229,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       startupTerminalPtyId
     } = await startRuntimeLocalWorktreeTerminals({
       request: args,
+      startupClaudeAccountId,
       repo,
       worktree,
       setup,

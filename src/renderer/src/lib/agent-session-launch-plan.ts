@@ -1,4 +1,5 @@
 import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import { isPinnableClaudeAccountId } from '../../../shared/claude/project-claude-account-preference'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
@@ -16,6 +17,7 @@ import {
   type AgentLaunchRoute,
   type AgentLaunchRoutingInput
 } from '@/lib/agent-launch-routing'
+import { findLaunchRepo, resolveLaunchClaudeAccountId } from '@/lib/claude-launch-account'
 import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-initial-view-mode'
 import {
   beginStructuredAgentLaunchSettlement,
@@ -28,6 +30,8 @@ import type { StructuredAgentLaunchOptions } from '@/lib/structured-agent-sessio
 export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
   resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
+  /** A one-time account choice; the project's saved account applies when omitted. */
+  claudeAccountId?: string
 }
 
 /**
@@ -152,6 +156,29 @@ export function structuredAgentSessionLaunchFeasible(
   return structuredAgentLaunchSupported({ ...buildAgentLaunchRouteInput(store, args), settings })
 }
 
+// Why: a structured session has no account-pinning path, so a pinned Claude launch runs in a terminal.
+function launchPinsClaudeAccount(
+  store: AgentLaunchRouteStore,
+  request: AgentSessionLaunchRequest
+): boolean {
+  if (request.agent !== 'claude') {
+    return false
+  }
+  const repo = findLaunchRepo(store, request.workspace)
+  return isPinnableClaudeAccountId(resolveLaunchClaudeAccountId(repo, request.claudeAccountId))
+}
+
+function resolvePlannedRoute(
+  store: AgentLaunchRouteStore,
+  request: AgentSessionLaunchRequest,
+  input: ReturnType<typeof buildAgentLaunchRouteInput>
+): AgentLaunchRoute {
+  const route = resolveAgentLaunchRoute(input)
+  return route === 'structured-native-chat' && launchPinsClaudeAccount(store, request)
+    ? 'terminal-tui'
+    : route
+}
+
 /** The one place a launch route is decided. Delivery mode is fixed here too, so the settle loop
  *  later receives exactly the prompt and mode the route was decided on. */
 export function planAgentSessionLaunch(
@@ -159,7 +186,7 @@ export function planAgentSessionLaunch(
   request: AgentSessionLaunchRequest
 ): AgentSessionLaunchPlan {
   const input = buildAgentLaunchRouteInput(store, request)
-  const route = resolveAgentLaunchRoute(input)
+  const route = resolvePlannedRoute(store, request, input)
   const executionHostId =
     route === 'structured-native-chat' ? parseExecutionHostId(input.executionHostId)?.id : undefined
   return adoptAgentSessionLaunchVerdict({

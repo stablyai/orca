@@ -12,10 +12,11 @@ import { normalizeWindowsTerminalCwd } from '../../../providers/windows-shell-ar
 import { wslUncDirectoryExistsAsync } from '../../../wsl'
 import { getCodexSelectionTargetForPty } from '../host-env/codex-home'
 import {
-  isClaudeLaunchCommand,
   recoverFreshSpawnProviderRouting,
   routesFreshSpawnsToLocalProvider
 } from '../host-env/fresh-spawn-routing'
+import { resolveProjectClaudeAccount } from '../../../claude-accounts/project-claude-account-resolution'
+import { isFreshClaudeLaunch, preparePinnableClaudeAuth } from '../claude-pinned-spawn'
 import { getAppPtyId, getProvider, getRelayPtyId } from '../provider/registry'
 import type { PtyIpcSpawnState } from './spawn-state'
 
@@ -191,11 +192,6 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       }
     }
   }
-  ctx.isClaudeLaunch =
-    !ctx.preAdoptedStablePane && !args.connectionId && isClaudeLaunchCommand(args.command)
-  if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
-    throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
-  }
   ctx.terminalRuntimeOptions =
     process.platform === 'win32' && !args.connectionId
       ? resolveLocalWindowsTerminalRuntimeOptions({
@@ -227,9 +223,31 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     ctx.cwd,
     ctx.expectedWslDistro
   )
-  ctx.claudeAuth =
-    ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(initialSelectionTarget)
-      : null
+  const pinnedClaudeAccountId =
+    ctx.preAdoptedStablePane || args.connectionId
+      ? undefined
+      : resolveProjectClaudeAccount({
+          // Why optional: as in the push-target hook, a partial Store must not fail every spawn.
+          getRepo: (repoId) => ctx.deps.store?.getRepo?.(repoId),
+          worktreeId: args.worktreeId,
+          // Why unchecked: launchConfig is untrusted IPC JSON; the resolver validates the id itself.
+          launchConfigAccountId: args.launchConfig?.claudeAccountId,
+          target: initialSelectionTarget
+        })
+  ctx.isClaudeLaunch = isFreshClaudeLaunch(
+    { ...args, preAdoptedStablePane: Boolean(ctx.preAdoptedStablePane) },
+    pinnedClaudeAccountId
+  )
+  // Why exempt: a switch never touches a pinned account; preparation re-reads it in the switch's queue.
+  if (ctx.isClaudeLaunch && !pinnedClaudeAccountId && isClaudeAuthSwitchInProgress()) {
+    throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
+  }
+  ctx.claudeAuth = ctx.isClaudeLaunch
+    ? await preparePinnableClaudeAuth(
+        ctx.deps.prepareClaudeAuth,
+        initialSelectionTarget,
+        pinnedClaudeAccountId
+      )
+    : null
   ctx.spawnTiming.mark('auth')
 }

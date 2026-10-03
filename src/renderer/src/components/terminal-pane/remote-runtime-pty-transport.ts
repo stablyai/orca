@@ -1,4 +1,4 @@
-import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
+import { createAgentSessionLaunchOptions } from '@/runtime/agent-session-launch-options'
 import { withRemoteReattachInputBuffer } from './remote-reattach-input-buffer'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
@@ -408,7 +408,7 @@ export function createRemoteRuntimePtyTransport(
   // Why: reconnect retries must replay one host operation instead of creating
   // another fresh agent when the first response was lost.
   const agentCreateOperation = createAgentSessionCreateOperation()
-  const agentKeyboardOptions = createAgentSessionKeyboardOptions(terminalKittyKeyboardProtocol)
+  const agentSessionLaunchOptions = createAgentSessionLaunchOptions(terminalKittyKeyboardProtocol)
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
@@ -2264,7 +2264,10 @@ export function createRemoteRuntimePtyTransport(
             connectLifecycleEpoch
           )
         const hostAuthorityCreate = async () => {
-          const keyboardOptions = await agentKeyboardOptions(createEnvironmentId)
+          const launchOptions = await agentSessionLaunchOptions(
+            createEnvironmentId,
+            launchConfigToSend
+          )
           return createWithUnknownOutcomeRecovery(
             'agent-session',
             (timeoutMs) =>
@@ -2274,7 +2277,7 @@ export function createRemoteRuntimePtyTransport(
                     'terminal.ensureAgentSession',
                     {
                       kind: 'explicit',
-                      ...keyboardOptions,
+                      ...launchOptions,
                       worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                       agent: launchAgentToSend!,
                       providerSession: resumeProviderSessionToSend,
@@ -2295,7 +2298,7 @@ export function createRemoteRuntimePtyTransport(
                     'terminal.createAgentSession',
                     withAgentSessionCreateOperationId(
                       {
-                        ...keyboardOptions,
+                        ...launchOptions,
                         worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                         agent: launchAgentToSend!,
                         ...(agentPrompt ? { prompt: agentPrompt } : {}),

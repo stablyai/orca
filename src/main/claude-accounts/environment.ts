@@ -9,6 +9,8 @@ export const CLAUDE_AUTH_ENV_VARS = [
 
 export type ClaudeEnvPatch = {
   CLAUDE_CONFIG_DIR?: string
+  /** Claude Code 2.1.220+ hashes this, not CLAUDE_CONFIG_DIR, for its scoped Keychain item. */
+  CLAUDE_SECURESTORAGE_CONFIG_DIR?: string
   ANTHROPIC_CUSTOM_HEADERS?: string
 }
 
@@ -35,6 +37,9 @@ export function applyClaudeEnvPatch(
 
   if (patch.CLAUDE_CONFIG_DIR) {
     baseEnv.CLAUDE_CONFIG_DIR = patch.CLAUDE_CONFIG_DIR
+  }
+  if (patch.CLAUDE_SECURESTORAGE_CONFIG_DIR) {
+    baseEnv.CLAUDE_SECURESTORAGE_CONFIG_DIR = patch.CLAUDE_SECURESTORAGE_CONFIG_DIR
   }
   if (patch.ANTHROPIC_CUSTOM_HEADERS !== undefined) {
     baseEnv.ANTHROPIC_CUSTOM_HEADERS = patch.ANTHROPIC_CUSTOM_HEADERS

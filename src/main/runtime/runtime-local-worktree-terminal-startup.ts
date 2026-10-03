@@ -52,6 +52,8 @@ export type RuntimeLocalWorktreeTerminalStartupResult = {
 
 export async function startRuntimeLocalWorktreeTerminals(args: {
   request: RuntimeManagedWorktreeCreateArgs
+  /** Resolved `--account`; only the startup agent terminal runs on it. */
+  startupClaudeAccountId?: string
   repo: Repo
   worktree: Worktree
   setup?: CreateWorktreeResult['setup']
@@ -101,6 +103,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         env: sequencedStartup.env,
         ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
         ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
+        ...(args.startupClaudeAccountId ? { claudeAccountId: args.startupClaudeAccountId } : {}),
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
         telemetry: sequencedStartup.telemetry,
@@ -143,7 +146,8 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       repo.id,
       worktree.id,
       activationSetup,
-      startup && !didSpawnStartup ? startup : undefined,
+      // Why: the renderer's fallback launch cannot honour --account; it would use the active one.
+      startup && !didSpawnStartup && !args.startupClaudeAccountId ? startup : undefined,
       runtimeWillProvision ? undefined : defaultTabs
     )
   } else if (ports.canSpawn && (setup || defaultTabs || didSpawnStartup)) {

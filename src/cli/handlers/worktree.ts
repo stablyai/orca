@@ -26,6 +26,7 @@ import {
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { printLineageSummary } from './worktree-lineage-summary'
+import { readClaudeLaunchAccountFlag } from './claude-launch-account-flag'
 import {
   assertWorkspaceTargetFlagsCompatible,
   hasWorkspaceProjectTarget,
@@ -180,6 +181,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const explicitParentWorktree = explicitParent.parentWorktree
     const explicitParentWorkspace = explicitParent.parentWorkspace
     const startupAgent = getOptionalStartupAgent(flags)
+    const claudeAccount = await readClaudeLaunchAccountFlag(flags, client, startupAgent)
     const setupDecision = getOptionalSetupDecision(flags)
     const noParent = flags.get('no-parent') === true
     const envParentWorkspace =
@@ -234,7 +236,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         ? {
             startupAgent,
             startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? '',
-            launchSource: 'cli'
+            launchSource: 'cli',
+            ...(claudeAccount ? { startupClaudeAccount: claudeAccount } : {})
           }
         : {})
     })

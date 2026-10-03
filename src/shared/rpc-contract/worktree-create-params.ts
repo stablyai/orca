@@ -111,6 +111,8 @@ export const WorktreeCreate = z
     // workspaces execute in a different shell than the client process.
     startupAgent: OptionalTuiAgent,
     startupPrompt: OptionalString,
+    // Why: `--account <id|email>` resolves on the host that owns the Claude accounts, never here.
+    startupClaudeAccount: OptionalString,
     // Which surface asked for the agent the host launches from `startupAgent` or `startupDraft`.
     launchSource: LaunchSourceParam.optional(),
     // Why: task-driven mobile creates need desktop parity: the host chooses
@@ -138,6 +140,12 @@ export const WorktreeCreate = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Choose either one parent selector or --no-parent.'
+      })
+    }
+    if (params.startupClaudeAccount !== undefined && params.startupAgent !== 'claude') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'startupClaudeAccount requires startupAgent claude'
       })
     }
     if (params.startupPrompt !== undefined && params.startupAgent === undefined) {

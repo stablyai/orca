@@ -63,7 +63,11 @@ import {
 } from './agent-launch-surface-factories'
 
 export type AgentLaunchExecution = {
-  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport' | 'getClientSettings'>
+  runtime: Pick<
+    OrcaRuntimeService,
+    'getStructuredAgentSessionCreateSupport' | 'getClientSettings'
+  > &
+    Partial<Pick<OrcaRuntimeService, 'listRepos'>>
   intent: AgentLaunchIntent
   surfaces: AgentLaunchSurfaceFactory
   workspaces?: AgentLaunchWorkspaceFactory

@@ -4,6 +4,7 @@ import {
   isMethodNotFoundRefusal,
   isStreamingOpenerReply,
   requireRpcResultOrThrowCodedError,
+  requireRpcResultOrThrowMessage,
   rpcObjectResultOrNull
 } from './rpc-acceptance-policies'
 
@@ -164,5 +165,20 @@ describe('isStreamingOpenerReply', () => {
       _meta: meta
     } as unknown as RpcResponse
     expect(isStreamingOpenerReply(response)).toBe(false)
+  })
+})
+
+describe('requireRpcResultOrThrowMessage', () => {
+  it('shows a pinned Claude refusal without its renderer marker', () => {
+    const refusal: RpcResponse = {
+      id: 'rpc-1',
+      ok: false,
+      error: {
+        code: 'runtime_error',
+        message: 'Account a@b.c is in use. [claude_pinned:host-sessions email=a%40b.c terminals=1]'
+      },
+      _meta: meta
+    }
+    expect(() => requireRpcResultOrThrowMessage(refusal)).toThrow(/^Account a@b\.c is in use\.$/)
   })
 })

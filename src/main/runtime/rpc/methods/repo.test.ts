@@ -426,6 +426,54 @@ describe('repo RPC methods', () => {
     expect(runtime.updateRepo).toHaveBeenLastCalledWith('repo-1', { ghAccount: null })
   })
 
+  it('persists normalized agentAccounts and clear sentinels, and omits malformed input', async () => {
+    const runtime = new OrcaRuntimeService(null)
+    vi.spyOn(runtime, 'updateRepo').mockResolvedValue({
+      id: 'repo-1',
+      path: '/srv/repo',
+      displayName: 'repo',
+      badgeColor: '#000000',
+      addedAt: 0,
+      agentAccounts: { claude: { mode: 'account', accountId: 'acct-1' } }
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { agentAccounts: { claude: { mode: 'account', accountId: ' acct-1 ' } } }
+      }),
+      { clientCapabilities: [WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY] }
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      agentAccounts: { claude: { mode: 'account', accountId: 'acct-1' } }
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        repo: { id: 'repo-1', agentAccounts: { claude: { mode: 'account', accountId: 'acct-1' } } }
+      }
+    })
+
+    await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { agentAccounts: null }
+      })
+    )
+    expect(runtime.updateRepo).toHaveBeenLastCalledWith('repo-1', { agentAccounts: null })
+
+    await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: exercising malformed transport input on purpose; the schema must drop it rather than coerce it.
+        updates: { agentAccounts: { claude: { mode: 'bogus' } } as never }
+      })
+    )
+    expect(runtime.updateRepo).toHaveBeenLastCalledWith('repo-1', {})
+  })
+
   it('persists agent worktree visibility updates', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

@@ -51,6 +51,8 @@ export type SleepingAgentLaunchConfig = {
   agentArgs: string
   agentEnv: Record<string, string>
   ompResumeFilePath?: string
+  /** Account this launch was pinned to, or ACTIVE_CLAUDE_ACCOUNT; replayed on resume. */
+  claudeAccountId?: string
 }
 
 export type SleepingAgentSessionRecord = {
@@ -71,6 +73,8 @@ export type SleepingAgentSessionRecord = {
   mainAgent?: AgentMainAgentStatus
   connectionId?: string | null
   launchConfig?: SleepingAgentLaunchConfig
+  /** Pinned Claude account when no launch config was recorded; resume must not guess the launch options. */
+  claudeAccountId?: string
   /** How the record was captured. Worktree-sleep records (legacy records have
    *  no origin) are consumed by worktree activation, which opens a fresh tab.
    *  Quit/live records describe panes that still exist in the restored session,

@@ -46,6 +46,8 @@ type RuntimeFolderWorktreeCreateDeps = {
 
 export async function createRuntimeFolderWorktree(args: {
   request: RuntimeManagedWorktreeCreateArgs
+  /** Resolved `--account`; only the startup agent terminal runs on it. */
+  startupClaudeAccountId?: string
   repo: Repo
   startup?: WorktreeStartupLaunch
   startupFollowup?: WorktreeStartupFollowup
@@ -137,6 +139,7 @@ export async function createRuntimeFolderWorktree(args: {
         env: args.startup.env,
         ...(args.startup.launchConfig ? { launchConfig: args.startup.launchConfig } : {}),
         ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
+        ...(args.startupClaudeAccountId ? { claudeAccountId: args.startupClaudeAccountId } : {}),
         ...(args.startup.viewMode ? { viewMode: args.startup.viewMode } : {}),
         startupCommandDelivery: args.startup.startupCommandDelivery,
         telemetry: args.startup.telemetry,
@@ -168,7 +171,8 @@ export async function createRuntimeFolderWorktree(args: {
       repo.id,
       worktree.id,
       undefined,
-      args.startup && !didSpawnStartup ? args.startup : undefined
+      // Why: the renderer's fallback launch cannot honour --account; it would use the active one.
+      args.startup && !didSpawnStartup && !args.startupClaudeAccountId ? args.startup : undefined
     )
   } else if (deps.ptySpawnAvailable && !didSpawnStartup && !args.createdWithAgent) {
     try {

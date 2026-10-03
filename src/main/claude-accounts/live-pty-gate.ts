@@ -1,3 +1,10 @@
+import { markPinnedClaudePtyExited } from './claude-pinned-pty-registry'
+import {
+  forgetHostClaudePtyAccount,
+  hostClaudeAccountIdFromProvenance,
+  recordHostClaudePtyAccount
+} from './claude-host-pty-accounts'
+
 const liveClaudePtyIds = new Set<string>()
 // Why: ids restored from persistence at startup, not yet confirmed against the
 // daemon. They keep the OAuth refresh gate closed so an early managed refresh
@@ -68,16 +75,25 @@ export function confirmSeededClaudeLivePtys(aliveSessionIds: readonly string[]):
     if (!alive.has(sessionId)) {
       liveClaudePtyIds.delete(sessionId)
       persistence?.removeClaudeLivePtySessionId(sessionId)
+      forgetHostClaudePtyAccount(sessionId)
     }
   }
   seededUnconfirmedPtyIds.clear()
   notifyDrainedOnTransition(hadLivePtys)
 }
 
-export function markClaudePtySpawned(ptyId: string): void {
+/** `launchProvenance` is the prepared auth's provenance; absent, the selected host account is used. */
+export function markClaudePtySpawned(ptyId: string, launchProvenance?: string): void {
   liveClaudePtyIds.add(ptyId)
   seededUnconfirmedPtyIds.delete(ptyId)
   persistence?.addClaudeLivePtySessionId(ptyId)
+  recordHostClaudePtyAccount(
+    ptyId,
+    launchProvenance === undefined
+      ? undefined
+      : hostClaudeAccountIdFromProvenance(launchProvenance),
+    { persist: true }
+  )
 }
 
 export function markClaudePtyExited(ptyId: string): void {
@@ -85,6 +101,9 @@ export function markClaudePtyExited(ptyId: string): void {
   liveClaudePtyIds.delete(ptyId)
   seededUnconfirmedPtyIds.delete(ptyId)
   persistence?.removeClaudeLivePtySessionId(ptyId)
+  // Why: this is the one exit path every provider reports through, so pinned PTYs release here too.
+  markPinnedClaudePtyExited(ptyId)
+  forgetHostClaudePtyAccount(ptyId)
   notifyDrainedOnTransition(hadLivePtys)
 }
 
@@ -103,11 +122,14 @@ export function markClaudePtyExited(ptyId: string): void {
  */
 export function markClaudeStructuredChildSpawned(childKey: string): void {
   liveClaudePtyIds.add(structuredChildGateId(childKey))
+  // Why: a structured child runs on the host selection too (claude-structured-auth-policy).
+  recordHostClaudePtyAccount(structuredChildGateId(childKey), undefined, { persist: false })
 }
 
 export function markClaudeStructuredChildExited(childKey: string): void {
   const hadLivePtys = liveClaudePtyIds.size > 0
   liveClaudePtyIds.delete(structuredChildGateId(childKey))
+  forgetHostClaudePtyAccount(structuredChildGateId(childKey))
   notifyDrainedOnTransition(hadLivePtys)
 }
 
