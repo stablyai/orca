@@ -53,7 +53,7 @@ describe('worktree card active styling', () => {
     // surface, so a custom background or tint scales it instead of cancelling it.
     expect(sleeping).toContain('var(--worktree-sidebar-foreground)')
     expect(sleeping).toContain('var(--worktree-sidebar)')
-    // Why these two: title text and the muted lane (Moon, host badge) carry the cue.
+    // Why these two: foreground dims title and host text; muted foreground dims Moon.
     expect(sleeping).toContain('--foreground:')
     expect(sleeping).toContain('--muted-foreground:')
     // Why not opacity/filter: both dim toward the backdrop or strip themed hues.
