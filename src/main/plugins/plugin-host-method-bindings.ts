@@ -4,7 +4,8 @@ import {
   PLUGIN_TERMINAL_ID_MAX_LENGTH,
   PLUGIN_WORKSPACE_LABEL_MAX_LENGTH,
   PLUGIN_WORKSPACE_TERMINAL_LIMIT,
-  type PluginHostMethodSpec
+  type PluginHostMethodSpec,
+  type PluginNotificationTarget
 } from '../../shared/plugins/plugin-host-api'
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
 
@@ -27,6 +28,7 @@ export type PluginHostServices = {
     pluginId: string
     title: string
     body?: string
+    target?: PluginNotificationTarget
   }): Promise<{ delivered: boolean }>
   storage: {
     get(pluginId: string, key: string): unknown
@@ -109,8 +111,13 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
     return { accepted: result.accepted }
   }),
   definePluginMethod('notifications.show', async (params, { pluginId, services }) => {
-    const { title, body } = params as { title: string; body?: string }
-    return services.dispatchPluginNotification({ pluginId, title, body })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the adapter parses params with notificationsShowParams before this handler runs.
+    const { title, body, target } = params as {
+      title: string
+      body?: string
+      target?: PluginNotificationTarget
+    }
+    return services.dispatchPluginNotification({ pluginId, title, body, target })
   }),
   definePluginMethod('storage.get', async (params, { pluginId, services }) => {
     const { key } = params as { key: string }

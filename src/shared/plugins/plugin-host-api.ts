@@ -53,9 +53,23 @@ const terminalSendTextResult = z.object({ accepted: z.boolean() })
 
 const notificationsShowParams = z.object({
   title: z.string().min(1).max(120),
-  body: z.string().max(1000).optional()
+  body: z.string().max(1000).optional(),
+  // Why: lets a click (desktop) or tap (paired phone) open the worktree/pane the notification is about.
+  target: z
+    .object({
+      // Why: the push gateway rejects a whole notification whose worktreeId exceeds 2048 chars.
+      worktreeId: z.string().min(1).max(2048),
+      paneKey: z.string().min(1).max(512).optional(),
+      // Why: a structured chat's pane key looks like a terminal's, so the plugin says which to reveal.
+      surface: z.enum(['terminal', 'agent-session']).optional()
+    })
+    .strict()
+    .optional()
 })
 const notificationsShowResult = z.object({ delivered: z.boolean() })
+export type PluginNotificationTarget = NonNullable<
+  z.infer<typeof notificationsShowParams>['target']
+>
 
 const RESERVED_STORAGE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
 const storageKeySchema = z
