@@ -11,7 +11,7 @@ import {
 } from '../browser/paired-runtime-browser-client-host-runtime'
 import { prepareBrowserClientHostPlacement } from '../browser/browser-client-host-placement-preparation'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-connectivity-handlers'
-import { getRuntimeEnvironmentStatus } from './runtime-environment-transport-routing'
+import { getRuntimeEnvironmentStatusForBrowserPlacement } from './runtime-environment-transport-routing'
 
 export function registerRuntimeEnvironmentBrowserClientHostHandler(options: {
   getUserDataPath: () => string
@@ -32,9 +32,10 @@ export function registerRuntimeEnvironmentBrowserClientHostHandler(options: {
         resolveEnvironment: (selector) => resolveEnvironment(userDataPath, selector),
         getStatus: async (environmentId) => {
           requireConnected(environmentId)
-          const status = await getRuntimeEnvironmentStatus(userDataPath, environmentId, undefined, {
-            observeOnly: true
-          })
+          const status = await getRuntimeEnvironmentStatusForBrowserPlacement(
+            userDataPath,
+            environmentId
+          )
           requireConnected(environmentId)
           return status
         },

@@ -130,6 +130,26 @@ describe('browser client host placement preparation', () => {
     expect(harness.startHost).not.toHaveBeenCalled()
     expect(harness.closeHost).not.toHaveBeenCalled()
   })
+
+  it('recovers client placement on the next create after a transient status failure', async () => {
+    const harness = createHarness()
+    harness.getStatus
+      .mockResolvedValueOnce({
+        id: 'status.get',
+        ok: false,
+        error: { code: 'runtime_unavailable', message: 'socket reconnecting' },
+        _meta: { runtimeId: 'runtime-a' }
+      })
+      .mockResolvedValueOnce(runtimeStatus())
+
+    await expect(harness.prepare()).resolves.toEqual({ kind: 'server' })
+    await expect(harness.prepare()).resolves.toEqual({
+      kind: 'client',
+      browserHostClientId: 'browser-client-a'
+    })
+    expect(harness.getStatus).toHaveBeenCalledTimes(2)
+    expect(harness.startHost).toHaveBeenCalledTimes(1)
+  })
 })
 
 function createHarness(options?: {

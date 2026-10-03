@@ -7,6 +7,7 @@ import { addEnvironmentFromPairingCode } from '../../shared/runtime-environment-
 import { pairingCode } from './runtime-environments-ipc-test-harness'
 import {
   getRuntimeEnvironmentStatus,
+  getRuntimeEnvironmentStatusForBrowserPlacement,
   resetSharedControlSupport
 } from './runtime-environment-transport-routing'
 
@@ -86,4 +87,26 @@ it('a passive capability check does not strand later active bootstrap recovery',
   await getRuntimeEnvironmentStatus(profile, environment.id)
   await vi.advanceTimersByTimeAsync(3_000)
   expect(request).toHaveBeenCalledTimes(3)
+})
+
+it('retries a transient placement probe once before falling back to server placement', async () => {
+  const environment = addEnvironmentFromPairingCode(profile, {
+    name: 'placement-retry',
+    pairingCode: pairingCode()
+  })
+  request
+    .mockRejectedValueOnce(
+      Object.assign(new Error('host not ready'), { code: 'runtime_unavailable' })
+    )
+    .mockResolvedValueOnce({
+      id: 'status',
+      ok: true,
+      result: { runtimeId: 'host-1', graphStatus: 'ready', capabilities: [] },
+      _meta: { runtimeId: 'host-1' }
+    })
+
+  await expect(
+    getRuntimeEnvironmentStatusForBrowserPlacement(profile, environment.id)
+  ).resolves.toMatchObject({ ok: true, result: { runtimeId: 'host-1' } })
+  expect(request).toHaveBeenCalledTimes(2)
 })
