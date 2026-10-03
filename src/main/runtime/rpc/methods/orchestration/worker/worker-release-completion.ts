@@ -263,7 +263,13 @@ async function completeWorkerTerminalReleaseOnce(
       })
     }
     const close = await runtime.closeTerminal(terminalHandle)
-    if (!close.ptyKilled) {
+    // A host-certified exit already proved the process is gone, so a close that kills nothing is
+    // not new doubt — the same escape the federated release path carries. It must be the earned
+    // exit verdict, not the observation's `exited`: locally that status also covers a disconnected
+    // terminal, which is lost contact, not proof of death. Without the escape an exited worker
+    // whose tab is gone wedges at release_unknown and no command can settle it.
+    const certifiedExit = runtime.getTerminalLivenessVerdict?.(terminalHandle)?.status === 'exited'
+    if (!close.ptyKilled && !certifiedExit) {
       const reason = describeUnconfirmedAgentStop(close)
       const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, reason)
       return {
