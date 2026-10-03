@@ -9,6 +9,7 @@ import type {
 } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import { awaitWindowsHostGitEnvironmentReady } from '../git/runner'
+import { getLocalGitRepoAccessBlocker } from '../git/git-safe-directory'
 import { getRepoName, isGitRepo } from '../git/repo'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
 import {
@@ -82,6 +83,11 @@ export class RuntimeNestedRepoImport {
           continue
         }
         const importRepoPath = await importTargetResolver.resolveLocal(repoPath)
+        const accessBlocker = await getLocalGitRepoAccessBlocker(importRepoPath)
+        if (accessBlocker) {
+          results.push({ path: repoPath, status: 'failed', error: accessBlocker })
+          continue
+        }
         const normalizedImportRepoPath = normalizeRuntimePathForComparison(importRepoPath)
         const alreadyImportedProjectId = importedProjectIdsByRepoPath.get(normalizedImportRepoPath)
         if (alreadyImportedProjectId) {
