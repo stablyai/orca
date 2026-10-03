@@ -42,9 +42,12 @@ async function readStructuredAgentSessionOptionsAtRest(
   if (!record) {
     throw new Error('agent_session_identity_required')
   }
-  const catalog = (await deps.modelCatalog
-    ?.read({ agent: record.provider, sessionId })
-    .catch(() => null)) ?? { origin: 'unknown' as const }
+  const catalog =
+    record.provider === 'cursor'
+      ? { origin: 'unknown' as const }
+      : ((await deps.modelCatalog
+          ?.read({ agent: record.provider, sessionId })
+          .catch(() => null)) ?? { origin: 'unknown' as const })
   const listed =
     catalog.origin === 'unknown' ? restingFallbackModels(record.provider) : catalog.models
   const models = listed ?? []
@@ -89,7 +92,9 @@ export async function recordStructuredAgentSessionOptionIntent(
   const accepted =
     record?.provider === 'codex'
       ? isCodexTurnOptionKey(input.key)
-      : record?.provider === 'claude' && isClaudeStructuredOptionKey(input.key)
+      : record?.provider === 'cursor'
+        ? input.key === 'model'
+        : record?.provider === 'claude' && isClaudeStructuredOptionKey(input.key)
   if (!record || !accepted) {
     return {
       ok: false,

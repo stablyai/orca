@@ -37,7 +37,7 @@ export function lookupOrcaAgentSession(
     .listRecords()
     .find((candidate) =>
       candidate.providerHandleChain.some(({ handle }) =>
-        handle.provider === 'claude' ? handle.sessionId === id : handle.threadId === id
+        handle.provider === 'codex' ? handle.threadId === id : handle.sessionId === id
       )
     )
   return owner ? { kind: 'provider-id', orcaSessionId: owner.sessionId } : { kind: 'unknown' }

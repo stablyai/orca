@@ -13,7 +13,7 @@ import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-
 
 export type StructuredAgentSessionAdoptionOwnership = {
   sessionId: string
-  provider: 'claude' | 'codex'
+  provider: 'claude' | 'codex' | 'cursor'
   providerSessionId: string
   lease: AgentSessionLease
 }
@@ -31,7 +31,7 @@ export type CommittedStructuredAgentSessionAdoptionReplay = {
 
 /** Exact committed-operation identity; attach still validates its fingerprint. */
 export function findCommittedStructuredAgentSessionAdoptionReplay(input: {
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'cursor'
   providerSessionId: string
   selfSessionId: string
   callerKey: string
@@ -66,13 +66,15 @@ export function findCommittedStructuredAgentSessionAdoptionReplay(input: {
   return {
     record,
     providerHandle:
-      adopted.handle.provider === 'codex'
-        ? { kind: 'codex', threadId: adopted.handle.threadId }
-        : {
-            kind: 'claude',
-            sessionId: adopted.handle.sessionId,
-            leafUuid: adopted.handle.leafUuid
-          }
+      adopted.handle.provider === 'cursor'
+        ? { kind: 'cursor', sessionId: adopted.handle.sessionId }
+        : adopted.handle.provider === 'codex'
+          ? { kind: 'codex', threadId: adopted.handle.threadId }
+          : {
+              kind: 'claude',
+              sessionId: adopted.handle.sessionId,
+              leafUuid: adopted.handle.leafUuid
+            }
   }
 }
 
@@ -87,7 +89,7 @@ export function findCommittedStructuredAgentSessionAdoptionReplay(input: {
  * ownership index — without this exemption the replay refuses instead of replaying.
  */
 export function findConflictingStructuredAdoption(input: {
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'cursor'
   providerSessionId: string
   selfSessionId: string
   ownership: readonly StructuredAgentSessionAdoptionOwnership[]
@@ -127,11 +129,11 @@ export function structuredAdoptionConflictError(
  * (selected account before the system default).
  */
 export async function resolveStructuredAgentSessionAdoption(input: {
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'cursor'
   providerSessionId: string
   candidateAccountHomes: readonly string[]
   resolveTranscript: (args: {
-    agent: 'claude' | 'codex'
+    agent: 'claude' | 'codex' | 'cursor'
     providerSessionId: string
     accountHomePath: string
   }) => Promise<string | null>

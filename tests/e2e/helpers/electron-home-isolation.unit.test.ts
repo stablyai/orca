@@ -29,6 +29,10 @@ describe('createElectronHomeIsolation', () => {
       inheritedEnv: {
         HOME: '/real/home',
         USERPROFILE: '/real/home',
+        CURSOR_CONFIG_DIR: '/real/cursor-config',
+        CURSOR_DATA_DIR: '/real/cursor-data',
+        XDG_CONFIG_HOME: '/real/config',
+        XDG_DATA_HOME: '/real/data',
         CODEX_HOME: '/real/codex',
         ORCA_CODEX_HOME: '/real/orca-codex',
         CLAUDE_CONFIG_DIR: '/real/claude',
@@ -53,6 +57,10 @@ describe('createElectronHomeIsolation', () => {
       USERPROFILE: canonicalHome,
       ORCA_E2E_USER_DATA_DIR: userDataDir
     })
+    expect(isolation.env.CURSOR_CONFIG_DIR).toBeUndefined()
+    expect(isolation.env.CURSOR_DATA_DIR).toBeUndefined()
+    expect(isolation.env.XDG_CONFIG_HOME).toBeUndefined()
+    expect(isolation.env.XDG_DATA_HOME).toBeUndefined()
     expect(isolation.env.CODEX_HOME).toBeUndefined()
     expect(isolation.env.ORCA_CODEX_HOME).toBeUndefined()
     expect(isolation.env.CLAUDE_CONFIG_DIR).toBeUndefined()

@@ -10,7 +10,8 @@ import {
 
 export function projectStructuredAiVaultSessions(
   result: AiVaultListResult,
-  structuredSupported: boolean
+  structuredSupported: boolean,
+  cursorSupported = structuredSupported
 ): AiVaultListResult {
   const host = getStructuredAgentSessionHost()
   if (!host) {
@@ -21,7 +22,7 @@ export function projectStructuredAiVaultSessions(
     if (!ownership) {
       return [session]
     }
-    if (!structuredSupported) {
+    if (!structuredSupported || (ownership.provider === 'cursor' && !cursorSupported)) {
       return []
     }
     return [
@@ -72,7 +73,7 @@ function isPotentialStructuredResumeCommand(command: string): boolean {
 }
 
 function findSessionOwnership(session: AiVaultSession): StructuredProviderSessionOwnership | null {
-  if (session.agent !== 'codex' && session.agent !== 'claude') {
+  if (session.agent !== 'codex' && session.agent !== 'claude' && session.agent !== 'cursor') {
     return null
   }
   return findOwnership(session.agent, session.sessionId)
@@ -81,7 +82,7 @@ function findSessionOwnership(session: AiVaultSession): StructuredProviderSessio
 function findResumeOwnership(
   args: AiVaultPrepareSessionResumeArgs
 ): StructuredProviderSessionOwnership | null {
-  if (args.agent !== 'codex' && args.agent !== 'claude') {
+  if (args.agent !== 'codex' && args.agent !== 'claude' && args.agent !== 'cursor') {
     return null
   }
   const host = getStructuredAgentSessionHost()
@@ -102,7 +103,7 @@ function findResumeOwnership(
 }
 
 function findOwnership(
-  provider: 'claude' | 'codex',
+  provider: 'claude' | 'codex' | 'cursor',
   providerSessionId: string
 ): StructuredProviderSessionOwnership | null {
   return (

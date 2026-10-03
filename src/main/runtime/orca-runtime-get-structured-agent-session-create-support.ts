@@ -3,6 +3,8 @@ import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusa
 import { OrcaRuntimeWithGetWorktreePs } from './orca-runtime-get-worktree-ps'
 import { supportsCodexStructuredLocation } from '../codex/codex-structured-location-support'
 import { supportsClaudeStructuredLocation } from '../claude/claude-structured-location-support'
+import { supportsCursorStructuredLocation } from '../cursor/cursor-structured-session-adapter'
+import { resolveCursorStructuredAccountHome } from '../cursor/cursor-structured-launch-resolution'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { resolveStructuredAgentSessionCreateSupport } from '../native-chat/structured-agent-session-create-support'
 import {
@@ -28,16 +30,18 @@ import { applyStructuredCodexWorkspaceTrust } from '../agent-workspace-trust-spa
 export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaRuntimeWithGetWorktreePs {
   async getStructuredAgentSessionCreateSupport(
     worktreeSelector: string,
-    agent: 'claude' | 'codex'
+    agent: 'claude' | 'codex' | 'cursor'
   ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }> {
     const location = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
     return resolveStructuredAgentSessionCreateSupport({
       agent,
       location,
       adapterSupportsCreate:
-        agent === 'claude'
-          ? supportsClaudeStructuredLocation(location)
-          : supportsCodexStructuredLocation(location),
+        agent === 'cursor'
+          ? supportsCursorStructuredLocation(location)
+          : agent === 'claude'
+            ? supportsClaudeStructuredLocation(location)
+            : supportsCodexStructuredLocation(location),
       getSettings: () => this.requireStore().getSettings()
     })
   }
@@ -45,7 +49,7 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
   /** The saved selection a new chat here starts with. createSupport reports it too, so a client's
    *  picker shows what create will run; one resolver keeps the two from drifting. */
   structuredAgentSessionLaunchSeedOptions(
-    agent: 'claude' | 'codex'
+    agent: 'claude' | 'codex' | 'cursor'
   ): Record<string, string> | undefined {
     return resolveStructuredLaunchSeedOptions(
       this.requireStore().getSettings().nativeChatSessionOptions,
@@ -93,10 +97,15 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
   async resolveStructuredAgentSessionCreateIntent(input: {
     envelope: { sessionId: string; clientOperationId: string }
     worktree: string
-    agent: 'claude' | 'codex'
+    agent: 'claude' | 'codex' | 'cursor'
     callerKey?: string
     resumeFrom?: { providerSessionId: string }
   }): Promise<AgentSessionAttachParams> {
+    if (input.agent === 'cursor') {
+      return this.resolveStructuredAgentSessionIntent(input, async ({ launchEnv }) =>
+        resolveCursorStructuredAccountHome(launchEnv, this.requireStore().getSettings())
+      )
+    }
     if (input.agent === 'claude') {
       return this.resolveStructuredAgentSessionIntent(input, async ({ launchEnv, location }) =>
         resolveStructuredClaudeAccountHomePath({
@@ -125,12 +134,18 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
    * Same resolver as the create intent above — never a second copy.
    */
   async resolveStructuredAgentAccountHome(
-    agent: 'claude' | 'codex'
-  ): Promise<{ variable: 'CLAUDE_CONFIG_DIR' | 'CODEX_HOME'; path: string }> {
+    agent: 'claude' | 'codex' | 'cursor'
+  ): Promise<{ variable: 'CLAUDE_CONFIG_DIR' | 'CODEX_HOME' | 'CURSOR_CONFIG_DIR'; path: string }> {
     const launchEnv = resolveTuiAgentLaunchEnv(
       agent,
       this.requireStore().getSettings().agentDefaultEnv
     )
+    if (agent === 'cursor') {
+      return {
+        variable: 'CURSOR_CONFIG_DIR',
+        path: await resolveCursorStructuredAccountHome(launchEnv, this.requireStore().getSettings())
+      }
+    }
     if (agent === 'claude') {
       return {
         variable: 'CLAUDE_CONFIG_DIR',
@@ -156,7 +171,7 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
     input: {
       envelope: { sessionId: string; clientOperationId: string }
       worktree: string
-      agent: 'claude' | 'codex'
+      agent: 'claude' | 'codex' | 'cursor'
       callerKey?: string
       resumeFrom?: { providerSessionId: string }
     },
@@ -202,7 +217,8 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
           agent: input.agent,
           providerSessionId: input.resumeFrom.providerSessionId,
           selfSessionId: input.envelope.sessionId,
-          selectedAccountHomePath
+          selectedAccountHomePath,
+          cwd: (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
         })
       : null
     return {
@@ -216,7 +232,12 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
       provider: input.agent,
       agent: input.agent,
       accountHome: {
-        variable: input.agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
+        variable:
+          input.agent === 'cursor'
+            ? 'CURSOR_CONFIG_DIR'
+            : input.agent === 'claude'
+              ? 'CLAUDE_CONFIG_DIR'
+              : 'CODEX_HOME',
         path: adoption ? adoption.accountHomePath : selectedAccountHomePath
       },
       ...(options ? { options } : {}),
@@ -227,13 +248,15 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
             // without adopting anything.
             adopt: {
               providerHandle:
-                input.agent === 'claude'
-                  ? {
-                      kind: 'claude' as const,
-                      sessionId: input.resumeFrom.providerSessionId,
-                      leafUuid: null
-                    }
-                  : { kind: 'codex' as const, threadId: input.resumeFrom.providerSessionId },
+                input.agent === 'cursor'
+                  ? { kind: 'cursor' as const, sessionId: input.resumeFrom.providerSessionId }
+                  : input.agent === 'claude'
+                    ? {
+                        kind: 'claude' as const,
+                        sessionId: input.resumeFrom.providerSessionId,
+                        leafUuid: null
+                      }
+                    : { kind: 'codex' as const, threadId: input.resumeFrom.providerSessionId },
               transcriptPath: adoption.transcriptPath
             }
           }

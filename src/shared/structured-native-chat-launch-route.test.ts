@@ -4,7 +4,10 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from './protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  CURSOR_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from './protocol-version'
 import {
   agentTabsDefaultToNativeChat,
   prefersStructuredNativeChatByDefault,
@@ -105,5 +108,47 @@ describe('per-launch structured feasibility', () => {
 
   it('supports a folder workspace without widening floating scope', () => {
     expect(support({ workspaceKind: 'folder' })).toEqual({ supported: true })
+  })
+})
+
+describe('Cursor native Chat launch', () => {
+  it('uses the native Chat preference independently of the separate structured experiment', () => {
+    expect(
+      prefersStructuredNativeChatByDefault(
+        { ...ON, experimentalStructuredNativeChat: false },
+        'cursor'
+      )
+    ).toBe(true)
+    expect(
+      prefersStructuredNativeChatByDefault({ ...ON, openAgentTabsInChatByDefault: false }, 'cursor')
+    ).toBe(false)
+    expect(
+      prefersStructuredNativeChatByDefault({ ...ON, experimentalNativeChat: false }, 'cursor')
+    ).toBe(false)
+  })
+  it('requires both negotiated capabilities and retains Terminal fallbacks', () => {
+    const hostCapabilities = [
+      STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+      CURSOR_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+    ]
+    expect(support({ agent: 'cursor' })).toEqual({
+      supported: false,
+      blocker: 'runtime-capability'
+    })
+    expect(support({ agent: 'cursor', hostCapabilities, workspaceKind: 'folder' })).toEqual({
+      supported: true
+    })
+    expect(support({ agent: 'cursor', hostCapabilities, executionHostId: 'ssh:host' })).toEqual({
+      supported: false,
+      blocker: 'remote-execution-host'
+    })
+    expect(support({ agent: 'cursor', hostCapabilities, reusesTerminal: true })).toEqual({
+      supported: false,
+      blocker: 'reused-terminal'
+    })
+    expect(support({ agent: 'cursor', hostCapabilities, requiresTuiLaunchCommand: true })).toEqual({
+      supported: false,
+      blocker: 'tui-launch-command'
+    })
   })
 })

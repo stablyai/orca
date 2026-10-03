@@ -130,7 +130,7 @@ export function decideAgentLaunchMode(args: {
 }): AgentLaunchModeReceipt {
   const { placement, settings } = args
   const vocabulary = args.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
-  if (!prefersStructuredNativeChatByDefault(settings)) {
+  if (!prefersStructuredNativeChatByDefault(settings, placement.agent)) {
     return {
       mode: 'terminal',
       preferred: 'terminal',

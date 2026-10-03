@@ -1,3 +1,4 @@
+import { projectStructuredCursorHistory } from '../ai-vault/structured-cursor-history'
 import { app, ipcMain } from 'electron'
 import {
   configureAiVaultSessionSources,
@@ -57,7 +58,6 @@ import {
   resolveAiVaultSessionTitlesByHost,
   type RuntimeAiVaultSessionTitleResolver
 } from './ai-vault-session-title-routing'
-import { projectStructuredAiVaultSessions } from '../ai-vault/structured-session-ownership'
 import { AI_VAULT_ALL_HOST_TIMEOUT_MS } from './ai-vault-all-host-timeouts'
 
 type AiVaultHandlerOptions = AiVaultSessionSources &
@@ -279,7 +279,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     try {
       await handlerOptions.ensureStructuredSessionOwnership?.()
       const result = await listAiVaultSessions(args, { signal: controller?.signal })
-      return projectStructuredAiVaultSessions(result, true)
+      return projectStructuredCursorHistory(result, args)
     } catch (error) {
       // Why: superseding a scan is normal control flow, but Electron logs every
       // rejected handler — report it as a result so the log stays truthful.

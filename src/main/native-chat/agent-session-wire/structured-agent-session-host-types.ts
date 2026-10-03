@@ -28,7 +28,7 @@ export type StructuredAgentSessionCaller = { callerKey: string }
 export type StructuredAgentSessionReveal = {
   sessionId: string
   workspaceId: string
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'cursor'
   readable: boolean
 }
 
@@ -101,6 +101,7 @@ export type StructuredAgentSessionHostSession = {
 
 export type StructuredAgentSessionHostDeps = {
   store: AgentSessionRecordStore
+  resolveWorkspacePath?: (workspaceId: string) => Promise<string>
   adapter: StructuredAgentSessionAdapter
   /** Optional advisory recovery storage, independent of conversation backups. */
   recoveryCapsule?: AgentSessionRecoveryCapsule

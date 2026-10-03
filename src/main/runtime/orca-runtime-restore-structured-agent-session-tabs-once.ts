@@ -74,7 +74,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
     const restored = (host?.listSessionTabs() ?? []).flatMap((session) => {
-      if (session.agent !== 'codex' && session.agent !== 'claude') {
+      if (session.agent !== 'codex' && session.agent !== 'claude' && session.agent !== 'cursor') {
         return []
       }
       let sessionId = session.sessionId
@@ -111,7 +111,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
   async publishStructuredAgentSessionTab(input: {
     workspaceId: string
     sessionId: string
-    agent: 'claude' | 'codex'
+    agent: 'claude' | 'codex' | 'cursor'
     activate: boolean
     notify?: boolean
     replacesSessionId?: string
@@ -139,7 +139,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
   projectStructuredAgentSessionTab(input: {
     workspaceId: string
     sessionId: string
-    agent: 'claude' | 'codex'
+    agent: 'claude' | 'codex' | 'cursor'
     activate: boolean
     notify?: boolean
     replacesSessionId?: string

@@ -1,3 +1,4 @@
+import { resolveCursorAcpHistorySource } from '../cursor/cursor-acp-history-source'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
@@ -22,7 +23,7 @@ type AdoptionSettings = {
 export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {
   host: StructuredAgentSessionHost | null
   envelope: { sessionId: string; clientOperationId: string }
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'cursor'
   callerKey?: string
   resumeFrom?: { providerSessionId: string }
   location: AgentSessionExecutionLocation
@@ -63,10 +64,11 @@ export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {
 export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
   host: StructuredAgentSessionHost | null
   settings: AdoptionSettings
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'cursor'
   providerSessionId: string
   selfSessionId: string
   selectedAccountHomePath: string
+  cwd?: string
 }) {
   const conflict = input.host
     ? findConflictingStructuredAdoption({
@@ -84,22 +86,31 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
     providerSessionId: input.providerSessionId,
     candidateAccountHomes: structuredAdoptionAccountHomeCandidates(input),
     resolveTranscript: async ({ agent, providerSessionId, accountHomePath }) =>
-      resolveSessionFilePath(
-        agent,
-        providerSessionId,
-        agent === 'claude'
-          ? { claudeProjectsDir: join(accountHomePath, 'projects') }
-          : { codexSessionsDirs: [join(accountHomePath, 'sessions')] }
-      )
+      agent === 'cursor'
+        ? resolveCursorAcpHistorySource({
+            accountHomePath,
+            providerSessionId,
+            cwd: input.cwd ?? ''
+          })
+        : resolveSessionFilePath(
+            agent,
+            providerSessionId,
+            agent === 'claude'
+              ? { claudeProjectsDir: join(accountHomePath, 'projects') }
+              : { codexSessionsDirs: [join(accountHomePath, 'sessions')] }
+          )
   })
 }
 
 /** Recognised adoption homes, most-preferred first. */
 function structuredAdoptionAccountHomeCandidates(input: {
   settings: AdoptionSettings
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'cursor'
   selectedAccountHomePath: string
 }): string[] {
+  if (input.agent === 'cursor') {
+    return [input.selectedAccountHomePath]
+  }
   if (input.agent === 'claude') {
     return [input.selectedAccountHomePath, join(homedir(), '.claude')]
   }

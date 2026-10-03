@@ -46,7 +46,7 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
   // refuses every non-local host, and a structured session reads its journal over RPC rather than
   // the transcript file, so local transcript readability does not apply either.
   if (
-    prefersStructuredNativeChatByDefault(input.settings) &&
+    prefersStructuredNativeChatByDefault(input.settings, input.agent) &&
     structuredAgentLaunchSupported(input)
   ) {
     return 'structured-native-chat'
@@ -67,7 +67,8 @@ export function structuredAgentLaunchSupported(
   input: Omit<AgentLaunchRoutingInput, 'launchText'>
 ): boolean {
   return (
-    input.settings?.experimentalStructuredNativeChat === true &&
+    (input.settings?.experimentalStructuredNativeChat === true ||
+      (input.agent === 'cursor' && input.settings?.experimentalNativeChat === true)) &&
     resolveStructuredNativeChatSupport({
       agent: input.agent,
       executionHostId: input.executionHostId,

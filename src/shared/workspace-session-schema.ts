@@ -133,7 +133,7 @@ const tabSchema = z.object({
   worktreeId: z.string(),
   executionHostId: executionHostIdSchema.optional(),
   contentType: tabContentTypeSchema,
-  agentSessionAgent: z.enum(['codex', 'claude']).optional().catch(undefined),
+  agentSessionAgent: z.enum(['codex', 'claude', 'cursor']).optional().catch(undefined),
   label: z.string(),
   generatedLabel: z.string().nullable().optional(),
   aiVaultTitle: z

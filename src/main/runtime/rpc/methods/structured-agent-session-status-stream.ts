@@ -4,7 +4,10 @@
 // covers every session, and unlike a transcript subscription it retains none of them.
 
 import { defineStreamingMethod, type RpcContext } from '../core'
-import { requireStructuredHost as requireHost } from './structured-agent-session-gate'
+import {
+  requireStructuredHost as requireHost,
+  supportsCursorStructuredSessions
+} from './structured-agent-session-gate'
 import { structuredAgentSessionStatusSubscriptionId } from './structured-agent-session-subscription-id'
 
 /** Ties a stream to both ends that can close it — the runtime's subscription registry and the
@@ -53,7 +56,21 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
       if (stream.isClosed()) {
         return
       }
-      dispose = host.subscribeStatus({ id: subscriptionId, emit })
+      dispose = host.subscribeStatus({
+        id: subscriptionId,
+        emit: (event) => {
+          if (supportsCursorStructuredSessions(ctx) || event.type === 'end') {
+            emit(event)
+          } else if (event.type === 'snapshot') {
+            emit({
+              ...event,
+              sessions: event.sessions.filter((session) => session.agent !== 'cursor')
+            })
+          } else if (event.session.agent !== 'cursor') {
+            emit(event)
+          }
+        }
+      })
       if (stream.isClosed()) {
         dispose()
       }

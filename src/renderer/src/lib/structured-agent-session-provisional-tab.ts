@@ -17,7 +17,7 @@ export type StructuredAgentSessionProvisionalLaunch = StructuredAgentLaunchHandl
 export function openStructuredAgentSessionProvisionalTab(args: {
   worktreeId: string
   sessionId: string
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'cursor'
   targetGroupId?: string
   activate?: boolean
 }): Tab {
@@ -67,7 +67,10 @@ export function beginStructuredAgentSessionProvisionalLaunch(args: {
     return null
   }
   const worktreeId = args.target?.worktreeId ?? args.plan.worktreeId
-  if (!worktreeId || (args.plan.agent !== 'claude' && args.plan.agent !== 'codex')) {
+  if (
+    !worktreeId ||
+    (args.plan.agent !== 'claude' && args.plan.agent !== 'codex' && args.plan.agent !== 'cursor')
+  ) {
     throw new Error('A provisional structured launch needs its workspace and provider.')
   }
   try {

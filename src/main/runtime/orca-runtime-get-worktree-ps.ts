@@ -154,6 +154,14 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
         resolveTuiAgentLaunchEnv('codex', this.requireStore().getSettings().agentDefaultEnv),
       resolveClaudeLaunchEnv: () =>
         resolveTuiAgentLaunchEnv('claude', this.requireStore().getSettings().agentDefaultEnv),
+      resolveCursorRecipe: () => {
+        const settings = this.requireStore().getSettings()
+        return {
+          command: settings.agentCmdOverrides?.cursor,
+          args: settings.agentDefaultArgs?.cursor,
+          env: resolveTuiAgentLaunchEnv('cursor', settings.agentDefaultEnv)
+        }
+      },
       resolveShellEnvironmentPolicy: () =>
         nativeChatShellEnvironmentPolicy(this.requireStore().getSettings()),
       resolveClaudeAuthPolicy: () =>

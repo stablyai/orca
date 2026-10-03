@@ -38,7 +38,7 @@ export function providerHistoryId(handle: AgentSessionProviderHandle): string {
   if (handle.kind === 'codex') {
     return handle.threadId
   }
-  return handle.kind === 'claude' ? handle.sessionId : handle.value
+  return handle.kind === 'opaque' ? handle.value : handle.sessionId
 }
 
 export async function openAgentSessionJournalWithRecovery(input: {
@@ -71,6 +71,16 @@ async function rehydrate(input: {
   trigger: AgentSessionJournalRecovery['trigger']
 }): Promise<AgentSessionJournalRecovery> {
   const reset: AgentJournalResetReason = 'epoch_changed'
+  if (input.identity.providerHandle.kind === 'cursor') {
+    return {
+      trigger: input.trigger,
+      reset,
+      epoch: input.journal.epoch,
+      imported: 0,
+      error:
+        'Cursor ACP history requires a provider session load; terminal transcripts cannot repair it'
+    }
+  }
   const result = await importLegacyTranscriptIntoJournal({
     journal: input.journal,
     agent: input.identity.agent satisfies AgentType,

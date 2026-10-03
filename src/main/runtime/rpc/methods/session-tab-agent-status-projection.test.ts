@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  CURSOR_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-types'
@@ -286,5 +287,43 @@ describe('projectSessionTabAgentStatus', () => {
     expect(projectSessionTabAgentStatus(localBoundary, undefined, undefined)).toBe(localBoundary)
     expect(projectSessionTabAgentStatus(mobileBoundary, 'mobile', [])).toBe(mobileBoundary)
     expect(projectSessionTabAgentStatus(runtimeCompletion, 'runtime', [])).toBe(runtimeCompletion)
+  })
+})
+
+describe('Cursor native tab capability', () => {
+  it('keeps Cursor separate from the Claude capability for paired clients', () => {
+    const snapshot: RuntimeMobileSessionTabsSnapshot = {
+      ...makeSnapshot(false),
+      activeTabId: 'cursor',
+      activeTabType: 'agent-session',
+      tabs: [
+        {
+          type: 'agent-session',
+          id: 'cursor',
+          sessionId: 'cursor-native',
+          agent: 'cursor',
+          title: 'Cursor Chat',
+          isActive: true
+        }
+      ]
+    }
+    expect(
+      projectSessionTabAgentStatus(snapshot, 'runtime', [
+        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+        CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+      ]).tabs
+    ).toEqual([])
+    expect(
+      projectSessionTabAgentStatus(snapshot, 'runtime', [
+        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+        CURSOR_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+      ]).tabs
+    ).toEqual(snapshot.tabs)
+    expect(
+      projectSessionTabAgentStatus(snapshot, 'mobile', [
+        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+        CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+      ]).tabs[0]?.title
+    ).toBe(STRUCTURED_CHAT_UPDATE_REQUIRED_TAB_TITLE)
   })
 })

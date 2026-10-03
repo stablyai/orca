@@ -68,7 +68,7 @@ export function releaseStructuredWorkerSession(
 export async function createStructuredWorkerSession(args: {
   runtime: OrcaRuntimeService
   worktreeId: string
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'cursor'
   dispatchId: string
   /** The dispatch's own `--model`/`--effort`, already narrowed to the seedable string subset. */
   options?: Readonly<Record<string, string>>

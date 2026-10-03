@@ -14,6 +14,7 @@ export const STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS = [
   defineMethod({
     name: 'agentSession.threadGoal',
     params: ThreadGoalParams,
-    handler: async (params, ctx) => requireHost(ctx).changeThreadGoal(callerFor(ctx), params)
+    handler: async (params, ctx) =>
+      requireHost(ctx, params.envelope.sessionId).changeThreadGoal(callerFor(ctx), params)
   })
 ]

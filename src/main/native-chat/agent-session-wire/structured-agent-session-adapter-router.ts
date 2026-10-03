@@ -7,7 +7,7 @@ import type {
 } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 
-type RoutedAgent = 'claude' | 'codex'
+type RoutedAgent = 'claude' | 'codex' | 'cursor'
 type SessionRoute = { adapter: StructuredAgentSessionAdapter; state: 'live' | 'stopped' }
 
 export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessionAdapter {
@@ -16,7 +16,8 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   private closePromise: Promise<void> | null = null
 
   constructor(
-    private readonly adapters: Record<RoutedAgent, StructuredAgentSessionAdapter>,
+    private readonly adapters: Record<'claude' | 'codex', StructuredAgentSessionAdapter> &
+      Partial<Record<RoutedAgent, StructuredAgentSessionAdapter>>,
     private readonly closeAdapters: () => Promise<void>
   ) {}
 
@@ -132,7 +133,7 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     this.liveOwnerOrNull(sessionId)?.readCommands?.(sessionId)
 
   atRestCommands: StructuredAgentSessionAtRestCommands = {
-    read: (record) => this.adapters[record.provider].atRestCommands?.read(record),
+    read: (record) => this.adapters[record.provider]?.atRestCommands?.read(record),
     onChange: (listener) => {
       const stops = Object.values(this.adapters).flatMap((adapter) =>
         adapter.atRestCommands ? [adapter.atRestCommands.onChange(listener)] : []
@@ -232,6 +233,7 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
 
   /** Drops a per-session stop receipt after the host releases its durable owner. */
   acknowledgeSessionRelease = (sessionId: string): void => {
+    this.routes.get(sessionId)?.adapter.acknowledgeSessionRelease?.(sessionId)
     this.routes.delete(sessionId)
   }
 
@@ -262,6 +264,8 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   }
 
   private adapterForAgent(agent: string): StructuredAgentSessionAdapter | null {
-    return agent === 'claude' || agent === 'codex' ? this.adapters[agent] : null
+    return agent === 'claude' || agent === 'codex' || agent === 'cursor'
+      ? (this.adapters[agent] ?? null)
+      : null
   }
 }

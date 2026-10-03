@@ -139,6 +139,11 @@ export function agentJournalItemKey(identity: AgentJournalItemIdentity): string 
   if (identity.provider === 'claude') {
     return ['claude', encodePart(identity.sessionId), encodePart(identity.uuid)].join(KEY_DELIMITER)
   }
+  if (identity.provider === 'cursor') {
+    return ['cursor', encodePart(identity.sessionId), encodePart(identity.recordId)].join(
+      KEY_DELIMITER
+    )
+  }
   if (identity.provider === 'orca') {
     return ['orca', encodePart(identity.clientMessageId)].join(KEY_DELIMITER)
   }
@@ -194,6 +199,18 @@ export function parseAgentJournalItemKey(key: string): AgentJournalItemIdentity 
   }
   if (provider === 'orca' && rest.length === 1) {
     return parsedIdentity({ provider, clientMessageId: rest[0] as string }, key, preserveExactKey)
+  }
+  if (
+    provider === 'cursor' &&
+    rest[0] !== undefined &&
+    rest[1] !== undefined &&
+    rest.length === 2
+  ) {
+    return parsedIdentity(
+      { provider, sessionId: rest[0], recordId: rest[1] },
+      key,
+      preserveExactKey
+    )
   }
   if (provider === 'legacy' && rest.length === 3) {
     return parsedIdentity(

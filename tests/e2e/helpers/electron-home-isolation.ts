@@ -7,6 +7,10 @@ const RESTRICTED_ENV_KEYS = new Set([
   'USERPROFILE',
   'HOMEDRIVE',
   'HOMEPATH',
+  'CURSOR_CONFIG_DIR',
+  'CURSOR_DATA_DIR',
+  'XDG_CONFIG_HOME',
+  'XDG_DATA_HOME',
   'CODEX_HOME',
   'ORCA_CODEX_HOME',
   // Why: Orca's spawn hook writes Claude folder trust into the config this names.

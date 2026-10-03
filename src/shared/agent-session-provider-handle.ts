@@ -9,18 +9,19 @@
  * instead of standing beside it: the unsaved handle was never a conversation to continue.
  */
 
-export const AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS = ['claude', 'codex'] as const
+export const AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS = ['claude', 'codex', 'cursor'] as const
 
 export type AgentSessionHandleProvider = (typeof AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS)[number]
 
 /** Runtime guard for persisted/remote provider metadata. Unknown values must not impersonate Codex. */
 export function isAgentSessionHandleProvider(value: unknown): value is AgentSessionHandleProvider {
-  return value === 'claude' || value === 'codex'
+  return value === 'claude' || value === 'codex' || value === 'cursor'
 }
 
 export type AgentSessionProviderHandle =
   | { provider: 'claude'; sessionId: string; leafUuid: string | null }
   | { provider: 'codex'; threadId: string }
+  | { provider: 'cursor'; sessionId: string }
 
 export type AgentSessionProviderHandleOrigin = 'created' | 'adopted' | 'resumed' | 'forked'
 
@@ -66,11 +67,16 @@ export function isAgentSessionProviderHandle(value: unknown): value is AgentSess
       (handle.leafUuid === null || isHandleField(handle.leafUuid))
     )
   }
-  return handle.provider === 'codex' && isHandleField(handle.threadId)
+  return handle.provider === 'cursor'
+    ? isHandleField(handle.sessionId)
+    : handle.provider === 'codex' && isHandleField(handle.threadId)
 }
 
 /** Stable string identity for one handle. Two handles with the same key name the same writer target. */
 export function agentSessionProviderHandleKey(handle: AgentSessionProviderHandle): string {
+  if (handle.provider === 'cursor') {
+    return `cursor:${JSON.stringify(handle.sessionId)}`
+  }
   return handle.provider === 'claude'
     ? `claude:${JSON.stringify([handle.sessionId, handle.leafUuid])}`
     : `codex:${JSON.stringify(handle.threadId)}`
@@ -81,6 +87,9 @@ export function agentSessionProviderHandleKey(handle: AgentSessionProviderHandle
  * whatever the provider called it.
  */
 export function agentSessionProviderHandleRoot(handle: AgentSessionProviderHandle): string {
+  if (handle.provider === 'cursor') {
+    return `cursor:${JSON.stringify(handle.sessionId)}`
+  }
   return handle.provider === 'claude'
     ? `claude:${JSON.stringify(handle.sessionId)}`
     : `codex:${JSON.stringify(handle.threadId)}`

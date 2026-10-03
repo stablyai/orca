@@ -50,6 +50,9 @@ export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean
     return true
   }
   const agent = input.detectedAgent ?? input.launchAgent ?? input.resolvedAgent
+  if (agent === 'cursor') {
+    return false
+  }
   if (
     nativeChatRequiresLocalTranscript(agent) &&
     input.nativeChatTranscriptIsLocalReadable !== true
