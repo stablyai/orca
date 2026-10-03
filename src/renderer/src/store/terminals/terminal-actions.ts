@@ -148,6 +148,8 @@ export type TerminalActions = {
   invalidateStaleDirectSshTargetPtyBindings: (authority: DirectSshAuthority) => number
   retryDirectSshTargetPanes: (authority: DirectSshAuthority, now?: number) => number
   settleDirectSshPaneRetry: (result: DirectSshPaneRetryResult, now?: number) => void
+  /** Closes SSH terminal tabs after an app update that started a new relay generation. */
+  retireDirectSshTerminalsForRelayGeneration: (targetId: string) => number
   /** Awaited verified shutdown; unlike closeTab, physical teardown gates the state commit. */
   shutdownWorktreeTerminals: (
     worktreeId: string,

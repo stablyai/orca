@@ -15,6 +15,7 @@ import { RelayCredentialMismatchError } from './ssh-relay-credential-mismatch-er
 import {
   interpretRelayHuskReapOutput,
   reapEmptyRelayHuskCommand,
+  reapSupersededRelayCommand,
   resolveRelayEndpointBeforeRelaunch
 } from './ssh-relay-endpoint-takeover'
 import { RelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
@@ -202,6 +203,18 @@ describe('reapEmptyRelayHuskCommand', () => {
       expect(command).toContain(`*'/${filename}'`)
     }
     expect(command).toContain('unrecognized_kids=$((unrecognized_kids+1))')
+  })
+})
+
+describe('reapSupersededRelayCommand', () => {
+  it('still re-checks argv, but does not refuse a daemon that still holds PTYs', () => {
+    const command = reapSupersededRelayCommand(4242, SOCK)
+    expect(command.indexOf('MISMATCH')).toBeLessThan(command.indexOf('kill -TERM'))
+    expect(command.indexOf('holder_count=')).toBeLessThan(command.indexOf('kill -TERM'))
+    expect(command.indexOf('BUSY')).toBeLessThan(command.indexOf('kill -TERM'))
+    expect(command).toContain('kill -TERM')
+    expect(command).not.toContain('unrecognized_kids')
+    expect(command).toContain('while [ $i -lt 50 ]')
   })
 })
 

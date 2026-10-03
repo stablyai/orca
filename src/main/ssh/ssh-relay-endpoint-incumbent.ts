@@ -279,6 +279,16 @@ export function mayLaunchOverRelayEndpoint(incumbent: RelayEndpointIncumbent): b
   return incumbent.verdict !== 'live'
 }
 
+function isSoleIdentifiedRelayHolder(incumbent: RelayEndpointIncumbent): boolean {
+  if (incumbent.verdict !== 'live' || !incumbent.holdersEnumerable) {
+    return false
+  }
+  if (incumbent.holders.length !== 1) {
+    return false
+  }
+  return incumbent.holders[0]?.matchesRelayArgv === true
+}
+
 /**
  * A live relay that provably holds nothing: identity confirmed against its argv, exactly one
  * holder, and no child the host could not account for as one of the daemon's own service
@@ -289,14 +299,18 @@ export function mayLaunchOverRelayEndpoint(incumbent: RelayEndpointIncumbent): b
  * gate was unreachable for any relay that had ever served a vault request (#13614).
  */
 export function isReapableRelayHusk(incumbent: RelayEndpointIncumbent): boolean {
-  if (incumbent.verdict !== 'live' || !incumbent.holdersEnumerable) {
-    return false
-  }
-  if (incumbent.holders.length !== 1) {
-    return false
-  }
-  const [holder] = incumbent.holders
-  return holder.matchesRelayArgv && holder.unrecognizedChildCount === 0
+  return (
+    isSoleIdentifiedRelayHolder(incumbent) && incumbent.holders[0]?.unrecognizedChildCount === 0
+  )
+}
+
+/**
+ * A superseded generation this client can no longer handshake with. Sole holder means no other
+ * Orca is attached, so SIGTERM destroys only unreachable work — including live PTYs.
+ * Same-path takeover must keep using {@link isReapableRelayHusk}; that path still preserves work.
+ */
+export function isReapableSupersededRelay(incumbent: RelayEndpointIncumbent): boolean {
+  return isSoleIdentifiedRelayHolder(incumbent)
 }
 
 export function describeRelayEndpointIncumbent(incumbent: RelayEndpointIncumbent): string {
