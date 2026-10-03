@@ -578,3 +578,29 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
     expect(restored?.launchConfig.agentCommand).toBe("claude '--resume'")
   })
 })
+
+describe('buildAgentResumeStartupPlan opencode2 standalone ownership', () => {
+  const opencodeSession = { key: 'session_id' as const, id: 'ses_opencode2resume1' }
+
+  it('emits --standalone exactly once from the default launch command', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'opencode2',
+      providerSession: opencodeSession,
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+    expect(restored?.launchCommand).toBe(
+      `opencode2 --standalone '--session' '${opencodeSession.id}'`
+    )
+  })
+
+  it('omits --standalone when the launch command override drops it', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'opencode2',
+      providerSession: opencodeSession,
+      cmdOverrides: { opencode2: 'opencode2' },
+      platform: 'linux'
+    })
+    expect(restored?.launchCommand).toBe(`opencode2 '--session' '${opencodeSession.id}'`)
+  })
+})

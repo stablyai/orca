@@ -65,6 +65,7 @@ describe('agent session resume metadata', () => {
     ['gemini', { key: 'session_id', id: 's1' }, ['gemini', '--resume', 's1']],
     ['antigravity', { key: 'conversation_id', id: 's1' }, ['agy', '--conversation', 's1']],
     ['opencode', { key: 'session_id', id: 's1' }, ['opencode', '--session', 's1']],
+    ['opencode2', { key: 'session_id', id: 's1' }, ['opencode2', '--session', 's1']],
     [
       'pi',
       { key: 'session_id', id: 's1', transcriptPath: '/tmp/pi-session.jsonl' },
