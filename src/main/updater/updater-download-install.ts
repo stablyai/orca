@@ -1,4 +1,8 @@
-import { beginMacUpdateDownload, deferMacQuitUntilInstallerReady } from '../updater-mac-install'
+import {
+  beginMacUpdateDownload,
+  deferMacQuitUntilInstallerReady,
+  setMacInstallPreflightInProgress
+} from '../updater-mac-install'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { isExternallyManagedLinuxInstall } from '../linux-update-package-type'
 import { LINUX_PACKAGE_EXTERNALLY_MANAGED_MESSAGE } from '../linux-package-downloaded-status'
@@ -31,6 +35,12 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
       return
     }
 
+    // A queued check must not repoint the feed or clear the staged target during installation.
+    this.finishActiveUpdateCheckAttempt()
+    this.clearBackgroundCheckLaunchPending()
+    if (process.platform === 'darwin') {
+      setMacInstallPreflightInProgress(true)
+    }
     // Why: defer the quit a tick so the renderer can flush dismissals/state before windows start closing.
     this.pendingQuitAndInstallTimer = setTimeout(() => {
       void this.performQuitAndInstall()
@@ -41,6 +51,8 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     if (
       this.localBuildSelectionInProgress ||
       this.pinnedBuildSelectionInProgress ||
+      this.pendingQuitAndInstallTimer ||
+      this.quitAndInstallInProgress ||
       this.downloadInFlight
     ) {
       return

@@ -34,8 +34,14 @@ export function registerMacUpdaterEvents({
     })
   }
 
-  app.on('before-quit', (event) => {
+  // Why: veto before startup listeners begin shutting down services.
+  app.prependListener('before-quit', (event) => {
     if (!shouldDeferMacQuitForInstall()) {
+      return
+    }
+    // Why: an Update & Restart is checking blockers or cleaning up; a second quit must not tear down underneath it.
+    if (macInstallPreflightInProgress) {
+      event.preventDefault()
       return
     }
     if (consumeMacInstallGuardBypass()) {
@@ -63,6 +69,14 @@ export function registerMacUpdaterEvents({
 
 /** Whether Squirrel.Mac has finished downloading the update from the localhost proxy. */
 let squirrelReady = false
+let macInstallPreflightInProgress = false
+
+export function setMacInstallPreflightInProgress(value: boolean): void {
+  macInstallPreflightInProgress = value
+  if (value) {
+    bypassMacInstallGuardOnce = false
+  }
+}
 /** Remembers a user/app quit request that arrived before Squirrel.Mac had a
  * staged update ready to apply. Without this handoff, quitting during the
  * localhost-proxy phase exits back into the old app and the update is lost. */
@@ -83,6 +97,7 @@ function clearPendingInstallTimeout(): void {
 }
 
 export function resetMacInstallState(): void {
+  macInstallPreflightInProgress = false
   installRequestedAfterSquirrelReady = false
   quitAndInstallInFlight = false
   bypassMacInstallGuardOnce = false

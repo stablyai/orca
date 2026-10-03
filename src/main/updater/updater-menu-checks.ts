@@ -7,6 +7,9 @@ import { UpdaterScheduling } from './updater-scheduling'
 /** Handles checks initiated from the desktop menu and modifier-key variants. */
 export abstract class UpdaterMenuChecks extends UpdaterScheduling {
   protected checkForUpdatesFromMenu(options?: UpdateCheckOptions): void {
+    if (this.pendingQuitAndInstallTimer || this.quitAndInstallInProgress) {
+      return
+    }
     if (!app.isPackaged || is.dev) {
       this.sendStatus({ state: 'not-available', userInitiated: true })
       return
@@ -60,6 +63,9 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
     const attemptId = this.beginUpdateCheckAttempt()
     const autoUpdater = this.getAutoUpdater()
     const launch = (): Promise<unknown> | undefined => {
+      if (this.pendingQuitAndInstallTimer || this.quitAndInstallInProgress) {
+        return undefined
+      }
       if (!this.isActiveUpdateCheckAttempt(attemptId)) {
         return undefined
       }

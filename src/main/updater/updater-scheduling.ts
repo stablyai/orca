@@ -45,6 +45,9 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
   protected runBackgroundUpdateCheck(
     nudgeId: string | null = this.getPersistedPendingUpdateNudgeId()
   ): boolean {
+    if (this.pendingQuitAndInstallTimer || this.quitAndInstallInProgress) {
+      return false
+    }
     // Why: a pinned dev jump owns the feed until it settles; a background check would repoint it mid-flight and download the wrong build.
     if (
       this.activeUpdateSource !== 'release' ||
@@ -69,6 +72,9 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     const attemptId = this.beginUpdateCheckAttempt()
     const autoUpdater = this.getAutoUpdater()
     const launch = (): Promise<unknown> | undefined => {
+      if (this.pendingQuitAndInstallTimer || this.quitAndInstallInProgress) {
+        return undefined
+      }
       if (!this.isActiveUpdateCheckAttempt(attemptId)) {
         return undefined
       }
