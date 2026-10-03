@@ -1,4 +1,7 @@
 import { spawn } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type * as ChildProcess from 'node:child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { generateCommitMessageFromContext } from './commit-message-text-generation'
@@ -269,5 +272,70 @@ describe('generateCommitMessageFromContext', () => {
       })
       expect(spawnMock).not.toHaveBeenCalled()
     })
+  })
+
+  it('launches Cursor multiline prompts through its sibling PowerShell shim on Windows', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-cursor-powershell-shim-'))
+    const batchShim = join(tempDir, 'cursor-agent.cmd')
+    const powerShellShim = join(tempDir, 'cursor-agent.ps1')
+    writeFileSync(batchShim, '@echo off\r\n')
+    writeFileSync(powerShellShim, 'exit 0\r\n')
+    try {
+      await withPlatform('win32', async () => {
+        const listeners = new Map<string, (value: unknown) => void>()
+        const child = {
+          pid: 123,
+          kill: vi.fn(),
+          stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+          stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+          stdin: { end: vi.fn() },
+          on: vi.fn((event, callback) => listeners.set(event, callback))
+        }
+        spawnMock.mockReturnValue(child as never)
+
+        const pending = generateCommitMessageFromContext(
+          {
+            branch: 'main',
+            stagedSummary: 'M\tREADME.md',
+            stagedPatch: '+hello\n+goodbye'
+          },
+          {
+            agentId: 'cursor',
+            model: 'auto'
+          },
+          {
+            kind: 'local',
+            cwd: 'C:\\repo',
+            env: {
+              PATH: tempDir,
+              SystemRoot: 'D:\\Windows'
+            }
+          }
+        )
+
+        listeners.get('stdout:data')?.(Buffer.from('Update README\n'))
+        listeners.get('close')?.(0)
+
+        await expect(pending).resolves.toMatchObject({
+          success: true,
+          message: 'Update README'
+        })
+        const [spawnCommand, spawnArgs] = spawnMock.mock.calls[0] ?? []
+        expect(spawnCommand).toBe('D:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
+        expect(spawnArgs?.slice(0, 6)).toEqual([
+          '-NoProfile',
+          '-NonInteractive',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          powerShellShim
+        ])
+        expect(spawnArgs).toContain('--print')
+        expect(spawnArgs?.at(-1)).toContain('+goodbye')
+        expect(spawnArgs).not.toContain('-Command')
+      })
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
   })
 })
