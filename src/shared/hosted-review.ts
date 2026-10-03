@@ -40,6 +40,7 @@ export type HostedReviewInfo = {
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
+  inMergeQueue?: boolean
   mergeStateStatus?: string | null
   headSha?: string
   /** GitHub repository that owns the PR; absent on older runtimes and other providers. */

@@ -11,6 +11,7 @@ import {
   getGitHubMutationRoutingSettings,
   getGitHubRuntimeRepoId
 } from '@/lib/github-source-runtime-context'
+import { githubAutoMergeSuccessToast } from '@/components/github-auto-merge-success-toast'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
@@ -310,11 +311,7 @@ export function PRActionsPanel({
         )
       }
       useAppStore.getState().recordFeatureInteraction('github-tasks')
-      toast.success(
-        enabled
-          ? translate('auto.components.GitHubItemDialog.a35ea5a0f6', 'Auto-merge enabled')
-          : translate('auto.components.GitHubItemDialog.4b390bd50d', 'Auto-merge disabled')
-      )
+      toast.success(githubAutoMergeSuccessToast(enabled, result))
       onMutated()
     } catch {
       toast.error(
