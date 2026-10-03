@@ -437,6 +437,7 @@ describe('WorktreeCard quick actions', () => {
     )
 
     expect(markup).toContain('aria-label="Delete workspace"')
+    expect(markup).toContain('can-hover:absolute')
   })
 
   it('shows delete as the quick action for folder workspace instances while Option/Alt is held', () => {
