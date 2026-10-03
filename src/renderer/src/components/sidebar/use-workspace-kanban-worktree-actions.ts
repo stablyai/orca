@@ -9,7 +9,10 @@ import {
 } from './worktree-manual-order'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
-import type { WorktreeMetaBatchUpdate } from '../../store/slices/worktree-helpers'
+import type {
+  WorktreeMetaBatchUpdate,
+  WorkspacePinTarget
+} from '../../store/slices/worktree-helpers'
 import type { WorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
 
 type LaneView = { items: readonly Worktree[] }
@@ -178,8 +181,12 @@ export function useWorkspaceKanbanWorktreeActions(args: {
     [args.sortBy, args.worktreesByStatus, dropWorktreesInStatus]
   )
   const pinWorktree = useCallback(
-    (worktreeId: string) => {
-      const current = args.worktreeById.get(worktreeId)
+    (target: WorkspacePinTarget) => {
+      const worktreeId = typeof target === 'string' ? target : target.worktreeId
+      const current =
+        typeof target === 'string'
+          ? args.worktreeById.get(target)
+          : useAppStore.getState().getKnownWorktreeById(worktreeId, target.executionHostId)
       if (!current || current.isPinned) {
         return
       }
@@ -192,10 +199,14 @@ export function useWorkspaceKanbanWorktreeActions(args: {
     [args]
   )
   const pinWorktrees = useCallback(
-    (worktreeIds: readonly string[]) => {
+    (targets: readonly WorkspacePinTarget[]) => {
       const updates: WorktreeMetaBatchUpdate[] = []
-      for (const worktreeId of worktreeIds) {
-        const current = args.worktreeById.get(worktreeId)
+      for (const target of targets) {
+        const worktreeId = typeof target === 'string' ? target : target.worktreeId
+        const current =
+          typeof target === 'string'
+            ? args.worktreeById.get(target)
+            : useAppStore.getState().getKnownWorktreeById(worktreeId, target.executionHostId)
         if (current && !current.isPinned) {
           updates.push({
             worktreeId,

@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import type React from 'react'
 import type { WorkspaceStatus } from '../../../../../../shared/worktree/types'
+import type { WorkspacePinTarget } from '../../../../store/slices/worktree-helpers'
 import type { HostSectionRow } from '../../host-section-rows'
 import { PINNED_GROUP_KEY } from '../grouping/group-keys'
 import type { WorktreeGroupBy } from '../grouping/row-types'
@@ -20,7 +21,7 @@ export function useWorkspaceStatusRowDrag(args: {
   rows: HostSectionRow[]
   groupBy: WorktreeGroupBy
   onMoveWorktreeToStatus: (worktreeId: string, status: WorkspaceStatus) => void
-  onPinWorktree: (worktreeId: string) => void
+  onPinWorktree: (target: WorkspacePinTarget) => void
 }) {
   const { ctx, session, runtime, scrollRef, rows, groupBy } = args
   const { setDragOverStatus, setPinDragOver, clearWorktreeDrag } = runtime

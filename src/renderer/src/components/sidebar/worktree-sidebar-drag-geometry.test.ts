@@ -193,7 +193,10 @@ describe('worktree sidebar drag geometry under mid-drag card growth', () => {
         {
           key: 'repo:one',
           worktreeIds: GROUP_IDS,
-          units: GROUP_IDS.map((worktreeId) => ({ worktreeId, worktreeIds: [worktreeId] }))
+          units: GROUP_IDS.map((worktreeId) => ({
+            worktreeId,
+            worktreeIds: [worktreeId]
+          }))
         }
       ],
       rects: grown
