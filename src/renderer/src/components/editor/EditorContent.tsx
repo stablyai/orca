@@ -1,9 +1,11 @@
+import React from 'react'
+import { resolveSqliteFileOwner } from './sqlite-file-owner'
 import { useAppStore } from '@/store'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
-import { CombinedDiffViewer, MarkdownPreview } from './editor-lazy-views'
+import { CombinedDiffViewer, MarkdownPreview, SqliteViewer } from './editor-lazy-views'
 import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
 import { EditorDiffFileSurface } from './EditorDiffFileSurface'
 import { EditorEditFileSurface } from './EditorEditFileSurface'
@@ -49,6 +51,7 @@ export function EditorContent({
   isMermaid,
   isCsv,
   isNotebook,
+  isSqlite,
   mdViewMode,
   inlineMarkdownRenderState,
   isChangesMode,
@@ -77,6 +80,7 @@ export function EditorContent({
   isMermaid: boolean
   isCsv: boolean
   isNotebook: boolean
+  isSqlite: boolean
   mdViewMode: MarkdownViewMode
   inlineMarkdownRenderState: MarkdownRenderState | null
   isChangesMode: boolean
@@ -117,6 +121,14 @@ export function EditorContent({
   const getConflictNavigation = useEditorConflictNavigation()
   const activeConflictEntry =
     worktreeEntries.find((entry) => entry.path === activeFile.relativePath) ?? null
+  const renderSqliteViewer = (file: OpenFile): React.JSX.Element => (
+    <SqliteViewer
+      key={file.id}
+      filePath={file.filePath}
+      owner={resolveSqliteFileOwner(file.worktreeId ?? null, file.filePath)}
+    />
+  )
+
   const isCombinedDiff =
     activeFile.mode === 'diff' &&
     (activeFile.diffSource === 'combined-all' ||
@@ -233,6 +245,10 @@ export function EditorContent({
   }
 
   if (activeFile.mode === 'edit') {
+    // Before EditorEditFileSurface's content lookup: the viewer reads over its own IPC, and the text pipeline rejects a database as oversized binary.
+    if (isSqlite) {
+      return renderSqliteViewer(activeFile)
+    }
     return (
       <EditorEditFileSurface
         activeFile={activeFile}
