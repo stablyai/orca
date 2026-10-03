@@ -9,6 +9,8 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { OpenAiTranscriptionKeyDialog } from './OpenAiTranscriptionKeyDialog'
 import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow'
+import { CustomSttEndpointDialog } from './CustomSttEndpointDialog'
+import { useCustomSttEndpoint } from './use-custom-stt-endpoint'
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
@@ -55,6 +57,8 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     mountedRef.current = node !== null
   }, [])
 
+  const isMounted = useCallback((): boolean => mountedRef.current, [])
+
   const updateVoiceSettings = useCallback(
     (updates: Partial<VoiceSettings>): void => {
       updateSettings({
@@ -66,6 +70,14 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     },
     [updateSettings]
   )
+
+  const customEndpoint = useCustomSttEndpoint({
+    voiceSettings,
+    selectedModel: catalog.find((m) => m.id === voiceSettings.sttModel),
+    updateVoiceSettings,
+    refreshModelStates,
+    isMounted
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -233,6 +245,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         modelStates={modelStates}
         onUpdateVoiceSettings={updateVoiceSettings}
         onOpenOpenAiDialog={openOpenAiDialog}
+        onOpenCustomEndpointDialog={customEndpoint.openDialog}
         onRefreshModelStates={refreshModelStates}
       />
 
@@ -264,6 +277,38 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         onApiKeyDraftChange={setOpenAiApiKeyDraft}
         onSave={() => void saveOpenAiApiKey()}
         onClear={() => void clearOpenAiApiKey()}
+      />
+
+      <CustomSttEndpointDialog
+        open={customEndpoint.dialogOpen}
+        configured={voiceSettings.customSttBaseUrl !== ''}
+        baseUrlDraft={customEndpoint.baseUrlDraft}
+        modelDraft={customEndpoint.modelDraft}
+        modelSuggestions={customEndpoint.modelSuggestions}
+        discovering={customEndpoint.discovering}
+        languageDraft={customEndpoint.languageDraft}
+        apiKeyDraft={customEndpoint.apiKeyDraft}
+        apiKeyConfigured={voiceSettings.customSttApiKeyConfigured}
+        pending={customEndpoint.pending}
+        testing={customEndpoint.testing}
+        reachability={customEndpoint.reachability}
+        testResult={customEndpoint.testResult}
+        onOpenChange={(open) => {
+          if (open) {
+            customEndpoint.setDialogOpen(true)
+          } else {
+            // Why: Esc / outside-click is a cancel — leave the profile untouched.
+            customEndpoint.cancel()
+          }
+        }}
+        onBaseUrlDraftChange={customEndpoint.setBaseUrlDraft}
+        onModelDraftChange={customEndpoint.setModelDraft}
+        onLanguageDraftChange={customEndpoint.setLanguageDraft}
+        onApiKeyDraftChange={customEndpoint.setApiKeyDraft}
+        onSave={() => void customEndpoint.save()}
+        onClear={() => void customEndpoint.clear()}
+        onTest={() => void customEndpoint.test()}
+        onCancel={() => customEndpoint.cancel()}
       />
     </div>
   )
