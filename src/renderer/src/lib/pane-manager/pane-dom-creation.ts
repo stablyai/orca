@@ -6,6 +6,11 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal } from '@xterm/xterm'
 import type { ITerminalOptions } from '@xterm/xterm'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import {
+  classifyExternalAppUrl,
+  TERMINAL_WEB_AND_APP_URL_REGEX
+} from '../../../../shared/external-app-url'
+import { getTerminalCustomAppSchemeOpenHint } from '@/components/terminal-pane/terminal-link-open-hints'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import { attachPaneDrag } from './pane-drag-pointer'
 import type { ManagedPaneInternal, PaneManagerOptions } from './pane-manager-types'
@@ -17,6 +22,10 @@ import { installWindowsCtrlAltChordRepair } from './terminal-windows-ctrl-alt-ch
 import { installTerminalMouseEncodingTracker } from './terminal-mouse-encoding-tracker'
 
 function defaultLinkTooltipText(uri: string, openLinkHint: string): string {
+  const classified = classifyExternalAppUrl(uri)
+  if (classified.ok && classified.kind === 'custom') {
+    return `${uri} (${getTerminalCustomAppSchemeOpenHint()})`
+  }
   return `${uri} (${openLinkHint})`
 }
 
@@ -75,6 +84,9 @@ export function createPaneDOM(
   const webLinksAddon = new WebLinksAddon(
     options.onLinkClick ? (event, uri) => options.onLinkClick!(id, event, uri) : undefined,
     {
+      // Why: include custom app schemes (obsidian://, vscode://, …) so agents'
+      // OS-handler links are clickable; open still requires main-process approval (#13225).
+      urlRegex: TERMINAL_WEB_AND_APP_URL_REGEX,
       hover: (_event, uri) => {
         if (uri) {
           linkTooltipHoverToken += 1
