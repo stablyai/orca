@@ -63,6 +63,33 @@ describe('OrcaRuntimeRpcServer', () => {
     ).toBeNull()
   })
 
+  it('keeps a queued direct terminal send alive without occupying a long-poll slot', async () => {
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath: mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    })
+    const dispatch = vi.spyOn(server['dispatcher'], 'dispatch').mockResolvedValue({
+      id: 'direct-send',
+      ok: true,
+      result: {},
+      _meta: { runtimeId: runtime.getRuntimeId() }
+    })
+    const startKeepalive = vi.fn()
+    await server['handleMessage'](
+      JSON.stringify({
+        id: 'direct-send',
+        authToken: server['authToken'],
+        method: 'terminal.send',
+        params: { text: 'later' }
+      }),
+      { startKeepalive, signal: new AbortController().signal }
+    )
+    expect(startKeepalive).toHaveBeenCalledOnce()
+    expect(server['activeLongPolls']).toBe(0)
+    expect(dispatch).toHaveBeenCalledOnce()
+  })
+
   it('rejects oversized RPC frames instead of buffering them indefinitely', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
