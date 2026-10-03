@@ -4,12 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import {
-  buildBody,
-  PANE,
-  GOOD_PANE,
-  type AgentHookServerCacheInternals
-} from './server.test-fixtures'
+import { buildBody, PANE } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -395,91 +390,6 @@ describe('AgentHookServer listener replay', () => {
     expect(statusListener).toHaveBeenCalledOnce()
     expect(server.getStatusSnapshot()).toEqual([expect.objectContaining({ paneKey: otherTabPane })])
     expect([...evidenceObservedAtByPaneKey.keys()]).toEqual([otherTabPane])
-  })
-
-  it('batches connection cleanup and retains sibling and local statuses', () => {
-    const server = new AgentHookServer()
-    const paneKeyAt = (prefix: string, index: number): string =>
-      makePaneKey(
-        `${prefix}-tab-${index}`,
-        `00000000-0000-4000-8000-${(index + 1).toString(16).padStart(12, '0')}`
-      )
-    const targetPaneKeys = Array.from({ length: 100 }, (_, index) => paneKeyAt('target', index))
-    const siblingPaneKeys = Array.from({ length: 100 }, (_, index) =>
-      paneKeyAt('sibling', index + 100)
-    )
-    const unstampedPaneKey = paneKeyAt('legacy', 250)
-    const statusListener = vi.fn()
-    const clearListener = vi.fn()
-    const internals = server as unknown as AgentHookServerCacheInternals
-    const persistSpy = vi.spyOn(internals, 'scheduleStatusPersist')
-    server.subscribeStatusChanges(statusListener)
-    server.setPaneStatusClearListener(clearListener)
-    for (const paneKey of targetPaneKeys) {
-      server.ingestRemote({ paneKey, payload: { state: 'working', agentType: 'claude' } }, 'ssh-a')
-    }
-    for (const paneKey of siblingPaneKeys) {
-      server.ingestRemote({ paneKey, payload: { state: 'working', agentType: 'claude' } }, 'ssh-b')
-    }
-    server.ingestTerminalStatus({
-      paneKey: unstampedPaneKey,
-      payload: { state: 'working', prompt: '', agentType: 'codex' }
-    })
-    statusListener.mockClear()
-    persistSpy.mockClear()
-
-    server.clearStatusEntriesForConnection('ssh-a')
-
-    expect(statusListener).toHaveBeenCalledOnce()
-    expect(persistSpy).toHaveBeenCalledOnce()
-    expect(clearListener).toHaveBeenCalledOnce()
-    expect(clearListener).toHaveBeenCalledWith({
-      transient: true,
-      connectionId: 'ssh-a',
-      clearedAt: expect.any(Number)
-    })
-    expect(server.getStatusSnapshot().map((entry) => entry.paneKey)).toEqual([
-      ...siblingPaneKeys,
-      unstampedPaneKey
-    ])
-  })
-
-  it('emits a connection cutoff after a pane-key collision and orders replay after it', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_700_000_000_000)
-    const server = new AgentHookServer()
-    const clearListener = vi.fn()
-    server.setPaneStatusClearListener(clearListener)
-    server.ingestRemote(
-      { paneKey: PANE, payload: { state: 'working', agentType: 'claude' } },
-      'ssh-a'
-    )
-    server.ingestRemote(
-      { paneKey: PANE, payload: { state: 'working', agentType: 'codex' } },
-      'ssh-b'
-    )
-
-    server.clearStatusEntriesForConnection('ssh-a')
-    const clear = clearListener.mock.calls[0]?.[0] as {
-      transient: true
-      connectionId: string
-      clearedAt: number
-    }
-    server.ingestRemote(
-      { paneKey: GOOD_PANE, payload: { state: 'working', agentType: 'claude' }, isReplay: true },
-      'ssh-a'
-    )
-
-    expect(clear).toMatchObject({ transient: true, connectionId: 'ssh-a' })
-    expect(server.getStatusSnapshot()).toEqual([
-      expect.objectContaining({ paneKey: PANE, connectionId: 'ssh-b' }),
-      expect.objectContaining({
-        paneKey: GOOD_PANE,
-        connectionId: 'ssh-a',
-        receivedAt: clear.clearedAt + 1
-      })
-    ])
-    vi.useRealTimers()
   })
 
   it('hydrates cached statuses as not observed in the current runtime', async () => {

@@ -175,7 +175,6 @@ export function buildStoreState(overrides: StoreLike): StoreLike {
     agentStatusByPaneKey: {},
     setAgentStatuses: vi.fn(() => []),
     recordAgentProviderSession: vi.fn(),
-    clearTransientAgentStatuses: vi.fn(),
     recentlyClosedAgentStatusTabIds: {},
     repos: [],
     worktreesByRepo: {},

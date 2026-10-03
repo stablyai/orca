@@ -29,7 +29,6 @@ export type AgentStatusIpcBridge = {
 
 export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatusIpcBridge {
   const pendingAgentStatusEvents: PendingAgentStatusEvent[] = []
-  const transientClearWatermarkByConnectionId = new Map<string, number>()
   let disposed = false
   let pendingAgentStatusRetryTimer: ReturnType<typeof setTimeout> | null = null
   let isFlushingAgentStatuses = false
@@ -103,7 +102,6 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
 
   const applyAgentStatus = createAgentStatusEventApplicator({
     pendingAgentStatusEvents,
-    transientClearWatermarkByConnectionId,
     enqueuePendingAgentStatus
   })
   const startupSnapshot = registerAgentStatusStartupSnapshot()
@@ -265,7 +263,6 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
     enqueueLiveAgentStatus,
     drainQueuedLiveAgentStatusesForPane,
     pendingAgentStatusEvents,
-    transientClearWatermarkByConnectionId,
     liveAgentStatusBurstQueue
   })
 

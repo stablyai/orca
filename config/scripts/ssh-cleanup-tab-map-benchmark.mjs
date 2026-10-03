@@ -70,7 +70,6 @@ function emptyState() {
     directSshLivePtyBindingByTabId: {},
     directSshPaneRetryHistoryByTabId: {},
     deferredSshReconnectTargets: [],
-    transientClearedAgentStatusConnectionIds: {},
     sshConnectionStates: new Map(),
     sshTargetLabels: new Map(),
     sshTargetGenerations: new Map(),
@@ -175,9 +174,6 @@ for (let iteration = 0; iteration < 3000; iteration++) {
     }
     if (random(2)) {
       state.deferredSshReconnectTargets.push(targetId)
-    }
-    if (random(2)) {
-      state.transientClearedAgentStatusConnectionIds[targetId] = true
     }
     if (random(2)) {
       state.remoteWorkspaceSyncStatusByTargetId[targetId] = { phase: 'synced' }

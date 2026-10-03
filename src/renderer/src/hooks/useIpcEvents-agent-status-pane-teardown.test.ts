@@ -385,7 +385,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(removeAgentStatus).toHaveBeenCalledWith(FUTURE_PANE_KEY)
   })
 
-  it('blocks cleared snapshots across remount and accepts newer reconnect replay', async () => {
+  it('ignores the late snapshot of a disposed bridge and applies the remounted one', async () => {
     let resolveOldSnapshot!: (entries: AgentStatusSetData[]) => void
     let resolveCurrentSnapshot!: (entries: AgentStatusSetData[]) => void
     const oldSnapshot = new Promise<AgentStatusSetData[]>((resolve) => {
@@ -396,16 +396,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
     const effectCleanups: (() => void)[] = []
     const setAgentStatus = vi.fn()
-    const clearTransientAgentStatuses = vi.fn()
-    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
-      current: null
-    }
     const onClearListenerRef: {
       current: ((data: AgentStatusClearIpcPayload) => void) | null
     } = { current: null }
     const storeState: StoreLike = buildStoreState({
       setAgentStatus,
-      clearTransientAgentStatuses,
       workspaceSessionReady: true,
       settings: { terminalFontSize: 13, notifications: { enabled: false } },
       repos: [{ id: 'repo-1', connectionId: 'ssh-a' }],
@@ -438,10 +433,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     vi.stubGlobal(
       'window',
       buildWindowApi({
-        onSet: (callback) => {
-          onSetListenerRef.current = callback
-          return () => {}
-        },
+        onSet: () => () => {},
         onClear: (callback) => {
           onClearListenerRef.current = callback
           return () => {}
@@ -456,55 +448,32 @@ describe('useIpcEvents agent status snapshot integration', () => {
     effectCleanups[0]?.()
     useIpcEvents()
     await Promise.resolve()
-    if (!onSetListenerRef.current || !onClearListenerRef.current) {
-      throw new Error('Expected agent status listeners to be registered')
-    }
 
     expect(() =>
       onClearListenerRef.current?.(null as unknown as AgentStatusClearIpcPayload)
     ).not.toThrow()
-    expect(clearTransientAgentStatuses).not.toHaveBeenCalled()
 
-    onClearListenerRef.current({
-      transient: true,
-      connectionId: 'ssh-a',
-      clearedAt: 100
-    })
-    const staleEntry: AgentStatusSetData = {
+    const entry = (prompt: string, receivedAt: number): AgentStatusSetData => ({
       paneKey: FUTURE_PANE_KEY,
       state: 'working',
-      prompt: 'stale snapshot',
+      prompt,
       agentType: 'codex',
       worktreeId: 'wt-1',
       connectionId: 'ssh-a',
-      receivedAt: 100,
+      receivedAt,
       stateStartedAt: 90
-    }
-    resolveOldSnapshot([staleEntry])
-    resolveCurrentSnapshot([staleEntry])
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(clearTransientAgentStatuses).toHaveBeenCalledWith('ssh-a', 100)
-    expect(setAgentStatus).not.toHaveBeenCalled()
-
-    onSetListenerRef.current({
-      paneKey: FUTURE_PANE_KEY,
-      state: 'working',
-      prompt: 'replayed',
-      agentType: 'codex',
-      worktreeId: 'wt-1',
-      connectionId: 'ssh-a',
-      receivedAt: 101,
-      stateStartedAt: 101
     })
+    resolveOldSnapshot([entry('disposed snapshot', 100)])
+    resolveCurrentSnapshot([entry('current snapshot', 101)])
+    await Promise.resolve()
+    await Promise.resolve()
 
     expect(setAgentStatus).toHaveBeenCalledOnce()
     expect(setAgentStatus).toHaveBeenCalledWith(
       FUTURE_PANE_KEY,
-      expect.objectContaining({ prompt: 'replayed' }),
+      expect.objectContaining({ prompt: 'current snapshot' }),
       'Remote agent',
-      { updatedAt: 101, stateStartedAt: 101 },
+      { updatedAt: 101, stateStartedAt: 90 },
       expect.objectContaining({ worktreeId: 'wt-1', connectionId: 'ssh-a' }),
       undefined
     )

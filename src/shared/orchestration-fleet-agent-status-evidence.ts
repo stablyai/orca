@@ -62,7 +62,7 @@ export type FleetAgentStatusEvidence = {
   binding: FleetEvidenceBinding
   clock: FleetEvidenceClock
   /** Delivery order only, never a staleness input. A relay reconnect restamps this to stay
-   *  monotonic past the transient-clear watermark, which is exactly what makes it the right
+   *  monotonic past the connection's ordering watermark, which is exactly what makes it the right
    *  key for ordering replays and the wrong one for measuring age. */
   deliveredAt: number
   activity: FleetAgentActivity

@@ -18,7 +18,6 @@ const state = {
   >,
   ptyIdsByTabId: {} as Record<string, string[]>,
   sshConnectionStates: new Map<string, { status: string }>(),
-  transientClearedAgentStatusConnectionIds: {} as Record<string, true>,
   setAgentStatus: vi.fn()
 }
 
@@ -59,7 +58,6 @@ describe('observeExistingAutomationSession', () => {
     state.terminalLayoutsByTabId = {}
     state.ptyIdsByTabId = {}
     state.sshConnectionStates = new Map()
-    state.transientClearedAgentStatusConnectionIds = {}
     mockSubscribeToPtyData.mockReturnValue(vi.fn())
     mockSubscribeToPtyExit.mockReturnValue(vi.fn())
     mockCallRuntimeRpc.mockReturnValue(new Promise(() => {}))

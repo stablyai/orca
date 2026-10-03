@@ -36,7 +36,6 @@ const store = {
   folderWorkspaces: [] as unknown[],
   projectGroups: [] as unknown[],
   sshConnectionStates: new Map<string, { status: string }>(),
-  transientClearedAgentStatusConnectionIds: {} as Record<string, true>,
   worktreesByRepo: {} as Record<string, StoreWorktree[]>,
   allWorktrees: vi.fn(() => store.worktreesByRepo['repo-1'] ?? []),
   tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },

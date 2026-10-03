@@ -1,6 +1,5 @@
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
-import { collectWorktreeIdsForConnection } from './agent-status-connection-worktree-scope'
 import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
 import { removePaneKeys, removePaneKeysByTabPrefix } from './agent-status-pane-keyed-records'
 
@@ -13,7 +12,6 @@ export function createAgentStatusCleanupActions(
   | 'clearMigrationUnsupportedPty'
   | 'removeAgentStatus'
   | 'removeAgentStatusByTabPrefix'
-  | 'clearTransientAgentStatuses'
 > {
   const { get, set, freshness } = runtime
   return {
@@ -166,52 +164,6 @@ export function createAgentStatusCleanupActions(
         }
       })
       freshness.scheduleDeferred()
-    },
-
-    clearTransientAgentStatuses: (connectionId, clearedAt) => {
-      if (connectionId.length === 0 || !Number.isFinite(clearedAt)) {
-        return
-      }
-      let removed = false
-      set((s) => {
-        const worktreeIdsOnConnection = collectWorktreeIdsForConnection(s, connectionId)
-        let next: Record<string, (typeof s.agentStatusByPaneKey)[string]> | null = null
-        for (const [paneKey, existing] of Object.entries(s.agentStatusByPaneKey)) {
-          if (existing.updatedAt > clearedAt) {
-            continue
-          }
-          const belongsToConnection =
-            existing.connectionId === connectionId ||
-            (existing.connectionId === undefined &&
-              existing.worktreeId !== undefined &&
-              worktreeIdsOnConnection.has(existing.worktreeId))
-          if (!belongsToConnection) {
-            continue
-          }
-          next ??= { ...s.agentStatusByPaneKey }
-          delete next[paneKey]
-        }
-        const alreadyBlocked = connectionId in s.transientClearedAgentStatusConnectionIds
-        if (!next && alreadyBlocked) {
-          return s
-        }
-        removed = next !== null
-        return {
-          ...(next
-            ? {
-                agentStatusByPaneKey: next,
-                agentStatusEpoch: s.agentStatusEpoch + 1,
-                sortEpoch: s.sortEpoch + 1
-              }
-            : {}),
-          transientClearedAgentStatusConnectionIds: alreadyBlocked
-            ? s.transientClearedAgentStatusConnectionIds
-            : { ...s.transientClearedAgentStatusConnectionIds, [connectionId]: true }
-        }
-      })
-      if (removed) {
-        freshness.scheduleDeferred()
-      }
     }
   }
 }

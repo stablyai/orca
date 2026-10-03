@@ -14,7 +14,7 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   authorityRestartId?: string
   receivedAt: number
   /** When this evidence was first observed, as distinct from `receivedAt`. A relay reconnect
-   *  replays cached rows and `receivedAt` must restamp to clear the connection watermark, so
+   *  replays cached rows and `receivedAt` must restamp past the connection watermark, so
    *  only this clock can answer how old the evidence itself is. Persisted so it survives a
    *  main restart; absent means "never separately observed" and consumers use `receivedAt`. */
   evidenceObservedAt?: number

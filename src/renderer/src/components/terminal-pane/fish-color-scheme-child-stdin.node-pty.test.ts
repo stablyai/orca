@@ -370,7 +370,6 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       repos: [{ id: 'repo1', connectionId: null }],
       projects: [],
       sshConnectionStates: new Map(),
-      transientClearedAgentStatusConnectionIds: {},
       cacheTimerByKey: {},
       // Dark app mode: a pre-fix reply is `CSI ?997;1n`, the exact payload issue #9993 reports.
       settings: {

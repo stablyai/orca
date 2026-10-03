@@ -67,14 +67,14 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
-    const connectionClearWatermark = terminalOwnedPayload.connectionId
+    const connectionOrderingWatermark = terminalOwnedPayload.connectionId
       ? this.connectionTimestampWatermarkById.get(terminalOwnedPayload.connectionId)
       : undefined
-    // Why: renderer ordering rejects older rows; live evidence must sort after reconnect clears and restored rows across clock rollback.
+    // Why: renderer ordering rejects older rows; live evidence must sort after its connection's earlier rows and restored rows across clock rollback.
     const restoredStatusWatermark = previous?.restoredUnconfirmed ? previous.receivedAt : undefined
     const now = Math.max(
       Date.now(),
-      (connectionClearWatermark ?? -1) + 1,
+      (connectionOrderingWatermark ?? -1) + 1,
       (restoredStatusWatermark ?? -1) + 1
     )
     if (terminalOwnedPayload.connectionId) {

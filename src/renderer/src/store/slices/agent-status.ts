@@ -96,7 +96,6 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     runtimeAgentOrchestrationByPaneKey: {},
     migrationUnsupportedByPtyId: {},
     agentStatusEpoch: 0,
-    transientClearedAgentStatusConnectionIds: {},
     retainedAgentsByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
     agentLaunchConfigByPaneKey: {},

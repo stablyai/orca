@@ -39,7 +39,6 @@ const store = {
   }[],
   repos: [{ id: 'repo-1', connectionId: null as string | null, path: '/repo' }],
   sshConnectionStates: new Map([['ssh-a', { status: 'connected' }]]),
-  transientClearedAgentStatusConnectionIds: {} as Record<string, true>,
   worktreesByRepo: {
     'repo-1': [
       {
@@ -136,7 +135,6 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     ]
     store.repos = [{ id: 'repo-1', connectionId: null, path: '/repo' }]
     store.sshConnectionStates = new Map([['ssh-a', { status: 'connected' }]])
-    store.transientClearedAgentStatusConnectionIds = {}
     store.worktreesByRepo = {
       'repo-1': [
         {

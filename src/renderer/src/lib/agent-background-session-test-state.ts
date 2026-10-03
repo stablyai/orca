@@ -40,7 +40,6 @@ export type AgentBackgroundSessionTestState = {
   terminalLayoutsByTabId: Record<string, { ptyIdsByLeafId?: Record<string, string | undefined> }>
   ptyIdsByTabId: Record<string, string[]>
   sshConnectionStates: Map<string, { status: string }>
-  transientClearedAgentStatusConnectionIds: Record<string, true>
   allWorktrees: () => { id: string; repoId: string; path: string }[]
   getKnownWorktreeById: (worktreeId: string) => { id: string; path: string } | undefined
   createTab: TestMock
@@ -105,7 +104,6 @@ export function createAgentBackgroundSessionTestState(mocks: {
     >,
     ptyIdsByTabId: {} as Record<string, string[]>,
     sshConnectionStates: new Map<string, { status: string }>(),
-    transientClearedAgentStatusConnectionIds: {} as Record<string, true>,
     allWorktrees: () => state.worktreesByRepo['repo-1'],
     getKnownWorktreeById: (worktreeId: string) =>
       state.worktreesByRepo['repo-1']?.find((worktree) => worktree.id === worktreeId),
@@ -151,7 +149,6 @@ export function resetAgentBackgroundSessionTestState(state: AgentBackgroundSessi
   state.terminalLayoutsByTabId = {}
   state.ptyIdsByTabId = {}
   state.sshConnectionStates = new Map()
-  state.transientClearedAgentStatusConnectionIds = {}
   // Why: restored here so a test that stubs folder-workspace lookup cannot leak it forward.
   state.getKnownWorktreeById = (worktreeId: string) =>
     state.worktreesByRepo['repo-1']?.find((worktree) => worktree.id === worktreeId)

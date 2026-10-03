@@ -63,10 +63,10 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     if (!this.canWriteLegacyStatusRow(previous)) {
       return
     }
-    const connectionClearWatermark = previous.connectionId
+    const connectionOrderingWatermark = previous.connectionId
       ? this.connectionTimestampWatermarkById.get(previous.connectionId)
       : undefined
-    const now = Math.max(Date.now(), (connectionClearWatermark ?? -1) + 1)
+    const now = Math.max(Date.now(), (connectionOrderingWatermark ?? -1) + 1)
     if (previous.connectionId) {
       this.connectionTimestampWatermarkById.set(previous.connectionId, now)
     }
@@ -163,7 +163,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
 
   /**
    * A replay restates evidence already observed; it is not a new observation. Keeping
-   * `receivedAt` at `now` preserves delivery order (the connection-clear watermark and the
+   * `receivedAt` at `now` preserves delivery order (the per-connection ordering watermark and the
    * renderer's four `<` drops all depend on it), while this clock records when the evidence
    * was actually seen — so the staleness window measures age, not reconnect count.
    * Without a remembered time the honest answer is `now`, which is today's behaviour.

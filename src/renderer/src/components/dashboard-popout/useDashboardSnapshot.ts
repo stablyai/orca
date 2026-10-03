@@ -47,7 +47,6 @@ export function useDashboardSnapshot(): DashboardSnapshot {
     let topologyRefreshTimer: ReturnType<typeof setTimeout> | null = null
     let topologyRefreshStartedAt: number | null = null
     let staleRefreshTimer: ReturnType<typeof setTimeout> | null = null
-    const transientClearWatermarks = new Map<string, number>()
 
     const requestTopologyRefresh = (): void => {
       if (topologyRefreshTimer) {
@@ -130,12 +129,6 @@ export function useDashboardSnapshot(): DashboardSnapshot {
 
     const unsubscribe = window.api.dashboard.onSnapshot(apply)
     const unsubscribeStatus = window.api.agentStatus.onSet((event) => {
-      if (
-        typeof event.connectionId === 'string' &&
-        event.receivedAt <= (transientClearWatermarks.get(event.connectionId) ?? -1)
-      ) {
-        return
-      }
       const result = patchDashboardSnapshotFromAgentStatus(snapshotRef.current, event)
       if (!result.matched) {
         if (snapshotRef.current.generatedAt !== 0) {
@@ -147,15 +140,7 @@ export function useDashboardSnapshot(): DashboardSnapshot {
         apply(result.snapshot)
       }
     })
-    const unsubscribeClear = window.api.agentStatus.onClear((event) => {
-      if ('transient' in event && event.transient) {
-        transientClearWatermarks.set(
-          event.connectionId,
-          Math.max(transientClearWatermarks.get(event.connectionId) ?? -1, event.clearedAt)
-        )
-      }
-      requestTopologyRefresh()
-    })
+    const unsubscribeClear = window.api.agentStatus.onClear(() => requestTopologyRefresh())
     void window.api.dashboard.requestSnapshot()
     return () => {
       unsubscribe()

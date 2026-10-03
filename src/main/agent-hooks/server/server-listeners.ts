@@ -188,7 +188,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   protected emitPaneStatusCleared(clear: AgentStatusClearIpcPayload): void {
     this.onPaneStatusCleared?.(clear)
     for (const listener of this.paneStatusClearListeners) {
-      // Why: callers are pane/connection teardown paths; one throwing subscriber must
+      // Why: callers are pane teardown paths; one throwing subscriber must
       // not strand the rest, matching every other fan-out here.
       try {
         listener(clear)

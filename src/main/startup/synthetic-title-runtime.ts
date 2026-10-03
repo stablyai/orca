@@ -8,7 +8,6 @@ import {
 } from '../../shared/synthetic-agent-title'
 import {
   advanceSyntheticTitleSpinnerEntries,
-  getSyntheticTitleSpinnerPaneKeyToStop,
   type SyntheticTitleSpinnerEntry
 } from '../synthetic-title-spinner'
 import { shouldSendSyntheticTitleFrame } from '../synthetic-title-visibility'
@@ -156,12 +155,7 @@ export function initializeSyntheticTitleRuntime(): void {
   // stands in for — otherwise a pane whose status was cleared or dismissed keeps rotating a
   // working title long after the agent finished (#13890). Both paths are covered: the
   // pane-scoped clear fan-out, and user dismissal, which never routes through it.
-  agentHookServer.subscribePaneStatusClear((clear) => {
-    const paneKey = getSyntheticTitleSpinnerPaneKeyToStop(clear)
-    if (paneKey) {
-      stopSyntheticTitleSpinner(paneKey)
-    }
-  })
+  agentHookServer.subscribePaneStatusClear((clear) => stopSyntheticTitleSpinner(clear.paneKey))
   agentHookServer.subscribeStatusDrop(stopSyntheticTitleSpinner)
 }
 

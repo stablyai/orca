@@ -41,7 +41,6 @@ function hook(
 ): AgentSessionStatusEvent {
   return {
     paneKey: PANE,
-    connectionId: null,
     stateStartedAt,
     receivedAt: stateStartedAt,
     payload: { state },
@@ -201,18 +200,6 @@ describe('AgentSessionTransitionRecorder', () => {
 
     expect(stats.getSummary().totalAgentTimeMs).toBe(45_000)
     expect(recorder.trackedPaneCount).toBe(0)
-  })
-
-  it('closes sessions on the dropped connection when an SSH batch clear lands', () => {
-    const stats = new StatsCollector()
-    const recorder = new AgentSessionTransitionRecorder(stats)
-
-    recorder.onStatus(hook('working', T, { paneKey: 'a', connectionId: 'ssh-1' }))
-    recorder.onStatus(hook('working', T, { paneKey: 'b', connectionId: 'ssh-2' }))
-    recorder.onCleared({ transient: true, connectionId: 'ssh-1', clearedAt: T + 20_000 })
-
-    expect(stats.getSummary().totalAgentTimeMs).toBe(20_000)
-    expect(recorder.trackedPaneCount).toBe(1)
   })
 
   it('bounds the mirror and closes what it evicts', () => {

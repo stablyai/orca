@@ -38,9 +38,6 @@ export type AgentStatusSlice = {
   migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>
   /** Monotonic tick that advances when agent-status freshness boundaries pass. */
   agentStatusEpoch: number
-  /** SSH connections whose transient rows were cleared and must reject renderer callbacks
-   *  until a later reconnect establishes a new connection lifecycle. */
-  transientClearedAgentStatusConnectionIds: Record<string, true>
   /** Arm the shared freshness timer after an external mirror writes live rows. */
   scheduleAgentStatusFreshness: () => void
 
@@ -125,9 +122,6 @@ export type AgentStatusSlice = {
 
   /** Remove all entries whose paneKey starts with the given prefix (tab close prefix-sweep). */
   removeAgentStatusByTabPrefix: (tabIdPrefix: string) => void
-
-  /** Remove stale live rows while preserving pane launch and resume identity. */
-  clearTransientAgentStatuses: (connectionId: string, clearedAt: number) => void
 
   /** Remove a single entry AND suppress re-retention on its next disappearance (user-initiated teardown: X button, pane close). */
   dropAgentStatus: (paneKey: string, opts?: DropAgentStatusOptions) => void

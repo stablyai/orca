@@ -503,7 +503,6 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
       repos: [{ id: 'repo1', connectionId: null, displayName: 'orca' }],
       projects: [],
       sshConnectionStates: new Map(),
-      transientClearedAgentStatusConnectionIds: {},
       cacheTimerByKey: {},
       settings: {
         promptCacheTimerEnabled: true,

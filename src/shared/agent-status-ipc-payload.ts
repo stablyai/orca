@@ -50,7 +50,7 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   receivedAt: number
   /** When the reported evidence was first observed, as distinct from `receivedAt` (delivery
    *  order). A relay reconnect replays cached rows, and `receivedAt` must restamp to stay
-   *  monotonic past the transient-clear watermark — so only this clock can measure staleness.
+   *  monotonic past the connection's ordering watermark — so only this clock can measure staleness.
    *  Optional: absent from old hosts, where consumers fall back to `receivedAt`. */
   evidenceObservedAt?: number
   /** Timestamp (ms) when the current state first appeared for this pane. */
@@ -82,11 +82,5 @@ export type AgentStatusCacheIdentity = {
   stateStartedAt: number
 }
 
-/** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */
-export type AgentStatusClearIpcPayload =
-  | { paneKey: string }
-  | {
-      transient: true
-      connectionId: string
-      clearedAt: number
-    }
+/** Wire shape for pane teardown. Transport loss never clears a row (ssh-execution-boundary.md). */
+export type AgentStatusClearIpcPayload = { paneKey: string }

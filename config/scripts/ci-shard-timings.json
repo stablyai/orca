@@ -8555,7 +8555,6 @@
       "src/renderer/src/store/slices/agent-status-retention-prefix-sweep.test.ts": 1493,
       "src/renderer/src/store/slices/agent-status-runtime-orchestration.test.ts": 1552,
       "src/renderer/src/store/slices/agent-status-session-boundary-done.test.ts": 1464,
-      "src/renderer/src/store/slices/agent-status-ssh-connection-clear.test.ts": 1418,
       "src/renderer/src/store/slices/agent-status-tool-assistant-fields.test.ts": 1612,
       "src/renderer/src/store/slices/agent-status-worktree-purge-leak.test.ts": 1555,
       "src/renderer/src/store/slices/agent-status.test.ts": 1634,

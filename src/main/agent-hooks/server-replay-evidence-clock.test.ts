@@ -57,8 +57,6 @@ describe('the observation clock a relay replay must not restamp', () => {
     expect(lastForPane().evidenceObservedAt).toBe(T0)
 
     vi.setSystemTime(T0 + 25 * 60 * 1000)
-    // A lost transport clears the row; the age of the evidence it restates is not a claim.
-    server.clearStatusEntriesForConnection(CONNECTION)
     ingest(
       server,
       { hook_event_name: 'UserPromptSubmit', prompt: 'do the thing' },
@@ -67,7 +65,7 @@ describe('the observation clock a relay replay must not restamp', () => {
 
     const replayed = lastForPane()
     expect(replayed.payload.state).toBe('working')
-    // Delivery order must still clear the connection watermark, or the renderer drops the row.
+    // Delivery order must still pass the connection watermark, or the renderer drops the row.
     expect(replayed.receivedAt).toBeGreaterThan(T0 + 25 * 60 * 1000 - 1)
     expect(replayed.evidenceObservedAt).toBe(T0)
   })
@@ -75,7 +73,6 @@ describe('the observation clock a relay replay must not restamp', () => {
   it('carries the observation time out of getStatusSnapshot, not just the listener', () => {
     ingest(server, { hook_event_name: 'UserPromptSubmit', prompt: 'do the thing' })
     vi.setSystemTime(T0 + 25 * 60 * 1000)
-    server.clearStatusEntriesForConnection(CONNECTION)
     ingest(
       server,
       { hook_event_name: 'UserPromptSubmit', prompt: 'do the thing' },
@@ -88,10 +85,22 @@ describe('the observation clock a relay replay must not restamp', () => {
     expect(row.evidenceObservedAt).toBe(T0)
   })
 
+  it('keeps the observation time for a replay that lands after the row was dismissed', () => {
+    ingest(server, { hook_event_name: 'UserPromptSubmit', prompt: 'do the thing' })
+    server.dropStatusEntry(PANE, { preserveResumeIdentity: false })
+
+    vi.setSystemTime(T0 + 25 * 60 * 1000)
+    ingest(
+      server,
+      { hook_event_name: 'UserPromptSubmit', prompt: 'do the thing' },
+      { isReplay: true }
+    )
+    expect(lastForPane().evidenceObservedAt).toBe(T0)
+  })
+
   it('lets a live event restamp the observation time after a replay', () => {
     ingest(server, { hook_event_name: 'UserPromptSubmit', prompt: 'do the thing' })
     vi.setSystemTime(T0 + 25 * 60 * 1000)
-    server.clearStatusEntriesForConnection(CONNECTION)
     ingest(
       server,
       { hook_event_name: 'UserPromptSubmit', prompt: 'do the thing' },

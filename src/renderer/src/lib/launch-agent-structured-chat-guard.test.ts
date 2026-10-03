@@ -91,7 +91,6 @@ const store = {
   projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' as const } }],
   repos: [{ id: 'repo-1', connectionId: null as string | null, path: '/repo' }],
   sshConnectionStates: new Map(),
-  transientClearedAgentStatusConnectionIds: {},
   worktreesByRepo: {
     'repo-1': [{ id: 'wt-1', repoId: 'repo-1', projectId: 'repo-1', path: '/repo/worktree' }]
   },

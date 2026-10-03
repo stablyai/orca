@@ -66,8 +66,7 @@ describe('agent status connection ownership', () => {
     const state = {
       terminalLayoutsByTabId: { 'tab-1': { ptyIdsByLeafId: { [LEAF]: ptyId } } },
       ptyIdsByTabId: { 'tab-1': [ptyId] },
-      sshConnectionStates: new Map([['ssh-a', { status: 'connected' }]]),
-      transientClearedAgentStatusConnectionIds: {}
+      sshConnectionStates: new Map([['ssh-a', { status: 'connected' }]])
     }
 
     expect(resolveLiveAgentStatusConnectionRouting({ state, paneKey: PANE, ptyId })).toEqual({
@@ -77,18 +76,18 @@ describe('agent status connection ownership', () => {
     expect(resolveLiveAgentStatusConnectionRouting({ state, paneKey: PANE, ptyId })).toBeUndefined()
   })
 
-  it('rejects stale SSH routing after clear and throughout transient reconnect', () => {
+  it('rejects SSH routing until the connection is connected again', () => {
     const ptyId = toAppSshPtyId('ssh-a', 'pty-1')
     const state = {
       terminalLayoutsByTabId: { 'tab-1': { ptyIdsByLeafId: { [LEAF]: ptyId } } },
       ptyIdsByTabId: { 'tab-1': [ptyId] },
-      sshConnectionStates: new Map([['ssh-a', { status: 'connected' }]]),
-      transientClearedAgentStatusConnectionIds: { 'ssh-a': true } as Record<string, true>
+      sshConnectionStates: new Map([['ssh-a', { status: 'reconnecting' }]])
     }
 
     expect(resolveLiveAgentStatusConnectionRouting({ state, paneKey: PANE, ptyId })).toBeUndefined()
-    state.transientClearedAgentStatusConnectionIds = {}
-    state.sshConnectionStates = new Map([['ssh-a', { status: 'reconnecting' }]])
-    expect(resolveLiveAgentStatusConnectionRouting({ state, paneKey: PANE, ptyId })).toBeUndefined()
+    state.sshConnectionStates = new Map([['ssh-a', { status: 'connected' }]])
+    expect(resolveLiveAgentStatusConnectionRouting({ state, paneKey: PANE, ptyId })).toEqual({
+      connectionId: 'ssh-a'
+    })
   })
 })

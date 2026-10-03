@@ -10,7 +10,6 @@ type AgentStatusRoutingState = {
     | undefined
   ptyIdsByTabId: Record<string, string[] | undefined> | undefined
   sshConnectionStates: ReadonlyMap<string, { status: string }>
-  transientClearedAgentStatusConnectionIds: Record<string, true>
 }
 
 export function resolveAgentStatusConnectionRouting(args: {
@@ -82,12 +81,9 @@ export function resolveLiveAgentStatusConnectionRouting(args: {
   if (!routing) {
     return undefined
   }
-  // Why: transient relay reconnect clears statuses without dropping durable
-  // PTY bindings; old renderer callbacks must stay blocked until reconnect.
   if (
     routing.connectionId !== null &&
-    (args.state.sshConnectionStates.get(routing.connectionId)?.status !== 'connected' ||
-      routing.connectionId in args.state.transientClearedAgentStatusConnectionIds)
+    args.state.sshConnectionStates.get(routing.connectionId)?.status !== 'connected'
   ) {
     return undefined
   }

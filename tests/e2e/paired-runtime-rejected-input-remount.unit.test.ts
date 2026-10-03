@@ -305,7 +305,6 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
       repos: [{ id: 'repo1', connectionId: null, displayName: 'orca' }],
       projects: [],
       sshConnectionStates: new Map(),
-      transientClearedAgentStatusConnectionIds: {},
       cacheTimerByKey: {},
       settings: { terminalMainSideEffectAuthority: false },
       codexRestartNoticeByPtyId: {},

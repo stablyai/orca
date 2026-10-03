@@ -71,7 +71,7 @@ audit established:
   authority id `main-agent-hooks`;
 - it alone holds pane authority: launch tokens and their hashed commitments,
   retired-pane fences, pane-key aliases, per-connection ordering watermarks,
-  and the evidence-age map that must outlive a transport clear;
+  and the evidence-age map that must outlive a dismissed row;
 - it alone persists, with a seven-day hydrate window and the
   `restoredUnconfirmed` stamp that keeps a hydrated row from ever reading as
   live truth;

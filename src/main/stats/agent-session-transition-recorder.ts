@@ -11,7 +11,6 @@ import type { AgentStatusPayload } from '../../shared/agent-status-types'
 export type AgentSessionStatusEvent = {
   paneKey: string
   worktreeId?: string
-  connectionId: string | null
   /** Identity-only refresh (resume metadata); carries no turn-state transition. */
   providerSessionOnly?: boolean
   /** Relay cache replay rather than a live hook. */
@@ -29,10 +28,8 @@ export type AgentSessionStatusEvent = {
   payload: Pick<AgentStatusPayload, 'state' | 'workingMode'>
 }
 
-/** Ordinary pane teardown, or a stamped batch clear for one dropped connection. */
-export type AgentSessionClearEvent =
-  | { paneKey: string }
-  | { transient: true; connectionId: string; clearedAt: number }
+/** Pane teardown. */
+export type AgentSessionClearEvent = { paneKey: string }
 
 /** Where session boundaries land. Matches StatsCollector's lifecycle API. */
 export type AgentSessionSink = {
@@ -51,7 +48,6 @@ export const AGENT_SESSION_MIRROR_LIMIT = 1000
 type MirroredSession = {
   /** Whether the row last said an agent was executing (the main agent or live agent child work). */
   executing: boolean
-  connectionId: string | null
   /** True while this recorder has an unmatched onAgentStart out to the sink. */
   open: boolean
 }
@@ -144,23 +140,14 @@ export class AgentSessionTransitionRecorder {
 
     this.touch(event.paneKey, {
       executing,
-      connectionId: event.connectionId,
       open
     })
     this.evictOldest()
   }
 
-  /** Pane teardown / dropped connection: close what this recorder still holds open. */
+  /** Pane teardown: close what this recorder still holds open. */
   onCleared(clear: AgentSessionClearEvent): void {
-    if ('paneKey' in clear) {
-      this.closeAndForget(clear.paneKey, Date.now())
-      return
-    }
-    for (const [paneKey, session] of Array.from(this.sessions)) {
-      if (session.connectionId === clear.connectionId) {
-        this.closeAndForget(paneKey, clear.clearedAt)
-      }
-    }
+    this.closeAndForget(clear.paneKey, Date.now())
   }
 
   get trackedPaneCount(): number {

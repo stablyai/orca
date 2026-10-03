@@ -16,7 +16,6 @@ export function registerAgentStatusListeners(args: {
   enqueueLiveAgentStatus: (data: AgentStatusIpcPayload) => void
   drainQueuedLiveAgentStatusesForPane: (paneKey: string) => void
   pendingAgentStatusEvents: PendingAgentStatusEvent[]
-  transientClearWatermarkByConnectionId: Map<string, number>
   liveAgentStatusBurstQueue: AgentStatusIpcPayload[]
 }): void {
   const {
@@ -24,7 +23,6 @@ export function registerAgentStatusListeners(args: {
     enqueueLiveAgentStatus,
     drainQueuedLiveAgentStatusesForPane,
     pendingAgentStatusEvents,
-    transientClearWatermarkByConnectionId,
     liveAgentStatusBurstQueue
   } = args
   unsubs.push(
@@ -34,42 +32,7 @@ export function registerAgentStatusListeners(args: {
   )
   const unsubscribeAgentStatusClear = window.api.agentStatus.onClear?.(
     (data: AgentStatusClearIpcPayload) => {
-      if (typeof data !== 'object' || data === null) {
-        return
-      }
-      if ('transient' in data && data.transient === true) {
-        if (
-          typeof data.connectionId !== 'string' ||
-          data.connectionId.length === 0 ||
-          !Number.isFinite(data.clearedAt)
-        ) {
-          return
-        }
-        const previousWatermark = transientClearWatermarkByConnectionId.get(data.connectionId) ?? -1
-        const effectiveWatermark = Math.max(previousWatermark, data.clearedAt)
-        transientClearWatermarkByConnectionId.set(data.connectionId, effectiveWatermark)
-        for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {
-          const pending = pendingAgentStatusEvents[index].data
-          if (
-            pending.connectionId === data.connectionId &&
-            pending.receivedAt <= effectiveWatermark
-          ) {
-            pendingAgentStatusEvents.splice(index, 1)
-          }
-        }
-        for (let index = liveAgentStatusBurstQueue.length - 1; index >= 0; index -= 1) {
-          const queued = liveAgentStatusBurstQueue[index]
-          if (
-            queued.connectionId === data.connectionId &&
-            queued.receivedAt <= effectiveWatermark
-          ) {
-            liveAgentStatusBurstQueue.splice(index, 1)
-          }
-        }
-        useAppStore.getState().clearTransientAgentStatuses(data.connectionId, effectiveWatermark)
-        return
-      }
-      if (!('paneKey' in data) || typeof data.paneKey !== 'string') {
+      if (typeof data !== 'object' || data === null || typeof data.paneKey !== 'string') {
         return
       }
       // Why: preserve set→clear FIFO so a queued completion still survives pane teardown.

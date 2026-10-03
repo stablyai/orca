@@ -474,7 +474,6 @@ describe('remote hidden-output restore outcomes', () => {
       repos: [{ id: 'repo1', connectionId: null, displayName: 'orca' }],
       projects: [],
       sshConnectionStates: new Map(),
-      transientClearedAgentStatusConnectionIds: {},
       cacheTimerByKey: {},
       settings: {
         promptCacheTimerEnabled: true,

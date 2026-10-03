@@ -36,14 +36,9 @@ import {
 
 export function createAgentStatusEventApplicator(args: {
   pendingAgentStatusEvents: PendingAgentStatusEvent[]
-  transientClearWatermarkByConnectionId: Map<string, number>
   enqueuePendingAgentStatus: (data: AgentStatusIpcPayload, options?: { replay?: boolean }) => void
 }): (data: AgentStatusIpcPayload, options?: AgentStatusApplyOptions) => AgentStatusApplyResult {
-  const {
-    pendingAgentStatusEvents,
-    transientClearWatermarkByConnectionId,
-    enqueuePendingAgentStatus
-  } = args
+  const { pendingAgentStatusEvents, enqueuePendingAgentStatus } = args
   const applyAgentStatus = (
     data: AgentStatusIpcPayload,
     options?: AgentStatusApplyOptions
@@ -127,13 +122,6 @@ export function createAgentStatusEventApplicator(args: {
     const ownershipConnectionId = isWslHookRelayConnectionId(data.connectionId)
       ? null
       : data.connectionId
-    const transientClearWatermark =
-      typeof data.connectionId === 'string'
-        ? transientClearWatermarkByConnectionId.get(data.connectionId)
-        : undefined
-    if (transientClearWatermark !== undefined && data.receivedAt <= transientClearWatermark) {
-      return 'dropped'
-    }
     const canAcceptPendingRemoteOwnership =
       ownershipConnectionId !== undefined &&
       ownershipConnectionId !== null &&
