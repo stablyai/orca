@@ -29,6 +29,7 @@ const MAX_STARTUP_LOCKS = 128
 const LOCK_NAME = /^[a-f0-9]{64}\.lock$/
 const LEGACY_OWNER_NAME = /^[a-f0-9]{64}\.lock\.[a-f0-9-]{36}\.owner$/
 const CANDIDATE_LOCK_NAME = /^[a-f0-9]{64}\.lock\.[a-f0-9-]{36}\.candidate$/
+// Older builds moved released locks aside under this name; startup still sweeps them.
 const RELEASED_LOCK_NAME = /^[a-f0-9]{64}\.lock\.[a-f0-9-]{36}\.released$/
 const OWNER_ENTRY_NAME = /^([a-f0-9-]{36})\.owner$/
 const RELEASE_ENTRY_NAME = /^([a-f0-9-]{36})\.released$/
@@ -228,7 +229,6 @@ export async function acquireSkillInstallLock(input: {
   const candidatePath = `${input.path}.${owner.token}.candidate`
   const candidateOwnerPath = join(candidatePath, `${owner.token}.owner`)
   const ownerPath = join(input.path, `${owner.token}.owner`)
-  const releasedPath = `${input.path}.${owner.token}.released`
   await mkdir(candidatePath, { mode: 0o700 })
   activeLockTokens.add(owner.token)
   let published = false
@@ -275,14 +275,10 @@ export async function acquireSkillInstallLock(input: {
         }
         await markReleased(join(input.path, `${owner.token}.released`))
         try {
-          await rename(input.path, releasedPath)
-        } catch (error) {
-          if ((await readSkillInstallLockOwner(ownerPath))?.token === owner.token) {
-            throw error
-          }
-          return
+          await cleanupReleasedSkillInstallLock(input.path, owner.token, input.removeLock)
+        } catch {
+          // The marker is the release; leftovers are reclaimed by the next acquirer or the startup sweep.
         }
-        await cleanupReleasedSkillInstallLock(releasedPath, owner.token, input.removeLock)
       } finally {
         activeLockTokens.delete(owner.token)
       }
