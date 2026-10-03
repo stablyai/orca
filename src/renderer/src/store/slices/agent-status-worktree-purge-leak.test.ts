@@ -146,6 +146,37 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
     expect(s.lastTerminalInputAtByPaneKey[OTHER_PANE]).toBe(2)
   })
 
+  it('drops sleeping records of the removed worktree whose tab is already gone (#24784)', () => {
+    const store = createTestStore()
+    const OTHER = 'repo1::/path/wt2'
+    // Why no tab: a record can outlive its tab, so the tab-prefix purge alone cannot reach it.
+    const ORPHAN_PANE = 'gone-tab:leaf-z'
+    const OTHER_PANE = 'other-tab:leaf-y'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: OTHER, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      tabsByWorktree: { [WT]: [], [OTHER]: [] },
+      agentLaunchConfigByPaneKey: {
+        [ORPHAN_PANE]: { launchConfig: {}, registeredAt: 0, identity: {} },
+        [OTHER_PANE]: { launchConfig: {}, registeredAt: 0, identity: {} }
+      } as unknown as AppState['agentLaunchConfigByPaneKey'],
+      sleepingAgentSessionsByPaneKey: {
+        [ORPHAN_PANE]: { paneKey: ORPHAN_PANE, worktreeId: WT },
+        [OTHER_PANE]: { paneKey: OTHER_PANE, worktreeId: OTHER }
+      } as unknown as AppState['sleepingAgentSessionsByPaneKey']
+    })
+
+    store.getState().purgeWorktreeTerminalState([WT])
+
+    const s = store.getState()
+    expect(Object.keys(s.sleepingAgentSessionsByPaneKey)).toEqual([OTHER_PANE])
+    expect(Object.keys(s.agentLaunchConfigByPaneKey)).toEqual([OTHER_PANE])
+  })
+
   it('purgeWorktreeTerminalState forgets pane-authority aliases for the removed tabs', () => {
     resetAgentPaneAuthorityAliasesForTests()
     const store = createTestStore()
