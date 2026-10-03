@@ -54,6 +54,26 @@ function windowsShellArgs(
   return null
 }
 
+function windowsRemoteCliPathEnv(
+  shellName: string,
+  env: Record<string, string>
+): Record<string, string> {
+  if (!['powershell.exe', 'powershell', 'pwsh.exe', 'pwsh', 'cmd.exe', 'cmd'].includes(shellName)) {
+    return {}
+  }
+  const binDir = env.ORCA_REMOTE_CLI_BIN_DIR?.trim()
+  if (!binDir) {
+    return {}
+  }
+  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'Path'
+  const current = env[pathKey] ?? ''
+  const remaining = current
+    .split(';')
+    .filter(Boolean)
+    .filter((entry) => entry.toLowerCase() !== binDir.toLowerCase())
+  return { [pathKey]: [binDir, ...remaining].join(';') }
+}
+
 function getWrapperRoot(env: Record<string, string>): string {
   return join(env.HOME || process.env.HOME || homedir(), RELAY_SHELL_READY_DIR)
 }
@@ -82,7 +102,7 @@ export function getRelayShellLaunchConfig(
         windowsShellArgs(shellName, {
           terminalWindowsWslDistro: options.terminalWindowsWslDistro
         }) ?? [],
-      env: {},
+      env: windowsRemoteCliPathEnv(shellName, env),
       supportsReadyMarker: false
     }
   }

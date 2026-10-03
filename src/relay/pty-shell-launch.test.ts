@@ -135,6 +135,45 @@ describe('getRelayShellLaunchConfig', () => {
     })
   })
 
+  it('prepends the remote CLI bridge after the relay merges the Windows PATH', () => {
+    expect(
+      getRelayShellLaunchConfig(
+        'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        {
+          Path: 'C:\\Windows\\System32;C:\\Tools',
+          ORCA_REMOTE_CLI_BIN_DIR: 'C:/Users/me/.orca-relay/bin'
+        },
+        'win32'
+      ).env
+    ).toEqual({ Path: 'C:/Users/me/.orca-relay/bin;C:\\Windows\\System32;C:\\Tools' })
+  })
+
+  it.each(['pwsh.exe', 'cmd.exe'])('deduplicates the remote CLI bridge for %s', (shell) => {
+    expect(
+      getRelayShellLaunchConfig(
+        shell,
+        {
+          PATH: 'c:/users/me/.orca-relay/bin;C:\\Tools',
+          ORCA_REMOTE_CLI_BIN_DIR: 'C:/Users/me/.orca-relay/bin'
+        },
+        'win32'
+      ).env
+    ).toEqual({ PATH: 'C:/Users/me/.orca-relay/bin;C:\\Tools' })
+  })
+
+  it('does not inject a Windows launcher path into WSL', () => {
+    expect(
+      getRelayShellLaunchConfig(
+        'wsl.exe',
+        {
+          Path: 'C:\\Windows\\System32',
+          ORCA_REMOTE_CLI_BIN_DIR: 'C:/Users/me/.orca-relay/bin'
+        },
+        'win32'
+      ).env
+    ).toEqual({})
+  })
+
   it.skipIf(process.platform === 'win32')(
     'wraps an ordinary SSH pane, as every remote pane with a CLI bridge already was',
     () => {
