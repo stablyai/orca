@@ -33,6 +33,8 @@ type TerminalViewportRefitOptions = {
   tabStripVisible: boolean
   // Why: text size (font scale); changing it changes cell size, so the PTY must be re-fitted to a new column count.
   textScale: number
+  // Why: Android opt-in; when set, keyboard-driven frame-height changes refit the PTY instead of waiting for the keyboard to close.
+  resizeForKeyboard: boolean
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
 }
@@ -52,6 +54,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
     connState,
     tabStripVisible,
     textScale,
+    resizeForKeyboard,
     unsubscribeTerminal,
     subscribeToTerminal
   } = options
@@ -79,9 +82,11 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
         // Why: a height refit can fire after the keyboard reopened within the debounce; re-check so we never reflow the PTY mid-keystroke.
         if (heightOriginatedRefitRef.current) {
           heightOriginatedRefitRef.current = false
-          const decision = reduceTerminalFrameHeightRefit(frameHeightRefitStateRef.current, {
-            type: 'refit-committed'
-          })
+          const decision = reduceTerminalFrameHeightRefit(
+            frameHeightRefitStateRef.current,
+            { type: 'refit-committed' },
+            resizeForKeyboard
+          )
           frameHeightRefitStateRef.current = decision.state
           if (!decision.shouldRefit) {
             return
@@ -176,6 +181,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
       clientRef,
       deviceTokenRef,
       initializedHandlesRef,
+      resizeForKeyboard,
       unsubscribeTerminal,
       subscribeToTerminal
     ]
@@ -205,13 +211,30 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
       return
     }
     prevWindowDimsRef.current = { width: windowWidth, height: windowHeight }
-    // Why: adjustResize can change only window height while the IME is open; the frame-height notifier corrects once it closes.
-    if (prev.width === windowWidth && frameHeightRefitStateRef.current.keyboardVisible) {
+    // Why: adjustResize can change only window height while the IME is open; defer it unless the user opted into keyboard resizing.
+    if (
+      !resizeForKeyboard &&
+      prev.width === windowWidth &&
+      frameHeightRefitStateRef.current.keyboardVisible
+    ) {
       return
     }
     viewportMeasuredRef.current = false
     scheduleViewportRefit()
-  }, [windowWidth, windowHeight, viewportMeasuredRef, scheduleViewportRefit])
+  }, [windowWidth, windowHeight, resizeForKeyboard, viewportMeasuredRef, scheduleViewportRefit])
+
+  // Why: a height-only window change suppressed while the option was off stays suppressed when it flips
+  // mid-keyboard, leaving the PTY at stale dims; toggling the option resends it.
+  const prevResizeForKeyboardRef = useRef(resizeForKeyboard)
+  useEffect(() => {
+    const was = prevResizeForKeyboardRef.current
+    prevResizeForKeyboardRef.current = resizeForKeyboard
+    if (was === resizeForKeyboard || !frameHeightRefitStateRef.current.keyboardVisible) {
+      return
+    }
+    viewportMeasuredRef.current = false
+    scheduleViewportRefit()
+  }, [resizeForKeyboard, viewportMeasuredRef, scheduleViewportRefit])
 
   // Why: on text-size change the refit's 150ms debounce lets the WebView apply the new fontSize before we re-measure cell metrics.
   const prevTextScaleRef = useRef(textScale)
@@ -247,7 +270,11 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
 
   const notifyFrameHeightRefitEvent = useCallback(
     (event: TerminalFrameHeightRefitEvent) => {
-      const transition = reduceTerminalFrameHeightRefit(frameHeightRefitStateRef.current, event)
+      const transition = reduceTerminalFrameHeightRefit(
+        frameHeightRefitStateRef.current,
+        event,
+        resizeForKeyboard
+      )
       frameHeightRefitStateRef.current = transition.state
       if (!transition.shouldRefit) {
         return
@@ -255,7 +282,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
       viewportMeasuredRef.current = false
       scheduleViewportRefit({ heightOriginated: true })
     },
-    [viewportMeasuredRef, scheduleViewportRefit]
+    [resizeForKeyboard, viewportMeasuredRef, scheduleViewportRefit]
   )
   // Why: notify imperatively so layout churn doesn't rerender the full session.
   const notifyTerminalFrameHeight = useCallback(

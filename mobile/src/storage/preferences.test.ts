@@ -12,6 +12,7 @@ import {
   loadHostSidebarWidth,
   loadMobileWebShellEnabled,
   loadPushNotificationsEnabled,
+  loadTerminalKeyboardResizeEnabled,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
   mobileShellBuildKind,
@@ -21,6 +22,7 @@ import {
   saveDisabledTerminalLiveInputHandles,
   saveHostSidebarWidth,
   savePushNotificationsEnabled,
+  saveTerminalKeyboardResizeEnabled,
   saveTerminalAutocompleteEnabled,
   saveTerminalLinkOpenMode
 } from './preferences'
@@ -369,6 +371,36 @@ describe('terminal autocomplete preference', () => {
     await saveTerminalAutocompleteEnabled(false)
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalAutocompleteEnabled', 'false')
+  })
+})
+
+describe('terminal keyboard resize preference', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
+  it('defaults to disabled when unset or unreadable', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    await expect(loadTerminalKeyboardResizeEnabled()).resolves.toBe(false)
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:terminalKeyboardResizeEnabled')
+
+    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+    await expect(loadTerminalKeyboardResizeEnabled()).resolves.toBe(false)
+  })
+
+  it('loads and persists the selected boolean value', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('true')
+    await expect(loadTerminalKeyboardResizeEnabled()).resolves.toBe(true)
+
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('false')
+    await expect(loadTerminalKeyboardResizeEnabled()).resolves.toBe(false)
+
+    await saveTerminalKeyboardResizeEnabled(true)
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalKeyboardResizeEnabled', 'true')
+
+    await saveTerminalKeyboardResizeEnabled(false)
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalKeyboardResizeEnabled', 'false')
   })
 })
 

@@ -56,6 +56,7 @@ function Harness(): null {
     connState: 'connected',
     terminals: [],
     terminalTextScale: 1,
+    terminalKeyboardResizeEnabled: false,
     activeSessionTabId: null,
     tabLayoutsRef: { current: new Map() },
     tabStripRef: { current: null },

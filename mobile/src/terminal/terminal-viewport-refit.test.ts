@@ -71,6 +71,24 @@ describe('terminal viewport refit', () => {
     expect(ran.state.pending).toBe(false)
   })
 
+  it('refits mid-keyboard when the resize-for-keyboard option is on', () => {
+    let state: TerminalFrameHeightRefitState = {
+      frameHeight: 600,
+      keyboardVisible: true,
+      pending: false
+    }
+    const dispatch = (event: TerminalFrameHeightRefitEvent) => {
+      const r = reduceTerminalFrameHeightRefit(state, event, true)
+      state = r.state
+      return r
+    }
+    // With the option on the PTY follows the frame while typing — no deferral, no pending debt.
+    expect(dispatch({ type: 'frame-height', height: 520 }).shouldRefit).toBe(true)
+    expect(state.pending).toBe(false)
+    // A debounce-window commit fires rather than re-deferring for the keyboard.
+    expect(dispatch({ type: 'refit-committed' }).shouldRefit).toBe(true)
+  })
+
   it('falls back to legacy resubscribe when an older desktop lacks updateViewport', () => {
     const unsupported = {
       id: 'old-host',
