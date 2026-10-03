@@ -4,8 +4,9 @@
 // or reaches only the model's context, and the thread history shows no user message either way.
 // So it is withdrawn, as a Stop's host-side withdrawal is. Any other end records pending
 // input before `turn/completed`, a failed turn after its `error` frame, so only that
-// frame settles: a failed turn that never echoed the send refused it, in Codex's words,
-// and a completed one leaves it pending for the journal's recovery on exit.
+// frame settles: a failed turn that never echoed the send refused it, in Codex's words. A
+// completed one leaves it for the thread stopping: Codex recorded nothing it never echoed (a
+// hook blocked it), so once no turn is open the send was not delivered.
 
 import {
   agentSessionFailureFact,
@@ -75,6 +76,22 @@ export function codexTurnEndRejection(end: CodexTurnEnd): AgentJournalDispatchRe
     )
   }
   return null
+}
+
+/** Settles the sends Codex took and never recorded, once the thread stopped running with no turn
+ *  open. After the turn-end settlement, so an interrupt still withdraws what it ended. */
+export function settleCodexSendsUnrecordedAtIdle(
+  session: Pick<CodexSession, 'dispatchEchoes'>,
+  settle: (settlement: CodexTurnEndSettlement) => void
+): void {
+  const unrecorded = session.dispatchEchoes.takeUnrecorded()
+  if (unrecorded.length === 0) {
+    return
+  }
+  const rejection = codexDispatchRejection(agentSessionFailureFact('notDelivered'))
+  for (const clientMessageId of unrecorded) {
+    settle({ clientMessageId, state: 'rejected', ...rejection })
+  }
 }
 
 /** Settles the sends bound to the turn this admitted notification ended. */

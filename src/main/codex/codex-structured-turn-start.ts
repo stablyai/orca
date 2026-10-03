@@ -208,5 +208,9 @@ export async function dispatchCodexTurn(
     ? session.dispatchEchoes.bindTurn(input.clientMessageId, session.threadId, answer.turnId)
     : null
   const rejection = endedFirst ? codexTurnEndRejection(endedFirst) : null
-  return rejection ? { state: 'rejected', ...rejection } : { state: 'admitted' }
+  if (rejection) {
+    return { state: 'rejected', ...rejection }
+  }
+  session.dispatchEchoes.admit(input.clientMessageId)
+  return { state: 'admitted' }
 }
