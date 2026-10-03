@@ -4,17 +4,19 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import {
   canStopWorkspacePort,
-  getPortOpenBrowserTooltipLabel,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
-  refreshWorkspacePortScanAfterStop,
-  resolvePortOpenInOrcaBrowser
+  refreshWorkspacePortScanAfterStop
 } from '@/lib/workspace-port-actions'
+import {
+  getPortOpenBrowserTooltipLabel,
+  resolvePortOpenModifierDestination,
+  resolvePortOpenRouting
+} from '@/lib/workspace-port-open-routing'
+import { usePortClientReachability } from '@/lib/workspace-port-client-reachability'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
-import { addressForPort } from '@/lib/workspace-port-urls'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import {
   WorktreeCardDetailSection,
@@ -106,11 +108,17 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
   const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const runtimeTarget = useWorktreeRuntimeTarget(
-    port.kind === 'workspace' ? port.owner.worktreeId : null
-  )
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
-  const address = addressForPort(port)
+  // Why: on a remote workspace the OS-derived address names *this* machine, where
+  // nothing is listening. One hook resolves the owning host, the address to show and
+  // copy, and whether the system browser has anywhere to go, so the three cannot drift.
+  const { address, reachableUrl, remoteHost, runtimeTarget, systemBrowserAvailable } =
+    usePortClientReachability(port)
+  const modifierDestination = resolvePortOpenModifierDestination({
+    settings,
+    remoteHost,
+    systemBrowserAvailable
+  })
   const canStop = canStopWorkspacePort(port)
   const openBrowserLabel = translate(
     'auto.components.sidebar.WorktreeCardPorts.33bc7d7495',
@@ -121,8 +129,10 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
       recordFeatureInteraction('ports')
-      const openInOrcaBrowser = resolvePortOpenInOrcaBrowser({
+      const routing = resolvePortOpenRouting({
         settings,
+        remoteHost,
+        systemBrowserAvailable,
         // Why: keyboard activations have detail=0; only pointer clicks carry
         // the modifier intent for the system-browser escape hatch.
         event: event.detail > 0 ? event : null,
@@ -133,8 +143,10 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
         runtimeTarget,
         createBrowserTab,
         setRemoteBrowserPageHandle,
-        openInOrcaBrowser,
-        localhostLabelRoute
+        openInOrcaBrowser: routing.openInOrcaBrowser,
+        systemBrowserRequested: routing.systemBrowserRequested,
+        localhostLabelRoute,
+        clientReachableUrl: reachableUrl
       }).then((result) => {
         if (!result.ok) {
           toast.error(
@@ -148,13 +160,16 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
       })
     },
     [
+      reachableUrl,
       createBrowserTab,
       port,
       localhostLabelRoute,
       recordFeatureInteraction,
+      remoteHost,
       runtimeTarget,
       setRemoteBrowserPageHandle,
-      settings
+      settings,
+      systemBrowserAvailable
     ]
   )
 
@@ -162,7 +177,6 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
       recordFeatureInteraction('ports')
-      const address = addressForPort(port)
       void window.api.ui.writeClipboardText(address)
       toast.success(
         translate('auto.components.sidebar.WorktreeCardPorts.c89f290e25', 'Copied {{value0}}', {
@@ -170,7 +184,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
         })
       )
     },
-    [port, recordFeatureInteraction]
+    [address, recordFeatureInteraction]
   )
 
   const handleStop = useCallback(
@@ -253,7 +267,9 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
         <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-md border border-border/40 bg-popover/95 px-0.5 can-hover:opacity-0 shadow-xs transition-opacity group-hover/port:opacity-100 group-focus-within/port:opacity-100">
           <PortAction
             label={openBrowserLabel}
-            tooltipLabel={getPortOpenBrowserTooltipLabel(openBrowserLabel)}
+            tooltipLabel={getPortOpenBrowserTooltipLabel(openBrowserLabel, {
+              modifierDestination
+            })}
             onClick={handleOpen}
           >
             <ExternalLink className="size-3" />

@@ -2,7 +2,10 @@ import React, { useCallback, useState } from 'react'
 import { Copy, ExternalLink, Pencil, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-port-actions'
+import {
+  getPortOpenBrowserTooltipLabel,
+  type PortOpenModifierDestination
+} from '@/lib/workspace-port-open-routing'
 import {
   addressForPortForwardEntry,
   advertisedBrowserUrlForForwardedRow
@@ -12,10 +15,13 @@ import { translate } from '@/i18n/i18n'
 
 export function SshForwardedPortRow({
   entry,
+  modifierDestination,
   onEdit,
   onOpenInBrowser
 }: {
   entry: PortForwardEntry
+  /** Where Shift+Cmd/Ctrl+click lands, or null when it repeats the plain click. */
+  modifierDestination: PortOpenModifierDestination
   onEdit: () => void
   onOpenInBrowser: (event?: React.MouseEvent<HTMLButtonElement>) => void
 }): React.JSX.Element {
@@ -102,7 +108,8 @@ export function SshForwardedPortRow({
             value0: advertisedBrowserUrl
           }
         )
-      : openBrowserLabel
+      : openBrowserLabel,
+    { modifierDestination }
   )
 
   return (

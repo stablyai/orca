@@ -382,9 +382,13 @@ describe('PortsStatusSegment popover host routing', () => {
       { key: string; result: WorkspacePortScanResult }
     ]
     expect(nextScans['local:all']).toBe(remoteHostScan)
+    // The projection stamps each row with the host that reported it; the stored scan stays raw.
     expect(projection).toEqual({
       key: 'local:all',
-      result: remoteHostScan
+      result: {
+        ...remoteHostScan,
+        ports: remoteHostScan.ports.map((port) => ({ ...port, hostScanKey: 'local:all' }))
+      }
     })
   })
 
