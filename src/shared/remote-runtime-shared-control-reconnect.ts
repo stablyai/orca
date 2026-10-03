@@ -55,6 +55,7 @@ export class SharedControlReconnectScheduler {
   scheduleAfterSocketClose(args: {
     intentionallyClosed: boolean
     manuallyDisconnected: boolean
+    environmentRemoved: () => boolean
     capabilityPaused: boolean
     subscriptionCount: number
     open: () => void
@@ -66,6 +67,14 @@ export class SharedControlReconnectScheduler {
     ) {
       return
     }
+    // Why open() instead of a bare return: its guard declines the dial *and* retires, and a socket
+    // closing after the removal has no liveness tick left to do that.
+    if (args.environmentRemoved()) {
+      args.open()
+      return
+    }
+    // Why the fire is not gated on removal either: open() re-asks the same predicate on every entry,
+    // so short-circuiting the timer would strand the transport it must evict.
     if (args.subscriptionCount > 0) {
       this.scheduleWithDefaultBackoff(args.intentionallyClosed, args.open)
       return

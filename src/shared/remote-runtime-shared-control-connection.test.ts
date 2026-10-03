@@ -671,6 +671,30 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     })
   })
 
+  it('retires a live socket on the liveness cadence once its environment is removed', async () => {
+    const server = await createServer()
+    let environmentRemoved = false
+    let connection: RemoteRuntimeSharedControlConnection | null = null
+    const onEnvironmentRemoved = vi.fn(() => connection?.close())
+    connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
+      liveness: { pingIntervalMs: 20, livenessTimeoutMs: 10_000 },
+      isEnvironmentRemoved: () => environmentRemoved,
+      onEnvironmentRemoved
+    })
+
+    await connection.request('worktree.ps', undefined, 1000)
+    expect(server.connectionCount()).toBe(1)
+
+    environmentRemoved = true
+    await vi.waitFor(() => expect(onEnvironmentRemoved).toHaveBeenCalled())
+
+    expect(connection.getDiagnostics()).toMatchObject({ state: 'closed' })
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(server.connectionCount()).toBe(1)
+    // Why: closing the socket must stop its liveness timer, or retirement repeats forever.
+    expect(onEnvironmentRemoved).toHaveBeenCalledTimes(1)
+  })
+
   it('rejects pending requests and schedules standing recovery when the socket closes', async () => {
     const server = await createServer({ closeBeforeResponse: true })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
@@ -686,5 +710,114 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     connection.pauseStandingRetry()
     expect(connection.getDiagnostics()).toMatchObject({ state: 'closed' })
     connection.close()
+  })
+
+  it('declines a request-driven reopen once its environment is removed', async () => {
+    const server = await createServer()
+    let environmentRemoved = false
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
+      isEnvironmentRemoved: () => environmentRemoved
+    })
+
+    await connection.request('worktree.ps', undefined, 1000)
+    expect(server.connectionCount()).toBe(1)
+
+    // Removal landing while the socket is down leaves the cached connection inert: the scheduler
+    // declines, so no timer is armed and this is the state a later request finds.
+    environmentRemoved = true
+    server.closeClients()
+    await vi.waitFor(() =>
+      expect(connection.getDiagnostics()).toMatchObject({
+        state: 'closed',
+        lastClose: { code: 4001, reason: 'test close' }
+      })
+    )
+
+    await expect(connection.request('worktree.ps', undefined, 1000)).rejects.toThrow(
+      'Remote Orca runtime closed the connection'
+    )
+    // Why the server-side count and not just the rejection: the defect was a *new socket* dialled
+    // to a removed environment, which a rejected caller would not otherwise reveal.
+    expect(server.connectionCount()).toBe(1)
+
+    connection.close()
+  })
+
+  it('retires a removed environment when a request finds the socket closed', async () => {
+    const server = await createServer()
+    let environmentRemoved = false
+    let connection: RemoteRuntimeSharedControlConnection | null = null
+    const onEnvironmentRemoved = vi.fn(() => connection?.close())
+    connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
+      isEnvironmentRemoved: () => environmentRemoved,
+      onEnvironmentRemoved
+    })
+
+    await connection.request('worktree.ps', undefined, 1000)
+
+    // Why the socket closes while the environment is still stored and the retry is then paused:
+    // that leaves no live socket, no armed timer and no close-time observation of the removal, so
+    // the next request is the only thing that can retire it.
+    server.closeClients()
+    await vi.waitFor(() =>
+      expect(connection?.getDiagnostics()).toMatchObject({ state: 'reconnecting' })
+    )
+    connection.pauseStandingRetry()
+    environmentRemoved = true
+    expect(onEnvironmentRemoved).not.toHaveBeenCalled()
+
+    await expect(connection.request('worktree.ps', undefined, 1000)).rejects.toThrow(
+      'Remote Orca runtime closed the connection'
+    )
+    expect(onEnvironmentRemoved).toHaveBeenCalledTimes(1)
+
+    // Why a second request: retirement closes the connection, so later callers finding the same
+    // retired transport must not re-fire it.
+    await expect(connection.request('worktree.ps', undefined, 1000)).rejects.toThrow()
+    expect(onEnvironmentRemoved).toHaveBeenCalledTimes(1)
+  })
+
+  it('retires a removed environment when its socket closes', async () => {
+    const server = await createServer()
+    let environmentRemoved = false
+    let connection: RemoteRuntimeSharedControlConnection | null = null
+    const onEnvironmentRemoved = vi.fn(() => connection?.close())
+    connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
+      isEnvironmentRemoved: () => environmentRemoved,
+      onEnvironmentRemoved
+    })
+
+    await connection.request('worktree.ps', undefined, 1000)
+
+    // Why this ordering: the removal is already known when the socket drops, so no reconnect is
+    // armed and the closed socket has no liveness tick left to retire it.
+    environmentRemoved = true
+    server.closeClients()
+
+    await vi.waitFor(() => expect(onEnvironmentRemoved).toHaveBeenCalledTimes(1), { timeout: 5000 })
+    expect(server.connectionCount()).toBe(1)
+  })
+
+  it('retires a removed environment when its reconnect timer fires', async () => {
+    const server = await createServer()
+    let environmentRemoved = false
+    let connection: RemoteRuntimeSharedControlConnection | null = null
+    const onEnvironmentRemoved = vi.fn(() => connection?.close())
+    connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
+      isEnvironmentRemoved: () => environmentRemoved,
+      onEnvironmentRemoved,
+      // Why flip from here: the removal has to land after the scheduler armed its timer and before
+      // it fires, the one window no request passes through.
+      onDiagnosticsChanged: ({ state }) => {
+        environmentRemoved ||= state === 'reconnecting'
+      }
+    })
+
+    await connection.request('worktree.ps', undefined, 1000)
+    server.closeClients()
+
+    await vi.waitFor(() => expect(onEnvironmentRemoved).toHaveBeenCalledTimes(1), { timeout: 5000 })
+    // Why the server-side count: retiring must not cost a dial to an environment that is gone.
+    expect(server.connectionCount()).toBe(1)
   })
 })

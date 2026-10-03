@@ -77,6 +77,9 @@ export type RemoteRuntimeSharedControlConnectionOptions = {
   clientCapabilities?: readonly RuntimeCapability[]
   isManuallyDisconnected?: () => boolean
   isCapabilityPaused?: () => boolean
+  isEnvironmentRemoved?: () => boolean
+  /** Runs once a live socket observes its environment is gone; the owner retires the transport. */
+  onEnvironmentRemoved?: () => void
   /** Publishes local transport diagnostics after a meaningful state transition. */
   onDiagnosticsChanged?: (diagnostics: RemoteRuntimeSharedConnectionDiagnostics) => void
   reconnectStableResetMs?: number
