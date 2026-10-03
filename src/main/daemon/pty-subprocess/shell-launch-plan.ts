@@ -5,6 +5,10 @@ import { isPwshAvailable } from '../../pwsh'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../../pty/codex-home-wsl-env'
 import { addOrcaWslInteropEnv } from '../../pty/wsl-orca-env'
 import {
+  requestWslShellReadyMarker,
+  wslStartupCommandWaitsForShellReady
+} from '../../pty/wsl-startup-shell-ready'
+import {
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
   seedPowerlevel10kWizardEnv
 } from '../../pty/powerlevel10k-wizard-env'
@@ -178,6 +182,16 @@ export function createPtyShellLaunchPlan(
     }
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
       addOrcaWslInteropEnv(env)
+    }
+    // Why: terminal-host-session-create.ts gates the startup write on the same predicate.
+    if (
+      wslStartupCommandWaitsForShellReady({
+        shellPath,
+        command: opts.command,
+        startupCommandDeliveredInShellArgs
+      })
+    ) {
+      requestWslShellReadyMarker(env)
     }
   } else {
     rescrubDaemonPtyEnvironment(env, opts)

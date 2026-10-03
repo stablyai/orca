@@ -301,7 +301,38 @@ describe('LocalPtyProvider', () => {
         expect.stringContaining("cd '/mnt/c/Users/jin/repo'")
       ])
       expect(spawnCall[1][5]).toContain('exec "$_orca_wsl_shell" -l')
+      expect(spawnCall[2].env.ORCA_SHELL_FEATURES).toBeUndefined()
       expect(spawnCall[2].env.HISTFILE).toContain('terminal-history-wsl/Debian')
+    })
+
+    // Why: typed before the distro's login shell reads, the command is dropped (#24188).
+    it('holds a WSL startup command until the guest shell reports ready', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      vi.useFakeTimers()
+      try {
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+          command: "pi 'test'"
+        })
+
+        const spawnEnv = spawnMock.mock.calls.at(-1)![2].env
+        expect(spawnEnv.ORCA_SHELL_FEATURES).toBe('ready')
+        expect(spawnEnv.WSLENV.split(':')).toContain('ORCA_SHELL_FEATURES')
+
+        const dataCallback: (data: string) => void = mockProc.onData.mock.calls[0]?.[0]
+        dataCallback('\x1b[?25l\x1b[2J')
+        await vi.advanceTimersByTimeAsync(5_000)
+        expect(mockProc.write).not.toHaveBeenCalled()
+
+        dataCallback('\x1b]777;orca-shell-ready\x07')
+        dataCallback('➜  repo ')
+        await vi.advanceTimersByTimeAsync(250)
+        expect(mockProc.write).toHaveBeenCalledWith("pi 'test'\r")
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it.each(['/home/jin/repo', '/a', '/c'])(

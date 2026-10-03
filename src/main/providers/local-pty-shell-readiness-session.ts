@@ -92,7 +92,7 @@ export function createLocalPtyShellReadinessSession(args: {
       shellReadyTimeout = setTimeout(() => {
         releaseHeldShellReadyBytes()
         finishShellReady({ postMarkerBytesObserved: false })
-      }, STARTUP_COMMAND_READY_MAX_WAIT_MS)
+      }, plan.shellReadyLaunch.readyTimeoutMs ?? STARTUP_COMMAND_READY_MAX_WAIT_MS)
     } else {
       finishShellReady({ postMarkerBytesObserved: false })
     }

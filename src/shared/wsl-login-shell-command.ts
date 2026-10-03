@@ -124,6 +124,7 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '  _orca_shell_ready_root="${ORCA_USER_DATA_PATH%/}/shell-ready"',
     'fi',
     '_orca_wsl_shell_name=$(basename "$_orca_wsl_shell" | tr "[:upper:]" "[:lower:]")',
+    '_orca_wsl_shell_wrapped=""',
     'case "$_orca_wsl_shell_name" in',
     '  bash)',
     '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -f "${_orca_shell_ready_root}/bash/rcfile" ]; then',
@@ -133,9 +134,36 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '  zsh)',
     '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -d "${_orca_shell_ready_root}/zsh" ]; then',
     '      export ZDOTDIR="${_orca_shell_ready_root}/zsh"',
+    '      _orca_wsl_shell_wrapped=1',
     '    fi',
     '    ;;',
+    '  fish)',
+    '    case ",${ORCA_SHELL_FEATURES:-}," in',
+    '      *,ready,*)',
+    '        unset ORCA_SHELL_FEATURES',
+    `        exec "$_orca_wsl_shell" -l -C ${quotePosixShell(WSL_FISH_SHELL_READY_INIT)}`,
+    '        ;;',
+    '    esac',
+    '    ;;',
     'esac',
+    // Why no marker for the rest: without a prompt hook it could only come before
+    // the shell's own startup files, which can still eat the command. They wait
+    // out the host's timeout instead. Consumed so it never leaks into the shell.
+    '[ -n "$_orca_wsl_shell_wrapped" ] || unset ORCA_SHELL_FEATURES',
     'exec "$_orca_wsl_shell" -l'
   ].join('\n')
 }
+
+/**
+ * Guest fish reports ready from its first prompt, after config.fish.
+ *
+ * Why: fish has no wrapper dir, so the host holds a WSL startup command until
+ * this fires (wsl-startup-shell-ready.ts, #24188). Must stay identical to
+ * getFishShellReadyInitCommand(SHELL_READY_MARKER_ESCAPED) in src/main/shell-templates.ts.
+ */
+export const WSL_FISH_SHELL_READY_INIT = [
+  'function __orca_shell_ready_marker --on-event fish_prompt',
+  '  builtin printf "\\033]777;orca-shell-ready\\007"',
+  '  functions -e __orca_shell_ready_marker',
+  'end'
+].join('\n')

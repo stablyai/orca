@@ -5,6 +5,7 @@ import { enumerateDirectoryOnce } from './directory-enumeration-probe'
 import { normalizePtySize } from './daemon-pty-size'
 import { Session } from './session'
 import { shellPathSupportsPtyStartupBarrier } from './shell-ready'
+import { wslStartupCommandWaitsForShellReady } from '../pty/wsl-startup-shell-ready'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
@@ -133,9 +134,18 @@ async function spawnAndPublishSession(
 
   // Why: a fallback shell does not emit the preferred shell's ready marker;
   // retaining the stale capability would indefinitely queue its first command.
-  const shellReadySupported =
+  const wrappedShellReadySupported =
     (opts.shellReadySupported ?? false) &&
     (subprocess.shellPath === undefined || shellPathSupportsPtyStartupBarrier(subprocess.shellPath))
+  // Why: main cannot tell a pane will be wsl.exe, but the spawned subprocess can, and it already
+  // asked the guest for the ready marker (shell-launch-plan.ts). Without the wait, the command
+  // lands before the distro's login shell is reading and is dropped (#24188).
+  const wslShellReadySupported = wslStartupCommandWaitsForShellReady({
+    shellPath: subprocess.shellPath,
+    command: opts.command,
+    startupCommandDeliveredInShellArgs: subprocess.startupCommandDeliveredInShellArgs
+  })
+  const shellReadySupported = wrappedShellReadySupported || wslShellReadySupported
   const session = new Session({
     sessionId: opts.sessionId,
     cols: size.cols,
@@ -202,7 +212,8 @@ async function spawnAndPublishSession(
     session.write(
       buildStartupCommandSubmission(opts.command, {
         submit,
-        bracketedPasteSafe: shellReadySupported
+        // Why not for WSL: the guest may be a shell Orca does not wrap, which would echo ESC[200~.
+        bracketedPasteSafe: wrappedShellReadySupported
       })
     )
   }
