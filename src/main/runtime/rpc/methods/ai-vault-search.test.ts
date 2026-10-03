@@ -116,6 +116,40 @@ describe('session search runtime RPC', () => {
       }
     )
   })
+  it.each(['runtime', 'relay'] as const)(
+    'searches when the real dispatcher is missing only status over %s',
+    async (transport) => {
+      const service = fakeSearchService()
+      setSessionSearchService(service)
+      const rpc = new RpcDispatcher({
+        runtime: new OrcaRuntimeService(),
+        methods: AI_VAULT_METHODS.filter((method) => method.name !== 'aiVault.searchStatus')
+      })
+      const replies: unknown[] = []
+      const client = createSessionSearchClient(async (method, params) => {
+        const response = await rpc.dispatch({ ...request(params), method })
+        replies.push(response)
+        if (!response.ok) {
+          throw Object.assign(new Error(response.error.message), { code: response.error.code })
+        }
+        return response.result
+      }, transport)
+      expect(
+        await client.searchSessions({
+          query: 'needle',
+          filters: { agents: ['claude'] }
+        })
+      ).toMatchObject({ kind: 'results' })
+      expect(replies).toMatchObject([
+        { ok: false, error: { code: 'method_not_found' } },
+        { ok: true }
+      ])
+      expect(service.search).toHaveBeenCalledExactlyOnceWith(
+        { query: 'needle', limit: 20, filters: { agents: ['claude'] } },
+        undefined
+      )
+    }
+  )
   it('maps the old runtime dispatcher refusal and rejects malformed responses', async () => {
     const legacy = dispatcher(true)
     const client = createSessionSearchClient(async (method, params) => {
