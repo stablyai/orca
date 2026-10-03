@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientTarget } from '../../../../runtime/runtime-rpc-client'
-import { WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+import {
+  WORKTREE_BASE_REF_CLEAR_RUNTIME_CAPABILITY,
+  WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY
+} from '../../../../../../shared/protocol-version'
 import { persistWorktreeMeta } from './worktree-meta-persist'
 
 const mocks = vi.hoisted(() => ({
@@ -107,5 +110,53 @@ describe('persistWorktreeMeta GitHub PR suppression compatibility', () => {
       updates: { suppressedGitHubPR: 42 }
     })
     expect(mocks.assertCapability).not.toHaveBeenCalled()
+  })
+})
+
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: settings only feed the mocked getActiveRuntimeTarget.
+const unreadSettings = {} as never
+
+describe('persistWorktreeMeta base ref clear compatibility', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.target = { kind: 'environment', environmentId: 'env-1' }
+    mocks.assertCapability.mockResolvedValue(undefined)
+  })
+
+  it('sends null so a capable remote host clears the worktree base ref', async () => {
+    await persistWorktreeMeta(unreadSettings, 'repo::/feature', { baseRef: undefined })
+
+    expect(mocks.assertCapability).toHaveBeenCalledWith(
+      'env-1',
+      WORKTREE_BASE_REF_CLEAR_RUNTIME_CAPABILITY,
+      'Update the remote runtime to reset this workspace’s compare target'
+    )
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      mocks.target,
+      'worktree.set',
+      { worktree: 'id:repo::/feature', baseRef: null },
+      { timeoutMs: 15_000 }
+    )
+  })
+
+  it('refuses the clear on an older host instead of letting it silently revert', async () => {
+    mocks.assertCapability.mockRejectedValue(new Error('update required'))
+
+    await expect(
+      persistWorktreeMeta(unreadSettings, 'repo::/feature', { baseRef: undefined })
+    ).rejects.toThrow('update required')
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+  })
+
+  it('sets a base ref on any host without a capability check', async () => {
+    await persistWorktreeMeta(unreadSettings, 'repo::/feature', { baseRef: 'origin/main' })
+
+    expect(mocks.assertCapability).not.toHaveBeenCalled()
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      mocks.target,
+      'worktree.set',
+      { worktree: 'id:repo::/feature', baseRef: 'origin/main' },
+      { timeoutMs: 15_000 }
+    )
   })
 })

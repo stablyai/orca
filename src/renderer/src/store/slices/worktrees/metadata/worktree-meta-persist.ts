@@ -6,6 +6,7 @@ import {
 } from '../../../../runtime/runtime-rpc-client'
 import {
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
+  WORKTREE_BASE_REF_CLEAR_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
@@ -121,6 +122,18 @@ async function persistWorktreeMetaUntracked(
       )
     )
   }
+  const clearBaseRef = Object.hasOwn(updates, 'baseRef') && updates.baseRef === undefined
+  // Why: an older host drops the clear, so the reset would silently revert on the next fetch.
+  if (target.kind === 'environment' && clearBaseRef) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      WORKTREE_BASE_REF_CLEAR_RUNTIME_CAPABILITY,
+      translate(
+        'auto.store.slices.worktrees.metadata.worktree.meta.persist.baseRefClear',
+        'Update the remote runtime to reset this workspace’s compare target'
+      )
+    )
+  }
   let compatibleUpdates = updates
   if (target.kind === 'environment' && 'suppressedGitHubPR' in updates) {
     if (typeof updates.suppressedGitHubPR === 'number' && updates.suppressedGitHubPR > 0) {
@@ -149,7 +162,9 @@ async function persistWorktreeMetaUntracked(
     'worktree.set',
     {
       worktree: identityKey ? `identity:${identityKey}` : toRuntimeWorktreeSelector(worktreeId),
-      ...encodePushTargetClearForRuntimeRpc(compatibleUpdates)
+      ...encodePushTargetClearForRuntimeRpc(compatibleUpdates),
+      // Why: JSON drops undefined, so null is the wire signal for clearing the worktree's base ref.
+      ...(clearBaseRef ? { baseRef: null } : {})
     },
     { timeoutMs: 15_000 }
   )
