@@ -154,3 +154,106 @@ describe('BrowserPageAnnotationTray edit mode', () => {
     expect(screen.queryByRole('textbox', { name: 'Annotation comment' })).not.toBeInTheDocument()
   })
 })
+
+function disclosureTargets(control: HTMLElement): HTMLElement[] {
+  const ids = control.getAttribute('aria-controls')?.split(/\s+/).filter(Boolean) ?? []
+  expect(ids).toHaveLength(2)
+  const nodes: HTMLElement[] = []
+  for (const id of ids) {
+    const node = document.getElementById(id)
+    expect(node).toBeInstanceOf(HTMLElement)
+    if (node instanceof HTMLElement) {
+      nodes.push(node)
+    }
+  }
+  expect(nodes).toHaveLength(2)
+  return nodes
+}
+
+describe('BrowserPageAnnotationTray collapse', () => {
+  it('starts expanded with Send, Copy, and Delete available', () => {
+    renderTray()
+
+    const collapseControl = screen.getByRole('button', { name: 'Collapse annotations' })
+    expect(collapseControl).toHaveAttribute('aria-expanded', 'true')
+    expect(collapseControl.querySelector('svg.lucide-chevron-up')).not.toBeNull()
+    expect(collapseControl.querySelector('svg.lucide-chevron-down')).toBeNull()
+    const [actions, list] = disclosureTargets(collapseControl)
+    expect(actions).toContainElement(screen.getByRole('button', { name: 'Send' }))
+    expect(list).toContainElement(screen.getByText('Fix this button'))
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Clear browser annotations' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Delete annotation 1' })).toBeInTheDocument()
+    expect(screen.getByText('Fix this button')).toBeVisible()
+  })
+
+  it('hides details and keeps the annotation count when collapsed', () => {
+    renderTray()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse annotations' }))
+
+    expect(screen.getByText('1 annotation')).toBeVisible()
+    const expandControl = screen.getByRole('button', { name: 'Expand annotations' })
+    expect(expandControl).toHaveAttribute('aria-expanded', 'false')
+    expect(expandControl.querySelector('svg.lucide-chevron-down')).not.toBeNull()
+    expect(expandControl.querySelector('svg.lucide-chevron-up')).toBeNull()
+    for (const node of disclosureTargets(expandControl)) {
+      expect(node).toHaveAttribute('hidden')
+    }
+    expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Clear browser annotations' })
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete annotation 1' })).not.toBeInTheDocument()
+    expect(screen.getByText('Fix this button')).not.toBeVisible()
+  })
+
+  it('restores details without losing annotations after expand', () => {
+    renderTray()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse annotations' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Expand annotations' }))
+
+    expect(screen.getByText('Fix this button')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Clear browser annotations' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Delete annotation 1' })).toBeInTheDocument()
+    const collapseControl = screen.getByRole('button', { name: 'Collapse annotations' })
+    expect(collapseControl).toHaveAttribute('aria-expanded', 'true')
+    expect(collapseControl.querySelector('svg.lucide-chevron-up')).not.toBeNull()
+    for (const node of disclosureTargets(collapseControl)) {
+      expect(node).not.toHaveAttribute('hidden')
+    }
+  })
+
+  it('names the collapse control for assistive tech', () => {
+    renderTray()
+
+    const collapseControl = screen.getByRole('button', { name: 'Collapse annotations' })
+    expect(collapseControl).toBeVisible()
+    expect(collapseControl).toHaveAttribute('aria-controls')
+  })
+
+  it('keeps an in-progress edit after collapse and expand', () => {
+    const { handleUpdateBrowserAnnotation } = renderTray()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit annotation 1' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Annotation comment' }), {
+      target: { value: 'Draft that must survive collapse' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse annotations' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Expand annotations' }))
+
+    expect(screen.getByRole('textbox', { name: 'Annotation comment' })).toHaveValue(
+      'Draft that must survive collapse'
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(handleUpdateBrowserAnnotation).toHaveBeenCalledWith(
+      'annotation-1',
+      'Draft that must survive collapse',
+      'change'
+    )
+  })
+})
