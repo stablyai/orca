@@ -20,6 +20,7 @@ import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { readStoredWebRuntimeEnvironment } from '../web-runtime-environment'
+import { readAcceptedChecklistVisibility } from './web-checklist-visibility-revision'
 import { mergeSettings, mergeWebUIState } from './web-preference-normalization'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull, webRuntimeState } from './web-runtime-session'
@@ -299,6 +300,11 @@ export function readLocalWebUIState(): PersistedUIState {
   // every caller then writes back, erasing the arm the stamp can never raise again.
   const storedSettings = getStoredSettings()
   const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
+  const acceptedChecklistVisibility = readAcceptedChecklistVisibility()
+  const localStored =
+    typeof acceptedChecklistVisibility === 'boolean'
+      ? { ...stored, setupGuideSettingsDismissed: acceptedChecklistVisibility }
+      : stored
   const base = {
     ...defaults,
     // Why: mirror the main-process missing-property seed from legacy card layout mode when runtime ui.get is unavailable.
@@ -307,10 +313,10 @@ export function readLocalWebUIState(): PersistedUIState {
     )
   }
   if (typeof stored.rightSidebarOpen === 'boolean') {
-    return mergeWebUIState(base, stored)
+    return mergeWebUIState(base, localStored)
   }
   return mergeWebUIState(base, {
-    ...stored,
+    ...localStored,
     // Why: web fallback lacks main-process normalization; migrate the retired setting only when local UI preference is absent.
     rightSidebarOpen: storedSettings.rightSidebarOpenByDefault
   })
