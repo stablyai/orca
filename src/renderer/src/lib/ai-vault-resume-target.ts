@@ -9,10 +9,13 @@ import {
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import { isWslUncPath, parseWslUncPath } from '../../../shared/wsl-paths'
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { getFolderWorkspaceCandidateRepos } from './folder-workspace-connection'
+import { getAiVaultResumeWorkspacePath } from './ai-vault-resume-shell'
+import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'
+import { CLIENT_PLATFORM } from './new-workspace'
 
 export type AiVaultResumeTargetStatus = 'local' | 'ssh' | 'runtime' | 'unknown'
 
@@ -37,12 +40,95 @@ export function isWslStoredAiVaultSessionFile(sessionFilePath: string | null | u
   return Boolean(sessionFilePath && isWslUncPath(sessionFilePath))
 }
 
+/** Where a local resume executes on a Windows client; null off Windows or when it cannot be resolved. */
+export type AiVaultLocalResumeRuntime =
+  | { kind: 'windows-host' }
+  | { kind: 'wsl'; distro: string | null }
+
+type AiVaultLocalResumeRuntimeState = Pick<
+  AppState,
+  'folderWorkspaces' | 'repos' | 'worktreesByRepo'
+> &
+  Partial<Pick<AppState, 'activeRepoId' | 'activeWorktreeId' | 'projects' | 'settings'>>
+
+const WINDOWS_DRIVE_PATH = /^[A-Za-z]:[\\/]/
+
+export function resolveAiVaultLocalResumeRuntime(
+  state: AiVaultLocalResumeRuntimeState,
+  worktreeId: string | null | undefined
+): AiVaultLocalResumeRuntime | null {
+  if (CLIENT_PLATFORM !== 'win32') {
+    return null
+  }
+  const workspacePath = getAiVaultResumeWorkspacePath(
+    state,
+    worktreeId ?? state.activeWorktreeId ?? null
+  )
+  const wslPath = workspacePath ? parseWslUncPath(workspacePath) : null
+  // Why: a Windows-path project can still be set to run in WSL, so without its settings the runtime is unknown.
+  if (!state.projects || !state.settings) {
+    return wslPath ? { kind: 'wsl', distro: wslPath.distro } : null
+  }
+  const projectRuntime = getLocalProjectExecutionRuntimeContext(
+    {
+      activeRepoId: state.activeRepoId ?? null,
+      activeWorktreeId: state.activeWorktreeId ?? null,
+      projects: state.projects,
+      repos: state.repos,
+      settings: state.settings,
+      worktreesByRepo: state.worktreesByRepo
+    },
+    worktreeId,
+    CLIENT_PLATFORM
+  )
+  if (projectRuntime?.status === 'repair-required') {
+    return { kind: 'wsl', distro: projectRuntime.repair.preferredRuntime.distro }
+  }
+  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
+    return { kind: 'wsl', distro: projectRuntime.runtime.distro }
+  }
+  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'windows-host') {
+    return { kind: 'windows-host' }
+  }
+  return wslPath ? { kind: 'wsl', distro: wslPath.distro } : { kind: 'windows-host' }
+}
+
+/**
+ * Why: a transcript only resumes under the runtime that wrote it — a WSL-stored one inside its own distro, a
+ * Windows-drive one on the Windows host (inside WSL the agent reads another home and finds nothing).
+ */
+export function isAiVaultSessionRuntimeCompatible(
+  sessionFilePath: string | null | undefined,
+  targetRuntime: AiVaultLocalResumeRuntime | null | undefined
+): boolean {
+  if (!targetRuntime || !sessionFilePath) {
+    return true
+  }
+  const sessionWsl = parseWslUncPath(sessionFilePath)
+  if (sessionWsl) {
+    return (
+      targetRuntime.kind === 'wsl' &&
+      (!targetRuntime.distro ||
+        targetRuntime.distro.toLowerCase() === sessionWsl.distro.toLowerCase())
+    )
+  }
+  return !(targetRuntime.kind === 'wsl' && WINDOWS_DRIVE_PATH.test(sessionFilePath))
+}
+
 export function canResumeAiVaultSessionOnTarget(args: {
   sessionFilePath: string | null | undefined
   sessionExecutionHostId?: ExecutionHostId | null
   targetStatus: AiVaultResumeTargetStatus
   targetExecutionHostId?: ExecutionHostId | null
+  /** Only consulted for local targets; omit when the caller cannot resolve it. */
+  targetRuntime?: AiVaultLocalResumeRuntime | null
 }): boolean {
+  if (
+    args.targetStatus === 'local' &&
+    !isAiVaultSessionRuntimeCompatible(args.sessionFilePath, args.targetRuntime)
+  ) {
+    return false
+  }
   const sessionExecutionHostId = normalizeExecutionHostId(args.sessionExecutionHostId)
   const targetExecutionHostId = normalizeExecutionHostId(args.targetExecutionHostId)
   if (args.targetStatus === 'runtime') {

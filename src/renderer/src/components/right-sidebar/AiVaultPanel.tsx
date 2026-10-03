@@ -70,7 +70,9 @@ export default function AiVaultPanel(): React.JSX.Element {
     useShallow((state) => ({
       folderWorkspaces: state.folderWorkspaces,
       projectGroups: state.projectGroups,
+      projects: state.projects,
       repos: state.repos,
+      settings: state.settings,
       worktreesByRepo: state.worktreesByRepo
     }))
   )

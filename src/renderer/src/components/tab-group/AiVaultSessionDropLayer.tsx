@@ -3,7 +3,8 @@ import { toast } from 'sonner'
 import {
   canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
-  getAiVaultResumeWorkspaceTargetStatus
+  getAiVaultResumeWorkspaceTargetStatus,
+  resolveAiVaultLocalResumeRuntime
 } from '@/lib/ai-vault-resume-target'
 import {
   AI_VAULT_SESSION_DRAG_END_EVENT,
@@ -200,7 +201,8 @@ export default function AiVaultSessionDropLayer({
           sessionFilePath: payload.sessionFilePath ?? null,
           sessionExecutionHostId: payload.sessionExecutionHostId ?? null,
           targetStatus,
-          targetExecutionHostId
+          targetExecutionHostId,
+          targetRuntime: resolveAiVaultLocalResumeRuntime(state, worktreeId)
         })
       ) {
         toast.error(

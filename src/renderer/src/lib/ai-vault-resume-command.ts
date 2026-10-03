@@ -18,15 +18,12 @@ import { parseWslUncPath } from '../../../shared/wsl-paths'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import type { AppState } from '@/store/types'
 import type { AiVaultSessionDragPayload } from '@/lib/ai-vault-session-drag'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { resolveAiVaultLocalResumeRuntime } from '@/lib/ai-vault-resume-target'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
-import {
-  getAiVaultResumeWorkspacePath,
-  resolveAiVaultResumeStartupShell
-} from '@/lib/ai-vault-resume-shell'
+import { resolveAiVaultResumeStartupShell } from '@/lib/ai-vault-resume-shell'
 
 type AiVaultResumeCommandSession = Pick<
   AiVaultSession,
@@ -299,14 +296,7 @@ function getAiVaultResumePlatform(
     return 'linux'
   }
 
-  const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId, CLIENT_PLATFORM)
-  if (projectRuntime?.status === 'repair-required') {
-    return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
-  }
-  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
-    return 'linux'
-  }
-
-  const workspacePath = getAiVaultResumeWorkspacePath(state, targetWorktreeId)
-  return workspacePath && parseWslUncPath(workspacePath) ? 'linux' : CLIENT_PLATFORM
+  return resolveAiVaultLocalResumeRuntime(state, worktreeId)?.kind === 'wsl'
+    ? 'linux'
+    : CLIENT_PLATFORM
 }
