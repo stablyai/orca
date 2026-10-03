@@ -3,11 +3,13 @@ import { buildAppFontFamily } from '@/lib/app-font-family'
 import { applyDocumentTheme } from '../lib/document-theme'
 import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph'
 import { useAppStore } from '../store'
+import { normalizeNativeChatGlassOpacity } from '../../../shared/window-glass'
 
 /** Applies the settings-driven theme and app font to the document root. */
 export function useDocumentAppearance(): void {
   const theme = useAppStore((s) => s.settings?.theme)
   const appFontFamily = useAppStore((s) => s.settings?.appFontFamily)
+  const nativeChatGlassOpacity = useAppStore((s) => s.settings?.nativeChatGlassOpacity)
 
   useEffect(() => {
     if (!theme) {
@@ -39,4 +41,13 @@ export function useDocumentAppearance(): void {
       buildAppFontFamily(appFontFamily)
     )
   }, [appFontFamily])
+
+  useEffect(() => {
+    const root = document.documentElement
+    root.classList.toggle('window-glass', window.api?.platform?.get().windowGlass === true)
+    root.style.setProperty(
+      '--native-chat-glass-opacity',
+      String(normalizeNativeChatGlassOpacity(nativeChatGlassOpacity))
+    )
+  }, [nativeChatGlassOpacity])
 }

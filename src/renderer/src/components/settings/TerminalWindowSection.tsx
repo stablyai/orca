@@ -9,6 +9,17 @@ import { SearchableSetting } from './SearchableSetting'
 import { clampNumber } from '@/lib/terminal-theme'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import {
+  DEFAULT_NATIVE_CHAT_GLASS_OPACITY,
+  MIN_NATIVE_CHAT_GLASS_OPACITY,
+  normalizeNativeChatGlassOpacity
+} from '../../../../shared/window-glass'
+import {
+  backgroundOpacityDescription,
+  chatGlassOpacityDescription,
+  getGlassCopyPlatform,
+  windowBlurDescription
+} from './terminal-window-glass-copy'
 
 type TerminalWindowSectionProps = {
   settings: GlobalSettings
@@ -31,6 +42,8 @@ export function TerminalWindowSection({
   const blurPendingRestart = (settings.windowBackgroundBlur ?? false) !== blurAtMountRef.current
   const [relaunchingBlur, setRelaunchingBlur] = useState(false)
   const mountedRef = useMountedRef()
+  const glassPlatform = getGlassCopyPlatform()
+  const showChatGlassOpacity = glassPlatform === 'mac'
 
   const handleRelaunch = async (): Promise<void> => {
     if (relaunchingBlur) {
@@ -77,10 +90,7 @@ export function TerminalWindowSection({
               'auto.components.settings.TerminalWindowSection.ea7b1a158e',
               'Background Opacity'
             )}
-            description={translate(
-              'auto.components.settings.TerminalWindowSection.809f37738d',
-              'Controls the transparency of the terminal background. 1 is fully opaque, 0 is fully transparent.'
-            )}
+            description={backgroundOpacityDescription(glassPlatform)}
             value={settings.terminalBackgroundOpacity ?? 1}
             defaultValue={1}
             min={0}
@@ -99,8 +109,8 @@ export function TerminalWindowSection({
             'Window Blur'
           )}
           description={translate(
-            'auto.components.settings.TerminalWindowSection.97950bb087',
-            'Apply background blur to the terminal window. Requires restart.'
+            'auto.components.settings.TerminalWindowSection.glass.blurSummary',
+            'See-through, blurred window behind terminals and the chat UI (macOS). Requires restart.'
           )}
           keywords={['window', 'blur', 'background', 'transparency', 'vibrancy']}
           className="space-y-3 py-2"
@@ -114,10 +124,7 @@ export function TerminalWindowSection({
                 )}
               </Label>
               <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.TerminalWindowSection.97950bb087',
-                  'Apply background blur to the terminal window. Requires restart.'
-                )}
+                {windowBlurDescription(glassPlatform)}
               </p>
             </div>
             <Switch
@@ -125,7 +132,9 @@ export function TerminalWindowSection({
                 'auto.components.settings.TerminalWindowSection.2b82242f43',
                 'Window Blur'
               )}
-              checked={settings.windowBackgroundBlur ?? false}
+              // Why: Linux can't create a glass window, so a value saved elsewhere must not read as on.
+              checked={glassPlatform !== 'linux' && (settings.windowBackgroundBlur ?? false)}
+              disabled={glassPlatform === 'linux'}
               onCheckedChange={(checked) => updateSettings({ windowBackgroundBlur: checked })}
             />
           </div>
@@ -167,6 +176,37 @@ export function TerminalWindowSection({
             </div>
           ) : null}
         </SearchableSetting>
+
+        {showChatGlassOpacity ? (
+          <SearchableSetting
+            title={translate(
+              'auto.components.settings.TerminalWindowSection.chatGlassOpacity',
+              'Chat Glass Opacity'
+            )}
+            description={translate(
+              'auto.components.settings.TerminalWindowSection.chatGlassOpacityDescription',
+              'macOS: how much of the blurred desktop shows through the chat UI when Window Blur is on.'
+            )}
+            keywords={['chat', 'glass', 'opacity', 'transparency', 'blur']}
+          >
+            <NumberField
+              label={translate(
+                'auto.components.settings.TerminalWindowSection.chatGlassOpacity',
+                'Chat Glass Opacity'
+              )}
+              description={chatGlassOpacityDescription(settings.windowBackgroundBlur === true)}
+              value={normalizeNativeChatGlassOpacity(settings.nativeChatGlassOpacity)}
+              defaultValue={DEFAULT_NATIVE_CHAT_GLASS_OPACITY}
+              min={MIN_NATIVE_CHAT_GLASS_OPACITY}
+              max={1}
+              step={0.05}
+              suffix={`${MIN_NATIVE_CHAT_GLASS_OPACITY} to 1`}
+              onChange={(value) =>
+                updateSettings({ nativeChatGlassOpacity: normalizeNativeChatGlassOpacity(value) })
+              }
+            />
+          </SearchableSetting>
+        ) : null}
 
         <SearchableSetting
           title={translate(

@@ -90,6 +90,8 @@ export type PlatformApi = {
     /** Login shell or ComSpec when available. */
     shell: string
     displayServer: 'wayland' | 'x11' | null
+    /** Window was created with a see-through vibrancy backdrop (restart-scoped). */
+    windowGlass: boolean
   }
 }
 

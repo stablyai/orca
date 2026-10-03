@@ -9013,7 +9013,20 @@
           "cf37ff69f6": "Base",
           "8abdab9f7c": "Restart now",
           "907131d741": "Restarting…",
-          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved."
+          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved.",
+          "chatGlassOpacity": "Chat Glass Opacity",
+          "chatGlassOpacityDescription": "macOS: how much of the blurred desktop shows through the chat UI when Window Blur is on.",
+          "glass": {
+            "blurSummary": "See-through, blurred window behind terminals and the chat UI (macOS). Requires restart.",
+            "blurMac": "Frosted-glass desktop behind terminals and the chat UI. Tune it with Background Opacity and Chat Glass Opacity. Uses some extra GPU power. Requires restart.",
+            "blurWindows": "Requests the Windows 11 acrylic backdrop. Orca's panels stay opaque on Windows, so terminals and chat don't show it yet. Requires restart.",
+            "blurLinux": "Not available on Linux.",
+            "opacityMac": "Terminal background opacity, 1 is solid. With Window Blur on, lower values show the blurred desktop; with it off, they only blend into Orca's own background.",
+            "opacityOther": "Terminal background opacity, 1 is solid. Orca's window is opaque on this platform, so lower values blend into Orca's own background instead of showing the desktop.",
+            "chatOpacity": "Chat UI background opacity over the blurred desktop, 1 is solid. Lower values show more of the desktop.",
+            "chatOpacityNeedsBlur": "Turn on Window Blur (and restart) to use this.",
+            "blurWeb": "Applies to the Orca desktop app window; it has no effect in this browser."
+          }
         },
         "UIZoomControl": {
           "c2c64b24d0": "Reset"
@@ -10870,7 +10883,12 @@
               "statusline": "statusline",
               "dim": "dim",
               "colors": "colors"
-            }
+            },
+            "chatGlassOpacity": "Chat Glass Opacity",
+            "chatGlassOpacityDescription": "macOS: how much of the blurred desktop shows through the chat UI when Window Blur is on.",
+            "chatKeyword": "chat",
+            "glassKeyword": "glass",
+            "blurSummary": "See-through, blurred window behind terminals and the chat UI (macOS). Requires restart."
           },
           "windows": {
             "search": {

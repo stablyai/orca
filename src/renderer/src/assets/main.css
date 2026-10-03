@@ -540,6 +540,48 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
   }
 }
 
+/* ── macOS window glass ─────────────────────────────── */
+/* Why: vibrancy sits behind the page, so glass surfaces clear every layer but one tint — stacked translucent
+   layers compound into a plain shade change. Surfaces with their own backgrounds stay opaque. */
+
+html.window-glass {
+  --native-chat-glass-base: var(--background);
+}
+
+html.window-glass body {
+  background-color: transparent;
+}
+
+html.window-glass .native-chat-pane-shell {
+  --background: transparent;
+  background-color: color-mix(
+    in srgb,
+    var(--native-chat-glass-base) calc(var(--native-chat-glass-opacity, 0.6) * 100%),
+    transparent
+  );
+}
+
+/* Why: the split root carries the terminal tint (Background Opacity); xterm repeats it on two inner layers. */
+html.window-glass .pane .xterm,
+html.window-glass .pane .xterm-scrollable-element {
+  background-color: transparent !important;
+}
+
+/* Why !important: pane-divider paints the split background inline on the root, above any nested split. */
+html.window-glass .pane-split-root:has(.pane > .native-chat-pane-shell) {
+  background: transparent !important;
+}
+
+html.window-glass
+  .pane-split-root:has(.pane > .native-chat-pane-shell)
+  .pane:not(:has(> .native-chat-pane-shell)) {
+  background: var(--pane-split-background);
+}
+
+html.window-glass .pane:has(> .native-chat-pane-shell) > .xterm-container {
+  visibility: hidden;
+}
+
 /* ── Sleek scrollbar (VS Code-like) ─────────────────── */
 
 .scrollbar-sleek {

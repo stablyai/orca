@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createDivider, createDividerFlexFrameScheduler, disposeDivider } from './pane-divider'
+import {
+  applyRootBackground,
+  createDivider,
+  createDividerFlexFrameScheduler,
+  disposeDivider
+} from './pane-divider'
 import { queuePanePtyResizeIfHeld } from './pane-pty-resize-hold'
 
 afterEach(() => {
@@ -500,3 +505,17 @@ function createSizedPaneElement(
     style: Record<string, string>
   }
 }
+
+describe('applyRootBackground', () => {
+  it('marks the root and exposes the split background for window-glass CSS', () => {
+    const setProperty = vi.fn()
+    const root = { classList: { add: vi.fn() }, style: { background: '', setProperty } }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: applyRootBackground only touches classList.add, style.background and style.setProperty, all stubbed here.
+    applyRootBackground(root as unknown as HTMLElement, {
+      splitBackground: 'rgba(40, 44, 52, 0.5)'
+    })
+    expect(root.classList.add).toHaveBeenCalledWith('pane-split-root')
+    expect(root.style.background).toBe('rgba(40, 44, 52, 0.5)')
+    expect(setProperty).toHaveBeenCalledWith('--pane-split-background', 'rgba(40, 44, 52, 0.5)')
+  })
+})

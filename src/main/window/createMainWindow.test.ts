@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { hasWindowGlassArgument } from '../../shared/window-glass'
 
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
@@ -394,12 +395,30 @@ describe('createMainWindow', () => {
     }
   })
 
-  it('never requests macOS vibrancy or transparency when window blur is enabled (#8482)', () => {
-    for (const [platform, expected] of [
-      ['darwin', { backgroundMaterial: undefined }],
-      ['win32', { backgroundMaterial: 'acrylic' }],
-      ['linux', { backgroundMaterial: undefined }]
-    ] satisfies [NodeJS.Platform, { backgroundMaterial: string | undefined }][]) {
+  it('never requests transparency; window blur maps to macOS vibrancy glass or Windows acrylic (#8482)', () => {
+    type Expected = {
+      vibrancy?: string
+      visualEffectState?: string
+      backgroundMaterial?: string
+      backgroundColor: string
+      glassArgument: boolean
+    }
+    const opaque: Expected = { backgroundColor: '#ffffff', glassArgument: false }
+    for (const [platform, blur, expected] of [
+      [
+        'darwin',
+        true,
+        {
+          vibrancy: 'under-window',
+          visualEffectState: 'active',
+          backgroundColor: '#00000000',
+          glassArgument: true
+        }
+      ],
+      ['darwin', false, opaque],
+      ['win32', true, { ...opaque, backgroundMaterial: 'acrylic' }],
+      ['linux', true, opaque]
+    ] satisfies [NodeJS.Platform, boolean, Expected][]) {
       browserWindowMock.mockReset()
       const webContents = {
         on: vi.fn(),
@@ -432,18 +451,25 @@ describe('createMainWindow', () => {
       })
 
       withPlatform(platform, () =>
-        createMainWindow({
-          getUI: () => ({}),
-          getSettings: () => ({ windowBackgroundBlur: true }),
-          updateUI: vi.fn()
-        } as never)
+        createMainWindow(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: createMainWindow reads only getUI, getSettings and updateUI from the store here.
+          {
+            getUI: () => ({}),
+            getSettings: () => ({ windowBackgroundBlur: blur }),
+            updateUI: vi.fn()
+          } as never
+        )
       )
 
       const browserWindowOptions = browserWindowMock.mock.calls[0]?.[0]
-      expect(browserWindowOptions.vibrancy).toBeUndefined()
       expect(browserWindowOptions.transparent).toBeUndefined()
+      expect(browserWindowOptions.vibrancy).toBe(expected.vibrancy)
+      expect(browserWindowOptions.visualEffectState).toBe(expected.visualEffectState)
       expect(browserWindowOptions.backgroundMaterial).toBe(expected.backgroundMaterial)
-      expect(browserWindowOptions.backgroundColor).toBe('#ffffff')
+      expect(browserWindowOptions.backgroundColor).toBe(expected.backgroundColor)
+      expect(
+        hasWindowGlassArgument(browserWindowOptions.webPreferences?.additionalArguments ?? [])
+      ).toBe(expected.glassArgument)
     }
   })
 

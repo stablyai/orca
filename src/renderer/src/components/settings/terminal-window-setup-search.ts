@@ -1,6 +1,8 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getGlassCopyPlatform } from './terminal-window-glass-copy'
+import type { SettingsSearchEntry } from './settings-search'
 
 export const getManageSessionsSearchEntries = createLocalizedCatalog(() => [
   {
@@ -31,7 +33,7 @@ export const getManageSessionsSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
-export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
+const getTerminalWindowSearchEntryCatalog = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.terminal.search.b36fd2416d', 'Background Opacity'),
     description: translate(
@@ -54,8 +56,8 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.terminal.search.72d0482137', 'Window Blur'),
     description: translate(
-      'auto.components.settings.terminal.search.bc2054657a',
-      'Apply background blur to the terminal window. Requires restart.'
+      'auto.components.settings.terminal.search.blurSummary',
+      'See-through, blurred window behind terminals and the chat UI (macOS). Requires restart.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.terminal.search.0838b3717b', 'window'),
@@ -131,6 +133,38 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
     ]
   }
 ])
+
+const getChatGlassSearchEntryCatalog = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.chatGlassOpacity',
+      'Chat Glass Opacity'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.chatGlassOpacityDescription',
+      'macOS: how much of the blurred desktop shows through the chat UI when Window Blur is on.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.chatKeyword', 'chat'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.glassKeyword', 'glass'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.46d99ef4bb', 'opacity'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.4f7f8f28ca',
+        'transparency'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.71eb45e293', 'blur')
+    ]
+  }
+])
+
+export function getTerminalWindowSearchEntries(
+  isMac = getGlassCopyPlatform() === 'mac'
+): SettingsSearchEntry[] {
+  // Why: Chat Glass Opacity only renders on desktop macOS; elsewhere search would land on a missing control.
+  return isMac
+    ? [...getTerminalWindowSearchEntryCatalog(), ...getChatGlassSearchEntryCatalog()]
+    : getTerminalWindowSearchEntryCatalog()
+}
 
 export const getTerminalSetupScriptSearchEntries = createLocalizedCatalog(() => [
   {
