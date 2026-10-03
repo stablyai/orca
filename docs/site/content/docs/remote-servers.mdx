@@ -115,6 +115,7 @@ That means:
 Orca creates a separate, revocable token for each paired client. The server lists these under **Shared Server Access**.
 
 - Click the trash button beside a grant to revoke it. Active clients using that grant are disconnected immediately.
+- On a headless host, run `orca runtime-access list --json`, then `orca runtime-access revoke --device <deviceId> --json` directly on the server. A shared grant is revoked for everyone using it; other grants are preserved.
 - Generating another link replaces the previous **unused** link. Clients that already paired keep their own grants until you revoke them.
 - Keep Tailscale ACLs or grants as narrow as your setup allows.
 - Do not forward the Orca port directly to the public internet. Prefer Tailscale, WireGuard, a trusted LAN, SSH forwarding, or an authenticated tunnel.
@@ -212,6 +213,8 @@ Update Orca on both computers if the server row reports an incompatible protocol
 ### The access link was shared with the wrong person
 
 On the server, open **Settings → Remote Orca Servers → Shared Server Access** and revoke that grant. Generate a new link for the intended client.
+
+Without a desktop window, use the `runtime-access` commands above from a terminal on the server, under Orca's OS account. Run inside its container when applicable; Orca's forwarded SSH/WSL CLI bridge and remote selectors cannot administer grants.
 
 ### The server cannot find an agent CLI
 

@@ -13,6 +13,11 @@ export type HandlerGroup = {
 // real exports by handler-group-manifest.test.ts, so drift fails CI, not dispatch.
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
+    name: 'runtime-access',
+    keys: ['runtime-access list', 'runtime-access revoke'],
+    load: async () => (await import('./handlers/runtime-access.js')).RUNTIME_ACCESS_HANDLERS
+  },
+  {
     name: 'core',
     keys: ['claude-teams', 'open', 'serve', 'status'],
     load: async () => (await import('./handlers/core.js')).CORE_HANDLERS

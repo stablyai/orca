@@ -39,6 +39,9 @@ export type { RemoteOrcaCliRequest, RemoteOrcaCliResult } from './ssh-remote-cli
 // caller's TTY (or a local tmux pane), which a buffered one-shot relay bridge
 // cannot host. Everything else routes through the full host CLI.
 const HOST_INTERACTIVE_COMMANDS: Record<string, string> = {
+  // Why: early feedback only; the host CLI's forwarded-cwd guard also covers parser differences.
+  'runtime-access':
+    'Runtime access administration cannot run through the SSH relay bridge. Run it directly in a terminal on the Orca host.',
   serve:
     'orca serve starts a foreground headless Orca server and cannot run through the SSH relay bridge. Run it directly on the machine that should host Orca.',
   'claude-teams':
