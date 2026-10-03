@@ -1,6 +1,7 @@
 import {
   isolatedScanRoots,
   writeJcodeSessionFixture,
+  writeJunieScannerFixture,
   writeMuseScannerFixture,
   writeOpenCode2SqliteFixture
 } from './session-scanner-test-fixtures'
@@ -14,6 +15,7 @@ export type EveryAgentVault = {
   antigravitySessionId: string
   ompSessionFile: string
   primeAgentSessionFile: string
+  junieSessionId: string
 }
 
 /** Build all agent layouts; OpenCode uses legacy JSON here and a separate fixture for SQLite. */
@@ -25,6 +27,7 @@ export async function writeEveryAgentVault(root: string): Promise<EveryAgentVaul
   await writeMuseScannerFixture(roots.museSessionsDir)
   await writeJcodeSessionFixture(roots)
   await writeKiroSessionFixture(roots)
+  const junieSessionId = await writeJunieScannerFixture(roots.junieSessionsDir)
   roots.opencodeDbPaths = [await writeOpenCode2SqliteFixture(root)]
   writeOpenCodeSqliteDatabase(roots.zcodeDbPath, [
     {
@@ -34,5 +37,5 @@ export async function writeEveryAgentVault(root: string): Promise<EveryAgentVaul
       turns: [{ role: 'user', parts: ['ZCode session prompt'] }]
     }
   ])
-  return { roots, antigravitySessionId, ompSessionFile, primeAgentSessionFile }
+  return { roots, antigravitySessionId, ompSessionFile, primeAgentSessionFile, junieSessionId }
 }
