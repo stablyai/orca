@@ -298,7 +298,7 @@ describe('structured agent session outbox admission', () => {
     expect(heldIds(result.current.outbox)).toEqual([heldId])
   })
 
-  it('keeps a refused message held when an unconfirmed message ahead of it is retried', async () => {
+  it('keeps a refused message held when the message in doubt ahead of it leaves', async () => {
     const none: readonly AgentJournalSubmission[] = []
     mocks.call.mockImplementation((_target, _method, params) => {
       const id = requestId(params)
@@ -329,12 +329,10 @@ describe('structured agent session outbox admission', () => {
       dispatchState: 'unknown'
     }
     rerender({ submissions: [unknown] })
-    await waitFor(() => expect(result.current.outbox[0]?.state).toBe('unconfirmed'))
-
-    act(() => result.current.retry(firstId))
+    // The host recorded it and never sends it again, so its entry goes; the refused one stays held.
     await waitFor(() => expect(result.current.outbox).toHaveLength(1))
     await settleTimers(50)
-    expect(sentTexts()).toEqual(['first', 'held', 'first'])
+    expect(sentTexts()).toEqual(['first', 'held'])
     expect(heldIds(result.current.outbox)).toEqual([heldId])
   })
 })

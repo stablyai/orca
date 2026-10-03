@@ -160,7 +160,9 @@ export function useMobileStructuredAgentSession(args: {
   const messages = useMemo(
     () =>
       projectStructuredAgentSessionMessages(state.items, [], state.submissions, {
-        showsFailedStartsSentElsewhere: hostSupport?.retryMessage === true
+        showsFailedStartsSentElsewhere: hostSupport?.retryMessage === true,
+        // The phone does not mark a message as unsent yet, so these stay hidden rather than look sent.
+        showsUndeliveredSentElsewhere: false
       }),
     [state.items, state.submissions, hostSupport?.retryMessage]
   )

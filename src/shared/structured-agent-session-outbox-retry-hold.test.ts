@@ -78,7 +78,7 @@ describe('a message held for its Retry', () => {
   })
 
   // Any fresh word on where a message stands supersedes an earlier attempt's failure.
-  it('is in doubt, and holds the queue, once the host says it cannot tell whether it landed', () => {
+  it('leaves the outbox once the host records that it cannot tell whether it landed', () => {
     const submission: AgentJournalSubmission = {
       clientMessageId: 'held',
       fence: 1,
@@ -93,11 +93,11 @@ describe('a message held for its Retry', () => {
       [entry('held', { lastAttemptAt: 2, lastFailure: REFUSED }), entry('next')],
       [submission]
     )
-    expect(reconciled[0]).toMatchObject({ state: 'unconfirmed' })
-    expect(reconciled[0]?.lastFailure).toBeUndefined()
+    // Its journal row draws it, and the host never sends it again, so nothing waits on it.
+    expect(reconciled.map((entry) => entry.clientMessageId)).toEqual(['next'])
     expect(admitStructuredAgentSessionOutboxEntry(reconciled)).toMatchObject({
-      state: 'blocked',
-      entry: { clientMessageId: 'held' }
+      state: 'dispatch',
+      entry: { clientMessageId: 'next' }
     })
   })
 })

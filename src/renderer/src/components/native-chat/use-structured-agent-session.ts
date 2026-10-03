@@ -178,7 +178,8 @@ export function useStructuredAgentSession(args: {
     transportState.journalItems,
     transcriptOutbox,
     submissions,
-    retriesInPlace
+    retriesInPlace,
+    outbox
   )
   const queuedController = useStructuredAgentSessionQueuedMessages({
     enabled: queueCapable && transportState.fence !== null,

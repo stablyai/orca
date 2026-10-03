@@ -2,6 +2,7 @@
 // id when the recorded one can only ever replay a settled rejection.
 
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import { rotateStructuredAgentSessionOutboxEntryId } from '../../../../shared/structured-agent-session-outbox-rotation'
 import {
   structuredAgentSessionEntryIdExpired,
   type StructuredAgentSessionOutboxEntry
@@ -40,8 +41,10 @@ export function retryStructuredAgentSessionOutboxEntry(args: {
     const rotated = outbox.map((entry) =>
       entry.clientMessageId === clientMessageId
         ? {
-            ...retriedByUser(entry),
-            clientMessageId: args.createOperationId(),
+            ...rotateStructuredAgentSessionOutboxEntryId(
+              retriedByUser(entry),
+              args.createOperationId()
+            ),
             state: 'queued' as const,
             lastAttemptAt: null,
             retryAfterUnknownSubmittedAt: null

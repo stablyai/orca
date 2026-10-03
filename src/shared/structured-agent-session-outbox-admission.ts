@@ -23,9 +23,11 @@ export type StructuredAgentSessionOutboxAdmission =
  * per-session serialize chain before dispatching, so it keeps its place, and waiting for its echo
  * costs delivery of everything queued behind it. One whose start was refused before it ran is the
  * exception the host makes: it waits for its next try while the messages behind it go first. An
- * `unconfirmed` entry is a barrier — sending past it would reorder around a message that may yet
- * land. One the user was told did not go through is not: it lands only by its own Retry, so what
- * the user sends after it goes out as they send it.
+ * `unconfirmed` entry is one the host may never have received, and a barrier — sending past it
+ * would reorder around a message that may yet land. Once the journal records it in doubt it leaves
+ * the outbox (the reconcile): its place is fixed and the host never sends it again. One the user
+ * was told did not go through is not a barrier either: it lands only by its own Retry, so what the
+ * user sends after it goes out as they send it.
  */
 export function admitStructuredAgentSessionOutboxEntry(
   entries: readonly StructuredAgentSessionOutboxEntry[]

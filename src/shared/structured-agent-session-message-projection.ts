@@ -8,7 +8,10 @@ import type { NativeChatMessage } from './native-chat-types'
 import type { StructuredAgentSessionOutboxEntry } from './structured-agent-session-outbox'
 import { structuredAgentSessionEntryHeldForRetry } from './structured-agent-session-outbox-admission'
 import { reconcileStructuredAgentSessionOutboxWithQueue } from './structured-agent-session-draft-hand-off'
-import { failedStartsSentElsewhere } from './structured-agent-session-failed-start-elsewhere'
+import {
+  failedStartsSentElsewhere,
+  undeliveredSentElsewhere
+} from './structured-agent-session-failed-start-elsewhere'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
 
 export function projectStructuredAgentSessionMessages(
@@ -17,11 +20,18 @@ export function projectStructuredAgentSessionMessages(
   submissions: readonly AgentJournalSubmission[],
   {
     projectItems = projectStructuredItemsToNativeChat,
-    showsFailedStartsSentElsewhere = true
+    showsFailedStartsSentElsewhere = true,
+    showsUndeliveredSentElsewhere = true,
+    sentHere = outbox
   }: {
     projectItems?: typeof projectStructuredItemsToNativeChat
     /** Whether the host can queue one again: an older host's are left hidden, as before. */
     showsFailedStartsSentElsewhere?: boolean
+    /** Whether the surface marks a message as unsent; one that can't leaves these hidden. */
+    showsUndeliveredSentElsewhere?: boolean
+    /** This client's whole outbox, cards' sends included, where `outbox` is only what the
+     *  transcript draws: no row of a message it holds is drawn as sent elsewhere. */
+    sentHere?: readonly Pick<StructuredAgentSessionOutboxEntry, 'clientMessageId' | 'rotatedFrom'>[]
   } = {}
 ): NativeChatMessage[] {
   const optimistic = reconcileStructuredAgentSessionOutboxWithQueue(outbox, submissions)
@@ -31,14 +41,13 @@ export function projectStructuredAgentSessionMessages(
       .filter((submission) => submission.dispatchState === 'rejected')
       .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
   )
-  // Sent from elsewhere and refused for good by a failed start: shown as unsent, as this client's
-  // own would be, in the conversation where the journal recorded it.
+  // Sent from elsewhere and refused for good by a failed start, or rejected after it was handed
+  // over: shown as unsent, as this client's own would be, where the journal put it.
   const unsentElsewhere = new Set(
-    showsFailedStartsSentElsewhere
-      ? failedStartsSentElsewhere(submissions, outbox).map((submission) =>
-          agentJournalSubmissionKey(submission.clientMessageId)
-        )
-      : []
+    [
+      ...(showsFailedStartsSentElsewhere ? failedStartsSentElsewhere(submissions, sentHere) : []),
+      ...(showsUndeliveredSentElsewhere ? undeliveredSentElsewhere(submissions, sentHere) : [])
+    ].map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
   )
   const visibleItems: AgentJournalRenderItem[] = []
   const refused = new Map<string, AgentJournalRenderItem>()

@@ -10,7 +10,9 @@ export function useStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
   outbox: readonly StructuredAgentSessionOutboxEntry[],
   submissions: readonly AgentJournalSubmission[],
-  showsFailedStartsSentElsewhere: boolean
+  showsFailedStartsSentElsewhere: boolean,
+  /** The whole outbox, where `outbox` leaves out the sends drawn as cards. */
+  sentHere: readonly StructuredAgentSessionOutboxEntry[] = outbox
 ) {
   return useMemo(
     () =>
@@ -18,8 +20,9 @@ export function useStructuredAgentSessionMessages(
         items,
         outbox,
         submissions,
-        showsFailedStartsSentElsewhere
+        showsFailedStartsSentElsewhere,
+        sentHere
       ),
-    [items, outbox, submissions, showsFailedStartsSentElsewhere]
+    [items, outbox, submissions, showsFailedStartsSentElsewhere, sentHere]
   )
 }

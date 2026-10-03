@@ -8,6 +8,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import {
+  createStructuredAgentSessionOutboxEntry,
+  reconcileStructuredAgentSessionOutbox,
+  structuredAgentSessionSendMutation
+} from '../../../shared/structured-agent-session-outbox'
+import { admitStructuredAgentSessionOutboxEntry } from '../../../shared/structured-agent-session-outbox-admission'
 import { CodexAppServerRequestError } from '../../codex/codex-app-server-connection'
 import { CodexAppServerTimeoutError } from '../../codex/codex-app-server-session'
 import {
@@ -478,4 +484,165 @@ describe('a message after a Codex Stop whose exit was unproven', () => {
     ).toBe(false)
     expect(host['sessions'].get(SESSION)?.owesProviderChildWindDown).toBeUndefined()
   })
+})
+
+// A follow-up steered into an open Codex turn and not yet echoed, when a Stop's interrupt fails.
+// The desktop's outbox is fed the host's own rows, as its reconcile and drain read them: nothing
+// the host keeps in doubt may hold the next message, which goes to a fresh Codex when the Stop
+// ended the child, or to the same one when it did not.
+describe('a follow-up Codex never echoed, when a Stop whose interrupt failed', () => {
+  /** A running turn, then a follow-up Codex took as a steer and has not echoed. */
+  async function steeredFollowUp(): Promise<string> {
+    await runningTurn()
+    codex.routes['turn/steer'] = turns.routes['turn/steer']
+    const followUp = await send('and also this')
+    if (!followUp.ok) {
+      throw new Error(JSON.stringify(followUp.refusal))
+    }
+    await vi.waitFor(() =>
+      expect(codex.connections.at(-1)!.calls.some((call) => call.method === 'turn/steer')).toBe(
+        true
+      )
+    )
+    return followUp.value.clientMessageId
+  }
+
+  function queued(clientMessageId: string, text: string) {
+    return createStructuredAgentSessionOutboxEntry({
+      clientMessageId,
+      sessionId: SESSION,
+      text,
+      attachments: [],
+      queuedAt: NOW
+    })
+  }
+
+  async function followUpRow(followUpId: string) {
+    const { submissions } = await host.journalSnapshot(SESSION)
+    return submissions.find((row) => row.clientMessageId === followUpId)
+  }
+
+  /** The desktop's queue as it held them, the follow-up on its way, read through the host's rows:
+   *  the next message is admitted and reaches Codex as a turn of its own. Resolves with the queue
+   *  as it stands once that message is on its way. */
+  async function nextMessageGoesOut(followUpId: string, child: number) {
+    const { submissions } = await host.journalSnapshot(SESSION)
+    const next = queued(hostTestOperationId(), 'carry on')
+    const outbox = reconcileStructuredAgentSessionOutbox(
+      [{ ...queued(followUpId, 'and also this'), state: 'dispatching', lastAttemptAt: NOW }, next],
+      submissions
+    )
+    expect(admitStructuredAgentSessionOutboxEntry(outbox)).toEqual({
+      state: 'dispatch',
+      entry: next
+    })
+    launch.resumeThreadId = THREAD
+    expect(await host.send(CALLER, structuredAgentSessionSendMutation(next, 1))).toMatchObject({
+      ok: true
+    })
+    await vi.waitFor(() => expect(codex.connections).toHaveLength(child + 1))
+    await vi.waitFor(() =>
+      expect(
+        codex.connections[child]!.calls.some(
+          (call) => call.method === 'turn/start' && JSON.stringify(call.params).includes('carry on')
+        )
+      ).toBe(true)
+    )
+    return outbox.map((entry) =>
+      entry === next ? { ...entry, state: 'dispatching' as const, lastAttemptAt: NOW } : entry
+    )
+  }
+
+  /** Read through the host's rows as they stand now, the queue admits what is sent after. */
+  async function queueStaysOpen(outbox: ReturnType<typeof reconcileStructuredAgentSessionOutbox>) {
+    const { submissions } = await host.journalSnapshot(SESSION)
+    const later = queued(hostTestOperationId(), 'and then')
+    expect(
+      admitStructuredAgentSessionOutboxEntry(
+        reconcileStructuredAgentSessionOutbox([...outbox, later], submissions)
+      )
+    ).toEqual({ state: 'dispatch', entry: later })
+  }
+
+  /** As the real connection: once a close begins it refuses every request, proven or not. The
+   *  first close does not prove the exit. */
+  function firstCloseUnproven(): void {
+    const old = codex.connections.at(-1)!
+    const close = old.close
+    const request = old.request
+    let unproven = 1
+    old.close = async () => {
+      old.closed = true
+      if (unproven === 0) {
+        return close()
+      }
+      unproven -= 1
+      return false
+    }
+    old.request = (method, params) =>
+      old.closed
+        ? Promise.reject(new Error('codex app-server is closing'))
+        : request(method, params)
+  }
+
+  it.each(['internal error', 'unanswered'] as const)(
+    'stays in doubt when the Stop ends the child (%s), and the next message goes to a fresh Codex',
+    async (failure) => {
+      const followUpId = await steeredFollowUp()
+      codex.routes['turn/interrupt'] = () => {
+        throw interruptFailure(failure)
+      }
+
+      await stop()
+      await host.flushStreamedEvents(SESSION)
+      expect(childEndedByStop()).toBe(true)
+      expect(await followUpRow(followUpId)).toMatchObject({
+        dispatchState: 'unknown',
+        recovered: true
+      })
+      await queueStaysOpen(await nextMessageGoesOut(followUpId, 1))
+    }
+  )
+
+  // Codex marks the turn ended before it writes the refusal, so the turn's end follows it.
+  it('keeps the child when Codex had no turn to interrupt, and the next message goes to it', async () => {
+    const followUpId = await steeredFollowUp()
+    codex.routes['turn/interrupt'] = () => {
+      setTimeout(() => turns.end('completed'), 2)
+      throw refused('no active turn to interrupt')
+    }
+
+    await stop()
+    await vi.waitFor(async () => expect((await journalRows()).turns).toEqual(['completed']))
+    await host.flushStreamedEvents(SESSION)
+    expect(childEndedByStop()).toBe(false)
+    // Nothing settled it, so the desktop's entry stays on its way, which holds nothing up.
+    expect(await followUpRow(followUpId)).toMatchObject({ dispatchState: 'pending' })
+    await queueStaysOpen(await nextMessageGoesOut(followUpId, 0))
+  })
+
+  // The owed stop is proven by the next send, which settles the follow-up in doubt only then.
+  it.each(['internal error', 'unanswered'] as const)(
+    'stays in doubt once a Stop that could not prove the exit (%s) is proven, and the queue never stops',
+    async (failure) => {
+      const followUpId = await steeredFollowUp()
+      codex.routes['turn/interrupt'] = () => {
+        throw interruptFailure(failure)
+      }
+      firstCloseUnproven()
+
+      await stop()
+      await host.flushStreamedEvents(SESSION)
+      expect(host['sessions'].get(SESSION)?.owesProviderChildWindDown).toBeDefined()
+      expect(await followUpRow(followUpId)).toMatchObject({ dispatchState: 'pending' })
+
+      const outbox = await nextMessageGoesOut(followUpId, 1)
+      expect(host['sessions'].get(SESSION)?.owesProviderChildWindDown).toBeUndefined()
+      expect(await followUpRow(followUpId)).toMatchObject({
+        dispatchState: 'unknown',
+        recovered: true
+      })
+      await queueStaysOpen(outbox)
+    }
+  )
 })

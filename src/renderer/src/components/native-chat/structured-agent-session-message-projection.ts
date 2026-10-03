@@ -10,11 +10,13 @@ export function projectStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
   outbox: readonly StructuredAgentSessionOutboxEntry[],
   submissions: readonly AgentJournalSubmission[],
-  showsFailedStartsSentElsewhere: boolean
+  showsFailedStartsSentElsewhere: boolean,
+  sentHere: readonly StructuredAgentSessionOutboxEntry[] = outbox
 ) {
   return projectMessages(items, outbox, submissions, {
     projectItems: projectStructuredQuestionMessages,
-    showsFailedStartsSentElsewhere
+    showsFailedStartsSentElsewhere,
+    sentHere
   })
 }
 

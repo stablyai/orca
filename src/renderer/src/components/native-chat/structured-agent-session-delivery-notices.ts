@@ -11,7 +11,8 @@
 // the message keeps only a smaller copy, read when its submission is not loaded. A message whose
 // start was refused before it ran and that waits for its next try says why and that Orca tries
 // again, whoever sent it. A rejection that is a failed start's, the fact a loaded start row from an older host
-// states, says only that it was not sent: the row already says why.
+// states, says only that it was not sent: the row already says why. One rejected after it was
+// handed over says why, whoever sent it.
 
 import {
   readAgentSessionFailureFact,
@@ -27,6 +28,7 @@ import { agentSessionWriteNotDoneParts } from '../../../../shared/agent-session-
 import { isStructuredAgentSessionStartFailureRow } from '../../../../shared/structured-agent-session-start-failure-row-key'
 import {
   structuredAgentSessionEntryIdExpired,
+  structuredAgentSessionRejectedFailure,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
 import {
@@ -39,7 +41,10 @@ import {
 } from '../../../../shared/agent-session-failure-words'
 import { joinSentences } from '../../../../shared/sentence-joining'
 import { isRetryingStructuredAgentSessionStart } from '../../../../shared/structured-agent-session-start-retry'
-import { failedStartsSentElsewhere } from '../../../../shared/structured-agent-session-failed-start-elsewhere'
+import {
+  failedStartsSentElsewhere,
+  undeliveredSentElsewhere
+} from '../../../../shared/structured-agent-session-failed-start-elsewhere'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { structuredAgentSessionAttemptFailureParts } from '../../../../shared/structured-agent-session-send-disposition'
 import { translate } from '@/i18n/i18n'
@@ -255,6 +260,18 @@ export function structuredAgentSessionDeliveryNotices(
     notices.set(agentJournalSubmissionKey(clientMessageId), {
       text,
       ...retryControlFor(clientMessageId)
+    })
+  }
+  // Worded as this client's own copy would be, with no Retry: the host cannot queue it again.
+  for (const submission of undeliveredSentElsewhere(submissions, outbox)) {
+    notices.set(agentJournalSubmissionKey(submission.clientMessageId), {
+      text: agentSessionWriteNoticeText(
+        structuredAgentSessionAttemptFailureParts(
+          structuredAgentSessionRejectedFailure(submission),
+          { agentName, retryControl: false },
+          readWholeAgentSessionFailureFact(submission.rejection)
+        )
+      )
     })
   }
   return notices

@@ -20,7 +20,8 @@ export type StructuredAgentSessionQueueDelivery = {
 /** Whether this entry's next request asks to be queued. An attempted id asks exactly what it sent,
  *  except of a host known not to queue, which rejects the field before its operation ledger, so
  *  nothing there was recorded with it. A first attempt asks only of a host known to queue, with
- *  the setting on, for plain text that is not a launch prompt. */
+ *  the setting on, for plain text that is not a launch prompt nor a Retry's copy under a new id:
+ *  a Retry goes now, as one in place does, never into a card beside the message it replaces. */
 export function structuredAgentSessionEntryAsksToQueue(
   entry: StructuredAgentSessionOutboxEntry,
   host: StructuredAgentSessionQueueDelivery
@@ -32,6 +33,7 @@ export function structuredAgentSessionEntryAsksToQueue(
     host.capability === 'supported' &&
     host.enabled &&
     entry.source !== 'launch' &&
+    entry.rotatedFrom === undefined &&
     entry.body.blocks.every((block) => block.type === 'text')
   )
 }

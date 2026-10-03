@@ -14,6 +14,10 @@ import type { AgentSessionMutationEnvelope } from './agent-session-wire'
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
 import { parseStructuredAgentSessionOutboxQueueFields } from './structured-agent-session-outbox-delivery'
+import {
+  parseStructuredAgentSessionOutboxRotation,
+  rotateStructuredAgentSessionOutboxEntryId
+} from './structured-agent-session-outbox-rotation'
 
 /** `rejected`: the host settled the send as not delivered. The drain never sends it again on its
  *  own and nothing queues behind it; only the user's Retry does, as a new id, or, on a host that
@@ -45,6 +49,9 @@ export type StructuredAgentSessionOutboxEntry = {
    *  is sent again or delivered, instead of outliving it as a separate error. On a `queued` entry
    *  it is also the hold (structured-agent-session-outbox-admission). */
   lastFailure?: StructuredAgentSessionAttemptFailure
+  /** The ids this message went out under before a new one replaced them, oldest first
+   *  (structured-agent-session-outbox-rotation). */
+  rotatedFrom?: string[]
 }
 
 /** A host's rejection fact as a message keeps it: never its provider detail, whose log text is not
@@ -199,8 +206,7 @@ export function requeueStructuredAgentSessionSendRefusal(
   // doubt, may have landed, so those keep it. Only a settled refusal proves the message never
   // landed.
   return {
-    ...entry,
-    clientMessageId: createOperationId(),
+    ...rotateStructuredAgentSessionOutboxEntryId(entry, createOperationId()),
     state: refusalSettled ? 'rejected' : 'queued',
     lastAttemptAt: null,
     retryAfterUnknownSubmittedAt: null
@@ -246,14 +252,14 @@ export function reconcileStructuredAgentSessionOutbox(
         }
       ]
     }
+    // Recorded, but whether the agent got it is unknown: its journal row draws it in place and the
+    // host never sends it again, so the entry goes. Only a Retry the user asked of this very
+    // submission stays, for its answer.
     if (
       submission?.dispatchState === 'unknown' &&
-      entry.retryAfterUnknownSubmittedAt !== -1 &&
       entry.retryAfterUnknownSubmittedAt !== submission.submittedAt
     ) {
-      // In doubt now, not failed: the probe's resend decides it, as for any unconfirmed send.
-      const { lastFailure: _superseded, ...inDoubt } = entry
-      return [{ ...inDoubt, state: 'unconfirmed' as const }]
+      return []
     }
     return [entry]
   })
@@ -297,6 +303,7 @@ export function parseStructuredAgentSessionOutboxEntry(
         ? entry.retryAfterUnknownSubmittedAt
         : null,
     ...(entry.source === 'launch' ? { source: 'launch' as const } : {}),
+    ...parseStructuredAgentSessionOutboxRotation(entry),
     ...parseStructuredAgentSessionOutboxQueueFields(entry),
     ...(lastFailure ? { lastFailure } : {})
   }

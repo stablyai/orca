@@ -68,6 +68,9 @@ function withLastFailure(
   return lastFailure === undefined ? rest : { ...rest, lastFailure }
 }
 
+/** The host's replay of a send whose operation it recorded but whose submission row it lost. */
+const SUBMISSION_MISSING = 'durable_send_submission_missing'
+
 function dropEntry(input: SendDispositionInput): StructuredAgentSessionOutboxEntry[] {
   return input.entries.filter(
     (candidate) => candidate.clientMessageId !== input.entry.clientMessageId
@@ -286,15 +289,19 @@ export function disposeStructuredAgentSessionSendResult(
       error: null
     }
   }
-  if (submission.dispatchState === 'unknown' && submission.recovered) {
-    return {
-      entries: input.entries.map((candidate) =>
-        candidate.clientMessageId === input.entry.clientMessageId
-          ? { ...candidate, state: 'unconfirmed', retryAfterUnknownSubmittedAt: -1 }
-          : candidate
-      ),
-      error: null
-    }
+  if (submission.dispatchState === 'unknown') {
+    // The host recorded it and never sends it again, so nothing waits on it: its row draws it, as
+    // the reconcile drops it. One whose row the host lost has only this entry to show it.
+    return submission.reason === SUBMISSION_MISSING
+      ? {
+          entries: input.entries.map((candidate) =>
+            candidate.clientMessageId === input.entry.clientMessageId
+              ? { ...candidate, state: 'unconfirmed', retryAfterUnknownSubmittedAt: -1 }
+              : candidate
+          ),
+          error: null
+        }
+      : { entries: dropEntry(input), error: null }
   }
   // `pending` is the host saying the message was written and is awaiting the
   // provider's acknowledgement, which cannot arrive until the turn ahead of it
@@ -303,10 +310,7 @@ export function disposeStructuredAgentSessionSendResult(
   // because a `pending` can still settle `rejected` or `unknown`, and only the
   // entry carries the retry state that answer needs.
   return {
-    entries: replaceEntryState(
-      input,
-      submission.dispatchState === 'unknown' ? 'unconfirmed' : 'dispatching'
-    ),
+    entries: replaceEntryState(input, 'dispatching'),
     error: null
   }
 }
