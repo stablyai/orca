@@ -175,6 +175,26 @@ function getHostStickyIndexes(rows: readonly RenderRow[], sticky: readonly numbe
   return sticky.filter((index) => rows[index]?.type === 'host-header')
 }
 
+/**
+ * The scroll position the sticky decision must be read from.
+ *
+ * The element's own `scrollTop` cannot drift. The virtualizer books measured size corrections
+ * into its remembered offset before the element scrolls and re-reads the element only on a scroll
+ * event, so a card that grows after mount moves the believed offset while the element stays put.
+ * In a list too short to scroll the element never catches up, and the believed offset then pins a
+ * header the user cannot see over the row they can (#18667); toggling a group drifts it again,
+ * which is the same defect seen as headers jumping.
+ *
+ * One call site, so one read per render pass rather than per row.
+ */
+export function resolveStickyScrollOffset(args: {
+  element: Pick<HTMLElement, 'scrollTop'> | null
+  virtualizerOffset: number | null
+  fallbackOffset: number
+}): number {
+  return args.element?.scrollTop ?? args.virtualizerOffset ?? args.fallbackOffset
+}
+
 /** Two-tier sticky resolution: the host card is the outer hierarchy level so
  *  it stays pinned for the whole section while group headers hand off beneath
  *  it. Without host sections this degrades to the original single-tier rules. */
