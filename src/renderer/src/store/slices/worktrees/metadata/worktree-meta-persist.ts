@@ -6,6 +6,7 @@ import {
 } from '../../../../runtime/runtime-rpc-client'
 import {
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
+  WORKSPACE_SNOOZE_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
@@ -118,6 +119,16 @@ async function persistWorktreeMetaUntracked(
       translate(
         'auto.store.slices.worktrees.metadata.worktree.meta.persist.4367540861',
         'Update the remote runtime to link Linear issues'
+      )
+    )
+  }
+  if (target.kind === 'environment' && 'snooze' in updates) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      WORKSPACE_SNOOZE_RUNTIME_CAPABILITY,
+      translate(
+        'auto.store.slices.worktrees.metadata.worktree.meta.persist.snooze',
+        'Update the remote runtime to snooze workspaces'
       )
     )
   }

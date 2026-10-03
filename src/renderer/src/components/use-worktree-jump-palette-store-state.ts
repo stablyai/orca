@@ -100,6 +100,7 @@ export function useWorktreeJumpPaletteStoreState({
     (state) => state.hideWorkspacesFromOtherDevices
   )
   const showSleepingWorkspaces = useAppStore((state) => state.showSleepingWorkspaces)
+  const showSnoozedWorkspaces = useAppStore((state) => state.showSnoozedWorkspaces)
   const alwaysShowDefaultBranchWorkspace = useAppStore(
     (state) => state.alwaysShowDefaultBranchWorkspace
   )
@@ -177,6 +178,7 @@ export function useWorktreeJumpPaletteStoreState({
     hideDetachedHeadWorkspaces,
     hideWorkspacesFromOtherDevices,
     showSleepingWorkspaces,
+    showSnoozedWorkspaces,
     alwaysShowDefaultBranchWorkspace,
     lastVisitedAtByWorktreeId,
     workspacePortScan,

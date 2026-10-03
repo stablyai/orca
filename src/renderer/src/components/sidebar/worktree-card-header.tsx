@@ -13,6 +13,7 @@ import { formatSparseDirectoryPreview, shouldBeginWorktreeRename } from './workt
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import { WorktreeCardSshHostControl } from './WorktreeCardSshHostControl'
 import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
+import { WorkspaceSnoozeBadge } from './WorkspaceSnoozeBadge'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
 // Why: pinned repo icon and compact inline badge share this chip shell so both repo cues read as the same affordance.
@@ -260,6 +261,8 @@ export function WorktreeCardHeader({
             </TooltipContent>
           </Tooltip>
         )}
+
+        {worktree.snooze ? <WorkspaceSnoozeBadge snooze={worktree.snooze} /> : null}
 
         {showTitleRowIndicators && titleRowIndicators}
       </div>

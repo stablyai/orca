@@ -522,7 +522,8 @@
                     "pr": {
                       "suppression": "Update the remote runtime to unlink GitHub pull requests"
                     }
-                  }
+                  },
+                  "snooze": "Update the remote runtime to snooze workspaces"
                 }
               }
             }
@@ -5490,7 +5491,8 @@
           "cliCreated": "Hide CLI-created",
           "detachedHead": "Hide detached HEAD",
           "keepDefaultBranch": "Except default branch",
-          "keepDefaultBranchAria": "Keep the default branch visible while hiding sleeping workspaces"
+          "keepDefaultBranchAria": "Keep the default branch visible while hiding sleeping workspaces",
+          "hideSnoozed": "Hide snoozed"
         },
         "SidebarHeader": {
           "projects": "Projects",
@@ -5565,7 +5567,8 @@
           "keepDefaultBranch": "Except default branch",
           "keepDefaultBranchAria": "Keep the default branch visible while hiding sleeping workspaces",
           "otherClients": "Hide other-client workspaces",
-          "otherClientsAria": "Hide workspaces created from other Orca clients on shared remote servers"
+          "otherClientsAria": "Hide workspaces created from other Orca clients on shared remote servers",
+          "hideSnoozed": "Hide snoozed"
         },
         "sidebarHostOptions": {
           "3e102f111c": "All hosts",
@@ -6497,6 +6500,27 @@
           "copied": "Command copied",
           "retry": "Retry now",
           "restored": "Git is working again. Worktrees refreshed."
+        },
+        "SnoozeWorkspaceDialog": {
+          "title": "Snooze Until",
+          "description": "The workspace sleeps and hides from the sidebar, then returns as unread at this time.",
+          "wakeAt": "Wake At",
+          "cancel": "Cancel",
+          "confirm": "Snooze"
+        },
+        "workspaceSnooze": {
+          "badge": "snoozed",
+          "badgeTooltipNoTime": "Snoozed. Right-click to wake now.",
+          "badgeTooltip": "Snoozed until {{time}}. Right-click to wake now.",
+          "snooze": "Snooze",
+          "pickTime": "Pick a Time…",
+          "wakeNow": "Wake Now",
+          "snoozeFailed": "Failed to snooze workspace",
+          "wakeFailed": "Failed to wake workspace",
+          "oneHour": "1 Hour",
+          "fiveHours": "5 Hours",
+          "tomorrowMorning": "Tomorrow Morning",
+          "nextWeek": "Next Week"
         }
       },
       "shared": {

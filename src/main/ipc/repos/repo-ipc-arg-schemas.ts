@@ -5,6 +5,7 @@ import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-linked-item
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import { DiffCommentSchema } from '../../../shared/diff-comment-schema'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
+import { WorkspaceSnoozeSchema } from '../../../shared/workspace-snooze'
 
 export const ProjectGroupCreateArgs = z.object({
   name: z.string().min(1),
@@ -152,6 +153,7 @@ export const FolderWorkspaceUpdateArgs = z.object({
       isArchived: z.boolean().optional(),
       isUnread: z.boolean().optional(),
       isPinned: z.boolean().optional(),
+      snooze: WorkspaceSnoozeSchema.nullable().optional(),
       sortOrder: z.number().finite().optional(),
       manualOrder: z.number().finite().optional(),
       workspaceStatus: z.string().optional(),

@@ -59,4 +59,25 @@ describe('normalizeFolderWorkspaces host attribution', () => {
 
     expect(inherited.connectionId).toBe('ssh-group')
   })
+
+  it('keeps a valid snooze and drops a malformed one', () => {
+    const workspaces = normalizeFolderWorkspaces(
+      [
+        {
+          id: 'ws-4',
+          projectGroupId: 'group-1',
+          name: 'Snoozed',
+          snooze: { snoozedAt: 1, wakeAt: 2 }
+        },
+        { id: 'ws-5', projectGroupId: 'group-1', name: 'Malformed', snooze: { wakeAt: 2 } }
+      ],
+      [folderGroup]
+    )
+    const snoozed = workspaces.find((workspace) => workspace.id === 'ws-4')
+    const malformed = workspaces.find((workspace) => workspace.id === 'ws-5')
+
+    expect(snoozed?.snooze).toEqual({ snoozedAt: 1, wakeAt: 2 })
+    expect(malformed).toBeDefined()
+    expect(malformed).not.toHaveProperty('snooze')
+  })
 })

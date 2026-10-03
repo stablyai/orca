@@ -9,6 +9,7 @@ import type {
 } from './worktree/lineage-types'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { GitWorktreeInfo, Worktree } from './worktree/types'
+import type { WorkspaceSnooze } from './workspace-snooze'
 
 export type RuntimeWorktreeAgentRow = {
   paneKey: string
@@ -66,6 +67,7 @@ export type RuntimeWorktreePsSummary = {
   linkedGitLabIssue: number | null
   comment: string
   isPinned: boolean
+  snooze?: WorkspaceSnooze
   isActive: boolean
   unread: boolean
   liveTerminalCount: number

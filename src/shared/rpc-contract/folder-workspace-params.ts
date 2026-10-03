@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { WorkspaceLinkedItemSchema } from '../workspace-linked-item-schema'
 import { TaskSourceContextSchema } from '../task-source-context-schema'
+import { WorkspaceSnoozeSchema } from '../workspace-snooze'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-linked-item-source-context'
 import { isTuiAgent } from '../tui-agent-config'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
@@ -52,6 +53,7 @@ export const FolderWorkspaceUpdate = z.object({
       isArchived: z.boolean().optional(),
       isUnread: z.boolean().optional(),
       isPinned: z.boolean().optional(),
+      snooze: WorkspaceSnoozeSchema.nullable().optional(),
       sortOrder: OptionalFiniteNumber,
       manualOrder: OptionalFiniteNumber,
       workspaceStatus: OptionalString,
