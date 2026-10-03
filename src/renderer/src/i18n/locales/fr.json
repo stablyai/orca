@@ -13499,6 +13499,7 @@
             "agentRole": "Agent",
             "toolRole": "Outil",
             "systemRole": "Système",
+            "errorRole": "Erreur",
             "sessionRole": "Session",
             "jumpToOriginalPane": "Aller au volet d'origine",
             "jumpToWorktree": "Aller au worktree",

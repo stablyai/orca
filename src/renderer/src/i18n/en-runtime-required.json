@@ -690,19 +690,31 @@
       "right": {
         "sidebar": {
           "AiVaultPanel": {
+            "aiSearch": "AI search",
+            "aiSearchHint": "Press Enter to rank with the auto-rename agent",
+            "askPastSessions": "Ask about past sessions",
             "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead.",
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "remoteBrowseLocalHistory": "Remote workspaces can browse local history. Resume actions run from local workspaces.",
+            "transcriptHits": "{{count}} transcript hits",
             "valueCopyFailed": "Unable to copy {{value0}}"
           },
           "AiVaultPanelControls": {
             "allSessions": "All sessions",
+            "anyTime": "Any time",
             "currentWorkspace": "Current workspace",
             "currentWorktreeLower": "current worktree",
             "globalScope": "Global",
+            "last24Hours": "Last 24 hours",
+            "last30Days": "Last 30 days",
+            "last7Days": "Last 7 days",
+            "localHost": "Local",
             "scope": "Scope",
+            "searchIn": "Search in",
             "thisScope": "This",
-            "worktreeScope": "Worktree"
+            "updated": "Updated",
+            "worktreeScope": "Worktree",
+            "wslHost": "WSL"
           },
           "AiVaultSessionDetails": {
             "assistant": "Assistant",
