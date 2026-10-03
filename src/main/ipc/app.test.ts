@@ -9,6 +9,7 @@ const {
   spawnMock,
   destroySystemTrayMock,
   relaunchAppMock,
+  relaunchAndExitImmediatelyMock,
   showOpenDialogMock,
   grantFloatingWorkspaceDirectoryMock,
   registerRendererShutdownCheckpointHandlerMock,
@@ -21,6 +22,7 @@ const {
   spawnMock: vi.fn(),
   destroySystemTrayMock: vi.fn(),
   relaunchAppMock: vi.fn(),
+  relaunchAndExitImmediatelyMock: vi.fn(),
   showOpenDialogMock: vi.fn(),
   grantFloatingWorkspaceDirectoryMock: vi.fn(),
   registerRendererShutdownCheckpointHandlerMock: vi.fn(),
@@ -98,7 +100,8 @@ vi.mock('../tray/system-tray', () => ({
 }))
 
 vi.mock('../app-relaunch', () => ({
-  relaunchApp: relaunchAppMock
+  relaunchApp: relaunchAppMock,
+  relaunchAndExitImmediately: relaunchAndExitImmediatelyMock
 }))
 
 vi.mock('./floating-workspace-directory', () => ({
@@ -154,6 +157,12 @@ describe('registerAppHandlers', () => {
     destroySystemTrayMock.mockReset()
     relaunchAppMock.mockReset()
     relaunchAppMock.mockImplementation(() => appRelaunchMock())
+    relaunchAndExitImmediatelyMock.mockReset()
+    // Mirrors the real choke point: relaunch, then leave without the quit pipeline.
+    relaunchAndExitImmediatelyMock.mockImplementation((reason: unknown, data?: unknown) => {
+      relaunchAppMock(reason, data)
+      appExitMock(0)
+    })
     showOpenDialogMock.mockReset()
     grantFloatingWorkspaceDirectoryMock.mockReset()
     registerRendererShutdownCheckpointHandlerMock.mockReset()
@@ -194,7 +203,7 @@ describe('registerAppHandlers', () => {
     await vi.advanceTimersByTimeAsync(150)
 
     expect(destroySystemTrayMock).toHaveBeenCalledTimes(1)
-    expect(relaunchAppMock).toHaveBeenCalledWith('renderer-request')
+    expect(relaunchAndExitImmediatelyMock).toHaveBeenCalledWith('renderer-request')
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).toHaveBeenCalledWith(0)
     expect(destroySystemTrayMock.mock.invocationCallOrder[0]).toBeLessThan(

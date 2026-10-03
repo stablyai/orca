@@ -9,6 +9,7 @@ import { initTelemetry, track } from '../telemetry/client'
 import { setCodexTrustGrantTelemetry } from '../codex/codex-trust-grant-telemetry'
 import { initObservability } from '../observability'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { initPreviousLaunchExitVerdict } from '../crash-reporting/previous-launch-exit-verdict'
 import { recoverPendingSkillTransactions } from '../skills/skill-transaction-startup-recovery'
 import { initCohortClassifier } from '../telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
@@ -96,11 +97,18 @@ export function initializeMainProcessObservers(): void {
   // tracer's active sink is populated at the moment the first span fires.
   // Honors DO_NOT_TRACK / ORCA_TELEMETRY_DISABLED / ORCA_DIAGNOSTICS_DISABLED
   // / CI internally; those gates do not need to be re-checked here.
-  initObservability()
+  const observability = initObservability()
   recordDurableCrashBreadcrumb('main_process_lifecycle_started', {
     packaged: app.isPackaged,
     platform: process.platform
   })
+  // Why gated on the sink: with tracing off the trace tail is stale or absent, and a
+  // verdict read from a launch that is not the previous one would be a fabrication.
+  // Why not awaited: it reads the trace tail off disk; a crash in the first few ms
+  // simply misses the detail, which beats blocking startup on file IO.
+  if (observability.localFileEnabled) {
+    void initPreviousLaunchExitVerdict(state.crashReports)
+  }
   state.skillTransactionRecovery = recoverPendingSkillTransactions(
     join(app.getPath('userData'), 'skill-installs')
   )
