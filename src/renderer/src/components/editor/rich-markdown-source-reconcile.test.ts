@@ -170,9 +170,9 @@ describe('reconcileSerializedMarkdown', () => {
     }
   })
 
-  it('falls back to canonical when a hunk fails to apply (branch 5)', () => {
-    const baseCanonical = 'The quick brown fox jumps over the lazy dog every morning.\n'
-    const edited = 'The quick brown fox LEAPS over the lazy dog every morning.\n'
+  it('keeps the source final newline when a hunk fails to apply (branch 5)', () => {
+    const baseCanonical = 'The quick brown fox jumps over the lazy dog every morning.'
+    const edited = 'The quick brown fox LEAPS over the lazy dog every morning.'
     const originalSource = 'Zzz totally unrelated content sharing nothing at all here.\n'
 
     const reconciled = reconcileSerializedMarkdown({
@@ -182,7 +182,7 @@ describe('reconcileSerializedMarkdown', () => {
       roundTrip
     })
 
-    expect(reconciled).toBe(edited)
+    expect(reconciled).toBe(`${edited}\n`)
   })
 
   it('falls back to canonical when the safety re-parse mismatches (branch 6)', () => {
@@ -507,6 +507,7 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
     })
 
     expect(roundTripCalls).toBeGreaterThan(0) // deferred to the safety-verified path
+    expect(reconciled).toBe('# H\n\ntext\n\n')
     // Exact reload equality (NOT trimEnd): the empty paragraph survives.
     expect(serialize(reconciled)).toBe(serialize(edited))
   })
@@ -552,5 +553,41 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
     })
 
     expect(serialize(reconciled)!.trimEnd()).toBe(edited.trimEnd())
+  })
+
+  it('patches an EOF edit before the serializer-omitted final newline', () => {
+    const originalSource =
+      'Cost was \\$1,200 for Nell & Mary.\n\n| Item         | Amount |\n|--------------|-------:|\n| Fee          | \\$500  |\n\nTrailing paragraph.\n'
+    const baseCanonical = serialize(originalSource)!
+    expect(baseCanonical.endsWith('\n')).toBe(false)
+    const edited = `${baseCanonical} Added word.`
+
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited,
+      roundTrip: (md) => serialize(md)
+    })
+
+    expect(reconciled).toBe(
+      'Cost was \\$1,200 for Nell & Mary.\n\n| Item         | Amount |\n|--------------|-------:|\n| Fee          | \\$500  |\n\nTrailing paragraph. Added word.\n'
+    )
+    expect(serialize(reconciled)).toBe(edited)
+  })
+
+  it('patches an EOF edit before a serializer-omitted CRLF', () => {
+    const originalSource = '# Title\r\n\r\n_emphasis_\r\n\r\nTrailing paragraph.\r\n'
+    const baseCanonical = serialize(originalSource)!
+    const edited = `${baseCanonical} Added word.`
+
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited,
+      roundTrip: (md) => serialize(md)
+    })
+
+    expect(reconciled).toBe('# Title\r\n\r\n_emphasis_\r\n\r\nTrailing paragraph. Added word.\r\n')
+    expect(reconciled.replace(/\r\n/g, '')).not.toContain('\n')
   })
 })
