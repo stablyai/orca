@@ -13,6 +13,7 @@ export type SplitPaneAroundLeafIdsOptions = {
   leafId?: string
   ptyId?: string
   placement?: 'before' | 'after'
+  preserveSiblingSizes?: boolean
 }
 
 type SplitPaneAroundLeafIdsArgs = {

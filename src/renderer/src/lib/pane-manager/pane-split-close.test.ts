@@ -13,8 +13,11 @@ const applyPaneOpacity = vi.hoisted(() => vi.fn())
 const applyDividerStyles = vi.hoisted(() => vi.fn())
 
 vi.mock('./pane-tree-ops', () => ({
+  arePaneSplitSizesEqualized: vi.fn(() => false),
   captureScrollState,
+  equalizePaneSplitSizes: vi.fn(),
   findPaneChildren: vi.fn(),
+  isExplicitSplitRatio: vi.fn(() => false),
   promoteSibling: vi.fn(),
   removeDividers: vi.fn(),
   safeFit: vi.fn(),
