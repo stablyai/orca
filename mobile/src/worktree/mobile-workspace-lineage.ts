@@ -22,10 +22,14 @@ function hasValidLineageParent(worktree: Worktree, parent: Worktree): boolean {
   )
 }
 
-export function applyMobileWorkspaceLineage(
-  worktrees: readonly Worktree[],
-  collapsedGroups: ReadonlySet<string> = new Set()
-): Worktree[] {
+/**
+ * Valid parent→child edges among the given rows. Edges never cross execution
+ * hosts and stale instance lineage is rejected the same way desktop does.
+ */
+export function buildMobileWorkspaceLineageEdges(worktrees: readonly Worktree[]): {
+  childrenByParentId: Map<string, Worktree[]>
+  childIds: Set<string>
+} {
   const visibleIds = new Set(worktrees.map((worktree) => getWorktreeRowIdentity(worktree)))
   const worktreeById = new Map(
     worktrees.map((worktree) => [getWorktreeRowIdentity(worktree), worktree])
@@ -54,6 +58,15 @@ export function applyMobileWorkspaceLineage(
     children.push(worktree)
     childrenByParentId.set(parentIdentity, children)
   }
+
+  return { childrenByParentId, childIds }
+}
+
+export function applyMobileWorkspaceLineage(
+  worktrees: readonly Worktree[],
+  collapsedGroups: ReadonlySet<string> = new Set()
+): Worktree[] {
+  const { childrenByParentId, childIds } = buildMobileWorkspaceLineageEdges(worktrees)
 
   const result: Worktree[] = []
   const emitted = new Set<string>()
