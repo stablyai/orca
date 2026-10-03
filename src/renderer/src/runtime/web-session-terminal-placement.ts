@@ -6,7 +6,13 @@
  * Records are consumed once the tab materializes; a lingering record would yank
  * a user-dragged tab back, so lifecycle is short by construction.
  */
-const groupByPendingHostTabId = new Map<string, string>()
+type PendingTerminalPlacement = {
+  groupId: string
+  /** The user moved the tab after the create recorded its intent, so that intent is spent. */
+  userMoved?: boolean
+}
+
+const placementByPendingHostTabId = new Map<string, PendingTerminalPlacement>()
 const MAX_PENDING_TERMINAL_PLACEMENTS = 128
 
 /** Create RPCs may return a surface id (`parent::leaf`); snapshots key terminals by the parent. */
@@ -27,24 +33,53 @@ export function recordWebSessionTerminalPlacement(args: {
 }): void {
   const key = hostTabKey(args.environmentId, args.worktreeId, args.hostTabId)
   if (
-    !groupByPendingHostTabId.has(key) &&
-    groupByPendingHostTabId.size >= MAX_PENDING_TERMINAL_PLACEMENTS
+    !placementByPendingHostTabId.has(key) &&
+    placementByPendingHostTabId.size >= MAX_PENDING_TERMINAL_PLACEMENTS
   ) {
-    const oldest = groupByPendingHostTabId.keys().next().value
+    const oldest = placementByPendingHostTabId.keys().next().value
     if (oldest !== undefined) {
-      groupByPendingHostTabId.delete(oldest)
+      placementByPendingHostTabId.delete(oldest)
     }
   }
-  groupByPendingHostTabId.set(key, args.groupId)
+  placementByPendingHostTabId.set(key, { groupId: args.groupId })
 }
 
+/** Undefined once the user moved the tab: snapshots must keep it where the user put it. */
 export function peekWebSessionTerminalPlacementGroup(args: {
   environmentId: string
   worktreeId: string
   hostTabId: string
 }): string | undefined {
-  return groupByPendingHostTabId.get(
+  const placement = placementByPendingHostTabId.get(
     hostTabKey(args.environmentId, args.worktreeId, args.hostTabId)
+  )
+  return placement?.userMoved ? undefined : placement?.groupId
+}
+
+/**
+ * A local move of a tab whose create is still settling is the user's placement and beats the
+ * create's. The entry stays so settlement can tell a user move from a mis-adopted tab.
+ */
+export function markWebSessionTerminalPlacementUserMoved(args: {
+  environmentId: string
+  worktreeId: string
+  hostTabId: string
+}): void {
+  const key = hostTabKey(args.environmentId, args.worktreeId, args.hostTabId)
+  const placement = placementByPendingHostTabId.get(key)
+  if (placement && !placement.userMoved) {
+    placementByPendingHostTabId.set(key, { ...placement, userMoved: true })
+  }
+}
+
+export function isWebSessionTerminalPlacementUserMoved(args: {
+  environmentId: string
+  worktreeId: string
+  hostTabId: string
+}): boolean {
+  return (
+    placementByPendingHostTabId.get(hostTabKey(args.environmentId, args.worktreeId, args.hostTabId))
+      ?.userMoved === true
   )
 }
 
@@ -53,7 +88,9 @@ export function forgetWebSessionTerminalPlacement(args: {
   worktreeId: string
   hostTabId: string
 }): void {
-  groupByPendingHostTabId.delete(hostTabKey(args.environmentId, args.worktreeId, args.hostTabId))
+  placementByPendingHostTabId.delete(
+    hostTabKey(args.environmentId, args.worktreeId, args.hostTabId)
+  )
 }
 
 export function clearWebSessionTerminalPlacementsForWorktree(
@@ -61,22 +98,22 @@ export function clearWebSessionTerminalPlacementsForWorktree(
   worktreeId: string
 ): void {
   const prefix = `${environmentId}\0${worktreeId}\0`
-  for (const key of groupByPendingHostTabId.keys()) {
+  for (const key of placementByPendingHostTabId.keys()) {
     if (key.startsWith(prefix)) {
-      groupByPendingHostTabId.delete(key)
+      placementByPendingHostTabId.delete(key)
     }
   }
 }
 
 export function clearWebSessionTerminalPlacementsForEnvironment(environmentId: string): void {
   const prefix = `${environmentId}\0`
-  for (const key of groupByPendingHostTabId.keys()) {
+  for (const key of placementByPendingHostTabId.keys()) {
     if (key.startsWith(prefix)) {
-      groupByPendingHostTabId.delete(key)
+      placementByPendingHostTabId.delete(key)
     }
   }
 }
 
 export function resetWebSessionTerminalPlacementsForTests(): void {
-  groupByPendingHostTabId.clear()
+  placementByPendingHostTabId.clear()
 }
