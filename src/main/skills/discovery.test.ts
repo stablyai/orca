@@ -212,6 +212,59 @@ describe('skill discovery', () => {
     ])
   })
 
+  it('deduplicates identical Claude default skills across physical roots', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const repo = join(root, 'repo')
+    const homeSkill = join(home, '.claude', 'skills', 'docs')
+    const repoSkill = join(repo, '.claude', 'skills', 'docs')
+    const markdown = '---\nname: docs\ndescription: Claude default docs\n---\n'
+    await mkdir(homeSkill, { recursive: true })
+    await mkdir(repoSkill, { recursive: true })
+    await writeFile(join(homeSkill, 'SKILL.md'), markdown)
+    await writeFile(join(repoSkill, 'SKILL.md'), markdown)
+
+    const result = await discoverSkills({ homeDir: home, cwd: repo, repos: [makeRepo(repo)] })
+
+    expect(result.skills.filter((skill) => skill.name === 'docs')).toHaveLength(1)
+    expect(result.skills[0]?.alternateSkillFiles).toEqual([
+      { path: join(repoSkill, 'SKILL.md'), updatedAt: expect.any(Number) }
+    ])
+  })
+
+  it('keeps same-name Claude skills with different content separate', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const repo = join(root, 'repo')
+    const homeSkill = join(home, '.claude', 'skills', 'docs')
+    const repoSkill = join(repo, '.claude', 'skills', 'docs')
+    await mkdir(homeSkill, { recursive: true })
+    await mkdir(repoSkill, { recursive: true })
+    await writeFile(join(homeSkill, 'SKILL.md'), '# docs\n\nHome\n')
+    await writeFile(join(repoSkill, 'SKILL.md'), '# docs\n\nProject\n')
+
+    const result = await discoverSkills({ homeDir: home, cwd: repo, repos: [makeRepo(repo)] })
+
+    expect(result.skills.filter((skill) => skill.name.toLowerCase() === 'docs')).toHaveLength(2)
+  })
+
+  it('does not deduplicate Claude defaults when content exceeds the summary limit', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const repo = join(root, 'repo')
+    const homeSkill = join(home, '.claude', 'skills', 'docs')
+    const repoSkill = join(repo, '.claude', 'skills', 'docs')
+    const prefix = `${'x'.repeat(256 * 1024)}\n`
+    await mkdir(homeSkill, { recursive: true })
+    await mkdir(repoSkill, { recursive: true })
+    await writeFile(join(homeSkill, 'SKILL.md'), `${prefix}home\n`)
+    await writeFile(join(repoSkill, 'SKILL.md'), `${prefix}repo\n`)
+
+    const result = await discoverSkills({ homeDir: home, cwd: repo, repos: [makeRepo(repo)] })
+
+    expect(result.skills.filter((skill) => skill.name.toLowerCase() === 'docs')).toHaveLength(2)
+  })
+
   it('filters discovery by requested directory name and source kind', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')

@@ -4,6 +4,8 @@ import type { ProjectExecutionRuntimeResolution } from './project-execution-runt
 
 export type SkillProvider = 'codex' | 'claude' | 'agent-skills'
 
+export type AlternateSkillFile = { path: string; updatedAt: number | null }
+
 export type SkillSourceKind = 'home' | 'repo' | 'bundled' | 'plugin'
 
 export type DiscoveredSkill = {
@@ -17,6 +19,8 @@ export type DiscoveredSkill = {
   /** Every root that reached this file. Canonical-path dedup keeps one row but
    *  must not erase co-owning roots, or shared symlinked skills lose agents. */
   rootPaths?: string[]
+  /** Other physical copies represented by this logical skill. */
+  alternateSkillFiles?: AlternateSkillFile[]
   directoryPath: string
   skillFilePath: string
   installed: boolean

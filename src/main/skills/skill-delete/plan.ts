@@ -104,10 +104,19 @@ export async function buildSkillDeletePlan(
     roots: await resolvedRoots(roots, input.filesystem, toFilesystemPath)
   }
   const requested = input.request.skills
+  const expandedRequested = requested.flatMap((skill) => [
+    skill,
+    ...(skill.alternateSkillFiles ?? []).map(({ path: skillFilePath, updatedAt }) => ({
+      ...skill,
+      skillFilePath,
+      alternateSkillFiles: undefined,
+      updatedAt
+    }))
+  ])
   // Inspect only paths a root already owns. A path outside every root is
   // `unowned` by definition, and asking the guest filesystem about it would
   // throw its own containment error before any of this reported a reason.
-  const inspectable = requested.filter(
+  const inspectable = expandedRequested.filter(
     (skill) => owningSkillRoot(api.dirname(skill.skillFilePath), context) !== null
   )
   const inspections = await inspectRequestedSkillFiles(
@@ -124,10 +133,43 @@ export async function buildSkillDeletePlan(
 
   const placementRoots = new Map<string, ClassifiedPlacement[]>()
   const skills = requested.map((skill): SkillDeletePlanEntry => {
-    const inspection = inspections.get(skill.skillFilePath)
+    const physicalSkills = expandedRequested.filter((candidate) => candidate.id === skill.id)
+    const physicalEntries = physicalSkills.map((physicalSkill) => {
+      const inspection = inspections.get(physicalSkill.skillFilePath)
+      return { physicalSkill, inspection }
+    })
+    const primary = physicalEntries.find(
+      ({ physicalSkill }) => physicalSkill.skillFilePath === skill.skillFilePath
+    )
+    const inspection = primary?.inspection
     if (!inspection) {
       return blockedEntry(skill, skill.skillFilePath, 'unowned')
     }
+    const stalePhysicalCopy = physicalEntries.some(
+      ({ physicalSkill, inspection: candidateInspection }) =>
+        candidateInspection &&
+        candidateInspection.kind !== 'missing' &&
+        !isSkillDeleteFresh(physicalSkill.updatedAt, candidateInspection.mtimeMs)
+    )
+    if (stalePhysicalCopy) {
+      return blockedEntry(skill, skill.skillFilePath, 'stale')
+    }
+    const placements = dedupePlacements(
+      physicalEntries.flatMap(({ physicalSkill, inspection: candidateInspection }) => {
+        if (!candidateInspection?.realpath || candidateInspection.kind === 'missing') {
+          return []
+        }
+        if (!isSkillDeleteFresh(physicalSkill.updatedAt, candidateInspection.mtimeMs)) {
+          return []
+        }
+        return candidates
+          .map((candidate) =>
+            classifySkillPlacement(candidate, candidateInspection.realpath!, context)
+          )
+          .filter((placement): placement is ClassifiedPlacement => placement !== null)
+      }),
+      semantics
+    )
     const canonicalPath = inspection.realpath
     if (!canonicalPath || inspection.kind === 'missing') {
       return blockedEntry(skill, skill.skillFilePath, 'missing')
@@ -139,12 +181,6 @@ export async function buildSkillDeletePlan(
     if (blocked) {
       return blockedEntry(skill, canonicalPath, blocked)
     }
-    const placements = dedupePlacements(
-      candidates
-        .map((candidate) => classifySkillPlacement(candidate, canonicalPath, context))
-        .filter((placement): placement is ClassifiedPlacement => placement !== null),
-      semantics
-    )
     if (placements.length === 0) {
       return blockedEntry(skill, canonicalPath, 'unowned')
     }
