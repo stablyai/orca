@@ -100,10 +100,26 @@ function resolveCloseTarget(
   return null
 }
 
+/** Whether keyboard focus sits inside a running-terminal close prompt. While it does,
+ *  the dialog owns a repeated close chord (second Cmd+W confirms, #21603). */
+export function isTerminalClosePromptFocused(): boolean {
+  return (
+    typeof document !== 'undefined' &&
+    document.activeElement instanceof HTMLElement &&
+    document.activeElement.closest('[data-close-terminal-dialog="true"]') !== null
+  )
+}
+
 /** Input adapters describe intent; targeting and tab operations live here. */
 export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boolean {
   const state = useAppStore.getState()
   if (command.type === 'close') {
+    // Why: a "Stop this agent?" prompt is open and focused — the dialog owns a
+    // repeated close chord (second Cmd+W confirms, #21603). Opening a tab-level
+    // prompt here would strand it, so leave the chord to the dialog.
+    if (isTerminalClosePromptFocused()) {
+      return false
+    }
     if (!command.target) {
       if (isEmptyFloatingWorkspacePanelVisible()) {
         window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
