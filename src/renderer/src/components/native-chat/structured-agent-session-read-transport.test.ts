@@ -73,7 +73,10 @@ describe('structured agent-session read transport generations', () => {
     })
   })
 
-  function start(applyEvent: (event: AgentSessionSubscribeEvent) => void, applyError = vi.fn()) {
+  function start(
+    applyEvent: Parameters<typeof startStructuredAgentSessionReadTransport>[0]['applyEvent'],
+    applyError = vi.fn()
+  ) {
     return startStructuredAgentSessionReadTransport({
       applyEvent,
       applyError,
@@ -180,6 +183,49 @@ describe('structured agent-session read transport generations', () => {
       expect(applyEvent).toHaveBeenCalledExactlyOnceWith(snapshot(2))
       attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
       await flushPromises()
+      transport.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("applies each subscription's first batch alone and marked, and coalesces the rest", async () => {
+    vi.useFakeTimers()
+    try {
+      const applied: [number | undefined, boolean][] = []
+      const batch = (sequence: number): AgentSessionSubscribeEvent => ({
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence },
+          items: [],
+          removedItemIds: [],
+          submissions: []
+        }
+      })
+      const transport = start((event, options) => {
+        applied.push([
+          event.type === 'batch' ? event.batch.cursor.sequence : undefined,
+          options?.opensSubscription === true
+        ])
+      })
+      await flushPromises()
+      attempts[0].onEvent(batch(1))
+      attempts[0].onEvent(batch(2))
+      attempts[0].onEvent(batch(3))
+      expect(applied).toEqual([[1, true]])
+      await vi.advanceTimersByTimeAsync(60)
+      expect(applied).toEqual([
+        [1, true],
+        [3, false]
+      ])
+
+      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+      await flushPromises()
+      attempts[0].onClose()
+      await vi.advanceTimersByTimeAsync(750)
+      attempts[1].onEvent(batch(4))
+      expect(applied.at(-1)).toEqual([4, true])
       transport.dispose()
     } finally {
       vi.useRealTimers()

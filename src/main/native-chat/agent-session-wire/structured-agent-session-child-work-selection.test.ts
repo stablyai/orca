@@ -78,8 +78,8 @@ describe("the host's strip channel and summary list the same running children", 
     })
     expect(summaries.at(-1)).toEqual(['run', 'owner', 'shell'])
 
-    // Nothing runs: no strip at all (a host that holds no provider says nothing).
+    // Nothing runs: "none", even with no provider holding the session, so a reader drops its strip.
     records = [finished('done', 5), finished('run', 7)]
-    expect(await strip()).toBeUndefined()
+    expect(await strip()).toBeNull()
   })
 })

@@ -455,6 +455,38 @@ describe('structured agent session reducer', () => {
     expect(withoutCapability.backgroundTasks).toBeUndefined()
   })
 
+  // An older host omits the roster only when its records hold no running child; a pane resuming
+  // from its cursor must not keep the one it held while away (#24227).
+  it("drops the held roster on a resumed subscription's first batch that omits it", () => {
+    const monitoring = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: {
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 1,
+        page: hydrationPage([item('message', 1)]),
+        backgroundTasks: { state: 'monitoring' }
+      }
+    })
+    const batch = {
+      type: 'batch' as const,
+      sessionId: 'session-a',
+      batch: { cursor: monitoring.cursor!, items: [], removedItemIds: [], submissions: [] },
+      fence: 1
+    }
+
+    expect(reduceStructuredAgentSession(monitoring, { type: 'event', event: batch })).toBe(
+      monitoring
+    )
+    const resumed = reduceStructuredAgentSession(monitoring, {
+      type: 'event',
+      event: batch,
+      opensSubscription: true
+    })
+    expect(resumed.backgroundTasks).toBeUndefined()
+    expect(resumed.items).toBe(monitoring.items)
+  })
+
   it('projects ephemeral activity without changing transcript identity and clears it', () => {
     const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
       type: 'event',
