@@ -20,11 +20,20 @@ describe('getExternalEditorOpenCapability', () => {
     ).toEqual({ allowed: true, remote: true })
   })
 
-  it('rejects non-VS Code and compound commands for SSH paths', () => {
+  it('allows VS Code forks that speak Remote-SSH for SSH paths', () => {
     expect(
       getExternalEditorOpenCapability(
         { activeRuntimeEnvironmentId: null },
         { connectionId: 'ssh-1', command: 'cursor' }
+      )
+    ).toEqual({ allowed: true, remote: true })
+  })
+
+  it('rejects local-only and compound commands for SSH paths', () => {
+    expect(
+      getExternalEditorOpenCapability(
+        { activeRuntimeEnvironmentId: null },
+        { connectionId: 'ssh-1', command: 'zed' }
       )
     ).toEqual({ allowed: false, reason: 'local-only-editor' })
     expect(
