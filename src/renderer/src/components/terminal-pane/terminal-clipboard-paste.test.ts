@@ -186,6 +186,105 @@ describe('terminal clipboard paste', () => {
     expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
   })
 
+  it('bracket-pastes the image when the clipboard also carries the image source URL', async () => {
+    const pasteText = vi.fn()
+    const saveClipboardImageAsTempFile = vi
+      .fn()
+      .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png')
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('https://example.com/assets/screenshot.png'),
+      saveClipboardImageAsTempFile,
+      pasteText
+    })
+
+    expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1760000000000-id.png', {
+      forceBracketedPaste: true,
+      recoverImagePasteWebglAtlas: true
+    })
+    expect(pasteText).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({ status: 'pasted', kind: 'image-path' })
+  })
+
+  it('bracket-pastes the image when the clipboard also carries the copied file path', async () => {
+    const pasteText = vi.fn()
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('/Users/jane/Desktop/My Shot.png'),
+      saveClipboardImageAsTempFile: vi
+        .fn()
+        .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png'),
+      pasteText
+    })
+
+    expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1760000000000-id.png', {
+      forceBracketedPaste: true,
+      recoverImagePasteWebglAtlas: true
+    })
+    expect(result).toEqual({ status: 'pasted', kind: 'image-path' })
+  })
+
+  it('falls back to the reference text when the clipboard holds no image bitmap', async () => {
+    const pasteText = vi.fn()
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('https://example.com/assets/screenshot.png'),
+      saveClipboardImageAsTempFile: vi.fn().mockResolvedValue(null),
+      pasteText
+    })
+
+    expect(pasteText).toHaveBeenCalledWith('https://example.com/assets/screenshot.png')
+    expect(result).toEqual({ status: 'pasted', kind: 'text' })
+  })
+
+  it('reports image extraction failures and still pastes the reference text', async () => {
+    const imageError = new Error('no image data')
+    const pasteText = vi.fn()
+    const onImagePasteError = vi.fn()
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('/Users/jane/Desktop/shot.png'),
+      saveClipboardImageAsTempFile: vi.fn().mockRejectedValue(imageError),
+      pasteText,
+      onImagePasteError
+    })
+
+    expect(onImagePasteError).toHaveBeenCalledWith(imageError)
+    expect(pasteText).toHaveBeenCalledWith('/Users/jane/Desktop/shot.png')
+    expect(result).toEqual({ status: 'pasted', kind: 'text' })
+  })
+
+  it('keeps whitespace-padded reference text on the text fast path', async () => {
+    const saveClipboardImageAsTempFile = vi.fn()
+    const pasteText = vi.fn()
+    const padded = `${' '.repeat(8192)}/tmp/shot.png`
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue(padded),
+      saveClipboardImageAsTempFile,
+      pasteText
+    })
+
+    expect(pasteText).toHaveBeenCalledWith(padded)
+    expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+    expect(result).toEqual({ status: 'pasted', kind: 'text' })
+  })
+
+  it('keeps rich text copies that ship a bitmap flavor on the text fast path', async () => {
+    const saveClipboardImageAsTempFile = vi.fn()
+    const pasteText = vi.fn()
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('Q1\t1200\nQ2\t1400'),
+      saveClipboardImageAsTempFile,
+      pasteText
+    })
+
+    expect(pasteText).toHaveBeenCalledWith('Q1\t1200\nQ2\t1400')
+    expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+    expect(result).toEqual({ status: 'pasted', kind: 'text' })
+  })
+
   it('reports text paste execution failures without probing for image fallback', async () => {
     const pasteError = new Error('terminal disconnected')
     const saveClipboardImageAsTempFile = vi.fn()
