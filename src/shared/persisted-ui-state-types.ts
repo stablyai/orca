@@ -172,6 +172,8 @@ export type PersistedUIState = {
   usageEmptyStateDismissed?: boolean
   /** One-shot toast announcing per-terminal Codex servers; set when shown, so absent means not yet seen. */
   codexTerminalServerIsolationNoticeSeen?: boolean
+  /** Windows one-shot toast for Codex moving onto ~/.codex; set when shown, so absent means not yet seen. */
+  codexSharedSettingsNoticeSeen?: boolean
   /** URL for new browser tabs; null = blank tab. */
   browserDefaultUrl?: string | null
   browserDefaultSearchEngine?: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null

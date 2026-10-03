@@ -18738,6 +18738,10 @@
       "description": "This makes agent status more reliable. You can turn it back on in Settings.",
       "openSettings": "Open Settings"
     },
+    "codexSharedSettingsNotice": {
+      "title": "Codex in Orca now shares your Codex settings",
+      "description": "Codex in Orca on Windows now uses your ~/.codex settings, the same as Codex outside Orca. Codex may ask you to trust a folder or approve a command again, and MCP servers you added only inside Orca may need to be added again."
+    },
     "codexSharedServerBanner": {
       "title": "This Codex is sharing a server with your other Codex tabs",
       "body": "Sessions may end unexpectedly, and agent status may be wrong.",
