@@ -3,7 +3,14 @@ import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
+import { formatFileLinkLocation } from '../../../shared/file-link-location'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { openDetectedFilePath } from '@/components/terminal-pane/terminal-file-open-routing'
+import {
+  getQuickOpenLiteralPathContext,
+  useQuickOpenLiteralPathTarget,
+  type QuickOpenLiteralPathTarget
+} from '@/components/quick-open-literal-path'
 import {
   CommandDialog,
   CommandInput,
@@ -28,6 +35,34 @@ function FooterKey({ children }: { children: React.ReactNode }): React.JSX.Eleme
     <span className="rounded-full border border-border/60 bg-muted/35 px-2 py-0.5 text-[10px] font-medium text-foreground/85">
       {children}
     </span>
+  )
+}
+
+function renderLiteralPathRow(
+  target: QuickOpenLiteralPathTarget,
+  onSelect: () => void
+): React.JSX.Element {
+  const value = formatFileLinkLocation({
+    pathText: target.absolutePath,
+    line: target.line,
+    column: target.column
+  })
+  const FileIcon = getFileTypeIcon(target.absolutePath)
+  return (
+    <CommandItem
+      key={value}
+      value={value}
+      onSelect={onSelect}
+      // Why: CommandDialog's descendant rule otherwise adds 24px of vertical padding.
+      className="min-w-0 !p-0"
+    >
+      <div className="flex w-full min-w-0 items-center gap-2 px-3 py-1">
+        <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 truncate text-foreground">
+          {translate('quickOpen.openLiteralPath', 'Open {{path}}', { path: target.queryText })}
+        </span>
+      </div>
+    </CommandItem>
   )
 }
 
@@ -65,6 +100,13 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
   })
 
   const worktreePath = activeWorktree?.path ?? null
+
+  const literalPathTarget = useQuickOpenLiteralPathTarget({
+    enabled: visible,
+    query: deferredQuery,
+    worktreeId: activeWorktreeId,
+    worktreePath
+  })
 
   // Why: Radix's onCloseAutoFocus restore is suppressed below, so dismissing
   // the dialog (Esc / click-away) would otherwise leave the active panel
@@ -108,6 +150,27 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
     [activeWorktreeId, worktreePath, openFile, closeModal, skipReturnFocus]
   )
 
+  const handleOpenLiteralPath = useCallback(() => {
+    if (!literalPathTarget || !activeWorktreeId || !worktreePath) {
+      return
+    }
+    // Why: opening a file moves focus into the editor; don't restore focus to
+    // the surface that was active before QuickOpen opened.
+    skipReturnFocus()
+    closeModal()
+    const context = getQuickOpenLiteralPathContext(activeWorktreeId, worktreePath)
+    openDetectedFilePath(
+      literalPathTarget.absolutePath,
+      literalPathTarget.line,
+      literalPathTarget.column,
+      {
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        runtimeEnvironmentId: context?.settings?.activeRuntimeEnvironmentId ?? null
+      }
+    )
+  }, [literalPathTarget, activeWorktreeId, worktreePath, closeModal, skipReturnFocus])
+
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (!open) {
@@ -143,6 +206,7 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
         className="!h-9 !py-2"
       />
       <CommandList className="p-2">
+        {literalPathTarget ? renderLiteralPathRow(literalPathTarget, handleOpenLiteralPath) : null}
         {loading ? (
           <div className="py-6 text-center text-sm text-muted-foreground">
             {translate('auto.components.QuickOpen.722a21e1a8', 'Loading files...')}
@@ -163,9 +227,17 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
             )
           })()
         ) : filtered.length === 0 ? (
-          <CommandEmpty>
-            {translate('auto.components.QuickOpen.74e2e1b3e4', 'No matching files.')}
-          </CommandEmpty>
+          literalPathTarget ? (
+            // Why: cmdk only shows CommandEmpty when no items are registered; the
+            // pinned row is one, so the no-fuzzy-results note renders directly.
+            <div className="py-6 text-center text-sm text-muted-foreground">
+              {translate('auto.components.QuickOpen.74e2e1b3e4', 'No matching files.')}
+            </div>
+          ) : (
+            <CommandEmpty>
+              {translate('auto.components.QuickOpen.74e2e1b3e4', 'No matching files.')}
+            </CommandEmpty>
+          )
         ) : (
           filtered.map((item) => {
             const { directory, filename } = splitTrailingSegment(item.path)
