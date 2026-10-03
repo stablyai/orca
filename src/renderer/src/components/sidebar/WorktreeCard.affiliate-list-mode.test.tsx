@@ -115,13 +115,14 @@ vi.mock('./WorktreeTitleInlineRename', () => ({
 
 import WorktreeCard from './WorktreeCard'
 
-function makeRepo(): Repo {
+function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
     id: 'repo-1',
     path: '/repo',
     displayName: 'orca',
     badgeColor: '#999999',
-    addedAt: 1
+    addedAt: 1,
+    ...overrides
   }
 }
 
@@ -322,5 +323,40 @@ describe('WorktreeCard affiliate list mode', () => {
     // renders, so an unread sleeping row stays noticeable.
     expect(container.querySelector('[data-worktree-sleeping-dim=""]')).not.toBeNull()
     expect(container.querySelector('[data-worktree-unread-alert=""]')).not.toBeNull()
+  })
+
+  it('shows the configured project name when the icon-only card style requests a label', () => {
+    settings = { experimentalNewWorktreeCardStyle: true }
+
+    act(() => {
+      root.render(
+        <WorktreeCard
+          worktree={makeWorktree()}
+          repo={makeRepo({ displayName: 'Customer API' })}
+          isActive={false}
+          showProjectLabel
+        />
+      )
+    })
+
+    const projectLabel = container.querySelector('[data-worktree-card-project-label]')
+    expect(projectLabel?.textContent).toBe('Customer API')
+    expect(projectLabel?.getAttribute('aria-label')).toBe('Project Customer API')
+  })
+
+  it('does not duplicate the existing project badge in the legacy detailed style', () => {
+    act(() => {
+      root.render(
+        <WorktreeCard
+          worktree={makeWorktree()}
+          repo={makeRepo({ displayName: 'Customer API' })}
+          isActive={false}
+          showProjectLabel
+        />
+      )
+    })
+
+    expect(container.querySelector('[data-worktree-card-project-label]')).toBeNull()
+    expect(container.textContent).toContain('Customer API')
   })
 })

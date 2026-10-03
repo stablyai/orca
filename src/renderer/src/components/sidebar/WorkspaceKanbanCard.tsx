@@ -68,6 +68,7 @@ function WorkspaceKanbanCard({
         isActive={isActive}
         isMultiSelected={isSelected}
         selectedWorktrees={contextWorktrees}
+        showProjectLabel
         nativeDragEnabled={nativeDragEnabled}
         onActivate={onActivate}
         onSelectionGesture={(event) => onSelectionGesture(event, worktreeIdentity)}
