@@ -9,6 +9,7 @@ import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
 import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialog'
 import RunningTerminalCloseDialog from './components/terminal-pane/RunningTerminalCloseDialog'
 import WorktreeBaseFallbackDialog from './components/WorktreeBaseFallbackDialog'
+import { useAgentHookInstallStatusRefresh } from './hooks/use-agent-hook-install-status-refresh'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
 import { AppRootSurfaces } from './app-shell/AppRootSurfaces'
@@ -49,6 +50,7 @@ function App(): React.JSX.Element {
   usePersistedUIWriter()
   useDocumentAppearance()
   useWindowVisibilityEffects()
+  useAgentHookInstallStatusRefresh()
   useGlobalKeybindings({ layout, floatingWorkspace })
 
   // Why: the same vars are set inline on .app-layout below, but portaled surfaces

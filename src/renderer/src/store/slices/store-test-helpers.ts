@@ -32,6 +32,7 @@ import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
 import { createRuntimeEnvironmentSshSlice } from './runtime-environment-ssh'
 import { createAgentStatusSlice } from './agent-status'
+import { createAgentHookInstallStatusSlice } from './agent-hook-install-status'
 import { createPaneForegroundAgentSlice } from './pane-foreground-agent'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
@@ -89,6 +90,7 @@ export function createTestStore() {
     ...createSshSlice(...a),
     ...createRuntimeEnvironmentSshSlice(...a),
     ...createAgentStatusSlice(...a),
+    ...createAgentHookInstallStatusSlice(...a),
     ...createPaneForegroundAgentSlice(...a),
     ...createDiffCommentsSlice(...a),
     ...createDetectedAgentsSlice(...a),

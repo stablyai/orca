@@ -2,6 +2,7 @@ import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import type { WorktreeSetupLaunch } from '../../shared/worktree/launch-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../shared/setup-script-imports'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 
 export type HooksApi = {
   check: (args: { repoId: string; hostId?: ExecutionHostId }) => Promise<{
@@ -32,4 +33,9 @@ export type HooksApi = {
     content: string
     hostId?: ExecutionHostId
   }) => Promise<void>
+}
+
+export type AgentHooksApi = {
+  /** Every managed target in one read, so a worktree dot can tell missing hooks from idle. */
+  installStatuses: () => Promise<AgentHookInstallStatus[]>
 }
