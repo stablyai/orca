@@ -13,7 +13,9 @@ import {
   getSelectedTaskProjectSource,
   hasMultipleTaskProjectHosts,
   hasMultipleTaskProjectHostsInGroup,
+  isAllTaskProjectsSelected,
   isTaskProjectGroupSelected,
+  nextTaskProjectSelectionAfterToggle,
   selectedTaskProjectGroups
 } from './task-project-source-combobox-model'
 
@@ -124,8 +126,7 @@ export default function TaskProjectSourceCombobox({
     return groups.filter((group) => searchRepos(group.sources, trimmed).length > 0)
   }, [groups, query])
   const showHostLabels = useMemo(() => hasMultipleTaskProjectHosts(groups), [groups])
-  const allSelected =
-    groups.length > 0 && selectedTaskProjectGroups(groups, selected).length === groups.length
+  const allSelected = isAllTaskProjectsSelected(groups, selected)
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen)
@@ -170,19 +171,10 @@ export default function TaskProjectSourceCombobox({
 
   const toggleProject = useCallback(
     (group: TaskProjectPickerGroup) => {
-      const next = new Set(selected)
-      const selectedSource = group.sources.find((source) => next.has(source.id))
-      if (selectedSource) {
-        if (selectedTaskProjectGroups(groups, selected).length <= 1) {
-          return
-        }
-        for (const source of group.sources) {
-          next.delete(source.id)
-        }
-      } else {
-        next.add(group.repo.id)
+      const next = nextTaskProjectSelectionAfterToggle({ groups, selected, group })
+      if (next) {
+        onChange(next)
       }
-      onChange(next)
     },
     [groups, onChange, selected]
   )
