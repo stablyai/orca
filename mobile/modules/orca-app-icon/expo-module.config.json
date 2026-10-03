@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["OrcaAppIconModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.orcaappicon.OrcaAppIconModule"]
+  }
+}

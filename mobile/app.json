@@ -83,6 +83,15 @@
       "expo-notifications",
       "./plugins/android-respect-rotation-lock.js",
       [
+        "./plugins/alternate-app-icons.js",
+        {
+          "icons": {
+            "watercolor": "./assets/app-icons/orca-watercolor.png",
+            "blue": "./assets/app-icons/orca-blue.png"
+          }
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
