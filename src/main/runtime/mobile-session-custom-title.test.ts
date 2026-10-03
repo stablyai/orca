@@ -51,6 +51,7 @@ function projectTitle(args: {
     findPty: () => null,
     getRetainedStatus: () => null,
     getTrackedTitle: () => args.trackedTitle ?? null,
+    getTitleDisplayClear: () => null,
     issuePtyHandle: vi.fn(() => 'handle'),
     recordPty: vi.fn(() => pty),
     buildPtyStatus: () => ({}),
