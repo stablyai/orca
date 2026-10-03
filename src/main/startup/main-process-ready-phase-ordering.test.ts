@@ -110,13 +110,17 @@ describe('initial proxy application ordering', () => {
     expect(desktopStart).toBeGreaterThanOrEqual(0)
     expect(desktopEnd).toBeGreaterThan(desktopStart)
     const desktop = launch.slice(desktopStart, desktopEnd)
+    // Why: the relay construction moved to the shared starter so serve can reuse it; the ordering contract now spans both files.
+    const starter = readStartupSource('desktop-relay-startup.ts')
 
     const windowIndex = desktop.indexOf('openMainWindow()')
-    const proxyIndex = desktop.indexOf('await state.initialProxyApplicationReady')
-    const relayIndex = desktop.indexOf('new DesktopRelayService(')
+    const starterIndex = desktop.indexOf('startDesktopRelayService(runtimeRpc)')
+    const proxyIndex = starter.indexOf('await state.initialProxyApplicationReady')
+    const relayIndex = starter.indexOf('new DesktopRelayService(')
 
     expect(windowIndex).toBeGreaterThanOrEqual(0)
-    expect(proxyIndex).toBeGreaterThan(windowIndex)
+    expect(starterIndex).toBeGreaterThan(windowIndex)
+    expect(proxyIndex).toBeGreaterThanOrEqual(0)
     expect(relayIndex).toBeGreaterThan(proxyIndex)
   })
 
