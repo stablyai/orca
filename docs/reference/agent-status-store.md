@@ -412,6 +412,38 @@ also retain a numeric key only when the runtime supplies the matching tab, PTY,
 and terminal handle. HTTP and relay ingress still require a stable key or a
 registered alias, and numeric rows are never persisted.
 
+## Hook rows follow the terminal, not the key it was spawned with
+
+A hook script posts the `ORCA_PANE_KEY` its PTY's environment carries, and a live
+process's environment never changes. A terminal can outlive that pane: the daemon
+keeps it across an app restart, and adoption may show it in a tab with a new id
+(STA-8862). The execution host therefore records the key it exported with the
+process — `envPaneKey` on the daemon session and the relay's PTY record, published
+as an optional field on their listings, and on the runtime's PTY record for a fresh
+spawn. The record dies with the process, so it needs no TTL.
+
+- **Ingress.** HTTP and relay posts resolve through
+  `resolveHookPaneKey`: the runtime names the pane the live terminal carrying that
+  key shows now (`terminal-env-pane-key-routing.ts`), then the alias table, then the
+  key itself. Only a terminal on the host the post came from qualifies, and a local
+  record whose process was seen to exit does not. Spool replay stays on the posted
+  key, because its launch-token fence is recorded there; the move below follows. The runtime refuses to guess when the key already names a live pane,
+  two live terminals exported it, or the terminal is mounted in more than one pane.
+- **Rows already filed under the exported key** move to the current pane when the
+  runtime learns of the move (registration, graph sync, inventory), through the
+  same cache move `transferPaneAuthority` uses but without minting an alias. If the
+  current pane already has its own row, the newer of the two wins, and the loser is
+  dropped by its own key, never through an alias.
+- **Cleanup is not routed.** Clears, dismissals and retirements are handed layout
+  keys, so a dead layout key never reaches the pane its process moved to.
+- **Exit** clears rows under the exported key as well as the current pane, unless
+  another live terminal shows that pane or exported the same key.
+
+A daemon or relay that predates the field behaves as before: the persisted binding
+when incarnations match, otherwise the row stays where it lands. Rows remain keyed
+by pane key; keying them by terminal identity outright, and deleting the
+UUID-to-UUID branch of the alias table, is the follow-up.
+
 ## PR 2: the renderer subscribes
 
 With structured rows arriving over `agentStatus:set`, the renderer's

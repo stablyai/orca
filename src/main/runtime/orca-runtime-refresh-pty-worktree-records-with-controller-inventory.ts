@@ -216,6 +216,8 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
           ...(session.wslDistro !== undefined
             ? { isWsl: Boolean(session.wslDistro), wslDistro: session.wslDistro }
             : {}),
+          // Why: hosts that predate the field omit it; the record then keeps what spawn recorded.
+          ...(session.envPaneKey ? { envPaneKey: session.envPaneKey } : {}),
           ...(restoresExactSurface
             ? { tabId: persistedSurface.tabId, paneKey: persistedSurface.paneKey }
             : {})

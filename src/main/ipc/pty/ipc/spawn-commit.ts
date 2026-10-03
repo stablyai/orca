@@ -67,6 +67,12 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
             tabId: args.tabId,
             leafId: ctx.metadataLeafId,
             ...(ctx.preAllocatedHandle ? { terminalHandle: ctx.preAllocatedHandle } : {}),
+            // A reattach never re-exports env, so only a fresh spawn knows its exported key here.
+            ...(ctx.result.isReattach !== true &&
+            ctx.validatedPaneKey &&
+            ctx.spawnEnv?.ORCA_PANE_KEY === ctx.validatedPaneKey
+              ? { envPaneKey: ctx.validatedPaneKey }
+              : {}),
             ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
             ...(agentLaunchAuthority ? { agentLaunchAuthority } : {}),
             ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})

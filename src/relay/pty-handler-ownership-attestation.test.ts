@@ -42,6 +42,7 @@ const PANE_KEY = 'tab-agent:22222222-2222-4222-8222-222222222222'
 type Summary = {
   id: string
   paneBound?: boolean
+  envPaneKey?: string
   hostAgeMs?: number
   ownerClientInstanceId?: string
   foregroundProcessEvidence?: { capturedAgeMs: number }
@@ -130,6 +131,18 @@ describe('PtyHandler publishes host-attested PTY ownership', () => {
     // every other sweep precondition is satisfied by a revived pane.
     expect(entry?.paneBound).toBe(true)
     expect(entry?.ownerClientInstanceId).toBeUndefined()
+    // Revive re-exports the serialized key, so the restored shell's hooks still post it.
+    expect(entry?.envPaneKey).toBe(PANE_KEY)
+  })
+
+  it('publishes the pane key it exported so the client can route that shell’s hooks', async () => {
+    const { id } = await spawnFrom(7, { env: { ORCA_PANE_KEY: PANE_KEY } })
+    const { id: bareId } = await spawnFrom(7, {})
+
+    const processes = await listProcesses()
+
+    expect(processes.find((process) => process.id === id)?.envPaneKey).toBe(PANE_KEY)
+    expect(processes.find((process) => process.id === bareId)).not.toHaveProperty('envPaneKey')
   })
 
   it('reports a bare shell as not pane-bound', async () => {

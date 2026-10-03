@@ -18,6 +18,8 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
       incarnationId?: PtyIncarnationId
       /** Handle allocated for the replacement incarnation, when one is known. */
       terminalHandle?: string
+      /** Set only for a fresh spawn: the pane key this process's environment carries. */
+      envPaneKey?: string
       agentLaunchAuthority?: { launchToken: string; launchAgent: TuiAgent }
       providerReattachLaunchIdentity?: {
         incarnationId: PtyIncarnationId
@@ -86,7 +88,10 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
             surfaceRecordedAtGraphSequence: spawnSurfaceClaimSequence(this.graphSequence)
           }
         : {}),
-      ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
+      ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {}),
+      ...(binding?.envPaneKey && binding.envPaneKey === paneKey
+        ? { envPaneKey: binding.envPaneKey }
+        : {})
     })
     const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
     if (paneKey && binding?.incarnationId && hostScope) {
@@ -153,6 +158,8 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
       }
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
     }
+    // Why: a reattach can bind a surviving process to a pane other than the one it exported.
+    this.reconcileMovedTerminalAgentStatus()
   }
 
   assertPtyRegistrationAllowed(ptyId: string, incarnationId?: PtyIncarnationId): void {

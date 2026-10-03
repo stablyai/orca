@@ -62,7 +62,9 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     if (!isAgentHookSource(record.source)) {
       return
     }
-    const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
+    const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record), {
+      routeToTerminal: false
+    })
     const normalized = this.normalizeLocalHookPayload(record.source, body)
     if (!normalized.event) {
       return

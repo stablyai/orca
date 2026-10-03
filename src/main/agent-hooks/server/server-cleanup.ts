@@ -7,9 +7,9 @@ import {
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
 import type { AgentStatusCacheIdentity } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
-import { AgentHookServerAuthorityFences } from './server-authority-fences'
+import { AgentHookServerTerminalPaneRouting } from './server-terminal-pane-routing'
 
-export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFences {
+export abstract class AgentHookServerCleanup extends AgentHookServerTerminalPaneRouting {
   /** The resume-identity remnant of a dropped row: a `providerSessionOnly` entry carries no state
    *  claim — it cannot gate a pane `working` — so it survives teardowns that end the pane's live
    *  claims. Returns null when the row has no resumable session to keep. */

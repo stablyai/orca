@@ -8,7 +8,7 @@ import { cloneAgentSessionOwnerBinding } from '../../shared/claimed-agent-pty-ow
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { maxTimestamp } from './runtime-worktree-status-projection'
 import type { RuntimeSyncedLeaf } from '../../shared/runtime-types'
-import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { inferWorktreeIdFromPtyId } from './runtime-worktree-path-identity'
 import {
   recordPtySurfaceClaim,
@@ -27,6 +27,7 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
         | 'preview'
         | 'tabId'
         | 'paneKey'
+        | 'envPaneKey'
         | 'surfaceRecordedAtGraphSequence'
         | 'title'
         | 'connectionId'
@@ -61,6 +62,10 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
         wslDistro,
         tabId: state.tabId ?? null,
         paneKey: state.paneKey ?? null,
+        envPaneKey:
+          typeof state.envPaneKey === 'string' && parsePaneKey(state.envPaneKey)
+            ? state.envPaneKey
+            : null,
         // A PTY the runtime is meeting for the first time has no prior observation for a graph
         // statement to contradict, and the leaf map cannot answer for a pane no statement has ever
         // named — a headless workspace has no renderer graph at all. The next statement decides it.
@@ -114,6 +119,9 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
       }
       // Why: restored/controller-discovered PTYs learn their worktree here without registerPty(), so URL enrichment must bind at this source.
       advertisedUrlWatcher.bindPty(ptyId, worktreeId)
+      if (pty.envPaneKey) {
+        this.reconcileMovedTerminalAgentStatus()
+      }
       return pty
     }
 
@@ -124,6 +132,17 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
       state.incarnationId !== pty.incarnationId
     ) {
       pty.agentSessionOwners = []
+      // A new process carries whatever key its own spawn exported.
+      pty.envPaneKey = null
+    }
+    // Why validated here: inventory rows come from a daemon or relay of any version.
+    const envPaneKey =
+      typeof state.envPaneKey === 'string' && parsePaneKey(state.envPaneKey)
+        ? state.envPaneKey
+        : null
+    const envPaneKeyLearned = envPaneKey !== null && envPaneKey !== pty.envPaneKey
+    if (envPaneKeyLearned) {
+      pty.envPaneKey = envPaneKey
     }
     if (state.incarnationId !== undefined) {
       if (pty.incarnationId && state.incarnationId && pty.incarnationId !== state.incarnationId) {
@@ -185,6 +204,9 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
     }
     // Why: recordPtyWorktree is the common lifecycle point for every path that resolves a PTY's worktree (renderer restore, controller list).
     advertisedUrlWatcher.bindPty(ptyId, worktreeId)
+    if (envPaneKeyLearned) {
+      this.reconcileMovedTerminalAgentStatus()
+    }
     return pty
   }
 

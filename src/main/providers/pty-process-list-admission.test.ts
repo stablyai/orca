@@ -53,6 +53,24 @@ describe('PtyProcessListAdmission', () => {
     ).toEqual({ id: 'pty-1', cwd: '/repo', title: 'shell' })
   })
 
+  it('keeps the pane key the host exported into the PTY', () => {
+    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+
+    expect(
+      new PtyProcessListAdmission().admit({
+        id: 'pty-1',
+        cwd: '',
+        title: 'shell',
+        envPaneKey: paneKey
+      })
+    ).toEqual({ id: 'pty-1', cwd: '', title: 'shell', envPaneKey: paneKey })
+    expect(() =>
+      new PtyProcessListAdmission().admit(
+        JSON.parse('{"id":"pty-1","cwd":"","title":"shell","envPaneKey":7}')
+      )
+    ).toThrow('invalid_pty_process_list')
+  })
+
   it('rejects aggregate entry and byte amplification', () => {
     const entryAdmission = new PtyProcessListAdmission()
     for (let index = 0; index < MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES; index += 1) {

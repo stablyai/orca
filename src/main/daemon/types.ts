@@ -370,6 +370,8 @@ export type SessionInfo = {
   shellState: ShellReadyState
   isAlive: boolean
   terminalHandle?: string
+  /** Absent from daemons that predate it; readers then fall back to the persisted binding. */
+  envPaneKey?: string
   wslDistro?: string | null
   pid: number | null
   cwd: string | null

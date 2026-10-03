@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import type { PtyListedSession } from '../../../shared/pty-listed-session'
+import type { ClosedTerminalTabTombstonesByTabId } from '../../../shared/closed-terminal-tab-tombstones'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
@@ -145,7 +146,9 @@ function testDeps(args: {
   const updateTabPtyId = vi.fn((tabId: string, ptyId: string) => {
     ptyIdsByTabId[tabId] = [...new Set([...(ptyIdsByTabId[tabId] ?? []), ptyId])]
   })
+  const closedTerminalTabTombstonesByTabId: ClosedTerminalTabTombstonesByTabId = {}
   const store = {
+    closedTerminalTabTombstonesByTabId,
     createTab,
     ptyIdsByTabId,
     setTabLayout,
@@ -319,6 +322,31 @@ describe('worktree agent activation gate', () => {
     expect(resume).not.toHaveBeenCalled()
   })
 
+  it('recreates a recorded tab this renderer no longer has under its recorded id', async () => {
+    const ptyId = `${WORKTREE_ID}@@live-pty`
+    const recorded = { paneKey: `tab-live:${LIVE_LEAF_ID}`, ptyId, tabId: 'tab-live' }
+    const { deps, createTab, resume } = testDeps({
+      sessions: [listed(ptyId)],
+      surfaceOwners: new Map([[ptyId, { unowned: true, recorded }]])
+    })
+
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
+
+    // A fresh id would leave the terminal's id unstable across the restart.
+    expect(createTab).toHaveBeenCalledTimes(1)
+    expect(createTab).toHaveBeenCalledWith(WORKTREE_ID, undefined, undefined, {
+      id: 'tab-live',
+      initialLeafId: LIVE_LEAF_ID,
+      initialPtyId: ptyId,
+      activate: false,
+      recordInteraction: false
+    })
+    expect(deps.getState().terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId).toEqual({
+      [LIVE_LEAF_ID]: ptyId
+    })
+    expect(resume).not.toHaveBeenCalled()
+  })
+
   it.each<[string, (store: GateTestStore) => void]>([
     [
       'the recorded pane now holds another PTY',
@@ -329,7 +357,15 @@ describe('worktree agent activation gate', () => {
           boundPtyId: `${WORKTREE_ID}@@other-pty`
         })
     ],
-    ['the recorded tab is gone', () => {}],
+    [
+      'the user closed the recorded tab',
+      (store) => {
+        store.closedTerminalTabTombstonesByTabId['tab-live'] = {
+          closedAt: Date.now(),
+          worktreeId: WORKTREE_ID
+        }
+      }
+    ],
     // A closed split or a replaced layout leaves the record naming a leaf the tab no longer has.
     [
       'the recorded leaf is no longer in the tab layout',

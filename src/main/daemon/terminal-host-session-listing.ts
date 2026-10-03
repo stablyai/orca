@@ -19,6 +19,7 @@ export function listLiveTerminalHostSessions(
       shellState: session.shellState,
       isAlive: true,
       ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
+      ...(session.envPaneKey ? { envPaneKey: session.envPaneKey } : {}),
       wslDistro: session.wslDistro,
       pid: session.pid,
       cwd: session.getCwd(),

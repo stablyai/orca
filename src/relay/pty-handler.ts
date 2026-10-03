@@ -434,6 +434,9 @@ type PtyProcessSummary = {
   title: string
   worktreeId?: string
   terminalHandle?: string
+  /** The ORCA_PANE_KEY this host exported into the PTY; its agent hooks post it for the process's
+   *  life. Absent from relays that predate the field and from bare relay shells. */
+  envPaneKey?: string
   foregroundProcessEvidence?: ForegroundProcessEvidence
   agentSessionOwners?: AgentSessionOwnerBinding[]
   /** Age on the HOST's clock. Published instead of a creation timestamp so a client with a skewed
@@ -3040,6 +3043,7 @@ export class PtyHandler {
           : {}),
         ...(managed.worktreeId ? { worktreeId: managed.worktreeId } : {}),
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {}),
+        ...(managed.paneKey ? { envPaneKey: managed.paneKey } : {}),
         ...(foregroundProcessEvidence ? { foregroundProcessEvidence } : {}),
         ...(this.agentSessionOwners.listForPty(id).length
           ? { agentSessionOwners: this.agentSessionOwners.listForPty(id) }

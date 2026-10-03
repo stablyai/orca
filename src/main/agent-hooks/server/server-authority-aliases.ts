@@ -149,6 +149,25 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     }
     const existing = this.legacyPaneKeyAliases.get(physicalPaneKey)
     const normalizedPtyId = ptyId?.trim() || existing?.ptyId || null
+    const moved = this.movePaneAuthorityState(previousOwnerPaneKey, toPaneKey)
+    // Why: the live process keeps posting the physical source key after detach; persist a chain-safe mapping to the current owner.
+    this.legacyPaneKeyAliases.set(physicalPaneKey, {
+      stablePaneKey: toPaneKey,
+      ptyId: normalizedPtyId,
+      updatedAt,
+      authorityVerified: options?.authorityVerified ?? true
+    })
+    this.boundPaneKeyAliases()
+    this.closedAgentStatusPaneKeys.delete(toPaneKey)
+    this.notifyPaneKeyAliasPersistenceListener()
+    this.commitMovedPaneAuthorityState(moved, options?.emitStatusRowMutation !== false)
+  }
+
+  /** Moves every pane-keyed fact the store holds from one key to another, without minting an alias. */
+  protected movePaneAuthorityState(
+    previousOwnerPaneKey: string,
+    toPaneKey: string
+  ): MovedPaneAuthority {
     const previousStatus = this.state.lastStatusByPaneKey.get(previousOwnerPaneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
@@ -227,24 +246,21 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     }
     this.clearAssistantMessageRetry(previousOwnerPaneKey)
     this.clearTranscriptPoll(previousOwnerPaneKey)
-    // Why: the live process keeps posting the physical source key after detach; persist a chain-safe mapping to the current owner.
-    this.legacyPaneKeyAliases.set(physicalPaneKey, {
-      stablePaneKey: toPaneKey,
-      ptyId: normalizedPtyId,
-      updatedAt,
-      authorityVerified: options?.authorityVerified ?? true
-    })
-    this.boundPaneKeyAliases()
-    this.closedAgentStatusPaneKeys.delete(toPaneKey)
-    this.notifyPaneKeyAliasPersistenceListener()
-    this.commitStatusRowMutation(
-      previousStatus,
-      transferredStatus,
-      options?.emitStatusRowMutation !== false
-    )
-    if (hadStatus || persistedAuthority) {
+    return { previousStatus, transferredStatus, hadStatus, persistedAuthority }
+  }
+
+  protected commitMovedPaneAuthorityState(moved: MovedPaneAuthority, emit: boolean): void {
+    this.commitStatusRowMutation(moved.previousStatus, moved.transferredStatus, emit)
+    if (moved.hadStatus || moved.persistedAuthority) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
     }
   }
+}
+
+type MovedPaneAuthority = {
+  previousStatus: EnrichedAgentHookEventPayload | undefined
+  transferredStatus: EnrichedAgentHookEventPayload | undefined
+  hadStatus: boolean
+  persistedAuthority: unknown
 }

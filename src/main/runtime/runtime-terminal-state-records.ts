@@ -55,6 +55,9 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   wslDistro: string | null
   tabId: string | null
   paneKey: string | null
+  /** ORCA_PANE_KEY the execution host exported into this process. Its agent hooks post this key for
+   *  the process's life, even after `paneKey` moves; see terminal-env-pane-key-routing.ts. */
+  envPaneKey?: string | null
   /**
    * `graphSequence` when `paneKey` was last written. A surface recorded since the last graph
    * statement has not yet been offered one that could contradict it — see

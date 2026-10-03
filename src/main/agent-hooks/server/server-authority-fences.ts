@@ -1,5 +1,6 @@
 import { clearPaneCacheState } from '../../../shared/agent-hook-listener/listener-state'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
 import { AgentHookServerAuthorityAliases } from './server-authority-aliases'
 import type {
   EnrichedAgentHookEventPayload,
@@ -219,6 +220,13 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     return this.legacyPaneKeyAliases.get(paneKey)?.stablePaneKey ?? paneKey
   }
 
+  // Why ingress only: cleanup is handed layout keys, which must never reach the pane a process moved to.
+  protected resolveHookPaneKey(paneKey: string, connectionId: string | null): string {
+    // A WSL relay id is transport provenance: the terminal it names is local.
+    const host = isWslHookRelayConnectionId(connectionId) ? null : connectionId
+    return this.terminalPaneResolver?.(paneKey, host) ?? this.resolvePaneKeyAlias(paneKey)
+  }
+
   protected revokeHydratedAuthorityForPaneKeys(paneKeys: ReadonlySet<string>): boolean {
     let changed = false
     for (const commitment of this.hydratedAuthorityCommitments) {
@@ -240,17 +248,26 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     return changed
   }
 
-  protected normalizeHookBodyPaneKeyAlias(body: unknown): unknown {
+  protected normalizeHookBodyPaneKeyAlias(
+    body: unknown,
+    options: { routeToTerminal: boolean } = { routeToTerminal: true }
+  ): unknown {
     if (typeof body !== 'object' || body === null) {
       return body
     }
     const record = body as Record<string, unknown>
     const rawPaneKey = typeof record.paneKey === 'string' ? record.paneKey.trim() : ''
-    const stablePaneKey = this.legacyPaneKeyAliases.get(rawPaneKey)?.stablePaneKey
-    if (!stablePaneKey) {
+    // Local HTTP posts come only from this machine's terminals. Spool replay is checked against
+    // fences recorded under the posted key, so it stays on that key; reconcile moves it later.
+    const stablePaneKey = !rawPaneKey
+      ? rawPaneKey
+      : options.routeToTerminal
+        ? this.resolveHookPaneKey(rawPaneKey, null)
+        : this.resolvePaneKeyAlias(rawPaneKey)
+    if (stablePaneKey === rawPaneKey) {
       return body
     }
-    // Why: detached shells keep posting the immutable physical pane key; normalize pane and tab identity to the current owner.
+    // Why: a live shell keeps posting the pane key exported at spawn; normalize pane and tab identity to the current owner.
     return { ...record, paneKey: stablePaneKey, tabId: parsePaneKey(stablePaneKey)?.tabId }
   }
 }

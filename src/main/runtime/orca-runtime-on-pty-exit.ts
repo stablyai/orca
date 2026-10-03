@@ -63,6 +63,10 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     if (processDeathCertified && exitPaneKeys.size > 0) {
       this.reconcileAgentStatusForEndedProcessFn?.(exitPaneKeys)
     }
+    if (processDeathCertified && pty) {
+      // The exported key routes only while its process lives.
+      pty.envPaneKey = null
+    }
     const incarnationId =
       exitIncarnationId ??
       pty?.incarnationId ??

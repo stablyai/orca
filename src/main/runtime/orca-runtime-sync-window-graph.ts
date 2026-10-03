@@ -308,6 +308,8 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
       }
     }
 
+    this.reconcileMovedTerminalAgentStatus()
+
     // Why: createTerminal waits for the renderer's graph sync to populate the
     // new leaf so it can return a handle. Drain callbacks after leaves update.
     for (const cb of [...this.graphSyncCallbacks]) {

@@ -1,3 +1,4 @@
+import { hasClosedTerminalTabRecord } from '../../../shared/closed-terminal-tab-tombstones'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import type { useAppStore } from '@/store'
@@ -9,6 +10,7 @@ import type {
 
 export type LiveSurfaceAdoptionStore = Pick<
   ReturnType<typeof useAppStore.getState>,
+  | 'closedTerminalTabTombstonesByTabId'
   | 'createTab'
   | 'ptyIdsByTabId'
   | 'setTabLayout'
@@ -79,6 +81,8 @@ function tabExists(store: LiveSurfaceAdoptionStore, tabId: string): boolean {
  * Rebind a PTY the host found unowned to the pane its record names, but only while this renderer
  * still holds that pane free: the host's graph omits unmounted panes, so its verdict cannot tell a
  * closed pane from one that merely lost its binding, and minting forks the PTY onto a second tab.
+ * A recorded tab this renderer no longer has comes back under its own id, so terminal ids stay
+ * stable across a restart — unless the user closed it.
  */
 function bindToRecordedSurface(
   store: LiveSurfaceAdoptionStore,
@@ -86,8 +90,14 @@ function bindToRecordedSurface(
   recorded: LiveTerminalSurfaceOwner
 ): boolean {
   const pane = parsePaneKey(recorded.paneKey)
-  if (!pane || !tabExists(store, recorded.tabId)) {
+  if (!pane) {
     return false
+  }
+  if (!tabExists(store, recorded.tabId)) {
+    return (
+      !hasClosedTerminalTabRecord(store.closedTerminalTabTombstonesByTabId, recorded.tabId) &&
+      bindLivePtyToExactSurface(store, worktreeId, recorded)
+    )
   }
   const heldPtyId = store.terminalLayoutsByTabId[recorded.tabId]?.ptyIdsByLeafId?.[pane.leafId]
   if (heldPtyId && heldPtyId !== recorded.ptyId) {

@@ -8,6 +8,8 @@ export type SessionOptions = {
   cols: number
   rows: number
   terminalHandle?: string
+  /** ORCA_PANE_KEY exported into this PTY; every agent hook it runs posts this key for its life. */
+  envPaneKey?: string
   launchAgent?: TuiAgent
   subprocess: SubprocessHandle
   shellReadySupported: boolean

@@ -55,6 +55,7 @@ export class PtyProcessListAdmission {
     const titleBytes = retainedStringBytes(value.title)
     const worktreeIdBytes = retainedOptionalStringBytes(value.worktreeId)
     const terminalHandleBytes = retainedOptionalStringBytes(value.terminalHandle)
+    const envPaneKeyBytes = retainedOptionalStringBytes(value.envPaneKey)
     const wslDistroBytes =
       value.wslDistro === null ? 0 : retainedOptionalStringBytes(value.wslDistro)
     const evidenceBytes =
@@ -69,6 +70,7 @@ export class PtyProcessListAdmission {
       titleBytes === null ||
       worktreeIdBytes === null ||
       terminalHandleBytes === null ||
+      envPaneKeyBytes === null ||
       wslDistroBytes === null ||
       evidenceBytes === null ||
       (value.rootProcessId !== undefined &&
@@ -103,6 +105,7 @@ export class PtyProcessListAdmission {
       titleBytes +
       worktreeIdBytes +
       terminalHandleBytes +
+      envPaneKeyBytes +
       wslDistroBytes +
       evidenceBytes +
       ownerBytes
@@ -125,6 +128,7 @@ export class PtyProcessListAdmission {
       ...(value.rootProcessId !== undefined ? { rootProcessId: value.rootProcessId } : {}),
       ...(value.worktreeId !== undefined ? { worktreeId: value.worktreeId } : {}),
       ...(value.terminalHandle !== undefined ? { terminalHandle: value.terminalHandle } : {}),
+      ...(value.envPaneKey !== undefined ? { envPaneKey: value.envPaneKey } : {}),
       ...(value.wslDistro !== undefined ? { wslDistro: value.wslDistro } : {}),
       ...(value.foregroundProcessEvidence !== undefined
         ? {

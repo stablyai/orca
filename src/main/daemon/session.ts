@@ -25,6 +25,7 @@ export class Session {
   readonly sessionId: string
   readonly incarnationId = randomUUID()
   readonly terminalHandle: string | null
+  readonly envPaneKey: string | null
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
   readonly processNameIsSpawnFile: boolean
@@ -43,6 +44,7 @@ export class Session {
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
     this.terminalHandle = opts.terminalHandle ?? null
+    this.envPaneKey = opts.envPaneKey ?? null
     this.launchAgent = opts.launchAgent ?? null
     this.wslDistro = opts.wslDistro ?? null
     this.subprocess = opts.subprocess

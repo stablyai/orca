@@ -247,6 +247,8 @@ async function startOrcadRuntime(
     checkHookAgentPresence: (paneKey) => agentHookServer.checkAgentPresence(paneKey),
     reconcileAgentStatusForEndedProcess: (paneKeys) =>
       agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys),
+    reconcileAgentStatusForMovedTerminals: (moves) =>
+      agentHookServer.reconcileMovedTerminalPaneKeys(moves),
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(profileStore.getSettings()) ? agentHookServer.buildPtyEnv() : {},
     // Why the dedupe here and not in the instance: `apply` closes and reconstructs
@@ -258,6 +260,9 @@ async function startOrcadRuntime(
       }
     }
   })
+  agentHookServer.setTerminalPaneResolver((paneKey, connectionId) =>
+    runtime.resolveAgentHookTerminalPane(paneKey, connectionId)
+  )
 
   const { installOrcadSessionSearchService } = await import('./orcad-session-search')
   sessionSearch = await installOrcadSessionSearchService({
