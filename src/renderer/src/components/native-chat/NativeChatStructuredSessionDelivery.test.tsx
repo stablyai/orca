@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   },
   questionCardProps: null as NativeChatQuestionCardProps | null,
   promptItems: [] as AgentJournalRenderItem[],
+  noJournalItems: Array.of<AgentJournalRenderItem>(),
   respond: vi.fn(),
   handlePasteEvent: vi.fn(),
   pasteFromClipboard: vi.fn(),
@@ -53,6 +54,7 @@ vi.mock('./use-structured-agent-session', async () => {
       target: { kind: 'local' } | { kind: 'environment'; environmentId: string }
     }) => {
       const outbox = useStructuredAgentSessionOutbox({
+        journalItems: mocks.noJournalItems,
         sessionId: props.sessionId,
         target: props.target,
         fence: 1,
@@ -62,7 +64,9 @@ vi.mock('./use-structured-agent-session', async () => {
         journalItems: [],
         messages:
           mocks.mode === 'outbox'
-            ? projectStructuredAgentSessionMessages([], outbox.outbox, [])
+            ? projectStructuredAgentSessionMessages([], outbox.outbox, [], {
+                rejectedInPlace: true
+              })
             : [
                 {
                   id: 'message-1',
@@ -184,6 +188,8 @@ vi.mock('./NativeChatQuestionCard', () => ({
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { appendStructuredAgentSessionOutboxMessage } from './structured-agent-session-outbox-storage'
+
+const REFUSED_RESTART = "The agent couldn't restart. Your message was not sent."
 
 describe('NativeChatStructuredSession delivery', () => {
   afterEach(() => {
@@ -308,10 +314,11 @@ describe('NativeChatStructuredSession delivery', () => {
     })
     seedOutbox('session-held-rejected', [
       seededEntry('session-held-rejected', 'op-head', 'first', 'unconfirmed'),
+      // Refused before the host recorded it, so its Retry is the only way it goes again.
       {
         ...seededEntry('session-held-rejected', 'op-rejected', 'second', 'queued'),
         state: 'rejected',
-        lastFailure: { kind: 'rejected', reason: 'Claude messages support at most 20 images' }
+        lastFailure: { kind: 'refused', code: 'agent_session_owner_restart_failed' }
       }
     ])
 
@@ -327,7 +334,7 @@ describe('NativeChatStructuredSession delivery', () => {
     )
 
     await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
-    expect(screen.getByText('Claude messages support at most 20 images')).toBeTruthy()
+    expect(screen.getByText(REFUSED_RESTART)).toBeTruthy()
     // One Retry, the stopped message's: it sends only that one.
     fireEvent.click(screen.getByRole('button', { name: /Retry/ }))
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
@@ -337,27 +344,38 @@ describe('NativeChatStructuredSession delivery', () => {
 
     // The queue moved, so the rejected message offers its own Retry again.
     await waitFor(() => expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull())
-    expect(screen.getByText('Claude messages support at most 20 images')).toBeTruthy()
+    expect(screen.getByText(REFUSED_RESTART)).toBeTruthy()
     expect(screen.getAllByRole('button', { name: /Retry/ })).toHaveLength(1)
     expect(mocks.call).toHaveBeenCalledOnce()
   })
 
-  it("words a failed start on each message by the chat's agent, leaving the resend to its Retry", async () => {
+  // Until the journal carries the row, the message's own copy words it; the host has it, so no Retry.
+  it("words a failed start its reply rejected by the chat's agent, with no Retry", async () => {
     mocks.mode = 'outbox'
     mocks.submissions = []
-    const startFailed = (clientMessageId: string, text: string) => ({
-      ...seededEntry('session-start-failed', clientMessageId, text, 'queued'),
-      state: 'rejected' as const,
-      lastFailure: {
-        kind: 'rejected' as const,
-        reason: 'Codex stopped before it finished starting. Send your message to try again.',
-        rejection: { kind: 'providerStartFailed' as const }
-      }
-    })
-    seedOutbox('session-start-failed', [
-      startFailed('op-first', 'first'),
-      startFailed('op-second', 'second')
-    ])
+    mocks.call.mockImplementation(
+      async (
+        _target: unknown,
+        _method: unknown,
+        params: { envelope: { clientOperationId: string } }
+      ) => ({
+        ok: true,
+        value: {
+          clientMessageId: params.envelope.clientOperationId,
+          submission: {
+            clientMessageId: params.envelope.clientOperationId,
+            fence: 1,
+            payloadFingerprint: 'fingerprint',
+            dispatchState: 'rejected',
+            providerItemId: null,
+            reason: 'Codex stopped before it finished starting. Send your message to try again.',
+            rejection: { kind: 'providerStartFailed' },
+            submittedAt: 1,
+            resolvedAt: 2
+          }
+        }
+      })
+    )
 
     render(
       <NativeChatStructuredSession
@@ -370,15 +388,23 @@ describe('NativeChatStructuredSession delivery', () => {
       />
     )
 
+    const send = mocks.composerProps?.structuredTransport?.send as
+      | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
+      | undefined
+    expect(send?.('first', [])).toBe(true)
     await waitFor(() =>
-      expect(screen.getAllByText('Codex stopped before it finished starting.')).toHaveLength(2)
+      expect(
+        screen.getByText(
+          'Codex stopped before it finished starting. Send your message to try again.'
+        )
+      ).toBeTruthy()
     )
-    expect(screen.getAllByRole('button', { name: /Retry/ })).toHaveLength(2)
-    expect(screen.queryByText(/Send your message to try again/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Retry/ })).toBeNull()
+    expect(mocks.call).toHaveBeenCalledOnce()
   })
 
-  it("words a rejected message from its loaded journal row, not the message's own copy", async () => {
-    mocks.mode = 'outbox'
+  // A copy an earlier session left in the outbox gives way to the host's row.
+  it("words a rejected message from its journal row, not the message's own copy, with no Retry", async () => {
     const reason = "Claude couldn't start. Send your message to try again."
     mocks.submissions = [
       {
@@ -419,6 +445,7 @@ describe('NativeChatStructuredSession delivery', () => {
       expect(screen.getByText("Codex couldn't start. Start a new chat to continue.")).toBeTruthy()
     )
     expect(screen.queryByText(reason)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Retry/ })).toBeNull()
   })
 
   it('names the stuck message behind an admitted head, and its Retry sends that one', async () => {

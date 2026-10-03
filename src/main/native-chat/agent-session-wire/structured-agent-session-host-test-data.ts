@@ -84,6 +84,8 @@ export function hostTestDrawnRowIds(
     state: 'dispatching' as const
   }))
   return projectNativeChatTranscriptMessages(
-    projectStructuredAgentSessionMessages(snapshot.items, outbox, snapshot.submissions)
+    projectStructuredAgentSessionMessages(snapshot.items, outbox, snapshot.submissions, {
+      rejectedInPlace: true
+    })
   ).map(({ id }) => id)
 }

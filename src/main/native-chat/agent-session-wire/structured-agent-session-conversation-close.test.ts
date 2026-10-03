@@ -241,16 +241,16 @@ describe('a start that never finishes (P2-15)', () => {
       providerChildPhase: 'starting' as const
     }))
     Object.assign(rig.host.deps.adapter, { awaitStarted: () => started.promise })
-    const reject = AgentSessionJournal.prototype.rejectQueuedSubmissions
-    vi.spyOn(AgentSessionJournal.prototype, 'rejectQueuedSubmissions').mockImplementation(function (
+    // The loop rejects the queued messages in the same append as its row.
+    const append = AgentSessionJournal.prototype.appendLifecycleBatch
+    vi.spyOn(AgentSessionJournal.prototype, 'appendLifecycleBatch').mockImplementation(function (
       this: AgentSessionJournal,
       ...args
     ) {
-      // Not the open's sweep of an earlier process's leftovers.
-      if (args[1].rejection.kind !== 'hostRestarted') {
-        order.push(`rejected: ${args[1].reason}`)
+      if (args[0].rejectsQueued) {
+        order.push(`rejected: ${args[0].rejectsQueued.reason}`)
       }
-      return reject.apply(this, args)
+      return append.apply(this, args)
     })
     const reader = collectSubscriber()
     const attached = await rig.host.attach(CALLER, hostTestAttachParams(null))

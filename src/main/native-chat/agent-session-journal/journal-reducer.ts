@@ -6,9 +6,9 @@
 // dropped rather than resurrecting stale content, and ordering is by the
 // position (sequence, then place in the row) of the write that CREATED an item
 // (a later revision updates the body, it does not move the bubble) — except a
-// queued message, which sits where its handover put it. Producer linkage is
-// likewise the creating write's: a revision naming no producer keeps it, one
-// naming any replaces it.
+// queued message, which sits where its handover put it, and a rejected one, which
+// sits where it was rejected. Producer linkage is likewise the creating write's: a
+// revision naming no producer keeps it, one naming any replaces it.
 
 import type {
   AgentJournalAcceptanceReceipt,

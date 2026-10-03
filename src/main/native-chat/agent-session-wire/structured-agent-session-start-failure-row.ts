@@ -42,9 +42,9 @@ export function hasStructuredAgentSessionStartFailureRow(
 }
 
 /**
- * A start the delivery loop needed and did not get: the start's row, and every queued message
- * rejected with the same words. Writes nothing when nothing is still queued: a start whose
- * messages Stop withdrew did not fail anyone.
+ * A start the delivery loop needed and did not get: every queued message rejected with the same
+ * words, then the start's row. Writes nothing when nothing is still queued: a start whose messages
+ * Stop withdrew did not fail anyone.
  */
 export async function recordStructuredAgentSessionStartFailure(
   session: Pick<StructuredAgentSessionHostSession, 'journal'> & { fence: number },
@@ -59,11 +59,8 @@ export async function recordStructuredAgentSessionStartFailure(
     settlementId: `start-failure:${startKey}`,
     fence: session.fence,
     recovered: true,
-    mutations: [structuredAgentSessionStartFailureRow(startKey, failure)]
-  })
-  await session.journal.rejectQueuedSubmissions(session.fence, {
-    reason: failure.reason,
-    rejection: failure.rejection
+    mutations: [structuredAgentSessionStartFailureRow(startKey, failure)],
+    rejectsQueued: { reason: failure.reason, rejection: failure.rejection }
   })
 }
 
