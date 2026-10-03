@@ -31,6 +31,13 @@ export const CROSS_LOCALE_KEY_OVERRIDES = {
     zh: '/{{value0}}',
     ja: '/{{value0}}'
   },
+  // Settings-search empty state. ko/zh put the quoted term before the verb phrase, so MT
+  // localized the old leading fragment as a whole clause and the query landed after the
+  // period. The message interpolates now; keep the term inside the quotes.
+  'auto.components.settings.Settings.noSettingsFoundForQuery': {
+    ko: '"{{value0}}"에 대한 설정을 찾을 수 없습니다.',
+    zh: '找不到“{{value0}}”的设置'
+  },
   'auto.components.settings.TasksPane.6b23a34f6d': {
     zh: 'Jira',
     ja: 'Jira'
