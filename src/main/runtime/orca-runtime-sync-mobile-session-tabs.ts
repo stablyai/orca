@@ -6,6 +6,13 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { getMobileSessionSnapshotTabIdentityKeys } from './mobile-session-tab-merge'
 
 export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOrchestrationPointerPty {
+  // Worktrees whose next renderer publication must bypass the same-version dedup
+  // below. A forced resync (requestRendererGraphResync) re-sends a worktree whose
+  // content changed (e.g. renderer-owned browser pages appeared) without the
+  // renderer bumping its snapshot version, so the resend would otherwise be
+  // dropped as a no-op. Consumed on the next publish for that worktree.
+  protected forceAcceptNextRendererPublish = new Set<string>()
+
   // Returns the worktrees whose stored snapshot object changed during this
   // sync, so the caller can fan out only actually-changed worktrees.
   protected syncMobileSessionTabs(
@@ -136,7 +143,15 @@ export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOr
       // against the stored snapshot's version: main-local touches bump it
       // independently and would reject genuinely newer renderer revisions.
       const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(snapshot.worktree)
+      // Why: a forced resync re-sends a worktree whose content changed without the
+      // renderer bumping its version; consume the one-shot flag and process this
+      // publish instead of dropping it as a same-version no-op.
+      const forceAcceptThisPublish = this.forceAcceptNextRendererPublish.has(snapshot.worktree)
+      if (forceAcceptThisPublish) {
+        this.forceAcceptNextRendererPublish.delete(snapshot.worktree)
+      }
       if (
+        !forceAcceptThisPublish &&
         accepted &&
         accepted.publicationEpoch === snapshot.publicationEpoch &&
         snapshot.snapshotVersion <= accepted.rendererVersion &&

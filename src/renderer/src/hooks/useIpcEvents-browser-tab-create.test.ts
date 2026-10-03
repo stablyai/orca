@@ -187,6 +187,8 @@ describe('useIpcEvents browser tab create routing', () => {
             return () => {}
           },
           replyTabCreate,
+          onRequestGraphResync: () => () => {},
+          replyGraphResync: () => {},
           onRequestTabClose: () => () => {},
           replyTabClose: () => {},
           onRequestTabSetProfile: () => () => {},

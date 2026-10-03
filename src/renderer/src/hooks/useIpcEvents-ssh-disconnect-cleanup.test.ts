@@ -168,6 +168,8 @@ describe('useIpcEvents updater integration', () => {
           onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
+          onRequestGraphResync: () => () => {},
+          replyGraphResync: () => {},
           onRequestTabClose: () => () => {},
           replyTabClose: () => {},
           onRequestTabSetProfile: () => () => {},

@@ -62,6 +62,8 @@ describe('browser profile request teardown', () => {
         ui: {
           onRequestTabCreate: () => () => {},
           replyTabCreate: vi.fn(),
+          onRequestGraphResync: () => () => {},
+          replyGraphResync: vi.fn(),
           onRequestTabSetProfile: (listener: typeof mocks.profileListener) => {
             mocks.profileListener = listener
             return () => {}
