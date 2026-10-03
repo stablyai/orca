@@ -10,6 +10,7 @@ import type {
   DirectSshPreparationToken
 } from './direct-ssh-reconnect-coordinator'
 import type { RemoteWorkspaceSnapshotPlacementStore } from './remote-workspace-snapshot-placement'
+import type { ReadHostPathExistence } from './remote-workspace-missing-host-paths'
 
 export type RemoteWorkspaceApi = {
   get: (args: { targetId: string }) => Promise<RemoteWorkspaceObservedSnapshot | null>
@@ -33,6 +34,7 @@ export type RemoteWorkspaceTargetSyncDeps = {
   ) => Promise<DirectSshPreparationInput | null>
   prepareOnly: (input: DirectSshPreparationInput) => Promise<DirectSshPreparationOutcome>
   finalizeHydratedTerminals: (authority: DirectSshAuthority) => number
+  readHostPathExistence?: ReadHostPathExistence
 }
 
 export type RemoteWorkspaceTargetSync = {
