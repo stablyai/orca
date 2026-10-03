@@ -8,7 +8,6 @@ import {
   shouldApplyTerminalImePendingCandidateKeyRelease
 } from './terminal-ime-candidate-key-release-guard'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
-import { installTerminalImeComposerPlaceholderMask } from './terminal-ime-composer-placeholder-mask'
 import { installTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import { installTerminalImeNativeTextForwarder } from './terminal-ime-native-text-forwarder'
 import { installTerminalIosHangulPreedit } from './terminal-ios-hangul-preedit'
@@ -62,7 +61,6 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
     ? installTerminalImeLinuxCandidateState(pane.terminal.element)
     : null
   const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
-  const imeComposerPlaceholderMask = installTerminalImeComposerPlaceholderMask(pane.terminal)
   const iosHangulPreedit = isIosWeb
     ? installTerminalIosHangulPreedit({
         terminalElement: pane.terminal.element,
@@ -74,7 +72,6 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
     : null
   imeCompositionDisposablesRef.current.set(pane.id, {
     dispose: () => {
-      imeComposerPlaceholderMask.dispose()
       imeCompositionTracker.dispose()
       linuxImeCandidateState?.dispose()
       iosHangulPreedit?.dispose()
