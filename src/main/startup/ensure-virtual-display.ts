@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { readFileSync, rmSync, statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { app } from 'electron'
+import { ORCA_VIRTUAL_DISPLAY_ENV } from '../pty/virtual-display-terminal-env'
 
 // Why: headless `orca serve` backs browser panes with offscreen BrowserWindows.
 // On Linux, Electron has no display platform without an X server and segfaults
@@ -26,6 +27,12 @@ function configureHeadlessServeChromiumFlags(): void {
   // Why: externally managed displays are commonly Xvfb too; a GPU-process fork can trap before serve readiness.
   app.disableHardwareAcceleration()
   app.commandLine.appendSwitch('disable-gpu')
+}
+
+function adoptVirtualDisplay(): void {
+  process.env.DISPLAY = VIRTUAL_DISPLAY
+  // Why: terminals inherit this env; the marker lets PTY spawns drop a DISPLAY no user can see.
+  process.env[ORCA_VIRTUAL_DISPLAY_ENV] = VIRTUAL_DISPLAY
 }
 
 function xvfbSocketPath(displayNumber: number): string {
@@ -249,7 +256,7 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
   // would advertise browser support that then fails at tab creation.
   if (isUnixSocket(xvfbSocketPath(VIRTUAL_DISPLAY_NUMBER))) {
     if (isManagedDisplayServerAlive(VIRTUAL_DISPLAY_NUMBER)) {
-      process.env.DISPLAY = VIRTUAL_DISPLAY
+      adoptVirtualDisplay()
       return true
     }
     // Why: stale socket/lock — clean them up so Xvfb can rebind the display
@@ -293,7 +300,7 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
     return false
   }
 
-  process.env.DISPLAY = VIRTUAL_DISPLAY
+  adoptVirtualDisplay()
 
   // Why: -terminate only takes effect after Xvfb accepts its first client.
   process.once('exit', stopVirtualDisplay)

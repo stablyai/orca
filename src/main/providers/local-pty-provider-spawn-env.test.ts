@@ -464,6 +464,31 @@ describe('LocalPtyProvider', () => {
       expect(env.LD_LIBRARY_PATH).toBe('/opt/audio/lib')
     })
 
+    it("does not inherit headless serve's virtual display into PTY shells", async () => {
+      const saved = {
+        DISPLAY: process.env.DISPLAY,
+        ORCA_VIRTUAL_DISPLAY: process.env.ORCA_VIRTUAL_DISPLAY
+      }
+      process.env.DISPLAY = ':99'
+      process.env.ORCA_VIRTUAL_DISPLAY = ':99'
+
+      try {
+        await provider.spawn({ cols: 80, rows: 24 })
+      } finally {
+        for (const [key, value] of Object.entries(saved)) {
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      }
+
+      const env = spawnMock.mock.calls.at(-1)?.[2].env
+      expect(env.DISPLAY).toBeUndefined()
+      expect(env.ORCA_VIRTUAL_DISPLAY).toBeUndefined()
+    })
+
     it('does not forward a half-activated conda env into the shell', async () => {
       // Why: CONDA_SHLVL asserts CONDA_PREFIX exists; forwarding the sentinel
       // alone makes the user's rc-file conda hook raise a TypeError (#14195).
