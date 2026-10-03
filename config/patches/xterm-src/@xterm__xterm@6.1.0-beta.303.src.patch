@@ -1,8 +1,27 @@
 diff --git a/src/browser/CoreBrowserTerminal.ts b/src/browser/CoreBrowserTerminal.ts
-index 67893b7966eb095db4459b8837de9766921f36c5..0abf7ecac1aa108f7caf711d0a5c610a688d34fd 100644
+index 67893b7966eb095db4459b8837de9766921f36c5..bead883f4f21a2a0a39ad803d6f945840b9d2b6f 100644
 --- a/src/browser/CoreBrowserTerminal.ts
 +++ b/src/browser/CoreBrowserTerminal.ts
-@@ -325,6 +325,9 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+@@ -25,7 +25,7 @@ import { IDecoration, IDecorationOptions, IDisposable, ILinkProvider, IMarker, I
+ import { copyHandler, handlePasteEvent, moveTextAreaUnderMouseCursor, paste, rightClickHandler } from './Clipboard';
+ import * as Strings from './LocalizableStrings';
+ import { OscLinkProvider } from './OscLinkProvider';
+-import { CharacterJoinerHandler, CustomKeyEventHandler, CustomWheelEventHandler, IBrowser, IBufferRange, ICompositionHelper, ILinkifier2, ITerminal } from './Types';
++import { CharacterJoinerHandler, CustomKeyEventHandler, CustomWheelEventHandler, IBrowser, IBufferRange, ICompositionHelper, IImePreedit, ILinkifier2, ITerminal } from './Types';
+ import { Viewport } from './Viewport';
+ import { BufferDecorationRenderer } from './decorations/BufferDecorationRenderer';
+ import { OverviewRulerRenderer } from './decorations/OverviewRulerRenderer';
+@@ -72,6 +72,9 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+ 
+   private readonly _linkifier: MutableDisposable<ILinkifier2> = this._register(new MutableDisposable());
+   public get linkifier(): ILinkifier2 | undefined { return this._linkifier.value; }
++  public get imePreedit(): IImePreedit | undefined {
++    return this._compositionHelper instanceof CompositionHelper ? this._compositionHelper.imePreedit : undefined;
++  }
+   private _overviewRulerRenderer: OverviewRulerRenderer | undefined;
+   private _viewport: Viewport | undefined;
+ 
+@@ -325,6 +328,9 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
    private _handleTextAreaBlur(): void {
      // Text can safely be removed on blur. Doing it earlier could interfere with
      // screen readers reading it out.
@@ -12,7 +31,7 @@ index 67893b7966eb095db4459b8837de9766921f36c5..0abf7ecac1aa108f7caf711d0a5c610a
      this.textarea!.value = '';
      this.refresh(this.buffer.y, this.buffer.y);
      if (this.coreService.decPrivateModes.sendFocus) {
-@@ -425,7 +428,18 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+@@ -425,7 +431,18 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
        this._compositionHelper!.updateCompositionElements();
      }));
      this._register(addDisposableListener(this.textarea!, 'compositionupdate', (e: CompositionEvent) => this._compositionHelper!.compositionupdate(e)));
@@ -32,7 +51,7 @@ index 67893b7966eb095db4459b8837de9766921f36c5..0abf7ecac1aa108f7caf711d0a5c610a
      this._register(addDisposableListener(this.textarea!, 'input', (ev: InputEvent) => this._inputEvent(ev), true));
      this._register(this.onRender(() => this._compositionHelper!.updateCompositionElements()));
    }
-@@ -552,6 +566,11 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+@@ -552,6 +569,11 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
      this._compositionView = this._document.createElement('div');
      this._compositionView.classList.add('composition-view');
      this._compositionHelper = this._instantiationService.createInstance(CompositionHelper, this.textarea, this._compositionView);
@@ -44,7 +63,7 @@ index 67893b7966eb095db4459b8837de9766921f36c5..0abf7ecac1aa108f7caf711d0a5c610a
      this._helperContainer.appendChild(this._compositionView);
  
      this._mouseCoordsService = this._instantiationService.createInstance(MouseCoordsService);
-@@ -1009,7 +1028,9 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+@@ -1009,7 +1031,9 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
  
      this._onKey.fire({ key, domEvent: ev });
      this._showCursor();
@@ -55,7 +74,7 @@ index 67893b7966eb095db4459b8837de9766921f36c5..0abf7ecac1aa108f7caf711d0a5c610a
  
      this._keyPressHandled = true;
  
-@@ -1027,6 +1048,15 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+@@ -1027,6 +1051,15 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
     * @param ev The input event to be handled.
     */
    protected _inputEvent(ev: InputEvent): boolean {
@@ -72,10 +91,42 @@ index 67893b7966eb095db4459b8837de9766921f36c5..0abf7ecac1aa108f7caf711d0a5c610a
      // support reading out character input which can doubling up input characters
      // Based on these event traces: https://github.com/xtermjs/xterm.js/issues/3679
 diff --git a/src/browser/Types.ts b/src/browser/Types.ts
-index 497afcf535f3eaca00889525a77e15eb633ccd96..96d499b34605f860608382114c3fbdc07dc6b07f 100644
+index 497afcf535f3eaca00889525a77e15eb633ccd96..bbe95178f084cfb0d7c1ed5f4a9dc118dab6b646 100644
 --- a/src/browser/Types.ts
 +++ b/src/browser/Types.ts
-@@ -41,9 +41,10 @@ export interface ICompositionHelper {
+@@ -4,7 +4,7 @@
+  */
+ 
+ import { IColor, ITerminalOptions } from '../common/Types';
+-import { CharData, IBuffer } from '../common/buffer/Types';
++import { CharData, IBuffer, IBufferLine } from '../common/buffer/Types';
+ import { ICoreTerminal } from '../common/CoreTerminal';
+ import { IDisposable, IRenderDimensions as IRenderDimensionsApi, Terminal as ITerminalApi } from '@xterm/xterm';
+ import { channels, css } from '../common/Color';
+@@ -30,6 +30,22 @@ export interface ITerminal extends InternalPassthroughApis, ICoreTerminal {
+   onA11yChar: IEvent<string>;
+   onA11yTab: IEvent<number>;
+   onWillOpen: IEvent<HTMLElement>;
++
++  /** The IME preedit the renderer draws into the cell grid, when in-grid preedit is composing. */
++  readonly imePreedit?: IImePreedit;
++}
++
++/**
++ * An IME preedit laid out on the cell grid. It exists only in what the renderer draws: the buffer,
++ * selection, serialization and the pty never see it.
++ */
++export interface IImePreedit {
++  /** The absolute buffer row the preedit is drawn on. */
++  readonly row: number;
++  /** The column the cursor is drawn at while composing. */
++  readonly cursorX: number;
++  /** `line` as displayed with the preedit composed into it; `line` itself is left untouched. */
++  composeLine(line: IBufferLine): IBufferLine;
+ }
+ 
+ export type CustomKeyEventHandler = (event: KeyboardEvent) => boolean;
+@@ -41,9 +57,10 @@ export interface ICompositionHelper {
    readonly isComposing: boolean;
    compositionstart(): void;
    compositionupdate(ev: CompositionEvent): void;
@@ -88,10 +139,10 @@ index 497afcf535f3eaca00889525a77e15eb633ccd96..96d499b34605f860608382114c3fbdc0
  
  export interface IBrowser {
 diff --git a/src/browser/input/CompositionHelper.ts b/src/browser/input/CompositionHelper.ts
-index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee3acfddfa 100644
+index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..9408542ce53753b3b77eec4a37b1a0cbe430f441 100644
 --- a/src/browser/input/CompositionHelper.ts
 +++ b/src/browser/input/CompositionHelper.ts
-@@ -1,10 +1,15 @@
+@@ -1,10 +1,22 @@
 +/// <reference lib="es2022.intl" />
  /**
   * Copyright (c) 2016 The xterm.js authors. All rights reserved.
@@ -102,6 +153,13 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 -import { IBufferService, ICoreService, IOptionsService } from '../../common/services/Services';
 +import { IRenderService, IThemeService } from '../services/Services';
 +import { IBufferService, ICoreService, IOptionsService, IUnicodeService } from '../../common/services/Services';
++import { IImePreedit } from '../Types';
++import { IBufferLine } from '../../common/buffer/Types';
++import { BufferLine } from '../../common/buffer/BufferLine';
++import { AttributeData, ExtendedAttrs } from '../../common/buffer/AttributeData';
++import { CellData } from '../../common/buffer/CellData';
++import { Attributes, Content, FgFlags, UnderlineStyle } from '../../common/buffer/Constants';
++import { UnicodeService } from '../../common/services/UnicodeService';
 +import { WidthCacheFontVariantCanvas } from '../renderer/dom/WidthCache';
 +import { addDisposableListener } from '../Dom';
 +import { Disposable } from '../../common/Lifecycle';
@@ -109,7 +167,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
  import { C0 } from '../../common/data/EscapeSequences';
  
  interface IPosition {
-@@ -12,6 +17,27 @@ interface IPosition {
+@@ -12,6 +24,27 @@ interface IPosition {
    end: number;
  }
  
@@ -137,7 +195,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
  /**
   * Encapsulates the logic for handling compositionstart, compositionupdate and compositionend
   * events, displaying the in-progress composition to the UI and forwarding the final composition
-@@ -24,6 +50,15 @@ export class CompositionHelper {
+@@ -24,6 +57,15 @@ export class CompositionHelper {
     */
    private _isComposing: boolean;
    public get isComposing(): boolean { return this._isComposing; }
@@ -153,7 +211,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
  
    /**
     * The position within the input textarea's value of the current composition.
-@@ -36,52 +71,144 @@ export class CompositionHelper {
+@@ -36,52 +78,171 @@ export class CompositionHelper {
     */
    private _compositionSuffix: string;
  
@@ -221,6 +279,29 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 +
 +  /** The insertion caret painted above the renderer cursor the composition view covers. */
 +  private _compositionCaret?: HTMLElement;
++
++  /** Set when `imePreeditInGrid` owns the current composition; the overlay stays empty then. */
++  private _gridPreedit?: CompositionGridPreedit;
++
++  /** The viewport rows the last in-grid publish covered, so a moved preedit repaints both. */
++  private _gridPreeditRows?: { start: number, end: number };
++
++  private _gridPreeditHidesTail = false;
++
++  private _gridPreeditAnchor?: { x: number, y: number };
++
++  /** The in-grid preedit the renderers draw, laid out against the live cursor. */
++  public get imePreedit(): IImePreedit | undefined {
++    return this._gridPreedit?.resolve(this._gridPreeditAnchor, this._gridPreeditHidesTail);
++  }
++
++  /**
++   * Whether the open composition draws in the grid. Latched at `compositionstart`, so it can
++   * differ from `imePreeditInGrid` when the option changes mid-composition.
++   */
++  public get isGridPreeditActive(): boolean {
++    return this._gridPreedit !== undefined;
++  }
 +
 +  // Keep the six-argument form callable: upstream's own CompositionHelper.test.ts constructs
 +  // this class directly, and `.npmignore` strips src/**/*.test.ts from the published tarball, so
@@ -298,9 +379,14 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 -    this._compositionView.textContent = '';
 +    this._resetCompositionView();
      this._dataAlreadySent = '';
+-    this._compositionView.classList.add('active');
 +    this._compositionInputData = '';
 +    this._lastCompositionData = '';
-     this._compositionView.classList.add('active');
++    if (this._optionsService.rawOptions.imePreeditInGrid && this._unicodeService) {
++      this._gridPreedit = new CompositionGridPreedit(this._bufferService, this._unicodeService);
++    } else {
++      this._compositionView.classList.add('active');
++    }
 +    this._dispatchCompositionSessionEvent(new CustomEvent(XTERM_COMPOSITION_SESSION_START_EVENT, {
 +      bubbles: true,
 +      detail: { id: this._compositionTransactionId }
@@ -308,7 +394,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
    }
  
    /**
-@@ -89,22 +216,95 @@ export class CompositionHelper {
+@@ -89,22 +250,133 @@ export class CompositionHelper {
     * @param ev The event.
     */
    public compositionupdate(ev: Pick<CompositionEvent, 'data'>): void {
@@ -324,10 +410,15 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 +    if (ev.data?.length > 0) {
 +      this._lastCompositionData = ev.data;
 +    }
-+    this._renderCompositionView(ev.data ?? '');
-+    // Some IMEs resume without compositionstart; keep that inferred transaction visible until
-+    // compositionend settles it. An empty update hides the overlay without ending the transaction.
-+    this._compositionView.classList.toggle('active', Boolean(ev.data));
++    if (this._gridPreedit) {
++      this._gridPreedit.setText(ev.data ?? '');
++      this._publishGridPreedit();
++    } else {
++      this._renderCompositionView(ev.data ?? '');
++      // Some IMEs resume without compositionstart; keep that inferred transaction visible until
++      // compositionend settles it. An empty update hides the overlay without ending the transaction.
++      this._compositionView.classList.toggle('active', Boolean(ev.data));
++    }
      this.updateCompositionElements();
 -    setTimeout(() => {
 -      const end = this._textarea.selectionEnd ?? this._textarea.value.length;
@@ -340,6 +431,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 +        this._compositionHasObservedProgress ||= this._hasCompositionProgress();
 +        const end = this._textarea.selectionEnd ?? this._textarea.value.length;
 +        this._compositionPosition.end = Math.max(this._compositionPosition.start, end);
++        this._syncGridPreeditCaret();
 +      }
 +    });
    }
@@ -410,10 +502,42 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 +    this._resetCompositionView();
 +    this._preeditRenderer?.dispose();
 +    this._preeditRenderer = undefined;
++    this._gridPreeditRows = undefined;
++  }
++
++  /**
++   * Hides the committed row tail the in-grid preedit would push right, for embedders that know the
++   * tail is a placeholder the typed text replaces.
++   */
++  public setPreeditHidesTail(hidesTail: boolean): void {
++    if (hidesTail !== this._gridPreeditHidesTail) {
++      this._gridPreeditHidesTail = hidesTail;
++      this._refreshGridPreedit();
++    }
++  }
++
++  /**
++   * Draws the in-grid preedit at `anchor` (column, row relative to the buffer base) instead of the
++   * terminal cursor, for embedders that know the app hides its real input position. Cleared when
++   * the composition ends.
++   */
++  public setPreeditAnchor(anchor: { x: number, y: number } | undefined): void {
++    const current = this._gridPreeditAnchor;
++    if (anchor?.x !== current?.x || anchor?.y !== current?.y) {
++      this._gridPreeditAnchor = anchor && { x: anchor.x, y: anchor.y };
++      this._refreshGridPreedit();
++    }
++  }
++
++  private _refreshGridPreedit(): void {
++    if (this._gridPreedit) {
++      this._publishGridPreedit();
++      this._positionGridPreeditTextarea();
++    }
    }
  
    /**
-@@ -113,7 +313,19 @@ export class CompositionHelper {
+@@ -113,7 +385,19 @@ export class CompositionHelper {
     * @returns Whether the Terminal should continue processing the keydown event.
     */
    public keydown(ev: KeyboardEvent): boolean {
@@ -434,7 +558,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
        if (ev.keyCode === 20 || ev.keyCode === 229) {
          // 20 is CapsLock, 229 is Enter
          // Continue composing if the keyCode is the "composition character"
-@@ -128,6 +340,10 @@ export class CompositionHelper {
+@@ -128,6 +412,10 @@ export class CompositionHelper {
        this._finalizeComposition(false);
      }
  
@@ -445,7 +569,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
      if (ev.keyCode === 229) {
        // If the "composition character" is used but gets to this point it means a non-composition
        // character (eg. numbers and punctuation) was pressed when the IME was active.
-@@ -138,6 +354,74 @@ export class CompositionHelper {
+@@ -138,6 +426,74 @@ export class CompositionHelper {
      return true;
    }
  
@@ -520,7 +644,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
    /**
     * Finalizes the composition, resuming regular input actions. This is called when a composition
     * is ending.
-@@ -146,23 +430,52 @@ export class CompositionHelper {
+@@ -146,23 +502,52 @@ export class CompositionHelper {
     *   compositionend event is triggered, such as enter, so that the composition is sent before
     *   the command is executed.
     */
@@ -584,7 +708,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
  
        // Since composition* events happen before the changes take place in the textarea on most
        // browsers, use a setTimeout with 0ms time to allow the native compositionend event to
-@@ -172,37 +485,315 @@ export class CompositionHelper {
+@@ -172,37 +557,315 @@ export class CompositionHelper {
        // - The last compositionupdate event's data property does not always accurately describe
        //   the character, a counter example being Korean where an ending consonsant can move to
        //   the following character if the following input is a vowel.
@@ -927,7 +1051,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
    /**
     * Apply any changes made to the textarea after the current event chain is allowed to complete.
     * This should be called when not currently composing but a keydown event with the "composition
-@@ -222,6 +813,9 @@ export class CompositionHelper {
+@@ -222,6 +885,9 @@ export class CompositionHelper {
  
          const diff = newValue.replace(oldValue, '');
  
@@ -937,10 +1061,83 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
          this._dataAlreadySent = diff;
  
          if (newValue.length > oldValue.length) {
-@@ -236,6 +830,105 @@ export class CompositionHelper {
+@@ -236,6 +902,183 @@ export class CompositionHelper {
      }, 0);
    }
  
++  /**
++   * Asks the renderer to repaint the rows the in-grid preedit covered and now covers, plus the
++   * cursor row it stands in for. Runs only on preedit changes: this path is also driven from
++   * `onRender`, so repainting unconditionally would never settle.
++   */
++  private _publishGridPreedit(): void {
++    const buffer = this._bufferService.buffer;
++    const preedit = this.imePreedit;
++    let start = buffer.ybase + buffer.y - buffer.ydisp;
++    let end = start;
++    if (preedit) {
++      start = Math.min(start, preedit.row - buffer.ydisp);
++      end = Math.max(end, preedit.row - buffer.ydisp);
++    }
++    const previous = this._gridPreeditRows;
++    this._gridPreeditRows = preedit ? { start, end } : undefined;
++    if (previous) {
++      start = Math.min(start, previous.start);
++      end = Math.max(end, previous.end);
++    }
++    start = Math.max(0, start);
++    end = Math.min(this._bufferService.rows - 1, end);
++    if (start <= end) {
++      this._renderService.refreshRows(start, end);
++    }
++  }
++
++  /** Places the IME caret inside the preedit where the textarea reports it, once it has settled. */
++  private _syncGridPreeditCaret(): void {
++    const preedit = this._gridPreedit;
++    if (!preedit) {
++      return;
++    }
++    const start = this._compositionPosition.start;
++    // A converting clause arrives as a non-collapsed selection whose end is the insertion point.
++    const caret = this._textarea.selectionEnd;
++    // Only trust the selection once the textarea holds exactly the preedit it describes.
++    const offset = caret !== null && this._textarea.value.substring(start, start + preedit.text.length) === preedit.text
++      ? caret - start
++      : undefined;
++    if (preedit.setCaret(offset)) {
++      this._publishGridPreedit();
++      this._positionGridPreeditTextarea();
++    }
++  }
++
++  /** Anchors the textarea to the drawn preedit so the OS candidate window follows it. */
++  private _positionGridPreeditTextarea(): void {
++    const buffer = this._bufferService.buffer;
++    const grid = this._gridPreedit;
++    const preedit = grid?.resolve(this._gridPreeditAnchor, this._gridPreeditHidesTail);
++    const viewportRow = (preedit ? preedit.row : buffer.ybase + buffer.y) - buffer.ydisp;
++    if (viewportRow < 0 || viewportRow >= this._bufferService.rows) {
++      return;
++    }
++    const cell = this._renderService.dimensions.css.cell;
++    const column = preedit && grid ? grid.start : Math.min(buffer.x, this._bufferService.cols - 1);
++    const width = Math.max((preedit && grid ? grid.visibleWidth : 0) * cell.width, 1);
++    this._setTextareaStyle('left', column * cell.width + 'px');
++    this._setTextareaStyle('top', viewportRow * cell.height + 'px');
++    // Ensure the text area is at least 1x1, otherwise certain IMEs may break
++    this._setTextareaStyle('width', width + 'px');
++    this._setTextareaStyle('height', Math.max(cell.height, 1) + 'px');
++    this._setTextareaStyle('lineHeight', cell.height + 'px');
++  }
++
++  /** Skips unchanged writes: this runs on every render, and a style write invalidates layout. */
++  private _setTextareaStyle(property: 'left' | 'top' | 'width' | 'height' | 'lineHeight', value: string): void {
++    if (this._textarea.style[property] !== value) {
++      this._textarea.style[property] = value;
++    }
++  }
++
 +  /**
 +   * Renders the preedit into the view and, when the cursor sits mid-line, the rest of the row
 +   * after it, so a composition reads as inserted text pushing the tail right rather than an opaque
@@ -1022,6 +1219,11 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 +  }
 +
 +  private _resetCompositionView(): void {
++    if (this._gridPreedit) {
++      this._gridPreedit = undefined;
++      this._gridPreeditAnchor = undefined;
++      this._publishGridPreedit();
++    }
 +    this._preeditRenderer?.clear();
 +    this._compositionView.textContent = '';
 +    this._compositionPreedit = undefined;
@@ -1043,11 +1245,15 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
    /**
     * Positions the composition view on top of the cursor and the textarea just below it (so the
     * IME helper dialog is positioned correctly).
-@@ -243,10 +936,23 @@ export class CompositionHelper {
+@@ -243,10 +1086,27 @@ export class CompositionHelper {
     *   necessary as the IME events across browsers are not consistently triggered.
     */
    public updateCompositionElements(dontRecurse?: boolean): void {
 -    if (!this._isComposing) {
++    if (this._gridPreedit) {
++      this._positionGridPreeditTextarea();
++      return;
++    }
 +    // Empty updates hide the overlay without ending the inferred transaction.
 +    if (!this._compositionView.classList.contains('active')) {
        return;
@@ -1068,7 +1274,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
      if (this._bufferService.buffer.isCursorInViewport) {
        const cursorX = Math.min(this._bufferService.buffer.x, this._bufferService.cols - 1);
  
-@@ -254,31 +960,156 @@ export class CompositionHelper {
+@@ -254,31 +1114,337 @@ export class CompositionHelper {
        const cursorTop = this._bufferService.buffer.y * this._renderService.dimensions.css.cell.height;
        const cursorLeft = cursorX * this._renderService.dimensions.css.cell.width;
  
@@ -1154,8 +1360,8 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 +          refresh();
 +        }
 +      }));
-+    }
-+  }
+     }
+   }
 +
 +  public clear(): void {
 +    this._preedit = undefined;
@@ -1228,12 +1434,288 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 +        emit(index);
 +        spacing = nextSpacing;
 +      }
-     }
++    }
 +    emit(data.length);
 +    nodes.push(doc.createTextNode('‎'));
 +    preedit.replaceChildren(...nodes);
-   }
++  }
++}
++
++interface IGridPreeditCell {
++  codepoints: number[];
++  width: number;
++  /** UTF-16 offset in the preedit text where this cell's grapheme ends. */
++  end: number;
++}
++
++/**
++ * The preedit laid out the way the buffer would hold it once committed, so the renderer draws it
++ * as ordinary cells: graphemes join and take widths exactly as `InputHandler.print` would.
++ */
++class CompositionGridPreedit implements IImePreedit {
++  public text = '';
++  public row = 0;
++  public cursorX = 0;
++  /** The first column the preedit occupies, as of the last `resolve`. */
++  public start = 0;
++  /** The preedit cells left after clipping to the row, as of the last `resolve`. */
++  public visibleWidth = 0;
++  private _cells: IGridPreeditCell[] = [];
++  private _width = 0;
++  private _caret?: number;
++  private _firstVisible = 0;
++  private _tailSource = 0;
++  private _hidesTail = false;
++  private readonly _line = new BufferLine(0);
++  private readonly _work = new CellData();
++  private readonly _preeditAttr = new AttributeData();
++  private readonly _fillAttr = new AttributeData();
++
++  constructor(
++    private readonly _bufferService: IBufferService,
++    private readonly _unicodeService: IUnicodeService
++  ) {
++    // Shared by every preedit cell, so it is never mutated after this.
++    this._preeditAttr.extended = new ExtendedAttrs();
++    this._preeditAttr.extended.underlineStyle = UnderlineStyle.SINGLE;
++  }
++
++  public setText(text: string): void {
++    this.text = text;
++    this._caret = undefined;
++    const cells: IGridPreeditCell[] = [];
++    let preceding = 0;
++    let offset = 0;
++    for (const char of text) {
++      offset += char.length;
++      const code = char.codePointAt(0)!;
++      // The buffer drops soft hyphens too.
++      if (code === 0xAD) {
++        continue;
++      }
++      const info = this._unicodeService.charProperties(code, preceding);
++      const width = UnicodeService.extractWidth(info);
++      const shouldJoin = UnicodeService.extractShouldJoin(info);
++      preceding = info;
++      const last = cells[cells.length - 1];
++      if (last && (shouldJoin || width === 0)) {
++        last.codepoints.push(code);
++        last.end = offset;
++        if (shouldJoin && width) {
++          last.width = Math.min(2, width);
++        }
++        continue;
++      }
++      cells.push({ codepoints: [code], width: Math.min(2, Math.max(1, width)), end: offset });
++    }
++    this._cells = cells;
++    this._width = cells.reduce((sum, cell) => sum + cell.width, 0);
++  }
++
++  /** Moves the caret to a UTF-16 offset inside the preedit, or its end; returns whether it moved. */
++  public setCaret(offset: number | undefined): boolean {
++    let caret: number | undefined;
++    if (offset !== undefined && offset >= 0 && offset < this.text.length) {
++      caret = 0;
++      for (const cell of this._cells) {
++        if (cell.end > offset) {
++          break;
++        }
++        caret += cell.width;
++      }
++    }
++    if (caret === this._caret) {
++      return false;
++    }
++    this._caret = caret;
++    return true;
++  }
++
++  public resolve(anchor: { x: number, y: number } | undefined, hidesTail: boolean): IImePreedit | undefined {
++    if (this._width === 0) {
++      return undefined;
++    }
++    const buffer = this._bufferService.buffer;
++    const cols = this._bufferService.cols;
++    const cursorX = Math.max(0, Math.min(anchor?.x ?? buffer.x, cols - 1));
++    // Keep the newest text and one cell for the caret when the preedit outgrows the row.
++    const room = Math.max(1, cols - 1);
++    let first = 0;
++    let hidden = 0;
++    while (this._width - hidden > room && first < this._cells.length - 1) {
++      hidden += this._cells[first++].width;
++    }
++    this._firstVisible = first;
++    this.visibleWidth = this._width - hidden;
++    this._tailSource = cursorX;
++    this._hidesTail = hidesTail;
++    // End-aligned against the right edge so the caret stays on screen.
++    this.start = Math.max(0, Math.min(cursorX, cols - this.visibleWidth - 1));
++    this.row = buffer.ybase + (anchor?.y ?? buffer.y);
++    const caret = Math.max(0, Math.min(this.visibleWidth, (this._caret ?? this._width) - hidden));
++    this.cursorX = Math.min(this.start + caret, cols - 1);
++    return this;
++  }
++
++  public composeLine(source: IBufferLine): IBufferLine {
++    if (!(source instanceof BufferLine)) {
++      return source;
++    }
++    const line = this._line;
++    const cols = Math.min(this._bufferService.cols, source.length);
++    line.copyFrom(source);
++    this._resolveAttributes(source);
++    const start = Math.min(this.start, cols);
++    const tail = Math.min(start + this.visibleWidth, cols);
++    if (this._hidesTail) {
++      for (let x = tail; x < cols; x++) {
++        line.setCellFromCodepoint(x, 0, 1, this._fillAttr);
++      }
++    } else if (tail < cols) {
++      // Reads as if the preedit were inserted at the cursor, pushing the committed tail right.
++      line.copyCellsFrom(source, this._tailSource, tail, cols - Math.max(tail, this._tailSource), false);
++      if (line.getWidth(tail) === 0) {
++        this._blankCell(line, tail);
++      }
++    }
++    let x = start;
++    for (let i = this._firstVisible; i < this._cells.length; i++) {
++      const cell = this._cells[i];
++      if (x + cell.width > cols) {
++        break;
++      }
++      line.setCellFromCodepoint(x, cell.codepoints[0], cell.width, this._preeditAttr);
++      for (let j = 1; j < cell.codepoints.length; j++) {
++        line.addCodepointToCell(x, cell.codepoints[j], 0);
++      }
++      if (cell.width === 2) {
++        line.setCellFromCodepoint(x + 1, 0, 0, this._preeditAttr);
++      }
++      x += cell.width;
++    }
++    // Never leave half of a wide character at either edge of the preedit or the row.
++    if (start > 0 && line.getWidth(start - 1) === 2) {
++      this._blankCell(line, start - 1);
++    }
++    if (cols > 0 && line.getWidth(cols - 1) === 2) {
++      this._blankCell(line, cols - 1);
++    }
++    return line;
++  }
++
++  /** Default foreground over the cursor cell's background, so the preedit sits inside TUI boxes. */
++  private _resolveAttributes(source: BufferLine): void {
++    source.loadCell(Math.min(this._tailSource, source.length - 1), this._work);
++    const bg = this._work.isInverse() ? 0 : this._work.bg & (Attributes.CM_MASK | Attributes.RGB_MASK);
++    this._preeditAttr.fg = FgFlags.UNDERLINE;
++    this._preeditAttr.bg = bg;
++    this._preeditAttr.updateExtended();
++    this._fillAttr.fg = 0;
++    this._fillAttr.bg = bg;
++  }
++
++  private _blankCell(line: BufferLine, x: number): void {
++    line.loadCell(x, this._work);
++    this._work.content = 1 << Content.WIDTH_SHIFT;
++    this._work.combinedData = '';
++    line.setCell(x, this._work);
++  }
  }
+diff --git a/src/browser/renderer/dom/DomRenderer.ts b/src/browser/renderer/dom/DomRenderer.ts
+index 657217f7104c97ce54b98e88b381b325b061604c..6ea7804bcce45c3ec803c59cd1f079e4e48dcdb6 100644
+--- a/src/browser/renderer/dom/DomRenderer.ts
++++ b/src/browser/renderer/dom/DomRenderer.ts
+@@ -526,8 +526,9 @@ export class DomRenderer extends Disposable implements IRenderer {
+ 
+   public renderRows(start: number, end: number): void {
+     const buffer = this._bufferService.buffer;
+-    const cursorAbsoluteY = buffer.ybase + buffer.y;
+-    const cursorX = Math.min(buffer.x, this._bufferService.cols - 1);
++    const preedit = this._terminal.imePreedit;
++    const cursorAbsoluteY = preedit?.row ?? buffer.ybase + buffer.y;
++    const cursorX = preedit?.cursorX ?? Math.min(buffer.x, this._bufferService.cols - 1);
+     const cursorBlink = this._coreService.decPrivateModes.cursorBlink ?? this._optionsService.rawOptions.cursorBlink;
+     const cursorStyle = this._coreService.decPrivateModes.cursorStyle ?? this._optionsService.rawOptions.cursorStyle;
+     const cursorInactiveStyle = this._optionsService.rawOptions.cursorInactiveStyle;
+@@ -545,9 +546,10 @@ export class DomRenderer extends Disposable implements IRenderer {
+         this._setRowBlinkState(y, false);
+         continue;
+       }
++      const isPreeditRow = preedit?.row === row;
+       rowElement.replaceChildren(
+         ...this._rowFactory.createRow(
+-          lineData,
++          isPreeditRow ? preedit.composeLine(lineData) : lineData,
+           row,
+           row === cursorAbsoluteY,
+           cursorStyle,
+@@ -559,7 +561,8 @@ export class DomRenderer extends Disposable implements IRenderer {
+           this._widthCache,
+           -1,
+           -1,
+-          rowInfo
++          rowInfo,
++          isPreeditRow
+         )
+       );
+       this._setRowBlinkState(y, rowInfo.hasBlinkingCells);
+@@ -604,8 +607,9 @@ export class DomRenderer extends Disposable implements IRenderer {
+ 
+     cols = Math.min(cols, this._bufferService.cols);
+     const buffer = this._bufferService.buffer;
+-    const cursorAbsoluteY = buffer.ybase + buffer.y;
+-    const cursorX = Math.min(buffer.x, cols - 1);
++    const preedit = this._terminal.imePreedit;
++    const cursorAbsoluteY = preedit?.row ?? buffer.ybase + buffer.y;
++    const cursorX = preedit?.cursorX ?? Math.min(buffer.x, cols - 1);
+     const cursorBlink = this._optionsService.rawOptions.cursorBlink;
+     const cursorStyle = this._optionsService.rawOptions.cursorStyle;
+     const cursorInactiveStyle = this._optionsService.rawOptions.cursorInactiveStyle;
+@@ -624,9 +628,10 @@ export class DomRenderer extends Disposable implements IRenderer {
+         this._setRowBlinkState(i, false);
+         continue;
+       }
++      const isPreeditRow = preedit?.row === row;
+       rowElement.replaceChildren(
+         ...this._rowFactory.createRow(
+-          bufferline,
++          isPreeditRow ? preedit.composeLine(bufferline) : bufferline,
+           row,
+           row === cursorAbsoluteY,
+           cursorStyle,
+@@ -638,7 +643,8 @@ export class DomRenderer extends Disposable implements IRenderer {
+           this._widthCache,
+           enabled ? (i === y ? x : 0) : -1,
+           enabled ? ((i === y2 ? x2 : cols) - 1) : -1,
+-          rowInfo
++          rowInfo,
++          isPreeditRow
+         )
+       );
+       this._setRowBlinkState(i, rowInfo.hasBlinkingCells);
+diff --git a/src/browser/renderer/dom/DomRendererRowFactory.ts b/src/browser/renderer/dom/DomRendererRowFactory.ts
+index 6ae089a4387de14488f39f5dab7024cffdcd9d10..f9e7feea570f127977bad9cc54b64a132e8e20ce 100644
+--- a/src/browser/renderer/dom/DomRendererRowFactory.ts
++++ b/src/browser/renderer/dom/DomRendererRowFactory.ts
+@@ -73,14 +73,16 @@ export class DomRendererRowFactory {
+     widthCache: WidthCache,
+     linkStart: number,
+     linkEnd: number,
+-    rowInfo?: { hasBlinkingCells: boolean }
++    rowInfo?: { hasBlinkingCells: boolean },
++    ignoreJoins: boolean = false
+   ): HTMLSpanElement[] {
+ 
+     const elements: HTMLSpanElement[] = [];
+     if (rowInfo) {
+       rowInfo.hasBlinkingCells = false;
+     }
+-    const joinedRanges = this._characterJoinerService.getJoinedCharacters(row);
++    // Joins are computed from the buffer, whose columns a composed-in preedit has shifted.
++    const joinedRanges = ignoreJoins ? [] : this._characterJoinerService.getJoinedCharacters(row);
+     const colors = this._themeService.colors;
+ 
+     let lineLength = lineData.getNoBgTrimmedLength();
 diff --git a/src/browser/renderer/dom/WidthCache.ts b/src/browser/renderer/dom/WidthCache.ts
 index d45938515e7a9903de0da0d61716fd42e4deea0c..17d6577e388eb2e4397338093e35373864b822a4 100644
 --- a/src/browser/renderer/dom/WidthCache.ts
@@ -1369,3 +1851,28 @@ index 8a10076e3963e33b4a7d1e4602333eb3f4772dc9..c6dcf18b762e3c56fe22e9c2d49b8e55
        this._flushDeletedTask.flush();
      }
    }
+diff --git a/src/common/services/OptionsService.ts b/src/common/services/OptionsService.ts
+index d14982e3ff8907fd3182c8c970d81afa74eba84b..eb4094af3e6d869a9aa2d72ce4c89077a905e266 100644
+--- a/src/common/services/OptionsService.ts
++++ b/src/common/services/OptionsService.ts
+@@ -37,6 +37,7 @@ export const DEFAULT_OPTIONS: Readonly<Required<ITerminalOptions>> = {
+   scrollOnUserInput: true,
+   scrollSensitivity: 1,
+   screenReaderMode: false,
++  imePreeditInGrid: false,
+   smoothScrollDuration: 0,
+   macOptionIsMeta: false,
+   macOptionClickForcesSelection: false,
+diff --git a/src/common/services/Services.ts b/src/common/services/Services.ts
+index 8f0aeeed15d38aa8ab341577520db15d13788a52..a149b006e25158ae68bd31527064f14867836de3 100644
+--- a/src/common/services/Services.ts
++++ b/src/common/services/Services.ts
+@@ -218,6 +218,8 @@ export interface ITerminalOptions {
+   fontSize?: number;
+   fontFamily?: string;
+   fontWeight?: FontWeight;
++  /** Draws the IME preedit in the renderer's cell grid instead of the composition-view overlay. */
++  imePreeditInGrid?: boolean;
+   fontWeightBold?: FontWeight;
+   ignoreBracketedPasteMode?: boolean;
+   letterSpacing?: number;

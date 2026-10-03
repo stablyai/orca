@@ -4,6 +4,7 @@ import path from 'node:path'
 import type { CDPSession, Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { samplePreeditOverlay } from './terminal-ime-preedit-overlay-probe'
 import {
   focusActiveTerminalInput,
   getTerminalContent,
@@ -255,16 +256,13 @@ async function readImeEventLog(page: Page): Promise<ImeEventLogEntry[]> {
 }
 
 async function readActiveCompositionText(page: Page): Promise<string> {
-  return page.evaluate(() => {
-    const active = document.activeElement
-    if (!(active instanceof HTMLTextAreaElement)) {
-      throw new Error('xterm helper textarea is not focused')
-    }
-    const view = active.closest('.xterm')?.querySelector<HTMLElement>('.composition-view')
-    return view?.classList.contains('active')
-      ? (view.textContent?.replaceAll('\u200e', '') ?? '')
-      : ''
-  })
+  const focused = await page.evaluate(() => document.activeElement instanceof HTMLTextAreaElement)
+  if (!focused) {
+    throw new Error('xterm helper textarea is not focused')
+  }
+  // Covers both the in-grid preedit (Orca's default) and the overlay fallback.
+  const sample = await samplePreeditOverlay(page)
+  return sample.active ? sample.text : ''
 }
 
 async function reloadWithWindowsImePolicy(page: Page): Promise<void> {

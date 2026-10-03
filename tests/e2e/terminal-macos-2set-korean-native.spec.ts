@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { samplePreeditOverlay } from './terminal-ime-preedit-overlay-probe'
 import {
   focusActiveTerminalInput,
   sendToTerminal,
@@ -56,13 +57,9 @@ function commitNativeComposition(): void {
 }
 
 async function readActiveComposition(page: Page): Promise<string | null> {
-  return page.evaluate(() => {
-    const textarea = document.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea:focus')
-    const composition = textarea?.parentElement?.querySelector<HTMLElement>(
-      '.composition-view.active'
-    )
-    return composition?.textContent?.replaceAll('\u200e', '') ?? null
-  })
+  // Covers both the in-grid preedit (Orca's default) and the overlay fallback.
+  const sample = await samplePreeditOverlay(page)
+  return sample.active ? sample.text : null
 }
 
 async function runNativeScenario(

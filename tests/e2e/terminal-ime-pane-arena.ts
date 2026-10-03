@@ -59,3 +59,17 @@ export async function closeTerminalImePaneArena(
     await sendToTerminal(arena.page, arena.ptyId, '\x03').catch(() => undefined)
   }
 }
+
+/**
+ * Pins every terminal to xterm's composition-view overlay, for specs asserting on the overlay's
+ * own geometry. Orca draws the preedit in the cell grid by default; the overlay is its fallback.
+ */
+export async function useTerminalImePreeditOverlay(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    for (const manager of window.__paneManagers?.values() ?? []) {
+      for (const pane of manager.getPanes()) {
+        pane.terminal.options.imePreeditInGrid = false
+      }
+    }
+  })
+}

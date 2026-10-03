@@ -1,6 +1,7 @@
 import type { ITerminalOptions } from '@xterm/xterm'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal-scrollback-policy'
 import { LIGHT_BG_MIN_CONTRAST } from '@/lib/terminal-contrast-correction'
+import { DEFAULT_TERMINAL_IME_PREEDIT_IN_GRID } from './terminal-ime-grid-preedit'
 
 type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
 type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
@@ -54,6 +55,8 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     macOptionIsMeta: false,
     macOptionClickForcesSelection: true,
     drawBoldTextInBrightColors: true,
+    // Why: the renderer draws the preedit as cells, so it cannot cover or misalign the row under it.
+    imePreeditInGrid: DEFAULT_TERMINAL_IME_PREEDIT_IN_GRID,
     scrollbar: {
       // Why: slim VS Code-style scrollbar (VS Code uses 14). FitAddon reserves
       // this as a gutter, costing ~1 column per pane — accepted tradeoff so the

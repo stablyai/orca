@@ -177,6 +177,40 @@ export const getTerminalRenderingSearchEntries = createLocalizedCatalog(() => [
         'colors'
       )
     ]
+  },
+  {
+    title: translate(
+      'components.settings.TerminalRendering.imePreeditInGrid',
+      'Draw IME Composition in Terminal Cells'
+    ),
+    description: translate(
+      'components.settings.TerminalRendering.imePreeditInGridDescription',
+      'Render text being composed with an input method (Korean, Japanese, Chinese) as terminal cells at the cursor. Turn off to use the floating overlay instead.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword('components.settings.TerminalRendering.search.ime', 'ime', {
+        aliases: ['cjk']
+      }),
+      ...translateSearchKeyword(
+        'components.settings.TerminalRendering.search.inputMethod',
+        'input method'
+      ),
+      ...translateSearchKeyword(
+        'components.settings.TerminalRendering.search.composition',
+        'composition'
+      ),
+      ...translateSearchKeyword('components.settings.TerminalRendering.search.preedit', 'preedit'),
+      ...translateSearchKeyword('components.settings.TerminalRendering.search.korean', 'korean', {
+        aliases: ['hangul']
+      }),
+      ...translateSearchKeyword(
+        'components.settings.TerminalRendering.search.japanese',
+        'japanese'
+      ),
+      ...translateSearchKeyword('components.settings.TerminalRendering.search.chinese', 'chinese'),
+      ...translateSearchKeyword('components.settings.TerminalRendering.search.overlay', 'overlay')
+    ]
   }
 ])
 

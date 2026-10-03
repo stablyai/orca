@@ -1,5 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
+import { sampleGridPreedit, type GridPreeditSample } from './terminal-ime-grid-preedit-probe'
 
 /**
  * Samples the xterm preedit overlay's real geometry.
@@ -60,8 +61,30 @@ export function readPreeditOverlay(): PreeditOverlaySample {
   }
 }
 
+/**
+ * The in-grid preedit as an overlay-shaped sample, so one set of visibility assertions covers
+ * both paths. Its box is the cells the published preedit occupies; `expectPreeditRendered` also
+ * waits for the renderer's frame to hold them.
+ */
+function gridPreeditAsOverlay(grid: GridPreeditSample): PreeditOverlaySample {
+  const active = grid.text.length > 0
+  return {
+    found: true,
+    active,
+    text: grid.text,
+    rect: active ? { width: grid.rect.width, height: grid.rect.height } : { width: 0, height: 0 },
+    checkVisibility: active,
+    display: 'block',
+    visibility: 'visible',
+    opacity: '1',
+    maxWidth: 'none',
+    overflow: 'visible'
+  }
+}
+
 export async function samplePreeditOverlay(page: Page): Promise<PreeditOverlaySample> {
-  return page.evaluate(readPreeditOverlay)
+  const grid = await sampleGridPreedit(page)
+  return grid.inGrid ? gridPreeditAsOverlay(grid) : page.evaluate(readPreeditOverlay)
 }
 
 export async function expectPreeditRendered(
@@ -74,6 +97,14 @@ export async function expectPreeditRendered(
     .toBe(expectedText)
   const sample = await samplePreeditOverlay(page)
   assertPreeditRendered(sample, expectedText, message)
+  if ((await sampleGridPreedit(page)).inGrid) {
+    // The published preedit is not enough: the renderer's frame must hold it too.
+    await expect
+      .poll(async () => (await sampleGridPreedit(page)).renderedText, {
+        message: `${message}: the renderer never drew the preedit cells`
+      })
+      .toBe(expectedText)
+  }
   return sample
 }
 
@@ -99,4 +130,6 @@ export async function expectPreeditHidden(page: Page, message: string): Promise<
   const sample = await samplePreeditOverlay(page)
   expect(sample.rect.width, `${message}: overlay still occupies width`).toBe(0)
   expect(sample.rect.height, `${message}: overlay still occupies height`).toBe(0)
+  const view = await page.evaluate(readPreeditOverlay)
+  expect(view.active, `${message}: the composition-view overlay is active`).toBe(false)
 }

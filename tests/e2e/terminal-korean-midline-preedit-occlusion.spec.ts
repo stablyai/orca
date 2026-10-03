@@ -19,7 +19,11 @@
  */
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import { closeTerminalImePaneArena, openTerminalImePaneArena } from './terminal-ime-pane-arena'
+import {
+  closeTerminalImePaneArena,
+  openTerminalImePaneArena,
+  useTerminalImePreeditOverlay
+} from './terminal-ime-pane-arena'
 import { setImeComposition } from './terminal-ime-cdp-composition'
 import {
   sampleMidlinePreeditOcclusion,
@@ -72,6 +76,8 @@ test.describe('Terminal mid-line Korean preedit occlusion', () => {
     orcaPage
   }, testInfo) => {
     const arena = await openTerminalImePaneArena(orcaPage)
+    // Asserts on the overlay itself; the in-grid default is covered by terminal-ime-grid-preedit.spec.ts.
+    await useTerminalImePreeditOverlay(orcaPage)
     let completed = false
     try {
       const placeholder = 'Ask Codex to do anything'
@@ -112,6 +118,8 @@ test.describe('Terminal mid-line Korean preedit occlusion', () => {
     orcaPage
   }, testInfo) => {
     const arena = await openTerminalImePaneArena(orcaPage)
+    // Asserts on the overlay itself; the in-grid default is covered by terminal-ime-grid-preedit.spec.ts.
+    await useTerminalImePreeditOverlay(orcaPage)
     let completed = false
     try {
       // The issue's repro: 안녕하세요, then CUB 6. Each Hangul syllable is two cells, so the
@@ -154,6 +162,8 @@ test.describe('Terminal mid-line Korean preedit occlusion', () => {
     // Passes before and after the fix by design: the guard is against over-correcting into
     // rendering a tail where the row has none.
     const arena = await openTerminalImePaneArena(orcaPage)
+    // Asserts on the overlay itself; the in-grid default is covered by terminal-ime-grid-preedit.spec.ts.
+    await useTerminalImePreeditOverlay(orcaPage)
     let completed = false
     try {
       await writeToActiveTerminal(orcaPage, '\x1b[2J\x1b[H안녕하세요')
