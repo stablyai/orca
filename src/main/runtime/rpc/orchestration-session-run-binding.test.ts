@@ -66,6 +66,33 @@ describe('structured lead Run binding through the RPC dispatcher', () => {
     vi.restoreAllMocks()
   })
 
+  it.each([false, true])(
+    'refuses parent Run takeover by session identity with pane present=%s',
+    async (panePresent) => {
+      const parent = h.db.getDispatchContextById(dispatchId)!.run_id
+      if (!panePresent) {
+        h.db.db
+          .prepare(
+            'UPDATE dispatch_contexts SET assignee_handle = NULL, assignee_pane_key = NULL WHERE id = ?'
+          )
+          .run(dispatchId)
+      }
+      const before = h.db.getRun(parent)
+      await expect(
+        h.dispatch(
+          orchestrationRequest('orchestration.runUse', { id: parent }, { sessionId: SESSION_Y })
+        )
+      ).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'consumer_fenced', data: { effectsApplied: false } }
+      })
+      expect(h.db.getRun(parent)).toEqual(before)
+      await expect(
+        call(SESSION_X, 'taskCreate', { spec: 'Coordinator remains bound' })
+      ).resolves.toMatchObject({ task: { run_id: parent } })
+    }
+  )
+
   it.each(['runCreate', 'runUse'] as const)(
     'cancels a parked session Dispatch check on %s',
     async (method) => {
