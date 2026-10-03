@@ -21,6 +21,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
       return
     }
     if (
+      !this.isMacStagingDeferredToInstall() &&
       deferMacQuitUntilInstallerReady(
         this.currentStatus,
         this.hasInstallableDownloadedVersion(),
