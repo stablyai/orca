@@ -37,6 +37,11 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     }
     afterCurrentInFlight?: boolean
     errorMode?: 'warn' | 'throw'
+    /**
+     * Marks this list as an authoritative census for retired-epoch repair. Subscription frames must
+     * not set this; only a refresh scheduled after the fence rejected a returning publisher.
+     */
+    authoritative?: boolean
   } = {}
 ): Promise<void> {
   const webSessionTabsSync = await import('./web-session-tabs-sync')
@@ -100,12 +105,14 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     } = webSessionTabsSync
     // A list is evidence about a moment, not about now. Record its place in receipt order before
     // ranking it, or a snapshot the host answered before a close lands after the retraction did.
+    const receiptOptions = options.authoritative ? { authoritative: true as const } : {}
     recordReceivedWebSessionTabsSnapshot(
       environmentId,
       snapshot,
       receivedFrame,
       runtimeId,
-      'bootstrap'
+      'bootstrap',
+      receiptOptions
     )
     if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision) {
       return
@@ -133,9 +140,10 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       environmentId,
       recovered,
       receivedFrame,
-      runtimeId
+      runtimeId,
+      receiptOptions
     )
-      ? decideWebSessionTabsSnapshot(recovered, environmentId)
+      ? decideWebSessionTabsSnapshot(recovered, environmentId, undefined, receiptOptions)
       : WEB_SESSION_TABS_FRAME_OUTRANKED
     const settleMirror = applyWebSessionTabsStorePatch(
       (state) => {

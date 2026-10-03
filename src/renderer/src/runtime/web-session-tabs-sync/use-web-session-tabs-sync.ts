@@ -10,9 +10,11 @@ import {
   type GlobalSubscriptionRefs
 } from './global-session-subscription'
 import { installActiveSessionTabsSubscription } from './active-session-subscription'
+import { enableWebRetiredEpochRepair } from './retired-epoch-repair'
 
 /** Mount the paired-runtime tab mirrors and the selected-worktree stream. */
 export function useWebSessionTabsSync(): void {
+  enableWebRetiredEpochRepair()
   const activeRuntimeEnvironmentIdRef = useRef<string | null>(null)
   const activeRuntimeWorktreeKeyRef = useRef<string | null>(null)
   const visibilityResumeOmissionsRef = useRef<
