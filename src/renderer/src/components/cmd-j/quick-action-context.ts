@@ -41,6 +41,7 @@ export type CmdJQuickActionContext = {
   openNewTerminalTab: (groupId: string) => Promise<void>
   openCreateWorkspace: () => void
   deleteActiveWorkspace: () => void
+  toggleActiveWorkspacePin: () => void
   openAddQuickCommand: () => void
   canSplitActiveChat?: boolean
   splitActiveChat?: (direction: NativeChatSplitDirection) => boolean
@@ -154,6 +155,7 @@ export function buildCmdJQuickActionContext(args: {
   openNewTerminalTab: (groupId: string) => Promise<void>
   openCreateWorkspace: () => void
   deleteActiveWorkspace: () => void
+  toggleActiveWorkspacePin: () => void
   openAddQuickCommand: () => void
 }): CmdJQuickActionContext {
   const activeWorktreeId = args.state.activeWorktreeId
@@ -194,6 +196,7 @@ export function buildCmdJQuickActionContext(args: {
     openNewTerminalTab: args.openNewTerminalTab,
     openCreateWorkspace: args.openCreateWorkspace,
     deleteActiveWorkspace: args.deleteActiveWorkspace,
+    toggleActiveWorkspacePin: args.toggleActiveWorkspacePin,
     openAddQuickCommand: args.openAddQuickCommand,
     canSplitActiveChat: canRunNativeChatSplitTarget(args.state, activeChatTarget),
     splitActiveChat: (direction) =>
