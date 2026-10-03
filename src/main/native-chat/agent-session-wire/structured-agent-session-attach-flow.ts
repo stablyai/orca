@@ -35,10 +35,6 @@ import { resolveAgentSessionReplayOutcome } from './structured-agent-session-rep
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
 import { acquireOwner } from './structured-agent-session-acquisition'
 import {
-  importAdoptedTranscript,
-  prepareAdoptedTranscript
-} from './structured-agent-session-adopted-import'
-import {
   withAgentSessionCreatePhase,
   type AgentSessionCreatePhaseRecorder
 } from '../../observability/agent-session-instrumentation'
@@ -93,11 +89,23 @@ export async function performAttach(
     )
   })
   const sessionId = params.envelope.sessionId
+  const expectedFence = params.envelope.expectedRuntimeFence
+  if (expectedFence === null) {
+    // A record is founded only by its create; a start names the fence of the record it read.
+    return {
+      ok: false,
+      refusal: refuse(
+        'agent_session_operation_invalid',
+        { reason: 'requestMalformed' },
+        'An agent start names the fence of the session record it starts.'
+      )
+    }
+  }
   const admitted = admitAttachOrRefuse(params)
   if (!admitted.ok) {
     return admitted
   }
-  // Ensure/recovery bypass create-intent, so recheck before reserving or spawning.
+  // An agent start bypasses create-intent, so recheck before reserving or spawning.
   if (!adapterSupportsCreateIfDeclared(input.adapter, params.location, params.agent)) {
     return unsupported()
   }
@@ -110,18 +118,13 @@ export async function performAttach(
   let unsupportedReservationSettlementAttempted = false
   let replayed = false
   let providerHistoryWindow: ProviderHistoryWindow | null = null
-  const preparedTranscript = store.getRecord(sessionId)
-    ? { ok: true as const, items: null }
-    : await prepareAdoptedTranscript(params)
-  if (!preparedTranscript.ok) {
-    return preparedTranscript
-  }
   try {
     const reserved = await withAgentSessionCreatePhase('reserve_owner', input.recordPhase, () =>
       store.reserveOwner(
         reserveRequestFor({
           sessionId,
           params,
+          expectedFence,
           authority: input.authority,
           callerKey: input.callerKey,
           fingerprint: admitted.fingerprint,
@@ -236,7 +239,6 @@ export async function performAttach(
       openConversation: input.openConversation,
       providerHistoryWindow
     })
-    await importAdoptedTranscript(params, attached, record, preparedTranscript.items)
     await input.onAttached(attached, acquisitionGeneration, acquiredOwner, providerChildPhase)
     await store.recordOperationOutcome({
       callerKey: input.callerKey,

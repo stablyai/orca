@@ -78,14 +78,14 @@ describe('AgentLaunchNotice', () => {
   })
 
   it('confirms a launch that went ahead, with any host note beneath it', () => {
-    expect(lines({ success: 'Agent started in feature-login', warning: 'w' })).toEqual([
-      { text: 'Agent started in feature-login', isError: false },
+    expect(lines({ success: 'Sent to an agent in feature-login', warning: 'w' })).toEqual([
+      { text: 'Sent to an agent in feature-login', isError: false },
       { text: 'w', isError: false }
     ])
   })
 
   it('never confirms beside an error', () => {
-    expect(lines({ success: 'Agent started', error: 'e' })).toEqual([{ text: 'e', isError: true }])
+    expect(lines({ success: 'Sent to an agent', error: 'e' })).toEqual([{ text: 'e', isError: true }])
   })
 
   it('renders nothing with nothing to say', () => {

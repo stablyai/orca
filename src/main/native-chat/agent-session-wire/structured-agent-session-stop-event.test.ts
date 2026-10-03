@@ -51,7 +51,11 @@ async function turnRow(turnId: string, state: 'running' | 'interrupted') {
   return journal().appendItem(
     { provider: 'codex', threadId: 'thread-1', turnId, ordinal: 999 },
     { kind: 'turn', turnId, state, startedAt: 1 },
-    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    // The rig's chat was created at rest (fence 1) and its agent started at the next.
+    {
+      fence: rig.store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    }
   )
 }
 

@@ -178,3 +178,40 @@ describe('coalesced launch delivery mode', () => {
     )
   })
 })
+
+describe('a launch prompt with a review reply', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    mocks.rendererTabs = {}
+    mocks.listeners.clear()
+    mocks.callStructuredAgentSession.mockResolvedValue({ ok: true, page: { fence: 1 } })
+  })
+
+  it('carries it on the message the launch sends', async () => {
+    const reviewReply = {
+      provider: 'gitlab' as const,
+      repoId: 'repo-1',
+      iid: 8,
+      resolve: ['discussion-1']
+    }
+    const intent = launchIntent('wt-review-reply', 'review-reply-session')
+    mocks.createIntent.mockReturnValueOnce(intent)
+    mocks.launch.mockResolvedValue({ sessionId: intent.sessionId, fence: 1 })
+    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
+      publishedSnapshot('wt-review-reply', intent.sessionId)
+    ])
+
+    startStructuredAgentLaunch('wt-review-reply', 'codex', {
+      prompt: 'Resolve these',
+      promptDelivery: 'auto-submit',
+      reviewReply
+    })
+    await flushLaunchSettlement()
+
+    const send = mocks.callStructuredAgentSession.mock.calls.find(
+      (call) => call[1] === 'agentSession.send'
+    )
+    expect(send?.[2]).toMatchObject({ reviewReply })
+  })
+})

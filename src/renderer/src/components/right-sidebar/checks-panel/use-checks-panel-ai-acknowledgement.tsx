@@ -7,10 +7,13 @@ import {
   canPostPRReviewThreadReply,
   checksPanelReviewStableKey,
   hasPRCommentGroupNeedingReply,
+  peekPendingPRCommentAiAck,
   resolvePRReviewReplyThreadId,
   setPendingPRCommentAiAck,
   takePendingPRCommentAiAck
 } from '../pr-comments-ai-launch-ack'
+import { buildPRCommentReviewReply } from '../pr-comment-review-reply-spec'
+import type { AgentSessionReviewReply } from '../../../../../shared/agent-session-review-reply'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import type { ChecksPanelReviewDataState } from './use-checks-panel-review-data'
 import type { ChecksPanelPollingState } from './use-checks-panel-polling'
@@ -301,38 +304,54 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
     commentResolutionLaunchAcceptedRef
   ])
 
-  /** Prompt reached the agent: only now may Orca write to the host. */
-  const consumeClaimedCommentResolutionAfterDelivery = useCallback((): void => {
-    const resolution =
-      claimedCommentResolutionRef.current ??
-      takePendingPRCommentAiAck() ??
-      pendingCommentResolutionRef.current
-    claimedCommentResolutionRef.current = null
-    pendingCommentResolutionRef.current = null
-    commentResolutionLaunchAcceptedRef.current = false
-    if (!resolution) {
-      setCommentResolutionAckBusyNow(false)
-      return
-    }
-    setCommentResolutionAckBusyNow(true)
-    void resolveSelectedThreadsAfterLaunch(resolution)
-      .catch((err) => {
-        console.warn('Failed to resolve/reply on selected review comments after AI launch:', err)
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.ChecksPanel.495b2f8c4b',
-            'Started the agent, but could not resolve or reply on the selected comments.'
+  /** What a structured chat's launch prompt carries for its host to write once the agent takes it. */
+  const buildLaunchReviewReply = useCallback((): AgentSessionReviewReply | undefined => {
+    const pending = peekPendingPRCommentAiAck() ?? pendingCommentResolutionRef.current
+    return pending ? buildPRCommentReviewReply(pending, commentsRef.current) : undefined
+  }, [commentsRef, pendingCommentResolutionRef])
+
+  /** Prompt reached the agent: only now may Orca write to the host. A structured chat's message
+   *  carries the writes for its host instead, so here they are only handed off. */
+  const consumeClaimedCommentResolutionAfterDelivery = useCallback(
+    (launch?: { reviewReplyCarried: boolean }): void => {
+      const resolution =
+        claimedCommentResolutionRef.current ??
+        takePendingPRCommentAiAck() ??
+        pendingCommentResolutionRef.current
+      claimedCommentResolutionRef.current = null
+      pendingCommentResolutionRef.current = null
+      commentResolutionLaunchAcceptedRef.current = false
+      if (!resolution) {
+        setCommentResolutionAckBusyNow(false)
+        return
+      }
+      if (launch?.reviewReplyCarried) {
+        clearSentCommentSelection(resolution.reviewContextKey)
+        setCommentResolutionAckBusyNow(false)
+        return
+      }
+      setCommentResolutionAckBusyNow(true)
+      void resolveSelectedThreadsAfterLaunch(resolution)
+        .catch((err) => {
+          console.warn('Failed to resolve/reply on selected review comments after AI launch:', err)
+          toast.error(
+            translate(
+              'auto.components.right.sidebar.ChecksPanel.495b2f8c4b',
+              'Started the agent, but could not resolve or reply on the selected comments.'
+            )
           )
-        )
-      })
-      .finally(() => setCommentResolutionAckBusyNow(false))
-  }, [
-    resolveSelectedThreadsAfterLaunch,
-    setCommentResolutionAckBusyNow,
-    claimedCommentResolutionRef,
-    pendingCommentResolutionRef,
-    commentResolutionLaunchAcceptedRef
-  ])
+        })
+        .finally(() => setCommentResolutionAckBusyNow(false))
+    },
+    [
+      clearSentCommentSelection,
+      resolveSelectedThreadsAfterLaunch,
+      setCommentResolutionAckBusyNow,
+      claimedCommentResolutionRef,
+      pendingCommentResolutionRef,
+      commentResolutionLaunchAcceptedRef
+    ]
+  )
   // Why: auto-start can capture a stale callback; always call the latest consumer.
   const consumeClaimedCommentResolutionAfterDeliveryRef = useRef(
     consumeClaimedCommentResolutionAfterDelivery
@@ -364,6 +383,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
     resolveSelectedThreadsAfterLaunch,
     handleLaunchAccepted,
     handleLaunchAborted,
+    buildLaunchReviewReply,
     consumeClaimedCommentResolutionAfterDeliveryRef
   }
 }

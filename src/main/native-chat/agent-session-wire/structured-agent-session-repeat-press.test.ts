@@ -23,6 +23,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { attachForTests, startAgentForTests } from './structured-agent-session-attach-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -52,7 +53,9 @@ beforeEach(async () => {
         link: {
           linkId: `link-${fence}`,
           handle: { provider: 'codex' as const, threadId: THREAD },
-          origin: fence > 1 ? ('resumed' as const) : ('created' as const),
+          origin: store.getRecord(SESSION)?.providerHandleChain.length
+            ? ('resumed' as const)
+            : ('created' as const),
           mintedAtFence: fence,
           observedAt: NOW
         }
@@ -72,7 +75,7 @@ beforeEach(async () => {
     mintSpawnToken: () => 'spawn-1',
     now: () => NOW
   })
-  expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
+  expect(await attachForTests(host, CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
 })
 
 afterEach(async () => {
@@ -200,8 +203,9 @@ describe('a press sent again', () => {
     expect(refused.ok ? null : agentSessionRefusalOperationState(refused.refusal.code)).toBe(
       'pending-admission'
     )
-    const fence = store.getRecord(SESSION)!.lease.runtimeFence
-    expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({ ok: true })
+    expect(await startAgentForTests(host, SESSION)).toMatchObject({
+      ok: true
+    })
 
     expect(await stop(store.getRecord(SESSION)!.lease.runtimeFence)).toMatchObject({
       ok: true,

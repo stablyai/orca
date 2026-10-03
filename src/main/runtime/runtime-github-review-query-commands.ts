@@ -2,6 +2,10 @@ import type { GitHubOwnerRepo, GitHubPRFile } from '../../shared/github/pull-req
 import type { Repo } from '../../shared/repo-types'
 import type { LocalProjectGhExecOptions } from '../project-runtime-git-options'
 import { getIssue, getPRCheckDetails, getPRChecks, getPRComments } from '../github/client'
+import {
+  getReviewReplyPosts,
+  type ReviewReplyPosts
+} from '../github/client/fetch/review-reply-posts'
 import { getPRFileContents } from '../github/work-item-details'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
@@ -13,6 +17,21 @@ type RuntimeGitHubReviewQueryCommandsDeps = {
 
 export class RuntimeGitHubReviewQueryCommands {
   constructor(private readonly deps: RuntimeGitHubReviewQueryCommandsDeps) {}
+
+  /** What a review reply may already have posted on this PR, read as the repo's gh account; throws
+   *  on any failure (`getReviewReplyPosts`). */
+  async getRepoReviewReplyPosts(
+    repoSelector: string,
+    args: Parameters<typeof getReviewReplyPosts>[1]
+  ): Promise<ReviewReplyPosts> {
+    const repo = await this.deps.resolveRepo(repoSelector)
+    return getReviewReplyPosts(
+      repo.path,
+      args,
+      repo.connectionId ?? null,
+      ...this.deps.getLocalGitArgs(repo)
+    )
+  }
 
   async getRepoIssue(
     repoSelector: string,

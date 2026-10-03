@@ -24,6 +24,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { attachForTests, startAgentForTests } from './structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
@@ -71,7 +72,7 @@ type OlderBuildLease = Partial<PersistedAgentSessionLease> & {
 }
 
 async function persistFromOlderBuild(lease: OlderBuildLease): Promise<void> {
-  expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
+  expect(await attachForTests(host, CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
   const attached = store.getRecord(SESSION)?.lease
   await host.flushAllStreamedEvents()
   // Over the attached owner: the older build's stage or terminal owner kept it from releasing.
@@ -264,8 +265,7 @@ describe('a record an older build left mid terminal handoff', () => {
           "Codex couldn't restart. This chat is still open in a terminal agent. Quit that agent to continue the chat here."
       }
     })
-    const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
-    expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({
+    expect(await startAgentForTests(host, SESSION)).toMatchObject({
       ok: false,
       refusal: { code: 'agent_session_conflict', message: quitTerminal }
     })

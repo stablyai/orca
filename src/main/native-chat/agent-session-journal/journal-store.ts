@@ -1,6 +1,7 @@
 // Append-only journal store for one agent session. It owns the chat's fold and write queue, and no
 // connection: every statement goes through the host's one journal database.
 
+import type { AgentSessionReviewReply } from '../../../shared/agent-session-review-reply'
 import { randomUUID } from 'node:crypto'
 import type {
   AgentJournalAcceptanceReceipt,
@@ -264,6 +265,16 @@ export class AgentSessionJournal {
   submissions = (): AgentJournalSubmission[] => [...this.state.submissions.values()]
 
   submission = (clientMessageId: string) => this.state.submissions.get(clientMessageId)
+
+  /** Host-only: each message's review reply (`JournalSubmissionRow.reviewReply`). */
+  reviewReplies = (): ReadonlyMap<string, AgentSessionReviewReply> => this.state.reviewReplies
+
+  /** The clock its rows are stamped by. */
+  clock = (): number => this.now()
+
+  /** Whether an item was ever written under this id, removed since or not. */
+  itemWritten = (itemId: string): boolean =>
+    this.state.items.has(itemId) || this.state.tombstones.has(itemId)
 
   pendingSubmissions = (): AgentJournalSubmission[] =>
     this.submissions().filter((entry) => entry.dispatchState === 'pending')

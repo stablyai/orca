@@ -23,6 +23,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { attachForTests } from './structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
@@ -110,7 +111,7 @@ function lastPhase(): string | undefined {
 
 describe('a publish-first Claude create whose init is slow', () => {
   it('never persists the catalog default, and persists the reported model once started', async () => {
-    await expect(host.attach(CALLER, claudeParams())).resolves.toMatchObject({ ok: true })
+    await expect(attachForTests(host, CALLER, claudeParams())).resolves.toMatchObject({ ok: true })
 
     // Published, not yet answering: the record holds no model rather than a guessed one.
     expect(store.getRecord(SESSION)?.options?.model).toBeUndefined()
@@ -126,7 +127,7 @@ describe('a publish-first Claude create whose init is slow', () => {
   it('keeps the saved model as intent while starting, then confirms what the child runs', async () => {
     const params = claudeParams()
     await expect(
-      host.attach(CALLER, { ...params, options: { model: 'opus' } })
+      attachForTests(host, CALLER, { ...params, options: { model: 'opus' } })
     ).resolves.toMatchObject({ ok: true })
     expect(store.getRecord(SESSION)?.options?.model).toBe('opus')
 
@@ -139,14 +140,14 @@ describe('a publish-first Claude create whose init is slow', () => {
 
   it('keeps the picked model across a resume whose new child starts on its own default', async () => {
     const params = claudeParams()
-    await host.attach(CALLER, { ...params, options: { model: 'opus' } })
+    await attachForTests(host, CALLER, { ...params, options: { model: 'opus' } })
     await adapter.awaitStarted(SESSION)
     await Promise.all(lifecycle)
     await host.close(SESSION, 'evict')
     const releasedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
 
     // Starting the chat again resumes the session under a new fence.
-    await expect(host.attach(CALLER, claudeParams(releasedFence))).resolves.toMatchObject({
+    await expect(attachForTests(host, CALLER, claudeParams(releasedFence))).resolves.toMatchObject({
       ok: true
     })
     expect(store.getRecord(SESSION)?.lease.runtimeFence).toBeGreaterThan(releasedFence)

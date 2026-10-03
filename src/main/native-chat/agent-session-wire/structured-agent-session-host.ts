@@ -20,7 +20,7 @@ import {
 } from './structured-agent-session-reveal'
 import { structuredAgentSessionOwnerStatus } from './structured-agent-session-owner-status'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
-import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
+import { createStructuredAgentSessionAtRest } from './structured-agent-session-create-at-rest'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import * as agentStart from './structured-agent-session-agent-start'
 import {
@@ -67,7 +67,10 @@ export class StructuredAgentSessionHost {
       this.conversationDelivery.afterCommit(sessionId, journal)
     },
     logger: sessionLogger.deferredStructuredAgentSessionLogger(() => this.deps.logger),
-    onOpened: (sessionId) => this.queued.drain.schedule(sessionId),
+    onOpened: (sessionId) => {
+      this.queued.drain.schedule(sessionId)
+      this.clientDelivery.observeReviewReplies(sessionId)
+    },
     now: () => this.now()
   })
   private readonly queued = wireStructuredAgentSessionQueuedMessages(this.sessions, () =>
@@ -78,6 +81,7 @@ export class StructuredAgentSessionHost {
     this.sessions,
     () => this.now(),
     () => this.deps,
+    (sessionId, task) => this.serialize(sessionId, task),
     (sessionId) => this.queued.onJournalActivity(sessionId),
     (sessionId) => this.restartResume.onAgentStarted(sessionId),
     (sessionId) => this.backgroundTasks.publish(sessionId)
@@ -242,12 +246,9 @@ export class StructuredAgentSessionHost {
 
   private serialize = this.tasks.serialize.bind(this.tasks)
 
-  attach(
-    caller: StructuredAgentSessionCaller,
-    params: AgentSessionAttachParams
-  ): Promise<SessionWire.AgentSessionMutationResult<SessionWire.AgentSessionAttachResult>> {
-    return attachStructuredAgentSession(this.attachContext(), caller.callerKey, params)
-  }
+  /** A new chat at rest; its first message starts the agent. */
+  create = (caller: StructuredAgentSessionCaller, params: AgentSessionAttachParams) =>
+    createStructuredAgentSessionAtRest(this.attachContext(), caller.callerKey, params)
 
   /** Test barrier: every write has landed by its call's return, so no production path needs it. */
   flushStreamedEvents = (sessionId: string): Promise<void> =>
@@ -347,6 +348,7 @@ export class StructuredAgentSessionHost {
 
   /** Test rigs only: the collaborators the host builds itself, typed, for tests that drive them. */
   collaboratorsForTests = () => ({
+    attachContext: () => this.attachContext(),
     sessions: this.sessions,
     subscribers: this.subscribers,
     runtimeState: this.runtimeState,

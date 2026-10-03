@@ -29,6 +29,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { attachForTests, startAgentForTests } from './structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const caller = { callerKey: 'desktop' }
@@ -107,8 +108,16 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
+/** An interrupted rewind recovers when the agent next starts: here, after the host puts it to rest. */
+async function restartAgent() {
+  await host
+    .collaboratorsForTests()
+    .lifetime.stopAgent(HOST_TEST_SESSION, { cause: 'evict', resting: true })
+  return startAgentForTests(host, HOST_TEST_SESSION)
+}
+
 async function seed(acceptedSubmissions = false) {
-  expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
+  expect(await attachForTests(host, caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
   const keys = ['kept', 'drop', 'tip'].map((turnId) => ({
     provider: 'codex' as const,
     threadId: HOST_TEST_THREAD,
@@ -196,8 +205,9 @@ describe('host rewind', () => {
     await expect(host.rewind(caller, request)).rejects.toThrow('disk failed')
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('provider-succeeded')
     replace.mockRestore()
-    const fence = store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
-    expect(await host.attach(caller, hostTestAttachParams(fence))).toMatchObject({ ok: true })
+    expect(await restartAgent()).toMatchObject({
+      ok: true
+    })
     expect((await host.journalSnapshot(HOST_TEST_SESSION)).items).toHaveLength(1)
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
     expect(await host.rewind(caller, request)).toMatchObject({ ok: true, replayed: true })
@@ -214,19 +224,12 @@ describe('host rewind', () => {
     expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(before)
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toMatchObject({ phase: 'prepared' })
     recoverRewind.mockRejectedValueOnce(new Error('history still unavailable'))
-    await expect(
-      host.attach(
-        caller,
-        hostTestAttachParams(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
-      )
-    ).rejects.toThrow('history still unavailable')
+    expect(await restartAgent()).toMatchObject({
+      ok: false,
+      refusal: { message: expect.stringContaining('history still unavailable') }
+    })
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('prepared')
-    expect(
-      await host.attach(
-        caller,
-        hostTestAttachParams(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
-      )
-    ).toMatchObject({ ok: true })
+    expect(await restartAgent()).toMatchObject({ ok: true })
     expect((await host.journalSnapshot(HOST_TEST_SESSION)).items).toHaveLength(1)
     expect((await host.journalSnapshot(HOST_TEST_SESSION)).items[0]?.body).toEqual(
       hostTestMessage('verified history')
@@ -333,12 +336,7 @@ describe('host rewind', () => {
       refusal: { rewindReason: 'outcome-unknown' }
     })
     expect(adapter.dispatch).not.toHaveBeenCalled()
-    expect(
-      await host.attach(
-        caller,
-        hostTestAttachParams(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
-      )
-    ).toMatchObject({ ok: true })
+    expect(await restartAgent()).toMatchObject({ ok: true })
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
     expect(await host.rewind(caller, request)).toMatchObject({ ok: true, replayed: true })
     expect(rewind).toHaveBeenCalledTimes(1)
@@ -350,12 +348,7 @@ describe('host rewind', () => {
     rewind.mockRejectedValueOnce(new Error('read failed before revert'))
     await expect(host.rewind(caller, await params(target))).rejects.toThrow('read failed')
     recoverRewind.mockResolvedValueOnce({ ok: false, reason: 'provider-refused' })
-    expect(
-      await host.attach(
-        caller,
-        hostTestAttachParams(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
-      )
-    ).toMatchObject({ ok: true })
+    expect(await restartAgent()).toMatchObject({ ok: true })
     expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(before)
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('refused')
     expect(await host.rewind(caller, await params(target))).toMatchObject({ ok: true })
@@ -371,12 +364,7 @@ describe('host rewind', () => {
     await expect(host.rewind(caller, await params(target))).rejects.toThrow('history unavailable')
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toMatchObject({ phase: 'prepared' })
     recoverRewind.mockResolvedValueOnce({ ok: false, reason: 'provider-refused' })
-    expect(
-      await host.attach(
-        caller,
-        hostTestAttachParams(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
-      )
-    ).toMatchObject({ ok: true })
+    expect(await restartAgent()).toMatchObject({ ok: true })
     expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(before)
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('refused')
     const body = hostTestMessage('after the refused rewind')
@@ -398,7 +386,9 @@ describe('host rewind', () => {
   })
 
   it('keeps host-stamped turn and goal rows through a Codex provider hydration', async () => {
-    expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
+    expect(await attachForTests(host, caller, hostTestAttachParams(null))).toMatchObject({
+      ok: true
+    })
     const message = (turnId: string) => ({
       provider: 'codex' as const,
       threadId: HOST_TEST_THREAD,
@@ -479,7 +469,9 @@ describe('host rewind', () => {
   })
 
   it('keeps each kept turn opened by the message that opened it, under its provider key', async () => {
-    expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
+    expect(await attachForTests(host, caller, hostTestAttachParams(null))).toMatchObject({
+      ok: true
+    })
     const message = (turnId: string, ordinal = 0) => ({
       provider: 'codex' as const,
       threadId: HOST_TEST_THREAD,
@@ -570,7 +562,9 @@ describe('host rewind', () => {
   })
 
   it('keeps a host goal row when interrupted Codex rewind recovery rebuilds provider history', async () => {
-    expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
+    expect(await attachForTests(host, caller, hostTestAttachParams(null))).toMatchObject({
+      ok: true
+    })
     const message = (turnId: string) => ({
       provider: 'codex' as const,
       threadId: HOST_TEST_THREAD,
@@ -614,12 +608,7 @@ describe('host rewind', () => {
       ok: true,
       items: [{ identity: message('kept'), body: hostTestMessage('kept from recovery') }]
     })
-    expect(
-      await host.attach(
-        caller,
-        hostTestAttachParams(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
-      )
-    ).toMatchObject({ ok: true })
+    expect(await restartAgent()).toMatchObject({ ok: true })
 
     expect(
       (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId, body }) => ({
@@ -645,12 +634,7 @@ describe('host rewind', () => {
     })
     await expect(host.rewind(caller, await params(target))).rejects.toThrow('lost after revert')
     recoverRewind.mockResolvedValueOnce({ ok: true, items })
-    expect(
-      await host.attach(
-        caller,
-        hostTestAttachParams(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
-      )
-    ).toMatchObject({ ok: true })
+    expect(await restartAgent()).toMatchObject({ ok: true })
     expect((await host.journalSnapshot(HOST_TEST_SESSION)).items).toHaveLength(2)
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
   })
@@ -679,12 +663,10 @@ describe('host rewind', () => {
         items: missing === 'turn' ? [] : items.slice(0, 1)
       })
       const replace = vi.spyOn(AgentSessionJournal.prototype, 'replaceEpochItems')
-      await expect(
-        host.attach(
-          caller,
-          hostTestAttachParams(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
-        )
-      ).rejects.toThrow('proof-mismatch')
+      expect(await restartAgent()).toMatchObject({
+        ok: false,
+        refusal: { message: expect.stringContaining('proof-mismatch') }
+      })
       expect(replace).not.toHaveBeenCalled()
       replace.mockRestore()
       expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.expectedEpoch).toBe(before.cursor.epoch)
@@ -712,12 +694,7 @@ describe('host rewind', () => {
     expect(committed.cursor.epoch).not.toBe(request.expectedEpoch)
     checkpoint.mockRestore()
     const replace = vi.spyOn(AgentSessionJournal.prototype, 'replaceEpochItems')
-    expect(
-      await host.attach(
-        caller,
-        hostTestAttachParams(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
-      )
-    ).toMatchObject({ ok: true })
+    expect(await restartAgent()).toMatchObject({ ok: true })
     expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(committed)
     expect(replace).not.toHaveBeenCalled()
     replace.mockRestore()

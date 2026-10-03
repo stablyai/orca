@@ -9,9 +9,9 @@ import { commitStructuredAgentSessionCreate } from './structured-agent-session-c
 it('logs a created chat whose tab could not be published, and answers it unconfirmed', async () => {
   const log = recordingStructuredAgentSessionLogger()
   const failure = new Error('tab write failed')
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the only members the commit reaches past attach.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the only members the commit reaches past create.
   const host = {
-    attach: vi.fn(async () => ({ ok: true, value: { sessionId: 'session-1' } })),
+    create: vi.fn(async () => ({ ok: true, value: { sessionId: 'session-1' } })),
     getSessionTabId: vi.fn(() => null),
     deps: { logger: log.logger }
   } as unknown as StructuredAgentSessionHost
@@ -27,7 +27,7 @@ it('logs a created chat whose tab could not be published, and answers it unconfi
     caller: { callerKey: 'client-1' },
     prepared: {
       host,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stubbed attach reads none of it.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stubbed create reads none of it.
       attachParams: {} as AgentSessionAttachParams,
       tab: { workspaceId: 'workspace-1', agent: 'codex' }
     },

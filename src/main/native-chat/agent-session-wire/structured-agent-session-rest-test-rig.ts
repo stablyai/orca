@@ -33,6 +33,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { STRUCTURED_AGENT_SESSION_IDLE_MS } from './structured-agent-session-idle-sweep'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { attachForTests } from './structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 export const REST_TEST_CALLER = { callerKey: 'client-1' }
@@ -207,7 +208,7 @@ export async function createRestTestRig(
 
 /** Creates the chat, lists its tab, and sends one message so its journal is on disk. */
 export async function foundRestTestChat(rig: RestTestRig): Promise<void> {
-  const attached = await rig.host.attach(REST_TEST_CALLER, hostTestAttachParams(null))
+  const attached = await attachForTests(rig.host, REST_TEST_CALLER, hostTestAttachParams(null))
   if (!attached.ok) {
     throw new Error(`attach refused: ${attached.refusal.code}`)
   }

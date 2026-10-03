@@ -1,9 +1,6 @@
-// Attach: reserve the session record, then open its journal.
-//
-// `create` and `ensure` are the same transition with a different starting
-// point — a null expected fence means "no session exists yet". Both go through
-// the record store's compare-and-swap, which also owns the idempotency row, so
-// a retried attach replays instead of reserving a second owner.
+// Attach: reserve an existing session record for an agent start, then open its journal. A record is
+// founded only by its create (`structured-agent-session-create-at-rest`); the attach goes through the
+// record store's compare-and-swap at the fence the start read.
 
 import type {
   AgentSessionJournalIdentity,
@@ -72,8 +69,8 @@ export type AgentSessionAttachParams = {
    * than starting one: it seeds the handle chain so the adapter resumes instead of creating, and
    * names the transcript to import so the journal shows the conversation so far.
    *
-   * Deliberately separate from `providerHandle`, which `agentSession.ensure` already supplies
-   * without adopting — presence of a handle must never be what triggers a resume.
+   * Deliberately separate from `providerHandle`, which an agent start supplies without
+   * adopting — presence of a handle must never be what triggers a resume.
    */
   adopt?: {
     providerHandle: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
@@ -264,7 +261,7 @@ async function reconcileAgainstProviderHistory(input: {
  */
 const ADOPTED_HANDLE_FENCE = 1
 
-function adoptedProviderHandleLink(
+export function adoptedProviderHandleLink(
   handle: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>,
   observedAt: number
 ): AgentSessionProviderHandleLink {
@@ -289,6 +286,7 @@ function adoptedProviderHandleLink(
 export function reserveRequestFor(input: {
   sessionId: string
   params: AgentSessionAttachParams
+  expectedFence: number
   authority: AgentSessionAttachAuthority
   callerKey: string
   fingerprint: string
@@ -301,19 +299,9 @@ export function reserveRequestFor(input: {
     provider: params.provider,
     accountHome: params.accountHome,
     ...(params.options ? { options: params.options } : {}),
-    ...(params.envelope.expectedRuntimeFence === null && params.surfaceTabId
-      ? { surfaceTabId: params.surfaceTabId }
-      : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
-    ...(params.adopt
-      ? {
-          // Fence 1 is a new record's first, and the owner probe requires the head link to carry
-          // the record's current fence.
-          adoptedHandleLink: adoptedProviderHandleLink(params.adopt.providerHandle, input.now)
-        }
-      : {}),
-    expectedFence: params.envelope.expectedRuntimeFence,
+    expectedFence: input.expectedFence,
     spawnToken: authority.spawnToken,
     claimKeyId: authority.claimKeyId,
     handoffOperationId: authority.handoffOperationId,

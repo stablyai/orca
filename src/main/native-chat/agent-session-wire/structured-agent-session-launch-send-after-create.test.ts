@@ -1,4 +1,6 @@
-// Where a launch prompt sent the instant `attach` resolves reaches the adapter.
+// Where a launch prompt sent the instant the create resolves reaches the adapter. The create
+// starts nothing: that send, at the create's own fence, is what starts the agent, and the delivery
+// loop dispatches it only after the start's `acquire` returns.
 //
 // Both shipped adapters look the session up in a live map and throw when it is absent
 // (`claude-structured-session-adapter.ts:331-337`, `codex-structured-session-state.ts`'s
@@ -15,7 +17,7 @@ import {
   CALLER,
   hostTestState
 } from './structured-agent-session-host-test-harness'
-import { HOST_TEST_NOW as NOW } from './structured-agent-session-host-test-data'
+import { HOST_TEST_NOW as NOW, HOST_TEST_SESSION } from './structured-agent-session-host-test-data'
 
 let host: StructuredAgentSessionHost
 
@@ -45,7 +47,7 @@ async function launchAndDeliver(): Promise<{
   dispatchState: string
 }> {
   const send = vi.spyOn(host, 'send')
-  const created = await host.attach(CALLER, attachParams())
+  const created = await host.create(CALLER, attachParams())
   if (!created.ok) {
     throw new Error(`expected a create, got ${created.refusal.code}`)
   }
@@ -53,6 +55,7 @@ async function launchAndDeliver(): Promise<{
     host,
     caller: CALLER,
     sessionId: created.value.sessionId,
+    // The create's own fence, as `agentLaunchSurfaceFactory` sends it.
     fence: created.value.fence,
     text: 'fix the failing test'
   })
@@ -69,6 +72,7 @@ async function launchAndDeliver(): Promise<{
       )?.dispatchState ?? 'missing'
     expect(dispatchState).not.toBe('pending')
   })
+  expect(created.value.fence).toBe(1)
   return { messageId, dispatchState }
 }
 
@@ -80,7 +84,7 @@ beforeEach(() => {
 })
 
 describe('a launch prompt sent the instant the create resolves', () => {
-  it('reaches a live provider, because attach returns only after acquire published it', async () => {
+  it("reaches a live provider, because the first send's start publishes the session before it dispatches", async () => {
     modelAdapterLiveness(true)
 
     await expect(launchAndDeliver()).resolves.toEqual({
@@ -88,6 +92,8 @@ describe('a launch prompt sent the instant the create resolves', () => {
       dispatchState: 'accepted'
     })
     expect(hostTestState().dispatch).toHaveBeenCalledTimes(1)
+    // Sent at the create's fence 1; its start moved the record to 2.
+    expect(hostTestState().store.getRecord(HOST_TEST_SESSION)?.lease.runtimeFence).toBe(2)
   })
 
   // Positive control: the assertion above is only evidence if this arm can fail, and it names

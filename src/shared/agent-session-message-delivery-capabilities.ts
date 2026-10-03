@@ -16,6 +16,10 @@ export const AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY =
 // as a new message.
 export const AGENT_SESSION_RETRY_MESSAGE_RUNTIME_CAPABILITY =
   'agent-session.retry-message.v1' as const
+// Why: `agentSession.send` takes a `reviewReply` the host runs once the agent takes the message; an
+// older host's strict params refuse the whole send, so a client attaches one only where advertised.
+export const AGENT_SESSION_REVIEW_REPLY_RUNTIME_CAPABILITY =
+  'agent-session.review-reply.v1' as const
 
 // How a send is answered. The host and the Electron client both advertise these.
 export const AGENT_SESSION_SEND_ANSWER_RUNTIME_CAPABILITIES = [
@@ -27,5 +31,6 @@ export const AGENT_SESSION_SEND_ANSWER_RUNTIME_CAPABILITIES = [
 // turn starts, so a client may gate on either.
 export const AGENT_SESSION_MESSAGE_DELIVERY_RUNTIME_CAPABILITIES = [
   ...AGENT_SESSION_SEND_ANSWER_RUNTIME_CAPABILITIES,
-  AGENT_SESSION_RETRY_MESSAGE_RUNTIME_CAPABILITY
+  AGENT_SESSION_RETRY_MESSAGE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REVIEW_REPLY_RUNTIME_CAPABILITY
 ] as const

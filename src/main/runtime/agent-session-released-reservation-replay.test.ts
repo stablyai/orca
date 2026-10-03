@@ -1,4 +1,4 @@
-// A create the host was running when it died is retried under the same operation id. Recovery has
+// A start the host was running when it died is retried under the same operation id. Recovery has
 // released its reservation by then, so the retry continues it at the next fence; a reservation that
 // is still held keeps answering exactly as it did.
 
@@ -13,7 +13,10 @@ import {
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionLease } from '../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
-import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import {
+  foundAndReserveTestAgentSessionRecord,
+  openTestAgentSessionRecordStore
+} from './agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
@@ -37,7 +40,8 @@ function open(): Promise<AgentSessionRecordStore> {
   return openTestAgentSessionRecordStore(directory)
 }
 
-function createRequest(
+/** The start of a record its create founded at fence 1. */
+function startRequest(
   overrides: Partial<AgentSessionReserveRequest> = {}
 ): AgentSessionReserveRequest {
   return {
@@ -50,7 +54,7 @@ function createRequest(
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
-    expectedFence: null,
+    expectedFence: 1,
     spawnToken: 'spawn-a',
     claimKeyId: 'key-1',
     handoffOperationId: OPERATION,
@@ -61,21 +65,21 @@ function createRequest(
   }
 }
 
-/** The create reserved, then a restart that could prove nothing released it at fence 2. */
+/** The start reserved, then a restart that could prove nothing released it at fence 3. */
 async function releasedByRestart(now: number): Promise<AgentSessionRecordStore> {
   const first = await open()
-  await first.reserveOwner(createRequest())
+  await foundAndReserveTestAgentSessionRecord(first, startRequest())
   const store = await open()
   await store.reconcileOnRestart({ probe: async () => INDETERMINATE, now })
   expect(store.getRecord(SESSION)?.lease).toMatchObject({
     claimStatus: 'released',
     handoffStage: null,
-    runtimeFence: 2
+    runtimeFence: 3
   })
   return store
 }
 
-describe('a create retried after recovery released its reservation', () => {
+describe('a start retried after recovery released its reservation', () => {
   it.each([
     ['its operation row is still pending', 1_000],
     ['its operation row has expired', PAST_EXPIRY]
@@ -83,39 +87,39 @@ describe('a create retried after recovery released its reservation', () => {
     const now = NOW + elapsed
     const store = await releasedByRestart(now)
 
-    const continued = await store.reserveOwner(createRequest({ spawnToken: () => 'spawn-b', now }))
+    const continued = await store.reserveOwner(startRequest({ spawnToken: () => 'spawn-b', now }))
     expect(continued.disposition).toBe('reserved')
     expect(continued.record.lease).toMatchObject({
       claimStatus: 'reserved',
       handoffStage: 'new-owner-proving',
-      runtimeFence: 3,
+      runtimeFence: 4,
       reservedSpawnToken: 'spawn-b',
       handoffOperationId: OPERATION
     })
-    expect(store.listOperationRows()).toEqual([
+    expect(store.listOperationRows().filter((row) => row.callerKey === 'client-1')).toEqual([
       expect.objectContaining({ operationId: OPERATION, outcome: { status: 'pending' } })
     ])
 
     // A spawn from the first reservation reports in late: refused at its fence, and by token.
     const lateSpawn = { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken: 'spawn-a' }
     await expect(
-      store.commitProcessIdentity({ sessionId: SESSION, fence: 1, process: lateSpawn, now })
+      store.commitProcessIdentity({ sessionId: SESSION, fence: 2, process: lateSpawn, now })
     ).rejects.toThrow('agent_session_checkpoint_stale')
     await expect(
-      store.commitProcessIdentity({ sessionId: SESSION, fence: 3, process: lateSpawn, now })
+      store.commitProcessIdentity({ sessionId: SESSION, fence: 4, process: lateSpawn, now })
     ).rejects.toThrow('agent_session_ownership_unknown')
 
     // Retried again while that reservation stands: the same reservation, never a second spawn.
     const mint = vi.fn(() => 'spawn-c')
-    const retried = await store.reserveOwner(createRequest({ spawnToken: mint, now }))
+    const retried = await store.reserveOwner(startRequest({ spawnToken: mint, now }))
     expect(retried.disposition).toBe('replayed')
-    expect(retried.record.lease).toMatchObject({ runtimeFence: 3, reservedSpawnToken: 'spawn-b' })
+    expect(retried.record.lease).toMatchObject({ runtimeFence: 4, reservedSpawnToken: 'spawn-b' })
     expect(mint).not.toHaveBeenCalled()
   })
 
   it('refuses an expired retry of a session that has no record', async () => {
     const store = await open()
-    await expect(store.reserveOwner(createRequest({ now: NOW + PAST_EXPIRY }))).rejects.toThrow(
+    await expect(store.reserveOwner(startRequest({ now: NOW + PAST_EXPIRY }))).rejects.toThrow(
       'agent_session_operation_expired'
     )
   })
@@ -125,30 +129,30 @@ describe('a create retried after recovery released its reservation', () => {
     ['one nothing could verify', INDETERMINATE, 'ownership_unknown']
   ] as const)('still refuses a retry once its child is live and %s', async (_case, probe, code) => {
     const store = await open()
-    await store.reserveOwner(createRequest())
+    await foundAndReserveTestAgentSessionRecord(store, startRequest())
     await store.commitProcessIdentity({
       sessionId: SESSION,
-      fence: 1,
+      fence: 2,
       process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken: 'spawn-a' },
       now: NOW
     })
     await store.proveOwner({
       sessionId: SESSION,
-      fence: 1,
+      fence: 2,
       link: {
         linkId: 'link-1',
         handle: { provider: 'codex', threadId: 'thread-1' },
         origin: 'created',
-        mintedAtFence: 1,
+        mintedAtFence: 2,
         observedAt: NOW
       },
       now: NOW
     })
 
-    await expect(store.reserveOwner(createRequest({ probe }))).rejects.toThrow(
+    await expect(store.reserveOwner(startRequest({ probe }))).rejects.toThrow(
       `agent_session_${code}`
     )
-    expect(store.getRecord(SESSION)?.lease).toMatchObject({ claimStatus: 'live', runtimeFence: 1 })
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({ claimStatus: 'live', runtimeFence: 2 })
   })
 
   it.each<[string, Partial<AgentSessionLease>, string]>([
@@ -160,13 +164,13 @@ describe('a create retried after recovery released its reservation', () => {
     ]
   ])('still refuses a retry whose reservation is %s', async (_case, lease, code) => {
     const store = await open()
-    await store.reserveOwner(createRequest())
+    await foundAndReserveTestAgentSessionRecord(store, startRequest())
     await store.transitionHandoff(SESSION, (record) => ({
       ...record,
       lease: { ...record.lease, ...lease }
     }))
 
-    await expect(store.reserveOwner(createRequest())).rejects.toThrow(code)
-    expect(store.getRecord(SESSION)?.lease.runtimeFence).toBe(1)
+    await expect(store.reserveOwner(startRequest())).rejects.toThrow(code)
+    expect(store.getRecord(SESSION)?.lease.runtimeFence).toBe(2)
   })
 })

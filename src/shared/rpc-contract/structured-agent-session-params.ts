@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { AgentSessionReviewReplySchema } from '../agent-session-review-reply'
 import { isAgentSessionSurfaceTabId } from '../agent-session-surface-tab-id'
 import { isAgentSessionId } from '../agent-session-record'
 import { normalizeExecutionHostId } from '../execution-host'
@@ -172,6 +173,10 @@ export const SendParams = z
      *  older host refuses it: clients send it only when `agent-session.queued-messages.v1` is
      *  advertised. Participates in the operation fingerprint, never the body fingerprint. */
     delivery: z.literal('queue-if-active').optional(),
+    /** What Orca does on the review once the agent takes this message. Sent only by the desktop to
+     *  its own host, with a launch prompt; strict, so an older host refuses it. Joins the
+     *  operation fingerprint, never the body's. A send carrying one is never held as a draft. */
+    reviewReply: AgentSessionReviewReplySchema.optional(),
     body: z
       .object({
         kind: z.literal('message'),

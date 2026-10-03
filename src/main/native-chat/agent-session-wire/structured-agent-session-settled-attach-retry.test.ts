@@ -1,6 +1,6 @@
-// What a client's retry sees around a failed attach settlement: a crash between
-// reserve and settlement replays into the original reservation, and a settled
-// failure refuses sends without ever re-dispatching on the user's behalf.
+// What the next start sees around a failed start's settlement: a crash between reserve and
+// settlement is released at restart, a replay of the same operation continues its reservation, and
+// a settled failure refuses sends without ever re-dispatching on the user's behalf.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -26,6 +26,11 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  attachExistingForTests,
+  attachForTests,
+  startAgentForTests
+} from './structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
@@ -133,7 +138,6 @@ describe('settled attach retry', () => {
   it('settles a post-acquisition journal failure and retries without a restart', async () => {
     const historyFilePath = vi
       .fn<NonNullable<StructuredAgentSessionAdapter['historyFilePath']>>()
-      .mockRejectedValueOnce(new Error('journal path unavailable'))
       .mockResolvedValue(null)
     host = new StructuredAgentSessionHost({
       logger: createStructuredAgentSessionLogger(),
@@ -144,28 +148,34 @@ describe('settled attach retry', () => {
       mintSpawnToken: () => 'spawn-a',
       now: () => NOW
     })
-    const first = hostTestAttachParams(null)
+    expect(await host.create(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
+    // Closed, so the start opens the journal again after it acquires.
+    await host.close(SESSION, 'evict')
+    historyFilePath.mockRejectedValueOnce(new Error('journal path unavailable'))
 
-    await expect(host.attach(CALLER, first)).rejects.toThrow('journal path unavailable')
+    expect(await startAgentForTests(host, SESSION)).toMatchObject({
+      ok: false,
+      refusal: { message: 'journal path unavailable' }
+    })
     expect(releaseAcquisition).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,
       ownerProcess: null,
       reservedSpawnToken: null,
-      runtimeFence: 2
+      runtimeFence: 3
     })
     expect(
-      store.listOperationRows().find((row) => row.operationId === first.envelope.clientOperationId)
+      store.listOperationRows().find((row) => row.callerKey === 'trusted-local:agent-start')
         ?.outcome
     ).toMatchObject({ status: 'failed' })
 
-    await expect(host.attach(CALLER, hostTestAttachParams(2))).resolves.toMatchObject({ ok: true })
+    await expect(startAgentForTests(host, SESSION)).resolves.toMatchObject({ ok: true })
     expect(acquire).toHaveBeenCalledTimes(2)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',
       handoffStage: null,
-      runtimeFence: 3
+      runtimeFence: 4
     })
   })
 
@@ -202,13 +212,17 @@ describe('settled attach retry', () => {
       mintSpawnToken,
       now: () => NOW
     })
-    const params = hostTestAttachParams(null)
-    publishFault.failOnPublish = 2
+    expect(await host.create(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
+    const params = hostTestAttachParams(1)
+    publishFault.failOnPublish = publishFault.publishCount + 2
 
-    await expect(host.attach(CALLER, params)).rejects.toThrow(
+    await expect(attachExistingForTests(host, CALLER, params)).rejects.toThrow(
       'agent session acquisition failure settlement failed'
     )
-    expect(await host.attach(CALLER, params)).toMatchObject({ ok: true, replayed: true })
+    expect(await attachExistingForTests(host, CALLER, params)).toMatchObject({
+      ok: true,
+      replayed: true
+    })
     expect(mintSpawnToken).toHaveBeenCalledOnce()
     expect(spawnTokens).toEqual(['spawn-safe', 'spawn-safe'])
   })
@@ -252,17 +266,16 @@ describe('settled attach retry', () => {
       }),
       now: () => NOW
     })
-    const params = hostTestAttachParams(null)
-    publishFault.failOnPublish = 2
+    expect(await host.create(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
+    publishFault.failOnPublish = publishFault.publishCount + 2
 
-    await expect(host.attach(CALLER, params)).rejects.toThrow(
+    await expect(startAgentForTests(host, SESSION)).rejects.toThrow(
       'agent session acquisition failure settlement failed'
     )
-    expect(publishFault.publishCount).toBe(2)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'reserved',
       handoffStage: 'new-owner-proving',
-      runtimeFence: 1,
+      runtimeFence: 2,
       reservedSpawnToken: 'spawn-1',
       ownerProcess: null
     })
@@ -290,20 +303,20 @@ describe('settled attach retry', () => {
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,
-      runtimeFence: 2,
+      runtimeFence: 3,
       reservedSpawnToken: null,
       ownerProcess: null,
       deathEvidence: null
     })
 
-    // The interrupted operation's own retry continues it as a fresh reservation.
-    await expect(host.attach(CALLER, params)).resolves.toMatchObject({ ok: true })
+    // The next start, the chat's next message's, goes ahead as a fresh reservation.
+    await expect(startAgentForTests(host, SESSION)).resolves.toMatchObject({ ok: true })
     expect(mintSpawnToken).toHaveBeenCalledTimes(2)
     expect(spawnTokens).toEqual(['spawn-1', 'spawn-2'])
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',
       runtimeKind: 'native',
-      runtimeFence: 3,
+      runtimeFence: 4,
       handoffStage: null,
       handoffOperationId: null,
       ownerProcess: { spawnToken: 'spawn-2' }
@@ -311,7 +324,7 @@ describe('settled attach retry', () => {
   })
 
   it('settles a submission the host restart left pending, and never redelivers it', async () => {
-    expect((await host.attach(CALLER, hostTestAttachParams(null))).ok).toBe(true)
+    expect((await attachForTests(host, CALLER, hostTestAttachParams(null))).ok).toBe(true)
     // Admitted: written to the child, acknowledgement still outstanding. The
     // restart below is the process fact that ends the wait, not a stopwatch.
     dispatch.mockImplementationOnce(async () => ({ state: 'admitted' as const }))
@@ -342,7 +355,7 @@ describe('settled attach retry', () => {
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',
       handoffStage: null,
-      runtimeFence: 3
+      runtimeFence: 4
     })
     expect(dispatch).toHaveBeenCalledTimes(1)
 
@@ -385,10 +398,10 @@ describe('settled attach retry', () => {
   it('records proven acquisition cleanup as durable death evidence', async () => {
     acquire.mockRejectedValueOnce(new Error('resume rejected'))
 
-    await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
+    await expect(attachForTests(host, CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
       ok: false,
       refusal: {
-        message: "Codex couldn't restart. Send your message to try again.",
+        message: "Codex couldn't start. Send your message to try again.",
         ownerVerdict: 'exited'
       }
     })

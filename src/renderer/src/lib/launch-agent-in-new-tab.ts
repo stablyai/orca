@@ -1,3 +1,4 @@
+import type { AgentSessionReviewReply } from '../../../shared/agent-session-review-reply'
 import { useAppStore } from '@/store'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
@@ -52,6 +53,8 @@ export type LaunchAgentInNewTabArgs = {
   launchPlatform?: NodeJS.Platform
   /** Called after the prompt is actually delivered to the agent input path. */
   onPromptDelivered?: () => void
+  /** Rides a structured chat's launch prompt (see `StructuredAgentLaunchOptions.reviewReply`). */
+  reviewReply?: AgentSessionReviewReply
   /**
    * Called before `onPromptDelivered` when the paste was written without ever observing the
    * agent's composer, so the launch cannot claim the prompt arrived. Fires only on the
@@ -115,6 +118,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     launchPlatform,
     onPromptDelivered,
     onPromptDeliveryUnconfirmed,
+    reviewReply,
     agentSessionLaunchPlan,
     pendingActivationSpawn,
     beforeSurfaceOpen
@@ -179,7 +183,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       promptDelivery: viewModePromptDelivery,
       tuiCustomization: { cwd: initialCwd },
       initialSessionOptions: startupPlan.sessionOptions,
-      onPromptDelivered
+      onPromptDelivered,
+      ...(reviewReply ? { reviewReply } : {})
     })
   if (plan?.route === 'structured-native-chat') {
     const structured = launchStructuredAgentFromNewTab({

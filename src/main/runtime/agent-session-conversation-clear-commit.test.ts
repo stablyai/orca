@@ -8,7 +8,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import { isAgentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
-import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import {
+  foundAndReserveTestAgentSessionRecord,
+  openTestAgentSessionRecordStore
+} from './agent-session-record-store-test-harness'
 
 const NOW = 1_800_000_000_000
 const SOURCE = 'session-alpha'
@@ -29,7 +32,7 @@ const open = () => openTestAgentSessionRecordStore(directory)
 
 async function storeWithSource(): Promise<AgentSessionRecordStore> {
   const store = await open()
-  await store.reserveOwner({
+  await foundAndReserveTestAgentSessionRecord(store, {
     sessionId: SOURCE,
     location: {
       executionHostId: 'local',
@@ -41,7 +44,6 @@ async function storeWithSource(): Promise<AgentSessionRecordStore> {
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude-work' },
     launchArgs: ['--flag'],
     options: { model: 'sonnet' },
-    expectedFence: null,
     spawnToken: 'spawn-a',
     claimKeyId: 'key-1',
     handoffOperationId: null,

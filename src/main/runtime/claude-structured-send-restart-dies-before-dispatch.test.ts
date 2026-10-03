@@ -15,6 +15,7 @@ import {
   createScriptedClaudeRuntime,
   scriptedClaudeExitError
 } from './structured-claude-scripted-runtime-test-support'
+import { attachForTests } from '../native-chat/agent-session-wire/structured-agent-session-attach-test-support'
 
 const SESSION = 'claude-send-restart-dies-first'
 const CALLER = { callerKey: 'client-1' }
@@ -134,7 +135,9 @@ describe('a send whose restarted Claude child dies before it proves its start', 
   it('is rejected with the diagnostic, adds no row, and a new send is one new attempt', async () => {
     claude.behave(SESSION, { initHangs: true })
     const host = await claude.install()
-    await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(SESSION, null))
+    ).resolves.toMatchObject({
       ok: true
     })
     await failLatestStart(host, 1)
@@ -175,7 +178,9 @@ describe('a send whose restarted Claude child dies before it proves its start', 
     async (at) => {
       claude.behave(SESSION, { initHangs: true })
       const host = await claude.install()
-      await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
+      await expect(
+        attachForTests(host, CALLER, claude.attachParams(SESSION, null))
+      ).resolves.toMatchObject({
         ok: true
       })
       await failLatestStart(host, 1)
@@ -199,7 +204,9 @@ describe('a send whose restarted Claude child dies before it proves its start', 
   it('reaches a subscriber that was open across the restart and the exit', async () => {
     claude.behave(SESSION, { initHangs: true })
     const host = await claude.install()
-    await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(SESSION, null))
+    ).resolves.toMatchObject({
       ok: true
     })
     const events: AgentSessionSubscribeEvent[] = []
@@ -253,7 +260,9 @@ describe('a chat whose Claude CLI keeps failing to start, seen by a subscriber o
     claude.behave(SESSION, { initHangs: true })
     const host = await claude.install()
     const events: AgentSessionSubscribeEvent[] = []
-    await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(SESSION, null))
+    ).resolves.toMatchObject({
       ok: true
     })
     const unsubscribe = await host.subscribe({

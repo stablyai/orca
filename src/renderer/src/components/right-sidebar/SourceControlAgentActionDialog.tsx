@@ -1,3 +1,4 @@
+import type { AgentSessionReviewReply } from '../../../../shared/agent-session-review-reply'
 import React from 'react'
 import {
   Dialog,
@@ -46,7 +47,11 @@ export type SourceControlAgentActionDialogProps = {
   onLaunchAccepted?: () => void
   /** Fires when an accepted launch later failed to deliver its prompt. */
   onLaunchAborted?: () => void
-  onLaunched?: () => void
+  /** `reviewReplyCarried`: a structured chat's message carries `reviewReply`, which its host writes
+   *  once the agent takes the message; the caller writes nothing to the review itself. */
+  onLaunched?: (launch: { reviewReplyCarried: boolean }) => void
+  /** Planned at start, for a structured chat's launch prompt to carry. */
+  reviewReply?: () => AgentSessionReviewReply | undefined
   startLabel?: string
   onStart?: (args: {
     agent: TuiAgent

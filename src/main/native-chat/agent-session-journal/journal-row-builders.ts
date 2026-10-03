@@ -1,3 +1,4 @@
+import type { AgentSessionReviewReply } from '../../../shared/agent-session-review-reply'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
@@ -72,6 +73,7 @@ export function journalSubmissionRowBuilder(
     handoverRecorded?: true
     queuedMessageId?: string
     origin?: 'client' | 'host'
+    reviewReply?: AgentSessionReviewReply
   },
   /** Present when the append hands off a queued draft: the row names that draft, stamped here
    *  from the consume itself so no hand-off path can leave the link off. */
@@ -317,6 +319,7 @@ export function buildJournalSubmissionRow(input: {
   handoverRecorded?: true
   queuedMessageId?: string
   origin?: 'client' | 'host'
+  reviewReply?: AgentSessionReviewReply
 }): JournalSubmissionRow {
   return {
     kind: 'submission',
@@ -327,6 +330,7 @@ export function buildJournalSubmissionRow(input: {
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts),
     ...(input.handoverRecorded ? { handoverRecorded: true } : {}),
     ...(input.queuedMessageId !== undefined ? { queuedMessageId: input.queuedMessageId } : {}),
-    ...(input.origin !== undefined ? { origin: input.origin } : {})
+    ...(input.origin !== undefined ? { origin: input.origin } : {}),
+    ...(input.reviewReply ? { reviewReply: input.reviewReply } : {})
   }
 }

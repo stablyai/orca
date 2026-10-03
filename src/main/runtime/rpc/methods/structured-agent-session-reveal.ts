@@ -5,7 +5,7 @@
 // tab, and a client drops every unpublished `agent-session` tab on each session-tabs sync. Without
 // this the row is unreachable, and the client's "retry in a moment" is advice that never comes true.
 //
-// Distinct from `agentSession.ensure`, which attaches a location the CLIENT supplies. Here the host
+// Distinct from an attach-shaped create, whose location the CLIENT supplies. Here the host
 // reads its own record and answers with that record's workspace and provider, so a client knowing
 // only a session id cannot aim the publication somewhere else.
 

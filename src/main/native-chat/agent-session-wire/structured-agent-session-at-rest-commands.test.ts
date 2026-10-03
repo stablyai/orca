@@ -28,6 +28,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { attachForTests } from './structured-agent-session-attach-test-support'
 
 const caller = { callerKey: 'desktop' }
 const CLAUDE_SESSION = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
@@ -130,7 +131,8 @@ beforeEach(async () => {
   await writeSkill(join(workspace, '.claude', 'skills'), 'review-pr')
   await writeCommand(join(account, 'commands'), 'deploy.md')
   await openHost()
-  const attached = await host.attach(
+  const attached = await attachForTests(
+    host,
     caller,
     hostTestAttachParams(null, {
       provider: 'claude',

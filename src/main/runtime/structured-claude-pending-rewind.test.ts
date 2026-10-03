@@ -24,6 +24,7 @@ import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { attachForTests } from '../native-chat/agent-session-wire/structured-agent-session-attach-test-support'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const caller = { callerKey: 'desktop' }
@@ -103,7 +104,7 @@ async function seedPendingRewind(phase: 'prepared' | 'provider-succeeded') {
 
 async function reattach() {
   await host.close(HOST_TEST_SESSION, 'evict')
-  expect(await host.attach(caller, attachParams(fence()))).toMatchObject({ ok: true })
+  expect(await attachForTests(host, caller, attachParams(fence()))).toMatchObject({ ok: true })
 }
 
 beforeEach(async () => {
@@ -133,7 +134,7 @@ beforeEach(async () => {
     now: () => HOST_TEST_NOW,
     probeOwner: async () => ({ outcome: 'exit-observed' })
   })
-  expect(await host.attach(caller, attachParams(null))).toMatchObject({ ok: true })
+  expect(await attachForTests(host, caller, attachParams(null))).toMatchObject({ ok: true })
 })
 
 afterEach(async () => {

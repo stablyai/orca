@@ -1,15 +1,16 @@
 /**
- * Creating a structured session for a worktree: resolve the create intent, attach it under the
- * host-computed fingerprint, then publish its tab.
+ * Creating a structured session for a worktree: resolve the create intent, create it at rest under
+ * the host-computed fingerprint, then publish its tab. Nothing starts an agent here; the chat's
+ * first message does.
  *
  * Extracted from `agentSession.create` so orchestration can start a native-born structured worker
  * on exactly the same path. `activate` is the only knob the two callers differ on: a chat the user
  * asked for takes the surface, a background dispatch must not steal it (the terminal worker path's
  * `surfaceOwner: false`).
  *
- * The prepare/commit split is the pre-commit boundary, not a style choice: nothing before `attach`
- * commits a session, so that span answers with a refusal, and nothing after it may be folded back
- * in. Both callers run the same two halves, so orchestration gets that guarantee too.
+ * The prepare/commit split is the pre-commit boundary, not a style choice: nothing before the
+ * host's `create` commits a session, so that span answers with a refusal, and nothing after it may
+ * be folded back in. Both callers run the same two halves, so orchestration gets that guarantee too.
  */
 
 import { refuse } from '../../../../shared/agent-session-wire-refusals'
@@ -120,7 +121,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   }
 }
 
-/** The commit half. Past `attach`, a failure no longer proves the session does not exist. */
+/** The commit half. Past the host's `create`, a failure no longer proves the session does not exist. */
 export async function commitStructuredAgentSessionCreate(args: {
   runtime: OrcaRuntimeService
   caller: StructuredAgentSessionCaller
@@ -128,7 +129,7 @@ export async function commitStructuredAgentSessionCreate(args: {
   activate: boolean
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { prepared } = args
-  const result = await prepared.host.attach(args.caller, prepared.attachParams)
+  const result = await prepared.host.create(args.caller, prepared.attachParams)
   if (!result.ok || !prepared.tab) {
     return result
   }

@@ -335,7 +335,10 @@ export function claudeStructuredSessionOptionsFrom(
   writeClaudeCatalogThrough(session, discovered)
   const listed = discovered.length > 0 ? discovered : seedModels()
   const current = readClaudeCurrentModel(session)
-  const model = currentModelId(listed, current.id)
+  // The static seed's default is not this agent's: Claude's settings or env may run another, so
+  // until a pick, the agent's report or its own listing names one (a start still under way), none.
+  const model =
+    current.id === undefined && discovered.length === 0 ? '' : currentModelId(listed, current.id)
   const models = structuredAgentSessionOptionModels(listed, model, (row) => ({
     ...row,
     resolvedModel: null

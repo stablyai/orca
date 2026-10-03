@@ -88,7 +88,8 @@ describe('Claude effort reporting', () => {
 
     const options = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
     expect(options.current.effort).toBeUndefined()
-    expect(options.current.model).toBeTruthy()
+    // Neither the agent's report nor its own listing named a model, so none is named.
+    expect(options.current.model).toBe('')
   })
 
   it('keeps the init fixture free of an effort the real frame never sends', async () => {

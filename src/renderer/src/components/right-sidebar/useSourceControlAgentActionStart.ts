@@ -1,3 +1,4 @@
+import type { AgentSessionReviewReply } from '../../../../shared/agent-session-review-reply'
 import { useCallback, useRef, useState } from 'react'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type {
@@ -50,7 +51,8 @@ type UseSourceControlAgentActionStartArgs = {
   ) => void | Promise<void>
   onLaunchAccepted?: () => void
   onLaunchAborted?: () => void
-  onLaunched?: () => void
+  onLaunched?: (launch: { reviewReplyCarried: boolean }) => void
+  reviewReply?: () => AgentSessionReviewReply | undefined
   onClose: () => void
 }
 
@@ -95,6 +97,7 @@ export function useSourceControlAgentActionStart({
   onLaunchAccepted,
   onLaunchAborted,
   onLaunched,
+  reviewReply,
   onClose
 }: UseSourceControlAgentActionStartArgs): UseSourceControlAgentActionStartResult {
   const [deliveryPlan, setDeliveryPlan] = useState<SourceControlAgentActionDeliveryPlanState>({
@@ -174,6 +177,7 @@ export function useSourceControlAgentActionStart({
           onLaunchAccepted,
           onLaunchAborted,
           onLaunched,
+          reviewReply,
           onClose: () => {
             resetDeliveryPlan()
             onClose()
@@ -198,6 +202,7 @@ export function useSourceControlAgentActionStart({
       onLaunchAborted,
       onLaunchAccepted,
       onLaunched,
+      reviewReply,
       onSaveAgentDefault,
       onStart,
       promptDelivery,

@@ -5,7 +5,9 @@
  * through the test database registry, so `closeTestJournalHostDatabases` closes it too.
  */
 
+import { randomUUID } from 'node:crypto'
 import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
+import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { PersistedAgentSessionRecord } from '../../shared/agent-session-legacy-handoff-lease'
 import { JOURNAL_DB_SCHEMA_VERSION } from '../native-chat/agent-session-journal/journal-database-schema'
 import {
@@ -14,6 +16,11 @@ import {
 } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import type Database from '../sqlite/sync-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
+import type { AgentSessionAtRestCreateRequest } from './agent-session-at-rest-create'
+import type {
+  AgentSessionReserveRequest,
+  AgentSessionReserveResult
+} from './agent-session-reservation-admission'
 import {
   AGENT_SESSION_STORE_SCHEMA_VERSION,
   type RetiredAgentSessionClaimKey
@@ -33,6 +40,43 @@ export type PersistedTestAgentSessionStore = {
   unusableRecords: Record<string, { reason: string; raw: unknown }>
   /** Absent until the store first records a chat tab. */
   sessionTabs?: { tabId: string; sessionId: string }[]
+}
+
+/** A record as production founds one: its create, at rest, under an operation of its own. */
+export async function foundTestAgentSessionRecord(
+  store: AgentSessionRecordStore,
+  request: Omit<AgentSessionAtRestCreateRequest, 'operation'>
+): Promise<AgentSessionRecord> {
+  const { record } = await store.createAtRest({
+    ...request,
+    operation: {
+      callerKey: 'test:create',
+      operationId: `${request.now}-${randomUUID().replaceAll('-', '')}`,
+      fingerprint: 'test:create'
+    }
+  })
+  return record
+}
+
+/** A founded record, then reserved for its first start at the founded fence, as a start reserves. */
+export async function foundAndReserveTestAgentSessionRecord(
+  store: AgentSessionRecordStore,
+  request: Omit<AgentSessionReserveRequest, 'expectedFence'> &
+    Pick<AgentSessionAtRestCreateRequest, 'surfaceTabId' | 'adoptedHandleLink'>
+): Promise<AgentSessionReserveResult> {
+  const founded = await foundTestAgentSessionRecord(store, {
+    sessionId: request.sessionId,
+    location: request.location,
+    provider: request.provider,
+    accountHome: request.accountHome,
+    ...(request.options ? { options: request.options } : {}),
+    ...(request.launchArgs ? { launchArgs: request.launchArgs } : {}),
+    ...(request.surfaceTabId ? { surfaceTabId: request.surfaceTabId } : {}),
+    ...(request.adoptedHandleLink ? { adoptedHandleLink: request.adoptedHandleLink } : {}),
+    claimKeyId: request.claimKeyId,
+    now: request.now
+  })
+  return store.reserveOwner({ ...request, expectedFence: founded.lease.runtimeFence })
 }
 
 function databaseFor(stateDirectory: string): Database.Database {

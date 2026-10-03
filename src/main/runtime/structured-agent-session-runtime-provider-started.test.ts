@@ -5,6 +5,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { waitForStructuredAgentSessionRecovery } from './structured-agent-session-runtime'
 import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'
+import { attachForTests } from '../native-chat/agent-session-wire/structured-agent-session-attach-test-support'
 
 const STALLED = 'claude-started-stalled'
 const HEALTHY = 'claude-started-healthy'
@@ -22,13 +23,17 @@ describe('a Claude child proving its start', () => {
     claude.behave(STALLED, { stallsControlReads: true })
     const host = await claude.install()
 
-    await expect(host.attach(CALLER, claude.attachParams(HEALTHY, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(HEALTHY, null))
+    ).resolves.toMatchObject({
       ok: true
     })
     await waitForStructuredAgentSessionRecovery()
 
     // This child answers startup, then never answers another control read.
-    await expect(host.attach(CALLER, claude.attachParams(STALLED, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(STALLED, null))
+    ).resolves.toMatchObject({
       ok: true
     })
     await vi.waitFor(() => expect(claude.child(STALLED).calls).toContain('get_settings'))
@@ -60,13 +65,15 @@ describe('a Claude child proving its start', () => {
     const host = await claude.install()
     // This start never returns from its spawn, so its lease stays reserved with no child.
     claude.behave(HEALTHY, { spawnHangs: true })
-    void host.attach(CALLER, claude.attachParams(HEALTHY, null)).catch(() => undefined)
+    void attachForTests(host, CALLER, claude.attachParams(HEALTHY, null)).catch(() => undefined)
     await vi.waitFor(() =>
       expect(host.deps.store.getRecord(HEALTHY)?.lease.claimStatus).toBe('reserved')
     )
     const childrenWhileHung = claude.children(HEALTHY).length
 
-    await expect(host.attach(CALLER, claude.attachParams(STALLED, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(STALLED, null))
+    ).resolves.toMatchObject({
       ok: true
     })
     await vi.waitFor(() =>
@@ -94,7 +101,9 @@ describe('a Claude child proving its start', () => {
       await writeHeld
       return replaceSessionOptions(input)
     })
-    await expect(host.attach(CALLER, claude.attachParams(HEALTHY, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(HEALTHY, null))
+    ).resolves.toMatchObject({
       ok: true
     })
     await vi.waitFor(() => expect(writing).toBe(true))

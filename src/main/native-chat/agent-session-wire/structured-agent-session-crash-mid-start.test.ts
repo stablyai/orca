@@ -25,6 +25,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { attachForTests, startAgentForTests } from './structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
@@ -108,7 +109,7 @@ describe('a host that dies while its Codex child is starting', () => {
   it('leaves the spawned child recorded, so the next host stops it by identity and starts over', async () => {
     const first = await openStore('dying')
     const dying = host('dying', first, adapterThatNeverFinishesStarting())
-    void dying.attach(CALLER, hostTestAttachParams(null)).catch(() => {})
+    void attachForTests(dying, CALLER, hostTestAttachParams(null)).catch(() => {})
     await vi.waitFor(() => expect(first.getRecord(SESSION)?.lease.ownerProcess).toBeTruthy())
     // Durable before the handshake returned: the only record the next host will have.
     expect(first.getRecord(SESSION)?.lease).toMatchObject({
@@ -148,8 +149,9 @@ describe('a host that dies while its Codex child is starting', () => {
       deathEvidence: { kind: 'pid-absent' }
     })
     // What the next send's delivery does: start at the record's current fence.
-    const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
-    expect(await relaunched.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({ ok: true })
+    expect(await startAgentForTests(relaunched, SESSION)).toMatchObject({
+      ok: true
+    })
     expect(restarted.connections).toHaveLength(1)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',
@@ -158,22 +160,23 @@ describe('a host that dies while its Codex child is starting', () => {
   })
 })
 
-// The client keeps a create it never heard back from and retries it under the same operation id, so
-// that replay, not a fresh start, is what the user's Retry and first send go through.
-describe('a create replayed after the host that ran it died', () => {
+// The create committed at rest before its first start ran. The client's retry of a create it never
+// heard back from answers that chat at rest, even once its operation row has aged out, and the
+// next message's start is what starts an agent.
+describe('a first start cut short by the host dying', () => {
   const PAST_OPERATION_EXPIRY =
     AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS + 60_000
 
   it.each([
     ['its child was recorded', adapterThatNeverFinishesStarting, 0],
     [
-      'its child was recorded, and its operation row has since expired',
+      'its child was recorded, and its operation rows have since expired',
       adapterThatNeverFinishesStarting,
       PAST_OPERATION_EXPIRY
     ],
     ['nothing was recorded beyond the reservation', adapterThatNeverSpawns, 0],
     [
-      'nothing was recorded, and its operation row has since expired',
+      'nothing was recorded, and its operation rows have since expired',
       adapterThatNeverSpawns,
       PAST_OPERATION_EXPIRY
     ]
@@ -181,7 +184,7 @@ describe('a create replayed after the host that ran it died', () => {
     const params = hostTestAttachParams(null)
     const first = await openStore('dying')
     const dying = host('dying', first, dyingAdapter())
-    void dying.attach(CALLER, params).catch(() => {})
+    void attachForTests(dying, CALLER, params).catch(() => {})
     await vi.waitFor(() =>
       expect(first.getRecord(SESSION)?.lease).toMatchObject(
         dyingAdapter === adapterThatNeverSpawns
@@ -211,28 +214,90 @@ describe('a create replayed after the host that ran it died', () => {
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,
-      runtimeFence: 2
+      runtimeFence: 3
     })
-
-    const replayed = await relaunched.attach(CALLER, params)
-    // Before, `agent_session_ownership_unknown` while the row was pending, then `_operation_expired`.
-    expect(replayed.ok ? null : replayed.refusal.code).toBeNull()
-    expect(replayed).toMatchObject({ ok: true, value: { sessionId: SESSION, fence: 3 } })
-    expect(restarted.connections).toHaveLength(1)
-    expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'live',
-      runtimeFence: 3,
-      ownerProcess: { spawnToken: 'spawn-b' }
+    // Before, `_operation_expired` once the row aged out, and the client's relaunch under a new id
+    // was then refused as `sessionExists`.
+    expect(await relaunched.create(CALLER, params)).toMatchObject({
+      ok: true,
+      replayed: true,
+      value: { sessionId: SESSION }
     })
     expect(
       store.getOperationRow(CALLER.callerKey, params.envelope.clientOperationId)?.outcome
     ).toEqual({ status: 'succeeded', sessionId: SESSION })
+    expect(restarted.connections).toHaveLength(0)
 
-    // Settled now: the same id replays that answer and never starts a second agent.
-    await expect(relaunched.attach(CALLER, params)).resolves.toMatchObject({
+    expect(await startAgentForTests(relaunched, SESSION)).toMatchObject({
       ok: true,
-      replayed: true
+      value: { sessionId: SESSION, fence: 4 }
     })
+    expect(restarted.connections).toHaveLength(1)
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'live',
+      runtimeFence: 4,
+      ownerProcess: { spawnToken: 'spawn-b' }
+    })
+
+    // The next message finds the agent running and never starts a second one.
+    await expect(startAgentForTests(relaunched, SESSION)).resolves.toMatchObject({ ok: true })
+    expect(restarted.connections).toHaveLength(1)
+  })
+})
+
+// An older host ran the agent inside its create and died there, leaving the create's row pending.
+describe('a create an older host left pending when it died', () => {
+  it('answers the chat at rest on its retry, settles the row, and starts on the next message', async () => {
+    const params = hostTestAttachParams(null)
+    const operation = {
+      callerKey: CALLER.callerKey,
+      operationId: params.envelope.clientOperationId
+    }
+    const left = await openStore('dying')
+    const identity = {
+      sessionId: SESSION,
+      location: params.location,
+      provider: params.provider,
+      accountHome: params.accountHome
+    }
+    await left.createAtRest({
+      ...identity,
+      claimKeyId: 'key-1',
+      operation: { ...operation, fingerprint: params.envelope.payloadFingerprint },
+      now: NOW
+    })
+    await left.reserveOwner({
+      ...identity,
+      expectedFence: 1,
+      spawnToken: 'spawn-a',
+      claimKeyId: 'key-1',
+      handoffOperationId: operation.operationId,
+      probe: { outcome: 'reservation-unused' },
+      operation: { ...operation, fingerprint: params.envelope.payloadFingerprint },
+      now: NOW
+    })
+    await crash(left)
+
+    const restarted = fakeCodex()
+    const store = await openStore('relaunched')
+    const relaunched = host(
+      'relaunched',
+      store,
+      Object.assign(adapterFor(restarted), { supportsCreate: () => true }),
+      {
+        mintSpawnToken: () => 'spawn-b',
+        probeOwner: async () => ({ outcome: 'indeterminate', reason: 'no token scan' })
+      }
+    )
+    await relaunched.restoreReadableSessions()
+
+    expect(await relaunched.create(CALLER, params)).toMatchObject({ ok: true, replayed: true })
+    expect(store.getOperationRow(operation.callerKey, operation.operationId)?.outcome).toEqual({
+      status: 'succeeded',
+      sessionId: SESSION
+    })
+    expect(restarted.connections).toHaveLength(0)
+    expect(await startAgentForTests(relaunched, SESSION)).toMatchObject({ ok: true })
     expect(restarted.connections).toHaveLength(1)
   })
 })

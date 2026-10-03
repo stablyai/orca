@@ -14,6 +14,7 @@ import {
   createScriptedClaudeRuntime,
   scriptedClaudeExitError
 } from './structured-claude-scripted-runtime-test-support'
+import { attachForTests } from '../native-chat/agent-session-wire/structured-agent-session-attach-test-support'
 
 const SESSION = 'claude-send-held'
 const CALLER = { callerKey: 'client-1' }
@@ -82,7 +83,9 @@ describe('a send into a Claude chat whose CLI keeps failing at startup', () => {
   it('restarts once, rejects the held message with the diagnostic when that start dies too, then delivers a new one once the CLI is healthy', async () => {
     claude.behave(SESSION, { initHangs: true })
     const host = await claude.install()
-    await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(SESSION, null))
+    ).resolves.toMatchObject({
       ok: true
     })
     await failLatestStart(host, 1)
@@ -132,7 +135,7 @@ describe('a send while the first Claude start is still answering initialize', ()
   it('is queued, and written once the CLI proves its start', async () => {
     claude.behave(SESSION, { initHangs: true })
     const host = await claude.install()
-    await host.attach(CALLER, claude.attachParams(SESSION, null))
+    await attachForTests(host, CALLER, claude.attachParams(SESSION, null))
 
     await send(host, 'hello')
     expect(claude.child(SESSION).calls).not.toContain('send')
@@ -148,7 +151,7 @@ describe('a send while the first Claude start is still answering initialize', ()
   it('is rejected with the diagnostic when the CLI dies first, and restarts nothing', async () => {
     claude.behave(SESSION, { initHangs: true })
     const host = await claude.install()
-    await host.attach(CALLER, claude.attachParams(SESSION, null))
+    await attachForTests(host, CALLER, claude.attachParams(SESSION, null))
     const startedFence = fence(host)
 
     const held = await send(host, 'hello')

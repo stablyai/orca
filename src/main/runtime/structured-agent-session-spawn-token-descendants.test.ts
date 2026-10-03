@@ -10,7 +10,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CODEX_SPAWN_TOKEN_ENV } from '../codex/codex-structured-owner-identity'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
-import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import {
+  foundAndReserveTestAgentSessionRecord,
+  openTestAgentSessionRecordStore
+} from './agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 import { createStructuredAgentSessionOwnerProbe } from './structured-agent-session-owner-probe'
 import {
@@ -52,7 +55,7 @@ function environ(token: string | null): string {
   return ['PATH=/usr/bin', ...(token ? [`${CODEX_SPAWN_TOKEN_ENV}=${token}`] : [])].join('\0')
 }
 
-function reserveRequest(): AgentSessionReserveRequest {
+function reserveRequest(): Omit<AgentSessionReserveRequest, 'expectedFence'> {
   const operationId = `${NOW}-${'1'.padStart(32, '0')}`
   return {
     sessionId: SESSION,
@@ -64,7 +67,6 @@ function reserveRequest(): AgentSessionReserveRequest {
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
-    expectedFence: null,
     spawnToken: MINTED_TOKEN,
     claimKeyId: 'key-1',
     handoffOperationId: null,
@@ -100,7 +102,7 @@ describe('a process that inherited a spawn token', () => {
   it('is never signalled when the host installs and reconciles, even when this store minted the token', async () => {
     // A chat ran and ended: its root exited and the lease was released, clearing the token.
     const seed = await openStore()
-    const reserved = await seed.reserveOwner(reserveRequest())
+    const reserved = await foundAndReserveTestAgentSessionRecord(seed, reserveRequest())
     const fence = reserved.record.lease.runtimeFence
     await seed.commitProcessIdentity({
       sessionId: SESSION,
@@ -157,7 +159,7 @@ describe('a process that inherited a spawn token', () => {
 describe('the reservation owner probe', () => {
   async function reconcileReservation(): Promise<AgentSessionRecordStore> {
     const crashed = await openStore()
-    await crashed.reserveOwner(reserveRequest())
+    await foundAndReserveTestAgentSessionRecord(crashed, reserveRequest())
     // The restart after a crash between reservation and recorded identity.
     const store = await openStore()
     await store.reconcileOnRestart({

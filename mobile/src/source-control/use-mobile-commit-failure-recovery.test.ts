@@ -94,7 +94,7 @@ describe('useMobileCommitFailureRecovery', () => {
     expect(succeeded).toBe(true)
     expect(recovery?.launchError).toBeNull()
     expect(recovery?.launchWarning).toBe('the requested arguments were ignored.')
-    expect(recovery?.launchSuccess).toBe('Agent started in feature-login')
+    expect(recovery?.launchSuccess).toBe('Sent to an agent in feature-login')
     // A new failure is a new launch; the old one's note does not carry over.
     rerender({ ...FAILURE, error: 'another hook failed' })
     expect(recovery?.launchWarning).toBeNull()

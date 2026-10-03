@@ -13,6 +13,8 @@ import {
 import type { AgentSessionMutationEnvelope } from './agent-session-wire'
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
+import type { AgentSessionReviewReply } from './agent-session-review-reply'
+import { agentSessionReviewReplyField } from './agent-session-review-reply'
 import { parseStructuredAgentSessionOutboxQueueFields } from './structured-agent-session-outbox-delivery'
 
 /** `rejected`: the host settled the send as not delivered. The drain never sends it again on its
@@ -34,6 +36,9 @@ export type StructuredAgentSessionOutboxEntry = {
   lastAttemptAt: number | null
   retryAfterUnknownSubmittedAt: number | null
   source?: 'launch'
+  /** What Orca does on the review once the agent takes this launch prompt; every send of the
+   *  entry carries it, so no retried or rotated id drops it. */
+  reviewReply?: AgentSessionReviewReply
   /** A Stop landed after this queue send went out: only the user's Retry sends it again, never the
    *  drain, the unconfirmed probe or an owner change, which would start a turn the user stopped. */
   outlivedStop?: true
@@ -297,6 +302,7 @@ export function parseStructuredAgentSessionOutboxEntry(
         ? entry.retryAfterUnknownSubmittedAt
         : null,
     ...(entry.source === 'launch' ? { source: 'launch' as const } : {}),
+    ...agentSessionReviewReplyField(entry.reviewReply),
     ...parseStructuredAgentSessionOutboxQueueFields(entry),
     ...(lastFailure ? { lastFailure } : {})
   }
@@ -306,6 +312,7 @@ export type StructuredAgentSessionSendMutation = {
   envelope: AgentSessionMutationEnvelope
   body: AgentJournalMessageItem
   delivery?: 'queue-if-active'
+  reviewReply?: AgentSessionReviewReply
 }
 
 /** The `agentSession.send` arguments an entry stands for. Typed rather than wire-shaped so a host
@@ -314,9 +321,10 @@ export function structuredAgentSessionSendMutation(
   entry: StructuredAgentSessionOutboxEntry,
   expectedRuntimeFence: number
 ): StructuredAgentSessionSendMutation {
-  // `delivery` joins the OPERATION fingerprint exactly as the host digests it; never the body's.
+  // `delivery` and `reviewReply` join the OPERATION fingerprint exactly as the host digests them.
   const delivery = entry.sentDelivery ?? undefined
-  const fields = { body: entry.body, ...(delivery ? { delivery } : {}) }
+  const plain = { body: entry.body, ...(delivery ? { delivery } : {}) }
+  const fields = entry.reviewReply ? { ...plain, reviewReply: entry.reviewReply } : plain
   return {
     envelope: {
       sessionId: entry.sessionId,

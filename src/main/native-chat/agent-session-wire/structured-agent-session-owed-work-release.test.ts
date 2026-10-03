@@ -32,6 +32,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { attachForTests } from './structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
@@ -122,7 +123,8 @@ afterEach(async () => {
 })
 
 async function attachStarting(): Promise<void> {
-  const created = await host.attach(
+  const created = await attachForTests(
+    host,
     CALLER,
     hostTestAttachParams(null, {
       provider: 'claude',

@@ -25,6 +25,7 @@ import {
   hostTestMessage
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import { attachForTests } from '../native-chat/agent-session-wire/structured-agent-session-attach-test-support'
 import {
   liveTestJournalRows,
   openTestJournalHostDatabase
@@ -168,7 +169,7 @@ beforeEach(async () => {
   })
   const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
   attachParams.envelope.clientOperationId = operationId()
-  const attached = await host.attach(CALLER, attachParams)
+  const attached = await attachForTests(host, CALLER, attachParams)
   if (!attached.ok) {
     throw new Error(JSON.stringify(attached.refusal))
   }

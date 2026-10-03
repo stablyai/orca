@@ -87,7 +87,9 @@ export const AGENT_SESSION_FAILURE_COPY = {
   providerRetrying: '{{agent}} hit a temporary problem and is retrying.',
   providerRetryingQuoted: '{{agent}} is retrying: {{detail}}.',
   previousExitUnverifiable:
-    '{{agent}} from before may still be running. Your messages will send once it stops.'
+    '{{agent}} from before may still be running. Your messages will send once it stops.',
+  reviewReplyFailed:
+    "Orca couldn't mark the review comments sent with this message as being fixed. Resolve or reply to them yourself."
 } as const
 
 export type AgentSessionFailureCopyId = keyof typeof AGENT_SESSION_FAILURE_COPY

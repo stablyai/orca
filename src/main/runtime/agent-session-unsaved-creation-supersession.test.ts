@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { codexProviderHandleLink } from '../codex/codex-structured-owner-identity'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
-import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import {
+  foundAndReserveTestAgentSessionRecord,
+  openTestAgentSessionRecordStore
+} from './agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
@@ -27,7 +30,7 @@ function reserveRequest(
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
-    expectedFence: null,
+    expectedFence: 1,
     spawnToken: `spawn-${operations}`,
     claimKeyId: 'key-1',
     handoffOperationId: null,
@@ -42,13 +45,16 @@ function reserveRequest(
   }
 }
 
-/** Reserve, observe the spawn and prove the link the adapter reported, as the host does. */
+/** Reserve (founding the record first, as its create does), observe the spawn and prove the link
+ *  the adapter reported, as the host does. */
 async function prove(
   store: AgentSessionRecordStore,
   request: AgentSessionReserveRequest,
   link: (fence: number) => AgentSessionProviderHandleLink
 ) {
-  const { record } = await store.reserveOwner(request)
+  const { record } = store.getRecord(SESSION)
+    ? await store.reserveOwner(request)
+    : await foundAndReserveTestAgentSessionRecord(store, request)
   const fence = record.lease.runtimeFence
   await store.commitProcessIdentity({
     sessionId: SESSION,

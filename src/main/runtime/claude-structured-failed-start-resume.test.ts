@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
 import { waitForStructuredAgentSessionRecovery } from './structured-agent-session-runtime'
 import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'
+import { attachForTests } from '../native-chat/agent-session-wire/structured-agent-session-attach-test-support'
 
 const SESSION = 'claude-failed-start'
 const CALLER = { callerKey: 'client-1' }
@@ -21,7 +22,9 @@ describe('a Claude chat whose first start died before initialize', () => {
   it('resumes on reopen, launching its id fresh and continuing the same chain', async () => {
     claude.behave(SESSION, { initHangs: true })
     const host = await claude.install()
-    await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(SESSION, null))
+    ).resolves.toMatchObject({
       ok: true
     })
     claude.child(SESSION).exit(new Error('claude stream-json exited (code 1): not signed in'))
@@ -31,7 +34,8 @@ describe('a Claude chat whose first start died before initialize', () => {
 
     // The user signs in and reopens the chat.
     claude.behave(SESSION, {})
-    const reopened = await host.attach(
+    const reopened = await attachForTests(
+      host,
       CALLER,
       claude.attachParams(SESSION, failed?.lease.runtimeFence ?? null)
     )
@@ -61,7 +65,7 @@ describe('a Claude chat whose CLI exits the moment it is spawned', () => {
       claude.behave(SESSION, { exitsDuringSpawn: { diagnostic, at } })
       const host = await claude.install()
 
-      const created = await host.attach(CALLER, claude.attachParams(SESSION, null))
+      const created = await attachForTests(host, CALLER, claude.attachParams(SESSION, null))
 
       expect(created).toMatchObject({
         ok: false,

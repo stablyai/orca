@@ -91,10 +91,11 @@ export async function launchAgentWithPrompt(args: {
   }
 }
 
-/** The confirmation under an AI button, naming the workspace when the screen knows it. */
-export function agentStartedMessage(workspaceLabel: string | null | undefined): string {
+/** The confirmation under an AI button, naming the workspace when the screen knows it. Said once
+ *  the host has the prompt: the agent may still be starting, and a failed start shows in its chat. */
+export function agentPromptSentMessage(workspaceLabel: string | null | undefined): string {
   const label = workspaceLabel?.trim()
-  return label ? `Agent started in ${label}` : 'Agent started'
+  return label ? `Sent to an agent in ${label}` : 'Sent to an agent'
 }
 
 /** What the button shows after a launch; one mapping so every AI button reads the same.
@@ -113,7 +114,7 @@ export function promptedLaunchNotice(
     case 'sent':
       return {
         succeeded: true,
-        success: agentStartedMessage(workspaceLabel),
+        success: agentPromptSentMessage(workspaceLabel),
         error: null,
         warning: result.warning ?? null,
         undeliveredPrompt: null

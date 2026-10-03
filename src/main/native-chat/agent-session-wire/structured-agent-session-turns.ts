@@ -6,6 +6,7 @@
 // row the next attach settles as `unknown`, whereas the reverse would lose a
 // turn the provider already accepted.
 
+import type { AgentSessionReviewReply } from '../../../shared/agent-session-review-reply'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import {
   agentSessionFailureWords,
@@ -122,6 +123,7 @@ export async function performSend(
     body: AgentJournalMessageItem
     /** Who asked for the turn; absent on callers that predate it. */
     origin?: 'client' | 'host'
+    reviewReply?: AgentSessionReviewReply
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   const existing = ctx.journal

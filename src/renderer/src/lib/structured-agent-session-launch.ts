@@ -7,10 +7,7 @@ import {
   retryStructuredAgentSessionLaunchIntent,
   StructuredAgentSessionCreateRefusalError
 } from '@/lib/launch-structured-agent-session'
-import {
-  discardStructuredAgentSessionLaunchOutbox,
-  enqueueStructuredAgentSessionLaunchPrompt
-} from '@/components/native-chat/structured-agent-session-outbox-storage'
+import { discardStructuredAgentSessionLaunchOutbox } from '@/components/native-chat/structured-agent-session-outbox-storage'
 import {
   launchAndReconcile,
   reconcileUnknownLaunch,
@@ -21,6 +18,7 @@ import {
   addStructuredLaunchCaller,
   createStructuredLaunchCallerGroup,
   releaseStructuredLaunchCallerAfterUnknownOutcome,
+  stageStructuredLaunchPrompt,
   structuredLaunchCallersHavePendingWork,
   type StructuredAgentLaunchOptions,
   type StructuredLaunchCaller
@@ -164,9 +162,7 @@ function structuredAgentLaunchState(
     const joined = joinLaunchDelivery(options, existing.promptDelivery)
     // Why: failed launches keep their draft/outbox, so a retry must not stage the same prompt twice.
     const text = retrying ? '' : outboxPromptText(joined)
-    const stagedPrompt = text
-      ? enqueueStructuredAgentSessionLaunchPrompt(existing.intent.sessionId, text)
-      : null
+    const stagedPrompt = stageStructuredLaunchPrompt(existing.intent.sessionId, text, joined)
     if (!retrying) {
       launchDraft.seedStructuredAgentLaunchDraft(existing.intent.sessionId, agent, joined)
     }
@@ -192,9 +188,7 @@ function structuredAgentLaunchState(
     options.hostSeedOptions
   )
   const text = outboxPromptText(options)
-  const stagedPrompt = text
-    ? enqueueStructuredAgentSessionLaunchPrompt(intent.sessionId, text)
-    : null
+  const stagedPrompt = stageStructuredLaunchPrompt(intent.sessionId, text, options)
   launchDraft.seedStructuredAgentLaunchDraft(intent.sessionId, agent, options)
   const callers = createStructuredLaunchCallerGroup()
   const state: StructuredLaunchState = {

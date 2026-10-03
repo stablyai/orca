@@ -76,9 +76,16 @@ export function structuredAgentSessionOptionCatalog(
   seed: AgentSessionOptionCatalog,
   result: AgentSessionOptionsResult
 ): AgentSessionOptionCatalog {
-  const models: CatalogModel[] = result.models.map((model) =>
+  const listed: CatalogModel[] = result.models.map((model) =>
     discoveredModel(model, result.fastModeSupport?.supported === true)
   )
+  // No listing is an unknown one, not an empty one: the client keeps its static seed's models.
+  const models = listed.length > 0 ? listed : [...seed.models]
+  // An unnamed model is unknown, not the listing's default: the picker names none until it is.
+  const { defaultModelIsCliDefault: _seedNamesDefault, ...unnamed } = seed
+  if (!result.current.model) {
+    return listed.length > 0 ? { ...unnamed, models } : { ...seed, models }
+  }
   if (!models.some((model) => model.id === result.current.model)) {
     models.push({
       id: result.current.model,
@@ -86,7 +93,7 @@ export function structuredAgentSessionOptionCatalog(
       options: seed.unknownModelOptions ?? []
     })
   }
-  return { ...seed, models, defaultModelIsCliDefault: true }
+  return { ...unnamed, models, defaultModelIsCliDefault: true }
 }
 
 export type StructuredAgentSessionOptionState = {

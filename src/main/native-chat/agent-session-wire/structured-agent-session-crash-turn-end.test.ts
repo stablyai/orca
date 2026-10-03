@@ -45,6 +45,7 @@ import {
   HOST_TEST_LOCATION as LOCATION,
   HOST_TEST_SESSION as SESSION
 } from './structured-agent-session-host-test-data'
+import { attachForTests } from './structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
@@ -252,7 +253,8 @@ function turnStatesSent(events: readonly AgentSessionSubscribeEvent[]) {
 }
 
 function attach(fence: number) {
-  return host.attach(
+  return attachForTests(
+    host,
     { callerKey: 'client-1' },
     hostTestAttachParams(fence, {
       provider: 'claude',
@@ -536,13 +538,13 @@ describe('a turn a newer start could not settle before it failed', () => {
       lastRenewedAt: RELAUNCHED_AT
     })
     advance(60_000)
-    // Recovery records that child's death, then the client retries at the fence it was told.
-    await expect(attach(15)).resolves.toMatchObject({ refusal: { currentFence: 16 } })
-    expect(store.getRecord(SESSION)?.lease.deathEvidence).toMatchObject({
-      ownerFence: 15,
-      lastProvenAliveAt: RELAUNCHED_AT
+    // Recovery records that child's death; the next start then reserves past it.
+    await host.collaboratorsForTests().runtimeState.resolveRecovery(SESSION)
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      runtimeFence: 16,
+      deathEvidence: { ownerFence: 15, lastProvenAliveAt: RELAUNCHED_AT }
     })
-    await expect(attach(16)).resolves.toMatchObject({ ok: true })
+    await expect(attach(16)).resolves.toMatchObject({ ok: true, fence: 17 })
 
     expect(await settledTurn()).toEqual(UNVERIFIABLE_TURN)
   })

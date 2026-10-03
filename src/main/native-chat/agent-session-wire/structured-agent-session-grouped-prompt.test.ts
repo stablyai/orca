@@ -24,6 +24,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { attachForTests } from './structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
@@ -151,7 +152,7 @@ afterEach(async () => {
 
 describe('grouped question admission', () => {
   it('reads the packed answer an older client sends into structured answers', async () => {
-    const attached = await host.attach(CALLER, attachParams())
+    const attached = await attachForTests(host, CALLER, attachParams())
     expect(attached.ok).toBe(true)
     const prompt = await seedGroupedQuestion()
     const answers = [
@@ -175,7 +176,7 @@ describe('grouped question admission', () => {
   })
 
   it('takes structured answers past the old option-id bound and keeps the packed form for older readers', async () => {
-    const attached = await host.attach(CALLER, attachParams())
+    const attached = await attachForTests(host, CALLER, attachParams())
     expect(attached.ok).toBe(true)
     const prompt = await seedGroupedQuestion()
     const typed = 'Proceed with the replacement, but wait for the capture. '.repeat(40)
@@ -207,7 +208,7 @@ describe('grouped question admission', () => {
   })
 
   it('refuses answers that do not match the questions without reaching the provider', async () => {
-    const attached = await host.attach(CALLER, attachParams())
+    const attached = await attachForTests(host, CALLER, attachParams())
     expect(attached.ok).toBe(true)
     const prompt = await seedGroupedQuestion()
     const answers = [{ questionId: 'q1', optionIds: ['target-web'] }]
@@ -245,7 +246,7 @@ describe('a grouped question answered again', () => {
   }
 
   it('answers a re-click with the same answers from the resolution it holds', async () => {
-    expect((await host.attach(CALLER, attachParams())).ok).toBe(true)
+    expect((await attachForTests(host, CALLER, attachParams())).ok).toBe(true)
     const prompt = await seedGroupedQuestion()
     const first = await answer(prompt, answers)
 
@@ -258,7 +259,7 @@ describe('a grouped question answered again', () => {
   })
 
   it('refuses different answers to a resolved question as moved on', async () => {
-    expect((await host.attach(CALLER, attachParams())).ok).toBe(true)
+    expect((await attachForTests(host, CALLER, attachParams())).ok).toBe(true)
     const prompt = await seedGroupedQuestion()
     await answer(prompt, answers)
 

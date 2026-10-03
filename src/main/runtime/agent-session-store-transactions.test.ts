@@ -13,6 +13,7 @@ import {
 } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
+  foundAndReserveTestAgentSessionRecord,
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
 } from './agent-session-record-store-test-harness'
@@ -37,7 +38,7 @@ async function liveChat(
   sessionId: string
 ): Promise<AgentSessionRecord> {
   counter += 1
-  const reserved = await store.reserveOwner({
+  const reserved = await foundAndReserveTestAgentSessionRecord(store, {
     sessionId,
     location: {
       executionHostId: 'local',
@@ -47,7 +48,6 @@ async function liveChat(
     },
     provider: 'claude',
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
-    expectedFence: null,
     spawnToken: `spawn-${counter}`,
     claimKeyId: 'key-1',
     handoffOperationId: null,

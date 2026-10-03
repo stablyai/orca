@@ -21,6 +21,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { attachForTests, startAgentForTests } from './structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
@@ -69,14 +70,14 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-describe('a create that fails after its child wrote through the unbound sink', () => {
+describe('a first start that fails after its child wrote through the unbound sink', () => {
   it.each([
     // The common failed start: answered as a refusal.
     ['refused', new Error(EXIT_REASON)],
-    // A failure the attach cannot classify still throws, and must release the sink too.
+    // A failure the attach throws, settled before it does, which the start answers from.
     ['thrown', new AgentSessionPreSpawnError(new Error(EXIT_REASON))]
   ])(
-    'releases the sink when %s, so a new create and shutdown both proceed',
+    'releases the sink when %s, so the next start and shutdown both proceed',
     async (_how, cause) => {
       acquire.mockImplementationOnce(async ({ events }) => {
         // The published child's exit reached the translator before any journal was attached.
@@ -84,17 +85,12 @@ describe('a create that fails after its child wrote through the unbound sink', (
         throw cause
       })
 
-      const failed = host.attach(CALLER, hostTestAttachParams(null))
-      await (cause instanceof AgentSessionPreSpawnError
-        ? expect(failed).rejects.toThrow("Codex couldn't restart. Send your message to try again.")
-        : expect(failed).resolves.toMatchObject({
-            ok: false,
-            refusal: { message: "Codex couldn't restart. Send your message to try again." }
-          }))
-
-      await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
-        ok: true
+      expect(await attachForTests(host, CALLER, hostTestAttachParams(null))).toMatchObject({
+        ok: false,
+        refusal: { message: "Codex couldn't start. Send your message to try again." }
       })
+
+      await expect(startAgentForTests(host, SESSION)).resolves.toMatchObject({ ok: true })
       await expect(host.flushAllStreamedEvents()).resolves.toBeUndefined()
       expect(acquire).toHaveBeenCalledTimes(2)
     }
@@ -104,7 +100,7 @@ describe('a create that fails after its child wrote through the unbound sink', (
     ['refused', new Error(EXIT_REASON)],
     ['thrown', new AgentSessionPreSpawnError(new Error(EXIT_REASON))]
   ])('releases the sink when a resume of a still-indexed session is %s', async (_how, cause) => {
-    await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
+    await expect(attachForTests(host, CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
       ok: true
     })
     const exitedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
@@ -116,20 +112,17 @@ describe('a create that fails after its child wrote through the unbound sink', (
       fence: exitedFence,
       acquisitionGeneration: `generation-${exitedFence}`
     })
-    const releasedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
     acquire.mockImplementationOnce(async ({ events }) => {
       events?.setActivity?.(null)
       throw cause
     })
 
     // The session stays indexed across this failure: it is a resume, not a create.
-    const failed = host.attach(CALLER, hostTestAttachParams(releasedFence))
-    await (cause instanceof AgentSessionPreSpawnError
-      ? expect(failed).rejects.toThrow("Codex couldn't restart. Send your message to try again.")
-      : expect(failed).resolves.toMatchObject({ ok: false }))
+    expect(await startAgentForTests(host, SESSION)).toMatchObject({
+      ok: false
+    })
 
-    const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
-    await expect(host.attach(CALLER, hostTestAttachParams(fence))).resolves.toMatchObject({
+    await expect(startAgentForTests(host, SESSION)).resolves.toMatchObject({
       ok: true
     })
     expect(acquire).toHaveBeenCalledTimes(3)

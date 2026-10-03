@@ -2,7 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
+  foundTestAgentSessionRecord,
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStoreText
 } from './agent-session-record-store-test-harness'
@@ -23,7 +25,7 @@ function request(overrides: Partial<AgentSessionReserveRequest> = {}): AgentSess
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
-    expectedFence: null,
+    expectedFence: 1,
     spawnToken: 'spawn-a',
     claimKeyId: 'key-1',
     handoffOperationId: null,
@@ -38,6 +40,21 @@ function request(overrides: Partial<AgentSessionReserveRequest> = {}): AgentSess
   }
 }
 
+/** The record a create founds at rest, which every start then reserves. */
+async function foundedStore(): Promise<AgentSessionRecordStore> {
+  const store = await openTestAgentSessionRecordStore(directory)
+  const { sessionId, location, provider, accountHome, claimKeyId } = request()
+  await foundTestAgentSessionRecord(store, {
+    sessionId,
+    location,
+    provider,
+    accountHome,
+    claimKeyId,
+    now: NOW
+  })
+  return store
+}
+
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orca-agent-session-launch-env-'))
 })
@@ -48,11 +65,11 @@ afterEach(async () => {
 
 describe('agent session launch environment admission', () => {
   it('does not persist ambient launch variables', async () => {
-    const store = await openTestAgentSessionRecordStore(directory)
+    const store = await foundedStore()
     await store.reserveOwner(request())
     await store.reserveOwner(
       request({
-        expectedFence: 1,
+        expectedFence: 2,
         spawnToken: 'spawn-b',
         launchEnv: {
           PATH: '/custom/bin:/usr/bin',
@@ -74,7 +91,8 @@ describe('agent session launch environment admission', () => {
   })
 
   it('rejects an environment that could not be validated before writing', async () => {
-    const store = await openTestAgentSessionRecordStore(directory)
+    const store = await foundedStore()
+    const founded = store.getRecord(SESSION)
     const launchEnv = Object.fromEntries(
       Array.from({ length: 257 }, (_, index) => [`KEY_${index}`, 'value'])
     )
@@ -82,15 +100,16 @@ describe('agent session launch environment admission', () => {
     await expect(store.reserveOwner(request({ launchEnv }))).rejects.toThrow(
       'agent_session_launch_env_invalid'
     )
-    expect(store.getRecord(SESSION)).toBeNull()
+    expect(store.getRecord(SESSION)).toEqual(founded)
   })
 
   it('rejects an overlong environment key before writing it', async () => {
-    const store = await openTestAgentSessionRecordStore(directory)
+    const store = await foundedStore()
+    const founded = store.getRecord(SESSION)
 
     await expect(
       store.reserveOwner(request({ launchEnv: { ['K'.repeat(513)]: 'value' } }))
     ).rejects.toThrow('agent_session_launch_env_invalid')
-    expect(store.getRecord(SESSION)).toBeNull()
+    expect(store.getRecord(SESSION)).toEqual(founded)
   })
 })

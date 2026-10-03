@@ -10,6 +10,7 @@ import {
 import type { AgentSessionFailedAcquisitionSettlement } from './agent-session-acquisition-failure-settlement'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
+  foundAndReserveTestAgentSessionRecord,
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
 } from './agent-session-record-store-test-harness'
@@ -113,12 +114,11 @@ describe('a failed acquisition', () => {
 
   /** Reserve and observe the spawn at NOW, as an attach does before it can fail. */
   async function spawnedOwner(store: AgentSessionRecordStore): Promise<number> {
-    const reserved = await store.reserveOwner({
+    const reserved = await foundAndReserveTestAgentSessionRecord(store, {
       sessionId: SESSION,
       location: agentSessionRecordFixture().location,
       provider: 'claude',
       accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
-      expectedFence: null,
       spawnToken: 'spawn-a',
       claimKeyId: 'key-1',
       handoffOperationId: OPERATION_ID,

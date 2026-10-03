@@ -127,6 +127,7 @@ describe('checks panel concrete content', () => {
       commentsSelectionClearRequest: null,
       conflictDetailsRefreshing: false,
       consumeClaimedCommentResolutionAfterDeliveryRef: { current: vi.fn() },
+      buildLaunchReviewReply: vi.fn(() => undefined),
       detachedHeadDisplay: null,
       editingTitle: false,
       getGitLabProjectRef: vi.fn(() => null),

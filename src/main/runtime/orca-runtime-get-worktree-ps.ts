@@ -181,7 +181,19 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
       // Read per sweep tick from the orchestration database: a worker whose dispatch is open keeps
       // its agent running. No database answers no.
       hasOpenDispatch: (record) =>
-        structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
+        structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record),
+      // A launch prompt's review reply writes through the same methods the review RPCs call.
+      reviewRuntime: {
+        resolveRepoReviewThread: (...args) =>
+          this.gitHubReviewMutations.resolveRepoReviewThread(...args),
+        resolveGitLabRepoMRDiscussion: (...args) =>
+          this.gitLabMutationCommands.resolveGitLabRepoMRDiscussion(...args),
+        addRepoPRReviewCommentReply: (...args) =>
+          this.gitHubIssueComments.addRepoPRReviewCommentReply(...args),
+        addRepoIssueComment: (...args) => this.gitHubIssueComments.addRepoIssueComment(...args),
+        getRepoReviewReplyPosts: (...args) =>
+          this.gitHubReviewQueries.getRepoReviewReplyPosts(...args)
+      }
     })
   }
 }

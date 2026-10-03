@@ -59,6 +59,7 @@ export function ChecksPanelActiveContent({
     commentsSelectionClearRequest,
     conflictDetailsRefreshing,
     consumeClaimedCommentResolutionAfterDeliveryRef,
+    buildLaunchReviewReply,
     detachedHeadDisplay,
     editingTitle,
     getGitLabProjectRef,
@@ -328,11 +329,12 @@ export function ChecksPanelActiveContent({
         }
         onSaveAgentDefault={saveLaunchActionDefault}
         // Why: claims the ack payload when the tab exists; the host writes still wait for delivery.
+        reviewReply={buildLaunchReviewReply}
         onLaunchAccepted={handleLaunchAccepted}
         onLaunchAborted={handleLaunchAborted}
-        onLaunched={() => {
+        onLaunched={(launch) => {
           // Why: prompt delivery succeeded — the only point at which host replies/resolves may run.
-          consumeClaimedCommentResolutionAfterDeliveryRef.current()
+          consumeClaimedCommentResolutionAfterDeliveryRef.current(launch)
           if (agentComposerState?.actionId === 'resolveConflicts') {
             toast.success(
               translate(

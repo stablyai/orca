@@ -50,6 +50,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { attachForTests, startAgentForTests } from './structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
@@ -370,12 +371,9 @@ describe('already-wedged profiles become usable on load', () => {
     await seedRunningTurn()
     openHost()
 
-    // The attach adjudicates the dead owner first, which moves the fence; like a client's ensure,
-    // it is retried at the fence the refusal names.
-    const stale = await host.attach(CALLER, hostTestAttachParams(13))
-    const fence = stale.ok ? 13 : (stale.refusal.currentFence ?? 13)
-    expect(stale.ok || stale.refusal.code === 'agent_session_checkpoint_stale').toBe(true)
-    expect(stale.ok || (await host.attach(CALLER, hostTestAttachParams(fence))).ok).toBe(true)
+    // The start adjudicates the dead owner first, which moves the fence, then reserves at the
+    // fence it reads from the record.
+    expect(await startAgentForTests(host, SESSION)).toMatchObject({ ok: true })
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
@@ -413,7 +411,7 @@ describe('already-wedged profiles become usable on load', () => {
     await seedRunningTurn()
     openHost()
 
-    expect(await host.attach(CALLER, hostTestAttachParams(13))).toMatchObject({ ok: true })
+    expect(await startAgentForTests(host, SESSION)).toMatchObject({ ok: true })
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
@@ -506,7 +504,7 @@ describe('already-wedged profiles become usable on load', () => {
       ownerProcess: null,
       deathEvidence: null
     })
-    expect(await host.attach(CALLER, hostTestAttachParams(14))).toMatchObject({ ok: true })
+    expect(await startAgentForTests(host, SESSION)).toMatchObject({ ok: true })
     expect(acquire).toHaveBeenCalledOnce()
   })
 
@@ -530,7 +528,9 @@ describe('already-wedged profiles become usable on load', () => {
         runtimeFence: 14,
         deathEvidence: null
       })
-      expect(await host.attach(CALLER, hostTestAttachParams(14))).toMatchObject({ ok: true })
+      expect(await startAgentForTests(host, SESSION)).toMatchObject({
+        ok: true
+      })
       expect(acquire).toHaveBeenCalledOnce()
     }
   )
@@ -542,7 +542,7 @@ describe('already-wedged profiles become usable on load', () => {
     await seedRunningTurn()
     openHost()
 
-    expect(await host.attach(CALLER, hostTestAttachParams(13))).toMatchObject({ ok: true })
+    expect(await startAgentForTests(host, SESSION)).toMatchObject({ ok: true })
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(turnLifecycle('turn-1')).toEqual({
@@ -560,14 +560,14 @@ describe('already-wedged profiles become usable on load', () => {
     ).toBe(false)
   })
 
-  it("leaves the live generation's running turn alone on a re-attach", async () => {
+  it("leaves the live generation's running turn alone on a second start", async () => {
     await seedStore(wedgedRecord({ claimStatus: 'released', handoffStage: null }))
     // The child this host spawns stays provably alive across the second attach.
     openHost({
       probeOwner: async () => ({ outcome: 'identity-matched', matchedOn: ['spawn-token'] })
     })
     const params = hostTestAttachParams(13)
-    expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
+    expect(await attachForTests(host, CALLER, params)).toMatchObject({ ok: true })
     const fence = store.getRecord(SESSION)!.lease.runtimeFence
     await restoredJournal().appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'turn-2', ordinal: 0 },
@@ -575,8 +575,8 @@ describe('already-wedged profiles become usable on load', () => {
       { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
-    // A reconnecting client replays its attach; the same operation admits the live owner.
-    expect(await host.attach(CALLER, params)).toMatchObject({ ok: true, replayed: true })
+    // The next start, a second message's, finds the agent running and leaves it alone.
+    expect(await attachForTests(host, CALLER, params)).toMatchObject({ ok: true })
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(turnLifecycle('turn-2')).toEqual({ turnId: 'turn-2', state: 'running', startedAt: NOW })
@@ -694,8 +694,9 @@ describe('already-wedged profiles become usable on load', () => {
     await host.restoreReadableSessions()
     expect(order).toEqual([])
     expect(scan).not.toHaveBeenCalled()
-    const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
-    expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({ ok: true })
+    expect(await startAgentForTests(host, SESSION)).toMatchObject({
+      ok: true
+    })
 
     expect(order).toEqual(['acquire'])
   })
@@ -714,8 +715,7 @@ describe('already-wedged profiles become usable on load', () => {
     await host.restoreReadableSessions()
 
     // A terminal agent keeps its transport across a restart, so an unanswered probe is not a way in.
-    const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
-    expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({
+    expect(await startAgentForTests(host, SESSION)).toMatchObject({
       ok: false,
       refusal: { code: 'agent_session_conflict' }
     })

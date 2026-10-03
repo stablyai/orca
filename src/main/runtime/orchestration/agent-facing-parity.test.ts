@@ -30,6 +30,7 @@ const sent = vi.hoisted((): { preambles: string[] } => ({ preambles: [] }))
 vi.mock('../rpc/methods/orchestration-structured-worker-session', () => ({
   sendStructuredWorkerPreamble: async (args: { preamble: string }) => {
     sent.preambles.push(args.preamble)
+    return { state: 'accepted' as const }
   }
 }))
 

@@ -1,5 +1,5 @@
-// A durably failed create tells a client what the host proved about the provider process, so a
-// client can tell "retry under a new operation" (exited) from "the session may exist" (anything else).
+// A failed first start says what the host proved about the provider process, so a reader can tell
+// "the next start goes ahead" (exited) from "the process may still exist" (anything else).
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -23,12 +23,13 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { attachForTests, startAgentForTests } from './structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
 const EXIT_REASON = 'claude stream-json exited (code 1): stderr tail'
 // The refusal says what the chat's start failure says; the error text stays in the log.
-const COULD_NOT_RESTART = "Codex couldn't restart. Send your message to try again."
+const COULD_NOT_START = "Codex couldn't start. Send your message to try again."
 const PROVIDER_STOPPED =
   'Codex stopped before it finished starting. Send your message to try again.'
 
@@ -74,10 +75,10 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-describe('failed create owner verdict', () => {
+describe('failed first start owner verdict', () => {
   it.each([
     // The cleanup's release proves the whole tree gone, which says nothing about why it failed.
-    ['a failure the cleanup proved gone', () => new Error(EXIT_REASON), {}, COULD_NOT_RESTART],
+    ['a failure the cleanup proved gone', () => new Error(EXIT_REASON), {}, COULD_NOT_START],
     // Only an exit the adapter saw says the provider stopped.
     [
       'an exit the adapter observed',
@@ -86,12 +87,10 @@ describe('failed create owner verdict', () => {
       PROVIDER_STOPPED
     ]
   ])(
-    'answers %s as exited on the first call and its replay, and a new operation starts fresh',
+    'answers %s as exited, and the next start goes ahead',
     async (_case, failure, situation, message) => {
       acquire.mockRejectedValueOnce(failure())
-      const first = hostTestAttachParams(null)
-      // The replay names the same details as the first answer: the ledger kept them beside the code,
-      // and the verdict reaches released clients at the top level exactly as before.
+      // The verdict reaches released clients at the top level exactly as before.
       const refusal = {
         code: 'agent_session_operation_invalid',
         details: { ...situation, ownerVerdict: 'exited' },
@@ -99,13 +98,13 @@ describe('failed create owner verdict', () => {
         ownerVerdict: 'exited'
       }
 
-      await expect(host.attach(CALLER, first)).resolves.toEqual({ ok: false, refusal })
-      await expect(host.attach(CALLER, first)).resolves.toEqual({ ok: false, refusal })
+      await expect(attachForTests(host, CALLER, hostTestAttachParams(null))).resolves.toEqual({
+        ok: false,
+        refusal
+      })
       expect(acquire).toHaveBeenCalledOnce()
 
-      const retry = hostTestAttachParams(null)
-      expect(retry.envelope.clientOperationId).not.toBe(first.envelope.clientOperationId)
-      await expect(host.attach(CALLER, retry)).resolves.toMatchObject({ ok: true })
+      await expect(startAgentForTests(host, SESSION)).resolves.toMatchObject({ ok: true })
       expect(acquire).toHaveBeenCalledTimes(2)
       expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
     }
@@ -113,7 +112,7 @@ describe('failed create owner verdict', () => {
 
   it.each([
     // A cleanup that saw the root go may have stopped it itself.
-    ['a root exit the cleanup saw', () => new Error(EXIT_REASON), {}, COULD_NOT_RESTART],
+    ['a root exit the cleanup saw', () => new Error(EXIT_REASON), {}, COULD_NOT_START],
     [
       'a root exit the adapter observed',
       () => withObservedProviderExit(new Error(EXIT_REASON)),
@@ -121,12 +120,9 @@ describe('failed create owner verdict', () => {
       PROVIDER_STOPPED
     ]
   ])(
-    'answers %s as exited on the first call, in the shape its replay takes',
+    'answers %s as exited, and the next start goes ahead',
     async (_case, cause, situation, message) => {
       acquire.mockRejectedValueOnce(new AgentSessionAcquisitionRootExitObservedError(cause()))
-      const first = hostTestAttachParams(null)
-      // The replay names the same details as the first answer: the ledger kept them beside the code,
-      // and the verdict reaches released clients at the top level exactly as before.
       const refusal = {
         code: 'agent_session_operation_invalid',
         details: { ...situation, ownerVerdict: 'exited' },
@@ -134,13 +130,13 @@ describe('failed create owner verdict', () => {
         ownerVerdict: 'exited'
       }
 
-      await expect(host.attach(CALLER, first)).resolves.toEqual({ ok: false, refusal })
-      await expect(host.attach(CALLER, first)).resolves.toEqual({ ok: false, refusal })
+      await expect(attachForTests(host, CALLER, hostTestAttachParams(null))).resolves.toEqual({
+        ok: false,
+        refusal
+      })
       expect(acquire).toHaveBeenCalledOnce()
 
-      await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
-        ok: true
-      })
+      await expect(startAgentForTests(host, SESSION)).resolves.toMatchObject({ ok: true })
       expect(acquire).toHaveBeenCalledTimes(2)
     }
   )
@@ -148,7 +144,7 @@ describe('failed create owner verdict', () => {
   it('answers an acquisition refusal with its verdict directly', async () => {
     acquire.mockRejectedValueOnce(new AgentSessionAcquisitionRefusal('not signed in'))
 
-    await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toEqual({
+    await expect(attachForTests(host, CALLER, hostTestAttachParams(null))).resolves.toEqual({
       ok: false,
       refusal: {
         code: 'agent_session_operation_invalid',
@@ -161,12 +157,9 @@ describe('failed create owner verdict', () => {
 
   it('never claims exited when the failed attempt could not prove its process gone', async () => {
     acquire.mockRejectedValueOnce(new AgentSessionAcquisitionExitUnprovenError(new Error('hung')))
-    const first = hostTestAttachParams(null)
+    const answer = await attachForTests(host, CALLER, hostTestAttachParams(null))
 
-    await expect(host.attach(CALLER, first)).rejects.toThrow()
-    const replay = await host.attach(CALLER, first)
-
-    expect(replay).toMatchObject({
+    expect(answer).toMatchObject({
       ok: false,
       refusal: { code: 'agent_session_ownership_unknown', ownerVerdict: 'unverifiable' }
     })

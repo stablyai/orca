@@ -262,7 +262,7 @@ describe('a rewind that restates a turnless Stop', () => {
     expect(await rig.stop()).toMatchObject({ ok: true })
     expect(journal().stopMarks.latest()?.event).not.toHaveProperty('turnId')
     await rig.settleAccepted(stopped, 'stopped')
-    const scope = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    const scope = { fence: fence(), turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     const stoppedTurn = { ...LATER_TURN, turnId: 'turn-stopped', ordinal: 998 }
     const ended = {
       kind: 'turn' as const,
@@ -277,7 +277,7 @@ describe('a rewind that restates a turnless Stop', () => {
     )
     await journal().appendItem(stoppedTurn, { ...ended, completedAt: Date.now() + 1 }, scope)
 
-    await journal().replaceEpochItems('handle_forked', 1, [
+    await journal().replaceEpochItems('handle_forked', fence(), [
       {
         identity: stoppedTurn,
         body: { ...ended, completedAt: Date.now() + 1, outcome: 'cancellation' }

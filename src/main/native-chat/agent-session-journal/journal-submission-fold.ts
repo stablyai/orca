@@ -7,6 +7,7 @@ import {
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { journalRenderItem } from './journal-render-item'
+import { readAgentSessionReviewReply } from '../../../shared/agent-session-review-reply'
 import { statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
@@ -32,6 +33,11 @@ export function applyJournalSubmission(
       : {}),
     ...(row.origin === 'client' || row.origin === 'host' ? { origin: row.origin } : {})
   })
+  // A malformed stored spec is dropped, never the row; it then runs nothing.
+  const reviewReply = readAgentSessionReviewReply(row.reviewReply)
+  if (reviewReply) {
+    state.reviewReplies.set(row.clientMessageId, reviewReply)
+  }
   const itemId = agentJournalSubmissionKey(row.clientMessageId)
   // A message handed over later belongs to no turn until its handover names one.
   const turnScope = row.handoverRecorded

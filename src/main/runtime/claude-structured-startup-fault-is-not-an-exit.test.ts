@@ -12,6 +12,7 @@ import {
   createScriptedClaudeRuntime,
   scriptedClaudeExitError
 } from './structured-claude-scripted-runtime-test-support'
+import { attachForTests } from '../native-chat/agent-session-wire/structured-agent-session-attach-test-support'
 
 const SESSION = 'claude-startup-fault'
 const CALLER = { callerKey: 'client-1' }
@@ -79,7 +80,8 @@ describe('a Claude start that Orca fails while the CLI is still running', () => 
     claude.behave(SESSION, { optionWritesFail: true })
     const host = await claude.install()
     await expect(
-      host.attach(
+      attachForTests(
+        host,
         CALLER,
         claude.attachParams(SESSION, null, { options: { permissionMode: 'plan' } })
       )
@@ -94,7 +96,9 @@ describe('a Claude start that Orca fails while the CLI is still running', () => 
   it('records on a held message a start that could not happen when init names another session', async () => {
     claude.behave(SESSION, { initHangs: true, initNamesForeignSession: true })
     const host = await claude.install()
-    await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(SESSION, null))
+    ).resolves.toMatchObject({
       ok: true
     })
     const held = await send(host, 'hello')
@@ -117,7 +121,9 @@ describe('a Claude start that Orca fails while the CLI is still running', () => 
   it('still says Claude stopped when the CLI exits on its own before its start lands', async () => {
     claude.behave(SESSION, { initHangs: true })
     const host = await claude.install()
-    await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(SESSION, null))
+    ).resolves.toMatchObject({
       ok: true
     })
     const held = await send(host, 'hello')

@@ -26,6 +26,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { attachForTests } from './structured-agent-session-attach-test-support'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 const CALLER = { callerKey: 'client-1' }
@@ -99,7 +100,7 @@ beforeEach(async () => {
     mintSpawnToken: () => 'spawn-1',
     now: () => NOW
   })
-  expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
+  expect(await attachForTests(host, CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
 })
 
 afterEach(async () => {
@@ -184,13 +185,13 @@ describe('a Stop that names no turn', () => {
     expect(stopped).toEqual({
       ok: true,
       replayed: false,
-      fence: 1,
+      fence: 2,
       cursor: expect.anything(),
       value: { cancelled: true }
     })
     expect(cancelTurn).toHaveBeenCalledTimes(1)
     expect(cancelTurn.mock.calls[0]![0]).not.toHaveProperty('turnId')
-    expect(cancelTurn.mock.calls[0]![0]).toMatchObject({ sessionId: SESSION, fence: 1 })
+    expect(cancelTurn.mock.calls[0]![0]).toMatchObject({ sessionId: SESSION, fence: 2 })
     expect(await statusRows()).toEqual(['Cancellation requested.'])
   })
 

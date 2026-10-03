@@ -53,11 +53,14 @@ async function readStructuredAgentSessionOptionsAtRest(
     saved.fastMode === undefined
       ? null
       : decodeStructuredAgentSessionOptionValue('fastMode', saved.fastMode)
-  // An unknown model is one the client already treats as unconfirmed. Only a real listing names the
-  // account's default; a built-in list's default is a guess, so with none the client keeps its own.
+  // An unnamed model is one the client shows as unknown. Only a real Codex listing names the model a
+  // start will run; Claude's settings or env may pick another than its listing's default, so a Claude
+  // chat no agent has run names none, as its live child and the client's own upgrade never do.
   const model =
     saved.model ??
-    (catalog.origin === 'unknown' ? undefined : models.find((entry) => entry.isDefault)?.id) ??
+    (catalog.origin === 'unknown' || record.provider !== 'codex'
+      ? undefined
+      : models.find((entry) => entry.isDefault)?.id) ??
     ''
   // As a live child answers: the pick, else what Claude runs for this model when none is sent.
   // A live Codex child answers only the effort its thread reported, never the model's default.

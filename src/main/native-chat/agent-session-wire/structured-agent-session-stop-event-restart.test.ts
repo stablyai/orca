@@ -47,6 +47,11 @@ let rig: QueuedMessageTestRig
 
 afterEach(() => rig.dispose())
 
+/** The started chat's fence: a create at rest holds the first, and its first start takes the next. */
+function fence(): number {
+  return rig.store.getRecord(HOST_TEST_SESSION)?.lease.runtimeFence ?? 1
+}
+
 function journal() {
   const open = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.journal
   if (!open) {
@@ -65,7 +70,7 @@ async function runningTurn(
   await journal().appendItem(
     identity,
     { kind: 'turn', turnId: TURN, state: 'running', startedAt: Date.now() - 30_000 },
-    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    { fence: fence(), turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
 }
 
@@ -74,6 +79,7 @@ async function runningTurn(
 async function restartAndSettle(
   proof: 'pid-absent' | 'exit-observed' | 'unproven' = 'pid-absent'
 ): Promise<void> {
+  const ownerFence = fence()
   rig.crashRestartHostProcess()
   await rig.host.journalSnapshot(HOST_TEST_SESSION)
   const now = Date.now()
@@ -84,13 +90,13 @@ async function restartAndSettle(
           kind: proof,
           detail: 'the relaunch proved the old child gone',
           observedAt: now + 60_000,
-          ownerFence: 1,
+          ownerFence,
           lastProvenAliveAt: now - 20_000
         }
   await settleStaleStructuredAgentSessionState({
     journal: journal(),
     sessionId: HOST_TEST_SESSION,
-    fence: 2,
+    fence: ownerFence + 1,
     acquisitionGeneration: 'generation-2',
     deathEvidence
   })
@@ -218,12 +224,12 @@ describe('a restart between a Stop and its turn end', () => {
         outcome: 'success',
         completedAt: Date.now()
       },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      { fence: fence(), turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal().appendItem(
       CODEX_NEXT_TURN,
       { kind: 'turn', turnId: NEXT_TURN, state: 'running', startedAt: Date.now() - 10_000 },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      { fence: fence(), turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     // Its exit is proven after the Stop, so only the turn the Stop named decides.
@@ -262,7 +268,7 @@ describe('a restart between a Stop and its turn end', () => {
     await journal().appendItem(
       CODEX_TURN,
       { kind: 'turn', turnId: TURN, state: 'running', startedAt: Date.now() - 30_000 },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      { fence: fence(), turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     // Its exit is proven after the Stop, so only whose turn it is decides.
@@ -279,7 +285,7 @@ describe('a restart between a Stop and its turn end', () => {
     expect(await rig.stop()).toMatchObject({ ok: true })
     expect(journal().stopMarks.latest()?.event.turnId).toBeUndefined()
     await rig.settleAccepted(stopped, 'stopped')
-    const scope = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    const scope = { fence: fence(), turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     // Codex names the send that opened a turn on its row.
     const opener = agentJournalSubmissionKey(stopped)
     await journal().appendItem(

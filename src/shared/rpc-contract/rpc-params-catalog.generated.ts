@@ -145,7 +145,7 @@ import {
   TypeText
 } from './computer-schemas-params'
 import {
-  AttachParams as AttachParamsOfEmulatorParams,
+  AttachParams,
   AxParams,
   ButtonParams,
   EmulatorAvailabilityParams,
@@ -472,7 +472,6 @@ import {
 } from './speech-params'
 import { SshTarget } from './ssh-params'
 import {
-  AttachParams,
   CancelParams,
   ConversationCommandParams,
   CreateParams,
@@ -593,7 +592,6 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.conversationOutline': OptionsParams,
   'agentSession.create': CreateParams,
   'agentSession.createSupport': CreateSupportParams,
-  'agentSession.ensure': AttachParams,
   'agentSession.handoffStatus': HandoffStatusParams,
   'agentSession.history': HistoryParams,
   'agentSession.hold': HoldParams,
@@ -753,7 +751,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.setValue': SetValue,
   'computer.typeText': TypeText,
   'diagnostics.memory': null,
-  'emulator.attach': AttachParamsOfEmulatorParams,
+  'emulator.attach': AttachParams,
   'emulator.availability': EmulatorAvailabilityParams,
   'emulator.ax': AxParams,
   'emulator.button': ButtonParams,

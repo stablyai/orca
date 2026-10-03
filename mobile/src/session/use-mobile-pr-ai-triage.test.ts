@@ -101,7 +101,7 @@ describe('useMobilePrAiTriage', () => {
       await triage?.launch('resolve-conflicts', () => 'resolve the conflicts')
     })
     expect(triage?.noticeFor('resolve-conflicts')).toEqual({
-      success: 'Agent started in feature-login',
+      success: 'Sent to an agent in feature-login',
       error: null,
       warning: null,
       undeliveredPrompt: null

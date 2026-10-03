@@ -25,6 +25,7 @@ import { runWorktreeAgentActivationGate } from '../../src/renderer/src/lib/workt
 import { readWorktreeStructuredActivationInventory } from '../../src/renderer/src/lib/worktree-agent-structured-inventory'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
 import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { attachForTests } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 
 const WORKTREE = 'repo-1::/workspace/repo'
@@ -119,7 +120,9 @@ beforeEach(async () => {
   closeSession = vi.fn(async () => true)
   store = await openTestAgentSessionRecordStore(root)
   openHost()
-  expect(await host.attach({ callerKey: 'client-1' }, hostTestAttachParams(null))).toMatchObject({
+  expect(
+    await attachForTests(host, { callerKey: 'client-1' }, hostTestAttachParams(null))
+  ).toMatchObject({
     ok: true
   })
   serveDesktopRuntime()

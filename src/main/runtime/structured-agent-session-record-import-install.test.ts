@@ -12,6 +12,7 @@ import { journalPragmaNumber } from '../native-chat/agent-session-journal/journa
 import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { legacyAgentSessionStorePath } from './agent-session-record-store-file'
+import { foundAndReserveTestAgentSessionRecord } from './agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
   ensureStructuredAgentSessionHost,
@@ -118,7 +119,7 @@ it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     expect(first.unverifiable()).toBe(true)
     expect(databaseVersion()).toBe(3)
     // A chat started meanwhile lives in the database and keeps its row through the copy.
-    await host.deps.store.reserveOwner({
+    await foundAndReserveTestAgentSessionRecord(host.deps.store, {
       sessionId: CREATED_WHILE_OWED,
       location: {
         executionHostId: 'local',
@@ -128,7 +129,6 @@ it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
       },
       provider: 'claude',
       accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
-      expectedFence: null,
       spawnToken: 'spawn-new',
       claimKeyId: 'key-1',
       handoffOperationId: null,

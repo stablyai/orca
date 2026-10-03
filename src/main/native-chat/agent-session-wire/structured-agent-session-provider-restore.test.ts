@@ -16,6 +16,7 @@ import {
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { attachForTests } from './structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CLAUDE_SESSION = 'claude-session'
@@ -82,7 +83,8 @@ describe('structured session provider restore', () => {
     resetHostTestOperationIds()
     const store = await openTestAgentSessionRecordStore(root)
     const host = createHost(store)
-    const attached = await host.attach(
+    const attached = await attachForTests(
+      host,
       { callerKey: 'client-1' },
       hostTestAttachParams(null, {
         provider: 'claude',

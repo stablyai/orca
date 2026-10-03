@@ -4,7 +4,7 @@ import type { RpcResponse } from '../transport/types'
 import { AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE } from './mobile-existing-agent-launch'
 import {
   AGENT_PROMPT_NOT_SENT_MESSAGE,
-  agentStartedMessage,
+  agentPromptSentMessage,
   launchAgentWithPrompt,
   promptedLaunchNotice
 } from './pr-ai-triage-launch'
@@ -265,7 +265,7 @@ describe('promptedLaunchNotice', () => {
     })
     expect(promptedLaunchNotice({ kind: 'sent' })).toEqual({
       succeeded: true,
-      success: 'Agent started',
+      success: 'Sent to an agent',
       error: null,
       warning: null,
       undeliveredPrompt: null
@@ -283,7 +283,7 @@ describe('promptedLaunchNotice', () => {
   it('never reports the host warning on a launch that went ahead as an error', () => {
     expect(promptedLaunchNotice({ kind: 'sent', warning: 'arguments were ignored' })).toEqual({
       succeeded: true,
-      success: 'Agent started',
+      success: 'Sent to an agent',
       error: null,
       warning: 'arguments were ignored',
       undeliveredPrompt: null
@@ -304,16 +304,16 @@ describe('promptedLaunchNotice', () => {
   })
 })
 
-describe('agentStartedMessage', () => {
+describe('agentPromptSentMessage', () => {
   // Issue #20543: a launch from the phone must say it happened, and where.
-  it('names the workspace the agent started in', () => {
+  it('names the workspace the prompt went to', () => {
     expect(promptedLaunchNotice({ kind: 'sent' }, 'feature-login').success).toBe(
-      'Agent started in feature-login'
+      'Sent to an agent in feature-login'
     )
   })
 
   it('still confirms the launch when the screen knows no workspace name', () => {
-    expect(agentStartedMessage(null)).toBe('Agent started')
-    expect(agentStartedMessage('   ')).toBe('Agent started')
+    expect(agentPromptSentMessage(null)).toBe('Sent to an agent')
+    expect(agentPromptSentMessage('   ')).toBe('Sent to an agent')
   })
 })
