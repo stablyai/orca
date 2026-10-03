@@ -38,6 +38,7 @@ import {
 import { interruptedLocalWorktreeRemovalJob } from './runtime-interrupted-local-worktree-removal'
 import { retryFailedRemovalUnlessRegistered } from '../worktree-removal-table'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
+import { stampRenamedPtyTitle } from './runtime-terminal-rename-title'
 
 export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithRemoveManagedWorktree {
   protected async resolveWorktreeRemovalTarget(
@@ -210,10 +211,7 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
   async renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
-      pty.pty.title = title
-      // Why: a manual rename must outrank later agent OSC title updates (which
-      // win by timestamp), so stamp it as the freshest title.
-      pty.pty.titleUpdatedAt = Date.now()
+      stampRenamedPtyTitle(pty.pty, title)
       this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
       // Why: without a renderer the rename only lived on the live pty and was
       // lost on restart. Persist customTitle so a headless rebuild keeps it.
@@ -236,6 +234,9 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
+    // Why: `terminal list` reads the PTY stamp. The renderer's tab title alone loses to
+    // the pane's own title, which an idle pane never re-reports (#24914).
+    stampRenamedPtyTitle(leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined, title)
     this.notifier?.renameTerminal(leaf.tabId, title)
     return { handle, tabId: leaf.tabId, title }
   }

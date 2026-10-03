@@ -153,12 +153,16 @@ export function getLatestLeafTitle(
     LeafStatusRecord,
     'paneTitle' | 'paneTitleUpdatedAt' | 'lastOscTitle' | 'lastOscTitleAt'
   >,
-  tabTitle: string | null
+  tabTitle: string | null,
+  ptyTitle: { title: string | null; updatedAt: number | null } | null = null
 ): string | null {
   return getLatestAgentCandidateTitle(
     { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
     { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt },
-    { title: tabTitle, updatedAt: 0 }
+    { title: tabTitle, updatedAt: 0 },
+    // Why: `terminal rename` stamps the live PTY, not the leaf. An idle pane never
+    // re-reports its title, so without this candidate the old pane title wins (#24914).
+    ...(ptyTitle ? [ptyTitle] : [])
   )
 }
 
