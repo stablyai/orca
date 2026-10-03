@@ -69,7 +69,7 @@ export function NativeChatNoticeRow({
           <CommentMarkdown
             content={block.text}
             variant="document"
-            className="text-sm"
+            className="text-sm tabular-nums [&_code]:[font-variant-numeric:normal]"
             onLinkClick={onLinkClick}
             allowFileUriLinks={allowFileUriLinks}
             linkifyFilePaths={onLinkClick !== undefined}
