@@ -6,6 +6,7 @@ function makeState(
     activeView?: string
     experimentEnabled?: boolean
     mode?: 'in-window' | 'popout'
+    docked?: boolean
     drawerOpen?: boolean
   } = {}
 ) {
@@ -13,7 +14,8 @@ function makeState(
     activeView: overrides.activeView ?? 'terminal',
     settings: {
       experimentalAgentDashboardPopout: overrides.experimentEnabled ?? true,
-      experimentalAgentDashboardMode: overrides.mode ?? 'in-window'
+      experimentalAgentDashboardMode: overrides.mode ?? 'in-window',
+      experimentalAgentDashboardDocked: overrides.docked ?? false
     },
     agentDashboardDrawerOpen: overrides.drawerOpen ?? false,
     setSidebarOpen: vi.fn(),
@@ -61,6 +63,13 @@ describe('toggleAgentDashboardFromShortcut', () => {
 
     expect(state.setSidebarOpen).toHaveBeenCalledWith(true)
     expect(state.setAgentDashboardDrawerOpen).toHaveBeenCalledWith(true)
+  })
+
+  it('opens the dock without expanding the sidebar', () => {
+    const state = makeState({ docked: true })
+    toggleAgentDashboardFromShortcut(state as never, vi.fn())
+    expect(state.setAgentDashboardDrawerOpen).toHaveBeenCalledWith(true)
+    expect(state.setSidebarOpen).not.toHaveBeenCalled()
   })
 
   it('leaves the sidebar alone when closing the in-window drawer', () => {

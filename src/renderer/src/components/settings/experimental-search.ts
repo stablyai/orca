@@ -85,6 +85,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
           'auto.components.settings.experimental.search.agentDashboard.inWindow',
           'in-window'
         ),
+        ...translateSearchKeyword('dashboardPopout.settings.dockAbove', 'Dock above workspace'),
         ...translateSearchKeyword(
           'auto.components.settings.experimental.search.agentDashboard.worktrees',
           'worktrees'
