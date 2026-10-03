@@ -1,5 +1,7 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import {
+  GITLAB_LABEL_FILTER_RUNTIME_CAPABILITY,
+  GITLAB_LABEL_FILTER_UPDATE_REQUIRED_MESSAGE,
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
   GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE
 } from '../../../../shared/protocol-version'
@@ -16,6 +18,11 @@ export function createGitLabApi(): WebGitLabApi {
   const route = <Result>(method: WebGitLabRuntimeMethod, args?: unknown): Promise<Result> =>
     callRuntimeResult<Result>(method, mapRepoPathArg(args))
 
+  const labelFilterSupported = async (): Promise<boolean> => {
+    const status = await getRemoteRuntimeStatus()
+    return Boolean(status?.capabilities?.includes(GITLAB_LABEL_FILTER_RUNTIME_CAPABILITY))
+  }
+
   const gitLabApi = {
     viewer: () => Promise.resolve(null),
     diagnoseAuth: () => route<WebGitLabResult<'diagnoseAuth'>>(GITLAB_WEB_RPC_METHODS.diagnoseAuth),
@@ -24,12 +31,43 @@ export function createGitLabApi(): WebGitLabApi {
     projectSlug: () => Promise.resolve(null),
     mrForBranch: () => Promise.resolve(null),
     mr: () => Promise.resolve(null),
-    listMRs: (args) => route<WebGitLabResult<'listMRs'>>(GITLAB_WEB_RPC_METHODS.listMRs, args),
-    listWorkItems: (args) =>
-      route<WebGitLabResult<'listWorkItems'>>(GITLAB_WEB_RPC_METHODS.listWorkItems, args),
+    listMRs: async (args) => {
+      if (args.labels?.length && !(await labelFilterSupported())) {
+        return {
+          items: [],
+          page: args.page ?? 1,
+          perPage: args.perPage ?? 20,
+          totalCount: 0,
+          totalPages: 0,
+          error: { type: 'validation_error', message: GITLAB_LABEL_FILTER_UPDATE_REQUIRED_MESSAGE }
+        }
+      }
+      return route<WebGitLabResult<'listMRs'>>(GITLAB_WEB_RPC_METHODS.listMRs, args)
+    },
+    listWorkItems: async (args) => {
+      if (args.labels?.length && !(await labelFilterSupported())) {
+        return {
+          items: [],
+          page: args.page ?? 1,
+          perPage: args.perPage ?? 20,
+          totalCount: 0,
+          totalPages: 0,
+          error: { type: 'validation_error', message: GITLAB_LABEL_FILTER_UPDATE_REQUIRED_MESSAGE }
+        }
+      }
+      return route<WebGitLabResult<'listWorkItems'>>(GITLAB_WEB_RPC_METHODS.listWorkItems, args)
+    },
     issue: () => Promise.resolve(null),
-    listIssues: (args) =>
-      route<WebGitLabResult<'listIssues'>>(GITLAB_WEB_RPC_METHODS.listIssues, args),
+    listIssues: async (args) => {
+      if (args.labels?.length && !(await labelFilterSupported())) {
+        return {
+          items: [],
+          totalPages: 0,
+          error: { type: 'validation_error', message: GITLAB_LABEL_FILTER_UPDATE_REQUIRED_MESSAGE }
+        }
+      }
+      return route<WebGitLabResult<'listIssues'>>(GITLAB_WEB_RPC_METHODS.listIssues, args)
+    },
     createIssue: (args) =>
       route<WebGitLabResult<'createIssue'>>(GITLAB_WEB_RPC_METHODS.createIssue, args),
     updateIssue: (args) =>

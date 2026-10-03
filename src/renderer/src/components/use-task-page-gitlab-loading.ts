@@ -19,8 +19,46 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
     gitlabView,
     setGitlabTodos,
     setGitlabTodosLoading,
-    activeGitlabFilter
+    activeGitlabFilter,
+    setGitlabLabelOptions,
+    selectedGitlabLabels
   } = model
+  const labelViewActive = gitlabView !== 'todos'
+  useEffect(() => {
+    setGitlabLabelOptions({ repoKey: selectedReposKey, labels: [], error: false })
+    if (taskSource !== 'gitlab' || !labelViewActive || selectedRepos.length === 0) {
+      return
+    }
+    let stale = false
+    void Promise.allSettled(
+      selectedRepos.map((repo) =>
+        window.api.gl.listLabels({
+          repoPath: repo.path,
+          repoId: repo.id,
+          sourceContext: getTaskPageRepoSourceContext(repo, 'gitlab')
+        })
+      )
+    ).then((results) => {
+      if (stale) {
+        return
+      }
+      const labels = [
+        ...new Set(results.flatMap((result) => (result.status === 'fulfilled' ? result.value : [])))
+      ]
+        .filter((label): label is string => typeof label === 'string')
+        .sort((a, b) => a.localeCompare(b))
+      setGitlabLabelOptions({
+        repoKey: selectedReposKey,
+        labels,
+        error: results.some((result) => result.status === 'rejected')
+      })
+    })
+    return () => {
+      stale = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedReposKey covers the selected repository fields; array identity changes on unrelated store updates.
+  }, [taskSource, labelViewActive, selectedReposKey, gitlabRefreshNonce, setGitlabLabelOptions])
+
   // Why: fetch GitLab Issues and MRs separately so errors stay isolated per tab (mirrors GitHub's split endpoints).
   useEffect(() => {
     if (taskSource !== 'gitlab') {
@@ -61,7 +99,8 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
                 sourceContext: getTaskPageRepoSourceContext(repo, 'gitlab'),
                 state: 'opened',
                 assignee: isAssignedToMe ? '@me' : undefined,
-                limit: 50
+                limit: 50,
+                labels: selectedGitlabLabels.length > 0 ? selectedGitlabLabels : undefined
               })
               .then((result) => {
                 const typed = result as {
@@ -88,7 +127,8 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
                 sourceContext: getTaskPageRepoSourceContext(repo, 'gitlab'),
                 state: activeMRFilter ?? 'opened',
                 page: 1,
-                perPage: 50
+                perPage: 50,
+                labels: selectedGitlabLabels.length > 0 ? selectedGitlabLabels : undefined
               })
               .then((result) => {
                 const typed = result as {
@@ -143,7 +183,14 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
       stale = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedReposKey covers every selectedRepos field read above (see its GitHub-scoped-context note); keying off the array ref would re-run on every parent render.
-  }, [taskSource, gitlabView, activeGitlabFilter, gitlabRefreshNonce, selectedReposKey])
+  }, [
+    taskSource,
+    gitlabView,
+    activeGitlabFilter,
+    gitlabRefreshNonce,
+    selectedReposKey,
+    selectedGitlabLabels
+  ])
 
   // Why: Todos fetch has its own effect — different trigger (no chip filter) and data path (gl.todos is user-scoped, not repo-scoped).
   useEffect(() => {

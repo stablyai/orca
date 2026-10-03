@@ -272,7 +272,7 @@ describe('AgentStatusStore', () => {
     expect(replica.getParent(parent)?.firstObservedAt).toBe(30)
   })
 
-  it.fails('does not roll a replica back to a superseded epoch snapshot', () => {
+  it('does not roll a replica back to a superseded epoch snapshot', () => {
     const parent = subject()
     const first = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
     first.applyMutation({ parent: { subject: parent, firstObservedAt: 10 } })
@@ -282,6 +282,22 @@ describe('AgentStatusStore', () => {
     expect(replica.applySnapshot(first.getSnapshot())).toBe(true)
     expect(replica.applySnapshot(second.getSnapshot())).toBe(true)
     expect(replica.applySnapshot(first.getSnapshot())).toBe(false)
+    expect(replica.getParent(parent)?.firstObservedAt).toBe(20)
+  })
+
+  it('rejects a superseded epoch snapshot replayed by transport, even at a higher revision', () => {
+    const parent = subject()
+    const first = createAgentStatusStore({ epoch: 'opaque-A', mode: 'authority' })
+    first.applyMutation({ parent: { subject: parent, firstObservedAt: 10 } })
+    const second = createAgentStatusStore({ epoch: 'opaque-B', mode: 'authority' })
+    second.applyMutation({ parent: { subject: parent, firstObservedAt: 20 } })
+    const replica = createAgentStatusStore({ epoch: 'replica', mode: 'replica' })
+    expect(replica.applySnapshot(first.getSnapshot())).toBe(true)
+    expect(replica.applySnapshot(second.getSnapshot())).toBe(true)
+    first.applyMutation({ parent: { subject: parent, firstObservedAt: 30 } })
+    expect(
+      replica.applyTransportEnvelope({ type: 'snapshot', snapshot: first.getSnapshot() })
+    ).toBe(false)
     expect(replica.getParent(parent)?.firstObservedAt).toBe(20)
   })
 

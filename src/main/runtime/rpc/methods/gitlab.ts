@@ -33,7 +33,8 @@ export const GITLAB_METHODS = [
         params.state,
         params.page,
         params.perPage,
-        params.query
+        params.query,
+        ...(params.labels === undefined ? [] : [params.labels])
       )
   }),
   defineMethod({
@@ -45,7 +46,8 @@ export const GITLAB_METHODS = [
         params.state,
         params.page,
         params.perPage,
-        params.query
+        params.query,
+        ...(params.labels === undefined ? [] : [params.labels])
       )
   }),
   defineMethod({
@@ -58,7 +60,8 @@ export const GITLAB_METHODS = [
         normalized.state,
         normalized.assignee,
         normalized.limit,
-        normalized.page
+        normalized.page,
+        ...(params.labels === undefined ? [] : [params.labels])
       )
     }
   }),

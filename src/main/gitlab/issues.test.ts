@@ -105,7 +105,7 @@ describe('gitlab issue operations', () => {
           created_at: '2026-06-16T00:00:00.000Z'
         })
       })
-      .mockResolvedValueOnce({ stdout: 'bug\nfrontend\n' })
+      .mockResolvedValueOnce({ stdout: '{"name":"bug"}\n{"name":"frontend"}\n' })
       .mockResolvedValueOnce({ stdout: '{"id":1,"username":"octo","avatar_url":""}\n' })
     glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
 
@@ -177,6 +177,23 @@ describe('gitlab issue operations', () => {
     expect(glabApiWithHeadersMock).toHaveBeenCalledWith(
       [
         'projects/stablyai%2Forca/issues?page=1&per_page=5&order_by=updated_at&sort=desc&state=opened'
+      ],
+      { cwd: '/repo-root' }
+    )
+  })
+
+  it('forwards the selected label while preserving pagination', async () => {
+    getIssueProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'stablyai/orca' })
+    glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
+
+    await listIssues('/repo-root', 50, undefined, 'opened', undefined, null, {}, 2, [
+      'bug',
+      'needs review'
+    ])
+
+    expect(glabApiWithHeadersMock).toHaveBeenCalledWith(
+      [
+        'projects/stablyai%2Forca/issues?page=2&per_page=50&order_by=updated_at&sort=desc&state=opened&labels=bug%2Cneeds%20review'
       ],
       { cwd: '/repo-root' }
     )
@@ -402,7 +419,7 @@ describe('gitlab issue operations', () => {
       .mockResolvedValueOnce({ host: 'git.internal', path: 'stablyai/orca' })
       .mockResolvedValueOnce({ host: 'git.internal', path: 'stablyai/orca' })
     glabExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'bug\nfeature\n' })
+      .mockResolvedValueOnce({ stdout: '{"name":"bug"}\n{"name":"feature"}\n' })
       .mockResolvedValueOnce({
         stdout:
           '{"id":12,"username":"alice","name":"Alice","avatar_url":"https://example.com/a.png","state":"active"}\n'
@@ -427,9 +444,9 @@ describe('gitlab issue operations', () => {
       '--hostname',
       'git.internal',
       '--paginate',
-      'projects/stablyai%2Forca/labels',
-      '--jq',
-      '.[].name'
+      '--output',
+      'ndjson',
+      'projects/stablyai%2Forca/labels?per_page=100'
     ])
     expect(glabExecFileAsyncMock.mock.calls[1][0]).toEqual([
       'api',

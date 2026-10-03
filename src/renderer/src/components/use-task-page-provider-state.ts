@@ -5,11 +5,15 @@ import type { GitLabTaskFilter, GitLabIssueFilter } from '@/components/task-page
 import type { GitLabWorkItem, GitLabTodo } from '../../../shared/gitlab-types'
 import { getRepoBackedTaskEmptyState } from '@/components/task-page-empty-state'
 import { isGitLabIssueFilter, isGitLabMRFilter } from './task-page-source-context'
+
+const NO_GITLAB_LABELS: string[] = []
+
 export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel) {
   const {
     settings,
     pageData,
     selectedRepos,
+    selectedReposKey,
     visibleTaskProviders,
     preferredTaskSource,
     taskSource,
@@ -70,6 +74,27 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   const [gitlabView, setGitlabView] = useState<'issues' | 'mrs' | 'todos'>('mrs')
   const [gitlabTodos, setGitlabTodos] = useState<GitLabTodo[]>([])
   const [gitlabTodosLoading, setGitlabTodosLoading] = useState(false)
+  const [gitlabLabelOptions, setGitlabLabelOptions] = useState<{
+    repoKey: string
+    labels: string[]
+    error: boolean
+  }>({ repoKey: selectedReposKey, labels: [], error: false })
+  const gitlabLabels =
+    gitlabLabelOptions.repoKey === selectedReposKey ? gitlabLabelOptions.labels : NO_GITLAB_LABELS
+  const gitlabLabelsError =
+    gitlabLabelOptions.repoKey === selectedReposKey && gitlabLabelOptions.error
+  const [gitlabLabelSelection, setGitlabLabelSelection] = useState<{
+    repoKey: string
+    labels: string[]
+  }>({ repoKey: selectedReposKey, labels: [] })
+  // Repair in render so switching A → B → A cannot restore an old A selection.
+  if (gitlabLabelSelection.repoKey !== selectedReposKey) {
+    setGitlabLabelSelection({ repoKey: selectedReposKey, labels: [] })
+  }
+  const selectedGitlabLabels = gitlabLabelSelection.labels
+  const setSelectedGitlabLabels = (labels: string[]): void => {
+    setGitlabLabelSelection({ repoKey: selectedReposKey, labels })
+  }
   const gitlabEmptyState = useMemo(
     () =>
       getRepoBackedTaskEmptyState({
@@ -99,6 +124,7 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
     }
     return gitlabItems
   }, [gitlabItems, gitlabView])
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fields declared below are assigned before this model is returned.
   const nextModel = model as typeof model & {
     taskSourceManuallyChangedRef: typeof taskSourceManuallyChangedRef
     lastPageTaskSourceRef: typeof lastPageTaskSourceRef
@@ -130,6 +156,11 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
     setGitlabTodos: typeof setGitlabTodos
     gitlabTodosLoading: typeof gitlabTodosLoading
     setGitlabTodosLoading: typeof setGitlabTodosLoading
+    gitlabLabels: typeof gitlabLabels
+    gitlabLabelsError: typeof gitlabLabelsError
+    setGitlabLabelOptions: typeof setGitlabLabelOptions
+    selectedGitlabLabels: typeof selectedGitlabLabels
+    setSelectedGitlabLabels: typeof setSelectedGitlabLabels
     gitlabEmptyState: typeof gitlabEmptyState
     gitlabFilterIsValid: typeof gitlabFilterIsValid
     activeGitlabFilter: typeof activeGitlabFilter
@@ -165,6 +196,11 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   nextModel.setGitlabTodos = setGitlabTodos
   nextModel.gitlabTodosLoading = gitlabTodosLoading
   nextModel.setGitlabTodosLoading = setGitlabTodosLoading
+  nextModel.gitlabLabels = gitlabLabels
+  nextModel.gitlabLabelsError = gitlabLabelsError
+  nextModel.setGitlabLabelOptions = setGitlabLabelOptions
+  nextModel.selectedGitlabLabels = selectedGitlabLabels
+  nextModel.setSelectedGitlabLabels = setSelectedGitlabLabels
   nextModel.gitlabEmptyState = gitlabEmptyState
   nextModel.gitlabFilterIsValid = gitlabFilterIsValid
   nextModel.activeGitlabFilter = activeGitlabFilter

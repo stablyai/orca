@@ -77,7 +77,8 @@ export async function listIssues(
   assignee?: string,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
-  page = 1
+  page = 1,
+  labels?: string[] | string
 ): Promise<IssueListResult> {
   const currentPage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : 1
   const perPage = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 20
@@ -110,10 +111,12 @@ export async function listIssues(
   try {
     const stateParam = state === 'all' ? '' : `&state=${state}`
     const scopeParam = assignee === '@me' ? '&scope=assigned_to_me' : ''
+    const labelValue = Array.isArray(labels) ? labels.join(',') : labels
+    const labelsParam = labelValue ? `&labels=${encodeURIComponent(labelValue)}` : ''
     const { body, headers } = await glabApiWithHeaders(
       [
         ...glabHostnameArgs(projectRef, connectionId),
-        `projects/${encodedProject(projectRef.path)}/issues?page=${currentPage}&per_page=${perPage}&order_by=updated_at&sort=desc${stateParam}${scopeParam}`
+        `projects/${encodedProject(projectRef.path)}/issues?page=${currentPage}&per_page=${perPage}&order_by=updated_at&sort=desc${stateParam}${scopeParam}${labelsParam}`
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )

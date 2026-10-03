@@ -45,6 +45,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
         assignee?: string
         limit?: number
         page?: number
+        labels?: string[]
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
@@ -60,7 +61,8 @@ export function registerGitLabIssueHandlers(store: Store): void {
         assignee,
         repoConnectionId(repo),
         localGitOptionArgs(store, repo)[0] ?? {},
-        page
+        page,
+        args.labels
       )
       // Why: Tasks page expects GitLabWorkItem[] so it can share row
       // rendering with MRs. Map IssueInfo → WorkItem here so the renderer

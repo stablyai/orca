@@ -39,7 +39,8 @@ export async function listMergeRequests(
   preference?: IssueSourcePreference,
   query?: string,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  labels?: string[] | string
 ): Promise<ListMergeRequestsResult> {
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   // Why: MRs live on the user's fork (origin); route through the preference resolver so fork workflows share plumbing.
@@ -69,6 +70,9 @@ export async function listMergeRequests(
     const stateFlag = mrListStateFlags(state)
     // Why: apply the same search as the API path, else queries are silently ignored on cwd-inferred repos (#6263).
     const searchFlag = query?.trim() ? ['--search', query.trim()] : []
+    // The CLI fallback cannot safely filter a bounded page locally.
+    const labelValue = Array.isArray(labels) ? labels.join(',') : labels
+    const labelFlag = labelValue ? ['--label', labelValue] : []
     await acquire()
     try {
       const { stdout } = await glabExecFileAsync(
@@ -86,7 +90,8 @@ export async function listMergeRequests(
           '--sort',
           'desc',
           ...stateFlag,
-          ...searchFlag
+          ...searchFlag,
+          ...labelFlag
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
@@ -115,9 +120,11 @@ export async function listMergeRequests(
   // Why: GitLab's API uses an absent state param to mean "any"; drop it for 'all'.
   const stateParam = state === 'all' ? '' : `&state=${state}`
   const searchParam = query?.trim() ? `&search=${encodeURIComponent(query.trim())}` : ''
+  const labelValue = Array.isArray(labels) ? labels.join(',') : labels
+  const labelsParam = labelValue ? `&labels=${encodeURIComponent(labelValue)}` : ''
   const path =
     `projects/${encodedProject(projectRef.path)}/merge_requests?` +
-    `page=${page}&per_page=${perPage}&order_by=updated_at&sort=desc&with_merge_status_recheck=false${stateParam}${searchParam}`
+    `page=${page}&per_page=${perPage}&order_by=updated_at&sort=desc&with_merge_status_recheck=false${stateParam}${searchParam}${labelsParam}`
   const repoId = projectRef.path
 
   await acquire()

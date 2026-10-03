@@ -71,6 +71,8 @@ export function createAgentStatusStore(options: CreateAgentStatusStoreOptions): 
   let state = createEmptyAgentStatusStoreState(options.epoch)
   let indexes = indexAgentStatusStoreState(state)
   let snapshotApplied = options.mode === 'authority'
+  // Epochs are opaque, so retain every accepted epoch to reject stale replays.
+  const acceptedEpochs = new Set<string>()
   const restore = (restored: typeof state) => {
     state = restored
     indexes = indexAgentStatusStoreState(restored)
@@ -155,18 +157,20 @@ export function createAgentStatusStore(options: CreateAgentStatusStoreOptions): 
         restore(restored)
         return true
       }
-      if (
-        snapshotApplied &&
-        snapshot.epoch === state.epoch &&
-        snapshot.revision <= state.revision
-      ) {
-        return false
+      if (snapshotApplied) {
+        if (snapshot.epoch !== state.epoch && acceptedEpochs.has(snapshot.epoch)) {
+          return false
+        }
+        if (snapshot.epoch === state.epoch && snapshot.revision <= state.revision) {
+          return false
+        }
       }
       const mirrored = agentStatusStoreStateFromSnapshot(snapshot, snapshot.epoch)
       if (!mirrored) {
         return false
       }
       restore(mirrored)
+      acceptedEpochs.add(snapshot.epoch)
       return true
     },
     applyTransportEnvelope(value) {

@@ -79,7 +79,8 @@ export async function listWorkItems(
   preference?: IssueSourcePreference,
   query?: string,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  labels?: string[] | string
 ): Promise<GitLabPagedResult<GitLabWorkItem>> {
   const issueState = mrStateToIssueState(state)
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
@@ -114,7 +115,8 @@ export async function listWorkItems(
       preference,
       query,
       connectionId,
-      localGitOptions
+      localGitOptions,
+      labels
     ),
     issueState === null
       ? Promise.resolve({
@@ -129,7 +131,8 @@ export async function listWorkItems(
           perPage,
           query,
           connectionId,
-          localGitOptions
+          localGitOptions,
+          labels
         )
   ])
   const merged = [...mrs.items, ...issues.items].sort((a, b) =>
@@ -156,17 +159,20 @@ export async function fetchIssuesAsWorkItems(
   perPage: number,
   query?: string,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  labels?: string[] | string
 ): Promise<{ items: GitLabWorkItem[]; error: ClassifiedError | undefined }> {
   await acquire()
   try {
     const stateParam = state === 'all' ? '' : `&state=${state}`
     const searchParam = query?.trim() ? `&search=${encodeURIComponent(query.trim())}` : ''
+    const labelValue = Array.isArray(labels) ? labels.join(',') : labels
+    const labelsParam = labelValue ? `&labels=${encodeURIComponent(labelValue)}` : ''
     const { stdout } = await glabExecFileAsync(
       [
         'api',
         ...glabHostnameArgs(projectRef, connectionId),
-        `projects/${encodedProject(projectRef.path)}/issues?page=${page}&per_page=${perPage}&order_by=updated_at&sort=desc${stateParam}${searchParam}`
+        `projects/${encodedProject(projectRef.path)}/issues?page=${page}&per_page=${perPage}&order_by=updated_at&sort=desc${stateParam}${searchParam}${labelsParam}`
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
