@@ -116,15 +116,25 @@ it('keeps the whole retrying line under a newer Orca\'s words, which name no one
   ).toBeTruthy()
 })
 
-it('says only that it is reconnecting, not as an error, when a failure names nothing', () => {
+// Only a chat that never loaded stores a failure naming nothing (the read owner drops it after load).
+it('says once that the history did not load beside a bubble of a chat that never loaded', () => {
   mocks.status = 'error'
 
-  renderPane()
+  render(
+    <NativeChatStructuredSession
+      isVisible
+      isFocusedGroup
+      tabId="structured-read-error-tab"
+      sessionId="read-error-session"
+      target={{ kind: 'environment', environmentId: 'remote-host' }}
+      agent="codex"
+    />
+  )
 
   expect(screen.getByTestId('message-list')).toBeTruthy()
-  const reconnecting = screen.getByText('Reconnecting to this chat…')
-  expect(reconnecting.className).not.toContain('text-destructive')
-  expect(screen.queryByText(/history couldn't be loaded/)).toBeNull()
+  expect(screen.getByTestId('structured-composer')).toBeTruthy()
+  expect(screen.getAllByText("This chat's history couldn't be loaded.")).toHaveLength(1)
+  expect(screen.queryByText(/reconnect/i)).toBeNull()
 })
 
 it('words a failed reconnect beside a transcript it keeps', () => {

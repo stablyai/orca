@@ -26,8 +26,6 @@ export function NativeChatStructuredSessionStatus(props: {
   /** The session's own status row, whose verdict the strip's children read. */
   paneKey: string
   error: string | null
-  /** A read the pane is reconnecting on its own: said plainly, not as an error. */
-  reconnecting?: boolean
   composerError: string | null
   isVisible: boolean
   backgroundTasks: StructuredSessionBackgroundTasksView
@@ -82,11 +80,6 @@ export function NativeChatStructuredSessionStatus(props: {
             '{{value0}} is still starting. Messages wait until it is ready; close this chat to give up on it.',
             { value0: props.agentLabel }
           )}
-        </p>
-      ) : null}
-      {props.reconnecting && !props.error ? (
-        <p className="mx-auto w-full max-w-4xl px-4 py-1 text-xs text-muted-foreground">
-          {translate('components.native-chat.state.reconnecting', 'Reconnecting to this chat…')}
         </p>
       ) : null}
       {props.error || props.composerError ? (

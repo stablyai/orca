@@ -17861,7 +17861,6 @@
           "retryingSubtitle": "The transcript could not be read. Orca keeps trying to load it.",
           "keepsTrying": "Orca keeps trying to load it."
         },
-        "reconnecting": "Reconnecting to this chat…",
         "pairHost": "Pair a host to view agent chat history.",
         "notAgent": {
           "title": "No conversation here",

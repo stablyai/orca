@@ -17682,7 +17682,6 @@
           "retryingSubtitle": "La transcription n'a pas pu être lue. Orca continue d'essayer de la charger.",
           "keepsTrying": "Orca continue d'essayer de le charger."
         },
-        "reconnecting": "Reconnexion à ce chat…",
         "pairHost": "Associez un hôte pour consulter l'historique de chat des agents.",
         "notAgent": {
           "title": "Aucune conversation ici",

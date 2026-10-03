@@ -319,12 +319,9 @@ export function NativeChatStructuredSession(
         startupPhase={hostExecution.phase}
         startupChildKey={hostExecution.childKey}
         paneKey={paneKey}
-        // Said once: on the pane when the failure took it, else here beside the transcript. A
-        // failure that names nothing is only the pane reconnecting.
-        error={
-          viewState.kind === 'error' || !readFailure?.named ? controller.error : readFailure.text
-        }
-        reconnecting={viewState.kind !== 'error' && readFailure !== null && !readFailure.named}
+        // Said once: on the pane when the failure took it, else here. A loaded chat stores only a
+        // refusal the host sent, so one beside messages is the host's or from before any load.
+        error={viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text}
         composerError={composerError}
         isVisible={props.isVisible}
         backgroundTasks={controller.backgroundTasks}
