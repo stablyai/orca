@@ -22,6 +22,7 @@ import type {
   WorkspaceSessionState
 } from './orca-runtime-test-mocks.spec'
 import type { OrchestrationDb } from './orchestration/db'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 type RuntimeService = InstanceType<typeof OrcaRuntimeService>
 type TestMock = Mock
@@ -280,7 +281,15 @@ function makePostRevealWorkerRecoveryHarness(
   }
 }
 
-function makePendingAgentTabActivationRuntime(opts: { disabledTuiAgents?: string[] } = {}): {
+function makePendingAgentTabActivationRuntime(
+  opts: {
+    disabledTuiAgents?: TuiAgent[]
+    agent?: 'claude' | 'codex'
+    statusAgent?: 'claude' | 'codex'
+    providerSessionId?: string
+    omitLaunchAgent?: boolean
+  } = {}
+): {
   runtime: RuntimeService
   spawn: ReturnType<typeof vi.fn>
 } {
@@ -298,7 +307,7 @@ function makePendingAgentTabActivationRuntime(opts: { disabledTuiAgents?: string
             color: null,
             sortOrder: 0,
             createdAt: 1,
-            launchAgent: 'claude'
+            ...(opts.omitLaunchAgent ? {} : { launchAgent: opts.agent ?? 'claude' })
           }
         ]
       },
@@ -307,13 +316,37 @@ function makePendingAgentTabActivationRuntime(opts: { disabledTuiAgents?: string
       }
     })
   )
-  const runtime = new OrcaRuntimeService({
-    ...runtimeStore,
-    getSettings: () => ({
-      ...store.getSettings(),
-      disabledTuiAgents: opts.disabledTuiAgents ?? []
-    })
-  } as never)
+  const statusRow = opts.providerSessionId
+    ? {
+        paneKey: `host-tab:${HEADLESS_LEAF_ID}`,
+        state: 'done' as const,
+        prompt: '',
+        agentType: opts.statusAgent ?? opts.agent ?? 'claude',
+        connectionId: null,
+        receivedAt: Date.now(),
+        stateStartedAt: Date.now(),
+        tabId: 'host-tab',
+        worktreeId: TEST_WORKTREE_ID,
+        providerSession: { key: 'session_id' as const, id: opts.providerSessionId },
+        providerSessionOnly: true
+      }
+    : null
+  const runtime = new OrcaRuntimeService(
+    {
+      ...runtimeStore,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: opts.disabledTuiAgents ?? []
+      })
+    },
+    undefined,
+    statusRow
+      ? {
+          getAgentStatusSnapshot: () => [statusRow],
+          getAgentProviderSessionRowsForPane: () => [statusRow]
+        }
+      : undefined
+  )
   runtime.setPtyController({
     spawn,
     write: () => true,
