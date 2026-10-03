@@ -1,3 +1,4 @@
+import { getFishClaudeShellFunction } from './claude-shell-function'
 export function quotePosixShell(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
 }
@@ -33,6 +34,7 @@ export function buildWslLoginShellCommand(command: string): string {
     'case "$_orca_wsl_shell_name" in',
     `  sh|dash) exec "$_orca_wsl_shell" -lc ${quotedCommand} ;;`,
     `  bash|zsh|ksh|mksh|ash) exec "$_orca_wsl_shell" -ilc ${quotedCommand} ;;`,
+    `  fish) exec "$_orca_wsl_shell" -ilc 'exec /bin/sh -c "$argv[1]"' -- ${quotedCommand} ;;`,
     `  *) exec /bin/sh -lc ${quotedCommand} ;;`,
     'esac'
   ].join('\n')
@@ -129,6 +131,9 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -f "${_orca_shell_ready_root}/bash/rcfile" ]; then',
     '      exec "$_orca_wsl_shell" --rcfile "${_orca_shell_ready_root}/bash/rcfile"',
     '    fi',
+    '    ;;',
+    '  fish)',
+    `    exec "$_orca_wsl_shell" -l -C ${quotePosixShell(getFishClaudeShellFunction())}`,
     '    ;;',
     '  zsh)',
     '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -d "${_orca_shell_ready_root}/zsh" ]; then',

@@ -134,6 +134,32 @@ if [[ -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
   }
 fi
 unset __orca_codex_binary
+__orca_claude_binary="$(unalias claude 2>/dev/null || :; command -v claude 2>/dev/null || :)"
+if [[ -n "${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "${__orca_claude_binary:-}" && -x "${__orca_claude_binary}" ]]; then
+  function claude {
+    local __orca_claude_home __orca_claude_pointer="${ORCA_CLAUDE_PROFILE_POINTER:-}"
+    # Why: a WSL pane's pointer is guest-relative, since the host cannot know the guest home.
+    case "$__orca_claude_pointer" in '~/'*) __orca_claude_pointer="${HOME:-}/${__orca_claude_pointer#??}" ;; esac
+    if [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$CLAUDE_CONFIG_DIR" != "${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ]; then
+      command claude "$@"; return
+    fi
+    if [ ! -f "$__orca_claude_pointer" ] || [ ! -r "$__orca_claude_pointer" ]; then
+      printf '%s\n' 'No Claude account is ready for this terminal. Open Orca Settings > Accounts to sign in again or choose System default.' >&2; return 1
+    fi
+    __orca_claude_home="$(LC_ALL=C tr '\000' '\n' < "$__orca_claude_pointer" && printf '.')" || { printf '%s\n' 'Claude account selection is unreadable.' >&2; return 1; }
+    __orca_claude_home="${__orca_claude_home%.}"
+    case "$__orca_claude_home" in *$'\n'*|*$'\r'*) printf '%s\n' 'Invalid Claude account selection.' >&2; return 1 ;; esac
+    if [ -n "$__orca_claude_home" ]; then
+      # Why the drive form: Git Bash runs the Windows claude.exe against the host's Windows path.
+      case "$__orca_claude_home" in /*|[A-Za-z]:[\\/]*) ;; *) printf '%s\n' 'Invalid Claude account selection.' >&2; return 1 ;; esac
+      if [ ! -d "$__orca_claude_home" ]; then printf '%s\n' 'Selected Claude profile is missing.' >&2; return 1; fi
+      ( unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN AWS_BEARER_TOKEN_BEDROCK; case "${ANTHROPIC_CUSTOM_HEADERS:-}" in *[aA][uU][tT][hH][oO][rR][iI][zZ][aA][tT][iI][oO][nN]*|*[xX]-[aA][pP][iI]-[kK][eE][yY]*|*[aA][pP][iI]-[kK][eE][yY]*|*[bB][eE][aA][rR][eE][rR]*) unset ANTHROPIC_CUSTOM_HEADERS ;; esac; export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
+    else
+      ( unset CLAUDE_CONFIG_DIR ORCA_CLAUDE_INJECTED_CONFIG_DIR; command claude "$@" )
+    fi
+  }
+fi
+unset __orca_claude_binary
 
 # Why: emit OSC 133 C/D so terminal-command-lifecycle can drop stale agent
 # status when the foreground command (e.g. an interrupted Claude/Codex CLI)

@@ -14,6 +14,8 @@ export type DaemonEndpointIdentity = {
   entryPath?: string
   appVersion?: string
   spawnerExecPath?: string
+  /** Its shells define the `claude` function that follows account switching. */
+  claudeAccountFunction?: true
 }
 
 export type HelloResponse = {

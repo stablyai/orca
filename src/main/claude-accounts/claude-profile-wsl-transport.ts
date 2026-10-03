@@ -23,6 +23,17 @@ import {
 
 const responseSchema = z.object({
   ready: z.boolean(),
+  readiness: z.record(z.string(), z.enum(['ready', 'sign-in-required', 'unavailable'])).optional(),
+  identities: z
+    .record(
+      z.string(),
+      z.object({
+        email: z.string().min(1),
+        organizationUuid: z.string().nullable(),
+        organizationName: z.string().nullable()
+      })
+    )
+    .optional(),
   provisioned: z.boolean(),
   homes: z.array(z.string().startsWith('/')).optional(),
   historyHomes: z
@@ -131,7 +142,7 @@ export async function prepareClaudeWslGuest(
         await requireRunningWslDistro(distro)
       }
       let claudeVersion = request.claudeVersion
-      if (request.action === 'setup' && request.hooksEnabled) {
+      if ((request.action === 'setup' || request.action === 'create') && request.hooksEnabled) {
         // Why caught: like native setup, an unknown version installs the default hook plan.
         try {
           const capture = buildWslCapturedLoginShellCommand('claude --version')

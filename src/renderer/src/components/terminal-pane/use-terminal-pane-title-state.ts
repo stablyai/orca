@@ -7,6 +7,7 @@ import {
 import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
 import { appendPaneTerminalError, clearPaneTerminalError } from './terminal-error-accumulation'
 import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
+import { noteTerminalLaunchError } from './terminal-launch-refusals'
 import { updateTerminalRemoteRuntimeRecoveryUiState } from './terminal-remote-runtime-recovery-ui-state'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 import type { TerminalPaneFoundation } from './use-terminal-pane-foundation'
@@ -20,7 +21,8 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
     setSessionStateSaveFailureMessage,
     setTerminalError,
     setTerminalErrorsByPaneId,
-    sshReconnectOwnsTerminalErrorsRef
+    sshReconnectOwnsTerminalErrorsRef,
+    tabId
   } = controller
   const [paneTitles, setPaneTitles] = useState<Record<number, string>>({})
   const paneTitlesRef = useRef<Record<number, string>>({})
@@ -92,6 +94,7 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
       setSessionStateSaveFailureMessage(message)
       return
     }
+    noteTerminalLaunchError(tabId, message)
     const visibleMessage = sshReconnectOwnsTerminalErrorsRef.current
       ? stripSshReconnectOwnedErrorLines(message)
       : message

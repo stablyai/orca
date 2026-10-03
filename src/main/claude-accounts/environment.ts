@@ -1,11 +1,7 @@
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 
-export const CLAUDE_AUTH_ENV_VARS = [
-  'ANTHROPIC_API_KEY',
-  'ANTHROPIC_AUTH_TOKEN',
-  'CLAUDE_CODE_OAUTH_TOKEN',
-  'AWS_BEARER_TOKEN_BEDROCK'
-] as const
+import { CLAUDE_AUTH_ENV_VARS, isAuthLikeClaudeCustomHeaders } from '../../shared/claude-auth-env'
+export { CLAUDE_AUTH_ENV_VARS } from '../../shared/claude-auth-env'
 
 export type ClaudeEnvPatch = {
   ORCA_CLAUDE_PROFILE_POINTER?: string
@@ -28,7 +24,7 @@ export function applyClaudeEnvPatch(
       const normalized = platform === 'win32' ? key.toUpperCase() : key
       if (
         (platform === 'win32' && CLAUDE_AUTH_ENV_VARS.some((authKey) => authKey === normalized)) ||
-        (normalized === 'ANTHROPIC_CUSTOM_HEADERS' && isAuthLikeCustomHeaders(baseEnv[key]))
+        (normalized === 'ANTHROPIC_CUSTOM_HEADERS' && isAuthLikeClaudeCustomHeaders(baseEnv[key]))
       ) {
         delete baseEnv[key]
       }
@@ -55,9 +51,6 @@ export function applyClaudeEnvPatch(
  *  cannot drift into telling the user two different things about one refusal. */
 export const CLAUDE_AUTH_ENV_CONFLICT_MESSAGE =
   'This Claude launch defines explicit Anthropic auth environment variables. Remove those overrides before using a managed Claude account.'
-
-export const CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE =
-  'A Claude account switch is in progress. Try again after it finishes.'
 
 /**
  * Whether a launch on the host runtime must drop inherited Anthropic auth.
@@ -104,16 +97,9 @@ export function hasClaudeAuthEnvConflict(
     if (value && CLAUDE_AUTH_ENV_VARS.some((authKey) => authKey === normalized)) {
       return true
     }
-    if (normalized === 'ANTHROPIC_CUSTOM_HEADERS' && isAuthLikeCustomHeaders(value)) {
+    if (normalized === 'ANTHROPIC_CUSTOM_HEADERS' && isAuthLikeClaudeCustomHeaders(value)) {
       return true
     }
   }
   return false
-}
-
-function isAuthLikeCustomHeaders(value: string | undefined): boolean {
-  if (!value) {
-    return false
-  }
-  return /authorization|x-api-key|api-key|bearer/i.test(value)
 }

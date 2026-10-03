@@ -79,7 +79,13 @@ function fixture() {
   const profiles = ['a', 'b'].map((id) =>
     describeClaudeProfile(dataRoot, id, { runtime: 'host', executionHostId: 'local' })
   )
-  profiles.forEach((profile) => prepareClaudeProfileDirectory(dataRoot, profile, home))
+  profiles.forEach((profile) => {
+    prepareClaudeProfileDirectory(dataRoot, profile, home)
+    writeFileSync(
+      join(profile.home, '.claude.json'),
+      JSON.stringify({ oauthAccount: { emailAddress: `${profile.accountId}@example.test` } })
+    )
+  })
   const worker = {
     prepare: vi.fn(async (job: Parameters<typeof provisionClaudeAccountProfile>[0]) =>
       provisionClaudeAccountProfile(job)
@@ -91,7 +97,7 @@ function fixture() {
     },
     dataRoot,
     userHome: home,
-    defaultHome: () => join(home, '.claude'),
+    inheritedConfigDir: () => null,
     claudeVersion: async () => '2.1.261',
     worker: { prepare: async (job) => worker.prepare({ ...job, installHooks: null }) }
   })

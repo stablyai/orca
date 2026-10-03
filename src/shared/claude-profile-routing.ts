@@ -1,6 +1,6 @@
-/** Step 4 enables this only after the credential writers have been removed. */
+/** Account homes are now the sole managed Claude credential owner. */
 export function claudeProfileRoutingEnabled(): boolean {
-  return false
+  return true
 }
 
 export const CLAUDE_PROFILE_ROUTING_CAPABILITY = 'claude.profile-routing.v1'

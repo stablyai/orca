@@ -1,9 +1,8 @@
+import { CLAUDE_AUTH_HEADER_POSIX_PATTERN, CLAUDE_AUTH_HEADER_WORDS } from './claude-auth-env'
 import { claudeProfileRoutingEnabled } from './claude-profile-routing'
-const authHeaderWords = 'authorization|x-api-key|api-key|bearer'
-const posixAuthHeaderPattern = authHeaderWords
-  .split('|')
-  .map((word) => `*${word.replace(/[a-z]/g, (letter) => `[${letter}${letter.toUpperCase()}]`)}*`)
-  .join('|')
+// Why one text: a missing pointer means Orca withdrew it (sign-in needed, host down), never a corrupt file.
+const NO_ACCOUNT_READY =
+  'No Claude account is ready for this terminal. Open Orca Settings > Accounts to sign in again or choose System default.'
 
 /**
  * These functions are inserted only when profile routing is enabled, and define `claude` only in a
@@ -24,7 +23,7 @@ if [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" 
       command claude "$@"; return
     fi
     if [ ! -f "$__orca_claude_pointer" ] || [ ! -r "$__orca_claude_pointer" ]; then
-      printf '%s\\n' 'Claude account selection is unreadable; choose an account again.' >&2; return 1
+      printf '%s\\n' '${NO_ACCOUNT_READY}' >&2; return 1
     fi
     __orca_claude_home="$(LC_ALL=C tr '\\000' '\\n' < "$__orca_claude_pointer" && printf '.')" || { printf '%s\\n' 'Claude account selection is unreadable.' >&2; return 1; }
     __orca_claude_home="\${__orca_claude_home%.}"
@@ -33,7 +32,7 @@ if [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" 
       # Why the drive form: Git Bash runs the Windows claude.exe against the host's Windows path.
       case "$__orca_claude_home" in /*|[A-Za-z]:[\\\\/]*) ;; *) printf '%s\\n' 'Invalid Claude account selection.' >&2; return 1 ;; esac
       if [ ! -d "$__orca_claude_home" ]; then printf '%s\\n' 'Selected Claude profile is missing.' >&2; return 1; fi
-      ( unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN AWS_BEARER_TOKEN_BEDROCK; case "\${ANTHROPIC_CUSTOM_HEADERS:-}" in ${posixAuthHeaderPattern}) unset ANTHROPIC_CUSTOM_HEADERS ;; esac; export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
+      ( unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN AWS_BEARER_TOKEN_BEDROCK; case "\${ANTHROPIC_CUSTOM_HEADERS:-}" in ${CLAUDE_AUTH_HEADER_POSIX_PATTERN}) unset ANTHROPIC_CUSTOM_HEADERS ;; esac; export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
     else
       ( unset CLAUDE_CONFIG_DIR ORCA_CLAUDE_INJECTED_CONFIG_DIR; command claude "$@" )
     fi
@@ -62,7 +61,7 @@ if test -n "$ORCA_CLAUDE_PROFILE_POINTER"; and test "$__orca_claude_type" = file
       set pointer "$HOME/"(string sub -s 3 -- "$pointer")
     end
     if not test -f "$pointer"; or not test -r "$pointer"
-      echo 'Claude account selection is unreadable; choose an account again.' >&2; return 1
+      echo '${NO_ACCOUNT_READY}' >&2; return 1
     end
     # Why read -z: it keeps newlines for the check below and exists before fish 3.4's collect flags.
     set -l profile ''
@@ -77,7 +76,7 @@ if test -n "$ORCA_CLAUDE_PROFILE_POINTER"; and test "$__orca_claude_type" = file
         echo 'Selected Claude profile is missing or invalid.' >&2; return 1
       end
       set -l headers
-      if string match -irq '${authHeaderWords}' -- "$ANTHROPIC_CUSTOM_HEADERS"
+      if string match -irq '${CLAUDE_AUTH_HEADER_WORDS}' -- "$ANTHROPIC_CUSTOM_HEADERS"
         set headers -u ANTHROPIC_CUSTOM_HEADERS
       end
       env $headers -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN -u AWS_BEARER_TOKEN_BEDROCK CLAUDE_CONFIG_DIR="$profile" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$profile" claude $argv
@@ -106,11 +105,12 @@ function Global:claude {
     try {
         if (-not $env:CLAUDE_CONFIG_DIR -or $env:CLAUDE_CONFIG_DIR -eq $env:ORCA_CLAUDE_INJECTED_CONFIG_DIR) {
             if (-not $env:ORCA_CLAUDE_PROFILE_POINTER) { throw 'Claude account selection is unreadable.' }
-            $orcaClaudeHome = [IO.File]::ReadAllText($env:ORCA_CLAUDE_PROFILE_POINTER)
+            if (-not [IO.File]::Exists($env:ORCA_CLAUDE_PROFILE_POINTER)) { throw '${NO_ACCOUNT_READY}' }
+            try { $orcaClaudeHome = [IO.File]::ReadAllText($env:ORCA_CLAUDE_PROFILE_POINTER) } catch { throw 'Claude account selection is unreadable.' }
             if ($orcaClaudeHome) {
                 if ($orcaClaudeHome -match '[\\r\\n\\x00]' -or -not [IO.Path]::IsPathRooted($orcaClaudeHome) -or -not [IO.Directory]::Exists($orcaClaudeHome)) { throw 'Selected Claude profile is missing or invalid.' }
                 foreach ($name in $names) {
-                    if ($name -ne 'ANTHROPIC_CUSTOM_HEADERS' -or $env:ANTHROPIC_CUSTOM_HEADERS -match '${authHeaderWords}') { Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue }
+                    if ($name -ne 'ANTHROPIC_CUSTOM_HEADERS' -or $env:ANTHROPIC_CUSTOM_HEADERS -match '${CLAUDE_AUTH_HEADER_WORDS}') { Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue }
                 }
                 $env:CLAUDE_CONFIG_DIR = $orcaClaudeHome
                 $env:ORCA_CLAUDE_INJECTED_CONFIG_DIR = $orcaClaudeHome

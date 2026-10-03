@@ -1,5 +1,6 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { isUnfinishedClaudeSignIn } from '../../../../shared/claude-unfinished-sign-in'
 
 export type UsageProviderSettings = Pick<
   GlobalSettings,
@@ -77,7 +78,7 @@ export function hasUsageProviderSettings(
 ): boolean {
   return Boolean(
     (settings?.codexManagedAccounts?.length ?? 0) > 0 ||
-    (settings?.claudeManagedAccounts?.length ?? 0) > 0 ||
+    hasFinishedClaudeAccount(settings?.claudeManagedAccounts) ||
     settings?.geminiCliOAuthEnabled === true ||
     Boolean(settings?.opencodeSessionCookie?.trim()) ||
     settings?.opencodeGoApiKeyConfigured === true ||
@@ -97,7 +98,7 @@ export function hasUsageProviderSettingsForProvider(
     return false
   }
   if (providerId === 'claude') {
-    return (settings.claudeManagedAccounts?.length ?? 0) > 0
+    return hasFinishedClaudeAccount(settings.claudeManagedAccounts)
   }
   if (providerId === 'codex') {
     return (settings.codexManagedAccounts?.length ?? 0) > 0
@@ -201,4 +202,9 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.cursor) &&
     !isProviderConfigured(providers.zcode)
   )
+}
+
+// Why: an unfinished sign-in holds no login, so it configures no Claude usage.
+function hasFinishedClaudeAccount(accounts: readonly { email: string }[] | undefined): boolean {
+  return (accounts ?? []).some((account) => !isUnfinishedClaudeSignIn(account))
 }

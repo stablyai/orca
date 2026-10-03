@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
   ClaudeRateLimitAccountsState,
@@ -159,6 +160,58 @@ describe('status bar runtime switch groups', () => {
     ).toEqual([
       { key: 'host', label: hostLabel },
       { key: 'wsl:Ubuntu', label: 'WSL Ubuntu' }
+    ])
+  })
+
+  it('labels unfinished Claude sign-ins and keeps accounts that need attention unselectable', () => {
+    const summary = (
+      id: string,
+      email: string,
+      extra: Partial<ClaudeRateLimitAccountsState['accounts'][number]> = {}
+    ) => ({
+      id,
+      email,
+      managedAuthRuntime: 'host' as const,
+      wslDistro: null,
+      authMethod: 'subscription-oauth' as const,
+      createdAt: 1,
+      updatedAt: 1,
+      lastAuthenticatedAt: 1,
+      ...extra
+    })
+    const runtimeState: ClaudeRateLimitAccountsState = {
+      accounts: [
+        summary('draft', '', { profileReadiness: 'sign-in-required' }),
+        summary('legacy', 'old@example.test', { profileReadiness: 'sign-in-required' }),
+        summary('ready', 'ok@example.test', {
+          profileReadiness: 'ready',
+          profileEmail: 'ok@example.test'
+        })
+      ],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: {} }
+    }
+    // Local settings carry no readiness; the switcher must still learn it from the host.
+    const settings: GlobalSettings = {
+      ...getDefaultSettings('/tmp'),
+      claudeManagedAccounts: runtimeState.accounts.map(
+        ({ profileReadiness: _readiness, profileEmail: _email, ...rest }) => ({
+          ...rest,
+          managedAuthPath: ''
+        })
+      ),
+      activeClaudeManagedAccountId: null,
+      activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
+    }
+    const state = resolveClaudeStatusAccountState(settings, runtimeState)
+    const [host] = buildClaudeStatusSwitchGroups(state, { runtime: 'host', wslDistro: null })
+    expect(
+      host.targets.map((target) => [target.label, target.disabled ?? false, target.hint ?? null])
+    ).toEqual([
+      ['System default', false, null],
+      ['Unfinished sign-in', true, 'Finish signing in to use this account'],
+      ['old@example.test', true, 'Sign in again to use this account'],
+      ['ok@example.test', false, null]
     ])
   })
 

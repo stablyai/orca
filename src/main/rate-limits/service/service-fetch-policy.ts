@@ -10,6 +10,7 @@ import {
   type ProviderRateLimits
 } from './service-types'
 import { mapClaudeUsageWindow } from '../claude-usage-window'
+import { claudeLaunchConfigDir } from '../../claude-accounts/runtime-auth/runtime-auth-types'
 
 export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchTargets {
   protected getMiniMaxCredentialError(message: string): ProviderRateLimits {
@@ -78,7 +79,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       return
     }
     this.lastClaudeAuthSnapshot = {
-      configDir: normalizeClaudeConfigDir(authPreparation?.envPatch.CLAUDE_CONFIG_DIR),
+      configDir: normalizeClaudeConfigDir(claudeLaunchConfigDir(authPreparation)),
       provenance: authPreparation?.provenance ?? 'system'
     }
   }

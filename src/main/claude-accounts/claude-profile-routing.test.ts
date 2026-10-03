@@ -12,8 +12,22 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createNativeClaudeProfileRouting,
-  systemDefaultClaudeHome
+  inheritedClaudeConfigDir
 } from './claude-profile-native-owner'
+import type * as FsUtils from '../codex-accounts/fs-utils'
+const writeFailure = vi.hoisted((): { error: Error | null } => ({ error: null }))
+vi.mock('../codex-accounts/fs-utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsUtils>()
+  return {
+    ...actual,
+    writeFileAtomically: (...args: Parameters<typeof actual.writeFileAtomically>) => {
+      if (writeFailure.error) {
+        throw writeFailure.error
+      }
+      return actual.writeFileAtomically(...args)
+    }
+  }
+})
 import { resolveSkillProviderRoots } from '../runtime/runtime-skill-install-authority'
 import { describeClaudeProfile, prepareClaudeProfileDirectory } from './claude-profile-paths'
 import { publishClaudeProfilePointer, readClaudeProfilePointer } from './claude-profile-pointer'
@@ -57,14 +71,20 @@ function fixture() {
     },
     dataRoot,
     userHome: home,
-    defaultHome: () => inherited.dir ?? join(home, '.claude'),
+    inheritedConfigDir: () => inherited.dir ?? null,
     worker,
     claudeVersion: async () => '2.1.261'
   })
   const profiles = ['a', 'b'].map((id) =>
     describeClaudeProfile(dataRoot, id, { runtime: 'host', executionHostId: 'local' })
   )
-  profiles.forEach((profile) => prepareClaudeProfileDirectory(dataRoot, profile, home))
+  profiles.forEach((profile) => {
+    prepareClaudeProfileDirectory(dataRoot, profile, home)
+    writeFileSync(
+      join(profile.home, '.claude.json'),
+      JSON.stringify({ oauthAccount: { emailAddress: `${profile.accountId}@example.test` } })
+    )
+  })
   return { root, home, dataRoot, settings, worker, routing, profiles, inherited }
 }
 describe('native Claude profile authority', () => {
@@ -122,6 +142,24 @@ describe('native Claude profile authority', () => {
     rmSync(f.routing.pointerPath(), { recursive: true })
     await f.routing.startup()
     expect(readClaudeProfilePointer(f.routing.pointerPath())).toBe(f.profiles[0].home)
+  })
+  it('keeps a System Default pointer when rewriting it fails, and says why in plain words', async () => {
+    const f = fixture()
+    f.settings.activeClaudeManagedAccountId = null
+    await f.routing.publish()
+    writeFailure.error = Object.assign(new Error('ENOSPC: no space left on device, write'), {
+      code: 'ENOSPC'
+    })
+    try {
+      await expect(f.routing.publish()).rejects.toThrow('ENOSPC')
+      expect(readClaudeProfilePointer(f.routing.pointerPath())).toBe(null)
+      const issue = f.routing.describeAccounts({ accounts: [], activeAccountId: null })
+      expect(issue.profileRoutingIssue).toBe(
+        'Orca could not save the Claude account selection because the disk is full.'
+      )
+    } finally {
+      writeFailure.error = null
+    }
   })
   it('requires host capability and refuses WSL until the guest step, without host fallback', async () => {
     const f = fixture()
@@ -186,7 +224,9 @@ describe('native Claude profile authority', () => {
     f.settings.activeClaudeManagedAccountId = 'legacy'
     expect(f.routing.describeAccounts(state).profileRoutingIssue).toBeDefined()
     await vi.waitFor(() =>
-      expect(f.routing.describeAccounts(state).profileRoutingIssue).toContain('fresh sign-in')
+      expect(f.routing.describeAccounts(state).profileRoutingIssue).toContain(
+        'Sign in again to use this account.'
+      )
     )
   })
   it('gives panes the selected profile and a twin, and System Default nothing but the pointer', () => {
@@ -210,7 +250,7 @@ describe('native Claude profile authority', () => {
     const f = fixture()
     await f.routing.publish()
     rmSync(join(f.dataRoot, 'claude-profiles', 'a', 'profile.json'))
-    await expect(f.routing.startup()).rejects.toThrow('fresh sign-in')
+    await expect(f.routing.startup()).rejects.toThrow('Sign in again to use this account.')
     expect(existsSync(f.routing.pointerPath())).toBe(false)
     f.settings.activeClaudeManagedAccountId = 'b'
     await f.routing.publish()
@@ -285,13 +325,13 @@ describe('native Claude profile authority', () => {
     expect(roots.claude).toBe(join('/legacy-claude', 'skills'))
   })
   it('System Default ignores a config dir an outer Orca injected', () => {
-    expect(systemDefaultClaudeHome({ CLAUDE_CONFIG_DIR: '/own' }, '/home/u')).toBe('/own')
+    expect(inheritedClaudeConfigDir({ CLAUDE_CONFIG_DIR: '/own' })).toBe('/own')
     expect(
-      systemDefaultClaudeHome(
-        { CLAUDE_CONFIG_DIR: '/outer/profile', ORCA_CLAUDE_INJECTED_CONFIG_DIR: '/outer/profile' },
-        '/home/u'
-      )
-    ).toBe(join('/home/u', '.claude'))
-    expect(systemDefaultClaudeHome({}, '/home/u')).toBe(join('/home/u', '.claude'))
+      inheritedClaudeConfigDir({
+        CLAUDE_CONFIG_DIR: '/outer/profile',
+        ORCA_CLAUDE_INJECTED_CONFIG_DIR: '/outer/profile'
+      })
+    ).toBeNull()
+    expect(inheritedClaudeConfigDir({})).toBeNull()
   })
 })

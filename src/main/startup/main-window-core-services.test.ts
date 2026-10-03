@@ -104,7 +104,6 @@ describe('main window profile-state update preparation', () => {
 
     expect(preserveAgentAuthBeforeRestartMock).toHaveBeenCalledWith({
       codexRuntimeHome: state.codexRuntimeHome,
-      claudeRuntimeAuth: state.claudeRuntimeAuth,
       store
     })
     expect(store.writeLatestProfileStateJsonExportAsync).not.toHaveBeenCalled()

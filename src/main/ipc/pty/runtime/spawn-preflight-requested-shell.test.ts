@@ -152,12 +152,16 @@ describe('runtime pty spawn preflight: Claude profiles in a WSL pane', () => {
     const prepareGuest = vi.fn(async (): Promise<never> => {
       throw new Error('unexpected guest call')
     })
+    const prepareDefault = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected default guest call')
+    })
     profiles.authority = new ClaudeProfileRoutingService(
       createWslClaudeProfileOwner(
         () => getDefaultSettings('/tmp'),
         prepareGuest,
         async () => {},
-        async () => true
+        async () => true,
+        prepareDefault
       )
     )
     const args: RuntimePtySpawnArgs = {
@@ -171,5 +175,6 @@ describe('runtime pty spawn preflight: Claude profiles in a WSL pane', () => {
     await expect(prepareRuntimePtySpawn(ctx)).resolves.toBeNull()
     expect(args.env).toEqual({ KEEP: '1' })
     expect(prepareGuest).not.toHaveBeenCalled()
+    expect(prepareDefault).not.toHaveBeenCalled()
   })
 })

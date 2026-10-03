@@ -1,21 +1,34 @@
-import {
-  CLAUDE_INJECTED_CONFIG_DIR_ENV,
-  CLAUDE_PROFILE_POINTER_ENV,
-  requireClaudeProfileRoutingCapability
-} from '../../shared/claude-profile-routing'
+import { CLAUDE_PROFILE_POINTER_ENV } from '../../shared/claude-profile-routing'
 import type { ClaudeRateLimitAccountsState } from '../../shared/managed-account-types'
-import { readClaudeProfilePointer } from './claude-profile-pointer'
+import {
+  claudeProfilePointerKeepsSystemDefault,
+  describeClaudeProfilePublishError,
+  readClaudeProfilePointer
+} from './claude-profile-pointer'
 import { ClaudeProfilePointerQueue } from './claude-profile-pointer-queue'
 import {
   ClaudeProfileHostUnreachableError,
+  ClaudeProfileSignInRequiredError,
   type ClaudeProfileHostAccess,
   type ClaudeProfileLaunchDescriptor,
   type ClaudeProfileRoutingOwner
 } from './claude-profile-routing-owner'
 import type { ClaudeAccountSelectionTarget } from './runtime-selection'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth-service'
-import type { ClaudeProfileSetupReport } from './claude-profile-setup'
 import type { ClaudeEnvPatch } from './environment'
+import {
+  describeClaudeSystemDefaultFor,
+  findClaudeAccountIdentityRefusal,
+  withObservedClaudeIdentities,
+  type ClaudeObservedAccount
+} from './claude-account-identity'
+import {
+  assertClaudeProfileLaunchable,
+  claudeProfileLaunchEnvPatch,
+  claudeProfileLaunchPreparation,
+  provisionClaudeLaunchProfile
+} from './claude-profile-launch-preparation'
+import type { ClaudeLoginIdentity } from './claude-profile-readiness'
 
 /** Settings remain authoritative; nothing in this class persists a second selection. */
 export class ClaudeProfileRoutingService {
@@ -25,7 +38,10 @@ export class ClaudeProfileRoutingService {
   private readonly current = new Set<string>()
   private readonly backgroundPublishes = new Map<string, Promise<unknown>>()
   private repair: Promise<unknown> | null = null
-  constructor(private readonly owner: ClaudeProfileRoutingOwner) {}
+  constructor(
+    private readonly owner: ClaudeProfileRoutingOwner,
+    private readonly accounts: () => readonly Omit<ClaudeObservedAccount, 'observed'>[] = () => []
+  ) {}
   /** Settings only: a WSL distro is routed while it holds an Orca Claude account. An unrouted one
    *  stays System Default exactly as before profiles: no pointer, no guest call. */
   routes(target?: ClaudeAccountSelectionTarget): boolean {
@@ -38,15 +54,11 @@ export class ClaudeProfileRoutingService {
       .some((entry) => entry.runtime === 'wsl' && entry.wslDistro?.toLowerCase() === distro)
   }
   resolve(target?: ClaudeAccountSelectionTarget): ClaudeProfileLaunchDescriptor {
-    const descriptor = this.owner.resolve(target)
-    if (descriptor.target.runtime === 'wsl' && !descriptor.target.wslDistro) {
-      throw new Error('Claude profile requires a specific WSL distro')
-    }
-    requireClaudeProfileRoutingCapability(this.owner.capabilities(descriptor.target))
-    if (!descriptor.configHome || !descriptor.readHome || !descriptor.pointerPath) {
-      throw new Error('Claude profile execution host is unavailable')
-    }
-    return descriptor
+    return assertClaudeProfileLaunchable(this.owner.resolve(target), {
+      capabilities: (descriptor) => this.owner.capabilities(descriptor.target),
+      identityRefusal: (accountId) =>
+        findClaudeAccountIdentityRefusal(this.accounts(), accountId, this.owner)
+    })
   }
   /** Select and startup set the profile up (`always`); a launch only sets up one that never was. */
   publish(
@@ -76,7 +88,7 @@ export class ClaudeProfileRoutingService {
         descriptor.profile &&
         (provisioning === 'always' || !this.owner.isProvisioned(descriptor))
       ) {
-        await this.provision(descriptor, access)
+        await provisionClaudeLaunchProfile(this.owner, descriptor, access)
       }
       if (this.resolve(target).configHome !== descriptor.configHome) {
         throw new Error('Claude account changed while preparing its profile; retry')
@@ -107,16 +119,19 @@ export class ClaudeProfileRoutingService {
       // Why: a pointer left naming the previous account would launch it silently. Only the newest
       // target publish, still naming the current selection, speaks for the pointer.
       if (this.pointers.isNewest(key, generation) && !this.isOvertaken(descriptor)) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = describeClaudeProfilePublishError(error)
         this.current.delete(key)
         this.publishIssues.set(
           key,
           target?.runtime === 'wsl' ? `WSL ${target.wslDistro ?? 'distro'}: ${message}` : message
         )
         try {
-          await this.pointers.write(key, generation, async () => {
-            await this.owner.withdraw(target, access)
-          })
+          // Why: a pointer already on System Default launches what was asked; removing it refuses.
+          if (!claudeProfilePointerKeepsSystemDefault(descriptor)) {
+            await this.pointers.write(key, generation, async () => {
+              await this.owner.withdraw(target, access)
+            })
+          }
         } catch (withdrawError) {
           console.warn('[claude-profile] Pointer withdrawal failed:', withdrawError)
         }
@@ -124,8 +139,8 @@ export class ClaudeProfileRoutingService {
       throw error
     }
   }
-  /** A distro that lost its last account: panes opened while it was routed must stop launching
-   *  that account. Bookkeeping, so it only warns. */
+  /** A distro that lost its last account: panes opened while it was routed fall back to System
+   *  Default, as new panes there do. Bookkeeping, so it only warns. */
   async retire(
     target: ClaudeAccountSelectionTarget,
     access: ClaudeProfileHostAccess
@@ -141,7 +156,7 @@ export class ClaudeProfileRoutingService {
     this.publishIssues.delete(key)
     try {
       await this.pointers.write(key, generation, async () => {
-        await this.owner.withdraw(target, access)
+        await (this.owner.retire?.(target, access) ?? this.owner.withdraw(target, access))
       })
     } catch (error) {
       console.warn('[claude-profile] Pointer withdrawal failed:', error)
@@ -155,26 +170,6 @@ export class ClaudeProfileRoutingService {
       )
     } catch {
       return false
-    }
-  }
-  /** Ownership refusal stops the caller; a worker fault on an already prepared profile only warns. */
-  private async provision(
-    descriptor: ClaudeProfileLaunchDescriptor,
-    access: ClaudeProfileHostAccess
-  ): Promise<void> {
-    const provisioned = this.owner.isProvisioned(descriptor)
-    let report: ClaudeProfileSetupReport
-    try {
-      report = await this.owner.prepare(descriptor, access)
-    } catch (error) {
-      if (!provisioned || descriptor.target.runtime === 'wsl') {
-        throw error
-      }
-      console.warn('[claude-profile] Setup failed; launching the already prepared profile:', error)
-      return
-    }
-    if (report.outcome === 'refused') {
-      throw new Error('Selected Claude profile could not be prepared')
     }
   }
   /** Part of a Claude launch, so it may boot the distro the launch just prepared. */
@@ -207,16 +202,7 @@ export class ClaudeProfileRoutingService {
     return this.preparation(await this.publish(target, 'if-missing', 'boot'))
   }
   preparation(descriptor: ClaudeProfileLaunchDescriptor): ClaudeRuntimeAuthPreparation {
-    return {
-      configDir: descriptor.readHome,
-      runtime: descriptor.target.runtime ?? 'host',
-      wslDistro: descriptor.target.wslDistro ?? null,
-      wslLinuxConfigDir: descriptor.target.runtime === 'wsl' ? descriptor.configHome : null,
-      envPatch: this.envPatch(descriptor),
-      stripAuthEnv: descriptor.profile !== null,
-      provenance: descriptor.profile ? `profile:${descriptor.profile.accountId}` : 'system',
-      profileLaunch: descriptor
-    }
+    return claudeProfileLaunchPreparation(descriptor)
   }
   /**
    * A pane's spawn env: its children keep this account until the pane reopens, while the claude
@@ -231,7 +217,7 @@ export class ClaudeProfileRoutingService {
       this.publishInBackground(target)
     }
     try {
-      return this.envPatch(this.resolve(target))
+      return claudeProfileLaunchEnvPatch(this.resolve(target))
     } catch {
       return { [CLAUDE_PROFILE_POINTER_ENV]: this.pointerPath(target) }
     }
@@ -259,23 +245,43 @@ export class ClaudeProfileRoutingService {
         .finally(() => this.backgroundPublishes.delete(key))
     )
   }
-  // Why no CLAUDE_CONFIG_DIR for System Default: the user's inherited value must pass through.
-  private envPatch(descriptor: ClaudeProfileLaunchDescriptor): ClaudeEnvPatch {
-    const home = descriptor.profile ? descriptor.configHome : undefined
-    return {
-      [CLAUDE_PROFILE_POINTER_ENV]: descriptor.pointerPath,
-      ...(home ? { CLAUDE_CONFIG_DIR: home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: home } : {})
+  /** The login Claude recorded in the account's profile, as last read; never a credential. */
+  observedIdentity(accountId: string): ClaudeLoginIdentity | null {
+    const state = this.owner.profileState(accountId)
+    return state.readiness === 'ready' ? state.identity : null
+  }
+
+  async refreshForRead(
+    target?: ClaudeAccountSelectionTarget,
+    options?: { managedGuest?: boolean }
+  ): Promise<void> {
+    await this.owner.refresh?.(target, 'if-running', options)
+  }
+  accountHome(accountId: string): string {
+    const { readiness } = this.owner.profileState(accountId)
+    if (readiness !== 'ready') {
+      throw readiness === 'sign-in-required'
+        ? new ClaudeProfileSignInRequiredError()
+        : new Error('Claude profile is unavailable.')
     }
+    const home = this.owner.accountHome?.(accountId)
+    if (!home) {
+      throw new Error('Claude profile home is unavailable.')
+    }
+    return home
   }
   /** Never throws: readiness is per account, and a stale pointer is republished in the background. */
   describeAccounts(state: ClaudeRateLimitAccountsState): ClaudeRateLimitAccountsState {
-    const accounts = state.accounts.map((account) => ({
-      ...account,
-      profileReadiness: this.owner.readiness(account.id)
-    }))
+    const accounts = withObservedClaudeIdentities(state.accounts, this.owner)
+    const systemDefault = describeClaudeSystemDefaultFor(this.owner, accounts)
     const issues = this.currentPublishIssues()
     if (this.pointerIsCurrent()) {
-      return { ...state, accounts, ...(issues ? { profileRoutingIssue: issues } : {}) }
+      return {
+        ...state,
+        accounts,
+        ...systemDefault,
+        ...(issues ? { profileRoutingIssue: issues } : {})
+      }
     }
     this.repair ??= this.publish(undefined, 'if-missing')
       .catch(() => {})
@@ -285,6 +291,7 @@ export class ClaudeProfileRoutingService {
     return {
       ...state,
       accounts,
+      ...systemDefault,
       profileRoutingIssue: issues || 'Claude account selection is being published'
     }
   }

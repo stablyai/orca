@@ -1,3 +1,8 @@
+import {
+  buildWslExecArgs,
+  buildWslCapturedLoginShellCommand
+} from '../../shared/wsl-login-shell-command'
+import { claudeLoginHostEnv, claudeLoginWslScript } from '../../shared/claude-login-environment'
 import { spawnProcess } from '../../shared/child-process/run-process'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import {
@@ -22,10 +27,6 @@ export type ClaudeCommandOptions = {
   allowFailure?: boolean
   signal?: AbortSignal
   keepStdinOpen?: boolean
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`
 }
 
 export function runClaudeCommandProcess(
@@ -150,10 +151,11 @@ export function runClaudeCommandProcess(
       }
       settle(() => {
         if (code === 0 || options?.allowFailure) {
-          resolvePromise(output)
+          resolvePromise(spawnConfig.readOutput ? spawnConfig.readOutput(output) : output)
           return
         }
-        const trimmedOutput = output.trim()
+        // Why readOutput first: a WSL command's own text sits between capture fences after the rc banner.
+        const trimmedOutput = (spawnConfig.readOutput?.(output).trim() || output).trim()
         rejectPromise(
           new Error(
             trimmedOutput
@@ -186,14 +188,7 @@ type ClaudeSpawnConfig = {
   args: string[]
   env: NodeJS.ProcessEnv
   windowsVerbatimArguments: boolean
-}
-
-function claudeConfigDirEnv(configDir: string): NodeJS.ProcessEnv {
-  return {
-    CLAUDE_CONFIG_DIR: configDir,
-    // Why: Claude Code 2.1.220+ hashes this for the Keychain service name.
-    CLAUDE_SECURESTORAGE_CONFIG_DIR: configDir
-  }
+  readOutput?: (output: string) => string
 }
 
 function resolveClaudeInvocation(
@@ -202,46 +197,44 @@ function resolveClaudeInvocation(
   interactiveLogin: WindowsHostInteractiveLoginSpawn | null,
   hostClaudeCommand: () => string
 ): ClaudeSpawnConfig {
+  if (configDir.linuxPath && configDir.wslDistro) {
+    const capture = buildWslCapturedLoginShellCommand(
+      claudeLoginWslScript(configDir.linuxPath, args)
+    )
+    return {
+      command: 'wsl.exe',
+      args: buildWslExecArgs(configDir.wslDistro, ['/bin/sh', '-c', capture.command]),
+      env: process.env,
+      windowsVerbatimArguments: false,
+      readOutput: (output) => capture.readStdout(output) ?? ''
+    }
+  }
   const spawnConfig = interactiveLogin
     ? {
         command: interactiveLogin.command,
         args: interactiveLogin.args,
-        env: withCliRuntimeOnPath(hostClaudeCommand(), {
-          ...process.env,
-          ...claudeConfigDirEnv(configDir.windowsPath)
-        }),
+        env: withCliRuntimeOnPath(
+          hostClaudeCommand(),
+          claudeLoginHostEnv(process.env, configDir.windowsPath)
+        ),
         windowsVerbatimArguments: false
       }
-    : configDir.linuxPath && configDir.wslDistro
+    : process.platform === 'win32'
       ? {
-          command: 'wsl.exe',
-          args: [
-            '-d',
-            configDir.wslDistro,
-            '--exec',
-            'bash',
-            '-lc',
-            `export CLAUDE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; export CLAUDE_SECURESTORAGE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; exec claude ${args.map(shellQuote).join(' ')}`
-          ],
-          env: process.env,
+          ...buildWindowsCommandInvocation(hostClaudeCommand(), args),
+          env: withCliRuntimeOnPath(
+            hostClaudeCommand(),
+            claudeLoginHostEnv(process.env, configDir.windowsPath)
+          )
+        }
+      : {
+          command: hostClaudeCommand(),
+          args,
+          env: withCliRuntimeOnPath(
+            hostClaudeCommand(),
+            claudeLoginHostEnv(process.env, configDir.windowsPath)
+          ),
           windowsVerbatimArguments: false
         }
-      : process.platform === 'win32'
-        ? {
-            ...buildWindowsCommandInvocation(hostClaudeCommand(), args),
-            env: withCliRuntimeOnPath(hostClaudeCommand(), {
-              ...process.env,
-              ...claudeConfigDirEnv(configDir.windowsPath)
-            })
-          }
-        : {
-            command: hostClaudeCommand(),
-            args,
-            env: withCliRuntimeOnPath(hostClaudeCommand(), {
-              ...process.env,
-              ...claudeConfigDirEnv(configDir.windowsPath)
-            }),
-            windowsVerbatimArguments: false
-          }
   return spawnConfig
 }

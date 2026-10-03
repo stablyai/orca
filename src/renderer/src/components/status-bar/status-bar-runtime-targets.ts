@@ -27,6 +27,9 @@ export type ClaudeStatusSwitchTarget = {
   label: string
   active: boolean
   runtimeTarget: CodexStatusRuntimeTarget
+  /** Set for an account that must be signed in again (or fixed) before it can be selected. */
+  disabled?: boolean
+  hint?: string | null
 }
 
 export type ClaudeStatusSwitchGroup = {

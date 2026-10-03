@@ -51,6 +51,10 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'accountSwitchInProgress',
     /** A Claude account is added in WSL and no Windows one is selected, which a chat can't run under. */
     'managedAccountUnsupported',
+    /** The selected Claude account needs a fresh sign-in. */
+    'accountSignInRequired',
+    /** The selected Claude account is signed in to another login than the one it was added as. */
+    'accountLoginChanged',
     /** The agent started, then Orca could not open the chat's conversation for it. */
     'attachFailed'
   ],

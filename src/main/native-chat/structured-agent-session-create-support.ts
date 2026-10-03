@@ -1,5 +1,6 @@
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { getClaudeProfileRoutingAuthority } from '../claude-accounts/claude-profile-routing-authority'
 import {
   readClaudeManagedAccountGateSettings,
   structuredClaudeMatchesActiveManagedAccount,
@@ -21,6 +22,8 @@ export function resolveStructuredAgentSessionCreateSupport(input: {
   location: AgentSessionExecutionLocation
   adapterSupportsCreate: boolean
   getSettings: () => ClaudeManagedAccountGateSettings
+  /** Under profiles a host chat resolves its own target, so another runtime's account is irrelevant. */
+  profileRoutingActive?: () => boolean
 }): StructuredAgentSessionCreateSupport {
   if (!input.adapterSupportsCreate) {
     return {
@@ -36,8 +39,11 @@ export function resolveStructuredAgentSessionCreateSupport(input: {
   // Claude only: Codex resolves its account on a different path, so its answer is untouched here.
   // `wsl` is the closest existing reason — the cause is a WSL-bound account rather than a WSL
   // workspace — and no client reads the field, so it stays as-is.
+  const profileRoutingActive =
+    input.profileRoutingActive ?? (() => getClaudeProfileRoutingAuthority() !== undefined)
   if (
     input.agent === 'claude' &&
+    !profileRoutingActive() &&
     !structuredClaudeMatchesActiveManagedAccount(
       readClaudeManagedAccountGateSettings(input.getSettings)
     )

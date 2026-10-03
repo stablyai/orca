@@ -173,6 +173,30 @@ describe('hasUsageProviderSettingsForProvider', () => {
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
   })
 
+  it('does not count an unfinished Claude sign-in as configured usage', () => {
+    const draft = {
+      id: 'draft',
+      email: '',
+      managedAuthPath: '',
+      authMethod: 'unknown' as const,
+      createdAt: 1,
+      updatedAt: 1,
+      lastAuthenticatedAt: 0
+    }
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'claude',
+        usageSettings({ claudeManagedAccounts: [draft] })
+      )
+    ).toBe(false)
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'claude',
+        usageSettings({ claudeManagedAccounts: [{ ...draft, email: 'a@example.test' }] })
+      )
+    ).toBe(true)
+  })
+
   it('treats the checked Antigravity item as the durable Antigravity signal', () => {
     expect(
       hasUsageProviderSettingsForProvider(

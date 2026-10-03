@@ -1,4 +1,5 @@
 import { CLAUDE_AUTH_ENV_VARS, applyClaudeEnvPatch } from '../claude-accounts/environment'
+import { isAuthLikeClaudeCustomHeaders } from '../../shared/claude-auth-env'
 
 const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
   'CLAUDE_CODE_CHILD_SESSION',
@@ -54,8 +55,7 @@ export function buildClaudeChildProcessEnv(
       const normalized = key.toUpperCase()
       if (
         authKeys.has(normalized) ||
-        (normalized === 'ANTHROPIC_CUSTOM_HEADERS' &&
-          /authorization|x-api-key|api-key|bearer/i.test(value))
+        (normalized === 'ANTHROPIC_CUSTOM_HEADERS' && isAuthLikeClaudeCustomHeaders(value))
       ) {
         delete env[key]
       }

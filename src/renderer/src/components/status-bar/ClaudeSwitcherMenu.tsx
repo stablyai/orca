@@ -13,6 +13,8 @@ import {
   fetchProviderAccountsSnapshot,
   selectClaudeProviderAccount
 } from '@/runtime/runtime-provider-accounts-client'
+import { toast } from 'sonner'
+import { getClaudeAccountErrorDescription } from '../settings/accounts-pane-action-errors'
 import { translate } from '@/i18n/i18n'
 import {
   getWindowsTerminalCapabilityOwnerKey,
@@ -114,12 +116,20 @@ export function ClaudeSwitcherMenu({
     })
   }, [loadAccounts, claudeAccountSyncKey])
 
-  const handleOpenChange = useCallback((nextOpen: boolean): void => {
-    setOpen(nextOpen)
-    if (!nextOpen) {
-      setAccountsExpanded(false)
-    }
-  }, [])
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean): void => {
+      setOpen(nextOpen)
+      if (!nextOpen) {
+        setAccountsExpanded(false)
+        return
+      }
+      // Why reload: readiness and the login each profile holds change without a settings change.
+      void loadAccounts().catch((error) => {
+        console.error('Failed to load Claude accounts for status bar:', error)
+      })
+    },
+    [loadAccounts]
+  )
 
   // Why: fetch inactive-account usage only on switcher expansion; remote-owned accounts have no local cache to fill.
   const handleAccountsExpandedToggle = useCallback((): void => {
@@ -157,6 +167,13 @@ export function ClaudeSwitcherMenu({
       }
     } catch (error) {
       console.error('Failed to switch Claude account from status bar:', error)
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.2743cdc0af',
+          'Claude account update failed.'
+        ),
+        { description: getClaudeAccountErrorDescription(error) }
+      )
     } finally {
       if (mountedRef.current) {
         setIsSwitching(false)
@@ -262,7 +279,7 @@ export function ClaudeSwitcherMenu({
               return (
                 <DropdownMenuItem
                   key={`${selectedGroup.key}:${target.id ?? 'system'}`}
-                  disabled={isSwitching || target.active}
+                  disabled={isSwitching || target.active || target.disabled}
                   onSelect={(event) => {
                     event.preventDefault()
                     if (!target.active) {
@@ -279,6 +296,11 @@ export function ClaudeSwitcherMenu({
                         </span>
                       ) : null}
                     </div>
+                    {target.hint ? (
+                      <span className="text-[10px] leading-4 text-muted-foreground">
+                        {target.hint}
+                      </span>
+                    ) : null}
                     {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
                       <InlineUsageSkeleton />
                     ) : inactiveUsage?.rateLimits ? (
@@ -293,10 +315,15 @@ export function ClaudeSwitcherMenu({
             })}
           </div>
           <div className="px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
-            {translate(
-              'auto.components.status.bar.StatusBar.8295903d17',
-              'Restart live Claude terminals before continuing old conversations after switching.'
-            )}
+            {accountState.olderTerminalsRunning || accounts.olderTerminalsRunning
+              ? translate(
+                  'accounts.claude.olderTerminalsClose',
+                  'Some terminals are still running from before this Orca update and keep the Claude account they started with. Close all terminals once to finish the update.'
+                )
+              : translate(
+                  'accounts.claude.profileSwitching',
+                  'Switching applies to the next Claude you start in any tab. Running sessions keep their account.'
+                )}
           </div>
         </div>
       ) : null}

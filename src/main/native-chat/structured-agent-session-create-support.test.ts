@@ -80,4 +80,18 @@ describe('resolveStructuredAgentSessionCreateSupport', () => {
       reason
     })
   })
+
+  it('supports Claude with System Default on the host while a WSL sign-in exists, under profiles', () => {
+    const draft = { ...managedAccount('wsl-draft', 'wsl'), email: '', wslDistro: 'Ubuntu' }
+    expect(
+      support({
+        profileRoutingActive: () => true,
+        getSettings: () => ({
+          claudeManagedAccounts: [draft],
+          activeClaudeManagedAccountId: null,
+          activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
+        })
+      })
+    ).toEqual({ supported: true })
+  })
 })

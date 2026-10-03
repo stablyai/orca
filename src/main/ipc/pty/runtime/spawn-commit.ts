@@ -7,7 +7,6 @@ import {
   recordCodexPaneAccountForSpawn,
   codexReattachedHomeRouteField
 } from '../host-env/codex-home'
-import { markClaudePtySpawned } from '../../../claude-accounts/live-pty-gate'
 import { registerPty } from '../../../memory/pty-registry'
 import { rememberPaneKeyForPty } from '../pane/key-state'
 import {
@@ -232,9 +231,6 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   // Why: arms main's per-PTY Command Code output detector from the launch command (renderer startupCommand parity).
   if (!ctx.stablePaneOwner) {
     ctx.deps.runtime?.noteTerminalSpawnCommand?.(ctx.result.id, ctx.launchCommand ?? null)
-  }
-  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
-    markClaudePtySpawned(ctx.result.id)
   }
   if (args.telemetry && !ctx.stablePaneOwner) {
     recordPtySpawnTelemetry(args.telemetry)

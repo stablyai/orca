@@ -83,10 +83,10 @@ describe('shared WSL pinned runtime', () => {
   })
   it('refuses a distro below the pinned glibc floor before downloading, naming both versions', async () => {
     mocks.download.mockClear()
-    const run = runner(false, 'glibc 2.27')
+    const run = runner(false, 'glibc 2.16')
     await expect(
       ensureWslPinnedRuntime(run, '/fake/cache', new AbortController().signal, 'test')
-    ).rejects.toThrow('glibc 2.27 is older than 2.28')
+    ).rejects.toThrow('glibc 2.16 is too old')
     expect(mocks.download).not.toHaveBeenCalled()
     expect(
       run.mock.calls.some(([spec]) => spec.script?.includes('ORCA_NODE_RUNTIME_EXTRACT_FAILED'))
@@ -168,4 +168,19 @@ describe('shared WSL pinned runtime', () => {
     )
     expect(error).toHaveProperty('message', mismatch)
   })
+})
+
+it('uses the glibc 2.17 compatibility pin for an older x64 distro', async () => {
+  mocks.download.mockClear()
+  await ensureWslPinnedRuntime(
+    runner(false, 'glibc 2.17'),
+    '/fake/cache',
+    new AbortController().signal,
+    'test'
+  )
+  expect(mocks.download).toHaveBeenCalledWith(
+    'linux-x64-glibc217',
+    '/fake/cache',
+    expect.anything()
+  )
 })

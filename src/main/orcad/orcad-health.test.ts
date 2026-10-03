@@ -44,7 +44,8 @@ const PID_RECORD: ParsedDaemonPid = {
   linuxStartTicks: null,
   bootId: null,
   spawnerExecPath: null,
-  cgroupUnit: 'orca-daemon-n.scope'
+  cgroupUnit: 'orca-daemon-n.scope',
+  claudeAccountFunction: false
 }
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!

@@ -153,7 +153,8 @@ export class DaemonClientConnections {
                 launchNonce: identity.launchNonce,
                 ...(identity.entryPath ? { entryPath: identity.entryPath } : {}),
                 ...(identity.appVersion ? { appVersion: identity.appVersion } : {}),
-                ...(identity.spawnerExecPath ? { spawnerExecPath: identity.spawnerExecPath } : {})
+                ...(identity.spawnerExecPath ? { spawnerExecPath: identity.spawnerExecPath } : {}),
+                claudeAccountFunction: true
               }
             }
           : {})

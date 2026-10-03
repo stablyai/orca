@@ -290,6 +290,7 @@ async function main(): Promise<void> {
               // where the daemon's own cgroup landed, verified from inside the process that
               // matters. See daemon-cgroup-scope.ts.
               cgroupUnit: detectOwnCgroupScopeUnit(),
+              claudeAccountFunction: true,
               launchNonce
             })
         }

@@ -85,8 +85,8 @@ export function renderAccountsRemovalDialogs(
             </DialogTitle>
             <DialogDescription>
               {translate(
-                'auto.components.settings.AccountsPane.854ebbcc45',
-                'Orca will delete the managed Claude auth for this saved account. If it is currently active, Orca falls back to the system default Claude login.'
+                'settings.accounts.claudeRemoveProfile',
+                'Orca will forget this account and leave its login files on disk. If selected, the next Claude launch uses System default. Running sessions keep their account.'
               )}
             </DialogDescription>
           </DialogHeader>

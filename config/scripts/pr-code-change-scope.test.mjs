@@ -361,6 +361,7 @@ describe('per-job path classification', () => {
   it('runs cross-version wire checks for every working-tree wire module', () => {
     for (const file of [
       'src/shared/protocol-version.ts',
+      'src/shared/account-runtime-capabilities.ts',
       'src/shared/terminal-stream-protocol.ts',
       'src/shared/agent-session-wire.ts',
       'src/shared/agent-session-mutation-envelope.ts',

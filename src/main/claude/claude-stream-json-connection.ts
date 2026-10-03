@@ -1,12 +1,7 @@
-import { randomUUID } from 'node:crypto'
 import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import type * as ClaudeAgentSdk from '@anthropic-ai/claude-agent-sdk'
 import type { CanUseTool, OnUserDialog, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '../../shared/child-process/run-process'
-import {
-  markClaudeStructuredChildExited,
-  markClaudeStructuredChildSpawned
-} from '../claude-accounts/live-pty-gate'
 import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import {
@@ -144,12 +139,6 @@ export async function openClaudeStreamJsonConnection(
   if (!child) {
     throw new Error('the claude agent SDK returned without spawning a child')
   }
-  // This child owns the account's credentials for as long as it runs, exactly as a
-  // Claude PTY does — hold the OAuth-refresh gate so a managed refresh cannot rotate
-  // the single-use token out from under it mid-turn. Entered below, once a release
-  // path exists.
-  const authGateKey = randomUUID()
-  const releaseAuthGate = (): void => markClaudeStructuredChildExited(authGateKey)
   let exited = false
   let exitStatus: ExitStatus | null = null
   let closing = false
@@ -205,7 +194,6 @@ export async function openClaudeStreamJsonConnection(
   })
   const markExited = (): void => {
     exited = true
-    releaseAuthGate()
     settleExit()
   }
   child.on('exit', (code, signal) => {
@@ -271,8 +259,6 @@ export async function openClaudeStreamJsonConnection(
     handleUnexpectedEnd(error)
   })
   child.on('close', () => {
-    // Covers the spawn-failure path too, where no 'exit' ever arrives.
-    releaseAuthGate()
     if (prePidSpawnError && spawner.pid === undefined) {
       processless = true
       settleExit()
@@ -285,13 +271,6 @@ export async function openClaudeStreamJsonConnection(
       handleUnexpectedEnd(error)
     }
   })
-  // Why here and not at spawn: a structured gate entry is deliberately unpersisted, so
-  // confirmSeededClaudeLivePtys can never reconcile a stray one and a leak defers the
-  // managed OAuth refresh for the life of the process. Entering only after 'exit' and
-  // 'close' are attached makes that unreachable — any later throw still leaves a
-  // listener that releases. Nothing between spawn and here can yield, so the child
-  // cannot end before the gate is entered.
-  markClaudeStructuredChildSpawned(authGateKey)
 
   const send: ClaudeStreamJsonConnection['send'] = (message, beforeDispatch) => {
     if (closing || exited || terminalError || child.stdin.destroyed || !child.stdin.writable) {

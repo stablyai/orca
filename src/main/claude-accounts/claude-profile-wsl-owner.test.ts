@@ -13,6 +13,7 @@ import {
   type ClaudeProfileRoutingOwner
 } from './claude-profile-routing-owner'
 import type { ClaudeWslProfileRequest } from './claude-profile-wsl-guest'
+import type { ClaudeWslProfileResponse } from './claude-profile-wsl-transport'
 import { mergeClaudeProfileReaderRoots } from './claude-profile-reader-roots'
 import {
   CLAUDE_PROFILE_ROUTING_CAPABILITY,
@@ -49,7 +50,7 @@ function hostOwner(): ClaudeProfileRoutingOwner {
     readHomes: () => [],
     capabilities: () => [CLAUDE_PROFILE_ROUTING_CAPABILITY],
     isProvisioned: () => true,
-    readiness: () => 'unsupported',
+    profileState: () => ({ readiness: 'unsupported', identity: null }),
     prepare: async () => ({ outcome: 'prepared', surfaces: {}, warnings: [] }),
     publish: async () => {},
     withdraw: () => {}
@@ -80,6 +81,9 @@ function fixture(options: { withHost?: boolean } = {}) {
   const respond = vi.fn(async (request: ClaudeWslProfileRequest) => ({
     ready: true,
     provisioned: true,
+    readiness: Object.fromEntries<NonNullable<ClaudeWslProfileResponse['readiness']>[string]>(
+      settings.claudeManagedAccounts.map((account) => [account.id, 'ready' as const])
+    ),
     homes: [
       `/home/${request.distro}/.claude`,
       ...settings.claudeManagedAccounts
@@ -117,7 +121,8 @@ function fixture(options: { withHost?: boolean } = {}) {
               hooksEnabled: false
             })
           },
-          reachable
+          reachable,
+          prepare
         )
         return options.withHost ? withWslClaudeProfileOwner(hostOwner(), wsl, () => settings) : wsl
       })()
@@ -137,7 +142,7 @@ it('keeps distro pointers, guest paths, startup and current selection separate',
   }
   expect(f.calls.filter((request) => request.action === 'setup')).toHaveLength(2)
   expect(f.calls.filter((request) => request.action === 'publish')).toHaveLength(4)
-  expect(claudeProfileRoutingEnabled()).toBe(false)
+  expect(claudeProfileRoutingEnabled()).toBe(true)
 })
 it('refuses runtime failure and withdraws only that distro pointer; retry can recover', async () => {
   const f = fixture()
@@ -169,17 +174,27 @@ it('continues initializing other distros when one is stopped, then reports the f
     false
   )
 })
-it('leaves a WSL distro with no Orca account exactly as before profiles', () => {
+it('leaves a distro with no account unrouted, then routes the next pane once its first account is added', async () => {
   const f = fixture()
-  for (const target of [
-    { runtime: 'wsl' as const, wslDistro: 'Arch' },
-    { runtime: 'wsl' as const, wslDistro: null }
-  ]) {
-    expect(f.routing.routes(target)).toBe(false)
-    expect(f.routing.terminalEnv(target)).toEqual({})
-  }
-  expect(f.routing.routes({ runtime: 'wsl', wslDistro: 'ubuntu' })).toBe(true)
-  expect(f.prepare).not.toHaveBeenCalled()
+  const target = { runtime: 'wsl' as const, wslDistro: 'Arch' }
+  expect(f.routing.routes(target)).toBe(false)
+  expect(f.routing.terminalEnv(target)).toEqual({})
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(f.prepare.mock.calls.some(([distro]) => distro === 'Arch')).toBe(false)
+  f.settings.claudeManagedAccounts.push({
+    ...f.settings.claudeManagedAccounts[0],
+    id: 'arch',
+    wslDistro: 'Arch'
+  })
+  f.settings.activeClaudeManagedAccountIdsByRuntime!.wsl.Arch = 'arch'
+  expect(f.routing.routes(target)).toBe(true)
+  // The add flow publishes the distro as soon as its draft is registered.
+  await f.routing.publish(target, 'always', 'boot')
+  expect(f.calls.at(-1)).toMatchObject({ action: 'publish', distro: 'Arch', accountId: 'arch' })
+  expect(f.routing.terminalEnv(target)).toMatchObject({
+    ORCA_CLAUDE_PROFILE_POINTER: WSL_CLAUDE_PROFILE_POINTER
+  })
+  expect(f.routing.routes({ runtime: 'wsl', wslDistro: null })).toBe(false)
 })
 it('opens a routed WSL pane at once and re-derives its publish once the distro is up', async () => {
   const f = fixture({ withHost: true })
@@ -263,7 +278,7 @@ it('lets overlapping launches of the same WSL account share the newest publish',
   const results = await Promise.allSettled([f.routing.prepare(ubuntu), f.routing.prepare(ubuntu)])
   expect(results.map((result) => result.status)).toEqual(['fulfilled', 'fulfilled'])
 })
-it('names the distro in a publish issue and drops issues for targets no longer routed', async () => {
+it('clears a distro publication issue after removing its last account and publishing System Default', async () => {
   const f = fixture({ withHost: true })
   f.prepare.mockRejectedValueOnce(new Error('runtime download failed'))
   await expect(f.routing.prepare(ubuntu)).rejects.toThrow('runtime download failed')
@@ -276,6 +291,9 @@ it('names the distro in a publish issue and drops issues for targets no longer r
   f.settings.claudeManagedAccounts = f.settings.claudeManagedAccounts.filter(
     (account) => account.wslDistro !== 'Ubuntu'
   )
+  f.settings.activeClaudeManagedAccountIdsByRuntime!.wsl.Ubuntu = null
+  await f.routing.publish(ubuntu)
+  expect(f.calls.at(-1)).toMatchObject({ action: 'publish', distro: 'Ubuntu', accountId: null })
   expect(issue()).toBeUndefined()
 })
 it('keeps a newer selection verified when an older inspect lands late', async () => {
@@ -308,6 +326,7 @@ it('reports readiness for every owned WSL profile, not only the selected one', a
     const result = await respond!(request)
     return {
       ...result,
+      readiness: { ...result.readiness, unowned: 'sign-in-required' as const },
       homes: result.homes.filter((home) => home !== profileHome('Ubuntu', 'unowned'))
     }
   })
@@ -322,7 +341,8 @@ it('reports readiness for every owned WSL profile, not only the selected one', a
     Ubuntu: 'ready',
     second: 'ready',
     unowned: 'sign-in-required',
-    Debian: 'sign-in-required'
+    // Not checked this session: background work never starts a stopped distro.
+    Debian: 'unverified'
   })
 })
 it('sets a WSL profile up at launch only while the guest reports it unprovisioned', async () => {
@@ -376,4 +396,186 @@ it('admits a guest UNC history root verbatim beside the legacy roots', () => {
     '/legacy/projects',
     guest
   ])
+})
+
+it('publishes System Default in a routed distro without the managed guest runtime', async () => {
+  const f = fixture()
+  f.settings.activeClaudeManagedAccountIdsByRuntime!.wsl.Ubuntu = null
+  const prepareGuest = vi.fn(async (): Promise<never> => {
+    throw new Error('Pinned guest runtime could not be prepared')
+  })
+  const routing = new ClaudeProfileRoutingService(
+    createWslClaudeProfileOwner(
+      () => f.settings,
+      prepareGuest,
+      async () => {},
+      f.reachable,
+      f.prepare
+    )
+  )
+  await expect(routing.publish(ubuntu, 'always', 'boot')).resolves.toMatchObject({ profile: null })
+  expect(f.calls.at(-1)).toMatchObject({ action: 'publish', distro: 'Ubuntu', accountId: null })
+  // A runtime failure never blocks choosing System Default, and leaves no routing issue behind.
+  expect(
+    routing.describeAccounts({ accounts: [], activeAccountId: null }).profileRoutingIssue ?? ''
+  ).not.toContain('Ubuntu')
+})
+
+it('shows an upgraded WSL account as needing sign-in once selecting it has checked the distro', async () => {
+  const f = fixture()
+  const debian = { runtime: 'wsl' as const, wslDistro: 'Debian' }
+  const readinessOf = () =>
+    f.routing
+      .describeAccounts({
+        accounts: f.settings.claudeManagedAccounts.map((account) => ({ ...account })),
+        activeAccountId: null
+      })
+      .accounts.find((account) => account.id === 'Debian')?.profileReadiness
+  expect(readinessOf()).toBe('unverified')
+  const respond = f.respond.getMockImplementation()!
+  f.respond.mockImplementation(async (request) => {
+    const result = await respond(request)
+    return request.distro === 'Debian'
+      ? { ...result, ready: false, readiness: { Debian: 'sign-in-required' as const } }
+      : result
+  })
+  await expect(f.routing.publish(debian, 'always', 'boot')).rejects.toThrow(
+    'Sign in again to use this account.'
+  )
+  expect(readinessOf()).toBe('sign-in-required')
+})
+
+function routingFixture(withAccount: boolean) {
+  const settings: ClaudeProfileSettings = {
+    claudeManagedAccounts: withAccount
+      ? [
+          {
+            id: 'a',
+            email: 'a@example.test',
+            authMethod: 'subscription-oauth',
+            managedAuthRuntime: 'wsl',
+            wslDistro: 'Ubuntu',
+            managedAuthPath: '/unused',
+            createdAt: 0,
+            updatedAt: 0,
+            lastAuthenticatedAt: 0
+          }
+        ]
+      : [],
+    activeClaudeManagedAccountId: null,
+    activeClaudeManagedAccountIdsByRuntime: {
+      host: null,
+      wsl: { Ubuntu: withAccount ? 'a' : null }
+    },
+    agentStatusHooksEnabled: false,
+    disabledTuiAgents: []
+  }
+  const calls: ClaudeWslProfileRequest[] = []
+  const guest = (distro: string) => ({
+    home: `/home/${distro}`,
+    request: async (request: ClaudeWslProfileRequest) => {
+      calls.push(request)
+      return {
+        ready: true,
+        provisioned: true,
+        readiness: Object.fromEntries(
+          settings.claudeManagedAccounts.map((a) => [a.id, 'ready' as const])
+        ),
+        homes: [],
+        historyHomes: { projects: [], transcripts: [] },
+        report: { outcome: 'prepared' as const, surfaces: {}, warnings: [] }
+      }
+    }
+  })
+  const prepare = vi.fn(async (distro: string) => guest(distro))
+  const prepareDefault = vi.fn(async (distro: string) => guest(distro))
+  const withdraw = vi.fn(async () => {})
+  const owner = createWslClaudeProfileOwner(
+    () => settings,
+    prepare,
+    withdraw,
+    async () => true,
+    prepareDefault
+  )
+  return {
+    settings,
+    prepare,
+    prepareDefault,
+    withdraw,
+    owner,
+    calls,
+    routing: new ClaudeProfileRoutingService(owner)
+  }
+}
+
+it('unroutes a distro once its last account is removed', async () => {
+  const f = routingFixture(true)
+  await f.routing.publish(ubuntu, 'always', 'boot')
+  f.settings.claudeManagedAccounts = []
+  f.settings.activeClaudeManagedAccountIdsByRuntime!.wsl.Ubuntu = null
+  expect(f.routing.routes(ubuntu)).toBe(false)
+  expect(f.routing.terminalEnv(ubuntu)).toEqual({})
+})
+it('leaves open panes on System Default, not refusing, once the last account is removed', async () => {
+  const f = routingFixture(true)
+  await f.routing.publish(ubuntu, 'always', 'boot')
+  f.settings.claudeManagedAccounts = []
+  f.settings.activeClaudeManagedAccountIdsByRuntime!.wsl.Ubuntu = null
+  f.calls.length = 0
+  await f.routing.retire(ubuntu, 'boot')
+  expect(f.withdraw).not.toHaveBeenCalled()
+  expect(f.prepareDefault).toHaveBeenCalledWith('Ubuntu', 'boot')
+  expect(f.calls).toEqual([expect.objectContaining({ action: 'publish', accountId: null })])
+})
+it('leaves a distro unrouted after a failed first Add forgets its draft', async () => {
+  const f = routingFixture(false)
+  f.settings.claudeManagedAccounts = [
+    {
+      id: 'd',
+      email: '',
+      authMethod: 'unknown',
+      managedAuthRuntime: 'wsl',
+      wslDistro: 'Ubuntu',
+      managedAuthPath: '',
+      createdAt: 0,
+      updatedAt: 0,
+      lastAuthenticatedAt: 0
+    }
+  ]
+  await f.routing.publish(ubuntu, 'always', 'boot')
+  f.settings.claudeManagedAccounts = []
+  expect(f.routing.routes(ubuntu)).toBe(false)
+  expect(f.routing.terminalEnv(ubuntu)).toEqual({})
+})
+it('does not retry a failed managed guest for every System Default launch', async () => {
+  const f = routingFixture(true)
+  f.prepare.mockRejectedValue(new Error('runtime download failed'))
+  await expect(f.routing.publish(ubuntu, 'always', 'boot')).rejects.toThrow(
+    'runtime download failed'
+  )
+  expect(f.prepareDefault).not.toHaveBeenCalled()
+  f.settings.activeClaudeManagedAccountIdsByRuntime!.wsl.Ubuntu = null
+  await expect(f.routing.publish(ubuntu, 'always', 'boot')).resolves.toMatchObject({
+    profile: null
+  })
+  const before = f.prepare.mock.calls.length
+  await f.routing.publish(ubuntu, 'if-missing', 'boot')
+  await f.routing.publish(ubuntu, 'if-missing', 'boot')
+  expect(f.prepare.mock.calls.length).toBe(before)
+  // Selecting the managed account again still tries its own guest.
+  f.settings.activeClaudeManagedAccountIdsByRuntime!.wsl.Ubuntu = 'a'
+  await expect(f.routing.publish(ubuntu, 'always', 'boot')).rejects.toThrow(
+    'runtime download failed'
+  )
+  expect(f.prepare.mock.calls.length).toBe(before + 1)
+})
+it('observes a finished sign-in through the managed guest even after a System Default fallback', async () => {
+  const f = routingFixture(true)
+  f.settings.activeClaudeManagedAccountIdsByRuntime!.wsl.Ubuntu = null
+  f.prepare.mockRejectedValueOnce(new Error('runtime download failed'))
+  await f.routing.publish(ubuntu, 'always', 'boot')
+  const before = f.prepare.mock.calls.length
+  await f.routing.refreshForRead(ubuntu, { managedGuest: true })
+  expect(f.prepare.mock.calls.length).toBe(before + 1)
+  expect(f.routing.observedIdentity('a')).toBeNull()
 })

@@ -84,6 +84,24 @@ export function getDaemonProvider(): DaemonProvider | null {
   return adapter
 }
 
+/**
+ * True while a daemon whose shells lack the account-switching `claude` function still hosts
+ * terminals; derived on each call from the live daemons, so it ends when those terminals close.
+ */
+// Temporary: needed until Claude account resolution moves to a PATH-level wrapper.
+export function daemonHostsTerminalsWithoutClaudeAccountFunction(): boolean {
+  if (!adapter) {
+    return false
+  }
+  const daemons =
+    adapter instanceof DaemonPtyRouter || adapter instanceof DegradedDaemonPtyProvider
+      ? adapter.getAllAdapters()
+      : [adapter]
+  return daemons.some(
+    (daemon) => daemon.lacksClaudeAccountFunction() && daemon.hostsAttachedSessions()
+  )
+}
+
 // Why: computed from the pid record on demand (not cached at adoption) so the Settings
 // remedy surface always reflects the daemon actually serving terminals right now.
 export async function getCurrentDaemonMacTccAttributionHealth(): Promise<MacDaemonTccAttributionHealth> {

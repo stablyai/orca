@@ -4,8 +4,8 @@
 # MIGRATION -- its length is the W3 goalpost.
 #
 # It may grow when the scanner learns to see a spawn it was blind to. That has
-# happened once: pty-subprocess.ts, local-pty-provider.ts and claude-pty.ts
-# bind 'wsl.exe' to a variable and spawn it later, which the old neighbourhood
+# happened once: pty-subprocess.ts, local-pty-provider.ts and the since-deleted
+# claude-pty.ts bind 'wsl.exe' to a variable and spawn it later, which the old neighbourhood
 # scan could not follow. They were recorded in a prose comment instead, so the
 # count was wrong by three in the direction that hides offenders. Adding them
 # is the guard getting honest, not the boundary regressing.
@@ -14,6 +14,10 @@
 # streaming child (OAuth logins, the hook relay, the browser network relay), a
 # synchronous caller, or a host-level flag like --status / --list that the
 # guest-command API cannot express because it always prepends --exec.
+# cli/handlers/account.ts: `orca account add claude` runs the guest OAuth login in
+# the user's terminal (same login as main/claude-accounts/claude-command-process.ts);
+# the CLI also cannot load the main-process runner.
+cli/handlers/account.ts
 main/agent-hooks/wsl-hook-relay-launch.ts
 main/browser/wsl-browser-network-relay-launch.ts
 main/claude-accounts/claude-command-process.ts
@@ -26,7 +30,6 @@ main/git/wsl-git-read-environment.ts
 main/ipc/filesystem-watcher-wsl.ts
 main/local-worktree-filesystem.ts
 main/providers/local-pty-spawn.ts
-main/rate-limits/claude-pty.ts
 main/rate-limits/codex-fetcher.ts
 main/wsl-availability.ts
 main/wsl-unc-delete.ts

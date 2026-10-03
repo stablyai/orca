@@ -1,3 +1,5 @@
+import { prepareClaudeWslDefaultGuest } from './claude-profile-wsl-default'
+import { inspectClaudeWslGuest, type ClaudeWslGuestCache } from './claude-profile-wsl-inspect'
 import { posix } from 'node:path'
 import { toWindowsWslUncPath } from '../../shared/wsl-paths'
 import {
@@ -7,9 +9,9 @@ import {
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { describeClaudeProfile } from './claude-profile-paths'
-import type {
-  ClaudeProfileHostAccess,
-  ClaudeProfileRoutingOwner
+import {
+  ClaudeProfileSignInRequiredError,
+  type ClaudeProfileRoutingOwner
 } from './claude-profile-routing-owner'
 import {
   getSelectedClaudeAccountIdForTarget,
@@ -19,7 +21,6 @@ import {
   prepareClaudeWslGuest,
   waitForRunningWslDistro,
   withdrawClaudeWslPointer,
-  type ClaudeWslGuest,
   type ClaudeWslProfileResponse
 } from './claude-profile-wsl-transport'
 
@@ -34,17 +35,15 @@ export type ClaudeProfileSettings = Pick<
 
 export function createWslClaudeProfileOwner(
   settings: () => ClaudeProfileSettings,
-  prepareGuest: (
-    distro: string,
-    access?: ClaudeProfileHostAccess
-  ) => Promise<ClaudeWslGuest> = prepareClaudeWslGuest,
-  withdrawPointer: (
-    distro: string,
-    access?: ClaudeProfileHostAccess
-  ) => Promise<void> = withdrawClaudeWslPointer,
-  waitForRunning: (distro: string) => Promise<boolean> = waitForRunningWslDistro
+  prepareGuest: typeof prepareClaudeWslGuest = prepareClaudeWslGuest,
+  withdrawPointer: typeof withdrawClaudeWslPointer = withdrawClaudeWslPointer,
+  waitForRunning: (distro: string) => Promise<boolean> = waitForRunningWslDistro,
+  prepareDefault: typeof prepareClaudeWslDefaultGuest = prepareClaudeWslDefaultGuest
 ): ClaudeProfileRoutingOwner {
-  const guests = new Map<string, { guest: ClaudeWslGuest; expires: number }>()
+  // Why: a managed guest that failed to start is not retried for System Default until it expires
+  // or the user acts; each retry could wait out the full prepare timeout first.
+  const managedGuestFailures = new Map<string, number>()
+  const guests: ClaudeWslGuestCache = new Map()
   const inspections = new Map<
     string,
     { accountId: string | null; home: string; result: ClaudeWslProfileResponse }
@@ -90,6 +89,12 @@ export function createWslClaudeProfileOwner(
       runtime: 'wsl',
       distro
     })
+  const inspectionFor = (accountId: string) => {
+    const distro = settings().claudeManagedAccounts.find(
+      (entry) => entry.id === accountId
+    )?.wslDistro
+    return distro ? inspections.get(distro.toLowerCase()) : undefined
+  }
   const selectedAccountId = (target?: ClaudeAccountSelectionTarget) => {
     try {
       return selected(target).accountId
@@ -98,25 +103,42 @@ export function createWslClaudeProfileOwner(
     }
   }
   const owner: ClaudeProfileRoutingOwner = {
-    refresh: async (target, access) => {
+    refresh: async (target, access, options) => {
       const { distro, accountId } = selected(target)
       const key = distro.toLowerCase()
-      const cached = guests.get(key)
-      const guest =
-        cached && cached.expires > Date.now() ? cached.guest : await prepareGuest(distro, access)
-      if (guest !== cached?.guest) {
-        guests.set(key, { guest, expires: Date.now() + 600_000 })
-      }
-      const result = await guest.request(
-        { action: 'inspect', distro, accountId, userHome: guest.home, hooksEnabled: false },
-        access
-      )
-      // Why: an inspect that lands after a newer selection must not replace its verification.
-      if (selectedAccountId(target) === accountId) {
-        inspections.set(key, { accountId, home: guest.home, result })
-      }
-      if (!result.ready) {
-        throw new Error('Selected WSL Claude account needs a fresh sign-in')
+      const previous = inspections.get(key)
+      try {
+        const managed = settings().claudeManagedAccounts.some(
+          (entry) => entry.managedAuthRuntime === 'wsl' && entry.wslDistro?.toLowerCase() === key
+        )
+        const { guest, result } = await inspectClaudeWslGuest({
+          guests,
+          managedGuestFailures,
+          prepareGuest,
+          prepareDefault,
+          distro,
+          managed,
+          accountId,
+          requireManaged: options?.managedGuest,
+          accountIds: settings()
+            .claudeManagedAccounts.filter((entry) => entry.wslDistro?.toLowerCase() === key)
+            .map((entry) => entry.id),
+          access
+        })
+        // Why: an inspect that lands after a newer selection must not replace its verification.
+        if (selectedAccountId(target) === accountId) {
+          inspections.set(key, { accountId, home: guest.home, result })
+        }
+        if (!result.ready) {
+          throw accountId && result.readiness?.[accountId] === 'sign-in-required'
+            ? new ClaudeProfileSignInRequiredError()
+            : new Error('Selected WSL Claude account could not be checked')
+        }
+      } catch (error) {
+        if (inspections.get(key) === previous) {
+          inspections.delete(key)
+        }
+        throw error
       }
     },
     resolve(target) {
@@ -138,6 +160,7 @@ export function createWslClaudeProfileOwner(
     },
     // Why guest-relative: the claude function expands it, so a pane needs no guest home.
     pointerPath: () => WSL_CLAUDE_PROFILE_POINTER,
+    // Settings only, as Step 3 had it: a distro stops being routed once its last account goes.
     targets: () =>
       [
         ...new Set(
@@ -160,22 +183,24 @@ export function createWslClaudeProfileOwner(
     isProvisioned: ({ target }) =>
       inspections.get(distroFor(target).toLowerCase())?.result.provisioned ?? false,
     // Why per account: the guest's inspect lists every owned profile, not only the selected one.
-    readiness: (accountId) => {
+    accountHome: (accountId) => {
       const account = settings().claudeManagedAccounts.find((entry) => entry.id === accountId)
-      const inspection = account?.wslDistro
-        ? inspections.get(account.wslDistro.toLowerCase())
-        : undefined
-      try {
-        return inspection &&
-          account?.wslDistro &&
-          inspection.result.homes?.includes(
-            profileFor(inspection.home, accountId, account.wslDistro).home
-          )
-          ? 'ready'
-          : 'sign-in-required'
-      } catch {
-        return 'sign-in-required'
+      if (!account?.wslDistro) {
+        throw new Error('Claude profile distro is unavailable.')
       }
+      return toWindowsWslUncPath(
+        profileFor(guestFor(account.wslDistro).home, accountId, account.wslDistro).home,
+        account.wslDistro
+      )
+    },
+    profileState: (accountId) => {
+      const inspection = inspectionFor(accountId)
+      return inspection
+        ? {
+            readiness: inspection.result.readiness?.[accountId] ?? 'unavailable',
+            identity: inspection.result.identities?.[accountId] ?? null
+          }
+        : { readiness: 'unverified', identity: null }
     },
     prepare: async (descriptor, access) => {
       const distro = distroFor(descriptor.target)
@@ -201,6 +226,8 @@ export function createWslClaudeProfileOwner(
           home: guest.home,
           result: {
             ...result,
+            readiness: inspections.get(distro.toLowerCase())?.result.readiness,
+            identities: inspections.get(distro.toLowerCase())?.result.identities,
             homes: inspections.get(distro.toLowerCase())?.result.homes,
             historyHomes: inspections.get(distro.toLowerCase())?.result.historyHomes
           }
@@ -238,45 +265,30 @@ export function createWslClaudeProfileOwner(
       )
     },
     reachable: (target) => waitForRunning(distroFor(target)),
-    withdraw: async (target, access) => {
+    // Why publish, not remove: panes opened while the distro was routed keep reading this
+    // pointer, and an empty one runs System Default there instead of refusing every `claude`.
+    retire: async (target, access) => {
       const distro = distroFor(target)
       guests.delete(distro.toLowerCase())
       inspections.delete(distro.toLowerCase())
+      const guest = await prepareDefault(distro, access)
+      await guest.request(
+        { action: 'publish', distro, userHome: guest.home, accountId: null, hooksEnabled: false },
+        access
+      )
+    },
+    withdraw: async (target, access) => {
+      const distro = distroFor(target)
+      guests.delete(distro.toLowerCase())
+      // Why keep a not-ready inspection: it cannot verify a launch, but it still tells the
+      // account rows why (e.g. an upgraded account needs sign-in) instead of "not checked".
+      if (inspections.get(distro.toLowerCase())?.result.ready !== false) {
+        inspections.delete(distro.toLowerCase())
+      }
       await withdrawPointer(distro, access)
     }
   }
   return owner
 }
 
-export function withWslClaudeProfileOwner(
-  native: ClaudeProfileRoutingOwner,
-  wsl: ClaudeProfileRoutingOwner,
-  settings: () => ClaudeProfileSettings
-): ClaudeProfileRoutingOwner {
-  const forTarget = (target?: ClaudeAccountSelectionTarget) =>
-    target?.runtime === 'wsl' ? wsl : native
-  return {
-    refresh: (target, access) => forTarget(target).refresh?.(target, access) ?? Promise.resolve(),
-    resolve: (target) => forTarget(target).resolve(target),
-    pointerPath: (target) => forTarget(target).pointerPath(target),
-    targets: () => [...native.targets(), ...wsl.targets()],
-    readHomes: (target, surface) =>
-      target
-        ? forTarget(target).readHomes(target, surface)
-        : [...native.readHomes(undefined, surface), ...wsl.readHomes(undefined, surface)],
-    capabilities: (target) => forTarget(target).capabilities(target),
-    isProvisioned: (descriptor) => forTarget(descriptor.target).isProvisioned(descriptor),
-    readiness: (id) =>
-      (settings().claudeManagedAccounts.find((account) => account.id === id)?.managedAuthRuntime ===
-      'wsl'
-        ? wsl
-        : native
-      ).readiness(id),
-    prepare: (descriptor, access) => forTarget(descriptor.target).prepare(descriptor, access),
-    trust: (descriptor, workspace, access) =>
-      forTarget(descriptor.target).trust?.(descriptor, workspace, access) ?? Promise.resolve(),
-    publish: (descriptor, access) => forTarget(descriptor.target).publish(descriptor, access),
-    withdraw: (target, access) => forTarget(target).withdraw(target, access),
-    reachable: (target) => forTarget(target).reachable?.(target) ?? Promise.resolve(true)
-  }
-}
+export { withWslClaudeProfileOwner } from './claude-profile-host-owner'

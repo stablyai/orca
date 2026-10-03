@@ -1,4 +1,10 @@
 import { getClaudeProfileRoutingAuthority } from '../claude-accounts/claude-profile-routing-authority'
+import {
+  ClaudeProfileIdentityRefusalError,
+  ClaudeProfileSignInRequiredError
+} from '../claude-accounts/claude-profile-routing-owner'
+import type { ClaudeProfileRoutingService } from '../claude-accounts/claude-profile-routing-service'
+import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth/runtime-auth-types'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import type {
@@ -14,15 +20,10 @@ import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { structuredSessionChildIdentityEnv } from '../runtime/structured-session-child-identity-env'
 import {
   CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
-  CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
   applyClaudeEnvPatch,
   hasClaudeAuthEnvConflict
 } from '../claude-accounts/environment'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
-import {
-  CLAUDE_AUTH_SWITCH_SETTLE_TIMEOUT_MS,
-  whenClaudeAuthSwitchSettles
-} from '../claude-accounts/live-pty-gate'
 import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   hasWslBoundClaudeAccount,
@@ -127,8 +128,6 @@ export type ClaudeStructuredLaunchResolverDeps = {
   resolveAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
   /** The user's Agent Permissions setting, re-read per acquisition. Absent means prompting. */
   resolvePermissionMode?: () => Promise<PermissionMode> | PermissionMode
-  /** How long an in-flight account switch may hold a launch before it is refused. */
-  authSwitchSettleTimeoutMs?: number
   /** Account state for the managed-account gate; null when it cannot be read, which refuses. */
   readManagedAccountGate?: () => ClaudeManagedAccountGateSettings | null
   /** Whether Claude wrote a transcript for this id; defaults to the transcript resolver. */
@@ -161,7 +160,7 @@ export async function resolveClaudeStructuredInvocation(
   deps: Pick<
     ClaudeStructuredLaunchResolverDeps,
     'resolveCommand' | 'resolveEnv' | 'resolveInheritedEnv' | 'resolveAuthPolicy'
-  > & { authSwitchSettleTimeoutMs?: number },
+  >,
   decorateEnv: (env: Record<string, string>) => Record<string, string> = (env) => env
 ): Promise<ClaudeStructuredInvocation> {
   const command = (deps.resolveCommand ?? resolveClaudeCommand)()
@@ -170,9 +169,6 @@ export async function resolveClaudeStructuredInvocation(
   const inheritedEnv = deps.resolveInheritedEnv
     ? await deps.resolveInheritedEnv()
     : cloneDefinedEnv(process.env)
-  // A switch can begin while the policy and overlay resolve, exactly as it can
-  // during the terminal preflight's prepareClaudeAuth — recheck after the awaits.
-  await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
   // Under a managed account the pinned credential is the only auth this launch may
   // use, so an explicit override is refused rather than silently beating the pin.
   if (auth.stripAuthEnv && hasClaudeAuthEnvConflict(overlay)) {
@@ -203,21 +199,20 @@ export async function resolveClaudeStructuredInvocation(
   return { command, env }
 }
 
-/**
- * Wait a running account switch out, and refuse only if it never settles.
- *
- * Launch resolution is reached from `acquireClaudeSession` *after* the old child has
- * been closed and proved, so a plain refusal here would leave the user with a dead
- * chat and no replacement — the very harm the acquire-entry guard exists to prevent.
- * The entry guard still refuses outright, because nothing has been torn down yet.
- */
-export async function assertClaudeAuthSwitchSettled(
-  timeoutMs = CLAUDE_AUTH_SWITCH_SETTLE_TIMEOUT_MS
-): Promise<void> {
-  if (!(await whenClaudeAuthSwitchSettles(timeoutMs))) {
-    throw new AgentSessionPreSpawnError(new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE), {
-      reason: 'accountSwitchInProgress'
-    })
+/** A refused account is a situation the person acts on, so the chat names it, not only the log. */
+async function prepareClaudeChatProfile(
+  profiles: ClaudeProfileRoutingService
+): Promise<ClaudeRuntimeAuthPreparation> {
+  try {
+    return await profiles.prepare()
+  } catch (error) {
+    if (error instanceof ClaudeProfileSignInRequiredError) {
+      throw new AgentSessionPreSpawnError(error, { reason: 'accountSignInRequired' })
+    }
+    if (error instanceof ClaudeProfileIdentityRefusalError) {
+      throw new AgentSessionPreSpawnError(error, { reason: 'accountLoginChanged' })
+    }
+    throw error
   }
 }
 
@@ -233,7 +228,6 @@ export function createClaudeStructuredLaunchResolver(
   deps: ClaudeStructuredLaunchResolverDeps
 ): (input: { identity: AgentSessionJournalIdentity }) => Promise<ClaudeStructuredLaunch> {
   return async ({ identity }) => {
-    await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
     const record = deps.store.getRecord(identity.sessionId)
     if (!record) {
       throw new Error(`no durable agent-session record for ${identity.sessionId}`)
@@ -256,7 +250,7 @@ export function createClaudeStructuredLaunchResolver(
     // a reacquire after an unexpected exit would otherwise spawn under whatever it has become.
     // Codex has no gate here — it resolves its account on a different path.
     const profiles = getClaudeProfileRoutingAuthority()
-    const prepared = profiles ? await profiles.prepare() : undefined
+    const prepared = profiles ? await prepareClaudeChatProfile(profiles) : undefined
     let launchHome = agentSessionLaunchAccountHome(record).path
     const gate = profiles ? undefined : deps.readManagedAccountGate?.()
     if (gate !== undefined && !structuredClaudeMatchesActiveManagedAccount(gate)) {

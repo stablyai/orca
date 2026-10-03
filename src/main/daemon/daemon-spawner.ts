@@ -31,6 +31,8 @@ export type DaemonPidFile = {
    *  `null` when it detected none. Absent on records no daemon wrote (adoption) or that predate
    *  durable-scope launching. */
   cgroupUnit?: string | null
+  /** Written by builds whose shells define the account-switching `claude` function. */
+  claudeAccountFunction?: true
 }
 
 export type DaemonProcessHandle = {

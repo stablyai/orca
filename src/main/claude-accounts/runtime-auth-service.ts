@@ -5,7 +5,7 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import { claudeProfileRoutingEnabled } from '../../shared/claude-profile-routing'
 import {
   createNativeClaudeProfileRouting,
-  systemDefaultClaudeHome
+  inheritedClaudeConfigDir
 } from './claude-profile-native-owner'
 import {
   installClaudeProfileRoutingAuthority,
@@ -17,15 +17,22 @@ import {
   getSelectedClaudeAccountIdForTarget,
   type ClaudeAccountSelectionTarget
 } from './runtime-selection'
-import type { ClaudeProfileHostAccess } from './claude-profile-routing-owner'
-import { ClaudeRuntimeAuthSync } from './runtime-auth/runtime-auth-sync'
+import {
+  ClaudeProfileSignInRequiredError,
+  type ClaudeProfileHostAccess
+} from './claude-profile-routing-owner'
+import { resolveLocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
+import { ClaudeRuntimePathResolver } from './runtime-paths'
+import { getDefaultWslDistro, getWslHome } from '../wsl'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import { join } from 'node:path'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
 
 export type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
 
-export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
-  constructor(store: Store) {
-    super(store)
+export class ClaudeRuntimeAuthService {
+  private mutationQueue: Promise<unknown> = Promise.resolve()
+  constructor(private readonly store: Pick<Store, 'getSettings'>) {
     if (claudeProfileRoutingEnabled()) {
       installClaudeProfileRoutingAuthority(
         createNativeClaudeProfileRouting({
@@ -36,19 +43,20 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
               : undefined,
           dataRoot: getAppEnvironment().getPath('userData'),
           userHome: homedir(),
-          defaultHome: () => systemDefaultClaudeHome(process.env, homedir()),
+          inheritedConfigDir: () => inheritedClaudeConfigDir(process.env),
           claudeVersion: () => probeClaudeCliVersionCached(resolveClaudeCommand())
         })
       )
     }
-    this.initializeLastSyncedState()
     void this.safeSyncForCurrentSelection()
   }
 
   async prepareForClaudeLaunch(
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRuntimeAuthPreparation> {
-    const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
+    const effectiveTarget = resolveWslDefaultTarget(
+      target ?? this.getDefaultAccountSelectionTarget()
+    )
     const profiles = getClaudeProfileRoutingAuthority()
     if (profiles) {
       // Why: an unrouted WSL distro launches System Default with no guest call, as before profiles.
@@ -63,13 +71,28 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
   async prepareForRateLimitFetch(
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRuntimeAuthPreparation> {
-    const profiles = getClaudeProfileRoutingAuthority()
-    if (profiles) {
-      return profiles.preparation(profiles.resolve(target))
+    const effective = resolveWslDefaultTarget(target ?? this.getDefaultAccountSelectionTarget())
+    try {
+      const profiles = getClaudeProfileRoutingAuthority()
+      if (!profiles) {
+        throw new Error('Claude profile host is unavailable.')
+      }
+      if (!profiles.routes(effective)) {
+        return this.getPreparation(effective)
+      }
+      await profiles.refreshForRead(effective)
+      return profiles.preparation(profiles.resolve(effective))
+    } catch (error) {
+      return {
+        configDir: '',
+        envPatch: {},
+        stripAuthEnv: true,
+        provenance: `profile:${getSelectedClaudeAccountIdForTarget(this.store.getSettings(), effective) ?? 'system'}`,
+        profileIssue: error instanceof Error ? error.message : 'Claude usage is unavailable.',
+        profileIssueKind:
+          error instanceof ClaudeProfileSignInRequiredError ? 'sign-in-required' : 'unavailable'
+      }
     }
-    const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
-    await this.syncForCurrentSelection(effectiveTarget)
-    return this.getPreparation(effectiveTarget)
   }
 
   /** `access: 'boot'` marks a user's select or remove, which may start a stopped WSL distro. */
@@ -78,10 +101,12 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
     access: ClaudeProfileHostAccess = 'if-running'
   ): Promise<void> {
     await this.serializeMutation(async () => {
-      const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
+      const effectiveTarget = resolveWslDefaultTarget(
+        target ?? this.getDefaultAccountSelectionTarget()
+      )
       const profiles = getClaudeProfileRoutingAuthority()
       if (!profiles) {
-        await this.doSyncForCurrentSelection(effectiveTarget)
+        throw new Error('Claude profile routing is unavailable.')
       } else if (profiles.routes(effectiveTarget)) {
         await profiles.publish(effectiveTarget, 'always', access)
       } else {
@@ -105,31 +130,18 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
         }
         return
       }
-      const settings = this.store.getSettings()
-      if (!settings.activeClaudeManagedAccountId) {
-        const previousAccount = this.getActiveAccount(
-          settings.claudeManagedAccounts,
-          this.lastSyncedAccountId
-        )
-        await this.restoreSystemDefaultSnapshot(
-          previousAccount ? await this.readManagedCredentials(previousAccount) : null,
-          previousAccount ? await this.readManagedOauthAccount(previousAccount) : undefined
-        )
-        this.lastSyncedAccountId = null
-        return
-      }
-      await this.doSyncForCurrentSelection()
+      throw new Error('Claude profile routing is unavailable.')
     })
   }
 
   getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
-    const legacy = () => this.getPreparation(target).configDir
-    return getClaudeProfileRoutingAuthority()?.configDirOr(target, legacy) ?? legacy()
-  }
-
-  private initializeLastSyncedState(): void {
-    const settings = this.store.getSettings()
-    this.lastSyncedAccountId = getSelectedClaudeAccountIdForTarget(settings, { runtime: 'host' })
+    const legacy = () => new ClaudeRuntimePathResolver().getRuntimePaths().configDir
+    return (
+      getClaudeProfileRoutingAuthority()?.configDirOr(
+        target && resolveWslDefaultTarget(target),
+        legacy
+      ) ?? legacy()
+    )
   }
 
   private async safeSyncForCurrentSelection(): Promise<void> {
@@ -147,13 +159,51 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
     return next
   }
 
-  // Why: re-auth/add-account write fresh managed tokens; skip the next read-back so stale runtime tokens can't overwrite them.
-  clearLastWrittenCredentialsJson(
-    accountId = this.store.getSettings().activeClaudeManagedAccountId
-  ): void {
-    if (accountId === this.store.getSettings().activeClaudeManagedAccountId) {
-      this.lastWrittenCredentialsJson = null
-    }
-    this.skipNextReadBackForAccountId = accountId
+  private getDefaultAccountSelectionTarget(): ClaudeAccountSelectionTarget {
+    const target = resolveLocalAccountRuntimeTarget(this.store.getSettings())
+    return process.platform === 'win32' ? target : { runtime: 'host' }
   }
+
+  private getPreparation(target?: ClaudeAccountSelectionTarget): ClaudeRuntimeAuthPreparation {
+    const effective = target ?? this.getDefaultAccountSelectionTarget()
+    if (getSelectedClaudeAccountIdForTarget(this.store.getSettings(), effective)) {
+      throw new ClaudeProfileSignInRequiredError()
+    }
+    const paths = new ClaudeRuntimePathResolver().getRuntimePaths()
+    if (effective.runtime === 'wsl') {
+      const distro = effective.wslDistro ?? getDefaultWslDistro()
+      const home = distro ? getWslHome(distro) : null
+      const guest = home ? parseWslUncPath(home) : null
+      if (!home || !guest) {
+        throw new Error('WSL Claude home is unavailable.')
+      }
+      return {
+        configDir: join(home, '.claude'),
+        runtime: 'wsl',
+        wslDistro: distro,
+        wslLinuxConfigDir: `${guest.linuxPath.replace(/\/$/, '')}/.claude`,
+        envPatch: {},
+        stripAuthEnv: true,
+        provenance: 'system'
+      }
+    }
+    return {
+      configDir: paths.configDir,
+      runtime: 'host',
+      envPatch: paths.envPatch,
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+  }
+}
+
+/** A WSL target that names no distro means the default distro, as Claude launches it there. */
+function resolveWslDefaultTarget(
+  target: ClaudeAccountSelectionTarget
+): ClaudeAccountSelectionTarget {
+  if (target.runtime !== 'wsl' || target.wslDistro?.trim()) {
+    return target
+  }
+  const defaultDistro = getDefaultWslDistro()
+  return defaultDistro ? { runtime: 'wsl', wslDistro: defaultDistro } : target
 }

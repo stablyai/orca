@@ -183,21 +183,47 @@ export function createClaudeAccountActionRunner(
           nextActiveAccountId !== null &&
           action === `reauth:${nextActiveAccountId}`)
       if (shouldPromptRestart) {
+        // Why: adding never selects, so "System default → System default" told the user nothing.
+        const addedWithoutSelecting =
+          action === 'adding' && previousActiveAccountId === nextActiveAccountId
+        const previousLabel = getClaudeAccountLabel(claudeAccounts, previousActiveAccountId)
+        const nextLabel = getClaudeAccountLabel(next, nextActiveAccountId)
+        // Why: a re-sign-in, or an Add replacing the selected account, would read "a@ → a@"; a
+        // select between two accounts with one email (two organizations) is a real switch.
+        const signedInAgain =
+          (action === 'adding' || action.startsWith('reauth:')) &&
+          nextActiveAccountId !== null &&
+          previousLabel === nextLabel
         toast.info(
           translate('auto.components.settings.AccountsPane.f921d32606', 'Claude account updated.'),
           {
-            description: translate(
-              'auto.components.settings.AccountsPane.b15ce90870',
-              '{{value0}} -> {{value1}}. Restart live Claude terminals before continuing old sessions.',
-              {
-                value0: getClaudeAccountLabel(claudeAccounts, previousActiveAccountId),
-                value1: getClaudeAccountLabel(next, nextActiveAccountId)
-              }
-            )
+            description: addedWithoutSelecting
+              ? translate(
+                  'accounts.claude.added',
+                  'Account added. Select it to use it for the next Claude you start.'
+                )
+              : signedInAgain
+                ? translate(
+                    'accounts.claude.signedInAgain',
+                    '{{value0}} is signed in again. The next Claude you start uses it. Running sessions keep their account.',
+                    { value0: nextLabel }
+                  )
+                : translate(
+                    'accounts.claude.nextLaunch',
+                    '{{value0}} → {{value1}}. The next Claude you start uses this selection. Running sessions keep their account.',
+                    { value0: previousLabel, value1: nextLabel }
+                  )
           }
         )
       }
     } catch (error) {
+      if (!isRemoteAccountScope) {
+        try {
+          await syncClaudeAccounts(await window.api.claudeAccounts.list())
+        } catch {
+          /* The original failure remains visible. */
+        }
+      }
       if (isClaudeAccountCancellation(error)) {
         return
       }

@@ -23,6 +23,10 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'managedAccountEnvOverride',
   'accountSwitchInProgress',
   'managedAccountUnsupported',
+  /** The selected Claude account's profile has no login; it needs a fresh sign-in. */
+  'accountSignInRequired',
+  /** The selected Claude account's profile holds another login than the one it was added as. */
+  'accountLoginChanged',
   'providerExited',
   'restartFailed',
   'providerRejected',

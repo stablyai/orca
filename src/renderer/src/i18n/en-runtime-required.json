@@ -1070,13 +1070,16 @@
           "566d9a99ab": "_token=…; minimax_group_id_v2=…",
           "5e08b0fe57": "Stored locally and sent only to platform.minimax.io for usage refreshes.",
           "79418c782a": "Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).",
+          "79e484c3b2": "Optional account switcher for the shared Claude auth files.",
           "7ce0e1907c": "). Find it in your browser's DevTools → Network → any opencode.ai request → Cookie header. OpenCode Go auth is web-based and shared across Windows and WSL terminals.",
+          "854ebbcc45": "Orca will delete the managed Claude auth for this saved account. If it is currently active, Orca falls back to the system default Claude login.",
           "8951c5309f": "auth=Fe26.2**…",
           "9107406589": "Could not load Claude accounts.",
           "922b51e02d": "Fe26.2**…",
           "a7e38affcd": "Fe26.2**… token or auth=Fe26.2**… header",
           "b10cb4f696": "adding",
           "b11078a9c2": "wsl",
+          "b15ce90870": "{{value0}} -> {{value1}}. Restart live Claude terminals before continuing old sessions.",
           "b2b1aa936d": "Paste your opencode.ai session cookie for rate limit fetching.",
           "b43e761fe5": "MiniMax cookie update failed.",
           "b8c2905c2b": "Could not load Codex accounts.",
@@ -2720,6 +2723,8 @@
         "imageUnsupported": "Image paste is not supported for this agent."
       },
       "failureWords": {
+        "accountLoginChanged": "The selected Claude account is now signed in to a different login. Open Settings > Accounts to sign in again, or choose System default.",
+        "accountSignInRequired": "The selected Claude account needs you to sign in again. Open Settings > Accounts to sign in again, or choose System default.",
         "accountSwitchInProgress": "A Claude account switch is in progress. Try again after it finishes.",
         "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
         "attachmentAtMost": "{{agent}} accepts at most {{limit}} images in one message, so this message was not sent.",
@@ -2803,15 +2808,12 @@
         }
       },
       "status": {
+        "failedAfter": "Failed after {{value0}}",
+        "interruptedAfter": "Interrupted after {{value0}}",
         "responding": "Agent is responding",
         "toggleDetails": "Toggle turn details",
         "workedFor": "Worked for {{value0}}",
-        "interruptedAfter": "Interrupted after {{value0}}",
-        "failedAfter": "Failed after {{value0}}",
         "workingFor": "Working for {{value0}}"
-      },
-      "subagents": {
-        "unnamed": "Subagent"
       },
       "tool": {
         "countN": "{{value0}} tool calls",

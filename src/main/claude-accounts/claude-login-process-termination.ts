@@ -7,8 +7,10 @@ const WINDOWS_TASKKILL_TIMEOUT_MS = 5_000
 
 /** Ends a `claude` login and everything it spawned, then runs `afterKill`. */
 export function terminateClaudeProcess(
-  child: ChildProcessHandle,
-  interactiveLogin: WindowsHostInteractiveLoginSpawn | null,
+  child: Pick<ChildProcessHandle, 'pid' | 'kill'>,
+  interactiveLogin: Partial<
+    Pick<WindowsHostInteractiveLoginSpawn, 'getTerminationPid' | 'waitForTerminationPid'>
+  > | null,
   afterKill: () => void
 ): void {
   const killWindowsTree = (windowsTerminationPid: number): void => {

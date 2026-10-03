@@ -8,7 +8,7 @@ export type ClaudeAccountIdentityCandidate = {
   wslDistro: string | null
 }
 
-function normalizeEmail(value: string | null | undefined): string | null {
+export function normalizeClaudeEmail(value: string | null | undefined): string | null {
   const trimmed = value?.trim().toLowerCase()
   return trimmed ? trimmed : null
 }
@@ -34,11 +34,13 @@ function runtimeScopeKey(
 // host vs WSL (and each WSL distro) keep separate managed-auth stores — so a
 // duplicate is only a match on email + organization + runtime scope, each side
 // normalized so a legacy/undefined field cannot dodge the check (#6616).
-export function findDuplicateClaudeAccount(
-  accounts: readonly ClaudeManagedAccount[],
-  candidate: ClaudeAccountIdentityCandidate
-): ClaudeManagedAccount | null {
-  const email = normalizeEmail(candidate.email)
+export function findDuplicateClaudeAccount<
+  T extends Pick<
+    ClaudeManagedAccount,
+    'email' | 'organizationUuid' | 'managedAuthRuntime' | 'wslDistro'
+  >
+>(accounts: readonly T[], candidate: ClaudeAccountIdentityCandidate): T | null {
+  const email = normalizeClaudeEmail(candidate.email)
   if (!email) {
     return null
   }
@@ -47,7 +49,7 @@ export function findDuplicateClaudeAccount(
   return (
     accounts.find(
       (account) =>
-        normalizeEmail(account.email) === email &&
+        normalizeClaudeEmail(account.email) === email &&
         normalizeOrganizationUuid(account.organizationUuid) === organizationUuid &&
         runtimeScopeKey(account.managedAuthRuntime, account.wslDistro) === scope
     ) ?? null

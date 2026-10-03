@@ -105,8 +105,22 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
       void this.fetchAll()
     } else {
       this.scheduleDeferredStartupRefresh()
+      void this.showClaudeSignInRequiredAtStartup()
     }
     this.startTimer()
+  }
+
+  // Why: a selected account that needs sign-in is known without a usage request, so the chip says
+  // so at once instead of "Loading usage…" until the window is first focused.
+  private async showClaudeSignInRequiredAtStartup(): Promise<void> {
+    try {
+      const preparation = await this.claudeAuthPreparationResolver?.(this.claudeFetchTarget)
+      if (preparation?.profileIssueKind === 'sign-in-required' && !this.state.claude) {
+        await this.fetchClaudeOnly({ force: true })
+      }
+    } catch (error) {
+      console.warn('[rate-limits] Could not check the Claude account at startup:', error)
+    }
   }
 
   stop(): void {

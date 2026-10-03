@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { prepareLocalCommitMessageAgentEnv } from './commit-message-agent-environment'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
+import { ClaudeProfileSignInRequiredError } from '../claude-accounts/claude-profile-routing-owner'
 
 const originalEnv = { ...process.env }
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -143,6 +144,20 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
       error: 'Failed to prepare the selected agent account for commit message generation.'
     })
     expect(result).not.toHaveProperty('env')
+  })
+
+  it('tells the user how to fix a Claude account that needs a fresh sign-in', async () => {
+    const result = await prepareLocalCommitMessageAgentEnv('claude', {
+      prepareForClaudeLaunch: async () => {
+        throw new ClaudeProfileSignInRequiredError()
+      }
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      error:
+        'The selected Claude account needs you to sign in again. Open Settings > Accounts to sign in again, or choose System default.'
+    })
   })
 
   it('strips a nested-Orca CODEX_HOME override when the launch resolves to the real home', async () => {

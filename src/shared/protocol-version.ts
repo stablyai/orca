@@ -1,3 +1,4 @@
+import { ACCOUNT_RUNTIME_CAPABILITIES } from './account-runtime-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
 import { AGENT_SESSION_STOP_RUNTIME_CAPABILITIES } from './agent-session-stop-capabilities'
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
@@ -128,8 +129,6 @@ export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
 // that. Advertised unconditionally: every build carrying this constant has the gate.
 export const WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY =
   'worktree.archive-failure-blocking.v1' as const
-export const CODEX_RESET_CREDIT_RUNTIME_CAPABILITY = 'accounts.codex-reset-credit.v1' as const
-export const ACCOUNT_IMPORT_RUNTIME_CAPABILITY = 'accounts.import-host-credentials.v1' as const
 export const ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY = 'accounts.antigravity-native.v1' as const
 // Why: older hosts cannot reconcile terminal.create's mutation after losing the reply, so clients may only retry unknown outcomes when advertised.
 export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
@@ -424,9 +423,8 @@ export const RUNTIME_CAPABILITIES = [
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
-  ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
+  ...ACCOUNT_RUNTIME_CAPABILITIES,
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
-  CODEX_RESET_CREDIT_RUNTIME_CAPABILITY,
   SKILL_INSTALL_CAPABILITY,
   SKILL_BUNDLE_INSTALL_CAPABILITY,
   SKILL_INSTALL_CANCEL_CAPABILITY,

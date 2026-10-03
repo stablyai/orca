@@ -6,10 +6,8 @@ import {
 import { isRemoteAgentHooksEnabled } from '../../../../shared/agent-hook-relay'
 import { isOpaqueRemintedPaneKey } from '../../../../shared/pane-key-alias'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { isClaudeAuthSwitchInProgress } from '../../../claude-accounts/live-pty-gate'
 import {
   CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
-  CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
   hasClaudeAuthEnvConflict
 } from '../../../claude-accounts/environment'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
@@ -24,9 +22,6 @@ import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-
 
 export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
-  if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
-    throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
-  }
   if (ctx.claudeAuth?.stripAuthEnv && hasClaudeAuthEnvConflict(args.env)) {
     throw new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE)
   }

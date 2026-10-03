@@ -201,6 +201,9 @@ const FAILURE_SENTENCES = {
     joinSentences([say('historyTooLarge'), say('startNewChat')]),
   managedAccountEnvOverride: (_context, _fact, _surface, say) => say('managedAccountEnvOverride'),
   accountSwitchInProgress: (_context, _fact, _surface, say) => say('accountSwitchInProgress'),
+  // The copy names its own step (Settings or System default), with or without a Retry beside it.
+  accountSignInRequired: (_context, _fact, _surface, say) => say('accountSignInRequired'),
+  accountLoginChanged: (_context, _fact, _surface, say) => say('accountLoginChanged'),
   managedAccountUnsupported: (context, _fact, _surface, say) =>
     joinSentences([
       say('managedAccountUnsupported'),

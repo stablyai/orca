@@ -143,6 +143,8 @@ const REASON_WORDS = {
     managedAccountEnvOverride: { fact: 'managedAccountEnvOverride', action: 'actFirst' },
     accountSwitchInProgress: { fact: 'accountSwitchInProgress', action: 'wait' },
     managedAccountUnsupported: { fact: 'managedAccountUnsupported', action: 'actFirst' },
+    accountSignInRequired: { fact: 'accountSignInRequired', action: 'actFirst' },
+    accountLoginChanged: { fact: 'accountLoginChanged', action: 'actFirst' },
     attachFailed: codeWords('retry')
   },
   agent_session_ownership_unknown: {

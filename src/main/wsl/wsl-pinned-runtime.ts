@@ -1,3 +1,4 @@
+import type { NodeRuntimeTarget } from '../../shared/node-runtime-pin'
 import { randomBytes } from 'node:crypto'
 import { basename } from 'node:path'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
@@ -39,14 +40,16 @@ export async function ensureWslPinnedRuntime(
   })
   const libc = parseOrcadLinuxLibc(libcProbe)
   const glibc = libc === 'glibc' ? parseGlibcVersion(libcProbe) : null
-  // Why before any download: the pinned Node cannot load on an older glibc, as SSH hosts refuse.
+  let target: NodeRuntimeTarget = `linux-${arch === 'x86_64' ? 'x64' : 'arm64'}-${libc}`
   if (glibc && isGlibcBelow(glibc, PINNED_NODE_GLIBC_FLOOR)) {
-    throw new Error(
-      `This WSL distro's glibc ${glibc.major}.${glibc.minor} is older than ` +
-        `${PINNED_NODE_GLIBC_FLOOR.major}.${PINNED_NODE_GLIBC_FLOOR.minor}, which Orca's bundled Node runtime needs.`
-    )
+    if (arch === 'x86_64' && !isGlibcBelow(glibc, { major: 2, minor: 17 })) {
+      target = 'linux-x64-glibc217'
+    } else {
+      throw new Error(
+        `This WSL distro's glibc ${glibc.major}.${glibc.minor} is too old for Orca's pinned runtime.`
+      )
+    }
   }
-  const target = `linux-${arch === 'x86_64' ? 'x64' : 'arm64'}-${libc}` as const
   const home = await run({ script: 'printf %s "$HOME"', loginPath: 'none' })
   if (!home.startsWith('/') || /[\r\n\0]/.test(home)) {
     throw new Error('WSL did not provide an absolute home directory.')

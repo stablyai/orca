@@ -103,6 +103,9 @@ async function readDaemonOwnerMetadata(
   if (identity.spawnerExecPath) {
     metadata.spawnerExecPath = identity.spawnerExecPath
   }
+  if (identity.claudeAccountFunction) {
+    metadata.claudeAccountFunction = true
+  }
   const incarnation = await readDaemonProcessIncarnation(identity.pid)
   if (incarnation) {
     metadata.linuxStartTicks = incarnation.linuxStartTicks

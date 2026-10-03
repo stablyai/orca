@@ -27,6 +27,7 @@ import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { browserManager } from '../browser/browser-manager'
 import { mainProcessState as state } from './main-process-state'
+import { isUnfinishedClaudeSignIn } from '../../shared/claude-unfinished-sign-in'
 
 export function initializeMainProcessAccountServices(): void {
   const store = state.store
@@ -152,14 +153,13 @@ export function initializeMainProcessAccountServices(): void {
         ...Object.values(normalizeClaudeRuntimeSelection(settings).wsl)
       ].filter(Boolean)
     )
+    // Why skip unfinished sign-ins: they hold no login, so there is no usage to read.
     return settings.claudeManagedAccounts
-      .filter((account) => !activeIds.has(account.id))
+      .filter((account) => !activeIds.has(account.id) && !isUnfinishedClaudeSignIn(account))
       .map((account) => ({
         id: account.id,
-        managedAuthPath: account.managedAuthPath,
         managedAuthRuntime: account.managedAuthRuntime,
-        wslDistro: account.wslDistro,
-        wslLinuxAuthPath: account.wslLinuxAuthPath
+        wslDistro: account.wslDistro
       }))
   })
   state.rateLimits.setInactiveCodexAccountsResolver(() => {

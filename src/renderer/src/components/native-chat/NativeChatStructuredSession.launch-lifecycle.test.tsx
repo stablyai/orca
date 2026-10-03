@@ -116,6 +116,27 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
     expect(screen.queryByText(/agent_session_/)).toBeNull()
   })
 
+  it.each([
+    [
+      'accountSignInRequired',
+      'The selected Claude account needs you to sign in again. Open Settings > Accounts to sign in again, or choose System default.'
+    ],
+    [
+      'accountLoginChanged',
+      'The selected Claude account is now signed in to a different login. Open Settings > Accounts to sign in again, or choose System default.'
+    ]
+  ] as const)('says why a refused Claude account did not start the chat (%s)', (reason, text) => {
+    mocks.launchLifecycle = 'failed'
+    mocks.launchFailure = {
+      kind: 'refused',
+      code: 'agent_session_operation_invalid',
+      details: { reason }
+    }
+    render(sessionView())
+
+    expect(screen.getByText(`Chat could not be started. ${text}`)).toBeTruthy()
+  })
+
   it("keeps a step the Retry doesn't take, and drops one it does", () => {
     mocks.launchLifecycle = 'failed'
     mocks.launchFailure = {

@@ -149,6 +149,10 @@ it('deduplicates shared guest history and rejects an arbitrary linked history ro
 })
 it('reads a request whose UTF-8 home is split across stdin chunks', async () => {
   const f = fixture('wsl-profile-\u00fc-')
+  writeFileSync(
+    join(f.profile.home, '.claude.json'),
+    JSON.stringify({ oauthAccount: { emailAddress: 'fake' } })
+  )
   const bundle = join(f.home, 'guest.cjs')
   await build({
     entryPoints: ['src/main/claude-accounts/claude-profile-wsl-entry.ts'],

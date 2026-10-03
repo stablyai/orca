@@ -666,8 +666,12 @@ describe('fetchCodexRateLimits', () => {
       expect(shellCommand).toContain(
         "exec codex '\\''-c'\\'' '\\''approval_policy=never'\\'' '\\''-c'\\'' '\\''features.plugins=false'\\'' '\\''-s'\\'' '\\''read-only'\\'' '\\''-a'\\'' '\\''never'\\'' '\\''app-server'\\'' <&3 >&4 3<&- 4>&-"
       )
-      expect(shellCommand.match(/<&3 >&4 3<&- 4>&-/g)).toHaveLength(3)
-      expect(shellCommand.match(/exec codex [^\n]+<&3 >&4 3<&- 4>&-/g)).toHaveLength(3)
+      // One copy per login-shell case: sh, bash-like, fish and the fallback.
+      expect(shellCommand.match(/<&3 >&4 3<&- 4>&-/g)).toHaveLength(4)
+      expect(shellCommand.match(/exec codex [^\n]+<&3 >&4 3<&- 4>&-/g)).toHaveLength(4)
+      expect(shellCommand).toContain(
+        `fish) exec "$_orca_wsl_shell" -ilc 'exec /bin/sh -c "$argv[1]"' --`
+      )
       expect(shellCommand).not.toContain('_orca_codex')
       expect(shellCommand).not.toContain('wsl-codex-path')
       expect(spawnOptions).toEqual(

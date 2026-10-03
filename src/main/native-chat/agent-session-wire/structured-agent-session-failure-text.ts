@@ -26,7 +26,9 @@ const TYPED_START_REFUSALS = [
   'historyTooLarge',
   'managedAccountEnvOverride',
   'accountSwitchInProgress',
-  'managedAccountUnsupported'
+  'managedAccountUnsupported',
+  'accountSignInRequired',
+  'accountLoginChanged'
 ] as const satisfies readonly (AgentSessionFailureKind &
   AgentSessionRefusalReason<'agent_session_operation_invalid'>)[]
 

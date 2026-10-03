@@ -18,3 +18,41 @@ if test "$__orca_codex_type" = file
   end
 end
 set -e __orca_codex_type
+set -l __orca_claude_type (type -t claude 2>/dev/null)
+if test -n "$ORCA_CLAUDE_PROFILE_POINTER"; and test "$__orca_claude_type" = file
+  function claude
+    if test -n "$CLAUDE_CONFIG_DIR"; and test "$CLAUDE_CONFIG_DIR" != "$ORCA_CLAUDE_INJECTED_CONFIG_DIR"
+      command claude $argv
+      return $status
+    end
+    set -l pointer "$ORCA_CLAUDE_PROFILE_POINTER"
+    # Why: a WSL pane's pointer is guest-relative, since the host cannot know the guest home.
+    if string match -q '~/*' -- "$pointer"
+      set pointer "$HOME/"(string sub -s 3 -- "$pointer")
+    end
+    if not test -f "$pointer"; or not test -r "$pointer"
+      echo 'No Claude account is ready for this terminal. Open Orca Settings > Accounts to sign in again or choose System default.' >&2; return 1
+    end
+    # Why read -z: it keeps newlines for the check below and exists before fish 3.4's collect flags.
+    set -l profile ''
+    if test -s "$pointer"; and not read -lz profile < "$pointer"
+      echo 'Claude account selection is unreadable.' >&2; return 1
+    end
+    if string match -qr '[\r\n]' -- "$profile"
+      echo 'Invalid Claude account selection.' >&2; return 1
+    end
+    if test -n "$profile"
+      if not string match -qr '^(/|[A-Za-z]:[\\\\/])' -- "$profile"; or not test -d "$profile"
+        echo 'Selected Claude profile is missing or invalid.' >&2; return 1
+      end
+      set -l headers
+      if string match -irq 'authorization|x-api-key|api-key|bearer' -- "$ANTHROPIC_CUSTOM_HEADERS"
+        set headers -u ANTHROPIC_CUSTOM_HEADERS
+      end
+      env $headers -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN -u AWS_BEARER_TOKEN_BEDROCK CLAUDE_CONFIG_DIR="$profile" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$profile" claude $argv
+    else
+      env -u CLAUDE_CONFIG_DIR -u ORCA_CLAUDE_INJECTED_CONFIG_DIR claude $argv
+    end
+  end
+end
+set -e __orca_claude_type

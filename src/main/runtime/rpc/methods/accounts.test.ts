@@ -16,20 +16,6 @@ function method(name: string) {
 describe('account RPC methods', () => {
   it.each([
     {
-      methodName: 'accounts.addClaudeFromConfigDir',
-      params: {
-        configDir: join(tmpdir(), 'claude-login'),
-        previousLegacyCredentialsSha256: 'a'.repeat(64)
-      },
-      runtimeMethod: 'addClaudeAccountFromConfigDir',
-      expectedSource: join(tmpdir(), 'claude-login'),
-      expectedOptions: {
-        runtime: undefined,
-        wslDistro: null,
-        previousLegacyCredentialsSha256: 'a'.repeat(64)
-      }
-    },
-    {
       methodName: 'accounts.addCodexFromHome',
       params: { sourceHome: join(tmpdir(), 'codex-login') },
       runtimeMethod: 'addCodexAccountFromHome',
@@ -64,7 +50,7 @@ describe('account RPC methods', () => {
 
     for (const clientKind of ['mobile', 'runtime'] as const) {
       await expect(addMethod.handler(params, { runtime, clientKind })).rejects.toThrow(
-        /only available on the Orca host runtime/
+        /only available on the Orca host runtime|Update the Orca CLI to add accounts/
       )
     }
     expect(runtime.addClaudeAccountFromConfigDir).not.toHaveBeenCalled()
@@ -222,4 +208,15 @@ describe('account RPC methods', () => {
     cleanup?.()
     await running
   })
+})
+
+it('rejects the retired Claude import even for a local socket, before touching its supplied path', async () => {
+  const old = method('accounts.addClaudeFromConfigDir')
+  if (isStreamingMethod(old)) {
+    throw new Error('Unexpected stream')
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Rejection happens before the handler accesses its context.
+  await expect(old.handler({ configDir: '/never-read' }, {} as never)).rejects.toThrow(
+    'Update the Orca CLI to add accounts'
+  )
 })

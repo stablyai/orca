@@ -1,29 +1,33 @@
-import { lstatSync, readdirSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { resolveClaudeGlobalConfigFile } from '../claude/claude-folder-trust-file'
+import {
+  readClaudeLoginState,
+  readClaudeProfileOwnership,
+  readClaudeProfileState,
+  type ClaudeLoginState
+} from './claude-profile-readiness'
+import { existsSync, lstatSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_ROUTING_CAPABILITY
 } from '../../shared/claude-profile-routing'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
-import {
-  describeClaudeProfile,
-  assertClaudeProfileDescendant,
-  readClaudeProfileObject
-} from './claude-profile-paths'
+import { describeClaudeProfile, assertClaudeProfileDescendant } from './claude-profile-paths'
 import { getSelectedClaudeAccountIdForTarget } from './runtime-selection'
 import { publishClaudeProfilePointer, withdrawClaudeProfilePointer } from './claude-profile-pointer'
-import type { ClaudeProfileRoutingOwner } from './claude-profile-routing-owner'
+import {
+  ClaudeProfileSignInRequiredError,
+  type ClaudeProfileRoutingOwner
+} from './claude-profile-routing-owner'
 import { withWslClaudeProfileOwner } from './claude-profile-wsl-owner'
 import { ClaudeProfileRoutingService } from './claude-profile-routing-service'
 import { ClaudeProfileSetupWorker } from './claude-profile-worker'
 
-/** The legacy resolver's home, except a value an outer Orca injected (its twin still marks it). */
-export function systemDefaultClaudeHome(env: NodeJS.ProcessEnv, userHome: string): string {
+/** The user's own CLAUDE_CONFIG_DIR, except a value an outer Orca injected (its twin still marks it). */
+export function inheritedClaudeConfigDir(env: NodeJS.ProcessEnv): string | null {
   const inherited = env.CLAUDE_CONFIG_DIR?.trim()
-  return inherited && inherited !== env[CLAUDE_INJECTED_CONFIG_DIR_ENV]?.trim()
-    ? inherited
-    : join(userHome, '.claude')
+  return inherited && inherited !== env[CLAUDE_INJECTED_CONFIG_DIR_ENV]?.trim() ? inherited : null
 }
 
 /** An owning runtime uses its own settings and paths, including when a paired client calls it. */
@@ -40,37 +44,41 @@ export function createNativeClaudeProfileRouting(args: {
   }
   dataRoot: string
   userHome: string
-  /** System Default's home: the inherited CLAUDE_CONFIG_DIR when set, as the legacy resolver reads it. */
-  defaultHome: () => string
+  /** System Default's CLAUDE_CONFIG_DIR; its home is ~/.claude when unset, as the legacy resolver reads it. */
+  inheritedConfigDir: () => string | null
   claudeVersion: () => Promise<string | null>
   wsl?: ClaudeProfileRoutingOwner
   worker?: Pick<ClaudeProfileSetupWorker, 'prepare'>
 }): ClaudeProfileRoutingService {
   const worker = args.worker ?? new ClaudeProfileSetupWorker()
   const pointerPath = join(args.dataRoot, 'claude-profiles', 'selected-host')
+  const defaultHome = () => args.inheritedConfigDir() ?? join(args.userHome, '.claude')
   const profileFor = (id: string) => {
     const profile = describeClaudeProfile(args.dataRoot, id, {
       executionHostId: 'local',
       runtime: 'host'
     })
     assertClaudeProfileDescendant(args.dataRoot, profile.home)
-    const markerPath = join(dirname(profile.home), 'profile.json')
-    const marker = readClaudeProfileObject(markerPath)
-    if (
-      marker.kind !== 'present' ||
-      marker.value.version !== 1 ||
-      marker.value.accountId !== id ||
-      marker.value.runtime !== 'host' ||
-      marker.value.distro !== undefined ||
-      !lstatSync(markerPath).isFile() ||
-      !lstatSync(profile.home).isDirectory()
-    ) {
-      throw new Error('Selected Claude account needs a fresh sign-in')
+    const { readiness } = readClaudeProfileState(args.dataRoot, profile)
+    if (readiness === 'sign-in-required') {
+      throw new ClaudeProfileSignInRequiredError()
+    }
+    if (readiness !== 'ready') {
+      throw new Error('Claude profile is unavailable. Try again.')
     }
     return profile
   }
   const accountFor = (id: string) =>
     args.store.getSettings().claudeManagedAccounts.find((entry) => entry.id === id)
+  const profileStateFor = (id: string): ClaudeLoginState => {
+    const account = accountFor(id)
+    return !account || account.managedAuthRuntime === 'wsl'
+      ? { readiness: 'unsupported', identity: null }
+      : readClaudeProfileState(
+          args.dataRoot,
+          describeClaudeProfile(args.dataRoot, id, { executionHostId: 'local', runtime: 'host' })
+        )
+  }
   const native: ClaudeProfileRoutingOwner = {
     resolve(target = { runtime: 'host' }) {
       if (target.runtime === 'wsl') {
@@ -84,12 +92,14 @@ export function createNativeClaudeProfileRouting(args: {
         throw new Error('Selected Claude account is unavailable on this host')
       }
       const profile = id ? profileFor(id) : null
-      const defaultHome = args.defaultHome()
+      const inheritedConfigDir = profile ? null : args.inheritedConfigDir()
+      const home = defaultHome()
       return {
         profile,
-        configHome: profile?.home ?? defaultHome,
-        readHome: profile?.home ?? defaultHome,
-        defaultHome,
+        configHome: profile?.home ?? home,
+        readHome: profile?.home ?? home,
+        defaultHome: home,
+        ...(inheritedConfigDir ? { inheritedConfigDir } : {}),
         pointerPath,
         target
       }
@@ -99,7 +109,7 @@ export function createNativeClaudeProfileRouting(args: {
     capabilities: () => [CLAUDE_PROFILE_ROUTING_CAPABILITY],
     readHomes: () => {
       // Why ~/.claude too: step-1 setup pools every profile's history there, whatever System Default is.
-      const shared = [args.defaultHome(), join(args.userHome, '.claude')]
+      const shared = [defaultHome(), join(args.userHome, '.claude')]
       let ids: string[]
       try {
         ids = readdirSync(join(args.dataRoot, 'claude-profiles'))
@@ -110,7 +120,13 @@ export function createNativeClaudeProfileRouting(args: {
         ...shared,
         ...ids.flatMap((id) => {
           try {
-            return [profileFor(id).home]
+            const profile = describeClaudeProfile(args.dataRoot, id, {
+              executionHostId: 'local',
+              runtime: 'host'
+            })
+            return readClaudeProfileOwnership(args.dataRoot, profile) === 'ready'
+              ? [profile.home]
+              : []
           } catch {
             return []
           }
@@ -125,18 +141,17 @@ export function createNativeClaudeProfileRouting(args: {
         return false
       }
     },
-    readiness: (id) => {
-      const account = accountFor(id)
-      if (!account || account.managedAuthRuntime === 'wsl') {
-        return 'unsupported'
-      }
-      try {
-        profileFor(id)
-        return 'ready'
-      } catch {
-        return 'sign-in-required'
-      }
-    },
+    accountHome: (id) => profileFor(id).home,
+    profileState: (id) => profileStateFor(id),
+    systemDefaultIdentity: () =>
+      readClaudeLoginState(
+        resolveClaudeGlobalConfigFile({
+          env: { CLAUDE_CONFIG_DIR: args.inheritedConfigDir() ?? undefined },
+          homeDir: args.userHome,
+          style: process.platform === 'win32' ? 'win32' : 'posix',
+          exists: existsSync
+        })
+      ).identity,
     prepare: async (descriptor) => {
       if (!descriptor.profile) {
         throw new Error('System Default does not require profile setup')
@@ -154,6 +169,7 @@ export function createNativeClaudeProfileRouting(args: {
     withdraw: () => withdrawClaudeProfilePointer(pointerPath)
   }
   return new ClaudeProfileRoutingService(
-    args.wsl ? withWslClaudeProfileOwner(native, args.wsl, () => args.store.getSettings()) : native
+    args.wsl ? withWslClaudeProfileOwner(native, args.wsl, () => args.store.getSettings()) : native,
+    () => args.store.getSettings().claudeManagedAccounts
   )
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { salvagePidFromCorruptDaemonRecord } from './daemon-pid-file-parse'
+import { parseDaemonPidFile, salvagePidFromCorruptDaemonRecord } from './daemon-pid-file-parse'
 
 describe('salvagePidFromCorruptDaemonRecord', () => {
   it('salvages a pid whose digit run is terminated by a following byte', () => {
@@ -18,5 +18,15 @@ describe('salvagePidFromCorruptDaemonRecord', () => {
     expect(salvagePidFromCorruptDaemonRecord('not a daemon record')).toBe(null)
     expect(salvagePidFromCorruptDaemonRecord('{"pid":0,"startedAtMs":17')).toBe(null)
     expect(salvagePidFromCorruptDaemonRecord('{"pid":-42,')).toBe(null)
+  })
+})
+
+describe('parseDaemonPidFile', () => {
+  it('reads whether the daemon was built with the account-switching claude function', () => {
+    expect(
+      parseDaemonPidFile('{"pid":42,"claudeAccountFunction":true}')?.claudeAccountFunction
+    ).toBe(true)
+    expect(parseDaemonPidFile('{"pid":42,"appVersion":"1.0.0"}')?.claudeAccountFunction).toBe(false)
+    expect(parseDaemonPidFile('42')?.claudeAccountFunction).toBe(false)
   })
 })

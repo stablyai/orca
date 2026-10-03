@@ -156,6 +156,27 @@ describe('RateLimitService', () => {
     service.stop()
   })
 
+  it('shows a selected Claude account that needs sign-in at startup without waiting for focus', async () => {
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
+    const service = new RateLimitService()
+    const window = new FakeRateLimitWindow()
+    service.setClaudeAuthPreparationResolver(async () => ({
+      configDir: '',
+      envPatch: {},
+      stripAuthEnv: true,
+      provenance: 'profile:a',
+      profileIssue: 'Sign in again to use this account.',
+      profileIssueKind: 'sign-in-required'
+    }))
+
+    service.attach(asRateLimitWindow(window))
+    service.start({ fetchImmediately: false })
+    await vi.waitFor(() => expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1))
+    expect(fetchCodexRateLimits).not.toHaveBeenCalled()
+
+    service.stop()
+  })
+
   it('performs a one-shot active-window fetch when startup focus was missed', async () => {
     vi.useFakeTimers()
     try {

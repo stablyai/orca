@@ -13,6 +13,7 @@ import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/ra
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+import { isUnfinishedClaudeSignIn } from '../../shared/claude-unfinished-sign-in'
 
 export type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
@@ -61,7 +62,7 @@ export class RuntimeAccountController {
   getSnapshot(): AccountsSnapshot {
     const { claudeAccounts, codexAccounts, rateLimits } = this.requireServices()
     return {
-      claude: claudeAccounts.listAccounts(),
+      claude: toWireClaudeAccounts(claudeAccounts.listAccounts()),
       codex: codexAccounts.listAccounts(),
       rateLimits: rateLimits.getState()
     }
@@ -85,8 +86,10 @@ export class RuntimeAccountController {
     ])
   }
 
-  selectClaude(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {
-    return this.requireServices().claudeAccounts.selectAccount(accountId)
+  async selectClaude(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {
+    return toWireClaudeAccounts(
+      await this.requireServices().claudeAccounts.selectAccount(accountId)
+    )
   }
 
   selectCodex(accountId: string | null): Promise<CodexRateLimitAccountsState> {
@@ -107,7 +110,7 @@ export class RuntimeAccountController {
     const { claudeAccounts, codexAccounts } = this.requireServices()
     const result = await codexAccounts.consumeRateLimitResetCredit(idempotencyKey, expectedScope)
     const snapshot = {
-      claude: claudeAccounts.listAccounts(),
+      claude: toWireClaudeAccounts(claudeAccounts.listAccounts()),
       codex: result.codex,
       rateLimits: result.rateLimits
     }
@@ -123,8 +126,20 @@ export class RuntimeAccountController {
     return { outcome: result.outcome, scope: result.scope, snapshot }
   }
 
-  removeClaude(accountId: string): Promise<ClaudeRateLimitAccountsState> {
-    return this.requireServices().claudeAccounts.removeAccount(accountId)
+  beginClaudeProfileLogin(target: ClaudeAccountSelectionTarget) {
+    return this.requireServices().claudeAccounts.beginProfileLogin(target)
+  }
+
+  async finishClaudeProfileLogin(accountId: string): Promise<ClaudeRateLimitAccountsState> {
+    return toWireClaudeAccounts(
+      await this.requireServices().claudeAccounts.finishProfileLogin(accountId)
+    )
+  }
+
+  async removeClaude(accountId: string): Promise<ClaudeRateLimitAccountsState> {
+    return toWireClaudeAccounts(
+      await this.requireServices().claudeAccounts.removeAccount(accountId)
+    )
   }
 
   addClaudeFromConfigDir(
@@ -153,7 +168,7 @@ export class RuntimeAccountController {
     const services = this.requireServices()
     return services.rateLimits.onStateChange((rateLimits) => {
       listener({
-        claude: services.claudeAccounts.listAccounts(),
+        claude: toWireClaudeAccounts(services.claudeAccounts.listAccounts()),
         codex: services.codexAccounts.listAccounts(),
         rateLimits
       })
@@ -166,4 +181,17 @@ export class RuntimeAccountController {
     }
     return this.services
   }
+}
+
+// Why: an unfinished sign-in has no email yet, and paired clients that require one (shipped mobile
+// builds) reject the whole snapshot, Codex included. Local Settings reads the service directly.
+function toWireClaudeAccounts(state: ClaudeRateLimitAccountsState): ClaudeRateLimitAccountsState {
+  const unfinishedAccounts = state.accounts.filter(isUnfinishedClaudeSignIn)
+  return unfinishedAccounts.length === 0
+    ? state
+    : {
+        ...state,
+        accounts: state.accounts.filter((account) => !isUnfinishedClaudeSignIn(account)),
+        unfinishedAccounts
+      }
 }

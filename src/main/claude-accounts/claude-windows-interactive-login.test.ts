@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 import { getCmdExePath } from '../../shared/windows-batch-spawn'
-import { createService, restorePlatform, setPlatform } from './claude-account-service-test-harness'
+const originalPlatform = process.platform
+function setPlatform(platform: NodeJS.Platform) {
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+}
+function restorePlatform() {
+  setPlatform(originalPlatform)
+}
 
 vi.mock('electron', () => ({
   app: {
@@ -57,21 +63,8 @@ describe('Claude Windows host interactive login', () => {
     }))
 
     try {
-      const { ClaudeAccountService } = await import('./service')
-      const service = new ClaudeAccountService(
-        createService() as never,
-        createService() as never,
-        createService() as never
-      )
-      await (
-        service as unknown as {
-          runClaudeCommand(
-            args: string[],
-            configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
-            timeoutMs: number
-          ): Promise<string>
-        }
-      ).runClaudeCommand(
+      const { runClaudeCommandProcess } = await import('./claude-command-process')
+      await runClaudeCommandProcess(
         ['auth', 'login', '--claudeai'],
         { windowsPath: 'C:\\tmp\\claude-auth', linuxPath: null, wslDistro: null },
         1000
@@ -115,21 +108,8 @@ describe('Claude Windows host interactive login', () => {
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
 
     try {
-      const { ClaudeAccountService } = await import('./service')
-      const service = new ClaudeAccountService(
-        createService() as never,
-        createService() as never,
-        createService() as never
-      )
-      const login = (
-        service as unknown as {
-          runClaudeCommand(
-            args: string[],
-            configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
-            timeoutMs: number
-          ): Promise<string>
-        }
-      ).runClaudeCommand(
+      const { runClaudeCommandProcess } = await import('./claude-command-process')
+      const login = runClaudeCommandProcess(
         ['auth', 'login', '--claudeai'],
         { windowsPath: 'C:\\tmp\\claude-auth', linuxPath: null, wslDistro: null },
         1000

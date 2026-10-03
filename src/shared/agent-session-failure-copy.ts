@@ -1,6 +1,11 @@
 // The pieces every failure sentence is made of, in English. The host fills them in as they are;
 // desktop translates each piece whole with this as its fallback, so the two never differ.
 
+import {
+  CLAUDE_ACCOUNT_LOGIN_CHANGED_NEXT_STEP,
+  CLAUDE_ACCOUNT_SIGN_IN_REQUIRED_NEXT_STEP
+} from './claude-account-refusal-copy'
+
 /** Sentences a refusal notice shows too, so a chat says them one way. */
 export const TERMINAL_AGENT_HOLDS_CHAT = 'This chat is still open in a terminal agent.'
 export const QUIT_TERMINAL_AGENT = 'Quit that agent to continue the chat here.'
@@ -27,6 +32,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
   managedAccountEnvOverride:
     'This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.',
   accountSwitchInProgress: 'A Claude account switch is in progress. Try again after it finishes.',
+  accountSignInRequired: CLAUDE_ACCOUNT_SIGN_IN_REQUIRED_NEXT_STEP,
+  accountLoginChanged: CLAUDE_ACCOUNT_LOGIN_CHANGED_NEXT_STEP,
   managedAccountUnsupported:
     'While a Claude account is added in WSL, Claude chats need a Windows Claude account.',
   chooseClaudeAccount: 'Choose or add one in Claude Accounts settings.',

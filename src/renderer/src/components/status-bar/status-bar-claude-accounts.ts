@@ -1,6 +1,7 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ClaudeRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import { translate } from '@/i18n/i18n'
+import { getClaudeAccountRowState } from '@/lib/claude-account-row-state'
 import {
   getCodexStatusRuntimeKey,
   getCodexStatusRuntimeLabel,
@@ -90,12 +91,17 @@ export function buildClaudeStatusSwitchGroups(
           active: activeId === null,
           runtimeTarget: target
         },
-        ...accountsForTarget.map((account) => ({
-          id: account.id,
-          label: account.email,
-          active: account.id === activeId,
-          runtimeTarget: target
-        }))
+        ...accountsForTarget.map((account) => {
+          const row = getClaudeAccountRowState(account)
+          return {
+            id: account.id,
+            label: row.label,
+            active: account.id === activeId,
+            runtimeTarget: target,
+            disabled: !row.selectable,
+            hint: row.problem
+          }
+        })
       ]
     }
   }
@@ -137,14 +143,18 @@ export function buildClaudeStatusSwitchGroups(
 }
 
 function getClaudeStatusAccountsFromSettings(
-  settings: GlobalSettings | null | undefined
+  settings: GlobalSettings | null | undefined,
+  runtimeState: ClaudeRateLimitAccountsState
 ): ClaudeRateLimitAccountsState | null {
   if (!settings) {
     return null
   }
+  // Why: settings carry the fresh selection; only the host knows each profile's readiness.
+  const observed = new Map(runtimeState.accounts.map((account) => [account.id, account]))
   return {
     accounts: settings.claudeManagedAccounts
       .map((account) => ({
+        ...pickObservedProfile(observed.get(account.id)),
         id: account.id,
         email: account.email,
         managedAuthRuntime: account.managedAuthRuntime ?? 'host',
@@ -180,5 +190,15 @@ export function resolveClaudeStatusAccountState(
   if (settings?.activeRuntimeEnvironmentId?.trim()) {
     return runtimeState
   }
-  return getClaudeStatusAccountsFromSettings(settings) ?? runtimeState
+  return getClaudeStatusAccountsFromSettings(settings, runtimeState) ?? runtimeState
+}
+
+function pickObservedProfile(
+  account: ClaudeStatusAccount | undefined
+): Pick<ClaudeStatusAccount, 'profileReadiness' | 'profileEmail' | 'profileIdentityIssue'> {
+  return {
+    ...(account?.profileReadiness ? { profileReadiness: account.profileReadiness } : {}),
+    ...(account?.profileEmail ? { profileEmail: account.profileEmail } : {}),
+    ...(account?.profileIdentityIssue ? { profileIdentityIssue: account.profileIdentityIssue } : {})
+  }
 }

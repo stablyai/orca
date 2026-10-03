@@ -19,6 +19,8 @@ import {
 const POSIX_SHELLS = ['/bin/bash', '/bin/zsh'].filter((shell) => existsSync(shell))
 const FISH =
   ['/opt/homebrew/bin/fish', '/usr/local/bin/fish', '/usr/bin/fish'].find(existsSync) ?? ''
+const NO_ACCOUNT_READY =
+  'No Claude account is ready for this terminal. Open Orca Settings > Accounts to sign in again or choose System default.'
 const roots: string[] = []
 afterEach(() => {
   gate.enabled = true
@@ -35,7 +37,7 @@ function fixture() {
   }
   writeFileSync(
     join(bin, 'claude'),
-    '#!/bin/sh\n[ "$1" != hold ] || sleep 0.1\nprintf "HOME=%s KEY=%s ARG=%s TWIN=%s\\n" "${CLAUDE_CONFIG_DIR-default}" "${ANTHROPIC_API_KEY-none}" "$1" "${ORCA_CLAUDE_INJECTED_CONFIG_DIR-none}"\nexit 23\n'
+    '#!/bin/sh\n[ "$1" != hold ] || { : > "$HOME/hold-started"; sleep 0.1; }\nprintf "HOME=%s KEY=%s ARG=%s TWIN=%s\\n" "${CLAUDE_CONFIG_DIR-default}" "${ANTHROPIC_API_KEY-none}" "$1" "${ORCA_CLAUDE_INJECTED_CONFIG_DIR-none}"\nexit 23\n'
   )
   chmodSync(join(bin, 'claude'), 0o700)
   const pointer = join(root, 'selected')
@@ -77,7 +79,8 @@ describe('Claude invocation account selection', () => {
       const f = fixture()
       const result = f.run(
         shell,
-        `${getPosixClaudeShellFunction()}\nclaude hold & child=$!\nsleep 0.02\nprintf '%s' '${f.b}' > "$ORCA_CLAUDE_PROFILE_POINTER"\nclaude 'two words'\nwait "$child"`
+        // Why wait for the child: a fixed sleep raced the child's pointer read on a loaded machine.
+        `${getPosixClaudeShellFunction()}\nclaude hold & child=$!\nwhile [ ! -e "$HOME/hold-started" ]; do sleep 0.01; done\nprintf '%s' '${f.b}' > "$ORCA_CLAUDE_PROFILE_POINTER"\nclaude 'two words'\nwait "$child"`
       )
       expect(result.stdout).toContain(`HOME=${f.a} KEY=none ARG=hold TWIN=${f.a}`)
       expect(result.stdout).toContain(`HOME=${f.b} KEY=none ARG=two words TWIN=${f.b}`)
@@ -96,7 +99,9 @@ describe('Claude invocation account selection', () => {
         expect(result.stderr).not.toBe('')
       }
       rmSync(f.pointer)
-      expect(f.run(shell, `${getPosixClaudeShellFunction()}\nclaude test`).status).toBe(1)
+      const missing = f.run(shell, `${getPosixClaudeShellFunction()}\nclaude test`)
+      expect(missing.status).toBe(1)
+      expect(missing.stderr).toContain(NO_ACCOUNT_READY)
       writeFileSync(f.pointer, '')
       expect(f.run(shell, `${getPosixClaudeShellFunction()}\nclaude default`).stdout).toContain(
         'HOME=default KEY=fake'
@@ -152,7 +157,7 @@ describe('Claude invocation account selection', () => {
       const guestPointer = join(f.root, '.local/share/orca/claude-profiles/selected-wsl')
       const unread = f.run(shell, `${fn}\nclaude x`, relative)
       expect([unread.status, unread.stdout]).toEqual([1, ''])
-      expect(unread.stderr).toContain('Claude account selection is unreadable')
+      expect(unread.stderr).toContain(NO_ACCOUNT_READY)
       mkdirSync(join(f.root, '.local/share/orca/claude-profiles'), { recursive: true })
       writeFileSync(guestPointer, f.b)
       expect(f.run(shell, `${fn}\nclaude x`, relative).stdout).toBe(
@@ -171,7 +176,7 @@ describe('Claude invocation account selection', () => {
       const fn = getPosixClaudeShellFunction()
       const result = f.run(shell, `${fn}\nunset HOME\nset -u\nclaude x`, relative)
       expect([result.status, result.stdout]).toEqual([1, ''])
-      expect(result.stderr).toContain('Claude account selection is unreadable')
+      expect(result.stderr).toContain(NO_ACCOUNT_READY)
     }
   )
   it('preserves dormant generated scripts byte for byte', () => {
@@ -212,6 +217,10 @@ describe('Claude invocation account selection', () => {
     const script = getPowerShellClaudeShellFunction()
     expect(script.startsWith('\n$orcaClaudeCommand = Get-Command claude')).toBe(true)
     expect(script).toContain('[IO.File]::ReadAllText($env:ORCA_CLAUDE_PROFILE_POINTER)')
+    // A missing pointer says what to do instead of surfacing a .NET FileNotFoundException.
+    expect(script).toContain(
+      `if (-not [IO.File]::Exists($env:ORCA_CLAUDE_PROFILE_POINTER)) { throw '${NO_ACCOUNT_READY}' }`
+    )
     expect(script).toContain('$env:CLAUDE_CONFIG_DIR -eq $env:ORCA_CLAUDE_INJECTED_CONFIG_DIR')
     expect(script).toContain("throw 'Selected Claude profile")
     expect(script).toContain('finally {')

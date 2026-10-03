@@ -69,8 +69,8 @@ function createChild(): FakeChild {
 }
 
 async function createRunner(): Promise<CommandRunner> {
-  const { ClaudeAccountService } = await import('./service')
-  return new ClaudeAccountService({} as never, {} as never, {} as never) as unknown as CommandRunner
+  const { runClaudeCommandProcess } = await import('./claude-command-process')
+  return { runClaudeCommand: runClaudeCommandProcess }
 }
 
 async function flushPromiseCallbacks(): Promise<void> {

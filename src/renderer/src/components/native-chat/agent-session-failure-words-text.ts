@@ -73,6 +73,16 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         'components.native-chat.failureWords.managedAccountUnsupported',
         COPY.managedAccountUnsupported
       ),
+    accountSignInRequired: () =>
+      translate(
+        'components.native-chat.failureWords.accountSignInRequired',
+        COPY.accountSignInRequired
+      ),
+    accountLoginChanged: () =>
+      translate(
+        'components.native-chat.failureWords.accountLoginChanged',
+        COPY.accountLoginChanged
+      ),
     chooseClaudeAccount: () =>
       translate(
         'components.native-chat.failureWords.chooseClaudeAccount',

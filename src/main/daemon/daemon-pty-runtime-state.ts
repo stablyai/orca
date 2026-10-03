@@ -188,6 +188,20 @@ export abstract class DaemonPtyRuntimeState {
     this.sessionIncarnations.delete(sessionId)
   }
 
+  /**
+   * False when this daemon reports it was built with the account-switching `claude` function, and
+   * when it cannot say either way (no hello identity and no pid record yet).
+   */
+  lacksClaudeAccountFunction(): boolean {
+    const identity = this.lastAuthenticatedIdentity ?? this.pidRecord
+    return identity !== null && !identity.claudeAccountFunction
+  }
+
+  /** Sessions this app holds open on the daemon; in memory, so it never waits on or respawns one. */
+  hostsAttachedSessions(): boolean {
+    return this.activeSessionIds.size > 0
+  }
+
   constructor(opts: DaemonPtyAdapterOptions) {
     this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
     this.socketPath = opts.socketPath

@@ -99,7 +99,7 @@ it('hands an installed owner’s profile roots to the scan request', async () =>
       },
       dataRoot,
       userHome: home,
-      defaultHome: () => join(home, '.claude'),
+      inheritedConfigDir: () => null,
       claudeVersion: async () => null,
       worker: { prepare: async () => ({ outcome: 'prepared', surfaces: {}, warnings: [] }) }
     })

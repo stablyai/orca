@@ -16,6 +16,18 @@ import {
   createClaudeStructuredLaunchResolver
 } from './claude-structured-launch-resolution'
 import { claudeStructuredPermissionModeForSettings } from './claude-structured-permission-mode'
+import {
+  ClaudeProfileIdentityRefusalError,
+  ClaudeProfileSignInRequiredError
+} from '../claude-accounts/claude-profile-routing-owner'
+
+const profileAuthority = vi.hoisted((): { prepare: (() => Promise<never>) | null } => ({
+  prepare: null
+}))
+vi.mock('../claude-accounts/claude-profile-routing-authority', () => ({
+  getClaudeProfileRoutingAuthority: () =>
+    profileAuthority.prepare ? { prepare: profileAuthority.prepare } : undefined
+}))
 
 const SESSION_ID = 'orca-session-1'
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
@@ -522,6 +534,27 @@ describe('claude structured launch resolution', () => {
       await expect(
         resolverFor(RESUMABLE)({ identity: identityAt('leaf-current') })
       ).resolves.toMatchObject({ providerSessionId: 'provider-current' })
+    })
+  })
+
+  describe('a selected Claude account the profile authority refuses', () => {
+    it.each([
+      ['accountSignInRequired', () => new ClaudeProfileSignInRequiredError()],
+      [
+        'accountLoginChanged',
+        () => new ClaudeProfileIdentityRefusalError('This account was added as a@ ...')
+      ]
+    ] as const)('names the %s situation so the chat can say it', async (reason, error) => {
+      profileAuthority.prepare = async () => {
+        throw error()
+      }
+      try {
+        const refused = resolverFor(RESUMABLE)({ identity: identityAt('leaf-current') })
+        await expect(refused).rejects.toBeInstanceOf(AgentSessionPreSpawnError)
+        await expect(refused).rejects.toMatchObject({ reason })
+      } finally {
+        profileAuthority.prepare = null
+      }
     })
   })
 })
