@@ -137,6 +137,10 @@ describe('onPtyExit per-PTY map reaper coverage', () => {
       )
     }
   })
+
+  it('evicts terminal run facts in onPtyExit', () => {
+    expect(reaperSource).toContain('this.terminalRunFacts.delete(ptyId)')
+  })
 })
 
 describe('per-PTY lifecycle generation retention (leak regression)', () => {
@@ -168,5 +172,18 @@ describe('per-PTY lifecycle generation retention (leak regression)', () => {
     expect(afterRespawn).toBeGreaterThan(beforeExit)
     // Stable once re-minted, so a post-respawn capture keeps matching itself.
     expect(internals.getPtyLifecycleGeneration('pty-1')).toBe(afterRespawn)
+  })
+})
+
+describe('per-PTY terminal run facts retention (leak regression)', () => {
+  it('retains no run facts after a spawn/exit cycle', () => {
+    const runtime = new OrcaRuntimeService()
+    for (let index = 0; index < 50; index += 1) {
+      const ptyId = `pty-${index}`
+      runtime.onPtySpawned(ptyId)
+      runtime.terminalRunFacts.recordSpawnCommit({ id: ptyId })
+      runtime.onPtyExit(ptyId, 0)
+    }
+    expect(runtime.terminalRunFacts.size).toBe(0)
   })
 })

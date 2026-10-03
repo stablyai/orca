@@ -100,4 +100,8 @@ export class TerminalRunFactsRegister {
     this.runsByPtyId.delete(ptyId)
     this.lastInputAtByPtyId.delete(ptyId)
   }
+
+  get size(): number {
+    return this.runsByPtyId.size
+  }
 }

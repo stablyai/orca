@@ -88,7 +88,7 @@ export function registerFilesystemWatcherHandlers(): void {
         const retry = watcherLifecycleState.pendingRemoteWatcherRetryListeners.get(key)
         retry?.listeners.delete(_event.sender.id)
         const retryTimer = watcherLifecycleState.pendingRemoteWatcherRetries.get(key)
-        if (retryTimer && retry?.listeners.size === 0) {
+        if (retryTimer && (!retry || retry.listeners.size === 0)) {
           clearTimeout(retryTimer)
           watcherLifecycleState.pendingRemoteWatcherRetries.delete(key)
           watcherLifecycleState.pendingRemoteWatcherRetryListeners.delete(key)

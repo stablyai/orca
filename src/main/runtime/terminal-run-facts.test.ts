@@ -122,4 +122,14 @@ describe('terminal run facts', () => {
     expect(facts.readLastInputAt('pty-1')).toBe(100)
     expect(facts.read('pty-1', null).firstUserInputAt).toBeNull()
   })
+
+  it('evicts run facts when deleted', () => {
+    const facts = new TerminalRunFactsRegister()
+    facts.recordSpawnCommit({ id: 'pty-1', incarnationId: 'inc-1' })
+    facts.recordInput('pty-1', 'driving', 'ls\r', 100)
+
+    facts.delete('pty-1')
+
+    expect(facts.read('pty-1', 'inc-1')).toEqual({ freshSpawn: false, firstUserInputAt: null })
+  })
 })
