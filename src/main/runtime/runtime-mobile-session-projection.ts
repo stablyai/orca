@@ -1,23 +1,30 @@
 import {
+  HOST_AGENT_PRESENCE_STATUS,
+  projectHostAgentPresenceStatus
+} from './runtime-mobile-agent-presence-projection'
+import {
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../shared/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
-import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../shared/agent-status-types'
 import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
-import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import {
   renewRuntimeMobileAgentStatusFromPtyTitle,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
 import { finalizeRuntimeMobileSessionTabsResult } from './runtime-mobile-session-result-finalization'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
+import {
+  createHookRowsForPaneLookup,
+  createStatusRowsLookup
+} from './runtime-mobile-session-pane-row-lookup'
 import {
   getLatestAgentCandidateTitle,
   getLeafDisplayRecord,
@@ -31,61 +38,8 @@ export function projectRuntimeMobileSessionTabs(
 ): RuntimeMobileSessionTabsResult {
   const tabs: RuntimeMobileSessionClientTab[] = []
   const liveBrowserTabsByPageId = host.getLiveBrowserTabs(snapshot.worktree)
-  // Production reads hook rows by pane; the snapshot fallback remains for tests
-  // and embedders that have not adopted the narrow getter.
-  let hookRowsByPaneKey: Map<string, AgentStatusIpcPayload[]> | null = null
-  const hookRowsForPane = new Map<string, AgentStatusIpcPayload[]>()
-  const getHookRowsForPane = (paneKey: string): AgentStatusIpcPayload[] => {
-    const cached = hookRowsForPane.get(paneKey)
-    if (cached) {
-      return cached
-    }
-    const direct = host.getProviderSessionRows(paneKey)
-    if (direct) {
-      hookRowsForPane.set(paneKey, direct)
-      return direct
-    }
-    hookRowsByPaneKey ??= indexAgentStatusRowsByPaneKey(host.getProviderSessionSnapshot())
-    const rows = hookRowsByPaneKey.get(paneKey) ?? []
-    hookRowsForPane.set(paneKey, rows)
-    return rows
-  }
-  let statusRowsByPaneKey: Map<string, AgentStatusIpcPayload[]> | null = null
-  let statusRowsByTerminalHandle: Map<string, AgentStatusIpcPayload[]> | null = null
-  const getStatusRows = (
-    paneKey: string,
-    terminalHandle: string | null
-  ): AgentStatusIpcPayload[] => {
-    if (!statusRowsByPaneKey || !statusRowsByTerminalHandle) {
-      statusRowsByPaneKey = new Map()
-      statusRowsByTerminalHandle = new Map()
-      for (const row of host.getStatusSnapshot()) {
-        const paneRows = statusRowsByPaneKey.get(row.paneKey)
-        if (paneRows) {
-          paneRows.push(row)
-        } else {
-          statusRowsByPaneKey.set(row.paneKey, [row])
-        }
-        if (row.terminalHandle) {
-          const handleRows = statusRowsByTerminalHandle.get(row.terminalHandle)
-          if (handleRows) {
-            handleRows.push(row)
-          } else {
-            statusRowsByTerminalHandle.set(row.terminalHandle, [row])
-          }
-        }
-      }
-    }
-    const paneRows = statusRowsByPaneKey.get(paneKey) ?? []
-    if (!terminalHandle) {
-      return paneRows
-    }
-    const handleRows = statusRowsByTerminalHandle.get(terminalHandle) ?? []
-    if (paneRows.length === 0) {
-      return handleRows
-    }
-    return [...paneRows, ...handleRows.filter((row) => !paneRows.includes(row))]
-  }
+  const getHookRowsForPane = createHookRowsForPaneLookup(host)
+  const getStatusRows = createStatusRowsLookup(host)
   // Why: a live PTY backs one surface; claim each once so two leaves resolving to it can't emit duplicate React keys and crash the client.
   const claimedLivePtyIds = new Set<string>()
   for (const tab of snapshot.tabs) {
@@ -279,8 +233,11 @@ export function projectRuntimeMobileSessionTabs(
     const projectedStatusEntry = projectedAgentStatus.agentStatus as
       | (AgentStatusEntry & { turnCompletedAt?: number })
       | undefined
-    const { turnCompletedAt: projectedTurnCompletedAt, ...clientStatusFields } =
-      projectedStatusEntry ?? {}
+    const {
+      turnCompletedAt: projectedTurnCompletedAt,
+      agentPresence: _clientPresence,
+      ...clientStatusFields
+    } = projectedStatusEntry ?? {}
     const rawTurnCompletedAt =
       hookAgentStatus?.live?.payload.turnCompletedAt ??
       selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey)).live?.payload.turnCompletedAt ??
@@ -292,8 +249,10 @@ export function projectRuntimeMobileSessionTabs(
     const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry
       ? { agentStatus: clientStatusFields as AgentStatusEntry }
       : {}
+    const presenceStatus = projectHostAgentPresenceStatus(getHookRowsForPane(paneKey))
     tabs.push({
-      type: 'terminal',
+      ...(presenceStatus ? { [HOST_AGENT_PRESENCE_STATUS]: presenceStatus } : {}),
+      type: 'terminal' as const,
       id: tab.id,
       parentTabId: tab.parentTabId,
       leafId: tab.leafId,

@@ -1,5 +1,11 @@
+import type { AgentProcessPresence } from '../../shared/agent-process-presence'
+import {
+  selectLiveOwnerAgent,
+  withoutEndedOwnerTitle
+} from '../../shared/ended-agent-owner-evidence'
 import {
   detectAgentStatusFromTitle,
+  isClaudeManagementTitle,
   isOpenCodeNativeTitle,
   isQuarterCircleSpinnerOnlyAgentTitle,
   isShellProcess,
@@ -30,6 +36,7 @@ export type RuntimeTerminalAgentStatusSnapshot = {
 }
 
 type Dependencies = {
+  getAgentPresence?(handle: string): AgentProcessPresence | undefined
   getController(): RuntimePtyController | null
   getLivePty(handle: string): { pty: RuntimePtyWorktreeRecord } | null
   getLiveLeaf(handle: string): { leaf: RuntimeLeafRecord }
@@ -75,6 +82,7 @@ export class RuntimeTerminalAgentStatusQuery {
     const terminal = this.getSnapshot(handle, ptyId, clear)
     const explicitStatus = this.deps.getExplicitStatus(handle)
     const lifecycle = getDisplayPromptLifecycle(this.deps.getLifecycleStatus(ptyId), clear)
+    const presence = this.deps.getAgentPresence?.(handle)
     const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
     const liveTitleClearsBlockedText =
       terminal.titleStatusIsLive &&
@@ -102,12 +110,20 @@ export class RuntimeTerminalAgentStatusQuery {
     ) {
       return { handle, isRunningAgent: true, status: 'permission' }
     }
+    // Presence answers only whether an agent owns the pane; the permission evidence above still wins.
+    const owner = selectLiveOwnerAgent(presence)
     if (explicitStatus) {
-      // Why: permission titles can linger after hooks report the agent resumed.
-      // Fresh hook state is tighter, but current shell/management evidence wins.
+      // Why: permission titles can linger after hooks report the agent resumed. Fresh hook state is
+      // tighter, but current shell/management evidence wins; only the owner itself in front
+      // overrides a shell title.
+      const ownerInFront =
+        owner !== undefined && (await this.foregroundIsOwner(handle, ptyId, owner))
+      const titleBlocks = ownerInFront
+        ? terminal.title !== null && isClaudeManagementTitle(terminal.title)
+        : terminalTitleBlocksExplicitAgentStatus(terminal.title)
       const isRunningAgent =
-        !terminalTitleBlocksExplicitAgentStatus(terminal.title) &&
-        !(await this.terminalHasShellForegroundProcess(handle, ptyId))
+        !titleBlocks &&
+        (ownerInFront || !(await this.terminalHasShellForegroundProcess(handle, ptyId)))
       this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
       return {
         handle,
@@ -115,7 +131,12 @@ export class RuntimeTerminalAgentStatusQuery {
         status: isRunningAgent ? explicitStatus.status : null
       }
     }
-    if (terminal.titleStatus) {
+    // An exited owner's own title is history; titles naming other agents still count.
+    const titleStatus =
+      withoutEndedOwnerTitle(terminal.title, presence) === terminal.title
+        ? terminal.titleStatus
+        : null
+    if (titleStatus) {
       // Why: an OpenCode marker and a lone quarter-circle spinner (STA-4028) are activity,
       // not identity, so resolve both through the identity/foreground evidence path.
       if (
@@ -127,10 +148,10 @@ export class RuntimeTerminalAgentStatusQuery {
         return {
           handle,
           isRunningAgent,
-          status: isRunningAgent ? terminal.titleStatus : null
+          status: isRunningAgent ? titleStatus : null
         }
       }
-      return { handle, isRunningAgent: true, status: terminal.titleStatus }
+      return { handle, isRunningAgent: true, status: titleStatus }
     }
 
     const isRunningAgent = await this.deps.isRunning(handle)
@@ -229,6 +250,17 @@ export class RuntimeTerminalAgentStatusQuery {
       titleStatus: title ? detectAgentStatusFromTitle(title.title) : leaf.lastAgentStatus,
       titleStatusIsLive: (title?.updatedAt ?? 0) > 0
     }
+  }
+
+  private async foregroundIsOwner(handle: string, ptyId: string, owner: string): Promise<boolean> {
+    let foregroundProcess: string | null = null
+    try {
+      foregroundProcess = (await this.deps.getController()?.getForegroundProcess(ptyId)) ?? null
+    } catch {
+      foregroundProcess = null
+    }
+    this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
+    return recognizeAgentProcess(foregroundProcess)?.agent === owner
   }
 
   private async terminalHasShellForegroundProcess(handle: string, ptyId: string): Promise<boolean> {

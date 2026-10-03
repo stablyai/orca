@@ -1,3 +1,4 @@
+import { projectSessionTabPresenceForClient } from './session-tab-presence-projection'
 import { isDeepStrictEqual } from 'node:util'
 import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
@@ -31,7 +32,11 @@ export function projectSessionTabsForClient(
   clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2]
 ): RuntimeMobileSessionTabsResult {
   return projectSessionTabBrowserPlacements(
-    projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities),
+    projectSessionTabAgentStatus(
+      projectSessionTabPresenceForClient(snapshot, clientCapabilities),
+      clientKind,
+      clientCapabilities
+    ),
     clientCapabilities
   )
 }

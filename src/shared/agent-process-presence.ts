@@ -12,6 +12,8 @@ export type AgentProcessPresence = {
   agent: AgentType
   process?: AgentProcessIdentity
   ended?: true
+  /** Relay ordering survives replay and owner-only retention without renewing evidence. */
+  observation?: AgentPresenceObservation
 }
 
 export type AgentProcessVerdict = 'live' | 'unverifiable' | 'exited'
@@ -57,9 +59,12 @@ export function readAgentProcessPresence(value: unknown): AgentProcessPresence |
   ) {
     return undefined
   }
+  const observation =
+    'observation' in value ? readAgentPresenceObservation(value.observation) : undefined
   const process = 'process' in value ? readAgentProcessIdentity(value.process) : undefined
   return {
     agent: value.agent,
+    ...(observation ? { observation } : {}),
     ...(process ? { process } : {}),
     ...('ended' in value && value.ended === true ? { ended: true as const } : {})
   }
@@ -67,4 +72,24 @@ export function readAgentProcessPresence(value: unknown): AgentProcessPresence |
 
 export function isSameAgentProcess(a: AgentProcessIdentity, b: AgentProcessIdentity): boolean {
   return a.pid === b.pid && a.platform === b.platform && a.startTime === b.startTime
+}
+
+export type AgentPresenceObservation = { epoch: string; sequence: number }
+
+export function readAgentPresenceObservation(value: unknown): AgentPresenceObservation | undefined {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('epoch' in value) ||
+    !('sequence' in value) ||
+    typeof value.epoch !== 'string' ||
+    value.epoch.length === 0 ||
+    value.epoch.length > 128 ||
+    typeof value.sequence !== 'number' ||
+    !Number.isSafeInteger(value.sequence) ||
+    value.sequence < 1
+  ) {
+    return undefined
+  }
+  return { epoch: value.epoch, sequence: value.sequence }
 }

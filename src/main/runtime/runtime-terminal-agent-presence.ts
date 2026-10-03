@@ -1,9 +1,17 @@
+import type { AgentProcessPresence } from '../../shared/agent-process-presence'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import {
+  paneEvidenceAgent,
+  paneEvidenceCounts,
+  withoutEndedOwnerTitle
+} from '../../shared/ended-agent-owner-evidence'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
   recognizeAgentProcess
 } from '../../shared/agent-process-recognition'
 import { isOpenCodeNativeTitle } from '../../shared/agent-detection'
+import type { TuiAgent } from '../../shared/tui-agent'
 import { isKnownReadyPromptPreview } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
@@ -23,6 +31,7 @@ const WRAPPER_RETRY_INTERVAL_MS = 150
 const WRAPPER_RETRY_TIMEOUT_MS = 6_500
 
 type RuntimeTerminalAgentPresenceDependencies = {
+  getAgentPresence?(handle: string): AgentProcessPresence | undefined
   /** A structured agent session of this runtime; it has no pane, so no PTY probe can see it. */
   isLiveStructuredAgent?(handle: string): boolean
   getLivePty(handle: string): RuntimePtyWorktreeRecord | null
@@ -41,6 +50,32 @@ export type RuntimeTerminalAgentPresenceOptions = {
   foregroundProcess?: string | null
 }
 
+/** The pane's newest recorded owner, as far as this host can vouch for it at the keyboard. */
+export function selectKeyboardAgentPresence(
+  rows: readonly AgentStatusIpcPayload[]
+): AgentProcessPresence | undefined {
+  const row = rows.reduce<AgentStatusIpcPayload | undefined>(
+    (newest, candidate) =>
+      !newest || candidate.receivedAt > newest.receivedAt ? candidate : newest,
+    undefined
+  )
+  const presence = row?.agentPresence
+  // Why: this host cannot check a live owner recorded on another host (SSH, a WSL guest), so it
+  // must not outrank the pane's own evidence here; that pane keeps main's rules.
+  return presence?.process && !presence.ended && row?.connectionId
+    ? { agent: presence.agent }
+    : presence
+}
+
+/** Once the identified owner exited, its own launch intent no longer describes the pane. */
+function withoutEndedOwnerLaunch<T extends { launchAgent: TuiAgent | null }>(
+  pty: T,
+  presence: AgentProcessPresence | undefined
+): T {
+  const launchAgent = paneEvidenceAgent(presence, pty.launchAgent)
+  return launchAgent === pty.launchAgent ? pty : { ...pty, launchAgent }
+}
+
 export class RuntimeTerminalAgentPresence {
   constructor(private readonly deps: RuntimeTerminalAgentPresenceDependencies) {}
 
@@ -55,6 +90,7 @@ export class RuntimeTerminalAgentPresence {
     if (this.deps.isLiveStructuredAgent?.(handle)) {
       return true
     }
+    const presence = this.deps.getAgentPresence?.(handle)
     try {
       // Why display records: presence reads what the pane shows, as before the stale-working
       // clear stopped rewriting records. A cwd spinner clears to a neutral title, so the
@@ -66,7 +102,8 @@ export class RuntimeTerminalAgentPresence {
         return await this.isPtyRunning(
           getPtyDisplayRecord(pty, clear),
           leaf ? getLeafDisplayRecord(leaf, clear) : null,
-          options
+          options,
+          presence
         )
       }
       const liveLeaf = this.deps.getLiveLeaf(handle)
@@ -74,8 +111,9 @@ export class RuntimeTerminalAgentPresence {
         liveLeaf,
         liveLeaf.ptyId ? this.deps.getTitleDisplayClear(liveLeaf.ptyId) : null
       )
-      const trackedPty = leaf.ptyId ? this.deps.getTrackedPty(leaf.ptyId) : null
-      const paneTitle = getLatestLeafTitle(leaf, null)
+      const tracked = leaf.ptyId ? this.deps.getTrackedPty(leaf.ptyId) : null
+      const trackedPty = tracked && withoutEndedOwnerLaunch(tracked, presence)
+      const paneTitle = withoutEndedOwnerTitle(getLatestLeafTitle(leaf, null), presence)
       const paneClassification = classifyAgentTitle(paneTitle)
       if (
         trackedPty
@@ -84,7 +122,7 @@ export class RuntimeTerminalAgentPresence {
       ) {
         return true
       }
-      const tabTitle = this.deps.getTabTitle(leaf.tabId)
+      const tabTitle = withoutEndedOwnerTitle(this.deps.getTabTitle(leaf.tabId), presence)
       const tabClassification = paneTitle === null ? classifyAgentTitle(tabTitle) : 'neutral'
       if (
         trackedPty
@@ -104,44 +142,40 @@ export class RuntimeTerminalAgentPresence {
       if (!leaf.ptyId) {
         return false
       }
-      const foreground = await this.readForegroundProcess(leaf.ptyId, options)
-      if (!foreground) {
-        return false
-      }
       const suppressClaude =
         paneClassification === 'management' || tabClassification === 'management'
-      if (suppressClaude && isExpectedAgentProcess(foreground, 'claude')) {
-        return false
-      }
-      return await this.isRecognizedForegroundAgentProcess(
-        leaf.ptyId,
-        foreground,
-        suppressClaude,
-        options.retryForegroundWrappers !== false
-      )
+      return await this.isForegroundAgent(leaf.ptyId, presence, suppressClaude, options)
     } catch {
       return false
     }
   }
 
   private async isPtyRunning(
-    pty: RuntimePtyWorktreeRecord,
+    livePty: RuntimePtyWorktreeRecord,
     leaf: RuntimeLeafRecord | null,
-    options: RuntimeTerminalAgentPresenceOptions
+    options: RuntimeTerminalAgentPresenceOptions,
+    presence: AgentProcessPresence | undefined
   ): Promise<boolean> {
-    const leafTitle = leaf
-      ? getLatestAgentCandidateTitle(
-          { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
-          { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
-        )
-      : null
+    const pty = withoutEndedOwnerLaunch(livePty, presence)
+    const leafTitle = withoutEndedOwnerTitle(
+      leaf
+        ? getLatestAgentCandidateTitle(
+            { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
+            { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
+          )
+        : null,
+      presence
+    )
     const leafClassification = classifyAgentTitle(leafTitle)
     if (ptyTitleProvesAgentPresence(pty, leafTitle, leafClassification)) {
       return true
     }
-    const ptyTitle = getLatestAgentCandidateTitle(
-      { title: pty.title, updatedAt: pty.titleUpdatedAt },
-      { title: pty.lastOscTitle, updatedAt: pty.lastOscTitleAt }
+    const ptyTitle = withoutEndedOwnerTitle(
+      getLatestAgentCandidateTitle(
+        { title: pty.title, updatedAt: pty.titleUpdatedAt },
+        { title: pty.lastOscTitle, updatedAt: pty.lastOscTitleAt }
+      ),
+      presence
     )
     const ptyClassification = classifyAgentTitle(ptyTitle)
     if (leafTitle === null && ptyTitleProvesAgentPresence(pty, ptyTitle, ptyClassification)) {
@@ -167,22 +201,35 @@ export class RuntimeTerminalAgentPresence {
     ) {
       return true
     }
-    const foreground = await this.readForegroundProcess(pty.ptyId, options)
-    if (!foreground) {
-      return false
-    }
     const suppressClaude =
       leafTitle !== null
         ? leafClassification === 'management'
         : managementClassification === 'management'
+    return await this.isForegroundAgent(pty.ptyId, presence, suppressClaude, options)
+  }
+
+  /** Presence proves the agent exists; only the program in front decides who holds the keyboard. */
+  private async isForegroundAgent(
+    ptyId: string,
+    presence: AgentProcessPresence | undefined,
+    suppressClaude: boolean,
+    options: RuntimeTerminalAgentPresenceOptions
+  ): Promise<boolean> {
+    // Why: a live owner never answers for the read. When the owner itself is in front, the
+    // recognition below already says so; any other program (Ctrl-Z then vim, ssh) keeps main's no.
+    const foreground = await this.readForegroundProcess(ptyId, options).catch(() => null)
+    if (!foreground) {
+      return false
+    }
     if (suppressClaude && isExpectedAgentProcess(foreground, 'claude')) {
       return false
     }
     return await this.isRecognizedForegroundAgentProcess(
-      pty.ptyId,
+      ptyId,
       foreground,
       suppressClaude,
-      options.retryForegroundWrappers !== false
+      options.retryForegroundWrappers !== false,
+      presence
     )
   }
 
@@ -200,11 +247,15 @@ export class RuntimeTerminalAgentPresence {
     ptyId: string,
     foregroundProcess: string,
     suppressClaude: boolean,
-    retryForegroundWrappers: boolean
+    retryForegroundWrappers: boolean,
+    presence: AgentProcessPresence | undefined
   ): Promise<boolean> {
     const recognized = recognizeAgentProcess(foregroundProcess)
     if (recognized) {
-      return !(suppressClaude && isExpectedAgentProcess(recognized.processName, 'claude'))
+      return (
+        paneEvidenceCounts(presence, recognized.agent) &&
+        !(suppressClaude && isExpectedAgentProcess(recognized.processName, 'claude'))
+      )
     }
     if (!isAgentForegroundWrapperProcess(foregroundProcess)) {
       return false
@@ -218,8 +269,9 @@ export class RuntimeTerminalAgentPresence {
       const refreshed = await this.deps.getForegroundProcess(ptyId)
       const refreshedRecognition = recognizeAgentProcess(refreshed)
       if (refreshedRecognition) {
-        return !(
-          suppressClaude && isExpectedAgentProcess(refreshedRecognition.processName, 'claude')
+        return (
+          paneEvidenceCounts(presence, refreshedRecognition.agent) &&
+          !(suppressClaude && isExpectedAgentProcess(refreshedRecognition.processName, 'claude'))
         )
       }
       if (!refreshed || !isAgentForegroundWrapperProcess(refreshed)) {

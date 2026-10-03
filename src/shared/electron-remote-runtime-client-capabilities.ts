@@ -1,4 +1,5 @@
 import {
+  AGENT_PROCESS_PRESENCE_RUNTIME_CAPABILITY,
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -18,6 +19,8 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
   // Why: only the renderer runs the retirement-proof ledger; CLI and mobile must keep full lists.
   SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
+  // Why: the paired client mirrors the host's tabs and reads their owner record; the CLI does not.
+  AGENT_PROCESS_PRESENCE_RUNTIME_CAPABILITY,
   // Only the renderer shows Deleting for a `removing` row; CLI and mobile get those rows omitted.
   WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
 ] as const

@@ -1,3 +1,4 @@
+import { createRelayAgentPresenceObservation } from './relay-agent-presence-observation'
 import { handleRelayHookRequest } from './agent-hook-request'
 import { transitionHookPresence } from '../shared/agent-hook-presence-transition'
 import { RelayAgentPresence } from './relay-agent-presence'
@@ -90,6 +91,7 @@ export class RelayAgentHookServer {
   private fixedToken: string | undefined
   private preferredPort: number
   private portFallbackApplied = false
+  private readonly observePresence = createRelayAgentPresenceObservation()
   private readonly presenceChecks = new RelayAgentPresence({
     rows: () => this.state.lastStatusByPaneKey.values(),
     checkOwner: (paneKey, successor) => this.checkAgentPresence(paneKey, successor)
@@ -298,9 +300,7 @@ export class RelayAgentHookServer {
     if (!transitioned) {
       return undefined
     }
-    const event = transitioned.agentPresence?.ended
-      ? { ...transitioned, providerSessionOnly: true }
-      : transitioned
+    const event = this.observePresence(transitioned)
     // Why: this post came from a process still running inside a pane whose tab the user closed.
     // Caching or forwarding it makes every connected client advertise a live, resumable agent pane
     // that no tab owns — the advertisement that ends up auto-typing a second `--resume` onto a

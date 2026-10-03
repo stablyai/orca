@@ -1,3 +1,4 @@
+import type { AgentProcessPresence } from './agent-process-presence'
 // ─── Explicit agent status (reported via native agent hooks → IPC) ──────────
 // Why: status comes from hooks (Claude, Codex, etc.) — never inferred from terminal titles;
 // a narrow interrupt fallback synthesizes a final `done` when an agent misses its cancellation hook.
@@ -75,6 +76,7 @@ export type AgentStatusOrchestrationContext = {
 }
 
 export type AgentStatusEntry = {
+  agentPresence?: AgentProcessPresence
   /** Renderer-local status-feed confirmation for children; absent on hook rows. */
   subagentObservation?: 'live' | 'unverifiable'
   state: AgentStatusState

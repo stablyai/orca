@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  AGENT_PROCESS_PRESENCE_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
@@ -30,6 +31,7 @@ import {
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../shared/agent-session-background-task-child-views-capability'
 import { supportsAgentLaunch } from '../runtime/rpc/methods/agent-launch'
+import { remoteRuntimeClientCapabilities } from '../../shared/remote-runtime-client-capabilities'
 import { createSupportFollowsHostSetting } from '../runtime/rpc/methods/structured-agent-session-policy'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 
@@ -52,6 +54,8 @@ const REMOTE_ONLY_BY_DECISION: readonly RuntimeCapability[] = [
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
   // Opts into a delta feed in place of the full tab list — a remote-transport concern.
   SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
+  // The host owner record on mirrored session tabs; main's own renderer reads it over agent-status IPC.
+  AGENT_PROCESS_PRESENCE_RUNTIME_CAPABILITY,
   // Main marks `removing` on its own worktree IPC listings unconditionally; the renderer never
   // lists its own host's worktrees over runtime RPC, where this capability decides mark vs omit.
   WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
@@ -120,5 +124,16 @@ describe('desktop renderer runtime client capabilities', () => {
         ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
       )
     ).toEqual([...LOCAL_ONLY_BY_DECISION].sort())
+  })
+
+  it('asks a paired host for the owner record on the tabs it mirrors, and only there', () => {
+    // What the paired desktop's request and control connections send (remoteRuntimeClientCapabilities
+    // over the Electron list), against the CLI's bare list, which never reads session tabs.
+    expect(remoteRuntimeClientCapabilities(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES)).toContain(
+      AGENT_PROCESS_PRESENCE_RUNTIME_CAPABILITY
+    )
+    expect(remoteRuntimeClientCapabilities()).not.toContain(
+      AGENT_PROCESS_PRESENCE_RUNTIME_CAPABILITY
+    )
   })
 })

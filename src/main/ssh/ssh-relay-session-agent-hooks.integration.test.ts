@@ -6,6 +6,7 @@ import type { SshConnection } from './ssh-connection'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
 import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-relay'
 import { RelayDispatcher } from '../../relay/dispatcher'
+import { AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES } from '../../shared/agent-status-legacy-adapter'
 import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD,
@@ -633,6 +634,47 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
         'conn-hook-metadata'
       )
     )
+    ingestSpy.mockRestore()
+  })
+
+  it('forwards the relay owner record to main and keeps host-set fields', async () => {
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: relay.transport,
+      serverBuildId: 'test-relay-build',
+      platform: 'linux-x64'
+    })
+    const ingestSpy = vi.spyOn(agentHookServer, 'ingestRemote')
+    session = createSession('conn-presence')
+    await session.establish({} as SshConnection)
+    const agentPresence = {
+      agent: 'claude',
+      process: { pid: 4242, platform: 'linux', startTime: 'boot:4242' },
+      observation: { epoch: 'relay-epoch', sequence: 7 }
+    } as const
+    relay.notifyAgentHook({
+      ...makeEnvelope({
+        source: 'claude',
+        hookEventName: 'SessionStart',
+        agentPresence,
+        payload: { state: 'done', prompt: '', agentType: 'claude' }
+      }),
+      // A relay must not be able to widen its own run capabilities.
+      advertisedAgentStatusCapabilities: ['forged-capability']
+    })
+    await vi.waitFor(() =>
+      expect(ingestSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentPresence,
+          advertisedAgentStatusCapabilities: AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES
+        }),
+        'conn-presence'
+      )
+    )
+    expect(agentHookServer.getStatusSnapshot()[0]).toMatchObject({
+      connectionId: 'conn-presence',
+      agentPresence
+    })
     ingestSpy.mockRestore()
   })
 

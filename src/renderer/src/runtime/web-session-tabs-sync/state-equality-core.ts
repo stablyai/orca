@@ -43,6 +43,7 @@ export function agentStatusEntryEqual(
     return false
   }
   return (
+    JSON.stringify(a.agentPresence) === JSON.stringify(b.agentPresence) &&
     a.state === b.state &&
     a.workingMode === b.workingMode &&
     a.prompt === b.prompt &&

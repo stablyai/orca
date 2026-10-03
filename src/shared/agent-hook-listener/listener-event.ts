@@ -6,6 +6,8 @@ import type { AgentProviderSessionMetadata } from '../agent-session-resume'
 export type AgentHookEventPayload = {
   paneKey: string
   agentPresence?: AgentProcessPresence
+  /** Internal admission from the authenticated relay ingress; never read from hook/client bytes. */
+  agentPresenceFromExecutionHost?: true
   /** Authenticated hook route that produced this event. */
   source?: AgentHookSource
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */

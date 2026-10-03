@@ -1681,45 +1681,16 @@ export class SshRelaySession {
       ) {
         return
       }
-      // Why: forward the agent CLI's env/version verbatim (not the relay's) so warn-once protocol-mismatch diagnostics fire for remote events too.
+      // Why: forward the relay's envelope as the WSL link does (ingestRemote re-validates every field),
+      // so fields like the owner record reach main; host-set fields go last so a relay can't override them.
+      type IngestEnvelope = Parameters<typeof agentHookServer.ingestRemote>[0]
       agentHookServer.ingestRemote(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: wire-deserialized notification whose paneKey/isReplay/launchToken types were checked above; ingestRemote re-validates the rest.
         {
-          paneKey: envelope.paneKey,
-          launchToken: typeof envelope.launchToken === 'string' ? envelope.launchToken : undefined,
-          tabId: typeof envelope.tabId === 'string' ? envelope.tabId : undefined,
-          worktreeId: typeof envelope.worktreeId === 'string' ? envelope.worktreeId : undefined,
-          env: typeof envelope.env === 'string' ? envelope.env : undefined,
-          version: typeof envelope.version === 'string' ? envelope.version : undefined,
-          hasExplicitPrompt: envelope.hasExplicitPrompt === true ? true : undefined,
-          promptInteractionKey:
-            typeof envelope.promptInteractionKey === 'string'
-              ? envelope.promptInteractionKey
-              : undefined,
-          hookEventName:
-            typeof envelope.hookEventName === 'string' ? envelope.hookEventName : undefined,
-          source: envelope.source,
-          providerPromptId: envelope.providerPromptId,
-          grokPromptBoundary: envelope.grokPromptBoundary === true ? true : undefined,
-          compactTrigger: envelope.compactTrigger,
-          toolUseId: typeof envelope.toolUseId === 'string' ? envelope.toolUseId : undefined,
-          toolAgentId: typeof envelope.toolAgentId === 'string' ? envelope.toolAgentId : undefined,
-          teammateName:
-            typeof envelope.teammateName === 'string' ? envelope.teammateName : undefined,
-          toolAgentType:
-            typeof envelope.toolAgentType === 'string' ? envelope.toolAgentType : undefined,
-          isReplay: envelope.isReplay === true ? true : undefined,
-          providerSession: envelope.providerSession,
-          providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
-          // Why: names the fields the relay dropped to fit the frame; ingestRemote restores them.
-          shedFields: envelope.shedFields,
-          claudeRunningNonAgentTask:
-            typeof envelope.claudeRunningNonAgentTask === 'boolean'
-              ? envelope.claudeRunningNonAgentTask
-              : undefined,
+          ...envelope,
           // Why: the SSH relay protocol advertises no run-serving capability.
-          advertisedAgentStatusCapabilities: AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES,
-          payload: envelope.payload
-        },
+          advertisedAgentStatusCapabilities: AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES
+        } as IngestEnvelope,
         this.targetId
       )
     })

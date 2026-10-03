@@ -51,6 +51,24 @@ export function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIn
   return graphState.cachedOpenFileIndexes
 }
 
+type PublishedAgentStatus = AppState['agentStatusByPaneKey'][string]
+const strippedHostPresence = new WeakMap<PublishedAgentStatus, PublishedAgentStatus>()
+
+/** The execution host projects presence; renderer publications carry turn presentation only. */
+function withoutHostPresence(entry: PublishedAgentStatus): PublishedAgentStatus {
+  if (entry.agentPresence === undefined) {
+    return entry
+  }
+  // Why: one stable copy per source entry, so the per-worktree snapshot cache still hits.
+  let stripped = strippedHostPresence.get(entry)
+  if (!stripped) {
+    const { agentPresence: _hostPresence, ...rest } = entry
+    stripped = rest
+    strippedHostPresence.set(entry, stripped)
+  }
+  return stripped
+}
+
 export function buildMobileSessionAgentStatusByWorktree(
   agentStatusByPaneKey: AppState['agentStatusByPaneKey'],
   tabsByWorktree: AppState['tabsByWorktree']
@@ -77,7 +95,7 @@ export function buildMobileSessionAgentStatusByWorktree(
       bucket = new Map()
       byWorktreeId.set(worktreeId, bucket)
     }
-    bucket.set(paneKey, agentStatusByPaneKey[paneKey])
+    bucket.set(paneKey, withoutHostPresence(agentStatusByPaneKey[paneKey]))
   }
   return byWorktreeId
 }

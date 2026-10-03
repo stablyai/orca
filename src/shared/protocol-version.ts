@@ -33,6 +33,8 @@ export { SKILL_INSTALL_RESULT_V2_CAPABILITY } from './skill-install-capability'
 // this client build requires a newer server. Exact app-version equality is
 // never required; these numbers define the supported compatibility window.
 
+export const AGENT_PROCESS_PRESENCE_RUNTIME_CAPABILITY = 'agent-process-presence.v1' as const
+
 export const RUNTIME_PROTOCOL_VERSION = 3
 export const MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION = 2
 export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 2
@@ -77,13 +79,7 @@ export const JIRA_USER_FIELDS_UPDATE_REQUIRED_MESSAGE =
 // conditional like browser.headless.v1.
 export const AI_VAULT_RUNTIME_CAPABILITY = 'aiVault.v1' as const
 export const AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY = 'aiVault.session-titles.v1' as const
-// Why: signals a host owns browser pages with no renderer (headless serve via the
-// offscreen backend). Advertised only when that backend is actually available, so
-// clients never fall back to a local desktop browser tab for a remote-owned page.
-export const BROWSER_HEADLESS_RUNTIME_CAPABILITY = 'browser.headless.v1' as const
-export const BROWSER_IDENTITY_RUNTIME_CAPABILITY = 'browser.identity.v1' as const
 export const BROWSER_SCREENCAST_RUNTIME_CAPABILITY = 'browser.screencast.v1' as const
-export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate-trust.v1' as const
 // Why: older hosts discard browser.tabCreate's page field, so clients may only
 // treat a preallocated page ID as canonical when this is advertised.
 export const BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY =
@@ -389,6 +385,7 @@ export const RUNTIME_CAPABILITIES = [
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  AGENT_PROCESS_PRESENCE_RUNTIME_CAPABILITY,
   REMOTE_SERVER_UPDATE_CAPABILITY,
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,

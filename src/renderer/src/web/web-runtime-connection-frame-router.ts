@@ -1,6 +1,7 @@
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame } from '../../../shared/runtime-rpc-envelope'
 import {
+  AGENT_PROCESS_PRESENCE_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
@@ -73,6 +74,7 @@ export async function routeWebRuntimeConnectionFrame(
             WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
             WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
             WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
+            AGENT_PROCESS_PRESENCE_RUNTIME_CAPABILITY,
             WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
           ]
         })

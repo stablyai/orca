@@ -228,6 +228,7 @@ export type WebSessionTabsSyncState = Pick<
   Partial<
     Pick<
       AppState,
+      | 'agentPresenceByPaneKey'
       | 'acknowledgedAgentsByPaneKey'
       | 'activityClearedAtByPaneKey'
       | 'agentLaunchConfigByPaneKey'

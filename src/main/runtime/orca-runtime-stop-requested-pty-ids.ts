@@ -5,7 +5,10 @@ import { localOrchestrationCliCommand } from './orchestration/cli-command'
 import { isStructuredWorkerHandle } from './structured-worker-identity'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import { OrcaRuntimeWithRuntimeId } from './orca-runtime-runtime-id'
-import { RuntimeTerminalAgentPresence } from './runtime-terminal-agent-presence'
+import {
+  RuntimeTerminalAgentPresence,
+  selectKeyboardAgentPresence
+} from './runtime-terminal-agent-presence'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import { RuntimeClientEventBus } from './runtime-client-event-bus'
 import { RuntimeNativeChatDraftResolutions } from './runtime-native-chat-draft-resolutions'
@@ -45,6 +48,7 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
   protected readonly ptyExitListenersByPtyId = new Map<string, Set<() => void>>()
 
   protected readonly terminalAgentPresence = new RuntimeTerminalAgentPresence({
+    getAgentPresence: (handle) => this.getRecordedAgentPresence(handle),
     isLiveStructuredAgent: (handle) =>
       Boolean(resolveStructuredWorkerAuthority(handle, this._orchestrationDb)),
     getLivePty: (handle) => this.getLivePtyForHandle(handle)?.pty ?? null,
@@ -166,6 +170,22 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     }
   })
 
+  protected getRecordedAgentPresence(handle: string) {
+    try {
+      const ptyId =
+        this.getLivePtyForHandle(handle)?.pty.ptyId ?? this.getLiveLeafForHandle(handle).leaf.ptyId
+      if (!ptyId) {
+        return undefined
+      }
+      const rows = Array.from(this.collectAgentStatusPaneKeysForPty(ptyId)).flatMap(
+        (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? []
+      )
+      return selectKeyboardAgentPresence(rows)
+    } catch {
+      return undefined
+    }
+  }
+
   protected readonly openCodeRunLifetime = new OpenCodeRunLifetimeStatus({
     isObservablePty: (ptyId) => {
       const pty = this.ptysById.get(ptyId)
@@ -199,6 +219,7 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     getLiveLeaf: (handle) => this.getLiveLeafForHandle(handle),
     getPrimaryLeaf: (ptyId) => this.getPrimaryLeafForPty(ptyId),
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
+    getAgentPresence: (handle) => this.getRecordedAgentPresence(handle),
     getExplicitStatus: (handle) => this.getFreshExplicitAgentStatusForHandle(handle),
     getLifecycleStatus: (ptyId) => this.agentPromptLifecycleByPtyId.get(ptyId),
     isRunning: (handle) => this.isTerminalRunningAgent(handle),

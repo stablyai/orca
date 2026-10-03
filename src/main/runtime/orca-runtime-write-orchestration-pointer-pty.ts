@@ -1,4 +1,9 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import {
+  paneEvidenceAgent,
+  selectLiveOwnerAgent,
+  withoutEndedOwnerTitle
+} from '../../shared/ended-agent-owner-evidence'
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from './orca-runtime-refresh-floating-workspace-pty-liveness'
 import { writeOrchestrationPointerWithSettlement } from './orchestration/mailbox-pointer-pty-write'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
@@ -93,16 +98,21 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     title: string | null,
     paneKey: string | null
   ): { agentIdentity?: TuiAgent } {
-    const hookRow = paneKey
-      ? selectRuntimeHookAgentRowForPane(this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? [])
-      : null
+    const rows = paneKey ? (this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? []) : []
+    const presence = [...rows].sort((a, b) => b.receivedAt - a.receivedAt)[0]?.agentPresence
+    const owner = selectLiveOwnerAgent(presence)
+    if (owner) {
+      return { agentIdentity: owner }
+    }
+    const hookRow = selectRuntimeHookAgentRowForPane(rows)
     const hookAgent = isTuiAgent(hookRow?.agentType) ? hookRow.agentType : null
+    // Why: an exited owner's own evidence is history; evidence naming another agent still counts.
     const agentIdentity = resolvePublishedPaneAgentIdentity({
-      hookAgent,
+      hookAgent: paneEvidenceAgent(presence, hookAgent),
       hookIsLive: hookRow?.agentIsLive,
-      launchAgent,
-      foregroundAgent,
-      title
+      launchAgent: paneEvidenceAgent(presence, launchAgent),
+      foregroundAgent: paneEvidenceAgent(presence, foregroundAgent),
+      title: withoutEndedOwnerTitle(title, presence)
     })
     return agentIdentity ? { agentIdentity } : {}
   }

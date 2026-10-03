@@ -1,5 +1,6 @@
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  AGENT_PROCESS_PRESENCE_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -20,7 +21,9 @@ export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilitie
   // Mobile renders either launch outcome — a structured chat or a terminal agent — so it may ask
   // the host to pick. Without this the host refuses `agent.launch` and every mobile create with an
   // agent stays a PTY.
-  AGENT_LAUNCH_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  // Tab icons and Chat read the host's owner record; without it the host sends the legacy row.
+  AGENT_PROCESS_PRESENCE_RUNTIME_CAPABILITY
 ])
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD =

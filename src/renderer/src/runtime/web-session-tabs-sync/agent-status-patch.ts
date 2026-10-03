@@ -1,3 +1,9 @@
+import { paneEvidenceCounts } from '../../../../shared/ended-agent-owner-evidence'
+import {
+  isSameAgentProcess,
+  readAgentProcessPresence,
+  type AgentProcessPresence
+} from '../../../../shared/agent-process-presence'
 import {
   agentStatusAuthorityObservedAt,
   type AgentStatusEntry
@@ -21,6 +27,7 @@ import {
   isMirroredAgentPaneKeyForTabs,
   batchAgentPaneKeysForTabs,
   remapHostAgentStatus,
+  toMirroredPaneKey,
   updateBatchAgentPaneKey
 } from './agent-status-primitives'
 import {
@@ -57,6 +64,17 @@ function withMirroredEvidenceReceipt(
   return { ...entry, mirroredEvidenceReceivedAt: receivedAt }
 }
 
+/** A status ping re-sends the same owner; only a new agent, process or exit changes presence. */
+function isSameOwnerRecord(a: AgentProcessPresence, b: AgentProcessPresence): boolean {
+  return (
+    a.agent === b.agent &&
+    a.ended === b.ended &&
+    a.process !== undefined &&
+    b.process !== undefined &&
+    isSameAgentProcess(a.process, b.process)
+  )
+}
+
 export function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,
   currentTerminalTabs: readonly TerminalTab[],
@@ -67,7 +85,10 @@ export function buildMirroredAgentStatusPatch(
   retractedTabIds: ReadonlySet<string>,
   now: number,
   batchContext?: WebSessionTabsBatchContext
-): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
+): Pick<
+  WebSessionTabsSyncState,
+  'agentStatusByPaneKey' | 'agentPresenceByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'
+> | null {
   const mirroredTabIds = new Set<string>()
   for (const tab of currentTerminalTabs) {
     if (isWebTerminalSurfaceTabId(tab.id)) {
@@ -94,6 +115,9 @@ export function buildMirroredAgentStatusPatch(
       )
     }
   }
+  let nextPresenceByPaneKey = state.agentPresenceByPaneKey ?? {}
+  let presenceChanged = false
+  const endedPaneKeys = new Set<string>()
   const nextByPaneKey = new Map<string, AgentStatusEntry>()
   for (const surface of terminalSurfaceTabs) {
     const retainedSurface = retainedSurfaceByHostTabAndPrunedLeafId
@@ -101,14 +125,58 @@ export function buildMirroredAgentStatusPatch(
       ?.get(surface.leafId)
     const hostEntry = remapHostAgentStatus(surface, retainedSurface)
     if (!hostEntry) {
+      // Why: snapshots arrive version-ordered, so a pane published without status no longer has an owner here.
+      const paneKey = toMirroredPaneKey(surface, retainedSurface?.leafId)
+      if (paneKey && nextPresenceByPaneKey[paneKey]?.connectionId === environmentId) {
+        const { [paneKey]: _released, ...remaining } = nextPresenceByPaneKey
+        nextPresenceByPaneKey = remaining
+        presenceChanged = true
+      }
+      continue
+    }
+    const presence = readAgentProcessPresence(hostEntry.agentPresence)
+    const previousPresence = nextPresenceByPaneKey[hostEntry.paneKey]
+    // Why: snapshots are already delivery/version ordered and the host re-derives presence for each
+    // one; the published status clock is not a presence clock, so it must not reorder owners.
+    if (!presence?.process && previousPresence?.connectionId === environmentId) {
+      const { [hostEntry.paneKey]: _released, ...remaining } = nextPresenceByPaneKey
+      nextPresenceByPaneKey = remaining
+      presenceChanged = true
+    } else if (
+      presence?.process &&
+      (previousPresence?.connectionId !== environmentId ||
+        !isSameOwnerRecord(previousPresence.presence, presence))
+    ) {
+      nextPresenceByPaneKey = {
+        ...nextPresenceByPaneKey,
+        [hostEntry.paneKey]: {
+          presence,
+          receivedAt: hostEntry.updatedAt,
+          connectionId: environmentId,
+          worktreeId
+        }
+      }
+      presenceChanged = true
+    }
+    // Why: an exited owner's own status is history; a later agent's status in the pane still shows.
+    if (
+      !paneEvidenceCounts(nextPresenceByPaneKey[hostEntry.paneKey]?.presence, hostEntry.agentType)
+    ) {
+      endedPaneKeys.add(hostEntry.paneKey)
       continue
     }
     const existing =
       nextByPaneKey.get(hostEntry.paneKey) ?? state.agentStatusByPaneKey[hostEntry.paneKey]
+    // Why: an identified row must be owned here so its exit and retraction can clear it; other rows
+    // keep the host's own attribution.
+    const attributed =
+      presence?.process && hostEntry.worktreeId === undefined
+        ? { ...hostEntry, worktreeId }
+        : hostEntry
     const entry = withMirroredEvidenceReceipt(
-      hostEntry.connectionId === undefined
-        ? { ...hostEntry, connectionId: environmentId }
-        : hostEntry,
+      attributed.connectionId === undefined
+        ? { ...attributed, connectionId: environmentId }
+        : attributed,
       existing,
       now
     )
@@ -132,6 +200,7 @@ export function buildMirroredAgentStatusPatch(
             ...(clientOwnsEntry && existing.state === 'working' && entry.state === 'working'
               ? { workingMode: entry.workingMode }
               : {}),
+            agentPresence: entry.agentPresence,
             paneKey: entry.paneKey,
             worktreeId: entry.worktreeId ?? existing.worktreeId,
             tabId: entry.tabId,
@@ -181,7 +250,10 @@ export function buildMirroredAgentStatusPatch(
     // there is nothing to arbitrate, and a client asleep past the stale
     // boundary would otherwise erase every pane it owns on the first snapshot
     // after wake (STA-3107) instead of decaying it like a local pane.
-    if (isClientOwnedAgentStatus(paneKey, state.agentStatusByPaneKey[paneKey])) {
+    if (
+      !endedPaneKeys.has(paneKey) &&
+      isClientOwnedAgentStatus(paneKey, state.agentStatusByPaneKey[paneKey])
+    ) {
       continue
     }
     if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {
@@ -238,13 +310,17 @@ export function buildMirroredAgentStatusPatch(
     sortRelevantChange = sortRelevantChange || entrySortRelevantChange
   }
 
-  if (!changed) {
+  if (!changed && !presenceChanged) {
     return null
   }
 
   return {
+    ...(presenceChanged ? { agentPresenceByPaneKey: nextPresenceByPaneKey } : {}),
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
-    agentStatusEpoch: aggregateRelevantChange ? state.agentStatusEpoch + 1 : state.agentStatusEpoch,
-    sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch
+    agentStatusEpoch:
+      aggregateRelevantChange || presenceChanged
+        ? state.agentStatusEpoch + 1
+        : state.agentStatusEpoch,
+    sortEpoch: sortRelevantChange || presenceChanged ? state.sortEpoch + 1 : state.sortEpoch
   }
 }

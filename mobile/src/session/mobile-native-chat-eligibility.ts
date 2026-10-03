@@ -1,3 +1,7 @@
+import {
+  paneEvidenceAgent,
+  selectLiveOwnerAgent
+} from '../../../src/shared/ended-agent-owner-evidence'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { isRuntimeOwnedSshTargetId } from '../../../src/shared/execution-host'
@@ -58,12 +62,14 @@ export function resolveMobileNativeChat(
   if (tab.type !== 'terminal') {
     return null
   }
-  const liveAgent = tab.agentStatus?.agentType ?? null
+  const presence = tab.agentStatus?.agentPresence
+  const liveAgent =
+    selectLiveOwnerAgent(presence) ?? paneEvidenceAgent(presence, tab.agentStatus?.agentType)
   const agent = liveAgent
     ? isNativeChatSupportedAgent(liveAgent)
       ? liveAgent
       : null
-    : tab.launchAgent
+    : paneEvidenceAgent(presence, tab.launchAgent)
   if (!agent || !isNativeChatSupportedAgent(agent)) {
     return null
   }

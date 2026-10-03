@@ -1,3 +1,4 @@
+import { admitRemoteAgentPresence } from './server-remote-agent-presence'
 import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
 import { track } from '../../telemetry/client'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
@@ -138,6 +139,14 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       toolAgentType,
       providerSession
     } = normalizeRemoteEnvelopeFields(envelope)
+    const remotePresence = admitRemoteAgentPresence(
+      envelope,
+      trimmedConnectionId,
+      this.state.lastStatusByPaneKey.get(paneKey)
+    )
+    if (!remotePresence) {
+      return
+    }
     // Why: relay crosses a trust boundary — re-run the canonical normalizer to enforce caps/invariants (returns null on malformed).
     const validatedPayload = normalizeAgentStatusPayload(envelope.payload)
     if (!validatedPayload) {
@@ -259,7 +268,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     })
     const event: AgentHookEventPayload & { authorityRestartId?: string } = {
       paneKey,
-      agentPresence: readAgentProcessPresence(envelope.agentPresence),
+      ...remotePresence,
       source: effectiveSource,
       ...(restartedAuthority?.authorityRestartId
         ? { authorityRestartId: restartedAuthority.authorityRestartId }
