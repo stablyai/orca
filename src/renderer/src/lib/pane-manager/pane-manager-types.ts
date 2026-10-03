@@ -180,6 +180,9 @@ export type ManagedPaneInternal = {
   // Set while the setting is on but the lazy addon chunk is still loading; the
   // loader's onLoaded handler drains these into a real attach.
   imageAttachmentDeferred?: boolean
+  // Why optional: attached only while imageAddon is live; null/absent before
+  // attach or after detach. Stored so detachInlineImages can unsubscribe.
+  imageCursorAdvanceDisposable?: IDisposable | null
   fitResizeObserver: ResizeObserver | null
   // Why: fit-element pixel size at the last successful fit; the reveal fit compares
   // against it to tell a real hidden-time resize from a transient cell-metric wobble.
