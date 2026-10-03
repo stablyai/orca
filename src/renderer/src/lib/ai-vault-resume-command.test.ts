@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import {
   buildAiVaultResumeCopyCommandForWorktree,
-  buildAiVaultResumeStartupForWorktree
+  buildAiVaultResumeStartupForWorktree,
+  getAiVaultAgentProviderSessionForWorktree
 } from './ai-vault-resume-command'
 
 vi.mock('@/lib/new-workspace', () => ({
@@ -66,6 +67,56 @@ function buildQueuedAiVaultResumeCommand(
 ): string {
   return buildAiVaultResumeStartupForWorktree(args).command
 }
+
+const WSL_PI_TRANSCRIPT =
+  '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.pi\\agent\\sessions\\--home-ada-repo--\\s-1.jsonl'
+
+describe('ai vault resume of WSL-stored Pi sessions', () => {
+  const piSession = {
+    agent: 'pi' as const,
+    sessionId: 's-1',
+    cwd: '/home/ada/repo',
+    codexHome: null,
+    filePath: WSL_PI_TRANSCRIPT
+  }
+
+  it('passes the Linux transcript path when resuming into a WSL workspace', () => {
+    const state = makeState({ worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\repo' })
+    const startup = buildAiVaultResumeStartupForWorktree({
+      state,
+      worktreeId: 'repo-1::worktree-1',
+      session: piSession
+    })
+
+    expect(startup.command).toContain('/home/ada/.pi/agent/sessions/--home-ada-repo--/s-1.jsonl')
+    expect(startup.command).not.toContain('wsl.localhost')
+    expect(startup.providerSession?.transcriptPath).toBe(
+      '/home/ada/.pi/agent/sessions/--home-ada-repo--/s-1.jsonl'
+    )
+  })
+
+  it('keeps the UNC transcript path for a Windows-host workspace that reads it through the share', () => {
+    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
+    const providerSession = getAiVaultAgentProviderSessionForWorktree({
+      state,
+      worktreeId: 'repo-1::worktree-1',
+      session: piSession
+    })
+
+    expect(providerSession?.transcriptPath).toBe(WSL_PI_TRANSCRIPT)
+  })
+
+  it('spells the drag-drop provider session for the drop target runtime', () => {
+    const state = makeState({ worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\repo' })
+    expect(
+      getAiVaultAgentProviderSessionForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: piSession
+      })?.transcriptPath
+    ).toBe('/home/ada/.pi/agent/sessions/--home-ada-repo--/s-1.jsonl')
+  })
+})
 
 describe('ai vault resume command runtime', () => {
   it('repro: queues a host-runtime resume without configured-WSL shell syntax', () => {

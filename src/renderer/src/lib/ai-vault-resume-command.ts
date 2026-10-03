@@ -125,7 +125,6 @@ function buildAiVaultResumeForWorktree(
    *  Spawned startups drop them through `envToDelete` instead. */
   clearEnvNames?: readonly string[]
 ): AiVaultResumeStartup {
-  const providerSession = getAiVaultAgentProviderSession(args.session)
   if (
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
@@ -134,10 +133,11 @@ function buildAiVaultResumeForWorktree(
     !(args.session.agent === 'codex' && args.session.codexHome === null) &&
     !args.commandOverride?.trim()
   ) {
+    const remoteProviderSession = getAiVaultAgentProviderSession(args.session)
     return {
       command: args.session.resumeCommand,
       ...realHomeCodexResumeEnvDeletion(args.session),
-      ...(providerSession ? { providerSession } : {})
+      ...(remoteProviderSession ? { providerSession: remoteProviderSession } : {})
     }
   }
   const platform =
@@ -150,6 +150,11 @@ function buildAiVaultResumeForWorktree(
   const isLocalSession =
     !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
   const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, platform)
+  // Why: a WSL-stored transcript is found under its UNC path, but Pi runs inside WSL and only knows the Linux one.
+  const providerSession = getAiVaultAgentProviderSession({
+    ...args.session,
+    filePath: resumeFilePath
+  })
   // Why: local shell settings do not describe a remote Windows host, whose
   // queued resume command uses the remote default PowerShell syntax.
   const liveShell: AgentStartupShell | undefined =
@@ -265,6 +270,21 @@ export function getAiVaultAgentProviderSession(
       : null
   }
   return { key: 'session_id', id: session.sessionId }
+}
+
+/** Provider-session metadata spelled for the target workspace's runtime (local sessions only). */
+export function getAiVaultAgentProviderSessionForWorktree(args: {
+  state: AiVaultResumeWorktreeArgs['state']
+  worktreeId: string
+  session: Pick<AiVaultSession, 'agent' | 'sessionId'> & { filePath?: string }
+}): AgentProviderSessionMetadata | null {
+  return getAiVaultAgentProviderSession({
+    ...args.session,
+    filePath: normalizeAiVaultResumeFilePath(
+      args.session.filePath,
+      getAiVaultResumePlatform(args.state, args.worktreeId)
+    )
+  })
 }
 
 function getAiVaultResumeCodexHome(
