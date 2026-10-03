@@ -9,6 +9,10 @@ import { useContextualTour } from './contextual-tours/use-contextual-tour'
 import type { TerminalWorkspaceStoreController } from './use-terminal-workspace-store-bindings'
 import { useWorktreeFiles } from './terminal/use-worktree-files'
 
+// Why: a fresh `?? []` gives this a new identity every render, which propagates to every
+// consumer memo. Same rule as useTabGroupWorkspaceModel's EMPTY_* fallbacks.
+const EMPTY_BROWSER_TABS: TerminalWorkspaceStoreController['browserTabsByWorktree'][string] = []
+
 export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStoreController) {
   const {
     activeGroupIdByWorktree,
@@ -64,8 +68,8 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
 
   const worktreeFiles = useWorktreeFiles(openFiles, renderedActiveWorktreeId)
   const worktreeBrowserTabs = renderedActiveWorktreeId
-    ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? [])
-    : []
+    ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? EMPTY_BROWSER_TABS)
+    : EMPTY_BROWSER_TABS
   // Why: this strip only renders before the worktree has a layout, which is exactly when a paired
   // client can have opened a page the host never has. Without a row here it stays uncloseable.
   const worktreeClientHostedBrowserRows = useClientHostedBrowserRows(renderedActiveWorktreeId ?? '')
@@ -77,9 +81,7 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
   const effectiveActiveLayout = renderedActiveWorktreeId
     ? getEffectiveLayoutForWorktree(renderedActiveWorktreeId)
     : undefined
-  const activeWorktreeBrowserTabIdsKey = renderedActiveWorktreeId
-    ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? []).map((tab) => tab.id).join(',')
-    : ''
+  const activeWorktreeBrowserTabIdsKey = worktreeBrowserTabs.map((tab) => tab.id).join(',')
   const activeContextualTourId = useAppStore((state) => state.activeContextualTourId)
   const hasSplitTerminalPane = useAppStore((state) =>
     hasFeatureInteraction(state.featureInteractions, 'terminal-pane-split')
