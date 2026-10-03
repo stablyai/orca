@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  sendWorktreeStartupFollowupWhenReady,
   waitForWorktreeStartupDraft,
   type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
@@ -67,5 +68,56 @@ describe('fresh worker composer readiness', () => {
     await vi.advanceTimersByTimeAsync(1)
     await expect(pending).resolves.toBeNull()
     expect(h.unsubscribe).toHaveBeenCalledOnce()
+  })
+})
+
+describe('stdin-after-start follow-up dispatch', () => {
+  afterEach(() => vi.useRealTimers())
+
+  function followupFixture(replay?: string) {
+    let listener = (_data: string): void => {}
+    const write = vi.fn()
+    const host: WorktreeStartupReadinessHost = {
+      getPtyId: () => 'pty-1',
+      getForegroundProcess: async () => 'kimi-code',
+      subscribeToData: (_ptyId, onData) => {
+        listener = onData
+        return () => {}
+      },
+      readRecentOutput: () => replay,
+      write
+    }
+    return { host, write, emit: (data: string) => listener(data) }
+  }
+
+  it('frames the follow-up prompt as one bracketed paste and a lone CR once the scanner confirms the composer', async () => {
+    vi.useFakeTimers()
+    const h = followupFixture('\x1b[?2004h')
+    sendWorktreeStartupFollowupWhenReady(h.host, 'term-1', {
+      agent: 'kimi',
+      expectedProcess: 'kimi-code',
+      prompt: 'line one\nline two'
+    })
+    await vi.runAllTimersAsync()
+    const writes = h.write.mock.calls.map((call) => call[1] as string)
+    // The submit keystroke is its own CR write — never an LF (Kimi binds LF to
+    // insert-newline), and never folded into the paste frame.
+    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+    expect(writes.some((data) => data.endsWith('\n'))).toBe(false)
+    expect(writes.join('')).toBe('\x1b[200~line one\nline two\x1b[201~\r')
+  })
+
+  it('falls back to one bare prompt+CR write when the ready signal never fires', async () => {
+    vi.useFakeTimers()
+    const h = followupFixture()
+    sendWorktreeStartupFollowupWhenReady(h.host, 'term-1', {
+      agent: 'kimi',
+      expectedProcess: 'kimi-code',
+      prompt: 'line one\nline two'
+    })
+    await vi.runAllTimersAsync()
+    // Without the scanner's confirmation bracketed paste may be off, so the
+    // delimiters would type in as literal input — keep the raw single write.
+    expect(h.write.mock.calls.map((call) => call[1] as string)).toEqual(['line one\nline two\r'])
   })
 })
