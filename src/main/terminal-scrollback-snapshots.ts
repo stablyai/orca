@@ -12,6 +12,7 @@ import {
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { getAppEnvironment } from '../shared/app-environment'
+import { collectIncognitoTabIds } from '../shared/workspace-session-terminal-buffers'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 import {
   TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT,
@@ -220,10 +221,13 @@ export function migrateWorkspaceSessionTerminalScrollbackSnapshots(
   session: WorkspaceSessionState,
   storage?: TerminalScrollbackSnapshotStorage
 ): { session: WorkspaceSessionState; changed: boolean } {
+  // Why: never externalize an incognito terminal's scrollback to a snapshot file, even if a caller
+  // reached here without the buffer prune. Prune already strips these; this is defense in depth.
+  const incognitoTabIds = collectIncognitoTabIds(session)
   let terminalLayoutsByTabId: WorkspaceSessionState['terminalLayoutsByTabId'] | null = null
   for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
     const buffers = layout.buffersByLeafId
-    if (!buffers || Object.keys(buffers).length === 0) {
+    if (!buffers || Object.keys(buffers).length === 0 || incognitoTabIds.has(tabId)) {
       continue
     }
     const refs = { ...layout.scrollbackRefsByLeafId }

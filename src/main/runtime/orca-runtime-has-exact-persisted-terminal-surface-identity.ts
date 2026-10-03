@@ -183,6 +183,7 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
       title: getLatestPtyTitle(this.getPtyDisplayRecord(pty)) ?? pty.controllerTitle,
       activate: false,
       presentation: 'background',
+      ...(pty.incognito ? { incognito: true } : {}),
       tabId: candidate.tabId,
       leafId: candidate.leafId,
       focus: false,

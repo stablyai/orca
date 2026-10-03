@@ -54,6 +54,24 @@ export function shouldPreserveTerminalScrollbackBuffers(
   )
 }
 
+/**
+ * Tab ids whose terminals are incognito ("no-session"). Callers that write scrollback content to
+ * disk (session buffers, snapshot refs) skip these so an incognito terminal leaves no scrollback.
+ */
+export function collectIncognitoTabIds(
+  session: Pick<WorkspaceSessionState, 'tabsByWorktree'>
+): Set<string> {
+  const ids = new Set<string>()
+  for (const tabs of Object.values(session.tabsByWorktree ?? {})) {
+    for (const tab of tabs) {
+      if (tab.incognito) {
+        ids.add(tab.id)
+      }
+    }
+  }
+  return ids
+}
+
 export function capTerminalScrollbackSessionBuffer(buffer: string): string {
   if (isUtf8ByteLengthWithinLimit(buffer, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT)) {
     return buffer
@@ -92,16 +110,29 @@ export function pruneLocalTerminalScrollbackBuffers(
 ): WorkspaceSessionState {
   let repoById: Map<string, RepoConnection> | null = null
   let worktreeIdByTabId: Map<string, string> | null = null
+  let incognitoTabIds: Set<string> | null = null
   const tabsByWorktree = session.tabsByWorktree ?? {}
   const preservesScrollback = (tabId: string): boolean => {
     repoById ??= new Map(repos.map((repo) => [repo.id, repo] as const))
-    if (!worktreeIdByTabId) {
+    if (!worktreeIdByTabId || !incognitoTabIds) {
       worktreeIdByTabId = new Map()
+      incognitoTabIds = new Set()
       for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
         for (const tab of tabs) {
           worktreeIdByTabId.set(tab.id, worktreeId)
+          if (tab.incognito) {
+            incognitoTabIds.add(tab.id)
+          }
         }
       }
+    }
+    // Why: an incognito ("no-session") terminal must persist NO scrollback anywhere — inline
+    // buffers, externalized snapshot refs, or the local-only home — even when a remote/runtime tab
+    // would otherwise keep renderer-captured scrollback. Stripping the refs here also drives the
+    // downstream delete-removed pass to erase any snapshot file a tab left before it went incognito,
+    // matching the daemon history suppression so incognito is honest across every on-disk home.
+    if (incognitoTabIds.has(tabId)) {
+      return false
     }
     return shouldPreserveTerminalScrollbackBuffersForRepoMap(worktreeIdByTabId.get(tabId), repoById)
   }

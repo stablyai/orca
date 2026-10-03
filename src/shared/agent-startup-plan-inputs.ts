@@ -1,6 +1,7 @@
 import type { GlobalSettings } from './global-settings-types'
 import type { SessionOptionValue } from './native-chat-session-options'
 import type { TuiAgent } from './tui-agent'
+import { applyIncognitoLaunchFlag } from './tui-agent-incognito'
 import { resolveTuiAgentLaunchArgs, resolveTuiAgentLaunchEnv } from './tui-agent-launch-defaults'
 import type { AgentStartupShell } from './tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from './windows-terminal-shell'
@@ -46,17 +47,24 @@ export function resolveAgentStartupPlanInputs(args: {
   /** A requested shell is the one this PTY will be, so it owns the quoting family. */
   windowsShellOverride?: string | null
   sessionOptions?: Record<string, SessionOptionValue> | undefined
+  /** When true and the agent is incognito-capable, its native ephemeral flag is added to argv. */
+  incognito?: boolean
 }): AgentStartupPlanInputs {
   const { agent, settings, platform, isRemote, sessionOptions } = args
+  // A per-launch override wins over the Settings default; `null` is "no arguments", so this tests
+  // for absence rather than falsiness. Incognito then adds the harness's own ephemeral flag so the
+  // agent — not just Orca's scrollback — is ephemeral (no-op for non-capable agents / a null arg).
+  const resolvedAgentArgs =
+    args.agentArgs !== undefined
+      ? args.agentArgs
+      : resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs)
   return {
     agent,
     cmdOverrides: settings.agentCmdOverrides ?? {},
-    // A per-launch override wins over the Settings default; `null` is "no arguments", so this
-    // tests for absence rather than falsiness.
     agentArgs:
-      args.agentArgs !== undefined
-        ? args.agentArgs
-        : resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
+      resolvedAgentArgs === null
+        ? applyIncognitoLaunchFlag(agent, '', args.incognito === true) || null
+        : applyIncognitoLaunchFlag(agent, resolvedAgentArgs, args.incognito === true),
     agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
     platform,
     shell: resolveLocalWindowsAgentStartupShell({

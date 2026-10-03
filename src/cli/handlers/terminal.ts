@@ -158,6 +158,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     const useRendererBackedInteractiveTerminal =
       !client.isRemote && shouldUseRendererBackedInteractiveTerminal(command)
     const focus = flags.get('focus') === true
+    const incognito = flags.get('no-session') === true
     const shell = getOptionalStringFlag(flags, 'shell')
     if (shell !== undefined) {
       if (!isSupportedWindowsShellOverride(shell)) {
@@ -193,6 +194,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       command,
       ...(shell !== undefined ? { shell } : {}),
       title: getOptionalStringFlag(flags, 'title'),
+      ...(incognito ? { incognito: true } : {}),
       // Why: interactive local agent TUIs need the renderer-backed terminal
       // path for browser-side features, but CLI creates must stay backgrounded
       // unless the caller explicitly asks for focus.

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   haveSameDisabledTuiAgents,
   normalizeDisabledTuiAgents,
+  normalizeTerminalIncognitoAgents,
   pickTuiAgent
 } from './tui-agent-selection'
 
@@ -32,6 +33,18 @@ describe('normalizeDisabledTuiAgents', () => {
       'codex',
       'claude'
     ])
+  })
+})
+
+describe('normalizeTerminalIncognitoAgents', () => {
+  it('keeps only incognito-capable agents and drops the rest', () => {
+    // 'claude'/'codex' cannot be made ephemeral, so they are dropped even though they are valid
+    // agent ids; the live ['pi'] setting must survive.
+    expect(
+      normalizeTerminalIncognitoAgents(['pi', 'claude', 'omp', 'codex', 'pi', 'unknown'])
+    ).toEqual(['pi', 'omp'])
+    expect(normalizeTerminalIncognitoAgents(['pi'])).toEqual(['pi'])
+    expect(normalizeTerminalIncognitoAgents(['claude'])).toEqual([])
   })
 })
 

@@ -34,6 +34,10 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
+import {
+  agentDefaultsToIncognito,
+  applyIncognitoLaunchFlag
+} from '../../../../shared/tui-agent-incognito'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
@@ -182,7 +186,14 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
         agent: tuiAgent,
         prompt: submitStartupPrompt,
         cmdOverrides: settings?.agentCmdOverrides ?? {},
-        agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs),
+        // Why: the host uses this self-contained backendStartup command verbatim, so the native
+        // ephemeral flag for a capable incognito agent must already be in argv here — otherwise the
+        // new-workspace path badges incognito while the harness still records its own session.
+        agentArgs: applyIncognitoLaunchFlag(
+          tuiAgent,
+          resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs),
+          agentDefaultsToIncognito(tuiAgent, settings?.terminalIncognitoAgents)
+        ),
         agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv),
         sessionOptions: resolveInitialNativeChatSessionOptions(
           {

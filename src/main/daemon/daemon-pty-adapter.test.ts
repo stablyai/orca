@@ -311,6 +311,18 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.id).toContain('wt-1')
     })
 
+    it('suppresses incognito command history for macOS-zsh and fish on the daemon', async () => {
+      // withHistoryIsolation runs server-side before the subprocess spawn, so lastSpawnOpts.env is
+      // what the shell gets. ORCA_HISTFILE (restored by the wrapper after macOS /etc/zshrc clobbers
+      // HISTFILE) and fish_private_mode are the knobs the daemon branch was missing; the shared
+      // incognito-history-env test asserts the full set. (HISTFILE/HISTSIZE/ORCA_INCOGNITO predate this.)
+      await adapter.spawn({ cols: 80, rows: 24, worktreeId: 'wt-incog', incognito: true })
+      expect(lastSpawnOpts?.env).toMatchObject({
+        ORCA_HISTFILE: '/dev/null',
+        fish_private_mode: '1'
+      })
+    })
+
     it('keeps a reattached native UNC session native despite a conflicting WSL preference', async () => {
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })

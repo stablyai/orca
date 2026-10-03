@@ -272,6 +272,9 @@ export type IpcPtyTransportOptions = {
   worktreeId?: string
   tabId?: string
   leafId?: string
+  /** Incognito ("no-session"): the daemon spawn suppresses on-disk scrollback, sets ORCA_INCOGNITO,
+   *  and the launch command carries the agent's native ephemeral flag. Sourced from the tab. */
+  incognito?: boolean
   activate?: boolean
   shellOverride?: string
   projectRuntime?: ProjectExecutionRuntimeResolution

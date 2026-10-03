@@ -18,6 +18,8 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
       incarnationId?: PtyIncarnationId
       /** Handle allocated for the replacement incarnation, when one is known. */
       terminalHandle?: string
+      /** Stamp the runtime pty record incognito so UI-launched incognito terminals match the daemon. */
+      incognito?: boolean
       agentLaunchAuthority?: { launchToken: string; launchAgent: TuiAgent }
       providerReattachLaunchIdentity?: {
         incarnationId: PtyIncarnationId
@@ -78,6 +80,9 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
       ...(binding && this.pendingMobileTerminalCreatesByKey.has(`${worktreeId}::${binding.tabId}`)
         ? { runtimeSessionOwned: true }
         : {}),
+      // Why here (one place for every path): the renderer-backed desktop spawn registers through
+      // this binding, so stamping incognito here covers it and restart re-adoption alike.
+      ...(binding?.incognito ? { incognito: true } : {}),
       ...(isWsl !== undefined ? { isWsl } : {}),
       ...(binding && paneKey
         ? {

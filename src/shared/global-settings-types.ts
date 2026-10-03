@@ -330,6 +330,10 @@ export type GlobalSettings = {
   /** Per-worktree shell history so ArrowUp doesn't surface other worktrees' commands (a HISTFILE for
    *  bash/zsh, a `fish_history` session name for fish). Defaults to true. */
   terminalScopeHistoryByWorktree: boolean
+  /** Agents whose terminals are created incognito ("no-session") by default: their scrollback is not
+   *  persisted to disk. A per-terminal `orca terminal create --no-session` (or its absence) always
+   *  overrides this. Empty/absent means no agent is incognito by default. */
+  terminalIncognitoAgents?: TuiAgent[]
   /** Kill switch for hidden terminal view parking: unmount long-hidden panes while a pane-less watcher keeps PTY side effects alive. */
   terminalHiddenViewParking?: boolean
   /** Kill switch for SSH terminal parking (C1): SSH panes park like local ones; reveal restores from main's headless model, falling back to relay replay. */

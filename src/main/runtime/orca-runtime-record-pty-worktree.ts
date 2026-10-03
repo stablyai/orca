@@ -34,6 +34,7 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
         | 'isWsl'
         | 'wslDistro'
         | 'incarnationId'
+        | 'incognito'
         | 'agentSessionOwners'
       >
     > = {}
@@ -72,6 +73,10 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
         launchToken: null,
         launchIncarnationId: null,
         launchAgent: null,
+        // Stamped at first registration so every read-site (buildPtyTerminalSummary,
+        // isTerminalHandleIncognito → worker-output-archive guard) agrees with the daemon
+        // suppression for a UI-launched incognito terminal, not just the background path.
+        incognito: state.incognito === true,
         agentSessionOwners: (state.agentSessionOwners ?? []).map(cloneAgentSessionOwnerBinding),
         foregroundAgent: null,
         connected: state.connected ?? true,
@@ -143,6 +148,12 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
     }
     if (state.runtimeSessionOwned !== undefined) {
       pty.runtimeSessionOwned = state.runtimeSessionOwned
+    }
+    if (state.incognito === true) {
+      // Why upgrade-only: incognito is a stable per-session property, and a re-registration (restart
+      // re-adoption, mobile publish) that omits the flag must never silently un-incognito a terminal
+      // whose scrollback is being suppressed — that would be a privacy downgrade.
+      pty.incognito = true
     }
     if (state.isWsl !== undefined) {
       pty.isWsl = state.isWsl

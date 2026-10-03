@@ -189,6 +189,39 @@ describe('getRelayShellLaunchConfig', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32')(
+    'adds -d for an incognito zsh when the wrapper cannot be installed (unwritable remote HOME)',
+    () => {
+      // HOME is a FILE, so the wrapper dir cannot be created and launch falls back to unwrapped.
+      // A plain `zsh -l` would let macOS /etc/zshrc re-point HISTFILE at ~/.zsh_history; -d skips
+      // the global rc files so the inherited HISTFILE=/dev/null stands and the incognito pane
+      // records no shell history even without the wrapper's restore hook.
+      const fileHome = join(homeDir, 'home-is-a-file')
+      writeFileSync(fileHome, 'not a directory')
+
+      const config = getRelayShellLaunchConfig('/bin/zsh', {
+        HOME: fileHome,
+        ORCA_INCOGNITO: '1',
+        HISTFILE: '/dev/null',
+        ORCA_HISTFILE: '/dev/null'
+      })
+
+      expect(config.args).toEqual(['-d', '-l'])
+      expect(config.supportsReadyMarker).toBe(false)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'leaves a NON-incognito zsh on the plain login path when the wrapper cannot be installed',
+    () => {
+      const fileHome = join(homeDir, 'home-is-a-file-2')
+      writeFileSync(fileHome, 'not a directory')
+
+      // No ORCA_INCOGNITO → no privacy promise → unchanged plain login shell (no -d).
+      expect(getRelayShellLaunchConfig('/bin/zsh', { HOME: fileHome }).args).toEqual(['-l'])
+    }
+  )
+
   it('keeps PowerShell Core on POSIX remotes as a login shell', () => {
     expect(getRelayShellLaunchConfig('/usr/bin/pwsh', { HOME: homeDir }, 'linux')).toEqual({
       args: ['-l'],

@@ -44,6 +44,14 @@ ${MANAGED_DATA_ACCOUNT_POWERSHELL_RESTORE}
 if ($env:ORCA_MIMOCODE_HOME) { $env:MIMOCODE_HOME = $env:ORCA_MIMOCODE_HOME }
 if ($env:ORCA_CODEX_HOME) { $env:CODEX_HOME = $env:ORCA_CODEX_HOME }
 
+# Incognito ("no-session") terminals must leave no shell history. PSReadLine persists command
+# history to its own file (ConsoleHost_history.txt) that HISTFILE/HISTSIZE/fish_private_mode cannot
+# reach, so native PowerShell would otherwise record a private session's commands. Disable it HERE,
+# after profiles have loaded, so a profile's own Set-PSReadLineOption cannot re-enable saving.
+if ($env:ORCA_INCOGNITO -eq '1' -and (Get-Module -Name PSReadLine)) {
+    try { Set-PSReadLineOption -HistorySaveStyle SaveNothing } catch { Write-Error $_ -ErrorAction Continue }
+}
+
 if ($ExecutionContext.SessionState.LanguageMode -eq "FullLanguage" -and
     ((-not (Test-Path variable:global:__OrcaOsc133State)) -or
      $null -eq $Global:__OrcaOsc133State.OriginalPrompt)) {

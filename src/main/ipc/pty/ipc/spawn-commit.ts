@@ -68,6 +68,9 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
             leafId: ctx.metadataLeafId,
             ...(ctx.preAllocatedHandle ? { terminalHandle: ctx.preAllocatedHandle } : {}),
             ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
+            // Why: stamp the runtime pty record incognito on the renderer-backed desktop spawn, so
+            // list/show summaries and the worker-output-archive guard see it — not just the daemon.
+            ...(args.incognito === true ? { incognito: true } : {}),
             ...(agentLaunchAuthority ? { agentLaunchAuthority } : {}),
             ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
           }

@@ -35,6 +35,9 @@ export const ptySessionControlApi = {
     connectionId?: string | null
     worktreeId?: string
     sessionId?: string
+    // Why: incognito ("no-session") terminals suppress on-disk scrollback at the daemon, set
+    // ORCA_INCOGNITO, and launch with the agent's native ephemeral flag.
+    incognito?: boolean
     shellOverride?: string
     projectRuntime?: ProjectExecutionRuntimeResolution
     terminalKittyKeyboardProtocol?: boolean

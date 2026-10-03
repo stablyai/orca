@@ -3537,7 +3537,10 @@
             "ab19f603eb": "Rename tab {{value0}}",
             "6df69d9388": "Close tab {{value0}}",
             "fdb2691425": "Collapse pane",
-            "95db5f2f7d": "Close tab"
+            "95db5f2f7d": "Close tab",
+            "incognitoIndicator": "Incognito",
+            "incognitoIndicatorTooltip": "Incognito — no-session: the agent and Orca record nothing",
+            "incognitoIndicatorTooltipOrcaOnly": "Incognito — Orca records no scrollback (this agent still keeps its own session)"
           },
           "SortableTabContextMenu": {
             "35e8892fd0": "Tab Color",
@@ -6854,7 +6857,10 @@
           "codexSessionSourceInfo": "About importing Codex history",
           "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
           "storedDefaultUndetected": "Saved as your default, but not detected right now",
-          "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out."
+          "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out.",
+          "incognitoByDefault": "Incognito by default",
+          "incognitoByDefaultDescription": "Launch this agent ephemerally (no-session): the harness records no session and Orca records no scrollback. A per-terminal --no-session flag still overrides this.",
+          "incognitoByDefaultAria": "{{value0}} incognito by default"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",

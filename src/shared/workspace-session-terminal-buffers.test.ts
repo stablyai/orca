@@ -187,6 +187,27 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
     })
   })
 
+  it('strips ALL scrollback for an incognito tab even when the host would otherwise preserve it', () => {
+    // A remote/SSH tab normally keeps its renderer-captured scrollback; incognito must override that
+    // so a "no-session" terminal leaves no buffer inline and no snapshot ref on disk.
+    const session = makeSession()
+    session.tabsByWorktree['remote-repo::/remote/worktree'][0].incognito = true
+
+    const result = pruneLocalTerminalScrollbackBuffers(session, [
+      { id: 'local-repo', connectionId: null },
+      { id: 'remote-repo', connectionId: 'ssh-target-1' }
+    ])
+
+    expect(result.terminalLayoutsByTabId['remote-tab']).toEqual({
+      root: null,
+      activeLeafId: null,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { 'pane:1': 'remote-pty' }
+    })
+    expect(result.terminalLayoutsByTabId['remote-tab'].buffersByLeafId).toBeUndefined()
+    expect(result.terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId).toBeUndefined()
+  })
+
   it('caps preserved SSH buffers by UTF-8 bytes for multibyte scrollback', () => {
     const multibyteRow = 'é'.repeat(1024)
     const hugeScrollback = multibyteRow.repeat(512)

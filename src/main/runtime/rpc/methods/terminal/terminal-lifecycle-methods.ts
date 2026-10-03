@@ -70,6 +70,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
                 ? { terminalColorQueryReplies: params.terminalColorQueryReplies }
                 : {}),
               title: params.title,
+              ...(typeof params.incognito === 'boolean' ? { incognito: params.incognito } : {}),
               focus,
               rendererBacked: params.rendererBacked === true,
               activate,

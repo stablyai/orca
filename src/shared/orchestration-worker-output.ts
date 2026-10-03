@@ -14,7 +14,9 @@ export const ORCHESTRATION_WORKER_READ_FALLBACK_REASONS = [
   'transcript_missing',
   'transcript_unreadable',
   'transcript_parse_failed',
-  'remote_capability_unavailable'
+  'remote_capability_unavailable',
+  // The worker terminal is incognito ("no-session"): its live buffer is never archived to disk.
+  'incognito_suppressed'
 ] as const
 export type OrchestrationWorkerReadFallbackReason =
   (typeof ORCHESTRATION_WORKER_READ_FALLBACK_REASONS)[number]

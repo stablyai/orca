@@ -134,7 +134,8 @@ describe('worker output archive WSL routing', () => {
         tail: ['remote worker terminal fallback'],
         truncated: false,
         status: 'live'
-      })
+      }),
+      isTerminalHandleIncognito: vi.fn(() => false)
     } as unknown as OrcaRuntimeService
 
     const result = await captureWorkerOutputArchive({
@@ -184,7 +185,8 @@ describe('worker output archive WSL routing', () => {
         tail: ['terminal fallback'],
         truncated: false,
         status: 'running'
-      })
+      }),
+      isTerminalHandleIncognito: vi.fn(() => false)
     } as unknown as OrcaRuntimeService
 
     const result = await captureWorkerOutputArchive({
@@ -197,6 +199,31 @@ describe('worker output archive WSL routing', () => {
     expect(result).toMatchObject({
       kind: 'terminal_tail',
       content: { fallbackReason: 'transcript_empty' }
+    })
+  })
+
+  it('never reads or archives an incognito worker terminal buffer', async () => {
+    const readTerminal = vi.fn()
+    const runtime = {
+      // No provider session, so capture would otherwise fall through to the live terminal tail.
+      getExactWorkerProviderSession: vi.fn(() => null),
+      readTerminal,
+      isTerminalHandleIncognito: vi.fn(() => true)
+    } as unknown as OrcaRuntimeService
+
+    const result = await captureWorkerOutputArchive({
+      runtime,
+      dispatchId: 'dispatch-incognito',
+      terminalHandle: 'term-incognito',
+      attachedAtMs: Date.now() - 1
+    })
+
+    // The live buffer is never read, and the archive carries no scrollback content.
+    expect(readTerminal).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      kind: 'terminal_tail',
+      status: 'empty',
+      content: { lines: [], fallbackReason: 'incognito_suppressed' }
     })
   })
 })

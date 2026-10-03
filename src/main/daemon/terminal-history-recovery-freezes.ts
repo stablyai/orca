@@ -3,7 +3,8 @@ import { getHistorySessionDirName } from './history-paths'
 import {
   markTerminalHistorySessionRecoveryFrozen,
   unmarkTerminalHistorySessionRecoveryFrozen,
-  type ActiveHistoryRecoveryFreeze
+  type ActiveHistoryRecoveryFreeze,
+  type HistoryRecoveryFreeze
 } from './terminal-history-recovery-quarantine'
 
 /** The recovery freezes one HistoryManager holds, each paired with the process-wide hold that keeps
@@ -20,6 +21,19 @@ export class TerminalHistoryRecoveryFreezes {
 
   has(sessionId: string): boolean {
     return this.bySessionId.has(sessionId)
+  }
+
+  /** Returns the active freeze the handle names, or throws if it isn't the current, fingerprinted one. */
+  require(sessionId: string, handle: HistoryRecoveryFreeze): ActiveHistoryRecoveryFreeze {
+    const activeFreeze = this.bySessionId.get(sessionId)
+    if (
+      handle.sessionId !== sessionId ||
+      activeFreeze?.handle !== handle ||
+      activeFreeze.fingerprint === undefined
+    ) {
+      throw new Error('terminal_history_recovery_freeze_invalid')
+    }
+    return activeFreeze
   }
 
   hold(sessionId: string, freeze: ActiveHistoryRecoveryFreeze): void {

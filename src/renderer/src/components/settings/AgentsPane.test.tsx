@@ -26,7 +26,8 @@ import {
   AgentsPane,
   getAgentsPaneSearchEntries,
   buildAgentAvailabilitySettingsUpdate,
-  createAgentAvailabilityUpdateQueue
+  createAgentAvailabilityUpdateQueue,
+  buildAgentIncognitoSettingsUpdate
 } from './AgentsPane'
 import { matchesSettingsSearch } from './settings-search'
 import { TooltipProvider } from '../ui/tooltip'
@@ -538,6 +539,39 @@ describe('AgentsPane', () => {
 
     props.onChange('disabled')
     expect(onSetEnabled).toHaveBeenCalledWith(false)
+  })
+
+  it('renders the incognito toggle only for an incognito-capable agent', () => {
+    detectedAgentsMock.detectedIds = ['pi']
+    const withCapable = renderPane({
+      ...getDefaultSettings('/tmp'),
+      terminalIncognitoAgents: ['pi']
+    })
+    expect(withCapable).toContain('aria-label="Pi incognito by default"')
+    expect(withCapable).toContain('Incognito by default')
+  })
+
+  it('omits the incognito toggle for a non-capable agent even with its settings panel open', () => {
+    detectedAgentsMock.detectedIds = ['claude']
+    // An args override forces the per-agent panel open, so the toggle's absence is real, not just a
+    // collapsed section.
+    const withNonCapable = renderPane({
+      ...getDefaultSettings('/tmp'),
+      agentDefaultArgs: { claude: '--dangerously-skip-permissions' }
+    })
+    expect(withNonCapable).not.toContain('incognito by default')
+    expect(withNonCapable).not.toContain('Incognito by default')
+  })
+
+  it('adds and removes agents from the incognito list on toggle', () => {
+    expect(buildAgentIncognitoSettingsUpdate({ terminalIncognitoAgents: [] }, 'pi', true)).toEqual({
+      terminalIncognitoAgents: ['pi']
+    })
+    expect(
+      buildAgentIncognitoSettingsUpdate({ terminalIncognitoAgents: ['pi'] }, 'pi', false)
+    ).toEqual({
+      terminalIncognitoAgents: []
+    })
   })
 
   it('clears the default agent when disabling that agent', () => {

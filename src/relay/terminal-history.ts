@@ -10,6 +10,7 @@ import {
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { toLinuxPath } from '../shared/wsl-paths'
+import { applyIncognitoHistoryEnv } from '../shared/incognito-history-env'
 import { hashWorktreeId } from '../main/terminal-history-id'
 import { dropInheritedOrcaHistFile } from '../main/worktree-history-file-path'
 import {
@@ -103,6 +104,24 @@ export function injectRelayHistoryEnv(
   } catch {
     return null
   }
+}
+
+/**
+ * Suppress every on-disk shell-history trace for an incognito ("no-session") PTY on the REMOTE host,
+ * and expose ORCA_INCOGNITO so the inner program (e.g. a private AI CLI) can detect it is private.
+ *
+ * This is the relay's mirror of the desktop/daemon `withHistoryIsolation` incognito branch in
+ * `src/main/daemon/daemon-pty-session-spawn.ts`, and shares the exact same knobs through
+ * `applyIncognitoHistoryEnv` so the two transports cannot drift: HISTFILE=/dev/null plus the
+ * macOS-zsh ORCA_HISTFILE restore and fish's private mode, overriding any per-worktree isolation.
+ * The relay owns no scrollback file (output.log/checkpoint live only in the local daemon's
+ * HistoryManager), so the shell's own command history is the sole on-disk leak the relay path must
+ * plug. Callers must also skip injectRelayHistoryEnv/injectRelayFishHistoryEnv for an incognito spawn
+ * so no scoped history file is minted either — matching the daemon, which returns before its own
+ * HISTFILE isolation runs — and carry INCOGNITO_HISTORY_WSLENV_KEYS over WSLENV for a WSL guest.
+ */
+export function applyRelayIncognitoEnv(env: Record<string, string>): void {
+  applyIncognitoHistoryEnv(env)
 }
 
 export function deleteRelayHistory(worktreeId: string): void {

@@ -36,6 +36,11 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
       }
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector, created)
       const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
+      // Incognito ("no-session"): honor the explicit per-terminal flag, else fall back to the
+      // per-agent default (Settings.terminalIncognitoAgents) for the agent this terminal launches.
+      const incognito = dependencies.resolveTerminalIncognito(opts, launchOpts, () =>
+        this.store?.getSettings?.()
+      )
       const reportPtySpawnCommitted = createPtySpawnCommitReporter(launchOpts.onPtySpawnCommitted)
       const cwd =
         this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
@@ -170,6 +175,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             ...(adoptedBeforeLaunch ? { adoptedStablePane: adoptedBeforeLaunch } : {}),
             ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
             ...(!adoptedBeforeLaunch && launchOpts.isNewSession ? { isNewSession: true } : {}),
+            ...(incognito ? { incognito: true } : {}),
             ...dependencies.BACKGROUND_TERMINAL_SPAWN_FLAGS
           })
         } finally {
@@ -183,8 +189,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         if (result.agentSessionEnsure) {
           const canonicalSurface = result.agentSessionEnsure.owner.surface
           preAllocatedHandle = canonicalSurface.terminalHandle
-          tabId = canonicalSurface.tabId
-          leafId = canonicalSurface.leafId
+          ;({ tabId, leafId } = canonicalSurface)
           paneKey = dependencies.makePaneKey(tabId, leafId)
         } else if (result.stablePaneOwner) {
           preAllocatedHandle = result.stablePaneOwner.handle
@@ -213,6 +218,8 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         const pty = this.getOrCreatePtyWorktreeRecord(result.id)
         if (pty) {
           pty.runtimeSessionOwned = true
+          // Why outside the adoption guard: incognito is a stable per-session property.
+          pty.incognito = incognito
           if (!adoptedStablePane) {
             if (launchOpts.title) {
               const observedAt = this.nextTitleObservationSequence()
@@ -259,6 +266,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
               activate: presentation === 'focused',
               ...(presentation ? { presentation } : {}),
               ...dependencies.ownerSurfacing(opts.surfaceOwner !== false),
+              ...(incognito ? { incognito: true } : {}),
               tabId,
               leafId
             })
@@ -277,6 +285,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
           ptyId: result.id,
           worktreeId: workspace.id,
           title: pty?.title ?? launchOpts.title ?? null,
+          ...(incognito ? { incognito: true } : {}),
           ...this.getPtyExecutionHostMetadata(result.id),
           surface,
           ...(result.pid ? { processId: result.pid } : {}),

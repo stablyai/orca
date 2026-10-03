@@ -26,6 +26,10 @@ export function buildSshPtySpawnRequest(args: {
     ...(options.historyIsolationEnabled !== undefined
       ? { historyIsolationEnabled: options.historyIsolationEnabled }
       : {}),
+    // Why: without this the relay's remote shell records command history to disk on the execution
+    // host for a `--no-session` terminal — the desktop path's HISTFILE=/dev/null never crossed the
+    // SSH boundary. Old relays ignore the extra param. See src/relay/pty-handler.ts spawnAfterAdmission.
+    ...(options.incognito ? { incognito: true } : {}),
     ...(options.agentWorkspaceTrust ? { agentWorkspaceTrust: options.agentWorkspaceTrust } : {}),
     ...(options.shellOverride !== undefined ? { shellOverride: options.shellOverride } : {}),
     ...(options.terminalWindowsWslDistro !== undefined

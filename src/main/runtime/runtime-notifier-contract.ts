@@ -60,6 +60,8 @@ export type RuntimeNotifier = {
       activate?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
+      /** Host-authoritative incognito ("no-session") state for the revealed terminal. */
+      incognito?: boolean
       tabId?: string
       leafId?: string
       splitFromLeafId?: string

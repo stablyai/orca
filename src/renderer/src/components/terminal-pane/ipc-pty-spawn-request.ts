@@ -1,6 +1,29 @@
+import { useAppStore } from '@/store'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 
 type PtyConnectOptions = Parameters<PtyTransport['connect']>[0]
+
+/**
+ * Whether this spawn's tab is incognito ("no-session"). Read from the stamped tab so the daemon
+ * spawn suppresses scrollback / sets ORCA_INCOGNITO / adds --no-session on EVERY renderer-backed
+ * launch — the foreground UI path, not just CLI/background. Covers fresh spawn, reattach, restart.
+ */
+function resolveSpawnIncognito(options: IpcPtyTransportOptions): boolean {
+  if (typeof options.incognito === 'boolean') {
+    return options.incognito
+  }
+  if (!options.worktreeId || !options.tabId) {
+    return false
+  }
+  try {
+    const tab = useAppStore
+      .getState()
+      .tabsByWorktree[options.worktreeId]?.find((entry) => entry.id === options.tabId)
+    return tab?.incognito === true
+  } catch {
+    return false
+  }
+}
 
 /** `incarnationId` names which lifetime of the returned id this spawn owns; absent when the
  *  execution host predates the field. It is deliberately NOT on `PtyConnectResult` — only the
@@ -41,6 +64,7 @@ export async function spawnIpcPty(
     cwdFallback === 'worktree' && !connectionId && !admittedSessionId
   // Why: a reattach under an admitted session id must never stop the PTY it is reattaching.
   const replacesPtyId = admittedSessionId ? null : (connectOptions.claimReplacedPtyId?.() ?? null)
+  const incognito = resolveSpawnIncognito(transportOptions)
   return window.api.pty.spawn({
     cols: connectOptions.cols ?? 80,
     rows: connectOptions.rows ?? 24,
@@ -73,6 +97,7 @@ export async function spawnIpcPty(
       : {}),
     ...(connectionId ? { connectionId } : {}),
     ...(admittedSessionId ? { sessionId: admittedSessionId } : {}),
+    ...(incognito ? { incognito: true } : {}),
     ...(connectOptions.initiallyHidden ? { initiallyHidden: true } : {}),
     worktreeId,
     ...(tabId ? { tabId } : {}),

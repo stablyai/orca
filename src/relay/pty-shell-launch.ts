@@ -121,7 +121,16 @@ export function getRelayShellLaunchConfig(
   }
   if (!wrappersReady) {
     // Why plain login shell: ZDOTDIR pointed at an incomplete wrapper dir makes
-    // zsh skip the user's whole config. Losing Orca's features is recoverable.
+    // zsh skip the user's whole config. Losing Orca's features is recoverable —
+    // EXCEPT incognito history suppression, which is a privacy promise, not a feature.
+    // Without the wrapper's post-/etc/zshrc restore, macOS /etc/zshrc re-points HISTFILE
+    // at ~/.zsh_history and the inherited HISTFILE=/dev/null is lost. For an incognito zsh
+    // add -d (skip GLOBAL rc files) so that clobber never runs — HISTFILE=/dev/null then
+    // stands, while the user's own ~/.z* config still loads. bash needs nothing: it honours
+    // the inherited HISTFILE directly and no global rc reassigns it.
+    if (shellName === 'zsh' && env.ORCA_INCOGNITO === '1') {
+      return { args: ['-d', ...POSIX_LOGIN_ARGS], env: {}, supportsReadyMarker: false }
+    }
     return unwrapped
   }
 

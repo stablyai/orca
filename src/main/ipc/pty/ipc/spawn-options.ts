@@ -74,6 +74,7 @@ export async function buildPtyIpcSpawnOptions(
       : {}),
     env: ctx.spawnEnv,
     historyIsolationEnabled: ctx.deps.getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
+    ...(args.incognito ? { incognito: true } : {}),
     ...(ctx.isMintedSessionId ? { isNewSession: true } : {})
   }
   if (!args.connectionId && !ctx.isDaemonHostSpawn) {

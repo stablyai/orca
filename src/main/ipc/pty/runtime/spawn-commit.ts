@@ -178,6 +178,9 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
             leafId: ctx.metadataLeafId,
             ...(args.preAllocatedHandle ? { terminalHandle: args.preAllocatedHandle } : {}),
             ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
+            // Why: keep the runtime-session spawn path in step with the IPC path — stamp incognito on
+            // the pty record so summary/worker-archive read-sites agree with the daemon suppression.
+            ...(args.incognito === true ? { incognito: true } : {}),
             ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
           }
         : undefined,

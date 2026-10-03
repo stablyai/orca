@@ -123,7 +123,9 @@ import {
 } from '../shared/agent-session-host-authority'
 import { readPtySlavePath } from '../shared/pty-slave-line-discipline-echo'
 import { chargedPtyRetainedStringBytes } from '../shared/pty-retained-string-memory'
+import { INCOGNITO_HISTORY_WSLENV_KEYS } from '../shared/incognito-history-env'
 import {
+  applyRelayIncognitoEnv,
   deleteRelayFishHistory,
   deleteRelayHistory,
   injectRelayFishHistoryEnv,
@@ -254,6 +256,9 @@ type ManagedPty = {
   envToDelete: string[]
   gitCredentialPromptGuarded: boolean
   historyIsolationEnabled?: boolean
+  /** Incognito ("no-session"): the remote shell's HISTFILE is forced to /dev/null and no scoped
+   *  history file is minted. Kept so revive re-applies the suppression (revivedEnv has no ORCA_INCOGNITO). */
+  incognito?: boolean
   startupCommand?: ManagedStartupCommand
   /** Whether this host armed the shell-ready marker for a renderer-delivered startup command.
    *  Kept off `startupCommand`, which is dropped once delivered; the client reads it from the
@@ -465,6 +470,9 @@ type SerializedPtyEntry = {
   gitCredentialPromptGuarded?: boolean
   /** Optional for state serialized by relays predating scoped history. */
   historyIsolationEnabled?: boolean
+  /** Incognito ("no-session"). Optional: absent from state serialized by relays predating it, and
+   *  such a pane was non-incognito anyway. Carried so a revived incognito pane re-suppresses history. */
+  incognito?: boolean
   /**
    * The shell override this pane was spawned with, re-resolved (and re-bounded)
    * on revive. Optional: state from a relay predating it revives the host
@@ -2034,20 +2042,36 @@ export class PtyHandler {
     const worktreeId =
       typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID
     const historyIsolationEnabled = params.historyIsolationEnabled === true
-    // Deliberately not reached by wsl.exe: a guest fish writes its history file
-    // inside the distro, where relay deletion cannot reach it (STA-4682).
-    if (historyIsolationEnabled && worktreeId && basename(shell).toLowerCase().startsWith('fish')) {
-      injectRelayFishHistoryEnv(spawnEnv, worktreeId)
-    }
+    const incognito = params.incognito === true
     const wslShell = isRelayWslShell(shell)
     if (wslShell) {
       // WSLENV is the only channel that carries a host env var into the guest.
       addWslEnvKeys(spawnEnv, [ORCA_IMAGE_PROTOCOL_ENV])
     }
-    if (historyIsolationEnabled && worktreeId) {
-      const historyRoot = injectRelayHistoryEnv(spawnEnv, worktreeId, shell, { wsl: wslShell })
-      if (wslShell && historyRoot) {
-        addWslEnvKeys(spawnEnv, ['HISTFILE'])
+    if (incognito) {
+      // Incognito wins over per-worktree history isolation: force HISTFILE=/dev/null (+ORCA_INCOGNITO)
+      // and mint NO scoped history file, mirroring the daemon's withHistoryIsolation incognito branch.
+      applyRelayIncognitoEnv(spawnEnv)
+      if (wslShell) {
+        // Carry every incognito history knob into the guest (HISTFILE, ORCA_HISTFILE for macOS-zsh
+        // guests, fish_private_mode, ...); otherwise incognito would be a false promise under WSL.
+        addWslEnvKeys(spawnEnv, [...INCOGNITO_HISTORY_WSLENV_KEYS])
+      }
+    } else {
+      // Deliberately not reached by wsl.exe: a guest fish writes its history file
+      // inside the distro, where relay deletion cannot reach it (STA-4682).
+      if (
+        historyIsolationEnabled &&
+        worktreeId &&
+        basename(shell).toLowerCase().startsWith('fish')
+      ) {
+        injectRelayFishHistoryEnv(spawnEnv, worktreeId)
+      }
+      if (historyIsolationEnabled && worktreeId) {
+        const historyRoot = injectRelayHistoryEnv(spawnEnv, worktreeId, shell, { wsl: wslShell })
+        if (wslShell && historyRoot) {
+          addWslEnvKeys(spawnEnv, ['HISTFILE'])
+        }
       }
     }
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
@@ -2150,6 +2174,7 @@ export class PtyHandler {
       envToDelete,
       gitCredentialPromptGuarded,
       ...(historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
+      ...(incognito ? { incognito: true } : {}),
       shellPath: shell,
       // Why the resolved one gates it: on a POSIX relay an override is rejected
       // outright, and storing one revive would only reject again is noise.
@@ -3099,6 +3124,9 @@ export class PtyHandler {
         envToDelete: managed.envToDelete,
         gitCredentialPromptGuarded: managed.gitCredentialPromptGuarded,
         ...(managed.historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
+        // Why serialized: revive re-spawns the shell from a bare env (no ORCA_INCOGNITO), so without
+        // this a revived incognito pane would start recording its command history on the remote host.
+        ...(managed.incognito ? { incognito: true } : {}),
         // Why serialized: revive re-spawns the shell, and without these a WSL
         // pane came back as the host default shell in another distro's history.
         ...(managed.shellOverride ? { shellOverride: managed.shellOverride } : {}),
@@ -3186,27 +3214,37 @@ export class PtyHandler {
         ? entry.terminalWindowsWslDistro
         : null
     const historyIsolationEnabled = entry.historyIsolationEnabled === true
+    const incognito = entry.incognito === true
     const spawnEnv = await this.buildSpawnEnv(
       revivedEnv,
       { id: entry.id, paneKey: entry.paneKey, shell },
       envToDelete
     )
-    if (
-      historyIsolationEnabled &&
-      entry.worktreeId &&
-      basename(shell).toLowerCase().startsWith('fish')
-    ) {
-      injectRelayFishHistoryEnv(spawnEnv, entry.worktreeId)
-    }
     if (wslShell) {
       addWslEnvKeys(spawnEnv, [ORCA_IMAGE_PROTOCOL_ENV])
     }
-    if (historyIsolationEnabled && entry.worktreeId) {
-      const historyRoot = injectRelayHistoryEnv(spawnEnv, entry.worktreeId, shell, {
-        wsl: wslShell
-      })
-      if (wslShell && historyRoot) {
-        addWslEnvKeys(spawnEnv, ['HISTFILE'])
+    if (incognito) {
+      // Mirrors the fresh spawn: a revived incognito pane re-suppresses its command history and
+      // re-exposes ORCA_INCOGNITO, minting no scoped history file, since revivedEnv carries neither.
+      applyRelayIncognitoEnv(spawnEnv)
+      if (wslShell) {
+        addWslEnvKeys(spawnEnv, [...INCOGNITO_HISTORY_WSLENV_KEYS])
+      }
+    } else {
+      if (
+        historyIsolationEnabled &&
+        entry.worktreeId &&
+        basename(shell).toLowerCase().startsWith('fish')
+      ) {
+        injectRelayFishHistoryEnv(spawnEnv, entry.worktreeId)
+      }
+      if (historyIsolationEnabled && entry.worktreeId) {
+        const historyRoot = injectRelayHistoryEnv(spawnEnv, entry.worktreeId, shell, {
+          wsl: wslShell
+        })
+        if (wslShell && historyRoot) {
+          addWslEnvKeys(spawnEnv, ['HISTFILE'])
+        }
       }
     }
     // Why: revive lacks the original launch command, so reuse the fresh-spawn guard decision (legacy defaults to unguarded).
@@ -3269,6 +3307,9 @@ export class PtyHandler {
       envToDelete,
       gitCredentialPromptGuarded,
       ...(historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
+      // Why re-stored: a revived incognito pane can be serialized again, and losing the flag on the
+      // second round trip would start recording its history one restart later.
+      ...(incognito ? { incognito: true } : {}),
       shellPath: shell,
       // Why re-stored: a revived pane can be serialized again, and losing the
       // override on the second round trip is the same bug one restart later.

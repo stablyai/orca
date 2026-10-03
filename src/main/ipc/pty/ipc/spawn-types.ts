@@ -40,6 +40,8 @@ export type PtySpawnIpcArgs = {
   worktreeId?: string
   sessionId?: string
   shellOverride?: string
+  // Incognito ("no-session"): suppress on-disk scrollback persistence for this terminal.
+  incognito?: boolean
   projectRuntime?: ProjectExecutionRuntimeResolution
   terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: {

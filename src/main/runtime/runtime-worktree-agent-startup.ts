@@ -7,6 +7,7 @@ import { repoIsRemote } from '../../shared/agent-launch-remote'
 import { getRepoSshConnectionId } from '../../shared/execution-host'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
+import { agentDefaultsToIncognito } from '../../shared/tui-agent-incognito'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import {
@@ -78,6 +79,9 @@ export async function buildWorktreeStartupForDraft(
     settings,
     platform: environment.getLaunchPlatform(),
     isRemote: repoIsRemote(repo),
+    // Why: the new-workspace draft path builds its own plan, so it must add the native ephemeral
+    // flag itself for a capable incognito agent — resolveAgentTerminalCreateOptions never runs here.
+    incognito: agentDefaultsToIncognito(agent, settings.terminalIncognitoAgents),
     ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {})
   })
   const telemetry = agentStartedTelemetry(agent, environment.launchSource)
@@ -143,6 +147,9 @@ export function buildWorktreeStartupForAgent(
       settings,
       platform: environment.getLaunchPlatform(),
       isRemote: repoIsRemote(repo),
+      // Why: the new-workspace agent path builds its own plan, so it must add the native ephemeral
+      // flag itself for a capable incognito agent — resolveAgentTerminalCreateOptions never runs here.
+      incognito: agentDefaultsToIncognito(agent, settings.terminalIncognitoAgents),
       ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
       sessionOptions: environment.toSessionOptions(environment.launchPreferences)
     }),

@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { Check, ChevronDown, ExternalLink } from 'lucide-react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { isIncognitoCapable } from '../../../../shared/tui-agent-incognito'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
-import { SettingsBadge, SettingsSegmentedControl } from './SettingsFormControls'
+import { SettingsBadge, SettingsSegmentedControl, SettingsSwitchRow } from './SettingsFormControls'
 import type { AgentSessionSourceHomeControl } from './codex-session-source-home-control'
 import { AgentSessionSourceHomeInput } from './codex-session-source-home-control'
 import { stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
@@ -65,11 +66,13 @@ export type AgentCatalogRowProps = {
   isDetected: boolean
   isEnabled: boolean
   isDefault: boolean
+  isIncognito: boolean
   cmdOverride: string | undefined
   argsOverride: string
   envOverride: Record<string, string>
   onSetDefault: () => void
   onSetEnabled: (enabled: boolean) => void
+  onSetIncognito: (incognito: boolean) => void
   onSaveOverride: (value: string) => void
   onSaveArgs: (value: string) => void
   onSaveEnv: (value: Record<string, string>) => void
@@ -86,11 +89,13 @@ export function AgentCatalogRow({
   isDetected,
   isEnabled,
   isDefault,
+  isIncognito,
   cmdOverride,
   argsOverride,
   envOverride,
   onSetDefault,
   onSetEnabled,
+  onSetIncognito,
   onSaveOverride,
   onSaveArgs,
   onSaveEnv,
@@ -99,7 +104,10 @@ export function AgentCatalogRow({
   const envSummary = stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
   const [cmdOpen, setCmdOpen] = useState(
-    Boolean(cmdOverride) || argsOverride !== defaultArgs || envSummary !== defaultEnvSummary
+    Boolean(cmdOverride) ||
+      argsOverride !== defaultArgs ||
+      envSummary !== defaultEnvSummary ||
+      isIncognito
   )
 
   return (
@@ -233,6 +241,29 @@ export function AgentCatalogRow({
                 runtimeLabel={sessionSourceHome.runtimeLabel}
                 value={sessionSourceHome.value}
                 onSave={sessionSourceHome.onSave}
+              />
+            </div>
+          )}
+          {/* Why: only agents with a native ephemeral flag (INCOGNITO_CAPABLE_AGENTS) can honestly
+              be made incognito; showing the toggle for others would be a false privacy promise. */}
+          {isIncognitoCapable(agentId) && (
+            <div className="mt-2">
+              <SettingsSwitchRow
+                label={translate(
+                  'auto.components.settings.AgentsPane.incognitoByDefault',
+                  'Incognito by default'
+                )}
+                description={translate(
+                  'auto.components.settings.AgentsPane.incognitoByDefaultDescription',
+                  'Launch this agent ephemerally (no-session): the harness records no session and Orca records no scrollback. A per-terminal --no-session flag still overrides this.'
+                )}
+                checked={isIncognito}
+                onChange={() => onSetIncognito(!isIncognito)}
+                ariaLabel={translate(
+                  'auto.components.settings.AgentsPane.incognitoByDefaultAria',
+                  '{{value0}} incognito by default',
+                  { value0: label }
+                )}
               />
             </div>
           )}

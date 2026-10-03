@@ -54,6 +54,7 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
       writable: pty.connected,
       lastOutputAt: pty.lastOutputAt,
       preview: pty.preview,
+      ...(pty.incognito ? { incognito: true } : {}),
       ...(pty.lastExitCause ? { exitCause: pty.lastExitCause } : {}),
       ...this.terminalExecutionHostField(pty.ptyId, pty.worktreeId),
       ...this.resolvePaneAgentIdentityField(
@@ -118,6 +119,12 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
     // Why: renderer adoption can race with CLI reads; keep ptyId → handle populated so summaries don't mint a second handle for the same terminal.
     this.handleByPtyId.set(record.ptyId, handle)
     return { record, pty }
+  }
+
+  /** True when the live terminal for this handle is incognito ("no-session"): its buffer content
+   *  must never be persisted to disk (e.g. a worker-output archive). Unknown handles read false. */
+  isTerminalHandleIncognito(handle: string): boolean {
+    return this.getLivePtyForHandle(handle)?.pty.incognito === true
   }
 
   protected assertLiveTerminalHandleTargetsPty(handle: string, expectedPtyId: string): void {

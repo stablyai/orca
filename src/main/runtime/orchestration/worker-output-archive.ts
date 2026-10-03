@@ -144,6 +144,23 @@ export async function captureWorkerOutputArchive(args: {
       }
     }
   }
+  // Why: an incognito ("no-session") worker terminal must leave no scrollback on disk. Its provider
+  // transcript is already suppressed at the source, and its live buffer must never be archived, so
+  // stop before readTerminal and return an empty receipt rather than persisting the tail.
+  if (args.runtime.isTerminalHandleIncognito(args.terminalHandle)) {
+    return {
+      kind: 'terminal_tail',
+      status: 'empty',
+      content: {
+        lines: [],
+        truncated: false,
+        terminalStatus: 'unknown',
+        warnings: ['The worker terminal is incognito; its scrollback was not archived.'],
+        fallbackReason: 'incognito_suppressed',
+        clipping: ['terminal_fallback']
+      }
+    }
+  }
   let terminal
   try {
     terminal = await args.runtime.readTerminal(args.terminalHandle, {})

@@ -182,6 +182,7 @@ export function buildDefaultSettings(args: {
     claudeManagedAccounts: [],
     activeClaudeManagedAccountId: null,
     terminalScopeHistoryByWorktree: true,
+    terminalIncognitoAgents: [],
     terminalHiddenViewParking: true,
     // C1 kill switches — runtime reads stay `!== false` so older persisted
     // settings objects (which omit them) keep the default-on behavior.

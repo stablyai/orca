@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
+import { IncognitoSessionLedger } from './terminal-history-incognito-ledger'
 import { getHistorySessionDirName } from './history-paths'
 import { ensurePrivateDir } from './daemon-private-file-modes'
 import { clearReplayableTerminalHistorySessionFiles } from './terminal-history-session-files'
@@ -39,6 +40,12 @@ export type * from './terminal-history-manager-options'
 export class HistoryManager {
   private writers = new Map<string, TerminalHistorySessionWriter>()
   private disabledSessions = new Set<string>()
+  // Why: an incognito ("no-session") terminal must leave no on-disk record. Membership here makes
+  // every writer-opening entry point (openSession/registerWriter/reopenSession) a no-op, so no
+  // session dir, output.log or checkpoint.json is ever created; appendIncrements/checkpoint then
+  // early-return because no writer exists. Persisted (ids only, never scrollback) so a session
+  // re-adopted or revived under the same id after a daemon/app restart stays incognito.
+  private readonly incognito: IncognitoSessionLedger
   private mutations = new TerminalHistoryMutationTracker()
   private readonly recoveryFreezes: TerminalHistoryRecoveryFreezes
   private onWriteError?: (sessionId: string, error: Error) => void
@@ -51,17 +58,32 @@ export class HistoryManager {
     this.onWriteError = opts?.onWriteError
     this.checkpointMaxBytes = opts?.checkpointMaxBytes ?? TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
     this.recoveryFreezes = new TerminalHistoryRecoveryFreezes(basePath)
+    this.incognito = new IncognitoSessionLedger(basePath)
     // Why: a quit between tombstone and reclaim leaves the tree on disk; nothing else rescans the queue.
     schedulePendingSessionTreeRemovals(this.basePath)
   }
 
   async openSession(sessionId: string, opts: OpenSessionOptions): Promise<void> {
+    // Why: an incognito terminal never touches disk — mark it, then stop before
+    // ensurePrivateDir/meta.json/writer creation (releasing any freeze) so no session tree appears.
+    // Suppress capture for a genuinely-incognito session (explicit flag or ledger id) AND, when the
+    // ledger is untrusted, for any re-adopt not explicitly created non-incognito — fail CLOSED since it
+    // may be one of the lost ids. Mark ONLY a genuine one (an untrusted-only re-adopt is suppressed for
+    // this process without marking, so a possibly-normal session is not penalised forever); surface a
+    // failed mark (the ledger is the only restart-suppression). No writer or session dir either way.
+    if (this.incognito.suppressesCapture(sessionId, opts.incognito)) {
+      if ((opts.incognito || this.incognito.has(sessionId)) && !this.incognito.mark(sessionId)) {
+        this.handleWriteError(sessionId, new Error('incognito_ledger_persist_failed'))
+      }
+      this.abandonRecoveryFreeze(opts.recoveryFreeze)
+      return
+    }
     let recoveryFreeze = opts.recoveryFreeze
     try {
       this.disabledSessions.delete(sessionId)
       const dir = this.sessionDir(sessionId)
       recoveryFreeze ??= await this.freezeForRecovery(sessionId)
-      const activeFreeze = this.requireRecoveryFreeze(sessionId, recoveryFreeze)
+      const activeFreeze = this.recoveryFreezes.require(sessionId, recoveryFreeze)
 
       if (opts.quarantineUnreadableRecovery) {
         quarantineTerminalHistorySession(this.basePath, sessionId, activeFreeze.fingerprint ?? null)
@@ -134,6 +156,12 @@ export class HistoryManager {
 
   // Why: warm reattach has no in-memory writers; re-register without touching meta.json or checkpoint.json (only recovery data until the next tick).
   registerWriter(sessionId: string, recoveryFreeze?: HistoryRecoveryFreeze): void {
+    if (this.incognito.suppressesCapture(sessionId)) {
+      // Warm reattach of an incognito session must not begin recording it either; and while the
+      // ledger is untrusted this re-adopt fails CLOSED, since it may be one of the lost incognito ids.
+      this.abandonRecoveryFreeze(recoveryFreeze)
+      return
+    }
     if (this.writers.has(sessionId)) {
       return
     }
@@ -143,7 +171,7 @@ export class HistoryManager {
     }
     if (recoveryFreeze) {
       try {
-        const activeFreeze = this.requireRecoveryFreeze(sessionId, recoveryFreeze)
+        const activeFreeze = this.recoveryFreezes.require(sessionId, recoveryFreeze)
         if (
           fingerprintTerminalHistorySession(this.basePath, sessionId) !== activeFreeze.fingerprint
         ) {
@@ -168,6 +196,8 @@ export class HistoryManager {
   // Why: wake re-spawns a sleep-killed session; re-register without deleting checkpoint.json, clear endedAt so it can cold-restore again.
   reopenSession(sessionId: string, recoveryFreeze?: HistoryRecoveryFreeze): void {
     this.disabledSessions.delete(sessionId)
+    // registerWriter no-ops for an incognito session (and abandons its freeze), so the writer stays
+    // absent below and no history is anchored — a woken incognito session keeps leaving no record.
     this.registerWriter(sessionId, recoveryFreeze)
     const writer = this.writers.get(sessionId)
     if (!writer) {
@@ -274,6 +304,7 @@ export class HistoryManager {
   async removeSession(sessionId: string): Promise<void> {
     this.writers.delete(sessionId)
     this.disabledSessions.delete(sessionId)
+    this.incognito.forget(sessionId)
     this.recoveryFreezes.release(sessionId)
     await this.mutations.wait(sessionId)
     // Why tombstoned: writer handles are closed by here, so the trees only have to become unreachable —
@@ -325,20 +356,5 @@ export class HistoryManager {
 
   private sessionDir(sessionId: string): string {
     return join(this.basePath, getHistorySessionDirName(sessionId))
-  }
-
-  private requireRecoveryFreeze(
-    sessionId: string,
-    recoveryFreeze: HistoryRecoveryFreeze
-  ): ActiveHistoryRecoveryFreeze {
-    const activeFreeze = this.recoveryFreezes.get(sessionId)
-    if (
-      recoveryFreeze.sessionId !== sessionId ||
-      activeFreeze?.handle !== recoveryFreeze ||
-      activeFreeze.fingerprint === undefined
-    ) {
-      throw new Error('terminal_history_recovery_freeze_invalid')
-    }
-    return activeFreeze
   }
 }

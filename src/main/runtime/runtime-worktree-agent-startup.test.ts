@@ -108,6 +108,84 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
   })
 })
 
+const incognitoSettings = {
+  agentCmdOverrides: {},
+  agentDefaultArgs: {},
+  agentDefaultEnv: {},
+  disabledTuiAgents: [],
+  defaultTuiAgent: undefined,
+  terminalWindowsShell: null,
+  terminalIncognitoAgents: ['pi']
+} as never
+
+const staleClaudeIncognitoSettings = {
+  agentCmdOverrides: {},
+  agentDefaultArgs: {},
+  agentDefaultEnv: {},
+  disabledTuiAgents: [],
+  defaultTuiAgent: undefined,
+  terminalWindowsShell: null,
+  // A stale/forged non-capable entry: the native flag must NOT be added for claude.
+  terminalIncognitoAgents: ['claude', 'pi']
+} as never
+
+describe('new-workspace launch injects the native incognito flag (B1 regression, D1)', () => {
+  it('adds --no-session on the agent path for a capable incognito agent', () => {
+    const result = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings: incognitoSettings,
+      agent: 'pi',
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: () => undefined
+    })
+    expect(result.startup.command).toContain('--no-session')
+  })
+
+  it('does NOT add --no-session for a non-capable agent even if wrongly listed', () => {
+    const result = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings: staleClaudeIncognitoSettings,
+      agent: 'claude',
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: () => undefined
+    })
+    expect(result.startup.command).not.toContain('--no-session')
+  })
+
+  it('does NOT add --no-session for a capable agent that is not in the incognito list', () => {
+    const result = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings,
+      agent: 'pi',
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: () => undefined
+    })
+    expect(result.startup.command).not.toContain('--no-session')
+  })
+
+  it('adds --no-session on the DRAFT path for a capable incognito agent', async () => {
+    const result = await buildWorktreeStartupForDraft({
+      repo: makeRepo({}),
+      settings: incognitoSettings,
+      draft: 'ship it',
+      requestedAgent: 'pi',
+      getLaunchPlatform: () => 'linux'
+    })
+    expect(result?.startup.command).toContain('--no-session')
+  })
+
+  it('does NOT add --no-session on the DRAFT path for a non-capable agent', async () => {
+    const result = await buildWorktreeStartupForDraft({
+      repo: makeRepo({}),
+      settings: staleClaudeIncognitoSettings,
+      draft: 'ship it',
+      requestedAgent: 'claude',
+      getLaunchPlatform: () => 'linux'
+    })
+    expect(result?.startup.command).not.toContain('--no-session')
+  })
+})
+
 describe('buildWorktreeStartupForDraft agent detection', () => {
   it('probes the SSH host named only by executionHostId instead of this client', async () => {
     mocks.detectRemoteAgents.mockResolvedValueOnce(['claude'])

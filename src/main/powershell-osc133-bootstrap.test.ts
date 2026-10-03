@@ -42,6 +42,22 @@ describe('PowerShell OSC 133 bootstrap', () => {
     expect(codexHomeRestore).toBeLessThan(script.indexOf('LanguageMode -eq "FullLanguage"'))
   })
 
+  it('disables PSReadLine history for incognito sessions, after profiles and gated on ORCA_INCOGNITO', () => {
+    const script = getPowerShellOsc133Bootstrap()
+
+    // PSReadLine persists to its own ConsoleHost_history.txt, which HISTFILE/fish_private_mode
+    // cannot reach; an incognito ("no-session") PowerShell session must turn it off.
+    expect(script).toContain("$env:ORCA_INCOGNITO -eq '1'")
+    expect(script).toContain('Set-PSReadLineOption -HistorySaveStyle SaveNothing')
+
+    const incognitoGuard = script.indexOf("$env:ORCA_INCOGNITO -eq '1'")
+    // Must run AFTER profiles (the bootstrap runs post-profile), so a profile's own
+    // Set-PSReadLineOption cannot re-enable saving — assert it is not gated behind the
+    // FullLanguage OSC-133 block, which some locked-down hosts skip.
+    expect(incognitoGuard).toBeGreaterThan(-1)
+    expect(incognitoGuard).toBeLessThan(script.indexOf('LanguageMode -eq "FullLanguage"'))
+  })
+
   it('encodes commands as UTF-16LE base64 for PowerShell -EncodedCommand', () => {
     expect(encodePowerShellCommand('Write-Output ok')).toBe(
       Buffer.from('Write-Output ok', 'utf16le').toString('base64')

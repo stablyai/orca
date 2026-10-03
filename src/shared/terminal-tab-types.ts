@@ -86,6 +86,10 @@ export type TerminalTab = {
   shellOverride?: string
   /** Keeps an ephemeral host fallback out of the active project's runtime. */
   forceHostRuntime?: boolean
+  /** True when this terminal is incognito ("no-session"): its scrollback is not recorded to disk.
+   *  Stamped at creation from the per-agent default (Settings.terminalIncognitoAgents) or an explicit
+   *  --no-session flag. Absent/false means normal recording. Surfaced so the tab can show a badge. */
+  incognito?: boolean
   /** Why: explorer-created terminals can start below the workspace root while
    *  still belonging to that workspace for tab/session ownership. */
   startupCwd?: string

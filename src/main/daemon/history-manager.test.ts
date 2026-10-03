@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -226,6 +226,128 @@ describe('HistoryManager', () => {
       mgr.registerWriter(sessionId, recoveryFreeze)
 
       expect(mgr.isSessionDisabled(sessionId)).toBe(true)
+    })
+  })
+
+  describe('incognito ("no-session") sessions', () => {
+    it('writes no session directory, output.log or checkpoint.json for an incognito session', async () => {
+      const sessionId = 'incognito-1'
+      await mgr.openSession(sessionId, { cwd: '/home/user', cols: 80, rows: 24, incognito: true })
+      // Increments and a checkpoint must be silently dropped, not persisted.
+      await mgr.appendIncrements(sessionId, 1, [{ kind: 'output', data: 'secret output\r\n' }])
+      await mgr.checkpoint(sessionId, makeSnapshot({ snapshotAnsi: 'secret output\r\n' }))
+
+      const sessionDir = join(dir, getHistorySessionDirName(sessionId))
+      expect(existsSync(sessionDir)).toBe(false)
+      expect(existsSync(sessionPath(dir, sessionId, 'meta.json'))).toBe(false)
+      expect(existsSync(sessionPath(dir, sessionId, 'output.log'))).toBe(false)
+      expect(existsSync(sessionPath(dir, sessionId, 'checkpoint.json'))).toBe(false)
+      expect(mgr.hasWriter(sessionId)).toBe(false)
+    })
+
+    it('records a normal session in the same manager (control)', async () => {
+      await mgr.openSession('normal-1', { cwd: '/tmp', cols: 80, rows: 24 })
+      await mgr.checkpoint('normal-1', makeSnapshot({ snapshotAnsi: 'recorded\r\n' }))
+
+      expect(existsSync(sessionPath(dir, 'normal-1', 'meta.json'))).toBe(true)
+      expect(existsSync(sessionPath(dir, 'normal-1', 'checkpoint.json'))).toBe(true)
+      expect(mgr.hasWriter('normal-1')).toBe(true)
+    })
+
+    it('keeps registerWriter and reopenSession no-ops for an incognito session (warm reattach / wake)', async () => {
+      const sessionId = 'incognito-reattach'
+      await mgr.openSession(sessionId, { cwd: '/tmp', cols: 80, rows: 24, incognito: true })
+
+      mgr.registerWriter(sessionId)
+      mgr.reopenSession(sessionId)
+
+      expect(mgr.hasWriter(sessionId)).toBe(false)
+      expect(existsSync(join(dir, getHistorySessionDirName(sessionId)))).toBe(false)
+    })
+
+    it('surfaces a ledger persistence failure instead of silently continuing without restart suppression', async () => {
+      // The durable ledger is the ONLY thing that keeps this session incognito across a restart. If
+      // it cannot be written, a later daemon can re-adopt the id without the flag and start recording,
+      // so a swallowed write must become a loud write-error — not a false success.
+      const failDir = createTestDir()
+      // Force the ledger's tmp+rename write to fail in a way a privileged (root) runner cannot
+      // bypass: directory modes are ignored under CAP_DAC_OVERRIDE, but writing a FILE to a path
+      // that is already a DIRECTORY always throws EISDIR. The ledger writes `<path>.tmp` first.
+      mkdirSync(join(failDir, '.incognito-sessions.json.tmp'))
+      const writeErrors: [string, Error][] = []
+      const onWriteError = (sessionId: string, error: Error): void => {
+        writeErrors.push([sessionId, error])
+      }
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const failing = new HistoryManager(failDir, { onWriteError })
+      try {
+        await failing.openSession('incognito-nodurable', {
+          cwd: '/tmp',
+          cols: 80,
+          rows: 24,
+          incognito: true
+        })
+
+        expect(writeErrors).toHaveLength(1)
+        expect(writeErrors[0][0]).toBe('incognito-nodurable')
+        // Surfaced loudly even though a callback happens to be wired here — production has none.
+        expect(errorSpy).toHaveBeenCalled()
+        // The session is disabled for this process too, so even in-memory appends stay no-ops.
+        expect(failing.isSessionDisabled('incognito-nodurable')).toBe(true)
+        // No writer/dir was created, and the (unwritable) ledger file did not appear.
+        expect(failing.hasWriter('incognito-nodurable')).toBe(false)
+        expect(existsSync(join(failDir, '.incognito-sessions.json'))).toBe(false)
+      } finally {
+        errorSpy.mockRestore()
+        await failing.dispose()
+        rmSync(failDir, { recursive: true, force: true })
+      }
+    })
+
+    it('fails CLOSED on re-adopt when the ledger is untrusted, but still records a fresh normal session', async () => {
+      // Corrupt ledger → its do-not-record ids are lost. A re-adopt (no explicit flag) might be one of
+      // them, so it must NOT be recorded; a brand-new, explicitly non-incognito session still records.
+      const failDir = createTestDir()
+      writeFileSync(join(failDir, '.incognito-sessions.json'), '{ corrupt')
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const mgrUntrusted = new HistoryManager(failDir)
+      try {
+        // Re-adopt path: openSession with no incognito flag, and warm-reattach registerWriter.
+        await mgrUntrusted.openSession('readopt-unknown', { cwd: '/tmp', cols: 80, rows: 24 })
+        mgrUntrusted.registerWriter('reattach-unknown')
+        expect(mgrUntrusted.hasWriter('readopt-unknown')).toBe(false)
+        expect(mgrUntrusted.hasWriter('reattach-unknown')).toBe(false)
+        expect(existsSync(join(failDir, getHistorySessionDirName('readopt-unknown')))).toBe(false)
+
+        // A brand-new session explicitly created non-incognito is known provenance → records normally.
+        await mgrUntrusted.openSession('fresh-normal', {
+          cwd: '/tmp',
+          cols: 80,
+          rows: 24,
+          incognito: false
+        })
+        expect(mgrUntrusted.hasWriter('fresh-normal')).toBe(true)
+      } finally {
+        errorSpy.mockRestore()
+        await mgrUntrusted.dispose()
+        rmSync(failDir, { recursive: true, force: true })
+      }
+    })
+
+    it('stays incognito across a restart: a fresh manager on the same dir records nothing on re-adopt', async () => {
+      const sessionId = 'incognito-persist'
+      await mgr.openSession(sessionId, { cwd: '/tmp', cols: 80, rows: 24, incognito: true })
+
+      // A daemon/app restart: a brand-new HistoryManager over the same base dir re-adopts the session
+      // (openSession/registerWriter WITHOUT the incognito flag). It must still write nothing.
+      const relaunched = new HistoryManager(dir)
+      await relaunched.openSession(sessionId, { cwd: '/tmp', cols: 80, rows: 24 })
+      relaunched.registerWriter(sessionId)
+      await relaunched.checkpoint(sessionId, makeSnapshot({ snapshotAnsi: 'post-restart\r\n' }))
+
+      expect(existsSync(join(dir, getHistorySessionDirName(sessionId)))).toBe(false)
+      expect(relaunched.hasWriter(sessionId)).toBe(false)
+      await relaunched.dispose()
     })
   })
 

@@ -65,6 +65,9 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
   launchAgent: TuiAgent | null
+  /** Incognito ("no-session") terminal: its scrollback is never persisted to disk. Surfaced as
+   *  "incognito" in `terminal list`/`show` so it is obvious nothing is being recorded. */
+  incognito: boolean
   agentSessionOwners: AgentSessionOwnerBinding[]
   foregroundAgent: TuiAgent | null
   connected: boolean

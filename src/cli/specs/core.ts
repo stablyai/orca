@@ -206,16 +206,18 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['terminal', 'create'],
     summary: 'Create a terminal session in the current worktree',
     usage:
-      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--shell <shell>] [--focus] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'shell', 'title', 'focus'],
+      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--shell <shell>] [--no-session] [--focus] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'shell', 'title', 'no-session', 'focus'],
     notes: [
       'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.',
+      '--no-session creates an incognito terminal: Orca records no scrollback for it on disk (no terminal-history log or checkpoint), so nothing it shows is captured. The live view still works and `terminal read` still returns its current output; only durable capture is skipped. It reads as "incognito" in `terminal list`. This suppresses ORCA\'s own recording for any agent; a harness that keeps its own session on disk (e.g. Claude Code writing ~/.claude/projects) is only made ephemeral for incognito-capable agents (pi, omp), which Orca launches with their native --no-session flag. An agent can also be made incognito by default in Settings (offered only for those capable agents), which --no-session overrides per terminal.',
       'Use this, not worktree create, for a fresh agent in the current checkout.',
       '--shell picks the shell the terminal IS on a Windows host (cmd.exe, powershell.exe, pwsh.exe, wsl.exe, bash.exe, git-bash); --command is typed into whatever shell the host started, so `--command cmd.exe` leaves a cmd running INSIDE the default shell and exiting it drops back to that shell.',
       'A host that cannot apply --shell refuses the create rather than quietly spawning its default shell: macOS and Linux execution hosts spawn the login shell, terminals routed over SSH resolve their shell on the SSH host, a --shell that contradicts the project execution runtime (WSL vs Windows host) is refused, and an Orca host older than --shell is refused by the CLI.'
     ],
     examples: [
       'orca terminal create --json',
+      'orca terminal create --no-session --command "pi" --json',
       'orca terminal create --worktree active --command "codex" --json',
       'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "opencode"',
       'orca terminal create --worktree path:/projects/myapp --command "opencode" --focus',

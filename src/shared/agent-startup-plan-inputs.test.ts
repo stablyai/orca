@@ -91,6 +91,56 @@ describe('resolveAgentStartupPlanInputs', () => {
     expect(inputs.shell).toBe('cmd')
   })
 
+  it('appends the native ephemeral flag once for a capable agent when incognito', () => {
+    const base = {
+      agent: 'pi' as const,
+      settings: { agentDefaultArgs: { pi: '--foo' } },
+      platform: 'darwin' as const,
+      isRemote: false
+    }
+
+    // Capable + incognito: flag added after the configured args.
+    expect(resolveAgentStartupPlanInputs({ ...base, incognito: true }).agentArgs).toBe(
+      '--foo --no-session'
+    )
+    // Not incognito: unchanged.
+    expect(resolveAgentStartupPlanInputs(base).agentArgs).toBe('--foo')
+    // Dedup-safe: an already-present flag is not doubled.
+    expect(
+      resolveAgentStartupPlanInputs({
+        ...base,
+        settings: { agentDefaultArgs: { pi: '--no-session' } },
+        incognito: true
+      }).agentArgs
+    ).toBe('--no-session')
+    // Null args + incognito still yields the lone flag.
+    expect(
+      resolveAgentStartupPlanInputs({ ...base, agentArgs: null, incognito: true }).agentArgs
+    ).toBe('--no-session')
+  })
+
+  it('never adds an ephemeral flag for a non-capable agent', () => {
+    expect(
+      resolveAgentStartupPlanInputs({
+        agent: 'claude',
+        settings: { agentDefaultArgs: { claude: '--verbose' } },
+        platform: 'darwin',
+        isRemote: false,
+        incognito: true
+      }).agentArgs
+    ).toBe('--verbose')
+    expect(
+      resolveAgentStartupPlanInputs({
+        agent: 'claude',
+        settings: EMPTY_SETTINGS,
+        platform: 'darwin',
+        isRemote: false,
+        agentArgs: null,
+        incognito: true
+      }).agentArgs
+    ).toBeNull()
+  })
+
   it('ties sessionOptionsOverrideAgentArgs to whether options were actually picked', () => {
     const base = {
       agent: 'codex' as const,

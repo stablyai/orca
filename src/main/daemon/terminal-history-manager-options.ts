@@ -6,6 +6,9 @@ export type OpenSessionOptions = {
   rows: number
   recoveryFreeze?: HistoryRecoveryFreeze
   quarantineUnreadableRecovery?: boolean
+  /** Incognito ("no-session"): mark the session so this open — and every later writer registration —
+   *  is a no-op, leaving no history dir/output.log/checkpoint on disk. */
+  incognito?: boolean
 }
 
 export type HistoryManagerOptions = {

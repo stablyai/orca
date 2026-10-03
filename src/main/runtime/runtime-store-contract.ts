@@ -82,6 +82,7 @@ export type RuntimeStore = {
     branchPrefixCustom: string
     defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
     disabledTuiAgents?: GlobalSettings['disabledTuiAgents']
+    terminalIncognitoAgents?: GlobalSettings['terminalIncognitoAgents']
     agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
     agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
     agentDefaultEnv?: GlobalSettings['agentDefaultEnv']

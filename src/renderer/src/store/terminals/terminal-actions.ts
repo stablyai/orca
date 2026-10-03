@@ -83,6 +83,8 @@ export type TerminalActions = {
       viewMode?: Tab['viewMode']
       startupCwd?: string
       forceHostRuntime?: boolean
+      /** Force incognito ("no-session") regardless of the per-agent default (e.g. --no-session). */
+      incognito?: boolean
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>

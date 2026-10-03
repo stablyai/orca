@@ -149,4 +149,51 @@ describe('sanitizeWebRuntimeWorkspaceSession', () => {
     expect(sanitized.unifiedTabs).toBeUndefined()
     expect(sanitized.tabGroups).toBeUndefined()
   })
+
+  it('never persists projected terminal scrollback (incl. an incognito terminal) to browser storage', () => {
+    // Regression guard: the paired-web/mobile client receives projected terminal buffers for live
+    // display, but must never write them to its own localStorage. This proves an incognito
+    // terminal's scrollback cannot land in the mobile client's store.
+    const session = {
+      activeRepoId: 'repo-1',
+      activeWorktreeId: 'repo-1::/worktree',
+      activeTabId: 'incognito-tab',
+      tabsByWorktree: {
+        'repo-1::/worktree': [
+          {
+            id: 'incognito-tab',
+            ptyId: 'remote:web@@term-incognito',
+            worktreeId: 'repo-1::/worktree',
+            title: 'pi',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            incognito: true
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'incognito-tab': {
+          root: { type: 'leaf', leafId: 'leaf-1' },
+          activeLeafId: 'leaf-1',
+          expandedLeafId: null,
+          buffersByLeafId: { 'leaf-1': 'SECRET-incognito-scrollback' },
+          scrollbackRefsByLeafId: { 'leaf-1': 'v1-secret' },
+          ptyIdsByLeafId: { 'leaf-1': 'remote:web@@term-incognito' }
+        }
+      },
+      localOnlyScrollbackByTabId: { 'incognito-tab': { 'leaf-1': 'SECRET-local-only' } },
+      lastVisitedAtByWorktreeId: { 'repo-1::/worktree': 2 }
+    } as unknown as WorkspaceSessionState
+
+    const sanitized = sanitizeWebRuntimeWorkspaceSession(session)
+    const serialized = JSON.stringify(sanitized)
+
+    expect(sanitized.terminalLayoutsByTabId).toEqual({})
+    expect(sanitized.localOnlyScrollbackByTabId).toBeUndefined()
+    expect(serialized).not.toContain('SECRET-incognito-scrollback')
+    expect(serialized).not.toContain('SECRET-local-only')
+    expect(serialized).not.toContain('v1-secret')
+  })
 })

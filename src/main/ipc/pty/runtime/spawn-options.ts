@@ -55,6 +55,7 @@ export async function buildRuntimePtySpawnOptions(
     cwd: ctx.cwd,
     env: ctx.env,
     historyIsolationEnabled: ctx.deps.getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
+    ...(args.incognito ? { incognito: true } : {}),
     ...(ctx.isNewDaemonSession ? { isNewSession: true } : {})
   }
   if (!args.connectionId && !ctx.isDaemonHostSpawn) {

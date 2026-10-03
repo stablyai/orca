@@ -17,6 +17,7 @@ import {
   updateGroup
 } from '../slices/tab-group-state'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { normalizeTerminalIncognitoAgents } from '../../../../shared/tui-agent-selection'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
@@ -114,6 +115,16 @@ export function createTerminalTabCreationActions(
             ? undefined
             : getLocalProjectExecutionRuntimeContext(s, worktreeId)
         )
+        // Why: an explicit --no-session wins; otherwise honor the per-agent incognito default for the
+        // launch agent so the tab badge matches how the host resolves scrollback recording.
+        const isIncognito =
+          options?.incognito ??
+          Boolean(
+            options?.launchAgent &&
+            normalizeTerminalIncognitoAgents(s.settings?.terminalIncognitoAgents).includes(
+              options.launchAgent
+            )
+          )
         tab = {
           id,
           // Why: CLI-created background sessions already own a PTY, so reveal attaches instead of spawning a duplicate.
@@ -130,6 +141,7 @@ export function createTerminalTabCreationActions(
           ...(createdShellOverride !== undefined ? { shellOverride: createdShellOverride } : {}),
           ...(startupCwd && startupCwd.length > 0 ? { startupCwd } : {}),
           ...(options?.forceHostRuntime ? { forceHostRuntime: true } : {}),
+          ...(isIncognito ? { incognito: true } : {}),
           ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
           // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})

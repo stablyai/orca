@@ -38,6 +38,10 @@ export type PtyApi = {
     connectionId?: string | null
     worktreeId?: string
     sessionId?: string
+    // Why: incognito ("no-session") terminals suppress on-disk scrollback at the daemon, set
+    // ORCA_INCOGNITO, and launch with the agent's native ephemeral flag. The renderer-backed spawn
+    // must carry it (CLI/background paths pass it main-side).
+    incognito?: boolean
     // Why: lets a single tab open in a different shell than the user's default.
     shellOverride?: string
     projectRuntime?: ProjectExecutionRuntimeResolution

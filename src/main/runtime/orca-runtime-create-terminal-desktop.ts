@@ -31,6 +31,13 @@ export async function createDesktopTerminal(
   const cwd = workspace
     ? runtime.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd)
     : launchOpts.cwd
+  // Why (B-foreground): the renderer-backed path never ran the background branch that resolves and
+  // threads incognito, so UI-launched incognito terminals (a Pi default-incognito chat) were
+  // recorded. Resolve it here the same way and send it so the renderer stamps the tab and the
+  // daemon spawn suppresses scrollback, sets ORCA_INCOGNITO, and launches with --no-session.
+  const incognito = dependencies.resolveTerminalIncognito(opts, launchOpts, () =>
+    runtime.store?.getSettings?.()
+  )
   const requestId = dependencies.randomUUID()
   const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -71,6 +78,10 @@ export async function createDesktopTerminal(
       ...(launchOpts.launchToken ? { launchToken: launchOpts.launchToken } : {}),
       ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
       ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
+      // Why send the resolved boolean (including false): the host is authoritative over incognito, so
+      // an explicit `--no-session false` that overrides a per-agent default must reach the renderer as
+      // false rather than being dropped and silently recomputed back to the default (incognito).
+      incognito,
       startupCommandDelivery: launchOpts.startupCommandDelivery,
       ...(launchOpts.shellOverride ? { shellOverride: launchOpts.shellOverride } : {}),
       title: launchOpts.title,
@@ -85,6 +96,9 @@ export async function createDesktopTerminal(
     tabId: reply.tabId,
     worktreeId: worktreeId ?? '',
     title: reply.title,
+    // Why: match the background create path's result (orca-runtime-create-terminal.ts) so the CLI
+    // `terminal create` reports a UI-launched incognito terminal as incognito too.
+    ...(incognito ? { incognito: true } : {}),
     ...runtime.getPtyExecutionHostMetadata(runtime.handles.get(handle)?.ptyId ?? null),
     surface: 'visible'
   }

@@ -2,7 +2,10 @@ import { z } from 'zod'
 import { isTaskProvider } from '../task-providers'
 import type { TaskProvider } from '../task-providers'
 import { isTuiAgent } from '../tui-agent-config'
-import { normalizeDisabledTuiAgents } from '../tui-agent-selection'
+import {
+  normalizeDisabledTuiAgents,
+  normalizeTerminalIncognitoAgents
+} from '../tui-agent-selection'
 import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
@@ -93,6 +96,13 @@ export const SettingsUpdate = z
     disabledTuiAgents: z
       .unknown()
       .transform((value) => normalizeDisabledTuiAgents(value))
+      .optional(),
+    // Agents whose terminals are incognito ("no-session") by default. Capability-filtered so a
+    // non-incognito-capable agent (e.g. claude) can never persist here even via direct RPC; a
+    // per-terminal `--no-session` (or its absence) always overrides this at resolution time.
+    terminalIncognitoAgents: z
+      .unknown()
+      .transform((value) => normalizeTerminalIncognitoAgents(value))
       .optional(),
     agentDefaultArgs: z
       .unknown()

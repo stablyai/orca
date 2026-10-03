@@ -78,7 +78,14 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
                 recordInteraction: false,
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }
-        const tab = store.createTab(worktreeId, data.targetGroupId, data.shellOverride, tabOptions)
+        const tab = store.createTab(worktreeId, data.targetGroupId, data.shellOverride, {
+          // Why: the host resolved incognito authoritatively (explicit --no-session or per-agent
+          // default), so it wins over createTab's optimistic stamp and drives the tab badge. Forward
+          // the explicit boolean — including `false` — so a host opt-out beats createTab recomputing
+          // the per-agent default and wrongly stamping the tab incognito.
+          ...tabOptions,
+          ...(typeof data.incognito === 'boolean' ? { incognito: data.incognito } : {})
+        })
         if (!shouldActivate) {
           // Why: renderer-backed Codex startup must mount its new TerminalPane without switching UI or connecting every saved tab.
           requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })

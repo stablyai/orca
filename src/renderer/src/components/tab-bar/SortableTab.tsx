@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { X, Minimize2, Pin } from 'lucide-react'
+import { X, Minimize2, Pin, EyeOff } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
+import { isIncognitoCapable } from '../../../../shared/tui-agent-incognito'
 import { useTabAgent } from '@/lib/use-tab-agent'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Input } from '@/components/ui/input'
@@ -120,6 +121,19 @@ export default function SortableTab({
   // Why: with a provider icon shown, strip the agent's own leading glyph so the tab doesn't show two icons for one agent.
   const displayTitle =
     tab.customTitle ?? (tabAgent ? stripLeadingAgentTitleDecoration(tab.title) : tab.title)
+
+  // Why honesty: a capable agent (pi/omp) is launched with its native --no-session so it truly
+  // records nothing; other agents get only Orca's own scrollback suppression, so the badge must not
+  // promise the harness records nothing. Shown only when tab.incognito, but cheap to precompute.
+  const incognitoTooltip = isIncognitoCapable(tab.launchAgent ?? tabAgent)
+    ? translate(
+        'auto.components.tab.bar.SortableTab.incognitoIndicatorTooltip',
+        'Incognito — no-session: the agent and Orca record nothing'
+      )
+    : translate(
+        'auto.components.tab.bar.SortableTab.incognitoIndicatorTooltipOrcaOnly',
+        'Incognito — Orca records no scrollback (this agent still keeps its own session)'
+      )
 
   const { attributes, listeners, setNodeRef } = useSortable({
     id: tab.id,
@@ -240,6 +254,23 @@ export default function SortableTab({
       />
       {isPinned && !isEditing && (
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
+      )}
+      {tab.incognito && !isEditing && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              data-testid="tab-incognito-indicator"
+              role="img"
+              aria-label={incognitoTooltip}
+              className="mr-1 inline-flex shrink-0 items-center text-muted-foreground"
+            >
+              <EyeOff className="size-3" aria-hidden />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {incognitoTooltip}
+          </TooltipContent>
+        </Tooltip>
       )}
       {isEditing ? (
         <Input
