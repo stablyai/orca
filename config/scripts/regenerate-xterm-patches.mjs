@@ -354,6 +354,24 @@ function overlayBuildOutput(pristineDir, upstreamRoot, packageEntry, destination
     }
     copyFileSync(built, path.join(destination, relative))
   }
+  copyPatchAddedSources(packageRoot, destination)
+}
+
+/** Ships the src/ files a source patch adds; test files are left out as .npmignore would. */
+export function copyPatchAddedSources(packageRoot, destination) {
+  // -z keeps non-ASCII names unquoted; a new file may also sit in a directory the tarball lacks.
+  const addedSources = run(
+    'git',
+    ['diff', '--name-only', '-z', '--diff-filter=A', '--relative', '--', 'src/'],
+    { cwd: packageRoot, env: pnpmDiffEnvironment() }
+  )
+  for (const relative of addedSources.split('\0').filter(Boolean)) {
+    if (!relative.endsWith('.test.ts')) {
+      const target = path.join(destination, relative)
+      mkdirSync(path.dirname(target), { recursive: true })
+      copyFileSync(path.join(packageRoot, relative), target)
+    }
+  }
 }
 
 function diffFolders(folderA, folderB) {
@@ -404,6 +422,8 @@ function regeneratePackage(packageEntry, manifest, context) {
     [
       'apply',
       '--whitespace=nowarn',
+      // New source files must be visible to diffCheckoutSource and removed by the next reset.
+      '--intent-to-add',
       ...(packageDir === '.' ? [] : [`--directory=${packageDir}`]),
       path.join(repoRoot, packageEntry.sourcePatch)
     ],

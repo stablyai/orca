@@ -10870,6 +10870,17 @@
               "statusline": "statusline",
               "dim": "dim",
               "colors": "colors"
+            },
+            "fitWideGlyphs": {
+              "wide": "wide",
+              "cjk": "cjk",
+              "korean": "korean",
+              "hangul": "hangul",
+              "chinese": "chinese",
+              "japanese": "japanese",
+              "fallback": "fallback",
+              "spacing": "spacing",
+              "center": "center"
             }
           },
           "windows": {
@@ -12261,7 +12272,9 @@
         },
         "TerminalRenderingSection": {
           "6d4c55bacc": "Inline Images",
-          "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols."
+          "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols.",
+          "fitWideGlyphs": "Fit and Center Wide Characters",
+          "fitWideGlyphsDescription": "Enlarge Korean, Chinese and Japanese characters drawn from a fallback font toward their two-cell width, never taller than the line, and center them so text does not look spaced out."
         },
         "CursorAccountsSection": {
           "source": {

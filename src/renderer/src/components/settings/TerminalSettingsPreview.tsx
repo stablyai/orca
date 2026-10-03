@@ -12,6 +12,7 @@ import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-cor
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
+import { resolveTerminalFitWideGlyphs } from '@/lib/pane-manager/terminal-wide-glyph-fit'
 import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { SettingsSwitch } from './SettingsFormControls'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -137,6 +138,7 @@ export function TerminalSettingsPreview({
       fontWeight: weights.fontWeight,
       fontWeightBold: weights.fontWeightBold,
       lineHeight: terminalLineHeight,
+      fitWideGlyphs: resolveTerminalFitWideGlyphs(settings.terminalFitWideGlyphs),
       theme: composedTheme ?? undefined,
       allowTransparency:
         settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1,
@@ -187,6 +189,7 @@ export function TerminalSettingsPreview({
     // Why: mirror so the unfocused cursor reflects the chosen shape (xterm defaults inactive to 'outline'; see constructor).
     terminal.options.cursorInactiveStyle = settings.terminalCursorStyle
     terminal.options.cursorBlink = settings.terminalCursorBlink
+    terminal.options.fitWideGlyphs = resolveTerminalFitWideGlyphs(settings.terminalFitWideGlyphs)
   }, [
     settings.terminalFontSize,
     settings.terminalFontWeightBold,
@@ -194,7 +197,8 @@ export function TerminalSettingsPreview({
     settings.terminalFontWeight,
     terminalLineHeight,
     settings.terminalCursorStyle,
-    settings.terminalCursorBlink
+    settings.terminalCursorBlink,
+    settings.terminalFitWideGlyphs
   ])
 
   useEffect(() => {

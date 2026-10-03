@@ -10605,6 +10605,17 @@
               "statusline": "状态行",
               "dim": "暗淡",
               "colors": "颜色"
+            },
+            "fitWideGlyphs": {
+              "wide": "宽字符",
+              "cjk": "cjk",
+              "korean": "韩文",
+              "hangul": "韩文字母",
+              "chinese": "中文",
+              "japanese": "日文",
+              "fallback": "后备字体",
+              "spacing": "间距",
+              "center": "居中"
             }
           },
           "windows": {
@@ -12053,7 +12064,9 @@
         },
         "TerminalRenderingSection": {
           "6d4c55bacc": "内嵌图像",
-          "fffab5890b": "使用 SIXEL、iTerm2 (IIP) 和 Kitty 图形协议直接在终端中显示图像。"
+          "fffab5890b": "使用 SIXEL、iTerm2 (IIP) 和 Kitty 图形协议直接在终端中显示图像。",
+          "fitWideGlyphs": "宽字符适配与居中",
+          "fitWideGlyphsDescription": "将由后备字体绘制的韩文、中文和日文字符放大到接近两个单元格的宽度（不超过行高），并居中显示，避免文字看起来间距过大。"
         },
         "CursorAccountsSection": {
           "dashboardLink": "Cursor 仪表盘",

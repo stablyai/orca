@@ -177,6 +177,55 @@ export const getTerminalRenderingSearchEntries = createLocalizedCatalog(() => [
         'colors'
       )
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.TerminalRenderingSection.fitWideGlyphs',
+      'Fit and Center Wide Characters'
+    ),
+    description: translate(
+      'auto.components.settings.TerminalRenderingSection.fitWideGlyphsDescription',
+      'Enlarge Korean, Chinese and Japanese characters drawn from a fallback font toward their two-cell width, never taller than the line, and center them so text does not look spaced out.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.fitWideGlyphs.wide',
+        'wide'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.fitWideGlyphs.cjk',
+        'cjk'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.fitWideGlyphs.korean',
+        'korean'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.fitWideGlyphs.hangul',
+        'hangul'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.fitWideGlyphs.chinese',
+        'chinese'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.fitWideGlyphs.japanese',
+        'japanese'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.fitWideGlyphs.fallback',
+        'fallback'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.fitWideGlyphs.spacing',
+        'spacing'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.fitWideGlyphs.center',
+        'center'
+      )
+    ]
   }
 ])
 

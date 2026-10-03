@@ -123,6 +123,11 @@ git -C /tmp/xterm/upstream/addons/addon-webgl diff --relative -- src/ \
   > config/patches/xterm-src/@xterm__addon-webgl@0.20.0-beta.299.src.patch
 ```
 
+A new source file (such as `addons/addon-webgl/src/WideGlyphFit.ts`) is invisible
+to `git diff` until it is marked with `git add -N`. The generator applies source
+patches with `--intent-to-add` and copies patch-added `src/` files into the emitted
+tree, so new modules ship like edited ones; `*.test.ts` files still cannot.
+
 `--write` rewrites the source patch into the canonical form it would emit on a
 re-diff, so a hand-produced `git diff` gets normalized on the first run rather
 than fighting `--check` forever.

@@ -8,6 +8,7 @@ import {
   assertBuildStepsAllowed,
   assertPublishedCommit,
   assertSourcemapPolicy,
+  copyPatchAddedSources,
   lockfileHasPatchEntry,
   lockfilePatchHashIsStale,
   patchHash,
@@ -477,5 +478,31 @@ describe('committed xterm patch artifacts', () => {
     expect(manifest.upstream.commit).toMatch(/^[0-9a-f]{40}$/)
     expect(manifest.packages.length).toBeGreaterThan(0)
     expect(() => assertBuildStepsAllowed(manifest)).not.toThrow()
+  })
+})
+
+describe('patch-added source files', () => {
+  it('ships files added under new and non-ASCII paths, but not added tests', async () => {
+    const packageRoot = await createDirectory()
+    const destination = await createDirectory()
+    const git = (...args) =>
+      execFileSync('git', args, { cwd: packageRoot, env: pnpmDiffEnvironment(), stdio: 'ignore' })
+    git('init', '-q')
+    await writeTree(packageRoot, { 'src/Existing.ts': 'export {}\n' })
+    git('add', '.')
+    git('-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-qm', 'base')
+    // What `git apply --intent-to-add` leaves behind for a patch that adds files.
+    await writeTree(packageRoot, {
+      'src/fresh/글꼴.ts': 'export const added = 1\n',
+      'src/fresh/글꼴.test.ts': 'test\n'
+    })
+    git('add', '-N', 'src/fresh')
+
+    copyPatchAddedSources(packageRoot, destination)
+
+    expect(await readFile(path.join(destination, 'src/fresh/글꼴.ts'), 'utf8')).toBe(
+      'export const added = 1\n'
+    )
+    await expect(readFile(path.join(destination, 'src/fresh/글꼴.test.ts'))).rejects.toThrow()
   })
 })

@@ -44,6 +44,24 @@ describe('buildPreviewAppearanceOptions', () => {
     const options = buildPreviewAppearanceOptions(null, false)
     expect(options.fontSize).toBe(14)
     expect(options.cursorBlink).toBe(true)
+    expect(options.fitWideGlyphs).toBe(true)
+  })
+
+  it('turns wide glyph fitting off when the user disabled it, overriding the pane default', () => {
+    const settings = { ...SETTINGS, terminalFitWideGlyphs: false }
+    expect(buildPreviewAppearanceOptions(settings, false).fitWideGlyphs).toBe(false)
+    expect(
+      buildPreviewTerminalOptions({
+        settings,
+        terminalInput: null,
+        macOptionIsMeta: false,
+        theme: null,
+        themeMode: 'dark',
+        cols: 80,
+        rows: 24,
+        scrollback: 1000
+      }).fitWideGlyphs
+    ).toBe(false)
   })
 })
 
