@@ -122,10 +122,15 @@ function assertNoElectronRequire(
   entryName: string,
   entry: OutputChunk,
   byFileName: Map<string, OutputChunk>,
+  electronFreeChunkCode: Map<OutputChunk, string>,
   runtime: EntryRuntime = 'plain-Node process'
 ): void {
   for (const chunk of collectReachableChunks(entry, byFileName)) {
-    if (ELECTRON_REQUIRE_RE.test(chunk.code)) {
+    const code = chunk.code
+    if (electronFreeChunkCode.get(chunk) === code) {
+      continue
+    }
+    if (ELECTRON_REQUIRE_RE.test(code)) {
       throw new Error(
         `[plain-node-entry-guard] "${entryName}" reaches chunk "${chunk.fileName}" that ` +
           `requires electron. "${entryName}" runs as a ${runtime}, where ` +
@@ -133,6 +138,7 @@ function assertNoElectronRequire(
           `v1.4.129-rc.1 daemon outage). Keep electron imports out of its module graph.`
       )
     }
+    electronFreeChunkCode.set(chunk, code)
   }
 }
 
@@ -272,17 +278,30 @@ export function createPlainNodeEntryGuardPlugin(
         }
       }
 
+      const electronFreeChunkCode = new Map<OutputChunk, string>()
       for (const entryName of PLAIN_NODE_ENTRY_NAMES) {
         const entry = entryByName.get(entryName)
         if (entry) {
-          assertNoElectronRequire(entryName, entry, byFileName, 'plain-Node process')
+          assertNoElectronRequire(
+            entryName,
+            entry,
+            byFileName,
+            electronFreeChunkCode,
+            'plain-Node process'
+          )
         }
       }
 
       for (const entryName of WORKER_THREAD_ENTRY_NAMES) {
         const entry = entryByName.get(entryName)
         if (entry) {
-          assertNoElectronRequire(entryName, entry, byFileName, 'worker thread')
+          assertNoElectronRequire(
+            entryName,
+            entry,
+            byFileName,
+            electronFreeChunkCode,
+            'worker thread'
+          )
         }
       }
 
