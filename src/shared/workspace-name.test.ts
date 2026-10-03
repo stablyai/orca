@@ -53,7 +53,7 @@ describe('getLinkedWorkItemSuggestedName', () => {
 })
 
 describe('getLinkedWorkItemWorkspaceName', () => {
-  it('uses the resolved GitHub title instead of the source URL or provider number', () => {
+  it('uses the resolved GitHub title instead of the source URL, led by the number', () => {
     expect(
       getLinkedWorkItemWorkspaceName({
         type: 'pr',
@@ -61,9 +61,88 @@ describe('getLinkedWorkItemWorkspaceName', () => {
         title: 'Fix pasted URL workspace names'
       })
     ).toEqual({
-      displayName: 'Fix pasted URL workspace names',
-      seedName: 'fix-pasted-url-workspace-names'
+      displayName: '#2049 Fix pasted URL workspace names',
+      seedName: '2049-fix-pasted-url-workspace-names'
     })
+  })
+
+  it('leads number-keyed items with the number, the way Jira leads with its key', () => {
+    expect(
+      getLinkedWorkItemWorkspaceName({
+        type: 'issue',
+        provider: 'github',
+        number: 165,
+        title: 'Site header breaks on small screens'
+      })?.displayName
+    ).toBe('#165 Site header breaks on small screens')
+    // GitLab cites merge requests as !n, not #n.
+    expect(
+      getLinkedWorkItemWorkspaceName({
+        type: 'mr',
+        provider: 'gitlab',
+        number: 42,
+        title: 'Tighten the relay timeout'
+      })?.displayName
+    ).toBe('!42 Tighten the relay timeout')
+  })
+
+  it('does not repeat a number the title already carried', () => {
+    expect(
+      getLinkedWorkItemWorkspaceName({
+        type: 'issue',
+        provider: 'github',
+        number: 165,
+        title: '#165: Site header breaks'
+      })
+    ).toEqual({ displayName: '#165 Site header breaks', seedName: '165-site-header-breaks' })
+  })
+
+  it('strips inline and bare-bang references before leading with the number', () => {
+    expect(
+      getLinkedWorkItemWorkspaceName({
+        type: 'mr',
+        provider: 'gitlab',
+        number: 42,
+        title: '!42: Tighten the relay timeout'
+      })?.displayName
+    ).toBe('!42 Tighten the relay timeout')
+    expect(
+      getLinkedWorkItemWorkspaceName({
+        type: 'issue',
+        provider: 'github',
+        number: 42,
+        title: 'Fix #42 checkout regression'
+      })?.displayName
+    ).toBe('#42 Fix checkout regression')
+  })
+
+  it('leaves Jira and Linear items unprefixed when their identifier is missing', () => {
+    expect(
+      getLinkedWorkItemWorkspaceName({
+        type: 'issue',
+        provider: 'jira',
+        number: 165,
+        title: 'Site header breaks on small screens'
+      })?.displayName
+    ).toBe('Site header breaks on small screens')
+    expect(
+      getLinkedWorkItemWorkspaceName({
+        type: 'issue',
+        provider: 'linear',
+        number: 165,
+        title: 'Site header breaks on small screens'
+      })?.displayName
+    ).toBe('Site header breaks on small screens')
+  })
+
+  it('falls back to the identity label when there is no number to lead with', () => {
+    expect(
+      getLinkedWorkItemWorkspaceName({
+        type: 'issue',
+        number: 0,
+        title: 'Imported from a tracker'
+      })?.displayName
+    ).toBe('Imported from a tracker')
   })
 
   it('keeps external provider identifiers without duplicating title prefixes', () => {

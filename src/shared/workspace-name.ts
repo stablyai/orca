@@ -58,13 +58,18 @@ export type WorkspaceIntentName = {
 }
 
 function getLinkedWorkItemTitleSubject(item: { title: string }): string {
-  return item.title
-    .trim()
-    .replace(/^(?:issue|pr|pull request|mr|merge request)\s*[#!]?\d+\s*[:-]\s*/i, '')
-    .replace(/^#\d+\s*[:-]\s*/, '')
-    .replace(/\([#!]?\d+\)/g, '')
-    .replace(/\b#\d+\b/g, '')
-    .trim()
+  return (
+    item.title
+      .trim()
+      .replace(/^(?:issue|pr|pull request|mr|merge request)\s*[#!]?\d+\s*[:-]\s*/i, '')
+      .replace(/^[#!]\d+\s*[:-]\s*/, '')
+      .replace(/\([#!]?\d+\)/g, '')
+      // Why: `\b` never matches before `#`/`!` after a space, so anchor on the
+      // preceding non-word character instead and keep it.
+      .replace(/(^|[^\p{L}\p{N}])[#!]\d+\b/gu, '$1')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+  )
 }
 
 // Why: generated workspace seeds are hyphenated; `issue-123-fix-title`
@@ -171,6 +176,19 @@ function workItemIdentity(item: WorkspaceIntentWorkItem): string {
   return `Issue ${item.number}`
 }
 
+// Why: Linear and Jira lead the name with their issue key, so number-keyed
+// providers lead with the number they are cited by — `#165`, or `!165` for a
+// GitLab merge request. getLinkedWorkItemTitleSubject already strips the number
+// out of the title, so this restores it in one predictable place.
+function numberPrefix(item: WorkspaceIntentWorkItem): string {
+  // Why: Linear and Jira items are cited by key, never by `#<number>`, so an
+  // item missing its identifier must keep the unprefixed fallback.
+  if (item.number <= 0 || item.provider === 'linear' || item.provider === 'jira') {
+    return ''
+  }
+  return `${item.type === 'mr' ? '!' : '#'}${item.number}`
+}
+
 export function getLinkedWorkItemWorkspaceName(
   item: WorkspaceIntentWorkItem
 ): WorkspaceIntentName | null {
@@ -181,7 +199,8 @@ export function getLinkedWorkItemWorkspaceName(
       .replace(new RegExp(`^${escapeRegex(identifier)}\\s*[:-]?\\s*`, 'i'), '')
       .trim()
   }
-  const displayName = [identifier, subject].filter(Boolean).join(' ') || workItemIdentity(item)
+  const prefix = identifier ?? numberPrefix(item)
+  const displayName = [prefix, subject].filter(Boolean).join(' ') || workItemIdentity(item)
   const seedName = slugifyForWorkspaceName(displayName)
   if (!seedName) {
     return null
