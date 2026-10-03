@@ -73,6 +73,8 @@ export class DaemonRespawnThrottle {
 
 export class DaemonCrashLoopError extends Error {
   readonly code = 'daemon_crash_loop'
+  /** How long until the sliding window drains and a respawn is admitted again. */
+  readonly retryAfterMs: number
   constructor(admission: Extract<DaemonRespawnAdmission, { allowed: false }>) {
     super(
       `The terminal daemon has failed ${admission.attemptsInWindow} times in a row; refusing to ` +
@@ -80,5 +82,6 @@ export class DaemonCrashLoopError extends Error {
         'start until the underlying failure is fixed (check the daemon log).'
     )
     this.name = 'DaemonCrashLoopError'
+    this.retryAfterMs = admission.retryAfterMs
   }
 }

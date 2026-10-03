@@ -1,4 +1,5 @@
 import { clearLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
+import { removeBrowserClientPageWebview } from '../browser-client-page-guest-metadata'
 import {
   clearBrowserPageViewportPresetSize,
   removeBrowserPageViewport
@@ -264,7 +265,7 @@ function removePersistentWebview(
     window.api.browser.unregisterGuest({ browserPageId: browserTabId })
   ).catch(() => {})
   moveFocusToRendererBeforeWebviewDetach(webview)
-  webview.remove()
+  removeBrowserClientPageWebview(webview)
   unregisterPersistentWebview(browserTabId)
   if (!preserveViewport) {
     clearBrowserPageViewportPresetSize(browserTabId)
