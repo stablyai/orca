@@ -268,6 +268,28 @@ describe('detectTerminalComposerDraft', () => {
     ).toBeNull()
   })
 
+  it('keeps a stock placeholder that soft-wraps mid-word out of draft metadata', () => {
+    // The row break falls inside "anything", so rejoining the rows with a space would stop the
+    // hint matching and report a stock prompt as text the user typed.
+    const context = {
+      rows: ['\u203a Ask Codex to do any'],
+      typedRows: ['\u203a'],
+      promptGlyphBoldRows: [true],
+      rowsWrapped: [false],
+      rowsBelow: ['thing', '', 'gpt-5.6 \u00b7 ~/repo'],
+      typedRowsBelow: ['', '', 'gpt-5.6 \u00b7 ~/repo'],
+      rowsBelowWrapped: [true, false, false],
+      beforeCursor: '\u203a ',
+      afterCursor: '',
+      rawAfterCursor: 'Ask Codex to do any',
+      cursorHidden: false,
+      cursorViewportRow: 4
+    }
+
+    expect(hasTerminalComposerPlaceholder(context)).toBe(true)
+    expect(detectTerminalComposerDraft(context)).toBeNull()
+  })
+
   it('joins soft-wrapped continuation rows without inserting a newline', () => {
     expect(
       detectTerminalComposerDraft({
