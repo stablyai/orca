@@ -17104,6 +17104,13 @@
                 }
               }
             }
+          },
+          "jira": {
+            "IssueDialog": {
+              "5d4c813e3f": "Stop generating title",
+              "7a9b8eb34a": "Generating title. Click to stop.",
+              "1dc54e5fa9": "Generate title from description"
+            }
           }
         }
       },
@@ -17463,6 +17470,19 @@
         "preloadApi": {
           "cursorAccounts": {
             "hostOnly": "Cursor sign-in details are only readable on the computer running Orca."
+          }
+        }
+      },
+      "use": {
+        "task": {
+          "page": {
+            "jira": {
+              "summary": {
+                "generation": {
+                  "3de3ec2d25": "Failed to generate a summary from the description."
+                }
+              }
+            }
           }
         }
       }

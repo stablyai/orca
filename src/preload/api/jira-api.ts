@@ -1,4 +1,8 @@
 import type {
+  JiraIssueSummaryGenerationContext,
+  JiraIssueSummaryGenerationResult
+} from '../../shared/jira-issue-summary-generation'
+import type {
   JiraComment,
   JiraConnectionStatus,
   JiraCreateField,
@@ -52,6 +56,10 @@ export type JiraApi = {
   createIssue: (
     args: JiraCreateIssueArgs
   ) => Promise<{ ok: true; id: string; key: string; url: string } | { ok: false; error: string }>
+  generateIssueSummary: (
+    args: JiraIssueSummaryGenerationContext
+  ) => Promise<JiraIssueSummaryGenerationResult>
+  cancelGenerateIssueSummary: () => Promise<void>
   updateIssue: (args: {
     key: string
     updates: JiraIssueUpdate
