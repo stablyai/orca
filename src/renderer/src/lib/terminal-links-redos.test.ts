@@ -26,4 +26,28 @@ describe('terminal-links ReDoS guard (#5970)', () => {
     const links = extractTerminalFileLinks('/Users/a/Foo Bar/file.ts')
     expect(links.some((link) => link.pathText === '/Users/a/Foo Bar/file.ts')).toBe(true)
   })
+
+  it('preserves every spaced prefix candidate without stalling on a bounded wrapped line', () => {
+    const wordCount = 9_900
+    const line = `/tmp/${'a '.repeat(wordCount)}`
+    const start = performance.now()
+    const links = extractTerminalFileLinkCandidates(line)
+    const elapsedMs = performance.now() - start
+
+    expect(links).toHaveLength(wordCount)
+    for (let index = 0; index < links.length; index += 1) {
+      const words = wordCount - Math.max(0, index - 1)
+      const text = line.slice(0, '/tmp/'.length + words * 2 - 1)
+      expect(links[index]).toEqual({
+        pathText: text,
+        displayText: text,
+        line: null,
+        column: null,
+        startIndex: 0,
+        endIndex: text.length
+      })
+    }
+    // This fits the 20,000-character hover limit; the old scan took about 300 ms.
+    expect(elapsedMs).toBeLessThan(100)
+  })
 })
