@@ -145,6 +145,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           // Why: point fetchCodexRateLimits at the managed home directly, avoiding materializing credentials into the shared runtime location.
           const fresh = await fetchCodexRateLimits({
             codexHomePath: home.managedHomePath,
+            networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           })
           if (
