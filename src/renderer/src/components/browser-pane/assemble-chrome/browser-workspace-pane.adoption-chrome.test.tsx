@@ -405,6 +405,7 @@ describe.each([
   it('carries the typed query behind a previewed suggestion through the swap', () => {
     renderWorkspacePane()
     const staged = startEditing('example')
+    act(() => staged.setSelectionRange(2, 4))
     act(() => {
       fireEvent.keyDown(staged, { key: 'ArrowDown' })
     })
@@ -419,6 +420,8 @@ describe.each([
       fireEvent.keyDown(adopted, { key: 'Escape' })
     })
     expect(adopted.value).toBe('example')
+    expect([adopted.selectionStart, adopted.selectionEnd]).toEqual([2, 4])
+    expect(adopted.getAttribute('aria-expanded')).toBe('true')
   })
 
   // Why: the resumed selection is restored against a bar the user is still typing into, and the

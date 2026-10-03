@@ -175,6 +175,22 @@ function button(container: HTMLDivElement, label: string): HTMLButtonElement {
   return element as HTMLButtonElement
 }
 
+function addressInput(container: HTMLDivElement): HTMLInputElement {
+  const input = container.querySelector<HTMLInputElement>(
+    '[data-browser-chrome-address-slot] input'
+  )
+  if (!input) {
+    throw new Error('address bar input missing')
+  }
+  return input
+}
+
+async function pressEscape(input: HTMLInputElement): Promise<void> {
+  await act(async () => {
+    input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  })
+}
+
 describe('HtmlDocPreview browser chrome', () => {
   let container: HTMLDivElement
   let root: Root
@@ -400,8 +416,6 @@ describe('HtmlDocPreview browser chrome', () => {
   })
 
   // Escape hands the slot back to the chip with nothing converted — the reader looked, then left.
-  // The first press belongs to the address bar (it closes the suggestion dropdown, as in the URL
-  // pane); the second one reaches the wrapper and exits the edit.
   it('returns to the chip on Escape without converting', async () => {
     await renderPreview(container, root)
     store.conversions.length = 0
@@ -409,18 +423,40 @@ describe('HtmlDocPreview browser chrome', () => {
     await act(async () => {
       button(container, 'Edit address').click()
     })
-    const input = container.querySelector<HTMLInputElement>(
-      '[data-browser-chrome-address-slot] input'
-    )
-    await act(async () => {
-      input!.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-    })
-    await act(async () => {
-      input!.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-    })
+    const input = addressInput(container)
+    await pressEscape(input)
+    expect(addressInput(container)).toBe(input)
+    await pressEscape(input)
 
     expect(store.conversions).toEqual([])
     expect(button(container, 'Edit address')).not.toBeNull()
+  })
+
+  it('reverts an edited address to the document path before leaving on Escape', async () => {
+    await renderPreview(container, root)
+    store.conversions.length = 0
+
+    await act(async () => {
+      button(container, 'Edit address').click()
+    })
+    const input = addressInput(container)
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+        input,
+        'https://example.com'
+      )
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(input.value).toBe('https://example.com')
+
+    await pressEscape(input)
+    await pressEscape(input)
+    expect(addressInput(container).value).toBe(ENTRY_RELATIVE_PATH)
+
+    await pressEscape(input)
+    expect(container.querySelector('[data-browser-chrome-address-slot] input')).toBeNull()
+    expect(button(container, 'Edit address')).not.toBeNull()
+    expect(store.conversions).toEqual([])
   })
 
   // Why: the browsing tour walks anchors by name, and a preview answering to the browser pane's

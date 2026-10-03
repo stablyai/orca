@@ -51,14 +51,13 @@ export function bindBrowserPageWebviewListeners({
     syncNavigationState,
     syncBrowserAnnotationViewportBridge,
     faviconUrlRef,
-    addressBarInputRef,
     lastKnownWebviewUrlRef,
     trackNextLoadingEventRef,
     clearBrowserPageAnnotationsRef,
     onSetUrlRef,
     setPendingAnnotationPayload,
     setBrowserOverlayViewport,
-    setAddressBarValue,
+    setAddressBarValueFromPage,
     addBrowserHistoryEntryRef,
     annotationViewportBridgeTokenRef,
     initialBrowserUrlRef,
@@ -99,7 +98,6 @@ export function bindBrowserPageWebviewListeners({
       faviconUrlRef,
       browserTabUrlRef,
       addressBarValueRef,
-      addressBarInputRef,
       activeLoadFailureRef,
       lastKnownWebviewUrlRef,
       trackNextLoadingEventRef,
@@ -110,7 +108,7 @@ export function bindBrowserPageWebviewListeners({
       onSetUrlRef,
       setPendingAnnotationPayload,
       setBrowserOverlayViewport,
-      setAddressBarValue,
+      setAddressBarValueFromPage,
       focusAddressBarNow
     })
 
@@ -129,12 +127,11 @@ export function bindBrowserPageWebviewListeners({
     recoveryNavigationValidationRef,
     activeLoadFailureRef,
     lastKnownWebviewUrlRef,
-    addressBarInputRef,
     onSetUrlRef,
     onUpdatePageStateRef,
     addBrowserHistoryEntryRef,
     faviconUrlRef,
-    setAddressBarValue,
+    setAddressBarValueFromPage,
     annotationViewportBridgeTokenRef,
     setBrowserOverlayViewport
   })

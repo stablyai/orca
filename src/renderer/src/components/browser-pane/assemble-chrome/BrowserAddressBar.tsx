@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Globe } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -7,9 +7,13 @@ import { useAppStore } from '@/store'
 import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../../shared/browser-url'
 import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
 import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
-import { shouldOverlayBrowserAddressBar } from './browser-address-bar-expansion'
-import { saveBrowserAddressBarEditSession } from './browser-address-bar-edit-session'
+import {
+  readBrowserAddressBarSelection,
+  saveBrowserAddressBarEditSession
+} from './browser-address-bar-edit-session'
+import { useBrowserAddressBarEscape, type AddressBarPreview } from './browser-address-bar-escape'
 import { useBrowserAddressBarDismissal } from './use-browser-address-bar-dismissal'
+import { useBrowserAddressBarOverlay } from './use-browser-address-bar-overlay'
 import type { BrowserAddressBarEditSessionBinding } from './use-browser-address-bar-edit-session'
 import BrowserAddressBarSuggestionList from './BrowserAddressBarSuggestionList'
 
@@ -18,6 +22,8 @@ type BrowserAddressBarProps = {
   onChange: (value: string) => void
   onSubmit: () => void
   onNavigate: (url: string) => void
+  committedAddress: string
+  onLeaveAddressBar: () => void
   /** Selecting a previewed-document suggestion; without it those rows fall back to onNavigate. */
   onOpenWorkspaceDoc?: (docLocation: BrowserPageDocLocation) => void
   inputRef: React.RefObject<HTMLInputElement | null>
@@ -36,6 +42,8 @@ export default function BrowserAddressBar({
   onChange,
   onSubmit,
   onNavigate,
+  committedAddress,
+  onLeaveAddressBar,
   onOpenWorkspaceDoc,
   inputRef,
   dismissSuggestionsRef,
@@ -44,10 +52,10 @@ export default function BrowserAddressBar({
 }: BrowserAddressBarProps): React.ReactElement {
   const [open, setOpen] = useState(false)
   const [selectedValueOverride, setSelectedValueOverride] = useState<string | null>(null)
-  const prePreviewValueRef = useRef<string | null>(null)
+  const previewRef = useRef<AddressBarPreview | null>(null)
   // Why: while previewing a highlighted suggestion the input shows the full URL,
   // but suggestions must keep matching the original typed query.
-  const autocompleteQuery = prePreviewValueRef.current ?? value
+  const autocompleteQuery = previewRef.current?.typedQuery ?? value
   const browserUrlHistory = useAppStore((s) => s.browserUrlHistory)
   const workspaceDocHistory = useAppStore((s) => s.workspaceDocHistory)
   const browserDefaultSearchEngine = useAppStore((s) => s.browserDefaultSearchEngine)
@@ -57,24 +65,7 @@ export default function BrowserAddressBar({
   const openedAtRef = useRef(0)
   const blurCloseTimerRef = useRef<number | null>(null)
   const closingResetTimerRef = useRef<number | null>(null)
-  const slotRef = useRef<HTMLDivElement | null>(null)
-  const [inlineWidth, setInlineWidth] = useState<number | null>(null)
-
-  // Why: the slot keeps its flex width even while the bar overlays the toolbar,
-  // so measuring it here (not the form) cannot oscillate with the overlay.
-  useEffect(() => {
-    const slot = slotRef.current
-    if (!slot || typeof ResizeObserver === 'undefined') {
-      return
-    }
-    const syncWidth = (): void => setInlineWidth(slot.getBoundingClientRect().width)
-    syncWidth()
-    const observer = new ResizeObserver(syncWidth)
-    observer.observe(slot)
-    return () => observer.disconnect()
-  }, [])
-
-  const overlay = shouldOverlayBrowserAddressBar({ inlineWidth, focused: open })
+  const { slotRef, overlay } = useBrowserAddressBarOverlay(open)
 
   const editSessionPageId = editSession?.pageId ?? null
   const resumedChrome = editSession?.resumed ?? null
@@ -92,7 +83,7 @@ export default function BrowserAddressBar({
     // opened the dropdown the way a fresh click would). This is what puts it back as the user
     // left it. Re-arming the blur grace window keeps the resumed focus from closing it again.
     if (resumedChrome.preview) {
-      prePreviewValueRef.current = resumedChrome.preview.typedQuery
+      previewRef.current = resumedChrome.preview
       setSelectedValueOverride(resumedChrome.preview.previewedUrl)
     }
     openedAtRef.current = Date.now()
@@ -112,19 +103,14 @@ export default function BrowserAddressBar({
       if (document.activeElement !== input) {
         return
       }
-      const typedQuery = prePreviewValueRef.current
+      const preview = previewRef.current
       saveBrowserAddressBarEditSession(editSessionPageId, {
         draft: liveEditRef.current.value,
-        selection: {
-          start: input.selectionStart ?? input.value.length,
-          end: input.selectionEnd ?? input.value.length,
-          direction: input.selectionDirection ?? 'none'
-        },
+        selection: readBrowserAddressBarSelection(input),
         suggestionsOpen: liveEditRef.current.open,
         // Why the draft alone is not enough: mid-preview it holds the highlighted suggestion, and
         // dropping this would strand the user with no way back to what they actually typed.
-        preview:
-          typedQuery === null ? null : { typedQuery, previewedUrl: liveEditRef.current.value }
+        preview: preview && { ...preview, previewedUrl: liveEditRef.current.value }
       })
     }
   }, [editSessionPageId, inputRef])
@@ -171,19 +157,21 @@ export default function BrowserAddressBar({
   )
 
   const clearSuggestionPreview = useCallback((): void => {
-    prePreviewValueRef.current = null
+    previewRef.current = null
     setSelectedValueOverride(null)
   }, [])
 
   const previewSuggestion = useCallback(
     (url: string): void => {
-      if (prePreviewValueRef.current === null) {
-        prePreviewValueRef.current = autocompleteQuery
+      const input = inputRef.current
+      if (previewRef.current === null && input) {
+        const selection = readBrowserAddressBarSelection(input)
+        previewRef.current = { typedQuery: autocompleteQuery, selection }
       }
       setSelectedValueOverride(url)
       onChange(url)
     },
-    [autocompleteQuery, onChange]
+    [autocompleteQuery, inputRef, onChange]
   )
 
   const selectSuggestionAtIndex = useCallback(
@@ -195,7 +183,7 @@ export default function BrowserAddressBar({
       if (index === 0 && suggestion.isSearch) {
         // Why: the search row mirrors what Enter already does with the typed
         // query — keep the input on the typed text instead of the search URL.
-        prePreviewValueRef.current = null
+        previewRef.current = null
         setSelectedValueOverride(null)
         onChange(autocompleteQuery)
         return
@@ -206,27 +194,39 @@ export default function BrowserAddressBar({
   )
 
   const restoreTypedQuery = useCallback((): void => {
-    const typed = prePreviewValueRef.current
-    if (typed === null) {
+    const preview = previewRef.current
+    if (preview === null) {
       return
     }
-    prePreviewValueRef.current = null
+    previewRef.current = null
     setSelectedValueOverride(null)
-    onChange(typed)
+    onChange(preview.typedQuery)
   }, [onChange])
 
-  const dismissSuggestions = useCallback((): void => {
+  const closeSuggestions = useCallback((): void => {
     if (blurCloseTimerRef.current !== null) {
       window.clearTimeout(blurCloseTimerRef.current)
       blurCloseTimerRef.current = null
     }
-    restoreTypedQuery()
     setOpen(false)
-  }, [restoreTypedQuery])
+  }, [])
 
-  const cancelSuggestionPreview = useCallback((): void => {
-    dismissSuggestions()
-  }, [dismissSuggestions])
+  const dismissSuggestions = useCallback((): void => {
+    restoreTypedQuery()
+    closeSuggestions()
+  }, [closeSuggestions, restoreTypedQuery])
+
+  const handleEscape = useBrowserAddressBarEscape({
+    inputRef,
+    value,
+    committedAddress,
+    suggestionsShown: open && suggestions.length > 0,
+    previewRef,
+    restoreTypedQuery,
+    closeSuggestions,
+    onChange,
+    onLeaveAddressBar
+  })
 
   const selectedValue =
     selectedValueOverride &&
@@ -304,7 +304,7 @@ export default function BrowserAddressBar({
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       if (event.key === 'Escape') {
-        cancelSuggestionPreview()
+        handleEscape(event)
         return
       }
 
@@ -322,7 +322,7 @@ export default function BrowserAddressBar({
         return
       }
 
-      const isPreviewing = prePreviewValueRef.current !== null
+      const isPreviewing = previewRef.current !== null
 
       if (event.key === 'ArrowDown') {
         event.preventDefault()
@@ -358,23 +358,13 @@ export default function BrowserAddressBar({
       selectedValue,
       selectSuggestionAtIndex,
       restoreTypedQuery,
-      cancelSuggestionPreview,
+      handleEscape,
       clearSuggestionPreview,
       onSubmit
     ]
   )
 
-  useBrowserAddressBarDismissal(open, dismissSuggestions)
-
-  useEffect(() => {
-    if (!dismissSuggestionsRef) {
-      return
-    }
-    dismissSuggestionsRef.current = dismissSuggestions
-    return () => {
-      dismissSuggestionsRef.current = null
-    }
-  }, [dismissSuggestions, dismissSuggestionsRef])
+  useBrowserAddressBarDismissal(open, dismissSuggestions, dismissSuggestionsRef)
 
   return (
     // Why: min-w-11 keeps the leading globe a real hit target once the toolbar
@@ -453,7 +443,7 @@ export default function BrowserAddressBar({
                 // should return to the derived top match instead of a stale row.
                 // Clearing preview state here also prevents stale hover/selection
                 // from repopulating the input after Cmd+A → Delete.
-                prePreviewValueRef.current = null
+                previewRef.current = null
                 setSelectedValueOverride(null)
                 onChange(nextValue)
               }}

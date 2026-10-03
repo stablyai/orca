@@ -20,6 +20,7 @@ export function BrowserPageChromeHeader({
   webviewRef,
   addressBarInputRef,
   dismissAddressBarSuggestionsRef,
+  leaveAddressBarForPage,
   reload,
   nav,
   grab,
@@ -45,6 +46,7 @@ export function BrowserPageChromeHeader({
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   addressBarInputRef: MutableRefObject<HTMLInputElement | null>
   dismissAddressBarSuggestionsRef: MutableRefObject<(() => void) | null>
+  leaveAddressBarForPage: () => void
   reload: ReturnType<typeof useBrowserPageReloadActions>
   nav: ReturnType<typeof useBrowserPageNavigationDownloads>
   grab: GrabModeHook
@@ -85,10 +87,12 @@ export function BrowserPageChromeHeader({
         runReloadTrigger={reload.runReloadTrigger}
         addressBarValue={nav.addressBarValue}
         setAddressBarValue={nav.setAddressBarValue}
+        committedAddress={nav.committedAddress}
         submitAddressBar={nav.submitAddressBar}
         navigateToUrl={nav.navigateToUrl}
         addressBarInputRef={addressBarInputRef}
         dismissAddressBarSuggestionsRef={dismissAddressBarSuggestionsRef}
+        leaveAddressBarForPage={leaveAddressBarForPage}
         grab={grab}
         grabIntent={grabAnnotations.grabIntent}
         startGrabIntent={grabAnnotations.startGrabIntent}

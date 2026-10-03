@@ -3,7 +3,6 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
-  useState,
   type Dispatch,
   type DragEvent,
   type MutableRefObject,
@@ -21,8 +20,8 @@ import type { BrowserLoadError } from '../../../../../shared/browser-workspace-t
 import { resolveBrowserAddressBarSubmission } from './browser-address-bar-navigation'
 import { navigateBrowserPageToUrl } from './navigate-browser-page-url'
 import type { BrowserDownloadState } from './browser-download-progress'
-import { toDisplayUrl } from '../describe-page/browser-page-url-display'
 import { useBrowserPageDownloadEvents } from './use-browser-page-download-events'
+import { useBrowserAddressBarText } from '../assemble-chrome/use-browser-address-bar-text'
 import type {
   BrowserPageRecoveryNavigationValidation,
   BrowserPageUrlSetter,
@@ -64,6 +63,8 @@ export function useBrowserPageNavigationDownloads({
 }): {
   addressBarValue: string
   setAddressBarValue: Dispatch<SetStateAction<string>>
+  committedAddress: string
+  setAddressBarValueFromPage: (value: string) => void
   submitAddressBar: () => void
   navigateToUrl: (url: string) => void
   visibleDownloads: BrowserDownloadState[]
@@ -73,21 +74,19 @@ export function useBrowserPageNavigationDownloads({
   handleInternalFileDragOverRef: MutableRefObject<(event: DragEvent<HTMLDivElement>) => void>
   handleInternalFileDropRef: MutableRefObject<(event: DragEvent<HTMLDivElement>) => void>
 } {
-  const [addressBarValue, setAddressBarValue] = useState(() => toDisplayUrl(browserTabUrl))
+  const {
+    addressBarValue,
+    setAddressBarValue,
+    committedAddress,
+    setAddressBarValueFromPage,
+    setAddressBarValueFromSubmit
+  } = useBrowserAddressBarText({ url: browserTabUrl, addressBarInputRef })
   const { downloadStates, setDownloadStates } = useBrowserPageDownloadEvents({
     browserTabId,
     setResourceNotice
   })
   const handleInternalFileDragOverRef = useRef<(event: DragEvent<HTMLDivElement>) => void>(() => {})
   const handleInternalFileDropRef = useRef<(event: DragEvent<HTMLDivElement>) => void>(() => {})
-
-  useEffect(() => {
-    // Why: don't clobber an in-progress address-bar query when an async URL update lands; syncing resumes once the input blurs.
-    if (document.activeElement === addressBarInputRef.current) {
-      return
-    }
-    setAddressBarValue(toDisplayUrl(browserTabUrl))
-  }, [addressBarInputRef, browserTabUrl])
 
   useEffect(() => {
     addressBarValueRef.current = addressBarValue
@@ -106,7 +105,7 @@ export function useBrowserPageNavigationDownloads({
         webviewRef,
         onSetUrlRef,
         onUpdatePageStateRef,
-        setAddressBarValue,
+        setAddressBarValueFromSubmit,
         setResourceNotice,
         focusWebviewNow
       })
@@ -114,6 +113,7 @@ export function useBrowserPageNavigationDownloads({
     [
       activeLoadFailureRef,
       browserTabId,
+      setAddressBarValueFromSubmit,
       focusWebviewNow,
       lastKnownWebviewUrlRef,
       onSetUrlRef,
@@ -281,6 +281,8 @@ export function useBrowserPageNavigationDownloads({
   return {
     addressBarValue,
     setAddressBarValue,
+    committedAddress,
+    setAddressBarValueFromPage,
     submitAddressBar,
     navigateToUrl,
     visibleDownloads,

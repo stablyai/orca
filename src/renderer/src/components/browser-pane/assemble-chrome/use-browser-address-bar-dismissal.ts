@@ -1,12 +1,26 @@
-import { useEffect } from 'react'
+import { useEffect, type MutableRefObject } from 'react'
 
 /**
  * Why: Electron <webview> guests run in a separate process, so clicking the page never dispatches
  * pointerdown on the renderer document and Radix cannot detect an outside dismiss. Window blur and
  * focus moves into the guest (the host <webview> tag) close the dropdown the same way
- * BrowserImportHintButton does for its popover; Escape closes it at window capture.
+ * BrowserImportHintButton does for its popover.
  */
-export function useBrowserAddressBarDismissal(open: boolean, dismissSuggestions: () => void): void {
+export function useBrowserAddressBarDismissal(
+  open: boolean,
+  dismissSuggestions: () => void,
+  dismissSuggestionsRef: MutableRefObject<(() => void) | null> | undefined
+): void {
+  useEffect(() => {
+    if (!dismissSuggestionsRef) {
+      return
+    }
+    dismissSuggestionsRef.current = dismissSuggestions
+    return () => {
+      dismissSuggestionsRef.current = null
+    }
+  }, [dismissSuggestions, dismissSuggestionsRef])
+
   useEffect(() => {
     if (!open) {
       return
@@ -24,22 +38,11 @@ export function useBrowserAddressBarDismissal(open: boolean, dismissSuggestions:
       dismissSuggestions()
     }
 
-    const handleEscape = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') {
-        return
-      }
-      dismissSuggestions()
-      event.preventDefault()
-      event.stopImmediatePropagation()
-    }
-
     window.addEventListener('blur', handleWindowBlur)
     document.addEventListener('focusin', handleFocusIn, true)
-    window.addEventListener('keydown', handleEscape, true)
     return () => {
       window.removeEventListener('blur', handleWindowBlur)
       document.removeEventListener('focusin', handleFocusIn, true)
-      window.removeEventListener('keydown', handleEscape, true)
     }
   }, [dismissSuggestions, open])
 }

@@ -1,4 +1,4 @@
-import type { Dispatch, DragEvent, MutableRefObject, RefObject, SetStateAction } from 'react'
+import type { Dispatch, DragEvent, MutableRefObject, SetStateAction } from 'react'
 import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
 import {
   normalizeBrowserNavigationUrl,
@@ -49,14 +49,13 @@ export type AttachBrowserPageWebviewArgs = {
   syncNavigationState: (webview: Electron.WebviewTag) => void
   syncBrowserAnnotationViewportBridge: () => void
   faviconUrlRef: MutableRefObject<string | null>
-  addressBarInputRef: RefObject<HTMLInputElement | null>
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
   trackNextLoadingEventRef: MutableRefObject<boolean>
   clearBrowserPageAnnotationsRef: MutableRefObject<(pageId: string) => void>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
   setPendingAnnotationPayload: Dispatch<SetStateAction<BrowserGrabPayload | null>>
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
-  setAddressBarValue: Dispatch<SetStateAction<string>>
+  setAddressBarValueFromPage: (value: string) => void
   addBrowserHistoryEntryRef: MutableRefObject<
     (url: string, title: string, faviconUrl?: string | null) => void
   >

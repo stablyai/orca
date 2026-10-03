@@ -37,7 +37,7 @@ export type NavigateBrowserPageToUrlArgs = {
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
-  setAddressBarValue: (value: string) => void
+  setAddressBarValueFromSubmit: (value: string) => void
   setResourceNotice: (notice: string | null) => void
   focusWebviewNow: () => boolean
 }
@@ -53,7 +53,7 @@ export function navigateBrowserPageToUrl({
   webviewRef,
   onSetUrlRef,
   onUpdatePageStateRef,
-  setAddressBarValue,
+  setAddressBarValueFromSubmit,
   setResourceNotice,
   focusWebviewNow
 }: NavigateBrowserPageToUrlArgs): void {
@@ -65,7 +65,7 @@ export function navigateBrowserPageToUrl({
       activeLoadFailureRef.current?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
         ? activeLoadFailureRef.current
         : null
-    setAddressBarValue(toDisplayUrl(browserModelUrl))
+    setAddressBarValueFromSubmit(toDisplayUrl(browserModelUrl))
     onSetUrlRef.current(browserTabId, browserModelUrl)
     onUpdatePageStateRef.current(browserTabId, {
       loading: true,

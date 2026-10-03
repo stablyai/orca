@@ -1,4 +1,4 @@
-import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../../shared/browser-annotation-viewport-bridge'
 import {
   normalizeBrowserNavigationUrl,
@@ -31,14 +31,13 @@ export type BrowserPageWebviewNavigationHandlersArgs = {
   recoveryNavigationValidationRef: MutableRefObject<BrowserPageRecoveryNavigationValidation | null>
   activeLoadFailureRef: MutableRefObject<BrowserLoadError | null>
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
-  addressBarInputRef: RefObject<HTMLInputElement | null>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
   addBrowserHistoryEntryRef: MutableRefObject<
     (url: string, title: string, faviconUrl?: string | null) => void
   >
   faviconUrlRef: MutableRefObject<string | null>
-  setAddressBarValue: Dispatch<SetStateAction<string>>
+  setAddressBarValueFromPage: (value: string) => void
   annotationViewportBridgeTokenRef: MutableRefObject<string>
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
 }
@@ -60,12 +59,11 @@ export function createBrowserPageWebviewNavigationHandlers({
   recoveryNavigationValidationRef,
   activeLoadFailureRef,
   lastKnownWebviewUrlRef,
-  addressBarInputRef,
   onSetUrlRef,
   onUpdatePageStateRef,
   addBrowserHistoryEntryRef,
   faviconUrlRef,
-  setAddressBarValue,
+  setAddressBarValueFromPage,
   annotationViewportBridgeTokenRef,
   setBrowserOverlayViewport
 }: BrowserPageWebviewNavigationHandlersArgs): BrowserPageWebviewNavigationHandlers {
@@ -128,10 +126,7 @@ export function createBrowserPageWebviewNavigationHandlers({
       normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
     lastKnownWebviewUrlRef.current = normalizedBrowserModelUrl
     rememberLiveBrowserUrl(browserTabId, browserModelUrl)
-    // Why: don't overwrite in-progress typing (see above).
-    if (document.activeElement !== addressBarInputRef.current) {
-      setAddressBarValue(toDisplayUrl(browserModelUrl))
-    }
+    setAddressBarValueFromPage(toDisplayUrl(browserModelUrl))
     if (persistUrl) {
       onSetUrlRef.current(browserTabId, browserModelUrl, { preserveLoadError })
     }

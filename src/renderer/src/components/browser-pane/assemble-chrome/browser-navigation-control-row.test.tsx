@@ -48,6 +48,8 @@ function renderRow(overrides: Partial<BrowserNavigationControls> = {}): BrowserN
             onChange={vi.fn()}
             onSubmit={vi.fn()}
             onNavigate={controls.navigate}
+            committedAddress="https://example.com/"
+            onLeaveAddressBar={vi.fn()}
             inputRef={inputRef}
           />
         }

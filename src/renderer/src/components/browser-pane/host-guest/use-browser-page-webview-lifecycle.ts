@@ -7,7 +7,6 @@ import {
   type Dispatch,
   type DragEvent,
   type MutableRefObject,
-  type RefObject,
   type SetStateAction
 } from 'react'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -44,7 +43,6 @@ export function useBrowserPageWebviewLifecycle({
   isPaintable,
   slotViewport,
   viewportPresetId,
-  addressBarInputRef,
   addressBarValueRef,
   browserTabUrlRef,
   keepAddressBarFocusRef,
@@ -53,7 +51,7 @@ export function useBrowserPageWebviewLifecycle({
   dismissAddressBarSuggestionsRef,
   onUpdatePageState,
   onSetUrl,
-  setAddressBarValue,
+  setAddressBarValueFromPage,
   setPendingAnnotationPayload,
   setBrowserOverlayViewport,
   setFindOpen,
@@ -86,7 +84,6 @@ export function useBrowserPageWebviewLifecycle({
   isPaintable: boolean
   slotViewport: HTMLDivElement | null
   viewportPresetId: BrowserViewportPresetId | null
-  addressBarInputRef: RefObject<HTMLInputElement | null>
   addressBarValueRef: MutableRefObject<string>
   browserTabUrlRef: MutableRefObject<string>
   keepAddressBarFocusRef: MutableRefObject<boolean>
@@ -95,7 +92,7 @@ export function useBrowserPageWebviewLifecycle({
   dismissAddressBarSuggestionsRef: MutableRefObject<(() => void) | null>
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
   onSetUrl: BrowserPageUrlSetter
-  setAddressBarValue: Dispatch<SetStateAction<string>>
+  setAddressBarValueFromPage: (value: string) => void
   setPendingAnnotationPayload: Dispatch<SetStateAction<BrowserGrabPayload | null>>
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
   setFindOpen: Dispatch<SetStateAction<boolean>>
@@ -252,14 +249,13 @@ export function useBrowserPageWebviewLifecycle({
       syncNavigationState,
       syncBrowserAnnotationViewportBridge,
       faviconUrlRef,
-      addressBarInputRef,
       lastKnownWebviewUrlRef,
       trackNextLoadingEventRef,
       clearBrowserPageAnnotationsRef,
       onSetUrlRef,
       setPendingAnnotationPayload,
       setBrowserOverlayViewport,
-      setAddressBarValue,
+      setAddressBarValueFromPage,
       addBrowserHistoryEntryRef,
       annotationViewportBridgeTokenRef,
       initialBrowserUrlRef,

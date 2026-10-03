@@ -116,21 +116,24 @@ export function ClientHostedBrowserPagePane({
 
   const guestFocus = useWebviewGuestFocus(webviewRef)
   const shortcutOwner = { browserTabId: browserTab.id, workspaceId, isActive, chromeShortcutScope }
-  const { keepAddressBarFocusRef, startAddressBarFocusGrab } = useBrowserPageChromeFocus({
-    ...shortcutOwner,
-    addressBarInputRef,
-    guestFocus
-  })
+  const { keepAddressBarFocusRef, startAddressBarFocusGrab, leaveAddressBarForPage } =
+    useBrowserPageChromeFocus({ ...shortcutOwner, addressBarInputRef, guestFocus })
   // Why the order matters: this resumes an interrupted edit in a layout effect, and the attach
   // effect below syncs the bar to the guest's URL through the setter it hands back. Called after
   // the attach effect, the resume would land on a bar that has already been overwritten.
-  const { addressBarValue, setAddressBarValue, setAddressBarValueFromPage, addressBarEditSession } =
-    useBrowserAddressBarEditSession({
-      pageId: browserTab.id,
-      url: browserTab.url,
-      addressBarInputRef,
-      startAddressBarFocusGrab
-    })
+  const {
+    addressBarValue,
+    setAddressBarValue,
+    committedAddress,
+    setAddressBarValueFromPage,
+    setAddressBarValueFromSubmit,
+    addressBarEditSession
+  } = useBrowserAddressBarEditSession({
+    pageId: browserTab.id,
+    url: browserTab.url,
+    addressBarInputRef,
+    startAddressBarFocusGrab
+  })
   const zoom = useBrowserPageZoomFeedback(browserTab.id)
   const reload = useBrowserPageReloadActions({
     browserTab,
@@ -165,7 +168,7 @@ export function ClientHostedBrowserPagePane({
     webviewRef,
     activeLoadFailureRef,
     onUpdatePageState,
-    setAddressBarValue
+    setAddressBarValueFromSubmit
   })
   const runDeferredNavigation = useEffectEvent(navigateToUrl)
 
@@ -362,6 +365,8 @@ export function ClientHostedBrowserPagePane({
               onChange={setAddressBarValue}
               onSubmit={() => navigateToUrl(addressBarValue)}
               onNavigate={navigateToUrl}
+              committedAddress={committedAddress}
+              onLeaveAddressBar={leaveAddressBarForPage}
               onOpenWorkspaceDoc={(docLocation) =>
                 convertBrowserPageToWorkspaceDoc(browserTab.id, docLocation)
               }
