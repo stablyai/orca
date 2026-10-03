@@ -5,8 +5,7 @@ import { parseLinuxBootTimeSeconds, parseLinuxProcStartTicks } from './daemon-pr
 import type {
   LinuxStatEvidence,
   ProcessLivenessVerdict,
-  ProcessSignalEvidence,
-  WindowsProcessEvidence
+  ProcessSignalEvidence
 } from './daemon-incarnation-evidence-types'
 
 const execFileAsync = promisify(execFile)
@@ -94,57 +93,6 @@ export async function readProcessCommandLine(
   }
 }
 
-// Why: Get-CimInstance errors (Winmgmt down, corrupt WMI repository, access denied) are
-// non-terminating and exit 0 with an empty $p, which is indistinguishable from "no such
-// process" — so the script reports query failure explicitly instead of asserting absence.
-export async function queryWindowsProcess(
-  pid: number,
-  dependencies: DaemonProcessInspectionDependencies = {}
-): Promise<WindowsProcessEvidence> {
-  if (!Number.isSafeInteger(pid) || pid <= 0) {
-    return { status: 'unavailable' }
-  }
-  const runCommand = dependencies.runCommand ?? runInspectionCommand
-  try {
-    const stdout = await runCommand(
-      'powershell.exe',
-      [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        `$ErrorActionPreference = 'Stop'; ` +
-          `try { $p = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}" } ` +
-          `catch { @{ status = 'query_failed' } | ConvertTo-Json -Compress; exit 0 }; ` +
-          `if (!$p) { @{ status = 'missing' } | ConvertTo-Json -Compress; exit 0 }; ` +
-          `$start = $null; if ($p.CreationDate) { ` +
-          `$start = [long]([DateTimeOffset]$p.CreationDate).ToUnixTimeMilliseconds() }; ` +
-          `@{ status = 'present'; cmd = $p.CommandLine; start = $start } | ConvertTo-Json -Compress`
-      ],
-      3_000
-    )
-    const parsed = JSON.parse(stdout.trim()) as {
-      status?: unknown
-      cmd?: unknown
-      start?: unknown
-    }
-    // Only a query that ran and found nothing proves absence; anything else stays indeterminate.
-    if (parsed.status === 'missing') {
-      return { status: 'missing' }
-    }
-    if (parsed.status !== 'present') {
-      return { status: 'unavailable' }
-    }
-    return {
-      status: 'present',
-      commandLine: typeof parsed.cmd === 'string' && parsed.cmd ? parsed.cmd : null,
-      startedAtMs:
-        typeof parsed.start === 'number' && Number.isFinite(parsed.start) ? parsed.start : null
-    }
-  } catch {
-    return { status: 'unavailable' }
-  }
-}
-
 // Why: the sync procfs helper in daemon-process-start-time spawns getconf per call; CLK_TCK is fixed for
 // the kernel's lifetime, so cache one async spawn and only retry after a failure. The cache is
 // keyed by runner because CLK_TCK belongs to the host that executes the command, not the module.
@@ -219,8 +167,6 @@ async function runInspectionCommand(
   args: string[],
   timeoutMs: number
 ): Promise<string> {
-  // powershell.exe is console-subsystem: without this it flashes a conhost and
-  // steals foreground on every inspection (#10488).
   const { stdout } = await execFileAsync(file, args, {
     encoding: 'utf8',
     timeout: timeoutMs,

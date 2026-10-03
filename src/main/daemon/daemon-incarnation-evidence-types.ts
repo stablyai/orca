@@ -1,4 +1,5 @@
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
+import type { WindowsProcessLookup } from '../windows/windows-process-lookup'
 import type {
   DaemonAuditGoneReason,
   DaemonEvidenceSource,
@@ -64,11 +65,6 @@ export type LinuxStatEvidence =
   | { status: 'missing' }
   | { status: 'unavailable' }
 
-export type WindowsProcessEvidence =
-  | { status: 'present'; commandLine: string | null; startedAtMs: number | null }
-  | { status: 'missing' }
-  | { status: 'unavailable' }
-
 export type DaemonProcessProbeDependencies = {
   platform?: NodeJS.Platform
   signalProcess?: (pid: number) => ProcessSignalEvidence
@@ -76,5 +72,5 @@ export type DaemonProcessProbeDependencies = {
   readBootIdentity?: () => Promise<string | undefined>
   readCommandLine?: (pid: number, platform: NodeJS.Platform) => Promise<string | undefined>
   readProcessStartedAtMs?: (pid: number) => Promise<number | null>
-  queryWindowsProcess?: (pid: number) => Promise<WindowsProcessEvidence>
+  readWindowsProcess?: (pid: number) => Promise<WindowsProcessLookup>
 }

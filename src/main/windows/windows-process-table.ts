@@ -51,7 +51,7 @@ export type WindowsProcessIdentityRow = {
   pid: number
   ppid: number
   name: string
-  /** Process creation time in Unix milliseconds, when the native snapshot provides it. */
+  /** Process creation time in Unix milliseconds, when the snapshot (native or CIM) provides it. */
   creationTimeMs?: number
 }
 

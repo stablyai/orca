@@ -86,6 +86,7 @@
     "../src/main/windows/windows-command-line-recovery-health.ts",
     "../src/main/windows/windows-process-table.ts",
     "../src/main/windows/windows-process-table-cim-scan.ts",
+    "../src/main/windows/windows-process-lookup.ts",
     "../src/main/daemon/daemon-process-start-time.ts",
     "../src/main/daemon/daemon-process-identity-query.ts",
     "../src/main/startup/startup-diagnostics.ts",

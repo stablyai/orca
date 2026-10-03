@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { WindowsProcessLookup } from '../windows/windows-process-lookup'
+import type { WindowsProcessRow } from '../windows/windows-process-table'
 
 const originalPlatform = process.platform
 const originalGetuidDescriptor = Object.getOwnPropertyDescriptor(process, 'getuid')
@@ -67,15 +69,39 @@ async function loadLinuxIdentity(fixture: LinuxIdentityFixture) {
   return { identity: await import('./managed-hook-owner-identity'), readFile }
 }
 
-async function loadWindowsIdentity() {
+function mockWindowsRegistry() {
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-  const execFileAsync = vi.fn(async (_file: string, args: string[]) => ({
-    stdout: args.join(' ').includes('MachineGuid')
-      ? '\r\n    MachineGuid    REG_SZ    AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE\r\n'
-      : '1777777777000\r\n'
+  const execFileAsync = vi.fn(async () => ({
+    stdout: '\r\n    MachineGuid    REG_SZ    AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE\r\n'
   }))
   vi.doMock('node:util', () => ({ promisify: () => execFileAsync }))
-  return { identity: await import('./managed-hook-owner-identity'), execFileAsync }
+  return execFileAsync
+}
+
+async function loadWindowsIdentity(
+  creationTimeMs: number | null = 1777777777000,
+  lookup: WindowsProcessLookup = { status: 'unavailable' }
+) {
+  const execFileAsync = mockWindowsRegistry()
+  const readWindowsProcessCreationTime = vi.fn(() => creationTimeMs)
+  const readWindowsProcess = vi.fn(async () => lookup)
+  vi.doMock('../windows/windows-process-table', () => ({ readWindowsProcessCreationTime }))
+  vi.doMock('../windows/windows-process-lookup', () => ({ readWindowsProcess }))
+  return {
+    identity: await import('./managed-hook-owner-identity'),
+    execFileAsync,
+    readWindowsProcessCreationTime,
+    readWindowsProcess
+  }
+}
+
+/** Real table module with no addon, so reads take the PowerShell scan the relay takes. */
+async function loadWindowsIdentityWithoutAddon(scan: () => Promise<WindowsProcessRow[]>) {
+  mockWindowsRegistry()
+  const table = await import('../windows/windows-process-table')
+  table.__setWindowsProcessTreeLoaderForTests(() => null)
+  table.__setWindowsProcessTableCimScanForTests(scan)
+  return await import('./managed-hook-owner-identity')
 }
 
 async function loadDarwinIdentity() {
@@ -105,6 +131,9 @@ afterEach(() => {
   vi.doUnmock('node:fs/promises')
   vi.doUnmock('node:child_process')
   vi.doUnmock('node:util')
+  vi.doUnmock('../windows/windows-process-table')
+  vi.doUnmock('../windows/windows-process-lookup')
+  vi.restoreAllMocks()
   vi.resetModules()
 })
 
@@ -209,7 +238,7 @@ describe('managed hook owner identity', () => {
   })
 
   it('uses machine and process creation identities on Windows', async () => {
-    const { identity, execFileAsync } = await loadWindowsIdentity()
+    const { identity, execFileAsync, readWindowsProcessCreationTime } = await loadWindowsIdentity()
 
     await expect(identity.readManagedHookHostIdentity()).resolves.toBe(
       'win32:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
@@ -220,7 +249,105 @@ describe('managed hook owner identity', () => {
     await expect(identity.readManagedHookProcessIdentity(process.pid)).resolves.toBe(
       `win32:${process.pid}:1777777777000`
     )
-    expect(execFileAsync).toHaveBeenCalledTimes(2)
+    // Only the registry read forks; the creation time comes from the in-process table.
+    expect(execFileAsync).toHaveBeenCalledTimes(1)
+    expect(readWindowsProcessCreationTime).toHaveBeenCalledWith(process.pid)
+  })
+
+  it('reads an untimed Windows process as gone only when the OS says it is', async () => {
+    const { identity } = await loadWindowsIdentity(null)
+    const kill = vi.spyOn(process, 'kill')
+
+    kill.mockImplementationOnce(() => {
+      throw Object.assign(new Error('no such process'), { code: 'ESRCH' })
+    })
+    await expect(identity.readManagedHookProcessIdentity(4242)).resolves.toBeNull()
+
+    kill.mockImplementationOnce(() => true)
+    await expect(identity.readManagedHookProcessIdentity(4242)).resolves.toBeUndefined()
+  })
+
+  it('reads an exited Windows process as gone even while a handle keeps its creation time', async () => {
+    const { identity } = await loadWindowsIdentity(1777777777000)
+    const kill = vi.spyOn(process, 'kill')
+
+    kill.mockImplementationOnce(() => {
+      throw Object.assign(new Error('no such process'), { code: 'ESRCH' })
+    })
+    await expect(identity.readManagedHookProcessIdentity(4242)).resolves.toBeNull()
+
+    kill.mockImplementationOnce(() => {
+      throw Object.assign(new Error('access denied'), { code: 'EPERM' })
+    })
+    await expect(identity.readManagedHookProcessIdentity(4242)).resolves.toBe(
+      'win32:4242:1777777777000'
+    )
+  })
+
+  it('takes the table creation time when the per-process read has none', async () => {
+    const { identity, readWindowsProcess } = await loadWindowsIdentity(null, {
+      status: 'present',
+      commandLine: 'node relay.js',
+      startedAtMs: 1777777777123
+    })
+
+    await expect(identity.readManagedHookProcessIdentity(4242)).resolves.toBe(
+      'win32:4242:1777777777123'
+    )
+    expect(readWindowsProcess).toHaveBeenCalledWith(4242)
+  })
+
+  describe('on a Windows host without the native addon', () => {
+    const selfRow = { pid: process.pid, ppid: 1, name: 'node.exe', command: 'node relay.js' }
+
+    it('identifies a live lock owner from the scan creation time', async () => {
+      const identity = await loadWindowsIdentityWithoutAddon(async () => [
+        { ...selfRow, creationTimeMs: 1777777770000 },
+        {
+          pid: 4242,
+          ppid: 1,
+          name: 'node.exe',
+          command: 'node relay.js',
+          creationTimeMs: 1777777777123
+        }
+      ])
+      const kill = vi.spyOn(process, 'kill')
+
+      await expect(identity.readManagedHookProcessIdentity(4242)).resolves.toBe(
+        'win32:4242:1777777777123'
+      )
+      // The same string an older relay's per-PID CIM query records for this process.
+      await expect(identity.readManagedHookProcessIdentity(process.pid)).resolves.toBe(
+        `win32:${process.pid}:1777777770000`
+      )
+      expect(kill).not.toHaveBeenCalled()
+    })
+
+    it('reads a pid the scan does not list as gone', async () => {
+      const identity = await loadWindowsIdentityWithoutAddon(async () => [selfRow])
+      const kill = vi.spyOn(process, 'kill')
+
+      await expect(identity.readManagedHookProcessIdentity(4242)).resolves.toBeNull()
+      expect(kill).not.toHaveBeenCalled()
+    })
+
+    it('falls back to the OS liveness check when the scan fails', async () => {
+      const identity = await loadWindowsIdentityWithoutAddon(async () => {
+        throw new Error('windows process table CIM scan failed')
+      })
+      const kill = vi.spyOn(process, 'kill')
+
+      kill.mockImplementationOnce(() => true)
+      await expect(identity.readManagedHookProcessIdentity(4242)).resolves.toBeUndefined()
+      kill.mockImplementationOnce(() => {
+        throw Object.assign(new Error('no such process'), { code: 'ESRCH' })
+      })
+      await expect(identity.readManagedHookProcessIdentity(4242)).resolves.toBeNull()
+      kill.mockImplementationOnce(() => true)
+      await expect(identity.readManagedHookProcessIdentity(process.pid)).resolves.toMatch(
+        /^runtime:/
+      )
+    })
   })
 
   it('retries an unverified macOS process identity', async () => {

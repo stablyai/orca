@@ -33,7 +33,7 @@ export async function createLegacyDaemonAdapters(
     const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
     const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
     if (!(await probeSocket(socketPath))) {
-      // Why: a recycled stale pid later turns an identity check into a PowerShell spawn, so delete leaked pid/token files — but only when the pid-process is provably gone (a live daemon can transiently fail the probe, and dropping its token makes its sessions permanently unadoptable).
+      // Why: a recycled stale pid later points an identity check at an unrelated process, so delete leaked pid/token files — but only when the pid-process is provably gone (a live daemon can transiently fail the probe, and dropping its token makes its sessions permanently unadoptable).
       if (!legacyDaemonProcessMayBeAlive(runtimeDir, protocolVersion)) {
         for (const stalePath of [
           getDaemonPidPath(runtimeDir, protocolVersion),

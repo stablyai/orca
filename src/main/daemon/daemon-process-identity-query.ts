@@ -1,10 +1,8 @@
 import { execFile, execFileSync } from 'node:child_process'
-import { promisify } from 'node:util'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
+import { readWindowsProcess } from '../windows/windows-process-lookup'
 
 const PS_IDENTITY_TIMEOUT_MS = 2_000
-
-const execFileAsync = promisify(execFile)
 
 export type WindowsProcessIdentity = {
   commandLine: string
@@ -66,57 +64,19 @@ export async function getPsProcessIdentityAsync(pid: number): Promise<PsProcessI
   }
 }
 
-export function parseWindowsProcessIdentityJson(stdout: string): WindowsProcessIdentity | null {
-  const trimmed = stdout.trim()
-  if (!trimmed) {
-    return null
-  }
-  try {
-    const parsed = JSON.parse(trimmed) as { cmd?: unknown; start?: unknown }
-    if (typeof parsed.cmd !== 'string' || !parsed.cmd) {
-      return null
-    }
-    return {
-      commandLine: parsed.cmd,
-      startedAtMs:
-        typeof parsed.start === 'number' && Number.isFinite(parsed.start) ? parsed.start : null
-    }
-  } catch {
-    return null
-  }
-}
-
-// Why: the only reliable command-line source on Windows is a CIM query, which
-// costs a full powershell.exe spawn (300-800ms cold, worse under Defender).
-// Async because the sync version measurably froze the Electron main thread at
-// startup for the whole spawn (benchmark: ~0.5s warm, 3s timeout cap cold).
-// CreationDate rides along in the same spawn so start-time verification adds
-// zero extra process launches. Timed under ORCA_STARTUP_DIAGNOSTICS so the
-// cold-start benchmark can attribute startup cost to these checks.
+// Why the process table, not a per-PID CIM query: that forked powershell.exe at
+// every startup (300-800ms cold); the native snapshot reads off-thread, with no child.
+// Timed under ORCA_STARTUP_DIAGNOSTICS so the cold-start benchmark can attribute
+// startup cost to these checks.
 export async function queryWindowsProcessIdentity(
   pid: number
 ): Promise<WindowsProcessIdentity | null> {
   const startedAt = performance.now()
   try {
-    const { stdout } = await execFileAsync(
-      'powershell.exe',
-      [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}"; ` +
-          `if ($p) { $start = $null; ` +
-          `if ($p.CreationDate) { $start = [long]([DateTimeOffset]$p.CreationDate).ToUnixTimeMilliseconds() }; ` +
-          `@{ cmd = $p.CommandLine; start = $start } | ConvertTo-Json -Compress }`
-      ],
-      {
-        encoding: 'utf8',
-        timeout: 3_000
-      }
-    )
-    return parseWindowsProcessIdentityJson(stdout)
-  } catch {
-    return null
+    const lookup = await readWindowsProcess(pid)
+    return lookup.status === 'present' && lookup.commandLine
+      ? { commandLine: lookup.commandLine, startedAtMs: lookup.startedAtMs }
+      : null
   } finally {
     if (isStartupDiagnosticsEnabled()) {
       logStartupDiagnostic('daemon-pid-check', {

@@ -25,6 +25,30 @@ describe('parseWindowsCimProcessRows', () => {
     ])
   })
 
+  it('carries the creation time when CIM reports one, and omits it when it cannot', () => {
+    const stdout = JSON.stringify([
+      {
+        CommandLine: 'node relay.js',
+        CreationTimeMs: 1777777777123,
+        Name: 'node.exe',
+        ParentProcessId: 4,
+        ProcessId: 100
+      },
+      // The System Idle Process has no CreationDate, so the query emits null.
+      { CommandLine: null, CreationTimeMs: null, Name: 'Idle', ParentProcessId: 0, ProcessId: 0 }
+    ])
+    expect(parseWindowsCimProcessRows(stdout)).toEqual([
+      {
+        pid: 100,
+        ppid: 4,
+        name: 'node.exe',
+        creationTimeMs: 1777777777123,
+        command: 'node relay.js'
+      },
+      { pid: 0, ppid: 0, name: 'Idle', command: 'Idle' }
+    ])
+  })
+
   it('falls back to the image name when a process denied its command line', () => {
     const stdout = JSON.stringify([
       { CommandLine: null, Name: 'lsass.exe', ParentProcessId: 4, ProcessId: 700 }

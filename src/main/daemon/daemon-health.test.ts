@@ -23,7 +23,6 @@ import {
   startTimesWithinTolerance
 } from './daemon-process-start-time'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
-import { parseWindowsProcessIdentityJson } from './daemon-process-identity-query'
 import type { SubprocessHandle } from './session-subprocess-handle'
 
 function createMockSubprocess(): SubprocessHandle {
@@ -367,29 +366,6 @@ describe('startTimeMatches', () => {
     }
     // Shift expected by 10s — clearly outside the ±1500ms tolerance.
     expect(startTimeMatches(process.pid, actual + 10_000)).toBe(false)
-  })
-})
-
-describe('parseWindowsProcessIdentityJson', () => {
-  it('parses command line and start time from the CIM query output', () => {
-    expect(
-      parseWindowsProcessIdentityJson(
-        '{"cmd":"Orca.exe daemon-entry.js","start":1700000000000}\r\n'
-      )
-    ).toEqual({ commandLine: 'Orca.exe daemon-entry.js', startedAtMs: 1_700_000_000_000 })
-  })
-
-  it('returns a null start time when CreationDate was unavailable', () => {
-    expect(
-      parseWindowsProcessIdentityJson('{"cmd":"Orca.exe daemon-entry.js","start":null}')
-    ).toEqual({ commandLine: 'Orca.exe daemon-entry.js', startedAtMs: null })
-  })
-
-  it('returns null for a missing process or inaccessible command line', () => {
-    expect(parseWindowsProcessIdentityJson('')).toBeNull()
-    expect(parseWindowsProcessIdentityJson('   \r\n')).toBeNull()
-    expect(parseWindowsProcessIdentityJson('{"cmd":null,"start":123}')).toBeNull()
-    expect(parseWindowsProcessIdentityJson('not-json')).toBeNull()
   })
 })
 

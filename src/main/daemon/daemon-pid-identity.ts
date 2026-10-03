@@ -37,9 +37,9 @@ export function isNoSuchProcessError(error: unknown): boolean {
 
 /**
  * 'unknown' is load-bearing: a failed inspection is not evidence that the recorded PID is
- * someone else's. `ps` runs under a 2s budget and PowerShell CIM under 3s, and a loaded
- * machine blows both — reading that as "not our daemon" is what authorized reclaiming a live
- * daemon's ownership in the first place.
+ * someone else's. `ps` runs under a 2s budget and the Windows process table under 3s, and
+ * a loaded machine blows both — reading that as "not our daemon" is what authorized
+ * reclaiming a live daemon's ownership in the first place.
  */
 export type DaemonProcessIdentity = 'match' | 'mismatch' | 'unknown'
 

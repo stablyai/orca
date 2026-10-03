@@ -162,7 +162,7 @@ describe('daemon process identity evidence', () => {
     await expect(
       probeDaemonProcessIdentity(exactIncarnation, endpoint, {
         ...base,
-        queryWindowsProcess: async () => ({
+        readWindowsProcess: async () => ({
           status: 'present',
           commandLine: 'unreadable',
           startedAtMs:
@@ -176,7 +176,7 @@ describe('daemon process identity evidence', () => {
     await expect(
       probeDaemonProcessIdentity(exactIncarnation, endpoint, {
         ...base,
-        queryWindowsProcess: async () => ({
+        readWindowsProcess: async () => ({
           status: 'present',
           commandLine: null,
           startedAtMs: exactIncarnation.identity.startedAtMs
@@ -189,7 +189,7 @@ describe('daemon process identity evidence', () => {
     await expect(
       probeDaemonProcessIdentity(exactIncarnation, endpoint, {
         ...base,
-        queryWindowsProcess: async () => ({
+        readWindowsProcess: async () => ({
           status: 'present',
           commandLine: 'unrelated process',
           startedAtMs: exactIncarnation.identity.startedAtMs
@@ -202,7 +202,7 @@ describe('daemon process identity evidence', () => {
     await expect(
       probeDaemonProcessIdentity(exactIncarnation, endpoint, {
         ...base,
-        queryWindowsProcess: async () => ({
+        readWindowsProcess: async () => ({
           status: 'present',
           commandLine: 'node daemon-entry',
           startedAtMs: null
@@ -215,7 +215,7 @@ describe('daemon process identity evidence', () => {
     await expect(
       probeDaemonProcessIdentity(exactIncarnation, endpoint, {
         ...base,
-        queryWindowsProcess: async () => ({ status: 'missing' })
+        readWindowsProcess: async () => ({ status: 'missing' })
       })
     ).resolves.toMatchObject({
       state: 'gone',
@@ -228,7 +228,7 @@ describe('daemon process identity evidence', () => {
       probeDaemonProcessIdentity(exactIncarnation, endpoint, {
         platform: 'win32',
         signalProcess: () => 'missing',
-        queryWindowsProcess: async () => ({
+        readWindowsProcess: async () => ({
           status: 'present',
           commandLine: null,
           startedAtMs: exactIncarnation.identity.startedAtMs
@@ -362,7 +362,7 @@ describe('daemon audit availability evidence', () => {
       probeProcessIdentity: async () => ({
         state: 'present',
         reason: 'windows_identity_match',
-        evidenceSources: ['windows_cim', 'endpoint_identity']
+        evidenceSources: ['windows_process_table', 'endpoint_identity']
       })
     } satisfies DaemonAuditClassifierDependencies
 
