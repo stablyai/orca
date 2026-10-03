@@ -24,9 +24,15 @@ function annotationElementLabel(payload: BrowserGrabPayload): string {
   return react ? `${inlineText(react)} ${base}` : base
 }
 
+/** The one-line label the pending card and the tray show for a grabbed element. */
+export function browserAnnotationTitle(payload: Pick<BrowserGrabPayload, 'target'>): string {
+  const { target } = payload
+  return target.accessibility.accessibleName || target.textSnippet || target.tagName
+}
+
 export const BROWSER_ANNOTATION_INLINE_TEXT_MAX_LENGTH = 2048
 
-function inlineText(
+export function inlineText(
   content: string,
   maxLength = BROWSER_ANNOTATION_INLINE_TEXT_MAX_LENGTH
 ): string {

@@ -10,17 +10,17 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { translate } from '@/i18n/i18n'
-import {
-  GRAB_BUDGET,
-  type BrowserAnnotationIntent,
-  type BrowserPageAnnotation
-} from '../../../../../shared/browser-grab-types'
+import { GRAB_BUDGET, type BrowserAnnotationIntent } from '../../../../../shared/browser-grab-types'
 import { BROWSER_ANNOTATION_INTENT_OPTIONS } from '../describe-page/browser-annotation-geometry'
 import { BrowserAnnotationSendMenuContent } from './BrowserAnnotationSendMenuContent'
 import { preventAgentSendTargetOutsideDismiss } from './prevent-agent-send-target-outside-dismiss'
 
-export function BrowserPageAnnotationTray({
+type TrayAnnotation = { id: string; comment: string; intent: BrowserAnnotationIntent }
+
+/** Design Mode's annotation tray (send, copy, clear, edit); the PDF annotate mode reuses it. */
+export function BrowserPageAnnotationTray<T extends TrayAnnotation>({
   browserAnnotations,
+  getAnnotationTitle,
   annotationTraySendOpen,
   handleAnnotationTraySendOpenChange,
   worktreeId,
@@ -33,7 +33,8 @@ export function BrowserPageAnnotationTray({
   handleDeleteBrowserAnnotation,
   handleUpdateBrowserAnnotation
 }: {
-  browserAnnotations: BrowserPageAnnotation[]
+  browserAnnotations: T[]
+  getAnnotationTitle: (annotation: T) => string
   annotationTraySendOpen: boolean
   handleAnnotationTraySendOpenChange: (open: boolean) => void
   worktreeId: string
@@ -64,7 +65,7 @@ export function BrowserPageAnnotationTray({
     }
   }, [browserAnnotations, editingAnnotationId])
 
-  const handleStartEdit = (annotation: BrowserPageAnnotation): void => {
+  const handleStartEdit = (annotation: T): void => {
     setEditingAnnotationId(annotation.id)
     setEditComment(annotation.comment)
     setEditIntent(annotation.intent)
@@ -262,9 +263,7 @@ export function BrowserPageAnnotationTray({
                 <>
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium text-foreground">
-                      {annotation.payload.target.accessibility.accessibleName ||
-                        annotation.payload.target.textSnippet ||
-                        annotation.payload.target.tagName}
+                      {getAnnotationTitle(annotation)}
                     </div>
                     <div className="mt-0.5 line-clamp-2 text-muted-foreground">
                       {annotation.comment}

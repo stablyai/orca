@@ -80,6 +80,7 @@ function renderTray(): {
     <TooltipProvider>
       <BrowserPageAnnotationTray
         browserAnnotations={[makeAnnotation()]}
+        getAnnotationTitle={(annotation) => annotation.payload.target.tagName}
         annotationTraySendOpen={false}
         handleAnnotationTraySendOpenChange={vi.fn()}
         worktreeId="wt-1"

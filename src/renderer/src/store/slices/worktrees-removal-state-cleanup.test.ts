@@ -7,6 +7,8 @@ import {
   markHugeRepoWarningDismissed
 } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { getHostedReviewLinkMutationGenerationForTests } from './worktrees'
+import type { PdfAnnotation } from './pdf-annotations'
+import { makeOpenFile } from './store-test-helpers'
 import { makeLineage, makeTerminalTab, makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createTestStore,
@@ -319,6 +321,43 @@ describe('removeWorktree state cleanup', () => {
     await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     expect(store.getState().editorViewMode).toEqual({ 'file-2': 'changes' })
+  })
+
+  it('cleans up PDF annotations and annotate sessions for files in the removed worktree', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const note = (fileKey: string): PdfAnnotation => ({
+      id: `note-${fileKey}`,
+      fileKey,
+      page: 1,
+      x: 0,
+      y: 0,
+      regions: [],
+      quote: null,
+      comment: 'Tighten this',
+      intent: 'change',
+      createdAt: '2026-09-30T00:00:00.000Z'
+    })
+    const session = { armed: true, draft: { page: 1, x: 0, y: 0, regions: [], quote: null } }
+
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      openFiles: [
+        makeOpenFile({
+          id: 'file-1',
+          worktreeId: 'repo1::/path/wt1',
+          filePath: '/path/wt1/paper.pdf',
+          relativePath: 'paper.pdf'
+        })
+      ],
+      pdfAnnotationsByFileKey: { 'file-1': [note('file-1')], 'file-2': [note('file-2')] },
+      pdfAnnotateSessions: { 'file-1': session, 'file-2': session }
+    })
+
+    await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
+
+    expect(Object.keys(store.getState().pdfAnnotationsByFileKey)).toEqual(['file-2'])
+    expect(Object.keys(store.getState().pdfAnnotateSessions)).toEqual(['file-2'])
   })
 
   it('cleans up markdownFrontmatterVisible for files in the removed worktree', async () => {

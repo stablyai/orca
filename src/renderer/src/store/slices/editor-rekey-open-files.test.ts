@@ -49,6 +49,32 @@ describe('rekeyOpenFilesForPathChange', () => {
     useAppStore.setState(useAppStore.getInitialState(), true)
   })
 
+  it('moves unsent PDF annotations to the renamed file id', () => {
+    seedEditTab()
+    const oldId = useAppStore.getState().openFiles[0]!.id
+    useAppStore.getState().addPdfAnnotation({
+      id: 'note-1',
+      fileKey: oldId,
+      page: 1,
+      x: 10,
+      y: 20,
+      regions: [],
+      quote: null,
+      comment: 'Tighten this',
+      intent: 'change',
+      createdAt: '2026-09-30T00:00:00.000Z'
+    })
+    const newPath = '/repo/sub/a.md'
+
+    useAppStore.getState().rekeyOpenFilesForPathChange({
+      rekeys: [rekeyFor(oldId, newPath, 'sub/a.md')]
+    })
+
+    const byFileKey = useAppStore.getState().pdfAnnotationsByFileKey
+    expect(byFileKey[oldId]).toBeUndefined()
+    expect(byFileKey[newPath]?.map((a) => [a.id, a.fileKey])).toEqual([['note-1', newPath]])
+  })
+
   it('retargets the session preserving draft, dirty, baseline, cursor, view, active, tab bar', () => {
     seedEditTab()
     const oldId = useAppStore.getState().openFiles[0]!.id

@@ -36,6 +36,11 @@ export function createCloseFileAction(
         delete newMarkdownRichModeSizeOverride[fileId]
         const newEditorViewMode = { ...s.editorViewMode }
         delete newEditorViewMode[fileId]
+        // PDF annotations are dropped with their tab, like browser Design Mode's.
+        const newPdfAnnotationsByFileKey = { ...s.pdfAnnotationsByFileKey }
+        delete newPdfAnnotationsByFileKey[fileId]
+        const newPdfAnnotateSessions = { ...s.pdfAnnotateSessions }
+        delete newPdfAnnotateSessions[fileId]
         const markdownVisibilityKeys = new Set([fileId])
         if (closedFile?.markdownPreviewSourceFileId) {
           markdownVisibilityKeys.add(closedFile.markdownPreviewSourceFileId)
@@ -187,6 +192,8 @@ export function createCloseFileAction(
           markdownViewMode: newMarkdownViewMode,
           markdownRichModeSizeOverride: newMarkdownRichModeSizeOverride,
           editorViewMode: newEditorViewMode,
+          pdfAnnotationsByFileKey: newPdfAnnotationsByFileKey,
+          pdfAnnotateSessions: newPdfAnnotateSessions,
           markdownFrontmatterVisible: newMarkdownFrontmatterVisible,
           markdownTableOfContentsVisible: newMarkdownTableOfContentsVisible,
           tabBarOrderByWorktree: nextTabBarOrderByWorktree,
