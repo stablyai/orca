@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createNativeChatMessageReuse } from '../../../src/shared/native-chat-row-reuse'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   buildMobileNativeChatTransientData,
@@ -168,6 +169,34 @@ describe('buildMobileNativeChatTransientData', () => {
     })
 
     expect(result.data[0]?.blocks).toEqual([{ type: 'image-ref', url: 'file:///phone-photo.jpg' }])
+  })
+
+  it('keeps image-preview and pending rows once reused by id across a batch', () => {
+    const reuse = createNativeChatMessageReuse()
+    const history = [
+      user('source', '[Image: source: /tmp/a.png]'),
+      user('prompt', '[Image #1] look at this')
+    ]
+    const pending = [{ id: 'p1', text: 'and this', images: ['file:///b.jpg'] }]
+    const batch = (reply: string) => {
+      const messages = [...history, assistant('a1', reply)]
+      return reuse(
+        buildMobileNativeChatTransientData({
+          messages,
+          folded: foldMobileNativeChatMessages(messages),
+          streaming: null,
+          pending,
+          imagePreviewsByMessageId: { prompt: ['file:///phone-photo.jpg'] }
+        }).data
+      )
+    }
+    const before = batch('Hel')
+    const after = batch('Hello')
+
+    expect(after.map((row) => row.id)).toEqual(['prompt', 'a1', 'p1'])
+    expect(after[0]).toBe(before[0])
+    expect(after[2]).toBe(before[2])
+    expect(after[1]).not.toBe(before[1])
   })
 
   it('appends a synthetic bubble for gated streaming text, between transcript and pending', () => {
