@@ -14,7 +14,10 @@ import type { TerminalWorkspaceLaunchScope } from '../runtime/runtime-legacy-wor
 
 export type PluginMarkdownSourceAuthority = {
   getRuntimeId(): string
-  showTerminalWorkspaceLaunchScope(selector: string): Promise<TerminalWorkspaceLaunchScope>
+  showTerminalWorkspaceLaunchScope(
+    selector: string,
+    options: { materializePushTarget: false }
+  ): Promise<TerminalWorkspaceLaunchScope>
 }
 
 export async function resolvePluginMarkdownSource(
@@ -37,10 +40,13 @@ export async function resolvePluginMarkdownSource(
     return { status: 'unavailable', reason: 'unsupported-context' }
   }
   try {
-    const scope = await authority.showTerminalWorkspaceLaunchScope(`id:${request.worktreeId}`)
+    const scope = await authority.showTerminalWorkspaceLaunchScope(`id:${request.worktreeId}`, {
+      materializePushTarget: false
+    })
     if (
       scope.id !== request.worktreeId ||
       scope.connectionId !== null ||
+      scope.executionHostId !== 'local' ||
       (!scope.repo && !scope.folderWorkspace) ||
       (scope.repo && getRepoExecutionHostId(scope.repo) !== 'local') ||
       (scope.folderWorkspace && getRepoExecutionHostId(scope.folderWorkspace) !== 'local') ||

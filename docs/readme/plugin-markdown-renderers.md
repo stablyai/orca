@@ -62,6 +62,9 @@ registered workspace and document. It verifies existence, Markdown extension and
 realpath containment before and after command invocation. `fileId` is an opaque
 editor correlation identity, not an authorization token. Manufacturing a workspace
 path or selecting another runtime ID cannot authorize a render.
+Source lookup explicitly disables deferred push-target materialization: reading a
+Markdown fence cannot add a Git remote or fetch from the network. Terminal launch
+retains its existing default behavior.
 
 The worker receives the validated request unchanged and returns:
 

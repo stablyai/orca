@@ -8,7 +8,10 @@ import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconc
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type { WorktreeVisibilitySourceMatcher } from '../../shared/worktree/visibility-sources'
 import type { RuntimeStore } from './runtime-store-contract'
-import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
+import type {
+  TerminalWorkspaceLaunchScope,
+  TerminalWorkspaceLookupOptions
+} from './runtime-legacy-worker-terminal-recovery-types'
 import type {
   WorkspacePortKillRequest,
   WorkspacePortKillResult,
@@ -138,9 +141,10 @@ export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreS
    * worktree record it never reads and lose the floating workspace to a `selector_not_found`.
    */
   async showTerminalWorkspaceLaunchScope(
-    worktreeSelector: string
+    worktreeSelector: string,
+    options: TerminalWorkspaceLookupOptions = {}
   ): Promise<TerminalWorkspaceLaunchScope> {
-    return await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+    return await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector, undefined, options)
   }
 
   async scanWorkspacePorts(repoId?: string): Promise<WorkspacePortScanResult> {

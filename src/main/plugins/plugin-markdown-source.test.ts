@@ -26,6 +26,7 @@ async function fixture(folder = false) {
     id: folder ? 'folder:notes' : 'repo::notes',
     path: workspace,
     connectionId: null,
+    executionHostId: 'local',
     repo: folder
       ? null
       : { id: 'repo', path: workspace, displayName: 'Notes', badgeColor: '', addedAt: 0 },
@@ -84,7 +85,10 @@ describe('Markdown source authorization', () => {
         status: 'resolved',
         source: { fileId: 'exact-file', runtimeId: 'runtime', worktreeId: f.scope.id }
       })
-      expect(f.authority.showTerminalWorkspaceLaunchScope).toHaveBeenCalledWith(`id:${f.scope.id}`)
+      expect(f.authority.showTerminalWorkspaceLaunchScope).toHaveBeenCalledWith(
+        `id:${f.scope.id}`,
+        { materializePushTarget: false }
+      )
     }
   )
 
@@ -119,6 +123,11 @@ describe('Markdown source authorization', () => {
       status: 'unavailable'
     })
     f.scope.connectionId = null
+    f.scope.executionHostId = 'runtime:other'
+    expect(await resolvePluginMarkdownSource(f.authority, f.request)).toMatchObject({
+      status: 'unavailable'
+    })
+    f.scope.executionHostId = 'local'
     if (!f.scope.repo) {
       throw new Error('fixture needs repo')
     }

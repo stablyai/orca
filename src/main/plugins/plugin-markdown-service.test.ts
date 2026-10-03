@@ -7,6 +7,8 @@ import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fi
 import type { PluginMarkdownWorkerResult } from '../../shared/plugins/plugin-markdown-renderer'
 import { PluginService } from './plugin-service'
 import type { PluginWorkerHandle } from './plugin-host-process'
+import { installPluginFromLocalPath } from './plugin-install'
+import { getUserPluginsDir } from './plugin-discovery'
 
 const roots: string[] = []
 const services: PluginService[] = []
@@ -39,6 +41,15 @@ describe('native Markdown service integration', () => {
     })
     await writeFile(join(pluginRoot, 'orca-plugin.json'), JSON.stringify(manifest))
     await writeFile(join(pluginRoot, 'worker.mjs'), 'export default async function () {}')
+    const userDataPath = join(root, 'data')
+    const installed = await installPluginFromLocalPath({
+      pluginsDir: getUserPluginsDir(userDataPath),
+      sourcePath: pluginRoot,
+      hostVersion: '1.0.0'
+    })
+    if (!installed.ok) {
+      throw new Error(installed.error)
+    }
     const response: PluginMarkdownWorkerResult = {
       sessionId: 'block',
       revision: 'r1',
@@ -62,12 +73,12 @@ describe('native Markdown service integration', () => {
     let consent = fingerprintPluginConsent(manifest)
     const factory = vi.fn(async () => worker)
     const service = new PluginService({
-      userDataPath: join(root, 'data'),
+      userDataPath,
       hostVersion: '1.0.0',
       isPluginSystemEnabled: () => true,
       getDisabledPlugins: () => [],
       getPluginConsents: () => ({ 'orca-samples.query': consent }),
-      getDevPluginPaths: () => [pluginRoot],
+      getDevPluginPaths: () => [],
       workerFactory: factory
     })
     services.push(service)
@@ -76,6 +87,7 @@ describe('native Markdown service integration', () => {
       id: 'repo::notes',
       path: root,
       connectionId: null,
+      executionHostId: 'local' as const,
       repo: { id: 'repo', path: root, displayName: 'Notes', badgeColor: '', addedAt: 0 },
       folderWorkspace: null
     }))
@@ -111,7 +123,7 @@ describe('native Markdown service integration', () => {
     })
     expect(invoke).toHaveBeenCalledWith('render-query', request)
     expect(factory).toHaveBeenCalledOnce()
-    expect(scope).toHaveBeenCalledWith('id:repo::notes')
+    expect(scope).toHaveBeenCalledWith('id:repo::notes', { materializePushTarget: false })
     expect(active).not.toHaveBeenCalled()
     consent = 'stale-fingerprint'
     expect(service.markdown.list()).toEqual([
