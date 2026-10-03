@@ -184,7 +184,10 @@ export function normalizeProviderEvent(input: {
       payload = normalizeQoderEvent(state, eventName, promptText, paneKey, hookPayload)
       break
     case 'kimi':
-      payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayload)
+      payload =
+        eventName === 'UserPromptSubmit' && extractedPrompt.text && !promptText
+          ? null
+          : normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayload)
       break
     case 'muse':
       payload = normalizeMuseEvent(state, eventName, promptText, paneKey, hookPayload)

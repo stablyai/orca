@@ -116,6 +116,60 @@ describe('shared agent-hook-listener', () => {
     expect(stopped?.providerSession).toMatchObject({ key: 'session_id', id: 'session_abc' })
   })
 
+  it('strips leading Kimi UserPromptSubmit hook results from prompt blocks', () => {
+    const submitted = normalizeAndAccept(state, 'kimi', {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: [
+        {
+          type: 'text',
+          text: '<hook_result hook_event="UserPromptSubmit">\n{}\n</hook_result>'
+        },
+        {
+          type: 'text',
+          text: '<hook_result hook_event="UserPromptSubmit">\nmetadata\n</hook_result>'
+        },
+        { type: 'text', text: 'Fix the CI configuration' }
+      ]
+    })
+
+    expect(submitted?.payload.prompt).toBe('Fix the CI configuration')
+    expect(submitted?.hasExplicitPrompt).toBe(true)
+  })
+
+  it('ignores a Kimi prompt containing only UserPromptSubmit hook results', () => {
+    normalizeAndAccept(state, 'kimi', {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: [{ type: 'text', text: 'Fix the CI configuration' }]
+    })
+    const hookResult = normalizeAndAccept(state, 'kimi', {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: [
+        {
+          type: 'text',
+          text: '<hook_result hook_event="UserPromptSubmit">\n{}\n</hook_result>'
+        }
+      ]
+    })
+    const tool = normalizeAndAccept(state, 'kimi', {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'pnpm test' }
+    })
+
+    expect(hookResult).toBeNull()
+    expect(tool?.payload.prompt).toBe('Fix the CI configuration')
+  })
+
+  it('preserves Kimi user text that only mentions hook-result markup', () => {
+    const prompt = 'Explain why <hook_result hook_event="UserPromptSubmit"> appears here'
+    const submitted = normalizeAndAccept(state, 'kimi', {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: [{ type: 'text', text: prompt }]
+    })
+
+    expect(submitted?.payload.prompt).toBe(prompt)
+  })
+
   // Why: Kimi shares Claude-compatible compact/harness hooks; cover the same sticky-working
   // guards so a Kimi-only regression cannot slip past the Claude-only tests (issue #11352).
   it('ignores harness-injected UserPromptSubmit for Kimi', () => {
