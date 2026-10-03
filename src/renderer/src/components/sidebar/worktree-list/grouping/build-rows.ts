@@ -2,7 +2,10 @@ import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
-import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
+import type {
+  WorkspaceLineage,
+  WorktreeLineage
+} from '../../../../../../shared/worktree/lineage-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import { cloneDefaultWorkspaceStatuses } from '../../../../../../shared/workspace-statuses'
 import type { AppState } from '../../../../store/types'
@@ -24,11 +27,9 @@ import type { ProjectGroupingModel } from './project-grouping'
 import { appendProjectGroupSections } from './project-group-sections'
 import { getPinnedSectionWorktrees } from '../../pinned-section-worktrees'
 import { emitPinnedGroup } from './pinned-group-rows'
-import {
-  appendWorktreeRows,
-  buildFolderWorkspaceRow,
-  buildPendingCreationRow
-} from './row-builders'
+import { appendWorktreeRows, buildPendingCreationRow } from './row-builders'
+import { getAttachedWorktreesByFolderWorkspaceId } from './folder-workspace-attached'
+import { appendFolderWorkspaceRows } from './folder-workspace-rows'
 import {
   compareFolderWorkspacesForDisplay,
   getRenderableFolderWorkspaces
@@ -70,7 +71,8 @@ export function buildRows(
   folderWorkspaces: readonly FolderWorkspace[] = [],
   hostLabelById?: ReadonlyMap<string, string>,
   defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID,
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings),
+  workspaceLineageByChildKey: Record<string, WorkspaceLineage> = {}
 ): Row[] {
   const result: Row[] = []
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
@@ -101,10 +103,32 @@ export function buildRows(
     ? getPinnedSectionWorktrees(worktrees, lineageById, worktreeMap)
     : worktrees.filter((worktree) => worktree.isPinned)
   const pinnedSectionIds = new Set(pinnedSectionWorktrees.map(getWorktreeHostIdentity))
-  const naturalWorktrees =
+  const worktreesOutsidePinnedSection =
     pinnedDisplayPolicy === 'duplicate-in-groups'
       ? worktrees
       : worktrees.filter((worktree) => !pinnedSectionIds.has(getWorktreeHostIdentity(worktree)))
+  // Why: a worktree attached to a rendered folder workspace lives inside that
+  // card, whatever lane its own status would pick, so it must not also be a row
+  // of its own. Pinned attached worktrees keep their pinned placement, matching
+  // worktree lineage. A folder that is not rendered (host filter) keeps its
+  // children visible as ordinary rows rather than hiding them.
+  const renderableFolderIds = new Set(
+    renderableFolderWorkspaces.map((pair) => pair.folderWorkspace.id)
+  )
+  const attachedByFolderId = new Map(
+    [
+      ...getAttachedWorktreesByFolderWorkspaceId(
+        worktreesOutsidePinnedSection,
+        workspaceLineageByChildKey
+      )
+    ].filter(([folderId]) => renderableFolderIds.has(folderId))
+  )
+  const attachedIdentities = new Set(
+    [...attachedByFolderId.values()].flat().map(getWorktreeHostIdentity)
+  )
+  const naturalWorktrees = worktreesOutsidePinnedSection.filter(
+    (worktree) => !attachedIdentities.has(getWorktreeHostIdentity(worktree))
+  )
   // Why the full set: under the default pinned policy a pinned worktree exists
   // only in the Pinned section, and its host is part of whether the sidebar is
   // mixed at all. Scoping to naturalWorktrees left pinned remotes unlabelled.
@@ -185,11 +209,23 @@ export function buildRows(
           hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
           cyclicLineageIds
         })
-        for (const pair of [...renderableFolderWorkspaces].sort((left, right) =>
-          compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
-        )) {
-          result.push(buildFolderWorkspaceRow(pair, 0))
-        }
+        appendFolderWorkspaceRows(
+          result,
+          [...renderableFolderWorkspaces].sort((left, right) =>
+            compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
+          ),
+          0,
+          {
+            attachedByFolderId,
+            repoMap,
+            lineageById,
+            worktreeMap,
+            nestLineage,
+            collapsedGroups,
+            cyclicLineageIds,
+            hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels
+          }
+        )
       }
     }
     return result
@@ -229,7 +265,8 @@ export function buildRows(
     lineageById,
     worktreeMap,
     nestLineage,
-    cyclicLineageIds
+    cyclicLineageIds,
+    attachedByFolderId
   }
 
   if (groupBy !== 'repo' || projectGroups.length === 0) {
