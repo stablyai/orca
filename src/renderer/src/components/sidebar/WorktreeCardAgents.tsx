@@ -12,7 +12,8 @@ import {
 } from './worktree-card-send-target-inputs'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { cn } from '@/lib/utils'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { AcknowledgedAgentRow } from '@/lib/agent-entry-acknowledgement'
+import { isAgentTurnAcknowledged } from '../../../../shared/agent-turn-acknowledgement'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { dismissStaleAgentRowByKey } from '../terminal-pane/stale-agent-row'
 import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
@@ -27,7 +28,6 @@ import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { translate } from '@/i18n/i18n'
 import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
-import { selectAcknowledgedAgentTimes } from './worktree-card-agent-ack-inputs'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -47,7 +47,7 @@ function revealCompactAgentCard(agentListRoot: HTMLElement | null): void {
 
 type Props = {
   worktreeId: string
-  agents?: DashboardAgentRowData[]
+  agents?: AcknowledgedAgentRow[]
   /** Spacing from the card body above; parent decides whether a divider is appropriate. */
   className?: string
 }
@@ -69,7 +69,7 @@ const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
 
 type BodyProps = {
   worktreeId: string
-  agents: DashboardAgentRowData[]
+  agents: AcknowledgedAgentRow[]
   className?: string
 }
 
@@ -91,19 +91,14 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const focusedAgentPaneKey = useFocusedAgentPaneKey(worktreeId)
   const compactAgentListRootRef = useRef<HTMLDivElement | null>(null)
 
-  // Why: acknowledgement writes are app-global; project only this card's rows
-  // so unrelated worktree activity does not rerender every agent body.
-  const acknowledgedAgentTimes = useAppStore(
-    useShallow((s) => selectAcknowledgedAgentTimes(s, agents))
-  )
+  // Why: the rows carry their acknowledgement, joined where they are built.
   const unvisitedByPaneKey = useMemo(() => {
     const out: Record<string, boolean> = {}
-    for (const [index, agent] of agents.entries()) {
-      const ackAt = acknowledgedAgentTimes[index] ?? 0
-      out[agent.paneKey] = ackAt < agent.entry.stateStartedAt
+    for (const agent of agents) {
+      out[agent.paneKey] = !isAgentTurnAcknowledged(agent.entry)
     }
     return out
-  }, [agents, acknowledgedAgentTimes])
+  }, [agents])
 
   const handleDismissAgent = useCallback(
     (paneKey: string) => {
@@ -236,7 +231,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   }, [])
 
   const renderAgentBranch = (
-    agent: DashboardAgentRowData,
+    agent: AcknowledgedAgentRow,
     ancestorPaneKeys: ReadonlySet<string> = new Set()
   ): React.ReactNode => {
     if (ancestorPaneKeys.has(agent.paneKey)) {
@@ -295,7 +290,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   }
 
   const renderCompactAgentBranch = (
-    agent: DashboardAgentRowData,
+    agent: AcknowledgedAgentRow,
     ancestorPaneKeys: ReadonlySet<string> = new Set(),
     cacheTimerActive = true
   ): React.ReactNode => {

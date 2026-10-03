@@ -12,6 +12,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
 import { applyAgentPaneActivityFlags } from '@/lib/agent-pane-activity-flags'
+import { acknowledgedAgentEntry } from '@/lib/agent-entry-acknowledgement'
 
 export type WorktreeAgentActivitySummary = {
   hasPermission: boolean
@@ -56,6 +57,7 @@ export type AgentActivityInput = Pick<
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
+  | 'acknowledgedAgentsByPaneKey'
 > & {
   tabsByWorktree: AgentActivityTabsByWorktree
   runtimeAgentOrchestrationByPaneKey?: AppState['runtimeAgentOrchestrationByPaneKey']
@@ -66,6 +68,7 @@ type AgentActivityCache = {
   agentStatusEpoch: number
   migrationUnsupportedByPtyId: AppState['migrationUnsupportedByPtyId']
   retainedAgentsByPaneKey: AppState['retainedAgentsByPaneKey']
+  acknowledgedAgentsByPaneKey: AppState['acknowledgedAgentsByPaneKey']
   runtimeAgentOrchestrationByPaneKey: AppState['runtimeAgentOrchestrationByPaneKey'] | undefined
   summaries: Map<string, WorktreeAgentActivitySummary>
 }
@@ -89,6 +92,7 @@ function getWorktreeAgentActivitySummaries(
     agentActivityCache.agentStatusEpoch === state.agentStatusEpoch &&
     agentActivityCache.migrationUnsupportedByPtyId === state.migrationUnsupportedByPtyId &&
     agentActivityCache.retainedAgentsByPaneKey === state.retainedAgentsByPaneKey &&
+    agentActivityCache.acknowledgedAgentsByPaneKey === state.acknowledgedAgentsByPaneKey &&
     agentActivityCache.runtimeAgentOrchestrationByPaneKey === runtimeAgentOrchestrationByPaneKey
   ) {
     return agentActivityCache.summaries
@@ -144,7 +148,10 @@ function getWorktreeAgentActivitySummaries(
     if (entry.state === 'done') {
       addParentPaneId(summary, orchestration, worktreeId, tabIdToWorktreeId)
     }
-    applyAgentPaneActivityFlags(summary, entry)
+    applyAgentPaneActivityFlags(
+      summary,
+      acknowledgedAgentEntry(entry, state.acknowledgedAgentsByPaneKey[paneKey])
+    )
   }
 
   for (const unsupported of Object.values(state.migrationUnsupportedByPtyId ?? {})) {
@@ -158,7 +165,11 @@ function getWorktreeAgentActivitySummaries(
   for (const retained of Object.values(state.retainedAgentsByPaneKey ?? {})) {
     const summary = summaryForWorktree(retained.worktreeId)
     // Why: a failed agent is retained so its failure stays visible, not so it reads done.
-    if (agentVerdictDisplayMark(retained.entry) === 'failed') {
+    const entry = acknowledgedAgentEntry(
+      retained.entry,
+      state.acknowledgedAgentsByPaneKey[retained.entry.paneKey]
+    )
+    if (agentVerdictDisplayMark(entry) === 'failed') {
       summary.hasRetainedFailed = true
     } else {
       summary.hasRetainedDone = true
@@ -191,6 +202,7 @@ function getWorktreeAgentActivitySummaries(
     agentStatusEpoch: state.agentStatusEpoch,
     migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
     retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
+    acknowledgedAgentsByPaneKey: state.acknowledgedAgentsByPaneKey,
     runtimeAgentOrchestrationByPaneKey,
     summaries
   }

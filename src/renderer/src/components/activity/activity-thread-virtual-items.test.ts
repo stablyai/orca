@@ -10,6 +10,7 @@ import { makeTab, makeWorktree } from './ActivityPrototypePage-test-fixtures'
 
 function makeThread(paneKey: string): AgentPaneThread {
   return {
+    acknowledgedAt: undefined,
     paneKey,
     tab: makeTab(),
     worktree: makeWorktree(),

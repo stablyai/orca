@@ -45,6 +45,7 @@ function clearWithOpenDraft(clear: boolean = true) {
   const retained = makeRetainedDoneEntry(tab)
   const paneKey = retained.entry.paneKey
   const thread: AgentPaneThread = {
+    acknowledgedAt: undefined,
     paneKey,
     tab,
     worktree: makeWorktree(),

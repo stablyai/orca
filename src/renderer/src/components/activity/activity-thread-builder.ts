@@ -4,6 +4,7 @@ import {
   statusPreviewForEntry
 } from './activity-thread-presentation'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { acknowledgedAgentEntry } from '@/lib/agent-entry-acknowledgement'
 import type {
   ActivityEvent,
   ActivityLiveAgentSnapshot,
@@ -52,6 +53,7 @@ function reuseThreadIfEqual(
     previous.agentType === next.agentType &&
     previous.currentAgentState === next.currentAgentState &&
     previous.currentAgentEntry === next.currentAgentEntry &&
+    previous.acknowledgedAt === next.acknowledgedAt &&
     previous.paneEntry === next.paneEntry &&
     previous.responsePreview === next.responsePreview &&
     previous.latestTimestamp === next.latestTimestamp &&
@@ -70,12 +72,16 @@ export function buildAgentPaneThreads(
     events: ActivityEvent[]
     liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot>
     paneEntryByPaneKey?: Record<string, AgentStatusEntry>
+    acknowledgedAgentsByPaneKey: Readonly<Record<string, number>>
     generatedTitlesEnabled?: boolean
   },
   reuseCache?: AgentPaneThreadReuseCache
 ): AgentPaneThread[] {
   const generatedTitlesEnabled = args.generatedTitlesEnabled === true
   const byPaneKey = new Map<string, AgentPaneThread>()
+  // Why: the thread's line follows its mark, so a seen cut-short turn drops "Failed" as the dot does.
+  const seen = (entry: AgentStatusEntry) =>
+    acknowledgedAgentEntry(entry, args.acknowledgedAgentsByPaneKey[entry.paneKey])
   for (const event of args.events) {
     const paneKey = event.entry.paneKey
     const existing = byPaneKey.get(paneKey)
@@ -89,8 +95,9 @@ export function buildAgentPaneThreads(
         agentType: event.agentType,
         currentAgentState: null,
         currentAgentEntry: null,
+        acknowledgedAt: args.acknowledgedAgentsByPaneKey[paneKey],
         paneEntry: args.paneEntryByPaneKey?.[paneKey],
-        responsePreview: statusPreviewForEntry(event.entry, event.state),
+        responsePreview: statusPreviewForEntry(seen(event.entry), event.state),
         latestTimestamp: event.timestamp,
         latestEvent: event,
         events: [event],
@@ -111,7 +118,7 @@ export function buildAgentPaneThreads(
       existing.agentType = event.agentType
       existing.tab = event.tab
       existing.responsePreview = statusPreviewForEntry(
-        event.entry,
+        seen(event.entry),
         event.state,
         existing.responsePreview
       )
@@ -130,8 +137,9 @@ export function buildAgentPaneThreads(
         agentType: liveAgent.agentType,
         currentAgentState: liveAgent.state,
         currentAgentEntry: liveAgent.entry,
+        acknowledgedAt: args.acknowledgedAgentsByPaneKey[paneKey],
         paneEntry: args.paneEntryByPaneKey?.[paneKey],
-        responsePreview: statusPreviewForEntry(liveAgent.entry, liveAgent.entry.state),
+        responsePreview: statusPreviewForEntry(seen(liveAgent.entry), liveAgent.entry.state),
         latestTimestamp: liveAgent.timestamp,
         latestEvent: null,
         events: [],
@@ -148,7 +156,7 @@ export function buildAgentPaneThreads(
     existing.currentAgentState = liveAgent.state
     existing.currentAgentEntry = liveAgent.entry
     existing.responsePreview = statusPreviewForEntry(
-      liveAgent.entry,
+      seen(liveAgent.entry),
       liveAgent.entry.state,
       existing.responsePreview
     )

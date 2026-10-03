@@ -1,4 +1,5 @@
 import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
+import { PROVIDER_EXIT_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionEndedEvent } from './structured-agent-session-adapter'
@@ -193,5 +194,5 @@ function logExitFailure(
 }
 
 function providerExitSettlementId(event: UnexpectedExitLifecycleEvent): string {
-  return `provider-exit:${event.sessionId}:${event.fence}:${event.acquisitionGeneration}`
+  return `${PROVIDER_EXIT_ROW_PREFIX}${event.sessionId}:${event.fence}:${event.acquisitionGeneration}`
 }

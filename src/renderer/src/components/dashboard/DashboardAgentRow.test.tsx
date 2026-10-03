@@ -5,13 +5,17 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { TooltipProvider } from '../ui/tooltip'
 import DashboardAgentRow from './DashboardAgentRow'
-import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
+import {
+  acknowledgedAgentRow,
+  type AcknowledgedAgentRow as DashboardAgentRowData
+} from '@/lib/agent-entry-acknowledgement'
 
 const NOW = 120_000
 
 function makeAgent(
-  overrides: Partial<DashboardAgentRowData> = {},
-  entryOverrides: Partial<AgentStatusEntry> = {}
+  overrides: Partial<Omit<DashboardAgentRowData, 'entry'>> = {},
+  entryOverrides: Partial<AgentStatusEntry> = {},
+  acknowledgedAt?: number
 ): DashboardAgentRowData {
   const paneKey = overrides.paneKey ?? 'tab-1:leaf-1'
   const tab: TerminalTab = {
@@ -35,15 +39,18 @@ function makeAgent(
     ...entryOverrides
   }
 
-  return {
-    paneKey,
-    entry,
-    tab,
-    agentType: entry.agentType ?? 'codex',
-    state: entry.state,
-    startedAt: entry.stateStartedAt,
-    ...overrides
-  }
+  return acknowledgedAgentRow(
+    {
+      paneKey,
+      entry,
+      tab,
+      agentType: entry.agentType ?? 'codex',
+      state: entry.state,
+      startedAt: entry.stateStartedAt,
+      ...overrides
+    },
+    acknowledgedAt
+  )
 }
 
 function renderRow(agent: DashboardAgentRowData): string {
@@ -324,6 +331,30 @@ describe('DashboardAgentRow', () => {
     expect(markup).toContain('bg-red-500')
     expect(markup).not.toContain('>interrupted<')
     expect(markup).not.toContain('lucide-circle-check')
+  })
+
+  // Attention only while unseen: a visited cut-short row reads like a finished one.
+  it('renders a visited cut-short row as done, and a visited failure still as failed', () => {
+    const visited = (outcome: 'interruption' | 'failure', acknowledgedAt: number) =>
+      renderRow(
+        makeAgent(
+          { state: 'done', startedAt: 1_000 },
+          {
+            state: 'done',
+            prompt: 'Give me a quick update',
+            updatedAt: 2_000,
+            stateStartedAt: 2_000,
+            stateHistory: [],
+            mainAgent: { state: 'done', outcome, stateStartedAt: 2_000 }
+          },
+          acknowledgedAt
+        )
+      )
+
+    expect(visited('interruption', 1_999)).toContain('aria-label="Failed"')
+    expect(visited('interruption', 2_000)).toContain('aria-label="Done"')
+    expect(visited('interruption', 2_000)).not.toContain('aria-label="Failed"')
+    expect(visited('failure', 2_000)).toContain('aria-label="Failed"')
   })
 
   it.each([

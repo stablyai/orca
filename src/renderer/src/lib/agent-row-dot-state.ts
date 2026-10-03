@@ -2,6 +2,7 @@ import type { AgentDotState } from '@/components/AgentStateDot'
 import type { AgentChildRowModel } from '../../../shared/agent-child-row-model'
 import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
 import type { AgentStatusEntry, AgentWorkingMode } from '../../../shared/agent-status-types'
+import type { AgentTurnAcknowledgement } from '../../../shared/agent-turn-acknowledgement'
 import type { AgentRowState } from './agent-row-decay-state'
 
 /**
@@ -31,7 +32,8 @@ export function agentRowDotState(
  */
 export function agentRowDisplayDotState(agent: {
   state: AgentRowState
-  entry: Pick<AgentStatusEntry, 'state' | 'interrupted' | 'mainAgent' | 'workingMode'>
+  entry: Pick<AgentStatusEntry, 'state' | 'interrupted' | 'mainAgent' | 'workingMode'> &
+    AgentTurnAcknowledgement
   childRow?: Pick<AgentChildRowModel, 'displayState'>
 }): AgentDotState {
   if (agent.childRow) {

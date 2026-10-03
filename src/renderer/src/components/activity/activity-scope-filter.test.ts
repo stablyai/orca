@@ -20,6 +20,7 @@ const SSH_HOST = 'ssh:devbox' as ExecutionHostId
 function makeThread(overrides: Partial<AgentPaneThread> = {}): AgentPaneThread {
   const worktree = makeWorktree()
   return {
+    acknowledgedAt: undefined,
     paneKey: PANE_KEY,
     paneTitle: 'Test Agent',
     agentType: 'claude',

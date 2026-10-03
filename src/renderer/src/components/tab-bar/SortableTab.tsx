@@ -105,6 +105,7 @@ export default function SortableTab({
       tab,
       agentStatusByPaneKey: s.agentStatusByPaneKey,
       agentStatusEpoch: s.agentStatusEpoch,
+      acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
       runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
       ptyIdsByTabId: s.ptyIdsByTabId,
       terminalLayout: s.terminalLayoutsByTabId?.[tab.id]

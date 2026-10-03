@@ -16,6 +16,7 @@ describe('#9040 terminal tab dot attributes spinner titles to the launched agent
 
   it('reports working for a Claude spinner title on a live tab', () => {
     const status = resolveTerminalTabActivityStatus({
+      acknowledgedAgentsByPaneKey: {},
       tab: {
         id: 'tab-1',
         title: '⠋ implementing the feature',
@@ -30,6 +31,7 @@ describe('#9040 terminal tab dot attributes spinner titles to the launched agent
   // Control: the named-provider path this must stay at parity with.
   it('reports working for a named-provider title', () => {
     const status = resolveTerminalTabActivityStatus({
+      acknowledgedAgentsByPaneKey: {},
       tab: { id: 'tab-1', title: 'claude [working]' } as TerminalTab,
       ptyIdsByTabId: { 'tab-1': ['pty-0'] }
     })
@@ -39,6 +41,7 @@ describe('#9040 terminal tab dot attributes spinner titles to the launched agent
 
   it('stays out of working for a spinner title with no launch identity', () => {
     const status = resolveTerminalTabActivityStatus({
+      acknowledgedAgentsByPaneKey: {},
       tab: { id: 'tab-1', title: '⠐ Review branch for regressions' } as TerminalTab,
       ptyIdsByTabId: { 'tab-1': ['pty-0'] }
     })

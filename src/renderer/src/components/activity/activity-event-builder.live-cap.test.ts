@@ -41,7 +41,7 @@ describe('live activity capacity', () => {
       acknowledgedAgentsByPaneKey: {},
       now: 3_000
     })
-    const threads = buildAgentPaneThreads(result)
+    const threads = buildAgentPaneThreads({ ...result, acknowledgedAgentsByPaneKey: {} })
 
     expect(threads).toHaveLength(82)
     expect(

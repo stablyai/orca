@@ -22,6 +22,7 @@ import { buildWorktreeAgentRows } from './worktree-agent-rows'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { getCompactAgentSecondary } from './worktree-card-compact-agent-row'
 import { resolveAttention } from './smart-attention'
+import { acknowledgedAgentRow } from '@/lib/agent-entry-acknowledgement'
 
 const NOW = new Date('2026-05-04T12:00:00.000Z').getTime()
 const TAB_ID = 'tab-1'
@@ -73,10 +74,10 @@ describe('a stale entry on a pane Orca still holds', () => {
       now: NOW
     })
     expect(rows[0].state).not.toBe('done')
-    expect(getAgentDotState(rows[0])).not.toBe('done')
+    expect(getAgentDotState(acknowledgedAgentRow(rows[0], undefined))).not.toBe('done')
     // Nor the working spinner: Orca has no current evidence of work either.
-    expect(getAgentDotState(rows[0])).not.toBe('working')
-    expect(getAgentDotState(rows[0])).toBe('unverifiable')
+    expect(getAgentDotState(acknowledgedAgentRow(rows[0], undefined))).not.toBe('working')
+    expect(getAgentDotState(acknowledgedAgentRow(rows[0], undefined))).toBe('unverifiable')
   })
 
   it('reports the observed gap rather than a verdict on the agent', () => {
@@ -87,7 +88,9 @@ describe('a stale entry on a pane Orca still holds', () => {
       ptyIdsByTabId: LIVE,
       now: NOW
     })
-    expect(getCompactAgentSecondary(rows[0], NOW)).toBe('No update in 34m')
+    expect(getCompactAgentSecondary(acknowledgedAgentRow(rows[0], undefined), NOW)).toBe(
+      'No update in 34m'
+    )
   })
 
   it('measures the gap from the observation clock, not the delivery clock', () => {
@@ -101,7 +104,9 @@ describe('a stale entry on a pane Orca still holds', () => {
       now: NOW
     })
     expect(rows[0].state).toBe('unverifiable')
-    expect(getCompactAgentSecondary(rows[0], NOW)).toBe('No update in 34m')
+    expect(getCompactAgentSecondary(acknowledgedAgentRow(rows[0], undefined), NOW)).toBe(
+      'No update in 34m'
+    )
   })
 })
 

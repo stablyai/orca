@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { AcknowledgedAgentRow as DashboardAgentRowData } from '@/lib/agent-entry-acknowledgement'
 import { CompactAgentRow, getCompactAgentSecondary } from './worktree-card-compact-agent-row'
 import {
   buildSummaryAgentGroups,
@@ -10,6 +10,7 @@ import {
   summarizeAgents
 } from './worktree-card-agent-summary'
 import { buildSubagentChildRows } from './worktree-subagent-child-rows'
+import { acknowledgedAgentRow } from '@/lib/agent-entry-acknowledgement'
 
 function monitoringAgent(): DashboardAgentRowData {
   return {
@@ -34,7 +35,8 @@ function monitoringAgent(): DashboardAgentRowData {
       updatedAt: 1,
       stateStartedAt: 1,
       stateHistory: [],
-      paneKey: 'tab-1:leaf-1'
+      paneKey: 'tab-1:leaf-1',
+      acknowledgedAt: undefined
     }
   }
 }
@@ -225,6 +227,50 @@ describe('worktree card agent summary', () => {
     })
 
     expect(getAgentDotState(parent)).toBe('failed')
-    expect(getAgentDotState(child)).toBe('working')
+    expect(getAgentDotState(acknowledgedAgentRow(child, undefined))).toBe('working')
+  })
+
+  // The row's own acknowledgement, the one that un-bolds it: once visited, the cut-short row reads
+  // like a finished one, here and in the compact summary; a failure stays failed.
+  it('reads a cut-short row failed only until the user visits it', () => {
+    const done = monitoringAgent()
+    done.state = 'done'
+    done.entry = {
+      ...done.entry,
+      state: 'done',
+      workingMode: undefined,
+      lastAssistantMessage: 'Halfway through the loop'
+    }
+    const withVerdict = (
+      outcome: 'interruption' | 'failure',
+      acknowledgedAt: number | undefined
+    ): DashboardAgentRowData => ({
+      ...done,
+      paneKey: `tab-1:${outcome}`,
+      entry: {
+        ...done.entry,
+        mainAgent: { state: 'done', outcome, stateStartedAt: 1 },
+        acknowledgedAt
+      }
+    })
+
+    expect(getAgentDotState(withVerdict('interruption', 0))).toBe('failed')
+    expect(getAgentDotState(withVerdict('interruption', 1))).toBe('done')
+    expect(getAgentDotState(withVerdict('failure', 1))).toBe('failed')
+    expect(getCompactAgentSecondary(withVerdict('interruption', 1), 0)).toBe(
+      'Halfway through the loop'
+    )
+    expect(
+      summarizeAgents([withVerdict('interruption', 1), withVerdict('failure', 1)], 'Agents')
+    ).toBe('Agents: 1 failed, 1 done')
+    const markup = (acknowledgedAt: number | undefined) =>
+      renderCompactAgentRow({
+        agent: withVerdict('interruption', acknowledgedAt),
+        now: 0,
+        onActivate: vi.fn()
+      })
+    expect(markup(undefined)).toContain('Failed')
+    expect(markup(1)).not.toContain('Failed')
+    expect(markup(1)).toContain('Halfway through the loop')
   })
 })

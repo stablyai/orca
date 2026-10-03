@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/dashboard-snapshot'
 import { dashboardBucketForDotState } from './dashboard-card-bucket'
 import type { AgentRowState } from '@/lib/agent-row-decay-state'
+import { isAgentTurnAcknowledged } from '../../../../shared/agent-turn-acknowledgement'
 
 /**
  * Project a row state onto the published card vocabulary.
@@ -39,7 +40,11 @@ export function dashboardRowBucketProjection(
       ? row.entry.workingMode
       : undefined
   const unseen =
-    !isTitleDerived && (acknowledgedAgentsByPaneKey?.[row.paneKey] ?? 0) < row.entry.stateStartedAt
+    !isTitleDerived &&
+    !isAgentTurnAcknowledged({
+      stateStartedAt: row.entry.stateStartedAt,
+      acknowledgedAt: acknowledgedAgentsByPaneKey?.[row.paneKey]
+    })
   const bucket = dashboardBucketForDotState(
     dashboardCardDisplayState({ dotState, workingMode, unseen })
   )

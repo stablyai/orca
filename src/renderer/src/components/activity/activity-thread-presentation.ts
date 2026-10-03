@@ -14,6 +14,10 @@ import {
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { translate } from '@/i18n/i18n'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
+import {
+  acknowledgedAgentEntry,
+  type AcknowledgedAgentStatusEntry
+} from '@/lib/agent-entry-acknowledgement'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { isHistoricalActivityState } from './activity-event-state'
 import type {
@@ -139,7 +143,7 @@ export function paneTitleForEvent(event: ActivityEvent, generatedTitlesEnabled: 
 }
 
 export function statusPreviewForEntry(
-  entry: AgentStatusEntry,
+  entry: AcknowledgedAgentStatusEntry,
   agentState?: AgentStatusState | null,
   previousPreview?: string
 ): string {
@@ -151,13 +155,17 @@ export type ActivityThreadStatusId = AgentDotState
 /** Single classifier behind grouping, labels, and clear-completed; the only place the
  *  verdict predicate is spelled. */
 export function activityThreadStatusId(thread: AgentPaneThread): ActivityThreadStatusId {
+  const seen = (entry: AgentStatusEntry) => acknowledgedAgentEntry(entry, thread.acknowledgedAt)
   // Why: a failed main agent outranks the subagent work still holding its row live.
-  if (thread.currentAgentEntry && agentVerdictDisplayMark(thread.currentAgentEntry) === 'failed') {
+  if (
+    thread.currentAgentEntry &&
+    agentVerdictDisplayMark(seen(thread.currentAgentEntry)) === 'failed'
+  ) {
     return 'failed'
   }
   const state = threadCurrentState(thread) ?? 'done'
   const verdictEntry = threadVerdictEntry(thread)
-  const verdictDot = verdictEntry ? agentVerdictDisplayMark(verdictEntry) : null
+  const verdictDot = verdictEntry ? agentVerdictDisplayMark(seen(verdictEntry)) : null
   if (!thread.currentAgentState && state === 'done' && verdictDot) {
     return verdictDot
   }

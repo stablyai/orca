@@ -112,7 +112,8 @@ function session(): NativeChatLiveSession {
 }
 
 describe('NativeChatMessageList folded turn headers', () => {
-  it('says a turn a crash cut off failed and a stopped turn was interrupted, where a finished one worked', () => {
+  // A crash-cut turn reads like a finished one; the chat's notice row is what says it stopped.
+  it('says a crash-cut turn worked like a finished one and a stopped turn was interrupted', () => {
     render(
       <NativeChatMessageList
         session={session()}
@@ -129,7 +130,7 @@ describe('NativeChatMessageList folded turn headers', () => {
       .map((button) => [button.textContent, button.getAttribute('aria-expanded')])
     expect(headers).toEqual([
       ['Worked for 12s', 'false'],
-      ['Failed after 12s', 'false'],
+      ['Worked for 12s', 'false'],
       ['Interrupted after 12s', 'false']
     ])
     // The turn's detail stays inside the fold.

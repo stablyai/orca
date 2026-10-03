@@ -14,7 +14,8 @@ const BASE: PaletteStatusInputsState = {
   terminalLayoutsByTabId: {},
   tabsByWorktree: {},
   unreadTerminalTabs: {},
-  unreadAgentCompletionPanes: {}
+  unreadAgentCompletionPanes: {},
+  acknowledgedAgentsByPaneKey: {}
 }
 
 describe('selectPaletteStatusInputs', () => {

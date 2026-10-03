@@ -22,6 +22,7 @@ import {
   type AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { RESTART_CONTINUATION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
 import {
   AGENT_SESSION_RESTART_CONTINUATION_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
@@ -120,7 +121,10 @@ function restartNoteWriter(
       return
     }
     await session.journal.appendItem(
-      { provider: 'orca', clientMessageId: `restart-continuation:${sessionId}:${host.now()}` },
+      {
+        provider: 'orca',
+        clientMessageId: `${RESTART_CONTINUATION_ROW_PREFIX}${sessionId}:${host.now()}`
+      },
       { kind: 'status', text, ...(tone ? { tone } : {}) },
       // About the conversation, not any turn in it.
       { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }

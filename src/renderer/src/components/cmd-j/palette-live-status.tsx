@@ -5,10 +5,7 @@ import { AgentStateDot } from '@/components/AgentStateDot'
 import { StateIndicatorTooltip } from '@/components/StateIndicatorTooltip'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { FilledBellIcon } from '@/components/sidebar/WorktreeCardHelpers'
-import {
-  buildExplicitEntriesByTabId,
-  type TabPaneInputSources
-} from '@/components/sidebar/smart-attention'
+import { buildExplicitEntriesByTabId } from '@/components/sidebar/smart-attention'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
 import {
@@ -18,6 +15,7 @@ import {
 } from '@/lib/worktree-status'
 import {
   resolveRecentWorkspaceTabStatus,
+  type RecentWorkspaceTabPaneSources,
   type RecentWorkspaceTabRow
 } from '@/lib/recent-workspace-tab-rows'
 import {
@@ -42,7 +40,7 @@ type PaletteLiveStatus = {
   liveAgentStatusByWorktreeId: ReadonlyMap<string, LiveAgentWorktreeStatus>
   agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
   stalePaneIdsByTabId: Record<string, ReadonlySet<string>>
-  paneSources: TabPaneInputSources
+  paneSources: RecentWorkspaceTabPaneSources
   tabsByWorktree: Record<string, TerminalTab[]>
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
   unreadTerminalTabs: Record<string, true>
@@ -72,7 +70,8 @@ export function PaletteLiveStatusProvider({
     browserTabsByWorktree,
     migrationUnsupportedByPtyId,
     unreadTerminalTabs,
-    unreadAgentCompletionPanes
+    unreadAgentCompletionPanes,
+    acknowledgedAgentsByPaneKey
   } = useAppStore(
     useShallow((s) =>
       active
@@ -85,7 +84,8 @@ export function PaletteLiveStatusProvider({
             browserTabsByWorktree: s.browserTabsByWorktree,
             migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
             unreadTerminalTabs: s.unreadTerminalTabs,
-            unreadAgentCompletionPanes: s.unreadAgentCompletionPanes
+            unreadAgentCompletionPanes: s.unreadAgentCompletionPanes,
+            acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey
           }
         : EMPTY_LIVE_INPUTS
     )
@@ -112,7 +112,8 @@ export function PaletteLiveStatusProvider({
         entriesByTabId,
         ptyIdsByTabId,
         runtimePaneTitlesByTabId,
-        terminalLayoutsByTabId
+        terminalLayoutsByTabId,
+        acknowledgedAgentsByPaneKey
       },
       tabsByWorktree,
       browserTabsByWorktree,
@@ -122,6 +123,7 @@ export function PaletteLiveStatusProvider({
       now
     }
   }, [
+    acknowledgedAgentsByPaneKey,
     agentStatusByPaneKey,
     browserTabsByWorktree,
     migrationUnsupportedByPtyId,
@@ -186,7 +188,8 @@ const EMPTY_LIVE_INPUTS = Object.freeze({
   browserTabsByWorktree: {},
   migrationUnsupportedByPtyId: {},
   unreadTerminalTabs: {},
-  unreadAgentCompletionPanes: {}
+  unreadAgentCompletionPanes: {},
+  acknowledgedAgentsByPaneKey: {}
 })
 
 function useLiveStatus(): PaletteLiveStatus | null {

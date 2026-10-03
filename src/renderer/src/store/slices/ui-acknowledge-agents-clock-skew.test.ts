@@ -67,6 +67,25 @@ describe('acknowledgeAgents with a clock-skewed execution host', () => {
     expect(ackAt < futureStartedAt).toBe(false)
   })
 
+  // Child work can hold the row open past the main agent's cut; the failed mark reads the cut's clock.
+  it("stamps at least the main agent's own clock when it is newer than the row's", () => {
+    const store = createUIStore()
+    const cutAt = NOW + SKEW_MS
+    const heldOpen: Partial<AppState> = {
+      agentStatusByPaneKey: {
+        [PANE_KEY]: makeAgentEntry({
+          state: 'working',
+          mainAgent: { state: 'done', outcome: 'interruption', stateStartedAt: cutAt }
+        })
+      }
+    }
+    store.setState(heldOpen)
+
+    store.getState().acknowledgeAgents([PANE_KEY])
+
+    expect(store.getState().acknowledgedAgentsByPaneKey[PANE_KEY]).toBe(cutAt)
+  })
+
   it('stops rewriting the ack map once a future-stamped turn is acknowledged', () => {
     const store = createUIStore()
     const futureStartedAt = NOW + SKEW_MS

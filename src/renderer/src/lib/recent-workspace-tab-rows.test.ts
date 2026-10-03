@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   orderRecentWorkspaceTabs,
   resolveRecentWorkspaceTabStatus,
+  type RecentWorkspaceTabPaneSources,
   type RecentWorkspaceTabRow
 } from './recent-workspace-tab-rows'
-import type { TabPaneInputSources } from '@/components/sidebar/smart-attention'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry,
@@ -44,8 +44,8 @@ function row(id: string, overrides: Partial<RecentWorkspaceTabRow> = {}): Recent
 
 function sources(
   entries: AgentStatusEntry[],
-  overrides: Partial<TabPaneInputSources> = {}
-): TabPaneInputSources {
+  overrides: Partial<RecentWorkspaceTabPaneSources> = {}
+): RecentWorkspaceTabPaneSources {
   const entriesByTabId = new Map<string, AgentStatusEntry[]>()
   for (const item of entries) {
     const tabId = item.paneKey.split(':')[0]
@@ -56,6 +56,7 @@ function sources(
     ptyIdsByTabId: {},
     runtimePaneTitlesByTabId: {},
     terminalLayoutsByTabId: {},
+    acknowledgedAgentsByPaneKey: {},
     ...overrides
   }
 }
@@ -164,6 +165,39 @@ describe('resolveRecentWorkspaceTabStatus', () => {
     })
 
     expect(resolveRecentWorkspaceTabStatus(row('cut'), sources([cut]), NOW)).toBe('failed')
+  })
+
+  it('reads a cut-short turn the user has seen as done, as the sidebar does; a failure stays failed', () => {
+    const at = NOW - 1_000
+    const cut = entry('cut', 'done', at, {
+      mainAgent: { state: 'done', outcome: 'interruption', stateStartedAt: at }
+    })
+    const failed = entry('failed', 'done', at, {
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: at }
+    })
+    const seen = { [cut.paneKey]: at, [failed.paneKey]: at }
+
+    expect(
+      resolveRecentWorkspaceTabStatus(
+        row('cut'),
+        sources([cut], { acknowledgedAgentsByPaneKey: seen }),
+        NOW
+      )
+    ).toBe('done')
+    expect(
+      resolveRecentWorkspaceTabStatus(
+        row('cut'),
+        sources([cut], { acknowledgedAgentsByPaneKey: { [cut.paneKey]: at - 1 } }),
+        NOW
+      )
+    ).toBe('failed')
+    expect(
+      resolveRecentWorkspaceTabStatus(
+        row('failed'),
+        sources([failed], { acknowledgedAgentsByPaneKey: seen }),
+        NOW
+      )
+    ).toBe('failed')
   })
 
   it("reads a user's Stop as interrupted though attention demotes it, whether recorded or an old host's flag", () => {

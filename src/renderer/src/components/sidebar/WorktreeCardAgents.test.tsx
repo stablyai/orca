@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { AcknowledgedAgentRow as DashboardAgentRowData } from '@/lib/agent-entry-acknowledgement'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
@@ -59,7 +59,8 @@ function mockAgent({
       stateStartedAt,
       stateHistory: prompt === undefined ? undefined : [],
       terminalHandle,
-      orchestration
+      orchestration,
+      acknowledgedAt: undefined
     },
     lineage
   }

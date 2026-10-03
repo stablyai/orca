@@ -27,7 +27,7 @@ import {
 } from '@/lib/agent-status'
 import { track } from '@/lib/telemetry'
 import { useNow } from '@/hooks/use-now'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { AcknowledgedAgentRow } from '@/lib/agent-entry-acknowledgement'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import { selectLivePtyIdsForWorktree } from '@/components/sidebar/worktree-card-status-inputs'
 import { useWorktreeAgentRows } from '@/components/sidebar/useWorktreeAgentRows'
@@ -37,7 +37,7 @@ import { translate } from '@/i18n/i18n'
 
 type OrderedSendTarget = {
   target: NotesSendAgentTarget
-  agent: DashboardAgentRowData | null
+  agent: AcknowledgedAgentRow | null
 }
 
 export function ReviewNotesSendMenuContent({
@@ -245,7 +245,7 @@ function AgentTargetMenuItem({
   onSend
 }: {
   target: NotesSendAgentTarget
-  agent: DashboardAgentRowData | null
+  agent: AcknowledgedAgentRow | null
   now: number
   disabled: boolean
   onSend: (target: NotesSendAgentTarget) => void
@@ -292,7 +292,7 @@ function AgentTargetMenuItem({
 
 function orderSendTargetsByWorktreeAgentRows(
   sendTargets: NotesSendAgentTarget[],
-  agentRows: DashboardAgentRowData[]
+  agentRows: AcknowledgedAgentRow[]
 ): OrderedSendTarget[] {
   const targetsByPaneKey = new Map(sendTargets.map((target) => [target.paneKey, target]))
   const usedPaneKeys = new Set<string>()
@@ -316,7 +316,7 @@ function orderSendTargetsByWorktreeAgentRows(
   return ordered
 }
 
-function formatAgentRelativeTime(agent: DashboardAgentRowData, now: number): string | null {
+function formatAgentRelativeTime(agent: AcknowledgedAgentRow, now: number): string | null {
   const doneAt = lastEnteredDoneAt(agent)
   if (doneAt !== null) {
     return `${formatTimeAgo(doneAt, now)}`

@@ -3,12 +3,19 @@ import {
   type AgentAttentionRemainder,
   type ReadableAgentAttentionUnread
 } from './agent-attention-contract'
+import {
+  agentAttentionStartedAt,
+  isAgentTurnAcknowledged
+} from '../../../shared/agent-turn-acknowledgement'
+
+/** A turn's clocks: the row's, and the main agent's own when child work holds the row open. */
+type AgentAttentionTurn = { stateStartedAt: number; mainAgent?: { stateStartedAt?: number } }
 
 /** Subject-keyed turn bookkeeping the acknowledgement policy reads; no surface shape here. */
 export type AgentAttentionTurnRecords = {
-  liveTurns: Record<string, { stateStartedAt: number }>
+  liveTurns: Record<string, AgentAttentionTurn>
   /** Turns kept after their session ended, so a finished agent can still be acknowledged. */
-  retainedTurns: Record<string, { entry: { stateStartedAt: number } }>
+  retainedTurns: Record<string, { entry: AgentAttentionTurn }>
   acknowledgedTurnStartedAt: Record<string, number>
 }
 
@@ -33,8 +40,8 @@ export function readAgentAttentionTurnStartedAt(
 /**
  * Subjects on the viewed surface whose current turn has not been acknowledged yet.
  *
- * Why compare stateStartedAt (not updatedAt): same-state pings must not re-trigger an ack,
- * matching the is-unvisited rule the workspace card uses.
+ * Judged on the attention clock the failed mark reads (`agentAttentionStartedAt`), so viewing a chat
+ * whose main agent was cut while child work held its row open clears the mark.
  */
 export function computeAgentAcknowledgementTargets(
   records: AgentAttentionTurnRecords,
@@ -44,13 +51,22 @@ export function computeAgentAcknowledgementTargets(
     return []
   }
   const targets: string[] = []
-  const acknowledgedAt = records.acknowledgedTurnStartedAt[subjectKey] ?? 0
+  const acknowledgedAt = records.acknowledgedTurnStartedAt[subjectKey]
   const liveTurn = records.liveTurns[subjectKey]
-  if (liveTurn && acknowledgedAt < liveTurn.stateStartedAt) {
+  if (
+    liveTurn &&
+    !isAgentTurnAcknowledged({ stateStartedAt: agentAttentionStartedAt(liveTurn), acknowledgedAt })
+  ) {
     targets.push(subjectKey)
   }
   const retainedTurn = records.retainedTurns[subjectKey]
-  if (retainedTurn && acknowledgedAt < retainedTurn.entry.stateStartedAt) {
+  if (
+    retainedTurn &&
+    !isAgentTurnAcknowledged({
+      stateStartedAt: agentAttentionStartedAt(retainedTurn.entry),
+      acknowledgedAt
+    })
+  ) {
     targets.push(subjectKey)
   }
   return targets

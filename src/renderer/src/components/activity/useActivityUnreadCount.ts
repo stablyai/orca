@@ -5,6 +5,7 @@ import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsuppor
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { isAgentTurnAcknowledged } from '../../../../shared/agent-turn-acknowledgement'
 
 import { freshActivityLiveAgentState, isHistoricalActivityState } from './activity-event-state'
 
@@ -45,7 +46,7 @@ export function countActivityUnread(source: ActivityUnreadCountSource, now = Dat
       (isHistoricalActivityState(entry.state) ||
         (live && freshActivityLiveAgentState(entry, now) === 'working')) &&
       entry.sessionBoundary !== true &&
-      mutedAt < entry.stateStartedAt
+      !isAgentTurnAcknowledged({ stateStartedAt: entry.stateStartedAt, acknowledgedAt: mutedAt })
     ) {
       count += 1
     }

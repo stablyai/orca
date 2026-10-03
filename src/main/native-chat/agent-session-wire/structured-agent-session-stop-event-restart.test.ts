@@ -111,7 +111,12 @@ function settled(turnId?: string) {
     turn,
     label: timing ? formatNativeChatTurnStatusLabel({ elapsedSeconds: 0, ...timing }) : null,
     mark: verdict
-      ? agentVerdictDisplayMark({ state: 'done', mainAgent: { state: 'done', outcome: verdict } })
+      ? agentVerdictDisplayMark({
+          state: 'done',
+          mainAgent: { state: 'done', outcome: verdict },
+          stateStartedAt: 1,
+          acknowledgedAt: undefined
+        })
       : null,
     errorRows: items.flatMap((item) =>
       item.body.kind === 'status' && item.body.tone === 'error' ? [item.body.text] : []
@@ -158,7 +163,8 @@ describe('a restart between a Stop and its turn end', () => {
     expect(errorRows).toEqual([])
   })
 
-  it('reads Failed after N, marked failed, when nobody stopped it', async () => {
+  // The notice row is the one explanation; the turn bar reads like a finished turn.
+  it('reads Worked for N, marked failed, when nobody stopped it', async () => {
     await runningTurn(CODEX_TURN)
 
     await restartAndSettle()
@@ -166,7 +172,7 @@ describe('a restart between a Stop and its turn end', () => {
     const { turn, label, mark, errorRows } = settled()
     expect(turn).toMatchObject({ state: 'interrupted' })
     expect(turn).not.toHaveProperty('outcome')
-    expect(label).toMatch(/^Failed after /)
+    expect(label).toMatch(/^Worked for /)
     expect(mark).toBe('failed')
     expect(errorRows).toEqual([
       expect.stringContaining('stopped while this response was in progress')

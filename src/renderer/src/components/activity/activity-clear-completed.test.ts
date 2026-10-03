@@ -65,6 +65,7 @@ import { activityThreadStatusId } from './activity-thread-presentation'
 
 function makeThread(paneKey: string, overrides: Partial<AgentPaneThread> = {}): AgentPaneThread {
   return {
+    acknowledgedAt: undefined,
     paneKey,
     tab: makeTab(),
     worktree: makeWorktree(),

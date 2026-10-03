@@ -12,6 +12,7 @@ import { makeTab, makeWorktree } from './ActivityPrototypePage-test-fixtures'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const mockThread: AgentPaneThread = {
+  acknowledgedAt: undefined,
   paneKey: 'tab-1:agent-1',
   tab: makeTab(),
   worktree: makeWorktree(),

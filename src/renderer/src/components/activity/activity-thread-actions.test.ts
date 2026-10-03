@@ -34,6 +34,7 @@ const REMOTE_HOST = 'ssh:devbox' as const
 function makeRemoteThread(): AgentPaneThread {
   const worktree = { ...makeWorktree(), hostId: REMOTE_HOST }
   return {
+    acknowledgedAt: undefined,
     paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
     paneTitle: 'Remote agent',
     agentType: 'claude',

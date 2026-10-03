@@ -1,7 +1,7 @@
 import React, { useCallback, useRef } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { AcknowledgedAgentRow } from '@/lib/agent-entry-acknowledgement'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
@@ -24,7 +24,7 @@ function stopActivationKeyPropagation(e: React.KeyboardEvent): void {
 }
 
 type CompactAgentSummaryButtonProps = {
-  agents: DashboardAgentRowData[]
+  agents: AcknowledgedAgentRow[]
   subjectLabel: string
   expanded: boolean
   onToggle: () => void

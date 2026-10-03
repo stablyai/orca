@@ -36,8 +36,10 @@ const AGENT_TURN_OUTCOMES: readonly AgentTurnOutcome[] = [
 ]
 
 // Mirrors desktop agentMainAgentVerdict and agentVerdictDisplayMark
-// (src/shared/agent-main-agent-verdict.ts); a parity test runs both over one table. `mainAgent` is
-// the main agent's own status, sent also while subagents hold the row working; an old host sends none.
+// (src/shared/agent-main-agent-verdict.ts) as desktop reads a turn the user has not seen; a parity
+// test runs both over one table. Desktop drops the failed mark from a turn cut short once the user
+// acknowledges it; the phone has no acknowledgement record, so it keeps the unseen reading. `mainAgent`
+// is the main agent's own status, sent also while subagents hold the row working; an old host sends none.
 export function agentRowVerdict(row: AgentRowVerdictSource): AgentTurnOutcome | null {
   if (row.mainAgent && row.mainAgent.state !== 'done') {
     return null
@@ -49,7 +51,7 @@ export function agentRowVerdict(row: AgentRowVerdictSource): AgentTurnOutcome | 
   return row.state === 'done' && row.interrupted ? 'cancellation' : null
 }
 
-// A fault (a failure, or a turn cut short by something other than the user) reads failed and
+// A failure, or a turn cut short when the agent stopped without anyone asking, reads failed and
 // outranks every state; a user's Stop, a turn a newer request replaced, and an unproven end mark
 // only a row that is itself done.
 export function agentRowVerdictMark(

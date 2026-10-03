@@ -1,7 +1,7 @@
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import {
-  agentTurnEndedOnPurpose,
-  agentVerdictDisplayMark
+  agentMainAgentVerdict,
+  agentTurnEndedOnPurpose
 } from '../../../../shared/agent-main-agent-verdict'
 import type { DashboardAgentRow } from './useDashboardData'
 
@@ -30,8 +30,14 @@ export function lastEnteredDoneAt(
   if (entry.state === 'done' && agentTurnEndedOnPurpose(entry) && entry.sessionBoundary !== true) {
     return entry.stateStartedAt
   }
-  // Why: a failed main agent reads failed while its subagents run, so it shows when it failed.
-  if (entry.state !== 'done' && entry.mainAgent && agentVerdictDisplayMark(entry) === 'failed') {
+  // Why: a main agent that failed or was cut short ended its turn while its subagents run, so it
+  // shows when that turn ended.
+  const verdict = agentMainAgentVerdict(entry)
+  if (
+    entry.state !== 'done' &&
+    entry.mainAgent &&
+    (verdict === 'failure' || verdict === 'interruption')
+  ) {
     return entry.mainAgent.stateStartedAt
   }
   for (let i = (entry.stateHistory?.length ?? 0) - 1; i >= 0; i--) {

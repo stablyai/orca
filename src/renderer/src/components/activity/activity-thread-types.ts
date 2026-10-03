@@ -54,6 +54,8 @@ export type AgentPaneThread = {
   agentType: AgentType
   currentAgentState: ActivityLiveAgentState | null
   currentAgentEntry: AgentStatusEntry | null
+  /** When the user last acknowledged the pane: a turn cut short reads failed only until then. */
+  acknowledgedAt: number | undefined
   /** The pane's own status row, live or not; its state outranks the newest event's. */
   paneEntry?: AgentStatusEntry
   responsePreview: string

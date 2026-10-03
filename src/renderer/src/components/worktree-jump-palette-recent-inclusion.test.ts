@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace-tab-palette-search'
-import type { TabPaneInputSources } from '@/components/sidebar/smart-attention'
+import type { RecentWorkspaceTabPaneSources } from '@/lib/recent-workspace-tab-rows'
 import type { AgentJournalTurnOutcome } from '../../../shared/agent-turn-outcome'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { shouldIncludeOpenTabInRecentSection } from './worktree-jump-palette-recent-inclusion'
@@ -41,10 +41,11 @@ function currentTabResult(): WorkspaceTabPaletteSearchResult {
 }
 
 function includesCurrentTabWith(entry: AgentStatusEntry): boolean {
-  const paneSources: TabPaneInputSources = {
+  const paneSources: RecentWorkspaceTabPaneSources = {
     entriesByTabId: new Map([[TAB_ID, [entry]]]),
     ptyIdsByTabId: {},
-    runtimePaneTitlesByTabId: {}
+    runtimePaneTitlesByTabId: {},
+    acknowledgedAgentsByPaneKey: {}
   }
   return shouldIncludeOpenTabInRecentSection({
     item: { id: 'item-1', type: 'workspace-tab', result: currentTabResult() },

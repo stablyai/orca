@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef } from 'react'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { AcknowledgedAgentRow } from '@/lib/agent-entry-acknowledgement'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
@@ -17,7 +17,7 @@ import { formatShortTimeAgo } from '@/lib/short-time-ago'
 import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
 
 function getCompactAgentPrimary(
-  agent: DashboardAgentRowData,
+  agent: AcknowledgedAgentRow,
   conversationName: string | null
 ): string {
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
@@ -25,7 +25,7 @@ function getCompactAgentPrimary(
 }
 
 export function getCompactAgentSecondary(
-  agent: DashboardAgentRowData,
+  agent: AcknowledgedAgentRow,
   now: number,
   lastAssistantMessageOverride?: string
 ): string {
@@ -58,7 +58,7 @@ export function getCompactAgentSecondary(
   return formatAgentTypeLabel(agent.agentType)
 }
 
-function getCompactAgentTime(agent: DashboardAgentRowData, now: number): string | null {
+function getCompactAgentTime(agent: AcknowledgedAgentRow, now: number): string | null {
   const doneAt = lastEnteredDoneAt(agent)
   if (doneAt !== null) {
     return formatShortTimeAgo(doneAt, now)
@@ -68,7 +68,7 @@ function getCompactAgentTime(agent: DashboardAgentRowData, now: number): string 
 }
 
 type CompactAgentRowProps = {
-  agent: DashboardAgentRowData
+  agent: AcknowledgedAgentRow
   now: number
   onActivate: (tabId: string, paneKey: string) => void
   // Why: send-popover target mode temporarily turns compact sidebar rows into

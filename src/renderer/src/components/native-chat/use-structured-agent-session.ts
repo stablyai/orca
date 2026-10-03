@@ -38,6 +38,8 @@ import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-
 import { outboxOutsideQueuedCards } from './structured-agent-session-queued-cards'
 import { structuredAgentSessionStartFailureFacts } from './structured-agent-session-delivery-notices'
 import { hostStatesTurnScopes } from '../../../../shared/native-chat-turn-membership'
+import { withNativeChatCutTurnNotices } from '../../../../shared/native-chat-cut-turn-notice'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/tui-agent-display-names'
 
 export type { StructuredPromptItem } from './structured-agent-session-message-projection'
 
@@ -163,8 +165,16 @@ export function useStructuredAgentSession(args: {
       }),
     [isWorking, outbox, queueCapability, queueFollowUps, queuedMessageIds]
   )
+  // What the transcript reads: the journal plus the one notice a cut turn with no row gets.
+  const transcriptItems = useMemo(
+    () =>
+      withNativeChatCutTurnNotices(transportState.journalItems, {
+        agentName: TUI_AGENT_DISPLAY_NAMES[agent === 'codex' ? 'codex' : 'claude']
+      }),
+    [agent, transportState.journalItems]
+  )
   const messages = useStructuredAgentSessionMessages(
-    transportState.journalItems,
+    transcriptItems,
     transcriptOutbox,
     transportState.submissions
   )
@@ -198,7 +208,7 @@ export function useStructuredAgentSession(args: {
             { command }
           )
       }),
-    journalItems: transportState.journalItems,
+    journalItems: transcriptItems,
     subagentRoster: transportState.subagentRoster,
     messages,
     status: transportEnabled ? state.status : 'ready',

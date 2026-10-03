@@ -14,6 +14,7 @@ import {
   type AgentPaneActivityFlags
 } from '@/lib/agent-pane-activity-flags'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import { acknowledgedAgentEntry } from '@/lib/agent-entry-acknowledgement'
 
 // Why: a terminal tab is a container of panes, exactly like a worktree card is
 // a container of tabs. Reuse the WorktreeCard status vocabulary and resolver so
@@ -31,6 +32,7 @@ type TerminalTabActivityFlags = AgentPaneActivityFlags & {
 type FlagsCache = {
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined
   agentStatusEpoch: number | undefined
+  acknowledgedAgentsByPaneKey: Record<string, number>
   flagsByTabId: Map<string, TerminalTabActivityFlags>
 }
 
@@ -42,7 +44,8 @@ let flagsCache: FlagsCache | null = null
 
 function getTerminalTabActivityFlags(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
-  agentStatusEpoch: number | undefined
+  agentStatusEpoch: number | undefined,
+  acknowledgedAgentsByPaneKey: Record<string, number>
 ): Map<string, TerminalTabActivityFlags> {
   // Why: freshness is time-based, so the store bumps agentStatusEpoch without
   // replacing the map at the 30m stale boundary (createFreshnessScheduler).
@@ -52,7 +55,8 @@ function getTerminalTabActivityFlags(
   if (
     flagsCache &&
     flagsCache.agentStatusByPaneKey === agentStatusByPaneKey &&
-    flagsCache.agentStatusEpoch === agentStatusEpoch
+    flagsCache.agentStatusEpoch === agentStatusEpoch &&
+    flagsCache.acknowledgedAgentsByPaneKey === acknowledgedAgentsByPaneKey
   ) {
     return flagsCache.flagsByTabId
   }
@@ -81,10 +85,13 @@ function getTerminalTabActivityFlags(
 
     const flags = getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId)
     flags.paneIds.add(identity.paneId)
-    applyAgentPaneActivityFlags(flags, entry)
+    applyAgentPaneActivityFlags(
+      flags,
+      acknowledgedAgentEntry(entry, acknowledgedAgentsByPaneKey[entry.paneKey || paneKey])
+    )
   }
 
-  flagsCache = { agentStatusByPaneKey, agentStatusEpoch, flagsByTabId }
+  flagsCache = { agentStatusByPaneKey, agentStatusEpoch, acknowledgedAgentsByPaneKey, flagsByTabId }
   return flagsByTabId
 }
 
@@ -133,6 +140,8 @@ type TerminalTabActivityInput = {
   // Why: the store bumps this at the 30m stale boundary without replacing the
   // pane-status map; it is the flag cache's invalidation key (see above).
   agentStatusEpoch?: number
+  /** The user's acknowledgements: a turn cut short reads failed only until seen, as on the card. */
+  acknowledgedAgentsByPaneKey: Record<string, number>
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayout?: TerminalLayoutSnapshot
@@ -148,11 +157,16 @@ export function resolveTerminalTabActivityStatus({
   tab,
   agentStatusByPaneKey,
   agentStatusEpoch,
+  acknowledgedAgentsByPaneKey,
   runtimePaneTitlesByTabId,
   ptyIdsByTabId,
   terminalLayout
 }: TerminalTabActivityInput): TerminalTabActivityStatus {
-  const flags = getTerminalTabActivityFlags(agentStatusByPaneKey, agentStatusEpoch).get(tab.id)
+  const flags = getTerminalTabActivityFlags(
+    agentStatusByPaneKey,
+    agentStatusEpoch,
+    acknowledgedAgentsByPaneKey
+  ).get(tab.id)
   return resolveWorktreeStatus({
     tabs: [tab],
     browserTabs: [],

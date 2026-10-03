@@ -12,6 +12,7 @@ import {
 function makeThread(overrides: Partial<AgentPaneThread> = {}): AgentPaneThread {
   const worktree = makeWorktree()
   return {
+    acknowledgedAt: undefined,
     paneKey: PANE_KEY,
     paneTitle: 'low hanging issues',
     agentType: 'codex',

@@ -15,7 +15,7 @@ import {
   agentVerdictDisplayMark
 } from '../../../../shared/agent-main-agent-verdict'
 import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
-import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
+import type { AcknowledgedAgentRow } from '@/lib/agent-entry-acknowledgement'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
@@ -33,14 +33,14 @@ function formatTimeAgo(ts: number, now: number): string {
 }
 
 // A child row's silence is the model's, on the clock its compact row and the strip read.
-function rowNoUpdateLabel(agent: DashboardAgentRowData, now: number): string {
+function rowNoUpdateLabel(agent: AcknowledgedAgentRow, now: number): string {
   return agent.childRow
     ? agentChildRowNoUpdateLabel(agent.childRow, now)
     : agentNoUpdateLabel(agent.entry, now)
 }
 
 function stateDotTooltipLabel(
-  agent: DashboardAgentRowData,
+  agent: AcknowledgedAgentRow,
   dotState: AgentDotState,
   now: number
 ): string {
@@ -53,7 +53,7 @@ function stateDotTooltipLabel(
 }
 
 type Props = {
-  agent: DashboardAgentRowData
+  agent: AcknowledgedAgentRow
   onDismiss: (paneKey: string) => void
   /** Navigate to this agent's tab; paneKey lets the caller mark-visit the exact clicked row. */
   onActivate: (tabId: string, paneKey: string) => void

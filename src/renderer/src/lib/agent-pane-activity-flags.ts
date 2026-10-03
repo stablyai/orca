@@ -1,5 +1,6 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
+import type { AgentTurnAcknowledgement } from '../../../shared/agent-turn-acknowledgement'
 
 /** What fresh agent panes contribute to a container's status (worktree card, terminal tab). */
 export type AgentPaneActivityFlags = {
@@ -15,7 +16,8 @@ export type AgentPaneActivityFlags = {
 /** Fold one fresh pane's entry into its container's flags; `resolveWorktreeStatus` ranks them. */
 export function applyAgentPaneActivityFlags(
   flags: AgentPaneActivityFlags,
-  entry: Pick<AgentStatusEntry, 'state' | 'workingMode' | 'interrupted' | 'mainAgent'>
+  entry: Pick<AgentStatusEntry, 'state' | 'workingMode' | 'interrupted' | 'mainAgent'> &
+    AgentTurnAcknowledgement
 ): void {
   const mark = agentVerdictDisplayMark(entry)
   if (entry.state === 'blocked' || entry.state === 'waiting') {

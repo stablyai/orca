@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { AcknowledgedAgentRow as DashboardAgentRowData } from '@/lib/agent-entry-acknowledgement'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CompactAgentRow } from './worktree-card-compact-agent-row'
 

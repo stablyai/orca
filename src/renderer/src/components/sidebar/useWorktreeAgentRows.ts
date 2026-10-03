@@ -26,6 +26,8 @@ import {
 } from './worktree-agent-row-selectors'
 import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from './worktree-agent-orchestration-index'
 import { EMPTY_TABS } from './WorktreeCardHelpers'
+import { selectAcknowledgedAgentTimes } from './worktree-card-agent-ack-inputs'
+import { acknowledgedAgentRow, type AcknowledgedAgentRow } from '@/lib/agent-entry-acknowledgement'
 import {
   createWorktreeAgentFreshnessSelector,
   EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
@@ -52,7 +54,7 @@ export {
  * store slice and then shared by every visible card, avoiding O(cards × agents)
  * selector work on high-frequency agent status pings.
  */
-export function useWorktreeAgentRows(worktreeId: string, active = true): DashboardAgentRow[] {
+export function useWorktreeAgentRows(worktreeId: string, active = true): AcknowledgedAgentRow[] {
   const selectAgentFreshness = useMemo(
     () => createWorktreeAgentFreshnessSelector(worktreeId),
     [worktreeId]
@@ -112,7 +114,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     active ? selectAgentFreshness(s) : EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
   )
 
-  return useMemo<DashboardAgentRow[]>(() => {
+  const rows = useMemo<DashboardAgentRow[]>(() => {
     if (!active) {
       return EMPTY_AGENT_ROWS
     }
@@ -156,4 +158,11 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     paneForegroundAgentByPaneKey,
     agentFreshnessSignature
   ])
+  // Why: joined here, once, so every surface built from these rows reads one seen-ness; only this
+  // card's acknowledgements are projected, so other cards' visits do not re-render it.
+  const acknowledgedTimes = useAppStore(useShallow((s) => selectAcknowledgedAgentTimes(s, rows)))
+  return useMemo(
+    () => rows.map((row, index) => acknowledgedAgentRow(row, acknowledgedTimes[index])),
+    [rows, acknowledgedTimes]
+  )
 }
