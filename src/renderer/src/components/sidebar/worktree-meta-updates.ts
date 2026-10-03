@@ -8,8 +8,20 @@ import type { WorkspaceSourceProvider } from '../../../../shared/new-workspace/w
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { WorkspaceLinkedItem } from '../../../../shared/worktree/types'
 import { parseGitLabIssueOrMRLink } from '../../../../shared/new-workspace/gitlab-links'
+import { parseBareItemNumber } from '../../../../shared/work-item-number'
+import type { HostedReviewCreationProvider } from '../../../../shared/hosted-review-creation-providers'
 
-export type WorktreeReviewProvider = 'github' | 'gitlab'
+/** The five real forges. Only github and gitlab have an editor; the other three
+ *  resolve so the row can name them rather than mislabel them GitHub. */
+export type WorktreeReviewProvider = HostedReviewCreationProvider
+
+export type EditableWorktreeReviewProvider = Extract<WorktreeReviewProvider, 'github' | 'gitlab'>
+
+export function isEditableReviewProvider(
+  provider: WorktreeReviewProvider | null | undefined
+): provider is EditableWorktreeReviewProvider {
+  return provider === 'github' || provider === 'gitlab'
+}
 
 export type WorktreeMetaSavedPayload = {
   worktreeId: string
@@ -33,7 +45,10 @@ export type WorktreeMetaSnapshot = {
   comment: string
   issueInput: string
   issueProvider: IssueLinkProvider
-  prInput: string
+  /** The persisted number in the slot of the provider being edited, or '' when
+   *  empty. Not the seeded field value — the Checks panel deliberately seeds a
+   *  review it has fetched but not yet linked, and Save must still write it. */
+  reviewInput: string
   /** Stands in for an org key the typed value omits, so re-saving a stored bare
    *  identifier does not read as a change. */
   linkedLinearIssueOrganizationUrlKey?: string | null
@@ -46,7 +61,9 @@ export type WorktreeMetaSnapshot = {
  *  — persistence gates the remote Linear capability on key presence, not value. */
 export type WorktreeMetaLiveLinks = {
   linkedPR?: number | null
+  linkedGitLabMR?: number | null
   linkedIssue?: number | null
+  linkedGitLabIssue?: number | null
   linkedLinearIssue?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
   linkedWorkItemProvider?: WorkspaceSourceProvider | null
@@ -80,10 +97,11 @@ export function parseGitHubWorkItemNumberForMetaField(
 
 export function parseGitLabMergeRequestNumberForMetaField(input: string): number | null {
   const trimmed = input.trim()
-  const direct = trimmed.startsWith('!') ? trimmed.slice(1) : trimmed
-  if (/^\d+$/.test(direct)) {
-    const number = Number(direct)
-    return Number.isSafeInteger(number) && number > 0 ? number : null
+  // Why: `!` is GitLab's MR sigil; `#` is GitHub's and stays rejected here.
+  const bare = trimmed.startsWith('!') ? trimmed.slice(1) : trimmed
+  const direct = bare.startsWith('#') ? null : parseBareItemNumber(bare)
+  if (direct !== null) {
+    return direct
   }
   let url: URL
   try {
@@ -98,6 +116,25 @@ export function parseGitLabMergeRequestNumberForMetaField(input: string): number
   return link?.type === 'mr' && Number.isSafeInteger(link.number) && link.number > 0
     ? link.number
     : null
+}
+
+/** One entry per provider this row can edit. The three read-only forges have no
+ *  link parser in src/shared, so adding one is: write a parser, add an entry. */
+export const REVIEW_LINK_EDITORS: Record<
+  EditableWorktreeReviewProvider,
+  {
+    parse: (input: string) => number | null
+    write: (value: number | null) => Partial<WorktreeMeta>
+  }
+> = {
+  github: {
+    parse: (input) => parseGitHubWorkItemNumberForMetaField(input, 'pr'),
+    write: (value) => ({ linkedPR: value })
+  },
+  gitlab: {
+    parse: parseGitLabMergeRequestNumberForMetaField,
+    write: (value) => ({ linkedGitLabMR: value })
+  }
 }
 
 // Why: blanking the field means "fall back to the branch/folder name", and the
@@ -142,8 +179,8 @@ function issueLinkIdentity(
   if (!parsed) {
     return `raw:${provider}:${trimmed}`
   }
-  if (parsed.provider === 'github') {
-    return `github:${parsed.number}`
+  if (parsed.provider === 'github' || parsed.provider === 'gitlab') {
+    return `${parsed.provider}:${parsed.number}`
   }
   const organizationUrlKey = parsed.organizationUrlKey ?? storedLinearOrganizationUrlKey ?? ''
   return `linear:${parsed.identifier}:${organizationUrlKey.trim().toLowerCase()}`
@@ -181,6 +218,9 @@ function keepsLinkedWorkItem(
   if (parsed.provider === 'github') {
     return live.linkedWorkItemProvider === 'github' && parsed.number === live.linkedIssue
   }
+  if (parsed.provider === 'gitlab') {
+    return live.linkedWorkItemProvider === 'gitlab' && parsed.number === live.linkedGitLabIssue
+  }
   if (
     live.linkedWorkItemProvider !== 'linear' ||
     parsed.identifier.toUpperCase() !== live.linkedLinearIssue?.trim().toUpperCase()
@@ -216,12 +256,14 @@ function buildIssueLinkUpdates(
   // re-states the same one, such as a URL adding an org key, must keep its own
   // title and SSH/runtime routing context. Narrow on purpose: `type` because the
   // field also records the PR or MR a workspace was created from, and provider
-  // because GitLab and Jira issues have no slot in this row — displacing what it
+  // because Jira issues still have no slot in this row — displacing what it
   // cannot display would destroy a link the user was never shown and has no
-  // other editor to restore it from.
+  // other editor to restore it from. GitHub, GitLab and Linear all have one.
   const displacedWorkItem: Partial<WorktreeMeta> =
     !keepsLinkedWorkItem(trimmed, draft.issueProvider, live) &&
-    (live.linkedWorkItemProvider === 'github' || live.linkedWorkItemProvider === 'linear') &&
+    (live.linkedWorkItemProvider === 'github' ||
+      live.linkedWorkItemProvider === 'gitlab' ||
+      live.linkedWorkItemProvider === 'linear') &&
     live.linkedWorkItemType === 'issue'
       ? { linkedWorkItem: null, linkedTaskSourceContext: null }
       : {}
@@ -235,9 +277,16 @@ function buildIssueLinkUpdates(
     ? LINEAR_ISSUE_LINK_CLEARED
     : {}
 
+  // Why: same presence gate as Linear — never emit a clear for a slot that was
+  // already empty, so a payload against an older runtime stays minimal and the
+  // remote capability gate in worktree-meta-persist does not fire needlessly.
+  const displacedGitLab: Partial<WorktreeMeta> =
+    typeof live.linkedGitLabIssue === 'number' ? { linkedGitLabIssue: null } : {}
+
   if (trimmed === '') {
     return {
       linkedIssue: null,
+      ...displacedGitLab,
       ...displacedLinear,
       ...displacedWorkItem
     }
@@ -253,41 +302,53 @@ function buildIssueLinkUpdates(
   if (parsed.provider === 'github') {
     return {
       linkedIssue: parsed.number,
+      ...displacedGitLab,
+      ...displacedLinear,
+      ...displacedWorkItem
+    }
+  }
+
+  if (parsed.provider === 'gitlab') {
+    return {
+      linkedGitLabIssue: parsed.number,
+      linkedIssue: null,
       ...displacedLinear,
       ...displacedWorkItem
     }
   }
 
   const linearUpdates = buildLinearIssueLinkUpdates(trimmed)
-  return linearUpdates ? { linkedIssue: null, ...linearUpdates, ...displacedWorkItem } : {}
+  return linearUpdates
+    ? { linkedIssue: null, ...displacedGitLab, ...linearUpdates, ...displacedWorkItem }
+    : {}
 }
 
 function buildReviewLinkUpdate(
   draft: WorktreeMetaDraft,
   current: WorktreeMetaSnapshot,
   live: WorktreeMetaLiveLinks,
-  provider: WorktreeReviewProvider
+  provider: WorktreeReviewProvider | null
 ): Partial<WorktreeMeta> {
+  if (!isEditableReviewProvider(provider)) {
+    return {}
+  }
   const trimmed = draft.reviewInput.trim()
-  if (provider === 'github' && trimmed === current.prInput.trim()) {
+  // Why: for every provider, not only GitHub. An untouched MR field used to
+  // re-emit linkedGitLabMR on comment-only saves.
+  if (trimmed === current.reviewInput.trim()) {
     return {}
   }
+  const editor = REVIEW_LINK_EDITORS[provider]
   if (trimmed === '') {
-    return provider === 'gitlab'
-      ? { linkedGitLabMR: null }
-      : {
-          linkedPR: null,
-          ...(typeof live.linkedPR === 'number' ? { suppressedGitHubPR: live.linkedPR } : {})
-        }
+    return {
+      ...editor.write(null),
+      ...(provider === 'github' && typeof live.linkedPR === 'number'
+        ? { suppressedGitHubPR: live.linkedPR }
+        : {})
+    }
   }
-  const number =
-    provider === 'gitlab'
-      ? parseGitLabMergeRequestNumberForMetaField(trimmed)
-      : parseGitHubWorkItemNumberForMetaField(trimmed, 'pr')
-  if (number === null) {
-    return {}
-  }
-  return provider === 'gitlab' ? { linkedGitLabMR: number } : { linkedPR: number }
+  const number = editor.parse(trimmed)
+  return number === null ? {} : editor.write(number)
 }
 
 /** Pure save-payload builder for the worktree meta dialog: empty inputs clear
@@ -298,7 +359,9 @@ export function buildWorktreeMetaUpdates(
   draft: WorktreeMetaDraft,
   current: WorktreeMetaSnapshot,
   live: WorktreeMetaLiveLinks,
-  reviewProvider: WorktreeReviewProvider = 'github'
+  // Why: null means the provider is still resolving or has no editor. The review
+  // row is inert then and must not write any slot.
+  reviewProvider: WorktreeReviewProvider | null = 'github'
 ): Partial<WorktreeMeta> {
   return {
     ...buildCommentUpdate(draft, current),

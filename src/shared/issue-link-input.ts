@@ -1,11 +1,14 @@
 import { parseGitHubIssueOrPRLink } from './github/links'
+import { parseGitLabIssueOrMRLink } from './new-workspace/gitlab-links'
 import { parseLinearIssueInput } from './linear/links'
+import { parseBareItemNumber } from './work-item-number'
 import type { WorkspaceSourceProvider } from './new-workspace/workspace-source'
 
 // Why: narrows the canonical provider union instead of minting a parallel one,
 // so adding Jira here is a one-entry change rather than a new axis.
 export const ISSUE_LINK_PROVIDERS = [
   'github',
+  'gitlab',
   'linear'
 ] as const satisfies readonly WorkspaceSourceProvider[]
 
@@ -26,6 +29,12 @@ export function getIssueLinkProviderFromUrl(input: string): IssueLinkProvider | 
   // Why: a URL is decisive only if it names that provider's *issue*. A GitHub
   // pull URL is a valid GitHub link but not an issue, and must not flip the
   // provider into a state where the field then refuses to save it.
+  // Why: GitLab's `/-/` path separator is unambiguous, and the GitHub matcher is
+  // host-agnostic — checking GitLab first keeps this right if that matcher is ever
+  // loosened to cover legacy `/owner/repo/issues/N` GitLab URLs.
+  if (parseGitLabIssueOrMRLink(trimmed)?.type === 'issue') {
+    return 'gitlab'
+  }
   if (parseGitHubIssueOrPRLink(trimmed)?.type === 'issue') {
     return 'github'
   }
@@ -37,6 +46,7 @@ export function getIssueLinkProviderFromUrl(input: string): IssueLinkProvider | 
 
 export type ParsedIssueLinkInput =
   | { provider: 'github'; number: number }
+  | { provider: 'gitlab'; number: number }
   | { provider: 'linear'; identifier: string; organizationUrlKey?: string }
 
 /**
@@ -57,6 +67,23 @@ export function parseIssueLinkInput(
     return parsed ? { provider: 'linear', ...parsed } : null
   }
 
+  if (provider === 'gitlab') {
+    // Why: parseGitLabIssueOrMRLink runs `new URL()` and matches the pathname with
+    // no protocol check, so `ftp://host/g/p/-/issues/42` parses. Gate here rather
+    // than inside it — 23 tests and the new-workspace link picker depend on its
+    // current shape, and parseGitLabMergeRequestNumberForMetaField already gates
+    // its own URLs the same way.
+    if (/^https?:\/\//i.test(trimmed)) {
+      const link = parseGitLabIssueOrMRLink(trimmed)
+      // Why: an MR URL pasted into the issue row must not become an issue link.
+      return link?.type === 'issue' ? { provider: 'gitlab', number: link.number } : null
+    }
+    // Why: not parseGitLabIssueOrMRNumber — it accepts the `!` MR prefix, which
+    // would let `!42` become an issue link.
+    const number = parseBareItemNumber(trimmed)
+    return number === null ? null : { provider: 'gitlab', number }
+  }
+
   const link = parseGitHubIssueOrPRLink(trimmed)
   if (link) {
     // Why: issue and PR numbers live in separate GitHub namespaces for refs; a
@@ -64,12 +91,6 @@ export function parseIssueLinkInput(
     return link.type === 'issue' ? { provider: 'github', number: link.number } : null
   }
 
-  const numeric = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed
-  if (!/^\d+$/.test(numeric)) {
-    return null
-  }
-  const parsed = Number.parseInt(numeric, 10)
-  // Why: `/^\d+$/` happily accepts 400 digits, which parseInt turns into
-  // Infinity — Save would enable and JSON.stringify would persist `null`.
-  return Number.isSafeInteger(parsed) && parsed > 0 ? { provider: 'github', number: parsed } : null
+  const number = parseBareItemNumber(trimmed)
+  return number === null ? null : { provider: 'github', number }
 }

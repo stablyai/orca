@@ -12,15 +12,15 @@ import { Button } from '@/components/ui/button'
 import { getDisplacedLinkLabels } from './worktree-issue-displacement'
 import {
   buildWorktreeMetaUpdates,
-  parseGitLabMergeRequestNumberForMetaField,
-  parseGitHubWorkItemNumberForMetaField,
-  type WorktreeReviewProvider,
+  isEditableReviewProvider,
+  REVIEW_LINK_EDITORS,
   type WorktreeMetaDraft,
   type WorktreeMetaSavedPayload,
   type WorktreeMetaSnapshot
 } from './worktree-meta-updates'
 import { useWorktreeIssueLink } from './use-worktree-issue-link'
 import { useWorktreeMetaWorkspace } from './use-worktree-meta-workspace'
+import { useWorktreeReviewProvider } from './use-worktree-review-provider'
 import { WorktreeIssueLinkField } from './WorktreeIssueLinkField'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -46,7 +46,7 @@ const EMPTY_SNAPSHOT: WorktreeMetaSnapshot = {
   comment: '',
   issueInput: '',
   issueProvider: 'github',
-  prInput: ''
+  reviewInput: ''
 }
 
 const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
@@ -69,8 +69,6 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const currentComment =
     typeof modalData.currentComment === 'string' ? modalData.currentComment : ''
   const focusField = typeof modalData.focus === 'string' ? modalData.focus : 'comment'
-  const reviewProvider: WorktreeReviewProvider =
-    modalData.reviewProvider === 'gitlab' ? 'gitlab' : 'github'
   const suppressHostedReviewRefresh = modalData.suppressHostedReviewRefresh === true
   const afterSave =
     typeof modalData.afterSave === 'function'
@@ -83,25 +81,28 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const {
     worktree,
     linkedIssue,
+    linkedGitLabIssue,
     linkedLinearIssue,
     currentIssue,
     currentProvider,
     isFolderWorkspace,
     liveLinks
   } = useWorktreeMetaWorkspace({ worktreeId, ownerRepoId, executionHostId })
-  // Why: ChecksPanel seeds the review it is looking at, which may not be linked yet.
+  const { provider: reviewProvider, persistedReview } = useWorktreeReviewProvider({
+    isOpen,
+    isFolderWorkspace,
+    modalReviewProvider: modalData.reviewProvider,
+    executionHostId,
+    worktree
+  })
+  // Why: the Checks panel seeds a review it has fetched but not yet linked, so the
+  // field starts there while the snapshot baseline stays the persisted value.
   const currentReview =
     typeof modalData.currentReview === 'number'
       ? String(modalData.currentReview)
-      : reviewProvider === 'gitlab'
-        ? worktree?.linkedGitLabMR != null
-          ? String(worktree.linkedGitLabMR)
-          : ''
-        : typeof modalData.currentPR === 'number'
-          ? String(modalData.currentPR)
-          : worktree?.linkedPR != null
-            ? String(worktree.linkedPR)
-            : ''
+      : reviewProvider === 'github' && typeof modalData.currentPR === 'number'
+        ? String(modalData.currentPR)
+        : persistedReview
 
   const [displayNameInput, setDisplayNameInput] = useState('')
   const [issueInput, setIssueInput] = useState('')
@@ -120,7 +121,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
       issueProvider,
       linearOrganizationUrlKey: worktree?.linkedLinearIssueOrganizationUrlKey ?? null,
       linkedLinearIssue: worktree?.linkedLinearIssue ?? null,
-      linearSourceContext: worktree?.linkedTaskSourceContext ?? null
+      linearSourceContext: worktree?.linkedTaskSourceContext ?? null,
+      linkedWorkItem: worktree?.linkedWorkItem ?? null,
+      linkedGitLabIssue: worktree?.linkedGitLabIssue ?? null
     })
 
   const issueInputRef = useRef<HTMLInputElement>(null)
@@ -144,7 +147,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
       comment: currentComment,
       issueInput: currentIssue,
       issueProvider: currentProvider,
-      prInput: worktree?.linkedPR != null ? String(worktree.linkedPR) : '',
+      reviewInput: persistedReview,
       linkedLinearIssueOrganizationUrlKey: worktree?.linkedLinearIssueOrganizationUrlKey ?? null
     })
     setSaveError(null)
@@ -201,15 +204,14 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     if (!worktreeId) {
       return false
     }
-    const trimmedPR = reviewInput.trim()
+    const trimmedReview = reviewInput.trim()
     // Same quadratic-parse bound as the issue field — this runs on every keystroke.
-    const prValid =
-      trimmedPR === '' ||
-      (!isWorkItemLinkQueryTooLarge(trimmedPR) &&
-        (reviewProvider === 'gitlab'
-          ? parseGitLabMergeRequestNumberForMetaField(trimmedPR)
-          : parseGitHubWorkItemNumberForMetaField(trimmedPR, 'pr')) !== null)
-    return !issueInvalid && prValid
+    const reviewValid =
+      trimmedReview === '' ||
+      !isEditableReviewProvider(reviewProvider) ||
+      (!isWorkItemLinkQueryTooLarge(trimmedReview) &&
+        REVIEW_LINK_EDITORS[reviewProvider].parse(trimmedReview) !== null)
+    return !issueInvalid && reviewValid
   }, [worktreeId, issueInvalid, reviewInput, reviewProvider])
 
   const displacedLinkLabels = useMemo(
@@ -219,9 +221,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
         snapshot,
         isFolderWorkspace,
         linkedIssue,
+        linkedGitLabIssue,
         linkedLinearIssue
       }),
-    [draft, snapshot, isFolderWorkspace, linkedIssue, linkedLinearIssue]
+    [draft, snapshot, isFolderWorkspace, linkedIssue, linkedGitLabIssue, linkedLinearIssue]
   )
 
   const handleOpenChange = useCallback(
@@ -336,15 +339,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
             )}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {reviewProvider === 'gitlab'
-              ? translate(
-                  'auto.components.sidebar.WorktreeMetaDialog.gitlabDescription',
-                  'Edit issue links, merge request links, and notes for this workspace.'
-                )
-              : translate(
-                  'auto.components.sidebar.WorktreeMetaDialog.a0d191b7a7',
-                  'Edit issue links, pull request links, and notes for this workspace.'
-                )}
+            {translate(
+              'auto.components.sidebar.WorktreeMetaDialog.4f8e2b7a19',
+              'Edit issue links, review links, and notes for this workspace.'
+            )}
           </DialogDescription>
         </DialogHeader>
 
