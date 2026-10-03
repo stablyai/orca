@@ -1,11 +1,11 @@
 import { existsSync } from 'node:fs'
-import { lstat, readFile, readlink } from 'node:fs/promises'
+import { lstat, readFile, readlink, stat } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
 import type { CliInstallMethod, CliInstallStatus } from '../../shared/cli-install-types'
 import { isAppImageExtractedLauncherPath } from './appimage-extracted-root'
 import { DEV_COMMAND_NAME, DEV_LAUNCHER_DIR } from './cli-install-constants'
 import { buildWindowsForwarder, extractManagedUnixLauncherTarget } from './cli-dev-launcher'
-import { isMissingError } from './cli-install-errors'
+import { isMissingError, isPermissionError } from './cli-install-errors'
 import { CliInstallLocation } from './cli-install-location'
 import { isPathInsideOrEqual, samePathEntry } from './cli-install-path-format'
 import { extractLegacyAppImageCliWrapperTarget } from './legacy-appimage-cli-wrapper'
@@ -52,7 +52,15 @@ export class CliCommandInspection extends CliInstallLocation {
         })
       }
 
-      const currentTarget = await readlink(commandPath)
+      let currentTarget: string
+      try {
+        currentTarget = await readlink(commandPath)
+      } catch (error) {
+        if (!isPermissionError(error)) {
+          throw error
+        }
+        return this.inspectUnreadableSymlink(commandPath, launcherPath)
+      }
       const resolvedCurrentTarget = resolve(dirname(commandPath), currentTarget)
       const resolvedLauncher = resolve(launcherPath)
       const isInstalled = resolvedCurrentTarget === resolvedLauncher && existsSync(resolvedLauncher)
@@ -87,6 +95,34 @@ export class CliCommandInspection extends CliInstallLocation {
       }
       throw error
     }
+  }
+
+  // Why: macOS may allow following a link that readlink cannot inspect; mutation later verifies
+  // the raw target with privileges, while links that do not resolve here remain conflicts.
+  private async inspectUnreadableSymlink(
+    commandPath: string,
+    launcherPath: string
+  ): Promise<CliInstallStatus> {
+    const [resolvedCommand, launcher] = await Promise.all([
+      stat(commandPath, { bigint: true }).catch(() => null),
+      stat(launcherPath, { bigint: true }).catch(() => null)
+    ])
+    const isOwnLauncher =
+      resolvedCommand !== null &&
+      launcher !== null &&
+      resolvedCommand.dev === launcher.dev &&
+      resolvedCommand.ino === launcher.ino
+    return this.buildStatus({
+      commandPath,
+      launcherPath,
+      installMethod: 'symlink',
+      supported: true,
+      state: isOwnLauncher ? 'stale' : 'conflict',
+      currentTarget: null,
+      detail: isOwnLauncher
+        ? `Orca can't read ${commandPath} (permission denied). Register again to repair it.`
+        : `Orca can't read ${commandPath} (permission denied) and can't confirm it is an Orca command. Repair its permissions and refresh, or remove it and register again.`
+    })
   }
 
   protected isManagedSymlinkTarget(resolvedTarget: string, launcherPath: string): boolean {

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { lstat, mkdir, readFile, readlink, rename, rmdir } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import type { CliInstallStatus } from '../../shared/cli-install-types'
-import { isMissingError } from './cli-install-errors'
+import { isMissingError, isPermissionError } from './cli-install-errors'
 import { quoteShell } from './cli-install-path-format'
 
 export type EntryIdentity = {
@@ -96,8 +96,11 @@ export async function inspectStableCommand(
       } else if (afterInspection && status.state !== 'conflict') {
         fileSha256 = await hashCommandFile(commandPath)
       }
-    } catch {
-      continue
+    } catch (error) {
+      // Why: macOS enforces read permission on readlink; privileged mutations verify the raw target.
+      if (!afterInspection?.isSymbolicLink || !isPermissionError(error)) {
+        continue
+      }
     }
     const afterEvidence = await readEntrySnapshot(commandPath)
     if (hasSameSnapshot(afterInspection, afterEvidence)) {
@@ -155,6 +158,20 @@ export async function capturedExpectedEntry(
   }
 }
 
+export function isUnreadableSymlinkInspection(inspected: StableCommandInspection): boolean {
+  return inspected.snapshot?.isSymbolicLink === true && inspected.rawSymlinkTarget === null
+}
+
+// Why: root can read a link Orca couldn't, so only the exact launcher target proves ownership; files keep their hash guard.
+export function expectedPrivilegedSymlinkTarget(
+  inspected: StableCommandInspection,
+  launcherPath: string
+): string | null {
+  return inspected.snapshot?.isSymbolicLink
+    ? (inspected.rawSymlinkTarget ?? launcherPath)
+    : inspected.rawSymlinkTarget
+}
+
 type MacPrivilegedSymlinkTransaction = {
   commandPath: string
   expected: EntryIdentity | null
@@ -186,7 +203,7 @@ export function buildMacPrivilegedSymlinkTransaction(
     : `if [ "$captured" -eq 1 ]; then ${restoreOrPreserve}; exit 73; fi`
   const capture =
     `umask 077; /bin/mkdir -p ${quoteShell(commandDirectory)} || exit $?; ` +
-    `/bin/mkdir ${quoteShell(transactionDirectory)} || exit $?; captured=0; ` +
+    `/bin/mkdir -m 700 ${quoteShell(transactionDirectory)} || exit $?; captured=0; ` +
     `if [ -e ${quoteShell(args.commandPath)} ] || [ -L ${quoteShell(args.commandPath)} ]; then ` +
     `/bin/mv ${quoteShell(args.commandPath)} ${quoteShell(heldPath)} && captured=1 || exit $?; fi; ` +
     `${rejectCaptured}; `
@@ -199,8 +216,10 @@ export function buildMacPrivilegedSymlinkTransaction(
     `/bin/rm -f ${quoteShell(publishPath)}; /bin/rmdir ${quoteShell(publishDirectory)} 2>/dev/null || :; ` +
     `if [ "$captured" -eq 1 ]; then ${restoreOrPreserve}; else /bin/rmdir ${quoteShell(transactionDirectory)}; fi; exit 73`
   return (
-    `${capture}if /bin/mkdir ${quoteShell(publishDirectory)} && ` +
+    `${capture}if /bin/mkdir -m 700 ${quoteShell(publishDirectory)} && ` +
     `/bin/ln -s ${quoteShell(args.launcherPath)} ${quoteShell(publishPath)} && ` +
+    // Why: macOS applies root's umask to symlinks, and readlink enforces their read bits.
+    `/bin/chmod -h 755 ${quoteShell(publishPath)} && ` +
     `/bin/ln -P ${quoteShell(publishPath)} ${quoteShell(commandDirectory)}; then ` +
     `/bin/rm ${quoteShell(publishPath)}; /bin/rmdir ${quoteShell(publishDirectory)}; ` +
     `if [ "$captured" -eq 1 ]; then /bin/rm ${quoteShell(heldPath)}; fi; ` +
