@@ -116,6 +116,21 @@ describe('fetchKimiRateLimits with a WSL credentials home', () => {
     expect(result.status).toBe('unavailable')
   })
 
+  it('reads the scoped slot named by the WSL config.toml with win32 separators', async () => {
+    files.set(
+      `${WSL_HOME}\\config.toml`,
+      '[providers."managed:kimi-code".oauth]\nkey = "oauth/kimi-code-env-abc123"\n'
+    )
+    files.set(`${WSL_HOME}\\credentials\\kimi-code-env-abc123.json`, credentials('wsl-scoped', 600))
+
+    const result = await fetchKimiRateLimits({
+      home: { runtime: 'wsl', wslDistro: 'Ubuntu', path: WSL_HOME }
+    })
+
+    expect(result.status).toBe('ok')
+    expect(netFetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer wsl-scoped')
+  })
+
   // Last: an unsettled UNC read stays shared for its path by design, so the stalled
   // distro gets its own home to avoid poisoning the other cases.
   it('bounds a stalled UNC read instead of parking the poll cycle', async () => {
