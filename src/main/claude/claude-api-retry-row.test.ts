@@ -13,13 +13,14 @@ import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'workspace-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'provider-1', leafUuid: 'leaf-1' }
+  providerHandle: claudeProviderHandle('provider-1', 'leaf-1')
 }
 
 /** A frame as Claude Code sends it while it retries a refused request. */

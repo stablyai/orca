@@ -24,6 +24,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const caller = { callerKey: 'desktop' }
 let directory: string
@@ -117,16 +118,13 @@ beforeEach(async () => {
           observedAt: HOST_TEST_NOW,
           // A start with no thread to resume creates one, whatever its fence.
           origin:
-            input.fence > 1 && input.identity.providerHandle.kind === 'codex'
+            input.fence > 1 && input.identity.providerHandle
               ? ('resumed' as const)
               : ('created' as const),
-          handle: {
-            provider: 'codex' as const,
-            threadId:
-              input.identity.providerHandle.kind === 'codex'
-                ? input.identity.providerHandle.threadId
-                : `00000000-0000-4000-8000-${String(acquisitions).padStart(12, '0')}`
-          }
+          handle: codexProviderHandle(
+            input.identity.providerHandle?.nativeId ??
+              `00000000-0000-4000-8000-${String(acquisitions).padStart(12, '0')}`
+          )
         }
       }
     }),
@@ -504,11 +502,7 @@ describe("the replacement's first send", () => {
       .mocked(adapter.acquire)
       .mock.calls.flatMap(([input]) => (input.identity.sessionId === replacement ? [input] : []))
     // No provider conversation to resume: the source's thread is not carried over.
-    expect(start?.identity.providerHandle).toEqual({
-      kind: 'opaque',
-      agent: 'codex',
-      value: 'pending'
-    })
+    expect(start?.identity.providerHandle).toBeNull()
     expect(start?.fence).toBe(2)
     expect(store.getRecord(replacement)?.lease).toMatchObject({ claimStatus: 'live' })
   })

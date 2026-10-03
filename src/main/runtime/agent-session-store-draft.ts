@@ -3,6 +3,7 @@
  * only once its rows have committed, so no reader ever sees a change that might still roll back.
  */
 
+import { encodeAgentSessionRecord } from '../../shared/agent-session-record-stored-form'
 import type {
   AgentSessionStoreState,
   RetiredAgentSessionClaimKey
@@ -42,7 +43,8 @@ export type AgentSessionStoreRowWrites = {
 function serializeChangedRows<V>(
   published: ReadonlyMap<string, V>,
   next: ReadonlyMap<string, V>,
-  readable: (key: string, written: unknown) => boolean
+  readable: (key: string, written: unknown) => boolean,
+  stored: (value: V) => unknown = (value) => value
 ): KeyedRowWrites {
   const writes: KeyedRowWrites = { upsert: [], remove: [] }
   let added = 0
@@ -51,7 +53,7 @@ function serializeChangedRows<V>(
     if (prior === value) {
       continue
     }
-    const json = JSON.stringify(value)
+    const json = JSON.stringify(stored(value))
     if (json === undefined || !readable(key, JSON.parse(json))) {
       throw new Error('agent_session_store_write_invalid')
     }
@@ -85,8 +87,11 @@ export function agentSessionStoreDraftRowWrites(
   published: AgentSessionStoreState,
   draft: AgentSessionStoreState
 ): AgentSessionStoreRowWrites | null {
-  const records = serializeChangedRows(published.records, draft.records, (sessionId, written) =>
-    isReadableAgentSessionStoreRecord(sessionId, written)
+  const records = serializeChangedRows(
+    published.records,
+    draft.records,
+    (sessionId, written) => isReadableAgentSessionStoreRecord(sessionId, written),
+    encodeAgentSessionRecord
   )
   const operations = serializeChangedRows(published.operations, draft.operations, (key, written) =>
     isReadableAgentSessionStoreOperation(key, written)

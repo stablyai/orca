@@ -16,7 +16,7 @@ import {
   isPersistedAgentSessionRecord,
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
-import { normalizeLegacyHandoffRecord } from '../../shared/agent-session-legacy-handoff-lease'
+import { decodePersistedAgentSessionRecord } from '../../shared/agent-session-record-stored-form'
 import { parseAgentSessionTabTable, type AgentSessionTabTable } from './agent-session-tab-table'
 
 export const AGENT_SESSION_STORE_SCHEMA_VERSION = 2 as const
@@ -130,7 +130,7 @@ function parseState(raw: string, hostId: string): Pick<LoadedAgentSessionStore, 
   if (typeof file.records === 'object' && file.records !== null) {
     for (const [sessionId, value] of Object.entries(file.records)) {
       const decoded = isPersistedAgentSessionRecord(value)
-        ? normalizeLegacyHandoffRecord(value)
+        ? decodePersistedAgentSessionRecord(value)
         : null
       const record = decoded?.record ?? null
       if (record?.sessionId === sessionId) {

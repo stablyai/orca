@@ -16,6 +16,7 @@ import {
   createClaudeStructuredLaunchResolver
 } from './claude-structured-launch-resolution'
 import { claudeStructuredPermissionModeForSettings } from './claude-structured-permission-mode'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'orca-session-1'
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
@@ -41,7 +42,7 @@ function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord
 function identityAt(leafUuid: string | null): typeof IDENTITY {
   return {
     ...IDENTITY,
-    providerHandle: { kind: 'claude', sessionId: 'provider-current', leafUuid }
+    providerHandle: claudeProviderHandle('provider-current', leafUuid)
   }
 }
 
@@ -100,8 +101,9 @@ const WSL_ONLY_NORMALIZED: ClaudeManagedAccountGateSettings = {
 }
 
 const RESUMABLE = record({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle, so the link's other fields stay unset.
   providerHandleChain: [
-    { handle: { provider: 'claude', sessionId: 'provider-current', leafUuid: 'leaf-current' } }
+    { handle: claudeProviderHandle('provider-current', 'leaf-current') }
   ] as AgentSessionRecord['providerHandleChain']
 })
 
@@ -136,14 +138,11 @@ describe('claude structured launch resolution', () => {
   it('resumes the durable chain head by session id and carries its leaf as bookkeeping', async () => {
     const launch = await resolverFor(
       record({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle, so the link's other fields stay unset.
         providerHandleChain: [
-          { handle: { provider: 'claude', sessionId: 'provider-old', leafUuid: 'leaf-old' } },
+          { handle: claudeProviderHandle('provider-old', 'leaf-old') },
           {
-            handle: {
-              provider: 'claude',
-              sessionId: 'provider-current',
-              leafUuid: 'leaf-current'
-            }
+            handle: claudeProviderHandle('provider-current', 'leaf-current')
           }
         ] as AgentSessionRecord['providerHandleChain']
       })
@@ -194,7 +193,7 @@ describe('claude structured launch resolution', () => {
       resolve({
         identity: {
           ...IDENTITY,
-          providerHandle: { kind: 'claude', sessionId: 'provider-other', leafUuid: 'leaf-current' }
+          providerHandle: claudeProviderHandle('provider-other', 'leaf-current')
         }
       })
     ).rejects.toThrow('durable resume identity changed before spawn')
@@ -203,13 +202,10 @@ describe('claude structured launch resolution', () => {
   it('keeps session-only resume when the durable handle has no leaf', async () => {
     const launch = await resolverFor(
       record({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle, so the link's other fields stay unset.
         providerHandleChain: [
           {
-            handle: {
-              provider: 'claude',
-              sessionId: 'provider-current',
-              leafUuid: null
-            }
+            handle: claudeProviderHandle('provider-current', null)
           }
         ] as AgentSessionRecord['providerHandleChain']
       })
@@ -226,7 +222,7 @@ describe('claude structured launch resolution', () => {
       record({
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle.
         providerHandleChain: [
-          { handle: { provider: 'claude', sessionId: 'provider-current', leafUuid: null } }
+          { handle: claudeProviderHandle('provider-current', null) }
         ] as AgentSessionRecord['providerHandleChain']
       }),
       undefined,

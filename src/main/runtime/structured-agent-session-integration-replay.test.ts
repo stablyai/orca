@@ -21,6 +21,7 @@ import {
   TURN,
   type StructuredCodexRpcHarness
 } from './structured-codex-session-rpc-test-harness'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const journals = createTrackedJournalOpener()
 const WORKSPACE = 'workspace-1'
@@ -118,7 +119,7 @@ describe('a structured codex session over agentSession.*', () => {
       workspaceId: WORKSPACE,
       hostId: 'local',
       agent: 'codex' as const,
-      providerHandle: { kind: 'codex' as const, threadId: THREAD }
+      providerHandle: codexProviderHandle(THREAD)
     }
     const reopened = await journals.open({
       identity,

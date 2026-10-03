@@ -21,10 +21,11 @@ import {
   type AgentSessionConversationCommandRecord
 } from './agent-session-conversation-command'
 import {
-  isAgentSessionProviderHandleChain,
+  decodePersistedAgentSessionProviderHandleChain,
   type AgentSessionHandleProvider,
   type AgentSessionProviderHandleLink
 } from './agent-session-provider-handle'
+import { agentSessionProviderHandleBelongsTo } from './agent-session-provider-handle-encoding'
 
 export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
 
@@ -333,8 +334,8 @@ function isPersistedAgentSessionLease(value: unknown): value is PersistedAgentSe
   )
 }
 
-/** The on-disk shape, which still admits the removed terminal handoff's lease values. Decode
- *  through `normalizeLegacyHandoffRecord` before anything reads the lease. */
+/** The on-disk shape, which still admits the removed terminal handoff's lease values and stores
+ *  handles in their typed form. Decode through `decodePersistedAgentSessionRecord` before use. */
 export function isPersistedAgentSessionRecord(
   value: unknown
 ): value is PersistedAgentSessionRecord {
@@ -347,7 +348,6 @@ export function isPersistedAgentSessionRecord(
     isAgentSessionId(record.sessionId) &&
     isAgentSessionExecutionLocation(record.location) &&
     (record.provider === 'claude' || record.provider === 'codex') &&
-    isAgentSessionProviderHandleChain(record.providerHandleChain) &&
     isAgentSessionAccountHome(record.accountHome) &&
     (record.options === undefined || isAgentSessionOptions(record.options)) &&
     (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
@@ -365,9 +365,12 @@ export function isPersistedAgentSessionRecord(
     return false
   }
   const validated = record as AgentSessionRecord
-  const head = validated.providerHandleChain.at(-1)
+  // The row holds stored handles; validate the chain they decode to.
+  const chain = decodePersistedAgentSessionProviderHandleChain(validated.providerHandleChain)
+  const head = chain?.at(-1)
   return (
-    validated.providerHandleChain.every((link) => link.handle.provider === validated.provider) &&
+    chain !== null &&
+    chain.every((link) => agentSessionProviderHandleBelongsTo(link.handle, validated.provider)) &&
     (validated.lease.claimStatus !== 'live' ||
       (validated.lease.ownerProcess !== null &&
         head?.linkId === validated.lease.provenHandleLinkId &&

@@ -23,6 +23,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -51,7 +52,7 @@ beforeEach(async () => {
         acquisitionGeneration: 'generation-1',
         link: {
           linkId: `link-${fence}`,
-          handle: { provider: 'codex' as const, threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: fence > 1 ? ('resumed' as const) : ('created' as const),
           mintedAtFence: fence,
           observedAt: NOW

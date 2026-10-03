@@ -40,6 +40,7 @@ import { createStructuredAgentSessionRestartOfferWithdrawal } from './structured
 import { restoreStructuredAgentSessionsOnRestart } from './structured-agent-session-restart-restore'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const { readOnlyOpens, openReadOnly } = vi.hoisted(() => ({
   readOnlyOpens: new Array<string>(),
@@ -87,7 +88,7 @@ function recordFor(sessionId: string): AgentSessionRecord {
     providerHandleChain: [
       {
         linkId: `codex-1-${sessionId}`,
-        handle: { provider: 'codex', threadId: `thread-${sessionId}` },
+        handle: codexProviderHandle(`thread-${sessionId}`),
         origin: 'created',
         mintedAtFence: 1,
         observedAt: 1

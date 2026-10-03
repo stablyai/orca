@@ -16,8 +16,7 @@ export function listStructuredProviderSessionOwnership(
       sessionId: record.sessionId,
       workspaceId: record.location.workspaceId,
       provider: record.provider,
-      providerSessionId:
-        link.handle.provider === 'codex' ? link.handle.threadId : link.handle.sessionId,
+      providerSessionId: link.handle.nativeId,
       lease: record.lease
     }))
   )

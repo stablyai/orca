@@ -16,6 +16,7 @@ import {
   appendAgentSessionProviderHandleLink,
   type AgentSessionProviderHandleLink
 } from '../../shared/agent-session-provider-handle'
+import { agentSessionProviderHandleBelongsTo } from '../../shared/agent-session-provider-handle-encoding'
 import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
 import type {
   AgentSessionDeathEvidence,
@@ -145,7 +146,7 @@ export function proveAgentSessionOwner(args: {
       reason: 'spawnIdentityMismatch'
     })
   }
-  if (args.link.handle.provider !== record.provider) {
+  if (!agentSessionProviderHandleBelongsTo(args.link.handle, record.provider)) {
     throw new Error('agent_session_provider_handle_provider_mismatch')
   }
   if (args.link.mintedAtFence !== args.fence) {

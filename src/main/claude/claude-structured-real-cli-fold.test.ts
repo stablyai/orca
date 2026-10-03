@@ -27,6 +27,7 @@ import {
   realClaudeCommand,
   realClaudeLaunchHome
 } from './claude-real-cli-availability-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'real-cli-fold'
 // Pins the live proof order (SessionStart hook frame before system/init) and lets the
@@ -42,7 +43,7 @@ function identity(providerSessionId: string): AgentSessionJournalIdentity {
     workspaceId: 'real-cli-fold-workspace',
     hostId: 'local',
     agent: 'claude',
-    providerHandle: { kind: 'claude', sessionId: providerSessionId, leafUuid: null }
+    providerHandle: claudeProviderHandle(providerSessionId, null)
   }
 }
 

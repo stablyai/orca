@@ -15,6 +15,7 @@ import {
 } from '../../../shared/agent-session-record.test-fixture'
 import * as providerSupport from './structured-agent-session-provider-support'
 import { revealStructuredAgentSession } from './structured-agent-session-reveal'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 function recordFor(provider: 'claude' | 'codex', sessionId: string): AgentSessionRecord {
   const record = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
@@ -26,7 +27,7 @@ function recordFor(provider: 'claude' | 'codex', sessionId: string): AgentSessio
         ? [
             {
               ...record.providerHandleChain[0]!,
-              handle: { provider: 'codex', threadId: `thread-${sessionId}` }
+              handle: codexProviderHandle(`thread-${sessionId}`)
             }
           ]
         : record.providerHandleChain

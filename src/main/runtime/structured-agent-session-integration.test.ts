@@ -44,6 +44,7 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const journals = createTrackedJournalOpener()
 
@@ -406,7 +407,7 @@ describe('a structured codex session over agentSession.*', () => {
       workspaceId: WORKSPACE,
       hostId: 'local',
       agent: 'codex' as const,
-      providerHandle: { kind: 'codex' as const, threadId: THREAD }
+      providerHandle: codexProviderHandle(THREAD)
     }
     const journal = await journals.open({
       identity,
@@ -827,7 +828,7 @@ describe('a structured codex session over agentSession.*', () => {
       workspaceId: WORKSPACE,
       hostId: 'local',
       agent: 'codex' as const,
-      providerHandle: { kind: 'codex' as const, threadId: THREAD }
+      providerHandle: codexProviderHandle(THREAD)
     }
     const reopened = await journals.open({
       identity,

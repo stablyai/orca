@@ -14,6 +14,7 @@ import {
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
 import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 export const THREAD_ID = 'thread-abc'
 
@@ -23,7 +24,7 @@ export function identityFor(sessionId: string): AgentSessionJournalIdentity {
     workspaceId: 'ws-1',
     hostId: 'host-1',
     agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: THREAD_ID }
+    providerHandle: codexProviderHandle(THREAD_ID)
   }
 }
 

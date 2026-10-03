@@ -9,7 +9,7 @@ import {
   isPersistedAgentSessionRecord,
   type AgentSessionLease
 } from '../../shared/agent-session-record'
-import { normalizeLegacyHandoffRecord } from '../../shared/agent-session-legacy-handoff-lease'
+import { decodePersistedAgentSessionRecord } from '../../shared/agent-session-record-stored-form'
 import type Database from '../sqlite/sync-database'
 import type { SqliteRow } from '../sqlite/sqlite-statement'
 import {
@@ -112,7 +112,7 @@ export function loadAgentSessionStoreRows(
     const parsed = parseJson(text(row, 'record_json'))
     const value = parsed.ok ? parsed.value : text(row, 'record_json')
     if (parsed.ok && isReadableAgentSessionStoreRecord(sessionId, value)) {
-      const { record } = normalizeLegacyHandoffRecord(value)
+      const { record } = decodePersistedAgentSessionRecord(value)
       state.records.set(sessionId, {
         ...record,
         lease: { ...withoutRetiredLeaseLatches(record.lease), unreconciled: true }

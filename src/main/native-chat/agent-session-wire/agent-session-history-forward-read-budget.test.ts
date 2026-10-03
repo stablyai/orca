@@ -20,13 +20,14 @@ import {
 } from '../agent-session-journal/journal-host-database-test-support'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { readAgentSessionHistory } from './agent-session-history-page'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const identity: AgentSessionJournalIdentity = {
   sessionId: 'bounded-catch-up',
   workspaceId: 'folder-workspace',
   hostId: 'remote-host',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 const journals = createTrackedJournalOpener()
 let root: string | undefined

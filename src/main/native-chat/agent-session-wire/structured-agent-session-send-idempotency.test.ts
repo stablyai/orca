@@ -11,6 +11,7 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import { performSend, type AgentSessionTurnContext } from './structured-agent-session-turns'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const journals = createTrackedJournalOpener()
 
@@ -25,7 +26,7 @@ beforeEach(async () => {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
     stateDirectory: root
   })

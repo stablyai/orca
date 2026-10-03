@@ -15,6 +15,7 @@ import {
   fakeClaude,
   identityFor
 } from './claude-structured-session-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'orca-session-auth'
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
@@ -60,11 +61,10 @@ function realResolverAdapter(
   claude: ReturnType<typeof fakeClaude>,
   authSwitchSettleTimeoutMs: number
 ): ClaudeStructuredSessionAdapter {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only the chain head's handle from this partial record.
   const resumable = {
     ...record(),
-    providerHandleChain: [
-      { handle: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null } }
-    ]
+    providerHandleChain: [{ handle: claudeProviderHandle(PROVIDER_SESSION_ID, null) }]
   } as unknown as AgentSessionRecord
   return new ClaudeStructuredSessionAdapter({
     resolveLaunch: createClaudeStructuredLaunchResolver({

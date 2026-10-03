@@ -8,9 +8,10 @@
 import type { AgentType } from '../../../shared/agent-status-types'
 import type {
   AgentJournalResetReason,
-  AgentSessionJournalIdentity,
-  AgentSessionProviderHandle
+  AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionProviderHandle } from '../../../shared/agent-session-provider-handle'
+import { AGENT_SESSION_PENDING_PROVIDER_HANDLE_VALUE } from '../../../shared/agent-session-provider-handle-encoding'
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import { importLegacyTranscriptIntoJournal } from '../agent-session-journal/journal-legacy-import'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -34,11 +35,8 @@ export type AgentSessionJournalOpened = {
 
 /** The provider's own session id, which is what the transcript readers index
  *  by — never the Orca session id. */
-export function providerHistoryId(handle: AgentSessionProviderHandle): string {
-  if (handle.kind === 'codex') {
-    return handle.threadId
-  }
-  return handle.kind === 'claude' ? handle.sessionId : handle.value
+export function providerHistoryId(handle: AgentSessionProviderHandle | null): string {
+  return handle?.nativeId ?? AGENT_SESSION_PENDING_PROVIDER_HANDLE_VALUE
 }
 
 export async function openAgentSessionJournalWithRecovery(input: {

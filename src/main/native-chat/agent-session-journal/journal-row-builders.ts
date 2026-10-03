@@ -5,8 +5,10 @@ import type {
   AgentJournalProducerLinkage,
   AgentJournalRowAttribution,
   AgentJournalTurnScope,
-  AgentSessionProviderHandle
+  AgentSessionJournalIdentity,
+  AgentSessionJournalProviderHandle
 } from '../../../shared/agent-session-journal-types'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
 import {
   agentJournalLinkageFields,
@@ -63,7 +65,7 @@ export function journalTombstoneRowBuilder(
 
 export function journalSubmissionRowBuilder(
   state: () => JournalReducerState,
-  providerHandle: AgentSessionProviderHandle,
+  identity: Pick<AgentSessionJournalIdentity, 'providerHandle' | 'agent'>,
   input: {
     clientMessageId: string
     payloadFingerprint: string
@@ -85,7 +87,7 @@ export function journalSubmissionRowBuilder(
     const queuedMessageId = consume?.messageId ?? input.queuedMessageId
     return buildJournalSubmissionRow({
       state: state(),
-      providerHandle,
+      providerHandle: agentSessionJournalProviderHandle(identity.providerHandle, identity.agent),
       ...input,
       ...(queuedMessageId !== undefined ? { queuedMessageId } : {}),
       seq,
@@ -300,7 +302,7 @@ export function buildJournalSubmissionRow(input: {
   state: JournalReducerState
   clientMessageId: string
   payloadFingerprint: string
-  providerHandle: AgentSessionProviderHandle
+  providerHandle: AgentSessionJournalProviderHandle
   body: AgentJournalMessageItem
   seq: number
   fence: number

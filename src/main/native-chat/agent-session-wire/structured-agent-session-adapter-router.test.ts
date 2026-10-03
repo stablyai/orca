@@ -8,6 +8,7 @@ import type {
   StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
 import { StructuredAgentSessionAdapterRouter } from './structured-agent-session-adapter-router'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 function claudeIdentity(sessionId: string): AgentSessionJournalIdentity {
   return {
@@ -15,7 +16,7 @@ function claudeIdentity(sessionId: string): AgentSessionJournalIdentity {
     workspaceId: 'workspace-1',
     hostId: 'local',
     agent: 'claude',
-    providerHandle: { kind: 'claude', sessionId: 'provider-session-1', leafUuid: null }
+    providerHandle: claudeProviderHandle('provider-session-1', null)
   }
 }
 
@@ -24,7 +25,7 @@ function acquisition(fence: number, spawnToken: string): AgentSessionAcquisition
     process: { hostId: 'local', pid: 1, processStartTimeMs: 1, spawnToken },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'claude', sessionId: 'provider-session-1', leafUuid: null },
+      handle: claudeProviderHandle('provider-session-1', null),
       origin: 'created',
       mintedAtFence: fence,
       observedAt: 1

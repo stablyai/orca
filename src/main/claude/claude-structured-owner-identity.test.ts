@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CLAUDE_SPAWN_TOKEN_ENV, claudeProcessIdentity } from './claude-structured-owner-identity'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY = {
   sessionId: 'session-identity',
   workspaceId: 'workspace-1',
   hostId: 'local',
   agent: 'claude' as const,
-  providerHandle: { kind: 'claude' as const, sessionId: 'session-1', leafUuid: 'leaf-1' }
+  providerHandle: claudeProviderHandle('session-1', 'leaf-1')
 }
 
 describe('claude structured owner identity', () => {

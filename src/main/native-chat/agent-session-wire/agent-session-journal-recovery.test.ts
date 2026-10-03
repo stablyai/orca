@@ -33,6 +33,10 @@ import {
 } from './agent-session-journal-recovery'
 import { JOURNAL_NEWER_SCHEMA_MESSAGE } from '../agent-session-journal/journal-open-failure'
 import { performSend, type AgentSessionTurnContext } from './structured-agent-session-turns'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
 
 // The store's replay goes through the mock: it is the only read of the journal an open makes.
 vi.mock('../agent-session-journal/journal-open', async (importOriginal) => {
@@ -47,7 +51,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: CODEX_SESSION }
+  providerHandle: codexProviderHandle(CODEX_SESSION)
 }
 
 const CODEX_LINES = [
@@ -156,10 +160,8 @@ afterEach(async () => {
 
 describe('providerHistoryId', () => {
   it('uses the provider handle, never the Orca session id', () => {
-    expect(providerHistoryId({ kind: 'codex', threadId: 'thread-9' })).toBe('thread-9')
-    expect(providerHistoryId({ kind: 'claude', sessionId: 'sess-9', leafUuid: null })).toBe(
-      'sess-9'
-    )
+    expect(providerHistoryId(codexProviderHandle('thread-9'))).toBe('thread-9')
+    expect(providerHistoryId(claudeProviderHandle('sess-9', null))).toBe('sess-9')
   })
 })
 
@@ -311,7 +313,7 @@ describe('openAgentSessionJournalWithRecovery', () => {
     const neighbour: AgentSessionJournalIdentity = {
       ...IDENTITY,
       sessionId: 'neighbour-session',
-      providerHandle: { kind: 'codex', threadId: 'neighbour-thread' }
+      providerHandle: codexProviderHandle('neighbour-thread')
     }
     const other = await journals.open({ identity: neighbour, stateDirectory: journalDir })
     for (let ordinal = 1; ordinal <= 3; ordinal += 1) {

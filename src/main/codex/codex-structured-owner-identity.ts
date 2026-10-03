@@ -3,6 +3,7 @@ import {
   agentSessionProviderHandleKey,
   type AgentSessionProviderHandleLink
 } from '../../shared/agent-session-provider-handle'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
 import { readProcessStartTimeMs } from '../runtime/agent-session-process-identity-probe'
 
@@ -91,16 +92,15 @@ export function codexProviderHandleLink(
 ): AgentSessionProviderHandleLink {
   return {
     linkId: input.linkId ?? `codex-${input.fence}-${input.threadId}`.slice(0, 128),
-    handle: { provider: 'codex', threadId: input.threadId },
+    handle: codexProviderHandle(input.threadId),
     origin: input.origin ?? (input.resumed ? 'resumed' : 'created'),
     mintedAtFence: input.fence,
     observedAt: input.observedAt,
     ...(input.supersedesThreadId
       ? {
-          supersedesKey: agentSessionProviderHandleKey({
-            provider: 'codex',
-            threadId: input.supersedesThreadId
-          })
+          supersedesKey: agentSessionProviderHandleKey(
+            codexProviderHandle(input.supersedesThreadId)
+          )
         }
       : {})
   }

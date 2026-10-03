@@ -21,6 +21,10 @@ import {
 import { AGENT_SESSION_CLAIM_KEY_RETENTION_MS } from './agent-session-claim-key-retention'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 
@@ -87,7 +91,7 @@ function handleLink(
 ): AgentSessionProviderHandleLink {
   return {
     linkId: 'link-1',
-    handle: { provider: 'claude', sessionId: 'provider-session-1', leafUuid: 'leaf-1' },
+    handle: claudeProviderHandle('provider-session-1', 'leaf-1'),
     origin: 'created',
     mintedAtFence: 1,
     observedAt: NOW,
@@ -218,7 +222,7 @@ describe('acquisition path', () => {
         sessionId: 'session-alpha',
         fence: 1,
         link: handleLink({
-          handle: { provider: 'codex', threadId: 'thread-1' }
+          handle: codexProviderHandle('thread-1')
         }),
         now: NOW
       })

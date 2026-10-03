@@ -15,6 +15,7 @@ import type { AgentSessionQuestionAnswer } from './agent-session-question-answer
 import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 import type { AgentSessionContextUsage } from './agent-session-context-usage'
+import type { AgentSessionProviderHandle } from './agent-session-provider-handle'
 import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
 
 export { type AgentType }
@@ -39,10 +40,11 @@ export type AgentJournalCursor = {
   sequence: number
 }
 
-/** The durable provider session a journal is bound to.
- *  Codex is one thread id; Claude needs the leaf because concurrent resumes of
- *  one session id branch the same transcript. */
-export type AgentSessionProviderHandle =
+/** A provider handle as journal rows record it, and (without `opaque`) as
+ *  `agentSession.attach` carries it. Persisted and on the wire: never reshape an
+ *  arm. Derived from the in-memory handle by `agentSessionJournalProviderHandle`;
+ *  `opaque` names any other transport, or `pending` before a handle is proved. */
+export type AgentSessionJournalProviderHandle =
   | { kind: 'codex'; threadId: string }
   | { kind: 'claude'; sessionId: string; leafUuid: string | null }
   | { kind: 'opaque'; agent: AgentType; value: string }
@@ -58,7 +60,8 @@ export type AgentSessionJournalIdentity = {
   /** Execution host that owns the process, so a client restart adjudicates nothing. */
   hostId: string
   agent: AgentType
-  providerHandle: AgentSessionProviderHandle
+  /** The record's proved handle; null before the provider has proved one. */
+  providerHandle: AgentSessionProviderHandle | null
 }
 
 // ─── Item identity ──────────────────────────────────────────────────────────

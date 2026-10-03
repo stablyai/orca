@@ -105,8 +105,7 @@ function connectionFor(sessionId: string): FakeConnection {
   const head = agentSessionProviderHandleChainHead(
     host.deps.store.getRecord(sessionId)?.providerHandleChain ?? []
   )
-  const thread =
-    threadBySession.get(sessionId) ?? (head?.handle.provider === 'codex' && head.handle.threadId)
+  const thread = threadBySession.get(sessionId) ?? head?.handle.nativeId
   const connection = codex.connections.findLast((candidate) => candidate.threadId === thread)
   if (!connection) {
     throw new Error(`no app-server for ${sessionId}`)

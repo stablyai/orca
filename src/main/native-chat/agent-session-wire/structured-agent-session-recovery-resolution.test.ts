@@ -15,6 +15,7 @@ import {
   resolveStructuredSessionRecovery,
   type StructuredSessionRecoveryResolutionDeps
 } from './structured-agent-session-recovery-resolution'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const MATCHED: AgentSessionOwnerProbe = { outcome: 'identity-matched', matchedOn: ['spawn-token'] }
@@ -81,7 +82,7 @@ async function liveOwner(store: AgentSessionRecordStore, pid = 4242) {
     fence,
     link: {
       linkId: 'link-recovery',
-      handle: { provider: 'codex', threadId: 'thread-recovery' },
+      handle: codexProviderHandle('thread-recovery'),
       origin: 'created',
       mintedAtFence: fence,
       observedAt: NOW

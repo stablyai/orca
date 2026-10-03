@@ -15,6 +15,7 @@ import {
   type ClaudeStructuredSessionEvent
 } from './claude-structured-session-adapter'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 export const PROVIDER_SESSION_ID = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
 
@@ -30,7 +31,7 @@ export function identityFor(sessionId = 'session-1'): AgentSessionJournalIdentit
     workspaceId: 'workspace-1',
     hostId: 'host-1',
     agent: 'claude',
-    providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
+    providerHandle: claudeProviderHandle(PROVIDER_SESSION_ID, null)
   }
 }
 

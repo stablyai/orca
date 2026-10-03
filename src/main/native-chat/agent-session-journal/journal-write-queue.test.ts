@@ -20,13 +20,14 @@ import { openJournalOwingImport } from './journal-owed-import-test-support'
 import type { AgentSessionJournal } from './journal-store'
 import { openAgentSessionJournal } from './journal-store-factory'
 import { JournalWriteQueue } from './journal-write-queue'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY = {
   sessionId: 'session-1',
   workspaceId: 'workspace-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 } as const
 
 const reply = (text: string): AgentJournalMessageItem => ({
