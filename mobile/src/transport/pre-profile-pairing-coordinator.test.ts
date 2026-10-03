@@ -545,3 +545,34 @@ describe('pre-profile pairing coordinator', () => {
     expect(deps.savePairedHost).not.toHaveBeenCalled()
   })
 })
+
+it('pairs an SSH route without racing relay and persists the original endpoint', async () => {
+  const client = fakeClient([success({ version: '1.0.0' })])
+  const deps = dependencies(client, [])
+  const connectionRoute = {
+    kind: 'ssh' as const,
+    host: 'server.example',
+    port: 22,
+    username: 'user',
+    targetHost: 'localhost',
+    targetPort: 6768,
+    hostKeyFingerprint: `SHA256:${'A'.repeat(43)}`,
+    credentialId: 'secret-id'
+  }
+  const attempt = startPreProfilePairing({
+    offer: relayOffer,
+    connectionRoute,
+    timeoutMs: 1000,
+    dependencies: deps
+  })
+  await attempt.result
+  expect(deps.connectRelay).not.toHaveBeenCalled()
+  expect(deps.saveJournal).not.toHaveBeenCalled()
+  expect(deps.connectDirect.mock.calls[0]?.[3]).toMatchObject({
+    routeProvider: { open: expect.any(Function) }
+  })
+  expect(deps.savePairedHost).toHaveBeenCalledWith(
+    expect.objectContaining({ endpoint: relayOffer.endpoint, connectionRoute })
+  )
+  expect(client.close).toHaveBeenCalled()
+})

@@ -1,0 +1,23 @@
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.orcasshtunnel'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace 'expo.modules.orcasshtunnel'
+  sourceSets.main.jniLibs.srcDirs += ['libs/jni']
+  defaultConfig { consumerProguardFiles 'consumer-rules.pro' }
+}
+
+def engine = file('libs/OrcaSshEngine.jar')
+if (!engine.exists()) {
+  throw new GradleException('Build the SSH engine first: node scripts/build-ssh-engine.mjs android')
+}
+dependencies { implementation files(engine) }

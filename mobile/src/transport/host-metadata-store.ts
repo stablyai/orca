@@ -32,6 +32,7 @@ export function toStoredHostProfile(host: HostProfile): StoredHostProfile {
     lastKnownMachineName,
     lastKnownHostPlatform,
     endpoint,
+    connectionRoute,
     publicKeyB64,
     lastConnected
   } = host
@@ -42,6 +43,7 @@ export function toStoredHostProfile(host: HostProfile): StoredHostProfile {
     ...(lastKnownMachineName !== undefined ? { lastKnownMachineName } : {}),
     ...(lastKnownHostPlatform !== undefined ? { lastKnownHostPlatform } : {}),
     endpoint,
+    ...(connectionRoute ? { connectionRoute } : {}),
     publicKeyB64,
     lastConnected
   }
@@ -61,10 +63,38 @@ function parseStoredHostProfiles(raw: string | null): StoredHostProfile[] | null
       if (item && typeof item === 'object' && 'deviceToken' in item) {
         return []
       }
-      const result = StoredHostProfileSchema.safeParse(item)
+      const result = StoredHostProfileSchema.safeParse(migrateLegacyConnectionRoute(item))
       return result.success ? [classifyLegacyHostName(result.data)] : []
     })
   } catch {
     return null
   }
+}
+
+// Why: the early SSH route shape forwarded to the server's localhost with an
+// optional jump host; the universal shape targets any host:port. Jump routes
+// cannot be expressed, so they degrade to a direct connection.
+function migrateLegacyConnectionRoute(item: unknown): unknown {
+  if (!isPlainRecord(item)) {
+    return item
+  }
+  const route = item.connectionRoute
+  if (!isPlainRecord(route) || route.kind !== 'ssh') {
+    return item
+  }
+  if (typeof route.targetPort === 'number') {
+    return item
+  }
+  if (typeof route.remotePort !== 'number' || route.jump !== undefined) {
+    return { ...item, connectionRoute: undefined }
+  }
+  const { remotePort: _remotePort, jump: _jump, ...rest } = route
+  return {
+    ...item,
+    connectionRoute: { ...rest, targetHost: 'localhost', targetPort: route.remotePort }
+  }
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object'
 }

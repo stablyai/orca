@@ -11,10 +11,11 @@ import {
   ScrollView
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
+import { updateHostConnectionRoute } from '../../../src/transport/host-connection-route-store'
 import { displayHostEndpoint } from '../../../src/transport/host-endpoint'
 import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-edit'
 import { usePrimeHosts, useRefreshHostClient } from '../../../src/transport/client-context'
@@ -66,6 +67,27 @@ export default function EditHostScreen() {
     void load()
   }, [load])
 
+  // Why: the SSH connection is chosen on a pushed screen, so the route this
+  // screen renders is only correct if the host is re-read when focus returns.
+  // Only `host` is refreshed, so an unsaved name/address edit survives.
+  const focusedBefore = useRef(false)
+  useFocusEffect(
+    useCallback(() => {
+      if (!focusedBefore.current) {
+        focusedBefore.current = true
+        return
+      }
+      void loadHosts()
+        .then((hosts) => {
+          const found = hosts.find((h) => h.id === hostId)
+          if (found) {
+            setHost(found)
+          }
+        })
+        .catch(() => {})
+    }, [hostId])
+  )
+
   const endpointEdit = useMemo(
     () => (host ? resolveHostEndpointEdit(host.endpoint, address) : null),
     [address, host]
@@ -80,6 +102,26 @@ export default function EditHostScreen() {
     endpointEdit.kind !== 'invalid' &&
     (nameChanged || endpointChanged) &&
     !saving
+
+  function clearRoute() {
+    if (savingRef.current || !host) {
+      return
+    }
+    setSaving(true)
+    savingRef.current = true
+    void updateHostConnectionRoute(host.id, null)
+      .then(() => {
+        refreshHostClient(host.id)
+        setHost((value) => (value ? { ...value, connectionRoute: undefined } : value))
+      })
+      .catch((reason: unknown) => {
+        setSaveError(reason instanceof Error ? reason.message : 'Cannot clear the SSH connection.')
+      })
+      .finally(() => {
+        savingRef.current = false
+        setSaving(false)
+      })
+  }
 
   async function handleSave() {
     if (!host || !hostId || !endpointEdit || savingRef.current) {
@@ -192,6 +234,30 @@ export default function EditHostScreen() {
               re-pair. Use this when the same desktop is reachable at a different IP (for example
               home LAN vs Tailscale).
             </Text>
+
+            <Pressable
+              style={styles.secondaryButton}
+              accessibilityRole="button"
+              disabled={saving}
+              onPress={() =>
+                router.push({ pathname: '/ssh-connections', params: { hostId: host.id } })
+              }
+            >
+              <Text style={styles.secondaryButtonText}>
+                {host.connectionRoute ? 'Change SSH connection' : 'Connect through SSH'}
+              </Text>
+            </Pressable>
+
+            {host.connectionRoute && (
+              <Pressable
+                style={styles.secondaryButton}
+                accessibilityRole="button"
+                disabled={saving}
+                onPress={() => clearRoute()}
+              >
+                <Text style={styles.secondaryButtonText}>Use direct connection instead</Text>
+              </Pressable>
+            )}
 
             <Text style={styles.label}>Name</Text>
             <TextInput

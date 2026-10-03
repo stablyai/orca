@@ -16,7 +16,7 @@ import {
   type RpcStreamSubscribeOptions
 } from './rpc-client-stream-registry'
 import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
-import { isStaleForegroundDial } from './rpc-stale-dial'
+import { recoverRpcClientOnForeground } from './rpc-client-foreground-recovery'
 import type { ConnectionState, ForegroundNudgeReason, RpcResponse } from './types'
 import { negotiateMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
 
@@ -81,6 +81,12 @@ export class DirectRpcClient implements RpcClient {
       onTimeout: this.connectionLog.livenessTimeout
     })
     this.socketFactory = new RpcClientSocketFactory({
+      routeProvider: options.routeProvider,
+      onCreated: (session) => {
+        this.socketSession = session
+      },
+      onRouteFailure: (message, retryable) =>
+        retryable ? this.retryAuthentication(message) : this.latchAuthenticationFailure(message),
       endpoint,
       deviceToken,
       serverPublicKeyB64,
@@ -115,7 +121,10 @@ export class DirectRpcClient implements RpcClient {
       socketFactory: this.socketFactory,
       authenticationRetry: this.authenticationRetry,
       getCurrentSession: () => this.socketSession,
-      clearCurrentSession: () => (this.socketSession = null),
+      clearCurrentSession: () => {
+        this.socketSession = null
+        this.socketFactory.closeRoute()
+      },
       getAuthenticationGeneration: () => this.authenticationGeneration,
       isIntentionallyClosed: () => this.intentionallyClosed,
       stopLiveness: (session) => {
@@ -172,39 +181,25 @@ export class DirectRpcClient implements RpcClient {
   }
 
   notifyForeground(_reason?: ForegroundNudgeReason): void {
-    if (this.intentionallyClosed) {
-      return
-    }
-    if (this.getState() === 'connected') {
-      console.log('[net] foreground — probing live connection')
-      if (this.livenessSession) {
-        this.liveness.probeNow(this.livenessSession)
-      }
-      return
-    }
-    const dialing = this.socketSession
-    const dialAgeMs = Date.now() - this.socketFactory.getDialStartedAt()
-    let abandoned = false
-    if (dialing && isStaleForegroundDial(this.getState(), dialAgeMs)) {
-      console.log('[net] foreground — abandoning stale dial', {
-        state: this.getState(),
-        dialAgeMs
-      })
-      this.socketClose.forceClose(dialing)
-      abandoned = true
-    }
-    if (this.getState() === 'reconnecting') {
-      console.log('[net] foreground — restarting reconnect loop', {
-        attempt: this.getReconnectAttempt(),
-        hadTimer: this.reconnect.hasTimer()
-      })
-      this.reconnect.redialNow(!abandoned)
-    }
+    recoverRpcClientOnForeground({
+      closed: this.intentionallyClosed,
+      getState: () => this.getState(),
+      probe: () => {
+        if (this.livenessSession) {
+          this.liveness.probeNow(this.livenessSession)
+        }
+      },
+      session: this.socketSession,
+      factory: this.socketFactory,
+      socketClose: this.socketClose,
+      reconnect: this.reconnect
+    })
   }
 
   close(): void {
     this.intentionallyClosed = true
     this.reconnect.cancel()
+    this.socketFactory.closeRoute()
     const session = this.socketSession
     session?.clearTimers()
     if (this.livenessSession) {
@@ -223,7 +218,7 @@ export class DirectRpcClient implements RpcClient {
       return
     }
     this.connectionState.publish('connecting')
-    this.socketSession = this.socketFactory.open()
+    this.socketFactory.open()
   }
 
   private handleAuthenticated(session: RpcClientSocketSession): void {
@@ -267,6 +262,7 @@ export class DirectRpcClient implements RpcClient {
   }
 
   private retryAuthentication(reason: string): void {
+    this.socketFactory.closeRoute()
     const closing = this.socketSession
     this.socketSession = null
     closing?.clearKey()
@@ -278,6 +274,8 @@ export class DirectRpcClient implements RpcClient {
   }
 
   private latchAuthenticationFailure(reason: string): void {
+    this.socketFactory.closeRoute()
+    this.reconnect.cancel()
     this.intentionallyClosed = true
     this.socketSession?.close()
     this.socketSession = null

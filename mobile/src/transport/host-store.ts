@@ -1,3 +1,4 @@
+import { cleanupSshCredentials } from './host-connection-route-store'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import { HostProfileSchema } from './types'
 import type { HostCatalogEntry, HostProfile, StoredHostProfile } from './types'
@@ -60,6 +61,7 @@ async function loadHostListSnapshot(): Promise<hostListLoads.HostListSnapshot> {
 }
 
 async function doLoadHostListSnapshot(): Promise<hostListLoads.HostListSnapshot> {
+  await cleanupSshCredentials().catch(() => {})
   const storedHosts = await loadStoredHostProfiles()
   if (!storedHosts) {
     return { catalog: [], profiles: [] }
@@ -270,6 +272,7 @@ export async function removeHost(hostId: string): Promise<void> {
     throw error
   }
   tokenCache.delete(hostId)
+  void cleanupSshCredentials().catch(() => {})
   try {
     await removeMobileRelayHostRouting(hostId)
     hostListLoads.dropSharedHostListLoad()
