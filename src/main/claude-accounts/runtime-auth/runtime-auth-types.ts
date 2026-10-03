@@ -15,6 +15,7 @@ export type ClaudeRuntimeAuthPreparation = {
 export type ClaudeSystemDefaultSnapshot = {
   credentialsJson: string | null
   configOauthAccount: unknown
+  configPath?: string
   keychainCredentialsJson: string | null
   scopedKeychainCredentialsJson?: string | null
   legacyKeychainCredentialsJson?: string | null

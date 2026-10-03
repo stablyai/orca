@@ -92,14 +92,25 @@ describe('ClaudeRuntimePathResolver', () => {
     expect(paths.envPatch).toEqual({})
   })
 
-  it('prefers a colocated config file once it exists', () => {
+  it('keeps the home config file when a colocated file exists without an override', () => {
     const configDir = join(testState.fakeHomeDir, '.claude')
     mkdirSync(configDir, { recursive: true })
     writeFileSync(join(configDir, '.claude.json'), '{}')
 
     const paths = new ClaudeRuntimePathResolver().getRuntimePaths()
 
+    expect(paths.configPath).toBe(join(testState.fakeHomeDir, '.claude.json'))
+    expect(paths.envPatch).toEqual({})
+  })
+
+  it('uses the colocated file when the default directory is explicitly inherited', () => {
+    const configDir = join(testState.fakeHomeDir, '.claude')
+    process.env.CLAUDE_CONFIG_DIR = configDir
+
+    const paths = new ClaudeRuntimePathResolver().getRuntimePaths()
+
     expect(paths.configPath).toBe(join(configDir, '.claude.json'))
+    expect(paths.envPatch).toEqual({ CLAUDE_CONFIG_DIR: configDir })
   })
 
   it('keeps the inherited config file colocated even before it exists', () => {
@@ -110,4 +121,23 @@ describe('ClaudeRuntimePathResolver', () => {
 
     expect(paths.configPath).toBe(join(inherited, '.claude.json'))
   })
+
+  it.each([false, true])(
+    'prefers a legacy .config.json in the config directory like Claude does (inherited: %s)',
+    (inherited) => {
+      const configDir = inherited
+        ? join(testState.fakeHomeDir, 'inherited-claude')
+        : join(testState.fakeHomeDir, '.claude')
+      mkdirSync(configDir, { recursive: true })
+      writeFileSync(join(configDir, '.config.json'), '{}')
+      writeFileSync(join(configDir, '.claude.json'), '{}')
+      if (inherited) {
+        process.env.CLAUDE_CONFIG_DIR = configDir
+      }
+
+      const paths = new ClaudeRuntimePathResolver().getRuntimePaths()
+
+      expect(paths.configPath).toBe(join(configDir, '.config.json'))
+    }
+  )
 })

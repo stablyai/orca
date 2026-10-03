@@ -45,6 +45,7 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
           settings.claudeManagedAccounts,
           this.lastSyncedAccountId
         )
+        this.reconcileSystemDefaultSnapshotConfigPath()
         await this.restoreSystemDefaultSnapshot(
           previousAccount ? await this.readManagedCredentials(previousAccount) : null,
           previousAccount ? await this.readManagedOauthAccount(previousAccount) : undefined

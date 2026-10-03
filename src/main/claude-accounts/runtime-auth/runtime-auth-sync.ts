@@ -29,6 +29,9 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
     const previousManagedOauthAccount = previousAccount
       ? await this.readManagedOauthAccount(previousAccount)
       : null
+    if (normalizedTarget.runtime === 'host') {
+      this.reconcileSystemDefaultSnapshotConfigPath()
+    }
     if (previousAccount && previousAccount.id !== activeAccount?.id) {
       if (previousManagedCredentialsJson) {
         const outgoingReadBackResult = await this.readBackRefreshedTokens(
