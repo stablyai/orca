@@ -1,5 +1,5 @@
 import type { IBuffer } from '@xterm/xterm'
-import { resolveCursorAgentImeAnchor } from '@/lib/pane-manager/terminal-ime-anchor'
+import { resolveParkedCursorAgentInput } from './cursor-agent-parked-screen'
 import { CSI_SEQUENCE_PATTERN } from '../../../../../shared/ansi-escape-sequences'
 
 export type TerminalWithFocusMode = {
@@ -38,7 +38,7 @@ export function parsedViewportShowsParkedCursorAgentScreen(
     return null
   }
   return (
-    resolveCursorAgentImeAnchor({
+    resolveParkedCursorAgentInput({
       buffer,
       rows: terminal.rows,
       cols: terminal.cols,
