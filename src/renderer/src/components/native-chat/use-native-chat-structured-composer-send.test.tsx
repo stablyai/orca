@@ -41,7 +41,7 @@ function harness(
   const { result } = renderHook(() =>
     useNativeChatStructuredComposerSend({
       agent,
-      draft: '',
+      draftScopeKey: 'tab-1:pane',
       imageAttachments: [ATTACHMENT],
       structuredTransport,
       clearImageAttachments: vi.fn(),

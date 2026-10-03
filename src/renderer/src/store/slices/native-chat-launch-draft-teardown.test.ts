@@ -38,7 +38,18 @@ const mockApi = {
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: mockApi }
 
-import { createTestStore, seedStore, makeWorktree, makeTab } from './store-test-helpers'
+import {
+  createTestStore,
+  seedStore,
+  makeWorktree,
+  makeTab,
+  makeTabGroup,
+  makeUnifiedTab
+} from './store-test-helpers'
+import {
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft
+} from '@/components/native-chat/native-chat-composer-draft-store'
 
 const WT1 = 'repo1::/path/wt1'
 const WT2 = 'repo1::/path/wt2'
@@ -150,5 +161,61 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
 
     expect(patch.nativeChatLaunchDraftByTabId[TAB1]).toBeUndefined()
     expect(patch.nativeChatLaunchDraftByTabId[TAB2]).toBeDefined()
+  })
+
+  it('removing a worktree drops the unsent composer drafts of its tabs only', async () => {
+    const store = createTestStore()
+    seedDrafts(store)
+    updateNativeChatComposerDraft(`${TAB1}:leaf-a`, { text: 'unsent' }, 'immediate')
+    updateNativeChatComposerDraft(`${TAB2}:leaf-a`, { text: 'kept' }, 'immediate')
+
+    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null })
+
+    expect(result).toEqual({ ok: true })
+    expect(readNativeChatComposerDraft(`${TAB1}:leaf-a`).text).toBe('')
+    expect(readNativeChatComposerDraft(`${TAB2}:leaf-a`).text).toBe('kept')
+  })
+
+  it('a user tab close drops the unsent composer drafts of that tab’s panes only', () => {
+    const store = createTestStore()
+    seedDrafts(store)
+    updateNativeChatComposerDraft(`${TAB1}:leaf-a`, { text: 'unsent' }, 'immediate')
+    updateNativeChatComposerDraft(`${TAB2}:leaf-a`, { text: 'kept' }, 'immediate')
+
+    store.getState().closeTab(TAB2, { reason: 'pty-exit' })
+    store.getState().closeTab(TAB1)
+
+    expect(readNativeChatComposerDraft(`${TAB1}:leaf-a`).text).toBe('')
+    expect(readNativeChatComposerDraft(`${TAB2}:leaf-a`).text).toBe('kept')
+  })
+
+  it('closing a structured chat tab drops its unsent composer draft', () => {
+    const store = createTestStore()
+    const chat = makeUnifiedTab({
+      id: 'chat-tab',
+      entityId: 'session-1',
+      contentType: 'agent-session',
+      worktreeId: WT1,
+      groupId: 'group-1'
+    })
+    seedStore(store, {
+      worktreesByRepo: { repo1: [makeWorktree({ id: WT1, repoId: 'repo1', path: '/path/wt1' })] },
+      unifiedTabsByWorktree: { [WT1]: [chat] },
+      groupsByWorktree: {
+        [WT1]: [
+          makeTabGroup({
+            id: 'group-1',
+            worktreeId: WT1,
+            activeTabId: chat.id,
+            tabOrder: [chat.id]
+          })
+        ]
+      }
+    })
+    updateNativeChatComposerDraft('chat-tab:pane', { text: 'unsent' }, 'immediate')
+
+    store.getState().closeUnifiedTab(chat.id)
+
+    expect(readNativeChatComposerDraft('chat-tab:pane').text).toBe('')
   })
 })

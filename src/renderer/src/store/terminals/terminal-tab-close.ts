@@ -17,6 +17,7 @@ import { commitTerminalSurfaceClose } from './terminal-surface-close-intent'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { removePaneKeysByTabPrefix } from '../slices/agent-status-pane-keyed-records'
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
+import { deleteNativeChatComposerDraftsForTab } from '@/components/native-chat/native-chat-composer-draft-store'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,
@@ -249,6 +250,10 @@ export function createTerminalTabCloseActions(
       })
       if (intentReason && closingWorktreeId && opts?.remoteCloseOwnedByHost !== true) {
         commitTerminalSurfaceClose(closingWorktreeId, { kind: 'tab', tabId }, intentReason)
+      }
+      // Why only a user close: it is the explicit abandon; the drafts' count and size bounds retire the rest.
+      if (closeReason === 'user') {
+        deleteNativeChatComposerDraftsForTab(tabId)
       }
       // Why shared with the paired snapshot apply: every path that removes a tab owes it the same sweep, and a second copy of the list is how one path silently misses a new entry.
       sweepRetiredTerminalTabState(get(), tabId, closingWorktreeId)

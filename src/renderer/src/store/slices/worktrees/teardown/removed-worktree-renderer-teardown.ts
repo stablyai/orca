@@ -11,6 +11,7 @@ import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../../../compon
 import { detachedHeadAutoDerivedDisplayNames } from '../metadata/detached-head-display-name'
 import { applyRemoveWorktreeSuccessState } from './remove-worktree-store-cleanup'
 import { purgeOrphanedRuntimeSshProjects } from './orphaned-runtime-ssh-project-purge'
+import { deleteNativeChatComposerDraftsForTab } from '@/components/native-chat/native-chat-composer-draft-store'
 
 /**
  * Renderer-side teardown after the backend removal succeeded.
@@ -79,6 +80,10 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   detachedHeadAutoDerivedDisplayNames.delete(worktreeId)
   forgetForegroundTerminalTabs(tabIds)
   forgetAgentStartupDeliveriesForTabs(tabIds)
+  // Structured chats were closed above, which deleted their drafts; terminal tabs skip closeTab.
+  for (const tabId of tabIds) {
+    deleteNativeChatComposerDraftsForTab(tabId)
+  }
 
   // Why: snapshot the sidebar top-row anchor in the same tick we remove the row; recording at click time goes stale across the await.
   requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')

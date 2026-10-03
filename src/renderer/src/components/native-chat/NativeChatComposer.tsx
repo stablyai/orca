@@ -250,7 +250,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
 
     const sendStructured = useNativeChatStructuredComposerSend({
       agent,
-      draft,
+      draftScopeKey: paneKey,
       imageAttachments,
       structuredTransport,
       clearImageAttachments,
@@ -286,6 +286,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     })
     const { send, goalMode } = useNativeChatComposerSubmit({
       structuredTransport,
+      draftScopeKey: paneKey,
       draft,
       caret,
       imageAttachments,

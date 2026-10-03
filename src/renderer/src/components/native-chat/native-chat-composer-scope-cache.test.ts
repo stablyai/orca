@@ -32,4 +32,14 @@ describe('setBoundedScopeCacheEntry', () => {
     expect([...cache.keys()]).toEqual(['b', 'a'])
     expect(cache.get('a')).toBe(3)
   })
+
+  it('never evicts the entry being set, even when every other entry is in use', () => {
+    const cache = new Map<string, number>()
+    for (let i = 0; i < NATIVE_CHAT_COMPOSER_SCOPE_CACHE_MAX; i += 1) {
+      setBoundedScopeCacheEntry(cache, `shown-${i}`, i)
+    }
+    setBoundedScopeCacheEntry(cache, 'new', 1, undefined, (key) => key.startsWith('shown-'))
+
+    expect(cache.get('new')).toBe(1)
+  })
 })

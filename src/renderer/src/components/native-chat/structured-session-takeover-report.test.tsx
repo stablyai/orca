@@ -50,6 +50,7 @@ function send(structuredTransport: NativeChatStructuredComposerTransport): (text
   const { result } = renderHook(() =>
     useNativeChatStructuredComposerSend({
       agent: 'claude',
+      draftScopeKey: 'tab-1:pane',
       imageAttachments: [],
       structuredTransport,
       clearImageAttachments: vi.fn(),
