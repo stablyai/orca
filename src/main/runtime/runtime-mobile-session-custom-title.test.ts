@@ -163,4 +163,42 @@ describe('desktop terminal rename on the mobile session strip', () => {
     expect(pendingManualTitle(runtime).manualTitle).toBeUndefined()
     expect(await terminalTitle(runtime)).toBe('Desktop name')
   })
+
+  it('keeps a phone rename when a delayed renderer graph arrives after the next one is ready', async () => {
+    const { runtime } = openRuntime()
+    runtime.syncWindowGraph(1, {
+      ...sessionGraph(1, 'Old mac name'),
+      rendererGeneration: 'renderer-a'
+    })
+    runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', Date.now())
+    const [terminal] = (await runtime.listTerminals()).terminals
+    await runtime.renameTerminal(terminal.handle, 'Phone name')
+    expect(runtime.markRendererReloading(1)).not.toBeNull()
+    runtime.syncWindowGraph(1, {
+      ...sessionGraph(2, 'Old mac name'),
+      rendererGeneration: 'renderer-b'
+    })
+    expect(await terminalTitle(runtime)).toBe('Phone name')
+
+    expect(() =>
+      runtime.syncWindowGraph(1, {
+        ...sessionGraph(3, 'Desktop name'),
+        rendererGeneration: 'renderer-a'
+      })
+    ).toThrow('Runtime graph publisher belongs to a superseded renderer generation')
+    expect(pendingManualTitle(runtime).manualTitle).toBe('Phone name')
+    expect(await terminalTitle(runtime)).toBe('Phone name')
+  })
+
+  it('accepts the next renderer generation while a reload is in progress', async () => {
+    const { runtime } = openRuntime()
+    runtime.syncWindowGraph(1, { ...sessionGraph(1), rendererGeneration: 'renderer-a' })
+    expect(runtime.markRendererReloading(1)).not.toBeNull()
+
+    runtime.syncWindowGraph(1, {
+      ...sessionGraph(2, 'Desktop name'),
+      rendererGeneration: 'renderer-b'
+    })
+    expect(await terminalTitle(runtime)).toBe('Desktop name')
+  })
 })
