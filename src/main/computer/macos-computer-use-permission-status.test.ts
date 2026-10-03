@@ -156,6 +156,7 @@ describe('getComputerUsePermissionStatus', () => {
     expect(settled).toBe(true)
     await rejection
     expect(child.kill).toHaveBeenCalled()
+    expectOnlyOwnStatusHelperStopped()
     expect(rm).toHaveBeenCalledWith(permissionStatusTempDir, {
       recursive: true,
       force: true
@@ -186,7 +187,7 @@ describe('getComputerUsePermissionStatus', () => {
       ],
       { stdio: ['ignore', 'pipe', 'pipe'] }
     )
-    expect(spawnSync).not.toHaveBeenCalled()
+    expectOnlyOwnStatusHelperStopped()
     expect(readFile).toHaveBeenCalledWith(permissionStatusPath, 'utf8')
     expect(rm).toHaveBeenCalledWith(permissionStatusTempDir, {
       recursive: true,
@@ -214,6 +215,18 @@ describe('getComputerUsePermissionStatus', () => {
 function mockPermissionStatus(json: string): void {
   vi.mocked(spawnSync).mockReturnValue({ status: 0 } as ReturnType<typeof spawnSync>)
   vi.mocked(readFile).mockResolvedValue(json)
+}
+
+function expectOnlyOwnStatusHelperStopped(): void {
+  expect(spawnSync).toHaveBeenCalledTimes(1)
+  expect(spawnSync).toHaveBeenCalledWith(
+    '/usr/bin/pkill',
+    [
+      '-f',
+      'orca-computer-use-macos[[:space:]]+--permission-status-file[[:space:]]+/tmp/orca-computer-use-permissions-test/status\\.json'
+    ],
+    { stdio: 'ignore' }
+  )
 }
 
 function setPlatform(platform: NodeJS.Platform): void {

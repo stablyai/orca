@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -95,8 +95,23 @@ async function readPermissionStatusFromHelperApp(
     }
     throw new RuntimeClientError('accessibility_error', 'Timed out checking permissions')
   } finally {
+    stopPermissionStatusHelper(statusPath)
     await rm(tempDir, { recursive: true, force: true })
   }
+}
+
+function stopPermissionStatusHelper(statusPath: string): void {
+  // Why: `open -n` starts a new helper instance per check and Orca never owns
+  // its PID. If a TCC probe wedges, the helper outlives the check; leaked
+  // instances each hold a LaunchServices registration and eventually block
+  // app launches system-wide. The status path is unique, so only this check's
+  // helper matches.
+  const escapedPath = statusPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  spawnSync(
+    '/usr/bin/pkill',
+    ['-f', `orca-computer-use-macos[[:space:]]+--permission-status-file[[:space:]]+${escapedPath}`],
+    { stdio: 'ignore' }
+  )
 }
 
 function launchPermissionStatusHelper(helperAppPath: string, statusPath: string): Promise<void> {
