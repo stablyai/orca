@@ -4,6 +4,7 @@ import {
   createSshPtyOutputIntakeHarness as createHarness,
   sshPtyOutputEvent as event
 } from './ssh-pty-output-intake-test-harness'
+import { SSH_PTY_ACK_FLUSH_MS } from './ssh-pty-source-ack-coalescer'
 
 describe('SshPtyOutputIntake', () => {
   it('plateaus at the model and pressure budgets, then resumes below low water', async () => {
@@ -652,6 +653,63 @@ describe('SshPtyOutputIntake', () => {
     })
   })
 
+  it('keeps crediting the next delivery after recovery cancellation reclaims a projected span', async () => {
+    vi.useFakeTimers()
+    try {
+      const { harness, credited } = await cancelProjectedRecoverySpan()
+      const next = harness.intake.acceptData(
+        event({
+          data: 'bbbb',
+          source: {
+            spanId: 'next-span',
+            clientGeneration: 2,
+            ownerGeneration: 3,
+            deliveryToken: 'next-token',
+            sourceStartSu: 0,
+            sourceEndSu: 4
+          }
+        })
+      )
+      harness.completions[1]!.resolve()
+      const nextReceipt = await next
+      harness.intake.publishProjectionPrefix(
+        [nextReceipt.projection.identity.projectionSemanticsId],
+        4,
+        4
+      )
+
+      // The renderer parses the replayed span first; that must not credit the next delivery.
+      harness.intake.settleProjectionPrefix('pty-1', 4)
+      await vi.advanceTimersByTimeAsync(SSH_PTY_ACK_FLUSH_MS)
+      expect(credited).toEqual([])
+
+      harness.intake.settleProjectionPrefix('pty-1', 4)
+      await vi.advanceTimersByTimeAsync(SSH_PTY_ACK_FLUSH_MS)
+      expect(credited).toEqual(['next-token@4'])
+      expect(harness.intake.getDebugSnapshot().projection.records).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('closes the generation while a recovery-canceled span is still unACKed', async () => {
+    vi.useFakeTimers()
+    try {
+      const { harness, credited } = await cancelProjectedRecoverySpan()
+
+      harness.intake.closeGeneration(1, 'provider-closed')
+      await vi.advanceTimersByTimeAsync(SSH_PTY_ACK_FLUSH_MS)
+
+      expect(harness.intake.getDebugSnapshot()).toMatchObject({
+        projection: { records: 0 },
+        source: { openedTokens: 0, ptyIdentities: 0 }
+      })
+      expect(credited).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('rejects late same-generation data after ordered exit cleanup', async () => {
     const harness = createHarness({}, { exitBarrierMs: 1000 })
     const first = harness.intake.acceptData(event())
@@ -758,3 +816,36 @@ describe('SshPtyOutputIntake', () => {
     await Promise.resolve()
   })
 })
+
+async function cancelProjectedRecoverySpan() {
+  const credited: string[] = []
+  const harness = createHarness({
+    publishSourceAck: (_providerGeneration, batch, onSettled) => {
+      for (const ack of batch.acknowledgements) {
+        credited.push(`${ack.deliveryToken}@${ack.creditedEndSu}`)
+      }
+      onSettled({ ok: true })
+    }
+  })
+  const recovered = harness.intake.acceptData(
+    event({
+      source: {
+        spanId: 'recovery-span',
+        clientGeneration: 2,
+        ownerGeneration: 3,
+        deliveryToken: 'recovery-token',
+        sourceStartSu: 4,
+        sourceEndSu: 8
+      }
+    })
+  )
+  harness.completions[0]!.resolve()
+  const receipt = await recovered
+  // The renderer has received the replayed span but not parsed it yet.
+  harness.intake.publishProjectionPrefix([receipt.projection.identity.projectionSemanticsId], 4, 4)
+  harness.intake.applySourceRecoveryCancellationProof(
+    { id: 'pty-1', code: -1, providerGeneration: 1, ptyIncarnation: 'incarnation-1' },
+    { sentEndSu: 8, creditedEndSu: 4 }
+  )
+  return { harness, credited }
+}
