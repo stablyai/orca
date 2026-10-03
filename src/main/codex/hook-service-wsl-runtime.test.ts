@@ -103,9 +103,9 @@ describe('Codex WSL runtime hook install', () => {
     const independent = firstHome.replace('\\Alice\\', '\\Bob\\')
     const target = { runtime: 'wsl' as const, wslDistro: 'Ubuntu' }
 
-    const first = service.prepareRuntimeHomeForLaunch(firstHome, target, true)
-    const second = service.prepareRuntimeHomeForLaunch(alias, target, true)
-    const third = service.prepareRuntimeHomeForLaunch(independent, target, true)
+    const first = service.prepareRuntimeHomeForLaunch(firstHome, target, true, 'shared')
+    const second = service.prepareRuntimeHomeForLaunch(alias, target, true, 'shared')
+    const third = service.prepareRuntimeHomeForLaunch(independent, target, true, 'shared')
     await vi.waitFor(() => expect(started).toEqual([firstHome, independent]))
 
     releases.splice(0).forEach((release) => release())
@@ -634,6 +634,69 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
       enabled: true,
       trustedHash: computeTrustedHash(managedTrustEntry)
     })
+  })
+
+  it("withdraws Codex-granted trust under the canonical path through the logical plan, keeping the user's", async () => {
+    const logicalPlan = createTestPlan()
+    writeFileSync(logicalPlan.configPath, '{"hooks":{}}\n', 'utf-8')
+    writeFileSync(logicalPlan.tomlPath, '', 'utf-8')
+    const userTrust: CodexTrustEntry = {
+      sourcePath: '/home/alice/.codex/hooks.json',
+      eventLabel: 'stop',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: '/bin/sh /home/alice/user-hook.sh',
+      trustedHash: 'sha256:user'
+    }
+    upsertHookTrustEntries(logicalPlan.tomlPath, [userTrust])
+    // Why: Codex hashes differently from Orca, so only the grant ledger proves these keys are Orca's.
+    trustGrantInternals.setGrantSessionRunner(async (request: CodexHookTrustGrantRequest) => {
+      upsertHookTrustEntries(
+        logicalPlan.tomlPath,
+        request.expectedTrustKeys.map((key) => {
+          const parsed = parseTrustKey(key)!
+          return {
+            sourcePath: parsed.sourcePath,
+            eventLabel: parsed.eventLabel,
+            groupIndex: parsed.groupIndex,
+            handlerIndex: parsed.handlerIndex,
+            command: request.managedCommand,
+            trustedHash: `sha256:codex-verbatim-${parsed.eventLabel}`
+          }
+        })
+      )
+      return {
+        outcome: 'granted' as const,
+        wroteTrust: true,
+        entries: request.expectedTrustKeys.map((key) => ({
+          key,
+          normalizedKey: normalizeHookTrustKeyForLookup(key),
+          trustedHash: `sha256:codex-verbatim-${parseTrustKey(key)!.eventLabel}`
+        }))
+      }
+    })
+    // The home crosses a symlink: the hooks-on install keyed trust under its canonical path.
+    const canonicalHome = '/mnt/wsl/alice/codex-runtime-home/home'
+    const canonicalPlan = {
+      ...logicalPlan,
+      commandScriptPath: `${canonicalHome}/.orca/agent-hooks/codex-hook.sh`,
+      trustConfigPath: `${canonicalHome}/hooks.json`,
+      linuxRuntimeHome: canonicalHome
+    }
+    expect((await _internals.installManagedHooksIntoWslRuntime(canonicalPlan)).state).toBe(
+      'installed'
+    )
+    expect(
+      [...readHookTrustEntries(logicalPlan.tomlPath).keys()].filter((key) =>
+        key.startsWith(canonicalPlan.trustConfigPath)
+      )
+    ).not.toEqual([])
+
+    expect(_internals.refreshWslRuntimeUserHooks(logicalPlan).state).toBe('not_installed')
+
+    expect([...readHookTrustEntries(logicalPlan.tomlPath).keys()]).toEqual([
+      computeTrustKey(userTrust)
+    ])
   })
 
   it('uses the previous ledger to remove stale Codex hashes after a canonical path change', async () => {

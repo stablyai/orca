@@ -495,6 +495,31 @@ describe('ensureRealHomeCodexHookState (install)', () => {
     const stopEntry = plan.managedEntries.find((entry) => entry.eventLabel === 'stop')
     expect(stopEntry).toMatchObject({ groupIndex: 0, handlerIndex: 0 })
   })
+
+  it("leaves a hooks-on Orca's entry and trust alone when a hooks-off Orca prepares a launch", async () => {
+    grantSucceeds()
+    writeFileSync(getRealConfigTomlPath(), 'model = "gpt-5"\n', 'utf-8')
+    await ensureRealHomeCodexHookState({
+      hooksEnabled: true,
+      userDataPath: userDataDir,
+      writePolicy: 'add-missing-only'
+    })
+    const hooksBefore = readFileSync(getRealHooksJsonPath(), 'utf-8')
+    const tomlBefore = readFileSync(getRealConfigTomlPath(), 'utf-8')
+    // A second Orca process, with status hooks off, sharing this ~/.codex.
+    _internals.resetForTesting('pending')
+
+    await expect(
+      ensureRealHomeCodexHookState({
+        hooksEnabled: false,
+        userDataPath: join(userDataDir, 'other-profile'),
+        writePolicy: 'add-missing-only'
+      })
+    ).resolves.toBe('removed')
+
+    expect(readFileSync(getRealHooksJsonPath(), 'utf-8')).toBe(hooksBefore)
+    expect(readFileSync(getRealConfigTomlPath(), 'utf-8')).toBe(tomlBefore)
+  })
 })
 
 describe('removeRealHomeCodexHookForOptOut', () => {

@@ -150,7 +150,8 @@ describe('Codex launch prep honours the per-agent hook opt-out', () => {
       expect(mocks.prepareRuntimeHomeForLaunch).toHaveBeenCalledWith(
         ACCOUNT_HOME,
         undefined,
-        codexHooksOn
+        codexHooksOn,
+        'profile'
       )
     }
   )

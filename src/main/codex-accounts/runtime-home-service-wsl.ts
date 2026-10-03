@@ -1,5 +1,6 @@
 import { join, win32 as pathWin32 } from 'node:path'
 import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
+import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import {
   getCodexSelectionLaneKey,
   getSelectedCodexAccountIdForTarget,
@@ -34,6 +35,19 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
       }
     }
     return this.getWslSystemCodexHomePath(target)
+  }
+
+  /**
+   * True only for a home this profile made for one of its managed accounts.
+   * Any other WSL home, above all the guest's own ~/.codex, is shared with
+   * every Orca on this machine and with Codex outside Orca.
+   */
+  isProfileOwnedWslCodexHome(homePath: string): boolean {
+    const key = normalizeRuntimePathForComparison(homePath)
+    return this.store.getSettings().codexManagedAccounts.some((account) => {
+      const accountHome = this.getWslLaunchCodexHomePath(account, undefined)
+      return accountHome !== null && normalizeRuntimePathForComparison(accountHome) === key
+    })
   }
 
   protected getWslLaunchCodexHomePath(

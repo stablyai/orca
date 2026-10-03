@@ -342,4 +342,51 @@ describe('CodexRuntimeHomeService', () => {
       }
     }
   })
+
+  it("owns its WSL account home but not the guest's own ~/.codex", async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const wslHome = join(testState.userDataDir, 'wsl-home')
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => wslHome
+    }))
+    const auth = createCodexAuthJson('ubuntu@example.com', 'acct-ubuntu', 'ubuntu-token')
+    const accountHomePath = createManagedAuth(testState.userDataDir, 'ubuntu-account', auth)
+    const store = createStore(
+      createSettings({
+        codexManagedAccounts: [
+          {
+            id: 'ubuntu-account',
+            email: 'ubuntu@example.com',
+            managedHomePath: accountHomePath,
+            managedHomeRuntime: 'wsl',
+            wslDistro: 'Ubuntu',
+            wslLinuxHomePath: '/home/alice/.local/share/orca/codex-accounts/ubuntu/home',
+            providerAccountId: 'acct-ubuntu',
+            workspaceLabel: null,
+            workspaceAccountId: 'acct-ubuntu',
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ],
+        activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } }
+      })
+    )
+
+    try {
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
+      const guestHome = service.prepareForCodexLaunch({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+
+      expect(guestHome).toBe(join(wslHome, '.codex'))
+      expect(service.isProfileOwnedWslCodexHome(guestHome!)).toBe(false)
+      expect(service.isProfileOwnedWslCodexHome(accountHomePath)).toBe(true)
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
 })
