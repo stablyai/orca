@@ -1,6 +1,22 @@
 import { NativeChatSkillPill } from './NativeChatSkillPill'
-import { ReactNodeViewRenderer, Node, type JSONContent } from '@tiptap/react'
+import { ReactNodeViewRenderer, Node, type Editor, type JSONContent } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
+
+type PromptTextMap = { readonly text: string; readonly positions: readonly number[] }
+
+// Keep one immutable document's mapping per editor, without retaining its undo history.
+const textMapsByEditor = new WeakMap<Editor, { doc: ProseMirrorNode; map: PromptTextMap }>()
+
+export function getPromptTextMap(editor: Editor): PromptTextMap {
+  const doc = editor.state.doc
+  const cached = textMapsByEditor.get(editor)
+  if (cached?.doc === doc) {
+    return cached.map
+  }
+  const map = promptTextMap(doc)
+  textMapsByEditor.set(editor, { doc, map })
+  return map
+}
 
 export const NativeChatSkill = Node.create({
   name: 'nativeChatSkill',
@@ -35,7 +51,7 @@ export function promptTextContent(text: string): JSONContent {
 }
 
 /** Each boundary maps a plain-text caret to a document position, including atomic skills. */
-export function promptTextMap(doc: ProseMirrorNode): { text: string; positions: number[] } {
+export function promptTextMap(doc: ProseMirrorNode): PromptTextMap {
   let text = ''
   const positions = [1]
   doc.forEach((block, blockOffset, index) => {
@@ -61,8 +77,8 @@ export function promptTextMap(doc: ProseMirrorNode): { text: string; positions: 
   return { text, positions }
 }
 
-export function promptTextOffset(doc: ProseMirrorNode, position: number): number {
-  const { positions } = promptTextMap(doc)
+export function promptTextOffset(editor: Editor, position: number): number {
+  const { positions } = getPromptTextMap(editor)
   const index = positions.findIndex((candidate) => candidate >= position)
   return index === -1 ? positions.length - 1 : index
 }
