@@ -31,7 +31,12 @@ function createRendererFixture() {
       file: 'assets/web-entry.js',
       isEntry: true,
       imports: ['_web-shared.js'],
-      dynamicImports: ['src/lazy.ts']
+      dynamicImports: ['src/lazy.ts'],
+      assets: [
+        'assets/web-icon-192-Fi1x2.png',
+        'assets/web-icon-512-Zz9y8.png',
+        'assets/web-app-manifest-Qq4w5.webmanifest'
+      ]
     },
     '_web-shared.js': {
       file: 'assets/web-shared.js',
@@ -46,8 +51,16 @@ function createRendererFixture() {
   writeFixtureFile(
     root,
     'out/renderer/web-index.html',
-    '<script type="module" src="./assets/web-entry.js"></script>'
+    '<script type="module" src="./assets/web-entry.js"></script>\n' +
+      '<link rel="manifest" href="./assets/web-app-manifest-Qq4w5.webmanifest" />'
   )
+  writeFixtureFile(
+    root,
+    'out/renderer/assets/web-app-manifest-Qq4w5.webmanifest',
+    JSON.stringify({ name: 'Orca', icons: [{ src: './web-icon-192-Fi1x2.png', sizes: '192x192' }] })
+  )
+  writeFixtureFile(root, 'out/renderer/assets/web-icon-192-Fi1x2.png', 'fixture-icon-192')
+  writeFixtureFile(root, 'out/renderer/assets/web-icon-512-Zz9y8.png', 'fixture-icon-512')
   writeFixtureFile(
     root,
     'out/renderer/assets/web-entry.js',
@@ -85,13 +98,38 @@ describe('renderer web client projection', () => {
     const result = await projectFixture(root)
 
     expect(result.code, result.stderr).toBe(0)
-    expect(result.stdout).toContain('Projected web client: 7 files')
+    expect(result.stdout).toContain('Projected web client: 10 files')
     expect(existsSync(join(root, 'out/web/web-index.html'))).toBe(true)
     expect(existsSync(join(root, 'out/web/assets/editor.worker-fixture.js'))).toBe(true)
     expect(existsSync(join(root, 'out/web/assets/logo.png'))).toBe(true)
     expect(existsSync(join(root, 'out/web/assets/desktop-entry.js'))).toBe(false)
     expect(existsSync(join(root, 'out/web/stale.js'))).toBe(false)
     expect(readFileSync(join(root, 'out/web/assets/web.css'), 'utf8')).toBe('.root{color:red}\n')
+  })
+
+  it('carries the web app manifest and its icons into the web client', async () => {
+    const root = createRendererFixture()
+    const result = await projectFixture(root)
+
+    expect(result.code, result.stderr).toBe(0)
+    for (const file of [
+      'assets/web-app-manifest-Qq4w5.webmanifest',
+      'assets/web-icon-192-Fi1x2.png',
+      'assets/web-icon-512-Zz9y8.png'
+    ]) {
+      expect(existsSync(join(root, 'out/web', file)), file).toBe(true)
+    }
+    expect(readFileSync(join(root, 'out/web/web-index.html'), 'utf8')).toContain(
+      'href="./assets/web-app-manifest-Qq4w5.webmanifest"'
+    )
+    const servedManifest = readFileSync(
+      join(root, 'out/web/assets/web-app-manifest-Qq4w5.webmanifest'),
+      'utf8'
+    )
+    expect(JSON.parse(servedManifest)).toEqual({
+      name: 'Orca',
+      icons: [{ src: './web-icon-192-Fi1x2.png', sizes: '192x192' }]
+    })
   })
 
   it('follows transitive relative references and cycles with the existing substring behavior', async () => {

@@ -4,13 +4,19 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
+import { createWebAppManifestIconsPlugin } from './config/build-plugins/web-app-manifest-icons'
 
 export default defineConfig({
   root: resolve('src/renderer'),
   // Why: pairing URLs may live under a reverse-proxy path prefix like
   // /orca/web-index.html, so built assets must resolve relative to the page.
   base: './',
-  plugins: [react(), tailwindcss(), createPdfjsViewerAssetsPlugin()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    createPdfjsViewerAssetsPlugin(),
+    createWebAppManifestIconsPlugin()
+  ],
   define: {
     ORCA_FEATURE_WALL_ENABLED: 'true'
   },
