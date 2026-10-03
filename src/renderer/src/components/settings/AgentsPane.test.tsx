@@ -468,16 +468,49 @@ describe('AgentsPane', () => {
     expect(matchesSettingsSearch('manual', getAgentsPaneSearchEntries())).toBe(true)
   })
 
-  it('applies the selected agent permission mode from settings without a mixed segment', () => {
+  it('renders mixed agent permissions with no selected segment and an explainer', () => {
     const onChange = vi.fn()
     const element = AgentPermissionsSetting({ mode: 'mixed', onChange })
-    const props = element.props.children.props.action.props as {
-      value: 'yolo'
+    const markup = renderToStaticMarkup(
+      React.createElement(TooltipProvider, null, element)
+    )
+
+    expect(markup).not.toContain('aria-checked="true"')
+    expect(markup).toContain('Some agents have custom launch arguments')
+  })
+
+  it('renders uniform agent permissions with the active segment and no explainer', () => {
+    for (const mode of ['yolo', 'manual'] as const) {
+      const markup = renderToStaticMarkup(
+        React.createElement(
+          TooltipProvider,
+          null,
+          AgentPermissionsSetting({ mode, onChange: vi.fn() })
+        )
+      )
+
+      const activeLabel = mode === 'yolo' ? 'Yolo' : 'Manual'
+      expect(markup).toMatch(new RegExp(`aria-checked="true"[^>]*>${activeLabel}<`))
+      expect(markup).not.toContain('Some agents have custom launch arguments')
+    }
+  })
+
+  it('forwards uniform permission selections and ignores a mixed selection', () => {
+    const onChange = vi.fn()
+    const element = AgentPermissionsSetting({ mode: 'mixed', onChange })
+    const children = Array.isArray(element.props.children) ? element.props.children : [element.props.children]
+    const header = children.find((child) => child.props?.action !== undefined)
+    if (header === undefined) {
+      throw new Error('permission section header not found')
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: section children are the known subsection header; its action slot holds the segmented control.
+    const props = header.props.action.props as {
+      value: 'yolo' | 'manual' | 'mixed'
       onChange: (value: 'yolo' | 'manual' | 'mixed') => void
       options: { value: string }[]
     }
 
-    expect(props.value).toBe('yolo')
+    expect(props.value).toBe('mixed')
     expect(props.options.map((option) => option.value)).toEqual(['yolo', 'manual'])
     props.onChange('mixed')
     expect(onChange).not.toHaveBeenCalled()

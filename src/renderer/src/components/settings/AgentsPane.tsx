@@ -77,7 +77,6 @@ export function AgentPermissionsSetting({
   mode: AgentPermissionMode
   onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
 }): React.JSX.Element {
-  const visibleMode: Exclude<AgentPermissionMode, 'mixed'> = mode === 'manual' ? 'manual' : 'yolo'
   return (
     <section className="space-y-3">
       <SettingsSubsectionHeader
@@ -112,7 +111,7 @@ export function AgentPermissionsSetting({
         )}
         action={
           <SettingsSegmentedControl<AgentPermissionMode>
-            value={visibleMode}
+            value={mode}
             onChange={(nextMode) => {
               if (nextMode !== 'mixed') {
                 onChange(nextMode)
@@ -139,6 +138,14 @@ export function AgentPermissionsSetting({
           />
         }
       />
+      {mode === 'mixed' ? (
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.AgentsPane.agentPermissionsMixedHint',
+            'Some agents have custom launch arguments, so permissions are mixed. Picking a mode applies it to the remaining agents.'
+          )}
+        </p>
+      ) : null}
     </section>
   )
 }
