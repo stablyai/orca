@@ -65,7 +65,11 @@ export function buildRuntimeMobileAgentStatus(
       : null
   const ptyTitleClassification = classifyAgentTitle(ptyTitle)
   const nonAgentTitle = ptyTitle !== null && ptyTitleClassification !== 'agent'
-  if (nonAgentTitle) {
+  const oscTitle = pty?.lastOscTitle ?? leaf?.lastOscTitle ?? null
+  // Why: a manual rename is not the shell reclaiming the pane, so the hook session stays addressable (#20626).
+  const manualTitleOverridesAgentOsc =
+    nonAgentTitle && ptyTitle !== oscTitle && classifyAgentTitle(oscTitle) === 'agent'
+  if (nonAgentTitle && !manualTitleOverridesAgentOsc) {
     // Why: non-agent title = shell reclaimed the pane; suppress to clear stuck spinners (#1437), though a live hook signal survives.
     const hasLiveHookSignal =
       retained?.payload.interactivePrompt != null ||

@@ -279,6 +279,81 @@ describe('headless hook agent-status projection (#11761)', () => {
     expect(agentStatus).not.toHaveProperty('toolName')
   })
 
+  // #20626: a manual rename replaces the agent's ✳ title but does not end the
+  // session. The hook's provider session is the transcript address, so it has
+  // to survive a label that no longer classifies as an agent title.
+  it('keeps the hook transcript address after a manual rename drops the agent glyph', async () => {
+    const runtime = await createRuntimeWithHookRows([
+      hookRow({
+        state: 'done',
+        prompt: '',
+        toolName: undefined,
+        interactivePrompt: undefined
+      })
+    ])
+    observePaneTitle(runtime, '✳ gate question')
+    const before = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const beforeTab = before.tabs[0]
+    if (beforeTab?.type !== 'terminal' || !beforeTab.terminal) {
+      throw new Error('expected a live terminal handle')
+    }
+    expect(beforeTab.agentStatus).toEqual(
+      expect.objectContaining({ providerSession: PROVIDER_SESSION })
+    )
+
+    await runtime.renameTerminal(beforeTab.terminal, 'ANSWER HERE: gate 004')
+
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+    expect(tab?.type === 'terminal' && tab.title).toBe('ANSWER HERE: gate 004')
+    expect(tab?.type === 'terminal' && tab.agentStatus).toEqual(
+      expect.objectContaining({
+        agentType: 'claude',
+        providerSession: PROVIDER_SESSION
+      })
+    )
+  })
+
+  it('does not invent a transcript address for a renamed shell pane', async () => {
+    const runtime = await createRuntimeWithHookRows([])
+    observePaneTitle(runtime, 'zsh')
+    const initial = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const initialTab = initial.tabs[0]
+    if (initialTab?.type !== 'terminal' || !initialTab.terminal) {
+      throw new Error('expected a live terminal handle')
+    }
+
+    await runtime.renameTerminal(initialTab.terminal, 'notes')
+
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+    expect(tab?.type === 'terminal' ? tab.agentStatus?.providerSession : undefined).toBeUndefined()
+  })
+
+  it('still has no transcript address when a renamed pane never reported a session', async () => {
+    const runtime = await createRuntimeWithHookRows([
+      hookRow({
+        state: 'done',
+        prompt: '',
+        toolName: undefined,
+        interactivePrompt: undefined,
+        providerSession: undefined
+      })
+    ])
+    observePaneTitle(runtime, '✳ gate question')
+    const initial = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const initialTab = initial.tabs[0]
+    if (initialTab?.type !== 'terminal' || !initialTab.terminal) {
+      throw new Error('expected a live terminal handle')
+    }
+
+    await runtime.renameTerminal(initialTab.terminal, 'ANSWER HERE: gate 004')
+
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+    expect(tab?.type === 'terminal' ? tab.agentStatus?.providerSession : undefined).toBeUndefined()
+  })
+
   it('keeps a pending question visible even under a non-agent title', async () => {
     const agentStatus = await projectAgentStatus([hookRow()], (runtime) => {
       observePaneTitle(runtime, 'bash')
