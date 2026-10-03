@@ -104,6 +104,8 @@ export type OpenFile = {
   /** Hash fragment to reveal when a preview tab opens from a link (`./guide.md#setup`); kept on tab state so repeat opens can retarget it. */
   markdownPreviewAnchor?: string
   diffSource?: DiffSource
+  /** Source Control opens an editable Changes view against the index; other edit tabs retain the HEAD baseline. */
+  changesAgainstIndex?: boolean
   branchCompare?: BranchCompareSnapshot
   commitCompare?: CommitCompareSnapshot
   branchOldPath?: string

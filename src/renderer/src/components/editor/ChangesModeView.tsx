@@ -9,7 +9,7 @@ import { translate } from '@/i18n/i18n'
 
 const DiffViewer = lazy(() => import('./DiffViewer'))
 
-// Why: Changes view mode renders an edit-mode tab as a HEAD-vs-working-tree
+// Why: Changes view mode renders an edit-mode tab against its Git baseline
 // diff without creating a separate diff-tab object. The draft is the live
 // source on the modified side; onContentChange is the same callback as normal
 // edit mode so dirty tracking, autosave, and close-prompt plumbing all continue
@@ -67,12 +67,12 @@ export function ChangesModeView({
   const isDiffBodyPruned = dc.largeDiffRenderLimit?.limited === true
   const isIdentical = !isDiffBodyPruned && dc.originalContent === modifiedContent
   // Why: after a terminal commit/pull/rebase, Changes mode refreshes the
-  // HEAD-side blob in React state, but Monaco can keep painting the previous
+  // original blob in React state, but Monaco can keep painting the previous
   // diff if we reuse the same kept model identities. Rotate only the
-  // original-side model identity so Monaco rebuilds the stale HEAD snapshot
+  // original-side model identity so Monaco rebuilds the stale baseline snapshot
   // without throwing away the modified-side undo history.
-  const headContentSignature = getDiffContentSignature(dc.originalContent)
-  const originalModelKey = `${diffViewStateKey}:original:${headContentSignature}`
+  const baselineContentSignature = getDiffContentSignature(dc.originalContent)
+  const originalModelKey = `${diffViewStateKey}:original:${baselineContentSignature}`
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       {activeFile.conflict && <ConflictBanner file={activeFile} entry={activeConflictEntry} />}
