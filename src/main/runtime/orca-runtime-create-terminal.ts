@@ -170,7 +170,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             ...(adoptedBeforeLaunch ? { adoptedStablePane: adoptedBeforeLaunch } : {}),
             ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
             ...(!adoptedBeforeLaunch && launchOpts.isNewSession ? { isNewSession: true } : {}),
-            ...dependencies.BACKGROUND_TERMINAL_SPAWN_FLAGS
+            ...dependencies.getBackgroundTerminalSpawnFlags(launchOpts.activationIntent)
           })
         } finally {
           releaseStablePaneCreate?.()

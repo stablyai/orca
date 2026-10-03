@@ -10,6 +10,12 @@ import type {
   RuntimeWorktreeTerminalSleepResult
 } from '../../shared/runtime-types'
 import type { WorktreeTerminalMutationKind } from './worktree-terminal-mutation-lock'
+import type { TabActivationIntent } from '../../shared/tab-activation-intent'
+import {
+  acquireWorktreeTerminalSpawnLease,
+  captureTerminalSleepPanes,
+  type WorktreeTerminalSpawnSurface
+} from './worktree-terminal-spawn-sleep-guard'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { cloneWorkspaceSessionState } from '../persistence/restoring-sessions/session-owner-fields'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../persistence/restoring-sessions/workspace-session-write-rollback'
@@ -262,25 +268,31 @@ export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithReso
     }
   }
 
-  async acquireWorktreeTerminalSpawn(worktreeId?: string): Promise<() => void> {
-    if (!worktreeId) {
-      return () => {}
-    }
-    const release = await this.acquireWorktreeTerminalMutation(worktreeId, 'shared')
-    const key = runtimeWorktreeIdentityKey(worktreeId)
-    const sleepState = this.terminalSleepStateByWorktreeId.get(key)
-    if (sleepState?.phase === 'sleeping' || sleepState?.phase === 'partial') {
-      this.terminalSleepStateByWorktreeId.delete(key)
-      this.emitClientEvent({
-        type: 'worktreeTerminalSleepState',
-        worktreeId: sleepState.worktreeId,
-        generation: sleepState.generation,
-        phase: 'woken',
-        ptyIds: sleepState.ptyIds,
-        terminalHandles: sleepState.terminalHandles
-      })
-    }
-    return release
+  protected captureTerminalSleepPanes(
+    worktreeId: string,
+    ptyIds: Iterable<string>
+  ): Record<string, string> {
+    return captureTerminalSleepPanes(
+      ptyIds,
+      this.ptysById,
+      this.getWorkspaceSessionForWorktree(worktreeId),
+      worktreeId
+    )
+  }
+
+  async acquireWorktreeTerminalSpawn(
+    worktreeId?: string,
+    activationIntent?: TabActivationIntent,
+    surface: WorktreeTerminalSpawnSurface = {}
+  ): Promise<() => void> {
+    return await acquireWorktreeTerminalSpawnLease({
+      worktreeId,
+      activationIntent,
+      surface,
+      sleepStates: this.terminalSleepStateByWorktreeId,
+      acquire: (id) => this.acquireWorktreeTerminalMutation(id, 'shared'),
+      emit: (event) => this.emitClientEvent(event)
+    })
   }
 
   protected async runWorktreeTerminalMutation<T>(

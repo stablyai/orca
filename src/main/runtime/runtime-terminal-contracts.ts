@@ -17,6 +17,7 @@ import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-contracts'
 import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { TabActivationIntent } from '../../shared/tab-activation-intent'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { WorkerTerminalHostScope } from './orchestration/worker-terminal-process-liveness'
@@ -86,6 +87,8 @@ export type TerminalCreateOptions = {
   /** Called before the spawn request leaves this process; a throw before it proves nothing spawned. */
   onPtySpawnDispatched?: () => void
   deferMobileSessionPublish?: boolean
+  /** Internal recovery intent; automatic materialization cannot undo a host sleep. */
+  activationIntent?: TabActivationIntent
 }
 
 /** Identity a fenced spawn can be re-found by in the execution host's own inventory. */

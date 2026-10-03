@@ -2,6 +2,7 @@
 import { OrcaRuntimeWithResolveMobileSessionTerminalCommand } from './orca-runtime-resolve-mobile-session-terminal-command'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { TabActivationIntent } from '../../shared/tab-activation-intent'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type {
   RuntimeMobileSessionCreateTerminalResult,
@@ -35,6 +36,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       supportsSplitGroupPlacement?: boolean
       launchConfig?: SleepingAgentLaunchConfig
       signal?: AbortSignal
+      activationIntent?: TabActivationIntent
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
@@ -66,6 +68,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       persistHostSessionBinding: true,
       // Why: this method publishes the authoritative snapshot below; skip the intermediate publish to avoid a wrong-group flash.
       deferMobileSessionPublish: true,
+      ...(opts.activationIntent ? { activationIntent: opts.activationIntent } : {}),
       signal: opts.signal
     })
     const livePty = this.getLivePtyForHandle(terminal.handle)

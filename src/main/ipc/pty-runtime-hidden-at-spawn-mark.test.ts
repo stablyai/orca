@@ -3,6 +3,8 @@ import { makeDeferred } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { isHiddenRendererPty } from './pty-hidden-delivery-gate'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { RuntimePtyController } from '../runtime/runtime-pty-controller-contract'
+import { WORKTREE_TERMINAL_SLEEP_BLOCKED_ERROR } from '../runtime/worktree-terminal-mutation-lock'
 import { registerPtyHandlers } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -49,14 +51,7 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
-type RuntimeSpawnController = {
-  spawn: (args: {
-    cols: number
-    rows: number
-    sessionId?: string
-    initiallyHidden?: boolean
-  }) => Promise<{ id: string }>
-}
+type RuntimeSpawnController = { spawn: NonNullable<RuntimePtyController['spawn']> }
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test doubles implement only the members these spawn paths read.
 const testDouble = <T>(value: unknown): T => value as T
@@ -98,6 +93,27 @@ describe('runtime-controller spawn: hidden until a renderer view mounts', () => 
     registerPtyHandlers(testDouble(mainWindow), testDouble(runtime))
     return testDouble<RuntimeSpawnController>(runtime.setPtyController.mock.calls[0]?.[0])
   }
+
+  it('forwards automatic recovery intent before any physical provider spawn', async () => {
+    const runtime = {
+      ...createRuntimeMock(),
+      acquireWorktreeTerminalSpawn: vi
+        .fn()
+        .mockRejectedValue(new Error(WORKTREE_TERMINAL_SLEEP_BLOCKED_ERROR))
+    }
+    const daemon = installObservableDaemonTestProvider()
+    const controller = installController(runtime)
+
+    await expect(
+      controller.spawn({ cols: 80, rows: 24, worktreeId: 'wt-1', activationIntent: 'automatic' })
+    ).rejects.toThrow(WORKTREE_TERMINAL_SLEEP_BLOCKED_ERROR)
+
+    expect(runtime.acquireWorktreeTerminalSpawn).toHaveBeenCalledWith('wt-1', 'automatic', {
+      ptyId: expect.any(String),
+      paneKey: undefined
+    })
+    expect(daemon.spawn).not.toHaveBeenCalled()
+  })
 
   it('marks a fresh daemon session hidden before spawn resolves', async () => {
     const runtime = createRuntimeMock()

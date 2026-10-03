@@ -1,3 +1,5 @@
+import type { TabActivationIntent } from '../../shared/tab-activation-intent'
+
 export type { TerminalCreateOptions } from './runtime-terminal-contracts'
 export type { Worktree } from '../../shared/worktree/types'
 export type { RuntimeTerminalCreate } from '../../shared/runtime-types'
@@ -31,7 +33,10 @@ export type { IpcMainEvent } from 'electron'
 
 // Why initiallyHidden: no renderer pane exists yet, so main must answer startup queries — Muse
 // exits silently when its startup cursor-position query goes unanswered.
-export const BACKGROUND_TERMINAL_SPAWN_FLAGS = {
-  initiallyHidden: true,
-  persistHostSessionBinding: true
-} as const
+export function getBackgroundTerminalSpawnFlags(activationIntent?: TabActivationIntent) {
+  return {
+    initiallyHidden: true,
+    persistHostSessionBinding: true,
+    ...(activationIntent ? { activationIntent } : {})
+  } as const
+}

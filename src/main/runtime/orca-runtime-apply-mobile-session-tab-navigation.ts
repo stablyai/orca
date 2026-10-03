@@ -13,7 +13,11 @@ import {
   projectClientSessionTabSelection
 } from './client-session-tab-selection'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
+import { blocksAutomaticTerminalSpawnForSleep } from './worktree-terminal-spawn-sleep-guard'
+import {
+  runtimeWorktreeIdentityKey,
+  runtimeWorktreeIdsEqual
+} from './runtime-worktree-path-identity'
 import {
   buildHeadlessMobileSessionTabGroups,
   cloneTerminalLayoutSnapshot
@@ -98,7 +102,7 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
   }
 
   /**
-   * Whether persistence proves this pane's PTY was deliberately taken down and parked
+   * Whether the host's sleep state or persistence proves this pane was deliberately parked
    * (workspace sleep or completed-agent hibernation) rather than lost and awaiting reconnect.
    * Why: `pending-handle` alone cannot tell those apart — a parked pane publishes it
    * indefinitely — and respawning a parked pane re-launches its agent behind the user.
@@ -108,6 +112,15 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
     worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab
   ): boolean {
+    const sleepState = this.terminalSleepStateByWorktreeId.get(
+      runtimeWorktreeIdentityKey(worktreeId)
+    )
+    if (sleepState) {
+      return blocksAutomaticTerminalSpawnForSleep(sleepState, {
+        ptyId: tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId],
+        paneKey: makePaneKey(tab.parentTabId, tab.leafId)
+      })
+    }
     const record =
       this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[
         makePaneKey(tab.parentTabId, tab.leafId)
