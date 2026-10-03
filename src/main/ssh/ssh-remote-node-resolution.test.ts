@@ -518,6 +518,25 @@ describe('resolveRemoteNodePath', () => {
     )
   })
 
+  it('uses -c (not -lc) and nushell lookup for a nu login shell', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('\n') // path probe: empty
+      .mockResolvedValueOnce('/usr/bin/nu\n') // $SHELL
+      .mockResolvedValueOnce('/home/u/.nix-profile/bin/node\n')
+      .mockResolvedValueOnce('v20.11.0\n')
+
+    await expect(resolveRemoteNodePath(conn)).resolves.toBe('/home/u/.nix-profile/bin/node')
+    expect(execCommandMock).toHaveBeenNthCalledWith(
+      3,
+      conn,
+      `'/usr/bin/nu' -c 'which node | get path | first'`,
+      {
+        wrapCommand: false,
+        timeoutMs: 8_000
+      }
+    )
+  })
+
   // ── Failure ───────────────────────────────────────────────────────────
 
   it('throws when both strategies find no usable node', async () => {
