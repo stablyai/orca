@@ -43,6 +43,31 @@ export function hasWorkspaceCleanupRiskEscalated(
   )
 }
 
+/** An agent is running now in a workspace the user did not approve stopping one in. */
+export function hasWorkspaceCleanupUnapprovedLiveAgent(
+  candidate: WorkspaceCleanupCandidate,
+  approvedCandidate: WorkspaceCleanupCandidate
+): boolean {
+  return (
+    candidate.blockers.includes('live-agent') && !approvedCandidate.blockers.includes('live-agent')
+  )
+}
+
+export function getWorkspaceCleanupAgentStartedFailure(
+  target: PreflightFailureTarget,
+  candidate: WorkspaceCleanupCandidate
+): WorkspaceCleanupFailure {
+  return {
+    worktreeId: target.worktreeId,
+    ...(target.executionHostId ? { executionHostId: target.executionHostId } : {}),
+    displayName: candidate.displayName,
+    message: translate(
+      'auto.store.slices.workspace.cleanup.agentStartedSinceConfirmation',
+      'An agent started in this workspace after you confirmed. Delete it again to review stopping the agent.'
+    )
+  }
+}
+
 export function hasValidWorkspaceCleanupUnverifiedConsent(
   candidateIdentity: string,
   consent: WorkspaceCleanupUnverifiedRemovalConsent | undefined,

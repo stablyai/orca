@@ -438,7 +438,8 @@
             "hostUnresolved": "Orca ne peut pas déterminer quel hôte possède cet espace de travail. Actualisez les projets et examinez-le à nouveau.",
             "gitStatusUnavailable": "Orca n'a pas pu vérifier le statut git de cet espace de travail. Réessayez, ou supprimez-le depuis la barre latérale propre à son hôte ou depuis la liste des projets.",
             "gitStatusUnavailableOlderPeer": "Orca n'a pas pu rattacher cet échec de statut git à un hôte. Mettez à jour l'homologue connecté le plus ancien, ou supprimez l'espace de travail depuis la barre latérale propre à son hôte ou depuis la liste des projets.",
-            "forceNeedsApproval": "Examinez et confirmez cet espace de travail avant de le supprimer de force."
+            "forceNeedsApproval": "Examinez et confirmez cet espace de travail avant de le supprimer de force.",
+            "agentStartedSinceConfirmation": "Un agent a démarré dans cet espace de travail après votre confirmation. Supprimez-le à nouveau pour vérifier l'arrêt de l'agent."
           }
         },
         "worktrees": {
@@ -18155,6 +18156,13 @@
           "label": "Hôte : {{value0}}",
           "unknown": "Hôte inconnu",
           "candidateName": "{{value0}} sur {{value1}}"
+        },
+        "stopAgents": {
+          "titleMany": "Arrêter ces agents ?",
+          "descriptionOne": "La suppression interrompra le travail en cours de l'agent.",
+          "descriptionMany": "La suppression interrompra le travail en cours de ces agents.",
+          "confirm": "Arrêter les agents et supprimer",
+          "confirmOne": "Arrêter l'agent et supprimer"
         }
       },
       "creation": {

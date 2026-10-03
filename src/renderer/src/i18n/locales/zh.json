@@ -338,6 +338,7 @@
             "gitStatusUnavailable": "Orca 无法检查此工作区的 Git 状态。请重试，或从对应主机的侧边栏或项目列表中将其删除。",
             "gitStatusUnavailableOlderPeer": "Orca 无法将此 Git 状态检查失败与主机匹配。请更新较旧的已连接端，或从对应主机的侧边栏或项目列表中删除该工作区。",
             "forceNeedsApproval": "请先检查并确认此工作区，然后再强制删除。",
+            "agentStartedSinceConfirmation": "确认后此工作区中启动了一个智能体。请再次删除以确认停止该智能体。",
             "hostCollision": "错误：此工作区存在于同一路径的多个主机上",
             "hostUnresolved": "Orca 无法判断哪个主机拥有此工作区。刷新项目并再次查看。"
           }
@@ -18109,6 +18110,13 @@
           "label": "主持人：{{value0}}",
           "unknown": "未知主机",
           "candidateName": "{{value0}} 在 {{value1}} 上"
+        },
+        "stopAgents": {
+          "titleMany": "停止这些智能体？",
+          "descriptionOne": "删除将停止智能体当前任务。",
+          "descriptionMany": "删除将停止这些智能体当前任务。",
+          "confirm": "停止智能体并删除",
+          "confirmOne": "停止智能体并删除"
         }
       },
       "creation": {

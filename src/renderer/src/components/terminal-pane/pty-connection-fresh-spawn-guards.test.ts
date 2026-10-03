@@ -199,6 +199,23 @@ describe('connectPanePty', () => {
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
   })
 
+  // A queued row may still fail its own delete and stay; a new terminal there must still start.
+  it('still spawns while the pane worktree is only queued for deletion', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      deleteStateByWorktreeId: { 'wt-1': { isDeleting: true, phase: 'queued' } }
+    }
+    const deps = createDeps({ tabId: 'tab-queued-delete-spawn' })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(transport.connect).toHaveBeenCalled()
+  })
+
   // The disposed-spawn kill in ipc-pty-connect asks this callback before retiring a PTY; it must
   // answer from the live store, or a remounted pane's shell dies under it.
   it('lets a disposed spawn survive while the pane surface still exists in the store', async () => {
