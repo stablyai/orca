@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithTerminalDrivers } from './orca-runtime-terminal-drivers'
+import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostScope } from '../../shared/execution-host'
 import { RuntimePreservedBranchCleanup } from './runtime-preserved-branch-cleanup'
 import type { IPtyProvider } from '../providers/types'
 import type {
@@ -96,6 +97,10 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
 
   protected readonly reconcileAgentStatusForEndedProcessFn:
     | ((paneKeys: Iterable<string>) => void)
+    | null
+
+  protected readonly dropAgentStatusForRemovedWorktreeFn:
+    | ((worktreeId: string, host?: ExecutionHostScope) => void)
     | null
 
   protected readonly canRecoverPersistentLocalPtysFn: () => boolean
@@ -247,6 +252,8 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
       if (this.store) {
         this.removeWorktreeMetadataAndHistory(this.store, worktreeId)
       }
+      // Why every host after the local-only hub: this store mints folder ids, so none is shared.
+      this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, ALL_EXECUTION_HOSTS_SCOPE)
     }
   })
 

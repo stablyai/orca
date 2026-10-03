@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithLinearCommands } from './orca-runtime-linear-commands'
+import type { ExecutionHostScope } from '../../shared/execution-host'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { StatsCollector } from '../stats/collector'
 import type { IPtyProvider } from '../providers/types'
@@ -86,6 +87,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
         paneKey: string
       ) => Promise<'live' | 'unverifiable' | 'exited' | null>
       reconcileAgentStatusForEndedProcess?: (paneKeys: Iterable<string>) => void
+      dropAgentStatusForRemovedWorktree?: (worktreeId: string, host?: ExecutionHostScope) => void
       canRecoverPersistentLocalPtys?: () => boolean
       // Why: the device registry lives on the RPC server, which is constructed with this runtime;
       // a closure defers the lookup past that ordering instead of inverting ownership.
@@ -230,6 +232,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       deps?.retireAgentHookCompatibilityAuthority ?? null
     this.checkHookAgentPresenceFn = deps?.checkHookAgentPresence ?? null
     this.reconcileAgentStatusForEndedProcessFn = deps?.reconcileAgentStatusForEndedProcess ?? null
+    this.dropAgentStatusForRemovedWorktreeFn = deps?.dropAgentStatusForRemovedWorktree ?? null
     this.canRecoverPersistentLocalPtysFn = deps?.canRecoverPersistentLocalPtys ?? (() => true)
     this.getPairedDeviceNameFn = deps?.getPairedDeviceName ?? (() => null)
     // Why: configure the shared AiVault scan cache from a serve-mode-reachable
