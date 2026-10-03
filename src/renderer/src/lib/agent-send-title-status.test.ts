@@ -24,4 +24,22 @@ describe('detectAgentSendTitleStatus', () => {
     expect(detectAgentSendTitleStatus('Codex ready')).toBe('idle')
     expect(detectAgentSendTitleStatus('zsh')).toBeNull()
   })
+
+  // Why: the runtime's presence check treats a lone quarter-circle frame as generic
+  // activity, not identity (STA-4028), so offering one here is an offer-then-refuse
+  // contradiction when the foreground read cannot prove the agent (#24286).
+  it.each(['\u25d1 Check package version in package.json', '\u25d3 Deploying release 4.2'])(
+    'rejects a lone quarter-circle spinner title %j',
+    (title) => {
+      expect(detectAgentSendTitleStatus(title)).toBeNull()
+    }
+  )
+
+  it('still accepts a quarter-circle frame that carries agent identity', () => {
+    expect(detectAgentSendTitleStatus('\u25d0 Claude Code')).toBe('working')
+  })
+
+  it('still accepts a braille-spinner-only title, which the runtime treats as presence', () => {
+    expect(detectAgentSendTitleStatus('\u2802 Deploying release 4.2')).toBe('working')
+  })
 })
