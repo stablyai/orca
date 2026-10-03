@@ -12,6 +12,8 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'hideWorkspacesFromOtherDevices',
   'manualRepoOrder',
   'workspaceHostOrder',
+  // A phone-width browser and a desktop window each choose their own left sidebar, and old hosts reject the unknown key.
+  'sidebarOpen',
   // Agent View filters and presentation belong to each client's host catalog and viewport.
   'agentsVisibleHostIds',
   'agentsFilterRepoIds',
