@@ -1,6 +1,7 @@
 import { useMemo, type JSX } from 'react'
 import { useAppStore } from '@/store'
 import {
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -10,6 +11,7 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { requestSidebarProjectGroupCreation } from '@/lib/scroll-to-current-workspace-status'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import { isSleepingSweepExemptionNarrowingList } from './visible-worktrees'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
@@ -142,6 +144,15 @@ export function WorkspaceOptionsMenuItems({
       <div className="px-2 pt-0.5 pb-1">
         <SidebarGroupByToggle groupBy={groupBy} setGroupBy={setGroupBy} />
       </div>
+      {groupBy === 'repo' && (
+        // Why here: groups only render in Project mode, so the creation entry rides the same section.
+        <DropdownMenuItem onSelect={() => requestSidebarProjectGroupCreation()}>
+          {translate(
+            'auto.components.sidebar.SidebarWorkspaceOptionsMenu.newProjectGroup',
+            'New group...'
+          )}
+        </DropdownMenuItem>
+      )}
 
       <DropdownMenuSeparator />
       <DropdownMenuSub>

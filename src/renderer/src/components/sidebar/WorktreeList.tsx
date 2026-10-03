@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
+import { SIDEBAR_PROJECT_GROUP_CREATE_REQUEST_EVENT } from '@/lib/scroll-to-current-workspace-status'
 import {
   useAllWorktrees,
   useProjectHostSetupProjection,
@@ -189,6 +190,19 @@ const WorktreeList = React.memo(function WorktreeList({
   })
   const projectGroupDialogs = useProjectGroupDialogs({ repos, repoMap, projectGroups })
 
+  // Why: the standalone-group entry lives in the header menu, outside this component;
+  // a window event bridges the two without threading a prop through the sidebar tree.
+  const handleCreateStandaloneProjectGroup = projectGroupDialogs.handleCreateStandaloneProjectGroup
+  React.useEffect(() => {
+    const onCreateRequest = (): void => {
+      handleCreateStandaloneProjectGroup()
+    }
+    window.addEventListener(SIDEBAR_PROJECT_GROUP_CREATE_REQUEST_EVENT, onCreateRequest)
+    return () => {
+      window.removeEventListener(SIDEBAR_PROJECT_GROUP_CREATE_REQUEST_EVENT, onCreateRequest)
+    }
+  }, [handleCreateStandaloneProjectGroup])
+
   const handleImmediateWorktreeActivate = useCallback((worktreeId: string, rowKey?: string) => {
     // Why: re-rendering the virtualized sidebar on the pointer path adds visible latency; mutate the row directly and let store state reconcile after.
     markSidebarWorktreeActiveImmediately(worktreeId, rowKey)
@@ -257,31 +271,41 @@ const WorktreeList = React.memo(function WorktreeList({
     placeholderRepoCount: rowModel.placeholderRepoIds.size,
     importedWorktreeCardCount: externalWorktreeCards.importedWorktreesByRepo.size
   })
+  // Why: the create request can arrive while the empty state shows (the header
+  // menu outlives row filtering), so the dialog host mounts above the split.
+  const projectGroupDialogHost = (
+    <SidebarWorktreeListDialogs
+      dialogs={projectGroupDialogs}
+      repos={repos}
+      settings={settings}
+      suppressExternalWorktreeInboxRepoId={
+        externalWorktreeCards.suppressExternalWorktreeInboxRepoId
+      }
+      setSuppressExternalWorktreeInboxRepoId={
+        externalWorktreeCards.setSuppressExternalWorktreeInboxRepoId
+      }
+      newExternalWorktreeInboxActionState={
+        externalWorktreeCards.newExternalWorktreeInboxActionState
+      }
+      onConfirmSuppressExternalWorktreeInbox={() => {
+        void externalWorktreeCards.handleConfirmSuppressExternalWorktreeInbox()
+      }}
+      onOpenWorktreeVisibility={handleOpenWorktreeVisibility}
+    />
+  )
   // Why: when active filters hide every row, the Clear Filters empty state must win over Project Group headers.
   if (rowModel.rows.length === 0 || filtersHideAllRows) {
-    return <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
+    return (
+      <>
+        {projectGroupDialogHost}
+        <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
+      </>
+    )
   }
 
   return (
     <>
-      <SidebarWorktreeListDialogs
-        dialogs={projectGroupDialogs}
-        repos={repos}
-        settings={settings}
-        suppressExternalWorktreeInboxRepoId={
-          externalWorktreeCards.suppressExternalWorktreeInboxRepoId
-        }
-        setSuppressExternalWorktreeInboxRepoId={
-          externalWorktreeCards.setSuppressExternalWorktreeInboxRepoId
-        }
-        newExternalWorktreeInboxActionState={
-          externalWorktreeCards.newExternalWorktreeInboxActionState
-        }
-        onConfirmSuppressExternalWorktreeInbox={() => {
-          void externalWorktreeCards.handleConfirmSuppressExternalWorktreeInbox()
-        }}
-        onOpenWorktreeVisibility={handleOpenWorktreeVisibility}
-      />
+      {projectGroupDialogHost}
       <VirtualizedWorktreeViewport
         // Why: status headers move during wake (inactive -> active); key only on grouping mode so row identity survives.
         key={`group:${groupBy}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
