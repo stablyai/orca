@@ -137,6 +137,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.pruneInactiveCodexState()
     return {
       ...this.state,
+      deepseekAccount: this.getDeepSeekAccountStatus(false),
       // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
       minimaxApiKeyConfigured: hasMiniMaxApiKey(),

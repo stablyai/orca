@@ -133,6 +133,12 @@ export function StatusBarVisibilityMenu({
             {translate('auto.components.status.bar.StatusBar.grokUsageMenu', 'Grok Usage')}
           </DropdownMenuCheckboxItem>
         )}
+        <DropdownMenuCheckboxItem
+          checked={statusBarItems.includes('deepseek')}
+          onCheckedChange={() => toggleStatusBarItem('deepseek')}
+        >
+          {translate('deepseek.statusBar.title', 'DeepSeek balance')}
+        </DropdownMenuCheckboxItem>
         {isStatusBarItemAvailable('zcode', detectedAgentIds) && (
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('zcode')}

@@ -24,6 +24,7 @@ export type UsageProviderSettings = Pick<
   opencodeGoApiKeyConfigured: boolean
   grokAuthConfigured: boolean
   cursorAuthConfigured: boolean
+  deepseekApiKeyConfigured?: boolean
 }
 
 type UsageProviderSnapshots = {
@@ -37,6 +38,7 @@ type UsageProviderSnapshots = {
   grok: ProviderRateLimits | null | undefined
   cursor: ProviderRateLimits | null | undefined
   zcode?: ProviderRateLimits | null
+  deepseek?: ProviderRateLimits | null
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -47,6 +49,7 @@ function hasUsageData(provider: ProviderRateLimits): boolean {
     provider.weekly ||
     provider.fableWeekly ||
     provider.monthly ||
+    provider.balance ||
     (provider.buckets && provider.buckets.length > 0)
   )
 }
@@ -89,7 +92,8 @@ export function hasUsageProviderSettings(
     settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true ||
     settings?.cursorAuthConfigured === true ||
-    settings?.zcodePlanApiKeyConfigured === true
+    settings?.zcodePlanApiKeyConfigured === true ||
+    settings?.deepseekApiKeyConfigured === true
   )
 }
 
@@ -125,6 +129,9 @@ export function hasUsageProviderSettingsForProvider(
   }
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true
+  }
+  if (providerId === 'deepseek') {
+    return settings.deepseekApiKeyConfigured === true
   }
   if (providerId === 'cursor') {
     return settings.cursorAuthConfigured === true
@@ -206,6 +213,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.minimax) &&
     !isProviderConfigured(providers.grok) &&
     !isProviderConfigured(providers.cursor) &&
-    !isProviderConfigured(providers.zcode)
+    !isProviderConfigured(providers.zcode) &&
+    !isProviderConfigured(providers.deepseek)
   )
 }

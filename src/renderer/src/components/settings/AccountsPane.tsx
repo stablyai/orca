@@ -39,6 +39,9 @@ import {
   providerAccountIsActiveInView,
   providerAccountMatchesView
 } from './provider-account-visibility'
+import { renderDeepSeekAccountsSection } from './accounts-pane-deepseek-section'
+import { getDeepSeekAccountScope } from '@/runtime/deepseek-account-scope'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { GrokAccountsSection } from './GrokAccountsSection'
 import { AntigravityAccountsSection } from './AntigravityAccountsSection'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -108,6 +111,18 @@ export function AccountsPane({
   // Why: with a Remote Orca Server active the server owns provider accounts
   // (see #7973); every list/select/remove below must scope to it, not host/WSL.
   const isRemoteAccountScope = hasRemoteProviderAccountOwner(settings)
+  const activeWorkspaceHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
+  const deepseekScope = getDeepSeekAccountScope(
+    settings,
+    activeWorkspaceHostId,
+    getRendererAppPlatform()
+  )
+  const deepseekScopeLabel = deepseekScope.environmentId
+    ? (runtimeEnvironments.find((environment) => environment.id === deepseekScope.environmentId)
+        ?.name ?? deepseekScope.environmentId)
+    : activeWorkspaceHostId?.startsWith('ssh:')
+      ? translate('deepseek.accounts.sshHost', 'SSH host')
+      : localAccountRuntime.label
   const activeRuntimeEnvironmentId = settings.activeRuntimeEnvironmentId?.trim() || null
   // Why: keep the real name separate from the prose fallback below; the scope
   // label must not interpolate the fallback.
@@ -375,6 +390,7 @@ export function AccountsPane({
     clearMiniMaxCookie
   }
   const visibleSections = [
+    renderDeepSeekAccountsSection(model, deepseekScope, activeWorkspaceHostId, deepseekScopeLabel),
     wslSupportedPlatform &&
     !isRemoteAccountScope &&
     matchesSettingsSearch(searchQuery, getAccountsLocationSearchEntries())

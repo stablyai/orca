@@ -34,6 +34,7 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
       previous?.weekly ||
       previous?.fableWeekly ||
       previous?.monthly ||
+      previous?.balance ||
       (previous?.buckets && previous.buckets.length > 0)
     )
 
