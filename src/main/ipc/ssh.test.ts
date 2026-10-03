@@ -26,6 +26,7 @@ import { RelayVersionMismatchError } from '../ssh/ssh-relay-version-mismatch-err
 import type { SshConnectionState, SshConnectionStatus, SshTarget } from '../../shared/ssh-types'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
+import { getActiveSshAgentHookInstallReports } from './ssh'
 
 const {
   mockSshStore,
@@ -78,6 +79,48 @@ describe('SSH IPC handlers', () => {
     await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
 
     expect(mockConnectionManager.connect).toHaveBeenCalledWith(target)
+  })
+
+  it('keeps an active host visible while hook detection is pending', async () => {
+    vi.stubEnv('ORCA_FEATURE_REMOTE_AGENT_HOOKS', '1')
+    let resolveDetection!: (value: { agents: string[] }) => void
+    const detection = new Promise<{ agents: string[] }>((resolve) => {
+      resolveDetection = resolve
+    })
+    const defaultRequest = mockMux.request.getMockImplementation()
+    mockMux.request.mockImplementation((method: string) =>
+      method === 'preflight.detectAgents' ? detection : defaultRequest?.(method)
+    )
+    try {
+      mockSshStore.getTarget.mockReturnValue({
+        id: 'ssh-1',
+        label: 'Server',
+        host: 'example.com',
+        port: 22,
+        username: 'deploy'
+      })
+      mockConnectionManager.connect.mockResolvedValue({})
+      mockConnectionManager.getState.mockReturnValue({
+        targetId: 'ssh-1',
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0
+      })
+      await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+
+      expect(getActiveSshAgentHookInstallReports()).toEqual([
+        {
+          targetId: 'ssh-1',
+          remoteHome: null,
+          state: 'unavailable',
+          detail: 'remote hook installation check is in progress',
+          statuses: []
+        }
+      ])
+    } finally {
+      resolveDetection({ agents: [] })
+      vi.unstubAllEnvs()
+    }
   })
 
   it('registers the provider before broadcasting connected authority', async () => {

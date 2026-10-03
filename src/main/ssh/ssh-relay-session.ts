@@ -37,8 +37,10 @@ import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD,
-  isRemoteAgentHooksEnabled
+  isRemoteAgentHooksEnabled,
+  type AgentHookInstallManagedHooksResult
 } from '../../shared/agent-hook-relay'
+import type { RemoteAgentHookInstallReport } from '../../shared/agent-hook-types'
 import { AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES } from '../../shared/agent-status-legacy-adapter'
 import { _internals as openCodeInternals } from '../opencode/hook-service'
 import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
@@ -386,6 +388,7 @@ export class SshRelaySession {
   private readonly ptyConsumerClientInstanceId: string
   private ptyConsumerSessionState: SshPtyConsumerSessionState | null = null
   private activeCompatibilityAttachmentIds = new Set<string>()
+  private agentHookInstallReport: RemoteAgentHookInstallReport | null = null
 
   constructor(
     readonly targetId: string,
@@ -468,6 +471,15 @@ export class SshRelaySession {
       remoteHome: env.remoteHome,
       hostPlatform: env.hostPlatform
     }
+  }
+
+  /** Returns the latest managed-hook install result for this SSH host.
+   *
+   * SSH agents read host-side hooks, so the CLI must not substitute local
+   * install state when reporting remote status (#8711).
+   */
+  getAgentHookInstallReport(): RemoteAgentHookInstallReport | null {
+    return this.agentHookInstallReport
   }
 
   async requestSessionSearch(method: string, params: Record<string, unknown>): Promise<unknown> {
@@ -1306,7 +1318,15 @@ export class SshRelaySession {
     this.wireUpPtyEvents(ptyProvider, mux, providerGeneration)
     this.wireUpAgentHookEvents(mux)
     this.wireUpRemoteWorkspaceEvents(mux)
-    void this.installManagedHooksOnRemote(mux, shouldContinue)
+    // The install can finish after reconnect() releases its attempt token.
+    void this.installManagedHooksOnRemote(
+      mux,
+      () =>
+        this.mux === mux &&
+        this.activePtyProviderGeneration === providerGeneration &&
+        !mux.isDisposed() &&
+        !this.isDisposed()
+    )
     return true
   }
 
@@ -1459,11 +1479,14 @@ export class SshRelaySession {
     mux: SshChannelMultiplexer,
     shouldContinue?: () => boolean
   ): Promise<void> {
-    if (
-      !isRemoteAgentHooksEnabled() ||
-      !this.areAgentStatusHooksEnabled() ||
-      (shouldContinue && !shouldContinue())
-    ) {
+    if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
+      this.recordAgentHookInstallReport(
+        this.remoteCliBridgeEnv?.remoteHome ?? null,
+        'skipped',
+        'agent status hooks are disabled',
+        [],
+        shouldContinue
+      )
       return
     }
     if (
@@ -1471,8 +1494,23 @@ export class SshRelaySession {
       isWindowsRemoteHost(this.remoteCliBridgeEnv.hostPlatform)
     ) {
       // Why: managed hook installers emit POSIX-only scripts/paths; Windows remotes rely on relay-injected env + plugin overlays instead.
+      this.recordAgentHookInstallReport(
+        this.remoteCliBridgeEnv.remoteHome,
+        'skipped',
+        'managed hook installers do not support Windows remotes',
+        [],
+        shouldContinue
+      )
       return
     }
+
+    this.recordAgentHookInstallReport(
+      this.remoteCliBridgeEnv?.remoteHome ?? null,
+      'unavailable',
+      'remote hook installation check is in progress',
+      [],
+      shouldContinue
+    )
 
     try {
       const store = this.store as { getSettings?: Store['getSettings'] }
@@ -1482,7 +1520,17 @@ export class SshRelaySession {
         })
       )
       const agents = detected.agents
-      if (agents.length === 0 || (shouldContinue && !shouldContinue())) {
+      if (shouldContinue && !shouldContinue()) {
+        return
+      }
+      if (agents.length === 0) {
+        this.recordAgentHookInstallReport(
+          this.remoteCliBridgeEnv?.remoteHome ?? null,
+          'skipped',
+          'no supported agents detected on the remote host',
+          [],
+          shouldContinue
+        )
         return
       }
       const hostKeyFingerprint = this.requireReadyConnection().getHostKeyFingerprint?.()
@@ -1491,14 +1539,29 @@ export class SshRelaySession {
         agents,
         ...(detected.claudeVersion ? { claudeVersion: detected.claudeVersion } : {})
       }
-      const result = (await mux.request(AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD, params)) as {
-        errors?: unknown
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The relay handler returns this shared contract; the statuses check below rejects older relays without report details.
+      const result = (await mux.request(
+        AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
+        params
+      )) as AgentHookInstallManagedHooksResult
+      if (!Array.isArray(result.statuses)) {
+        throw new Error('Remote relay did not return managed hook install details')
       }
-      if (typeof result.errors === 'number' && result.errors > 0) {
+      const incomplete = result.statuses.filter((status) => status.state !== 'installed')
+      if (incomplete.length > 0) {
         console.warn(
-          `[ssh-relay-session] ${result.errors} remote managed hook installers failed for ${this.targetId}`
+          `[ssh-relay-session] ${incomplete.length} remote managed hook installers were incomplete for ${this.targetId}`
         )
       }
+      this.recordAgentHookInstallReport(
+        result.home,
+        incomplete.length === 0 ? 'installed' : 'partial',
+        incomplete.length === 0
+          ? null
+          : `${incomplete.length} agent hook install(s) incomplete on the remote host`,
+        result.statuses,
+        shouldContinue
+      )
     } catch (error) {
       // Why: teardown routinely cancels this best-effort request; only warn for
       // installer failures that survive the connection lifecycle.
@@ -1509,13 +1572,49 @@ export class SshRelaySession {
         code === 'DISPOSED' ||
         mux.isDisposed()
       ) {
+        this.recordAgentHookInstallReport(
+          this.remoteCliBridgeEnv?.remoteHome ?? null,
+          'error',
+          code === -32601
+            ? 'remote relay does not support managed hook status details'
+            : 'remote hook install was interrupted',
+          [],
+          shouldContinue
+        )
         return
       }
+      const detail = error instanceof Error ? error.message : String(error)
       console.warn(
-        `[ssh-relay-session] relay managed hook install failed for ${this.targetId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `[ssh-relay-session] relay managed hook install failed for ${this.targetId}: ${detail}`
       )
+      this.recordAgentHookInstallReport(
+        this.remoteCliBridgeEnv?.remoteHome ?? null,
+        'error',
+        detail,
+        [],
+        shouldContinue
+      )
+    }
+  }
+
+  /** Stores a remote hook install report while guarding against stale reconnects. */
+  private recordAgentHookInstallReport(
+    remoteHome: string | null,
+    state: RemoteAgentHookInstallReport['state'],
+    detail: string | null,
+    statuses: RemoteAgentHookInstallReport['statuses'],
+    shouldContinue?: () => boolean
+  ): void {
+    // Why: an aborted reconnect may finish late; only its current owner may replace host status.
+    if (shouldContinue && !shouldContinue()) {
+      return
+    }
+    this.agentHookInstallReport = {
+      targetId: this.targetId,
+      remoteHome,
+      state,
+      detail,
+      statuses
     }
   }
 

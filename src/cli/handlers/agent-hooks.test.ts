@@ -54,7 +54,7 @@ const {
   getManagedAgentHookStatusesMock: vi.fn()
 }))
 
-vi.mock('../runtime-client', () => {
+vi.mock('../runtime-client', async () => {
   class RuntimeClient {
     call = callMock
     getCliStatus = getCliStatusMock
@@ -69,9 +69,12 @@ vi.mock('../runtime-client', () => {
     }
   }
 
+  const { RuntimeRpcFailureError } = await import('../runtime/types.js')
+
   return {
     RuntimeClient,
     RuntimeClientError,
+    RuntimeRpcFailureError,
     getDefaultUserDataPath: getDefaultUserDataPathMock
   }
 })
@@ -82,6 +85,7 @@ vi.mock('../../main/agent-hooks/managed-agent-hook-controls', () => ({
 }))
 
 import { main } from '../index'
+import { RuntimeRpcFailureError } from '../runtime-client'
 
 function readDefaultProfileState(userDataPath: string) {
   const opened = openProfileStateDatabase(
@@ -134,6 +138,170 @@ describe('agent hooks CLI handler', () => {
     vi.unstubAllEnvs()
     vi.restoreAllMocks()
     rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  it('reports per-SSH-host hook installs from the runtime when it is reachable', async () => {
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+    getCliStatusMock.mockResolvedValueOnce({
+      id: 'test-status',
+      ok: true,
+      result: {
+        app: { running: true, pid: null },
+        runtime: { state: 'running', reachable: true, runtimeId: null },
+        graph: { state: 'running' }
+      },
+      _meta: { runtimeId: 'test' }
+    })
+    const local = [
+      {
+        agent: 'codex',
+        state: 'installed',
+        configPath: '/local/hooks.json',
+        managedHooksPresent: true,
+        detail: null
+      }
+    ]
+    const remotes = [
+      {
+        targetId: 'ssh-1',
+        remoteHome: '/home/dev',
+        state: 'partial',
+        detail: '1 agent hook install(s) failed on the remote host',
+        statuses: [
+          {
+            agent: 'codex',
+            state: 'error',
+            configPath: '/home/dev/.codex/hooks.json',
+            managedHooksPresent: false,
+            detail: 'Could not parse remote Codex hooks.json'
+          }
+        ]
+      }
+    ]
+    callMock.mockResolvedValueOnce({
+      id: 'test-call',
+      ok: true,
+      result: { local, remotes },
+      _meta: { runtimeId: 'rt-1' }
+    })
+
+    await main(['agent', 'hooks', 'status', '--json'], userDataPath)
+
+    expect(callMock).toHaveBeenCalledWith('agentHooks.status', undefined, { timeoutMs: 10_000 })
+    const printed = String(vi.mocked(console.log).mock.calls.at(-1)?.[0])
+    const parsed = JSON.parse(printed)
+    expect(parsed.result).toMatchObject({
+      appliedBy: 'runtime',
+      statuses: local,
+      remotes
+    })
+  })
+
+  it('preserves local diagnostics with explicitly unavailable SSH status on older runtimes', async () => {
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+    getCliStatusMock.mockResolvedValueOnce({
+      id: 'test-status',
+      ok: true,
+      result: {
+        app: { running: true, pid: null },
+        runtime: { state: 'running', reachable: true, runtimeId: null },
+        graph: { state: 'running' }
+      },
+      _meta: { runtimeId: 'test' }
+    })
+    callMock.mockRejectedValueOnce(
+      new RuntimeRpcFailureError({
+        id: 'legacy',
+        ok: false,
+        error: { code: 'method_not_found', message: 'Unknown method: agentHooks.status' },
+        _meta: { runtimeId: 'legacy' }
+      })
+    )
+    await main(['agent', 'hooks', 'status', '--json'], userDataPath)
+    expect(process.exitCode).not.toBe(1)
+    const printed = String(vi.mocked(console.log).mock.calls.at(-1)?.[0])
+    expect(JSON.parse(printed).result).toMatchObject({
+      appliedBy: 'offline',
+      remotes: null,
+      remotesUnavailableReason: 'runtime does not support SSH hook status'
+    })
+  })
+
+  it('surfaces an RPC failure from a reachable runtime instead of reporting local-only status', async () => {
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+    getCliStatusMock.mockResolvedValueOnce({
+      id: 'test-status',
+      ok: true,
+      result: {
+        app: { running: true, pid: null },
+        runtime: { state: 'running', reachable: true, runtimeId: null },
+        graph: { state: 'running' }
+      },
+      _meta: { runtimeId: 'test' }
+    })
+    callMock.mockRejectedValueOnce(new Error('agentHooks.status timed out'))
+
+    await main(['agent', 'hooks', 'status', '--json'], userDataPath)
+
+    // Why: a reachable runtime whose status RPC fails must not silently print
+    // a local-only report — that reads as `installed` while SSH host state is
+    // unknown, the exact misleading green this command exists to prevent.
+    expect(process.exitCode).toBe(1)
+    const printed = [
+      ...vi.mocked(console.error).mock.calls.flat(),
+      ...vi.mocked(console.log).mock.calls.flat()
+    ].join('\n')
+    expect(printed).toContain('agentHooks.status timed out')
+  })
+
+  it('falls back to local-only status when the runtime is unreachable', async () => {
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+    const local = [
+      {
+        agent: 'codex',
+        state: 'installed',
+        configPath: '/local/hooks.json',
+        managedHooksPresent: true,
+        detail: null
+      }
+    ]
+    getManagedAgentHookStatusesMock.mockReturnValue(local)
+
+    await main(['agent', 'hooks', 'status', '--json'], userDataPath)
+
+    expect(callMock).not.toHaveBeenCalled()
+    const printed = String(vi.mocked(console.log).mock.calls.at(-1)?.[0])
+    const parsed = JSON.parse(printed)
+    expect(parsed.result).toMatchObject({
+      appliedBy: 'offline',
+      statuses: local,
+      remotes: null
+    })
+  })
+
+  it('labels SSH status unavailable in offline text output', async () => {
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+    getManagedAgentHookStatusesMock.mockReturnValue([])
+
+    await main(['agent', 'hooks', 'status'], userDataPath)
+
+    expect(vi.mocked(console.log).mock.calls.at(-1)?.[0]).toContain(
+      'ssh: unavailable — runtime is not reachable'
+    )
+  })
+
+  it('surfaces a runtime status transport failure instead of falling back', async () => {
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+    getCliStatusMock.mockRejectedValueOnce(new Error('status transport failed'))
+
+    await main(['agent', 'hooks', 'status', '--json'], userDataPath)
+
+    expect(process.exitCode).toBe(1)
+    const printed = [
+      ...vi.mocked(console.error).mock.calls.flat(),
+      ...vi.mocked(console.log).mock.calls.flat()
+    ].join('\n')
+    expect(printed).toContain('status transport failed')
   })
 
   it('keeps new card style off when creating offline settings for a fresh profile', async () => {
