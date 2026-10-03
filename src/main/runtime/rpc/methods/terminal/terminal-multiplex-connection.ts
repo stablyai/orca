@@ -23,6 +23,7 @@ export type TerminalMultiplexConnectionBase = {
   sendBinary: NonNullable<RpcContext['sendBinary']>
   registerBinaryStreamHandler: NonNullable<RpcContext['registerBinaryStreamHandler']>
   signal: RpcContext['signal']
+  closeConnection: RpcContext['closeConnection']
   emit: MultiplexEmit
   closed: boolean
   cursor: number

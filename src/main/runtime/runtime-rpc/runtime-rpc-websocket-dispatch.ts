@@ -11,6 +11,7 @@ import type { DeviceScope } from '../device-registry'
 import { RuntimeRpcRequestAdmission } from './runtime-rpc-request-admission'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
+import { closeWebSocketWithinFlushBound } from '../rpc/ws-bounded-close'
 
 // Why: status.get has no per-connection context in the dispatcher, so stamp the scope here at the transport boundary.
 function injectDeviceScope(response: string, scope: DeviceScope): string {
@@ -150,6 +151,9 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
         pairing: pairingContext,
         signal: abortRegistration?.signal,
         sendBinary,
+        closeConnection: ws
+          ? (code, reason) => closeWebSocketWithinFlushBound(ws, code, reason)
+          : undefined,
         registerBinaryStreamHandler: (streamId, handler) =>
           this.registerBinaryStreamHandler(connectionId, streamId, handler),
         registerBinaryMessageHandler: (handler) =>

@@ -13,6 +13,7 @@ export type RpcDispatchStreamingOptions = {
   updateClientCapabilities?: (capabilities: readonly RuntimeCapability[]) => void
   pairing?: PairingRpcContext
   sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
+  closeConnection?: (code: number, reason: string) => void
   registerBinaryStreamHandler?: (
     streamId: number,
     handler: (frame: TerminalStreamFrame) => void
