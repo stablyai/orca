@@ -18,7 +18,10 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import { getProjectIdForProviderIdentity } from '../../shared/project-host-setup-projection'
+import {
+  getProjectIdForProviderIdentity,
+  importedFolderProjectIdentityMismatchMessage
+} from '../../shared/project-host-setup-projection'
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-lookup'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
@@ -186,7 +189,9 @@ export class RuntimeProjectHostSetupController {
       const existingProject = this.listProjects().find((project) => project.id === args.projectId)
       const identity = existingProject?.providerIdentity ?? args.projectProviderIdentity
       if (!identity || getProjectIdForProviderIdentity(identity) !== args.projectId) {
-        throw new Error('Imported folder does not match the selected project identity.')
+        throw new Error(
+          importedFolderProjectIdentityMismatchMessage(setup.projectId, args.projectId)
+        )
       }
       const updated = store.updateRepo(repo.id, {
         upstream: {
