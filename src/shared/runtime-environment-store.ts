@@ -233,13 +233,28 @@ function readEnvironmentStore(userDataPath: string): RuntimeEnvironmentStore {
   }
   try {
     hardenExistingSecureFile(path)
-    const parsed = RuntimeEnvironmentStoreSchema.parse(
-      JSON.parse(
-        readNodeFileSyncWithinLimit(path, MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES).buffer.toString(
-          'utf8'
-        )
-      )
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code ?? 'unknown error'
+    throw new RuntimeEnvironmentStoreError(
+      'runtime_error',
+      `Could not secure Orca environments at ${path}; permission hardening failed (${code}).`
     )
+  }
+  let persisted: string
+  try {
+    persisted = readNodeFileSyncWithinLimit(
+      path,
+      MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES
+    ).buffer.toString('utf8')
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code ?? 'unknown error'
+    throw new RuntimeEnvironmentStoreError(
+      'runtime_error',
+      `Could not read Orca environments at ${path}; file access failed (${code}).`
+    )
+  }
+  try {
+    const parsed = RuntimeEnvironmentStoreSchema.parse(JSON.parse(persisted))
     return {
       version: 1,
       environments: parsed.environments
