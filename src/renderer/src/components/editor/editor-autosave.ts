@@ -187,13 +187,17 @@ export async function requestEditorSaveQuiesce(target: EditorSaveQuiesceTarget):
   })
 }
 
-export async function requestEditorFileSave(target: EditorSaveFileTarget): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
+export function requestEditorFileSave({
+  fileId,
+  fallbackContent
+}: EditorSaveFileTarget): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
     let claimed = false
     window.dispatchEvent(
       new CustomEvent<EditorSaveFileDetail>(ORCA_EDITOR_SAVE_FILE_EVENT, {
         detail: {
-          ...target,
+          fileId,
+          fallbackContent,
           claim: () => {
             claimed = true
           },
@@ -202,6 +206,8 @@ export async function requestEditorFileSave(target: EditorSaveFileTarget): Promi
         }
       })
     )
+    // Completion callbacks share this scope; the queue now owns the fallback.
+    fallbackContent = undefined
     // Why: a direct save request should never report success unless some
     // controller actually accepted responsibility for writing the file. Unlike
     // quiesce, silently no-oping here would make Cmd/Ctrl+S look successful

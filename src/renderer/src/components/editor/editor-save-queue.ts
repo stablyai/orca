@@ -35,11 +35,22 @@ export type EditorSaveQueue = {
   dispose: () => void
 }
 
+type PendingEditorSave = {
+  fallbackContent: string
+  trigger: 'autosave' | 'user'
+  generation: number
+}
+
+type EditorSaveEntry = {
+  request: PendingEditorSave | null
+  promise: Promise<void>
+}
+
 // Why: keeping the save queue, quiesce coordination, and the debounce timers that feed it together avoids split-brain saves.
 export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
   const autoSaveTimers = new Map<string, number>()
   const autoSaveScheduledContent = new Map<string, string>()
-  const saveQueue = new Map<string, Promise<void>>()
+  const saveQueue = new Map<string, EditorSaveEntry>()
   const saveGeneration = new Map<string, number>()
 
   const clearAutoSaveTimer = (fileId: string): void => {
@@ -53,26 +64,45 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
 
   const bumpSaveGeneration = (fileId: string): void => {
     saveGeneration.set(fileId, (saveGeneration.get(fileId) ?? 0) + 1)
+    const pending = saveQueue.get(fileId)
+    if (pending) {
+      pending.request = null
+    }
   }
 
   const queueSave = (
-    file: OpenFile,
+    { id: fileId }: OpenFile,
     fallbackContent: string,
     trigger: 'autosave' | 'user' = 'user'
   ): Promise<void> => {
-    clearAutoSaveTimer(file.id)
-    const queuedGeneration = saveGeneration.get(file.id) ?? 0
+    clearAutoSaveTimer(fileId)
+    const queuedGeneration = saveGeneration.get(fileId) ?? 0
+    const previousSave = saveQueue.get(fileId)
+    const pending = previousSave?.request
+    // Pending saves read the latest draft, so keep only one trailing write per generation.
+    if (previousSave && pending?.generation === queuedGeneration) {
+      pending.fallbackContent = fallbackContent
+      if (trigger === 'user') {
+        pending.trigger = trigger
+      }
+      return previousSave.promise
+    }
 
-    const previousSave = saveQueue.get(file.id) ?? Promise.resolve()
-    const queuedSave = previousSave
+    const entry: EditorSaveEntry = {
+      request: { fallbackContent, trigger, generation: queuedGeneration },
+      promise: Promise.resolve()
+    }
+    entry.promise = (previousSave?.promise ?? Promise.resolve())
       .catch(() => undefined)
       .then(async () => {
-        if ((saveGeneration.get(file.id) ?? 0) !== queuedGeneration) {
+        const request = entry.request
+        entry.request = null
+        if (!request || (saveGeneration.get(fileId) ?? 0) !== queuedGeneration) {
           return
         }
 
         const state = store.getState()
-        const liveFile = state.openFiles.find((openFile) => openFile.id === file.id) ?? null
+        const liveFile = state.openFiles.find((openFile) => openFile.id === fileId) ?? null
         if (!liveFile) {
           return
         }
@@ -83,18 +113,19 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         }
 
         if (liveFile.pendingOwnerMigration === true) {
-          if (trigger === 'autosave') {
+          if (request.trigger === 'autosave') {
             return
           }
           throw new Error('This file is still restoring its workspace owner. Try saving again.')
         }
 
         // Why: only autosave is blocked while suspended; explicit user saves proceed (the banner warned).
-        if (trigger === 'autosave' && isAutosaveSuspendedForFile(liveFile)) {
+        if (request.trigger === 'autosave' && isAutosaveSuspendedForFile(liveFile)) {
           return
         }
 
-        const contentToSave = state.editorDrafts[file.id] ?? fallbackContent
+        const contentToSave = state.editorDrafts[fileId] ?? request.fallbackContent
+        request.fallbackContent = ''
         const worktree = liveFile.worktreeId
           ? findWorktreeById(state.worktreesByRepo ?? {}, liveFile.worktreeId)
           : null
@@ -117,42 +148,40 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
           throw error
         }
 
-        if ((saveGeneration.get(file.id) ?? 0) !== queuedGeneration) {
+        if ((saveGeneration.get(fileId) ?? 0) !== queuedGeneration) {
           return
         }
 
         const nextState = store.getState()
-        const currentDraft = nextState.editorDrafts[file.id]
+        const currentDraft = nextState.editorDrafts[fileId]
         const stillDirty = currentDraft !== undefined && currentDraft !== contentToSave
-        nextState.markFileDirty(file.id, stillDirty)
+        nextState.markFileDirty(fileId, stillDirty)
         if (!stillDirty) {
-          nextState.clearEditorDraft(file.id)
+          nextState.clearEditorDraft(fileId)
         }
         // Why: disk now holds contentToSave — rebaseline so our own save isn't flagged external; drop pending verification.
-        nextState.setLastKnownDiskSignature(file.id, getDiskBaselineSignature(contentToSave))
-        nextState.clearPendingDiskBaselineVerification(file.id)
+        nextState.setLastKnownDiskSignature(fileId, getDiskBaselineSignature(contentToSave))
+        nextState.clearPendingDiskBaselineVerification(fileId)
         // Why: the write made disk match the buffer, so clear any now-stale changed-on-disk conflict.
-        const savedFile = nextState.openFiles.find((openFile) => openFile.id === file.id)
+        const savedFile = nextState.openFiles.find((openFile) => openFile.id === fileId)
         if (savedFile?.externalMutation === 'changed') {
           trackExternalChangeConflictAction(savedFile, 'save_overwrite')
-          nextState.setExternalMutation(file.id, null)
+          nextState.setExternalMutation(fileId, null)
         }
 
         window.dispatchEvent(
           new CustomEvent<EditorFileSavedDetail>(ORCA_EDITOR_FILE_SAVED_EVENT, {
-            detail: { fileId: file.id, content: contentToSave }
+            detail: { fileId, content: contentToSave }
           })
         )
       })
-
-    let trackedSave: Promise<void>
-    trackedSave = queuedSave.finally(() => {
-      if (saveQueue.get(file.id) === trackedSave) {
-        saveQueue.delete(file.id)
-      }
-    })
-    saveQueue.set(file.id, trackedSave)
-    return trackedSave
+      .finally(() => {
+        if (saveQueue.get(fileId) === entry) {
+          saveQueue.delete(fileId)
+        }
+      })
+    saveQueue.set(fileId, entry)
+    return entry.promise
   }
 
   const quiesceFileSave = async (fileId: string): Promise<void> => {
@@ -161,7 +190,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     const pendingSave = saveQueue.get(fileId)
     clearAutoSaveTimer(fileId)
     bumpSaveGeneration(fileId)
-    await pendingSave?.catch(() => undefined)
+    await pendingSave?.promise.catch(() => undefined)
   }
 
   const syncAutoSave = (): void => {
