@@ -11,11 +11,13 @@ import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { getFileExplorerOperationExecutionHostId } from './file-explorer-operation-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { PluginIconThemeRegistration } from '../../../../shared/plugins/plugin-icon-theme-artifact'
 
 type FileExplorerVirtualRowsProps = {
   virtualizer: Virtualizer<HTMLDivElement, Element>
   inlineInputIndex: number
   rowProjection: FileExplorerRowProjection
+  iconTheme?: PluginIconThemeRegistration | null
   displayDepthOffset?: number
   inlineInput: InlineInput | null
   handleInlineSubmit: (value: string) => void
@@ -107,6 +109,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     virtualizer,
     inlineInputIndex,
     rowProjection,
+    iconTheme = null,
     displayDepthOffset = 0,
     inlineInput,
     handleInlineSubmit,
@@ -225,6 +228,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
             <FileExplorerRow
               displayDepthOffset={displayDepthOffset}
               node={n}
+              iconTheme={iconTheme}
               isExpanded={expanded.has(n.path)}
               isLoading={n.isDirectory && loadingDirPaths.has(n.path)}
               isSelected={selectedPaths.has(n.path) || activeFileId === n.path}

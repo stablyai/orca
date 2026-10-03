@@ -10,6 +10,7 @@ import {
   FolderPlus,
   Globe,
   ListCollapse,
+  Palette,
   Pencil,
   Search,
   SquareTerminal,
@@ -19,7 +20,12 @@ import { toast } from 'sonner'
 import {
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuShortcut
 } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store'
@@ -38,9 +44,45 @@ import {
   shouldShowViewFileAction
 } from './file-explorer-row-action-visibility'
 import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-file-transfer'
+import {
+  FOLDER_COLOR_PALETTE,
+  isFolderColorHex,
+  type FolderColorHex
+} from '../../../../shared/folder-color-palette'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
+
+function getFolderColorLabel(id: (typeof FOLDER_COLOR_PALETTE)[number]['id']): string {
+  switch (id) {
+    case 'magenta':
+      return translate('fileExplorer.folderColor.magenta', 'Magenta')
+    case 'violet':
+      return translate('fileExplorer.folderColor.violet', 'Violet')
+    case 'purple-magenta':
+      return translate('fileExplorer.folderColor.purpleMagenta', 'Purple magenta')
+    case 'orange':
+      return translate('fileExplorer.folderColor.orange', 'Orange')
+    case 'orange-magenta':
+      return translate('fileExplorer.folderColor.orangeMagenta', 'Orange magenta')
+    case 'yellow':
+      return translate('fileExplorer.folderColor.yellow', 'Yellow')
+    case 'green':
+      return translate('fileExplorer.folderColor.green', 'Green')
+    case 'yellow-green':
+      return translate('fileExplorer.folderColor.yellowGreen', 'Yellow green')
+    case 'yellow-orange':
+      return translate('fileExplorer.folderColor.yellowOrange', 'Yellow orange')
+    case 'cyan-blue':
+      return translate('fileExplorer.folderColor.cyanBlue', 'Cyan blue')
+    case 'green-blue':
+      return translate('fileExplorer.folderColor.greenBlue', 'Green blue')
+    case 'purple-blue':
+      return translate('fileExplorer.folderColor.purpleBlue', 'Purple blue')
+    case 'blue':
+      return translate('fileExplorer.folderColor.blue', 'Blue')
+  }
+}
 
 /** Platform-appropriate label: macOS → Finder, Windows → File Explorer, Linux → Files */
 function getRevealLabel(): string {
@@ -91,7 +133,10 @@ type FileExplorerRowContextMenuProps = Pick<
   | 'onRequestDelete'
   | 'onCollapseFolderSubtree'
   | 'onFindInFolder'
->
+> & {
+  folderColor: FolderColorHex | null
+  onFolderColorChange: (color: FolderColorHex | null) => void
+}
 
 export function FileExplorerRowContextMenu({
   node,
@@ -115,7 +160,9 @@ export function FileExplorerRowContextMenu({
   onOpenInTerminal,
   onRequestDelete,
   onCollapseFolderSubtree,
-  onFindInFolder
+  onFindInFolder,
+  folderColor,
+  onFolderColorChange
 }: FileExplorerRowContextMenuProps): React.JSX.Element {
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -276,6 +323,42 @@ export function FileExplorerRowContextMenu({
             <ContextMenuShortcut>{findInFolderShortcutLabel}</ContextMenuShortcut>
           ) : null}
         </ContextMenuItem>
+      )}
+      {node.isDirectory && (
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
+            <Palette />
+            {translate('auto.components.right.sidebar.FileExplorerRow.folderColor', 'Folder Color')}
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="w-56">
+            <ContextMenuRadioGroup
+              value={folderColor ?? 'automatic'}
+              onValueChange={(value) => onFolderColorChange(isFolderColorHex(value) ? value : null)}
+            >
+              {FOLDER_COLOR_PALETTE.map((option) => (
+                <ContextMenuRadioItem key={option.id} value={option.hex}>
+                  <span
+                    aria-hidden="true"
+                    className="size-3 rounded-sm border border-border"
+                    style={{ backgroundColor: option.hex }}
+                  />
+                  {getFolderColorLabel(option.id)}
+                </ContextMenuRadioItem>
+              ))}
+              <ContextMenuSeparator />
+              <ContextMenuRadioItem value="automatic">
+                <span
+                  aria-hidden="true"
+                  className="size-3 rounded-sm border border-border bg-muted"
+                />
+                {translate(
+                  'auto.components.right.sidebar.FileExplorerRow.automaticThemeColor',
+                  'Automatic theme color'
+                )}
+              </ContextMenuRadioItem>
+            </ContextMenuRadioGroup>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
       )}
       <ContextMenuItem
         onSelect={() => {
