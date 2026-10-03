@@ -73,15 +73,19 @@ export function buildSshTargetSavePayload(
   }
   const httpProxyUrl = httpProxy.value || undefined
   const httpProxyBypassRules = normalizeProxyBypassRules(form.httpProxyBypassRules) || undefined
-  // Why omit unchanged proxy fields: this form submits a full snapshot, and persistence
-  // treats a present-but-empty httpProxyUrl as the user clearing the proxy (releasing any
-  // sealed ciphertext). Sending it on every save would drop a keychain-sealed proxy the
-  // user never touched — so, like the local settings proxy, only a real edit is sent.
-  const proxyChanged =
-    !baseline ||
-    (baseline.httpProxyUrl ?? undefined) !== httpProxyUrl ||
-    (baseline.httpProxyBypassRules ?? undefined) !== httpProxyBypassRules
-  const proxyUpdates = proxyChanged ? { httpProxyUrl, httpProxyBypassRules } : {}
+  // Why omit unchanged proxy fields, per field: this form submits a full snapshot, and
+  // persistence reads a present-but-empty httpProxyUrl as the user clearing the proxy
+  // (releasing any sealed ciphertext). The stored baseline is '' both for a target that
+  // never had a proxy and for one whose proxy is keychain-sealed, so it must be pushed
+  // through the same normalizers before comparing — `?? undefined` would never equate
+  // that '' with the form's undefined and every save would look like a clear. Comparing
+  // each field on its own also keeps a bypass-only edit from shipping an empty URL.
+  const baselineProxyUrl = normalizeProxyUrl(baseline?.httpProxyUrl ?? '').value || undefined
+  const baselineBypassRules = normalizeProxyBypassRules(baseline?.httpProxyBypassRules) || undefined
+  const proxyUpdates = {
+    ...(baselineProxyUrl !== httpProxyUrl ? { httpProxyUrl } : {}),
+    ...(baselineBypassRules !== httpProxyBypassRules ? { httpProxyBypassRules } : {})
+  }
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
   const remoteRuntime = form.remoteRuntime === 'auto' ? undefined : form.remoteRuntime
 
@@ -103,12 +107,20 @@ export function buildSshTargetSavePayload(
     ...(form.allowRemoteCliControl ? { allowRemoteCliControl: true } : {})
   }
 
+  // Why destructure: the spread below would otherwise re-send an unchanged proxy on
+  // every save; proxy fields reach `updates` only through proxyUpdates.
+  const {
+    httpProxyUrl: _createProxyUrl,
+    httpProxyBypassRules: _createProxyBypass,
+    ...targetWithoutProxy
+  } = target
+
   return {
     ok: true,
     payload: {
       target,
       updates: {
-        ...target,
+        ...targetWithoutProxy,
         // Why: updateTarget merges partially, so explicit undefined values are
         // required to clear optional fields inherited from ~/.ssh/config.
         identityFile,
