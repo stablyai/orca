@@ -2,7 +2,7 @@
 import { useEffect, useMemo } from 'react'
 import { cleanup } from '@testing-library/react'
 import { EditorContent, useEditor, type Editor } from '@tiptap/react'
-import { afterEach, beforeEach, vi } from 'vitest'
+import { afterEach, beforeEach, vi, type Mock } from 'vitest'
 import type {
   PluginMarkdownRenderRequest,
   PluginMarkdownSourceRequest,
@@ -14,18 +14,20 @@ const worktreeLookup = vi.hoisted<{ value: { id: string; path: string; diffComme
   () => ({ value: [] })
 )
 const statRuntimePathMock = vi.hoisted(() => vi.fn(async () => ({ isDirectory: false })))
+type FixtureAction = Mock<(...args: unknown[]) => unknown>
+const actionMock = (): FixtureAction => vi.fn()
 
 export const storeState = {
-  openFile: vi.fn(),
-  activateMarkdownLink: vi.fn(),
-  openMarkdownPreview: vi.fn(),
-  setMarkdownViewMode: vi.fn(),
+  openFile: actionMock(),
+  activateMarkdownLink: actionMock(),
+  openMarkdownPreview: actionMock(),
+  setMarkdownViewMode: actionMock(),
   markdownFrontmatterVisible: {},
-  setPendingEditorReveal: vi.fn(),
-  addDiffComment: vi.fn(),
-  deleteDiffComment: vi.fn(),
-  updateDiffComment: vi.fn(),
-  clearDeliveredDiffComments: vi.fn(),
+  setPendingEditorReveal: actionMock(),
+  addDiffComment: actionMock(),
+  deleteDiffComment: actionMock(),
+  updateDiffComment: actionMock(),
+  clearDeliveredDiffComments: actionMock(),
   keybindings: {},
   worktreesByRepo: {},
   repos: [],
@@ -90,7 +92,7 @@ export function setAvailable(value: boolean): void {
   available = value
 }
 export const cancel = vi.fn(async () => {})
-export const unsubscribe = vi.fn()
+export const unsubscribe: Mock<() => void> = vi.fn()
 export const resolveSource = vi.fn(
   async (request: PluginMarkdownSourceRequest): Promise<PluginMarkdownSourceResult> => ({
     status: 'resolved',
