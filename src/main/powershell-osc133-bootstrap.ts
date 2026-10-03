@@ -103,6 +103,20 @@ export function getPowerShellOsc133Bootstrap(): string {
   return POWERSHELL_OSC133_BOOTSTRAP
 }
 
+// Why: a startup command embedded in -EncodedCommand runs before the first
+// prompt, so the prompt hook never sees it start and the first prompt skips
+// D. Mark it like a typed command — C now, D from the next prompt — so command
+// boundaries (agent exit, Quick Command link retirement) match bash/zsh.
+const POWERSHELL_EMBEDDED_STARTUP_COMMAND_MARK = `if ((Test-Path variable:global:__OrcaOsc133State) -and
+    $null -ne $Global:__OrcaOsc133State.OriginalPrompt) {
+    $Global:__OrcaOsc133State.HasSeenPrompt = $true
+    [Console]::Write("$($Global:__OrcaOsc133State.Esc)]133;C$($Global:__OrcaOsc133State.Bel)")
+}`
+
+export function getPowerShellEmbeddedStartupCommandMark(): string {
+  return POWERSHELL_EMBEDDED_STARTUP_COMMAND_MARK
+}
+
 export function isPowerShellExecutableName(shellName: string): boolean {
   const normalized = shellName.toLowerCase()
   return (

@@ -63,6 +63,26 @@ const sleepingAgentLaunchEnvSchema = z.preprocess(
   z.record(z.string(), z.string())
 )
 
+// Why: the persisted Quick Command id/label that launched the tab (a
+// terminal-command wrapper like `ccr muse --resume`), so restore can re-run
+// the same user command instead of the stock agent CLI. Tolerant by design:
+// a weird persisted value (control chars from a user-typed label) drops just
+// the ref, never the record — hydration drops a whole record on any field
+// failure, which would cost the resume handle entirely.
+const quickCommandRefSchema = z
+  .unknown()
+  .transform((value) => {
+    if (typeof value !== 'string') {
+      return undefined
+    }
+    const trimmed = value.trim()
+    if (trimmed.length === 0 || trimmed.length > 80 || hasUnsafeLaunchEnvChars(trimmed)) {
+      return undefined
+    }
+    return trimmed
+  })
+  .optional()
+
 const sleepingAgentLaunchConfigBaseSchema = z.object({
   agentCommand: z.string().optional(),
   agentArgs: z.string(),
@@ -75,7 +95,9 @@ const sleepingAgentLaunchConfigBaseSchema = z.object({
     .min(1)
     .max(32 * 1024)
     .refine((value) => !hasUnsafeLaunchEnvChars(value))
-    .optional()
+    .optional(),
+  quickCommandId: quickCommandRefSchema,
+  quickCommandLabel: quickCommandRefSchema
 })
 
 export const sleepingAgentLaunchConfigSchema = z.preprocess((raw) => {
@@ -101,6 +123,8 @@ const sleepingAgentSessionRecordSchema = z
     mainAgent: z.unknown().transform(normalizeMainAgentStatusField).optional(),
     connectionId: z.string().nullable().optional(),
     launchConfig: sleepingAgentLaunchConfigSchema.optional(),
+    quickCommandId: quickCommandRefSchema,
+    quickCommandLabel: quickCommandRefSchema,
     origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),
     restoreOnTabOpenOnly: z.boolean().optional()
   })

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { buildWslInteractiveLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import { resolveSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
+import { getPowerShellEmbeddedStartupCommandMark } from '../powershell-osc133-bootstrap'
 // Why resolved rather than hardcoded: the wrapper tree is content-addressed.
 import { getShellReadyWrapperRoot } from './local-pty-shell-ready-wrapper-root'
 
@@ -201,6 +202,29 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(command).toContain('function Global:prompt')
     expect(command).toContain(expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'"))
     expect(command.trimEnd().endsWith("& 'codex' '--no-alt-screen'")).toBe(true)
+  })
+
+  it('marks an embedded startup command so its exit reports OSC 133 D', () => {
+    const embedded = decodePowerShellCommand(
+      resolveWindowsShellLaunchArgs(
+        'powershell.exe',
+        'C:\\Users\\alice',
+        'C:\\Users\\alice',
+        undefined,
+        'ccr muse --resume'
+      )
+    )
+    const markIndex = embedded.indexOf(getPowerShellEmbeddedStartupCommandMark())
+    expect(markIndex).toBeGreaterThan(-1)
+    // Why ordered: the mark must run after the bootstrap installs the prompt
+    // hook and right before the command, so the first prompt emits its D.
+    expect(markIndex).toBeGreaterThan(embedded.indexOf('function Global:prompt'))
+    expect(embedded.indexOf('\nccr muse --resume')).toBeGreaterThan(markIndex)
+
+    const bootstrapOnly = decodePowerShellCommand(
+      resolveWindowsShellLaunchArgs('powershell.exe', 'C:\\Users\\alice', 'C:\\Users\\alice')
+    )
+    expect(bootstrapOnly).not.toContain(getPowerShellEmbeddedStartupCommandMark())
   })
 
   it('preserves complex PowerShell startup command text through EncodedCommand', () => {
