@@ -5,6 +5,7 @@ import {
   ORCA_IMAGE_PROTOCOL_VALUE
 } from '../../shared/terminal-image-protocol'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
+import { removeInheritedFigtermSessionEnv } from '../pty/figterm-session-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
 import { stripPiProcessOwnerEnv } from '../pty/pi-process-owner-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
@@ -40,6 +41,7 @@ export function buildLocalPtySpawnEnvironment(args: {
   stripPiProcessOwnerEnv(spawnEnv)
   removeAppImageRuntimeEnv(spawnEnv)
   removeInheritedNoColor(spawnEnv)
+  removeInheritedFigtermSessionEnv(spawnEnv)
   for (const key of spawn.envToDelete ?? []) {
     delete spawnEnv[key]
   }
