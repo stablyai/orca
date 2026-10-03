@@ -68,6 +68,22 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
             <Text style={styles.filterRowText}>Hide sleeping</Text>
             {state.filters.hideSleeping && <Check size={14} color={colors.textPrimary} />}
           </Pressable>
+          {state.filters.hideSleeping && (
+            <Pressable
+              style={styles.filterChildRow}
+              onPress={settings.toggleAlwaysShowDefaultBranch}
+              accessibilityLabel="Keep the default branch visible while hiding sleeping workspaces"
+              accessibilityRole="checkbox"
+              accessibilityState={{
+                checked: state.filters.alwaysShowDefaultBranch !== false
+              }}
+            >
+              <Text style={styles.filterChildRowText}>Except default branch</Text>
+              {state.filters.alwaysShowDefaultBranch !== false && (
+                <Check size={14} color={colors.textPrimary} />
+              )}
+            </Pressable>
+          )}
           <View style={styles.filterSeparator} />
           <Pressable style={styles.filterRow} onPress={settings.toggleHideDefaultBranch}>
             <Text style={styles.filterRowText}>Hide default branch</Text>

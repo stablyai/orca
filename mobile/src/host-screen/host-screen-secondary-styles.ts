@@ -83,6 +83,20 @@ export const hostScreenSecondaryStyles = StyleSheet.create({
     fontSize: typography.bodySize,
     color: colors.textPrimary
   },
+  // Why: desktop "Except default branch" is an indented, muted child of Hide sleeping.
+  filterChildRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingLeft: spacing.md + 2 + spacing.lg,
+    paddingRight: spacing.md + 2,
+    gap: spacing.sm
+  },
+  filterChildRowText: {
+    flex: 1,
+    fontSize: typography.bodySize,
+    color: colors.textMuted
+  },
   filterSeparator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
