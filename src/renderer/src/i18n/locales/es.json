@@ -8867,7 +8867,13 @@
             "72539aede4": "sistema",
             "51ae2183e1": "escritorio",
             "0534c76311": "Interruptor maestro para notificaciones de escritorio de Orca.",
-            "4a210b2f72": "Habilitar notificaciones"
+            "4a210b2f72": "Habilitar notificaciones",
+            "machines": "Máquinas",
+            "machinesDescription": "Elige qué máquinas pueden mostrar notificaciones en este equipo, como máquinas SSH o servidores vinculados.",
+            "host": "host",
+            "remote": "remoto",
+            "ssh": "ssh",
+            "mute": "silenciar"
           }
         },
         "orchestration": {
@@ -10511,6 +10517,11 @@
           "usageDescription": "Cursor factura dos cuotas que se restablecen con tu ciclo de facturación, más gasto bajo demanda cuando se agotan.",
           "usageLabel": "Uso",
           "usageTitle": "Uso mensual del plan"
+        },
+        "NotificationHostToggles": {
+          "offCount": "{{count}} desactivadas",
+          "machines": "Máquinas",
+          "machinesDescription": "Elige qué máquinas pueden mostrar notificaciones en este equipo. El interruptor de un servidor vinculado también controla el trabajo al que se accede a través de él."
         }
       },
       "right": {

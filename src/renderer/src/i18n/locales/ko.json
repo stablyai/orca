@@ -10035,7 +10035,13 @@
             "72539aede4": "시스템",
             "51ae2183e1": "데스크탑",
             "0534c76311": "Orca 데스크톱 알림용 마스터 스위치입니다.",
-            "4a210b2f72": "알림 활성화"
+            "4a210b2f72": "알림 활성화",
+            "machines": "머신",
+            "machinesDescription": "이 컴퓨터에 알림을 표시할 수 있는 컴퓨터를 선택합니다. SSH 컴퓨터나 페어링된 서버 등이 해당됩니다.",
+            "host": "호스트",
+            "remote": "원격",
+            "ssh": "ssh",
+            "mute": "음소거"
           }
         },
         "orchestration": {
@@ -12066,6 +12072,11 @@
           "usageDescription": "Cursor는 요금 주기에 따라 초기화되는 두 가지 풀과, 소진 후에 발생하는 주문형 지출로 과금합니다.",
           "usageLabel": "사용량",
           "usageTitle": "월간 플랜 사용량"
+        },
+        "NotificationHostToggles": {
+          "offCount": "{{count}}대 꺼짐",
+          "machines": "머신",
+          "machinesDescription": "이 컴퓨터에 알림을 표시할 수 있는 컴퓨터를 선택합니다. 페어링된 서버의 스위치는 해당 서버를 통해 수행하는 작업에도 적용됩니다."
         }
       },
       "right": {

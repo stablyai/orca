@@ -10315,7 +10315,13 @@
             "72539aede4": "system",
             "51ae2183e1": "desktop",
             "0534c76311": "Master switch for Orca desktop notifications.",
-            "4a210b2f72": "Enable Notifications"
+            "4a210b2f72": "Enable Notifications",
+            "machines": "Machines",
+            "machinesDescription": "Choose which machines can show notifications on this computer, such as SSH machines or paired servers.",
+            "host": "host",
+            "remote": "remote",
+            "ssh": "ssh",
+            "mute": "mute"
           }
         },
         "orchestration": {
@@ -12331,6 +12337,11 @@
           "hostOnly": "Change the plan site and API key in the desktop app on the computer running Orca.",
           "detailsUnavailable": "Plan credential details are only readable on the computer running Orca.",
           "siteUnavailable": "Host plan site unavailable"
+        },
+        "NotificationHostToggles": {
+          "offCount": "{{count}} off",
+          "machines": "Machines",
+          "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it."
         }
       },
       "right": {

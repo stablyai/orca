@@ -10047,7 +10047,13 @@
             "72539aede4": "系统",
             "51ae2183e1": "桌面",
             "0534c76311": "Orca 桌面通知的主开关。",
-            "4a210b2f72": "启用通知"
+            "4a210b2f72": "启用通知",
+            "machines": "机器",
+            "machinesDescription": "选择哪些机器可以在此电脑上显示通知，例如 SSH 机器或已配对的服务器。",
+            "host": "主机",
+            "remote": "远程",
+            "ssh": "ssh",
+            "mute": "静音"
           }
         },
         "orchestration": {
@@ -12118,6 +12124,11 @@
           "usageDescription": "已关联 Coding Plan 的实时配额窗口，随状态栏用量周期刷新。",
           "planLevel": "套餐：{{value0}}",
           "hostOnly": "请在运行 Orca 的电脑上的桌面应用中更改套餐站点和 API 密钥。"
+        },
+        "NotificationHostToggles": {
+          "offCount": "{{count}} 台已关闭",
+          "machines": "机器",
+          "machinesDescription": "选择哪些机器可以在此电脑上显示通知。已配对服务器的开关也控制通过该服务器开展的工作。"
         }
       },
       "right": {

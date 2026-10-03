@@ -80,6 +80,10 @@ export function createNotificationDeliveryService(
       }
 
       const settings = deps.readNotificationSettings()
+      const hostMuted =
+        request.notificationSourceId !== undefined &&
+        settings.mutedNotificationSourceIds.includes(request.notificationSourceId)
+      // Machine mutes leave mobile eligibility and its cooldown unchanged.
       const desktopAllowed =
         settings.enabled &&
         (request.source !== 'agent-task-complete' || settings.agentTaskComplete) &&
@@ -118,8 +122,11 @@ export function createNotificationDeliveryService(
         }
       }
 
-      if (!desktopAllowed) {
-        return { delivered: false, reason: settings.enabled ? 'source-disabled' : 'disabled' }
+      if (!desktopAllowed || hostMuted) {
+        return {
+          delivered: false,
+          reason: !settings.enabled ? 'disabled' : hostMuted ? 'host-muted' : 'source-disabled'
+        }
       }
 
       const browserWindow = deps.findActiveWindow()
