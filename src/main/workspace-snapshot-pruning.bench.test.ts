@@ -102,7 +102,7 @@ function makeCandidate(index: number): WorkspaceCleanupCandidate {
       newestDiffCommentAt: null,
       retainedDoneAgentCount: 0
     },
-    git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: 0 },
+    git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, merged: null, checkedAt: 0 },
     fingerprint: `fingerprint-${index}`
   }
 }
