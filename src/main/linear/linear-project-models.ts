@@ -227,6 +227,13 @@ export function mapIssueForWorkspace(
       name: issue.team?.name ?? '',
       key: issue.team?.key ?? ''
     },
+    project: issue.project
+      ? {
+          id: issue.project.id,
+          name: issue.project.name,
+          color: issue.project.color ?? undefined
+        }
+      : undefined,
     labels: labelNodes.map((label) => label.name),
     labelIds: issue.labelIds ?? labelNodes.map((label) => label.id),
     assignee: mapUser(issue.assignee),

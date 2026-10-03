@@ -4,6 +4,7 @@ import { findLinearIssueWorkspaceAttachmentInIndex } from '@/lib/linear-issue-wo
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { cn } from '@/lib/utils'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
+import { LinearIssueProjectLabel } from '@/components/linear-issue-project-label'
 import { LinearStateCell } from '../../task-page-linear-issue-model'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -121,8 +122,21 @@ export function TaskPageLinearIssueTable({
                     <span className="truncate">{attachedWorkspaceLabel}</span>
                   </span>
                 ) : null}
+                {effectiveLinearDisplayProperties.has('project') ? (
+                  <LinearIssueProjectLabel
+                    project={issue.project}
+                    className="max-w-[12rem] text-[11px] lg:!hidden"
+                  />
+                ) : null}
               </div>
             </div>
+
+            {effectiveLinearDisplayProperties.has('project') ? (
+              <LinearIssueProjectLabel
+                project={issue.project}
+                className="text-[12px] max-lg:!hidden"
+              />
+            ) : null}
 
             {effectiveLinearDisplayProperties.has('labels') ? (
               <div className="flex min-w-0 items-center gap-1 max-lg:!hidden">

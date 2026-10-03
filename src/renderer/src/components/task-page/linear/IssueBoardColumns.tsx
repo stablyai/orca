@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 import { findLinearIssueWorkspaceAttachmentInIndex } from '@/lib/linear-issue-workspace-attachment'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
+import { LinearIssueProjectLabel } from '@/components/linear-issue-project-label'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -188,6 +189,12 @@ export function TaskPageLinearIssueBoardColumns({
                     ) : null}
                     {effectiveLinearDisplayProperties.has('team') ? (
                       <span className="truncate">{teamLabel}</span>
+                    ) : null}
+                    {effectiveLinearDisplayProperties.has('project') ? (
+                      <LinearIssueProjectLabel
+                        project={issue.project}
+                        className="max-w-full text-[11px]"
+                      />
                     ) : null}
                     {effectiveLinearDisplayProperties.has('updated') ? (
                       <span>{formatRelativeTime(issue.updatedAt)}</span>

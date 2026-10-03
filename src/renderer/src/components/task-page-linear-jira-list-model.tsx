@@ -151,6 +151,9 @@ export function getLinearIssueGridTemplate(
   visibleProperties: ReadonlySet<LinearDisplayProperty>
 ): string {
   const columns = ['96px', 'minmax(240px,1.55fr)']
+  if (visibleProperties.has('project')) {
+    columns.push('minmax(140px,0.75fr)')
+  }
   if (visibleProperties.has('labels')) {
     columns.push('minmax(168px,0.9fr)')
   }

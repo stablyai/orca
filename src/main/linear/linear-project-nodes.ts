@@ -92,6 +92,11 @@ export type LinearIssueNode = {
     name?: string | null
     key?: string | null
   } | null
+  project?: {
+    id: string
+    name: string
+    color?: string | null
+  } | null
   assignee?: LinearUserNode | null
   labels?: LinearConnection<{ id: string; name: string }> | null
 }

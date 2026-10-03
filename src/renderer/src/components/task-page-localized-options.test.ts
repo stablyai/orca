@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { i18n } from '@/i18n/i18n'
 import {
+  DEFAULT_LINEAR_DISPLAY_PROPERTIES,
   getGitHubModeButtons,
   getGitHubTaskKindPresets,
+  getLinearDisplayProperties,
   getLinearPriorityLabel
 } from './task-page-localized-options'
 
@@ -42,6 +44,17 @@ describe('task-page-localized-options', () => {
       'PRs',
       'Projects'
     ])
+  })
+
+  it('refreshes the default-visible Linear Project property when the UI language changes', async () => {
+    expect(DEFAULT_LINEAR_DISPLAY_PROPERTIES).toContain('project')
+    expect(getLinearDisplayProperties()).toContainEqual({ id: 'project', label: 'Project' })
+
+    await i18n.changeLanguage('ko')
+
+    expect(getLinearDisplayProperties()).toContainEqual({ id: 'project', label: '프로젝트' })
+
+    await i18n.changeLanguage('en')
   })
 
   it('refreshes Linear priority labels when the UI language changes', async () => {
