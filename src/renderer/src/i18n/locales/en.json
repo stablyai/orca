@@ -4183,6 +4183,13 @@
             "resumingAriaOne": "Resuming 1 chat. Click to open details.",
             "resumingAria": "Resuming {{value0}} chats. Click to open details.",
             "resumingTooltip": "Restoring interrupted chats and asking them to carry on…"
+          },
+          "CopilotStatusSegment": {
+            "badge": "Copilot",
+            "signedInAs": "GitHub Copilot",
+            "signIn": "Click to sign in to GitHub Copilot",
+            "deviceCode": "Copilot sign-in code {{code}} copied — paste it in the browser.",
+            "signInFailed": "Copilot sign-in failed"
           }
         }
       },

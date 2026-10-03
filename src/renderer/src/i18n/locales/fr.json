@@ -4097,6 +4097,13 @@
             "resumingAriaOne": "Reprise d’1 conversation. Cliquez pour voir les détails.",
             "resumingAria": "Reprise de {{value0}} conversations. Cliquez pour voir les détails.",
             "resumingTooltip": "Restauration des conversations interrompues et demande de poursuite…"
+          },
+          "CopilotStatusSegment": {
+            "badge": "Copilot",
+            "signedInAs": "GitHub Copilot",
+            "signIn": "Cliquez pour vous connecter à GitHub Copilot",
+            "deviceCode": "Code de connexion Copilot {{code}} copié : collez-le dans le navigateur.",
+            "signInFailed": "Échec de la connexion à Copilot"
           }
         }
       },

@@ -3994,6 +3994,13 @@
             "resumingAriaOne": "1 件のチャットを再開中。詳細はクリックしてください。",
             "resumingAria": "{{value0}} 件のチャットを再開中。詳細はクリックしてください。",
             "resumingTooltip": "中断されたチャットを復元し、続行を依頼しています…"
+          },
+          "CopilotStatusSegment": {
+            "badge": "Copilot",
+            "signedInAs": "GitHub Copilot",
+            "signIn": "クリックして GitHub Copilot にサインイン",
+            "deviceCode": "Copilot のサインインコード {{code}} をコピーしました。ブラウザーに貼り付けてください。",
+            "signInFailed": "Copilot へのサインインに失敗しました"
           }
         }
       },
