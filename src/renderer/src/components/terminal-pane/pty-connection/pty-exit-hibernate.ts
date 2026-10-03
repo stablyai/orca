@@ -11,6 +11,7 @@ import { isProvenProcessExit } from '../../../../../shared/terminal-exit-cause'
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-main-agent-verdict'
+import { exitsShellOnSetupSuccess } from '../../../../../shared/setup-runner-command'
 import {
   createGitBashConsoleCapacityDetector,
   type GitBashConsoleCapacityDetector
@@ -316,7 +317,14 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       // for this ptyId — reattach/coldRestore skip it) that the user never typed
       // into, so a reattached-dead session or an explicit `exit` still tears
       // down as before.
-      if (session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt)) {
+      // A setup that exited its shell on success asked to close, so the guard does not apply.
+      const setupExitedOnSuccess =
+        exitCode === 0 && exitsShellOnSetupSuccess(processExitState.startup?.command)
+      if (
+        session.spawnedFreshPtyId === ptyId &&
+        !Number.isFinite(session.lastTerminalInputAt) &&
+        !setupExitedOnSuccess
+      ) {
         return
       }
       session.deps.onPtyExitRef.current(ptyId, exitCode)
