@@ -3,6 +3,7 @@ import { TOGGLE_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceB
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/visible-worktrees'
+import { SIDEBAR_AGENT_INDEX_JUMP_EVENT } from '@/components/sidebar/use-sidebar-agent-index-shortcut'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { deleteHoveredWorkspaceImmediately } from '@/components/sidebar/hovered-workspace-delete'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
@@ -88,6 +89,10 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
         return
       }
       if (store.activeView !== 'terminal') {
+        return
+      }
+      if (store.sidebarOpen && store.sidebarBody === 'agents') {
+        window.dispatchEvent(new CustomEvent(SIDEBAR_AGENT_INDEX_JUMP_EVENT, { detail: index }))
         return
       }
       const visibleTargets = getVisibleWorktreeShortcutTargets()
