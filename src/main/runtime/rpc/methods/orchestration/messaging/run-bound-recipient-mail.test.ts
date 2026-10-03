@@ -81,6 +81,25 @@ describe('mail for a lead whose pane coordinates its own Run', () => {
     expect(await leadInbox()).toMatchObject({ messages: [{ subject: 'Follow-up for the lead' }] })
   })
 
+  it('keeps a Dispatch owned by the root Run addressable after its assignee creates a Run', async () => {
+    setup()
+    const leadRun = bindLeadRun()
+
+    const result = await call('orchestration.send', {
+      from: 'term_coord',
+      to: `dispatch:${dispatch.id}`,
+      run: rootRun.id,
+      subject: 'Explicit root follow-up'
+    })
+
+    expect(result).toMatchObject({
+      message: { to_handle: `run:${leadRun.id}`, run_id: leadRun.id },
+      warnings: [{ code: 'recipient_run_bound_redirect' }]
+    })
+    expect(db.getDispatchContextById(dispatch.id)?.run_id).toBe(rootRun.id)
+    expect(await leadInbox()).toMatchObject({ messages: [{ subject: 'Explicit root follow-up' }] })
+  })
+
   it('still reads dispatch mail that arrived before the pane bound its own Run', async () => {
     setup()
     db.insertMessage({

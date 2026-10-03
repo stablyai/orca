@@ -225,19 +225,19 @@ describe('Run-bound lead mailbox boundaries', () => {
     expect(state.db.hasOutstandingMailboxDelivery(`dispatch:${dispatch.id}`)).toBe(false)
   })
 
-  it('refuses an explicit sender Run that would silently redirect into another Run', async () => {
+  it('refuses to address a parent Dispatch from the assignee Run', async () => {
     await expect(
       h.call(
         'orchestration.send',
         {
           from: 'term_coord',
           to: `dispatch:${dispatch.id}`,
-          run: dispatch.run_id,
+          run: leadRun.id,
           subject: 'wrong scope'
         },
         state.ctx
       )
-    ).rejects.toMatchObject({ code: 'recipient_run_mismatch' })
+    ).rejects.toMatchObject({ code: 'dispatch_run_mismatch' })
     expect(state.db.getInbox()).toEqual([])
   })
 
