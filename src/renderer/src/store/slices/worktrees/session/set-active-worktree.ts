@@ -79,6 +79,9 @@ export function createSetActiveWorktree(
         }
       }
 
+      const nextActiveWorkspaceKey = isWorkspaceKey(worktreeId)
+        ? worktreeId
+        : worktreeWorkspaceKey(worktreeId)
       const worktree = findKnownWorktreeById(s, worktreeId, executionHostId)
       shouldClearUnread = Boolean(worktree?.isUnread)
       const {
@@ -158,6 +161,7 @@ export function createSetActiveWorktree(
           : { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType }
       const hasStateChange =
         s.activeWorktreeId !== worktreeId ||
+        s.activeWorkspaceKey !== nextActiveWorkspaceKey ||
         s.activeWorkspaceExecutionHostId !== (executionHostId ?? null) ||
         // Why: a pending-creation panel can show over the prior worktree; a non-null activePendingCreationId counts as a change.
         s.activePendingCreationId !== null ||
@@ -184,9 +188,7 @@ export function createSetActiveWorktree(
         ...reconciliation?.patch,
         activeRepoId: nextActiveRepoId,
         activeWorktreeId: worktreeId,
-        activeWorkspaceKey: isWorkspaceKey(worktreeId)
-          ? worktreeId
-          : worktreeWorkspaceKey(worktreeId),
+        activeWorkspaceKey: nextActiveWorkspaceKey,
         activeWorkspaceExecutionHostId: executionHostId ?? null,
         activePendingCreationId: null,
         activeFileId,

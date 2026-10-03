@@ -112,6 +112,24 @@ describe('setActiveWorktree focus handling', () => {
       }
     }
   })
+
+  it('repairs a stale workspace key when reactivating the current worktree', () => {
+    const store = createTestStore()
+    const worktree = makeWorktree({ id: 'repo1::/path/current', repoId: 'repo1' })
+    store.setState({
+      worktreesByRepo: { repo1: [worktree] },
+      activeWorktreeId: worktree.id,
+      activeWorkspaceKey: 'worktree:repo1::/path/stale',
+      activeWorkspaceExecutionHostId: null,
+      activeTabTypeByWorktree: { [worktree.id]: 'terminal' },
+      rightSidebarExplorerView: 'files',
+      everActivatedWorktreeIds: new Set([worktree.id])
+    } as unknown as Partial<AppState>)
+
+    store.getState().setActiveWorktree(worktree.id)
+
+    expect(store.getState().activeWorkspaceKey).toBe(worktreeWorkspaceKey(worktree.id))
+  })
 })
 
 describe('markWorktreeVisited', () => {
