@@ -52,7 +52,7 @@ describe('DaemonPtyAdapter startup delivery', () => {
       await vi.advanceTimersByTimeAsync(299)
       expect(lastSubprocess.write).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(1)
-      expect(lastSubprocess.write).toHaveBeenCalledExactlyOnceWith('codex\n')
+      expect(lastSubprocess.write).toHaveBeenCalledExactlyOnceWith('codex\r')
       expect(lastSpawnOpts).not.toEqual(
         expect.objectContaining({ startupCommandDelivery: 'shell-ready' })
       )
@@ -82,7 +82,7 @@ describe('DaemonPtyAdapter startup delivery', () => {
       )
       lastSubprocess._simulateData('\x1b]777;orca-shell-ready\x07\r\nuser@host $ ')
       await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)
-      expect(lastSubprocess.write).toHaveBeenCalledExactlyOnceWith('codex\n')
+      expect(lastSubprocess.write).toHaveBeenCalledExactlyOnceWith('codex\r')
     }
   )
 
@@ -102,6 +102,6 @@ describe('DaemonPtyAdapter startup delivery', () => {
     lastSubprocess._simulateData('\r\nuser@host $ ')
 
     await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)
-    expect(lastSubprocess.write).toHaveBeenCalledExactlyOnceWith(`${startup.command}\n`)
+    expect(lastSubprocess.write).toHaveBeenCalledExactlyOnceWith(`${startup.command}\r`)
   })
 })

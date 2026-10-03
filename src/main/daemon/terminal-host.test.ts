@@ -189,9 +189,7 @@ describe('TerminalHost', () => {
 
       lastSubprocess._onDataCb?.('\r\nuser@host $ ')
       await new Promise((r) => setTimeout(r, 40))
-      expect(lastSubprocess.write).toHaveBeenCalledWith(
-        process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
-      )
+      expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\r')
     })
 
     it('uses the short daemon settle path when marker and prompt arrive together', async () => {
@@ -211,9 +209,7 @@ describe('TerminalHost', () => {
         expect(lastSubprocess.write).not.toHaveBeenCalled()
 
         vi.advanceTimersByTime(1)
-        expect(lastSubprocess.write).toHaveBeenCalledWith(
-          process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
-        )
+        expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\r')
       } finally {
         vi.useRealTimers()
       }
@@ -242,9 +238,7 @@ describe('TerminalHost', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
-      expect(lastSubprocess.write).toHaveBeenCalledWith(
-        process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
-      )
+      expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\r')
     })
 
     it('does not bracketed-paste-wrap multiline commands for a fallback shell without paste mode', async () => {
@@ -272,7 +266,8 @@ describe('TerminalHost', () => {
 
       const written = (lastSubprocess.write as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]
       expect(written).not.toContain('\x1b[200~')
-      expect(written).toContain('line one\nline two')
+      // Why CR between the lines: without bracketed paste each break submits its own line.
+      expect(written).toContain('line one\rline two')
     })
 
     it('keeps the shell-ready barrier when the spawned shell supports the marker', async () => {

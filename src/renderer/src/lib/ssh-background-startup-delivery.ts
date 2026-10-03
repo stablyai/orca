@@ -139,12 +139,10 @@ export function createSshBackgroundStartupDelivery(
       // PTYs; hidden automation tabs still submit the command themselves.
       // Why bracketed paste: multiline prompts are pasted literally only when we
       // synchronized on the Orca shell-ready marker — that is the bash/zsh overlay
-      // with bracketed-paste mode armed. Submit with CR since the relay drives a
-      // remote shell.
+      // with bracketed-paste mode armed.
       options.write(
         ptyId,
         buildStartupCommandSubmission(command, {
-          submit: '\r',
           bracketedPasteSafe: markerObserved
         })
       )
