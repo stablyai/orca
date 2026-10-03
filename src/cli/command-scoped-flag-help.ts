@@ -4,6 +4,12 @@ const FILE_OPEN_FOCUS_HELP =
 
 /** Per-command flag help, kept out of the shared help chain it would crowd. */
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'account reset-codex-limits': {
+    account: '--account <id>         Exact managed Codex account id (from account list --json)',
+    out: '--out <new-file>       Save a preview request without spending a reset credit',
+    'request-file': '--request-file <file>  Read the unchanged request saved by a preview',
+    confirm: '--confirm              Authorize spending one reset credit for the saved scope'
+  },
   'worktree create': {
     pr: '--pr <number>          Linked GitHub pull request number',
     'gitlab-issue': '--gitlab-issue <number|url> Linked GitLab issue in the source project',

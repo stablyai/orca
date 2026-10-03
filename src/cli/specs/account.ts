@@ -7,6 +7,25 @@ import { GLOBAL_FLAGS, type CommandSpec } from '../args'
 // way to manage Claude and Codex accounts.
 export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['account', 'reset-codex-limits'],
+    summary: 'Preview and confirm spending one Codex rate-limit reset credit',
+    usage:
+      'orca account reset-codex-limits (--account <id> --out <new-file> | --request-file <file> --confirm) [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'account', 'out', 'request-file', 'confirm'],
+    notes: [
+      'Preview never resets usage. It saves the account, runtime, offer revision, and a unique attempt key in a new JSON file; existing files are not overwritten.',
+      'Only the managed account already selected for the active Codex usage runtime is eligible. This command never switches accounts or runtimes.',
+      'Confirmation consumes one earned reset credit to reset eligible server-side usage windows; it does not clear local statistics or grant unlimited quota.',
+      'After a lost response, retry with the same unchanged request file. A stale scope is rejected before contacting the provider.',
+      'Run on the account-owning Orca host. --environment and --pairing-code are rejected.'
+    ],
+    examples: [
+      'orca account list --json',
+      'orca account reset-codex-limits --account <id> --out reset-attempt.json',
+      'orca account reset-codex-limits --request-file reset-attempt.json --confirm --json'
+    ]
+  },
+  {
     path: ['account', 'add'],
     summary: 'Add a managed Claude or Codex account by signing in on this Orca host',
     usage: 'orca account add [--agent claude|codex] [--json]',

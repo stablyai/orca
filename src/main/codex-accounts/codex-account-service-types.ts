@@ -5,6 +5,8 @@ import type {
 } from '../../shared/managed-account-types'
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/rate-limit-types'
+import type { CodexResetCreditRejectedBeforeProviderReason } from '../../shared/runtime-account-types'
+export type { CodexResetCreditRejectedBeforeProviderReason } from '../../shared/runtime-account-types'
 
 export type CodexAccountAddTarget = {
   runtime?: 'host' | 'wsl'
@@ -30,14 +32,6 @@ export type ManagedCodexHomeLocation = {
   wslDistro: string | null
   wslLinuxHomePath: string | null
 }
-
-export type CodexResetCreditRejectedBeforeProviderReason =
-  | 'targetChanged'
-  | 'accountChanged'
-  | 'accountRevisionChanged'
-  | 'accountRuntimeChanged'
-  | 'offerUnavailable'
-  | 'offerChanged'
 
 export type CodexResetCreditConsumedResult = {
   outcome: CodexRateLimitResetOutcome

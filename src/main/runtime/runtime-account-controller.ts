@@ -1,42 +1,29 @@
 import type { ClaudeAccountService } from '../claude-accounts/service'
-import type {
-  CodexAccountService,
-  CodexResetCreditRejectedBeforeProviderReason
-} from '../codex-accounts/service'
+import type { CodexAccountService } from '../codex-accounts/service'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { RateLimitService } from '../rate-limits/service'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../shared/managed-account-types'
-import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+
+import type {
+  AccountsSnapshot,
+  CodexRateLimitResetRpcResult
+} from '../../shared/runtime-account-types'
 
 export type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
   codexAccounts: CodexAccountService
   rateLimits: RateLimitService
 }
-
-export type AccountsSnapshot = {
-  claude: ClaudeRateLimitAccountsState
-  codex: CodexRateLimitAccountsState
-  rateLimits: RateLimitState
-}
-
-export type CodexRateLimitResetRpcResult = {
-  scope: CodexResetCreditExpectedScope
-  snapshot: AccountsSnapshot
-} & (
-  | { outcome: CodexRateLimitResetOutcome }
-  | {
-      status: 'rejectedBeforeProvider'
-      retryDisposition: 'discardAttempt'
-      reason: CodexResetCreditRejectedBeforeProviderReason
-    }
-)
+export type {
+  AccountsSnapshot,
+  CodexRateLimitResetRpcResult
+} from '../../shared/runtime-account-types'
 
 export class RuntimeAccountController {
   private services: RuntimeAccountServices | null = null

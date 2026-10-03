@@ -22,6 +22,22 @@ Use `orca` when Orca's running editor/runtime is the source of truth. Use plain 
 
 Prefer `--json` for agent-driven calls. If the CLI is missing, say so explicitly instead of inspecting source files first.
 
+## Codex rate-limit reset credits
+
+`orca account list --json` reports managed account ids. To preview the GUI's reset
+action, run `orca account reset-codex-limits --account <id> --out <new-file>`.
+This saves a scoped JSON request and performs no reset. Review the account,
+runtime, and credit expenditure before running
+`orca account reset-codex-limits --request-file <file> --confirm --json`.
+Confirmation spends one earned credit to reset eligible server-side usage windows.
+Only the managed account already selected for the active usage runtime is supported;
+no accounts or runtimes are switched. Run on the account-owning host, not via
+`--environment` or `--pairing-code`. If a response is lost, retry with the same
+unchanged request file; never create a fresh attempt for an uncertain outcome.
+A `reset_scope_changed` error rejects the attempt before contacting the provider,
+so a new preview must be reviewed before confirming again. Do not confirm a reset
+unless the user has authorized spending a credit for that account.
+
 ## Full Handoffs
 
 A full handoff transfers ownership to another agent or worktree, then the original agent stops. Treat requests phrased as "hand off", "handoff", "handover", "give this to another agent", "give this to another worktree", "another agent", or "another worktree" as full handoffs unless the user explicitly asks to supervise, monitor, wait for results, track completion, coordinate a DAG, use decision gates, or manage ask/reply.

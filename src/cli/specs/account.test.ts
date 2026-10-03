@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ACCOUNT_COMMAND_SPECS } from './account'
-import { effectiveAllowedFlags } from '../args'
+import { effectiveAllowedFlags, parseArgs, validateCommandAndFlags } from '../args'
 import { formatCommandHelp } from '../help'
 
 function spec(path: string): (typeof ACCOUNT_COMMAND_SPECS)[number] {
@@ -13,6 +13,19 @@ function spec(path: string): (typeof ACCOUNT_COMMAND_SPECS)[number] {
 }
 
 describe('account command specs', () => {
+  it('parses confirmation as a boolean without consuming the request file flag', () => {
+    const parsed = parseArgs(
+      ['account', 'reset-codex-limits', '--confirm', '--request-file', 'attempt.json'],
+      ACCOUNT_COMMAND_SPECS.map((entry) => entry.path),
+      ACCOUNT_COMMAND_SPECS
+    )
+    validateCommandAndFlags(ACCOUNT_COMMAND_SPECS, parsed)
+    expect(parsed.flags.get('confirm')).toBe(true)
+    expect(parsed.flags.get('request-file')).toBe('attempt.json')
+    const help = formatCommandHelp(spec('account reset-codex-limits'))
+    expect(help).toContain('server-side usage windows')
+    expect(help).toContain('same unchanged request file')
+  })
   it('does not accept or advertise browser page targeting', () => {
     for (const entry of ACCOUNT_COMMAND_SPECS) {
       expect(effectiveAllowedFlags(entry)).not.toContain('page')

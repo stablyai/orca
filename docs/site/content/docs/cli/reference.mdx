@@ -331,6 +331,39 @@ orca account add --agent codex
 
 `account add` runs `claude login` / `codex login` in **this** terminal on the host, then registers the captured credentials with the local runtime. Codex uses device authorization so the browser can finish on another machine. Run these on the machine that owns the accounts — not through a client-only remote session.
 
+### Reset Codex limits with an earned credit
+
+The GUI's **Reset now** action spends one earned Codex reset credit to reset eligible
+server-side usage windows. It does not clear local statistics or grant unlimited quota.
+The CLI uses the same account service and reset protection:
+
+```bash
+orca account list --json
+# Copy the exact managed Codex account id from the JSON result.
+orca account reset-codex-limits --account <id> --out reset-attempt.json
+# Review the preview and file before authorizing the credit expenditure.
+orca account reset-codex-limits --request-file reset-attempt.json --confirm --json
+```
+
+The preview performs no reset and refuses to overwrite an existing request file.
+Only the managed account selected for the active Codex usage runtime is eligible;
+this includes an explicitly scoped WSL account when that distro is the active usage
+runtime. The command never switches accounts or runtimes and does not support the
+system-default account. If usage or credits are unavailable, refresh usage in Orca
+before generating the preview. The saved request contains account and offer revisions,
+not credentials. A change to the account, runtime, or offer causes the service to
+reject the request before contacting the provider.
+
+If a response is lost, retry the confirmation with the **same unchanged file**. Do
+not generate a fresh attempt: the saved key and scope let the existing service
+reconcile or replay the original attempt without spending another credit. A
+`reset_scope_changed` error is a pre-provider rejection; review a new preview before
+confirming again. The command preserves the distinct `reset`, `nothingToReset`,
+`noCredit`, and `alreadyRedeemed` outcomes in JSON output.
+
+Run on the machine that owns the accounts; `--environment` and `--pairing-code`
+are rejected. Older runtimes without scoped reset support are refused.
+
 ## Artifacts
 
 Publish HTML or Markdown through the signed-in Orca account. Viewing a public link does not require sign-in; create/list/update/delete do. **Publishing is off by default** — a human must enable **Settings → Artifacts → Allow publishing public artifact links** on the device. There is no CLI flag that grants the gate. `list`, `unshare`, and `delete` stay available so you can audit or revoke links after turning publishing off.
