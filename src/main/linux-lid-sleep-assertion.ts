@@ -1,6 +1,8 @@
 import { spawnProcess } from '../shared/child-process/run-process'
 
 export const LINUX_LID_SLEEP_ASSERTION_RETRY_MS = 30_000
+// Hosts without a usable logind (headless servers) fail every attempt, so back off.
+export const LINUX_LID_SLEEP_ASSERTION_MAX_RETRY_MS = 30 * 60_000
 
 type Logger = Pick<Console, 'debug' | 'warn'>
 
@@ -43,6 +45,8 @@ export class LinuxLidSleepAssertion {
   private readonly platform: NodeJS.Platform
   private readonly spawn: SystemdInhibitSpawn
   private child: SystemdInhibitProcess | null = null
+  private childStartedAt: number | null = null
+  private consecutiveFailures = 0
   private retryNotBefore: number | null = null
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   private systemdInhibitUnavailable = false
@@ -95,6 +99,7 @@ export class LinuxLidSleepAssertion {
     }
 
     this.child = child
+    this.childStartedAt = this.now()
     const onError: SystemdInhibitErrorListener = (error) => {
       this.handleChildFailure(
         child,
@@ -120,8 +125,8 @@ export class LinuxLidSleepAssertion {
     child.on('exit', onExit)
     child.on('close', onClose)
     child.stdin?.on('error', onError)
+    // Keep the failure streak: systemd-inhibit can still exit 1 right after a successful spawn.
     this.resetRetrySuppression()
-    this.resetFailureStreak()
   }
 
   stop(_reason: string): void {
@@ -132,6 +137,7 @@ export class LinuxLidSleepAssertion {
     }
     const child = this.child
     this.child = null
+    this.childStartedAt = null
     // Pipe and child errors can arrive after stop; close ends both event sources.
     this.intentionalStops.add(child)
     try {
@@ -167,7 +173,15 @@ export class LinuxLidSleepAssertion {
     }
     this.reportedFailures.add(child)
     if (this.child === child) {
+      if (
+        this.childStartedAt !== null &&
+        this.now() - this.childStartedAt >= LINUX_LID_SLEEP_ASSERTION_RETRY_MS
+      ) {
+        // The inhibitor was held, so this is a new failure rather than another retry.
+        this.resetFailureStreak()
+      }
       this.child = null
+      this.childStartedAt = null
     }
     this.handleFailure(failureKey, startReason, details, failureType)
   }
@@ -194,7 +208,13 @@ export class LinuxLidSleepAssertion {
       return
     }
     this.logFailure(failureKey, reason, details, failureType)
-    this.retryNotBefore = this.now() + LINUX_LID_SLEEP_ASSERTION_RETRY_MS
+    this.consecutiveFailures += 1
+    this.retryNotBefore =
+      this.now() +
+      Math.min(
+        LINUX_LID_SLEEP_ASSERTION_RETRY_MS * 2 ** (this.consecutiveFailures - 1),
+        LINUX_LID_SLEEP_ASSERTION_MAX_RETRY_MS
+      )
     this.scheduleRetry()
     this.onUnexpectedFailure('linux-lid-assertion-failure')
   }
@@ -222,6 +242,7 @@ export class LinuxLidSleepAssertion {
   private resetFailureStreak(): void {
     this.lastFailureKey = null
     this.warnedForLastFailure = false
+    this.consecutiveFailures = 0
   }
 
   private scheduleRetry(): void {
