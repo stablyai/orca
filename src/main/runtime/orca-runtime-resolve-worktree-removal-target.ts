@@ -7,12 +7,6 @@ import type {
 } from './runtime-worktree-selection'
 import { resolveRuntimeWorktreeRemovalTarget } from './runtime-worktree-removal-target'
 import type { RuntimeStore } from './runtime-store-contract'
-import { splitWorktreeId } from '../../shared/worktree/id'
-import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
-import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../worktree-removal-repo-owner'
-import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
-import { deleteWorktreeHistoryDir } from '../terminal-history-deletion'
-import { closeClientHostedBrowserPagesForWorktree } from './worktree-browser-client-page-close'
 import type {
   ForceDeleteWorktreeBranchResult,
   RemoveWorktreeResult
@@ -29,7 +23,10 @@ import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../shared/execution-host'
-import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
+import {
+  purgeRemovedWorktreeHostState,
+  removeRuntimeWorktreeMetadataAndHistory
+} from './worktree-removal-host-state-purge'
 import {
   resumeInterruptedWorktreeRemovals,
   retryFailedWorktreeRemoval,
@@ -117,80 +114,23 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
   }
 
   // Host state every removal path drops once Git has let go of the checkout.
+  // Resolves only after the Codex pretrust deletion landed, so a removal ack
+  // cannot precede the trust table purge.
   protected purgeRemovedWorktree(
     store: RuntimeStore,
     worktreeId: string,
     repoId: string,
     removalHostId?: ExecutionHostId
-  ): void {
-    this.clearOptimisticReconcileToken(worktreeId)
-    this.removeWorktreeMetadataAndHistory(store, worktreeId, removalHostId)
-    this.invalidateResolvedWorktreeCache()
-    this.invalidateWorktreeScanCacheForRepo(repoId)
-    invalidateAuthorizedRootsCache()
+  ): Promise<void> {
+    return purgeRemovedWorktreeHostState(this, store, worktreeId, repoId, removalHostId)
   }
 
   protected removeWorktreeMetadataAndHistory(
     store: RuntimeStore,
     worktreeId: string,
     hostId?: ExecutionHostId
-  ): void {
-    // Why: worktree IDs are path-derived and can be recreated, so removal must
-    // purge history and process-local caches before the ID points at new state.
-    const persistedHostId = store.getWorktreeMeta(worktreeId)?.hostId
-    const repoId = splitWorktreeId(worktreeId)?.repoId
-    const preservesSameIdOwner = Boolean(
-      hostId &&
-      ((persistedHostId && persistedHostId !== hostId) ||
-        (repoId && hasWorktreeRemovalRepoOwnerOnOtherHost(store, repoId, hostId)))
-    )
-    const acceptedRendererSnapshot = this.acceptedRendererMobileSnapshotByWorktree.get(worktreeId)
-    const storedSnapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    if (hostId) {
-      store.removeWorktreeMeta(worktreeId, hostId)
-    } else {
-      store.removeWorktreeMeta(worktreeId)
-    }
-    if (!preservesSameIdOwner) {
-      // A paired PTY can outlive the delete acknowledgement; it must not be
-      // rescued into a newly-created occupant of the same path-derived ID.
-      for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
-        const ptyWorktreeId = this.ptysById.get(ptyId)?.worktreeId
-        if (ptyWorktreeId && runtimeWorktreeIdsEqual(ptyWorktreeId, worktreeId)) {
-          this.pairedRendererSessionOwnedPtyIds.delete(ptyId)
-        }
-      }
-      const removedPublicationEpoch =
-        acceptedRendererSnapshot?.publicationEpoch ??
-        storedSnapshot?.publicationEpoch ??
-        this.rendererGeneration ??
-        undefined
-      this.removedMobileSessionWorktreeIds.set(
-        worktreeId,
-        removedPublicationEpoch ? { removedPublicationEpoch } : {}
-      )
-      this.mobileSessionTabsByWorktree.delete(worktreeId)
-      this.mobileSessionTabsAgentStatusHeartbeat.removeWorktree(worktreeId)
-      this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
-      this.cancelScheduledMobileSessionTabsChanged(worktreeId)
-      this.notifyMobileSessionTabsRemoved(worktreeId)
-      advertisedUrlWatcher.forgetWorktree(worktreeId)
-      deleteWorktreeHistoryDir(worktreeId)
-      this.closeHeadlessBrowserPagesForWorktree(worktreeId)
-      closeClientHostedBrowserPagesForWorktree(this, worktreeId)
-    }
-  }
-
-  // Why: headless offscreen browser pages are main-process BrowserWindows that
-  // outlive a worktree unless explicitly closed — removing a worktree without
-  // closing its open panes leaks the windows for the life of the serve process.
-  protected closeHeadlessBrowserPagesForWorktree(worktreeId: string): void {
-    if (!this.offscreenBrowserBackend || !this.agentBrowserBridge?.tabList) {
-      return
-    }
-    for (const tab of this.agentBrowserBridge.tabList(worktreeId).tabs) {
-      void this.offscreenBrowserBackend.closeTab(tab.browserPageId).catch(() => {})
-    }
+  ): Promise<void> {
+    return removeRuntimeWorktreeMetadataAndHistory(this, store, worktreeId, hostId)
   }
 
   async forceDeletePreservedBranch(

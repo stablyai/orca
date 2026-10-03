@@ -39,7 +39,7 @@ type InterruptedWorktreeRemovalHost = {
   /** A retry's teardown: terminals may have opened in the leftover since the failed delete. */
   stopPtys?: () => Promise<void>
   /** Drops the worktree's host state (metadata, history, caches), as every removal path does. */
-  purge: (record: WorktreeRemovalRecord) => void
+  purge: (record: WorktreeRemovalRecord) => void | Promise<void>
   onRemoved: (record: WorktreeRemovalRecord) => void
   publish: (repoId: string) => void
 }
@@ -72,7 +72,7 @@ export function interruptedLocalWorktreeRemovalJob(
         preserveBranchHead: (result, fallbackHead) =>
           host.preservedBranchCleanup.preserveHead(result, fallbackHead),
         // remember() clears the cleanup target when no branch was preserved.
-        finishRemoval: (result, _rememberBranch, fallbackHead) => {
+        finishRemoval: async (result, _rememberBranch, fallbackHead) => {
           host.preservedBranchCleanup.remember(
             record.worktreeId,
             undefined,
@@ -80,7 +80,7 @@ export function interruptedLocalWorktreeRemovalJob(
             fallbackHead,
             removedPushTarget
           )
-          host.purge(record)
+          await host.purge(record)
         }
       })
       host.onRemoved(record)
@@ -195,7 +195,9 @@ async function finishInterruptedLocalWorktreeRemoval(
     await gate.finish(removed)
   }
   await cleanupRemovedWorktreePushTarget(finishArgs)
-  args.finishRemoval(result, true, record.head)
+  // Awaited like the registered branch: the removal may only be reported
+  // after the purge — and the Codex pretrust deletion inside it — landed.
+  await args.finishRemoval(result, true, record.head)
   return result
 }
 

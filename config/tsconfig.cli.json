@@ -164,6 +164,7 @@
     "../src/main/codex/codex-trust-grant-host.ts",
     "../src/main/codex/codex-trust-grant-cooldown.ts",
     "../src/main/codex/codex-trust-grant-ledger.ts",
+    "../src/main/codex/codex-project-trust-ownership.ts",
     "../src/main/codex/codex-user-hook-trust-moves.ts",
     "../src/main/codex/codex-wsl-hook-install-plan.ts",
     "../src/main/codex/config-settings-baseline.ts",

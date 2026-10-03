@@ -8,6 +8,7 @@ import {
   upsertProjectTrustLevel,
   upsertProjectTrustLevelInContent
 } from './config-toml-trust'
+import { hasProjectTrustEntry, removeProjectTrustContent } from './config-toml-project-trust'
 import {
   createTrustConfigFixture,
   removeTrustConfigFixture
@@ -248,6 +249,127 @@ describe('upsertProjectTrustLevel', () => {
 
     expect(readFileSync(configPath, 'utf-8')).toBe(firstWrite)
     expect(existsSync(`${configPath}.bak`)).toBe(false)
+  })
+})
+
+describe('removeProjectTrustContent', () => {
+  const ORIGINAL = [
+    'model = "gpt-5.5"',
+    '',
+    '[projects."/tmp/codex-ws"]',
+    'trust_level = "trusted"',
+    '',
+    '[projects."/tmp/other"]',
+    'trust_level = "untrusted"',
+    '',
+    '[profiles.default]',
+    'sandbox_mode = "workspace-write"',
+    ''
+  ].join('\n')
+
+  it('removes the whole table and keeps sibling tables and top-level keys byte-identical', () => {
+    const updated = removeProjectTrustContent(ORIGINAL, '/tmp/codex-ws')
+
+    expect(updated).toBe(
+      [
+        'model = "gpt-5.5"',
+        '',
+        '[projects."/tmp/other"]',
+        'trust_level = "untrusted"',
+        '',
+        '[profiles.default]',
+        'sandbox_mode = "workspace-write"',
+        ''
+      ].join('\n')
+    )
+  })
+
+  it('removes every duplicate table for the path (#22592) and leaves one table alone', () => {
+    const duplicated = [
+      '[projects."/tmp/codex-ws"]',
+      'trust_level = "trusted"',
+      '',
+      '[projects."/tmp/codex-ws"]',
+      'trust_level = "untrusted"',
+      '',
+      '[projects."/tmp/other"]',
+      'trust_level = "trusted"',
+      ''
+    ].join('\n')
+
+    const updated = removeProjectTrustContent(duplicated, '/tmp/codex-ws')
+
+    expect(updated).toBe(['[projects."/tmp/other"]', 'trust_level = "trusted"', ''].join('\n'))
+  })
+
+  it('removes a table at the start of the file and one at the end', () => {
+    const updated = removeProjectTrustContent(
+      ['[projects."/tmp/codex-ws"]', 'trust_level = "trusted"', ''].join('\n'),
+      '/tmp/codex-ws'
+    )
+    expect(updated).toBe('')
+
+    const trailing = removeProjectTrustContent(
+      [
+        '[profiles.default]',
+        'sandbox_mode = "off"',
+        '',
+        '[projects."/tmp/codex-ws"]',
+        'trust_level = "trusted"'
+      ].join('\n'),
+      '/tmp/codex-ws'
+    )
+    // Why: like the hook-trust removal, the separator above the table is not the table's byte.
+    expect(trailing).toBe(['[profiles.default]', 'sandbox_mode = "off"', '', ''].join('\n'))
+  })
+
+  it('preserves CRLF endings of the surviving content', () => {
+    const original = [
+      '[projects."/tmp/codex-ws"]',
+      'trust_level = "trusted"',
+      '',
+      '[projects."/tmp/other"]',
+      'trust_level = "trusted"',
+      ''
+    ].join('\r\n')
+
+    expect(removeProjectTrustContent(original, '/tmp/codex-ws')).toBe(
+      ['[projects."/tmp/other"]', 'trust_level = "trusted"', ''].join('\r\n')
+    )
+  })
+
+  it('returns content unchanged when the path has no table', () => {
+    expect(removeProjectTrustContent(ORIGINAL, '/tmp/absent')).toBe(ORIGINAL)
+  })
+
+  it('removes a table whose header uses another recognised spelling', () => {
+    const original = [
+      "[projects.'/tmp/codex-ws']",
+      'trust_level = "trusted"',
+      '',
+      '[projects."/tmp/other"]',
+      ''
+    ].join('\n')
+
+    expect(removeProjectTrustContent(original, '/tmp/codex-ws')).toBe(
+      ['[projects."/tmp/other"]', ''].join('\n')
+    )
+  })
+})
+
+describe('hasProjectTrustEntry', () => {
+  it('sees a table written by the upsert and none after removing it', () => {
+    const content = upsertProjectTrustLevelInContent('', '/tmp/codex-ws', 'trusted')
+
+    expect(hasProjectTrustEntry(content, '/tmp/codex-ws')).toBe(true)
+    expect(
+      hasProjectTrustEntry(removeProjectTrustContent(content, '/tmp/codex-ws'), '/tmp/codex-ws')
+    ).toBe(false)
+  })
+
+  it('matches a legacy Windows separator variant without touching either table', () => {
+    expect(hasProjectTrustEntry('[projects."C:/Users/nw/repo"]', 'C:\\Users\\nw\\repo')).toBe(true)
+    expect(hasProjectTrustEntry('[projects."/tmp/codex-ws"]', '/tmp/other')).toBe(false)
   })
 })
 
