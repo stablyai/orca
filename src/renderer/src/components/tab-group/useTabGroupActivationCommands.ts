@@ -55,7 +55,8 @@ export function useTabGroupActivationCommands({
       setActiveTabType('terminal', worktreeId)
       const activeLeafId = worktreeState.terminalLayoutsByTabId[terminalId]?.activeLeafId ?? null
       // Why: restore xterm focus to the store-active leaf so keyboard input can't drift to a sibling pane.
-      focusTerminalTabSurface(terminalId, activeLeafId)
+      // Why: after focus sat elsewhere (e.g. a browser's address bar), macOS can keep a stale input context on the hidden helper and drop every key; refocus rebuilds it.
+      focusTerminalTabSurface(terminalId, activeLeafId, { refreshImeContext: true })
     },
     [
       activateTab,
