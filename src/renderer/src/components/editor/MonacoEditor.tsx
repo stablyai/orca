@@ -24,6 +24,7 @@ import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from './MonacoMarkdownAnnotationOverlay'
+import { orcaMonacoTheme } from '@/lib/monaco-orca-themes'
 
 type MonacoEditorProps = {
   fileId: string
@@ -236,7 +237,7 @@ export default function MonacoEditor({
         language={language}
         // Why: defaultValue, not controlled value — Orca owns post-mount content sync; a controlled path would double setValue.
         defaultValue={content}
-        theme={isDark ? 'vs-dark' : 'vs'}
+        theme={orcaMonacoTheme(isDark)}
         onChange={contentSync.handleChange}
         onMount={handleMount}
         options={{
@@ -252,6 +253,8 @@ export default function MonacoEditor({
           fontSize: editorFontSize,
           fontFamily: editorFontFamily,
           lineNumbers: 'on',
+          // Why: global like maxTokenizationLineLength; LSP semantic tokens (ruby-lsp) need it on.
+          'semanticHighlighting.enabled': true,
           renderLineHighlight: 'line',
           automaticLayout: true,
           tabSize: 2,

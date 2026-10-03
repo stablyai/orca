@@ -12,6 +12,7 @@ export function useTerminalPaneLifecycleRefs() {
     previousVisibleForReconcileRef: useRef<TerminalPaneVisibilitySnapshot | null>(null),
     linkProviderDisposablesRef: useRef(new Map<number, IDisposable>()),
     terminalHandleLinkDisposablesRef: useRef(new Map<number, IDisposable>()),
+    symbolLinkDisposablesRef: useRef(new Map<number, IDisposable>()),
     linkifierClickPrimingDisposablesRef: useRef(new Map<number, IDisposable>()),
     linkPointerGesturesRef: useRef(
       new Map<number, ReturnType<typeof installTerminalLinkPointerGesture>>()

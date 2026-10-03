@@ -319,6 +319,9 @@ module.exports = {
     'out/main/chunks/**',
     'resources/**',
     'node_modules/ws/**',
+    // Why: spawned as separate Node processes (ELECTRON_RUN_AS_NODE), which cannot read inside app.asar reliably.
+    'node_modules/typescript-language-server/**',
+    'node_modules/typescript-6/**',
     'node_modules/tweetnacl/**',
     'node_modules/zod/**',
     'node_modules/yaml/**'

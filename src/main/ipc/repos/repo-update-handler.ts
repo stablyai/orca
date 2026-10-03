@@ -5,6 +5,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
 import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
+import { normalizeRepoLanguageServerSettings } from '../../../shared/repo-language-server-settings'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
@@ -15,6 +16,7 @@ import {
 } from '../../../shared/worktree/visibility-sources'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { getLspSessionManager } from '../../lsp/lsp-session-registry'
 import { notifyReposChanged } from './repos-changed-notification'
 
 export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Store): void {
@@ -37,6 +39,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | 'worktreeBasePath'
             | 'kind'
             | 'symlinkPaths'
+            | 'languageServers'
             | 'issueSourcePreference'
             | 'forkSyncMode'
             | 'externalWorktreeVisibilityPromptDismissedAt'
@@ -214,6 +217,10 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           updates.sourceControlAi = normalizedSourceControlAi
         }
       }
+      // Why: settings gate spawning repo-controlled code, so malformed input clears instead of coercing.
+      if ('languageServers' in updates) {
+        updates.languageServers = normalizeRepoLanguageServerSettings(updates.languageServers)
+      }
       const hostId = args.hostId ? normalizeExecutionHostId(args.hostId) : null
       if (args.hostId && !hostId) {
         return null
@@ -225,6 +232,9 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
         if ('worktreeBasePath' in updates) {
           void prepareLocalWorktreeRootForRepo(store, updated)
           invalidateAuthorizedRootsCache()
+        }
+        if ('languageServers' in updates) {
+          getLspSessionManager()?.disposeForRepo(args.repoId)
         }
         notifyReposChanged(mainWindow)
       }

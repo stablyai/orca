@@ -30,6 +30,10 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'qrcode',
   'ssh2',
   'tweetnacl',
+  // Why: npm alias of typescript@6 for the bundled language server; tsserver.js is gone in TS 7.
+  'typescript-6',
+  'typescript-language-server',
+  'vscode-jsonrpc',
   'ws',
   'yaml',
   'zod'
@@ -128,7 +132,8 @@ function readPackage(packageName, fromDir = projectDir) {
   const packageDir = realpathSync(dirname(packageJsonPath))
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
   return {
-    name: packageJson.name ?? packageName,
+    // Why the requested name: an npm alias (typescript-6) must land under its alias directory.
+    name: packageName,
     packageDir,
     dependencies: Object.keys(packageJson.dependencies ?? {})
   }

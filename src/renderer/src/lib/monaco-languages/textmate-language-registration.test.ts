@@ -92,4 +92,40 @@ describe('registerTextMateLanguage', () => {
     expect(monaco.languages.register).not.toHaveBeenCalled()
     expect(monaco.languages.registerTokensProviderFactory).not.toHaveBeenCalled()
   })
+
+  it('replaces the tokenizer of an existing language without re-registering it', () => {
+    const { monaco } = createMonacoMock([{ id: 'ruby' }])
+
+    registerTextMateLanguage(monaco as never, {
+      language: { id: 'ruby', extensions: ['.rb'] },
+      configuration: { comments: { lineComment: '#' } },
+      scopeName: 'source.ruby',
+      loadGrammar: vi.fn(),
+      replaceExistingTokenizer: true
+    })
+
+    expect(monaco.languages.register).not.toHaveBeenCalled()
+    expect(monaco.languages.setLanguageConfiguration).not.toHaveBeenCalled()
+    expect(monaco.languages.registerTokensProviderFactory).toHaveBeenCalledWith(
+      'ruby',
+      expect.objectContaining({ create: expect.any(Function) })
+    )
+  })
+
+  it('registers a missing language normally when replacing its tokenizer', () => {
+    const { monaco } = createMonacoMock()
+    const configuration = { comments: { lineComment: '#' } }
+
+    registerTextMateLanguage(monaco as never, {
+      language: { id: 'ruby', extensions: ['.rb'] },
+      configuration,
+      scopeName: 'source.ruby',
+      loadGrammar: vi.fn(),
+      replaceExistingTokenizer: true
+    })
+
+    expect(monaco.languages.register).toHaveBeenCalledWith({ id: 'ruby', extensions: ['.rb'] })
+    expect(monaco.languages.setLanguageConfiguration).toHaveBeenCalledWith('ruby', configuration)
+    expect(monaco.languages.registerTokensProviderFactory).toHaveBeenCalledTimes(1)
+  })
 })
