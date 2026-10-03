@@ -1,13 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import {
-  ActivityIndicator,
-  FlatList,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-  Pressable,
-  Text,
-  View
-} from 'react-native'
+import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
@@ -27,6 +19,7 @@ import {
   type MobileNativeChatPendingItem
 } from './mobile-native-chat-render-data'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
+import { useMobileChatEarlierPageScroll } from './use-mobile-native-chat-earlier-page'
 import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import { useSettledMobileNativeChatInputLock } from './use-mobile-native-chat-input-lease'
@@ -216,6 +209,7 @@ export function MobileNativeChatView({
       }),
     [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
+  const historyHeadId = messages[0]?.id ?? null
   const {
     listRef,
     showJumpToTail,
@@ -226,9 +220,15 @@ export function MobileNativeChatView({
     endUserDrag,
     beginMomentum,
     endMomentum,
-    detachFromTail,
+    holdVisibleContent,
     recordScrollMetrics
-  } = useMobileNativeChatTailFollow<NativeChatMessage>({ hasItems: data.length > 0 })
+  } = useMobileNativeChatTailFollow<NativeChatMessage>({
+    hasItems: data.length > 0,
+    historyHeadId,
+    messageIds: messages.map((message) => message.id),
+    earlierPageLoading: loadingEarlier === true,
+    surfaceKey: sendSurfaceId
+  })
 
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
@@ -247,21 +247,18 @@ export function MobileNativeChatView({
   )
 
   const loadEarlier = useCallback(() => {
-    detachFromTail()
+    holdVisibleContent()
     onLoadEarlier?.()
-  }, [detachFromTail, onLoadEarlier])
+  }, [holdVisibleContent, onLoadEarlier])
 
-  const onScroll = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { contentOffset } = e.nativeEvent
-      recordScrollMetrics(e.nativeEvent)
-      // Near the top — page in older history.
-      if (contentOffset.y < 60 && hasMore && !loadingEarlier) {
-        loadEarlier()
-      }
-    },
-    [hasMore, loadingEarlier, loadEarlier, recordScrollMetrics]
-  )
+  const onScroll = useMobileChatEarlierPageScroll({
+    surfaceId: sendSurfaceId,
+    historyHeadId,
+    hasMore,
+    loadingEarlier,
+    loadEarlier,
+    recordScrollMetrics
+  })
 
   // Per-turn status rows: one live indicator while the turn runs, then a settled
   // "Worked for N" row. The structured lane owns them; the bridge lane keeps its
