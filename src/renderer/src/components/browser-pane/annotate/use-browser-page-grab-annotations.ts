@@ -87,6 +87,7 @@ export function useBrowserPageGrabAnnotations({
   grabMenuActionTakenRef: MutableRefObject<boolean>
   handleAddBrowserAnnotation: (comment: string, intent: BrowserAnnotationIntent) => void
   handleCancelPendingBrowserAnnotation: () => void
+  cancelPendingBrowserCapture: () => void
   handleGrabActionShortcut: (key: 'c' | 's') => void
 } {
   const mountedRef = useMountedRef()
@@ -114,11 +115,7 @@ export function useBrowserPageGrabAnnotations({
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const addBrowserPageAnnotation = useAppStore((s) => s.addBrowserPageAnnotation)
 
-  useEffect(() => {
-    return () => {
-      clearTimeout(grabToastTimerRef.current)
-    }
-  }, [])
+  useEffect(() => () => clearTimeout(grabToastTimerRef.current), [])
 
   const dismissGrabToast = useCallback(() => {
     clearTimeout(grabToastTimerRef.current)
@@ -165,13 +162,16 @@ export function useBrowserPageGrabAnnotations({
     [containerRef, dismissGrabToast, mountedRef, webviewRef]
   )
 
-  // Why: the same in-guest picker powers two flows — Cmd/Ctrl+C copies, the toolbar action creates a pending annotation.
+  // The picker supports clipboard copying and independently dismissible annotation drafts.
   useEffect(() => {
     if (grab.state !== 'confirming' || !grab.payload) {
       return
     }
     if (grabIntent === 'annotate') {
-      setPendingAnnotationPayload(grab.payload)
+      // Loading may cancel the selection before React accepts this pending snapshot.
+      setPendingAnnotationPayload(() =>
+        grabPayloadRef.current === grab.payload ? grab.payload : null
+      )
       return
     }
     if (!grab.contextMenu) {
@@ -267,7 +267,7 @@ export function useBrowserPageGrabAnnotations({
 
   const handleAddBrowserAnnotation = useCallback(
     (comment: string, intent: BrowserAnnotationIntent): void => {
-      const payload = pendingAnnotationPayload
+      const payload = pendingAnnotationPayloadRef.current
       if (!payload) {
         return
       }
@@ -281,6 +281,7 @@ export function useBrowserPageGrabAnnotations({
         payload: createBrowserAnnotationPayload(payload)
       })
       recordFeatureInteraction('browser-annotations')
+      pendingAnnotationPayloadRef.current = null
       setPendingAnnotationPayload(null)
       setBrowserAnnotationTrayOpen(true)
       showGrabToast(annotationAddedGrabToastMessage(), 'success', payload)
@@ -290,7 +291,6 @@ export function useBrowserPageGrabAnnotations({
       addBrowserPageAnnotation,
       browserTabId,
       grab,
-      pendingAnnotationPayload,
       recordFeatureInteraction,
       setBrowserAnnotationTrayOpen,
       showGrabToast
@@ -298,11 +298,21 @@ export function useBrowserPageGrabAnnotations({
   )
 
   const handleCancelPendingBrowserAnnotation = useCallback((): void => {
+    pendingAnnotationPayloadRef.current = null
     setPendingAnnotationPayload(null)
     if (grabIntent === 'annotate' && grab.state === 'confirming') {
       grab.rearm()
     }
   }, [grab, grabIntent])
+
+  const cancelPendingBrowserCapture = useCallback((): void => {
+    grabRef.current.cancel()
+    pendingAnnotationPayloadRef.current = null
+    grabPayloadRef.current = null
+    setPendingAnnotationPayload(null)
+    clearTimeout(grabToastTimerRef.current)
+    setGrabToast(null)
+  }, [])
 
   return {
     grabIntent,
@@ -318,6 +328,7 @@ export function useBrowserPageGrabAnnotations({
     grabMenuActionTakenRef,
     handleAddBrowserAnnotation,
     handleCancelPendingBrowserAnnotation,
+    cancelPendingBrowserCapture,
     handleGrabActionShortcut
   }
 }
