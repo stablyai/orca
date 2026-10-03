@@ -381,9 +381,40 @@ describe('registerFilesystemHandlers', () => {
       [path.join('dist', 'bundle.js'), path.join('src', 'index.ts')],
       {}
     )
+    expect(sshProvider.checkIgnoredPaths).toHaveBeenCalledWith('/remote/repo', ['build/output.js'])
+  })
+
+  it('normalizes Windows backslashes to POSIX forward slashes for SSH checkIgnored', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH])
+    const sshProvider = {
+      checkIgnoredPaths: vi.fn().mockResolvedValue([])
+    }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:checkIgnored')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'ssh-1',
+      paths: ['src\\nested\\file.ts']
+    })
+
     expect(sshProvider.checkIgnoredPaths).toHaveBeenCalledWith('/remote/repo', [
-      path.join('build', 'output.js')
+      'src/nested/file.ts'
     ])
+  })
+
+  it('rejects traversal paths in SSH checkIgnored even when backslashes bypass native validation', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH])
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:checkIgnored')!(null, {
+        worktreePath: '/remote/repo',
+        connectionId: 'ssh-1',
+        paths: ['..\\secret.txt']
+      })
+    ).rejects.toThrow('Access denied: git file path escapes the selected worktree')
   })
 
   it('routes abort merge through local and SSH git providers', async () => {
