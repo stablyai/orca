@@ -527,6 +527,15 @@ const MUSE_READY_SCREEN_META = [
   '  muse-spark-1.3 · max · ~/Downloads/interview-coach · YOLO'
 ]
 
+// Shape from #25005: Muse Code on Linux paints its idle composer without the voice-input footer.
+const MUSE_READY_SCREEN_NO_VOICE_FOOTER = [
+  '  Muse Code 1.4.2',
+  '──────────────────────────────────────────',
+  '❯',
+  '──────────────────────────────────────────',
+  '  muse-spark-1.4 · max · ~/work/app'
+]
+
 const MUSE_TRUST_DIALOG = [
   'Do you trust this workspace?',
   'Workspace: /private/tmp',
@@ -541,6 +550,54 @@ describe('isMuseReadyPromptPreview', () => {
   it('recognizes a Muse ready screen across providers', () => {
     expect(isMuseReadyPromptPreview(waitTextFor(MUSE_READY_SCREEN_ECHO))).toBe(true)
     expect(isMuseReadyPromptPreview(waitTextFor(MUSE_READY_SCREEN_META))).toBe(true)
+  })
+
+  it('recognizes the idle composer without the voice-input footer', () => {
+    const waitText = waitTextFor(MUSE_READY_SCREEN_NO_VOICE_FOOTER)
+    expect(isMuseReadyPromptPreview(waitText)).toBe(true)
+    expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
+  })
+
+  it('refuses a shell prompt left below the banner of an exited Muse', () => {
+    expect(
+      isMuseReadyPromptPreview(
+        waitTextFor(['  Muse Code 1.4.2', 'error: provider not configured', '~/work/app ❯'])
+      )
+    ).toBe(false)
+    expect(
+      isMuseReadyPromptPreview(
+        waitTextFor([
+          '  Muse Code 1.4.2',
+          'error: provider not configured',
+          '$ git log --graph --oneline',
+          '──────────────────────────',
+          '~/work/app on main',
+          '❯'
+        ])
+      )
+    ).toBe(false)
+    expect(
+      isMuseReadyPromptPreview(
+        waitTextFor(['  Muse Code 1.4.2', 'error: provider not configured', '───────', '❯ ls'])
+      )
+    ).toBe(false)
+  })
+
+  it('recognizes a footer-free composer painted with cursor moves and escapes', () => {
+    const esc = String.fromCharCode(27)
+    const bel = String.fromCharCode(7)
+    const rule = '─'.repeat(40)
+    const painted =
+      `${esc}[2;3H${esc}[1mMuse Code${esc}[22m 1.4.2${esc}[4;1H${esc}[2m${rule}` +
+      `${esc}]0;app${bel}${esc}7${esc}[>3u${esc}(B${esc}[5;1H${esc}[22m❯${esc}8` +
+      `${esc}[6;1H${esc}[2m${rule}${esc}[7;3H${esc}[22mmuse-spark-1.4 · max · ~/work/app`
+    expect(isMuseReadyPromptPreview(waitTextFor([painted]))).toBe(true)
+  })
+
+  it('refuses a footer-free composer once a blocked dialog opens below it', () => {
+    const waitText = waitTextFor([...MUSE_READY_SCREEN_NO_VOICE_FOOTER, ...MUSE_TRUST_DIALOG])
+    expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-trust-workspace')
+    expect(isMuseReadyPromptPreview(waitText)).toBe(false)
   })
 
   it('tolerates ANSI styling around the ready markers', () => {
