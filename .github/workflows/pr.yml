@@ -1105,6 +1105,10 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts
           config/scripts/nsis-process-check.test.mjs
 
+      # The ssh-config-loader regression gates its Windows case with it.skipIf, which the
+      # win32-test-lane-registration scanner cannot see (suite-level gates only): backslash
+      # Include separators only parse on win32, so the ubuntu unit shards skip the case and
+      # this list is the only place that can execute it.
       - name: Test Windows-specific boundaries
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
@@ -1156,6 +1160,7 @@ jobs:
           src/main/startup/windows-install-dir-acl-repair.win32.test.ts
           src/main/runtime/repo-worktree-admin-fingerprint.test.ts
           src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts
+          src/main/ssh/ssh-config-loader-regression.test.ts
           src/shared/secure-file-fsync-flags.test.ts
           src/shared/secure-path-windows-acl.win32.test.ts
           src/main/runtime/unreadable-secret-store-preservation.win32.test.ts

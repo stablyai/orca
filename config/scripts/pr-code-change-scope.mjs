@@ -351,6 +351,10 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/startup/windows-install-dir-acl-repair.win32.test.ts',
   'src/main/runtime/repo-worktree-admin-fingerprint.test.ts',
   'src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts',
+  // Its Windows-only case is gated with it.skipIf, which the lane-registration scanner cannot
+  // see (suite-level gates only), so this registration is what puts the backslash-Include
+  // separator regression on a real Windows runner.
+  'src/main/ssh/ssh-config-loader-regression.test.ts',
   'src/shared/secure-file-fsync-flags.test.ts',
   'src/shared/secure-path-windows-acl.win32.test.ts',
   'src/main/runtime/unreadable-secret-store-preservation.win32.test.ts',

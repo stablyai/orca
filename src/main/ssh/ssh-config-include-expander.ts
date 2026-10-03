@@ -1,6 +1,7 @@
-import { existsSync, globSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { homedir, hostname, userInfo } from 'node:os'
 import { posix, win32 } from 'node:path'
+import { globIncludePattern } from './ssh-config-include-glob'
 
 type PathApi = typeof posix | typeof win32
 
@@ -169,12 +170,20 @@ function resolveIncludePaths(pattern: string, context: IncludeExpansionContext):
   const absolutePattern = resolveIncludePatternPath(withTokens, context)
   if (hasGlobPattern(absolutePattern)) {
     try {
-      const matches = globSync(absolutePattern).sort((left, right) => left.localeCompare(right))
+      const { matches, truncationNote } = globIncludePattern(absolutePattern)
+      matches.sort((left, right) => left.localeCompare(right))
+      // The truncation note rides along on whichever warning fires, so partial
+      // discovery is never presented as the total when a cap engages.
       if (matches.length > MAX_INCLUDE_GLOB_MATCHES) {
         console.warn(
-          `[ssh] Include pattern "${absolutePattern}" matched ${matches.length} files; processing first ${MAX_INCLUDE_GLOB_MATCHES}`
+          `[ssh] Include pattern "${absolutePattern}" matched ${matches.length} files${truncationNote ?? ''}; processing first ${MAX_INCLUDE_GLOB_MATCHES}`
         )
         return matches.slice(0, MAX_INCLUDE_GLOB_MATCHES)
+      }
+      if (truncationNote !== undefined) {
+        console.warn(
+          `[ssh] Include pattern "${absolutePattern}"${truncationNote}; processing ${matches.length} matches`
+        )
       }
       return matches
     } catch {
