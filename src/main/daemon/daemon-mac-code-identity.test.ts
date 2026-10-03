@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
 vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
 
-import { classifyCodesignDisplayOutput, getDaemonMacCodeIdentity } from './daemon-mac-code-identity'
+import {
+  classifyCodesignDisplayOutput,
+  getDaemonMacCodeIdentity,
+  inspectDaemonMacCodeIdentity
+} from './daemon-mac-code-identity'
 
 const HELPER_PATH =
   '/Applications/Orca.app/Contents/Frameworks/Orca Helper.app/Contents/MacOS/Orca Helper'
@@ -78,6 +82,19 @@ describe('getDaemonMacCodeIdentity', () => {
         args: ['--display', '--verbose=1', '+3337']
       })
     )
+  })
+
+  it('returns the resolved path alongside the verdict for the attribution check', async () => {
+    codesignReturns(`Executable=${PARKED_PATH}\n`, 0)
+    await expect(inspectDaemonMacCodeIdentity(3337)).resolves.toEqual({
+      identity: 'parked',
+      executablePath: PARKED_PATH
+    })
+    codesignReturns('+3337: No such file or directory\n', 1)
+    await expect(inspectDaemonMacCodeIdentity(3337)).resolves.toEqual({
+      identity: 'unresolvable',
+      executablePath: null
+    })
   })
 
   it('reports unresolvable when codesign cannot map the pid to on-disk code', async () => {

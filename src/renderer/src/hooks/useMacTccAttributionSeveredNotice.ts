@@ -40,6 +40,9 @@ export function useMacTccAttributionSeveredNotice(): void {
     i18n.language === targetLocale &&
     i18n.hasResourceBundle(targetLocale, 'translation')
   const toastedThisSession = useRef(false)
+  // Why apart from the latch: only a toast still on screen may yield and come back; one the user
+  // dismissed or acted on stays handled.
+  const severedToastOnScreen = useRef(false)
   // Why: toast was only marked after await; a focus/effect re-run mid-check could dual-toast.
   const checkInFlight = useRef(false)
 
@@ -66,7 +69,21 @@ export function useMacTccAttributionSeveredNotice(): void {
       openSettingsPage()
     }
 
-    const applySeveredNotice = (health: PtyManagementMacTccAttributionHealth): void => {
+    const applySeveredNotice = (
+      health: PtyManagementMacTccAttributionHealth,
+      folderNoticeOwnsCause: boolean
+    ): void => {
+      // Why: a measured folder denial is the same severed daemon; its Fix dialog is the better
+      // remedy, so one cause gets one toast. Severed without a denial (Local Network) still toasts.
+      if (health === 'severed' && folderNoticeOwnsCause) {
+        if (severedToastOnScreen.current) {
+          severedToastOnScreen.current = false
+          toast.dismiss(SEVERED_TCC_NOTICE_ID)
+          // Yielding is not the once-per-session showing: re-raise once the folder notice lets go.
+          toastedThisSession.current = false
+        }
+        return
+      }
       if (health !== 'severed') {
         if (toastedThisSession.current) {
           toast.dismiss(SEVERED_TCC_NOTICE_ID)
@@ -77,6 +94,10 @@ export function useMacTccAttributionSeveredNotice(): void {
         return
       }
       toastedThisSession.current = true
+      severedToastOnScreen.current = true
+      const markHandled = (): void => {
+        severedToastOnScreen.current = false
+      }
       toast.warning(
         translate(
           'auto.hooks.useMacTccAttributionSeveredNotice.title',
@@ -94,12 +115,16 @@ export function useMacTccAttributionSeveredNotice(): void {
               'auto.hooks.useMacTccAttributionSeveredNotice.openManageSessions',
               'Open Manage Sessions'
             ),
-            onClick: openManageSessions
+            onClick: () => {
+              markHandled()
+              openManageSessions()
+            }
           },
           cancel: {
             label: translate('auto.hooks.useMacTccAttributionSeveredNotice.dismiss', 'Dismiss'),
-            onClick: () => {}
-          }
+            onClick: markHandled
+          },
+          onDismiss: markHandled
         }
       )
     }
@@ -170,8 +195,14 @@ export function useMacTccAttributionSeveredNotice(): void {
       checkInFlight.current = true
       try {
         const { health, folderAccessMismatch } = await macTccAttribution()
-        applySeveredNotice(health)
-        applyFolderAccessNotice(folderAccessMismatch ?? null)
+        const mismatch = folderAccessMismatch ?? null
+        // Why not after X: a dismissed folder notice cannot come back, so it no longer owns the remedy.
+        const folderNoticeOwnsCause =
+          mismatch !== null &&
+          useMacFolderAccessFixStore.getState().noticePhaseByScope.get(mismatch.daemonScope) !==
+            'dismissed'
+        applySeveredNotice(health, folderNoticeOwnsCause)
+        applyFolderAccessNotice(mismatch)
       } catch {
         // Rejection clears the guard so a later focus can retry.
       } finally {

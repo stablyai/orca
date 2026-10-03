@@ -23,7 +23,8 @@ export type DaemonSpawnerPathClass = (typeof DAEMON_SPAWNER_PATH_CLASSES)[number
 export const DAEMON_TCC_ATTRIBUTION_VALUES = ['intact', 'severed', 'unknown'] as const
 
 /**
- * Where macOS says the daemon pid's own executable is now (#21826). Measurement only.
+ * Where macOS says the daemon pid's own executable is now (#21826). Reported by adoption telemetry
+ * and read by the TCC attribution check, where `parked` and `unresolvable` mean severed.
  * `resolved`: an existing file outside a ShipIt directory (not a claim it is the installed app).
  * `parked`: inside a Squirrel `…ShipIt…` directory, where an update moves the outgoing bundle.
  * `unresolvable`: the file is gone, which is where tccd loses the daemon's code identity.

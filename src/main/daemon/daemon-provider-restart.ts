@@ -28,6 +28,7 @@ import {
   runCoalescedDaemonRestart,
   type RestartDaemonResult
 } from './daemon-restart-state'
+import { clearDaemonReplacementDeferral } from './daemon-replacement-deferral'
 import { getDaemonPidPath, type DaemonSpawner } from './daemon-spawner'
 import { PROTOCOL_VERSION } from './types'
 
@@ -80,6 +81,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
     // Step 4: reuse the existing spawner so the respawn closure baked into long-lived adapters stays valid (do NOT new one).
     currentSpawner.resetHandle()
     info = await currentSpawner.ensureRunning()
+    clearDaemonReplacementDeferral()
   } catch (error) {
     // Why: old provider stays authoritative until the final swap; rebind since relaunch failed after teardown.
     rebindLocalProviderListeners()
