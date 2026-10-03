@@ -17,6 +17,7 @@ export type UiWindowApi = {
   /** Paths of files a file manager copied; empty when there are none or the host cannot list them. */
   readClipboardFilePaths: () => Promise<string[]>
   readClipboardImageThumbnail: () => Promise<ClipboardImageThumbnail | null>
+  readClipboardFilePaths: () => Promise<string[]>
   writeClipboardText: (text: string) => Promise<void>
   writeTerminalClipboardText: (text: string) => Promise<void>
   writeSelectionClipboardText: (text: string) => Promise<void>

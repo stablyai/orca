@@ -163,6 +163,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     // Browsers expose copied files only inside a paste event.
     readClipboardFilePaths: async () => [],
     readClipboardImageThumbnail: () => readClipboardImageThumbnail().catch(() => null),
+    // The browser clipboard exposes no OS file entries, so paste stays text-only.
+    readClipboardFilePaths: () => Promise.resolve([]),
     writeClipboardText: writeWebClipboardText,
     writeTerminalClipboardText: writeWebClipboardText,
     writeSelectionClipboardText: () =>

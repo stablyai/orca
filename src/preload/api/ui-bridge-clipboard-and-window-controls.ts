@@ -98,6 +98,7 @@ export const uiClipboardAndWindowControlsApi = {
   readClipboardFilePaths: (): Promise<string[]> => ipcRenderer.invoke('clipboard:readFilePaths'),
   readClipboardImageThumbnail: (): Promise<ClipboardImageThumbnail | null> =>
     ipcRenderer.invoke('clipboard:readImageThumbnail'),
+  readClipboardFilePaths: (): Promise<string[]> => ipcRenderer.invoke('clipboard:readFilePaths'),
   writeClipboardText: (text: string): Promise<void> =>
     ipcRenderer.invoke('clipboard:writeText', text),
   writeTerminalClipboardText: (text: string): Promise<void> =>
