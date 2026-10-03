@@ -150,6 +150,11 @@ export class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopE
       return
     }
     this.graphReloadLifecycle.settleActive('cancelled')
+    // Why: a closed window no longer publishes a graph; a serve runtime must fall back to
+    // headless ownership or paired clients lose terminal create/close (#18604).
+    if (this.headlessServeRuntime) {
+      this.headlessGraphFallbackAvailable = true
+    }
     if (this.shouldRestoreHeadlessGraph(windowId)) {
       this.pendingHeadlessPromotionWindowId = null
       this.restoreHeadlessGraphAuthority()
