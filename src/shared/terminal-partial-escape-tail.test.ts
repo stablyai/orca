@@ -1,9 +1,38 @@
 import { describe, expect, it } from 'vitest'
 import {
   advancePartialEscapeTail,
+  advanceTerminalEscapeBoundary,
   extractPartialEscapeTail,
   MAX_PARTIAL_ESCAPE_TAIL_LENGTH
 } from './terminal-partial-escape-tail'
+
+describe('advanceTerminalEscapeBoundary', () => {
+  it('matches the full-tail scanner at every split, without retaining payloads', () => {
+    const streams = [
+      '\x1b[38;2;115;118;123;48;2;65;69;76m⠁',
+      '\x1b\x00\t[31;1mred\x1b[0m',
+      '\x1b]0;title\x1b\\plain',
+      '\x1b\x00]0;title\x07',
+      '\x1bP$qm\x1b\\',
+      '\x1b_Gpayload\x1b\\',
+      '\x1b  q\x1b[31;\x18plain',
+      '\x1b]0;title\x1b\x1b[31mred',
+      '\x1bPpayload\x1b[32mgreen',
+      '\x1b[31;\x1a',
+      `\x1b]0;${'x'.repeat(MAX_PARTIAL_ESCAPE_TAIL_LENGTH + 1)}\x1b\\`
+    ]
+    for (const stream of streams) {
+      let state = ''
+      for (let i = 0; i < stream.length; i += 1) {
+        state = advanceTerminalEscapeBoundary(state, stream[i])
+        expect(state.length).toBeLessThanOrEqual(3)
+        expect(state === '', JSON.stringify({ stream: stream.slice(0, 50), i })).toBe(
+          extractPartialEscapeTail(stream.slice(0, i + 1)) === ''
+        )
+      }
+    }
+  })
+})
 
 describe('extractPartialEscapeTail', () => {
   it('returns empty for parser-clean streams', () => {

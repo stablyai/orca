@@ -1,4 +1,5 @@
 import { replayIntoTerminal, replayIntoTerminalAsync } from '../replay-guard'
+import { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
 import { terminalOutputPrefersRenderRefresh } from '@/lib/pane-manager/terminal-complex-script'
 import {
   buildPostReplayLiveAgentReattachReset,
@@ -23,6 +24,7 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 /** Follow-output reset, replay writes, and fresh-shell viewport blanking. */
 export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void {
+  const idleCursorReset = (session.idleCursorReset ??= new TerminalIdleCursorReset())
   session.resetFreshSpawnFollowOutput = (): void => {
     session.cancelFreshSpawnFollowReset()
     markTerminalFollowOutput(session.pane.terminal)
@@ -104,6 +106,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     // Why: drain any queued background bytes BEFORE the replay paint, so the
     // scheduler's deferred drain cannot land older bytes on top of the replay.
     flushTerminalOutput(session.pane.terminal)
+    data = idleCursorReset.processOutput(data)
     replayIntoTerminal(session.pane, session.deps.replayingPanesRef, data, {
       breadcrumbIdentity: {
         tabId: session.deps.tabId,
@@ -119,6 +122,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     // Why: WebGL must be rebuilt after xterm has parsed replay bytes, not
     // merely after the write was queued.
     flushTerminalOutput(session.pane.terminal)
+    data = idleCursorReset.processOutput(data)
     return replayIntoTerminalAsync(session.pane, session.deps.replayingPanesRef, data, {
       breadcrumbIdentity: {
         tabId: session.deps.tabId,
