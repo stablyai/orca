@@ -29,7 +29,7 @@ function discovery(owner: string | null, rootPath = '/Users/test/.agents/skills'
         id: 'source',
         label: 'Source',
         path: rootPath,
-        sourceKind: 'home' as const,
+        sourceKind: 'home' as 'home' | 'repo',
         providers: ['agent-skills' as const],
         owner,
         exists: true
@@ -52,11 +52,30 @@ describe('isNativeChatSkillForAgent', () => {
     expect(isNativeChatSkillForAgent('claude', skill({ providers: ['agent-skills'] }))).toBe(false)
   })
 
-  it('uses explicit source ownership and keeps shared roots visible', () => {
+  it('uses explicit source ownership and limits global shared roots to Codex', () => {
     const shared = discovery(null)
     expect(isNativeChatSkillForAgent('codex', skill({}), shared)).toBe(true)
-    expect(isNativeChatSkillForAgent('claude', skill({}), shared)).toBe(true)
-    expect(isNativeChatSkillForAgent('grok', skill({}), shared)).toBe(true)
+    expect(isNativeChatSkillForAgent('claude', skill({}), shared)).toBe(false)
+    expect(isNativeChatSkillForAgent('grok', skill({}), shared)).toBe(false)
+  })
+
+  it('allows canonical workspace roots only for providers that read them', () => {
+    const workspace = discovery(null, '/workspace/.agents/skills')
+    workspace.sources[0]!.sourceKind = 'repo'
+    expect(
+      isNativeChatSkillForAgent(
+        'codex',
+        skill({ rootPath: '/workspace/.agents/skills', sourceKind: 'repo' }),
+        workspace
+      )
+    ).toBe(true)
+    expect(
+      isNativeChatSkillForAgent(
+        'claude',
+        skill({ rootPath: '/workspace/.agents/skills', sourceKind: 'repo' }),
+        workspace
+      )
+    ).toBe(false)
   })
 
   it('aliases OpenClaude to Claude roots without exposing them to other agents', () => {
@@ -91,18 +110,47 @@ describe('isNativeChatSkillForAgent', () => {
       ]
     } satisfies Pick<SkillDiscoveryResult, 'sources'>
     // A symlinked skill deduped under the Codex root but also reachable
-    // through the shared root stays visible to every agent.
+    // through the shared root stays visible to Codex only at global scope.
     const merged = skill({
       rootPath: '/Users/test/.codex/skills',
       rootPaths: ['/Users/test/.codex/skills', '/Users/test/.agents/skills']
     })
-    expect(isNativeChatSkillForAgent('claude', merged, result)).toBe(true)
+    expect(isNativeChatSkillForAgent('claude', merged, result)).toBe(false)
     expect(isNativeChatSkillForAgent('codex', merged, result)).toBe(true)
     const codexOnly = skill({
       rootPath: '/Users/test/.codex/skills',
       rootPaths: ['/Users/test/.codex/skills']
     })
     expect(isNativeChatSkillForAgent('claude', codexOnly, result)).toBe(false)
+  })
+
+  it('does not let a non-granting source at a path hide a granting one behind it', () => {
+    // Two roots can resolve to one path (see `rootScanKey` in main/skills/discovery.ts),
+    // and a provider root override can put an unowned root ahead of the agent's own.
+    const result = {
+      sources: [
+        {
+          id: 'shared-home',
+          label: 'Agent skills home',
+          path: '/Users/test/.claude/skills',
+          sourceKind: 'home' as const,
+          providers: ['agent-skills' as const],
+          owner: null,
+          exists: true
+        },
+        {
+          id: 'home-claude',
+          label: 'Claude home',
+          path: '/Users/test/.claude/skills',
+          sourceKind: 'home' as const,
+          providers: ['claude' as const],
+          owner: 'claude' as const,
+          exists: true
+        }
+      ]
+    } satisfies Pick<SkillDiscoveryResult, 'sources'>
+    const shared = skill({ rootPath: '/Users/test/.claude/skills' })
+    expect(isNativeChatSkillForAgent('claude', shared, result)).toBe(true)
   })
 })
 

@@ -40,7 +40,7 @@ function source(
 }
 
 describe('orchestration skill agent coverage', () => {
-  it('marks shared-path agents from the global ~/.agents/skills install', () => {
+  it('marks only Codex from the global ~/.agents/skills install', () => {
     const skills = [
       skill({
         providers: ['agent-skills'],
@@ -58,8 +58,8 @@ describe('orchestration skill agent coverage', () => {
       )
     ).toEqual([
       { agent: 'codex', label: 'Codex', installed: true },
-      { agent: 'gemini', label: 'Gemini', installed: true },
-      { agent: 'droid', label: 'Droid', installed: true }
+      { agent: 'gemini', label: 'Gemini', installed: false },
+      { agent: 'droid', label: 'Droid', installed: false }
     ])
   })
 
