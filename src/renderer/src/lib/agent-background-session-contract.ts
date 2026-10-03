@@ -21,4 +21,6 @@ export type LaunchAgentBackgroundSessionResult = {
   ptyId: string
   startupPlan: AgentStartupPlan
   terminalOwnership: AutomationTerminalOwnership | null
+  /** True when the launch queued a prompt draft whose delivery verdict can be awaited. */
+  scheduledDraftDelivery: boolean
 }

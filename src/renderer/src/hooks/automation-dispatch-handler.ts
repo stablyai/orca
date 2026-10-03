@@ -2,6 +2,7 @@ import { listAutomationRunsForTarget } from '@/components/automations/automation
 import { translate } from '@/i18n/i18n'
 import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
 import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-session'
+import { subscribeAgentBackgroundDraftDelivery } from '@/lib/agent-background-draft-delivery'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
@@ -187,6 +188,25 @@ export async function handleAutomationDispatchRequest({
       throw new Error('Unable to build an agent launch plan.')
     }
     terminalOwnership = result.terminalOwnership
+    if (result.scheduledDraftDelivery) {
+      // Why: a draft that never lands leaves an idle agent posing as a live
+      // run — delivery failure must reach the run's verdict. Delivery retries
+      // outlive the launch await, so hold success verdicts until it resolves.
+      // Arming mirrors the launch's schedule condition: with no draft queued
+      // (a blank prompt), no verdict would ever arrive.
+      completion.expectPromptDelivery()
+      const unsubscribeDraftDelivery = subscribeAgentBackgroundDraftDelivery(
+        result.tabId,
+        (delivered) => {
+          unsubscribeDraftDelivery()
+          if (delivered) {
+            completion.handlePromptDeliverySucceeded()
+          } else {
+            completion.handlePromptDeliveryFailed()
+          }
+        }
+      )
+    }
     if (automation.reuseSession) {
       // Why: the first fresh launch is the seed for later reuse and must
       // survive completion under the same policy as an already-reused tab.
