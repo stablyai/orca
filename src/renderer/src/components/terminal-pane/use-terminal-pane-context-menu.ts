@@ -23,6 +23,7 @@ import {
 } from './terminal-pane-menu-agent-session-actions'
 import { useTerminalPaneSplitActions } from './use-terminal-pane-split-actions'
 import { useTerminalContextMenuTrigger } from './use-terminal-context-menu-trigger'
+import type { TerminalFileLinkReveal } from './terminal-hovered-file-link'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
@@ -53,6 +54,7 @@ type TerminalMenuState = {
   open: boolean
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
   point: { x: number; y: number }
+  fileLinkReveal: TerminalFileLinkReveal | null
   menuOpenedAtRef: React.RefObject<number>
   paneCount: number
   menuPaneId: number | null
@@ -131,14 +133,22 @@ export function useTerminalPaneContextMenu({
       source
     )
 
-  const { open, setOpen, point, menuOpenedAtRef, onContextMenuCapture, onPaneTitleContextMenu } =
-    useTerminalContextMenuTrigger({
-      managerRef,
-      containerRef,
-      contextPaneIdRef,
-      rightClickToPaste,
-      pasteResolvedPane
-    })
+  const {
+    open,
+    setOpen,
+    point,
+    fileLinkReveal,
+    menuOpenedAtRef,
+    onContextMenuCapture,
+    onPaneTitleContextMenu
+  } = useTerminalContextMenuTrigger({
+    managerRef,
+    paneTransportsRef,
+    containerRef,
+    contextPaneIdRef,
+    rightClickToPaste,
+    pasteResolvedPane
+  })
 
   const { onSplitRight, onSplitDown } = useTerminalPaneSplitActions({
     managerRef,
@@ -288,6 +298,7 @@ export function useTerminalPaneContextMenu({
     open,
     setOpen,
     point,
+    fileLinkReveal,
     menuOpenedAtRef,
     paneCount,
     menuPaneId,

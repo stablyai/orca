@@ -1,3 +1,8 @@
+import {
+  isRemoteRuntimeFileOperation,
+  type RuntimeFileOperationArgs
+} from '@/runtime/runtime-file-client'
+
 export const TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES = 1024
 
 // Why: POSIX-looking SSH paths are only meaningful inside their connection;
@@ -55,4 +60,40 @@ export function writeTerminalPathExistsCache(
     }
   }
   cache.set(key, exists)
+}
+
+/** Whether the host that owns a terminal-printed path has it, remembered for later hovers. */
+export async function probeTerminalPathExists({
+  cache,
+  pathExists,
+  fileContext,
+  absolutePath,
+  runtimeEnvironmentId,
+  recheckMissing = false
+}: {
+  cache: Map<string, boolean>
+  pathExists: (context: RuntimeFileOperationArgs, path: string, remote: boolean) => Promise<boolean>
+  fileContext: RuntimeFileOperationArgs
+  absolutePath: string
+  runtimeEnvironmentId?: string | null
+  /** Never trust "missing", which may have been created since: ask again, and don't remember it. */
+  recheckMissing?: boolean
+}): Promise<boolean> {
+  const isRemoteRuntimePath = isRemoteRuntimeFileOperation(fileContext, absolutePath)
+  const cacheKey = getTerminalPathExistsCacheKey({
+    absolutePath,
+    connectionId: fileContext.connectionId,
+    isRemoteRuntimePath,
+    runtimeEnvironmentId
+  })
+  const remembered = readTerminalPathExistsCache(cache, cacheKey)
+  const exists =
+    remembered === undefined || (recheckMissing && !remembered)
+      ? await pathExists(fileContext, absolutePath, isRemoteRuntimePath)
+      : remembered
+  // Why: a caller that re-asks never trusts "missing"; remembering it would only hide the path from callers that do.
+  if (exists || !recheckMissing) {
+    writeTerminalPathExistsCache(cache, cacheKey, exists)
+  }
+  return exists
 }

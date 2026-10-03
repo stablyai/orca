@@ -5,7 +5,7 @@ import TerminalContextMenu from './TerminalContextMenu'
 import { translate } from '@/i18n/i18n'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 
-type ItemProps = { onSelect?: () => void; children?: React.ReactNode }
+type ItemProps = { onSelect?: () => void; disabled?: boolean; children?: React.ReactNode }
 
 const items = vi.hoisted(() => ({ list: [] as ItemProps[] }))
 const shortcuts = vi.hoisted(() => ({ list: [] as string[] }))
@@ -42,6 +42,11 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
 })
 vi.mock('@/i18n/i18n', () => ({ translate: vi.fn((_key: string, fallback: string) => fallback) }))
 vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
+const revealTerminalFileLink = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/reveal-in-file-manager', () => ({
+  getRevealInFileManagerLabel: () => 'Reveal in Finder'
+}))
+vi.mock('./terminal-hovered-file-link', () => ({ revealTerminalFileLink }))
 vi.mock('./terminal-context-menu-dismiss', () => ({
   shouldIgnoreTerminalMenuPointerDownOutside: () => false
 }))
@@ -68,6 +73,7 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     canClosePane: true,
     canExpandPane: true,
     menuPaneIsExpanded: false,
+    fileLinkReveal: null,
     onCopy: vi.fn(),
     onSelectAll: vi.fn(),
     onPaste: vi.fn(),
@@ -127,6 +133,29 @@ describe('TerminalContextMenu', () => {
     renderMenu()
     expect(translate).toHaveBeenCalled()
     expect(items.list.length).toBeGreaterThan(0)
+  })
+
+  it('leads with a reveal row only when the right-click landed on a file link (issue #24003)', () => {
+    renderMenu()
+    expect(items.list.map((item) => childrenText(item.children))).not.toContain('Reveal in Finder')
+
+    items.list = []
+    renderMenu({ fileLinkReveal: { path: '/repo/src/foo.ts', blocked: false } })
+    expect(childrenText(items.list[0]?.children)).toBe('Reveal in Finder')
+    expect(items.list[0]?.disabled).toBe(false)
+    items.list[0]?.onSelect?.()
+    expect(revealTerminalFileLink).toHaveBeenCalledWith({
+      path: '/repo/src/foo.ts',
+      blocked: false
+    })
+  })
+
+  it('disables the reveal row as local-only for a file link on another host', () => {
+    renderMenu({ fileLinkReveal: { path: '/repo/src/foo.ts', blocked: true } })
+
+    expect(childrenText(items.list[0]?.children)).toBe('Reveal in Finder')
+    expect(items.list[0]?.disabled).toBe(true)
+    expect(renderToStaticMarkup(<>{items.list[0]?.children}</>)).toContain('Local only')
   })
 
   it('renders a "Copy Context" item that triggers onCopyAgentSessionContext (issue #5020)', () => {

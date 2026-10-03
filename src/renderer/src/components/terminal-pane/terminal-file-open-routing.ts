@@ -106,6 +106,31 @@ export function shouldOpenTerminalFileWithSystemDefault(
   return canClientOsOpenWorkspaceFile(fileContext, filePath)
 }
 
+/** A terminal-printed path as its owning host addresses it, and whether that host is this client. */
+export function resolveTerminalFileHost(
+  filePath: string,
+  deps: Pick<
+    TerminalFileOpenDeps,
+    'worktreeId' | 'worktreePath' | 'runtimeEnvironmentId' | 'wslDistro'
+  >
+): { path: string; fileContext: RuntimeFileOperationArgs; clientOsCanOpen: boolean } {
+  const path = mapTerminalFilePath(
+    filePath,
+    deps.worktreePath,
+    terminalLinkWslDistro(deps.wslDistro, deps.runtimeEnvironmentId)
+  )
+  const fileContext = getTerminalFileContext(
+    deps.worktreeId,
+    deps.worktreePath,
+    deps.runtimeEnvironmentId
+  )
+  return {
+    path,
+    fileContext,
+    clientOsCanOpen: shouldOpenTerminalFileWithSystemDefault(fileContext, path)
+  }
+}
+
 let latestOpenDetectedFilePathRequestId = 0
 let pendingEditorRevealFrameIds: number[] = []
 

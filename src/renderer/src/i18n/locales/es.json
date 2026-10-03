@@ -756,6 +756,16 @@
         "tooLarge": "Es demasiado grande para copiarlo, así que Orca no pudo pasárselo al agente.",
         "storageFull": "El almacenamiento de Orca para archivos soltados está lleno, así que Orca no pudo pasárselo al agente.",
         "generic": "Vuelve a soltar los archivos."
+      },
+      "reveal": {
+        "in": {
+          "file": {
+            "manager": {
+              "notFound": "No se encontró el archivo. Puede que se haya movido o eliminado.",
+              "launchFailed": "No se pudo mostrar el archivo."
+            }
+          }
+        }
       }
     },
     "hooks": {
@@ -4905,7 +4915,7 @@
           "3921d3d9a5": "No se encontró la carpeta del espacio de trabajo.",
           "f387af445b": "La ruta del espacio de trabajo no es una ruta local válida.",
           "3ec372b664": "gestor de archivos",
-          "localOnly": "Local only",
+          "localOnly": "Solo local",
           "remoteSsh": "Remote SSH",
           "remoteRuntimeUnsupported": "Opening this path in a local app is not available.",
           "remoteRuntimeUnsupportedDetail": "Switch to a local or SSH workspace, then try again.",
@@ -10645,7 +10655,10 @@
             "f9d7ca753d": "Copiar rutas",
             "3161c4e425": "carpeta",
             "e887fa4b2e": "Abrir en terminal",
-            "1d8e182c32": "Ver archivo"
+            "1d8e182c32": "Ver archivo",
+            "revealInFinder": "Mostrar en Finder",
+            "openContainingFolder": "Abrir carpeta contenedora",
+            "revealInFileExplorer": "Mostrar en el Explorador de archivos"
           },
           "FileExplorerToolbar": {
             "d238264654": "Mostrar archivos ignorados por Git",

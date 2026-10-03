@@ -4,6 +4,7 @@ import {
   ClipboardCopy,
   Copy,
   Eraser,
+  ExternalLink,
   GitFork,
   Maximize2,
   MessageSquare,
@@ -31,6 +32,9 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
+import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
+import { getRevealInFileManagerLabel } from '@/lib/reveal-in-file-manager'
+import { revealTerminalFileLink, type TerminalFileLinkReveal } from './terminal-hovered-file-link'
 import { isMacPlatform, nativeChatToggleShortcutLabel } from '../native-chat/native-chat-shortcut'
 import { AgentSessionContinuationMenuItem } from './AgentSessionContinuationMenuItem'
 import type { TerminalQuickCommandMenuHost } from '@/hooks/use-terminal-quick-command-hosts'
@@ -44,6 +48,8 @@ type TerminalContextMenuProps = {
   canClosePane: boolean
   canExpandPane: boolean
   menuPaneIsExpanded: boolean
+  /** The file link under the right-click, if any. */
+  fileLinkReveal: TerminalFileLinkReveal | null
   onCopy: () => void
   onSelectAll: () => void
   onPaste: () => void
@@ -136,6 +142,7 @@ function TerminalContextMenuItems({
   canClosePane,
   canExpandPane,
   menuPaneIsExpanded,
+  fileLinkReveal,
   onCopy,
   onSelectAll,
   onPaste,
@@ -191,6 +198,19 @@ function TerminalContextMenuItems({
   const showClearPaneTitleShortcut = shortcuts.clearPaneTitle !== 'Unassigned'
   return (
     <>
+      {fileLinkReveal ? (
+        <>
+          <DropdownMenuItem
+            disabled={fileLinkReveal.blocked}
+            onSelect={() => void revealTerminalFileLink(fileLinkReveal)}
+          >
+            <ExternalLink />
+            {getRevealInFileManagerLabel()}
+            {fileLinkReveal.blocked ? <LocalOnlyMenuHint /> : null}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+        </>
+      ) : null}
       <DropdownMenuItem onSelect={onCopy}>
         <Copy />
         {translate('auto.components.terminal.pane.TerminalContextMenu.f3eeb1de13', 'Copy')}
