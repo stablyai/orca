@@ -1,5 +1,6 @@
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import { translate } from '@/i18n/i18n'
 
 export type AutomationSourceDisplay = {
   label: string
@@ -41,6 +42,8 @@ function getProviderLabel(provider: TaskSourceContext['provider']): string {
       return 'Linear'
     case 'jira':
       return 'Jira'
+    case 'sentry':
+      return translate('auto.components.automations.sourceDisplay.sentry', 'Sentry')
   }
 }
 
@@ -58,6 +61,8 @@ function getSourceIdentityLabel(sourceContext: TaskSourceContext): string | null
         return identity.workspaceName ?? identity.workspaceId ?? null
       case 'jira':
         return identity.siteUrl ?? identity.siteId ?? null
+      case 'sentry':
+        return identity.organizationSlug ?? identity.baseUrl ?? null
     }
   }
   return sourceContext.accountLabel ?? sourceContext.repoId ?? null

@@ -73,6 +73,8 @@ export function toFolderWorkspaceLinkedTask(
     url: item.url,
     ...(item.linearIdentifier ? { linearIdentifier: item.linearIdentifier } : {}),
     ...(item.jiraIdentifier ? { jiraIdentifier: item.jiraIdentifier } : {}),
+    ...(item.sentryIssueId ? { sentryIssueId: item.sentryIssueId } : {}),
+    ...(item.sentryShortId ? { sentryShortId: item.sentryShortId } : {}),
     ...(item.repoId ? { repoId: item.repoId } : {})
   }
 }

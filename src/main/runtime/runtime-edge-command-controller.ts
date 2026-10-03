@@ -4,6 +4,7 @@ import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 import { RuntimeBrowserScreencastController } from './runtime-browser-screencast-controller'
 import { createRuntimeBrowserCommands } from './runtime-browser-commands-factory'
 import { RuntimeJiraCommands } from './runtime-jira-commands'
+import { RuntimeSentryCommands } from './runtime-sentry-commands'
 
 type PublicMethods<T> = Pick<T, keyof T>
 type BrowserSurface = Omit<PublicMethods<RuntimeBrowserCommands>, 'browserScreencast'> & {
@@ -22,6 +23,7 @@ type BrowserSurface = Omit<PublicMethods<RuntimeBrowserCommands>, 'browserScreen
 
 export type RuntimeEdgeCommandSurface = BrowserSurface &
   PublicMethods<RuntimeJiraCommands> &
+  PublicMethods<RuntimeSentryCommands> &
   PublicMethods<RuntimeEmulatorCommands>
 
 type ScreencastDependencies = ConstructorParameters<typeof RuntimeBrowserScreencastController>[0]
@@ -112,6 +114,10 @@ const BROWSER_COMMAND_NAMES = [
   'browserTabClose'
 ] as const satisfies readonly (keyof RuntimeBrowserCommands)[]
 
+function bindPrefixedMethods<T extends object, Prefix extends string>(
+  instance: T,
+  prefix: Prefix
+): Pick<PublicMethods<T>, Extract<keyof T, `${Prefix}${string}`>>
 function bindPrefixedMethods<T extends object>(
   instance: T,
   prefix: string
@@ -125,6 +131,10 @@ function bindPrefixedMethods<T extends object>(
   return bound as Partial<PublicMethods<T>>
 }
 
+function bindNamedMethods<T extends object, Names extends readonly (keyof T)[]>(
+  instance: T,
+  names: Names
+): Pick<PublicMethods<T>, Names[number]>
 function bindNamedMethods<T extends object>(
   instance: T,
   names: readonly (keyof T)[]
@@ -136,6 +146,7 @@ function bindNamedMethods<T extends object>(
 
 export class RuntimeEdgeCommandController {
   private readonly jira = new RuntimeJiraCommands()
+  private readonly sentry = new RuntimeSentryCommands()
   private readonly browser: RuntimeBrowserCommands
   private readonly screencasts: RuntimeBrowserScreencastController
   private readonly emulator: RuntimeEmulatorCommands
@@ -155,10 +166,11 @@ export class RuntimeEdgeCommandController {
     this.emulator = new RuntimeEmulatorCommands(args.emulatorHost)
     this.surface = {
       ...bindPrefixedMethods(this.jira, 'jira'),
+      ...bindPrefixedMethods(this.sentry, 'sentry'),
       ...bindNamedMethods(this.browser, BROWSER_COMMAND_NAMES),
       ...bindPrefixedMethods(this.emulator, 'emulator'),
       browserScreencast: (params, options) => this.screencasts.start(params, options)
-    } as RuntimeEdgeCommandSurface
+    } satisfies RuntimeEdgeCommandSurface
   }
 
   cancelScreencast(browserPageId: string): void {

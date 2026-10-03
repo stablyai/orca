@@ -11,6 +11,7 @@ import {
 import type { AutomationHostTarget } from './automation-host-client'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import { translate } from '@/i18n/i18n'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
@@ -259,6 +260,8 @@ function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider'
       return 'Linear'
     case 'jira':
       return 'Jira'
+    case 'sentry':
+      return translate('auto.components.automations.targetAvailability.sentry', 'Sentry')
   }
 }
 
