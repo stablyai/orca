@@ -103,6 +103,21 @@ export function getPowerShellOsc133Bootstrap(): string {
   return POWERSHELL_OSC133_BOOTSTRAP
 }
 
+/**
+ * Marks a startup command appended to the bootstrap as a real command.
+ *
+ * Why: that command runs before the first prompt, and the prompt wrapper
+ * suppresses `133;D` until it has printed once — so an agent launched this way
+ * exits leaving no command-finished boundary, and nothing ever retires its pane.
+ * bash gets both marks from its DEBUG trap; PowerShell has to be told.
+ */
+export function getPowerShellOsc133StartupCommandMark(): string {
+  return `if (Test-Path variable:global:__OrcaOsc133State) {
+    [Console]::Write("$($Global:__OrcaOsc133State.Esc)]133;C$($Global:__OrcaOsc133State.Bel)")
+    $Global:__OrcaOsc133State.HasSeenPrompt = $true
+}`
+}
+
 export function isPowerShellExecutableName(shellName: string): boolean {
   const normalized = shellName.toLowerCase()
   return (
