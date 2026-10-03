@@ -30,6 +30,7 @@ let workspacePortScan: { key: string; result: WorkspacePortScanResult } | null =
 let settings: Partial<GlobalSettings> | null = { compactWorktreeCards: true }
 let agentActivityDisplayMode: 'compact' | 'full' | undefined
 let mockInlineAgentRows: DashboardAgentRowData[] = []
+let remoteStatusesByWorktree: Record<string, unknown> = {}
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
@@ -51,6 +52,7 @@ vi.mock('@/store', () => ({
       ptyIdsByTabId: {},
       recordFeatureInteraction,
       remoteBranchConflictByWorktreeId: {},
+      remoteStatusesByWorktree,
       setRemoteBrowserPageHandle: vi.fn(),
       replaceWorkspacePortScans,
       setWorkspacePortScanRefreshing,
@@ -191,6 +193,7 @@ describe('WorktreeCard compact hover details', () => {
     hostedReviewCache = {}
     issueCache = {}
     projectGroups = []
+    remoteStatusesByWorktree = {}
     workspacePortScan = null
     settings = { compactWorktreeCards: true }
     agentActivityDisplayMode = undefined
@@ -838,5 +841,21 @@ describe('WorktreeCard compact hover details', () => {
 
     expect(markup).toContain('data-worktree-card-meta-row=""')
     expect(markup).toContain('feature/local-branch')
+  })
+
+  it('shows upstream ahead/behind counts next to the branch', async () => {
+    settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status', 'branch']
+    const worktree = makeWorktree({ displayName: 'Human title' })
+    remoteStatusesByWorktree = {
+      [worktree.id]: { hasUpstream: true, upstreamName: 'origin/main', ahead: 2, behind: 178 }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toMatch(/--git-decoration-deleted\)\]">↓178<.*--git-decoration-added\)\]">↑2</)
   })
 })

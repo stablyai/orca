@@ -4,6 +4,7 @@ import { GitMerge } from 'lucide-react'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { Badge } from '@/components/ui/badge'
+import { useAppStore } from '@/store'
 import CacheTimer from './CacheTimer'
 import { WorktreeHostContextBadge } from './WorktreeHostContextBadge'
 import { CONFLICT_OPERATION_LABELS } from './WorktreeCardHelpers'
@@ -87,6 +88,8 @@ export function WorktreeCardMetaRow({
           />
         ) : null}
 
+        {(showIdentityInNewCard || showBranch) && <UpstreamCounts worktreeId={worktree.id} />}
+
         {showConflictOperationBadge && (
           <Badge
             variant="outline"
@@ -104,5 +107,27 @@ export function WorktreeCardMetaRow({
         <div className="ml-auto flex shrink-0 items-center gap-1 pr-1.5">{detailsAndPorts}</div>
       )}
     </div>
+  )
+}
+
+// Why: counts come from the last upstream refresh; unvisited worktrees have none, so nothing renders.
+function UpstreamCounts({ worktreeId }: { worktreeId: string }): React.JSX.Element | null {
+  const status = useAppStore((s) => s.remoteStatusesByWorktree?.[worktreeId])
+  if (!status?.hasUpstream || (status.ahead === 0 && status.behind === 0)) {
+    return null
+  }
+  return (
+    <span
+      className="flex shrink-0 gap-1 text-[11px] leading-none tabular-nums"
+      title={status.upstreamName}
+      data-worktree-card-upstream-counts=""
+    >
+      {status.behind > 0 && (
+        <span className="text-[var(--git-decoration-deleted)]">↓{status.behind}</span>
+      )}
+      {status.ahead > 0 && (
+        <span className="text-[var(--git-decoration-added)]">↑{status.ahead}</span>
+      )}
+    </span>
   )
 }
