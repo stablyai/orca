@@ -1,4 +1,5 @@
 import { colors } from '../../theme/mobile-theme'
+import { paintBottomRowBackdrop } from './bottom-row-backdrop'
 import type { TerminalDocumentScope, TerminalDocumentTheme } from './document-scope'
 
 /** The page background before a theme arrives, and the fallback when a theme omits one. */
@@ -189,4 +190,5 @@ export function applyTerminalTheme(
     scope.term.options.theme = scope.terminalTheme
     scope.term.options.minimumContrastRatio = scope.terminalMinimumContrastRatio
   }
+  paintBottomRowBackdrop(scope)
 }
