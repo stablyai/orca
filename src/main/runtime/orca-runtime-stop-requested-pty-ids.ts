@@ -38,6 +38,8 @@ import { RuntimeMessageWaiters } from './runtime-message-waiters'
 import type { RuntimeSkillCommands } from './runtime-skill-command-surface'
 import { RuntimeTerminalStreamConsumers } from './runtime-terminal-stream-consumers'
 import type { RecentPtyOutputBuffer } from './recent-pty-output-buffer'
+import type { RuntimePtyController } from './runtime-pty-controller-contract'
+import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
 
 export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId {
   protected readonly stopRequestedPtyIds = new Set<string>()
@@ -52,9 +54,45 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     getPrimaryLeaf: (ptyId) => this.getLeavesForPty(ptyId)[0] ?? null,
     getTrackedPty: (ptyId) => this.ptysById.get(ptyId) ?? null,
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title?.trim() || null,
-    getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null,
+    getForegroundProcess: (ptyId) =>
+      this.readTerminalAgentForegroundProcess(ptyId, (controller) =>
+        controller.getForegroundProcess(ptyId)
+      ),
+    confirmForegroundProcess: (ptyId) =>
+      this.readTerminalAgentForegroundProcess(ptyId, (controller) =>
+        controller.confirmForegroundProcess?.(ptyId) ?? null
+      ),
     getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId)
   })
+
+  protected async readTerminalAgentForegroundProcess(
+    ptyId: string,
+    read: (controller: RuntimePtyController) => Promise<string | null> | null
+  ): Promise<string | null> {
+    const controller = this.ptyController
+    const pty = this.ptysById.get(ptyId)
+    if (!controller || pty?.connected === false) {
+      return null
+    }
+    const incarnationId = pty?.incarnationId
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const foreground = await read(controller)
+    if (
+      this.ptyController !== controller ||
+      this.ptysById.get(ptyId) !== pty ||
+      pty?.connected === false ||
+      pty?.incarnationId !== incarnationId ||
+      this.getPtyLifecycleGeneration(ptyId) !== generation
+    ) {
+      return null
+    }
+    const agent = recognizeAgentProcess(foreground)?.agent
+    if (pty && agent && pty.foregroundAgent !== agent) {
+      pty.foregroundAgent = agent
+      this.touchMobileSessionSnapshotsForPty(ptyId)
+    }
+    return foreground
+  }
 
   protected notifier: RuntimeNotifier | null = null
 

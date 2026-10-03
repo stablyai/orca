@@ -12,7 +12,8 @@ import { withTimeout } from './runtime-async-boundaries'
 import {
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptBody,
-  isKnownReadyPromptSettled
+  isKnownReadyPromptSettled,
+  isQuietReadyScreenBody
 } from './terminal-wait-detection'
 import { readsTrustedScreen } from './agent-state-rules/agent-state-rules-engine'
 import { restoreProjectedComposerDraft } from './orca-runtime-terminal-projection'
@@ -28,6 +29,9 @@ import {
 } from './terminal-wait-results'
 import { createSetupCompletionScanner } from './orchestration/setup-completion-signal'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { evaluateTuiIdle } from './tui-idle-evidence'
+import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
+import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
 
 export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
   /** One bounded look at the provider's screen for an adopted PTY whose retained
@@ -40,6 +44,10 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
     waiterTimeoutMs: number,
     agent: TuiAgent | null
   ): void {
+    if (agent === 'codex') {
+      void this.probeRestoredCodexIdle(waiter).catch(() => {})
+      return
+    }
     const settleMarginMs = Math.min(
       TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS,
       Math.max(1, Math.floor(waiterTimeoutMs / 3))
@@ -100,6 +108,80 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
         this.terminalWaiters.resolve(waiter, result)
       })
       .catch(() => {})
+  }
+
+  protected async probeRestoredCodexIdle(waiter: TerminalWaiter): Promise<void> {
+    const live = this.getLivePtyForHandle(waiter.handle)
+    const controller = this.ptyController
+    if (!live?.pty.connected || !live.pty.incarnationId || !controller?.serializeProviderBuffer) {
+      return
+    }
+    const pty = live.pty
+    const incarnationId = pty.incarnationId
+    const generation = this.getPtyLifecycleGeneration(pty.ptyId)
+    const isCurrent = () =>
+      this.terminalWaiters.get(waiter.handle)?.has(waiter) === true &&
+      this.ptyController === controller &&
+      this.getLivePtyForHandle(waiter.handle)?.pty === pty &&
+      pty.connected &&
+      pty.incarnationId === incarnationId &&
+      this.getPtyLifecycleGeneration(pty.ptyId) === generation
+    const read = () =>
+      this.serializeProviderTerminalBuffer(
+        pty.ptyId,
+        { scrollbackRows: 0 },
+        { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS, retireOnTimeout: true }
+      )
+    const first = await read()
+    if (!first || !isCurrent()) {
+      return
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, this.tuiIdleEvidenceSource.quiescenceMs))
+    if (!isCurrent()) {
+      return
+    }
+    const second = await withTimeout(
+      this.captureProviderTerminalBuffer(pty.ptyId, { scrollbackRows: 0 }, generation),
+      VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+      null
+    )
+    if (
+      !second ||
+      !isCurrent() ||
+      first.seq !== second.seq ||
+      first.cols !== second.cols ||
+      first.rows !== second.rows ||
+      this.getPtyOutputSequence(pty.ptyId) > second.seq
+    ) {
+      return
+    }
+    const projection = await this.parseVisibleSnapshot(second)
+    const foreground = await this.readTerminalAgentForegroundProcess(pty.ptyId, (current) =>
+      current.confirmForegroundProcess?.(pty.ptyId) ?? null
+    )
+    if (
+      !isCurrent() ||
+      recognizeAgentProcess(foreground)?.agent !== 'codex' ||
+      this.getPtyOutputSequence(pty.ptyId) > second.seq
+    ) {
+      return
+    }
+    const screen = restoreProjectedComposerDraft(projection.lines, projection.draft)
+    const snapshotText = screen.join('\n')
+    const evidence = ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () => snapshotText)
+    const verdict = evaluateTuiIdle({
+      ...evidence,
+      readPositiveBodyEvidence: () => false,
+      readQuietReadyBodyEvidence: () => isQuietReadyScreenBody(snapshotText, 'codex', () => screen),
+      providerOutputQuiet: true
+    })
+    if (verdict.kind !== 'ready-strong' && verdict.kind !== 'blocked') {
+      return
+    }
+    this.terminalWaiters.resolve(
+      waiter,
+      this.buildTuiIdleProbeResult(waiter.handle, verdict.kind === 'blocked' ? verdict.reason : null)
+    )
   }
 
   protected buildTuiIdleProbeResult(

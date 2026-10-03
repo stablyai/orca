@@ -13,6 +13,7 @@ export type TranscriptPaneOptions = {
   foregroundProcess: string | null
   data: string
   launchAgent?: TuiAgent
+  headless?: boolean
   /** Set for a pane whose PTY lives on an SSH host or WSL distro rather than locally. */
   connectionId?: string
   /** Simulates a PTY controller whose foreground probe never settles. */
@@ -54,8 +55,9 @@ export async function createTranscriptPane(
     leafId: TRANSCRIPT_PANE_LEAF_ID,
     title: 'Terminal'
   })
-  runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  if (!options.headless) {
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: TRANSCRIPT_PANE_TAB_ID,
@@ -75,7 +77,8 @@ export async function createTranscriptPane(
         paneTitle: options.paneTitle
       }
     ]
-  })
+    })
+  }
   if (options.launchAgent) {
     runtime.registerPty(TRANSCRIPT_PANE_PTY_ID, TRANSCRIPT_PANE_WORKTREE_ID, null, {
       tabId: TRANSCRIPT_PANE_TAB_ID,

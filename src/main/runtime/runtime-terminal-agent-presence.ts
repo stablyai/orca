@@ -31,6 +31,7 @@ type RuntimeTerminalAgentPresenceDependencies = {
   getTrackedPty(ptyId: string): RuntimePtyWorktreeRecord | null
   getTabTitle(tabId: string): string | null
   getForegroundProcess(ptyId: string): Promise<string | null> | null
+  confirmForegroundProcess?(ptyId: string): Promise<string | null> | null
   /** The stale-working timer's display-only clear of the PTY's own title, if one stands. */
   getTitleDisplayClear(ptyId: string): TitleDisplayClear | null
 }
@@ -193,7 +194,15 @@ export class RuntimeTerminalAgentPresence {
     if (options.foregroundProcess !== undefined) {
       return options.foregroundProcess
     }
-    return await this.deps.getForegroundProcess(ptyId)
+    const foreground = await this.deps.getForegroundProcess(ptyId)
+    if (
+      !recognizeAgentProcess(foreground) &&
+      !isAgentForegroundWrapperProcess(foreground) &&
+      this.deps.confirmForegroundProcess
+    ) {
+      return await this.deps.confirmForegroundProcess(ptyId)
+    }
+    return foreground
   }
 
   private async isRecognizedForegroundAgentProcess(

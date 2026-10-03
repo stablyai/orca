@@ -38,7 +38,7 @@ function shouldProbeVisibleScreen(
   return (
     (record.lastAgentStatus === null && waitText.length === 0) ||
     showsScreenProbeBanner(waitText) ||
-    (readsTrustedScreen(paneAgent) && record.lastOutputAt === null)
+    ((paneAgent === 'codex' || readsTrustedScreen(paneAgent)) && record.lastOutputAt === null)
   )
 }
 

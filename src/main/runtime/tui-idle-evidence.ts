@@ -210,6 +210,7 @@ export type TuiIdleEvaluationInput = {
   /** Tier 0: the hook server's fresh row for the pane, read only for an authoritative agent. */
   readHookTurn?: () => TuiIdleHookTurn | null
   quiescenceMs: number
+  providerOutputQuiet?: boolean
 }
 
 export type TuiIdleVerdict =
@@ -317,12 +318,14 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   // Why before the working title: Codex can leave a stale spinner title after a turn, and a
   // live spinner emits output every ~100 ms, so a spinning pane is never quiet here.
   if (
-    hasQuietReadyScreen(
-      input.record,
-      input.agent,
-      input.readQuietReadyBodyEvidence,
-      input.quiescenceMs
-    )
+    input.providerOutputQuiet === true
+      ? input.readQuietReadyBodyEvidence()
+      : hasQuietReadyScreen(
+          input.record,
+          input.agent,
+          input.readQuietReadyBodyEvidence,
+          input.quiescenceMs
+        )
   ) {
     return READY_STRONG
   }
