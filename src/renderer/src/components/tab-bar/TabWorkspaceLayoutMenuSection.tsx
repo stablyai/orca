@@ -1,19 +1,47 @@
 import {
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-  DropdownMenuItem,
-  DropdownMenuShortcut
+  DropdownMenuItem
 } from '@/components/ui/dropdown-menu'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Columns2 } from 'lucide-react'
 import type { TabSplitDirection } from '../../store/slices/tabs'
-import { translate } from '@/i18n/i18n'
-import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
+import { useAppStore } from '../../store'
+import { moveTabToNewPaneColumn, resolveTabPaneColumnMoveTarget } from './tab-move-to-pane-column'
 import { TAB_CONTEXT_SUBMENU_CONTENT_CLASS } from './tab-context-menu-sizing'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { TAB_MOVE_TO_SPLIT_COMMANDS, type KeybindingActionId } from '../../../../shared/keybindings'
+import {
+  translateTabMoveToSplitDirection,
+  translateTabMoveToSplitLabel
+} from '@/lib/tab-move-to-split-copy'
 
-const PANE_COLUMN_DIRECTIONS: TabSplitDirection[] = ['right', 'left', 'down', 'up']
+/** Keeps user-assigned chords visible where each move direction is chosen. */
+function PaneColumnDirectionItem({
+  actionId,
+  direction,
+  shortcutLabel,
+  onSelect
+}: {
+  actionId: KeybindingActionId
+  direction: TabSplitDirection
+  shortcutLabel?: string
+  onSelect: () => void
+}): React.JSX.Element {
+  const assignedShortcut = useOptionalShortcutLabel(actionId)
+  const shortcut = shortcutLabel ?? assignedShortcut
+  return (
+    <DropdownMenuItem onSelect={onSelect}>
+      {paneColumnDirectionIcon(direction)}
+      {translateTabMoveToSplitDirection(direction)}
+      {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
+    </DropdownMenuItem>
+  )
+}
 
+/** Keeps icon metadata out of the shared command catalog. */
 function paneColumnDirectionIcon(direction: TabSplitDirection): React.JSX.Element {
   switch (direction) {
     case 'right':
@@ -27,19 +55,7 @@ function paneColumnDirectionIcon(direction: TabSplitDirection): React.JSX.Elemen
   }
 }
 
-function paneColumnDirectionLabel(direction: TabSplitDirection): string {
-  switch (direction) {
-    case 'right':
-      return translate('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.right', 'Right')
-    case 'left':
-      return translate('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.left', 'Left')
-    case 'down':
-      return translate('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.down', 'Down')
-    case 'up':
-      return translate('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.up', 'Up')
-  }
-}
-
+/** Hides the submenu when moving the tab would collapse back to the same layout. */
 export function TabWorkspaceLayoutMenuSection({
   unifiedTabId,
   groupId,
@@ -53,7 +69,8 @@ export function TabWorkspaceLayoutMenuSection({
   trailingSeparator?: boolean
   shortcutLabels?: Partial<Record<TabSplitDirection, string>>
 }): React.JSX.Element | null {
-  if (!canMoveTabToNewPaneColumn(unifiedTabId, groupId)) {
+  const target = resolveTabPaneColumnMoveTarget(useAppStore.getState(), unifiedTabId, groupId)
+  if (!target) {
     return null
   }
 
@@ -63,25 +80,19 @@ export function TabWorkspaceLayoutMenuSection({
       <DropdownMenuSub>
         <DropdownMenuSubTrigger className="[&>svg:last-child]:size-3.5">
           <Columns2 className="size-3.5 shrink-0" />
-          {translate(
-            'auto.components.tab.bar.TabWorkspaceLayoutMenuSection.moveToPaneColumn',
-            'Move Tab to Split'
-          )}
+          {translateTabMoveToSplitLabel()}
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent className={TAB_CONTEXT_SUBMENU_CONTENT_CLASS}>
-          {PANE_COLUMN_DIRECTIONS.map((direction) => (
-            <DropdownMenuItem
-              key={direction}
+          {TAB_MOVE_TO_SPLIT_COMMANDS.map(({ id, direction }) => (
+            <PaneColumnDirectionItem
+              key={id}
+              actionId={id}
+              direction={direction}
+              shortcutLabel={shortcutLabels?.[direction]}
               onSelect={() => {
-                moveTabToNewPaneColumn({ unifiedTabId, groupId, direction })
+                moveTabToNewPaneColumn({ target, direction })
               }}
-            >
-              {paneColumnDirectionIcon(direction)}
-              {paneColumnDirectionLabel(direction)}
-              {shortcutLabels?.[direction] ? (
-                <DropdownMenuShortcut>{shortcutLabels[direction]}</DropdownMenuShortcut>
-              ) : null}
-            </DropdownMenuItem>
+            />
           ))}
         </DropdownMenuSubContent>
       </DropdownMenuSub>
