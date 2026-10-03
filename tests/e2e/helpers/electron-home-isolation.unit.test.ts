@@ -33,6 +33,7 @@ describe('createElectronHomeIsolation', () => {
         ORCA_CODEX_HOME: '/real/orca-codex',
         CLAUDE_CONFIG_DIR: '/real/claude',
         ZDOTDIR: '/real/zdotdir',
+        ORCA_DISABLE_MACOS_LOGIN_SHELL: 'false',
         PATH: '/bin'
       },
       launchEnv: { TEST_TOKEN: 'safe' },
@@ -57,6 +58,9 @@ describe('createElectronHomeIsolation', () => {
     expect(isolation.env.ORCA_CODEX_HOME).toBeUndefined()
     expect(isolation.env.CLAUDE_CONFIG_DIR).toBeUndefined()
     expect(isolation.env.ZDOTDIR).toBeUndefined()
+    expect(isolation.env.ORCA_DISABLE_MACOS_LOGIN_SHELL).toBe(
+      process.platform === 'darwin' ? '1' : undefined
+    )
     // Codex always routes to the resolved home, so the post-launch guard must
     // accept the boundary this env produces.
     expect(() =>
@@ -89,4 +93,19 @@ describe('createElectronHomeIsolation', () => {
   it('compares Windows home paths case-insensitively', () => {
     expect(areSameHomePath('C:\\Users\\Alice', 'c:\\users\\alice', 'win32')).toBe(true)
   })
+
+  it.each(['launchEnv', 'extraEnv'] as const)(
+    'rejects %s attempts to restore the macOS login wrapper',
+    (overlay) => {
+      expect(() =>
+        createElectronHomeIsolation({
+          inheritedEnv: {},
+          launchEnv: overlay === 'launchEnv' ? { ORCA_DISABLE_MACOS_LOGIN_SHELL: '0' } : {},
+          extraEnv: overlay === 'extraEnv' ? { ORCA_DISABLE_MACOS_LOGIN_SHELL: '0' } : {},
+          userDataDir: createUserDataDir(),
+          realHome: '/real/home'
+        })
+      ).toThrow(/ORCA_DISABLE_MACOS_LOGIN_SHELL/)
+    }
+  )
 })
