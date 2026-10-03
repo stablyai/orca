@@ -96,7 +96,9 @@ function sessionHoldingTurn(turnId: string | null): ReturnType<typeof sessionFor
     journalPrompts: {
       resolve: vi.fn(),
       handOver: () => () => {},
-      cancel: () => ({ accepted: true })
+      cancel: () => ({ accepted: true }),
+      openCards: () => [][Symbol.iterator](),
+      whenWritten: () => undefined
     },
     currentTurnId: turnId,
     commandTurnId: null,
