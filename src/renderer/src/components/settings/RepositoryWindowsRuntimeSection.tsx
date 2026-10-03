@@ -12,6 +12,8 @@ type RepositoryWindowsRuntimeSectionProps = {
   project: Project | null
   settings: Pick<GlobalSettings, 'localWindowsRuntimeDefault'> | null
   isLocalWindowsProject: boolean
+  /** Where this project's files live; a WSL UNC pins the runtime to that distro. */
+  repoPath?: string | null
   wslAvailable: boolean
   wslDistros: string[]
   wslCapabilitiesLoading: boolean
@@ -30,6 +32,7 @@ export function RepositoryWindowsRuntimeSection({
   project,
   settings,
   isLocalWindowsProject,
+  repoPath,
   wslAvailable,
   wslDistros,
   wslCapabilitiesLoading,
@@ -67,6 +70,7 @@ export function RepositoryWindowsRuntimeSection({
         project={project}
         settings={settings}
         isLocalWindowsProject={isLocalWindowsProject}
+        repoPath={repoPath}
         wslAvailable={wslAvailable}
         wslDistros={wslDistros}
         wslCapabilitiesLoading={wslCapabilitiesLoading}
