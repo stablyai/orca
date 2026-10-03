@@ -9,6 +9,8 @@ export type CommandSpec = {
   summary: string
   usage: string
   allowedFlags: string[]
+  // Why: per-command option descriptions live with the spec; flags absent here fall back to the shared tables.
+  flagHelp?: Record<string, string>
   // Why: repeatability is per-command vocabulary. `--agent` repeats for `search`
   // and is single-valued for `worktree create`, which one global set cannot say.
   repeatableFlags?: string[]

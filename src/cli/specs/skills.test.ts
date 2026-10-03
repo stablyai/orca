@@ -16,16 +16,16 @@ describe('skill command specs', () => {
     const help = formatCommandHelp(spec('skills get'))
 
     expect(help).toContain('Prints the compact guide by default')
-    expect(help).toContain('--full                 Print the full guide with bundled references')
-    expect(help).not.toContain('--full                 Include all supported V1 issue context')
+    expect(help).toMatch(/--full[ \t]+Print the full guide with bundled references/)
+    expect(help).not.toMatch(/--full[ \t]+Include all supported V1 issue context/)
   })
 
   it('documents the per-reference selector beside --full', () => {
     const help = formatCommandHelp(spec('skills get'))
 
     expect(help).toContain('Usage: orca skills get <topic> [--full | --reference <name>] [--json]')
-    expect(help).toContain('--reference <name>     Print one bundled reference by name')
-    expect(help).toContain('--references           List the bundled reference names for a topic')
+    expect(help).toMatch(/--reference <name>[ \t]+Print one bundled reference by name/)
+    expect(help).toMatch(/--references[ \t]+List the bundled reference names for a topic/)
     expect(help).toContain('orca skills get orchestration --reference recovery-and-cleanup')
     expect(effectiveAllowedFlags(spec('skills get'))).toEqual(
       expect.arrayContaining(['reference', 'references'])
