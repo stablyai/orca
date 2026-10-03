@@ -17,6 +17,7 @@ import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
 import { useWorkspaceRevealBodyRedirect } from './use-workspace-reveal-body-redirect'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { ProjectIconRail } from './ProjectIconRail'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
 
@@ -137,12 +138,16 @@ function Sidebar({
     }
   }, [agentDashboardDrawerOpen, setAgentDashboardDrawerOpen, showAgentDashboard])
 
+  const sidebarCollapseMode = useAppStore((s) => s.sidebarCollapseMode)
+  const isRail = !sidebarOpen && sidebarCollapseMode === 'rail'
+
   const { containerRef, onResizeStart, isResizing } = useSidebarResize<HTMLDivElement>({
     isOpen: sidebarOpen,
     width: sidebarWidth,
     minWidth: MIN_WIDTH,
     maxWidth: MAX_WIDTH,
     deltaSign: 1,
+    collapsedWidth: isRail ? 48 : 0,
     setWidth: setSidebarWidth,
     onDraftWidthChange: setLiveSidebarWidth
   })
@@ -158,7 +163,7 @@ function Sidebar({
         style={leftSidebarStyle}
         {...dropHandlers}
       >
-        {sidebarOpen && (
+        {sidebarOpen ? (
           <>
             {/* Fixed controls */}
             <SidebarNav />
@@ -207,7 +212,9 @@ function Sidebar({
               />
             </div>
           </>
-        )}
+        ) : isRail ? (
+          <ProjectIconRail />
+        ) : null}
 
         {sidebarOpen && affordance.visible ? (
           <div
