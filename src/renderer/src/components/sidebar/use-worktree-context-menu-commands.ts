@@ -53,7 +53,11 @@ export function useWorktreeContextMenuCommands(args: {
     )
   }, [args])
   const handleTogglePin = useCallback(() => {
-    args.setWorktreesPinnedAndReveal([args.worktree.id], !args.worktree.isPinned)
+    // The clicked row names its own host, so qualify the write like the sibling meta updates do.
+    args.setWorktreesPinnedAndReveal(
+      [{ worktreeId: args.worktree.id, executionHostId: args.worktree.hostId ?? 'local' }],
+      !args.worktree.isPinned
+    )
   }, [args])
   const handleCreateGroupFromRepo = useCallback(() => {
     if (!args.repo) {
