@@ -104,7 +104,7 @@ export async function buildRuntimePtySpawnOptions(
     env: ctx.env,
     envToDelete: ctx.spawnOptions.envToDelete
   })
-  ctx.env = await prepareOpenCodePtyLaunch({
+  const openCodeLaunch = await prepareOpenCodePtyLaunch({
     command: ctx.launchCommand,
     agent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
     env: ctx.env,
@@ -116,6 +116,8 @@ export async function buildRuntimePtySpawnOptions(
       ? { wsl: { distro: ctx.expectedWslDistro ?? undefined } }
       : {})
   })
+  ctx.env = openCodeLaunch.env
+  ctx.launchCommand = openCodeLaunch.command
   ctx.spawnOptions.env = ctx.env
   promoteAgentTeamsShimPath(ctx.env, ctx.requestedAgentTeamsPath)
   const noDaemonLaunch = planCodexNoDaemonLaunch({

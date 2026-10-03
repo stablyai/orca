@@ -11,7 +11,7 @@ import { AgentHookServerIngestRemote } from './server-ingest-remote'
 
 export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRemote {
   buildPtyEnv(): Record<string, string> {
-    if (this.port <= 0 || !this.token) {
+    if (!this.statusHooksEnabled || this.port <= 0 || !this.token) {
       return {}
     }
     const env: Record<string, string> = {
