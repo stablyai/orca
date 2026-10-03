@@ -257,6 +257,8 @@ Pair with your desktop app to monitor and steer your agents from your phone.
 
 Want to contribute or run locally? See our [CONTRIBUTING.md](.github/CONTRIBUTING.md) guide.
 
+For isolated mobile-rendering experiments, see [experimental browser raster rendering](docs/reference/experimental-browser-raster.md).
+
 The relay that pairs the mobile app with a desktop host is also in this repository under
 [`cloud/`](cloud/README.md), with a separate pnpm workspace and setup guide.
 
