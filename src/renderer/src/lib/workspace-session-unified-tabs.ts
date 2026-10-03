@@ -1,6 +1,7 @@
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
+import { dedupeTabsById } from '../store/slices/tab-group-state'
 
 type PersistedUnifiedTabSessionData = Pick<
   WorkspaceSessionState,
@@ -88,7 +89,14 @@ export function buildPersistedUnifiedTabSessionData(
     }
 
     const groupIds = new Set(groups.map((group) => group.id))
-    const persistedTabs = tabs.filter((tab) => groupIds.has(tab.groupId))
+    // Why dedupe: repeated tab ids otherwise accumulate on disk, and readers that do not
+    // dedupe see both. Sort like hydration and filter first so the surviving copy matches
+    // what hydration keeps and a copy in a dropped group cannot erase the valid one.
+    const persistedTabs = dedupeTabsById(
+      [...tabs]
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
+        .filter((tab) => groupIds.has(tab.groupId))
+    )
     if (persistedTabs.length === 0) {
       continue
     }
