@@ -18,6 +18,7 @@ import {
   exitTrailingEmptyOrderedListItem
 } from './rich-markdown-list-continuation'
 import { deleteAdjacentEmptyParagraph } from './rich-markdown-empty-paragraph-delete'
+import { exitHeadingOnEnter } from './rich-markdown-heading-continuation'
 import { handleRichMarkdownTableBackspace } from './rich-markdown-table-row-delete'
 import { handleRichMarkdownTableEnter } from './rich-markdown-table-enter'
 import { handleRichMarkdownTableTab } from './rich-markdown-table-tab'
@@ -176,13 +177,20 @@ export function createRichMarkdownKeyHandler(
         event.preventDefault()
         return true
       }
+      // Why: the slash/doc-link menus own Enter while open, and their blocks
+      // run later in this handler.
+      const noMenuOpen = !ctx.slashMenuRef.current && !ctx.docLinkMenuRef.current
+      const headingEnterEligible =
+        ed && !event.shiftKey && noMenuOpen && !isComposingMarkdownInput(event, ed)
+      if (headingEnterEligible && exitHeadingOnEnter(ed)) {
+        event.preventDefault()
+        return true
+      }
       // Why: table Enter (cell below / add row) must run before ProseMirror
-      // inserts an in-cell paragraph that GFM serialization cannot keep — but
-      // the slash/doc-link menus own Enter while open (their blocks run later).
+      // inserts an in-cell paragraph that GFM serialization cannot keep.
       if (
         ed &&
-        !ctx.slashMenuRef.current &&
-        !ctx.docLinkMenuRef.current &&
+        noMenuOpen &&
         !isComposingMarkdownInput(event, ed) &&
         handleRichMarkdownTableEnter(ed)
       ) {
