@@ -33,6 +33,8 @@ const STATUS_DOT_COLOR: Record<CheckStatus, string> = {
   success: 'bg-emerald-500',
   failure: 'bg-rose-500',
   pending: 'bg-amber-500',
+  // Why: grey, matching the Checks panel's muted cancelled tone — not the failure red (#15847).
+  cancelled: 'bg-muted-foreground/70',
   neutral: 'bg-muted-foreground'
 }
 
