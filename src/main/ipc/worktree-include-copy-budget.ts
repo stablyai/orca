@@ -11,7 +11,7 @@ export type WorktreeCopyBudget = {
 
 // Why: `.worktreeinclude` is a repo-authored list, and a repo that lists
 // `node_modules` freezes worktree creation for minutes behind an inline copy
-// (macOS gets a cheap APFS clone; Linux/Windows get a full `fs.cp`). These
+// (same-volume APFS/ReFS gets a cheap clone; other filesystems get a full `fs.cp`). These
 // limits clear real payloads — `.env` files, `.vscode/`, small build caches —
 // and refuse dependency trees. The entry limit matters as much as the byte
 // limit: 200k tiny files are slow to copy even though they weigh little.
@@ -44,7 +44,7 @@ export type SkippedWorktreeCopyPath = {
 }
 
 export type WorktreeCopyAdmitOptions = {
-  /** False when the backend clones copy-on-write (APFS `clonefile`), where
+  /** False when the backend clones copy-on-write (APFS clonefile/ReFS block clone), where
    *  bytes cost nothing and only inode count is real work. */
   bytesAreCopied?: boolean
 }
