@@ -1,7 +1,6 @@
 import { sameBucketRecords } from './bucket-record-equality'
 import {
   type UnreadBadgeCountSources,
-  type UnreadBadgeTab,
   type UnreadBadgeWorktree,
   getUnreadBadgeCount
 } from './unread-badge-count'
@@ -9,11 +8,12 @@ import {
 const EMPTY_BUCKETS = Object.freeze({})
 
 function sameBadgeWorktree(previous: UnreadBadgeWorktree, next: UnreadBadgeWorktree): boolean {
-  return previous.id === next.id && previous.isUnread === next.isUnread
-}
-
-function sameBadgeTab(previous: UnreadBadgeTab, next: UnreadBadgeTab): boolean {
-  return previous.id === next.id
+  return (
+    previous.id === next.id &&
+    previous.hostId === next.hostId &&
+    previous.isUnread === next.isUnread &&
+    previous.isArchived === next.isArchived
+  )
 }
 
 /**
@@ -22,29 +22,26 @@ function sameBadgeTab(previous: UnreadBadgeTab, next: UnreadBadgeTab): boolean {
  * only notifies when the badge value can actually have moved.
  *
  * Why chaining against the immediately preceding state is enough: equality over the count's read set
- * — worktree `id`/`isUnread`, tab `id`, and the unread map identity — is transitive, so a run of
+ * — the worktree projection and the folder workspace list identity — is transitive, so a run of
  * unchanged states is equivalent to comparing against the state that produced the cached count.
  */
 export function createUnreadBadgeCountSelector(): (state: UnreadBadgeCountSources) => number {
   let previousWorktreesByRepo: UnreadBadgeCountSources['worktreesByRepo'] = EMPTY_BUCKETS
-  let previousTabsByWorktree: UnreadBadgeCountSources['tabsByWorktree'] = EMPTY_BUCKETS
-  let previousUnreadTerminalTabs: UnreadBadgeCountSources['unreadTerminalTabs'] | undefined
+  let previousFolderWorkspaces: UnreadBadgeCountSources['folderWorkspaces'] | undefined
   let unreadCount = 0
   let counted = false
 
   return (state) => {
     const unchanged =
       counted &&
-      previousUnreadTerminalTabs === state.unreadTerminalTabs &&
-      sameBucketRecords(previousWorktreesByRepo, state.worktreesByRepo, sameBadgeWorktree) &&
-      sameBucketRecords(previousTabsByWorktree, state.tabsByWorktree, sameBadgeTab)
+      previousFolderWorkspaces === state.folderWorkspaces &&
+      sameBucketRecords(previousWorktreesByRepo, state.worktreesByRepo, sameBadgeWorktree)
     if (!unchanged) {
       unreadCount = getUnreadBadgeCount(state)
-      previousUnreadTerminalTabs = state.unreadTerminalTabs
+      previousFolderWorkspaces = state.folderWorkspaces
       counted = true
     }
     previousWorktreesByRepo = state.worktreesByRepo
-    previousTabsByWorktree = state.tabsByWorktree
     return unreadCount
   }
 }

@@ -1,47 +1,39 @@
-import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../shared/worktree/types'
 
 /** The only fields the count reads, so a projection over them is a sound cache key. */
-export type UnreadBadgeWorktree = Pick<Worktree, 'id' | 'isUnread'>
-export type UnreadBadgeTab = Pick<TerminalTab, 'id'>
+export type UnreadBadgeWorktree = Pick<Worktree, 'id' | 'hostId' | 'isUnread' | 'isArchived'>
 
 export type UnreadBadgeCountSources = {
   worktreesByRepo: Readonly<Record<string, readonly UnreadBadgeWorktree[]>>
-  tabsByWorktree: Readonly<Record<string, readonly UnreadBadgeTab[]>>
-  unreadTerminalTabs: Readonly<Record<string, StoredAgentAttentionUnread>>
+  folderWorkspaces: readonly Pick<FolderWorkspace, 'isUnread'>[]
 }
 
+/**
+ * Why workspace flags only: the flag is what the sidebar draws and what visiting a workspace
+ * clears. Tab markers outlive both, so counting them left a number with nothing to find (#23363).
+ */
 export function getUnreadBadgeCount({
   worktreesByRepo,
-  tabsByWorktree,
-  unreadTerminalTabs
+  folderWorkspaces
 }: UnreadBadgeCountSources): number {
-  const unreadWorktreeIds = new Set<string>()
-
+  // Why host identity: a repo on two hosts publishes one id for two sidebar rows.
+  const unreadWorktrees = new Set<string>()
   for (const worktrees of Object.values(worktreesByRepo)) {
     for (const worktree of worktrees) {
-      if (worktree.isUnread) {
-        unreadWorktreeIds.add(worktree.id)
+      // Why: the sidebar never renders an archived worktree; folder rows have no such filter.
+      if (worktree.isUnread && !worktree.isArchived) {
+        unreadWorktrees.add(getWorktreeHostIdentity(worktree))
       }
     }
   }
 
-  const unreadTabIds = new Set(Object.keys(unreadTerminalTabs))
-  if (unreadTabIds.size === 0) {
-    return unreadWorktreeIds.size
-  }
-
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    for (const tab of tabs) {
-      if (!unreadTabIds.delete(tab.id)) {
-        continue
-      }
-      unreadWorktreeIds.add(worktreeId)
+  let count = unreadWorktrees.size
+  for (const folderWorkspace of folderWorkspaces) {
+    if (folderWorkspace.isUnread) {
+      count += 1
     }
   }
-
-  // Why: tab unread state should normally map to a live worktree, but counting
-  // unmatched entries keeps the Dock badge honest during hydration races.
-  return unreadWorktreeIds.size + unreadTabIds.size
+  return count
 }
