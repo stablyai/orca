@@ -130,6 +130,7 @@ docs/**
 !docs/reference/ime-regression-checklist.md
 !docs/reference/jcode-hook-events.md
 !docs/reference/linux-glibc-compatibility.md
+!docs/reference/linux-memory-kill-attribution.md
 !docs/reference/macos-press-and-hold.md
 !docs/reference/orcad-operations.md
 !docs/reference/pnpm-install-policy.md

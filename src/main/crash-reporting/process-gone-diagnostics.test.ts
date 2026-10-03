@@ -7,6 +7,8 @@ import {
   startPreGoneCrashSampling
 } from './process-gone-diagnostics'
 import { setSystemMemoryInfoReaderForTest } from './system-memory-details'
+import { setLinuxCgroupMemoryLimitReaderForTest } from './linux-cgroup-memory-limit'
+import { setLinuxMemoryPressureStallReaderForTest } from './linux-memory-pressure-stall'
 
 type MetricFixture = {
   pid?: number
@@ -29,10 +31,16 @@ describe('process gone diagnostics', () => {
   beforeEach(() => {
     resetPreGoneCrashSamplingForTest()
     setSystemMemoryInfoReaderForTest(null)
+    // buildProcessGoneCrashDetails spreads getSystemMemoryDetails, so on a Linux
+    // runner the real cgroup and PSI files add keys to the exact-shape assertions.
+    setLinuxCgroupMemoryLimitReaderForTest(() => undefined)
+    setLinuxMemoryPressureStallReaderForTest(() => undefined)
   })
 
   afterEach(() => {
     vi.useRealTimers()
+    setLinuxCgroupMemoryLimitReaderForTest(null)
+    setLinuxMemoryPressureStallReaderForTest(null)
   })
 
   it('summarizes Electron process memory by crash-report-friendly buckets', () => {
