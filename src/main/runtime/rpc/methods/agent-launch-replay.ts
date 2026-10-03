@@ -22,37 +22,19 @@ import type {
   AgentSessionOperationRefusalCode
 } from '../../../../shared/agent-session-operation-ledger'
 import { resolveAgentSessionReplayOutcome } from '../../../native-chat/agent-session-wire/structured-agent-session-replay-outcome'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import type { RpcContext } from '../core'
+import { rpcCallerOperationKey } from '../rpc-caller-identity'
 import type { AgentLaunchParams } from './agent-launch-schemas'
 
-/** Remote replay needs the paired-device subject because its bearer credential can rotate. */
-export function agentLaunchOperationCallerKey(
-  context: Pick<RpcContext, 'pairedDeviceId' | 'clientKind'>
-): string {
-  if (context.clientKind === undefined) {
-    return 'trusted-local:runtime'
-  }
-  const pairedDeviceId = context.pairedDeviceId?.trim()
-  if (!pairedDeviceId) {
+/**
+ * The ledger namespace of whoever the transport says is calling. A transport that could not name its
+ * caller gets no replay safety at all, rather than a namespace shared with strangers.
+ */
+export function agentLaunchOperationCallerKey(context: Pick<RpcContext, 'caller'>): string {
+  if (!context.caller) {
     throw new Error('agent_session_identity_required')
   }
-  return pairedDeviceId
-}
-
-/**
- * The store is owned by the structured session host, so reaching it installs that host — already
- * true of any structured launch, which installs it to attach. The change is that a terminal-bound
- * launch now opens the record store too, when and only when its caller asked for replay safety.
- */
-async function requireLaunchOperationStore(context: RpcContext): Promise<AgentSessionRecordStore> {
-  await context.runtime.ensureStructuredAgentSessionHost()
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
-    throw new Error('structured_agent_session_unsupported')
-  }
-  return host.deps.store
+  return rpcCallerOperationKey(context.caller)
 }
 
 /**
@@ -67,6 +49,9 @@ export type AgentLaunchAdmission =
   /** This caller owns the operation. It alone runs the effect, and it must settle the row. */
   | {
       decision: 'execute'
+      /** The surface exists: records the launch as it stands, so a restart before `settle` replays
+       *  the running agent instead of refusing an unknown outcome. */
+      record: (provisional: AgentLaunchResult) => Promise<void>
       settle: (result: AgentLaunchResult) => Promise<void>
       fail: (code: string) => Promise<void>
       /** Distinct from the launch id: the inner attach reserves in this same ledger. */
@@ -134,8 +119,9 @@ export async function admitAgentLaunchOperation(
   if (!attachOperationId) {
     return refusal(operationId, 'agent_session_operation_invalid', 'is not a durable operation id')
   }
-  const store = await requireLaunchOperationStore(context)
   const callerKey = agentLaunchOperationCallerKey(context)
+  // The ledger alone: admitting a terminal launch has no use for the chat host.
+  const store = await context.runtime.openAgentSessionRecordStore()
   const { decision: admitted, claim } = await store.admitAndClaimOperation(
     { callerKey, operationId, fingerprint, now },
     // A fresh row, or a replayed one no one has answered yet, leaves the right to run open.
@@ -169,21 +155,24 @@ export async function admitAgentLaunchOperation(
       refusal(operationId, 'agent_session_operation_unknown', 'is claimed but unsettled')
     )
   }
+  const succeeded = (result: AgentLaunchResult) =>
+    store.recordOperationOutcome({
+      callerKey,
+      operationId,
+      outcome: {
+        status: 'succeeded',
+        // A terminal surface has a handle, not a session id; `launch` carries whichever it is.
+        sessionId: result.outcome.kind === 'structured' ? result.outcome.sessionId : '',
+        launch: result
+      }
+    })
   return {
     decision: 'execute',
     attachOperationId,
     callerKey,
-    settle: (result) =>
-      store.recordOperationOutcome({
-        callerKey,
-        operationId,
-        outcome: {
-          status: 'succeeded',
-          // A terminal surface has a handle, not a session id; `launch` carries whichever it is.
-          sessionId: result.outcome.kind === 'structured' ? result.outcome.sessionId : '',
-          launch: result
-        }
-      }),
+    // The same row shape twice: a build that predates the first write reads either one.
+    record: succeeded,
+    settle: succeeded,
     fail: (code) =>
       store.recordOperationOutcome({
         callerKey,

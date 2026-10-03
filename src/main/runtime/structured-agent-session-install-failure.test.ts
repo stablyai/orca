@@ -1,5 +1,6 @@
-// An install that fails after it opened the chat journal closes that connection, so the next
-// install does not leave a second one open in the same process.
+// An install that fails after it opened the chat journal leaves that one connection to the record
+// store slot, which launch admission may already be using, and the next install builds on it: the
+// process never holds a second connection.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -54,18 +55,20 @@ afterEach(async () => {
 })
 
 describe('an install that fails after opening the chat journal', () => {
-  it('closes the journal connection it opened, and the next install opens its own', async () => {
+  it('keeps the one connection it opened, and the next install builds on it', async () => {
     const open = vi.spyOn(JournalHostDatabase, 'open')
     mocks.failWiring.mockReturnValueOnce(true)
 
     await expect(install()).rejects.toThrow('model catalog wiring failed')
-    const failed = await open.mock.results[0]?.value
-    expect(failed).toBeInstanceOf(JournalHostDatabase)
-    expect(failed.isClosed).toBe(true)
+    const opened = await open.mock.results[0]?.value
+    expect(opened).toBeInstanceOf(JournalHostDatabase)
+    expect(opened.isClosed).toBe(false)
 
     await expect(install()).resolves.toBeDefined()
-    expect(open).toHaveBeenCalledTimes(2)
-    const reopened = await open.mock.results[1]?.value
-    expect(reopened?.isClosed).toBe(false)
+    expect(open).toHaveBeenCalledOnce()
+    expect(opened.isClosed).toBe(false)
+
+    await stopStructuredAgentSessionRuntime()
+    expect(opened.isClosed).toBe(true)
   })
 })

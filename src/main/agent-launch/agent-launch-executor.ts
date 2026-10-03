@@ -38,6 +38,7 @@ import {
   HANDED_TO_TERMINAL,
   launchCommandPrompt,
   promptReceipt,
+  settledAtCreation,
   settleLaunchPromptDisposal
 } from './agent-launch-prompt-delivery'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -74,7 +75,12 @@ export type AgentLaunchExecution = {
   onSurfacePublished?: (surface: AgentLaunchPublishedSurface) => void
 }
 
-export type AgentLaunchPublishedSurface = Pick<AgentLaunchResult, 'outcome' | 'worktreeId'>
+/**
+ * The launch as it stands once its surface exists: a complete result whose prompt receipt says only
+ * what creation itself settled — carried on the launch command, or not (yet) delivered. Complete so
+ * a host that dies during the delivery still leaves a truthful answer behind.
+ */
+export type AgentLaunchPublishedSurface = AgentLaunchResult
 
 export async function executeAgentLaunch(
   execution: AgentLaunchExecution
@@ -101,11 +107,12 @@ export async function executeAgentLaunch(
   if (intent.reuseTerminal) {
     const reused = published(execution, {
       outcome: { kind: 'terminal', handle: intent.reuseTerminal.handle },
-      worktreeId: existingWorktreeId(intent.target)
+      worktreeId: existingWorktreeId(intent.target),
+      receipt: preflight,
+      ...promptReceipt(intent, settledAtCreation({}))
     })
     return {
       ...reused,
-      receipt: preflight,
       ...promptReceipt(
         intent,
         await deliverTerminalLaunchPrompt(execution, intent.reuseTerminal.handle, {
@@ -124,12 +131,13 @@ export async function executeAgentLaunch(
         handle: placed.startupTerminalHandle,
         ...(placed.startupTerminalPaneKey ? { paneKey: placed.startupTerminalPaneKey } : {})
       },
-      worktreeId: placed.worktreeId
+      worktreeId: placed.worktreeId,
+      receipt: preflight,
+      ...(placed.warning ? { warning: placed.warning } : {}),
+      ...promptReceipt(intent, settledAtCreation(placed))
     })
     return {
       ...startup,
-      receipt: preflight,
-      ...(placed.warning ? { warning: placed.warning } : {}),
       ...promptReceipt(
         intent,
         placed.promptRodeLaunchCommand
@@ -179,11 +187,15 @@ export async function executeAgentLaunch(
   // not start while looking at it. Telling those apart needs `createManagedWorktree` to stop
   // multiplexing "couldn't copy untracked files" and "startup terminal failed" into one string.
   const warning = combineLaunchWarnings(placed.warning, created.warning)
-  const surface = published(execution, { outcome: created.outcome, worktreeId: placed.worktreeId })
-  return {
-    ...surface,
+  const surface = published(execution, {
+    outcome: created.outcome,
+    worktreeId: placed.worktreeId,
     receipt: settled,
     ...(warning ? { warning } : {}),
+    ...promptReceipt(intent, settledAtCreation(created))
+  })
+  return {
+    ...surface,
     ...promptReceipt(intent, await settleLaunchPromptDisposal(execution, created))
   }
 }

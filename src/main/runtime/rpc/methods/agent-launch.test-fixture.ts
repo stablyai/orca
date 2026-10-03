@@ -9,6 +9,8 @@ import { vi } from 'vitest'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
 import { AgentLaunchPaneAlreadyLiveError } from '../../../../shared/agent-launch-pane-already-live'
 import type { RpcContext } from '../core'
+import { resolveRpcCallerIdentity } from '../rpc-caller-identity'
+import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 
 export const STRUCTURED_PREFERENCE = {
   experimentalNativeChat: true,
@@ -47,6 +49,13 @@ function reportPromptCarry(
   if (typeof report === 'function' && offered && options.lineCarriesPrompt !== undefined) {
     report(options.lineCarriesPrompt)
   }
+}
+
+let launchRecordStore: AgentSessionRecordStore | null = null
+
+/** The ledger every stub's `openAgentSessionRecordStore` opens, as a process opens its one store. */
+export function setAgentLaunchRecordStore(store: AgentSessionRecordStore | null): void {
+  launchRecordStore = store
 }
 
 export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
@@ -119,6 +128,12 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       folderWorkspace: null
     })),
     ensureStructuredAgentSessionHost: vi.fn(async () => {}),
+    openAgentSessionRecordStore: vi.fn(async (): Promise<AgentSessionRecordStore> => {
+      if (!launchRecordStore) {
+        throw new Error('agent_session_record_store_unavailable')
+      }
+      return launchRecordStore
+    }),
     waitForSetupTerminalCompletion
   }
 }
@@ -139,12 +154,14 @@ export function methodNamed<TMethod extends { name: string }, TName extends stri
 }
 
 // The one call the stub cannot satisfy structurally; every method it does implement is asserted.
+// The caller is stamped the way the dispatcher stamps it from the same transport fields.
 export function rpcContext(
   runtime: AgentLaunchRuntimeStub,
   context: Partial<RpcContext>
 ): RpcContext {
+  const caller = context.caller ?? resolveRpcCallerIdentity(context)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements only the runtime surface these methods reach, so a method it omits throws on call rather than reading a wrong value.
-  return { runtime, ...context } as unknown as RpcContext
+  return { runtime, ...context, ...(caller ? { caller } : {}) } as unknown as RpcContext
 }
 
 export const CAPABLE_CLIENT: Partial<RpcContext> = {

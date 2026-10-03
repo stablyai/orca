@@ -11,7 +11,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
 import { AgentLaunchStructuredSessionRefusedError } from './agent-launch-surface-factories'
-import type { AgentLaunchIntent } from '../../shared/agent-launch-intent'
+import type { AgentLaunchIntent, AgentLaunchResult } from '../../shared/agent-launch-intent'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 
 const STRUCTURED_PREFERENCE = {
@@ -29,6 +29,7 @@ function harness(options: {
   terminalPromptDelivered?: boolean
   /** Whether the surface reports that its typed line took the offered prompt. */
   lineCarriesPrompt?: boolean
+  onSurfacePublished?: AgentLaunchExecution['onSurfacePublished']
 }) {
   const calls: string[] = []
   const carried = (startupPrompt: string | undefined) =>
@@ -96,7 +97,8 @@ function harness(options: {
           deliverStructuredPrompt,
           deliverTerminalPrompt
         },
-        workspaces: { createWorktree }
+        workspaces: { createWorktree },
+        ...(options.onSurfacePublished ? { onSurfacePublished: options.onSurfacePublished } : {})
       })
   }
 }
@@ -591,5 +593,70 @@ describe('caller-supplied launch inputs', () => {
     const result = await h.run({ agent: 'claude', target: EXISTING })
 
     expect(result.warning).toBeUndefined()
+  })
+})
+
+describe('the surface is published as the launch stands, before its prompt is delivered', () => {
+  const PROMPTED_EXISTING: AgentLaunchIntent = {
+    agent: 'claude',
+    target: { kind: 'existing', worktree: 'wt-7' },
+    prompt: { text: 'fix the build', delivery: 'submit' }
+  }
+
+  function publishing(options: Parameters<typeof harness>[0]) {
+    const published: AgentLaunchResult[] = []
+    const launch = harness({
+      ...options,
+      onSurfacePublished: (surface) => {
+        launch.calls.push('published')
+        published.push(surface)
+      }
+    })
+    return { launch, published }
+  }
+
+  it('records a prompt still owed as not delivered, then delivers it', async () => {
+    const { launch, published } = publishing({ settings: {}, lineCarriesPrompt: false })
+
+    const result = await launch.run(PROMPTED_EXISTING)
+
+    expect(launch.calls).toEqual(['createTerminalAgent', 'published', 'deliverTerminalPrompt'])
+    expect(published).toEqual([
+      {
+        outcome: { kind: 'terminal', handle: 'term_1' },
+        worktreeId: 'wt-7',
+        receipt: result.receipt,
+        prompt: { delivery: 'submit', outcome: 'not-delivered' }
+      }
+    ])
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+  })
+
+  it('records a prompt the launch command carried as already handed over', async () => {
+    const { launch, published } = publishing({ settings: {}, lineCarriesPrompt: true })
+
+    const result = await launch.run(PROMPTED_EXISTING)
+
+    expect(published[0]?.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(published[0]).toEqual(result)
+    expect(launch.deliverTerminalPrompt).not.toHaveBeenCalled()
+  })
+
+  it('records a chat before its first message is committed', async () => {
+    const { launch, published } = publishing({})
+
+    const result = await launch.run(PROMPTED_EXISTING)
+
+    expect(launch.calls).toEqual([
+      'createSupport',
+      'createStructuredSession',
+      'published',
+      'deliverStructuredPrompt'
+    ])
+    expect(published[0]).toEqual({
+      ...result,
+      prompt: { delivery: 'submit', outcome: 'not-delivered' }
+    })
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'journaled', messageId: 'msg-1' })
   })
 })

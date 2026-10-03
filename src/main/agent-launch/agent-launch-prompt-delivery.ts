@@ -29,6 +29,17 @@ import type { AgentLaunchStructuredSurface } from './agent-launch-surface-factor
 export const HANDED_TO_TERMINAL: AgentLaunchPromptDisposal = { outcome: 'handed-to-terminal' }
 const NOT_DELIVERED: AgentLaunchPromptDisposal = { outcome: 'not-delivered' }
 
+/**
+ * What the receipt may say before any delivery runs: only what creating the surface already
+ * settled. A launch command that carried the text has handed it over; anything else is not (yet)
+ * delivered, which is also the truthful answer when the host dies before delivering it.
+ */
+export function settledAtCreation(created: {
+  promptRodeLaunchCommand?: boolean
+}): AgentLaunchPromptDisposal {
+  return created.promptRodeLaunchCommand ? HANDED_TO_TERMINAL : NOT_DELIVERED
+}
+
 /** Each surface delivers its own way, so the disposal is decided where the surface is known. */
 export async function settleLaunchPromptDisposal(
   execution: AgentLaunchExecution,

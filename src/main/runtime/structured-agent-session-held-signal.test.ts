@@ -1,7 +1,7 @@
 /**
  * "This machine holds a structured chat" against a real host and record store. Session history,
- * resume preparation and replay-safe phone launches all build the host for a user who never had a
- * chat; only a chat record may turn the signal on, and the first one must turn it on at once.
+ * resume preparation and replay-safe phone launches all open the record store for a user who never
+ * had a chat; only a chat record may turn the signal on, and the first one must turn it on at once.
  */
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -21,6 +21,7 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { openAgentSessionRecordStoreOnce } from './agent-session-record-store-slot'
 
 vi.mock('../ai-vault/session-scanner-worker-spawn', () => ({
   scanAiVaultSessionsInWorker: vi.fn(),
@@ -53,6 +54,14 @@ const runtime = {
   ensureStructuredAgentSessionHost: async () => {
     await installHost()
   },
+  openAgentSessionRecordStore: async () =>
+    (
+      await openAgentSessionRecordStoreOnce({
+        stateDirectory,
+        hostId: 'local',
+        logger: createStructuredAgentSessionLogger()
+      })
+    ).store,
   listAiVaultSessions: async () => ({
     sessions: [],
     issues: [],
@@ -110,7 +119,12 @@ describe('whether this machine holds a structured chat', () => {
 
   it('stays false when a replay-safe phone launch records its operation', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission reads only these fields.
-    const context = { runtime, clientKind: 'mobile', pairedDeviceId: 'phone-1' } as RpcContext
+    const context = {
+      runtime,
+      clientKind: 'mobile',
+      pairedDeviceId: 'phone-1',
+      caller: { kind: 'paired-device', deviceId: 'phone-1' }
+    } as RpcContext
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission reads only the operation id.
     const params = { operationId: operationId('a1') } as Parameters<
       typeof admitAgentLaunchOperation
