@@ -11,6 +11,56 @@ import {
 } from './agent-process-recognition'
 
 describe('agent process recognition', () => {
+  it.each([
+    '/usr/local/bin/dsb',
+    '/usr/bin/deepseek-build',
+    'C:\\Users\\dev\\bin\\dsb.cmd',
+    'C:\\Users\\dev\\bin\\deepseek-build-agent.exe'
+  ])('recognizes manually started DeepSeek Build at %s', (processName) => {
+    expect(recognizeAgentProcess(processName)?.agent).toBe('dsb')
+  })
+
+  it('recognizes DeepSeek Build by binary name and its npm shim', () => {
+    expect(recognizeAgentProcess('dsb')).toEqual({ agent: 'dsb', processName: 'dsb' })
+    expect(recognizeAgentProcess('deepseek-build')).toEqual({
+      agent: 'dsb',
+      processName: 'deepseek-build'
+    })
+    expect(recognizeAgentProcess('deepseek-build-agent')).toEqual({
+      agent: 'dsb',
+      processName: 'deepseek-build-agent'
+    })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /usr/lib/node_modules/@innocarpe/deepseek-build/npm/bin/dsb.js'
+      )
+    ).toEqual({ agent: 'dsb', processName: 'dsb' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /usr/lib/node_modules/@innocarpe/deepseek-build/npm/bin/dsb.js run "explain this"'
+      )
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('dsb run "explain this"')).toBeNull()
+  })
+
+  it.each([
+    '-r ./preload.js',
+    '--require "./preload path.js"',
+    '--import ./preload.mjs',
+    '--loader ./loader.mjs',
+    '--experimental-loader ./loader.mjs',
+    '--require=./preload.js',
+    '--import=./preload.mjs'
+  ])('excludes a one-shot DSB npm shim after Node options %s', (options) => {
+    const shim = `node ${options} /usr/lib/node_modules/@innocarpe/deepseek-build/npm/bin/dsb.js`
+    expect(recognizeAgentProcessFromCommandLine(`${shim} run "task"`)).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(`${shim} run "task"`, { includeHeadlessOneShot: true })
+        ?.agent
+    ).toBe('dsb')
+    expect(recognizeAgentProcessFromCommandLine(`${shim} agent`)?.agent).toBe('dsb')
+  })
+
   it('recognizes packaged Codex foreground process names', () => {
     expect(recognizeAgentProcess('codex-aarch64-ap')).toEqual({
       agent: 'codex',
@@ -53,6 +103,13 @@ describe('agent process recognition', () => {
       expect(recognizeAgentProcessFromCommandLine(command)).toBeNull()
       expect(detectExplicitPiAgentKindFromCommand(command)).toBeNull()
     }
+  })
+
+  it('recognizes both published DeepSeek Build npm entrypoints and excludes run with cwd', () => {
+    const shim = '/usr/lib/node_modules/@innocarpe/deepseek-build/npm/bin/deepseek-build.js'
+    expect(recognizeAgentProcessFromCommandLine(`node ${shim}`)?.agent).toBe('dsb')
+    expect(recognizeAgentProcessFromCommandLine(`node ${shim} --cwd folder run task`)).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('dsb --cwd folder run task')).toBeNull()
   })
 
   it('recognizes the OpenClaude foreground process', () => {

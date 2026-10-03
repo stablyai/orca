@@ -40,6 +40,21 @@ describe('readiness census coverage', () => {
     )
   })
 
+  it('replays observation-only Build captures only on agent-unknown panes', () => {
+    const buildCaptures = readdirSync(join(__dirname, '__fixtures__'))
+      .filter((file) => file.startsWith('dsb-') && file.endsWith('.txt'))
+      .map((file) => file.slice(0, -'.txt'.length))
+    const buildPanes = CENSUS_PANES.filter(({ transcript }) =>
+      buildCaptures.includes(transcript.name)
+    )
+    expect(buildPanes.map(censusPaneSubject).toSorted()).toEqual(
+      buildCaptures.map((name) => `transcript/${name}@unknown`).toSorted()
+    )
+    for (const { transcript } of buildPanes) {
+      expect(transcript.agent).toBeNull()
+    }
+  })
+
   it('keeps exactly one baseline per replayed pane and synthetic agent', () => {
     const subjects = [
       ...CENSUS_PANES.map(censusPaneSubject),

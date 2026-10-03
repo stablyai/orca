@@ -248,7 +248,13 @@ describe('serialize round trip over captured PTY transcripts', () => {
           'jitter/true/2/34:0db2561506ff28d2e83276b07bc8684541957f61e488b6f8081627e8cad80c63'
         ])
       }
-      if (SEEDS === 2 && transcript.name.startsWith('freebuff-')) {
+      // The pre-#22586 serializer has these same row-1 bold diffs on the untouched capture.
+      if (SEEDS === 2 && transcript.name === 'dsb-6-9-0-folder') {
+        expect(failureSignatures).toEqual([
+          'jitter/false/2/19:2050835176269320209c56be5ae9e525424635dfca511d44d3911d3a22ba9d27',
+          'jitter/true/2/19:2050835176269320209c56be5ae9e525424635dfca511d44d3911d3a22ba9d27'
+        ])
+      } else if (SEEDS === 2 && transcript.name.startsWith('freebuff-')) {
         expect(failureSignatures).toEqual(FREEBUFF_BASELINE[transcript.name] ?? [])
       } else if (!OLD_ADDON_PATH && SEEDS === 2) {
         expect(counts['new-fail'] ?? 0).toBe(KNOWN_PREEXISTING_I2_FAILURES[transcript.name] ?? 0)

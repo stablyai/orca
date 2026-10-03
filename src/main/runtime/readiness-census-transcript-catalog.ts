@@ -38,6 +38,8 @@ const RUNTIME_RECORDERS: readonly (readonly [string, Recorder])[] = [
     'cursor-agent-',
     { agent: 'cursor', foregroundProcess: 'cursor-agent', grid: { cols: 80, rows: 24 } }
   ],
+  // Build is observation-only, so its recordings do not establish TuiAgent readiness.
+  ['dsb-', { agent: null, foregroundProcess: 'dsb' }],
   ['dsh-', { agent: 'dsh', foregroundProcess: 'dsh-tui' }],
   ['freebuff-', { agent: 'freebuff', foregroundProcess: 'freebuff' }],
   ['hermes-', { agent: 'hermes', foregroundProcess: 'hermes' }],

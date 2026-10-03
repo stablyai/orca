@@ -14,6 +14,7 @@ import { getRegisteredSshState } from '../ssh/ssh-target-registry'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalAgent } from '../../shared/terminal-agent'
 import type { AgentPromptActivity } from './agent-prompt-submission-verification'
 import { readTuiIdleHookTurn, type TuiIdleHookTurn } from './tui-idle-hook-lane'
 
@@ -165,7 +166,7 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
     return worktreePath && isWindowsAbsolutePathLike(worktreePath) ? 'win32' : 'linux'
   }
 
-  protected getPtyAgent(ptyId: string): TuiAgent | null {
+  protected getPtyAgent(ptyId: string): TerminalAgent | null {
     const pty = this.ptysById.get(ptyId)
     return pty?.launchAgent ?? pty?.foregroundAgent ?? null
   }
