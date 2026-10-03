@@ -2,10 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { claudeStructuredPermissionModeForSettings } from './claude-structured-permission-mode'
 
 describe('claudeStructuredPermissionModeForSettings', () => {
-  // The three states the Agent Permissions toggle can leave behind. The untouched case is the
-  // common one and the easiest to get wrong: the toggle writes nothing until it is used, and the
-  // default Orca ships for the key it did not write is the bypass flag — which is what a terminal
-  // launch has always applied to an untouched profile.
+  // The untouched case is the common one and the easiest to get wrong: a profile with no stored
+  // mode gets the default Orca ships, which is bypass — what a terminal launch has always applied.
   it('bypasses when the user has never opened Agent settings', () => {
     expect(claudeStructuredPermissionModeForSettings({ agentDefaultArgs: {} })).toBe(
       'bypassPermissions'
@@ -17,29 +15,50 @@ describe('claudeStructuredPermissionModeForSettings', () => {
     )
   })
 
-  it('bypasses when Yolo wrote the flag, alone or beside other tokens', () => {
+  it('bypasses in Yolo with or without extra arguments', () => {
+    expect(
+      claudeStructuredPermissionModeForSettings({
+        agentPermissionMode: 'bypass',
+        agentDefaultArgs: { claude: '--model Opus' }
+      })
+    ).toBe('bypassPermissions')
+  })
+
+  // A terminal launch honours a bypass flag typed into Arguments, so the structured path does too.
+  it('bypasses when the flag is typed into Arguments under Manual', () => {
     for (const claude of [
       '--dangerously-skip-permissions',
       '--dangerously-skip-permissions --model Opus',
       '--model Opus --dangerously-skip-permissions'
     ]) {
       expect(
-        claudeStructuredPermissionModeForSettings({ agentDefaultArgs: { claude } }),
+        claudeStructuredPermissionModeForSettings({
+          agentPermissionMode: 'ask',
+          agentDefaultArgs: { claude }
+        }),
         claude
       ).toBe('bypassPermissions')
     }
   })
 
-  // Manual is stored as an empty string, which owns the key and so beats the shipped default.
-  it('prompts when Manual cleared the flag', () => {
-    expect(claudeStructuredPermissionModeForSettings({ agentDefaultArgs: { claude: '' } })).toBe(
+  it('prompts in Manual, globally or for Claude alone', () => {
+    expect(claudeStructuredPermissionModeForSettings({ agentPermissionMode: 'ask' })).toBe(
       'default'
     )
+    expect(
+      claudeStructuredPermissionModeForSettings({
+        agentPermissionModeOverrides: { claude: 'ask' },
+        agentDefaultArgs: { claude: '--model Opus' }
+      })
+    ).toBe('default')
   })
 
-  it('prompts when the user replaced the flag with something else', () => {
+  it('follows a Claude-only Yolo choice under a Manual default', () => {
     expect(
-      claudeStructuredPermissionModeForSettings({ agentDefaultArgs: { claude: '--model Opus' } })
-    ).toBe('default')
+      claudeStructuredPermissionModeForSettings({
+        agentPermissionMode: 'ask',
+        agentPermissionModeOverrides: { claude: 'bypass' }
+      })
+    ).toBe('bypassPermissions')
   })
 })

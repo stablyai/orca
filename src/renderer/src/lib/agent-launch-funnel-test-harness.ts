@@ -11,6 +11,8 @@ export type LaunchFunnelSettings = {
   agentCmdOverrides: Record<string, string>
   agentDefaultArgs: Record<string, string>
   agentDefaultEnv: Record<string, Record<string, string>>
+  agentPermissionMode?: 'bypass' | 'ask'
+  agentPermissionModeOverrides?: Record<string, 'bypass' | 'ask'>
   activeRuntimeEnvironmentId: string | null
   terminalWindowsShell?: string
   experimentalNativeChat?: boolean

@@ -4,6 +4,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import { buildSourceControlAgentConnectionErrorPlan } from './source-control-agent-action-dialog-support'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
+import { resolveTuiAgentLaunchArgs } from '../../../../shared/tui-agent-launch-defaults'
 
 type BuildSourceControlAgentDeliveryPlanArgs = {
   selectedAgent: TuiAgent | null
@@ -35,7 +36,10 @@ export function buildSourceControlAgentDeliveryPlan({
   const result = planSourceControlAgentActionLaunch({
     agent: selectedAgent,
     commandInput,
-    agentArgs,
+    // Same composition as the launch, so the preview shows the permission flag it will carry.
+    agentArgs: selectedAgent
+      ? resolveTuiAgentLaunchArgs(selectedAgent, settings, agentArgs)
+      : agentArgs,
     sessionOptions: selectedAgent
       ? resolveInitialNativeChatSessionOptions(settings, {
           agent: selectedAgent,

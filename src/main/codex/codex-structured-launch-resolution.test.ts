@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { AgentLaunchProfileSettings } from '../../shared/tui-agent-launch-defaults'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
@@ -41,7 +42,7 @@ function resolverFor(
   value: AgentSessionRecord | null,
   resolveWorkspacePath: (workspaceId: string) => Promise<string> = async (id) => `/repos/${id}`,
   resolveRollout: () => Promise<string | null> = async () => null,
-  agentDefaultArgs: Record<string, string> = { codex: '' }
+  permissionSettings: AgentLaunchProfileSettings = { agentPermissionMode: 'ask' }
 ) {
   return createCodexStructuredLaunchResolver({
     store: { getRecord: () => value } as unknown as AgentSessionRecordStore,
@@ -49,7 +50,7 @@ function resolverFor(
     resolveCommand: () => '/usr/local/bin/codex',
     resolveRollout,
     isWindowsProcessStartTimeAvailable: () => true,
-    resolvePermissionPolicy: () => codexStructuredPermissionPolicyForSettings({ agentDefaultArgs })
+    resolvePermissionPolicy: () => codexStructuredPermissionPolicyForSettings(permissionSettings)
   })
 }
 
@@ -144,11 +145,11 @@ describe('codex structured launch resolution', () => {
     expect(fresh).not.toHaveProperty('supersedeIfUnsaved')
   })
 
-  // Agent Permissions is the only thing derived from the arguments field. app-server owns it on
+  // Agent Permissions is the only launch setting the structured path reads. app-server owns it on
   // the thread RPC rather than through the interactive CLI's process flags.
   it('resolves the bypass posture as app-server thread policy', async () => {
     const launch = await resolverFor(record(), undefined, undefined, {
-      codex: '--dangerously-bypass-approvals-and-sandbox --model gpt-5.6-sol'
+      agentDefaultArgs: { codex: '--model gpt-5.6-sol' }
     })({ identity: IDENTITY })
 
     expect(launch.args).toEqual(['app-server'])

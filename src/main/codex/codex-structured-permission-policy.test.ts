@@ -17,14 +17,17 @@ describe('codexStructuredPermissionPolicyForSettings', () => {
     ).toEqual(BYPASS)
   })
 
-  it('bypasses when Yolo wrote the flag, alone or beside other tokens', () => {
+  it('bypasses when the flag is typed into Arguments under Manual', () => {
     for (const codex of [
       '--dangerously-bypass-approvals-and-sandbox',
       '--dangerously-bypass-approvals-and-sandbox --model gpt-5.6-sol',
       '--model gpt-5.6-sol --dangerously-bypass-approvals-and-sandbox'
     ]) {
       expect(
-        codexStructuredPermissionPolicyForSettings({ agentDefaultArgs: { codex } }),
+        codexStructuredPermissionPolicyForSettings({
+          agentPermissionMode: 'ask',
+          agentDefaultArgs: { codex }
+        }),
         codex
       ).toEqual(BYPASS)
     }
@@ -36,7 +39,10 @@ describe('codexStructuredPermissionPolicyForSettings', () => {
       '-- --dangerously-bypass-approvals-and-sandbox'
     ]) {
       expect(
-        codexStructuredPermissionPolicyForSettings({ agentDefaultArgs: { codex } }),
+        codexStructuredPermissionPolicyForSettings({
+          agentPermissionMode: 'ask',
+          agentDefaultArgs: { codex }
+        }),
         codex
       ).toEqual(MANUAL)
     }
@@ -46,16 +52,25 @@ describe('codexStructuredPermissionPolicyForSettings', () => {
   // means the fields are ABSENT, and absent is not a reset. A session flipped Yolo → Manual
   // resumed with the Yolo thread's `approvalPolicy: never` still in force and escalated with no
   // prompt. Manual has to say what it wants.
-  it('states the approval posture when Manual cleared the flag', () => {
-    expect(codexStructuredPermissionPolicyForSettings({ agentDefaultArgs: { codex: '' } })).toEqual(
-      MANUAL
-    )
+  it('states the approval posture in Manual', () => {
+    expect(
+      codexStructuredPermissionPolicyForSettings({ agentPermissionModeOverrides: { codex: 'ask' } })
+    ).toEqual(MANUAL)
+  })
+
+  it('follows the typed mode, not whether Arguments are custom', () => {
+    expect(
+      codexStructuredPermissionPolicyForSettings({ agentDefaultArgs: { codex: '-m gpt-5.6-sol' } })
+    ).toEqual(BYPASS)
   })
 
   it('never answers with an absent policy for either posture', () => {
     for (const codex of ['', '--dangerously-bypass-approvals-and-sandbox', '--model gpt-5.6-sol']) {
       expect(
-        codexStructuredPermissionPolicyForSettings({ agentDefaultArgs: { codex } }),
+        codexStructuredPermissionPolicyForSettings({
+          agentPermissionMode: 'ask',
+          agentDefaultArgs: { codex }
+        }),
         codex
       ).toBeDefined()
     }
@@ -66,6 +81,7 @@ describe('codexStructuredPermissionPolicyForSettings', () => {
   it('carries nothing but the permission posture out of the arguments field', () => {
     expect(
       codexStructuredPermissionPolicyForSettings({
+        agentPermissionMode: 'ask',
         agentDefaultArgs: {
           codex: '--profile review --add-dir /repo -c model_reasoning_effort=high'
         }

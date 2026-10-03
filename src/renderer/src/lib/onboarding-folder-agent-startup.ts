@@ -49,8 +49,8 @@ export function buildOnboardingFolderAgentStartup(
     agent,
     prompt: '',
     cmdOverrides: settings.agentCmdOverrides ?? {},
-    agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+    agentArgs: resolveTuiAgentLaunchArgs(agent, settings),
+    agentEnv: resolveTuiAgentLaunchEnv(agent, settings),
     sessionOptions: resolveInitialNativeChatSessionOptions(settings, {
       agent,
       nativeChatTranscriptIsLocalReadable

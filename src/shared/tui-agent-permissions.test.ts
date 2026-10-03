@@ -1,105 +1,72 @@
 import { describe, expect, it } from 'vitest'
 import {
-  applyAgentPermissionMode,
-  resolveAgentPermissionModeSummary,
-  resolveTuiAgentPermissionMode,
-  YOLO_TUI_AGENT_ARGS,
-  YOLO_TUI_AGENT_ENV
+  agentHasPermissionMode,
+  applyAgentPermissionModeToAll,
+  normalizeAgentPermissionModeOverrides,
+  resolveAgentPermissionMode,
+  resolveDefaultAgentPermissionMode,
+  type AgentPermissionSettingsFields
 } from './tui-agent-permissions'
 
 describe('tui agent permissions', () => {
-  it('recognizes the current default profile as yolo', () => {
-    expect(
-      resolveAgentPermissionModeSummary({
-        agentDefaultArgs: YOLO_TUI_AGENT_ARGS,
-        agentDefaultEnv: YOLO_TUI_AGENT_ENV
-      })
-    ).toBe('yolo')
+  it('defaults an untouched profile to bypass, as Orca has always shipped', () => {
+    expect(resolveDefaultAgentPermissionMode({})).toBe('bypass')
+    expect(resolveAgentPermissionMode('claude', undefined)).toBe('bypass')
   })
 
-  it('recognizes an empty profile as manual', () => {
-    expect(resolveAgentPermissionModeSummary({ agentDefaultArgs: {}, agentDefaultEnv: {} })).toBe(
-      'manual'
-    )
+  it('prefers the agent override over the shared default', () => {
+    const settings = {
+      agentPermissionMode: 'ask' as const,
+      agentPermissionModeOverrides: { codex: 'bypass' as const }
+    }
+    expect(resolveAgentPermissionMode('codex', settings)).toBe('bypass')
+    expect(resolveAgentPermissionMode('claude', settings)).toBe('ask')
   })
 
-  it('preserves custom agent arguments when applying manual mode', () => {
-    const result = applyAgentPermissionMode({
-      mode: 'manual',
-      agentDefaultArgs: {
-        claude: '--dangerously-skip-permissions',
-        codex: '--model gpt-5'
-      },
-      agentDefaultEnv: YOLO_TUI_AGENT_ENV
+  it('applies one mode to every agent and clears per-agent choices', () => {
+    expect(applyAgentPermissionModeToAll('ask')).toEqual({
+      agentPermissionMode: 'ask',
+      agentPermissionModeOverrides: {}
     })
-
-    expect(result.agentDefaultArgs.claude).toBe('')
-    expect(result.agentDefaultArgs.codex).toBe('--model gpt-5')
-    expect(result.agentDefaultEnv.goose).toEqual({})
   })
 
-  it('reports mixed when custom arguments are present', () => {
+  // A mode a newer build wrote stays stored for it.
+  it('drops unknown agents but keeps every stored mode', () => {
     expect(
-      resolveAgentPermissionModeSummary({
-        agentDefaultArgs: {
-          ...YOLO_TUI_AGENT_ARGS,
-          codex: '--model gpt-5'
-        },
-        agentDefaultEnv: YOLO_TUI_AGENT_ENV
+      normalizeAgentPermissionModeOverrides({
+        claude: 'ask',
+        nope: 'bypass',
+        codex: 'yolo',
+        gemini: 1
       })
-    ).toBe('mixed')
+    ).toEqual({ claude: 'ask', codex: 'yolo' })
+    expect(normalizeAgentPermissionModeOverrides('bad')).toEqual({})
   })
 
-  it('resolves one Codex yolo launch as yolo', () => {
-    expect(
-      resolveTuiAgentPermissionMode({
-        agent: 'codex',
-        agentArgs: YOLO_TUI_AGENT_ARGS.codex,
-        agentEnv: {}
-      })
-    ).toBe('yolo')
+  it('knows which agents have a permission mode at all', () => {
+    expect(agentHasPermissionMode('claude')).toBe(true)
+    expect(agentHasPermissionMode('goose')).toBe(true)
+    expect(agentHasPermissionMode('opencode')).toBe(false)
   })
 
-  it('resolves one empty Codex launch as manual', () => {
-    expect(resolveTuiAgentPermissionMode({ agent: 'codex', agentArgs: '', agentEnv: {} })).toBe(
-      'manual'
+  // A newer build may store a mode this one doesn't know; it fails toward more prompts.
+  it('reads a stored mode it does not know as ask', () => {
+    const settings: AgentPermissionSettingsFields = JSON.parse(
+      '{"agentPermissionMode":"accept-edits"}'
     )
-  })
-
-  it('switches Muse between yolo and manual arguments', () => {
+    expect(resolveDefaultAgentPermissionMode(settings)).toBe('ask')
+    expect(resolveAgentPermissionMode('claude', settings)).toBe('ask')
     expect(
-      applyAgentPermissionMode({
-        mode: 'yolo',
-        agentDefaultArgs: { muse: '' },
-        agentDefaultEnv: {}
-      }).agentDefaultArgs.muse
-    ).toBe('--yolo')
-    expect(
-      applyAgentPermissionMode({
-        mode: 'manual',
-        agentDefaultArgs: { muse: '--yolo' },
-        agentDefaultEnv: {}
-      }).agentDefaultArgs.muse
-    ).toBe('')
-  })
-
-  it('resolves custom Codex permission arguments as mixed', () => {
-    expect(
-      resolveTuiAgentPermissionMode({
-        agent: 'codex',
-        agentArgs: '--ask-for-approval on-request',
-        agentEnv: {}
+      resolveAgentPermissionMode('codex', {
+        ...settings,
+        agentPermissionModeOverrides: { codex: 'bypass' }
       })
-    ).toBe('mixed')
-  })
-
-  it('resolves env-driven yolo launches', () => {
+    ).toBe('bypass')
     expect(
-      resolveTuiAgentPermissionMode({
-        agent: 'goose',
-        agentArgs: '',
-        agentEnv: YOLO_TUI_AGENT_ENV.goose
+      resolveAgentPermissionMode('codex', {
+        agentPermissionMode: 'bypass',
+        agentPermissionModeOverrides: { codex: 'accept-edits' }
       })
-    ).toBe('yolo')
+    ).toBe('ask')
   })
 })

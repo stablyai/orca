@@ -468,22 +468,86 @@ describe('AgentsPane', () => {
     expect(matchesSettingsSearch('manual', getAgentsPaneSearchEntries())).toBe(true)
   })
 
-  it('applies the selected agent permission mode from settings without a mixed segment', () => {
+  it('shows the stored default on the switch and applies a choice to every agent', () => {
     const onChange = vi.fn()
-    const element = AgentPermissionsSetting({ mode: 'mixed', onChange })
+    const element = AgentPermissionsSetting({ mode: 'ask', exceptions: [], onChange })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: AgentPermissionsSetting passes these props to its segmented control.
     const props = element.props.children.props.action.props as {
-      value: 'yolo'
-      onChange: (value: 'yolo' | 'manual' | 'mixed') => void
+      value: string
+      onChange: (value: 'bypass' | 'ask') => void
       options: { value: string }[]
     }
 
-    expect(props.value).toBe('yolo')
-    expect(props.options.map((option) => option.value)).toEqual(['yolo', 'manual'])
-    props.onChange('mixed')
-    expect(onChange).not.toHaveBeenCalled()
+    expect(props.value).toBe('ask')
+    expect(props.options.map((option) => option.value)).toEqual(['bypass', 'ask'])
+    props.onChange('bypass')
+    expect(onChange).toHaveBeenCalledWith('bypass')
+  })
 
-    props.onChange('manual')
-    expect(onChange).toHaveBeenCalledWith('manual')
+  // #23853 / STA-8699: an agent whose launch differed from the switch used to read as Yolo.
+  it('names agents that launch differently from the switch instead of hiding them', () => {
+    const markup = renderPane({
+      ...getDefaultSettings('/tmp'),
+      agentPermissionMode: 'bypass',
+      agentPermissionModeOverrides: { claude: 'ask' }
+    })
+
+    expect(markup).toContain('Set separately: Claude (Manual).')
+  })
+
+  // The summary line and the agent's own control already say it; no badge repeats it.
+  it('shows no permission badge on an agent that is set separately', () => {
+    detectedAgentsMock.detectedIds = ['claude']
+    const markup = renderPane({
+      ...getDefaultSettings('/tmp'),
+      agentPermissionMode: 'bypass',
+      agentPermissionModeOverrides: { claude: 'ask' }
+    })
+
+    expect(markup).toContain('aria-label="Claude permissions"')
+    expect(markup).not.toMatch(/rounded-full[^>]*>Manual</)
+  })
+
+  // A choice a newer build stored reads as Manual, and is listed as one.
+  it('shows a stored per-agent mode it does not know as Manual', () => {
+    detectedAgentsMock.detectedIds = ['claude']
+    const markup = renderPane({
+      ...getDefaultSettings('/tmp'),
+      agentPermissionMode: 'bypass',
+      agentPermissionModeOverrides: { claude: 'accept-edits' }
+    })
+    const claudeControl = markup.slice(markup.indexOf('aria-label="Claude permissions"'))
+
+    expect(markup).toContain('Set separately: Claude (Manual).')
+    expect(claudeControl).toMatch(/role="radio" aria-checked="true"[^>]*>Manual</)
+  })
+
+  it('counts a permission option typed into Arguments as the agent posture', () => {
+    detectedAgentsMock.detectedIds = ['claude', 'codex']
+    const markup = renderPane({
+      ...getDefaultSettings('/tmp'),
+      agentPermissionMode: 'bypass',
+      agentDefaultArgs: { codex: '-a on-request' }
+    })
+
+    expect(markup).toContain('Set separately: Codex (Manual).')
+  })
+
+  it('leaves agents that are not installed out of the summary', () => {
+    detectedAgentsMock.detectedIds = ['claude']
+    const markup = renderPane({
+      ...getDefaultSettings('/tmp'),
+      agentPermissionMode: 'bypass',
+      agentPermissionModeOverrides: { codex: 'ask' }
+    })
+
+    expect(markup).not.toContain('Set separately')
+  })
+
+  it('lists no exceptions when every agent follows the switch', () => {
+    const markup = renderPane({ ...getDefaultSettings('/tmp'), agentPermissionMode: 'ask' })
+
+    expect(markup).not.toContain('Set separately')
   })
 
   it('keeps catalog agent ids, labels, and commands discoverable in settings search', () => {

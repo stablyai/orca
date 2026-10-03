@@ -5680,7 +5680,6 @@
           "2d133152fa": "Sin entorno predeterminado",
           "agentPermissions": "Permisos de Agents",
           "agentPermissionsInfo": "Información de permisos de Agents",
-          "agentPermissionsTooltip": "No se aplica a agents con argumentos de lanzamiento sobrescritos.",
           "agentPermissionsDescription": "Elige si Orca lanza agents con menos prompts de permisos o con checks manuales.",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "Manual",
@@ -5691,7 +5690,13 @@
           "03e1a5081a": "on {{value0}}",
           "25a41a9aad": "Re-detect agents installed on the active server",
           "remoteDetectionFailed": "Couldn’t detect installed agents. Check the host connection and try again.",
-          "retryDetection": "Retry"
+          "retryDetection": "Retry",
+          "agentPermissionsAppliesToAll": "Se aplica a todos los agentes. Para configurar un agente de otra forma, despliégalo en la lista de abajo.",
+          "agentPermissionsExceptions": "Configurados por separado: {{value0}}.",
+          "agentPermissionOverride": "Permisos",
+          "agentPermissionOverrideAria": "Permisos de {{value0}}",
+          "agentPermissionOverrideDefault": "Predeterminado ({{value0}})",
+          "agentPermissionArgumentsOptions": "Los argumentos o el entorno ya configuran los permisos ({{value0}}), así que {{value1}} los usa en lugar de este ajuste."
         },
         "AppIconSelector": {
           "d5a112dc9b": "Icono siguiente",

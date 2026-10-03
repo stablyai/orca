@@ -26,6 +26,7 @@ import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
 import type { TuiAgent } from './tui-agent'
+import type { AgentPermissionSettingsFields } from './tui-agent-permissions'
 import type {
   AgentDashboardMode,
   BranchPrefixStrategy,
@@ -55,7 +56,8 @@ export type WorktreeVisibilityDefaults = {
   sourcePreferences?: WorktreeVisibilitySourcePreferences
 }
 
-export type GlobalSettings = {
+// The permission-mode fields live beside their logic; this file is at its max-lines ceiling.
+export type GlobalSettings = AgentPermissionSettingsFields & {
   workspaceDir: string
   /** Host-owned defaults used when a repository has no explicit visibility override. */
   worktreeVisibilityDefaults?: WorktreeVisibilityDefaults
@@ -412,9 +414,10 @@ export type GlobalSettings = {
     /** Per-WSL-distro absolute Linux path; missing distro falls back to <wslHome>/.codex. */
     wsl?: Record<string, string>
   }
-  /** Per-agent default CLI arguments appended after the binary/path and before prompts. */
+  /** Per-agent extra CLI arguments the user typed, appended after the binary/path and before
+   *  prompts. Never holds the permission flag: `agentPermissionMode` owns that. */
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
-  /** Per-agent launch environment defaults used when yolo mode is exposed as env. */
+  /** Per-agent extra launch environment. Never holds an env-driven permission bypass. */
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
   /** One-shot guard for adding yolo-mode default args to untouched agent launch profiles. */
   agentYoloDefaultsMigrated?: boolean

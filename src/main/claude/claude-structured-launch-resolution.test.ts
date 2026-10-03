@@ -1,4 +1,5 @@
 import { chmodSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import type { AgentLaunchProfileSettings } from '../../shared/tui-agent-launch-defaults'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -53,12 +54,17 @@ function makeExecutable(path: string): void {
   }
 }
 
+/** Manual, with these Claude arguments typed into Settings. */
+function manualWithArgs(claude: string): AgentLaunchProfileSettings {
+  return { agentPermissionMode: 'ask', agentDefaultArgs: { claude } }
+}
+
 function resolverFor(
   value: AgentSessionRecord | null,
   resolveEnv?: () => Record<string, string>,
   stripAuthEnv = false,
   // Manual by default so a test that is not about permissions is not silently about them.
-  agentDefaultArgs: Record<string, string> = { claude: '' },
+  permissionSettings: AgentLaunchProfileSettings = { agentPermissionMode: 'ask' },
   hasTranscript: () => Promise<boolean> = async () => true
 ) {
   return createClaudeStructuredLaunchResolver({
@@ -66,7 +72,7 @@ function resolverFor(
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveCommand: () => '/usr/local/bin/claude',
     resolveAuthPolicy: () => ({ stripAuthEnv }),
-    resolvePermissionMode: () => claudeStructuredPermissionModeForSettings({ agentDefaultArgs }),
+    resolvePermissionMode: () => claudeStructuredPermissionModeForSettings(permissionSettings),
     hasTranscript,
     ...(resolveEnv ? { resolveEnv } : {})
   })
@@ -231,7 +237,7 @@ describe('claude structured launch resolution', () => {
       }),
       undefined,
       false,
-      { claude: '' },
+      { agentPermissionMode: 'ask' },
       hasTranscript
     )({ identity: identityAt(null) })
 
@@ -257,7 +263,12 @@ describe('claude structured launch resolution', () => {
     ['--dangerously-skip-permissions --model Opus'],
     ['--model Opus --dangerously-skip-permissions']
   ])('starts a Yolo session in bypassPermissions for args %s', async (claude) => {
-    const launch = await resolverFor(record(), undefined, false, { claude })({ identity: IDENTITY })
+    const launch = await resolverFor(
+      record(),
+      undefined,
+      false,
+      manualWithArgs(claude)
+    )({ identity: IDENTITY })
 
     expect(launch.options.extraArgs).toEqual({
       'replay-user-messages': null,
@@ -279,11 +290,15 @@ describe('claude structured launch resolution', () => {
     })
   })
 
-  // Manual is stored as an empty string, which owns the key and so beats the shipped default.
   it.each([[''], ['--model Opus']])(
     'leaves a Manual session prompting for args %s',
     async (claude) => {
-      const launch = await resolverFor(record(), undefined, false, { claude })({
+      const launch = await resolverFor(
+        record(),
+        undefined,
+        false,
+        manualWithArgs(claude)
+      )({
         identity: IDENTITY
       })
 

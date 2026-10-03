@@ -14,6 +14,9 @@ import {
   AgentDefaultArgsInput,
   AgentDefaultEnvInput
 } from './AgentLaunchDefaultsEditor'
+import { AgentPermissionOverrideControl } from './AgentPermissionControls'
+import type { AgentPermissionMode } from '../../../../shared/tui-agent-permissions'
+import type { AgentPermissionPosture } from '../../../../shared/tui-agent-permission-args'
 
 type AgentAvailability = 'enabled' | 'disabled'
 
@@ -74,6 +77,15 @@ export type AgentCatalogRowProps = {
   onSaveArgs: (value: string) => void
   onSaveEnv: (value: Record<string, string>) => void
   sessionSourceHome?: AgentSessionSourceHomeControl
+  /** Shows the environment editor even when empty (agents whose permission mode is an env var). */
+  envEditable?: boolean
+  /** Absent for agents with no permission flag to set. */
+  permission?: {
+    override: AgentPermissionMode | undefined
+    defaultMode: AgentPermissionMode
+    posture: AgentPermissionPosture
+    onChange: (choice: AgentPermissionMode | 'default') => void
+  }
 }
 
 export function AgentCatalogRow({
@@ -94,12 +106,17 @@ export function AgentCatalogRow({
   onSaveOverride,
   onSaveArgs,
   onSaveEnv,
-  sessionSourceHome
+  sessionSourceHome,
+  envEditable,
+  permission
 }: AgentCatalogRowProps): React.JSX.Element {
   const envSummary = stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
   const [cmdOpen, setCmdOpen] = useState(
-    Boolean(cmdOverride) || argsOverride !== defaultArgs || envSummary !== defaultEnvSummary
+    Boolean(cmdOverride) ||
+      argsOverride !== defaultArgs ||
+      envSummary !== defaultEnvSummary ||
+      permission?.override !== undefined
   )
 
   return (
@@ -216,7 +233,18 @@ export function AgentCatalogRow({
               onSaveArgs={onSaveArgs}
             />
           </div>
-          {(defaultEnvSummary || envSummary) && (
+          {permission && (
+            <div className="mt-2">
+              <AgentPermissionOverrideControl
+                agentLabel={label}
+                override={permission.override}
+                defaultMode={permission.defaultMode}
+                posture={permission.posture}
+                onChange={permission.onChange}
+              />
+            </div>
+          )}
+          {(envEditable || defaultEnvSummary || envSummary) && (
             <div className="mt-2">
               <AgentDefaultEnvInput
                 key={`${agentId}:${envSummary}`}

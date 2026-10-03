@@ -9,7 +9,12 @@ import { resolveLocalWindowsAgentStartupShell } from './windows-terminal-shell'
 export type AgentStartupSettings = Partial<
   Pick<
     GlobalSettings,
-    'agentCmdOverrides' | 'agentDefaultArgs' | 'agentDefaultEnv' | 'terminalWindowsShell'
+    | 'agentCmdOverrides'
+    | 'agentDefaultArgs'
+    | 'agentDefaultEnv'
+    | 'agentPermissionMode'
+    | 'agentPermissionModeOverrides'
+    | 'terminalWindowsShell'
   >
 >
 
@@ -41,7 +46,8 @@ export function resolveAgentStartupPlanInputs(args: {
   settings: AgentStartupSettings
   platform: NodeJS.Platform
   isRemote: boolean
-  /** Replaces the configured default args for this launch; `null` is "no arguments". */
+  /** Launch-ready args for this launch (a client already applied its permission mode); `null` is
+   *  "no arguments at all". Omit it to compose from this host's settings. */
   agentArgs?: string | null
   /** A requested shell is the one this PTY will be, so it owns the quoting family. */
   windowsShellOverride?: string | null
@@ -54,10 +60,8 @@ export function resolveAgentStartupPlanInputs(args: {
     // A per-launch override wins over the Settings default; `null` is "no arguments", so this
     // tests for absence rather than falsiness.
     agentArgs:
-      args.agentArgs !== undefined
-        ? args.agentArgs
-        : resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      args.agentArgs !== undefined ? args.agentArgs : resolveTuiAgentLaunchArgs(agent, settings),
+    agentEnv: resolveTuiAgentLaunchEnv(agent, settings),
     platform,
     shell: resolveLocalWindowsAgentStartupShell({
       platform,

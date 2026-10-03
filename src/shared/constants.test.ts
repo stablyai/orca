@@ -1,3 +1,7 @@
+import {
+  composeTuiAgentLaunchArgsRecord,
+  composeTuiAgentLaunchEnvRecord
+} from './tui-agent-launch-defaults'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY, getDefaultSettings } from './constants'
 import { getDefaultNotificationSettings } from './notification-settings-defaults'
@@ -129,7 +133,12 @@ describe('getDefaultSettings', () => {
   it('defaults agent launch args to yolo mode where the CLI supports it', () => {
     const settings = getDefaultSettings('/tmp')
 
-    expect(settings.agentDefaultArgs).toMatchObject({
+    expect(settings.agentPermissionMode).toBe('bypass')
+    // Spelled out so an older build, which reads a missing entry as the flag, launches Manual.
+    expect(settings.agentDefaultArgs).toMatchObject({ claude: '', codex: '', devin: '' })
+    expect(settings.agentDefaultArgs).not.toHaveProperty('opencode')
+    expect(settings.agentDefaultEnv).toEqual({ goose: {} })
+    expect(composeTuiAgentLaunchArgsRecord(settings)).toMatchObject({
       claude: '--dangerously-skip-permissions',
       codex: '--dangerously-bypass-approvals-and-sandbox',
       gemini: '--yolo',
@@ -138,9 +147,9 @@ describe('getDefaultSettings', () => {
       copilot: '--yolo',
       grok: '--permission-mode bypassPermissions'
     })
-    expect(settings.agentDefaultArgs).not.toHaveProperty('opencode')
-    expect(settings.agentDefaultArgs).not.toHaveProperty('kilo')
-    expect(settings.agentDefaultEnv).toMatchObject({
+    expect(composeTuiAgentLaunchArgsRecord(settings).opencode).toBe('')
+    expect(composeTuiAgentLaunchArgsRecord(settings).kilo).toBe('')
+    expect(composeTuiAgentLaunchEnvRecord(settings)).toMatchObject({
       goose: { GOOSE_MODE: 'auto' }
     })
     expect(settings.agentYoloDefaultsMigrated).toBe(true)

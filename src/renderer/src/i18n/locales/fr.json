@@ -6753,7 +6753,6 @@
           "2d133152fa": "Aucun environnement par défaut",
           "agentPermissions": "Permissions des agents",
           "agentPermissionsInfo": "Infos permissions des agents",
-          "agentPermissionsTooltip": "Ne s'applique pas aux agents dont vous avez remplacé les arguments de lancement.",
           "agentPermissionsDescription": "Choisissez si Orca lance les agents avec moins de demandes de permission ou avec des vérifications manuelles.",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "Manuel",
@@ -6762,7 +6761,13 @@
           "codexSessionSourceInfo": "À propos de l'import de l'historique Codex",
           "codexSessionSourceTooltip": "Orca exécute Codex dans un home isolé. Pointez ceci vers votre home Codex existant pour en importer l'historique de sessions. Si vide, ~/.codex est utilisé.",
           "storedDefaultUndetected": "Enregistré par défaut, mais non détecté actuellement",
-          "noAgentsDetected": "Aucun agent détecté. Si un agent est installé, la détection a peut-être expiré."
+          "noAgentsDetected": "Aucun agent détecté. Si un agent est installé, la détection a peut-être expiré.",
+          "agentPermissionsAppliesToAll": "S'applique à tous les agents. Pour régler un agent différemment, développez-le dans la liste ci-dessous.",
+          "agentPermissionsExceptions": "Réglés séparément : {{value0}}.",
+          "agentPermissionOverride": "Autorisations",
+          "agentPermissionOverrideAria": "Autorisations de {{value0}}",
+          "agentPermissionOverrideDefault": "Par défaut ({{value0}})",
+          "agentPermissionArgumentsOptions": "Les arguments ou l'environnement règlent eux-mêmes les autorisations ({{value0}}), donc {{value1}} les utilise à la place de ce réglage."
         },
         "AppIconSelector": {
           "d5a112dc9b": "Icône suivante",

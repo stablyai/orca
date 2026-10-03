@@ -65,7 +65,7 @@ describe('openCodexThread', () => {
       thread: { id: 'thread-existing' }
     }))
     const permissionPolicy = codexStructuredPermissionPolicyForSettings({
-      agentDefaultArgs: { codex: '' }
+      agentPermissionMode: 'ask'
     })
 
     await openCodexThread(

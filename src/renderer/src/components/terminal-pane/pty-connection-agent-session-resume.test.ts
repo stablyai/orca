@@ -561,13 +561,14 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: 'lost-pty',
-        command: "codex '--model' 'current' 'resume' 'codex-session-1'"
+        command:
+          "codex '--dangerously-bypass-approvals-and-sandbox' '--model' 'current' 'resume' 'codex-session-1'"
       })
     )
     expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(
       paneKey,
       expect.objectContaining({
-        agentArgs: '--model current'
+        agentArgs: '--dangerously-bypass-approvals-and-sandbox --model current'
       }),
       expect.objectContaining({
         agentType: 'codex',

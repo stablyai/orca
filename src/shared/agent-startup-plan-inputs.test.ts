@@ -21,7 +21,8 @@ describe('resolveAgentStartupPlanInputs', () => {
     })
 
     expect(inputs.cmdOverrides).toEqual({ claude: 'my-claude' })
-    expect(inputs.agentArgs).toBe('--verbose')
+    // The permission mode reaches every launch built from settings, ahead of the user's text.
+    expect(inputs.agentArgs).toBe('--dangerously-skip-permissions --verbose')
     expect(inputs.agentEnv).toEqual({ FOO: 'bar' })
     expect(
       resolveAgentStartupPlanInputs({
@@ -42,11 +43,28 @@ describe('resolveAgentStartupPlanInputs', () => {
       isRemote: false
     }
 
-    expect(resolveAgentStartupPlanInputs(base).agentArgs).toBe('--verbose')
+    expect(resolveAgentStartupPlanInputs(base).agentArgs).toBe(
+      '--dangerously-skip-permissions --verbose'
+    )
+    // Why verbatim: explicit args come from a paired client, which composed its own mode into them.
     expect(resolveAgentStartupPlanInputs({ ...base, agentArgs: null }).agentArgs).toBeNull()
     expect(resolveAgentStartupPlanInputs({ ...base, agentArgs: '--model opus' }).agentArgs).toBe(
       '--model opus'
     )
+  })
+
+  it('leaves the flag off for an agent in Manual', () => {
+    expect(
+      resolveAgentStartupPlanInputs({
+        agent: 'claude',
+        settings: {
+          agentPermissionModeOverrides: { claude: 'ask' },
+          agentDefaultArgs: { claude: '--verbose' }
+        },
+        platform: 'darwin',
+        isRemote: false
+      }).agentArgs
+    ).toBe('--verbose')
   })
 
   it('classifies the Windows shell only for a local win32 launch', () => {
@@ -133,7 +151,9 @@ describe('a picked session option outranks configured launch arguments', () => {
   it('strips the configured model flag instead of emitting both spellings', () => {
     const plan = commandFor({ agentDefaultArgs: { codex: '--model gpt-5-codex' } })
 
-    expect(plan?.launchCommand).toBe("codex '-m' 'gpt-5'")
+    expect(plan?.launchCommand).toBe(
+      "codex '--dangerously-bypass-approvals-and-sandbox' '-m' 'gpt-5'"
+    )
     // Without the override the configured flag trailed the picked one and won on argv order.
     expect(plan?.launchCommand).not.toContain('gpt-5-codex')
   })
