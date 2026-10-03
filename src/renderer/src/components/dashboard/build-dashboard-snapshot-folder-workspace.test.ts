@@ -242,7 +242,13 @@ describe('buildDashboardSnapshot folder workspaces', () => {
     }
 
     expect(snapshot.cards).toHaveLength(1)
-    expect(snapshot.cards[0]).toMatchObject({ paneKey: PANE_KEY, bucket: 'done' })
+    expect(snapshot.cards[0]).toMatchObject({
+      paneKey: PANE_KEY,
+      bucket: 'done',
+      ptyId: null,
+      surfaceKind: 'structured-chat',
+      structuredSessionId: 'session-1'
+    })
     expect(buildDashboardBucketCounts(structuredState, NOW)).toEqual(expected)
   })
 

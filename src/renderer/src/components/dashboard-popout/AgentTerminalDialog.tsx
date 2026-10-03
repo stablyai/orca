@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import {
   dashboardCardDisplayState,
+  isDashboardStructuredChatCard,
   type DashboardCard,
   type DashboardRevealAgentArgs
 } from '../../../../shared/dashboard-snapshot'
@@ -40,13 +41,20 @@ function AgentTerminalFrame({
   onOpenChange,
   onReveal
 }: AgentTerminalFrameProps): React.JSX.Element {
+  const structuredChat = isDashboardStructuredChatCard(card)
   const reveal = (): void => {
     onReveal({
       repoId: card.repoId,
       worktreeId: card.worktreeId,
       executionHostId: card.executionHostId,
       tabId: card.tabId,
-      leafId: card.leafId
+      leafId: card.leafId,
+      ...(structuredChat
+        ? {
+            surfaceKind: 'structured-chat' as const,
+            ...(card.structuredSessionId ? { structuredSessionId: card.structuredSessionId } : {})
+          }
+        : {})
     })
     onOpenChange(false)
   }
@@ -81,13 +89,20 @@ function AgentTerminalFrame({
         />
       ) : (
         <div className="min-h-0 flex-1 px-2.5 pb-2 text-[11px] text-muted-foreground">
-          {terminalPreviewUnavailableMessage({ hostKind: card.hostKind })}
+          {structuredChat
+            ? translate(
+                'dashboardPopout.terminal.structuredUnavailable',
+                'No terminal preview — this is a structured chat session.'
+              )
+            : terminalPreviewUnavailableMessage({ hostKind: card.hostKind })}
         </div>
       )}
       <div className="flex shrink-0 items-center gap-1.5 px-2.5 py-1.5">
         <Button type="button" variant="outline" size="xs" className="ml-auto" onClick={reveal}>
           <SquareArrowOutUpRight className="size-3" />
-          {translate('dashboardPopout.terminal.focusWorktree', 'Open worktree')}
+          {structuredChat
+            ? translate('dashboardPopout.terminal.openChat', 'Open chat')
+            : translate('dashboardPopout.terminal.focusWorktree', 'Open worktree')}
         </Button>
       </div>
     </>

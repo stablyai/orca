@@ -79,7 +79,11 @@ export function isDashboardRevealAgentArgs(value: unknown): value is DashboardRe
       (isBoundedString(args.executionHostId, MAX_ID_LENGTH) &&
         normalizeExecutionHostId(args.executionHostId) !== null)) &&
     isBoundedString(args.tabId, MAX_ID_LENGTH) &&
-    (args.leafId === null || isBoundedString(args.leafId, MAX_ID_LENGTH))
+    (args.leafId === null || isBoundedString(args.leafId, MAX_ID_LENGTH)) &&
+    (args.surfaceKind === undefined ||
+      args.surfaceKind === 'terminal' ||
+      args.surfaceKind === 'structured-chat') &&
+    isOptionalBoundedString(args.structuredSessionId, MAX_ID_LENGTH)
   )
 }
 
@@ -266,6 +270,10 @@ function isDashboardCard(value: unknown): boolean {
     isBoundedString(card.worktreeId, MAX_ID_LENGTH) &&
     isBoundedString(card.tabId, MAX_ID_LENGTH) &&
     (card.leafId === null || isBoundedString(card.leafId, MAX_ID_LENGTH)) &&
+    (card.surfaceKind === undefined ||
+      card.surfaceKind === 'terminal' ||
+      card.surfaceKind === 'structured-chat') &&
+    isOptionalBoundedString(card.structuredSessionId, MAX_ID_LENGTH) &&
     isOptionalBoundedString(card.parentPaneKey, MAX_ID_LENGTH) &&
     isOptionalBoundedString(card.parentWorktreeId, MAX_ID_LENGTH) &&
     isBoundedString(card.repoName, MAX_LABEL_LENGTH, true) &&

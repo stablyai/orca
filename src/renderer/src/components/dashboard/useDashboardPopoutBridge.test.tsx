@@ -23,7 +23,10 @@ const mocks = vi.hoisted(() => ({
   offPopoutOpenChanged: vi.fn(),
   offSnapshotRequested: vi.fn(),
   activateTabAndFocusPane: vi.fn(),
-  activateAndRevealWorkspace: vi.fn()
+  activateAndRevealWorkspace: vi.fn(),
+  activateStructuredAgentSessionById: vi.fn(() => false),
+  activateStructuredAgentSessionTab: vi.fn(() => false),
+  activateAiVaultStructuredSession: vi.fn(async () => true)
 }))
 
 vi.mock('@/store', () => ({
@@ -42,6 +45,15 @@ vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
+}))
+
+vi.mock('@/lib/structured-agent-session-tab-activation', () => ({
+  activateStructuredAgentSessionById: mocks.activateStructuredAgentSessionById,
+  activateStructuredAgentSessionTab: mocks.activateStructuredAgentSessionTab
+}))
+
+vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
+  activateAiVaultStructuredSession: mocks.activateAiVaultStructuredSession
 }))
 
 vi.mock('./build-dashboard-snapshot', () => ({
@@ -226,6 +238,43 @@ describe('useDashboardPopoutBridge', () => {
     )
 
     expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+  })
+
+  it('does not treat a failed structured republish as an opened chat', async () => {
+    mocks.activateAndRevealWorkspace.mockReturnValue({ primaryTabId: null })
+    mocks.activateStructuredAgentSessionById.mockReturnValue(false)
+    mocks.activateStructuredAgentSessionTab.mockReturnValue(false)
+    let resolveActivation: (active: boolean) => void = () => {}
+    mocks.activateAiVaultStructuredSession.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        resolveActivation = resolve
+      })
+    )
+    await act(async () => root.render(<Harness enabled />))
+
+    await act(async () =>
+      mocks.onRevealAgent.mock.calls[0][0]({
+        repoId: 'repo-1',
+        worktreeId: 'worktree-1',
+        tabId: 'tab-1',
+        leafId: null,
+        surfaceKind: 'structured-chat',
+        structuredSessionId: 'session-1'
+      })
+    )
+
+    expect(mocks.activateAiVaultStructuredSession).toHaveBeenCalledWith({
+      structuredSession: { workspaceId: 'worktree-1', sessionId: 'session-1' }
+    })
+    expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+
+    await act(async () => {
+      resolveActivation(false)
+    })
+
+    expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
   })
 
   it('ignores unrelated store writes while retaining every snapshot input', () => {

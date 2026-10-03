@@ -47,8 +47,23 @@ function AgentDashboardDrawerBody({
   }, [])
   const handleRevealAgent = useCallback(
     (args: AgentRevealArgs) => {
-      revealDashboardAgent(args)
-      onClose()
+      const opened = revealDashboardAgent(args)
+      // Why: host republish returns a Promise, and a Promise is truthy before it settles.
+      if (opened === true) {
+        onClose()
+        return
+      }
+      if (opened === false) {
+        return
+      }
+      void opened.then(
+        (active) => {
+          if (active) {
+            onClose()
+          }
+        },
+        () => undefined
+      )
     },
     [onClose]
   )
