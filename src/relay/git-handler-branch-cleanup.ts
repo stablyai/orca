@@ -1,12 +1,14 @@
 import {
   branchHasNoUnmergedChangesWithLazyTargetRefresh,
-  getBranchCleanupTargetRefs
+  getBranchCleanupTargetRefs,
+  type GitBranchCleanupExecOptions
 } from '../shared/git-branch-cleanup'
 import type { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { GitExec } from './git-handler-ops'
 import { expandTilde } from './context'
 import { isBranchInDetachedWorktree } from '../shared/git-worktree-admin'
 import { parseWorktreeList } from '../shared/git-worktree-porcelain-parser'
+import { createRelayGitObjectQuarantine } from './relay-git-object-quarantine'
 
 export async function deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure(
   git: GitExec,
@@ -15,8 +17,19 @@ export async function deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure(
   branchHead: string,
   capabilities: GitCapabilityCache
 ): Promise<boolean> {
-  const runGit = (args: string[], options?: { stdin?: string }) =>
-    options ? git(args, repoPath, options) : git(args, repoPath)
+  const quarantine = createRelayGitObjectQuarantine(git, repoPath)
+  const runGit = (args: string[], options?: GitBranchCleanupExecOptions) => {
+    const run = (env: Record<string, string> | undefined) => {
+      if (options?.stdin === undefined && !env) {
+        return git(args, repoPath)
+      }
+      return git(args, repoPath, {
+        ...(options?.stdin !== undefined ? { stdin: options.stdin } : {}),
+        ...(env ? { env } : {})
+      })
+    }
+    return options?.discardWrittenObjects ? quarantine.run(run) : run(undefined)
+  }
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
   // Why: SSH worktrees hit the same squash-merge shape as local worktrees.
   // Git's no-op merge proof lets us clean up only branches whose changes

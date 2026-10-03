@@ -131,6 +131,19 @@ export function gitRunnerModuleMock(mocks: GitHubClientMocks): GitRunnerModuleMo
   }
 }
 
+export type LocalGitObjectQuarantineModuleMock = {
+  createLocalGitObjectQuarantine: () => {
+    run: <T>(command: (env: undefined) => Promise<T>) => Promise<T>
+  }
+}
+
+// Why: client tests script git calls in order; the scratch object store adds a common-dir read.
+export function localGitObjectQuarantineModuleMock(): LocalGitObjectQuarantineModuleMock {
+  return {
+    createLocalGitObjectQuarantine: () => ({ run: (command) => command(undefined) })
+  }
+}
+
 export type SshGitDispatchModuleMock = {
   getSshGitProviderGeneration: Mock
   getSshGitProvider: Mock

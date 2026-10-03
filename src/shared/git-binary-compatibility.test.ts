@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rm, unlink, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, unlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
@@ -9,6 +9,15 @@ import {
   isUnsupportedMergeTreeWriteTreeError
 } from './git-merge-tree-capability'
 import { isBranchCheckedOutInWorktreeError } from './git-branch-delete-refusal'
+import {
+  branchHasNoUnmergedChangesOnAnyTarget,
+  type GitBranchCleanupExec
+} from './git-branch-cleanup'
+import { GitCapabilityCache } from './git-capability-cache'
+import {
+  createGitObjectQuarantine,
+  GIT_OBJECT_QUARANTINE_DIR_PREFIX
+} from './git-object-quarantine'
 import { isForEachRefExcludeUnsupportedError } from './git-ref-command-capabilities'
 import { isNoWriteFetchHeadUnsupportedError } from './git-fetch-head-capability'
 import {
@@ -563,6 +572,42 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
         isUnsupportedMergeTreeMergeBaseError
       )
       await expect(runGit([...legacyArgs, head, head])).resolves.toBeDefined()
+    }
+  })
+
+  // Why pin this: a scratch folder made around a Git that rejects --write-tree can outlive a crash,
+  // and Git before 2.35 never prunes it; only a Git known to write trees gets one.
+  it('makes a merge-tree scratch object store only once this Git is known to write trees', async () => {
+    const branch = 'compat-cleanup-merged'
+    await runGit(['branch', branch, 'HEAD'])
+    const objectsPath = join(repoPath, '.git', 'objects')
+    const quarantine = createGitObjectQuarantine(async () => ({
+      hostPath: objectsPath,
+      gitPath: image ? '/repo/.git/objects' : objectsPath
+    }))
+    let scratchFolders = 0
+    const runCleanupGit: GitBranchCleanupExec = (args, options) =>
+      options?.discardWrittenObjects
+        ? quarantine.run((env) => {
+            scratchFolders += env ? 1 : 0
+            return runGit(args, env)
+          })
+        : runGit(args)
+    const capabilities = new GitCapabilityCache()
+    const check = () =>
+      branchHasNoUnmergedChangesOnAnyTarget(runCleanupGit, branch, ['HEAD'], capabilities)
+
+    try {
+      await expect(check()).resolves.toBe(supports(2, 38))
+      await expect(check()).resolves.toBe(supports(2, 38))
+      expect(scratchFolders).toBe(supports(2, 38) ? 1 : 0)
+      expect(
+        (await readdir(objectsPath)).filter((entry) =>
+          entry.startsWith(GIT_OBJECT_QUARANTINE_DIR_PREFIX)
+        )
+      ).toEqual([])
+    } finally {
+      await runGit(['branch', '-D', branch])
     }
   })
 

@@ -107,6 +107,119 @@ describe('branchHasNoUnmergedChangesOnAnyTarget', () => {
     expect(runGit).toHaveBeenCalledWith(['patch-id', '--stable'], { stdin: 'branch-diff' })
     expect(runGit).toHaveBeenCalledWith(['patch-id', '--stable'], { stdin: 'squash-diff' })
     expect(runGit).not.toHaveBeenCalledWith(['cherry', '-v', 'target', 'refs/heads/feature/test'])
+    // Only merge-tree's throwaway tree writes go to a scratch object store.
+    const discarding = vi
+      .mocked(runGit)
+      .mock.calls.filter(([, options]) => options?.discardWrittenObjects)
+      .map(([args]) => args[0])
+    expect(discarding.length).toBeGreaterThan(0)
+    expect(new Set(discarding)).toEqual(new Set(['merge-tree']))
+  })
+
+  it('runs the first merge-tree as Git always has, then the next ones against a scratch store', async () => {
+    const runGit = baseProofResponses()
+
+    await branchHasNoUnmergedChangesOnAnyTarget(
+      runGit,
+      'feature/test',
+      ['refs/remotes/origin/main'],
+      new GitCapabilityCache()
+    )
+
+    const mergeTrees = vi
+      .mocked(runGit)
+      .mock.calls.filter(([args]) => args[0] === 'merge-tree')
+      .map(([args, options]) => [args[2], options?.discardWrittenObjects])
+    expect(mergeTrees).toEqual([
+      ['target', false],
+      ['squash', true]
+    ])
+  })
+
+  it('never asks for a scratch store from a Git that rejects merge-tree --write-tree', async () => {
+    // Git 2.25's exact rejection.
+    const rejected = Object.assign(new Error('Command failed: git merge-tree --write-tree'), {
+      code: 129,
+      stdout: '',
+      stderr: 'usage: git merge-tree <base-tree> <branch1> <branch2>\n'
+    })
+    const runGit = baseProofResponses({
+      'merge-tree --write-tree target refs/heads/feature/test': rejected,
+      'merge-tree --write-tree squash refs/heads/feature/test': rejected
+    })
+    const capabilities = new GitCapabilityCache()
+    const check = () =>
+      branchHasNoUnmergedChangesOnAnyTarget(
+        runGit,
+        'feature/test',
+        ['refs/remotes/origin/main'],
+        capabilities
+      )
+
+    await expect(check()).resolves.toBe(false)
+    await expect(check()).resolves.toBe(false)
+
+    const mergeTrees = vi
+      .mocked(runGit)
+      .mock.calls.filter(([args]) => args[0] === 'merge-tree')
+      .map(([, options]) => options?.discardWrittenObjects)
+    expect(mergeTrees).toEqual([false])
+  })
+
+  describe('a merge-tree that exits 1', () => {
+    function exitOne(stdout: string): Error {
+      return Object.assign(new Error('Command failed: git merge-tree --write-tree'), {
+        code: 1,
+        stdout,
+        stderr: ''
+      })
+    }
+
+    async function scratchStoreRequestsOverTwoChecks(failure: Error): Promise<unknown[]> {
+      // No branch-only merge commits, so each check runs merge-tree exactly once.
+      const runGit = baseProofResponses({
+        'merge-tree --write-tree target refs/heads/feature/test': failure,
+        'rev-list --right-only --merges --count target...refs/heads/feature/test': '0\n'
+      })
+      const capabilities = new GitCapabilityCache()
+      const check = () =>
+        branchHasNoUnmergedChangesOnAnyTarget(
+          runGit,
+          'feature/test',
+          ['refs/remotes/origin/main'],
+          capabilities
+        )
+
+      await expect(check()).resolves.toBe(false)
+      await expect(check()).resolves.toBe(false)
+
+      return vi
+        .mocked(runGit)
+        .mock.calls.filter(([args]) => args[0] === 'merge-tree')
+        .map(([, options]) => options?.discardWrittenObjects)
+    }
+
+    it.each([
+      ['SHA-1', 'a'.repeat(40)],
+      ['SHA-256', 'b'.repeat(64)]
+    ])(
+      'learns support from a conflict (%s tree ID), so the next check asks for a scratch store',
+      async (_label, treeId) => {
+        const conflict = exitOne(`${treeId}\n100644 ${'c'.repeat(40)} 1\tshared.txt\n\n`)
+
+        await expect(scratchStoreRequestsOverTwoChecks(conflict)).resolves.toEqual([false, true])
+      }
+    )
+
+    it.each([
+      ['empty stdout', ''],
+      ['stdout that is not a tree ID', 'merged-tree\n']
+    ])('does not record support from %s', async (_label, stdout) => {
+      await expect(scratchStoreRequestsOverTwoChecks(exitOne(stdout))).resolves.toEqual([
+        false,
+        false
+      ])
+    })
   })
 
   it('preserves a branch with merge commits when no target squash commit matches', async () => {
