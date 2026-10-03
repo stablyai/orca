@@ -98,7 +98,12 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // composer is not ready until ~10s — so the 8s default expired first and the draft
     // was pasted blind, mid-startup (#22479). The signal itself fired every time in
     // those runs, so the budget was the problem, not a dropped escape.
-    draftPasteReadyTimeoutMs: 20_000
+    draftPasteReadyTimeoutMs: 20_000,
+    composerReadyCaptures: [
+      'opencode-1-18-32-timed-boot-slow',
+      'opencode-1-18-32-timed-boot-hidden-pane',
+      'opencode-1-18-32-timed-first-launch'
+    ]
   },
   // Why: opencode2 installs as a separate binary and uses the same prompt flags.
   // Its @opentui composer keeps the same cursor-gated paste signal.
@@ -108,7 +113,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     launchCmd: 'opencode2 --standalone',
     promptInjectionMode: 'flag-prompt',
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste',
-    draftPasteReadyTimeoutMs: 20_000
+    draftPasteReadyTimeoutMs: 20_000,
+    composerReadyCaptures: ['opencode-2-0-18-timed-boot-hidden-pane']
   },
   'mimo-code': {
     detectCmd: 'mimo',
@@ -317,7 +323,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'stdin-after-start',
     // Why: ZCode repaints an animated ASCII banner indefinitely, so the default quiet-render
     // window never settles; its composer box corner is the real "input is live" signal.
-    draftPasteReadySignal: 'zcode-composer-prompt'
+    draftPasteReadySignal: 'zcode-composer-prompt',
+    composerReadyCaptures: ['zcode-composer-ready']
   },
   devin: {
     detectCmd: 'devin',

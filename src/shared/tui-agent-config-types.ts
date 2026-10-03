@@ -43,6 +43,8 @@ export type TuiAgentConfig = {
   draftPasteReadySignal?: DraftPasteReadySignal
   /** Hard deadline for the agent's composer readiness signal. */
   draftPasteReadyTimeoutMs?: number
+  /** Captured boots proving the composer marker used for fresh worker dispatch. */
+  composerReadyCaptures?: readonly string[]
   /** Delay before one extra blind submit Enter, for agents that render their composer before Enter is live (codex); a no-op if the first Enter landed. */
   submitRetryDelayMs?: number
   /** Extra ms per logical prompt line before Enter, for TUIs that expand multiline paste slowly (antigravity). */

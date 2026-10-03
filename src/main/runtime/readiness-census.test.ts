@@ -23,14 +23,26 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { describeCensusDiff, runLengthDecode, runLengthEncode } from './readiness-census-baseline'
 import { CENSUS_AGENTS } from './readiness-census-synthetic-matrix'
+import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import {
   CENSUS_PANES,
+  CENSUS_TRANSCRIPTS,
   CENSUS_SHARD_COUNT,
   censusPaneSubject,
   censusShard
 } from './readiness-census-transcript-catalog'
 
 describe('readiness census coverage', () => {
+  it('assigns every cited composer recording to its launch agent', () => {
+    for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG)) {
+      for (const name of config.composerReadyCaptures ?? []) {
+        const transcript = CENSUS_TRANSCRIPTS.find((recording) => recording.name === name)
+        expect(transcript, name).toBeDefined()
+        expect(transcript?.agent, name).toBe(agent)
+      }
+    }
+  })
+
   it('replays every pane in exactly one shard', () => {
     const sharded = Array.from({ length: CENSUS_SHARD_COUNT }, (_, index) =>
       censusShard(index + 1)

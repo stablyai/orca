@@ -1,3 +1,4 @@
+import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import {
@@ -27,6 +28,7 @@ import {
   resolveWorkerStartReadinessTimeoutMs
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from '../worker/worker-start-prompt-budget'
+import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineMethod({
@@ -217,8 +219,9 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         }
         persistFederatedReadinessStage(setupStage)
         failedStage = 'agent_readiness'
-        const wait = await runtime.waitForTerminal(terminalHandle, {
-          condition: 'tui-idle',
+        const wait = await waitForWorkerAgentReady(runtime, terminalHandle, {
+          agent,
+          reusesTerminal: Boolean(params.terminal),
           timeoutMs: readinessTimeoutMs
         })
         persistFederatedSetupWaitOutcome({ ...setupStage, wait })
@@ -232,23 +235,15 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
               : `Agent did not become ready (${wait.status}).`
           )
         }
-        const authority = runtime.getOrchestrationDispatchAuthority(terminalHandle)
-        const paneKey = authority?.paneKey ?? runtime.getTerminalPaneKey(terminalHandle)
-        const processIncarnation =
-          authority?.processIncarnation ?? runtime.getTerminalProcessIncarnation(terminalHandle)
-        if (!paneKey || !processIncarnation) {
-          throw new Error('stable_pane_required')
-        }
-        db.prepareRemoteAttachmentAuthority({
+        prepareFederatedAttachmentAuthority({
+          runtime,
+          db,
           dispatchId: params.dispatchId,
-          paneKey,
-          processIncarnation,
           worktreeId: worktree.id,
           terminalHandle,
-          setupState: setup.state,
+          setup,
           effects,
-          hostScope: authority?.hostScope ? JSON.stringify(authority.hostScope) : null,
-          terminalOwnership: params.terminal ? 'external' : 'created'
+          reusesTerminal: Boolean(params.terminal)
         })
         failedStage = 'dispatch_input'
         const prompt = await runtime.sendTerminalAgentPrompt(
