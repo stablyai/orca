@@ -90,4 +90,13 @@ describe('id-keyed worktree projections keep distinct hosts distinct', () => {
       buildWorktreeByIdIndex(worktreesByRepo).get(SHARED_ID)
     )
   })
+
+  it('returns a stable array reference on cache miss to preserve selector memoization', () => {
+    const worktreesByRepo = byRepo(localRow)
+    const first = getIndexedWorktreesById(worktreesByRepo, 'missing-worktree-id')
+    const second = getIndexedWorktreesById(worktreesByRepo, 'missing-worktree-id')
+
+    expect(first).toBe(second)
+    expect(first).toEqual([])
+  })
 })
