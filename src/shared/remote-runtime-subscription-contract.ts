@@ -28,6 +28,7 @@ export type RemoteRuntimeTransportSubscriptionCallbacks<TResult = unknown> = {
 export type RemoteRuntimeSubscriptionOptions = RemoteRuntimeSocketLivenessOptions & {
   clientCapabilities?: readonly RuntimeCapability[]
   perMessageDeflate?: boolean
+  snapshotCompression?: boolean
   outboundQueue?: RemoteRuntimeOutboundQueueOptions
   outboundMemoryBudget?: RemoteRuntimeOutboundMemoryBudget
   // Why: overridable so the connect-bound regression test can pin the ordering against the
