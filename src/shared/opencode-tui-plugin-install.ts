@@ -4,7 +4,10 @@ import {
   writeOverlayOpenCodePluginAtomically
 } from './opencode-plugin-atomic-write'
 import { dirname, join } from 'node:path'
-import { registerOpenCodeTuiPlugin } from './opencode-tui-config-registration'
+import {
+  InvalidOpenCodeTuiConfigError,
+  registerOpenCodeTuiPlugin
+} from './opencode-tui-config-registration'
 import {
   isInstalledOpenCodePluginCurrent,
   isOverlayOpenCodePluginCurrent
@@ -41,7 +44,7 @@ export function writeOpenCodeTuiPlugin(
     ownership === 'canonical' ? isInstalledOpenCodePluginCurrent : isOverlayOpenCodePluginCurrent
   if (isCurrent(entry, tuiSource)) {
     if (tuiSource !== source) {
-      registerOpenCodeTuiPlugin(dirname(pluginsDir), entry, ownership)
+      registerTuiPlugin(pluginsDir, entry, ownership)
     }
     return
   }
@@ -52,6 +55,22 @@ export function writeOpenCodeTuiPlugin(
       : writeOverlayOpenCodePluginAtomically
   write(entry, tuiSource)
   if (tuiSource !== source) {
+    registerTuiPlugin(pluginsDir, entry, ownership)
+  }
+}
+
+function registerTuiPlugin(
+  pluginsDir: string,
+  entry: string,
+  ownership: 'canonical' | 'overlay'
+): void {
+  try {
     registerOpenCodeTuiPlugin(dirname(pluginsDir), entry, ownership)
+  } catch (error) {
+    if (!(error instanceof InvalidOpenCodeTuiConfigError)) {
+      throw error
+    }
+    // Invalid TUI settings must not block the separate server status plugin.
+    console.warn('[OpenCode] Failed to register TUI status plugin:', entry, error)
   }
 }
