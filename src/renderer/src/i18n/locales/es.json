@@ -6282,7 +6282,8 @@
         "BranchPrefixFeedback": {
           "6c40c0908f": "El prefijo no puede contener espacios ni caracteres especiales como ~ ^ : ? * [ \\",
           "64d70b156a": "Las ramas se llamarán {{example}}",
-          "808f9a726e": "No se aplicará ningún prefijo"
+          "808f9a726e": "No se aplicará ningún prefijo",
+          "c478cf4ec7": "No se aplicará ningún prefijo porque el nombre de usuario en minúsculas termina en .lock y Git lo rechaza."
         },
         "GitPane": {
           "895d3f70b8": "gh",

@@ -7443,7 +7443,8 @@
         "BranchPrefixFeedback": {
           "6c40c0908f": "Le préfixe ne peut pas contenir d'espaces ni de caractères spéciaux comme ~ ^ : ? * [ \\",
           "64d70b156a": "Les branches seront nommées {{example}}",
-          "808f9a726e": "Aucun préfixe ne sera appliqué"
+          "808f9a726e": "Aucun préfixe ne sera appliqué",
+          "c478cf4ec7": "Aucun préfixe ne sera appliqué, car le nom d'utilisateur en minuscules se termine par .lock, ce que Git refuse."
         },
         "GitPane": {
           "895d3f70b8": "gh",

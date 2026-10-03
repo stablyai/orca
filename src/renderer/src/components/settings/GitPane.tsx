@@ -9,6 +9,10 @@ import { Switch } from '../ui/switch'
 import { useAppStore } from '../../store'
 import { getGitPaneSearchEntries } from './git-search'
 import { SearchableSetting } from './SearchableSetting'
+import {
+  gitUsernamePrefixOmission,
+  selectBranchPrefixInput
+} from '../../../../shared/branch-prefix'
 import { BranchPrefixFeedback } from './BranchPrefixFeedback'
 import { matchesSettingsSearch } from './settings-search'
 import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
@@ -164,7 +168,9 @@ export function GitPane({
     }
   }, [settings.branchPrefixCustom])
   const branchPrefixInputValue =
-    settings.branchPrefix === 'git-username' ? displayedGitUsername : customPrefixDraft
+    settings.branchPrefix === 'git-username'
+      ? (selectBranchPrefixInput(settings, displayedGitUsername || null) ?? '')
+      : customPrefixDraft
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, {
@@ -228,17 +234,33 @@ export function GitPane({
             }}
             placeholder={
               settings.branchPrefix === 'git-username'
-                ? translate(
-                    'auto.components.settings.GitPane.aefa1ecb59',
-                    'No git username configured'
-                  )
+                ? displayedGitUsername.trim()
+                  ? translate(
+                      'auto.components.settings.BranchPrefixFeedback.808f9a726e',
+                      'No prefix will be applied'
+                    )
+                  : translate(
+                      'auto.components.settings.GitPane.aefa1ecb59',
+                      'No git username configured'
+                    )
                 : translate('auto.components.settings.GitPane.b559bf9899', 'e.g. feature')
             }
             className="max-w-xs"
             readOnly={settings.branchPrefix === 'git-username'}
           />
         )}
-        {isBranchPrefixInputMode && <BranchPrefixFeedback rawPrefix={branchPrefixInputValue} />}
+        {isBranchPrefixInputMode && (
+          <BranchPrefixFeedback
+            rawPrefix={branchPrefixInputValue}
+            omission={
+              settings.branchPrefix === 'git-username'
+                ? gitUsernamePrefixOmission(
+                    displayedGitUsername.trim() ? displayedGitUsername : null
+                  )
+                : null
+            }
+          />
+        )}
       </SearchableSetting>
     ) : null,
     matchesSettingsSearch(searchQuery, {
