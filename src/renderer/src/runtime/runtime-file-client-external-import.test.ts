@@ -3,12 +3,14 @@ import { importExternalPathsToRuntime } from './runtime-file-client'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import {
   fsImportExternalPaths,
+  fsReleaseRuntimeUpload,
   fsStageExternalPathsForRuntimeUpload,
   fsUploadExternalFileToRuntime,
   runtimeEnvironmentCall,
   runtimeEnvironmentTransportCall,
   installRuntimeFileClientEnvironment
 } from './runtime-file-client-test-harness'
+import type { RuntimeImportProgressHandlers } from './runtime-upload-progress-tracker'
 
 installRuntimeFileClientEnvironment()
 
@@ -48,6 +50,8 @@ type UploadRequest = {
   expected: Record<string, unknown>
   worktree: string
   relativePath: string
+  uploadId?: string
+  fileSequence?: number
   expectedExecutionHostId?: string
   expectedSshTargetId?: string
   expectedSshConnectionGeneration?: number
@@ -245,6 +249,162 @@ describe('runtime file client', () => {
     )
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'files.writeBase64Chunk' })
+    )
+  })
+
+  it('settles and releases each row when the drop reports progress', async () => {
+    fsStageExternalPathsForRuntimeUpload.mockResolvedValue({
+      sources: [
+        {
+          sourcePath: '/Users/me/logo.png',
+          status: 'staged',
+          name: 'logo.png',
+          kind: 'file',
+          entries: [stagedFile('', 3, 55)]
+        }
+      ]
+    })
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce(notFoundResponse('stat-destination-miss'))
+      .mockResolvedValueOnce(okResponse('create-destination-dir'))
+      .mockResolvedValueOnce(notFoundResponse('stat-miss'))
+      .mockResolvedValueOnce(okResponse('commit-upload'))
+      .mockResolvedValueOnce(okResponse('delete-temp'))
+    const progress = {
+      onStart: vi.fn<RuntimeImportProgressHandlers['onStart']>(),
+      onRowProgress: vi.fn<RuntimeImportProgressHandlers['onRowProgress']>(),
+      onRowSettled: vi.fn<RuntimeImportProgressHandlers['onRowSettled']>(),
+      onFinish: vi.fn<RuntimeImportProgressHandlers['onFinish']>()
+    }
+
+    await expect(
+      importExternalPathsToRuntime(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo'
+        },
+        ['/Users/me/logo.png'],
+        '/remote/repo/uploads',
+        { progress }
+      )
+    ).resolves.toMatchObject({ results: [{ status: 'imported' }] })
+
+    const uploadId = progress.onStart.mock.calls[0]?.[0][0]?.uploadId
+    expect(uploadId).toEqual(expect.any(String))
+    expect(progress.onRowProgress).toHaveBeenLastCalledWith(uploadId, 3)
+    expect(progress.onRowSettled).toHaveBeenCalledWith(uploadId, 'done')
+    expect(progress.onFinish).toHaveBeenCalledTimes(1)
+    expect(fsReleaseRuntimeUpload).toHaveBeenCalledWith({ uploadId })
+  })
+
+  it('gives each copy of a path dropped twice its own row and file sequence', async () => {
+    const logo = {
+      sourcePath: '/Users/me/logo.png',
+      status: 'staged',
+      name: 'logo.png',
+      kind: 'file',
+      entries: [stagedFile('', 3, 55)]
+    }
+    fsStageExternalPathsForRuntimeUpload.mockResolvedValue({ sources: [logo, logo] })
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce(notFoundResponse('stat-destination-miss'))
+      .mockResolvedValueOnce(okResponse('create-destination-dir'))
+      .mockResolvedValueOnce(notFoundResponse('stat-miss'))
+      .mockResolvedValueOnce(okResponse('commit-upload'))
+      .mockResolvedValueOnce(okResponse('delete-temp'))
+      // The copy first finds `logo.png` reserved by the first, then takes `logo copy.png`.
+      .mockResolvedValueOnce(notFoundResponse('stat-name-miss'))
+      .mockResolvedValueOnce(notFoundResponse('stat-copy-miss'))
+      .mockResolvedValueOnce(okResponse('commit-copy'))
+      .mockResolvedValueOnce(okResponse('delete-copy-temp'))
+    const progress = {
+      onStart: vi.fn<RuntimeImportProgressHandlers['onStart']>(),
+      onRowProgress: vi.fn<RuntimeImportProgressHandlers['onRowProgress']>(),
+      onRowSettled: vi.fn<RuntimeImportProgressHandlers['onRowSettled']>(),
+      onFinish: vi.fn<RuntimeImportProgressHandlers['onFinish']>()
+    }
+
+    await importExternalPathsToRuntime(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/remote/repo'
+      },
+      ['/Users/me/logo.png', '/Users/me/logo.png'],
+      '/remote/repo/uploads',
+      { progress }
+    )
+
+    const rowIds = progress.onStart.mock.calls[0]?.[0].map((row) => row.uploadId)
+    expect(new Set(rowIds).size).toBe(2)
+    expect(uploadRequests().map((request) => request.uploadId)).toEqual(rowIds)
+    expect(uploadRequests().map((request) => request.fileSequence)).toEqual([0, 1])
+    expect(progress.onRowSettled.mock.calls).toEqual([
+      [rowIds?.[0], 'done'],
+      [rowIds?.[1], 'done']
+    ])
+  })
+
+  it('stops a cancelled source of empty directories and removes its root', async () => {
+    fsStageExternalPathsForRuntimeUpload.mockResolvedValue({
+      sources: [
+        {
+          sourcePath: '/Users/me/empty',
+          status: 'staged',
+          name: 'empty',
+          kind: 'directory',
+          entries: [
+            { relativePath: '', kind: 'directory' },
+            { relativePath: 'nested', kind: 'directory' }
+          ]
+        }
+      ]
+    })
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce({
+        id: 'stat-destination',
+        ok: true,
+        result: { size: 0, isDirectory: true, mtime: 1 },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockResolvedValueOnce(notFoundResponse('stat-import-root-miss'))
+      .mockResolvedValueOnce(okResponse('create-import-root'))
+      .mockResolvedValueOnce(okResponse('delete-import-root'))
+    // The user cancels after the root exists, before the nested directory.
+    const isCancelled = vi.fn<(uploadId: string) => boolean>()
+    isCancelled.mockReturnValueOnce(false).mockReturnValue(true)
+
+    await expect(
+      importExternalPathsToRuntime(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo'
+        },
+        ['/Users/me/empty'],
+        '/remote/repo/uploads',
+        {
+          progress: {
+            onStart: vi.fn(),
+            onRowProgress: vi.fn(),
+            onRowSettled: vi.fn(),
+            onFinish: vi.fn(),
+            isCancelled
+          }
+        }
+      )
+    ).resolves.toMatchObject({
+      results: [{ status: 'failed', reason: 'Upload cancelled', cancelled: true }]
+    })
+
+    const methods = runtimeEnvironmentCall.mock.calls.map(([call]) => call.method)
+    expect(methods.filter((method) => method === 'files.createDirNoClobber')).toHaveLength(1)
+    expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        method: 'files.delete',
+        params: expect.objectContaining({ relativePath: 'uploads/empty', recursive: true })
+      })
     )
   })
 

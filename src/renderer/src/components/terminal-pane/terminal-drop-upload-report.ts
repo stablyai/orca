@@ -4,7 +4,9 @@ import { describeDropSkipReason } from '@/lib/drop-skip-reason-copy'
 
 export function reportTerminalDropUploadSkipsAndFailures(
   skipped: { reason: string }[],
-  failed: { reason: string }[]
+  failed: { reason: string }[],
+  /** Names the destination workspace when the user has switched away from it. */
+  workspaceDescription?: string
 ): void {
   if (skipped.length > 0) {
     // Why: symlink rejection is policy, not an error; mixed reasons stay generic.
@@ -38,7 +40,8 @@ export function reportTerminalDropUploadSkipsAndFailures(
         'auto.components.terminal.pane.terminal.drop.handler.1e072f611e',
         'Failed to upload {{value0}} {{value1}}.',
         { value0: failed.length, value1: noun }
-      )
+      ),
+      { description: workspaceDescription }
     )
   }
 }

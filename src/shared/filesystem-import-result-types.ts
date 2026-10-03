@@ -28,6 +28,8 @@ export type ImportItemResult =
       sourcePath: string
       status: 'failed'
       reason: string
+      /** The user cancelled this source, so it is not a failure to report back. */
+      cancelled?: boolean
     }
 
 // Why: staging crosses IPC to the renderer and back into the streamer, so the
