@@ -537,6 +537,7 @@ describe('PR workflow parallelism', () => {
       'mobile_web_app',
       'cross-version-wire',
       'managed_hook_node18',
+      'standalone_cli',
       'package',
       'package_windows'
     ])

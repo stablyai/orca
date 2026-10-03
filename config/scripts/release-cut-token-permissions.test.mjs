@@ -68,6 +68,8 @@ const EXPECTED_MATRIX = {
     { contents: 'read' },
   [`${RELEASE_WORKFLOW}#skill-sharing-linux-floor-release-gate`]: { contents: 'read' },
   [`${RELEASE_WORKFLOW}#skill-sharing-release-gate`]: { contents: 'read' },
+  [`${RELEASE_WORKFLOW}#standalone-cli`]: { contents: 'read' },
+  [`${RELEASE_WORKFLOW}#standalone-cli-publish`]: { contents: 'write' },
   [`${RELEASE_WORKFLOW}#terminal-rendering-golden`]: { contents: 'read' },
   [`${RELEASE_WORKFLOW}#terminal-rendering-release-evidence`]: { contents: 'read' }
 }
@@ -77,6 +79,7 @@ const RELEASE_TAG_EXECUTION_JOBS = [
   'create-release',
   'skill-sharing-linux-floor-release-gate',
   'skill-sharing-release-gate',
+  'standalone-cli',
   'terminal-rendering-golden',
   'terminal-rendering-release-evidence'
 ]

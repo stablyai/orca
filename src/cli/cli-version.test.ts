@@ -6,9 +6,10 @@ import { readOrcaCliVersion } from './cli-version'
 
 const temporaryDirectories: string[] = []
 
-afterEach(() =>
-  Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true })))
-)
+afterEach(() => {
+  delete process.env.ORCA_CLI_STANDALONE
+  return Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true })))
+})
 
 describe('CLI version', () => {
   it('reads the package boundary beside the compiled CLI', async () => {
@@ -32,5 +33,14 @@ describe('CLI version', () => {
     expect(readOrcaCliVersion(runtimeDir)).toBeNull()
     await writeFile(join(root, 'package.json'), JSON.stringify({ version: 178 }))
     expect(readOrcaCliVersion(runtimeDir)).toBeNull()
+  })
+
+  it('reads the standalone package manifest beside the bundle', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-cli-version-standalone-'))
+    temporaryDirectories.push(root)
+    await writeFile(join(root, 'package.json'), JSON.stringify({ version: '1.5.0' }))
+    process.env.ORCA_CLI_STANDALONE = '1'
+
+    expect(readOrcaCliVersion(root)).toBe('1.5.0')
   })
 })

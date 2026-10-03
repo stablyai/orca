@@ -45,6 +45,12 @@ describe('getRequiredReleaseAssetNames', () => {
     )
   })
 
+  it('includes the version-matched and latest standalone CLI tarballs', () => {
+    expect(getRequiredReleaseAssetNames('v1.4.27-rc.3')).toEqual(
+      expect.arrayContaining(['orca-cli-1.4.27-rc.3.tgz', 'orca-cli.tgz'])
+    )
+  })
+
   it('includes x64 and arm64 Linux assets', () => {
     expect(getRequiredReleaseAssetNames('v1.4.27')).toEqual(
       expect.arrayContaining([

@@ -1,9 +1,14 @@
 import { RuntimeClientError } from '../../runtime-client'
+import { isStandaloneCli } from '../../standalone-cli-mode'
 
 export function resolveCompatibilityCliCommand(): 'orca' | 'orca-ide' | 'orca-dev' {
   const configured = process.env.ORCA_CLI_COMMAND
   if (configured === 'orca' || configured === 'orca-ide' || configured === 'orca-dev') {
     return configured
+  }
+  // Why: the standalone package installs `orca` on every platform, Linux included.
+  if (isStandaloneCli()) {
+    return 'orca'
   }
   return process.platform === 'linux' ? 'orca-ide' : 'orca'
 }

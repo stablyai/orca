@@ -107,7 +107,16 @@ export type CliRuntimeState =
   | 'graph_not_ready'
   | 'stale_bootstrap'
 
+/** The CLI's own build, reported so a standalone install can be matched against its server. */
+export type CliClientVersionInfo = {
+  version: string | null
+  standalone: boolean
+  runtimeProtocolVersion: number
+  minCompatibleRuntimeServerVersion: number
+}
+
 export type CliStatusResult = {
+  client?: CliClientVersionInfo
   target?: { kind: 'local' } | { kind: 'environment'; environment: string }
   app: {
     running: boolean
@@ -121,6 +130,8 @@ export type CliStatusResult = {
     connectionState?: RuntimeHostConnectionState
     runtimeId: string | null
     appVersion?: string
+    runtimeProtocolVersion?: number
+    minCompatibleRuntimeClientVersion?: number
     remoteUpdateSupport?: RemoteServerUpdateSupport
     capabilities?: RuntimeCapability[]
     degradations?: RuntimeDegradation[]

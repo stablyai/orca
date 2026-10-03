@@ -26,7 +26,9 @@ export function getRequiredReleaseAssetNames(tag) {
     'orca-macos-x64.dmg',
     'orca-macos-x64.dmg.blockmap',
     'orca-macos-arm64.dmg',
-    'orca-macos-arm64.dmg.blockmap'
+    'orca-macos-arm64.dmg.blockmap',
+    `orca-cli-${version}.tgz`,
+    'orca-cli.tgz'
   ]
 }
 

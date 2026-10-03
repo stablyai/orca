@@ -1,6 +1,7 @@
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
 import { HANDLER_GROUPS, type HandlerGroup } from './handler-group-manifest'
+import { refuseDesktopOnlyCommandInStandalone } from './standalone-cli-mode'
 
 export type HandlerContext = {
   flags: Map<string, string | boolean>
@@ -41,6 +42,7 @@ export async function dispatch(commandPath: string[], ctx: HandlerContext): Prom
   if (!group) {
     throw new RuntimeClientError('invalid_argument', `Unknown command: ${key}`)
   }
+  refuseDesktopOnlyCommandInStandalone(commandPath)
   const handler = (await group.load())[key]
   // Why: the manifest key list is verified against the real exports in CI, so a
   // miss here means the group changed without the manifest — fail loudly.
