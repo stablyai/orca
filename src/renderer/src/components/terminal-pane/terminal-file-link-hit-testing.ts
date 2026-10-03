@@ -7,7 +7,10 @@ import {
   openDetectedFilePath,
   terminalLinkWslDistro
 } from './terminal-file-open-routing'
-import { getTerminalPathExistsCacheKey } from './terminal-path-exists-cache'
+import {
+  getTerminalPathExistsCacheKey,
+  peekTerminalPathExistsCache
+} from './terminal-path-exists-cache'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import {
   buildHardWrappedPathLogicalLineCandidates,
@@ -83,7 +86,9 @@ export function openFilePathLinkAtBufferPosition(
         line: resolved.line,
         column: resolved.column,
         pathText: parsed.pathText,
-        cachedExists: deps.pathExistsCache?.get(cacheKey),
+        cachedExists: deps.pathExistsCache
+          ? peekTerminalPathExistsCache(deps.pathExistsCache, cacheKey)
+          : undefined,
         isKnownWorktreeRoot
       })
     }

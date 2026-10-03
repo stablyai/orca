@@ -1,4 +1,27 @@
 export const TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES = 1024
+// Why: an agent often prints a path before it writes the file (e.g. while it waits for
+// permission to create a file outside the project). A permanent "missing" answer would keep
+// that path unclickable for the life of the pane.
+export const TERMINAL_PATH_MISSING_CACHE_TTL_MS = 3000
+
+const missingCheckedAt = new WeakMap<Map<string, boolean>, Map<string, number>>()
+
+function isExpiredMissingEntry(cache: Map<string, boolean>, key: string): boolean {
+  const checkedAt = missingCheckedAt.get(cache)?.get(key)
+  return checkedAt !== undefined && Date.now() - checkedAt >= TERMINAL_PATH_MISSING_CACHE_TTL_MS
+}
+
+/** Cached answer without touching LRU order; expired "missing" answers read as unknown. */
+export function peekTerminalPathExistsCache(
+  cache: Map<string, boolean>,
+  key: string
+): boolean | undefined {
+  const value = cache.get(key)
+  if (value === false && isExpiredMissingEntry(cache, key)) {
+    return undefined
+  }
+  return value
+}
 
 // Why: POSIX-looking SSH paths are only meaningful inside their connection;
 // local/runtime keys keep the legacy scope so existing hover probes stay hot.
@@ -28,7 +51,7 @@ export function readTerminalPathExistsCache(
   cache: Map<string, boolean>,
   key: string
 ): boolean | undefined {
-  const value = cache.get(key)
+  const value = peekTerminalPathExistsCache(cache, key)
   if (value !== undefined) {
     cache.delete(key)
     cache.set(key, value)
@@ -52,7 +75,18 @@ export function writeTerminalPathExistsCache(
         break
       }
       cache.delete(oldestKey)
+      missingCheckedAt.get(cache)?.delete(oldestKey)
     }
   }
   cache.set(key, exists)
+  let checkedAt = missingCheckedAt.get(cache)
+  if (exists) {
+    checkedAt?.delete(key)
+    return
+  }
+  if (!checkedAt) {
+    checkedAt = new Map()
+    missingCheckedAt.set(cache, checkedAt)
+  }
+  checkedAt.set(key, Date.now())
 }
