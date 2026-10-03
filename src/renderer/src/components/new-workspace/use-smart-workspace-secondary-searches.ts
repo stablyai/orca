@@ -6,6 +6,7 @@ import { getSmartWorkspaceLinearSearchQuery } from '../../../../shared/new-works
 import type { parseBoundedSmartWorkspaceLinearIssueUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { RESULT_LIMIT } from './smart-workspace-name-field-model'
 import { getBranchSearchRequest } from './smart-workspace-source-results'
+import { useSmartWorkspaceBusinessmapSearch } from './use-smart-workspace-businessmap-search'
 import type { useSmartWorkspaceNameFieldFoundation } from './use-smart-workspace-name-field-foundation'
 
 type Foundation = ReturnType<typeof useSmartWorkspaceNameFieldFoundation>
@@ -17,7 +18,9 @@ export function useSmartWorkspaceSecondarySearches({
   linearUrlIntent,
   linearUrlIntentOwnsInput,
   shouldQueryJira,
-  jiraSearchJql
+  jiraSearchJql,
+  shouldQueryBusinessmap,
+  businessmapQuery
 }: {
   foundation: Foundation
   shouldQueryLinear: boolean
@@ -26,6 +29,8 @@ export function useSmartWorkspaceSecondarySearches({
   linearUrlIntentOwnsInput: boolean
   shouldQueryJira: boolean
   jiraSearchJql: string | null
+  shouldQueryBusinessmap: boolean
+  businessmapQuery: string
 }): void {
   const {
     disabled,
@@ -54,6 +59,7 @@ export function useSmartWorkspaceSecondarySearches({
     setJiraIssues,
     setJiraLoading
   } = foundation
+  useSmartWorkspaceBusinessmapSearch({ foundation, shouldQueryBusinessmap, businessmapQuery })
   // Read the latest metadata for URL resolution without making the search effect depend on object identity.
   const linearStatusRef = useRef(linearStatus)
   // react-doctor-disable-next-line react-doctor/no-ref-current-in-render

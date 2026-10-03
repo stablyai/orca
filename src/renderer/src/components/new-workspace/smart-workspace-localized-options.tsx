@@ -2,6 +2,7 @@ import type React from 'react'
 import { CaseSensitive, GitBranch, Github, Gitlab, Sparkles } from 'lucide-react'
 
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { BusinessmapIcon } from '@/components/icons/BusinessmapIcon'
 import { translate } from '@/i18n/i18n'
 import type { SmartNameMode } from './smart-workspace-source-results'
 
@@ -69,6 +70,14 @@ export function getSmartWorkspaceNameModes(): SmartWorkspaceNameModeOption[] {
       id: 'jira',
       label: translate('auto.components.new.workspace.SmartWorkspaceNameField.jiraMode', 'Jira'),
       Icon: JiraIcon
+    },
+    {
+      id: 'businessmap',
+      label: translate(
+        'auto.components.new.workspace.SmartWorkspaceNameField.businessmapMode',
+        'Businessmap'
+      ),
+      Icon: BusinessmapIcon
     },
     {
       id: 'gitlab',

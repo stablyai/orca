@@ -130,14 +130,17 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
               {translate('auto.components.mobile.slides.HomeSlide.a4c3f7b7aa', 'Tasks')}
             </div>
             <div className="mp-task-home-subtitle">
-              {translate('auto.components.mobile.slides.HomeSlide.d047197480', 'GitHub · Linear')}
+              {translate(
+                'auto.components.mobile.slides.HomeSlide.tasksProviders',
+                'GitHub · Linear · Businessmap'
+              )}
             </div>
           </div>
           <div
             className="mp-task-home-providers"
             aria-label={translate(
-              'auto.components.mobile.slides.HomeSlide.0bad5b07c8',
-              'GitHub and Linear'
+              'auto.components.mobile.slides.HomeSlide.tasksProvidersLabel',
+              'GitHub, Linear, and Businessmap'
             )}
           >
             <div className="mp-task-home-provider-button">
@@ -145,6 +148,9 @@ export function HomeSlide({ tapping }: { tapping: boolean }): React.JSX.Element 
             </div>
             <div className="mp-task-home-provider-button">
               <LinearIcon />
+            </div>
+            <div className="mp-task-home-provider-button">
+              <BusinessmapIcon />
             </div>
           </div>
           <div className="mp-chevron-right">
@@ -318,6 +324,16 @@ function LinearIcon(): React.JSX.Element {
   return (
     <svg viewBox="0 0 100 100" fill="currentColor" aria-hidden>
       <path d="M1.225 61.523c-.187-.738.708-1.235 1.246-.697l36.703 36.703c.538.538.041 1.433-.697 1.246C20.6 94.16 5.84 79.4 1.225 61.523ZM.002 46.811a.997.997 0 0 0 .291.749l52.147 52.147a.998.998 0 0 0 .749.291 50.328 50.328 0 0 0 9.235-1.119c.667-.149.904-.972.422-1.454L1.575 37.154c-.482-.482-1.305-.245-1.454.422A50.328 50.328 0 0 0 .002 46.81Zm4.528-18.34a.998.998 0 0 0 .195 1.144l64.66 64.66a.998.998 0 0 0 1.144.195 50.45 50.45 0 0 0 5.913-3.46.999.999 0 0 0 .14-1.518L9.51 22.418a.999.999 0 0 0-1.518.14 50.45 50.45 0 0 0-3.46 5.913Zm10.435-13.075a.999.999 0 0 0 .002 1.41l68.226 68.226a.999.999 0 0 0 1.41.002c19.292-19.477 19.234-50.97-.176-70.378-19.410-19.410-50.901-19.468-70.378-.176-1.061 1.044.916 1.916.916 1.916Z" />
+    </svg>
+  )
+}
+
+function BusinessmapIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <rect x="3" y="4" width="5" height="16" rx="1.5" />
+      <rect x="9.5" y="4" width="5" height="10" rx="1.5" />
+      <rect x="16" y="4" width="5" height="13" rx="1.5" />
     </svg>
   )
 }

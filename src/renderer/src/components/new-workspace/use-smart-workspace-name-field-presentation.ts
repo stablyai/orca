@@ -8,11 +8,7 @@ import {
   parseBoundedSmartWorkspaceLinearIssueUrlIntent,
   prioritizeSmartWorkspaceLinearIssueResults
 } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
-import {
-  getActiveWorkspaceEmojiShortcode,
-  searchWorkspaceEmojiShortcodes,
-  type WorkspaceEmojiSuggestion
-} from '@/lib/workspace-emoji-shortcodes'
+import { useSmartWorkspaceEmojiSuggestions } from './use-smart-workspace-emoji-suggestions'
 import { resolveSmartWorkspaceCommandValue } from './smart-workspace-command-value'
 import {
   buildSmartWorkspaceSourceRows,
@@ -52,6 +48,8 @@ export function useSmartWorkspaceNameFieldPresentation(
     jiraIssues,
     linearAvailable,
     linearIssues,
+    businessmapCards,
+    businessmapLoading,
     commandValue,
     setCommandValue,
     emojiCursor,
@@ -64,7 +62,7 @@ export function useSmartWorkspaceNameFieldPresentation(
     linearLoading,
     jiraLoading,
     linearUrlLoadingFeedbackQuery,
-    settledLinearUrlQuery
+    settledLinearUrlQuery: _settledLinearUrlQuery
   } = foundation
   const linearUrlIntent =
     options?.linearUrlIntent ?? parseBoundedSmartWorkspaceLinearIssueUrlIntent(value)
@@ -75,7 +73,7 @@ export function useSmartWorkspaceNameFieldPresentation(
   const linearUrlLookupFailed =
     linearUrlIntentOwnsInput &&
     linearAvailable &&
-    settledLinearUrlQuery === linearQuery.trim() &&
+    _settledLinearUrlQuery === linearQuery.trim() &&
     !linearLoading &&
     linearIssues.length === 0
   const githubUrlIntent = useMemo(
@@ -100,7 +98,7 @@ export function useSmartWorkspaceNameFieldPresentation(
         site
       }))
     }
-    return buildSmartWorkspaceSourceRows({
+    const baseRows = buildSmartWorkspaceSourceRows({
       branches: getVisibleBranchResults({
         branches,
         mode,
@@ -143,6 +141,20 @@ export function useSmartWorkspaceNameFieldPresentation(
       resultLimit: RESULT_LIMIT,
       value
     })
+    // Why: mirrors the jira-mode rows — the shared builder stays provider-agnostic, so businessmap rows append locally.
+    if (mode !== 'smart' && mode !== 'businessmap') {
+      return baseRows
+    }
+    const businessmapRows = getVisibleHeldProviderResults({
+      items: businessmapCards,
+      value,
+      debouncedQuery
+    }).map((card) => ({
+      kind: 'businessmap' as const,
+      value: `businessmap-${card.id}`,
+      card
+    }))
+    return [...baseRows, ...businessmapRows].slice(0, RESULT_LIMIT + 1)
   }, [
     branches,
     branchResultsSource,
@@ -156,6 +168,7 @@ export function useSmartWorkspaceNameFieldPresentation(
     jiraSource.intent,
     jiraSource.issue,
     jiraIssues,
+    businessmapCards,
     linearAvailable,
     linearIssues,
     linearUrlIntentOwnsInput,
@@ -215,7 +228,7 @@ export function useSmartWorkspaceNameFieldPresentation(
     linearUrlIntentOwnsInput &&
     linearAvailable &&
     sourceIntent !== 'linear' &&
-    (linearLoading || settledLinearUrlQuery !== linearQuery.trim())
+    (linearLoading || _settledLinearUrlQuery !== linearQuery.trim())
   const blockingTaskUrlResolution = isBlockingTaskUrlResolution({
     sourceIntent: sourceIntent === 'github' || sourceIntent === 'gitlab' ? sourceIntent : null,
     isQueryStale,
@@ -235,40 +248,31 @@ export function useSmartWorkspaceNameFieldPresentation(
     }
     setCommandValue(resolvedCommandValue)
   }, [commandValue, resolvedCommandValue, setCommandValue])
-  const activeEmojiShortcode = useMemo(
-    () => getActiveWorkspaceEmojiShortcode(value, emojiCursor),
-    [emojiCursor, value]
-  )
-  const emojiSuggestions = useMemo(
-    () =>
-      activeEmojiShortcode
-        ? searchWorkspaceEmojiShortcodes(activeEmojiShortcode.query)
-        : ([] as WorkspaceEmojiSuggestion[]),
-    [activeEmojiShortcode]
-  )
-  const emojiMenuOpen =
-    !disabled &&
-    selectedSource === null &&
-    activeEmojiShortcode !== null &&
-    emojiSuggestions.length > 0
-  const resolvedEmojiCommandValue = emojiSuggestions.some(
-    (suggestion) => `emoji:${suggestion.shortcode}` === emojiCommandValue
-  )
-    ? emojiCommandValue
-    : emojiSuggestions[0]
-      ? `emoji:${emojiSuggestions[0].shortcode}`
-      : ''
-  const selectedEmojiSuggestion =
-    emojiSuggestions.find(
-      (suggestion) => `emoji:${suggestion.shortcode}` === resolvedEmojiCommandValue
-    ) ?? null
+  const {
+    activeEmojiShortcode,
+    emojiSuggestions,
+    emojiMenuOpen,
+    resolvedEmojiCommandValue,
+    selectedEmojiSuggestion
+  } = useSmartWorkspaceEmojiSuggestions({
+    value,
+    emojiCursor,
+    emojiCommandValue,
+    disabled,
+    hasSelectedSource: selectedSource !== null
+  })
   const showLinearUrlLoadingFeedback =
     linearLoading && linearUrlIntentOwnsInput && linearUrlLoadingFeedbackQuery === linearQuery
   const visibleLinearLoading =
     linearLoading && (!linearUrlIntentOwnsInput || showLinearUrlLoadingFeedback)
   const loading = jiraSource.intent
     ? jiraSource.loading
-    : githubLoading || gitlabLoading || branchesLoading || visibleLinearLoading || jiraLoading
+    : githubLoading ||
+      gitlabLoading ||
+      branchesLoading ||
+      visibleLinearLoading ||
+      jiraLoading ||
+      businessmapLoading
   // Why: only spin on first load, not refreshes with retained rows.
   const showSearchSpinner = loading && searchResultRows.length === 0
   const ActiveInputIcon =

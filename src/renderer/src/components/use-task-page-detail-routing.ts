@@ -6,18 +6,21 @@ import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import { findTaskPageLinearIssue } from '@/components/task-page-cache-selectors'
 import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selectors'
+import { useTaskPageBusinessmapDetailRouting } from './use-task-page-businessmap-detail-routing'
 export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
   const {
     pageData,
     openTaskPage,
     linearTaskSourceContext,
     jiraTaskSourceContext,
+    businessmapTaskSourceContext,
     setDialogWorkItem
   } = model
   const [selectedLinearIssueIdState, setSelectedLinearIssueId] = useState<string | null>(null)
   const [selectedLinearIssueFallbackState, setSelectedLinearIssueFallback] =
     useState<LinearIssue | null>(null)
   const [selectedLinearIssueCanFloatState, setSelectedLinearIssueCanFloat] = useState(false)
+  const businessmap = useTaskPageBusinessmapDetailRouting(businessmapTaskSourceContext)
 
   // Why: subscribe to just the Linear caches so list and inline detail reflect optimistic cell edits without a second cache.
   const linearCacheSnapshot = useAppStore(
@@ -108,6 +111,7 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
     }
     setDialogWorkItem(null)
     clearSelectedLinearIssue()
+    businessmap.clearSelectedBusinessmapCard()
     useAppStore.setState((s) => ({
       taskPageData: {
         ...s.taskPageData,
@@ -122,7 +126,7 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
         openJiraSourceContext: undefined
       }
     }))
-  }, [clearSelectedLinearIssue, setDialogWorkItem])
+  }, [businessmap, clearSelectedLinearIssue, setDialogWorkItem])
   const [selectedJiraIssueKeyState, setSelectedJiraIssueKey] = useState<string | null>(null)
   const [selectedJiraIssueFallbackState, setSelectedJiraIssueFallback] = useState<JiraIssue | null>(
     null
@@ -182,7 +186,6 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
     },
     [jiraTaskSourceContext, openTaskPage]
   )
-
   // Linear tab state
   const nextModel = model as typeof model & {
     selectedLinearIssueId: typeof selectedLinearIssueId
@@ -210,7 +213,7 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
     jiraDetailSourceContext: typeof jiraDetailSourceContext
     setSelectedJiraIssue: typeof setSelectedJiraIssue
     openJiraDetailPage: typeof openJiraDetailPage
-  }
+  } & typeof businessmap
   nextModel.selectedLinearIssueId = selectedLinearIssueId
   nextModel.setSelectedLinearIssueId = setSelectedLinearIssueId
   nextModel.selectedLinearIssueFallback = selectedLinearIssueFallback
@@ -236,6 +239,7 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
   nextModel.jiraDetailSourceContext = jiraDetailSourceContext
   nextModel.setSelectedJiraIssue = setSelectedJiraIssue
   nextModel.openJiraDetailPage = openJiraDetailPage
+  Object.assign(nextModel, businessmap)
   return nextModel
 }
 export type TaskPageDetailRoutingModel = ReturnType<typeof useTaskPageDetailRouting>

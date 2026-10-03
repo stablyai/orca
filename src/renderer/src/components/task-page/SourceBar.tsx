@@ -23,12 +23,16 @@ export function TaskPageSourceBar({
     closeTaskPage,
     updateSettings,
     selectJiraSite,
+    selectBusinessmapSite,
     linearConnected,
     jiraConnected,
+    businessmapConnected,
     linearWorkspaces,
     selectedLinearWorkspaceId,
     jiraSites,
     selectedJiraSiteId,
+    businessmapSites,
+    selectedBusinessmapSiteId,
     visibleSourceOptions,
     taskSource,
     taskSourceAvailabilityNoticeByProvider,
@@ -39,6 +43,11 @@ export function TaskPageSourceBar({
     setJiraIssues,
     setJiraLoading,
     setJiraError,
+    setSelectedBusinessmapCardId,
+    setSelectedBusinessmapCardFallback,
+    setBusinessmapCards,
+    setBusinessmapLoading,
+    setBusinessmapError,
     defaultLinearTeamSelection,
     linearTeamSelection,
     linearTeamOptions,
@@ -219,6 +228,41 @@ export function TaskPageSourceBar({
                 {jiraSites.map((site) => (
                   <SelectItem key={site.id} value={site.id}>
                     {site.displayName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+        </div>
+      ) : null}
+      {taskSource === 'businessmap' && businessmapConnected ? (
+        <div className="flex items-center gap-2">
+          {businessmapSites.length > 1 ? (
+            <Select
+              value={selectedBusinessmapSiteId ?? undefined}
+              onValueChange={(value) => {
+                setSelectedBusinessmapCardId(null)
+                setSelectedBusinessmapCardFallback(null)
+                setBusinessmapCards([])
+                setBusinessmapError(null)
+                setBusinessmapLoading(true)
+                void selectBusinessmapSite(value).catch(() => {
+                  toast.error(
+                    translate(
+                      'auto.components.TaskPage.businessmapSiteSwitchFailed',
+                      'Failed to switch Businessmap site.'
+                    )
+                  )
+                })
+              }}
+            >
+              <SelectTrigger className="h-8 w-[220px] rounded-md border-border/50 bg-muted/50 text-xs font-medium shadow-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {businessmapSites.map((site) => (
+                  <SelectItem key={site.id} value={site.id}>
+                    {site.displayName ?? site.accountName ?? site.subdomain}
                   </SelectItem>
                 ))}
               </SelectContent>

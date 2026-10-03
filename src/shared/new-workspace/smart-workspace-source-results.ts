@@ -1,3 +1,4 @@
+import type { BusinessmapCard } from '../businessmap-types'
 import type { GitHubWorkItem } from '../github/work-item-types'
 import type { GitLabWorkItem } from '../gitlab-types'
 import type { JiraIssue } from '../jira-types'
@@ -17,7 +18,15 @@ export {
   isSmartWorkspaceSourceQueryWithinLimit
 } from './smart-workspace-source-query'
 
-export type SmartNameMode = 'smart' | 'github' | 'gitlab' | 'branches' | 'linear' | 'jira' | 'text'
+export type SmartNameMode =
+  | 'smart'
+  | 'github'
+  | 'gitlab'
+  | 'branches'
+  | 'linear'
+  | 'jira'
+  | 'businessmap'
+  | 'text'
 
 export type SmartWorkspaceSourceRow =
   | { kind: 'use-name'; value: string; name: string }
@@ -27,6 +36,7 @@ export type SmartWorkspaceSourceRow =
   | { kind: 'branch'; value: string; refName: string; localBranchName: string }
   | { kind: 'linear'; value: string; issue: LinearIssue }
   | { kind: 'jira'; value: string; issue: JiraIssue }
+  | { kind: 'businessmap'; value: string; card: BusinessmapCard }
 
 type LinearIssueSourceInput = LinearIssue[] | LinearCollectionResult<LinearIssue> | null | undefined
 
@@ -37,6 +47,7 @@ const EMPTY_HINT_BY_MODE: Record<SmartNameMode, string> = {
   branches: 'No matching branches.',
   linear: 'Start typing to search Linear issues.',
   jira: 'Start typing to search Jira issues, or paste an issue URL.',
+  businessmap: 'Start typing to search Businessmap cards.',
   text: ''
 }
 

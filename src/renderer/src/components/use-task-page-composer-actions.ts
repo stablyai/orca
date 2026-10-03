@@ -1,4 +1,4 @@
-import type { TaskPageJiraListEffectsModel } from './use-task-page-jira-list-effects'
+import type { TaskPageBusinessmapListEffectsModel } from './use-task-page-businessmap-list-effects'
 import { useCallback } from 'react'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../../shared/linear/workspace-types'
@@ -10,10 +10,11 @@ import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-op
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { bindTaskPageJiraItemSourceContext } from './task-page-jira-item-source-context'
+import { useTaskPageBusinessmapComposerActions } from './use-task-page-businessmap-composer-actions'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldHideTaskPageListChrome } from '@/components/task-page-list-chrome-visibility'
 import { getJiraIssueWorkspaceSeed } from './task-page-source-context'
-export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) {
+export function useTaskPageComposerActions(model: TaskPageBusinessmapListEffectsModel) {
   const {
     setTaskResumeState,
     openModal,
@@ -23,14 +24,18 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     checkLinearConnection,
     selectedLinearWorkspaceId,
     jiraSites,
+    businessmapSites,
+    selectedBusinessmapSiteId,
     taskSource,
     linearTaskSourceContext,
     jiraTaskSourceContext,
+    businessmapTaskSourceContext,
     gitlabDialogItem,
     dialogWorkItem,
     selectedLinearIssue,
     clearSelectedLinearIssue,
     selectedJiraIssue,
+    selectedBusinessmapCard,
     linearMode,
     setLinearIssues,
     setLinearLoading,
@@ -57,6 +62,13 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     setLinearTeamRefreshNonce,
     setLinearTeamSelection
   } = model
+  const { openComposerForBusinessmapItem, handleUseBusinessmapItem } =
+    useTaskPageBusinessmapComposerActions({
+      businessmapSites,
+      businessmapTaskSourceContext,
+      selectedBusinessmapSiteId,
+      openModal
+    })
   // Why: Linear ids are strings (e.g. "ENG-123") but the provider-generic shape needs a numeric number, so the adapter uses 0 as placeholder.
   const openComposerForLinearItem = useCallback(
     (issue: LinearIssue): void => {
@@ -233,6 +245,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     hasGitHubDetail: Boolean(dialogWorkItem),
     hasGitLabDetail: Boolean(gitlabDialogItem),
     hasJiraDetail: Boolean(selectedJiraIssue),
+    hasBusinessmapDetail: Boolean(selectedBusinessmapCard),
     hasLinearIssueDetail: Boolean(selectedLinearIssue),
     hasLinearProjectContext: Boolean(selectedLinearProject),
     hasLinearViewContext: Boolean(selectedLinearCustomView)
@@ -247,6 +260,8 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     handleLinearAccessConnected: typeof handleLinearAccessConnected
     openComposerForJiraItem: typeof openComposerForJiraItem
     handleUseJiraItem: typeof handleUseJiraItem
+    openComposerForBusinessmapItem: typeof openComposerForBusinessmapItem
+    handleUseBusinessmapItem: typeof handleUseBusinessmapItem
     taskPageListChromeHidden: typeof taskPageListChromeHidden
   }
   nextModel.openComposerForLinearItem = openComposerForLinearItem
@@ -255,9 +270,10 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
   nextModel.handleLinearWorkspaceChange = handleLinearWorkspaceChange
   nextModel.handleLinearTeamSelectionChange = handleLinearTeamSelectionChange
   nextModel.handleLinearScopeOpen = handleLinearScopeOpen
-  nextModel.handleLinearAccessConnected = handleLinearAccessConnected
   nextModel.openComposerForJiraItem = openComposerForJiraItem
   nextModel.handleUseJiraItem = handleUseJiraItem
+  nextModel.openComposerForBusinessmapItem = openComposerForBusinessmapItem
+  nextModel.handleUseBusinessmapItem = handleUseBusinessmapItem
   nextModel.taskPageListChromeHidden = taskPageListChromeHidden
   return nextModel
 }

@@ -37,7 +37,7 @@ const VALID_JIRA_PRESETS = new Set<NonNullable<TaskResumeState['jiraPreset']>>([
   'all',
   'done'
 ])
-
+const VALID_BUSINESSMAP_PRESETS: ReadonlySet<string> = new Set(['assigned', 'all', 'done'])
 export function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
   if (!value || typeof value !== 'object') {
     return undefined
@@ -99,6 +99,18 @@ export function sanitizeTaskResumeState(value: unknown): TaskResumeState | undef
   }
   if (typeof input.jiraQuery === 'string') {
     next.jiraQuery = input.jiraQuery
+  }
+  if (
+    typeof input.businessmapPreset === 'string' &&
+    VALID_BUSINESSMAP_PRESETS.has(input.businessmapPreset)
+  ) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: membership in VALID_BUSINESSMAP_PRESETS narrows to the preset union, but Set<string>.has does not propagate the guard.
+    next.businessmapPreset = input.businessmapPreset as NonNullable<
+      TaskResumeState['businessmapPreset']
+    >
+  }
+  if (typeof input.businessmapQuery === 'string') {
+    next.businessmapQuery = input.businessmapQuery
   }
   return Object.keys(next).length > 0 ? next : undefined
 }

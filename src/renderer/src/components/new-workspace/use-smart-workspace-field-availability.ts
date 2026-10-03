@@ -24,7 +24,8 @@ export function useSmartWorkspaceFieldAvailability({
   linearStatus,
   linearStatusChecked,
   checkLinearConnection,
-  jiraSourceConnected
+  jiraSourceConnected,
+  businessmapSourceConnected
 }: {
   props: NormalizedSmartWorkspaceNameFieldProps
   state: FieldState
@@ -40,6 +41,7 @@ export function useSmartWorkspaceFieldAvailability({
   linearStatusChecked: boolean
   checkLinearConnection: () => Promise<void>
   jiraSourceConnected: boolean
+  businessmapSourceConnected: boolean
 }) {
   const {
     disabled,
@@ -62,9 +64,11 @@ export function useSmartWorkspaceFieldAvailability({
     setBranchResultsSource,
     setCrossRepoPrompt,
     setLinearIssues,
-    setJiraIssues,
     setLinearLoading,
+    setJiraIssues,
     setJiraLoading,
+    setBusinessmapCards,
+    setBusinessmapLoading,
     setCommandValue,
     setDebouncedQuery
   } = state
@@ -105,6 +109,9 @@ export function useSmartWorkspaceFieldAvailability({
     }
     if (item.id === 'jira') {
       return jiraSourceConnected
+    }
+    if (item.id === 'businessmap') {
+      return businessmapSourceConnected
     }
     if (item.id === 'branches') {
       return branchesEnabled && !repoBackedSourcesDisabled
@@ -174,24 +181,32 @@ export function useSmartWorkspaceFieldAvailability({
       setOpen(false)
       return
     }
-    if ((mode === 'gitlab' && gitlabSourceAvailable) || (mode === 'linear' && linearAvailable)) {
+    if (
+      (mode === 'gitlab' && gitlabSourceAvailable) ||
+      (mode === 'linear' && linearAvailable) ||
+      (mode === 'businessmap' && businessmapSourceConnected)
+    ) {
       return
     }
-    if (mode !== 'gitlab' && mode !== 'linear') {
+    if (mode !== 'gitlab' && mode !== 'linear' && mode !== 'businessmap') {
       return
     }
     setMode('smart')
     setGitlabItems([])
     setLinearIssues([])
     setJiraIssues([])
-    setGitlabLoading(false)
+    setBusinessmapCards([])
     setLinearLoading(false)
     setJiraLoading(false)
+    setBusinessmapLoading(false)
     setCommandValue('')
   }, [
     gitlabSourceAvailable,
     linearAvailable,
+    businessmapSourceConnected,
     mode,
+    setBusinessmapCards,
+    setBusinessmapLoading,
     setCommandValue,
     setGitlabItems,
     setGitlabLoading,
@@ -212,15 +227,15 @@ export function useSmartWorkspaceFieldAvailability({
     setGithubItems([])
     setGitlabItems([])
     setBranches([])
-    setBranchResultsSource(null)
     setLinearIssues([])
     setJiraIssues([])
+    setBusinessmapCards([])
     setGithubLoading(false)
     setGitlabLoading(false)
     setBranchesLoading(false)
     setLinearLoading(false)
     setJiraLoading(false)
-    setCommandValue('')
+    setBusinessmapLoading(false)
     setCrossRepoPrompt(null)
   }, [
     disabled,
@@ -233,10 +248,12 @@ export function useSmartWorkspaceFieldAvailability({
     setGithubLoading,
     setGitlabItems,
     setGitlabLoading,
-    setJiraIssues,
-    setJiraLoading,
     setLinearIssues,
     setLinearLoading,
+    setJiraIssues,
+    setJiraLoading,
+    setBusinessmapCards,
+    setBusinessmapLoading,
     setOpen
   ])
 

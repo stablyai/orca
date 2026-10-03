@@ -7,6 +7,7 @@ export type SmartWorkspaceCommandRowKind =
   | 'linear'
   | 'jira'
   | 'jira-account'
+  | 'businessmap'
 
 export type SmartWorkspaceCommandRow = {
   kind: SmartWorkspaceCommandRowKind

@@ -32,6 +32,10 @@ export function useFeatureWallTaskSourcePresentation(
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const businessmapStatus = useAppStore((s) => s.businessmapStatus)
+  const businessmapStatusChecked = useAppStore((s) => s.businessmapStatusChecked)
+  const businessmapStatusContextKey = useAppStore((s) => s.businessmapStatusContextKey)
+  const checkBusinessmapConnection = useAppStore((s) => s.checkBusinessmapConnection)
   const settings = useAppStore((s) => s.settings)
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
@@ -39,6 +43,7 @@ export function useFeatureWallTaskSourcePresentation(
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
   const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey
+  const businessmapStatusCurrent = businessmapStatusContextKey === providerRuntimeContextKey
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
 
   useEffect(() => {
@@ -56,7 +61,14 @@ export function useFeatureWallTaskSourcePresentation(
     if (!jiraStatusCurrent || !jiraStatusChecked) {
       void checkJiraConnection()
     }
+    if (!businessmapStatusCurrent || !businessmapStatusChecked) {
+      void checkBusinessmapConnection()
+    }
   }, [
+    businessmapStatusChecked,
+    businessmapStatusContextKey,
+    businessmapStatusCurrent,
+    checkBusinessmapConnection,
     checkJiraConnection,
     checkLinearConnection,
     expectedPreflightContextKey,
@@ -87,6 +99,9 @@ export function useFeatureWallTaskSourcePresentation(
     jiraStatus,
     jiraStatusChecked,
     jiraStatusContextKey,
+    businessmapStatus,
+    businessmapStatusChecked,
+    businessmapStatusContextKey,
     providerRuntimeContextKey
   })
 

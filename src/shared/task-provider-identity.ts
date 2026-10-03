@@ -29,11 +29,18 @@ export type JiraTaskProviderIdentity = {
   projectKey?: string | null
 }
 
+export type BusinessmapTaskProviderIdentity = {
+  provider: 'businessmap'
+  subdomain?: string | null
+  boardId?: number | null
+}
+
 export type TaskProviderIdentity =
   | GitHubTaskProviderIdentity
   | GitLabTaskProviderIdentity
   | LinearTaskProviderIdentity
   | JiraTaskProviderIdentity
+  | BusinessmapTaskProviderIdentity
 
 export function normalizeTaskProviderIdentity(
   provider: TaskProvider,
@@ -79,6 +86,12 @@ export function normalizeTaskProviderIdentity(
         siteUrl: normalizeNonEmptyString(raw.siteUrl),
         projectKey: normalizeNonEmptyString(raw.projectKey)
       }
+    case 'businessmap':
+      return {
+        provider,
+        subdomain: normalizeNonEmptyString(raw.subdomain),
+        boardId: typeof raw.boardId === 'number' ? raw.boardId : null
+      }
   }
 }
 
@@ -112,6 +125,11 @@ export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: u
       )
     case 'jira':
       return ['siteId', 'siteUrl', 'projectKey'].every((key) => isNullableOptionalString(raw[key]))
+    case 'businessmap':
+      return (
+        isNullableOptionalString(raw.subdomain) &&
+        (raw.boardId === undefined || raw.boardId === null || typeof raw.boardId === 'number')
+      )
   }
 }
 
@@ -119,7 +137,8 @@ const TASK_PROVIDER_IDENTITY_FIELDS: Record<TaskProvider, readonly string[]> = {
   github: ['owner', 'repo', 'host'],
   gitlab: ['projectId', 'namespace', 'project', 'webUrl'],
   linear: ['workspaceId', 'workspaceName', 'teamId', 'teamKey'],
-  jira: ['siteId', 'siteUrl', 'projectKey']
+  jira: ['siteId', 'siteUrl', 'projectKey'],
+  businessmap: ['subdomain', 'boardId']
 }
 
 export function areTaskProviderIdentitiesEqual(
@@ -157,6 +176,8 @@ export function taskProviderIdentityCachePart(
       return [identity.workspaceId, identity.teamId ?? identity.teamKey].filter(Boolean).join('/')
     case 'jira':
       return [identity.siteId ?? identity.siteUrl, identity.projectKey].filter(Boolean).join('/')
+    case 'businessmap':
+      return [identity.subdomain, identity.boardId].filter(Boolean).join('/')
   }
 }
 

@@ -105,10 +105,15 @@ export function getSmartWorkspaceNameFieldCopy({
                     'auto.components.new.workspace.SmartWorkspaceNameField.searchJira',
                     'Search Jira issues or paste an issue URL'
                   )
-                : translate(
-                    'auto.components.new.workspace.SmartWorkspaceNameField.workspaceName',
-                    'Workspace name'
-                  )
+                : mode === 'businessmap'
+                  ? translate(
+                      'auto.components.new.workspace.SmartWorkspaceNameField.searchBusinessmap',
+                      'Search Businessmap cards'
+                    )
+                  : translate(
+                      'auto.components.new.workspace.SmartWorkspaceNameField.workspaceName',
+                      'Workspace name'
+                    )
 
   return {
     crossRepoSwitchTitle,

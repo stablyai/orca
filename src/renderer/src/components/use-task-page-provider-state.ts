@@ -22,6 +22,7 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   const linearSearchPersistReadyRef = useRef(false)
   const linearViewPersistReadyRef = useRef(false)
   const jiraSearchPersistReadyRef = useRef(false)
+  const businessmapSearchPersistReadyRef = useRef(false)
   const [taskResumeApplied, setTaskResumeApplied] = useState(false)
 
   // Why: useState only inits once, so sync taskSource from the store when a sidebar source-icon click changes pageData.taskSource.
@@ -107,6 +108,7 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
     linearSearchPersistReadyRef: typeof linearSearchPersistReadyRef
     linearViewPersistReadyRef: typeof linearViewPersistReadyRef
     jiraSearchPersistReadyRef: typeof jiraSearchPersistReadyRef
+    businessmapSearchPersistReadyRef: typeof businessmapSearchPersistReadyRef
     taskResumeApplied: typeof taskResumeApplied
     setTaskResumeApplied: typeof setTaskResumeApplied
     projectModeVisible: typeof projectModeVisible
@@ -142,6 +144,7 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   nextModel.linearSearchPersistReadyRef = linearSearchPersistReadyRef
   nextModel.linearViewPersistReadyRef = linearViewPersistReadyRef
   nextModel.jiraSearchPersistReadyRef = jiraSearchPersistReadyRef
+  nextModel.businessmapSearchPersistReadyRef = businessmapSearchPersistReadyRef
   nextModel.taskResumeApplied = taskResumeApplied
   nextModel.setTaskResumeApplied = setTaskResumeApplied
   nextModel.projectModeVisible = projectModeVisible

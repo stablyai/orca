@@ -14,30 +14,31 @@ describe('smart-workspace-localized-options', () => {
       'GitHub',
       'Linear',
       'Jira',
+      'Businessmap',
       'GitLab',
       'Branch',
       'Name'
     ])
 
     await i18n.changeLanguage('zh')
-
     expect(getSmartWorkspaceNameModes().map((mode) => mode.label)).toEqual([
       '智能',
       'GitHub',
       'Linear',
       'Jira',
+      'Businessmap',
       'GitLab',
       '分支',
       '名称'
     ])
 
     await i18n.changeLanguage('en')
-
     expect(getSmartWorkspaceNameModes().map((mode) => mode.label)).toEqual([
       'Smart',
       'GitHub',
       'Linear',
       'Jira',
+      'Businessmap',
       'GitLab',
       'Branch',
       'Name'

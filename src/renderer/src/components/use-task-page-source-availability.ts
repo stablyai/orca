@@ -30,6 +30,7 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     selectedLinearWorkspace,
     selectedJiraSiteId,
     selectedJiraSite,
+    selectedBusinessmapSite,
     taskSource,
     runtimePreflightStatusByHostId,
     taskSourceRepoContexts,
@@ -138,8 +139,30 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
   const jiraTaskSourceScopeKey = jiraTaskSourceContext
     ? getTaskSourceCacheScope(jiraTaskSourceContext)
     : providerRuntimeContextKey
+  const businessmapTaskSourceContext = useMemo(
+    () =>
+      normalizeTaskSourceContext({
+        provider: 'businessmap',
+        projectId: fallbackTaskSourceProjectId,
+        hostId: accountBackedTaskSourceHostId,
+        providerIdentity: {
+          provider: 'businessmap',
+          subdomain: selectedBusinessmapSite?.subdomain ?? null,
+          boardId: null
+        },
+        accountLabel:
+          selectedBusinessmapSite?.accountName ??
+          selectedBusinessmapSite?.displayName ??
+          selectedBusinessmapSite?.subdomain ??
+          null
+      }),
+    [accountBackedTaskSourceHostId, fallbackTaskSourceProjectId, selectedBusinessmapSite]
+  )
+  const businessmapTaskSourceScopeKey = businessmapTaskSourceContext
+    ? getTaskSourceCacheScope(businessmapTaskSourceContext)
+    : providerRuntimeContextKey
   const accountBackedTaskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
-    if (taskSource !== 'linear' && taskSource !== 'jira') {
+    if (taskSource !== 'linear' && taskSource !== 'jira' && taskSource !== 'businessmap') {
       return []
     }
     const host = hostRegistryById.get(accountBackedTaskSourceHostId)
@@ -155,6 +178,8 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     linearListInvalidationVersionForSource: typeof linearListInvalidationVersionForSource
     jiraTaskSourceContext: typeof jiraTaskSourceContext
     jiraTaskSourceScopeKey: typeof jiraTaskSourceScopeKey
+    businessmapTaskSourceContext: typeof businessmapTaskSourceContext
+    businessmapTaskSourceScopeKey: typeof businessmapTaskSourceScopeKey
     accountBackedTaskSourceHostAvailability: typeof accountBackedTaskSourceHostAvailability
   }
   nextModel.getTaskPickerRepoHostLabel = getTaskPickerRepoHostLabel
@@ -165,6 +190,8 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
   nextModel.linearListInvalidationVersionForSource = linearListInvalidationVersionForSource
   nextModel.jiraTaskSourceContext = jiraTaskSourceContext
   nextModel.jiraTaskSourceScopeKey = jiraTaskSourceScopeKey
+  nextModel.businessmapTaskSourceContext = businessmapTaskSourceContext
+  nextModel.businessmapTaskSourceScopeKey = businessmapTaskSourceScopeKey
   nextModel.accountBackedTaskSourceHostAvailability = accountBackedTaskSourceHostAvailability
   return nextModel
 }

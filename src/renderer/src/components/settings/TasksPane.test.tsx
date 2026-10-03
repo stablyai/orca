@@ -16,12 +16,14 @@ const mocks = vi.hoisted(() => ({
   refreshPreflightStatus: vi.fn(),
   checkLinearConnection: vi.fn(),
   checkJiraConnection: vi.fn(),
+  checkBusinessmapConnection: vi.fn(),
   linearSetupProps: [] as {
     connected: boolean
     checking: boolean
     onOpenIntegrations: () => void
   }[],
-  jiraSetupProps: [] as { onOpenIntegrations: () => void }[]
+  jiraSetupProps: [] as { onOpenIntegrations: () => void }[],
+  businessmapSetupProps: [] as { onOpenIntegrations: () => void }[]
 }))
 
 vi.mock('./use-task-source-provider-readiness', () => ({
@@ -65,6 +67,10 @@ vi.mock('./TaskSourceSimpleSetup', () => ({
   JiraSetupSteps: (props: { onOpenIntegrations: () => void }) => {
     mocks.jiraSetupProps.push(props)
     return <div data-testid="jira-setup">Jira setup</div>
+  },
+  BusinessmapSetupSteps: (props: { onOpenIntegrations: () => void }) => {
+    mocks.businessmapSetupProps.push(props)
+    return <div data-testid="businessmap-setup">Businessmap setup</div>
   }
 }))
 
@@ -76,6 +82,7 @@ vi.mock('@/store', () => ({
       refreshPreflightStatus: () => void
       checkLinearConnection: () => void
       checkJiraConnection: () => void
+      checkBusinessmapConnection: () => void
       settingsSearchQuery: string
     }) => unknown
   ) =>
@@ -85,6 +92,7 @@ vi.mock('@/store', () => ({
       refreshPreflightStatus: mocks.refreshPreflightStatus,
       checkLinearConnection: mocks.checkLinearConnection,
       checkJiraConnection: mocks.checkJiraConnection,
+      checkBusinessmapConnection: mocks.checkBusinessmapConnection,
       settingsSearchQuery: ''
     })
 }))
@@ -124,6 +132,7 @@ describe('TasksPane', () => {
   beforeEach(() => {
     mocks.linearSetupProps = []
     mocks.jiraSetupProps = []
+    mocks.businessmapSetupProps = []
     mocks.openSettingsPage.mockClear()
     mocks.openSettingsTarget.mockClear()
     mocks.readiness = {
@@ -137,7 +146,8 @@ describe('TasksPane', () => {
         skillChecking: false,
         visible: true
       },
-      jira: { connected: false, checking: false, visible: false }
+      jira: { connected: false, checking: false, visible: false },
+      businessmap: { connected: false, checking: false, visible: false }
     }
   })
 
@@ -176,6 +186,7 @@ describe('TasksPane', () => {
       visible: true
     }
     mocks.readiness.jira = { connected: false, checking: false, visible: true }
+    mocks.readiness.businessmap = { connected: false, checking: false, visible: true }
 
     const markup = renderPane()
 
@@ -250,6 +261,26 @@ describe('TasksPane', () => {
       pane: 'integrations',
       repoId: null,
       sectionId: 'integrations-jira'
+    })
+  })
+
+  it('deep-links connected Businessmap credential management to its integration card', async () => {
+    mocks.readiness.businessmap = { connected: true, checking: false, visible: true }
+    await renderInteractivePane()
+    const expandBusinessmap = Array.from(container?.querySelectorAll('button') ?? []).find(
+      (button) => button.getAttribute('aria-label') === 'Show Businessmap setup steps'
+    )
+
+    await act(async () => {
+      expandBusinessmap?.click()
+    })
+    mocks.businessmapSetupProps.at(-1)?.onOpenIntegrations()
+
+    expect(mocks.openSettingsPage).toHaveBeenCalledOnce()
+    expect(mocks.openSettingsTarget).toHaveBeenCalledWith({
+      pane: 'integrations',
+      repoId: null,
+      sectionId: 'integrations-businessmap'
     })
   })
 

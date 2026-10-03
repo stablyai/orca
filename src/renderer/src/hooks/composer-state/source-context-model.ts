@@ -30,4 +30,5 @@ export type ComposerSourceContextModel = {
   taskSourceContext: TaskSourceContext | null
   selectedRepoGitHubSourceContext: TaskSourceContext | null
   smartNameJiraSourceContext: TaskSourceContext | null
+  smartNameBusinessmapSourceContext: TaskSourceContext | null
 }

@@ -20,6 +20,7 @@ import { useSmartWorkspaceSecondarySearches } from './use-smart-workspace-second
 
 export function useSmartWorkspaceNameFieldController({
   jiraSourceContext = null,
+  businessmapSourceContext = null,
   disabled = false,
   textOnly = false,
   branchesEnabled = true,
@@ -34,6 +35,7 @@ export function useSmartWorkspaceNameFieldController({
   const normalizedProps: NormalizedSmartWorkspaceNameFieldProps = {
     ...props,
     jiraSourceContext,
+    businessmapSourceContext,
     disabled,
     textOnly,
     branchesEnabled,
@@ -92,6 +94,14 @@ export function useSmartWorkspaceNameFieldController({
     foundation.jiraSourceConnected &&
     jiraSourceContext !== null &&
     jiraSearchJql !== null
+  const shouldQueryBusinessmap =
+    !disabled &&
+    !textOnly &&
+    !foundation.jiraSource.intent &&
+    !linearUrlIntentOwnsInput &&
+    foundation.businessmapSourceConnected &&
+    sourceQueryWithinLimit &&
+    (foundation.mode === 'smart' || foundation.mode === 'businessmap')
 
   useSmartWorkspaceGithubSearch({
     foundation,
@@ -105,7 +115,9 @@ export function useSmartWorkspaceNameFieldController({
     linearUrlIntent,
     linearUrlIntentOwnsInput,
     shouldQueryJira,
-    jiraSearchJql
+    jiraSearchJql,
+    shouldQueryBusinessmap,
+    businessmapQuery: foundation.debouncedQuery
   })
   const shouldQueryGitlab =
     sourceQueryWithinLimit &&

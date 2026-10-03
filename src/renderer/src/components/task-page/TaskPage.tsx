@@ -11,6 +11,7 @@ import { useTaskPageGitHubIssueDraft } from '../use-task-page-github-issue-draft
 import { useTaskPageDetailRouting } from '../use-task-page-detail-routing'
 import { useTaskPageLinearViewState } from '../use-task-page-linear-view-state'
 import { useTaskPageJiraListState } from '../use-task-page-jira-list-state'
+import { useTaskPageBusinessmapListState } from '../use-task-page-businessmap-list-state'
 import { useTaskPageResumeRestoration } from '../use-task-page-resume-restoration'
 import { useTaskPageProviderMetadata } from '../use-task-page-provider-metadata'
 import { useTaskPageGitLabLoading } from '../use-task-page-gitlab-loading'
@@ -18,10 +19,13 @@ import { useTaskPageLinearListSelection } from '../use-task-page-linear-list-sel
 import { useTaskPageLinearListProjection } from '../use-task-page-linear-list-projection'
 import { useTaskPageLinearBoard } from '../use-task-page-linear-board'
 import { useTaskPageJiraListProjection } from '../use-task-page-jira-list-projection'
+import { useTaskPageBusinessmapListProjection } from '../use-task-page-businessmap-list-projection'
 import { useTaskPageLinearCreationState } from '../use-task-page-linear-creation-state'
 import { useTaskPageGitHubMutationState } from '../use-task-page-github-mutation-state'
 import { useTaskPageJiraCreationState } from '../use-task-page-jira-creation-state'
 import { useTaskPageJiraCreationMetadata } from '../use-task-page-jira-creation-metadata'
+import { useTaskPageBusinessmapCreationState } from '../use-task-page-businessmap-creation-state'
+import { useTaskPageBusinessmapCreationMetadata } from '../use-task-page-businessmap-creation-metadata'
 import { useTaskPageGitHubListProjection } from '../use-task-page-github-list-projection'
 import { useTaskPageGitHubSearchPagination } from '../use-task-page-github-search-pagination'
 import { useTaskPageGitHubLandingRefresh } from '../use-task-page-github-landing-refresh'
@@ -32,11 +36,13 @@ import { useTaskPageGitHubIssueCreation } from '../use-task-page-github-issue-cr
 import { useTaskPageLinearProjectCreation } from '../use-task-page-linear-project-creation'
 import { useTaskPageLinearIssueCreation } from '../use-task-page-linear-issue-creation'
 import { useTaskPageJiraIssueCreation } from '../use-task-page-jira-issue-creation'
+import { useTaskPageBusinessmapCardCreation } from '../use-task-page-businessmap-card-creation'
 import { useTaskPageGlobalEffects } from '../use-task-page-global-effects'
 import { useTaskPageLinearListEffects } from '../use-task-page-linear-list-effects'
 import { useTaskPageLinearInOrcaEffects } from '../use-task-page-linear-in-orca-effects'
 import { useTaskPageLinearCollectionEffects } from '../use-task-page-linear-collection-effects'
 import { useTaskPageJiraListEffects } from '../use-task-page-jira-list-effects'
+import { useTaskPageBusinessmapListEffects } from '../use-task-page-businessmap-list-effects'
 import { useTaskPageComposerActions } from '../use-task-page-composer-actions'
 import { TaskPageSurface } from './Surface'
 
@@ -53,32 +59,38 @@ export default function TaskPage(): React.JSX.Element {
   const stage10 = useTaskPageDetailRouting(stage9)
   const stage11 = useTaskPageLinearViewState(stage10)
   const stage12 = useTaskPageJiraListState(stage11)
-  const stage13 = useTaskPageResumeRestoration(stage12)
-  const stage14 = useTaskPageProviderMetadata(stage13)
-  const stage15 = useTaskPageGitLabLoading(stage14)
-  const stage16 = useTaskPageLinearListSelection(stage15)
-  const stage17 = useTaskPageLinearListProjection(stage16)
-  const stage18 = useTaskPageLinearBoard(stage17)
-  const stage19 = useTaskPageJiraListProjection(stage18)
-  const stage20 = useTaskPageLinearCreationState(stage19)
-  const stage21 = useTaskPageGitHubMutationState(stage20)
-  const stage22 = useTaskPageJiraCreationState(stage21)
-  const stage23 = useTaskPageJiraCreationMetadata(stage22)
-  const stage24 = useTaskPageGitHubListProjection(stage23)
-  const stage25 = useTaskPageGitHubSearchPagination(stage24)
-  const stage26 = useTaskPageGitHubLandingRefresh(stage25)
-  const stage27 = useTaskPageGitHubQuietRefresh(stage26)
-  const stage28 = useTaskPageSearchActions(stage27)
-  const stage29 = useTaskPageWorkspaceActions(stage28)
-  const stage30 = useTaskPageGitHubIssueCreation(stage29)
-  const stage31 = useTaskPageLinearProjectCreation(stage30)
-  const stage32 = useTaskPageLinearIssueCreation(stage31)
-  const stage33 = useTaskPageJiraIssueCreation(stage32)
-  const stage34 = useTaskPageGlobalEffects(stage33)
-  const stage35 = useTaskPageLinearListEffects(stage34)
-  const stage36 = useTaskPageLinearInOrcaEffects(stage35)
-  const stage37 = useTaskPageLinearCollectionEffects(stage36)
-  const stage38 = useTaskPageJiraListEffects(stage37)
-  const stage39 = useTaskPageComposerActions(stage38)
-  return <TaskPageSurface model={stage39} />
+  const stage13 = useTaskPageBusinessmapListState(stage12)
+  const stage14 = useTaskPageResumeRestoration(stage13)
+  const stage15 = useTaskPageProviderMetadata(stage14)
+  const stage16 = useTaskPageGitLabLoading(stage15)
+  const stage17 = useTaskPageLinearListSelection(stage16)
+  const stage18 = useTaskPageLinearListProjection(stage17)
+  const stage19 = useTaskPageLinearBoard(stage18)
+  const stage20 = useTaskPageJiraListProjection(stage19)
+  const stage21 = useTaskPageBusinessmapListProjection(stage20)
+  const stage22 = useTaskPageLinearCreationState(stage21)
+  const stage23 = useTaskPageGitHubMutationState(stage22)
+  const stage24 = useTaskPageJiraCreationState(stage23)
+  const stage25 = useTaskPageJiraCreationMetadata(stage24)
+  const stage26 = useTaskPageBusinessmapCreationState(stage25)
+  const stage27 = useTaskPageBusinessmapCreationMetadata(stage26)
+  const stage28 = useTaskPageGitHubListProjection(stage27)
+  const stage29 = useTaskPageGitHubSearchPagination(stage28)
+  const stage30 = useTaskPageGitHubLandingRefresh(stage29)
+  const stage31 = useTaskPageGitHubQuietRefresh(stage30)
+  const stage32 = useTaskPageSearchActions(stage31)
+  const stage33 = useTaskPageWorkspaceActions(stage32)
+  const stage34 = useTaskPageGitHubIssueCreation(stage33)
+  const stage35 = useTaskPageLinearProjectCreation(stage34)
+  const stage36 = useTaskPageLinearIssueCreation(stage35)
+  const stage37 = useTaskPageJiraIssueCreation(stage36)
+  const stage38 = useTaskPageBusinessmapCardCreation(stage37)
+  const stage39 = useTaskPageGlobalEffects(stage38)
+  const stage40 = useTaskPageLinearListEffects(stage39)
+  const stage41 = useTaskPageLinearInOrcaEffects(stage40)
+  const stage42 = useTaskPageLinearCollectionEffects(stage41)
+  const stage43 = useTaskPageJiraListEffects(stage42)
+  const stage44 = useTaskPageBusinessmapListEffects(stage43)
+  const stage45 = useTaskPageComposerActions(stage44)
+  return <TaskPageSurface model={stage45} />
 }

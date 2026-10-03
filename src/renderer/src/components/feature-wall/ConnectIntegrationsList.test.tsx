@@ -29,6 +29,13 @@ type StoreState = {
   checkJiraConnection: () => Promise<void>
   testJiraConnection: () => Promise<{ ok: boolean; error?: string }>
   disconnectJira: () => Promise<void>
+  businessmapStatus: { connected: boolean; sites?: unknown[] }
+  businessmapStatusChecked: boolean
+  businessmapStatusContextKey: string | null
+  checkBusinessmapConnection: () => Promise<void>
+  testBusinessmapConnection: () => Promise<{ ok: boolean; error?: string }>
+  disconnectBusinessmap: () => Promise<void>
+  connectBusinessmap: () => Promise<{ ok: boolean; error?: string }>
 }
 
 const { storeState } = vi.hoisted(() => ({
@@ -107,7 +114,14 @@ function installStore(preflightStatus: PreflightStatus): void {
     jiraStatusContextKey: providerContextKey,
     checkJiraConnection: vi.fn(async () => {}),
     testJiraConnection: vi.fn(async () => ({ ok: true })),
-    disconnectJira: vi.fn(async () => {})
+    disconnectJira: vi.fn(async () => {}),
+    businessmapStatus: { connected: false, sites: [] },
+    businessmapStatusChecked: true,
+    businessmapStatusContextKey: providerContextKey,
+    checkBusinessmapConnection: vi.fn(async () => {}),
+    testBusinessmapConnection: vi.fn(async () => ({ ok: true })),
+    disconnectBusinessmap: vi.fn(async () => {}),
+    connectBusinessmap: vi.fn(async () => ({ ok: true }))
   }
 }
 

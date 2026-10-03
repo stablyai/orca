@@ -5,7 +5,8 @@ import {
   type NewLinearProjectDraft,
   isTaskCreationDraftContentful,
   type NewLinearIssueDraft,
-  type NewJiraIssueDraft
+  type NewJiraIssueDraft,
+  type NewBusinessmapCardDraft
 } from '@/store/slices/task-creation-drafts'
 import { useAppStore } from '@/store'
 // Why: hoisted so the type-guard predicate isn't re-allocated on every render.
@@ -52,5 +53,13 @@ export function writeNewJiraIssueDraft(draft: NewJiraIssueDraft | null): void {
     state.setNewJiraIssueDraft(draft)
   } else {
     state.clearNewJiraIssueDraft()
+  }
+}
+export function writeNewBusinessmapCardDraft(draft: NewBusinessmapCardDraft | null): void {
+  const state = useAppStore.getState()
+  if (draft && isTaskCreationDraftContentful(draft)) {
+    state.setNewBusinessmapCardDraft(draft)
+  } else {
+    state.clearNewBusinessmapCardDraft()
   }
 }

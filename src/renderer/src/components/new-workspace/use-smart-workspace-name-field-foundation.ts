@@ -25,6 +25,7 @@ export function useSmartWorkspaceNameFieldFoundation(
     value,
     disabled,
     jiraSourceContext,
+    businessmapSourceContext,
     selectedSource
   } = props
   const {
@@ -44,6 +45,9 @@ export function useSmartWorkspaceNameFieldFoundation(
     refreshPreflightStatus,
     searchJiraIssues,
     searchLinearIssues,
+    businessmapConnectionStatus,
+    checkBusinessmapConnection,
+    searchBusinessmapCards,
     settings
   } = useAppStore(
     useShallow((s) => ({
@@ -63,6 +67,9 @@ export function useSmartWorkspaceNameFieldFoundation(
       refreshPreflightStatus: s.refreshPreflightStatus,
       searchJiraIssues: s.searchJiraIssues,
       searchLinearIssues: s.searchLinearIssues,
+      businessmapConnectionStatus: s.businessmapStatus,
+      checkBusinessmapConnection: s.checkBusinessmapConnection,
+      searchBusinessmapCards: s.searchBusinessmapCards,
       settings: s.settings
     }))
   )
@@ -169,9 +176,9 @@ export function useSmartWorkspaceNameFieldFoundation(
     linearStatus,
     linearStatusChecked,
     checkLinearConnection,
-    jiraSourceConnected
+    jiraSourceConnected,
+    businessmapSourceConnected: businessmapConnectionStatus?.connected === true
   })
-
   return {
     ...props,
     ...state,
@@ -186,6 +193,11 @@ export function useSmartWorkspaceNameFieldFoundation(
     listLinearIssues,
     searchJiraIssues,
     searchLinearIssues,
+    businessmapConnectionStatus,
+    checkBusinessmapConnection,
+    searchBusinessmapCards,
+    businessmapSourceConnected: businessmapConnectionStatus?.connected === true,
+    businessmapSourceContext,
     selectedRepo,
     selectedRepoOwnerSettings,
     githubSourceContext,

@@ -221,5 +221,45 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
         'disconnect'
       )
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.integrations.search.businessmap',
+      'Businessmap Integration'
+    ),
+    description: translate(
+      'auto.components.settings.integrations.search.businessmapDescription',
+      'Connect Businessmap or update Businessmap API key credentials.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.businessmapKeyword',
+        'businessmap'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.kanbanizeKeyword',
+        'kanbanize'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.c450244ad7',
+        'integration'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.2ec2bd328c',
+        'api token'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.20540996ef',
+        'credentials'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.3c3d3d8ffa',
+        'connect'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.a626990bd2',
+        'disconnect'
+      )
+    ]
   }
 ])

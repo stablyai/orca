@@ -2,6 +2,7 @@ import type { GitLabTaskFilter, GitLabIssueFilter } from '@/components/task-page
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { GitLabProjectRef, GitLabWorkItem } from '../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../shared/jira-types'
+import type { BusinessmapCard } from '../../../shared/businessmap-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getLinkedWorkItemWorkspaceName, getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
 import {
@@ -29,6 +30,7 @@ export function isGitLabIssueFilter(
 export const TASK_SEARCH_DEBOUNCE_MS = 300
 export const LINEAR_ITEM_LIMIT = 36
 export const JIRA_ITEM_LIMIT = 50
+export const BUSINESSMAP_ITEM_LIMIT = 30
 export const PR_CHECKS_EAGER_PREFETCH_LIMIT = 20
 export const GITHUB_TASK_GRID_CLASS =
   'min-w-[790px] grid-cols-[72px_minmax(320px,1fr)_84px_100px_92px_122px]'
@@ -61,6 +63,16 @@ export function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
       title: `${issue.key} ${issue.title}`,
       jiraIdentifier: issue.key
     })?.seedName ?? getLinkedWorkItemSuggestedName(issue)
+  )
+}
+export function getBusinessmapCardWorkspaceSeed(card: BusinessmapCard): string {
+  return (
+    getLinkedWorkItemWorkspaceName({
+      type: 'issue',
+      provider: 'businessmap',
+      number: card.id,
+      title: card.title
+    })?.seedName ?? getLinkedWorkItemSuggestedName(card)
   )
 }
 export function getTaskPageRepoSourceContext(
