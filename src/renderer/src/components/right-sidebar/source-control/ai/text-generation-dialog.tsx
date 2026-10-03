@@ -48,36 +48,37 @@ type SourceControlTextGenerationDialogProps = SourceControlTextGenerationBaseDia
   generateLabel: string
 }
 
+// Keep context placeholders intact when users copy the preview to customize its rules.
 function buildBasePromptPreview(actionId: SourceControlTextActionId): string {
   switch (actionId) {
     case 'commitMessage':
       return buildCommitMessagePrompt(
         {
-          branch: 'feature/example',
-          stagedSummary: 'M src/example.ts',
-          stagedPatch: 'diff --git a/src/example.ts b/src/example.ts\n+addSourceControlAiPreview()'
+          branch: '{branch}',
+          stagedSummary: '{stagedFiles}',
+          stagedPatch: '{stagedPatch}'
         },
         ''
       )
     case 'pullRequest':
       return buildPullRequestFieldsPrompt(
         {
-          branch: 'feature/example',
-          base: 'main',
+          branch: '{branch}',
+          base: '{baseBranch}',
           branchChangedByPreparation: false,
-          currentTitle: 'Draft title',
-          currentBody: 'Draft description',
+          currentTitle: '{currentTitle}',
+          currentBody: '{currentBody}',
           currentDraft: false,
-          commitSummary: 'a1b2c3d Add Source Control AI prompt previews',
-          changeSummary: 'src/example.ts | 12 ++++++++++--',
-          patch: 'diff --git a/src/example.ts b/src/example.ts\n+addSourceControlAiPreview()'
+          commitSummary: '{commitSummary}',
+          changeSummary: '{changedFiles}',
+          patch: '{patch}'
         },
         ''
       )
     case 'branchName':
       return buildBranchNamePrompt({
-        firstPrompt: 'Add source-control AI prompt previews',
-        assistantMessage: 'I will update the generation dialog variable chip preview.'
+        firstPrompt: '{firstPrompt}',
+        assistantMessage: '{assistantMessage}'
       })
   }
 }
