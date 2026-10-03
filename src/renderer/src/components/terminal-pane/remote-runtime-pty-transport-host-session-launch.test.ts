@@ -348,6 +348,83 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
   })
 
+  const codexRollout =
+    '/home/u/.codex/sessions/2026/09/30/rollout-2026-09-30T00-00-00-codex-owned.jsonl'
+  it.each([
+    ['owner label', { resumeIdentity: { agent: 'codex' as const } }, {}],
+    // A record saved before the label existed still names its owner through its own transcript.
+    ['transcript path', { transcriptPath: codexRollout }, { transcriptPath: codexRollout }]
+  ])(
+    'sends the %s owner for a mixed row and lets the host use that agent settings',
+    async (_name, owner, sentOwner) => {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'repo1::/remote/wt',
+        command: 'claude --old',
+        launchAgent: 'claude',
+        agentArgsOverride: '--claude-only',
+        env: { CLAUDE_ONLY: '1' },
+        resumeProviderSession: { key: 'session_id', id: 'codex-owned', ...owner },
+        tabId: 'tab-1',
+        leafId: '11111111-1111-4111-8111-111111111111'
+      })
+      await transport.connect({ url: '', callbacks: {} })
+      expect(runtimeCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'terminal.ensureAgentSession',
+        timeoutMs: 15_000,
+        params: {
+          kind: 'explicit',
+          worktree: 'id:repo1::/remote/wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-owned', ...sentOwner },
+          placement: { tabId: 'tab-1', leafId: '11111111-1111-4111-8111-111111111111' },
+          presentation: 'background'
+        }
+      })
+    }
+  )
+
+  it.each([
+    ['the pane override', '--pane-override'],
+    ['no agentArgs, so the host keeps its defaults', undefined]
+  ] as const)('sends an owned resume as a bare locator with %s', async (_name, override) => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      command: "claude '--resume' 'provider-session'",
+      launchAgent: 'claude',
+      ...(override !== undefined ? { agentArgsOverride: override } : {}),
+      resumeProviderSession: {
+        key: 'session_id',
+        id: 'provider-session',
+        resumeIdentity: { agent: 'claude' }
+      },
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.ensureAgentSession',
+        params: expect.objectContaining({
+          providerSession: { key: 'session_id', id: 'provider-session' },
+          ...(override !== undefined ? { agentArgs: override } : {})
+        })
+      })
+    )
+    if (override === undefined) {
+      expect(runtimeCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'terminal.ensureAgentSession',
+          params: expect.objectContaining({ agentArgs: expect.anything() })
+        })
+      )
+    }
+  })
+
   it('degrades a Kimi resume to a legacy launch when the host predates the resume capability', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const transport = createRemoteRuntimePtyTransport('env-1', {

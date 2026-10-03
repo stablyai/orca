@@ -1,3 +1,4 @@
+import { resolveResumeAgent } from '../../../shared/agent-resume-identity'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
@@ -67,20 +68,21 @@ export function launchSleepingAgentSession(
   options?: ResumeSleepingAgentSessionsOptions
 ): boolean {
   const state = useAppStore.getState()
-  const launchConfig = record.launchConfig
+  const agent = resolveResumeAgent(record.agent, record.providerSession)
+  const launchConfig = agent === record.agent ? record.launchConfig : undefined
   const resumeTarget = getResumeLaunchTarget(record.worktreeId)
   const startupPlan = buildAgentResumeStartupPlan({
-    agent: record.agent,
+    agent,
     providerSession: record.providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     agentArgs:
       launchConfig !== undefined
         ? launchConfig.agentArgs
-        : resolveTuiAgentLaunchArgs(record.agent, state.settings?.agentDefaultArgs),
+        : resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
     agentEnv:
       launchConfig !== undefined
         ? launchConfig.agentEnv
-        : resolveTuiAgentLaunchEnv(record.agent, state.settings?.agentDefaultEnv),
+        : resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
     ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
     ...(launchConfig?.ompResumeFilePath
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
@@ -99,27 +101,27 @@ export function launchSleepingAgentSession(
   }
 
   const tab = state.createTab(record.worktreeId, undefined, undefined, {
-    launchAgent: record.agent,
+    launchAgent: agent,
     pendingStartup: {
       command: startupPlan.launchCommand,
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
       launchConfig: startupPlan.launchConfig,
       resumeProviderSession: record.providerSession,
-      launchAgent: record.agent,
+      launchAgent: agent,
       ...(launchConfig ? { agentArgsOverride: launchConfig.agentArgs } : {}),
       ...(startupPlan.startupCommandDelivery
         ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
         : {}),
       showSessionRestoredBanner: true,
       telemetry: {
-        agent_kind: tuiAgentToAgentKind(record.agent),
+        agent_kind: tuiAgentToAgentKind(agent),
         launch_source: 'sidebar',
         request_kind: 'resume'
       }
     },
     automaticResumeClaim: {
       worktreeId: record.worktreeId,
-      launchAgent: record.agent,
+      launchAgent: agent,
       providerSession: record.providerSession
     },
     ...(options?.suppressNavigation ? { activate: false, recordInteraction: false } : {})

@@ -58,7 +58,11 @@ describe('Copilot hook normalization', () => {
       buildBody({ hook_event_name: 'SessionStart', session_id: sessionId }),
       'production'
     )
-    expect(started?.providerSession).toEqual({ key: 'session_id', id: sessionId })
+    expect(started?.providerSession).toEqual({
+      key: 'session_id',
+      id: sessionId,
+      resumeIdentity: { agent: 'copilot' }
+    })
 
     const stopped = _internals.normalizeHookPayload(
       'copilot',
@@ -66,7 +70,11 @@ describe('Copilot hook normalization', () => {
       'production'
     )
     expect(stopped?.payload.state).toBe('done')
-    expect(stopped?.providerSession).toEqual({ key: 'session_id', id: sessionId })
+    expect(stopped?.providerSession).toEqual({
+      key: 'session_id',
+      id: sessionId,
+      resumeIdentity: { agent: 'copilot' }
+    })
   })
 
   it('captures the Copilot provider session from a camelCase sessionId', () => {
@@ -75,7 +83,11 @@ describe('Copilot hook normalization', () => {
       buildBody({ hookEventName: 'agentStop', sessionId: 'copilot-camel' }),
       'production'
     )
-    expect(result?.providerSession).toEqual({ key: 'session_id', id: 'copilot-camel' })
+    expect(result?.providerSession).toEqual({
+      key: 'session_id',
+      id: 'copilot-camel',
+      resumeIdentity: { agent: 'copilot' }
+    })
   })
 
   it('infers Copilot user prompt payloads that omit hook_event_name', () => {

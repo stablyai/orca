@@ -257,7 +257,8 @@ describe('Last-status persistence', () => {
           providerSession: {
             key: 'session_id',
             id: 'pi-session-1',
-            transcriptPath: '/tmp/pi-session-1.jsonl'
+            transcriptPath: '/tmp/pi-session-1.jsonl',
+            resumeIdentity: { agent: 'pi' }
           }
         })
       )

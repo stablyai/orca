@@ -3,10 +3,8 @@ import type { PtyConnectResult } from '../pty-transport'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { parseLegacyNumericPaneKey } from '../../../../../shared/stable-pane-id'
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
-import {
-  agentProviderSessionsEqual,
-  type SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
+import { sameResumeTarget } from '../../../../../shared/agent-resume-identity'
 import { recognizeAgentProcessFromCommandLine } from '../../../../../shared/agent-process-recognition'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
@@ -71,10 +69,10 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
       if (
         paneKey !== consumed.paneKey &&
         record.worktreeId === consumed.record.worktreeId &&
-        record.agent === consumed.record.agent &&
-        agentProviderSessionsEqual(
+        sameResumeTarget(
           record.agent,
           record.providerSession,
+          consumed.record.agent,
           consumed.record.providerSession
         )
       ) {

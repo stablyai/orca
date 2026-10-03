@@ -8,6 +8,16 @@ import {
 } from './agent-session-claim-identity'
 
 describe('agent session claim identity', () => {
+  it('uses the route owner when creating a claim', () => {
+    expect(
+      canonicalizeAgentSessionIdentity('claude', {
+        key: 'session_id',
+        id: 'codex-worker',
+        resumeIdentity: { agent: 'codex' }
+      })
+    ).toMatchObject({ agent: 'codex', providerSession: { id: 'codex-worker' } })
+  })
+
   it('creates stable opaque identity and worktree digests', () => {
     const signer = createEphemeralAgentSessionClaimSigner('profile-1')
     const identity = canonicalizeAgentSessionIdentity('codex', {

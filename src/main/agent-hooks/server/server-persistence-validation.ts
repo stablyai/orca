@@ -1,7 +1,7 @@
 import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
 import { createHash } from 'node:crypto'
 
-import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
+import { decodeHookResumeSession } from '../../../shared/agent-resume-identity'
 import {
   normalizeAgentStatusPayload,
   type AgentMainAgentStatus,
@@ -126,7 +126,11 @@ export function sanitizeHydratedEntry(
         legacyBoundaryMainAgent
         ? false
         : undefined
-  const providerSession = normalizeAgentProviderSession(record.providerSession) ?? undefined
+  const providerSession = decodeHookResumeSession(
+    record.providerSession,
+    record.source,
+    connectionId
+  )
   const providerSessionOnly = record.providerSessionOnly === true
   const retainedForLiveness = record.retainedForLiveness === true
   const validRetainedIdentity = Boolean(

@@ -3,6 +3,7 @@
 // not receive PowerShell single quotes.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 
 const mockCreateTab = vi.fn()
@@ -108,6 +109,42 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
       ]
     }
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
+  })
+
+  it('resumes a mixed row with the owning agent and its current settings', async () => {
+    store.settings.agentCmdOverrides = { codex: 'custom-codex' }
+    store.settings.agentDefaultArgs = { codex: '--codex-current' }
+    store.settings.agentDefaultEnv = { codex: { CODEX_CURRENT: '1' } }
+    await expect(
+      launch({
+        ...record,
+        agent: 'claude',
+        providerSession: { ...record.providerSession, resumeIdentity: { agent: 'codex' } },
+        launchConfig: {
+          agentCommand: 'claude --old',
+          agentArgs: '--claude-only',
+          agentEnv: { CLAUDE_ONLY: '1' }
+        }
+      })
+    ).resolves.toBe(`custom-codex '--codex-current' 'resume' '${SESSION_ID}'`)
+    expect(mockCreateTab.mock.calls.at(-1)?.[3]).toMatchObject({
+      launchAgent: 'codex',
+      pendingStartup: { launchAgent: 'codex', env: { CODEX_CURRENT: '1' } }
+    })
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(store.clearSleepingAgentSession).toHaveBeenCalledWith(record.paneKey)
+  })
+
+  it('resumes an owned record exactly like a legacy one', async () => {
+    store.settings.terminalWindowsShell = 'powershell.exe'
+
+    await expect(
+      launch({
+        ...record,
+        providerSession: { ...record.providerSession, resumeIdentity: { agent: 'codex' } }
+      })
+    ).resolves.toBe(`codex '--dangerously-bypass-approvals-and-sandbox' 'resume' '${SESSION_ID}'`)
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('quotes the resume argv for a cmd.exe tab', async () => {

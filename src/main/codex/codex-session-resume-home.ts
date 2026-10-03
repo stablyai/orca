@@ -7,13 +7,11 @@ import {
 } from '../../shared/cross-platform-path'
 import { listCodexSessionRolloutFilesIncrementally } from './codex-session-file-listing'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
+import { claimsCodexRolloutLayout } from '../../shared/agent-transcript-layout'
 
 // Why: only Codex's dated rollout layout may establish account-home provenance; nested/misplaced JSONL must not select credentials.
-const CLAIMED_CODEX_ROLLOUT_TAIL = String.raw`\d{4}/\d{2}/\d{2}/rollout-[^/]+\.jsonl(?:\.zst)?`
 const TRUSTED_CODEX_ROLLOUT_TAIL = String.raw`\d{4}/\d{2}/\d{2}/rollout-[^/:]+\.jsonl(?:\.zst)?`
 const ROLLOUT_RELATIVE_PATH = new RegExp(`^${TRUSTED_CODEX_ROLLOUT_TAIL}$`)
-// Why: case-insensitive because trusted-home matching folds Windows path case too.
-const CODEX_ROLLOUT_LAYOUT_PATH = new RegExp(`(?:^|/)sessions/${CLAIMED_CODEX_ROLLOUT_TAIL}$`, 'i')
 
 /** `resume` pins CODEX_HOME to the account that owns the rollout. `fresh` means
  *  provenance could not be verified, so the caller drops the resume argv — an
@@ -106,20 +104,6 @@ export function resolveTrustedCodexSessionResumeHome(args: {
   fileIsRegular?: (filePath: string) => boolean
 }): string | null {
   return resolveTrustedCodexSessionResume(args)?.homePath ?? null
-}
-
-/**
- * True when transcriptPath claims Codex's dated rollout layout, under any home and without
- * checking existence — separating rejected Codex provenance from cross-agent/stale metadata.
- * Not scoped to trusted homes: a rollout under a removed home is still rejected provenance,
- * and admitting it would resume that session under whichever account is selected now.
- */
-export function claimsCodexRolloutLayout(transcriptPath: string | undefined): boolean {
-  const persistedPath = transcriptPath?.trim()
-  if (!persistedPath) {
-    return false
-  }
-  return CODEX_ROLLOUT_LAYOUT_PATH.test(persistedPath.replace(/\\/g, '/'))
 }
 
 /**

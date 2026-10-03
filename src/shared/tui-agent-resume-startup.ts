@@ -1,8 +1,10 @@
+import { resolveResumeAgent } from './agent-resume-identity'
 import {
   getAgentResumeArgv,
   type AgentProviderSessionMetadata,
   type ResumableTuiAgent
 } from './agent-session-resume'
+import { resolveTuiAgentLaunchArgs, resolveTuiAgentLaunchEnv } from './tui-agent-launch-defaults'
 import type { SessionOptionValue } from './native-chat-session-options'
 import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
@@ -18,6 +20,8 @@ export function buildAgentResumeStartupPlan(args: {
   cmdOverrides: Partial<Record<TuiAgent, string>>
   platform: NodeJS.Platform
   shell?: AgentStartupShell
+  agentDefaultArgs?: Partial<Record<TuiAgent, string>>
+  agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
   agentArgs?: string | null
   agentEnv?: Record<string, string> | null
   agentCommand?: string | null
@@ -26,6 +30,19 @@ export function buildAgentResumeStartupPlan(args: {
   sessionOptionsOverrideAgentArgs?: boolean
   isRemote?: boolean
 }): AgentStartupPlan | null {
+  const agent = resolveResumeAgent(args.agent, args.providerSession)
+  if (agent !== args.agent) {
+    args = {
+      ...args,
+      agent,
+      agentCommand: undefined,
+      agentArgs: resolveTuiAgentLaunchArgs(agent, args.agentDefaultArgs),
+      agentEnv: resolveTuiAgentLaunchEnv(agent, args.agentDefaultEnv),
+      ompResumeFilePath: undefined,
+      sessionOptions: undefined,
+      sessionOptionsOverrideAgentArgs: undefined
+    }
+  }
   const argv = getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
   if (!argv) {
     return null

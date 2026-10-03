@@ -28,7 +28,9 @@ export function shouldSuppressInheritedTerminalStatus(args: {
   return args.inheritedFromActivePane && args.incomingState === 'done'
 }
 
-function normalizedKnownAgentType(agentType: AgentType | null | undefined): AgentType | null {
+export function normalizedKnownAgentType(
+  agentType: AgentType | null | undefined
+): AgentType | null {
   if (!agentType || agentType === 'unknown') {
     return null
   }

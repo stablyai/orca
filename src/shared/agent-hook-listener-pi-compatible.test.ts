@@ -422,6 +422,7 @@ describe('shared agent-hook-listener', () => {
     expect(event?.providerSession).toEqual({
       key: 'session_id',
       id: 'pi-session-1',
+      resumeIdentity: { agent: 'pi' },
       transcriptPath: '/tmp/pi-session-1.jsonl'
     })
   })

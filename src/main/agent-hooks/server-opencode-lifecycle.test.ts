@@ -60,7 +60,7 @@ describe('AgentHookServer OpenCode lifecycle', () => {
         paneKey: PANE,
         state: 'done',
         sessionBoundary: true,
-        providerSession: { key: 'session_id', id: 'fresh' }
+        providerSession: { key: 'session_id', id: 'fresh', resumeIdentity: { agent: 'opencode' } }
       })
     ])
 
@@ -151,7 +151,11 @@ describe('AgentHookServer OpenCode lifecycle', () => {
     )
     expect(
       server.getStatusSnapshot().find((entry) => entry.paneKey === TARGET_PANE)?.providerSession
-    ).toEqual({ key: 'session_id', id: 'target-fresh' })
+    ).toEqual({
+      key: 'session_id',
+      id: 'target-fresh',
+      resumeIdentity: { agent: 'opencode' }
+    })
 
     server.transferPaneAuthority(PANE, TARGET_PANE, 'pty-opencode')
     await post(
@@ -163,7 +167,11 @@ describe('AgentHookServer OpenCode lifecycle', () => {
     expect(server.getStatusSnapshot()).toEqual([
       expect.objectContaining({
         paneKey: TARGET_PANE,
-        providerSession: { key: 'session_id', id: 'source-after-transfer' }
+        providerSession: {
+          key: 'session_id',
+          id: 'source-after-transfer',
+          resumeIdentity: { agent: 'opencode' }
+        }
       })
     ])
   })
@@ -177,7 +185,9 @@ describe('AgentHookServer OpenCode lifecycle', () => {
     // The stale old-token follow-up stays fenced out.
     await post({ hook_event_name: 'SessionBusy', sessionID: 'old' }, 'old-token')
     expect(server.getStatusSnapshot()).toEqual([
-      expect.objectContaining({ providerSession: { key: 'session_id', id: 'restart' } })
+      expect.objectContaining({
+        providerSession: { key: 'session_id', id: 'restart', resumeIdentity: { agent: 'opencode' } }
+      })
     ])
 
     // Why: the runtime defers retirement while an agent stays in the foreground, so a
@@ -187,7 +197,9 @@ describe('AgentHookServer OpenCode lifecycle', () => {
     await post({ hook_event_name: 'SessionBusy', sessionID: 'fresh' }, 'fresh-token')
 
     expect(server.getStatusSnapshot()).toEqual([
-      expect.objectContaining({ providerSession: { key: 'session_id', id: 'fresh' } })
+      expect.objectContaining({
+        providerSession: { key: 'session_id', id: 'fresh', resumeIdentity: { agent: 'opencode' } }
+      })
     ])
   })
 
@@ -204,7 +216,9 @@ describe('AgentHookServer OpenCode lifecycle', () => {
     await post({ hook_event_name: 'SessionBusy', sessionID: 'old' }, 'old-token')
 
     expect(server.getStatusSnapshot()).toEqual([
-      expect.objectContaining({ providerSession: { key: 'session_id', id: 'restart' } })
+      expect.objectContaining({
+        providerSession: { key: 'session_id', id: 'restart', resumeIdentity: { agent: 'opencode' } }
+      })
     ])
   })
 
@@ -230,7 +244,14 @@ describe('AgentHookServer OpenCode lifecycle', () => {
     await post({ hook_event_name: 'SessionBusy', sessionID: 'old' }, 'old-token')
 
     expect(server.getStatusSnapshot()).toEqual([
-      expect.objectContaining({ providerSession: { key: 'session_id', id: 'restart' }, prompt: '' })
+      expect.objectContaining({
+        providerSession: {
+          key: 'session_id',
+          id: 'restart',
+          resumeIdentity: { agent: 'opencode' }
+        },
+        prompt: ''
+      })
     ])
   })
 

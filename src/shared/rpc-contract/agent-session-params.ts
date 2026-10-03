@@ -6,6 +6,7 @@ import {
   hasUnsafeProviderSessionIdChars
 } from '../agent-session-resume'
 import { parseAgentSessionOperationTimestamp } from '../agent-session-host-authority'
+import { resolveResumeAgent } from '../agent-resume-identity'
 import type {
   RuntimeCreateAgentSessionRequest,
   RuntimeEnsureAgentSessionRequest
@@ -105,7 +106,9 @@ export const ProviderSession = z
           Buffer.byteLength(value, 'utf8') <= MAX_TRANSCRIPT_PATH_BYTES,
         'Invalid transcript path'
       )
-      .optional()
+      .optional(),
+    // Why: clients older than the owner label echo it from the host's session.tabs mirror.
+    resumeIdentity: z.object({ agent: z.enum(RESUMABLE_TUI_AGENTS) }).optional()
   })
   .strict()
 
@@ -143,7 +146,13 @@ export const ExplicitEnsure = z
         message: 'OMP resume path requires the OMP agent'
       })
     }
-    if (getAgentResumeArgv(value.agent, value.providerSession, value.ompResumeFilePath) === null) {
+    if (
+      getAgentResumeArgv(
+        resolveResumeAgent(value.agent, value.providerSession),
+        value.providerSession,
+        value.ompResumeFilePath
+      ) === null
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['providerSession'],

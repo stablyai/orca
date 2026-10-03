@@ -1,3 +1,4 @@
+import { resolveResumeAgent } from '../../shared/agent-resume-identity'
 import { createHash, createHmac, randomBytes } from 'node:crypto'
 import {
   closeSync,
@@ -54,13 +55,14 @@ function canonicalPathForPlatform(value: string): string {
 }
 
 export function canonicalizeAgentSessionIdentity(
-  agent: unknown,
+  displayAgent: unknown,
   rawProviderSession: unknown
 ): CanonicalAgentSessionIdentity {
-  if (!isResumableTuiAgent(agent)) {
+  if (!isResumableTuiAgent(displayAgent)) {
     throw new Error('agent_session_identity_required')
   }
   const providerSession = normalizeAgentProviderSession(rawProviderSession)
+  const agent = providerSession ? resolveResumeAgent(displayAgent, providerSession) : displayAgent
   if (!providerSession || !getAgentResumeArgv(agent, providerSession)) {
     throw new Error('agent_session_identity_required')
   }
