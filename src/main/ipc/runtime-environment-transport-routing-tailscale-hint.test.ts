@@ -48,12 +48,26 @@ afterEach(() => {
 
 describe('Tailscale hint on remote runtime connection failure', () => {
   it('recommends Tailscale on the settings status probe for a non-tailnet endpoint', async () => {
-    const id = seedEnvironment('lan-host', 'ws://127.0.0.1:9')
+    const id = seedEnvironment('loopback-host', 'ws://127.0.0.1:9')
     const response = await getRuntimeEnvironmentStatus(userDataPath, id, 1000)
     expect(response.ok).toBe(false)
     if (response.ok === false) {
       expect(response.error.message).toContain('connect both devices to Tailscale')
       expect(response.error.message).toContain('https://tailscale.com/download')
+    }
+  })
+
+  // Why: #14210 — the endpoint in the pairing link was a LAN address, and the probe told a
+  // user already on the tailnet to install Tailscale. Loopback still takes the generic hint,
+  // so only a real private address exercises this branch end to end.
+  it('names a LAN endpoint and drops the Tailscale advice on the status probe', async () => {
+    const id = seedEnvironment('lan-host', 'ws://192.168.1.20:9')
+    const response = await getRuntimeEnvironmentStatus(userDataPath, id, 1000)
+    expect(response.ok).toBe(false)
+    if (response.ok === false) {
+      expect(response.error.message).toContain('at ws://192.168.1.20:9')
+      expect(response.error.message).toContain('local-network address')
+      expect(response.error.message).not.toContain('connect both devices to Tailscale')
     }
   })
 
@@ -68,14 +82,14 @@ describe('Tailscale hint on remote runtime connection failure', () => {
   })
 
   it('augments the thrown error for in-use calls (the toast path)', async () => {
-    const id = seedEnvironment('lan-host', 'ws://127.0.0.1:9')
+    const id = seedEnvironment('loopback-host', 'ws://127.0.0.1:9')
     await expect(callRuntimeEnvironment(userDataPath, id, 'files.read', {}, 1000)).rejects.toThrow(
       /connect both devices to Tailscale/
     )
   })
 
   it('augments a subscription that fails to connect initially', async () => {
-    const id = seedEnvironment('lan-host', 'ws://127.0.0.1:9')
+    const id = seedEnvironment('loopback-host', 'ws://127.0.0.1:9')
     await expect(
       subscribeRuntimeEnvironment(userDataPath, id, 'files.watch', {}, 1000, {
         onEvent: () => {},

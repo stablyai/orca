@@ -1,4 +1,5 @@
 import type { ClientOptions } from 'ws'
+import { endpointForDisplay } from './remote-pairing-endpoint'
 
 /**
  * Connect-phase bound for the Node-side remote-runtime WebSocket transports.
@@ -55,28 +56,6 @@ export function remoteRuntimeConnectOptions<TOptions extends ClientOptions>(
       connectTimeoutMs > 0
         ? connectTimeoutMs
         : REMOTE_RUNTIME_CONNECT_TIMEOUT_MS
-  }
-}
-
-/**
- * A hostname or IP literal, optionally with a port. Deliberately excludes `_` and anything
- * else WHATWG URL tolerates in a host: consumers still substring-match error messages for
- * tokens such as `terminal_gone`, so an endpoint carrying one would turn loss of contact into
- * a terminal-gone verdict — the one conclusion `ssh-execution-boundary.md` forbids.
- */
-const DISPLAYABLE_ENDPOINT_HOST_RE = /^(?:\[[0-9a-f:.]+\]|[a-z0-9.-]+)(?::\d{1,5})?$/i
-
-/**
- * Why: the endpoint comes from a pasted pairing code, which is only length-capped and can
- * carry userinfo. Show scheme and host and nothing else, and only when the host cannot smuggle
- * a token another consumer reads as a verdict.
- */
-function endpointForDisplay(endpoint: string): string {
-  try {
-    const { protocol, host } = new URL(endpoint)
-    return DISPLAYABLE_ENDPOINT_HOST_RE.test(host) ? `${protocol}//${host}` : 'the paired endpoint'
-  } catch {
-    return 'the paired endpoint'
   }
 }
 
