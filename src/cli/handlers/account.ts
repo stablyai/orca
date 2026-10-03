@@ -35,9 +35,12 @@ import {
   withInteractiveLoginCleanup
 } from './interactive-login-interruption'
 import { getWslAccountTarget } from './account-wsl-location'
+import { GROK_ACCOUNT_HANDLERS } from './grok-account'
+import type { GrokAccountsState } from '../../shared/grok-account-types'
 
 // Why: add returns just that provider's state; list returns the full snapshot.
 type AccountsListSnapshot = {
+  grok?: GrokAccountsState
   claude: ClaudeRateLimitAccountsState
   codex: CodexRateLimitAccountsState
 }
@@ -299,6 +302,7 @@ async function assertAccountImportSupported({ client }: HandlerContext): Promise
 
 /** CLI handlers for `orca account add [--agent claude|codex]` and `orca account list`. */
 export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
+  ...GROK_ACCOUNT_HANDLERS,
   'account add': async (ctx) => {
     const agentFlag = ctx.flags.get('agent')
     // Why: a valueless `--agent` parses as boolean true; defaulting it to claude
@@ -334,7 +338,7 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
       result,
       json,
       (snapshot) =>
-        `${formatAccountsBlock('Claude', snapshot.claude)}\n\n${formatAccountsBlock('Codex', snapshot.codex)}`
+        `${formatAccountsBlock('Claude', snapshot.claude)}\n\n${formatAccountsBlock('Codex', snapshot.codex)}${snapshot.grok ? `\n\n${formatAccountsBlock('Grok', snapshot.grok)}` : ''}`
     )
   }
 }

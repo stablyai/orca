@@ -42,12 +42,12 @@ export function getGrokToolEventMatcherForTests(): string {
   return GROK_TOOL_EVENT_MATCHER
 }
 
-function getConfigPath(): string {
+function getConfigPath(home?: string): string {
   // Why: Grok loads trusted global hook files from $GROK_HOME/hooks/*.json
   // (or ~/.grok when unset). Honor GROK_HOME so install/status match the same
   // home Grok and transcript lookup use; keep Orca entries in a dedicated file
   // so user-authored hook files stay untouched.
-  return join(resolveGrokHomeDir(), 'hooks', 'orca-status.json')
+  return join(home ?? resolveGrokHomeDir(), 'hooks', 'orca-status.json')
 }
 
 /** Test seam: the command registered for `scriptPath` on the current platform. */
@@ -92,8 +92,8 @@ export class GrokHookService {
     await refreshManagedScriptIfPresent(getGrokManagedScriptPath(), getGrokManagedScript())
   }
 
-  getStatus(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
+  getStatus(home?: string): AgentHookInstallStatus {
+    const configPath = getConfigPath(home)
     const scriptPath = getGrokManagedScriptPath()
     const config = readHooksJson(configPath)
     if (!config) {
@@ -139,8 +139,8 @@ export class GrokHookService {
     return { agent: 'grok', state, configPath, managedHooksPresent, detail }
   }
 
-  install(options?: { userInitiated?: boolean }): AgentHookInstallStatus {
-    const configPath = getConfigPath()
+  install(options?: { userInitiated?: boolean; home?: string }): AgentHookInstallStatus {
+    const configPath = getConfigPath(options?.home)
     const scriptPath = getGrokManagedScriptPath()
     const snapshot = readHooksJsonWithRaw(configPath)
     const config = snapshot.config
@@ -171,7 +171,7 @@ export class GrokHookService {
       Object.keys(config.hooks ?? {}).length === 0 &&
       !reinstallsOwnSymlinkCleanup
     ) {
-      return this.getStatus()
+      return this.getStatus(options?.home)
     }
 
     buildInstalledGrokConfig(
@@ -193,7 +193,7 @@ export class GrokHookService {
       if (configIsSymlink) {
         clearGrokSymlinkCleanupMarker(configPath)
       }
-      return this.getStatus()
+      return this.getStatus(options?.home)
     } catch (error) {
       if (ownsWindowsHook) {
         unregisterGrokHookOwnerSync()

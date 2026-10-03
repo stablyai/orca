@@ -18862,5 +18862,27 @@
         "accounts": "accounts"
       }
     }
+  },
+  "grokAccounts": {
+    "loadFailed": "Unable to load saved Grok accounts.",
+    "changeFailed": "Unable to change the Grok account.",
+    "launchHint": "Choose the account for new Grok sessions on this computer. Existing sessions keep their own account.",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "used": "{{percent}}% used",
+    "reset": "Resets {{when}}",
+    "loading": "Loading usage…",
+    "usageLabel": "Grok usage for {{email}}",
+    "reconnect": "Reconnect account",
+    "selected": "Selected",
+    "select": "Use account",
+    "add": "Add Grok account",
+    "system": "Use system login",
+    "cancel": "Cancel sign-in",
+    "signingIn": "Complete Grok sign-in in your browser.",
+    "openSwitcher": "Open Grok details and account switcher",
+    "accountLabel": "Grok Account",
+    "loadingAccounts": "Loading accounts…",
+    "hostOnly": "Manage Grok accounts on the computer running Orca."
   }
 }

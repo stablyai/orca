@@ -25,6 +25,7 @@ import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
 import { ClaudeSwitcherMenu } from './ClaudeSwitcherMenu'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
+import { GrokSwitcherMenu } from './GrokSwitcherMenu'
 import { ProviderDetailsMenu, CLOSE_ALL_CONTEXT_MENUS_EVENT } from './ProviderDetailsMenu'
 import { ProviderSegment, UsageOverflowChip, getUsageTone } from './StatusBarProviderSegment'
 import { useStatusBarController } from './use-status-bar-controller'
@@ -193,9 +194,7 @@ export function StatusBarSurface({
                     onManageAccounts={handleManageAccounts}
                     onUsageDetails={handleUsageDetails}
                     renderRow={(p, rowNode) => {
-                      // Every provider drills into its detail panel (parity with the
-                      // per-provider dropdowns on main); Claude/Codex additionally get
-                      // the account switcher + runtime toggle + Codex reset credits.
+                      // Provider account controls stay inside each usage detail menu.
                       if (p.provider === 'claude') {
                         return (
                           <ClaudeSwitcherMenu
@@ -211,6 +210,17 @@ export function StatusBarSurface({
                         return (
                           <CodexSwitcherMenu
                             codex={p}
+                            compact={compact}
+                            iconOnly={false}
+                            asSubmenu
+                            triggerContent={rowNode}
+                          />
+                        )
+                      }
+                      if (p.provider === 'grok') {
+                        return (
+                          <GrokSwitcherMenu
+                            grok={p}
                             compact={compact}
                             iconOnly={false}
                             asSubmenu

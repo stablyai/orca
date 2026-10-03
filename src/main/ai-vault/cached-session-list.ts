@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { getManagedGrokAccountHomes } from '../grok-accounts/paths'
 import {
   clearAiVaultBackgroundRestartCircuit,
   resetAiVaultScannerBackgroundForTests,
@@ -58,13 +59,22 @@ export function configureAiVaultSessionSources(next: AiVaultSessionSources): voi
  */
 export async function localAiVaultScanRoots(): Promise<
   Required<Pick<AiVaultScanOptions, 'additionalCodexSessionsDirs' | 'wslHomeDirs'>> &
-    Pick<AiVaultScanOptions, 'executionHostId' | 'wslOpenCodeReaders'>
+    Pick<
+      AiVaultScanOptions,
+      'executionHostId' | 'wslOpenCodeReaders' | 'additionalGrokSessionsDirs'
+    >
 > {
   const [additionalCodexHomes, wslHomeDirs] = await Promise.all([
     filterPathsToRunningWslDistrosAsync(configuredAdditionalCodexHomePaths()),
     getAiVaultWslHomeDirs()
   ])
+  const grokHomes = getManagedGrokAccountHomes()
   return {
+    ...(grokHomes.length
+      ? {
+          additionalGrokSessionsDirs: grokHomes.map((home) => join(home, 'sessions'))
+        }
+      : {}),
     additionalCodexSessionsDirs: additionalCodexHomes.map((homePath) => join(homePath, 'sessions')),
     wslHomeDirs,
     wslOpenCodeReaders: await prepareOpenCodeWslReaders(wslHomeDirs),

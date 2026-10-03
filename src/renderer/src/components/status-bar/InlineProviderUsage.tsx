@@ -47,6 +47,13 @@ export function InlineUsageBars({
           used: clampUsedPercent(limits.fableWeekly.usedPercent),
           label: translate('auto.components.status.bar.StatusBar.54e8d6bb2d', 'Fable')
         }
+      : null,
+    limits.provider === 'grok' && limits.monthly
+      ? {
+          key: 'monthly',
+          used: clampUsedPercent(limits.monthly.usedPercent),
+          label: translate('grokAccounts.monthly', 'Monthly')
+        }
       : null
   ].filter((window): window is { key: string; used: number; label: string } => window !== null)
 

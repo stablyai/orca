@@ -18725,5 +18725,11 @@
     "addTypedPath": "Add",
     "noDirectories": "No folders added yet.",
     "removePath": "Remove {{name}}"
+  },
+  "grokAccounts": {
+    "openSwitcher": "打开 Grok 详情和账户切换器",
+    "accountLabel": "Grok 账户",
+    "loadingAccounts": "正在加载账户…",
+    "hostOnly": "请在运行 Orca 的计算机上管理 Grok 账户。"
   }
 }

@@ -7,6 +7,7 @@ const {
   applyBackgroundActivationPolicy,
   isBackgroundLaunch,
   isWindowlessLaunch,
+  restoreDesktopActivationForUserLaunch,
   showWindowWithoutStealingFocus
 } = await import('./foreground-activation-policy')
 
@@ -54,6 +55,62 @@ describe('isWindowlessLaunch', () => {
         ORCA_E2E_FOREGROUND: '1'
       })
     ).toBe(true)
+  })
+})
+
+describe('restoreDesktopActivationForUserLaunch', () => {
+  it('allows a normal shortcut to show the existing background window', () => {
+    const env = { ORCA_BACKGROUND_LAUNCH: '1' }
+    const window = makeWindow()
+    showWindowWithoutStealingFocus(window, env)
+    expect(window.show).not.toHaveBeenCalled()
+    expect(
+      restoreDesktopActivationForUserLaunch(
+        { backgroundLaunch: false },
+        {
+          env,
+          platform: 'win32'
+        }
+      )
+    ).toBe(true)
+    showWindowWithoutStealingFocus(window, env)
+    expect(window.show).toHaveBeenCalledOnce()
+    expect(isBackgroundLaunch(env)).toBe(false)
+  })
+
+  it.each([undefined, null, {}, { backgroundLaunch: true }, { backgroundLaunch: 'false' }])(
+    'keeps background launches hidden without a normal desktop launch: %j',
+    (launchData) => {
+      const env = { ORCA_BACKGROUND_LAUNCH: '1' }
+      expect(restoreDesktopActivationForUserLaunch(launchData, { env })).toBe(false)
+      expect(isWindowlessLaunch(env)).toBe(true)
+    }
+  )
+
+  it.each(['ORCA_E2E_HEADLESS', 'ORCA_E2E_HEADFUL'])(
+    'never promotes an isolated %s test window',
+    (flag) => {
+      const env = { ORCA_BACKGROUND_LAUNCH: '1', [flag]: '1' }
+      expect(restoreDesktopActivationForUserLaunch({ backgroundLaunch: false }, { env })).toBe(
+        false
+      )
+      expect(isWindowlessLaunch(env)).toBe(true)
+    }
+  )
+
+  it('restores the macOS desktop activation policy after a user relaunch', () => {
+    const app = { setActivationPolicy: vi.fn() }
+    expect(
+      restoreDesktopActivationForUserLaunch(
+        { backgroundLaunch: false },
+        {
+          env: { ORCA_BACKGROUND_LAUNCH: '1' },
+          app,
+          platform: 'darwin'
+        }
+      )
+    ).toBe(true)
+    expect(app.setActivationPolicy).toHaveBeenCalledWith('regular')
   })
 })
 

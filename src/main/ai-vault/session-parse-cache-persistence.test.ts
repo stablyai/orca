@@ -155,6 +155,7 @@ const CACHED_SESSION_FIELDS = {
   model: true,
   filePath: true,
   codexHome: true,
+  grokHome: true,
   createdAt: true,
   updatedAt: true,
   modifiedAt: true,

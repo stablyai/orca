@@ -155,7 +155,7 @@ export function registerCoreHandlers(
   registerOpenCodeGoCredentialsHandlers(rateLimits)
   registerMiniMaxCredentialsHandlers(rateLimits)
   registerZcodePlanCredentialsHandlers(rateLimits)
-  registerGrokAccountHandlers()
+  registerGrokAccountHandlers(rateLimits)
   registerCursorAccountHandlers()
   registerRateLimitHandlers(rateLimits, codexAccounts)
   registerGitHubHandlers(store, stats)

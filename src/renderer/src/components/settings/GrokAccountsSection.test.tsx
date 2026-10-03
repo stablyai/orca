@@ -50,7 +50,12 @@ describe('GrokAccountsSection', () => {
     mocks.grokUsage.mockReturnValue(null)
     Object.defineProperty(window, 'api', {
       configurable: true,
-      value: { grokAccounts: { getStatus: mocks.getStatus } }
+      value: {
+        grokAccounts: {
+          getStatus: mocks.getStatus,
+          list: vi.fn().mockResolvedValue({ accounts: [], activeAccountId: null, usage: {} })
+        }
+      }
     })
   })
 

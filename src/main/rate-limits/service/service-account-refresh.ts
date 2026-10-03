@@ -42,6 +42,13 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     })
   }
 
+  async refreshForGrokAccountChange(): Promise<RateLimitState> {
+    this.grokFetchGeneration += 1
+    this.activeFailureStreakByProvider.grok = 0
+    this.updateState({ ...this.state, grok: this.withFetchingStatus(null, 'grok') })
+    return await this.refreshGrok()
+  }
+
   invalidateMiniMaxCredentialState(): void {
     this.minimaxFetchGeneration += 1
     // Why: saving/forgetting the cookie can race an in-flight fetch; clear the visible snapshot before any old-cookie result returns.

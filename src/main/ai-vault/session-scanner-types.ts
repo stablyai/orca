@@ -36,6 +36,7 @@ export type AiVaultScanOptions = {
   /** Test override for the ZCode CLI's OpenCode-shaped SQLite database. */
   zcodeDbPath?: string
   grokSessionsDir?: string
+  additionalGrokSessionsDirs?: readonly string[]
   devinTranscriptsDir?: string
   hermesSessionsDir?: string
   rovoSessionsDir?: string

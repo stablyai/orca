@@ -84,7 +84,14 @@ export function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAc
     error: null
   }
   return {
-    getStatus: () => Promise.resolve(unsigned)
+    getStatus: () => Promise.resolve(unsigned),
+    list: () => Promise.resolve({ accounts: [], activeAccountId: null, usage: {} }),
+    add: () => Promise.reject(new Error('Add Grok accounts in the desktop app on this computer.')),
+    reauthenticate: () =>
+      Promise.reject(new Error('Reconnect Grok accounts in the desktop app on this computer.')),
+    select: () =>
+      Promise.reject(new Error('Select Grok accounts in the desktop app on this computer.')),
+    cancelLogin: () => Promise.resolve()
   }
 }
 

@@ -27,6 +27,7 @@ import { shouldRefreshNativeClaudeAgentTeamsEnv } from '../pane/launch-authority
 import type { PtyIpcSpawnState } from './spawn-state'
 import { assemblePtyIpcSpawnCodexEnv } from './spawn-env-codex'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
+import { pinGrokLaunchAccount } from '../../../grok-accounts/launch'
 
 export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
@@ -88,6 +89,14 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
       launchConfig: args.launchConfig
     })
   ctx.effectiveLaunchConfig = args.launchConfig
+  const grokLaunch = pinGrokLaunchAccount(
+    ctx.baseEnv,
+    ctx.effectiveLaunchConfig,
+    args.launchAgent,
+    !args.connectionId && ctx.codexSelectionTarget.runtime === 'host'
+  )
+  ctx.baseEnv = grokLaunch.env
+  ctx.effectiveLaunchConfig = grokLaunch.launchConfig
   const shouldPreAllocateTerminalHandle =
     ctx.deps.runtime !== undefined &&
     ((!(ctx.provider instanceof LocalPtyProvider) &&

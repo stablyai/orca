@@ -1,8 +1,10 @@
 import { defineMethod, defineStreamingMethod } from '../core'
+import { listGrokAccounts } from '../../../grok-accounts/service'
 import {
   AccountsUnsubscribeParams,
   AddClaudeFromConfigDirParams,
   AddCodexFromHomeParams,
+  AddGrokFromHomeParams,
   ConsumeCodexResetCreditParams,
   ListAccountsParams,
   RemoveAccountParams,
@@ -25,6 +27,36 @@ let accountsSubscriptionSeq = 0
 // `orca account add` CLI can register accounts on a headless host; it is gated
 // to the local runtime connection, never a mobile device token. See #1438.
 export const ACCOUNT_METHODS = [
+  defineMethod({
+    name: 'accounts.listGrok',
+    params: ListAccountsParams,
+    handler: async (_params, { clientKind }) => {
+      if (clientKind !== undefined) {
+        throw new Error('Read Grok accounts on the Orca host runtime.')
+      }
+      return listGrokAccounts()
+    }
+  }),
+  defineMethod({
+    name: 'accounts.selectGrok',
+    params: SelectAccountParams,
+    handler: async (params, { runtime, clientKind }) => {
+      if (clientKind !== undefined) {
+        throw new Error('Select Grok accounts on the Orca host runtime.')
+      }
+      return runtime.selectGrokAccount(params.accountId)
+    }
+  }),
+  defineMethod({
+    name: 'accounts.addGrokFromHome',
+    params: AddGrokFromHomeParams,
+    handler: async (params, { runtime, clientKind }) => {
+      if (clientKind !== undefined) {
+        throw new Error('Adding Grok accounts is only available on the Orca host runtime.')
+      }
+      return runtime.addGrokAccountFromHome(params.sourceHome)
+    }
+  }),
   defineMethod({
     name: 'accounts.list',
     params: ListAccountsParams,

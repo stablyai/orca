@@ -48,6 +48,8 @@ export type RuntimeServiceCommandSurface = {
   refreshAccountsForMobileSubscriber: RuntimeAccountController['refreshForMobileSubscriber']
   selectClaudeAccount: RuntimeAccountController['selectClaude']
   selectCodexAccount: RuntimeAccountController['selectCodex']
+  selectGrokAccount: RuntimeAccountController['selectGrok']
+  addGrokAccountFromHome: RuntimeAccountController['addGrokFromHome']
   selectCodexAccountForTarget: RuntimeAccountController['selectCodexForTarget']
   consumeCodexRateLimitResetCredit: RuntimeAccountController['consumeCodexResetCredit']
   removeClaudeAccount: RuntimeAccountController['removeClaude']
@@ -141,6 +143,8 @@ export function installRuntimeServiceCommandSurface(
     refreshAccountsForMobileSubscriber: accounts.refreshForMobileSubscriber.bind(accounts),
     selectClaudeAccount: accounts.selectClaude.bind(accounts),
     selectCodexAccount: accounts.selectCodex.bind(accounts),
+    selectGrokAccount: accounts.selectGrok.bind(accounts),
+    addGrokAccountFromHome: accounts.addGrokFromHome.bind(accounts),
     selectCodexAccountForTarget: accounts.selectCodexForTarget.bind(accounts),
     consumeCodexRateLimitResetCredit: accounts.consumeCodexResetCredit.bind(accounts),
     removeClaudeAccount: accounts.removeClaude.bind(accounts),

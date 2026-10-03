@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('../grok-accounts/paths', () => ({ getSelectedGrokAccountHome: () => null }))
 
 const netFetchMock = vi.hoisted(() => vi.fn())
 const authState = vi.hoisted<{

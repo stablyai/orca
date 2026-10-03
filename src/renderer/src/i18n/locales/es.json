@@ -15558,5 +15558,11 @@
       "searchFailed": "La búsqueda no pudo finalizar. Inténtalo de nuevo.",
       "refreshFailed": "No se pudo actualizar la vista previa. Se muestra la versión anterior; abre la vista de código para ver el contenido actual."
     }
+  },
+  "grokAccounts": {
+    "openSwitcher": "Abrir detalles de Grok y selector de cuenta",
+    "accountLabel": "Cuenta de Grok",
+    "loadingAccounts": "Cargando cuentas…",
+    "hostOnly": "Gestiona las cuentas de Grok en el equipo que ejecuta Orca."
   }
 }

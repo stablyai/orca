@@ -37,6 +37,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         miniMaxResult
       ],
       grokResultPromise,
+      grokGeneration,
       cursorResultPromise,
       zcodeResultPromise,
       antigravityResultPromise
@@ -222,7 +223,9 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       previousZcodeAccount !== undefined &&
       zcodeAccount !== undefined &&
       previousZcodeAccount === zcodeAccount
-    this.trackActiveFailureStreak('grok', grok)
+    if (grokGeneration === this.grokFetchGeneration) {
+      this.trackActiveFailureStreak('grok', grok)
+    }
     this.trackActiveFailureStreak('cursor', cursor)
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
@@ -230,7 +233,10 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     this.trackActiveFailureStreak('antigravity', antigravity)
     this.updateState({
       ...this.state,
-      grok: this.applyStalePolicy(grok, previousState.grok),
+      grok:
+        grokGeneration === this.grokFetchGeneration
+          ? this.applyStalePolicy(grok, previousState.grok)
+          : this.state.grok,
       cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor),
       zcode: !shouldApplyZcode
         ? this.state.zcode

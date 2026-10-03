@@ -1,5 +1,5 @@
 import type { App } from 'electron'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   acquireSingleInstanceLock,
   logSingleInstanceLockBypass,
@@ -14,6 +14,8 @@ import {
 } from './single-instance-lock'
 
 type Listener = (...args: unknown[]) => void
+
+afterEach(() => vi.unstubAllEnvs())
 
 function makeFakeApp(lockResult: boolean): {
   app: App
@@ -71,14 +73,37 @@ describe('acquireSingleInstanceLock', () => {
 
     const [registered] = fake.listeners['second-instance'] ?? []
     expect(registered).toBeDefined()
-    registered?.({}, ['/opt/orca/orca-linux.AppImage', '--serve'], '/home/orca')
+    const launchData = { backgroundLaunch: false }
+    registered?.({}, ['/opt/orca/orca-linux.AppImage', '--serve'], '/home/orca', launchData)
 
     expect(onSecondInstance).toHaveBeenCalledTimes(1)
-    expect(onSecondInstance).toHaveBeenCalledWith(['/opt/orca/orca-linux.AppImage', '--serve'])
+    expect(onSecondInstance).toHaveBeenCalledWith(
+      ['/opt/orca/orca-linux.AppImage', '--serve'],
+      launchData
+    )
+  })
+
+  it.each(['1', undefined])('sends this launch policy to the owner: %s', (background) => {
+    vi.stubEnv('ORCA_BACKGROUND_LAUNCH', background)
+    vi.stubEnv('ORCA_E2E_HEADLESS', undefined)
+    vi.stubEnv('ORCA_E2E_HEADFUL', undefined)
+    const fake = makeFakeApp(false)
+    acquireSingleInstanceLock(fake.app, vi.fn())
+    expect(fake.requestSingleInstanceLock).toHaveBeenCalledWith({
+      backgroundLaunch: background === '1'
+    })
   })
 })
 
 describe('shouldActivateDesktopForSecondInstance', () => {
+  it('keeps automated second launches from raising an already visible desktop', () => {
+    expect(shouldActivateDesktopForSecondInstance(['Orca.exe'], { backgroundLaunch: true })).toBe(
+      false
+    )
+    expect(shouldActivateDesktopForSecondInstance(['Orca.exe'], { backgroundLaunch: false })).toBe(
+      true
+    )
+  })
   it('ignores a duplicate serve launch but still activates for a desktop launch', () => {
     // Why: a supervisor respawning `orca serve` must not open a window on a display-less host (#11935).
     const serveArgv = ['/opt/orca/orca-linux.AppImage', '--serve']

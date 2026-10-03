@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+vi.mock('../grok-accounts/paths', () => ({ getSelectedGrokAccountHome: () => null }))
 
 describe('readGrokAuthSession', () => {
   afterEach(() => {

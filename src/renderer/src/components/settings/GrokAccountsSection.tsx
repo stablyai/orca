@@ -8,6 +8,7 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import type { GrokAccountStatus } from '../../../../shared/rate-limit-types'
 import { SearchableSetting } from './SearchableSetting'
+import { GrokManagedAccounts } from './GrokManagedAccounts'
 const GROK_CLI_DOCS_URL = 'https://docs.x.ai/build/overview'
 
 export function GrokAccountsSection(): React.JSX.Element {
@@ -74,7 +75,7 @@ export function GrokAccountsSection(): React.JSX.Element {
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.GrokAccountsSection.f6e5d4c3b2',
-              'Shows weekly credit usage from your Grok CLI sign-in (session file ~/.grok/auth.json).'
+              'Shows usage for your saved Grok accounts and the selected CLI login.'
             )}
           </p>
         </div>
@@ -88,6 +89,8 @@ export function GrokAccountsSection(): React.JSX.Element {
           <ExternalLink className="size-3" />
         </a>
       </div>
+
+      <GrokManagedAccounts updatedAt={grokUsage?.updatedAt} />
 
       <div
         className={cn(

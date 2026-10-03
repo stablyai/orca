@@ -66,6 +66,12 @@ export const AddCodexFromHomeParams = z.object({
   wslDistro: z.string().nullish()
 })
 
+export const AddGrokFromHomeParams = z
+  .object({
+    sourceHome: z.string().min(1, 'Missing sourceHome').max(4096)
+  })
+  .strict()
+
 // Why: `orca account list` prints only emails and the active ids, so it opts out
 // of the forced all-provider usage refresh below — that lane bypasses the poll
 // throttle and Retry-After gate and costs one serial round-trip per account.

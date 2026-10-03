@@ -1,6 +1,6 @@
 import { openTranscriptReadStream, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
@@ -57,7 +57,11 @@ export async function parseGrokSessionFile(
   updateTimeline(accumulator, extractString(record.updated_at))
   updateTimeline(accumulator, extractString(record.last_active_at))
   await consumeGrokChatHistory(accumulator, dirname(file.path))
-  return finalizeSession(accumulator, platform)
+  const session = finalizeSession(accumulator, platform)
+  const sessionsDir = dirname(dirname(dirname(file.path)))
+  return session && basename(sessionsDir) === 'sessions'
+    ? { ...session, grokHome: dirname(sessionsDir) }
+    : session
 }
 
 async function consumeGrokChatHistory(

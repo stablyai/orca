@@ -18672,5 +18672,11 @@
     "addTypedPath": "Add",
     "noDirectories": "No folders added yet.",
     "removePath": "Remove {{name}}"
+  },
+  "grokAccounts": {
+    "openSwitcher": "Ouvrir les détails de Grok et le sélecteur de compte",
+    "accountLabel": "Compte Grok",
+    "loadingAccounts": "Chargement des comptes…",
+    "hostOnly": "Gérez les comptes Grok sur le poste qui exécute Orca."
   }
 }

@@ -13,6 +13,9 @@ import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/ra
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+import type { GrokAccountsState } from '../../shared/grok-account-types'
+import { importGrokAccount, selectGrokAccount } from '../grok-accounts/service'
+import { readGrokAccountIndex } from '../grok-accounts/paths'
 
 export type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
@@ -21,6 +24,7 @@ export type RuntimeAccountServices = {
 }
 
 export type AccountsSnapshot = {
+  grok?: GrokAccountsState
   claude: ClaudeRateLimitAccountsState
   codex: CodexRateLimitAccountsState
   rateLimits: RateLimitState
@@ -60,7 +64,9 @@ export class RuntimeAccountController {
 
   getSnapshot(): AccountsSnapshot {
     const { claudeAccounts, codexAccounts, rateLimits } = this.requireServices()
+    const grok = readGrokAccountIndex()
     return {
+      ...(grok.accounts.length ? { grok: { ...grok, usage: {} } } : {}),
       claude: claudeAccounts.listAccounts(),
       codex: codexAccounts.listAccounts(),
       rateLimits: rateLimits.getState()
@@ -91,6 +97,18 @@ export class RuntimeAccountController {
 
   selectCodex(accountId: string | null): Promise<CodexRateLimitAccountsState> {
     return this.requireServices().codexAccounts.selectAccount(accountId)
+  }
+
+  selectGrok(accountId: string | null): Promise<GrokAccountsState> {
+    const { rateLimits } = this.requireServices()
+    return selectGrokAccount(accountId, () => {
+      void rateLimits.refreshForGrokAccountChange().catch(() => {})
+    })
+  }
+
+  addGrokFromHome(sourceHome: string): Promise<GrokAccountsState> {
+    this.requireServices()
+    return importGrokAccount(sourceHome)
   }
 
   selectCodexForTarget(

@@ -34,6 +34,7 @@ import {
   restoreOrStripOverlayEnv
 } from './pi-agent'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
+import { applyGrokAccountToPtyEnv } from '../../../grok-accounts/launch'
 
 /**
  * Mutates `baseEnv` in place with all host-local PTY env vars and returns it.
@@ -48,6 +49,7 @@ export function buildPtyHostEnv(
 ): Record<string, string> {
   mergePersistedWindowsPath(baseEnv)
   Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
+  applyGrokAccountToPtyEnv(baseEnv, opts)
 
   // Why: pre-1.4.209 panes exported Orca's retired shared hooks dir; inheriting it hides the user's global OpenCode config.
   const isLegacyOpenCodeHooksDir = (dir: string | undefined): boolean =>
