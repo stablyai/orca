@@ -15,8 +15,8 @@ const GH_LOGIN_PROBE_TIMEOUT_MS = 2500
 // stuck and start the retry cooldown. Retry-After sleeps can exceed any wall;
 // bounding those is exactly what the wall is for.
 const GH_LOGIN_PROBE_WALL_MS = 10_000
-// Why: a timed-out probe says nothing about the account, so don't pin '' for
-// the whole session — retry after a cooldown instead of hammering a stuck gh.
+// Why: enrichment can reuse a failed result briefly, but worktree creation
+// must retry immediately so one outage does not reject every create request.
 const GH_LOGIN_TIMEOUT_RETRY_MS = 5 * 60 * 1000
 const LOCAL_GIT_READ_TIMEOUT_MS = 5000
 
@@ -192,11 +192,15 @@ async function probeGhLoginOnce(): Promise<GhLoginOutcome> {
   return { login: normalizeHostedLogin(parseGhAuthStatusLogin(output)), timedOut: false }
 }
 
-async function getGhLoginOutcome(): Promise<GhLoginOutcome> {
+async function getGhLoginOutcome(retryTimedOut = false): Promise<GhLoginOutcome> {
   if (cachedGhLogin !== null) {
     return { login: cachedGhLogin, timedOut: false }
   }
-  if (ghLoginTimedOutAt !== null && Date.now() - ghLoginTimedOutAt < GH_LOGIN_TIMEOUT_RETRY_MS) {
+  if (
+    !retryTimedOut &&
+    ghLoginTimedOutAt !== null &&
+    Date.now() - ghLoginTimedOutAt < GH_LOGIN_TIMEOUT_RETRY_MS
+  ) {
     return { login: '', timedOut: true }
   }
   if (ghLoginProbeInFlight) {
@@ -307,7 +311,8 @@ async function localRepoHasEffectiveGitHubRemote(repoPath: string): Promise<bool
  * { username: '', authoritative: false }.
  */
 export async function resolveLocalGitUsernameDetailed(
-  repoPath: string
+  repoPath: string,
+  options?: { retryTimedOut?: boolean }
 ): Promise<ResolvedGitUsername> {
   for (const key of EXPLICIT_USERNAME_CONFIG_KEYS) {
     try {
@@ -325,7 +330,7 @@ export async function resolveLocalGitUsernameDetailed(
     }
   }
   if (await localRepoHasEffectiveGitHubRemote(repoPath)) {
-    const outcome = await getGhLoginOutcome()
+    const outcome = await getGhLoginOutcome(options?.retryTimedOut)
     return { username: outcome.login, authoritative: !outcome.timedOut }
   }
   return { username: '', authoritative: true }
@@ -333,6 +338,20 @@ export async function resolveLocalGitUsernameDetailed(
 
 export async function resolveLocalGitUsername(repoPath: string): Promise<string> {
   return (await resolveLocalGitUsernameDetailed(repoPath)).username
+}
+
+const GIT_USERNAME_TIMEOUT_MESSAGE =
+  'could not resolve the git-username branch prefix: gh login probe timed out'
+export const GIT_USERNAME_PROBE_TIMEOUT_ERROR_CODE = 'git_username_probe_timeout'
+
+export async function resolveGitUsernameForBranchPrefix(repoPath: string): Promise<string> {
+  const detailed = await resolveLocalGitUsernameDetailed(repoPath, { retryTimedOut: true })
+  if (!detailed.authoritative) {
+    throw Object.assign(new Error(GIT_USERNAME_TIMEOUT_MESSAGE), {
+      code: GIT_USERNAME_PROBE_TIMEOUT_ERROR_CODE
+    })
+  }
+  return detailed.username
 }
 
 export function resetGhLoginCacheForTests(): void {

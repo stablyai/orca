@@ -21,6 +21,14 @@ describe('worker start outcome classification', () => {
     expect(isUnknownWorkerStartOutcome(new Error('worktree exists'), 'worktree_create')).toBe(false)
   })
 
+  it('keeps the pre-mutation git-username probe failure definite', () => {
+    const error = Object.assign(new Error('gh login probe timed out'), {
+      code: 'git_username_probe_timeout'
+    })
+
+    expect(isUnknownWorkerStartOutcome(error, 'worktree_create')).toBe(false)
+  })
+
   // Why: a stalled prompt still reports a definite failure to the caller — the correction path is
   // the worker's own report, which keeps its capability and can re-settle the dispatch (see
   // worker-start-unobserved-prompt-settlement.test.ts), not an outcome_unknown receipt.

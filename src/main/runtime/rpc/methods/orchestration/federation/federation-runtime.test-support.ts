@@ -5,7 +5,7 @@ export function configureFederationWorkerRuntime(runtime: OrcaRuntimeService): v
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
   vi.spyOn(runtime, 'showRepo').mockResolvedValue({ id: 'windows-repo', kind: 'git' } as never)
   vi.spyOn(runtime, 'createManagedWorktree').mockResolvedValue({
-    worktree: { id: 'repo::windows-worktree', repoId: 'repo' },
+    worktree: { id: 'repo::windows-worktree', repoId: 'repo', branch: 'octocat/windows-worker' },
     startupTerminal: { spawned: true, handle: 'term_windows_worker' },
     setupReceipt: {
       requested: 'run',
