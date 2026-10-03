@@ -97,7 +97,8 @@ describe('IosEmulatorBackend', () => {
       launch: false,
       permissions: false,
       accessibilityTree: true,
-      logcat: false
+      logcat: false,
+      record: true
     })
   })
 
@@ -394,5 +395,58 @@ describe('IosEmulatorBackend', () => {
 
     const unreachable = new IosEmulatorBackend({ waitForEndpointReady: async () => false })
     expect(await unreachable.isSessionReusable(info)).toBe(false)
+  })
+
+  describe('screen recording', () => {
+    function backendWithRecorder(stop = vi.fn(async () => {})) {
+      const startVideoRecording = vi.fn(async (_udid: string, outputPath: string) => ({
+        outputPath,
+        stop
+      }))
+      return { backend: new IosEmulatorBackend({ startVideoRecording }), startVideoRecording, stop }
+    }
+
+    it('advertises record support so the bridge routes the verb here', () => {
+      expect(new IosEmulatorBackend().capabilities.record).toBe(true)
+    })
+
+    it('boots the simulator before capturing and reports the output path', async () => {
+      const { backend, startVideoRecording } = backendWithRecorder()
+
+      const info = await backend.startRecording('device-1', '/tmp/demo.mp4')
+
+      expect(ensureSimulatorBootedMock).toHaveBeenCalledWith('device-1')
+      expect(startVideoRecording).toHaveBeenCalledWith('device-1', '/tmp/demo.mp4')
+      expect(info).toMatchObject({ deviceId: 'device-1', outputPath: '/tmp/demo.mp4' })
+    })
+
+    it('refuses a second recording for the same device', async () => {
+      const { backend } = backendWithRecorder()
+      await backend.startRecording('device-1', '/tmp/one.mp4')
+
+      await expect(backend.startRecording('device-1', '/tmp/two.mp4')).rejects.toThrow(
+        /already running/
+      )
+    })
+
+    it('stops the capture before killing the helper, so the file is not truncated', async () => {
+      const { backend, stop } = backendWithRecorder()
+      await backend.startRecording('device-1', '/tmp/demo.mp4')
+
+      await backend.stopHelperForDevice('device-1')
+
+      expect(stop).toHaveBeenCalledOnce()
+      expect(backend.activeRecording('device-1')).toBeNull()
+    })
+
+    it('stops every recording on shutdown so no capture outlives the app', async () => {
+      const { backend, stop } = backendWithRecorder()
+      await backend.startRecording('device-1', '/tmp/demo.mp4')
+
+      await backend.stopAllRecordings()
+
+      expect(stop).toHaveBeenCalledOnce()
+      expect(backend.activeRecording('device-1')).toBeNull()
+    })
   })
 })

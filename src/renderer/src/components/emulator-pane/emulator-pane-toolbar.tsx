@@ -1,4 +1,4 @@
-import { Home, Power, RotateCw, Smartphone } from 'lucide-react'
+import { Circle, Home, Power, RotateCw, Smartphone, Square } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -10,6 +10,10 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { SimulatorDeviceRow } from './emulator-pane-types'
+import {
+  formatRecordingElapsed,
+  type EmulatorRecordingStatus
+} from './use-emulator-screen-recording'
 import { translate } from '@/i18n/i18n'
 
 type EmulatorPaneToolbarProps = {
@@ -18,11 +22,15 @@ type EmulatorPaneToolbarProps = {
   loading: boolean
   devices: SimulatorDeviceRow[]
   selectedUdid: string | null
+  recordingStatus: EmulatorRecordingStatus
+  recordingElapsedSeconds: number
+  canRecord: boolean
   onSelectDevice: (udid: string) => void
   onAttach: () => void
   onShutdown: () => void
   onHome: () => void
   onRotate: () => void
+  onToggleRecording: () => void
 }
 
 export function EmulatorPaneToolbar({
@@ -31,11 +39,15 @@ export function EmulatorPaneToolbar({
   loading,
   devices,
   selectedUdid,
+  recordingStatus,
+  recordingElapsedSeconds,
+  canRecord,
   onSelectDevice,
   onAttach,
   onShutdown,
   onHome,
-  onRotate
+  onRotate,
+  onToggleRecording
 }: EmulatorPaneToolbarProps) {
   // Why: the toolbar chip describes Orca's preview/control stream, not the
   // lower-level CoreSimulator boot state.
@@ -44,6 +56,15 @@ export function EmulatorPaneToolbar({
   const statusClassName = subtleStatus
     ? 'text-muted-foreground'
     : 'border-border bg-muted text-muted-foreground'
+  const isRecording = recordingStatus === 'recording'
+  const recordingPending = recordingStatus === 'starting' || recordingStatus === 'stopping'
+  const recordLabel = translate(
+    'auto.components.emulator.pane.emulator.pane.toolbar.5f1c8b3d20',
+    'Record'
+  )
+  const recordingLabel = isRecording
+    ? translate('auto.components.emulator.pane.emulator.pane.toolbar.a7d4e9f612', 'Stop recording')
+    : recordLabel
 
   return (
     <div className="flex items-center gap-2 border-b border-border px-3 py-2">
@@ -107,6 +128,34 @@ export function EmulatorPaneToolbar({
           {translate('auto.components.emulator.pane.emulator.pane.toolbar.6bd8dff42a', 'Rotate')}
         </TooltipContent>
       </Tooltip>
+      {canRecord ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant={isRecording ? 'destructive' : 'secondary'}
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={onToggleRecording}
+              disabled={!isLive || loading || recordingPending}
+              aria-label={recordingLabel}
+              aria-pressed={isRecording}
+            >
+              {isRecording ? (
+                <Square className="size-3 fill-current" />
+              ) : (
+                <Circle className="size-3 fill-current text-destructive" />
+              )}
+              <span className="hidden tabular-nums sm:inline">
+                {isRecording ? formatRecordingElapsed(recordingElapsedSeconds) : recordLabel}
+              </span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4}>
+            {recordingLabel}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

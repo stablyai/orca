@@ -73,7 +73,9 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     launch: true,
     permissions: true,
     accessibilityTree: true,
-    logcat: true
+    logcat: true,
+    // adb screenrecord needs a long-lived process plus an on-device pull; not wired yet.
+    record: false
   }
 
   private readonly runner: AndroidCommandRunner
