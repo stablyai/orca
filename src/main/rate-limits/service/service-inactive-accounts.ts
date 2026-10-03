@@ -62,7 +62,10 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             continue
           }
           const cached = this.inactiveClaudeCache.get(account.id) ?? null
-          this.inactiveClaudeCache.set(account.id, this.applyStalePolicy(fresh, cached))
+          this.inactiveClaudeCache.set(
+            account.id,
+            this.applyInactiveClaudeStalePolicy(fresh, cached)
+          )
         } catch {
           // Why: per-account try/catch keeps one Keychain/network error from aborting the remaining accounts in the batch.
           if (
@@ -80,6 +83,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
       if (!signal.aborted && fetchGeneration === this.inactiveClaudeAccountsGeneration) {
         this.lastInactiveClaudeFetchAt = Date.now()
       }
+      this.scheduleInactiveClaudeExpiryPush()
     } finally {
       this.finishFetchCycle(controller)
     }

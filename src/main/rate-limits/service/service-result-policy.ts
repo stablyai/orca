@@ -1,3 +1,9 @@
+import type { UsageRateLimitFailureKind } from '../../../shared/rate-limit-types'
+import {
+  expireClaudeUsageWindows,
+  hasClaudeUsageWindows,
+  nextClaudeUsageWindowReset
+} from '../claude-usage-window-expiry'
 import { RateLimitServiceFetchControl } from './service-fetch-control'
 import {
   MAX_ACTIVE_FAILURE_STREAK,
@@ -7,7 +13,13 @@ import {
   type ProviderRateLimits
 } from './service-types'
 
+const LOGIN_REQUIRED_FAILURE_KINDS: ReadonlySet<UsageRateLimitFailureKind> = new Set([
+  'missing-credentials'
+])
+
 export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetchControl {
+  private inactiveClaudeExpiryTimer: ReturnType<typeof setTimeout> | null = null
+
   protected applyStalePolicy(
     fresh: ProviderRateLimits,
     previous: ProviderRateLimits | null
@@ -62,6 +74,74 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
         lastSuccessfulSource:
           previous.usageMetadata?.lastSuccessfulSource ?? previous.usageMetadata?.source
       }
+    }
+  }
+
+  /**
+   * Stale policy for saved-but-inactive Claude accounts. Nobody is using the account, so its
+   * last-known windows stay valid until each one resets, not for the active bar's 30 minutes.
+   */
+  protected applyInactiveClaudeStalePolicy(
+    fresh: ProviderRateLimits,
+    previous: ProviderRateLimits | null
+  ): ProviderRateLimits {
+    const failureKind = fresh.usageMetadata?.failureKind
+    // Why: an unclassified failure (e.g. "No credentials") may be a lost login, so it keeps the 30-minute policy.
+    if (fresh.status === 'ok' || fresh.status === 'unavailable' || !previous || !failureKind) {
+      return this.applyStalePolicy(fresh, previous)
+    }
+    // Why: a login that needs the user is not transient; old bars would hide the "sign in" row for days.
+    if (LOGIN_REQUIRED_FAILURE_KINDS.has(failureKind)) {
+      return fresh
+    }
+    const kept = expireClaudeUsageWindows(previous)
+    if (!hasClaudeUsageWindows(kept)) {
+      return fresh
+    }
+    return {
+      ...kept,
+      error: fresh.error,
+      status: 'error',
+      usageMetadata: {
+        ...kept.usageMetadata,
+        ...fresh.usageMetadata,
+        lastSuccessfulSource: kept.usageMetadata?.lastSuccessfulSource ?? kept.usageMetadata?.source
+      }
+    }
+  }
+
+  /**
+   * Why: the renderer only sees a reset window as unknown when state is published, and
+   * background polling stays quiet while the window is unfocused; publish once at the next reset.
+   */
+  protected scheduleInactiveClaudeExpiryPush(): void {
+    this.clearInactiveClaudeExpiryPush()
+    const now = Date.now()
+    let nextReset: number | null = null
+    for (const limits of this.inactiveClaudeCache.values()) {
+      const reset = nextClaudeUsageWindowReset(limits, now)
+      if (reset !== null && (nextReset === null || reset < nextReset)) {
+        nextReset = reset
+      }
+    }
+    if (nextReset === null) {
+      return
+    }
+    this.inactiveClaudeExpiryTimer = setTimeout(
+      () => {
+        this.inactiveClaudeExpiryTimer = null
+        this.pushToRenderer()
+        this.scheduleInactiveClaudeExpiryPush()
+      },
+      Math.max(1_000, nextReset - now + 1_000)
+    )
+    this.inactiveClaudeExpiryTimer.unref?.()
+  }
+
+  protected clearInactiveClaudeExpiryPush(): void {
+    if (this.inactiveClaudeExpiryTimer) {
+      clearTimeout(this.inactiveClaudeExpiryTimer)
+      this.inactiveClaudeExpiryTimer = null
     }
   }
 
