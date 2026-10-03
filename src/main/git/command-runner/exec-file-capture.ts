@@ -1,6 +1,10 @@
 import { execFile, type ChildProcess, type ExecFileOptions } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
 import { endSubprocessStdin } from '../../../shared/subprocess-stdin-write'
+import {
+  armChildExitDeadline,
+  type ChildExitDeadline
+} from '../../../shared/child-process/child-exit-deadline'
 import { runProcess } from '../../../shared/child-process/run-process'
 import type { WslProcessGroupTermination } from '../wsl-process-group-termination'
 import { createAbortError } from './abort-error'
@@ -111,7 +115,7 @@ export function execFileCapture(
     let settled = false
     let terminating = false
     let child: ChildProcess | null = null
-    let timer: NodeJS.Timeout | null = null
+    let deadline: ChildExitDeadline | undefined
     let terminationReported = false
     const reportChildTerminated = (): void => {
       if (terminationReported) {
@@ -121,10 +125,8 @@ export function execFileCapture(
       options.onChildTerminated?.()
     }
     const cleanup = (): void => {
-      if (timer) {
-        clearTimeout(timer)
-        timer = null
-      }
+      deadline?.clear()
+      deadline = undefined
       options.signal?.removeEventListener('abort', onAbort)
     }
     const finish = (
@@ -211,9 +213,10 @@ export function execFileCapture(
       endSubprocessStdin(child.stdin, options.stdin)
     }
 
-    // Why: Node's timeout waits forever on signal-ignoring CLIs; enforce our own deadline with bounded tree cleanup.
-    if (options.timeout && options.timeout > 0) {
-      timer = setTimeout(() => {
+    // Why: judge after one loop turn so a child that exited during a blocked
+    // main thread is allowed to deliver its exit and output first.
+    if (!settled && options.timeout && options.timeout > 0) {
+      deadline = armChildExitDeadline(child, options.timeout, () => {
         if (settled || terminating) {
           return
         }
@@ -228,7 +231,7 @@ export function execFileCapture(
           terminating = false
           finish(timeoutError)
         })
-      }, options.timeout)
+      })
     }
     options.signal?.addEventListener('abort', onAbort, { once: true })
   })

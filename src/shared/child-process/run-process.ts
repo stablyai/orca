@@ -10,6 +10,7 @@ import { forceTerminateProcessTree, signalProcessTree } from './process-tree-ter
 import { hasSpawnObserver, notifySpawnObserver } from './spawn-observer'
 import { createOutputSink } from './bounded-output-sink'
 import { createChildTerminationReporter } from './child-termination-reporter'
+import { armChildExitDeadline } from './child-exit-deadline'
 
 export type {
   ChildProcessHandle,
@@ -112,7 +113,7 @@ export function runProcess(
         return
       }
       settled = true
-      clearTimeout(timer)
+      deadline?.clear()
       clearTimeout(graceTimer)
       clearTimeout(barrierDeadlineTimer)
       spec.signal?.removeEventListener('abort', onAbort)
@@ -270,14 +271,13 @@ export function runProcess(
       graceTimer.unref?.()
     }
 
-    const timer =
+    const deadline =
       spec.timeoutMs === null
         ? undefined
-        : setTimeout(() => {
+        : armChildExitDeadline(child, spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS, () => {
             timedOut = true
             stopAndSettle()
-          }, spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS)
-    timer?.unref?.()
+          })
 
     // Why the same escalation: an aborted caller has stopped waiting, so an
     // unkillable child must not keep the promise alive on their behalf either.

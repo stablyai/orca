@@ -4,6 +4,10 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { resolveSpawn, runProcess, runProcessSync } from './run-process'
 import { WINDOWS_ARGUMENT_CORPUS } from './__fixtures__/windows-argument-corpus'
+import {
+  blockEventLoopUntilChildFinished,
+  finishingChildScript
+} from './__fixtures__/blocked-event-loop'
 
 const SPEC = { program: 'C:\\bin\\agent.cmd', args: ['--prompt', 'hi'] }
 
@@ -117,6 +121,25 @@ describe('bounded output', () => {
       maxOutputBytes: 8
     })
     expect(result.outputTruncated).toBe(false)
+  })
+})
+
+describe('blocked event loop', () => {
+  it('does not report a child that finished during the block as timed out', async () => {
+    const markerDir = await mkdtemp(path.join(tmpdir(), 'orca-run-process-blocked-'))
+    try {
+      const marker = path.join(markerDir, 'finished')
+      const pending = runProcess({
+        program: process.execPath,
+        args: ['-e', finishingChildScript(marker, 'done')],
+        timeoutMs: 100
+      })
+      blockEventLoopUntilChildFinished(marker, 300)
+
+      await expect(pending).resolves.toMatchObject({ code: 0, stdout: 'done', timedOut: false })
+    } finally {
+      await rm(markerDir, { recursive: true, force: true })
+    }
   })
 })
 

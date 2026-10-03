@@ -212,7 +212,8 @@ describe('Claude Keychain credentials', () => {
       }
     )
 
-    await vi.advanceTimersByTimeAsync(3000)
+    // The deadline is judged one loop turn after 3000ms; fake timers put that at 3001.
+    await vi.advanceTimersByTimeAsync(3001)
 
     expect(settled).toBe(true)
     await readPromise

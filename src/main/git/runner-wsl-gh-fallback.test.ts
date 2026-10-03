@@ -432,7 +432,8 @@ describe('ghExecFileAsync WSL fallback', () => {
 
     await vi.advanceTimersByTimeAsync(999)
     expect(spawnMock).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(1)
+    // The deadline is judged one loop turn later, which fake timers put 1ms on.
+    await vi.advanceTimersByTimeAsync(2)
     expect(spawnMock).toHaveBeenCalledWith(
       'taskkill',
       ['/pid', '2400', '/t', '/f'],

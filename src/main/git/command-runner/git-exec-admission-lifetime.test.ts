@@ -125,7 +125,8 @@ describe('git exec admission lifetime', () => {
     await settleAdmissionGrant()
     expect(execFileMock).toHaveBeenCalledOnce()
 
-    await vi.advanceTimersByTimeAsync(10)
+    // The deadline is judged one loop turn later, which fake timers put 1ms on.
+    await vi.advanceTimersByTimeAsync(11)
     await rejection
     expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(1)
 
@@ -233,7 +234,8 @@ describe('git exec admission lifetime', () => {
     await settleAdmissionGrant()
     expect(spawnMock).toHaveBeenCalledOnce()
 
-    await vi.advanceTimersByTimeAsync(2010)
+    // +1: the deadline is judged one loop turn later, 1ms under fake timers.
+    await vi.advanceTimersByTimeAsync(2011)
     expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(1)
     await vi.advanceTimersByTimeAsync(10_000)
     await rejection
