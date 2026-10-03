@@ -18,10 +18,18 @@ export type ProcessTableRow = {
 // and takes the whole chunk — and the app — down with it. Only hosts ever run these argv.
 const HOST_IS_DARWIN = typeof process !== 'undefined' && process.platform === 'darwin'
 
-/** Columns used by the evidence reader. Keep command last so its spaces survive parsing. */
+/**
+ * Columns used by the evidence reader. Keep command last so its spaces survive parsing.
+ *
+ * Why `tdev=` on macOS: `tty=` makes `ps` name every terminal with devname(3), which walks /dev
+ * for each process. That walk grows with processes times /dev entries: 1.3s of system time on
+ * a 1,854-process Mac with 143 ptys, against 0.19s for this whole capture with `tdev=`. The
+ * reader turns each `major/minor` back into the name `tty=` would have printed
+ * (`darwin-terminal-names.ts`), so rows keep exactly the same `tty` strings.
+ */
 export const PS_ARGS = (
   HOST_IS_DARWIN
-    ? ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command=']
+    ? ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,tdev=,lstart=,command=']
     : ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,tty=,etimes=,command=']
 ) as readonly string[]
 
