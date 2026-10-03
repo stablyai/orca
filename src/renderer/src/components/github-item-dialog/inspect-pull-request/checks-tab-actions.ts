@@ -244,7 +244,7 @@ export async function fixBrokenGitHubChecks({
       toast.success(
         translate(
           'auto.components.GitHubItemDialog.28986b3747',
-          'Started an AI agent for the broken checks.'
+          'Sent to an AI agent for the broken checks.'
         )
       )
     }

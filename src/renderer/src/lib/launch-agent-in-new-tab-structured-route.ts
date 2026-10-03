@@ -1,3 +1,4 @@
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import {
   adoptAgentSessionLaunchVerdict,
   type AgentSessionLaunchPlan
@@ -16,6 +17,8 @@ type StructuredFromNewTab = {
   pasteDraftAfterLaunch: false
   structuredSettlement: Promise<StructuredAgentLaunchSettlement>
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
+  /** The host this launch put the chat on: this client's own, or the paired server it asked. */
+  structuredChatTarget: RuntimeClientTarget
 }
 
 /**
@@ -55,6 +58,7 @@ export function launchStructuredAgentFromNewTab(args: {
         },
         pasteDraftAfterLaunch: false,
         structuredSettlement: structured.structuredSettlement,
+        structuredChatTarget: { kind: 'local' },
         ...(structured.promptDeliveryResult
           ? { promptDeliveryResult: structured.promptDeliveryResult }
           : {})
@@ -90,6 +94,7 @@ export function launchStructuredAgentFromNewTab(args: {
       surface: { kind: 'host-published' },
       pasteDraftAfterLaunch: false,
       structuredSettlement: launch.settlement,
+      structuredChatTarget: paired.target,
       ...(launch.promptDeliveryResult ? { promptDeliveryResult: launch.promptDeliveryResult } : {})
     }
   )

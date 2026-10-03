@@ -19,6 +19,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { attachForTests } from '../native-chat/agent-session-wire/structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 const THREAD = 'thread-runtime-child-work'
@@ -89,7 +90,7 @@ describe('structured Codex child work through the production runtime', () => {
     })
     const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
     attachParams.envelope.clientOperationId = `${Date.now()}-${'1'.padStart(32, '0')}`
-    const attached = await host.attach({ callerKey: 'runtime-test' }, attachParams)
+    const attached = await attachForTests(host, { callerKey: 'runtime-test' }, attachParams)
     expect(attached).toMatchObject({ ok: true })
     // Creating the session starts its child; nothing else has to keep it running.
     expect(connections).toHaveLength(1)

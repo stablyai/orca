@@ -77,7 +77,7 @@ function createIntentParams() {
   return { envelope: envelope('agentSession.create', fields, null), ...fields }
 }
 
-function ensureParams(fence: number) {
+function resolvedCreateParams(fence: number) {
   const params = {
     location: {
       executionHostId: 'local',
@@ -204,6 +204,37 @@ function textOf(item: AgentJournalRenderItem): string {
     : ''
 }
 
+function message(text: string) {
+  return { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
+}
+
+/** A message at the record's current fence; the chat's first one is what starts Claude. */
+async function send(text: string): Promise<{
+  clientMessageId: string
+  submission: { dispatchState: string; reason: string | null }
+}> {
+  const body = message(text)
+  return ok('agentSession.send', {
+    envelope: envelope('agentSession.send', { body }, leaseOf(SESSION).runtimeFence),
+    body
+  })
+}
+
+/** A created chat whose first message has started Claude. */
+async function startedChat(): Promise<void> {
+  await ok<{ fence: number }>('agentSession.create', createIntentParams())
+  await send('hello')
+  await vi.waitFor(() => expect(claude.connections).toHaveLength(1))
+}
+
+/** The submission a message ended as, read from a fresh subscription's snapshot. */
+async function submissionOf(clientMessageId: string) {
+  const snapshot = (await subscribe()).find((frame) => frame.type === 'snapshot')
+  return snapshot?.type === 'snapshot'
+    ? snapshot.page.submissions.find((entry) => entry.clientMessageId === clientMessageId)
+    : undefined
+}
+
 beforeEach(async () => {
   operations = 0
   claudeAuthPolicy = { stripAuthEnv: false }
@@ -228,7 +259,7 @@ beforeEach(async () => {
     getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     resolveStructuredAgentSessionCreateIntent: async (input: { envelope: unknown }) => ({
-      ...ensureParams(1),
+      ...resolvedCreateParams(1),
       envelope: input.envelope,
       providerHandle: undefined
     }),
@@ -320,7 +351,7 @@ describe('a structured Claude session over agentSession.*', () => {
       CLAUDE_CONFIG_DIR: '/shell/claude'
     }
 
-    await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    await startedChat()
 
     const env = claude.live().launch.env
     expect(env).not.toHaveProperty('ANTHROPIC_API_KEY')
@@ -338,7 +369,7 @@ describe('a structured Claude session over agentSession.*', () => {
       ANTHROPIC_API_KEY: 'sk-ant-SHELL-ONLY'
     }
 
-    await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    await startedChat()
 
     expect(claude.live().launch.env).toMatchObject({
       CODEX_LB_API_KEY: 'shell-exported',
@@ -352,7 +383,7 @@ describe('a structured Claude session over agentSession.*', () => {
     recordAccountHomePath = join(homedir(), '.claude')
     shellEnv = { ...shellEnv, CLAUDE_CONFIG_DIR: '/shell/claude', SHELL_ONLY_MARKER: 'from-shell' }
 
-    await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    await startedChat()
 
     const env = claude.live().launch.env
     expect(env).not.toHaveProperty('CLAUDE_CONFIG_DIR')
@@ -364,111 +395,79 @@ describe('a structured Claude session over agentSession.*', () => {
     shellEnv = { ...shellEnv, CODEX_LB_API_KEY: 'shell-exported', LISTED_ONLY: 'yes' }
     shellEnvironmentPolicy = { inheritAll: false, names: ['LISTED_ONLY'] }
 
-    await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    await startedChat()
 
     const env = claude.live().launch.env
     expect(env?.LISTED_ONLY).toBe('yes')
     expect(env).not.toHaveProperty('CODEX_LB_API_KEY')
   })
 
-  it('refuses a create whose configured env overrides the pinned managed account auth', async () => {
+  it('rejects the first message when the configured env overrides the pinned managed account auth', async () => {
     claudeAuthPolicy = { stripAuthEnv: true }
     // The default overlay carries ANTHROPIC_AUTH_TOKEN, which the terminal path
     // refuses at spawn-env.ts:25 rather than letting it beat the pinned account.
-    const params = createIntentParams()
-    const sentence =
-      'This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.'
-    const refused = await call('agentSession.create', params)
+    await ok<{ fence: number }>('agentSession.create', createIntentParams())
 
-    // The thrown answer keeps its wire code; only its words are the ones its replay reads.
-    expect(refused).toMatchObject({
-      ok: false,
-      error: { code: 'runtime_error', message: sentence }
-    })
-    // Its replay reads the same sentence, beside the situation it names.
-    expect(await call('agentSession.create', params)).toMatchObject({
-      ok: true,
-      result: {
-        ok: false,
-        refusal: {
-          code: 'agent_session_operation_invalid',
-          details: { reason: 'managedAccountEnvOverride' },
-          message: sentence
-        }
-      }
-    })
+    const sent = await send('hello')
+
+    // Only the person can remove those variables, so the message ends at once with that sentence.
+    await vi.waitFor(async () =>
+      expect(await submissionOf(sent.clientMessageId)).toMatchObject({
+        dispatchState: 'rejected',
+        reason:
+          'This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.',
+        rejection: { kind: 'managedAccountEnvOverride' }
+      })
+    )
     // Refused before spawn: no provider child was ever opened.
     expect(claude.connections).toHaveLength(0)
   })
 
-  it('publishes, then ends the session quietly when initialization has no credentials', async () => {
+  it('rejects the first message, adding no row, when initialization has no credentials', async () => {
     claude.setInitializeAccount({ apiProvider: 'firstParty', tokenSource: 'none' })
-
-    // The create answers once the child is spawned; the missing credentials arrive after.
     await ok<{ fence: number }>('agentSession.create', createIntentParams())
-    await waitForStructuredAgentSessionRecovery()
 
-    // No message waited on this start, so the empty chat says nothing.
-    expect(itemsOf(await subscribe()).filter((item) => item.body?.kind === 'status')).toEqual([])
-    expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
-    // A failed start is not auto-resumed into the same failure.
-    expect(claude.connections).toHaveLength(1)
-
-    // The first message starts it again and says why; signing in is the person's to do, so it is
-    // not tried again on a timer and adds no row.
-    const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }
-    const sent = await ok<{ clientMessageId: string }>('agentSession.send', {
-      envelope: envelope('agentSession.send', { body }, leaseOf(SESSION).runtimeFence),
-      body
-    })
+    // The first message starts Claude and says why it could not; signing in is the person's to do,
+    // so it is not tried again on a timer and adds no row.
+    const sent = await send('hello')
     await waitForStructuredAgentSessionRecovery()
     await vi.waitFor(async () => {
-      const frames = await subscribe()
-      const snapshot = frames.find((frame) => frame.type === 'snapshot')
-      expect(
-        snapshot?.type === 'snapshot'
-          ? snapshot.page.submissions.find(
-              (entry) => entry.clientMessageId === sent.clientMessageId
-            )
-          : undefined
-      ).toMatchObject({
+      expect(await submissionOf(sent.clientMessageId)).toMatchObject({
         dispatchState: 'rejected',
         reason:
           'Claude is not signed in for the selected account. Sign in, then send your message again.',
         rejection: { kind: 'notSignedIn' }
       })
-      expect(itemsOf(frames).filter((item) => item.body?.kind === 'status')).toEqual([])
+      expect(itemsOf(await subscribe()).filter((item) => item.body?.kind === 'status')).toEqual([])
     })
-    expect(claude.connections).toHaveLength(2)
+    expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
+    // A failed start is not auto-resumed into the same failure.
+    expect(claude.connections).toHaveLength(1)
   })
 
   // The root's death is first-hand. Its descendants were never snapshottable, or one was seen
   // alive; either way the lease follows the root, so the reservation goes with it.
   it.each(['unverifiable', 'live'] as const)(
-    'releases a session whose CLI self-exited during create with its tree %s, refused in a sentence',
+    'releases a chat whose CLI self-exited starting for its first message with its tree %s, said on the message',
     async (tree) => {
       claude.setSelfExit({
         message: 'claude stream-json exited (code 1): claude: not signed in',
         exitVerdict: { root: 'exited', tree }
       })
+      await ok<{ fence: number }>('agentSession.create', createIntentParams())
 
-      const failed = await call('agentSession.create', createIntentParams())
+      const sent = await send('hello')
 
-      // Answered once, as the refusal a replay of this operation gives, never thrown first.
-      expect(failed).toMatchObject({
-        ok: true,
-        result: {
-          ok: false,
-          refusal: {
-            code: 'agent_session_operation_invalid',
-            // The CLI's stderr is log text; the person reads what the chat's start failure says.
-            message: 'Claude stopped before it finished starting. Send your message to try again.',
-            ownerVerdict: 'exited'
-          }
-        }
-      })
+      // The CLI's stderr is log text; the person reads what the start failure says, on the message.
+      await vi.waitFor(async () =>
+        expect(await submissionOf(sent.clientMessageId)).toMatchObject({
+          dispatchState: 'rejected',
+          reason: 'Claude stopped before it finished starting. Send your message to try again.',
+          rejection: { kind: 'providerStartFailed' }
+        })
+      )
       const lease = leaseOf(SESSION)
-      // Latching here would refuse every later attach with agent_session_ownership_unknown,
+      // Latching here would refuse every later start with agent_session_ownership_unknown,
       // wedging a user who only needs to sign in.
       expect(lease).toMatchObject({ claimStatus: 'released', handoffStage: null })
       expect(lease.deathEvidence).toMatchObject({
@@ -477,31 +476,30 @@ describe('a structured Claude session over agentSession.*', () => {
       })
 
       claude.setSelfExit(null)
-      // Signing in and reopening the chat works: the reservation was not latched.
-      await ok<{ fence: number }>('agentSession.ensure', ensureParams(lease.runtimeFence))
+      // Signing in and sending again works: the reservation was not latched.
+      await send('again')
+      await vi.waitFor(() => expect(claude.live().sent.length).toBeGreaterThan(0))
     }
   )
 
-  it('answers a create whose whole CLI tree exited as exited on the first call', async () => {
+  it('rejects the first message when the whole CLI tree exited starting for it', async () => {
     claude.setSelfExit({
       message: 'claude stream-json exited (code 1): claude: not signed in',
       // The common case: the close ladder proves the root and every descendant gone.
       exitVerdict: { root: 'exited', tree: 'exited' }
     })
+    // The create answers at once; nothing has started yet.
+    await ok<{ fence: number }>('agentSession.create', createIntentParams())
 
-    const failed = await call('agentSession.create', createIntentParams())
+    const sent = await send('hello')
 
-    expect(failed).toMatchObject({
-      ok: true,
-      result: {
-        ok: false,
-        refusal: {
-          code: 'agent_session_operation_invalid',
-          message: 'Claude stopped before it finished starting. Send your message to try again.',
-          ownerVerdict: 'exited'
-        }
-      }
-    })
+    await vi.waitFor(async () =>
+      expect(await submissionOf(sent.clientMessageId)).toMatchObject({
+        dispatchState: 'rejected',
+        reason: 'Claude stopped before it finished starting. Send your message to try again.',
+        rejection: { kind: 'providerStartFailed' }
+      })
+    )
     expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
     claude.setSelfExit(null)
   })
@@ -513,7 +511,13 @@ describe('a structured Claude session over agentSession.*', () => {
       exitVerdict: { root: 'live', tree: 'unverifiable' }
     })
 
-    await call('agentSession.create', createIntentParams())
+    await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    const sent = await send('hello')
+    // A start whose process could not be proven gone books no other try: the message ends.
+    await vi.waitFor(async () =>
+      expect(await submissionOf(sent.clientMessageId)).toMatchObject({ dispatchState: 'rejected' })
+    )
+    expect(claude.connections).toHaveLength(1)
     claude.setSelfExit(null)
 
     // The adapter closed the stdio of what it spawned, and no owner was recorded to stop. The next
@@ -528,7 +532,7 @@ describe('a structured Claude session over agentSession.*', () => {
   it.each(['unverifiable', 'live'] as const)(
     'restarts a chat whose stop saw the Claude root exit with its tree %s',
     async (tree) => {
-      await ok('agentSession.create', createIntentParams())
+      await startedChat()
       const first = claude.live()
       first.exitVerdict = { root: 'exited', tree }
       first.close = async () => {
@@ -554,7 +558,7 @@ describe('a structured Claude session over agentSession.*', () => {
   )
 
   it('routes a published Claude first-hand exit through fenced host reconciliation', async () => {
-    await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    await startedChat()
     const connection = claude.live()
     connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
     connection.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
@@ -570,7 +574,7 @@ describe('a structured Claude session over agentSession.*', () => {
   it.each(['unverifiable', 'live'] as const)(
     'restarts a chat on its next send after a Claude crash whose tree was %s',
     async (tree) => {
-      const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
+      await startedChat()
       const connection = claude.live()
       connection.exitVerdict = { root: 'exited', tree }
       connection.close = async () => {
@@ -578,15 +582,12 @@ describe('a structured Claude session over agentSession.*', () => {
         return false
       }
       // Claude takes the message but crashes before echoing it.
+      const before = connection.sent.length
       connection.send = async (message) => {
         connection.sent.push(message)
       }
-      const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'in flight' }] }
-      const inFlight = ok<{ submission: { dispatchState: string; reason: string | null } }>(
-        'agentSession.send',
-        { envelope: envelope('agentSession.send', { body }, created.fence), body }
-      )
-      await vi.waitFor(() => expect(connection.sent).toHaveLength(1))
+      const inFlight = send('in flight')
+      await vi.waitFor(() => expect(connection.sent).toHaveLength(before + 1))
       connection.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
 
       expect((await inFlight).submission).toMatchObject({
@@ -597,11 +598,7 @@ describe('a structured Claude session over agentSession.*', () => {
       await waitForStructuredAgentSessionRecovery()
       expect(claude.connections).toHaveLength(1)
       expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
-      const next = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'after' }] }
-      await ok('agentSession.send', {
-        envelope: envelope('agentSession.send', { body: next }, leaseOf(SESSION).runtimeFence),
-        body: next
-      })
+      await send('after')
       await vi.waitFor(() => expect(claude.connections).toHaveLength(2))
       expect(claude.live().launch.options).toMatchObject({ resume: PROVIDER_SESSION })
       await vi.waitFor(() => expect(claude.live().sent).toHaveLength(1))
@@ -612,6 +609,21 @@ describe('a structured Claude session over agentSession.*', () => {
   it('creates, sends, streams, approves, interrupts, and resumes from the chain head', async () => {
     shellEnv = { ...shellEnv, ANTHROPIC_API_KEY: 'sk-ant-SHELL-LEAK' }
     const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    // Created at rest: the first message is what starts Claude.
+    expect(claude.connections).toHaveLength(0)
+    const stream = await subscribe()
+
+    const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'List files' }] }
+    const sent = await ok<{
+      submission: { dispatchState: string; providerItemId: string | null }
+    }>('agentSession.send', {
+      envelope: envelope('agentSession.send', { body }, created.fence),
+      body
+    })
+    expect(sent.submission).toMatchObject({
+      dispatchState: 'accepted',
+      providerItemId: `claude:${PROVIDER_SESSION}:user-1`
+    })
     expect(claude.live().launch.options).toMatchObject({ sessionId: PROVIDER_SESSION })
     expect(claude.live().launch.options.resume).toBeUndefined()
     expect(claude.live().launch.env).toMatchObject({
@@ -632,19 +644,6 @@ describe('a structured Claude session over agentSession.*', () => {
     expect(history).toMatchObject({
       ok: true,
       result: { providerSession: { key: 'session_id', id: PROVIDER_SESSION } }
-    })
-    const stream = await subscribe()
-
-    const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'List files' }] }
-    const sent = await ok<{
-      submission: { dispatchState: string; providerItemId: string | null }
-    }>('agentSession.send', {
-      envelope: envelope('agentSession.send', { body }, created.fence),
-      body
-    })
-    expect(sent.submission).toMatchObject({
-      dispatchState: 'accepted',
-      providerItemId: `claude:${PROVIDER_SESSION}:user-1`
     })
 
     claude.live().handlers.onMessage?.({
@@ -804,8 +803,8 @@ describe('a structured Claude session over agentSession.*', () => {
       provider: 'claude',
       leafUuid: 'assistant-leaf'
     })
-    // A Claude Stop ends its child once Claude ends the stopped turn, so the chat rests; the next
-    // open resumes the conversation.
+    // A Claude Stop ends its child once Claude ends the stopped turn, so the chat rests; its next
+    // message resumes the conversation.
     const old = claude.live()
     old.handlers.onMessage?.({
       type: 'result',
@@ -817,12 +816,10 @@ describe('a structured Claude session over agentSession.*', () => {
     await vi.waitFor(() => expect(leaseOf(SESSION).claimStatus).toBe('released'))
     expect(old.closed).toBe(true)
     const rested = leaseOf(SESSION)
-    const resumed = await ok<{ fence: number }>(
-      'agentSession.ensure',
-      ensureParams(rested.runtimeFence)
-    )
-    expect(resumed.fence).toBe(rested.runtimeFence + 1)
-    expect(claude.live()).not.toBe(old)
+    await send('next')
+    await vi.waitFor(() => expect(claude.live()).not.toBe(old))
+    const resumed = leaseOf(SESSION).runtimeFence
+    expect(resumed).toBe(rested.runtimeFence + 1)
     // Claude owns where the conversation continues; the stored leaf is the stopped turn's, which
     // Claude ended with its own result.
     expect(claude.live().launch.options).toMatchObject({ resume: PROVIDER_SESSION })
@@ -838,9 +835,12 @@ describe('a structured Claude session over agentSession.*', () => {
     expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)).toMatchObject(
       lastCompletedTurn
     )
-    // Open, close, open with no turn in between keeps that leaf.
-    const reopened = await ok<{ fence: number }>('agentSession.ensure', ensureParams(resumed.fence))
-    expect(reopened.fence).toBe(resumed.fence + 1)
+    // Start, stop, start with no completed turn in between keeps that leaf.
+    const second = claude.live()
+    await getStructuredAgentSessionHost()?.close(SESSION, 'evict')
+    await send('again')
+    await vi.waitFor(() => expect(claude.live()).not.toBe(second))
+    expect(leaseOf(SESSION).runtimeFence).toBeGreaterThan(resumed)
     expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)).toMatchObject(
       lastCompletedTurn
     )

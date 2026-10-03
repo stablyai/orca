@@ -21,6 +21,7 @@ import {
 } from './structured-agent-session-rest-test-rig'
 import { StructuredAgentSessionIdleSweep } from './structured-agent-session-idle-sweep'
 import { hostTestAttachParams } from './structured-agent-session-host-test-data'
+import { attachForTests } from './structured-agent-session-attach-test-support'
 
 let rig: RestTestRig
 
@@ -254,7 +255,7 @@ describe('a start that never finishes (P2-15)', () => {
       return resolve.call(this, input)
     })
     const reader = collectSubscriber()
-    const attached = await rig.host.attach(CALLER, hostTestAttachParams(null))
+    const attached = await attachForTests(rig.host, CALLER, hostTestAttachParams(null))
     expect(attached.ok).toBe(true)
     await rig.host.subscribe({ id: 'reader', sessionId: SESSION, emit: reader.emit })
     const sent = await rig.host.send(CALLER, restTestSend('stuck behind the start', fence()))

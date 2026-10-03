@@ -2,6 +2,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
 import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
+import { resolveStructuredWorkerPreambleBudgetMs } from '../../../../../../shared/orchestration-timing-budgets'
 import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preamble'
 import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
@@ -39,6 +40,8 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   launchReceipt: OrchestrationWorkerLaunchReceipt
   mode: WorkerStartModeReceipt
   timeoutMs: number
+  /** When the worker start began, so the preamble's wait ends inside the caller's own timeout. */
+  startedAtMs: number
   effects: WorkerEffect[]
   terminalRevealWarning: string | undefined
   /** Keeps the caller's failure receipt naming the stage that actually failed. */
@@ -62,6 +65,11 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     coordinatorHandle: args.coordinatorHandle,
     devMode: args.devMode,
     requestId: args.requestId,
+    preambleBudgetMs: resolveStructuredWorkerPreambleBudgetMs({
+      startedAtMs: args.startedAtMs,
+      timeoutMs: args.timeoutMs,
+      nowMs: Date.now()
+    }),
     whenUndelivered: undelivered.resolve
   })
   effects.push({

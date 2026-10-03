@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import {
+  foundTestAgentSessionRecord,
+  openTestAgentSessionRecordStore
+} from '../../runtime/agent-session-record-store-test-harness'
 import { mapRuntimeError } from '../../runtime/rpc/errors'
 import {
   AgentSessionPreSpawnError,
@@ -32,12 +35,13 @@ afterEach(async () => {
   root = null
 })
 
-function createParams(): AgentSessionAttachParams {
+/** The first start of a chat its create founded at fence 1. */
+function startParams(): AgentSessionAttachParams {
   const params: AgentSessionAttachParams = {
     envelope: {
       sessionId: SESSION,
       clientOperationId: OPERATION,
-      expectedRuntimeFence: null,
+      expectedRuntimeFence: 1,
       payloadFingerprint: ''
     },
     location: {
@@ -68,6 +72,15 @@ function createParams(): AgentSessionAttachParams {
 async function firstAnswerAndReplay(thrown: AgentSessionPreSpawnError) {
   root = await mkdtemp(join(tmpdir(), 'orca-pre-spawn-first-answer-'))
   const store = await openTestAgentSessionRecordStore(root)
+  const { location, provider, accountHome } = startParams()
+  await foundTestAgentSessionRecord(store, {
+    sessionId: SESSION,
+    location,
+    provider,
+    accountHome,
+    claimKeyId: 'key-1',
+    now: NOW
+  })
   const unused = async (): Promise<never> => {
     throw new Error('not reached before a spawn')
   }
@@ -93,7 +106,7 @@ async function firstAnswerAndReplay(thrown: AgentSessionPreSpawnError) {
       probe: { outcome: 'reservation-unused' as const }
     },
     callerKey: 'client-1',
-    params: createParams(),
+    params: startParams(),
     now: () => NOW,
     onAttached: () => {}
   }
@@ -118,7 +131,7 @@ function thrownWith(
   return { reason, needsUser: true }
 }
 
-describe('a create that fails before any process spawns', () => {
+describe('a first start that fails before any process spawns', () => {
   it.each<[string, string, AgentSessionPreSpawnReason | undefined, string]>([
     [
       'the managed account env override',

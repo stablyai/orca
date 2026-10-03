@@ -10,7 +10,6 @@ import {
   AgentSessionRecoveryCapsule,
   AGENT_SESSION_RECOVERY_CAPSULE_FILE
 } from '../../runtime/agent-session-recovery-capsule'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { parseAgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
@@ -31,22 +30,16 @@ import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
-  hostTestAttachParams,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { startAgentForTests } from './structured-agent-session-attach-test-support'
 import { recordingProductionStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
-/** Starts the agent explicitly — the attach a client's ensure makes — for a test that needs a
- *  running child before its next step. Nothing else starts one ahead of a send. */
-export async function startAgent(state: {
-  host: StructuredAgentSessionHost
-  store: AgentSessionRecordStore
-}): Promise<void> {
-  const result = await state.host.attach(
-    CALLER,
-    hostTestAttachParams(state.store.getRecord(SESSION)?.lease.runtimeFence ?? null)
-  )
+/** Starts the agent as a queued message's delivery does, for a test that needs a running child
+ *  before its next step. Nothing else starts one ahead of a send. */
+export async function startAgent(state: { host: StructuredAgentSessionHost }): Promise<void> {
+  const result = await startAgentForTests(state.host, SESSION)
   expect(result.ok).toBe(true)
 }
 

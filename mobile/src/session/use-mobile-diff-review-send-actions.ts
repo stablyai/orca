@@ -156,9 +156,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       }
       if (result.kind === 'prompt-not-sent') {
         // Notes stay unsent so Copy Notes and a later send still carry them.
-        setActionError(
-          "The agent started, but the notes weren't sent. Use Copy Notes to paste them."
-        )
+        setActionError("The notes weren't sent to the agent. Use Copy Notes to paste them.")
         return
       }
       await markNotesSent(comments)

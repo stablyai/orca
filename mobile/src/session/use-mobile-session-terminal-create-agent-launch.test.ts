@@ -517,10 +517,7 @@ describe('launches that carry a prompt', () => {
     await create_(state, 'codex', { initialPrompt: 'the notes', onPromptSent })
 
     expect(onPromptSent).not.toHaveBeenCalled()
-    expect(state.showToast).toHaveBeenCalledWith(
-      "The agent started, but the notes weren't sent.",
-      2400
-    )
+    expect(state.showToast).toHaveBeenCalledWith("The notes weren't sent to the agent.", 2400)
   })
 
   it('says a quick command prompt was not sent', async () => {

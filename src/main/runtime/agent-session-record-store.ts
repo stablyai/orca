@@ -70,13 +70,18 @@ import { setAgentSessionTabVisibility, showAgentSessionTabs } from './agent-sess
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import { loadAgentSessionStoreRows } from './agent-session-record-rows'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
+import { AgentSessionRecordStoreCommitListeners } from './agent-session-record-store-commit-listeners'
+import {
+  commitAgentSessionAtRestCreate,
+  type AgentSessionAtRestCreateRequest,
+  type AgentSessionAtRestCreateResult
+} from './agent-session-at-rest-create'
 
 export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
   AGENT_SESSION_LEASE_RENEW_INTERVAL_MS = 10_000
 
 export class AgentSessionRecordStore {
-  private readonly deathEvidenceListeners = new Set<(sessionId: string) => void>()
-  private readonly firstRecordListeners = new Set<() => void>()
+  private readonly commitListeners = new AgentSessionRecordStoreCommitListeners()
 
   private constructor(
     private readonly transactions: AgentSessionStoreTransactions,
@@ -163,6 +168,12 @@ export class AgentSessionRecordStore {
   /** A committed /clear and the at-rest conversation it continues in, in one write. */
   commitConversationClear = (clear: AgentSessionConversationClear): Promise<void> =>
     this.transact((draft) => commitConversationClearRecord(draft, clear))
+
+  /** A new chat at rest and the operation row its create answers retries from, in one write. */
+  createAtRest = (
+    request: AgentSessionAtRestCreateRequest
+  ): Promise<AgentSessionAtRestCreateResult> =>
+    this.transact((draft) => commitAgentSessionAtRestCreate(draft, request))
 
   /** Unfenced on purpose: the name is a durable note, so writing it never contends with the
    *  writer lease. `null` clears it. */
@@ -330,16 +341,12 @@ export class AgentSessionRecordStore {
 
   /** Told, once committed, of each session a transaction wrote a proof of death for — whichever
    *  transition wrote it, since every one lands here. Must not throw. */
-  onDeathEvidence(listener: (sessionId: string) => void): () => void {
-    this.deathEvidenceListeners.add(listener)
-    return () => this.deathEvidenceListeners.delete(listener)
-  }
+  onDeathEvidence = (listener: (sessionId: string) => void): (() => void) =>
+    this.commitListeners.onDeathEvidence(listener)
 
   /** Told, once committed, when the store records its first chat. Must not throw. */
-  onFirstRecord(listener: () => void): () => void {
-    this.firstRecordListeners.add(listener)
-    return () => this.firstRecordListeners.delete(listener)
-  }
+  onFirstRecord = (listener: () => void): (() => void) =>
+    this.commitListeners.onFirstRecord(listener)
 
   /** Serializes every mutation. `apply` changes only the draft it is given; readers see the change
    *  once its rows have committed. */
@@ -347,28 +354,13 @@ export class AgentSessionRecordStore {
     apply: (draft: AgentSessionStoreState) => T,
     options?: { inMemoryWhenReadOnly?: boolean }
   ): Promise<T> => {
-    let proven: string[] = []
-    let heldBefore = true
+    let notify = (): void => {}
     const result = await this.transactions.transact((draft) => {
-      heldBefore = this.holdsRecords()
-      if (this.deathEvidenceListeners.size === 0) {
-        return apply(draft)
-      }
-      const before = new Map(
-        [...draft.records].map(([id, record]) => [id, record.lease.deathEvidence])
-      )
-      const applied = apply(draft)
-      proven = [...draft.records]
-        .filter(([id, { lease }]) => lease.deathEvidence && lease.deathEvidence !== before.get(id))
-        .map(([id]) => id)
-      return applied
+      const watched = this.commitListeners.watch(this.holdsRecords, draft, apply)
+      notify = watched.notify
+      return watched.result
     }, options)
-    for (const sessionId of proven) {
-      this.deathEvidenceListeners.forEach((listener) => listener(sessionId))
-    }
-    if (!heldBefore && this.holdsRecords()) {
-      this.firstRecordListeners.forEach((listener) => listener())
-    }
+    notify()
     return result
   }
 }

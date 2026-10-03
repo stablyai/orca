@@ -32,6 +32,7 @@ import {
   openTestJournalHostDatabase,
   updateTestJournalRowJson
 } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { attachForTests } from '../../../native-chat/agent-session-wire/structured-agent-session-attach-test-support'
 
 const CLIENT = {
   clientId: 'device-1',
@@ -151,7 +152,7 @@ describe('opening a chat at rest (P2-01)', () => {
 describe('the accessor', () => {
   it('opens a closed conversation once, however many readers arrive together (P2-02)', async () => {
     // Written by the provider alone, so nothing but the readers below ever opens it here.
-    const attached = await rig.host.attach(CALLER, hostTestAttachParams(null))
+    const attached = await attachForTests(rig.host, CALLER, hostTestAttachParams(null))
     expect(attached.ok).toBe(true)
     rig.adapter.acquire.mock.calls
       .at(-1)?.[0]

@@ -286,7 +286,8 @@ const FAILURE_SENTENCES = {
       retry?.cause
     ),
   previousExitUnverifiable: (context, _fact, _surface, say) =>
-    say('previousExitUnverifiable', agent(say, context))
+    say('previousExitUnverifiable', agent(say, context)),
+  reviewReplyFailed: (_context, _fact, _surface, say) => say('reviewReplyFailed')
 } satisfies Record<AgentSessionFailureKind, Sentence>
 
 /** The sentence a person reads for this fact on this surface; never a marker. */

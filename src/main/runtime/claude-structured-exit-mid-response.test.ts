@@ -11,6 +11,7 @@ import {
   createScriptedClaudeRuntime,
   scriptedClaudeExitError
 } from './structured-claude-scripted-runtime-test-support'
+import { attachForTests } from '../native-chat/agent-session-wire/structured-agent-session-attach-test-support'
 
 const SESSION = 'claude-exit-mid-response'
 const CALLER = { callerKey: 'client-1' }
@@ -45,7 +46,9 @@ async function send(host: StructuredAgentSessionHost, text: string): Promise<voi
 describe('a started Claude CLI that exits while a response is in progress', () => {
   it('says Claude stopped, and that the conversation can continue', async () => {
     const host = await claude.install()
-    await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(SESSION, null))
+    ).resolves.toMatchObject({
       ok: true
     })
     await send(host, 'hello')

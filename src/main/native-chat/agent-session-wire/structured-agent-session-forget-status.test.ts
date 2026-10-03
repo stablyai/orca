@@ -20,7 +20,7 @@ import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
-import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
+import { attachStructuredAgentSessionUnderSerialize } from './structured-agent-session-attach-orchestration'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
@@ -200,9 +200,10 @@ function attachContext(
   } as unknown as StructuredAgentSessionAttachContext
 }
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the attach fails before reading anything past the envelope.
 const attachParams = {
   envelope: { sessionId: SESSION, clientOperationId: 'op-1' }
-} as unknown as Parameters<typeof attachStructuredAgentSession>[2]
+} as unknown as Parameters<typeof attachStructuredAgentSessionUnderSerialize>[2]
 
 describe('a session that leaves the host without an explicit close', () => {
   it('forgets the retained exact subject after the record and live session are deleted first', async () => {
@@ -243,7 +244,11 @@ describe('a session that leaves the host without an explicit close', () => {
     const drop = vi.spyOn(server, 'dropStructuredStatus')
 
     await expect(
-      attachStructuredAgentSession(attachContext(sessions, feed), 'caller-1', attachParams)
+      attachStructuredAgentSessionUnderSerialize(
+        attachContext(sessions, feed),
+        'caller-1',
+        attachParams
+      )
     ).rejects.toThrow('attach failed after acquisition')
 
     expect(sessions.has(SESSION)).toBe(true)
@@ -257,7 +262,11 @@ describe('a session that leaves the host without an explicit close', () => {
     const { feed, sessions } = await workingSession()
 
     await expect(
-      attachStructuredAgentSession(attachContext(sessions, feed), 'caller-1', attachParams)
+      attachStructuredAgentSessionUnderSerialize(
+        attachContext(sessions, feed),
+        'caller-1',
+        attachParams
+      )
     ).rejects.toThrow('attach failed after acquisition')
 
     const events: unknown[] = []

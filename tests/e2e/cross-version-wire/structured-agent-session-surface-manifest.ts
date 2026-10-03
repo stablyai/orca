@@ -49,12 +49,7 @@ export const STRUCTURED_CALLS: {
   { method: 'agentSession.createSupport', hostMethod: null, result: { supported: true } },
   {
     method: 'agentSession.create',
-    hostMethod: 'attach',
-    result: { ok: true, replayed: false, value: { sessionId: SESSION } }
-  },
-  {
-    method: 'agentSession.ensure',
-    hostMethod: 'attach',
+    hostMethod: 'create',
     result: { ok: true, replayed: false, value: { sessionId: SESSION } }
   },
   {
@@ -255,8 +250,6 @@ export function paramsFor(method: string): unknown {
       return { worktree: `id:${WORKSPACE}`, agent: 'codex' }
     case 'agentSession.create':
       return createIntentParams()
-    case 'agentSession.ensure':
-      return attachParams(fence)
     case 'agentSession.conversationCommand': {
       const fields = { command: 'compact' }
       return { envelope: envelope({ method, fields, fence }), ...fields }

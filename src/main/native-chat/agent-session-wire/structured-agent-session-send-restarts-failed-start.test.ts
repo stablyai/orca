@@ -27,6 +27,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { attachForTests } from './structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
@@ -161,7 +162,7 @@ beforeEach(async () => {
     mintSpawnToken: () => `spawn-${generation + 1}`,
     now: () => NOW
   })
-  await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
+  await expect(attachForTests(host, CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
     ok: true
   })
 })

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   callRuntime:
     vi.fn<(target: RuntimeClientTarget, method: string, params?: unknown) => Promise<unknown>>(),
   discardOutbox: vi.fn<(sessionId: string) => void>(),
+  dropReviewReplyWatchers: vi.fn<(sessionId: string) => void>(),
   hasTombstone: vi.fn<(worktreeId: string, sessionId: string) => boolean>(),
   markCancelled:
     vi.fn<(worktreeId: string, sessionId: string, executionHostId: string) => boolean>()
@@ -19,6 +20,9 @@ vi.mock('@/lib/structured-agent-session-launch-registry', () => ({
 }))
 vi.mock('@/components/native-chat/structured-agent-session-outbox-storage', () => ({
   discardStructuredAgentSessionLaunchOutbox: mocks.discardOutbox
+}))
+vi.mock('@/lib/structured-agent-session-review-reply-settled', () => ({
+  dropStructuredReviewReplyWatchers: mocks.dropReviewReplyWatchers
 }))
 vi.mock('./structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeSession
@@ -90,6 +94,8 @@ describe('structured agent session tab retirement', () => {
     })
     expect(mocks.markCancelled).toHaveBeenCalledWith('wt-1', 'session-1', 'local')
     expect(mocks.discardOutbox).toHaveBeenCalledWith('session-1')
+    // A source waiting on the chat's review-reply receipt hears nothing more from it.
+    expect(mocks.dropReviewReplyWatchers).toHaveBeenCalledWith('session-1')
     await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
     expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1')
   })

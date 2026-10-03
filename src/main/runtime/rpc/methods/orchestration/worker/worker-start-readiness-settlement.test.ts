@@ -10,8 +10,15 @@ vi.mock('./failed-worker-start-teardown', () => ({ tearDownFailedWorkerStart: te
 
 const { deliverAndSettleWorkerStartReadiness } = await import('./worker-start-readiness-settlement')
 
-/** `verdict`: what the host finally answers for a preamble it held. */
-function settle(delivered: 'accepted' | undefined, verdict = new Promise<unknown>(() => {})) {
+/** `verdict`: what the host finally answers for a preamble it held, past the start's wait. */
+function settle(
+  delivered: 'accepted' | undefined,
+  start: { timeoutMs: number; startedAtMs: number } = {
+    timeoutMs: 60_000,
+    startedAtMs: Date.now()
+  },
+  verdict = new Promise<unknown>(() => {})
+) {
   let state = 'starting'
   const db = {
     getWorkerDispatch: () => ({ state }),
@@ -36,12 +43,15 @@ function settle(delivered: 'accepted' | undefined, verdict = new Promise<unknown
       value: { clientMessageId: 'c1', submission: { dispatchState: 'pending', reason: null } }
     }),
     // undefined: the worker's agent was still starting when the wait ran out.
-    waitForSendSettlement: async (_session: string, _id: string, options?: { until?: string }) =>
-      options?.until === 'verdict'
-        ? verdict
-        : delivered
-          ? { value: { clientMessageId: 'c1', submission: { dispatchState: delivered } } }
-          : undefined
+    // The watch for a held preamble's own verdict outlasts every start's wait.
+    waitForSendSettlement: vi.fn(
+      async (_session: string, _id: string, options?: { until?: string; budgetMs?: number }) =>
+        options?.until === 'verdict' && (options.budgetMs ?? 0) > 60_000
+          ? verdict
+          : delivered
+            ? { value: { clientMessageId: 'c1', submission: { dispatchState: delivered } } }
+            : undefined
+    )
   }
   const args = {
     runtime: {
@@ -63,14 +73,14 @@ function settle(delivered: 'accepted' | undefined, verdict = new Promise<unknown
     setupReceipt: {},
     launchReceipt: {},
     mode: {},
-    timeoutMs: 60_000,
+    ...start,
     effects: [],
     terminalRevealWarning: undefined,
     onStage: () => {}
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fakes implement exactly the runtime, db and host members this settlement reaches.
   const receipt = deliverAndSettleWorkerStartReadiness(args as never)
-  return { db, receipt, notifyMessageArrived }
+  return { db, receipt, host, notifyMessageArrived }
 }
 
 describe('a structured worker whose agent outlasts the preamble wait', () => {
@@ -101,13 +111,38 @@ describe('a structured worker whose agent outlasts the preamble wait', () => {
     await expect(receipt).resolves.toMatchObject({ state: 'ready', turnStart: 'observed' })
     expect(db.markWorkerStartUnknown).not.toHaveBeenCalled()
   })
+
+  // The CLI gives a worker start its own timeout plus a fixed grace; a short timeout must not
+  // leave the preamble waiting past it, or the CLI times out before the receipt arrives.
+  it.each([
+    [60_000, 0, 60_000],
+    [10_000, 0, 40_000],
+    [10_000, 25_000, 15_000],
+    [10_000, 45_000, 0]
+  ])(
+    'waits for the agent within the start timeout %i ms less what %i ms already spent',
+    async (timeoutMs, spentMs, budgetMs) => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      try {
+        vi.setSystemTime(1_000_000)
+        const { host, receipt } = settle(undefined, {
+          timeoutMs,
+          startedAtMs: 1_000_000 - spentMs
+        })
+        await receipt
+        expect(host.waitForSendSettlement.mock.calls[0]?.[2]).toMatchObject({ budgetMs })
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
 })
 
 describe('a structured worker whose held preamble the host later rejects for good', () => {
   it('fails the start it left unknown, tears it down, and tells the Run once', async () => {
     teardown.mockClear()
     const rejected = Promise.withResolvers<unknown>()
-    const { db, receipt, notifyMessageArrived } = settle(undefined, rejected.promise)
+    const { db, receipt, notifyMessageArrived } = settle(undefined, undefined, rejected.promise)
     await expect(receipt).resolves.toMatchObject({ state: 'outcome_unknown' })
     expect(db.failWorkerStart).not.toHaveBeenCalled()
 
@@ -139,11 +174,12 @@ describe('a structured worker whose held preamble the host later rejects for goo
     teardown.mockClear()
     const landed = settle(
       undefined,
+      undefined,
       Promise.resolve({ value: { submission: { dispatchState: 'accepted' } } })
     )
     await landed.receipt
     const reported = Promise.withResolvers<unknown>()
-    const movedOn = settle(undefined, reported.promise)
+    const movedOn = settle(undefined, undefined, reported.promise)
     await movedOn.receipt
     movedOn.db.markWorkerDispatchReady()
     // The worker reported before the verdict: it is no longer a start to settle.

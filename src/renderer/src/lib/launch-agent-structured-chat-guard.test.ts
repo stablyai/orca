@@ -578,9 +578,11 @@ describe('structured chat adoption guard on the launch path', () => {
       promptDelivery: 'submit-after-ready'
     })
 
+    // The chat keeps it for that retry, so it says it holds it.
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: false,
-      failureNotified: false
+      failureNotified: false,
+      heldByChat: true
     })
     expect(mockCreateTab).not.toHaveBeenCalled()
   })

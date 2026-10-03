@@ -282,6 +282,32 @@ describe('Claude effort default at rest', () => {
     expect(pickerEffort(resting)).toBe('high')
   })
 
+  // Every new chat sits at rest until its first message. Settings or env may run another model
+  // than the listing's default, so the picker names none (and offers no effort) until one runs.
+  it('names no model for a new chat at rest even with a listing, and the picker shows it unknown', async () => {
+    const store = new AgentModelCatalogStore()
+    await startChild(store)
+
+    const resting = await readAtRest(store, restingRecord({}))
+
+    expect(resting.current).toEqual({ model: '' })
+    const seed = getAgentSessionOptionCatalog('claude')!
+    const snapshot = structuredAgentSessionOptionSnapshot(
+      applyStructuredAgentSessionOptions(
+        createStructuredAgentSessionOptionState('claude', seed),
+        seed,
+        resting
+      )
+    )
+    const model = snapshot.find((row) => row.id === 'model')
+    expect(model).toMatchObject({ valueSource: 'unknown' })
+    expect(model?.kind.type === 'select' ? model.kind.currentValue : 'named').toBeUndefined()
+    expect(
+      model?.kind.type === 'select' ? model.kind.choices.map((c) => c.value) : []
+    ).not.toContain('')
+    expect(snapshot.find((row) => row.id === 'effort')).toBeUndefined()
+  })
+
   it('names no model at rest with no pick and no catalog, so the client keeps what the child ran', async () => {
     // The CLI's default model, reported live; the chat never picked one.
     const child = await startChild(new AgentModelCatalogStore(), undefined, [], {

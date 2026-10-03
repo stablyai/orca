@@ -35,7 +35,7 @@ export function useMobileCommitFailureRecovery({
   // would start a second agent.
   const inFlightRef = useRef(false)
   const [launchError, setLaunchError] = useState<string | null>(null)
-  // The agent started without its prompt; kept so the user can paste it in themselves. Keyed by the
+  // The launch went through without its prompt; kept so the user can paste it in themselves. Keyed by the
   // failure it was built for, so a new failure never shows the previous one's prompt.
   const [undelivered, setUndelivered] = useState<{
     failure: MobileCommitFailureRecovery

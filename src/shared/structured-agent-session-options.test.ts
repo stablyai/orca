@@ -92,6 +92,24 @@ describe('structured agent session options', () => {
     expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('persisted-unknown')
   })
 
+  // A Codex chat at rest before any listing (first chat on an account, WSL, a failed read) still
+  // gets its picker: an unknown listing keeps the static seed, as the host's catalog contract says.
+  it('keeps the static seed models when the host lists none and names no model', () => {
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex'),
+      CODEX_SESSION_OPTION_CATALOG,
+      { models: [], current: { model: '' } }
+    )
+    const model = structuredAgentSessionOptionSnapshot(state).find((row) => row.id === 'model')
+
+    expect(
+      model?.kind.type === 'select' ? model.kind.choices.map((choice) => choice.value) : []
+    ).toEqual(CODEX_SESSION_OPTION_CATALOG.models.map((entry) => entry.id))
+    expect(state.catalog?.defaultModelIsCliDefault).toBe(
+      CODEX_SESSION_OPTION_CATALOG.defaultModelIsCliDefault
+    )
+  })
+
   it('projects live options as directly settable descriptors', () => {
     const state = applyStructuredAgentSessionOptions(
       createStructuredAgentSessionOptionState('codex'),

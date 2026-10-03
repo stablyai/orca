@@ -24,7 +24,7 @@ export type PrAiTriageLaunchNotice = {
   success: string | null
   error: string | null
   warning: string | null
-  /** The agent started without its prompt; kept so the user can paste it in themselves. */
+  /** The launch went through without its prompt; kept so the user can paste it in themselves. */
   undeliveredPrompt: string | null
 }
 

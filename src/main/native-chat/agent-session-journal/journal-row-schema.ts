@@ -30,6 +30,7 @@ import {
 } from '../../../shared/agent-session-journal-schemas'
 import { isAdmissibleAgentSessionContextUsage } from '../../../shared/agent-session-context-usage-schema'
 import type { StructuredAgentSessionStopCause } from '../agent-session-wire/structured-agent-session-stop-cause'
+import type { AgentSessionReviewReply } from '../../../shared/agent-session-review-reply'
 
 /** Producer linkage rides the row BASE rather than the body: the two nested
  *  prompt shapes are `.strict()`, so an unknown key on a body would make the
@@ -135,6 +136,9 @@ export type JournalSubmissionRow = JournalRowBase & {
    *  continuation, a launch prompt, the queue's automatic drain. Absent on rows from before it
    *  was recorded. Older readers keep the key and ignore it. */
   origin?: JournalSubmissionOrigin
+  /** What Orca does on the review once the agent takes this message; host-only, read through
+   *  `readAgentSessionReviewReply` as it folds. Older readers keep the key and ignore it. */
+  reviewReply?: AgentSessionReviewReply
 }
 
 export type JournalSubmissionOrigin = 'client' | 'host'

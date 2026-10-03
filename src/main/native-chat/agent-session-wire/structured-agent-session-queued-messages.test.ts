@@ -717,9 +717,10 @@ describe('/clear', () => {
       throw new Error('expected a queued receipt')
     }
     const draftId = queued.value.queued.messageId
-    await store.setConversationCommand(SESSION, 1, {
+    const fence = store.getRecord(SESSION)!.lease.runtimeFence
+    await store.setConversationCommand(SESSION, fence, {
       command: 'clear',
-      runtimeFence: 1,
+      runtimeFence: fence,
       operationId: hostTestOperationId(),
       callerKey: CALLER.callerKey,
       phase: 'prepared',

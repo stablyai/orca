@@ -342,6 +342,11 @@ export function setPendingPRCommentAiAck(payload: PendingPRCommentAiAck): void {
   pendingAiCommentAck = payload
 }
 
+/** The unclaimed payload, left in place: a launch plans its review reply from it. */
+export function peekPendingPRCommentAiAck(): PendingPRCommentAiAck | null {
+  return pendingAiCommentAck
+}
+
 export function takePendingPRCommentAiAck(): PendingPRCommentAiAck | null {
   const payload = pendingAiCommentAck
   pendingAiCommentAck = null

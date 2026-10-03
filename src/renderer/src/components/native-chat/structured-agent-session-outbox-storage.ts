@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/structured-agent-session-outbox'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import type { AgentSessionReviewReply } from '../../../../shared/agent-session-review-reply'
 
 const OUTBOX_PREFIX = 'orca:desktopStructuredAgentSessionOutbox:v1:'
 
@@ -180,7 +181,7 @@ export function appendStructuredAgentSessionOutboxMessage(
   sessionId: string,
   text: string,
   attachments: readonly StructuredAgentSessionAttachment[] = [],
-  source?: 'launch'
+  launch?: Pick<StructuredAgentSessionOutboxEntry, 'reviewReply'>
 ): StructuredAgentSessionOutboxEntry | null {
   const entry = {
     ...createStructuredAgentSessionOutboxEntry({
@@ -190,7 +191,7 @@ export function appendStructuredAgentSessionOutboxMessage(
       attachments,
       queuedAt: Date.now()
     }),
-    ...(source ? { source } : {})
+    ...(launch ? { source: 'launch' as const, ...launch } : {})
   }
   return commitStructuredAgentSessionOutbox(
     sessionId,
@@ -203,9 +204,15 @@ export function appendStructuredAgentSessionOutboxMessage(
 
 export function enqueueStructuredAgentSessionLaunchPrompt(
   sessionId: string,
-  text: string
+  text: string,
+  reviewReply?: AgentSessionReviewReply
 ): StructuredAgentSessionOutboxEntry | null {
-  return appendStructuredAgentSessionOutboxMessage(sessionId, text, [], 'launch')
+  return appendStructuredAgentSessionOutboxMessage(
+    sessionId,
+    text,
+    [],
+    reviewReply ? { reviewReply } : {}
+  )
 }
 
 export function discardStructuredAgentSessionLaunchOutbox(sessionId: string): void {

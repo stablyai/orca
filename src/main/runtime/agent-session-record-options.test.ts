@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { readNativeSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-option-restoration'
-import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import {
+  foundAndReserveTestAgentSessionRecord,
+  openTestAgentSessionRecordStore
+} from './agent-session-record-store-test-harness'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-options'
@@ -47,7 +50,7 @@ it('drops provider-rejected persisted options before the next owner proof', asyn
 
 it('persists resumed provider options atomically with owner proof', async () => {
   const store = await openTestAgentSessionRecordStore(directory)
-  const reserved = await store.reserveOwner({
+  const reserved = await foundAndReserveTestAgentSessionRecord(store, {
     sessionId: SESSION,
     location: {
       executionHostId: 'local',
@@ -57,7 +60,6 @@ it('persists resumed provider options atomically with owner proof', async () => 
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/accounts/codex' },
-    expectedFence: null,
     spawnToken: 'spawn-options',
     claimKeyId: 'key-1',
     handoffOperationId: null,

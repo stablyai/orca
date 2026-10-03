@@ -5,7 +5,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
-import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import {
+  foundAndReserveTestAgentSessionRecord,
+  openTestAgentSessionRecordStore
+} from './agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
@@ -26,12 +29,11 @@ function operationId(): string {
     .replaceAll(/[^0-9a-f]/g, '0')}`
 }
 
-const reserveRequest = (): AgentSessionReserveRequest => ({
+const reserveRequest = (): Omit<AgentSessionReserveRequest, 'expectedFence'> => ({
   sessionId: SESSION,
   location: NATIVE,
   provider: 'claude',
   accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude-work' },
-  expectedFence: null,
   spawnToken: 'spawn-a',
   claimKeyId: 'key-1',
   handoffOperationId: null,
@@ -51,7 +53,7 @@ afterEach(async () => {
 
 async function reservedStore(): Promise<AgentSessionRecordStore> {
   const store = await openTestAgentSessionRecordStore(directory)
-  await store.reserveOwner(reserveRequest())
+  await foundAndReserveTestAgentSessionRecord(store, reserveRequest())
   return store
 }
 

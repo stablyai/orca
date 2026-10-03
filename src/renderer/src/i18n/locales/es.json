@@ -983,7 +983,7 @@
         "f4b1292569": "Iniciar el agente de IA predeterminado en estos checks",
         "9a1004fc76": "Actualizar checks",
         "03e542fcfe": "No se pudo iniciar un agente de IA para los checks fallidos: {{value0}}",
-        "28986b3747": "Se inició un agente de IA para los checks fallidos.",
+        "28986b3747": "Se envió a un agente de IA para los checks fallidos.",
         "1690fd7f4a": "No hay checks fallidos que arreglar.",
         "9e7c221b8d": "No se pudieron volver a ejecutar los checks",
         "e463ec935f": "Se solicitó volver a ejecutar los checks",
@@ -1467,7 +1467,7 @@
         "a18d01cda3": "Aún no se reportaron checks",
         "3912daf310": "Este pull request aún no tiene checks reportados.",
         "45877f5089": "No se encontraron checks",
-        "85e62c5266": "Se inició un agente de IA para los checks fallidos.",
+        "85e62c5266": "Se envió a un agente de IA para los checks fallidos.",
         "ddfd42f460": "Revisa el prompt antes de iniciar un agente.",
         "a053bdd082": "Arreglar checks fallidos con IA",
         "1b14d0a69c": "Abrir en GitHub",
@@ -10522,8 +10522,8 @@
             "60ed678138": "seleccionados"
           },
           "ChecksPanel": {
-            "2ef90c9819": "Se inició un agente de IA para los checks con errores.",
-            "a0181a8d76": "Se inició un agente de IA para los conflictos.",
+            "2ef90c9819": "Se envió a un agente de IA para los checks con errores.",
+            "a0181a8d76": "Se envió a un agente de IA para los conflictos.",
             "34464d00b9": "actualizado",
             "058039787c": "Cancelar",
             "2ab7fd4b6d": "Guardar",
@@ -10569,7 +10569,7 @@
               "pending": "Syncing…",
               "branch": "Sync Branch"
             },
-            "7e4b2a19c0": "No se pudo resolver el PR de GitHub para responder.",
+            "7e4b2a19c0": "No se encontró el PR de GitHub en el que responder. Responde tú mismo a esos comentarios.",
             "430f1a62d4": "No se pudo resolver el hilo seleccionado en el host."
           },
           "CreatePullRequestDialog": {
@@ -10857,7 +10857,7 @@
             "f4c766f1ca": "Elija el agente y la plantilla de comando para esta ejecución.",
             "1a6a6e0bc5": "Generar detalles de reseña alojada",
             "6b122529d4": "Generar mensaje de commit",
-            "e48caaf0dd": "Inició un agente de IA para los conflictos.",
+            "e48caaf0dd": "Se envió a un agente de IA para los conflictos.",
             "901140f47d": "Revisa el prompt antes de iniciar un agente.",
             "19652ddd76": "Resolver conflictos con IA",
             "c9ad22888e": "Elige el destino de comparación de ramas para este repositorio.",
@@ -11427,7 +11427,7 @@
                     "9bbd9077a2": "No hay agentes de AI habilitados. Configura agentes en Configuración.",
                     "5540ff50cc": "No se pudo construir el comando de inicio del agente.",
                     "216f762bd7": "No se pudo resolver la conexión del espacio de trabajo.",
-                    "success": "Se inició un agente de AI para el fallo de {{value0}}."
+                    "success": "Se envió a un agente de IA para el fallo de {{value0}}."
                   }
                 }
               },
@@ -13568,7 +13568,7 @@
                     "4f2d9a8c17": "Selecciona un repositorio antes de lanzar una acción de IA.",
                     "7c3e1b5d42": "Abre un PR o MR antes de lanzar un fix con IA.",
                     "9b2f6d4a81": "Este check no está fallando.",
-                    "2ef90c9819": "Se inició un agente de IA para este check."
+                    "2ef90c9819": "Se envió a un agente de IA para este check."
                   }
                 }
               }
@@ -15006,7 +15006,8 @@
         "providerRateLimited": "{{agent}} alcanzó un límite de solicitudes y está reintentando.",
         "providerRetrying": "{{agent}} tuvo un problema temporal y está reintentando.",
         "providerRetryingQuoted": "{{agent}} está reintentando: {{detail}}.",
-        "previousExitUnverifiable": "Es posible que {{agent}} siga en ejecución desde antes. Sus mensajes se enviarán cuando se detenga."
+        "previousExitUnverifiable": "Es posible que {{agent}} siga en ejecución desde antes. Sus mensajes se enviarán cuando se detenga.",
+        "reviewReplyFailed": "Orca no pudo marcar como en corrección los comentarios de revisión enviados con este mensaje. Resuélvelos o respóndelos tú."
       },
       "writeNotice": {
         "notDoneReadHistory": "No se pudo cargar el historial de este chat.",

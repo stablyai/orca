@@ -12,6 +12,7 @@ import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launc
 import { hostTestMessage } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'
+import { attachForTests } from '../native-chat/agent-session-wire/structured-agent-session-attach-test-support'
 
 const SESSION = 'claude-startup-unanswered-control'
 const CALLER = { callerKey: 'client-1' }
@@ -111,7 +112,7 @@ describe('a Claude start whose CLI answers initialize but not a control request'
     const host = await claude.install()
     const saved = { model: 'sonnet', permissionMode: 'plan' }
     await expect(
-      host.attach(CALLER, claude.attachParams(SESSION, null, { options: saved }))
+      attachForTests(host, CALLER, claude.attachParams(SESSION, null, { options: saved }))
     ).resolves.toMatchObject({ ok: true })
 
     // The restore asked; the CLI never answered; startup went on without it.
@@ -140,7 +141,11 @@ describe('a Claude start whose CLI answers initialize but not a control request'
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const host = await claude.install()
     await expect(
-      host.attach(CALLER, claude.attachParams(SESSION, null, { options: { model: 'sonnet' } }))
+      attachForTests(
+        host,
+        CALLER,
+        claude.attachParams(SESSION, null, { options: { model: 'sonnet' } })
+      )
     ).resolves.toMatchObject({ ok: true })
     await vi.waitFor(
       () => expect(record(host)?.options).toEqual({ model: 'sonnet', effort: 'high' }),
@@ -163,7 +168,11 @@ describe('a Claude start whose CLI answers initialize but not a control request'
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const host = await claude.install()
     await expect(
-      host.attach(CALLER, claude.attachParams(SESSION, null, { options: { model: 'sonnet' } }))
+      attachForTests(
+        host,
+        CALLER,
+        claude.attachParams(SESSION, null, { options: { model: 'sonnet' } })
+      )
     ).resolves.toMatchObject({ ok: true })
     await vi.waitFor(
       () => expect(record(host)?.options).toEqual({ model: 'sonnet', effort: 'high' }),
@@ -231,7 +240,11 @@ describe('a Claude start whose CLI answers initialize but not a control request'
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const host = await claude.install()
     await expect(
-      host.attach(CALLER, claude.attachParams(SESSION, null, { options: { model: 'sonnet' } }))
+      attachForTests(
+        host,
+        CALLER,
+        claude.attachParams(SESSION, null, { options: { model: 'sonnet' } })
+      )
     ).resolves.toMatchObject({ ok: true })
     // The record holds the saved model from creation; only the start's own report (effort) says
     // startup finished, and an option write before then is refused as still starting.
@@ -250,7 +263,9 @@ describe('a Claude start whose CLI answers initialize but not a control request'
   it("lands with effort unknown when startup's own settings read goes unanswered", async () => {
     claude.behave(SESSION, { startupSettingsReadHangs: true, controlTimeoutMs: DEADLINE_MS })
     const host = await claude.install()
-    await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(SESSION, null))
+    ).resolves.toMatchObject({
       ok: true
     })
 

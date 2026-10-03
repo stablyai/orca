@@ -9,7 +9,10 @@ import {
   writeOlderBuildLease
 } from '../../runtime/agent-session-older-build-lease.test-fixture'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import {
+  foundAndReserveTestAgentSessionRecord,
+  openTestAgentSessionRecordStore
+} from '../../runtime/agent-session-record-store-test-harness'
 import { supervisedPosixLaunch } from '../../codex/codex-app-server-posix-supervisor'
 import {
   resolveStructuredSessionRecovery,
@@ -38,7 +41,7 @@ async function openStore(directory?: string): Promise<AgentSessionRecordStore> {
 
 async function reserve(store: AgentSessionRecordStore) {
   operations += 1
-  return store.reserveOwner({
+  return foundAndReserveTestAgentSessionRecord(store, {
     sessionId: SESSION,
     location: {
       executionHostId: 'local',
@@ -48,7 +51,6 @@ async function reserve(store: AgentSessionRecordStore) {
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/tmp/codex' },
-    expectedFence: null,
     spawnToken: 'spawn-recovery',
     claimKeyId: 'key-1',
     handoffOperationId: null,
@@ -131,7 +133,7 @@ describe('structured session recovery resolution', () => {
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,
-      runtimeFence: 2,
+      runtimeFence: 3,
       reservedSpawnToken: null,
       deathEvidence: null
     })
@@ -153,7 +155,7 @@ describe('structured session recovery resolution', () => {
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,
-      runtimeFence: 2,
+      runtimeFence: 3,
       ownerProcess: null
     })
   })
@@ -185,7 +187,7 @@ describe('structured session recovery resolution', () => {
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,
-      runtimeFence: 2
+      runtimeFence: 3
     })
   })
 
@@ -211,7 +213,7 @@ describe('structured session recovery resolution', () => {
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,
-      runtimeFence: 2,
+      runtimeFence: 3,
       ownerProcess: null,
       deathEvidence: null
     })
@@ -236,7 +238,7 @@ describe('structured session recovery resolution', () => {
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,
-      runtimeFence: 2,
+      runtimeFence: 3,
       ownerProcess: null,
       deathEvidence: null
     })

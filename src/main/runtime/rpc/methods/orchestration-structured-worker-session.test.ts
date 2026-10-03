@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/structured-agent-session-dispatch-rejection'
+import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../../shared/orchestration-timing-budgets'
 
 const hostRef: { current: unknown } = { current: null }
 const createSpy = vi.fn()
@@ -234,7 +235,7 @@ describe('structured worker session', () => {
 
 describe('structured worker dispatch preamble', () => {
   type PreambleHost = Parameters<typeof sendStructuredWorkerPreamble>[0]['host']
-  type Settled = Pick<AgentJournalSubmission, 'dispatchState' | 'reason'>
+  type Settled = Pick<AgentJournalSubmission, 'dispatchState' | 'reason' | 'startRetry'>
 
   function submissionOf(settled: Settled): AgentJournalSubmission {
     return {
@@ -276,7 +277,7 @@ describe('structured worker dispatch preamble', () => {
   it('reports the preamble delivered only on an accepted submission', async () => {
     await expect(
       send(hostWithSubmission({ dispatchState: 'accepted', reason: null }))
-    ).resolves.toBe('accepted')
+    ).resolves.toEqual({ state: 'accepted' })
   })
 
   it('waits for an accepted preamble to be delivered, and reports that delivery (W10)', async () => {
@@ -287,7 +288,21 @@ describe('structured worker dispatch preamble', () => {
           { dispatchState: 'accepted', reason: null }
         )
       )
-    ).resolves.toBe('accepted')
+    ).resolves.toEqual({ state: 'accepted' })
+  })
+
+  // The preamble is what starts the worker's agent, so a start still being retried is why it waits.
+  it('names the failed start a held preamble waits behind', async () => {
+    const startRetry = {
+      attempts: 1,
+      reason: "Codex couldn't start. Orca will try again shortly.",
+      rejection: { kind: 'startFailed' as const },
+      failedAt: 1,
+      nextAttemptAt: 2
+    }
+    await expect(
+      send(hostWithSubmission({ dispatchState: 'pending', reason: null, startRetry }))
+    ).resolves.toEqual({ state: 'pending', startRetry })
   })
 
   it('reports a preamble still held for an agent that outlasted the wait, without failing the start (W10)', async () => {
@@ -295,7 +310,7 @@ describe('structured worker dispatch preamble', () => {
     // down, which rejected the preamble the start was about to deliver.
     await expect(
       send(hostWithSubmission({ dispatchState: 'pending', reason: null }))
-    ).resolves.toBe('pending')
+    ).resolves.toEqual({ state: 'pending' })
   })
 
   it('never claims delivery for a submission the provider never acknowledged', async () => {
@@ -361,8 +376,9 @@ describe('structured worker dispatch preamble', () => {
     const verdicts: unknown[] = []
     const heldThen = (verdict: Settled): PreambleHost => ({
       ...hostWithSubmission({ dispatchState: 'pending', reason: null }),
+      // Only the watch past the start's wait hears the verdict; within it the agent never took it.
       waitForSendSettlement: async (_session, _id, options) =>
-        options?.until === 'verdict'
+        options?.until === 'verdict' && (options.budgetMs ?? 0) > ORCHESTRATION_READINESS_TIMEOUT_MS
           ? {
               cursor: { epoch: 'epoch-1', sequence: 3 },
               value: { clientMessageId: 'c1', submission: submissionOf(verdict) }
@@ -385,7 +401,7 @@ describe('structured worker dispatch preamble', () => {
       )
     }
 
-    expect(verdicts).toEqual(['pending', 'pending'])
+    expect(verdicts).toEqual([{ state: 'pending' }, { state: 'pending' }])
     await vi.waitFor(() => expect(heard).toHaveBeenCalledOnce())
     expect(heard).toHaveBeenCalledWith(
       'The dispatch preamble was not delivered: Codex never finished starting, so Orca stopped it.'

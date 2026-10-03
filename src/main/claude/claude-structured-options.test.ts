@@ -480,3 +480,26 @@ describe('Claude structured option restore under the request deadline', () => {
     ).rejects.toBeInstanceOf(ClaudeControlRequestTimeoutError)
   })
 })
+
+describe("a Claude chat's first start, before the agent names its model", () => {
+  function startingSession(): ClaudeSession {
+    return { ...sessionFor(vi.fn()), startup: createClaudeSessionStartup() }
+  }
+
+  it("names no model, not its listing's default, and still lists the models", async () => {
+    const result = await readClaudeStructuredSessionOptions(startingSession(), undefined)
+
+    expect(result.current.model).toBe('')
+    expect(result.models.length).toBeGreaterThan(0)
+    expect(result.models.some((model) => model.isDefault)).toBe(true)
+  })
+
+  it('names the pick a start replays', async () => {
+    const session = startingSession()
+    session.options.set('model', 'opus')
+
+    const result = await readClaudeStructuredSessionOptions(session, undefined)
+
+    expect(result.current.model).toBe('opus')
+  })
+})

@@ -7,7 +7,10 @@ import {
   agentSessionRecordFixture
 } from '../../../shared/agent-session-record.test-fixture'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import {
+  foundAndReserveTestAgentSessionRecord,
+  openTestAgentSessionRecordStore
+} from '../../runtime/agent-session-record-store-test-harness'
 import { StructuredAgentSessionLeaseRenewer } from './structured-agent-session-lease-renewer'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
@@ -18,7 +21,7 @@ async function liveStore(): Promise<AgentSessionRecordStore> {
   const root = await mkdtemp(join(tmpdir(), 'orca-lease-renewer-'))
   roots.push(root)
   const store = await openTestAgentSessionRecordStore(root)
-  const reserved = await store.reserveOwner({
+  const reserved = await foundAndReserveTestAgentSessionRecord(store, {
     sessionId: 'session-renewal',
     location: {
       executionHostId: 'local',
@@ -28,7 +31,6 @@ async function liveStore(): Promise<AgentSessionRecordStore> {
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: root },
-    expectedFence: null,
     spawnToken: 'spawn-renewal',
     claimKeyId: 'key-1',
     handoffOperationId: null,

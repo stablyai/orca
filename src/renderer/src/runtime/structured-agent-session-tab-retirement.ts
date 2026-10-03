@@ -1,3 +1,4 @@
+import { dropStructuredReviewReplyWatchers } from '@/lib/structured-agent-session-review-reply-settled'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
   markStructuredAgentSessionLaunchesPublished,
@@ -77,6 +78,7 @@ export function beginStructuredAgentSessionTabClose(args: {
     )
   }
   discardStructuredAgentSessionLaunchOutbox(args.sessionId)
+  dropStructuredReviewReplyWatchers(args.sessionId)
   retireStructuredAgentSessionTab(args)
 }
 

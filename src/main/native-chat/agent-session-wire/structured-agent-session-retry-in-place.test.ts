@@ -27,6 +27,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { attachForTests, startAgentForTests } from './structured-agent-session-attach-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const PHONE = { callerKey: 'phone-1' }
@@ -102,7 +103,7 @@ beforeEach(async () => {
   store = await openTestAgentSessionRecordStore(root)
   startHost()
   await expect(
-    host.attach(CALLER, hostTestAttachParams(null, { providerHandle: undefined }))
+    attachForTests(host, CALLER, hostTestAttachParams(null, { providerHandle: undefined }))
   ).resolves.toMatchObject({ ok: true })
   // The chat is put to rest, so each message starts the agent.
   await host.close(SESSION, 'evict')
@@ -241,9 +242,7 @@ describe('a Retry of a message whose start failed for good', () => {
 // By then the chat was put to rest, Orca restarted, or the chat was closed while it waited.
 describe('a Retry after the chat it failed in was closed or reopened', () => {
   async function reopen(): Promise<void> {
-    await expect(
-      host.attach(CALLER, hostTestAttachParams(fence(), { providerHandle: undefined }))
-    ).resolves.toMatchObject({ ok: true })
+    await expect(startAgentForTests(host, SESSION)).resolves.toMatchObject({ ok: true })
   }
 
   it('delivers it after the idle sweep put the chat to rest', async () => {

@@ -2,13 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../../../shared/tab-types'
 import { createTestStore, makeWorktree, seedStore } from '../store-test-helpers'
 
-const mocks = vi.hoisted(() => ({ beginClose: vi.fn() }))
+const mocks = vi.hoisted(() => ({ beginClose: vi.fn(), dropWatchers: vi.fn() }))
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: mocks.beginClose
+}))
+vi.mock('@/lib/structured-agent-session-review-reply-settled', () => ({
+  dropStructuredReviewReplyWatchers: mocks.dropWatchers
 }))
 
 // `repoId::path` names both checkouts: this machine's and the paired server's.
@@ -58,6 +61,7 @@ function storeWith(tab: Tab): ReturnType<typeof createTestStore> {
 
 beforeEach(() => {
   mocks.beginClose.mockReset()
+  mocks.dropWatchers.mockReset()
 })
 
 describe('closing a structured chat from outside its workspace', () => {
@@ -81,5 +85,7 @@ describe('closing a structured chat from outside its workspace', () => {
 
     expect(mocks.beginClose).not.toHaveBeenCalled()
     expect(store.getState().unifiedTabsByWorktree[WORKTREE] ?? []).toEqual([])
+    // No host to stop it on, but the chat is gone here, and so is a review reply's wait on it.
+    expect(mocks.dropWatchers).toHaveBeenCalledWith('chat-1')
   })
 })

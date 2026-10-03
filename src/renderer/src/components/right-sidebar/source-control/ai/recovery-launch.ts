@@ -68,7 +68,7 @@ export function getDefaultSourceControlRecoveryLaunchCopy(
     ),
     success: translate(
       'auto.components.right.sidebar.source.control.ai.recovery.launch.success',
-      'Started an AI agent for the {{value0}} failure.',
+      'Sent to an AI agent for the {{value0}} failure.',
       { value0: subject }
     )
   }

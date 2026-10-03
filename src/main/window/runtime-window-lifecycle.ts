@@ -17,6 +17,7 @@ import { registerRendererDocumentNavigation } from './renderer-document-navigati
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
 import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
+import { broadcastGitHubWorkItemMutation } from '../ipc/github-work-item-mutation-events'
 
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
@@ -43,6 +44,8 @@ export function registerRuntimeWindowLifecycle(
     },
     worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
     worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
+    githubPullRequestMutated: (payload) =>
+      broadcastGitHubWorkItemMutation({ ...payload, type: 'pr' }),
     reposChanged: () => send('repos:changed'),
     automationsChanged: (payload) => send('automations:changed', payload),
     activateWorktree: (

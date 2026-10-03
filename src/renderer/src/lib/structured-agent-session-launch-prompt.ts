@@ -11,6 +11,7 @@ import {
 import { agentSessionRefusalFailure } from '../../../shared/agent-session-write-failure'
 import { createStructuredAgentSessionOperationId } from '../../../shared/structured-agent-session-mutation'
 import {
+  getStructuredAgentSessionOutbox,
   mutateStructuredAgentSessionLaunchPrompt,
   type StructuredAgentSessionLaunchPromptMutation
 } from '@/components/native-chat/structured-agent-session-outbox-storage'
@@ -21,6 +22,23 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 export type StructuredPromptDeliveryResult = {
   delivered: boolean
   failureNotified: boolean
+  /** Not delivered, but its chat still holds it and sends it again or offers its Retry: the chat
+   *  owns it from here, so the caller does not offer it again. */
+  heldByChat?: true
+  /** The chat's message carries the launch's review reply, which its host writes; set only by a
+   *  structured chat that took the prompt, never by a terminal it fell back to. */
+  reviewReplyCarried?: true
+}
+
+/** Whether the chat still holds this launch prompt, under its first id or one a refusal rotated. */
+function chatHoldsLaunchPrompt(entry: StructuredAgentSessionOutboxEntry | null): boolean {
+  const body = entry && JSON.stringify(entry.body)
+  return Boolean(
+    entry &&
+    getStructuredAgentSessionOutbox(entry.sessionId).some(
+      (held) => held.source === 'launch' && JSON.stringify(held.body) === body
+    )
+  )
 }
 
 export type StructuredLaunchPromptOptions = {
@@ -163,7 +181,14 @@ export function settleStructuredAgentLaunchPrompt(args: {
   if (args.options.promptDelivery === 'draft' || !args.options.prompt?.trim()) {
     return undefined
   }
-  return args.launchResult.then(async (receipt) => {
+  const carried = args.stagedEntry?.reviewReply ? { reviewReplyCarried: true as const } : {}
+  const held = (): StructuredPromptDeliveryResult => ({
+    delivered: false,
+    failureNotified: false,
+    heldByChat: true,
+    ...carried
+  })
+  const settled = args.launchResult.then(async (receipt) => {
     if (!args.stagedEntry) {
       return { delivered: false, failureNotified: true }
     }
@@ -177,7 +202,17 @@ export function settleStructuredAgentLaunchPrompt(args: {
     const delivered = await dispatch.promise
     if (delivered) {
       args.options.onPromptDelivered?.()
+      return { delivered, failureNotified: false, ...carried }
     }
-    return { delivered, failureNotified: false }
+    return chatHoldsLaunchPrompt(entry) ? held() : { delivered, failureNotified: false }
+  })
+  // A create that failed hands the source back its comments, so a relaunch of the prompt the chat
+  // kept must not carry their writes too.
+  return settled.catch((error: unknown) => {
+    const entry = args.stagedEntry
+    if (entry?.reviewReply) {
+      mutateEntry(entry, ({ reviewReply: _handedBack, ...kept }) => kept)
+    }
+    throw error
   })
 }

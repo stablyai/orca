@@ -15,6 +15,7 @@ import { hasUnansweredStructuredAgentSessionDispatch } from '../../shared/struct
 import { hostTestMessage } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'
+import { attachForTests } from '../native-chat/agent-session-wire/structured-agent-session-attach-test-support'
 
 const SESSION = 'claude-idle-release'
 const PROVIDER_SESSION = claudeSessionIdForOrcaSession(SESSION)
@@ -70,7 +71,9 @@ function sessionState(state: 'running' | 'idle'): Record<string, unknown> {
 describe('a live Claude chat whose CLI reports idle', () => {
   it('releases a send whose write ended in doubt, and leaves a pending one alone', async () => {
     const host = await claude.install()
-    await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(SESSION, null))
+    ).resolves.toMatchObject({
       ok: true
     })
     const child = claude.child(SESSION)
@@ -128,7 +131,9 @@ describe('a live Claude chat whose CLI took a send and let it go without an echo
     ['it went idle with no terminal state', 'idle', DISPATCH_DOUBT_PROVIDER_IDLE]
   ])('records released doubt when %s', async (_label, ending, reason) => {
     const host = await claude.install()
-    await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(SESSION, null))
+    ).resolves.toMatchObject({
       ok: true
     })
     const child = claude.child(SESSION)
@@ -165,7 +170,9 @@ describe('a live Claude chat whose CLI took a send and let it go without an echo
 
   it('holds a send it has only queued, through an idle that may precede its start', async () => {
     const host = await claude.install()
-    await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(SESSION, null))
+    ).resolves.toMatchObject({
       ok: true
     })
     const child = claude.child(SESSION)

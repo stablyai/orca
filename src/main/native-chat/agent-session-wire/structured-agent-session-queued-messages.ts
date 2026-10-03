@@ -194,6 +194,7 @@ export async function maybeQueueStructuredAgentSessionSend(
     envelope: { clientOperationId: string }
     body: AgentJournalMessageItem
     delivery?: 'queue-if-active'
+    reviewReply?: unknown
   }
 ): Promise<
   | { ok: true; value: AgentSessionSendResult }
@@ -201,7 +202,12 @@ export async function maybeQueueStructuredAgentSessionSend(
   | null
 > {
   const clientMessageId = params.envelope.clientOperationId
-  if (params.delivery !== 'queue-if-active' || !queuedMessageBodyIsTextOnly(params.body)) {
+  // A draft carries no review reply, so a send with one is recorded as a message now.
+  if (
+    params.delivery !== 'queue-if-active' ||
+    params.reviewReply !== undefined ||
+    !queuedMessageBodyIsTextOnly(params.body)
+  ) {
     return null
   }
   // Asked again with no ledger answer: a send this host queued answers as its replay would —

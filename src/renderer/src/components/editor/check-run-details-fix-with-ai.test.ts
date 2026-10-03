@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -210,5 +211,7 @@ describe('check-run-details-fix-with-ai', () => {
       })
     )
     expect(startFixChecksAgent.mock.calls[0]?.[0]?.basePrompt).toContain('assertion failed')
+    // Said once the chat has the prompt: its agent may still be starting.
+    expect(toast.success).toHaveBeenCalledWith('Sent to an AI agent for this check.')
   })
 })

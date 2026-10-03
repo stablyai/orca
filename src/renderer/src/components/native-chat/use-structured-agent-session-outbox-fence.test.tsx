@@ -144,7 +144,7 @@ describe('an outbox on a host that accepts a send before any agent has it', () =
       })
     )
     setItem.mockRestore()
-    expect(delivery).toEqual({ delivered: false, failureNotified: false })
+    expect(delivery).toEqual({ delivered: false, failureNotified: false, heldByChat: true })
     expect(mocks.call).not.toHaveBeenCalled()
     expect(result.current.outbox).toMatchObject([{ state: 'queued' }])
 

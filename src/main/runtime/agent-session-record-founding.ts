@@ -2,6 +2,7 @@ import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 
 /** Who a conversation's agent is and how it launches: the same whether it is created or founded. */
 export type AgentSessionRecordIdentity = Pick<
@@ -27,16 +28,18 @@ export function agentSessionRecordIdentityFields(
 }
 
 /**
- * A conversation no agent has run yet, at rest: its first send starts one. The empty handle chain
- * is what makes that start a fresh conversation rather than a resume.
+ * A conversation no agent has run yet, at rest: its first send starts one. An empty handle chain
+ * makes that start a fresh conversation; an adopted link makes it a resume.
  */
 export function foundAgentSessionRecord(
   identity: AgentSessionRecordIdentity,
-  lease: { claimKeyId: string; now: number }
+  lease: { claimKeyId: string; now: number },
+  /** The provider conversation a create adopts; its first start resumes it instead. */
+  adoptedHandleLink?: AgentSessionProviderHandleLink
 ): AgentSessionRecord {
   return {
     ...agentSessionRecordIdentityFields(identity, lease.now),
-    providerHandleChain: [],
+    providerHandleChain: adoptedHandleLink ? [adoptedHandleLink] : [],
     lease: {
       sessionId: identity.sessionId,
       runtimeKind: 'native',

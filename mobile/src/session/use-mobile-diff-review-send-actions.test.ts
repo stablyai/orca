@@ -353,7 +353,7 @@ describe('useMobileDiffReviewSendActions', () => {
     })
     expect(saveCommentsAndReviewState).not.toHaveBeenCalled()
     expect(setActionError).toHaveBeenLastCalledWith(
-      "The agent started, but the notes weren't sent. Use Copy Notes to paste them."
+      "The notes weren't sent to the agent. Use Copy Notes to paste them."
     )
   })
 

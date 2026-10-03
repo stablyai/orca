@@ -16,6 +16,14 @@ import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { NATIVE_CHAT_INITIAL_LIMIT, type NativeChatOlderPageResult } from './native-chat-pagination'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
+import {
+  dropStructuredReviewReplyWatchers,
+  noticeStructuredReviewReplyReceipt
+} from '@/lib/structured-agent-session-review-reply-settled'
+import {
+  createStructuredAgentSessionOlderPageReader,
+  OLDER_PAGE_ANCHOR_ATTEMPTS
+} from './structured-agent-session-read-older-pages'
 
 export type StructuredAgentSessionReadSnapshot = {
   state: StructuredAgentSessionState
@@ -34,9 +42,6 @@ export type StructuredAgentSessionReadOwner = {
 }
 
 const owners = new Map<string, StructuredAgentSessionReadOwner>()
-
-/** Bounded so a busy stream cannot turn one scroll-to-top into an endless read chain. */
-const OLDER_PAGE_ANCHOR_ATTEMPTS = 3
 
 function countsTowardInitialHistory(item: AgentJournalRenderItem): boolean {
   return item.body.kind !== 'status' || !item.body.providerFrame
@@ -175,55 +180,32 @@ function createReadOwner(
     }
   }
 
-  let olderPage: { shouldStop: () => boolean; promise: Promise<NativeChatOlderPageResult> } | null =
-    null
-  const readOlderPage = async (shouldStop: () => boolean): Promise<NativeChatOlderPageResult> => {
-    try {
-      // A live batch can head-trim past the anchor mid-read, and the reducer drops
-      // that page rather than leave a hole in the transcript. Re-anchor and retry.
-      for (let attempt = 0; attempt < OLDER_PAGE_ANCHOR_ATTEMPTS; attempt += 1) {
-        const cursor = oldestStructuredAgentSessionCursor(snapshot.state)
-        if (shouldStop()) {
-          return 'superseded'
-        }
-        if (!cursor) {
-          return 'exhausted'
-        }
-        const result = await callStructuredAgentSession<AgentSessionHistoryResult>(
-          target,
-          'agentSession.history',
-          { sessionId, direction: 'before', cursor, limit: AGENT_SESSION_HISTORY_MAX_LIMIT }
-        )
-        if (shouldStop()) {
-          return 'superseded'
-        }
-        if (!result.ok) {
-          return 'failed'
-        }
-        // The reducer drops a page whose anchor slid, so only an intact anchor lands.
-        if (oldestStructuredAgentSessionCursor(snapshot.state)?.sequence === cursor.sequence) {
-          apply({ type: 'older-page', requestedCursor: cursor, page: result.page })
-          if (oldestStructuredAgentSessionCursor(snapshot.state)?.sequence !== cursor.sequence) {
-            return 'applied'
-          }
-          return snapshot.state.hasOlder ? 'unchanged' : 'exhausted'
-        }
-      }
-      return 'unchanged'
-    } catch {
-      // A failed page leaves the loaded conversation intact; the list offers a retry, and
-      // the next invalidation (re-attach, snapshot, reset) re-enables paging.
-      return shouldStop() ? 'superseded' : 'failed'
-    }
-  }
+  const olderPages = createStructuredAgentSessionOlderPageReader({
+    sessionId,
+    target,
+    getState: () => snapshot.state,
+    apply,
+    captureHistoryReadGuard: () => captureActiveHistoryReadGuard(),
+    markLoadingOlder: () => setSnapshot({ ...snapshot, loadingOlder: true }),
+    clearLoadingOlder
+  })
 
   const start = (): void => {
     if (snapshot.state.epoch === null) {
       apply({ type: 'loading' })
     }
     const transport = startStructuredAgentSessionReadTransport({
-      applyEvent: (event) => apply({ type: 'event', event }),
-      applyError: (message, refusal) => apply({ type: 'error', message, refusal }),
+      applyEvent: (event) => {
+        apply({ type: 'event', event })
+        noticeStructuredReviewReplyReceipt(sessionId, event)
+      },
+      applyError: (message, refusal) => {
+        apply({ type: 'error', message, refusal })
+        // The host holds no such chat: nothing it would say about a review reply is coming.
+        if (refusal?.details?.reason === 'recordMissing') {
+          dropStructuredReviewReplyWatchers(sessionId)
+        }
+      },
       getCursor: () => snapshot.state.cursor,
       onHistoryReadInvalidated: invalidateOlderPages,
       hydrate: snapshot.state.epoch === null ? hydrate : undefined,
@@ -265,33 +247,7 @@ function createReadOwner(
       stopActiveRun?.()
     },
     getSnapshot: () => snapshot,
-    loadOlder: () => {
-      // Concurrent callers (scroll-to-top, the button, a rail jump) share one page
-      // and its result rather than reading a refusal as "no progress".
-      if (olderPage && !olderPage.shouldStop()) {
-        return olderPage.promise
-      }
-      const shouldStop = captureActiveHistoryReadGuard()
-      if (shouldStop()) {
-        return Promise.resolve('superseded')
-      }
-      if (!oldestStructuredAgentSessionCursor(snapshot.state) || !snapshot.state.hasOlder) {
-        return Promise.resolve('exhausted')
-      }
-      setSnapshot({ ...snapshot, loadingOlder: true })
-      const page = { shouldStop, promise: readOlderPage(shouldStop) }
-      olderPage = page
-      void page.promise.finally(() => {
-        if (olderPage !== page) {
-          return
-        }
-        olderPage = null
-        if (!shouldStop()) {
-          clearLoadingOlder()
-        }
-      })
-      return page.promise
-    },
+    loadOlder: olderPages.loadOlder,
     subscribe: (listener) => {
       listeners.add(listener)
       return () => {

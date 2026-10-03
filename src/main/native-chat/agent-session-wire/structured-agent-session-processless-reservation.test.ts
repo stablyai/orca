@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import {
+  foundTestAgentSessionRecord,
+  openTestAgentSessionRecordStore
+} from '../../runtime/agent-session-record-store-test-harness'
 import {
   AgentSessionPreSpawnError,
   type StructuredAgentSessionAdapter
@@ -30,10 +33,8 @@ afterEach(async () => {
   root = null
 })
 
-function attachParams(
-  operationId = OPERATION,
-  expectedRuntimeFence: number | null = null
-): AgentSessionAttachParams {
+/** A start of the record `foundedStore` founds at fence 1. */
+function attachParams(operationId = OPERATION, expectedRuntimeFence = 1): AgentSessionAttachParams {
   const params: AgentSessionAttachParams = {
     envelope: {
       sessionId: SESSION,
@@ -66,10 +67,30 @@ function attachParams(
   }
 }
 
+/** The store with the record a create founds at rest, which every start here reserves. */
+async function foundedStore(directory: string) {
+  const store = await openTestAgentSessionRecordStore(directory)
+  const { location, provider, accountHome } = attachParams()
+  await foundTestAgentSessionRecord(store, {
+    sessionId: SESSION,
+    location,
+    provider,
+    accountHome,
+    claimKeyId: 'key-1',
+    now: NOW
+  })
+  return store
+}
+
+/** The rows this suite's starts wrote; the create writes one of its own. */
+function startRows(store: Awaited<ReturnType<typeof foundedStore>>) {
+  return store.listOperationRows().filter((row) => row.callerKey === 'client-1')
+}
+
 describe('processless structured session reservation', () => {
   it('refuses an adapter that declares no create support before reserving a lease', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-unsupported-attach-'))
-    const store = await openTestAgentSessionRecordStore(root)
+    const store = await foundedStore(root)
     const reserveOwner = vi.spyOn(store, 'reserveOwner')
     const acquire = vi.fn<StructuredAgentSessionAdapter['acquire']>()
     const adapter = {
@@ -108,7 +129,7 @@ describe('processless structured session reservation', () => {
 
   it('refuses a replay when adapter support drifts after durable reservation', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-replay-support-drift-'))
-    const store = await openTestAgentSessionRecordStore(root)
+    const store = await foundedStore(root)
     const supportsCreate = vi
       .fn<NonNullable<StructuredAgentSessionAdapter['supportsCreate']>>()
       .mockReturnValueOnce(true)
@@ -156,7 +177,7 @@ describe('processless structured session reservation', () => {
 
   it('releases a new reservation when support drifts before acquisition', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-support-drift-reservation-'))
-    const store = await openTestAgentSessionRecordStore(root)
+    const store = await foundedStore(root)
     const supportsCreate = vi
       .fn<NonNullable<StructuredAgentSessionAdapter['supportsCreate']>>()
       .mockReturnValueOnce(true)
@@ -193,10 +214,10 @@ describe('processless structured session reservation', () => {
       claimStatus: 'released',
       handoffStage: null,
       reservedSpawnToken: null,
-      runtimeFence: 2,
+      runtimeFence: 3,
       deathEvidence: { kind: 'pid-absent', detail: 'reservation failed before spawn' }
     })
-    expect(store.listOperationRows()[0]?.outcome).toMatchObject({
+    expect(startRows(store)[0]?.outcome).toMatchObject({
       status: 'failed',
       code: 'structured_agent_session_unsupported'
     })
@@ -209,7 +230,7 @@ describe('processless structured session reservation', () => {
 
   it('settles a pre-spawn failure and its processless evidence in one durable transaction', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-processless-reservation-'))
-    const store = await openTestAgentSessionRecordStore(root)
+    const store = await foundedStore(root)
     const adapter = {
       acquire: vi.fn(async () => {
         throw new AgentSessionPreSpawnError(new Error('workspace no longer exists'))
@@ -242,11 +263,11 @@ describe('processless structured session reservation', () => {
       claimStatus: 'released',
       handoffStage: null,
       handoffOperationId: null,
-      runtimeFence: 2,
+      runtimeFence: 3,
       reservedSpawnToken: null,
       deathEvidence: { kind: 'pid-absent', detail: 'reservation failed before spawn' }
     })
-    expect(store.listOperationRows()[0]?.outcome).toMatchObject({ status: 'failed' })
+    expect(startRows(store)[0]?.outcome).toMatchObject({ status: 'failed' })
 
     const reopened = await openTestAgentSessionRecordStore(root)
     await reopened.reconcileOnRestart({
@@ -255,14 +276,14 @@ describe('processless structured session reservation', () => {
     })
     expect(reopened.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
-      runtimeFence: 2,
+      runtimeFence: 3,
       reservedSpawnToken: null
     })
   })
 
   it('does not rerun a settled pre-spawn failure and admits a fresh operation', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-processless-retry-'))
-    const store = await openTestAgentSessionRecordStore(root)
+    const store = await foundedStore(root)
     const adapter = {
       acquire: vi
         .fn<StructuredAgentSessionAdapter['acquire']>()
@@ -319,13 +340,13 @@ describe('processless structured session reservation', () => {
           spawnToken: 'spawn-b',
           handoffOperationId: NEXT_OPERATION
         },
-        params: attachParams(NEXT_OPERATION, 2)
+        params: attachParams(NEXT_OPERATION, 3)
       })
     ).resolves.toMatchObject({ ok: true })
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',
       handoffStage: null,
-      runtimeFence: 3,
+      runtimeFence: 4,
       ownerProcess: { spawnToken: 'spawn-b' }
     })
   })

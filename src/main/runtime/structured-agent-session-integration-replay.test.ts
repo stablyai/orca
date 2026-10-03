@@ -75,20 +75,32 @@ describe('a structured codex session over agentSession.*', () => {
     const host = await ensureStructuredAgentSessionHost(harness.hostConfig())
     const adapter = (host as unknown as { deps: { adapter: CodexStructuredSessionAdapter } }).deps
       .adapter
-    const historyEntered = Promise.withResolvers<void>()
-    const historyGate = Promise.withResolvers<void>()
-    const originalHistoryFilePath = adapter.historyFilePath.bind(adapter)
-    vi.spyOn(adapter, 'historyFilePath').mockImplementation(async (input) => {
-      historyEntered.resolve()
-      await historyGate.promise
-      return originalHistoryFilePath(input)
+    // Held once the child exists and before the attach binds it: rows it emits now are buffered.
+    const acquired = Promise.withResolvers<void>()
+    const bindGate = Promise.withResolvers<void>()
+    const originalAcquire = adapter.acquire.bind(adapter)
+    vi.spyOn(adapter, 'acquire').mockImplementation(async (input) => {
+      const result = await originalAcquire(input)
+      acquired.resolve()
+      await bindGate.promise
+      return result
     })
 
-    const creating = harness.ok<{ fence: number }>(
+    const created = await harness.ok<{ fence: number }>(
       'agentSession.create',
       harness.createIntentParams()
     )
-    await historyEntered.promise
+    // The first send's start is the acquiring attach.
+    const body = {
+      kind: 'message' as const,
+      role: 'user' as const,
+      blocks: [{ type: 'text' as const, text: 'go' }]
+    }
+    const sending = harness.ok('agentSession.send', {
+      envelope: harness.envelope('agentSession.send', { body }, created.fence),
+      body
+    })
+    await acquired.promise
     harness.codex.notify('turn/started', { threadId: THREAD, turn: { id: TURN } })
     harness.codex.notify('item/started', {
       threadId: THREAD,
@@ -108,8 +120,8 @@ describe('a structured codex session over agentSession.*', () => {
     })
     await new Promise<void>((resolve) => setImmediate(resolve))
     const waitedForJournalBind = !stopped
-    historyGate.resolve()
-    await creating
+    bindGate.resolve()
+    await sending
     await stopping
     expect(waitedForJournalBind).toBe(true)
 

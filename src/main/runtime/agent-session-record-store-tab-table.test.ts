@@ -7,15 +7,15 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import { isAgentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
+  foundTestAgentSessionRecord,
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
 } from './agent-session-record-store-test-harness'
-import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
+import type { AgentSessionAtRestCreateRequest } from './agent-session-at-rest-create'
 
 const NOW = 1_800_000_000_000
 const NATIVE: AgentSessionExecutionLocation = {
@@ -24,10 +24,8 @@ const NATIVE: AgentSessionExecutionLocation = {
   workspaceId: 'workspace-1',
   workspaceKind: 'git-worktree'
 }
-const INDETERMINATE: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'no answer' }
 
 let directory: string
-let counter = 0
 
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orca-agent-session-tab-table-'))
@@ -37,30 +35,20 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-function operationId(now = NOW): string {
-  counter += 1
-  return `${now}-${String(counter)
-    .padStart(32, '0')
-    .replaceAll(/[^0-9a-f]/g, '0')}`
-}
-
-function reserveRequest(
-  overrides: Partial<AgentSessionReserveRequest> = {}
-): AgentSessionReserveRequest {
-  return {
+/** A chat's create, which is where a tab id is reserved. */
+function create(
+  store: AgentSessionRecordStore,
+  overrides: Partial<Omit<AgentSessionAtRestCreateRequest, 'operation'>> = {}
+) {
+  return foundTestAgentSessionRecord(store, {
     sessionId: 'session-alpha',
     location: NATIVE,
     provider: 'claude',
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude-work' },
-    expectedFence: null,
-    spawnToken: 'spawn-a',
     claimKeyId: 'key-1',
-    handoffOperationId: null,
-    probe: INDETERMINATE,
-    operation: { callerKey: 'client-1', operationId: operationId(), fingerprint: 'fp-1' },
     now: NOW,
     ...overrides
-  }
+  })
 }
 
 async function open(): Promise<AgentSessionRecordStore> {
@@ -72,7 +60,7 @@ describe('chat tab table', () => {
 
   it('takes a reserved id only when the tab is shown, and refuses it to a second chat', async () => {
     const store = await open()
-    await store.reserveOwner(reserveRequest({ surfaceTabId: 'tab-alpha' }))
+    await create(store, { surfaceTabId: 'tab-alpha' })
     // A create that dies before its tab is shown leaves nothing to restore or release.
     expect(store.getSessionTabId('session-alpha')).toBeNull()
     expect((await readPersistedTestAgentSessionStore(directory)).sessionTabs).toBeUndefined()
@@ -85,27 +73,16 @@ describe('chat tab table', () => {
     expect(persisted.records['session-alpha']).not.toHaveProperty('surfaceTabId')
 
     await expect(
-      store.reserveOwner(
-        reserveRequest({
-          sessionId: 'session-beta',
-          surfaceTabId: 'tab-alpha',
-          operation: { callerKey: 'client-1', operationId: operationId(), fingerprint: 'fp-2' }
-        })
-      )
+      create(store, { sessionId: 'session-beta', surfaceTabId: 'tab-alpha' })
     ).rejects.toThrow('agent_session_conflict')
     expect(store.getRecord('session-beta')).toBeNull()
   })
 
   it('refuses showing a tab with the situation typed, as every chat refusal is', async () => {
     const store = await open()
-    await store.reserveOwner(reserveRequest({ surfaceTabId: 'tab-alpha' }))
+    await create(store, { surfaceTabId: 'tab-alpha' })
     await store.setSessionTabVisibility('session-alpha', true, 'tab-alpha')
-    await store.reserveOwner(
-      reserveRequest({
-        sessionId: 'session-beta',
-        operation: { callerKey: 'client-1', operationId: operationId(), fingerprint: 'fp-2' }
-      })
-    )
+    await create(store, { sessionId: 'session-beta' })
 
     // The message stays the code: readers of a thrown refusal treat it as one.
     await expect(
@@ -126,30 +103,24 @@ describe('chat tab table', () => {
 
   it('frees a reserved id once its chat is hidden', async () => {
     const store = await open()
-    await store.reserveOwner(reserveRequest({ surfaceTabId: 'tab-alpha' }))
+    await create(store, { surfaceTabId: 'tab-alpha' })
     await store.setSessionTabVisibility('session-alpha', true, 'tab-alpha')
     await store.setSessionTabVisibility('session-alpha', false)
-    await store.reserveOwner(
-      reserveRequest({
-        sessionId: 'session-beta',
-        surfaceTabId: 'tab-alpha',
-        operation: { callerKey: 'client-1', operationId: operationId(), fingerprint: 'fp-2' }
-      })
-    )
+    await create(store, { sessionId: 'session-beta', surfaceTabId: 'tab-alpha' })
     await store.setSessionTabVisibility('session-beta', true, 'tab-alpha')
     expect(store.getSessionTabId('session-beta')).toBe('tab-alpha')
   })
 
   it('refuses a tab id that could not prefix a pane key', async () => {
     const store = await open()
-    await expect(
-      store.reserveOwner(reserveRequest({ surfaceTabId: 'agent-session:session-alpha' }))
-    ).rejects.toThrow('agent_session_operation_invalid')
+    await expect(create(store, { surfaceTabId: 'agent-session:session-alpha' })).rejects.toThrow(
+      'agent_session_operation_invalid'
+    )
   })
 
   it('gives a shown chat the id clients derive, and puts a hidden one back under its old id', async () => {
     const store = await open()
-    await store.reserveOwner(reserveRequest())
+    await create(store)
     await store.setSessionTabVisibility('session-alpha', true)
     expect(store.getSessionTabId('session-alpha')).toBe(LEGACY_TAB_ID)
     await store.setSessionTabVisibility('session-alpha', false)

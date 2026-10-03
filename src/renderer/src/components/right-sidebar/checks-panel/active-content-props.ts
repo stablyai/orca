@@ -62,6 +62,7 @@ export type ChecksPanelActiveContentModel = Pick<
   Pick<
     ChecksPanelAiAcknowledgementState,
     | 'consumeClaimedCommentResolutionAfterDeliveryRef'
+    | 'buildLaunchReviewReply'
     | 'handleLaunchAborted'
     | 'handleLaunchAccepted'
   > &

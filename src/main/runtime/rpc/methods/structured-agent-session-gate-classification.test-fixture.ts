@@ -1,12 +1,7 @@
 // Every `agentSession.*` method with valid params, as tables the suites iterate. Adding a method
 // means adding it to exactly one of these.
 
-import {
-  attachParams,
-  envelope,
-  sendParams,
-  SESSION
-} from './structured-agent-session-rpc.test-fixture'
+import { envelope, sendParams, SESSION } from './structured-agent-session-rpc.test-fixture'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 
 /** Stops or retires work the caller already owns; none of these builds a host. */
@@ -54,7 +49,6 @@ export const WORK_METHODS = [
       agent: 'codex'
     }
   },
-  { method: 'agentSession.ensure', params: attachParams() },
   { method: 'agentSession.send', params: sendParams() },
   {
     method: 'agentSession.queuedMessageSend',

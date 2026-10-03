@@ -11,7 +11,10 @@ import {
   buildDispatchPreamble,
   dispatchPreambleSendOptions
 } from '../../../../orchestration/preamble'
-import { sendStructuredWorkerPreamble } from '../../orchestration-structured-worker-session'
+import {
+  sendStructuredWorkerPreamble,
+  type StructuredWorkerPreambleDelivery
+} from '../../orchestration-structured-worker-session'
 import type { WorkerTurnStartObservation } from './worker-start-turn-observation'
 import type { createStructuredWorkerSessionForWorktree } from './worker-topology'
 
@@ -38,6 +41,8 @@ export async function deliverWorkerDispatchPreamble(args: {
   coordinatorHandle: string
   devMode: boolean | undefined
   requestId: string
+  /** How long a structured preamble waits for its agent. */
+  preambleBudgetMs?: number
   /** A structured preamble the host held, then rejected for good: why. */
   whenUndelivered?: (reason: string) => void
 }): Promise<{
@@ -68,21 +73,10 @@ export async function deliverWorkerDispatchPreamble(args: {
       sessionId: structuredSession.identity.sessionId,
       dispatchId: args.dispatchId,
       preamble,
+      ...(args.preambleBudgetMs === undefined ? {} : { budgetMs: args.preambleBudgetMs }),
       ...(args.whenUndelivered ? { whenUndelivered: args.whenUndelivered } : {})
     })
-    return {
-      structuredTurnStart:
-        delivery === 'accepted'
-          ? { verdict: 'observed' }
-          : {
-              verdict: 'unobserved',
-              reason:
-                'The dispatch preamble was accepted, but the agent had not started to take it. It ' +
-                'is delivered when the agent starts; if the worker then reports, this Dispatch ' +
-                'settles normally. If Orca cannot start the agent, this Dispatch fails and its ' +
-                'Run is told.'
-            }
-    }
+    return { structuredTurnStart: structuredPreambleTurnStart(delivery) }
   }
   return {
     prompt: (
@@ -92,5 +86,23 @@ export async function deliverWorkerDispatchPreamble(args: {
         dispatchPreambleSendOptions(args.requestId)
       )
     ).prompt
+  }
+}
+
+/** What a structured preamble's delivery says about the worker's turn start. */
+export function structuredPreambleTurnStart(
+  delivery: StructuredWorkerPreambleDelivery
+): WorkerTurnStartObservation {
+  if (delivery.state === 'accepted') {
+    return { verdict: 'observed' }
+  }
+  const waiting = delivery.startRetry
+    ? `The worker's agent did not start: ${delivery.startRetry.reason} The dispatch preamble ` +
+      'waits for its next start; if the worker then reports, this Dispatch settles normally.'
+    : 'The dispatch preamble was accepted, but the agent had not started to take it. It is ' +
+      'delivered when the agent starts; if the worker then reports, this Dispatch settles normally.'
+  return {
+    verdict: 'unobserved',
+    reason: `${waiting} If Orca cannot start the agent, this Dispatch fails and its Run is told.`
   }
 }

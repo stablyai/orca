@@ -27,6 +27,7 @@ import { useAppStore } from '@/store'
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from './structured-agent-session-provisional-tab'
 import { beginDirectWorkItemStructuredLaunch } from './launch-work-item-direct-agent-routing'
+import { launchStructuredAgentFromNewTab } from './launch-agent-in-new-tab-structured-route'
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import { resumeAiVaultSessionInNewChat } from '@/components/right-sidebar/ai-vault-session-resume-in-chat-launch'
 import { getStructuredAgentLaunchStatus } from './structured-agent-session-launch-registry'
@@ -217,5 +218,20 @@ describe('a structured chat launch on a paired server', () => {
       ])
     )
     launch?.cancel()
+  })
+
+  it('names the host it asked, so a later wait on the chat reads it there', () => {
+    mocks.createSupport.mockResolvedValue({ supported: true })
+
+    const launched = launchStructuredAgentFromNewTab({
+      plan: pairedPlan(),
+      worktreeId: WORKTREE,
+      openTerminal: vi.fn()
+    })
+
+    expect(launched?.structuredChatTarget).toEqual({
+      kind: 'environment',
+      environmentId: 'server-1'
+    })
   })
 })

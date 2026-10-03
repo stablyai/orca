@@ -1,3 +1,4 @@
+import { dropStructuredReviewReplyWatchers } from '@/lib/structured-agent-session-review-reply-settled'
 import type { AppState } from '../../../types'
 import type { WorktreePurgeTarget, WorktreePurgeTargets } from '../../worktree-helpers'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
@@ -55,6 +56,9 @@ export function buildWorktreePurgeState(
   }
   for (const worktreeId of worktreeIdSet) {
     for (const tab of s.unifiedTabsByWorktree[worktreeId] ?? []) {
+      if (tab.contentType === 'agent-session') {
+        dropStructuredReviewReplyWatchers(tab.entityId)
+      }
       // A retained launch here survived a reload, so its persisted record names its host.
       const owner =
         tab.contentType === 'agent-session' && !cancelledSessionIds.has(tab.entityId)

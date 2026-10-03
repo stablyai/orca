@@ -254,7 +254,9 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         'components.native-chat.failureWords.previousExitUnverifiable',
         COPY.previousExitUnverifiable,
         values
-      )
+      ),
+    reviewReplyFailed: () =>
+      translate('components.native-chat.failureWords.reviewReplyFailed', COPY.reviewReplyFailed)
   }
 
 export const sayAgentSessionFailureTranslated: AgentSessionFailureSay = (id, values = {}) =>

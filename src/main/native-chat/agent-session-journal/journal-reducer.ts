@@ -10,6 +10,7 @@
 // likewise the creating write's: a revision naming no producer keeps it, one
 // naming any replaces it.
 
+import type { AgentSessionReviewReply } from '../../../shared/agent-session-review-reply'
 import type {
   AgentJournalAcceptanceReceipt,
   AgentJournalRenderItem,
@@ -52,6 +53,8 @@ export type JournalReducerState = {
   /** Revision of a removed item, so a late lower revision cannot resurrect it. */
   tombstones: Map<string, number>
   submissions: Map<string, AgentJournalSubmission>
+  /** Host-only: what Orca does on the review once the agent takes a message, by message id. */
+  reviewReplies: Map<string, AgentSessionReviewReply>
   receipts: Map<string, AgentJournalAcceptanceReceipt>
   /** Provider item id → the submission slot that adopted it. Stops an accepted
    *  echo from appending a second copy of the user's own message. */
@@ -78,6 +81,7 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     itemFences: new Map(),
     tombstones: new Map(),
     submissions: new Map(),
+    reviewReplies: new Map(),
     receipts: new Map(),
     aliases: new Map(),
     appliedSettlementIds: new Set(),

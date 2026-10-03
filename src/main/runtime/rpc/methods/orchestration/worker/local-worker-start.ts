@@ -51,6 +51,7 @@ export async function startLocalWorker(args: {
   mode: WorkerStartModeReceipt
 }): Promise<unknown> {
   const { params, runtime, db, run, coordinator, callerSession, existingTask } = args
+  const startedAtMs = Date.now()
   const { orchestrationMutation } = args
   const coordinatorPane = coordinator?.paneKey ?? null
   const requestedWorktree = params.worktree ?? 'current'
@@ -198,9 +199,9 @@ export async function startLocalWorker(args: {
     persistWorkerReadinessStage(setupStage)
 
     failedStage = 'agent_readiness'
-    // A structured session is ready the moment its attach returns ok: there is no boot-to-idle
-    // gap and no terminal title to read an idle edge from. Only the repo's wait-for-setup policy
-    // still holds it back, and that gate has to be waited on explicitly here.
+    // A structured session has no boot-to-idle gap and no terminal title to read an idle edge
+    // from: its agent starts with the preamble below. Only the repo's wait-for-setup policy still
+    // holds it back, and that gate has to be waited on explicitly here.
     const wait = structuredSession
       ? await awaitStructuredWorkerSetupGate({
           runtime,
@@ -262,6 +263,7 @@ export async function startLocalWorker(args: {
       launchReceipt: launch.receipt,
       mode,
       timeoutMs: params.timeoutMs ?? 60_000,
+      startedAtMs,
       effects,
       terminalRevealWarning: placed.warning,
       onStage: (stage) => {

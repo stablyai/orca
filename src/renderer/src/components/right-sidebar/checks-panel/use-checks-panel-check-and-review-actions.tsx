@@ -140,7 +140,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
         toast.success(
           translate(
             'auto.components.right.sidebar.ChecksPanel.2ef90c9819',
-            'Started an AI agent for the broken checks.'
+            'Sent to an AI agent for the broken checks.'
           )
         )
       }

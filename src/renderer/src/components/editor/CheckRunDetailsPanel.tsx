@@ -195,7 +195,7 @@ export function CheckRunDetailsPanel({
                   toast.success(
                     translate(
                       'auto.components.editor.check.run.details.fix.with.ai.2ef90c9819',
-                      'Started an AI agent for this check.'
+                      'Sent to an AI agent for this check.'
                     )
                   )
                 }

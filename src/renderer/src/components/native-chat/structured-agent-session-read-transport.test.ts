@@ -21,6 +21,9 @@ vi.mock('@/runtime/runtime-host-contact-regained', () => ({
 
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
+import { agentJournalItemKey } from '../../../../shared/agent-session-journal-item-key'
+import { agentSessionReviewReplyReceiptMessageId } from '../../../../shared/agent-session-review-reply'
+import { watchStructuredReviewReplySettled } from '@/lib/structured-agent-session-review-reply-settled'
 
 type SubscribeAttempt = {
   closed: PromiseWithResolvers<{ unsubscribe: () => void }>
@@ -608,5 +611,44 @@ describe('structured agent-session read transport unattached refusals', () => {
   it('does not watch host contact for a local read', () => {
     startWithHydration(async () => undefined, vi.fn()).dispose()
     expect(mocks.watchHostContact).not.toHaveBeenCalled()
+  })
+
+  it("leaves a review reply's receipt to the read owner, so one batch is noticed once", async () => {
+    vi.useFakeTimers()
+    try {
+      const settled = vi.fn()
+      const dispose = watchStructuredReviewReplySettled('session-a', settled)
+      const transport = startStructuredAgentSessionReadTransport({
+        applyEvent: () => {},
+        applyError: vi.fn(),
+        getCursor: () => null,
+        onHistoryReadInvalidated: () => undefined,
+        sessionId: 'session-a',
+        target
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      attempts[0].onEvent({
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence: 3 },
+          items: [],
+          removedItemIds: [
+            agentJournalItemKey({
+              provider: 'orca',
+              clientMessageId: agentSessionReviewReplyReceiptMessageId('message-1')
+            })
+          ],
+          submissions: []
+        }
+      })
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(settled).not.toHaveBeenCalled()
+      transport.dispose()
+      dispose()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

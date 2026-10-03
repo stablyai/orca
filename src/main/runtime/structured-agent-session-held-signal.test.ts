@@ -13,6 +13,7 @@ import {
   structuredAgentSessionsHeld
 } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import { foundAndReserveTestAgentSessionRecord } from './agent-session-record-store-test-harness'
 import type { RpcContext, RpcRequest } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { OrcaRuntimeService } from './orca-runtime'
@@ -65,7 +66,7 @@ function operationId(suffix: string): string {
 }
 
 async function recordChat(host: StructuredAgentSessionHost): Promise<void> {
-  await host.deps.store.reserveOwner({
+  await foundAndReserveTestAgentSessionRecord(host.deps.store, {
     sessionId: 'session-1',
     location: {
       executionHostId: 'local',
@@ -75,7 +76,6 @@ async function recordChat(host: StructuredAgentSessionHost): Promise<void> {
     },
     provider: 'claude',
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: join(stateDirectory, 'claude') },
-    expectedFence: null,
     spawnToken: 'spawn-1',
     claimKeyId: 'key-1',
     handoffOperationId: null,

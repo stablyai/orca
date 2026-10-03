@@ -1338,7 +1338,7 @@
         "f4b1292569": "Start the default AI agent on these checks",
         "9a1004fc76": "Refresh checks",
         "03e542fcfe": "Failed to start an AI agent for the broken checks: {{value0}}",
-        "28986b3747": "Started an AI agent for the broken checks.",
+        "28986b3747": "Sent to an AI agent for the broken checks.",
         "1690fd7f4a": "No broken checks to fix.",
         "9e7c221b8d": "Failed to rerun checks",
         "e463ec935f": "Check reruns requested",
@@ -1842,7 +1842,7 @@
         "a18d01cda3": "No checks reported yet",
         "3912daf310": "This pull request has no reported checks yet.",
         "45877f5089": "No checks found",
-        "85e62c5266": "Started an AI agent for the broken checks.",
+        "85e62c5266": "Sent to an AI agent for the broken checks.",
         "ddfd42f460": "Review the prompt before starting an agent.",
         "a053bdd082": "Fix Broken Checks With AI",
         "1b14d0a69c": "Open in GitHub",
@@ -12342,8 +12342,8 @@
             "60ed678138": "selected"
           },
           "ChecksPanel": {
-            "2ef90c9819": "Started an AI agent for the broken checks.",
-            "a0181a8d76": "Started an AI agent for the conflicts.",
+            "2ef90c9819": "Sent to an AI agent for the broken checks.",
+            "a0181a8d76": "Sent to an AI agent for the conflicts.",
             "34464d00b9": "updated",
             "058039787c": "Cancel",
             "2ab7fd4b6d": "Save",
@@ -12389,7 +12389,7 @@
               "pending": "Syncing…",
               "branch": "Sync Branch"
             },
-            "7e4b2a19c0": "Could not resolve the GitHub PR to reply on.",
+            "7e4b2a19c0": "Couldn't find the GitHub PR to reply on. Reply to those comments yourself.",
             "430f1a62d4": "Could not resolve the selected thread on the host.",
             "updateReactionFailed": "Failed to update reaction.",
             "gitlabMoreActions": "More MR actions",
@@ -12697,7 +12697,7 @@
             "f4c766f1ca": "Choose the agent and command template for this run.",
             "1a6a6e0bc5": "Generate Hosted Review Details",
             "6b122529d4": "Generate Commit Message",
-            "e48caaf0dd": "Started an AI agent for the conflicts.",
+            "e48caaf0dd": "Sent to an AI agent for the conflicts.",
             "901140f47d": "Review the prompt before starting an agent.",
             "19652ddd76": "Resolve Conflicts With AI",
             "c9ad22888e": "Pick the branch compare target for this repository.",
@@ -13293,7 +13293,7 @@
                     "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
                     "5540ff50cc": "Could not build the agent launch command.",
                     "216f762bd7": "Unable to resolve the workspace connection.",
-                    "success": "Started an AI agent for the {{value0}} failure."
+                    "success": "Sent to an AI agent for the {{value0}} failure."
                   }
                 }
               },
@@ -15638,7 +15638,7 @@
                     "4f2d9a8c17": "Select a repository before launching an AI action.",
                     "7c3e1b5d42": "Open a PR or MR before launching an AI fix.",
                     "9b2f6d4a81": "This check is not failing.",
-                    "2ef90c9819": "Started an AI agent for this check."
+                    "2ef90c9819": "Sent to an AI agent for this check."
                   }
                 }
               }
@@ -17636,7 +17636,8 @@
         "providerRateLimited": "{{agent}} is rate-limited and retrying.",
         "providerRetrying": "{{agent}} hit a temporary problem and is retrying.",
         "providerRetryingQuoted": "{{agent}} is retrying: {{detail}}.",
-        "previousExitUnverifiable": "{{agent}} from before may still be running. Your messages will send once it stops."
+        "previousExitUnverifiable": "{{agent}} from before may still be running. Your messages will send once it stops.",
+        "reviewReplyFailed": "Orca couldn't mark the review comments sent with this message as being fixed. Resolve or reply to them yourself."
       },
       "writeNotice": {
         "notDoneReadHistory": "This chat's history couldn't be loaded.",

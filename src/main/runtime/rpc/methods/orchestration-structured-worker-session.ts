@@ -3,8 +3,9 @@
  *
  * Three things make this different from the PTY worker path, and all three live here:
  *
- * - The session is created directly as structured, so readiness is the attach returning ok. There
- *   is no boot-to-idle gap to wait on and no `tui-idle` edge to read.
+ * - The session is created directly as structured, at rest; its preamble is its first message and
+ *   starts its agent, so readiness is the agent taking the preamble. There is no boot-to-idle gap to
+ *   wait on and no `tui-idle` edge to read.
  * - Nothing here keeps its agent running. The idle sweep leaves it running while its dispatch is
  *   open, reading that from the orchestration database; once the dispatch settles the agent rests
  *   like any chat's, and the next mail starts it.
@@ -13,7 +14,10 @@
 
 import { randomUUID } from 'node:crypto'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../../shared/agent-session-definitive-refusal'
-import type { AgentJournalMessageItem } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalMessageItem,
+  AgentJournalStartRetry
+} from '../../../../shared/agent-session-journal-types'
 import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../../shared/orchestration-timing-budgets'
 import { STRUCTURED_AGENT_SESSION_START_RETRY_DELAYS_MS } from '../../../../shared/structured-agent-session-start-retry'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
@@ -38,6 +42,7 @@ import {
 } from '../../structured-worker-identity'
 import { createKeyedTrailingEdgeCoalescer } from '../../keyed-trailing-edge-coalescer'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
+import type { SendSettlementWaitOptions } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
 
 type StructuredWorkerBinding = {
   sessionId: string
@@ -78,8 +83,8 @@ export async function createStructuredWorkerSession(args: {
   onJournalActivity: (sessionId: string) => void
 }): Promise<{ identity: StructuredWorkerIdentity; host: StructuredAgentSessionHost }> {
   const sessionId = randomUUID()
-  // Registered BEFORE the session is created, because `attach` is what spawns the provider child
-  // and the child's environment is read from this registry at spawn time. Registering afterwards
+  // Registered BEFORE the session is created, because the child's environment is read from this
+  // registry when its first message (the preamble) starts it. Registering afterwards
   // ships a worker with no ORCA_TERMINAL_HANDLE, whose bare `orca orchestration check` then
   // resolves to whatever single leaf sits in the worktree — by default the COORDINATOR's pane.
   //
@@ -141,8 +146,8 @@ export async function createStructuredWorkerSession(args: {
     })
     return { identity, host }
   } catch (error) {
-    // A start that fails after the session exists would otherwise strand a live provider child
-    // that no dispatch owns and that nothing else in the runtime will ever retire.
+    // A start that fails after the session exists would otherwise strand a chat (and, once its
+    // first message runs, a provider child) that no dispatch owns and nothing else will retire.
     structuredWorkerIdentities.forget(identity.handle)
     if (structuredCreateMayHaveCommitted(created)) {
       await discardStructuredWorkerSession(sessionId, args.runtime)
@@ -152,12 +157,12 @@ export async function createStructuredWorkerSession(args: {
 }
 
 /**
- * Whether a create may have attached a session, which is the question cleanup has to ask.
+ * Whether a create may have committed a session, which is the question cleanup has to ask.
  *
- * `ok` is not the test. `commit` answers `agent_session_operation_unknown` when `attach` SUCCEEDED
- * and only the tab publish failed, and a throw out of the commit half is past `attach` too — the
- * pre-commit half never throws, it refuses. Both leave a session with a published tab and no
- * binding, so nothing else in the runtime will ever retire it. Only a DEFINITIVE refusal
+ * `ok` is not the test. `commit` answers `agent_session_operation_unknown` when the host's create
+ * SUCCEEDED and only the tab publish failed, and a throw out of the commit half is past the create
+ * too — the pre-commit half never throws, it refuses. Both leave a session with a published tab and
+ * no binding, so nothing else in the runtime will ever retire it. Only a DEFINITIVE refusal
  * proves there is nothing to discard; everything else gets the best-effort close.
  */
 function structuredCreateMayHaveCommitted(
@@ -172,7 +177,7 @@ function structuredCreateMayHaveCommitted(
  * Stops the provider child, drops the DURABLE tab reference so nothing restores the chat after a
  * restart, and — only once the close came back without throwing — retires the background tab this
  * start published from the live snapshot. All three are no-ops for a session that was never
- * attached, which is why a non-definitive refusal can reach here unconditionally. A close that
+ * created, which is why a non-definitive refusal can reach here unconditionally. A close that
  * threw leaves the tab alone: the child may still be running, and the tab is the way to reach it.
  *
  * Exported because a start can also fail AFTER `createStructuredWorkerSession` returned — on the
@@ -215,6 +220,13 @@ type StructuredWorkerPreambleHost = Pick<
   deps: { store: { getRecord: (sessionId: string) => { lease: { runtimeFence: number } } | null } }
 }
 
+/** What became of the preamble within the wait. `pending`: the worker's agent had not taken it; the
+ *  host still holds it for that agent and never re-sends it. `startRetry`: its start failed and
+ *  another was still booked when the wait ran out, which is why it had not. */
+export type StructuredWorkerPreambleDelivery =
+  | { state: 'accepted' }
+  | { state: 'pending'; startRetry?: AgentJournalStartRetry }
+
 /** How long a held preamble is watched for its own verdict: every try of its start, each of which
  *  may take a whole start. */
 const PREAMBLE_VERDICT_WAIT_MS =
@@ -232,16 +244,17 @@ function preambleUndeliveredReason(submission: {
   }: ${reasonClause(submission.reason)}.`
 }
 
-/** Delivers the dispatch preamble as the worker's first turn. `pending`: the worker's agent had
- *  not taken it within the wait; the host still holds it for that agent, and never re-sends it.
- *  `whenUndelivered` hears it if the host later rejects it for good, its start's tries spent. */
+/** Delivers the dispatch preamble as the worker's first turn, which is what starts its agent.
+ *  `whenUndelivered` hears it if the host later rejects a preamble still pending for good, its
+ *  start's tries spent. */
 export async function sendStructuredWorkerPreamble(args: {
   host: StructuredWorkerPreambleHost
   sessionId: string
   dispatchId: string
   preamble: string
+  budgetMs?: number
   whenUndelivered?: (reason: string) => void
-}): Promise<'accepted' | 'pending'> {
+}): Promise<StructuredWorkerPreambleDelivery> {
   const body: AgentJournalMessageItem = {
     kind: 'message',
     role: 'user',
@@ -270,15 +283,7 @@ export async function sendStructuredWorkerPreamble(args: {
   const answered = agentSessionSendSubmission(result.value)
   const submission =
     answered?.dispatchState === 'pending'
-      ? (agentSessionSendSubmission(
-          (
-            await args.host
-              .waitForSendSettlement(args.sessionId, result.value.clientMessageId, {
-                budgetMs: ORCHESTRATION_READINESS_TIMEOUT_MS
-              })
-              .catch(() => undefined)
-          )?.value
-        ) ?? answered)
+      ? ((await preambleVerdict(args, result.value.clientMessageId)) ?? answered)
       : answered
   if (submission?.dispatchState === 'pending' && args.whenUndelivered) {
     const { whenUndelivered } = args
@@ -295,8 +300,14 @@ export async function sendStructuredWorkerPreamble(args: {
       })
       .catch(() => undefined)
   }
-  if (submission?.dispatchState === 'accepted' || submission?.dispatchState === 'pending') {
-    return submission.dispatchState
+  if (submission?.dispatchState === 'accepted') {
+    return { state: 'accepted' }
+  }
+  if (submission?.dispatchState === 'pending') {
+    return {
+      state: 'pending',
+      ...(submission.startRetry ? { startRetry: submission.startRetry } : {})
+    }
   }
   if (submission?.dispatchState === 'rejected') {
     // A rejection is a verdict, not a mystery: the preamble provably did not happen.
@@ -316,6 +327,27 @@ export async function sendStructuredWorkerPreamble(args: {
   throw new OrchestrationError(
     'operation_unknown',
     `The dispatch preamble was submitted but not acknowledged (${submission?.dispatchState ?? 'unknown'}): ${reasonClause(submission?.reason)}.`
+  )
+}
+
+/** The preamble's verdict within the budget: a start that fails and is tried again inside it is
+ *  still waited on. At the budget, a start still waiting for its next try answers with its failure. */
+async function preambleVerdict(
+  args: { host: StructuredWorkerPreambleHost; sessionId: string; budgetMs?: number },
+  clientMessageId: string
+) {
+  const read = (options: SendSettlementWaitOptions) =>
+    args.host
+      .waitForSendSettlement(args.sessionId, clientMessageId, options)
+      .then((settled) => agentSessionSendSubmission(settled?.value))
+      .catch(() => undefined)
+  return (
+    (await read({
+      budgetMs: args.budgetMs ?? ORCHESTRATION_READINESS_TIMEOUT_MS,
+      until: 'verdict'
+    })) ??
+    // A zero budget answers at once only for a start waiting for its next try.
+    (await read({ budgetMs: 0 }))
   )
 }
 

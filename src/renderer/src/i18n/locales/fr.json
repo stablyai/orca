@@ -1291,7 +1291,7 @@
         "f4b1292569": "Démarrer l'agent IA par défaut sur ces vérifications",
         "9a1004fc76": "Actualiser les vérifications",
         "03e542fcfe": "Échec du démarrage d'un agent IA pour les vérifications cassées : {{value0}}",
-        "28986b3747": "Un agent IA a été démarré pour les vérifications cassées.",
+        "28986b3747": "Envoyé à un agent IA pour les vérifications cassées.",
         "1690fd7f4a": "Aucune vérification cassée à corriger.",
         "9e7c221b8d": "Échec de la relance des vérifications",
         "e463ec935f": "Relances des vérifications demandées",
@@ -1795,7 +1795,7 @@
         "a18d01cda3": "Aucune vérification signalée pour l'instant",
         "3912daf310": "Cette pull request n'a aucune vérification signalée pour l'instant.",
         "45877f5089": "Aucune vérification trouvée",
-        "85e62c5266": "Un agent IA a été démarré pour les vérifications cassées.",
+        "85e62c5266": "Envoyé à un agent IA pour les vérifications cassées.",
         "ddfd42f460": "Vérifiez le prompt avant de démarrer un agent.",
         "a053bdd082": "Corriger les vérifications en échec avec l'IA",
         "1b14d0a69c": "Ouvrir dans GitHub",
@@ -12179,8 +12179,8 @@
             "60ed678138": "sélectionnés"
           },
           "ChecksPanel": {
-            "2ef90c9819": "Un agent IA a été démarré pour les vérifications cassées.",
-            "a0181a8d76": "Un agent IA a été lancé pour les conflits.",
+            "2ef90c9819": "Envoyé à un agent IA pour les vérifications cassées.",
+            "a0181a8d76": "Envoyé à un agent IA pour les conflits.",
             "34464d00b9": "mis à jour",
             "058039787c": "Annuler",
             "2ab7fd4b6d": "Enregistrer",
@@ -12226,7 +12226,7 @@
               "pending": "Synchronisation…",
               "branch": "Synchroniser la branche"
             },
-            "7e4b2a19c0": "Impossible d'identifier la PR GitHub sur laquelle répondre.",
+            "7e4b2a19c0": "Impossible de trouver la PR GitHub sur laquelle répondre. Répondez vous-même à ces commentaires.",
             "430f1a62d4": "Impossible de résoudre le fil sélectionné côté hôte.",
             "updateReactionFailed": "Échec de la mise à jour de la réaction.",
             "gitlabMoreActions": "Plus d'actions MR",
@@ -12534,7 +12534,7 @@
             "f4c766f1ca": "Choisissez l'agent et le modèle de commande pour cette exécution.",
             "1a6a6e0bc5": "Générer les détails de la revue hébergée",
             "6b122529d4": "Générer le message de commit",
-            "e48caaf0dd": "Un agent IA a été lancé pour les conflits.",
+            "e48caaf0dd": "Envoyé à un agent IA pour les conflits.",
             "901140f47d": "Vérifiez le prompt avant de démarrer un agent.",
             "19652ddd76": "Résoudre les conflits avec l'IA",
             "c9ad22888e": "Choisissez la cible de comparaison de branches pour ce dépôt.",
@@ -13130,7 +13130,7 @@
                     "9bbd9077a2": "Aucun agent IA activé. Configurez les agents dans les paramètres.",
                     "5540ff50cc": "Impossible de construire la commande de lancement de l'agent.",
                     "216f762bd7": "Impossible de résoudre la connexion de l'espace de travail.",
-                    "success": "Un agent IA a été lancé pour l'échec de {{value0}}."
+                    "success": "Envoyé à un agent IA pour l'échec de {{value0}}."
                   }
                 }
               },
@@ -15475,7 +15475,7 @@
                     "4f2d9a8c17": "Sélectionnez un dépôt avant de lancer une action IA.",
                     "7c3e1b5d42": "Ouvrez une pull request ou une MR avant de lancer une correction IA.",
                     "9b2f6d4a81": "Cette vérification n'est pas en échec.",
-                    "2ef90c9819": "Un agent IA a été démarré pour cette vérification."
+                    "2ef90c9819": "Envoyé à un agent IA pour cette vérification."
                   }
                 }
               }
@@ -17475,7 +17475,8 @@
         "providerRateLimited": "{{agent}} est limité en débit et réessaie.",
         "providerRetrying": "{{agent}} a rencontré un problème temporaire et réessaie.",
         "providerRetryingQuoted": "{{agent}} réessaie : {{detail}}.",
-        "previousExitUnverifiable": "L'exécution précédente de {{agent}} est peut-être toujours en cours. Vos messages seront envoyés dès qu'elle s'arrêtera."
+        "previousExitUnverifiable": "L'exécution précédente de {{agent}} est peut-être toujours en cours. Vos messages seront envoyés dès qu'elle s'arrêtera.",
+        "reviewReplyFailed": "Orca n'a pas pu marquer comme en cours de correction les commentaires de revue envoyés avec ce message. Résolvez-les ou répondez-y vous-même."
       },
       "writeNotice": {
         "notDoneReadHistory": "L'historique de ce chat n'a pas pu être chargé.",

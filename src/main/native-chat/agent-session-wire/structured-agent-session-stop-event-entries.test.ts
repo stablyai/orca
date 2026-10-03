@@ -22,6 +22,11 @@ afterEach(() => rig.dispose())
 /** Swept only when a test ticks it. */
 const MANUAL_IDLE_SWEEP = { idleMs: 0, intervalMs: 60 * 60 * 1000 }
 
+/** The started chat's fence: a create at rest holds the first, and its first start takes the next. */
+function fence(): number {
+  return rig.store.getRecord(HOST_TEST_SESSION)?.lease.runtimeFence ?? 1
+}
+
 function journal() {
   const open = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.journal
   if (!open) {
@@ -56,7 +61,7 @@ async function runningTurn(turnId = 'turn-1'): Promise<string> {
   await journal().appendItem(
     { provider: 'codex', threadId: 'thread-1', turnId, ordinal: 999 },
     { kind: 'turn', turnId, state: 'running', startedAt: 1 },
-    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    { fence: fence(), turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   return working
 }
@@ -211,7 +216,7 @@ describe('every Stop entry writes its event, with its reason, before it ends the
         turnId: 'turn-1',
         ordinal: 999
       }
-      const scope = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      const scope = { fence: fence(), turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       await journal().appendItem(
         identity,
         { kind: 'turn', turnId: 'turn-1', state: 'running', startedAt: 1, userItemId: opener },
@@ -271,7 +276,7 @@ describe('every Stop entry writes its event, with its reason, before it ends the
     await journal().appendItem(
       { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 999 },
       { kind: 'turn', turnId: 'turn-1', state: 'interrupted', completedAt: Date.now() },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      { fence: fence(), turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     expect(journal().activeTurnId()).toBeNull()
     const sink = rig.host['runtimeState'].eventSinkFor(HOST_TEST_SESSION)
@@ -368,7 +373,7 @@ describe("a person's Stop pause and the Stop events after it", () => {
       'starting'
     )
     // A person's Stop of an earlier turn still pauses the queue.
-    await journal().appendStopEvent({ reason: 'user-stop', caller: 'client-1' }, 1)
+    await journal().appendStopEvent({ reason: 'user-stop', caller: 'client-1' }, fence())
     expect(journal().queuedMessages.userStopInForce()).not.toBeNull()
     const atClose = stopEventsAtClose()
 
@@ -390,7 +395,7 @@ describe("a person's Stop pause and the Stop events after it", () => {
     await journal().appendItem(
       { provider: 'codex', threadId: 'thread-1', turnId: 'turn-mail', ordinal: 999 },
       { kind: 'turn', turnId: 'turn-mail', state: 'running', startedAt: 1 },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      { fence: fence(), turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
     const atClose = stopEventsAtClose()

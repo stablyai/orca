@@ -214,7 +214,6 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'session.tabs.unsubscribeAll',
   'agentSession.createSupport',
   'agentSession.create',
-  'agentSession.ensure',
   'agentSession.reveal',
   'agentSession.send',
   'agentSession.cancel',

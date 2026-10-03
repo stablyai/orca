@@ -11,6 +11,7 @@ import {
   createScriptedClaudeRuntime,
   scriptedClaudeExitError
 } from './structured-claude-scripted-runtime-test-support'
+import { attachForTests } from '../native-chat/agent-session-wire/structured-agent-session-attach-test-support'
 
 const SESSION = 'claude-resumed-start'
 const CALLER = { callerKey: 'client-1' }
@@ -42,7 +43,9 @@ function rejectionTexts(events: AgentSessionSubscribeEvent[]): string[] {
 describe('a reopened Claude chat whose CLI dies before initialize', () => {
   it('publishes the startup failure, with the diagnostic, to the open chat', async () => {
     const host = await claude.install()
-    await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
+    await expect(
+      attachForTests(host, CALLER, claude.attachParams(SESSION, null))
+    ).resolves.toMatchObject({
       ok: true
     })
     await waitForStructuredAgentSessionRecovery()

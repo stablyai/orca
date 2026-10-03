@@ -8,6 +8,7 @@ import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../../runtime/rpc/methods/structured-agent-session'
 import { setStructuredAgentSessionHost } from './structured-agent-session-registry'
+import { attachForTests } from './structured-agent-session-attach-test-support'
 import { hostTestAttachParams } from './structured-agent-session-host-test-data'
 import {
   createRestTestRig,
@@ -57,7 +58,8 @@ async function collect(): Promise<void> {
 }
 
 async function seedFold() {
-  const attached = await rig.host.attach(
+  const attached = await attachForTests(
+    rig.host,
     CALLER,
     hostTestAttachParams(null, {
       location: {

@@ -487,7 +487,8 @@ describe('a create that reserves its tab', () => {
   })
 
   it('restores no tab for a reserved create that stopped before its tab was published', async () => {
-    const attached = await host.attach(
+    // The host's create committed; the tab it reserved was never published.
+    const attached = await host.create(
       caller,
       hostTestAttachParams(null, {
         envelope: {
@@ -510,17 +511,28 @@ describe('a create that reserves its tab', () => {
     })
   })
 
-  it('leaves no tab behind when the create fails, so nothing is restored and the id is free', async () => {
+  // A create starts no agent; the first message does, and its failure is that message's.
+  it('keeps the chat its tab when its first message cannot start the agent', async () => {
     acquireFails = true
-    expect(await createChat(HOST_TEST_SESSION, 'reserved-tab')).toMatchObject({ ok: false })
-    expect(store.getSessionTabId(HOST_TEST_SESSION)).toBeNull()
-    expect(store.listVisibleSessionIds()).toEqual([])
-
-    acquireFails = false
-    expect(await createChat('session-bravo', 'reserved-tab')).toMatchObject({
+    expect(await createChat(HOST_TEST_SESSION, 'reserved-tab')).toMatchObject({
       ok: true,
       value: { tabId: 'reserved-tab' }
     })
+    const body = hostTestMessage('first')
+    expect(
+      await host.send(caller, {
+        envelope: envelopeFor('agentSession.send', HOST_TEST_SESSION, { body }),
+        body
+      })
+    ).toMatchObject({ ok: true })
+    await vi.waitFor(async () =>
+      expect((await host.journalSnapshot(HOST_TEST_SESSION)).submissions[0]).toMatchObject({
+        dispatchState: 'rejected'
+      })
+    )
+
+    expect(store.getSessionTabId(HOST_TEST_SESSION)).toBe('reserved-tab')
+    expect(await createChat('session-bravo', 'reserved-tab')).toMatchObject({ ok: false })
   })
 })
 

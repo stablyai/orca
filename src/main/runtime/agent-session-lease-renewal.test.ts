@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
+  foundAndReserveTestAgentSessionRecord,
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStoreText
 } from './agent-session-record-store-test-harness'
@@ -20,7 +21,7 @@ async function establishOwner(
 ): Promise<AgentSessionRecord> {
   const sessionId = `session-${suffix}`
   const spawnToken = `spawn-${suffix}`
-  const reserved = await store.reserveOwner({
+  const reserved = await foundAndReserveTestAgentSessionRecord(store, {
     sessionId,
     location: {
       executionHostId: 'local',
@@ -30,7 +31,6 @@ async function establishOwner(
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: directory },
-    expectedFence: null,
     spawnToken,
     claimKeyId: 'key-1',
     handoffOperationId: null,
@@ -92,7 +92,7 @@ describe('agent-session lease renewal batch', () => {
     const { directory, store } = await liveStore()
     await store.evictProvenDeadOwner({
       sessionId: 'session-b',
-      expectedFence: 1,
+      expectedFence: 2,
       probe: { outcome: 'pid-absent' },
       now: NOW + 5_000
     })
@@ -101,8 +101,8 @@ describe('agent-session lease renewal batch', () => {
 
     await expect(
       store.renewLeases([
-        { sessionId: 'session-a', fence: 1, childProbe: MATCHED, now: NOW + 10_000 },
-        { sessionId: 'session-b', fence: 1, childProbe: MATCHED, now: NOW + 10_000 }
+        { sessionId: 'session-a', fence: 2, childProbe: MATCHED, now: NOW + 10_000 },
+        { sessionId: 'session-b', fence: 2, childProbe: MATCHED, now: NOW + 10_000 }
       ])
     ).rejects.toThrow('agent_session_checkpoint_stale')
 

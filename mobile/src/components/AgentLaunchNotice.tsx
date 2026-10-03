@@ -10,7 +10,7 @@ import { colors, spacing, typography } from '../theme/mobile-theme'
 
 type Props = {
   availability: MobileAgentLaunchAvailability
-  /** The confirmation that the agent started with its prompt. */
+  /** The confirmation that the prompt was sent to an agent. */
   success: string | null
   error: string | null
   /** The host's note on a launch that went ahead; secondary text, not an error. */

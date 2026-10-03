@@ -13,6 +13,20 @@ export function resolveWorkerStartReadinessTimeoutMs(timeoutMs: number | undefin
     : ORCHESTRATION_READINESS_TIMEOUT_MS
 }
 
+/**
+ * How long a structured worker's preamble may wait for its agent: up to the readiness wait, but
+ * no longer than the worker start's own timeout leaves plus the allowance a terminal worker's turn
+ * observation gets, so the host answers inside the CLI's worker-start grace.
+ */
+export function resolveStructuredWorkerPreambleBudgetMs(args: {
+  startedAtMs: number
+  timeoutMs: number
+  nowMs: number
+}): number {
+  const left = args.startedAtMs + args.timeoutMs + AGENT_PROMPT_EFFECT_TIMEOUT_MS - args.nowMs
+  return Math.min(ORCHESTRATION_READINESS_TIMEOUT_MS, Math.max(0, left))
+}
+
 export function resolveFederationAttachTimeoutMs(
   readinessTimeoutMs = ORCHESTRATION_READINESS_TIMEOUT_MS
 ): number {

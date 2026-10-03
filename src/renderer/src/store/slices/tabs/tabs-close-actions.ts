@@ -1,3 +1,4 @@
+import { dropStructuredReviewReplyWatchers } from '@/lib/structured-agent-session-review-reply-settled'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { collapseGroupLayout } from './tabs-layout'
 import {
@@ -73,6 +74,8 @@ export function createTabsCloseActions(
           console.warn('[structured-agent-session] close found no owning host', tab.entityId)
         }
         get().clearNativeChatLaunchDraft(structuredAgentSessionTabId(tab.entityId))
+        // With or without a host to name, the chat is gone here, and so is any wait on it.
+        dropStructuredReviewReplyWatchers(tab.entityId)
       }
       // Why: on closing the active tab, walk the MRU stack to the previously-active tab; pickNextActiveTab falls back to the neighbor.
       const nextActiveTabId =

@@ -82,7 +82,8 @@ describe('send', () => {
     expect(dispatch).toHaveBeenCalledTimes(1)
     const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.items).toHaveLength(1)
-    expect(page.ok && page.page.fence).toBe(1)
+    // The harness creates the chat at rest (fence 1), then starts its agent at 2.
+    expect(page.ok && page.page.fence).toBe(2)
     expect(page.page.hostNow).toBe(NOW)
     expect(page.providerSession).toEqual({ key: 'session_id', id: THREAD })
   })

@@ -27,6 +27,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { attachForTests } from './structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
@@ -96,7 +97,7 @@ async function restartWithPersistedTurn(): Promise<StructuredAgentSessionHost> {
   resetHostTestOperationIds()
   const store = await openTestAgentSessionRecordStore(root)
   const host = createHost(store)
-  expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
+  expect(await attachForTests(host, CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
   const body = hostTestMessage('persisted conversation')
   const sent = await host.send(CALLER, { envelope: sendEnvelope(store, { body }), body })
   if (!sent.ok) {

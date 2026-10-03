@@ -18,15 +18,16 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+import { startAgentForTests } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach-test-support'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
-import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-subscription-registry'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import {
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REVIEW_REPLY_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
@@ -34,6 +35,7 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import { resolveBaselineReleaseRef } from './release-checkout'
+import { callBuild, runtimeStub } from './agent-session-wire-calls'
 import {
   installableHost,
   structuredHostStub,
@@ -80,31 +82,6 @@ beforeAll(async () => {
   baseline = await loadAgentSessionWireBuild(baselineRef)
 }, SUITE_TIMEOUT_MS)
 
-function runtimeStub(overrides: Record<string, unknown> = {}): unknown {
-  const subscriptions = new RuntimeSubscriptionRegistry()
-  return {
-    getRuntimeId: () => 'runtime-1',
-    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
-    ensureStructuredAgentSessionHost: async () => undefined,
-    getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
-    structuredAgentSessionLaunchSeedOptions: () => undefined,
-    resolveStructuredAgentSessionCreateIntent: async () => {
-      const {
-        envelope: _envelope,
-        providerHandle: _providerHandle,
-        ...resolved
-      } = attachParams(null)
-      return resolved
-    },
-    publishStructuredAgentSessionTab: () => {},
-    registerSubscriptionCleanup: subscriptions.register.bind(subscriptions),
-    registerOwnedSubscriptionCleanup: subscriptions.registerOwned.bind(subscriptions),
-    cleanupSubscription: subscriptions.cleanup.bind(subscriptions),
-    cleanupSubscriptionsByPrefix: subscriptions.cleanupByPrefix.bind(subscriptions),
-    ...overrides
-  }
-}
-
 /**
  * What a client too old to know the structured surface advertises: the baseline's
  * own list, minus the capability. Derived rather than assumed to be the baseline's
@@ -121,26 +98,6 @@ function legacyClientCapabilities(): string[] {
 /** The structured methods the baseline release actually registers, read from it. */
 function baselineStructuredMethods(): string[] {
   return baseline.methodNames.filter((name) => name.startsWith('agentSession.'))
-}
-
-/** Every reply one call produced. Streaming methods answer more than once, and a
- *  refusal has to arrive as a reply rather than as silence. */
-async function callBuild(
-  build: AgentSessionWireBuild,
-  method: string,
-  params: unknown,
-  client: RpcClientIdentity,
-  runtime: unknown = runtimeStub()
-): Promise<RpcReply[]> {
-  const replies: RpcReply[] = []
-  await build
-    .createDispatcher(runtime)
-    .dispatchStreaming(
-      { id: `request-${method}`, authToken: 'cross-version-token', method, params },
-      (raw) => replies.push(JSON.parse(raw) as RpcReply),
-      client
-    )
-  return replies
 }
 
 /**
@@ -462,6 +419,38 @@ describe('cross-version structured agent sessions', () => {
       }
     })
 
+    it('takes a review reply on a send exactly where the host advertises running it', async () => {
+      // The desktop attaches `reviewReply` only on this capability: an older host's strict send
+      // params refuse the field, and with it the whole launch prompt.
+      const method = 'agentSession.send'
+      const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fix these' }] }
+      const reviewReply = { provider: 'gitlab', repoId: 'repo-1', iid: 8, resolve: ['d-1'] }
+      const fields = { body, reviewReply }
+      const params = { envelope: envelope({ method, fields, fence: 1 }), ...fields }
+      expect(current.capabilities).toContain(AGENT_SESSION_REVIEW_REPLY_RUNTIME_CAPABILITY)
+      for (const build of [current, baseline]) {
+        if (!build.methodNames.includes(method)) {
+          continue
+        }
+        const advertised = build.capabilities.includes(
+          AGENT_SESSION_REVIEW_REPLY_RUNTIME_CAPABILITY
+        )
+        const hostCalls = structuredHostStub(SESSION, WORKSPACE)
+        await build.installStructuredHost(installableHost(hostCalls))
+        try {
+          const replies = await callBuild(build, method, params, {
+            clientKind: 'runtime',
+            clientCapabilities: current.capabilities
+          })
+          expect(replies, `${build.label}: ${method} must answer exactly once`).toHaveLength(1)
+          expect(replies[0]?.ok, `${build.label}: ${JSON.stringify(replies[0])}`).toBe(advertised)
+          expect(hostCalls.send).toHaveBeenCalledTimes(advertised ? 1 : 0)
+        } finally {
+          await build.installStructuredHost(null)
+        }
+      }
+    })
+
     it(
       'executes every method a release-shaped checkout registers',
       async () => {
@@ -578,8 +567,11 @@ describe('cross-version structured agent sessions', () => {
         now: () => NOW
       })
       setStructuredAgentSessionHost(host)
-      const attached = await host.attach({ callerKey: 'test' }, attachParams(null) as never)
-      expect(attached.ok).toBe(true)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attachParams builds the wire shape the suite feeds every build; the host takes its typed form.
+      const created = await host.create({ callerKey: 'test' }, attachParams(null) as never)
+      expect(created.ok).toBe(true)
+      // The row is owned once the chat's agent has run its thread, which its first start does.
+      expect(await startAgentForTests(host, SESSION)).toMatchObject({ ok: true })
       createMobileSessionTerminal = vi.fn()
       runtime = {
         ...(runtimeStub() as Record<string, unknown>),
@@ -798,21 +790,6 @@ describe('cross-version structured agent sessions', () => {
       refusal?: { code: string; currentFence?: number }
     }
 
-    /** Reattaching after a restart: the client's fence died with the previous
-     *  host, and the refusal that says so is what hands it the live one. */
-    async function reattach(staleFence: number): Promise<HostAnswer> {
-      const refused = await answer('agentSession.ensure', attachParams(staleFence))
-      expect(refused).toMatchObject({
-        ok: false,
-        refusal: { code: 'agent_session_checkpoint_stale' }
-      })
-      const currentFence = refused.refusal?.currentFence
-      expect(currentFence).toBeGreaterThan(staleFence)
-      const reattached = await answer('agentSession.ensure', attachParams(currentFence ?? 0))
-      expect(reattached).toMatchObject({ ok: true })
-      return reattached
-    }
-
     async function call(
       method: string,
       params: unknown,
@@ -885,16 +862,20 @@ describe('cross-version structured agent sessions', () => {
     })
 
     // Every released client still sends the fence it last saw; this host names a write by its
-    // target and ignores that fence. Only the attach keeps comparing one, which `reattach` pins.
+    // target and ignores that fence. The first send's start moved it past the one create answered.
     it('delivers a write still fenced to the host generation that died', async () => {
       const created = await answer('agentSession.create', createIntentParams())
+      expect(await answer('agentSession.send', sendParams('first', created.fence))).toMatchObject({
+        ok: true
+      })
       await bootHost('b')
-      const reattached = await reattach(created.fence)
-      expect(reattached.fence).toBeGreaterThan(created.fence)
+      // Read before the stale send, so the answer is checked against the restarted record's own.
+      const restarted = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
+      expect(restarted).toBeGreaterThan(created.fence)
 
       expect(await answer('agentSession.send', sendParams('stale', created.fence))).toMatchObject({
         ok: true,
-        fence: reattached.fence
+        fence: restarted
       })
     })
 

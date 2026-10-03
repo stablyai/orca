@@ -1,4 +1,5 @@
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
+import type { AgentSessionReviewReply } from '../../../shared/agent-session-review-reply'
 import type {
   AgentJournalCursor,
   AgentJournalItemBody,
@@ -91,6 +92,8 @@ export type JournalSubmissionInput = {
   queuedMessageId?: string
   /** Who asked for this turn (`JournalSubmissionRow.origin`). */
   origin?: 'client' | 'host'
+  /** `JournalSubmissionRow.reviewReply`. */
+  reviewReply?: AgentSessionReviewReply
 }
 
 /** A submission append that converts a queued draft, in one transaction. */

@@ -15,14 +15,15 @@ import { resolveMobileSourceControlLaunchAgent } from './mobile-source-control-l
 
 export type MobilePromptedAgentLaunch =
   | { kind: 'sent'; warning?: string }
-  /** The agent started but `prompt`, the text as sent, did not reach it; the caller offers it. */
+  /** The launch went through but `prompt`, the text as sent, did not reach the agent; the caller
+   *  offers it. */
   | { kind: 'prompt-not-sent'; prompt: string; warning?: string }
   /** Nothing started; `message` says why. */
   | { kind: 'not-started'; message: string }
   /** The agent may be running; do not launch again until the user has looked. */
   | { kind: 'unconfirmed'; message: string }
 
-export const AGENT_PROMPT_NOT_SENT_MESSAGE = "The agent started, but the prompt wasn't sent."
+export const AGENT_PROMPT_NOT_SENT_MESSAGE = "The prompt wasn't sent to the agent."
 
 export async function launchAgentWithPrompt(args: {
   client: RpcClient
@@ -91,10 +92,11 @@ export async function launchAgentWithPrompt(args: {
   }
 }
 
-/** The confirmation under an AI button, naming the workspace when the screen knows it. */
-export function agentStartedMessage(workspaceLabel: string | null | undefined): string {
+/** The confirmation under an AI button, naming the workspace when the screen knows it. Said once
+ *  the host has the prompt: the agent may still be starting, and a failed start shows in its chat. */
+export function agentPromptSentMessage(workspaceLabel: string | null | undefined): string {
   const label = workspaceLabel?.trim()
-  return label ? `Agent started in ${label}` : 'Agent started'
+  return label ? `Sent to an agent in ${label}` : 'Sent to an agent'
 }
 
 /** What the button shows after a launch; one mapping so every AI button reads the same.
@@ -113,7 +115,7 @@ export function promptedLaunchNotice(
     case 'sent':
       return {
         succeeded: true,
-        success: agentStartedMessage(workspaceLabel),
+        success: agentPromptSentMessage(workspaceLabel),
         error: null,
         warning: result.warning ?? null,
         undeliveredPrompt: null

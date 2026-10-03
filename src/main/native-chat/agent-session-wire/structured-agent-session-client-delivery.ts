@@ -10,6 +10,7 @@ import type {
 } from './structured-agent-session-host-types'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
 import { StructuredAgentSessionSendSettlement } from './structured-agent-session-send-settlement'
+import { createStructuredAgentSessionHostReviewReplies } from './structured-agent-session-review-replies'
 import {
   createStructuredAgentSessionHostStatusFeed,
   type StructuredAgentSessionStatusSubscriber
@@ -27,11 +28,14 @@ export class StructuredAgentSessionClientDelivery {
   private readonly statusFeed
   private readonly turnCompletionFeed
   private readonly sendSettlement
+  private readonly reviewReplies
 
   constructor(
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,
     now: () => number,
     private readonly deps: () => StructuredAgentSessionHostDeps,
+    /** The host's per-session lane, which a review reply's receipt is written in. */
+    serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>,
     private readonly onJournalActivity?: (sessionId: string) => void,
     onAgentStarted?: (sessionId: string) => void,
     /** A session's child records changed; the chat strip republishes from them. */
@@ -53,6 +57,11 @@ export class StructuredAgentSessionClientDelivery {
       this.requireJournal(sessionId)
     )
     this.waitForSendSettlement = this.sendSettlement.wait
+    this.reviewReplies = createStructuredAgentSessionHostReviewReplies({
+      deps,
+      journal: (sessionId) => sessions.get(sessionId)?.journal,
+      serialize
+    })
     this.subscribers = new AgentSessionSubscribers({
       readCommands: (sessionId) => this.readCommands(sessionId),
       readQueuePublication: (sessionId) =>
@@ -95,6 +104,9 @@ export class StructuredAgentSessionClientDelivery {
     }
   }
 
+  /** A journal opening re-derives what a run cut off by a restart still owes. */
+  observeReviewReplies = (sessionId: string): void => this.reviewReplies.observe(sessionId)
+
   publishRestored = (sessionId: string): void =>
     this.statusFeed.publish(sessionId, undefined, { replay: true })
 
@@ -131,6 +143,8 @@ export class StructuredAgentSessionClientDelivery {
     // subscribed, which is the whole reason a backgrounded chat can complete at all. After the
     // status publish, so it reads the projection that publish cached.
     this.turnCompletionFeed.observe(sessionId, journal)
+    // Off the same edge: a review reply runs once its message is accepted, read or not.
+    this.reviewReplies.observe(sessionId)
     this.onJournalActivity?.(sessionId)
   }
 

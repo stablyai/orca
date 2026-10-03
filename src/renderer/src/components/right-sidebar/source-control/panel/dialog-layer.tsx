@@ -207,7 +207,7 @@ export function SourceControlDialogLayer({
           toast.success(
             translate(
               'auto.components.right.sidebar.SourceControl.e48caaf0dd',
-              'Started an AI agent for the conflicts.'
+              'Sent to an AI agent for the conflicts.'
             )
           )
         }

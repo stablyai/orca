@@ -157,7 +157,6 @@ describe('mobile RPC allowlist', () => {
     ).toEqual([
       'agentSession.createSupport',
       'agentSession.create',
-      'agentSession.ensure',
       'agentSession.reveal',
       'agentSession.send',
       'agentSession.cancel',

@@ -223,8 +223,8 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
       ...(input.resumeFrom && adoption
         ? {
             // `adopt` is what makes the reservation seed the handle chain. Presence of
-            // `providerHandle` alone must not: `agentSession.ensure` already passes one today
-            // without adopting anything.
+            // `providerHandle` alone must not: an agent start passes one without adopting
+            // anything.
             adopt: {
               providerHandle:
                 input.agent === 'claude'

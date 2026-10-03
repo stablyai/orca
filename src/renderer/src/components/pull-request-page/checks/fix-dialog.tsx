@@ -59,7 +59,7 @@ export function ChecksFixDialog({
         toast.success(
           translate(
             'auto.components.PullRequestPage.85e62c5266',
-            'Started an AI agent for the broken checks.'
+            'Sent to an AI agent for the broken checks.'
           )
         )
       }}

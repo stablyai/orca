@@ -49,9 +49,10 @@ describe('the one queue gate', () => {
     }
     const draftId = queued.value.queued.messageId
     // An unfinished /clear changed nothing the chat reads, so it refuses no send.
-    await store.setConversationCommand(SESSION, 1, {
+    const fence = store.getRecord(SESSION)!.lease.runtimeFence
+    await store.setConversationCommand(SESSION, fence, {
       command: 'clear',
-      runtimeFence: 1,
+      runtimeFence: fence,
       operationId: hostTestOperationId(),
       callerKey: CALLER.callerKey,
       phase: 'prepared',
@@ -69,6 +70,7 @@ describe('the one queue gate', () => {
     }
     const draftId = queued.value.queued.messageId
     const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    const fence = store.getRecord(SESSION)!.lease.runtimeFence
     await journal.appendItem(
       { provider: 'orca', clientMessageId: 'prompt-1' },
       {
@@ -78,7 +80,7 @@ describe('the one queue gate', () => {
         options: [],
         resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
       },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     expect(await sendNow(draftId)).toMatchObject({
       ok: false,
@@ -86,9 +88,7 @@ describe('the one queue gate', () => {
     })
     // Read in place: the gate runs on every admission and drain step.
     const snapshot = vi.spyOn(journal, 'snapshot')
-    expect(structuredQueueHold({ journal, record: store.getRecord(SESSION), fence: 1 })).toBe(
-      'prompt'
-    )
+    expect(structuredQueueHold({ journal, record: store.getRecord(SESSION), fence })).toBe('prompt')
     expect(snapshot).not.toHaveBeenCalled()
     snapshot.mockRestore()
     await journal.appendItem(
@@ -105,7 +105,7 @@ describe('the one queue gate', () => {
           resolvedAt: 1
         }
       },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     // The turn still runs (`working`), which Send-now alone may override.
     expect(await submission(working)).toMatchObject({ dispatchState: 'pending' })

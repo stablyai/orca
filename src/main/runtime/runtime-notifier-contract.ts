@@ -29,6 +29,8 @@ export type RuntimeNotifier = {
   worktreesChanged(repoId: string, renamed?: { oldWorktreeId: string; newWorktreeId: string }): void
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
+  /** The host wrote to a GitHub PR on a user's behalf; views of it refetch, as after their own. */
+  githubPullRequestMutated?(payload: { repoPath: string; repoId: string; number: number }): void
   reposChanged(): void
   activateWorktree(
     repoId: string,

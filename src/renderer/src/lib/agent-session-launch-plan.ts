@@ -23,11 +23,14 @@ import {
   type StructuredAgentLaunchHooks,
   type StructuredAgentLaunchSettlement
 } from '@/lib/structured-agent-launch-settlement'
+import type { AgentSessionReviewReply } from '../../../shared/agent-session-review-reply'
 import type { StructuredAgentLaunchOptions } from '@/lib/structured-agent-session-launch'
 
 export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
   resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
+  /** See `StructuredAgentLaunchOptions.reviewReply`; a terminal launch ignores it. */
+  reviewReply?: AgentSessionReviewReply
 }
 
 /**
@@ -45,6 +48,7 @@ export type AgentSessionLaunchVerdict = {
   promptDelivery?: NativeChatLaunchPromptDelivery
   resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
+  reviewReply?: AgentSessionReviewReply
 }
 
 export type AgentSessionStructuredFeasibilityRequest = AgentLaunchRouteArgs & {
@@ -81,6 +85,7 @@ function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): Structured
     ...(verdict.promptDelivery ? { promptDelivery: verdict.promptDelivery } : {}),
     ...(verdict.resumeFrom ? { resumeFrom: verdict.resumeFrom } : {}),
     ...(verdict.onPromptDelivered ? { onPromptDelivered: verdict.onPromptDelivered } : {}),
+    ...(verdict.reviewReply ? { reviewReply: verdict.reviewReply } : {}),
     ...(verdict.executionHostId ? { executionHostId: verdict.executionHostId } : {})
   }
 }
@@ -170,6 +175,7 @@ export function planAgentSessionLaunch(
     ...(request.prompt !== undefined ? { prompt: request.prompt } : {}),
     ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
     ...(request.resumeFrom ? { resumeFrom: request.resumeFrom } : {}),
-    ...(request.onPromptDelivered ? { onPromptDelivered: request.onPromptDelivered } : {})
+    ...(request.onPromptDelivered ? { onPromptDelivered: request.onPromptDelivered } : {}),
+    ...(request.reviewReply ? { reviewReply: request.reviewReply } : {})
   })
 }

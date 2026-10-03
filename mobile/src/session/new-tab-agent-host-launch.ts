@@ -16,11 +16,9 @@ import {
   type PendingSessionSelection
 } from './pending-session-selection'
 
-const NOTES_NOT_SENT_MESSAGE = "The agent started, but the notes weren't sent."
-export const PROMPT_UNCONFIRMED_MESSAGE =
-  "The agent started, but couldn't confirm the prompt was sent."
-export const NOTES_UNCONFIRMED_MESSAGE =
-  "The agent started, but couldn't confirm the notes were sent."
+const NOTES_NOT_SENT_MESSAGE = "The notes weren't sent to the agent."
+export const PROMPT_UNCONFIRMED_MESSAGE = "Couldn't confirm the prompt was sent to the agent."
+export const NOTES_UNCONFIRMED_MESSAGE = "Couldn't confirm the notes were sent to the agent."
 
 export type NewTabAgentLaunchOptions = MobileQuickCommandLaunch['options'] & {
   onPromptSent?: () => void
@@ -80,7 +78,7 @@ export async function launchNewTabAgentThroughHost(args: {
     return true
   }
   if (launched.kind === 'unknown') {
-    // Why: a listed tab proves the agent started, so only the prompt is in doubt; notes stay unsent.
+    // Why: a listed tab proves the launch went through, so only the prompt is in doubt; notes stay unsent.
     if (isLaunchedSurfaceListed(args.getSessionTabs(), reservation)) {
       if (prompt?.trim()) {
         triggerError()

@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionReviewRuntime } from './structured-agent-session-review-reply-runner'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
@@ -150,4 +151,6 @@ export type StructuredAgentSessionHostDeps = {
   statusSink?: StructuredAgentSessionStatusSink
   /** Host model catalog surface; absent means every catalog read answers `unknown`. */
   modelCatalog?: AgentModelCatalogService
+  /** The review writes a launch prompt's review reply asks for; absent, none runs. */
+  reviewRuntime?: StructuredAgentSessionReviewRuntime
 }

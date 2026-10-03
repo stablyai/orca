@@ -33,6 +33,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { attachForTests } from '../native-chat/agent-session-wire/structured-agent-session-attach-test-support'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
@@ -132,7 +133,7 @@ describe('the chat strip and the session list read the same host child records',
     })
     const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
     attachParams.envelope.clientOperationId = `${Date.now()}-${'1'.padStart(32, '0')}`
-    const attached = await host.attach({ callerKey: 'switch-test' }, attachParams)
+    const attached = await attachForTests(host, { callerKey: 'switch-test' }, attachParams)
     expect(attached).toMatchObject({ ok: true })
     const fence = attached.ok ? attached.value.fence : 0
     const summaries: AgentSessionStatusSummary[] = []

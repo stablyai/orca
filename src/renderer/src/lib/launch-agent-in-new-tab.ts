@@ -1,3 +1,5 @@
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { AgentSessionReviewReply } from '../../../shared/agent-session-review-reply'
 import { useAppStore } from '@/store'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
@@ -26,6 +28,7 @@ import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { launchStructuredAgentFromNewTab } from '@/lib/launch-agent-in-new-tab-structured-route'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
+import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import {
   planAgentSessionLaunch,
@@ -52,6 +55,8 @@ export type LaunchAgentInNewTabArgs = {
   launchPlatform?: NodeJS.Platform
   /** Called after the prompt is actually delivered to the agent input path. */
   onPromptDelivered?: () => void
+  /** Rides a structured chat's launch prompt (see `StructuredAgentLaunchOptions.reviewReply`). */
+  reviewReply?: AgentSessionReviewReply
   /**
    * Called before `onPromptDelivered` when the paste was written without ever observing the
    * agent's composer, so the launch cannot claim the prompt arrived. Fires only on the
@@ -80,7 +85,10 @@ export type LaunchAgentInNewTabResult = {
   surface: AgentLaunchSurface
   startupPlan: AgentStartupPlan
   pasteDraftAfterLaunch: boolean
-  promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
+  /** `heldByChat` comes only from a structured chat's launch prompt. */
+  promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
+  /** Structured route only: the host the launch put the chat on, decided as it launched. */
+  structuredChatTarget?: RuntimeClientTarget
   /** Structured route only: what the launch did once it settled. The call stays synchronous. */
   structuredSettlement?: Promise<StructuredAgentLaunchSettlement>
 } | null
@@ -115,6 +123,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     launchPlatform,
     onPromptDelivered,
     onPromptDeliveryUnconfirmed,
+    reviewReply,
     agentSessionLaunchPlan,
     pendingActivationSpawn,
     beforeSurfaceOpen
@@ -179,7 +188,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       promptDelivery: viewModePromptDelivery,
       tuiCustomization: { cwd: initialCwd },
       initialSessionOptions: startupPlan.sessionOptions,
-      onPromptDelivered
+      onPromptDelivered,
+      ...(reviewReply ? { reviewReply } : {})
     })
   if (plan?.route === 'structured-native-chat') {
     const structured = launchStructuredAgentFromNewTab({

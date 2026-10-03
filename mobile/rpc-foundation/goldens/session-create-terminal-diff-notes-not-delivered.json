@@ -57,14 +57,6 @@
       "sessionTabs": [],
       "terminals": []
     },
-    "776182f604c7": {
-      "name": "toast",
-      "ordinal": 4,
-      "value": {
-        "durationMs": 2400,
-        "message": "The agent started, but the notes weren't sent."
-      }
-    },
     "8f06d46b0825": {
       "name": "agent.launchReplay#1",
       "ordinal": 1,
@@ -128,6 +120,14 @@
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
+    },
+    "ac15d5ff2168": {
+      "name": "toast",
+      "ordinal": 4,
+      "value": {
+        "durationMs": 2400,
+        "message": "The notes weren't sent to the agent."
+      }
     },
     "ad660413fab0": {
       "name": "agent.launchReplay#1",
@@ -207,7 +207,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "73449f52ee06",
-          "effects": ["6248a3dd0710", "776182f604c7"]
+          "effects": ["6248a3dd0710", "ac15d5ff2168"]
         }
       },
       {
@@ -220,7 +220,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "73449f52ee06",
-          "effects": ["6248a3dd0710", "776182f604c7"]
+          "effects": ["6248a3dd0710", "ac15d5ff2168"]
         }
       }
     ]

@@ -5,6 +5,7 @@
 // operation happened, so the durable answer usually comes back out of the
 // journal. Send is fail-closed: admission alone cannot prove non-delivery.
 
+import type { AgentSessionReviewReply } from '../../../shared/agent-session-review-reply'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionOperationOutcome } from '../../../shared/agent-session-operation-ledger'
@@ -64,6 +65,7 @@ export function sendPlan(params: {
   body: AgentJournalMessageItem
   retryUnknown?: true
   delivery?: 'queue-if-active'
+  reviewReply?: AgentSessionReviewReply
   userSend?: true
   beforeRun?: () => void
 }): MutationPlan<AgentSessionSendResult> {
@@ -75,9 +77,13 @@ export function sendPlan(params: {
     operationIdScope: 'global',
     conversationWrite: true,
     markUnknownBeforeRun: true,
-    // `delivery` joins the OPERATION fingerprint only; the submission row keeps
+    // `delivery` and `reviewReply` join the OPERATION fingerprint only; the submission row keeps
     // the body-only fingerprint the reducer's echo-aliasing recomputes.
-    fields: { body: params.body, ...(params.delivery ? { delivery: params.delivery } : {}) },
+    fields: {
+      body: params.body,
+      ...(params.delivery ? { delivery: params.delivery } : {}),
+      ...(params.reviewReply ? { reviewReply: params.reviewReply } : {})
+    },
     recoverUnknownFromDurableState: true,
     // `retryUnknown` is a compatibility-only client signal. A recorded send
     // always replays and never reaches the provider twice.
@@ -88,7 +94,8 @@ export function sendPlan(params: {
         origin: params.userSend ? 'client' : 'host',
         clientMessageId,
         payloadFingerprint: sendBodyFingerprint(params.envelope.sessionId, params.body),
-        body: params.body
+        body: params.body,
+        ...(params.reviewReply ? { reviewReply: params.reviewReply } : {})
       })
     },
     replay: (ctx, outcome) => {

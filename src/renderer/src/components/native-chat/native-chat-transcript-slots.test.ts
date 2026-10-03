@@ -264,6 +264,27 @@ describe('a turn no message opened', () => {
     ])
   })
 
+  it('keeps an Orca failure about the conversation in sight when the turn around it folds', () => {
+    // A review reply's failed write lands mid-turn but belongs to no turn.
+    const messages = [
+      text('u1', 'fix these', 'user'),
+      toolRun('work'),
+      failure('review-reply'),
+      text('a1', 'Done.')
+    ]
+    const slots = build(messages, {
+      turnKeys: ['u1', 'u1', undefined, 'u1'],
+      turnStatuses: { active: settled(3), completedByTurn: { u1: settled(3) } }
+    })
+    expect(slots.find((slot) => slot.message.id === 'review-reply')?.folded).toBe(false)
+    // Scoped to the turn instead, the agent's answer after it would fold it away.
+    const inTurn = build(messages, {
+      turnKeys: ['u1', 'u1', 'u1', 'u1'],
+      turnStatuses: { active: settled(3), completedByTurn: { u1: settled(3) } }
+    })
+    expect(inTurn.find((slot) => slot.message.id === 'review-reply')).toBeUndefined()
+  })
+
   it('folds an error the agent recovered from behind the answer that followed it', () => {
     const messages = [text('u1', 'go', 'user'), failure('retry'), text('a1', 'Done.')]
     const slots = build(messages, {

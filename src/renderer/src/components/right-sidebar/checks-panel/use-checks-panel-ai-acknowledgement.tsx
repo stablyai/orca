@@ -7,10 +7,15 @@ import {
   canPostPRReviewThreadReply,
   checksPanelReviewStableKey,
   hasPRCommentGroupNeedingReply,
+  peekPendingPRCommentAiAck,
   resolvePRReviewReplyThreadId,
   setPendingPRCommentAiAck,
   takePendingPRCommentAiAck
 } from '../pr-comments-ai-launch-ack'
+import { buildPRCommentReviewReply } from '../pr-comment-review-reply-spec'
+import type { SourceControlAgentLaunched } from '../runSourceControlAgentActionStart'
+import { useChecksPanelReviewReplyRefetch } from './use-checks-panel-review-reply-refetch'
+import type { AgentSessionReviewReply } from '../../../../../shared/agent-session-review-reply'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import type { ChecksPanelReviewDataState } from './use-checks-panel-review-data'
 import type { ChecksPanelPollingState } from './use-checks-panel-polling'
@@ -40,6 +45,12 @@ type ChecksPanelAiAcknowledgementInput = Pick<
 > &
   Pick<ChecksPanelReviewDataState, 'fetchComments'> &
   Pick<ChecksPanelPollingState, 'fetchGitLabDetails'>
+
+const cannotReplyOnPR = (): string =>
+  translate(
+    'auto.components.right.sidebar.ChecksPanel.7e4b2a19c0',
+    "Couldn't find the GitHub PR to reply on. Reply to those comments yourself."
+  )
 
 export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgementInput) {
   const {
@@ -99,10 +110,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
         resolution.provider === 'github' &&
         githubTarget == null &&
         hasPRCommentGroupNeedingReply(resolution.selectedGroups)
-          ? translate(
-              'auto.components.right.sidebar.ChecksPanel.7e4b2a19c0',
-              'Could not resolve the GitHub PR to reply on.'
-            )
+          ? cannotReplyOnPR()
           : undefined
       const resolveSnapshottedThread = buildSnapshottedThreadResolver({
         provider: resolution.provider,
@@ -301,38 +309,73 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
     commentResolutionLaunchAcceptedRef
   ])
 
-  /** Prompt reached the agent: only now may Orca write to the host. */
-  const consumeClaimedCommentResolutionAfterDelivery = useCallback((): void => {
-    const resolution =
-      claimedCommentResolutionRef.current ??
-      takePendingPRCommentAiAck() ??
-      pendingCommentResolutionRef.current
-    claimedCommentResolutionRef.current = null
-    pendingCommentResolutionRef.current = null
-    commentResolutionLaunchAcceptedRef.current = false
-    if (!resolution) {
-      setCommentResolutionAckBusyNow(false)
-      return
-    }
-    setCommentResolutionAckBusyNow(true)
-    void resolveSelectedThreadsAfterLaunch(resolution)
-      .catch((err) => {
-        console.warn('Failed to resolve/reply on selected review comments after AI launch:', err)
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.ChecksPanel.495b2f8c4b',
-            'Started the agent, but could not resolve or reply on the selected comments.'
+  const refetchOnceChatWrote = useChecksPanelReviewReplyRefetch({
+    asyncResultKeyRef,
+    refreshCommentsAfterBulkResolve
+  })
+
+  /** What a structured chat's launch prompt carries for its host to write once the agent takes it. */
+  const buildLaunchReviewReply = useCallback((): AgentSessionReviewReply | undefined => {
+    const pending = peekPendingPRCommentAiAck() ?? pendingCommentResolutionRef.current
+    return pending ? buildPRCommentReviewReply(pending, commentsRef.current) : undefined
+  }, [commentsRef, pendingCommentResolutionRef])
+
+  /** Prompt reached the agent: only now may Orca write to the host. A structured chat's message
+   *  carries the writes for its host instead, so here they are only handed off. */
+  const consumeClaimedCommentResolutionAfterDelivery = useCallback(
+    (launch?: SourceControlAgentLaunched): void => {
+      const resolution =
+        claimedCommentResolutionRef.current ??
+        takePendingPRCommentAiAck() ??
+        pendingCommentResolutionRef.current
+      claimedCommentResolutionRef.current = null
+      pendingCommentResolutionRef.current = null
+      commentResolutionLaunchAcceptedRef.current = false
+      if (!resolution) {
+        setCommentResolutionAckBusyNow(false)
+        return
+      }
+      if (launch?.reviewReplyCarried) {
+        clearSentCommentSelection(resolution.reviewContextKey)
+        setCommentResolutionAckBusyNow(false)
+        // The chat's host may be a paired server, whose own mutation notice never reaches this
+        // client: refetch once the chat says its host wrote.
+        if (launch.chat) {
+          refetchOnceChatWrote(launch.chat, resolution)
+        }
+        // The one write the chat's host can't make: without the PR's repository it can't reply.
+        if (
+          resolution.provider === 'github' &&
+          !resolution.githubTarget &&
+          hasPRCommentGroupNeedingReply(resolution.selectedGroups)
+        ) {
+          toast.error(cannotReplyOnPR())
+        }
+        return
+      }
+      setCommentResolutionAckBusyNow(true)
+      void resolveSelectedThreadsAfterLaunch(resolution)
+        .catch((err) => {
+          console.warn('Failed to resolve/reply on selected review comments after AI launch:', err)
+          toast.error(
+            translate(
+              'auto.components.right.sidebar.ChecksPanel.495b2f8c4b',
+              'Started the agent, but could not resolve or reply on the selected comments.'
+            )
           )
-        )
-      })
-      .finally(() => setCommentResolutionAckBusyNow(false))
-  }, [
-    resolveSelectedThreadsAfterLaunch,
-    setCommentResolutionAckBusyNow,
-    claimedCommentResolutionRef,
-    pendingCommentResolutionRef,
-    commentResolutionLaunchAcceptedRef
-  ])
+        })
+        .finally(() => setCommentResolutionAckBusyNow(false))
+    },
+    [
+      clearSentCommentSelection,
+      refetchOnceChatWrote,
+      resolveSelectedThreadsAfterLaunch,
+      setCommentResolutionAckBusyNow,
+      claimedCommentResolutionRef,
+      pendingCommentResolutionRef,
+      commentResolutionLaunchAcceptedRef
+    ]
+  )
   // Why: auto-start can capture a stale callback; always call the latest consumer.
   const consumeClaimedCommentResolutionAfterDeliveryRef = useRef(
     consumeClaimedCommentResolutionAfterDelivery
@@ -364,6 +407,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
     resolveSelectedThreadsAfterLaunch,
     handleLaunchAccepted,
     handleLaunchAborted,
+    buildLaunchReviewReply,
     consumeClaimedCommentResolutionAfterDeliveryRef
   }
 }

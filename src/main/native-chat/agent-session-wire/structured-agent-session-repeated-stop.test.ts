@@ -123,7 +123,7 @@ describe('a Stop pressed again', () => {
     })
     replaceHostTestState({ store: relaunchedStore, host: relaunched })
     host = relaunched
-    await startAgent({ host, store: relaunchedStore })
+    await startAgent({ host })
     cancelTurn.mockResolvedValueOnce({ cancelled: false })
 
     expect(await stopTurn()).toMatchObject({ ok: true, value: { cancelled: false } })
