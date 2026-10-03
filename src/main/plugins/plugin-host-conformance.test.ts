@@ -199,8 +199,11 @@ describe('plugin host main/relay conformance', () => {
       code: 'invalid_params'
     },
     {
+      // storage.get is panel-callable so a panel can render live state; storage WRITES stay
+      // worker-only, so this exercises the same panel_forbidden path with a method that is
+      // still forbidden by design.
       name: 'panel-forbidden method',
-      request: { method: 'storage.get', params: { key: 'alpha' } },
+      request: { method: 'storage.set', params: { key: 'alpha', value: 1 } },
       viaPanel: true,
       policy: () => createPolicy(['storage']),
       code: 'panel_forbidden'
