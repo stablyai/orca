@@ -1,4 +1,5 @@
 import type { ParsedAgentStatusPayload } from '../../agent-status-types'
+import { oweClaudeAgentTaskNotification } from '../../claude-owed-task-notifications'
 import {
   claudeRosterHasRestoredSnapshotSubagent,
   claudeRosterHasRuntimeWorkingSubagent,
@@ -8,6 +9,7 @@ import {
   upsertWorkingClaudeSubagent
 } from '../../claude-subagent-roster'
 import type { HookListenerState } from '../listener-state'
+import { claudeRowHasUnlistedLiveWork } from './claude-pane-hold-evidence'
 import { readString } from '../tool-input-preview'
 import {
   clearClaudePendingWaitForAgent,
@@ -76,18 +78,24 @@ export function normalizeClaudeSubagentLifecycleEvent(
         stopClaudeSubagent(roster, agentId)
         endedChildWork = wasWorking && roster.get(agentId)?.state !== 'working'
       }
+      // Why the roster's verdict: it already tells a finish from a teammate's turn end (parked idle).
+      if (roster?.get(agentId)?.state !== 'idle') {
+        oweClaudeAgentTaskNotification(
+          state.claudeLaunchedBackgroundTasksByPaneKey.get(paneKey),
+          agentId,
+          Date.now()
+        )
+      }
       // Why: a blocked child that dies without another tool event would pin its permission/question wait on the pane forever — nothing else references that agent again.
       clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) => waitingAgentId === agentId)
     }
   }
   const workingChildEvidence = claudeRosterHasRuntimeWorkingSubagent(roster)
   const hasUnconfirmedChild = claudeRosterHasRestoredSnapshotSubagent(roster)
-  // Why: a shell or cron the inventory positively reported is live evidence whatever verdict
-  // ended the main agent's turn; a cancel never discounts it.
+  // Why: a shell or cron the inventory positively reported, or a notification this runtime saw
+  // become owed, is live evidence whatever verdict ended the main agent's turn.
   const hasConfirmedDoneGate =
-    cachedLead?.state === 'done' &&
-    (state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-      state.claudeActiveSessionCronPaneKeys.has(paneKey))
+    cachedLead?.state === 'done' && claudeRowHasUnlistedLiveWork(state, paneKey)
   const restoredOnlyDoneGate =
     cachedLead?.state === 'done' && !hasConfirmedDoneGate && hasUnconfirmedChild
   if (roster?.size === 0) {

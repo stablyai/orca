@@ -43,7 +43,7 @@ export type AgentHookEventPayload = {
   providerSessionOnly?: boolean
   /** True when this event is a relay cache replay rather than a live hook. */
   isReplay?: boolean
-  /** Transport-only Claude background-work evidence used to reject false input-based interrupts. */
+  /** Claude live work the child list does not show (a shell, a cron, an owed task notification); rejects false input-based interrupts. */
   claudeRunningNonAgentTask?: boolean
   /** Row projected from a structured session the host holds: `owned` while its provider child
    *  runs here, `held` once the child is gone but the session is still open. Never persisted. */
