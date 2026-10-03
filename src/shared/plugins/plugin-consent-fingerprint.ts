@@ -3,7 +3,9 @@ import { canonicalizeCapabilitySet } from './plugin-capabilities'
 import type { PluginManifest } from './plugin-manifest'
 
 type PluginConsentSubject = Pick<PluginManifest, 'capabilities' | 'main'> & {
-  contributes?: Partial<Pick<PluginManifest['contributes'], 'keybindings' | 'vmRecipes' | 'agents'>>
+  contributes?: Partial<
+    Pick<PluginManifest['contributes'], 'keybindings' | 'vmRecipes' | 'agents' | 'markdownRenderers'>
+  >
 }
 
 export function hasInstructionalPluginContributions(manifest: PluginConsentSubject): boolean {
@@ -32,7 +34,13 @@ export function canonicalizePluginConsent(
   const instructionalIdentity = hasInstructionalPluginContributions(manifest)
     ? `\0instructional-content:${contentIdentity ?? 'unresolved'}`
     : ''
-  return `${capabilities}${workerIdentity}${instructionalIdentity}`
+  const renderers = manifest.contributes?.markdownRenderers ?? []
+  const rendererIdentity = renderers.length
+    ? `\0markdown-renderers:${JSON.stringify(
+        renderers.map(({ language, commandId }) => [language, commandId]).sort()
+      )}`
+    : ''
+  return `${capabilities}${workerIdentity}${instructionalIdentity}${rendererIdentity}`
 }
 
 export function fingerprintPluginConsent(
