@@ -95,6 +95,7 @@ function CommandInput({
   iconClassName,
   trailing,
   ref,
+  onKeyDown,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input> & {
   wrapperClassName?: string
@@ -118,6 +119,13 @@ function CommandInput({
           'flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
           className
         )}
+        onKeyDown={(event) => {
+          // Why: cmdk intercepts Home/End at root and prevents native input caret navigation.
+          if (event.key === 'Home' || event.key === 'End') {
+            event.stopPropagation()
+          }
+          onKeyDown?.(event)
+        }}
         {...props}
       />
       {trailing}
