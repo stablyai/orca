@@ -63,52 +63,62 @@ describe('fetchCodexRateLimits auth errors', () => {
     vi.unstubAllGlobals()
   })
 
-  it('returns Codex RPC auth refresh errors without masking them behind a fallback', async () => {
-    const rpcChild = makeRpcChild()
-    const authError =
+  it.each([
+    [
+      'refresh reuse',
       'Your access token could not be refreshed because your refresh token was already used. Please log out and sign in again.'
+    ],
+    [
+      'invalidated token',
+      'failed to fetch codex rate limits: 401 Unauthorized; body={"error":{"message":"Your authentication token has been invalidated. Please try signing in again.","code":"token_invalidated"}}'
+    ]
+  ])(
+    'returns %s RPC auth errors without masking them behind a fallback',
+    async (_case, authError) => {
+      const rpcChild = makeRpcChild()
 
-    childSpawnMock.mockReturnValue(rpcChild)
-    rpcChild.stdin.write.mockImplementation((line: string) => {
-      const msg = JSON.parse(line) as { id?: number; method?: string }
-      if (msg.method === 'initialize') {
-        setTimeout(() => {
-          rpcChild.stdout.emit(
-            'data',
-            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
-          )
-        }, 0)
-      }
-      if (msg.method === 'account/rateLimits/read') {
-        setTimeout(() => {
-          rpcChild.stdout.emit(
-            'data',
-            Buffer.from(
-              `${JSON.stringify({
-                jsonrpc: '2.0',
-                id: msg.id,
-                error: { code: -32000, message: authError }
-              })}\n`
+      childSpawnMock.mockReturnValue(rpcChild)
+      rpcChild.stdin.write.mockImplementation((line: string) => {
+        const msg = JSON.parse(line) as { id?: number; method?: string }
+        if (msg.method === 'initialize') {
+          setTimeout(() => {
+            rpcChild.stdout.emit(
+              'data',
+              Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
             )
-          )
-        }, 0)
-      }
-    })
+          }, 0)
+        }
+        if (msg.method === 'account/rateLimits/read') {
+          setTimeout(() => {
+            rpcChild.stdout.emit(
+              'data',
+              Buffer.from(
+                `${JSON.stringify({
+                  jsonrpc: '2.0',
+                  id: msg.id,
+                  error: { code: -32000, message: authError }
+                })}\n`
+              )
+            )
+          }, 0)
+        }
+      })
 
-    const resultPromise = fetchCodexRateLimits()
-    await vi.advanceTimersByTimeAsync(1)
-    await vi.advanceTimersByTimeAsync(1)
+      const resultPromise = fetchCodexRateLimits()
+      await vi.advanceTimersByTimeAsync(1)
+      await vi.advanceTimersByTimeAsync(1)
 
-    await expect(resultPromise).resolves.toMatchObject({
-      provider: 'codex',
-      session: null,
-      weekly: null,
-      status: 'error',
-      error: authError
-    })
-    expect(fetch).not.toHaveBeenCalled()
-    expect(ptySpawnMock).not.toHaveBeenCalled()
-  })
+      await expect(resultPromise).resolves.toMatchObject({
+        provider: 'codex',
+        session: null,
+        weekly: null,
+        status: 'error',
+        error: authError
+      })
+      expect(fetch).not.toHaveBeenCalled()
+      expect(ptySpawnMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('returns the app-server chatgpt-auth-required error without falling back', async () => {
     const rpcChild = makeRpcChild()
