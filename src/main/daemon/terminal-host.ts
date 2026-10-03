@@ -55,6 +55,7 @@ export class TerminalHost {
   private onSessionReaped: TerminalHostOptions['onSessionReaped']
   private reportReadinessEvent: TerminalHostOptions['reportReadinessEvent']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
+  private onPtySpawned: TerminalHostOptions['onPtySpawned']
   private creationFenced = false
   private disposePromise: Promise<void> | null = null
   private readonly agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
@@ -71,6 +72,7 @@ export class TerminalHost {
     this.onSessionReaped = opts.onSessionReaped
     this.reportReadinessEvent = opts.reportReadinessEvent
     this.onFinalCheckpoint = opts.onFinalCheckpoint
+    this.onPtySpawned = opts.onPtySpawned
     this.killedTombstones = new TerminalHostTombstones(opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES)
   }
 
@@ -122,6 +124,7 @@ export class TerminalHost {
             ...(this.reportReadinessEvent
               ? { reportReadinessEvent: this.reportReadinessEvent }
               : {}),
+            ...(this.onPtySpawned ? { onPtySpawned: this.onPtySpawned } : {}),
             onSessionExit: this.handleSessionExit.bind(this)
           })
         }
