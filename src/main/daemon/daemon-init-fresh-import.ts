@@ -2,6 +2,10 @@ import { vi } from 'vitest'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import type { DaemonInitMockState } from './daemon-init-test-harness'
 
+export function missingFileError(): NodeJS.ErrnoException {
+  return Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+}
+
 /** Resets every mock plus the module registry, then re-imports daemon-init so its module-level spawner/adapter/restartInFlight start fresh. */
 export async function importFreshDaemonInit(state: DaemonInitMockState) {
   const {
@@ -103,7 +107,7 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
   writeFileSyncMock.mockClear()
   readFileSyncMock.mockReset()
   readFileSyncMock.mockImplementation(() => {
-    throw new Error('ENOENT')
+    throw missingFileError()
   })
   unlinkSyncMock.mockClear()
   parseDaemonPidFileMock.mockReset()

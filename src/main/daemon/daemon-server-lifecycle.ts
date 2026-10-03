@@ -5,6 +5,9 @@ import { CLEAN_DISCONNECT_PROTOCOL_VERSION } from './types'
 
 type PendingShutdownReply = { start: () => void }
 
+// Why: matches daemon-entry's signal-path budget. Past it, exiting is the only way to end the sessions.
+const SHUTDOWN_DISPOSE_DEADLINE_MS = 5_000
+
 type DaemonServerLifecycleOptions = {
   protocolVersion: number
   initialAdoptionTimeoutMs: number
@@ -220,15 +223,37 @@ export class DaemonServerLifecycle {
   }
 
   private async finishRpcShutdown(serverClose: Promise<void>): Promise<void> {
-    await this.finishOrdinaryShutdown(serverClose)
+    await this.withinDisposeDeadline('rpc', this.finishOrdinaryShutdown(serverClose))
     this.options.onRpcShutdown()
   }
 
   private async finishIdleShutdown(serverClose: Promise<void>): Promise<void> {
     this.options.endpoint.unlinkOwnedArtifacts()
-    await this.disposeResources()
-    await serverClose
+    await this.withinDisposeDeadline(
+      'idle',
+      this.disposeResources().then(() => serverClose)
+    )
     this.options.onIdleShutdown()
+  }
+
+  // Why: the token/pid files are already gone, so a daemon stuck disposing could never be reached,
+  // shut down, or idled out again — its shells would outlive every client.
+  private async withinDisposeDeadline(reason: string, work: Promise<void>): Promise<void> {
+    let timer: unknown = null
+    const deadline = new Promise<void>((resolve) => {
+      timer = this.options.clock.setTimeout(() => {
+        this.options.log.log('shutdown-dispose-timeout', {
+          reason,
+          deadlineMs: SHUTDOWN_DISPOSE_DEADLINE_MS
+        })
+        resolve()
+      }, SHUTDOWN_DISPOSE_DEADLINE_MS)
+    })
+    try {
+      await Promise.race([work, deadline])
+    } finally {
+      this.options.clock.clearTimeout(timer)
+    }
   }
 
   private async disposeResources(): Promise<void> {
