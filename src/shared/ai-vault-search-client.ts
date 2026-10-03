@@ -50,17 +50,27 @@ export function createSessionSearchClient(
       let raw: unknown
       try {
         // IPC and its all-hosts merge are this build; each remote leg negotiates its own host.
-        if (transport !== 'ipc' && parsed.filters?.agents?.includes('qoder')) {
+        if (
+          transport !== 'ipc' &&
+          parsed.filters?.agents?.some((agent) => agent === 'qoder' || agent === 'kiro')
+        ) {
           const status = AiVaultSearchStatusSchema.parse(await call('aiVault.searchStatus', {}))
-          if (status.supportsQoderHistory !== true) {
-            const agents = parsed.filters.agents.filter((agent) => agent !== 'qoder')
-            if (agents.length === 0) {
-              return { kind: 'unavailable', reason: 'unsupported-agent' }
-            }
-            hostRequest = { ...parsed, filters: { ...parsed.filters, agents } }
+          // Why: a host older than either agent rejects the whole request on its unknown tag.
+          const agents = parsed.filters.agents.filter(
+            (agent) =>
+              (agent !== 'qoder' || status.supportsQoderHistory === true) &&
+              (agent !== 'kiro' || status.supportsKiroHistory === true)
+          )
+          if (agents.length === 0) {
+            return { kind: 'unavailable', reason: 'unsupported-agent' }
           }
+          hostRequest = { ...parsed, filters: { ...parsed.filters, agents } }
         }
-        raw = await call('aiVault.searchSessions', { ...hostRequest, supportsQoderHistory: true })
+        raw = await call('aiVault.searchSessions', {
+          ...hostRequest,
+          supportsQoderHistory: true,
+          supportsKiroHistory: true
+        })
       } catch (error) {
         if (isUnknownSessionSearchMethod(error)) {
           return { kind: 'unavailable', reason: 'no-service' }

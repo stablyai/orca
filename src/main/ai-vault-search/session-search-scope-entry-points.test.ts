@@ -78,7 +78,12 @@ describe('every search entry point carries the scope identity through', () => {
     const service = fakeSearchService()
     setSessionSearchService(service)
     installSessionSearchScopeCatalogSource(() => CATALOG)
-    await relayHandler()({ query: 'needle', supportsQoderHistory: true, within: WITHIN })
+    await relayHandler()({
+      query: 'needle',
+      supportsQoderHistory: true,
+      supportsKiroHistory: true,
+      within: WITHIN
+    })
     expect(service.search).toHaveBeenCalledWith(expect.anything(), {
       kind: 'resolved',
       paths: ['/work/app']
@@ -88,7 +93,12 @@ describe('every search entry point carries the scope identity through', () => {
   it('hands the relay’s own verdict down, that host carrying no repo catalog', async () => {
     const service = fakeSearchService()
     setSessionSearchService(service)
-    await relayHandler()({ query: 'needle', supportsQoderHistory: true, within: WITHIN })
+    await relayHandler()({
+      query: 'needle',
+      supportsQoderHistory: true,
+      supportsKiroHistory: true,
+      within: WITHIN
+    })
     expect(service.search).toHaveBeenCalledWith(
       { query: 'needle', limit: 20 },
       {

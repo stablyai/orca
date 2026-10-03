@@ -56,7 +56,9 @@ describe('session search runtime RPC', () => {
         {
           query: 'needle',
           limit: 20,
-          filters: { agents: AI_VAULT_AGENTS.filter((agent) => agent !== 'qoder') }
+          filters: {
+            agents: AI_VAULT_AGENTS.filter((agent) => agent !== 'qoder' && agent !== 'kiro')
+          }
         },
         undefined
       )

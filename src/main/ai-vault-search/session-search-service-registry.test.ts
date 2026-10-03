@@ -59,7 +59,7 @@ describe('session search service registry', () => {
       {
         query: 'needle',
         limit: 20,
-        filters: { agents: AI_VAULT_AGENTS.filter((a) => a !== 'qoder') }
+        filters: { agents: AI_VAULT_AGENTS.filter((a) => a !== 'qoder' && a !== 'kiro') }
       },
       undefined
     )
@@ -94,6 +94,33 @@ describe('session search service registry', () => {
       await client.searchSessions({ query: 'proof', filters: { agents: ['qoder'] } })
       expect(service.search).toHaveBeenLastCalledWith(
         { query: 'proof', limit: 20, filters: { agents: ['qoder'] } },
+        undefined
+      )
+    }
+  )
+  it.each(['ipc', 'runtime', 'relay'] as const)(
+    'negotiates Kiro hits before retrieval on %s, without widening explicit filters',
+    async (transport) => {
+      const service = fakeSearchService()
+      setSessionSearchService(service)
+      await searchSessionService(
+        { query: 'proof', supportsQoderHistory: true, filters: { agents: ['claude', 'kiro'] } },
+        transport
+      )
+      expect(service.search).toHaveBeenLastCalledWith(
+        { query: 'proof', limit: 20, filters: { agents: ['claude'] } },
+        undefined
+      )
+      const client = createSessionSearchClient(
+        (method, request) =>
+          method === 'aiVault.searchStatus'
+            ? sessionSearchServiceStatus(request, transport)
+            : searchSessionService(request, transport),
+        transport
+      )
+      await client.searchSessions({ query: 'proof', filters: { agents: ['kiro'] } })
+      expect(service.search).toHaveBeenLastCalledWith(
+        { query: 'proof', limit: 20, filters: { agents: ['kiro'] } },
         undefined
       )
     }

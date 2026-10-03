@@ -12,6 +12,7 @@ import {
 import { cursorChatMetaPath } from './session-scanner-cursor-chat-meta'
 import { devinSessionsDbDependencyPath } from './session-scanner-devin-db'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
+import { kiroAgentSource } from './session-scanner-kiro-paths'
 import { resolveMuseSessionsDir } from './session-scanner-muse-paths'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
 import {
@@ -320,7 +321,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // match only those (not sibling .log/.sqlite3 sidecars or the .msp-view
     // materialized projection).
     filePredicate: (filePath) => basename(filePath) === 'session.jsonl'
-  }
+  },
+  kiro: kiroAgentSource
 }
 
 /**

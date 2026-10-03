@@ -58,10 +58,9 @@ test('a pre-Qoder release can read current host search pages without losing othe
   ) {
     throw new Error('The pinned release has no search request parser')
   }
-  expect(oldRequest.safeParse({ query: 'proof', supportsQoderHistory: true })).toHaveProperty(
-    'success',
-    true
-  )
+  expect(
+    oldRequest.safeParse({ query: 'proof', supportsQoderHistory: true, supportsKiroHistory: true })
+  ).toHaveProperty('success', true)
 })
 
 test.each(['v1.4.211', 'b49abdb1f4da6b3d62dfa9ccf3c74dc9e74d291c'])(
@@ -104,6 +103,18 @@ test.each(['v1.4.211', 'b49abdb1f4da6b3d62dfa9ccf3c74dc9e74d291c'])(
         within
       })
     )
+    // A host that predates Kiro rejects its tag the same way, so it is narrowed alike.
+    expect(
+      await client.searchSessions({
+        query: 'proof',
+        filters: { agents: ['codex', 'kiro'] },
+        within
+      })
+    ).toMatchObject({ hits: [{ agent: 'codex' }] })
+    expect(call).toHaveBeenLastCalledWith(
+      'aiVault.searchSessions',
+      expect.objectContaining({ filters: { agents: ['codex'] }, within })
+    )
     call.mockClear()
     expect(
       await client.searchSessions({ query: 'proof', filters: { agents: ['qoder'] }, within })
@@ -117,7 +128,9 @@ test.each(['v1.4.211', 'b49abdb1f4da6b3d62dfa9ccf3c74dc9e74d291c'])(
       expect(call).toHaveBeenLastCalledWith(
         'aiVault.searchSessions',
         expect.objectContaining({
-          filters: { agents: AI_VAULT_AGENTS.filter((agent) => agent !== 'qoder') }
+          filters: {
+            agents: AI_VAULT_AGENTS.filter((agent) => agent !== 'qoder' && agent !== 'kiro')
+          }
         })
       )
     }

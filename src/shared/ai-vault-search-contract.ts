@@ -24,6 +24,7 @@ export const AiVaultSearchRequestSchema = z
     cursor: z.string().optional(),
     filters: AiVaultSearchFiltersSchema.optional(),
     supportsQoderHistory: z.boolean().optional(),
+    supportsKiroHistory: z.boolean().optional(),
     /** Scope by identity, resolved into paths by whichever host answers. */
     within: AiVaultSearchScopeIdentitySchema.optional(),
     debug: z.boolean().optional()
@@ -135,6 +136,7 @@ export const AiVaultSearchStatusRequestSchema = z.object({})
 export const AiVaultSetSearchEnabledParamsSchema = z.object({ enabled: z.boolean() })
 export const AiVaultSearchStatusSchema = z.object({
   supportsQoderHistory: z.boolean().optional(),
+  supportsKiroHistory: z.boolean().optional(),
   enabled: z.boolean(),
   phase: z.enum(['idle', 'indexing', 'current', 'degraded', 'closed']),
   filesIndexed: z.number().int().nonnegative(),

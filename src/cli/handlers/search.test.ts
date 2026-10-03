@@ -105,7 +105,8 @@ describe('orca search over the runtime RPC', () => {
     expect(call).toHaveBeenCalledWith('aiVault.searchSessions', {
       query: 'resize race',
       limit: 20,
-      supportsQoderHistory: true
+      supportsQoderHistory: true,
+      supportsKiroHistory: true
     })
   })
 
@@ -163,7 +164,8 @@ describe('orca search over the runtime RPC', () => {
 
     expect(call).toHaveBeenCalledWith('aiVault.searchSessions', {
       ...params,
-      supportsQoderHistory: true
+      supportsQoderHistory: true,
+      supportsKiroHistory: true
     })
   })
 

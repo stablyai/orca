@@ -187,6 +187,10 @@ function defaultAiVaultResumeCommandBase(agent: AiVaultAgent): string {
   if (agent === 'rovo') {
     return 'acli'
   }
+  // Why: `--resume-id` belongs to kiro-cli's `chat` subcommand, so the bare binary cannot take it.
+  if (agent === 'kiro') {
+    return 'kiro-cli chat --tui'
+  }
   return TUI_AGENT_CONFIG[agent].detectCmd
 }
 
@@ -218,6 +222,8 @@ function buildAgentResumeInvocation(
       return `${baseCommand} resume ${sessionArg}`
     case 'cline':
       return `${baseCommand} --id ${sessionArg}`
+    case 'kiro':
+      return `${baseCommand} --resume-id ${sessionArg}`
     case 'qoder':
     case 'codebuddy':
     case 'claude':

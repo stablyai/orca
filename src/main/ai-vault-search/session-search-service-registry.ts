@@ -14,7 +14,7 @@ import {
   type SessionSearchTransport
 } from '../../shared/ai-vault-search-transport'
 import type { SessionSearchService } from './session-search-service'
-import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
+import { AI_VAULT_AGENTS, type AiVaultAgent } from '../../shared/ai-vault-types'
 
 let service: SessionSearchService | null = null
 
@@ -35,23 +35,26 @@ export async function searchSessionService(
   // The choke point every entry point funnels through, so every host kind
   // resolves alike; the verdict goes to the service, which answers off and
   // not-ready first.
-  const { within, supportsQoderHistory, ...request } = parsed
+  const { within, supportsQoderHistory, supportsKiroHistory, ...request } = parsed
   // Older clients reject the whole page when a hit has an unknown agent tag.
+  const isCompatibleAgent = (agent: AiVaultAgent): boolean =>
+    (supportsQoderHistory || agent !== 'qoder') && (supportsKiroHistory || agent !== 'kiro')
   const requestedAgents = request.filters?.agents
   const compatibleAgents = (requestedAgents?.length ? requestedAgents : AI_VAULT_AGENTS).filter(
-    (agent) => supportsQoderHistory || agent !== 'qoder'
+    isCompatibleAgent
   )
-  const compatibleRequest = supportsQoderHistory
-    ? request
-    : {
-        ...request,
-        filters: {
-          ...request.filters,
-          agents: compatibleAgents.length
-            ? compatibleAgents
-            : AI_VAULT_AGENTS.filter((agent) => agent !== 'qoder')
+  const compatibleRequest =
+    supportsQoderHistory && supportsKiroHistory
+      ? request
+      : {
+          ...request,
+          filters: {
+            ...request.filters,
+            agents: compatibleAgents.length
+              ? compatibleAgents
+              : AI_VAULT_AGENTS.filter(isCompatibleAgent)
+          }
         }
-      }
   const hostScope = within
     ? resolveSessionSearchScope(within, sessionSearchScopeCatalog())
     : undefined
@@ -85,7 +88,8 @@ export async function sessionSearchServiceStatus(
   return redactStatusForTransport(
     AiVaultSearchStatusSchema.parse({
       ...(service ? await service.status() : unavailableSessionSearchStatus()),
-      supportsQoderHistory: true
+      supportsQoderHistory: true,
+      supportsKiroHistory: true
     }),
     transport
   )

@@ -23,7 +23,8 @@ export type AiVaultDeleteSessionResult =
 //
 // The rest are excluded, recorded here because the UI deliberately won't say
 // why (a provider's storage layout is Orca's problem, not the reader's):
-// - antigravity, kimi: a separate registry (history.jsonl / session_index.jsonl)
+// - antigravity, kimi, kiro: a separate registry (history.jsonl /
+//   session_index.jsonl / session-index/*.jsonl)
 //   would keep a dangling entry. Antigravity's carries no conversation id, so
 //   which line to drop can't be determined at all.
 // - codex: session_index.jsonl plus hardlink aliases between the Orca-managed

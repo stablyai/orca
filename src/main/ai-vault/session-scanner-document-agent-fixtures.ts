@@ -219,4 +219,34 @@ export async function writeDocumentAgentFixtures(
       }
     ])
   )
+
+  // Kiro: <sessions>/<workspace-hash>/sess_*/session.json + sibling messages.jsonl.
+  const kiroSessionDir = join(roots.kiroSessionsDir, '5fab923ac92fb45c', 'sess_kiro-session')
+  await mkdir(kiroSessionDir, { recursive: true })
+  await writeFile(
+    join(kiroSessionDir, 'session.json'),
+    JSON.stringify({
+      id: 'sess_kiro-session',
+      title: 'Kiro vault title',
+      workspacePaths: ['/tmp/kiro'],
+      createdAt: '2026-05-01T10:12:00.000Z',
+      lastModifiedAt: '2026-05-01T10:12:05.000Z',
+      modelId: 'claude-opus-5.5'
+    })
+  )
+  await writeFile(
+    join(kiroSessionDir, 'messages.jsonl'),
+    jsonlBody([
+      {
+        id: 'k1',
+        timestamp: '2026-05-01T10:12:01.000Z',
+        payload: { type: 'user', content: 'Kiro vault title' }
+      },
+      {
+        id: 'k2',
+        timestamp: '2026-05-01T10:12:04.000Z',
+        payload: { type: 'assistant', operationType: 'Say', content: 'Kiro reply' }
+      }
+    ])
+  )
 }
