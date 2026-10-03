@@ -21,6 +21,8 @@ import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-t
 import type { TerminalQuickCommandMutation } from '../../shared/terminal-quick-commands'
 import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-options'
 import type { Automation } from '../../shared/automations-types'
+import type { PreflightRuntimeContext } from '../ipc/preflight-runtime-target'
+import { resolveLocalGlobalRuntime } from '../local-project-runtime-resolution'
 
 export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithStateFields {
   get ptyForegroundProcessReads() {
@@ -199,6 +201,12 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
 
   getClientSettings() {
     return this.clientSettings.get()
+  }
+
+  // Why: paired clients can't send host-private runtime settings; a null WSL distro stays repair-required, matching launch.
+  getHostAgentPreflightContext(): PreflightRuntimeContext | undefined {
+    const projectRuntime = this.store ? resolveLocalGlobalRuntime(this.store) : undefined
+    return projectRuntime ? { projectRuntime } : undefined
   }
 
   async updateClientSettings(updates: RuntimeClientSettingsUpdate) {

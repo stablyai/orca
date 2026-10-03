@@ -4,7 +4,8 @@ import type { Project } from '../shared/project-types'
 import type { Repo } from '../shared/repo-types'
 import {
   resolveProjectExecutionRuntime,
-  type ProjectExecutionRuntimeResolution
+  type ProjectExecutionRuntimeResolution,
+  type ResolveProjectExecutionRuntimeArgs
 } from '../shared/project-execution-runtime'
 import {
   getCachedWslAvailability,
@@ -47,22 +48,45 @@ function canResolveProjectRuntimeForWorktreeId(
   return canResolveProjectRuntimeForRepo(store) && typeof store.getRepo === 'function'
 }
 
+function getCachedWslResolutionInputs(): Pick<
+  ResolveProjectExecutionRuntimeArgs,
+  'wslAvailable' | 'availableWslDistros'
+> {
+  return {
+    wslAvailable: hasCachedWslAvailability()
+      ? (getCachedWslAvailability() ?? undefined)
+      : undefined,
+    availableWslDistros: hasCachedWslDistros() ? getCachedWslDistros() : null
+  }
+}
+
 function resolveLocalProjectRuntime(
   store: ResolvableStore,
   project: Project,
   settings: ReturnType<ResolvableStore['getSettings']> = store.getSettings()
 ): ProjectExecutionRuntimeResolution {
-  const wslAvailable = hasCachedWslAvailability()
-    ? (getCachedWslAvailability() ?? undefined)
-    : undefined
-  const availableWslDistros = hasCachedWslDistros() ? getCachedWslDistros() : null
   return resolveProjectExecutionRuntime({
     appPlatform: process.platform,
     projectId: project.id,
     projectRuntimePreference: project.localWindowsRuntimePreference,
     globalWindowsRuntimeDefault: settings.localWindowsRuntimeDefault,
-    wslAvailable,
-    availableWslDistros
+    ...getCachedWslResolutionInputs()
+  })
+}
+
+export function resolveLocalGlobalRuntime(
+  store: ProjectRuntimeResolutionStore,
+  appPlatform: string = process.platform
+): ProjectExecutionRuntimeResolution | undefined {
+  if (typeof store.getSettings !== 'function') {
+    return undefined
+  }
+  return resolveProjectExecutionRuntime({
+    appPlatform,
+    projectId: 'local-project',
+    projectRuntimePreference: { kind: 'inherit-global' },
+    globalWindowsRuntimeDefault: store.getSettings().localWindowsRuntimeDefault,
+    ...getCachedWslResolutionInputs()
   })
 }
 
