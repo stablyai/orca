@@ -131,6 +131,8 @@ export type TerminalActions = {
     }
   ) => void
   setTabColor: (tabId: string, color: string | null) => void
+  /** Exempts (or re-enables) a terminal tab's agent panes for idle hibernation. */
+  setTabNeverHibernate: (tabId: string, neverHibernate: boolean) => void
   /** Binds only live tabs and migrates replacement identity state before publishing ownership. */
   updateTabPtyId: (
     tabId: string,

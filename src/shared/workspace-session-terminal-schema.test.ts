@@ -143,4 +143,42 @@ describe('parseWorkspaceSession terminal fields', () => {
       expect(parseRow({ viewMode: 'holographic' })?.viewMode).toBe('terminal')
     })
   })
+
+  // Why: zod strips undeclared keys, so an undeclared neverHibernate would silently
+  // re-enable hibernation for an opted-out tab on the next launch.
+  describe('terminal row neverHibernate', () => {
+    function parseRow(row: Record<string, unknown>): Record<string, unknown> | undefined {
+      const result = parseWorkspaceSession({
+        activeRepoId: null,
+        activeWorktreeId: 'wt',
+        activeTabId: 'tab1',
+        tabsByWorktree: {
+          wt: [
+            {
+              id: 'tab1',
+              ptyId: null,
+              worktreeId: 'wt',
+              title: 'Terminal 1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 0,
+              ...row
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {}
+      })
+      expect(result.ok).toBe(true)
+      return result.ok ? result.value.tabsByWorktree.wt[0] : undefined
+    }
+
+    it('survives the load boundary', () => {
+      expect(parseRow({ neverHibernate: true })?.neverHibernate).toBe(true)
+    })
+
+    it('leaves a row persisted by an older build undefined', () => {
+      expect(parseRow({})?.neverHibernate).toBeUndefined()
+    })
+  })
 })
