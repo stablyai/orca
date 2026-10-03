@@ -46,6 +46,14 @@ vi.mock('./useTabDragSplit', () => ({
   })
 }))
 
+// Why: these cases invoke TabGroupSplitLayout as a plain function (not a
+// mounted component) to inspect its element tree, so any real React hook it
+// calls would throw. Stub the side-effect-only refit hook out — its behavior
+// is covered directly in use-refit-on-split-collapse.test.tsx.
+vi.mock('./use-refit-on-split-collapse', () => ({
+  useRefitOnSplitCollapse: vi.fn()
+}))
+
 import TabGroupSplitLayout from './TabGroupSplitLayout'
 
 type ReactElementLike = {
