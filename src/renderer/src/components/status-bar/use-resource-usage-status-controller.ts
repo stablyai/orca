@@ -6,6 +6,7 @@ import type { UnifiedSessionRow } from './resource-usage-merge-types'
 import type { ResourceSessionBindingInputs } from './resource-session-bindings'
 import type { SortOption } from './resource-usage-resource-tree'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   getResourceUsageAllWorktrees,
   getResourceUsageBrowserTabsByWorktree,
@@ -25,12 +26,12 @@ import {
 import { useResourceSessionInventory } from './use-resource-session-inventory'
 import { useResourceUsageActions } from './use-resource-usage-actions'
 import { useResourceUsageDerivedModel } from './use-resource-usage-derived-model'
+import { useResourceManagerHostSelection } from './use-resource-manager-host-selection'
+import { useDeferredLoadingState } from './use-deferred-loading-state'
 
 const POLL_MS = 2_000
 
 export function useResourceUsageStatusController() {
-  const snapshot = useAppStore((s) => s.memorySnapshot)
-  const memorySnapshotError = useAppStore((s) => s.memorySnapshotError)
   const fetchSnapshot = useAppStore((s) => s.fetchMemorySnapshot)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const setActiveView = useAppStore((s) => s.setActiveView)
@@ -47,6 +48,8 @@ export function useResourceUsageStatusController() {
   const [collapsedRepos, setCollapsedRepos] = useState<Set<string>>(new Set())
   const [collapsedWorktrees, setCollapsedWorktrees] = useState<Set<string>>(new Set())
   const [appCollapsed, setAppCollapsed] = useState(true)
+  const hostSelection = useResourceManagerHostSelection()
+  const { activeHostId, viewingRemoteHost, remoteHostUnreachable, resourceSnapshot } = hostSelection
   const {
     sessionInventory,
     sessionsError,
@@ -86,7 +89,6 @@ export function useResourceUsageStatusController() {
   const deferredSshSessionIdsByTabId = useAppStore((s) =>
     getResourceUsageDeferredSshSessionIdsByTabId(s, open)
   )
-  const resourceSnapshot = snapshot
   // Why: ptyIdsByTabId tracks mounted/live panes only; Resource Manager reads restored wake hints only for classification.
   const resourceSessionBindings = useMemo<ResourceSessionBindingInputs>(
     () => ({
@@ -170,16 +172,22 @@ export function useResourceUsageStatusController() {
     if (!open) {
       return
     }
-    void fetchSnapshot()
+    // Why: the status-bar badge remains local while the panel may show a remote;
+    // poll those two views only, rather than fanning out to every connected server.
+    const pollVisibleSnapshots = (): void => {
+      void fetchSnapshot(activeHostId)
+      if (activeHostId !== LOCAL_EXECUTION_HOST_ID) {
+        void fetchSnapshot(LOCAL_EXECUTION_HOST_ID)
+      }
+    }
+    pollVisibleSnapshots()
     void refreshSessions()
     // Why: only memory polls on an interval; session inventory is explicit on open/action since it's expensive with many terminals.
-    const memTimer = window.setInterval(() => {
-      void fetchSnapshot()
-    }, POLL_MS)
+    const memTimer = window.setInterval(pollVisibleSnapshots, POLL_MS)
     return () => {
       window.clearInterval(memTimer)
     }
-  }, [open, fetchSnapshot, refreshSessions])
+  }, [open, activeHostId, fetchSnapshot, refreshSessions])
 
   useEffect(() => {
     if (!open) {
@@ -189,6 +197,8 @@ export function useResourceUsageStatusController() {
 
   const derived = useResourceUsageDerivedModel({
     open,
+    activeHostId: parseExecutionHostId(activeHostId)?.id ?? LOCAL_EXECUTION_HOST_ID,
+    viewingRemoteHost,
     resourceSnapshot,
     sessions,
     resourceSessionBindings,
@@ -200,11 +210,18 @@ export function useResourceUsageStatusController() {
     workspaceSessionReady,
     sessionCount: sessionInventory.count,
     sessionsError,
-    memorySnapshotError,
-    snapshot,
+    memorySnapshotError: hostSelection.localSnapshotError,
+    snapshot: hostSelection.localSnapshot,
     spaceScanReady
   })
+  // Why: a host we have never sampled has nothing to show yet. Held behind a short
+  // delay so a fast switch never flashes a placeholder — see STYLEGUIDE, "Don't pick
+  // worst-case feedback for everyone".
+  const awaitingFirstSnapshot =
+    open && !resourceSnapshot && !derived.daemonUnreachable && !remoteHostUnreachable
+  const showLoadingSkeleton = useDeferredLoadingState(awaitingFirstSnapshot)
   const actions = useResourceUsageActions({
+    activeHostId,
     setCollapsedRepos,
     setCollapsedWorktrees,
     tabsByWorktree,
@@ -243,6 +260,13 @@ export function useResourceUsageStatusController() {
     setPopoverBodyNode,
     daemonActions,
     resourceSnapshot,
+    resourceHosts: hostSelection.resourceHosts,
+    activeHostId,
+    setSelectedHostId: hostSelection.setSelectedHostId,
+    selectDefaultHost: hostSelection.selectDefaultHost,
+    viewingRemoteHost,
+    remoteHostUnreachable,
+    showLoadingSkeleton,
     spaceScanReady,
     recordFeatureInteraction,
     ...derived,
