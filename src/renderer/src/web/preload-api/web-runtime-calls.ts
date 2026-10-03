@@ -35,12 +35,20 @@ export async function callRuntimeEnvelope<TResult = unknown>(
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
-  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
-    if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
-      return Promise.resolve(manuallyDisconnectedResponse(environment))
+  const pendingResponse = runtimeCallQueuePool.enqueueJson(
+    environment.id,
+    method,
+    params,
+    (queuedParams) => {
+      if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+        return Promise.resolve(manuallyDisconnectedResponse(environment))
+      }
+      return getClientForEnvironment(environment).call(method, queuedParams, { timeoutMs })
     }
-    return getClientForEnvironment(environment).call(method, params, { timeoutMs })
-  })
+  )
+  // The suspended frame must release the original graph after the queue snapshots it.
+  params = undefined
+  const response = await pendingResponse
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
@@ -58,12 +66,19 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
-  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
-    if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
-      return Promise.resolve(manuallyDisconnectedResponse(environment))
+  const pendingResponse = runtimeCallQueuePool.enqueueJson(
+    environment.id,
+    method,
+    params,
+    (queuedParams) => {
+      if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+        return Promise.resolve(manuallyDisconnectedResponse(environment))
+      }
+      return getClientForEnvironment(environment).call(method, queuedParams, { timeoutMs })
     }
-    return getClientForEnvironment(environment).call(method, params, { timeoutMs })
-  })
+  )
+  params = undefined
+  const response = await pendingResponse
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
@@ -76,7 +91,9 @@ export async function callRuntimeResult<TResult>(
   params?: unknown,
   timeoutMs?: number
 ): Promise<TResult> {
-  const response = await callRuntimeEnvelope(method, params, timeoutMs)
+  const pendingResponse = callRuntimeEnvelope(method, params, timeoutMs)
+  params = undefined
+  const response = await pendingResponse
   if (!response.ok) {
     // Why keep the code: callers classify recoverable host failures by token, and the message alone
     // (e.g. "Parent selector was not found.") carries none.
@@ -91,7 +108,9 @@ export async function callRuntimeResultWithOwner<TResult>(
   timeoutMs?: number
 ): Promise<{ result: TResult; hostId: ExecutionHostId; environmentId: string }> {
   const environmentId = requireActiveEnvironment().id
-  const result = await callRuntimeResult<TResult>(method, params, timeoutMs)
+  const pendingResult = callRuntimeResult<TResult>(method, params, timeoutMs)
+  params = undefined
+  const result = await pendingResult
   return { result, hostId: toRuntimeExecutionHostId(environmentId), environmentId }
 }
 
