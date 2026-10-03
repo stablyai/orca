@@ -201,6 +201,9 @@ export function buildMacPrivilegedSymlinkTransaction(
   return (
     `${capture}if /bin/mkdir ${quoteShell(publishDirectory)} && ` +
     `/bin/ln -s ${quoteShell(args.launcherPath)} ${quoteShell(publishPath)} && ` +
+    // Why: the admin shell runs with umask 077 and macOS honours symlink modes, so a root-made
+    // link would be unreadable to the user and break `readlink` in the install status check.
+    `/bin/chmod -h 755 ${quoteShell(publishPath)} && ` +
     `/bin/ln -P ${quoteShell(publishPath)} ${quoteShell(commandDirectory)}; then ` +
     `/bin/rm ${quoteShell(publishPath)}; /bin/rmdir ${quoteShell(publishDirectory)}; ` +
     `if [ "$captured" -eq 1 ]; then /bin/rm ${quoteShell(heldPath)}; fi; ` +

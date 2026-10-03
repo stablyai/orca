@@ -4,9 +4,9 @@ import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/h
 import { ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
 import { toast } from 'sonner'
 import { LinearIcon } from '@/components/icons/LinearIcon'
-import { JiraIcon } from '@/components/icons/JiraIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
+import { getKeyedIssueChrome, KeyedIssueIcon } from './worktree-card-keyed-issue-chrome'
 import {
   WorktreeCardDetailSection,
   WorktreeCardDetailSectionContent
@@ -292,18 +292,11 @@ export function WorktreeCardDetailsHover({
           {jiraIssue && (
             <WorktreeCardDetailSection>
               <DetailHeader
-                icon={<JiraIcon className="size-3 text-muted-foreground" />}
-                label={translate(
-                  'auto.components.sidebar.WorktreeCardMeta.jiraIssue',
-                  'Jira {{value0}}',
-                  { value0: jiraIssue.identifier }
-                )}
+                icon={<KeyedIssueIcon issue={jiraIssue} className="size-3 text-muted-foreground" />}
+                label={getKeyedIssueChrome(jiraIssue).title(jiraIssue.identifier)}
                 actions={
                   <MetadataActionIcon
-                    label={translate(
-                      'auto.components.sidebar.WorktreeCardMeta.viewOnJira',
-                      'View on Jira'
-                    )}
+                    label={getKeyedIssueChrome(jiraIssue).viewLabel()}
                     href={jiraIssue.url}
                   >
                     <ExternalLink className="size-3" />

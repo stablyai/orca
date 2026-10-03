@@ -1,5 +1,6 @@
 import type { TaskPageJiraIssueCreationModel } from './use-task-page-jira-issue-creation'
 import { useEffect } from 'react'
+import { useYouTrackStore } from '@/components/youtrack/youtrack-store'
 export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) {
   const {
     closeTaskPage,
@@ -24,14 +25,17 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) 
     selectedLinearIssue,
     selectedJiraIssue,
     newLinearIssueOpen,
-    newJiraIssueOpen
+    newJiraIssueOpen,
+    taskSource
   } = model
   const githubTasksBusy = tasksLoading || tasksRefreshing || tasksFiltering
+  const youtrackIssueOpen = useYouTrackStore((s) => s.selectedIssueId !== null)
   useEffect(() => {
     // Why: when a modal is open, let it own Esc dismissal.
     if (
       dialogWorkItem ||
       selectedJiraIssue ||
+      (taskSource === 'youtrack' && youtrackIssueOpen) ||
       selectedLinearIssue ||
       newIssueOpen ||
       newLinearIssueOpen ||
@@ -87,7 +91,9 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) 
     newLinearIssueOpen,
     newJiraIssueOpen,
     selectedLinearIssue,
-    selectedJiraIssue
+    selectedJiraIssue,
+    taskSource,
+    youtrackIssueOpen
   ])
   useEffect(() => {
     if (!preflightStatusCurrent || !preflightStatusChecked) {

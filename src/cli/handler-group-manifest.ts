@@ -251,6 +251,18 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/linear.js')).LINEAR_HANDLERS
   },
   {
+    name: 'youtrack',
+    keys: [
+      'youtrack issue',
+      'youtrack list',
+      'youtrack comment add',
+      'youtrack state set',
+      'youtrack field set',
+      'youtrack create'
+    ],
+    load: async () => (await import('./handlers/youtrack.js')).YOUTRACK_HANDLERS
+  },
+  {
     name: 'vm',
     keys: ['vm recipe doctor'],
     load: async () => (await import('./handlers/vm.js')).VM_HANDLERS

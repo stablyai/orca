@@ -58,8 +58,9 @@ export function getTaskSourceContextSummary(args: {
         hostAvailability: args.hostAvailability
       })
     case 'jira':
+    case 'youtrack':
       return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.jiraSiteName,
+        accountLabel: args.provider === 'jira' ? args.jiraSiteName : null,
         accountHostId: args.accountHostId,
         hostLabelById: args.hostLabelById,
         hostAvailability: args.hostAvailability

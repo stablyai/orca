@@ -25,6 +25,8 @@ export type WorktreeCardLinearIssueDisplay = {
 }
 
 export type WorktreeCardJiraIssueDisplay = {
+  /** String-keyed issue providers share this row; absent means Jira. */
+  provider?: 'jira' | 'youtrack'
   identifier: string
   title: string
   url: string

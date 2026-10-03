@@ -2,8 +2,8 @@ import React from 'react'
 import { CalendarClock, CircleDot, SquareTerminal, StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
-import { JiraIcon } from '@/components/icons/JiraIcon'
 import { MetaIconBadge } from './WorktreeCardMetadataControls'
+import { getKeyedIssueChrome, KeyedIssueIcon } from './worktree-card-keyed-issue-chrome'
 import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
 import type {
   WorktreeCardMetaBadgesProps,
@@ -131,14 +131,8 @@ export const WorktreeCardMetaBadges = React.forwardRef<
         </MetaIconBadge>
       )}
       {jiraIssue && (
-        <MetaIconBadge
-          label={translate(
-            'auto.components.sidebar.WorktreeCardMeta.linkedJira',
-            'Linked Jira {{value0}}',
-            { value0: jiraIssue.identifier }
-          )}
-        >
-          <JiraIcon className="text-muted-foreground" />
+        <MetaIconBadge label={getKeyedIssueChrome(jiraIssue).linkedLabel(jiraIssue.identifier)}>
+          <KeyedIssueIcon issue={jiraIssue} className="text-muted-foreground" />
         </MetaIconBadge>
       )}
       {review && (

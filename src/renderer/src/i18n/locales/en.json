@@ -18862,5 +18862,152 @@
         "accounts": "accounts"
       }
     }
+  },
+  "youtrack": {
+    "smartField": {
+      "placeholderSuffix": "{{base}} or YouTrack ID"
+    },
+    "settings": {
+      "connectTitle": "Connect YouTrack",
+      "connectedToInsecure": "Connected to {{url}} (certificate verification skipped)",
+      "connectedTo": "Connected to {{url}}",
+      "connectDescription": "Add your self-hosted YouTrack address and a permanent token.",
+      "manage": "Manage",
+      "add": "Add YouTrack access",
+      "providerDescription": "Connect self-hosted YouTrack and show your issues in Tasks."
+    },
+    "source": {
+      "label": "YouTrack"
+    },
+    "search": {
+      "title": "YouTrack Integration",
+      "description": "Connect self-hosted YouTrack or update its permanent token.",
+      "keyword": {
+        "youtrack": "youtrack",
+        "jetbrains": "jetbrains",
+        "integration": "integration",
+        "permanentToken": "permanent token",
+        "certificate": "certificate",
+        "tasks": "tasks"
+      }
+    },
+    "integration": {
+      "connectedAs": "Connected as {{name}}",
+      "checking": "Checking YouTrack access.",
+      "notConnected": "Add a self-hosted YouTrack to browse, update, and create issues.",
+      "statusConnected": "Connected",
+      "statusNotConnected": "Not connected",
+      "reconnect": "Reconnect",
+      "add": "Add YouTrack access",
+      "tokenName": "Your YouTrack token",
+      "verified": "Verified",
+      "testing": "Testing...",
+      "test": "Test",
+      "disconnect": "Disconnect YouTrack",
+      "insecureTls": "Certificate verification is skipped for this host. Reconnect to turn it back on.",
+      "howTo": "Use your YouTrack address and a permanent token from Profile → Account Security."
+    },
+    "sidebar": {
+      "openTasks": "Open YouTrack tasks",
+      "issue": "YouTrack {{value0}}",
+      "linkedIssue": "Linked YouTrack {{value0}}",
+      "viewIssue": "View in YouTrack"
+    },
+    "connect": {
+      "title": "Connect YouTrack",
+      "description": "Use your YouTrack address and a permanent token to browse and update issues.",
+      "baseUrl": "YouTrack URL",
+      "httpWarning": "This address uses http://, so your token would be sent unencrypted. Use https:// if your YouTrack supports it.",
+      "token": "Permanent token",
+      "tokenHint": "Create one under Profile → Account Security",
+      "openTokenSettings": "open in YouTrack",
+      "insecureTls": "Skip certificate verification",
+      "insecureTlsHint": "For self-signed or internal-CA certificates. Applies only to this YouTrack host; use it only on networks you trust.",
+      "storageNote": "Your token is stored locally and encrypted when the OS keychain is available.",
+      "cancel": "Cancel",
+      "submit": "Connect",
+      "baseUrlPlaceholder": "https://youtrack.example.com",
+      "tokenPlaceholder": "perm:…"
+    },
+    "create": {
+      "created": "Created {{id}}",
+      "title": "New YouTrack issue",
+      "description": "Fields come from the selected project; required ones are marked with *.",
+      "project": "Project",
+      "loadingProjects": "Loading projects…",
+      "summary": "Summary *",
+      "descriptionLabel": "Description (Markdown)",
+      "moreFields": "More fields ({{count}})",
+      "missing": "Required: {{fields}}",
+      "cancel": "Cancel",
+      "submit": "Create issue"
+    },
+    "detail": {
+      "project": "Project",
+      "reporter": "Reporter",
+      "tags": "Tags",
+      "stateChanged": "{{id}} → {{state}}",
+      "changeState": "Change state",
+      "noState": "No state",
+      "noTransitions": "No available state changes.",
+      "resolvedState": "resolves",
+      "title": "YouTrack issue",
+      "description": "Preview, update, and start work from the selected issue.",
+      "openWorkspace": "Open workspace",
+      "startWorkspace": "Start workspace",
+      "close": "Close",
+      "noDescription": "No description provided.",
+      "links": "Links",
+      "comments": "Comments",
+      "retry": "Retry",
+      "noComments": "No comments yet.",
+      "unknownAuthor": "Unknown",
+      "commentPlaceholder": "Add a comment (Markdown)…",
+      "comment": "Comment"
+    },
+    "list": {
+      "blockedBy": "Blocked by {{count}} unresolved issue(s)",
+      "unassigned": "Unassigned",
+      "startWorkspaceFor": "Start workspace from {{id}}",
+      "startWorkspace": "Start workspace",
+      "openInYouTrackFor": "Open {{id}} in YouTrack",
+      "openInYouTrack": "Open in YouTrack",
+      "emptyTitle": "No YouTrack issues found",
+      "emptyQuery": "Try a different query.",
+      "emptyPreset": "No issues match the selected filter."
+    },
+    "preset": {
+      "assigned": "Assigned to me",
+      "reported": "Reported",
+      "open": "All open",
+      "done": "Done"
+    },
+    "toolbar": {
+      "queryPlaceholder": "YouTrack query, e.g. Assignee: me #Unresolved project: ABC — Enter to search",
+      "newIssue": "New issue",
+      "refresh": "Refresh",
+      "insecureTls": "Certificate verification skipped",
+      "openYouTrack": "Open YouTrack",
+      "disconnect": "Disconnect"
+    },
+    "empty": {
+      "title": "Connect your YouTrack",
+      "description": "Browse your issues, move them between states, comment, and start work directly from here.",
+      "connect": "Connect YouTrack",
+      "hide": "Hide YouTrack"
+    },
+    "fields": {
+      "filter": "Filter…",
+      "noOptions": "No matching values.",
+      "clear": "Clear",
+      "periodPlaceholder": "e.g. 2d 4h"
+    },
+    "workspace": {
+      "remoteLinkDropped": "This worktree runs on a remote Orca server, which may not keep its YouTrack link. The worktree is still created.",
+      "openFailed": "Unable to open the workspace for this issue."
+    },
+    "store": {
+      "desktopOnly": "YouTrack is only available in the desktop app."
+    }
   }
 }

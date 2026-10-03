@@ -58,12 +58,7 @@ export type LinearIssueRequest = {
   context?: LinearCurrentIssueContextHints
 }
 
-export type LinearCurrentIssueContextHints = {
-  worktreeId?: string
-  terminalHandle?: string
-  cwd?: string
-  remote?: boolean
-}
+export type LinearCurrentIssueContextHints = CurrentWorktreeContextHints
 
 export type {
   LinearAttachResult,
@@ -101,6 +96,7 @@ export type {
   LinearIssueRelationWriteRequest,
   LinearIssueRelationWriteResult
 } from './issue-relation-write'
+import type { CurrentWorktreeContextHints } from '../current-worktree-context'
 
 export type LinearWriteTargetRequest = {
   input?: string

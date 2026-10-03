@@ -4,8 +4,8 @@ import {
   getOptionalStringFlag,
   getRepeatedStringFlag
 } from './flags'
+import { buildCurrentWorktreeContext } from './current-worktree-context'
 import {
-  buildLinearCurrentContext,
   getDueDateFlag,
   getOptionalWriteId,
   getPriorityFlag,
@@ -34,7 +34,7 @@ export async function buildSaveIssueRequest(
     input,
     current,
     workspaceId: getOptionalStringFlag(flags, 'workspace'),
-    context: buildLinearCurrentContext(cwd, remote),
+    context: buildCurrentWorktreeContext(cwd, remote),
     team: getOptionalStringFlag(flags, 'team'),
     title: getOptionalStringFlag(flags, 'title'),
     description: description ?? body,

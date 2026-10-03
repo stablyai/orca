@@ -10,6 +10,7 @@ import type {
 } from './smart-workspace-name-field-model'
 import { useJiraSourceConnection } from './use-jira-source-connection'
 import { useJiraUrlSource } from './use-jira-url-source'
+import { useYouTrackIssueSuggestions } from '@/components/youtrack/use-youtrack-issue-reference'
 import { useSmartWorkspaceFieldAvailability } from './use-smart-workspace-field-availability'
 import { useSmartWorkspaceNameFieldState } from './use-smart-workspace-name-field-state'
 
@@ -152,6 +153,10 @@ export function useSmartWorkspaceNameFieldFoundation(
     sourceContext: jiraSourceContext,
     connection: jiraConnection
   })
+  const youtrackIssues = useYouTrackIssueSuggestions(
+    value,
+    !disabled && !textOnly && state.mode === 'smart' && selectedSource === null
+  )
   const jiraSourceConnected = jiraConnectionStatus?.connected === true
   const showJiraSiteContext =
     state.mode === 'jira' && jiraConnectionStatus?.selectedSiteId === 'all'
@@ -194,6 +199,7 @@ export function useSmartWorkspaceNameFieldFoundation(
     jiraConnectionStatus,
     jiraSource,
     jiraSourceConnected,
+    youtrackIssues,
     showJiraSiteContext,
     jiraStatusId,
     linearStatusId

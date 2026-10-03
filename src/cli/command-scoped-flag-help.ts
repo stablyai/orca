@@ -1,3 +1,5 @@
+import { YOUTRACK_FLAG_HELP } from './youtrack-flag-help'
+
 // Why: the shared --focus line describes terminal create's terminal session.
 const FILE_OPEN_FOCUS_HELP =
   "--focus                Bring the user to the file (switches Orca's window to its worktree)"
@@ -42,7 +44,8 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     sort: '--sort <order>         relevance (default) or newest',
     debug: '--debug                Include the planner route the host used',
     'index-status': '--index-status         Report the index instead of searching'
-  }
+  },
+  ...YOUTRACK_FLAG_HELP
 }
 
 export function formatCommandScopedFlagHelp(command: string, flag: string): string | undefined {

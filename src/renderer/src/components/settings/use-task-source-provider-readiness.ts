@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -10,6 +10,7 @@ import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-install-commands'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
+import { useYouTrackStore } from '@/components/youtrack/youtrack-store'
 import type { TaskProviderReadiness } from './task-source-setup-state'
 
 export function useTaskSourceProviderReadiness(
@@ -28,6 +29,12 @@ export function useTaskSourceProviderReadiness(
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const linearConnected = useLinearProviderConnected()
+  const youtrackConnected = useYouTrackStore((s) => s.status.connected)
+  const youtrackChecked = useYouTrackStore((s) => s.statusChecked)
+  const checkYouTrackStatus = useYouTrackStore((s) => s.checkStatus)
+  useEffect(() => {
+    void checkYouTrackStatus()
+  }, [checkYouTrackStatus])
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
@@ -91,6 +98,11 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      youtrack: {
+        connected: youtrackConnected,
+        checking: !youtrackChecked,
+        visible: visible.has('youtrack')
       }
     }
   }, [
@@ -106,6 +118,8 @@ export function useTaskSourceProviderReadiness(
     linearSkillUnverifiable,
     reviewChecking,
     reviewUnavailable,
-    visibleProvidersKey
+    visibleProvidersKey,
+    youtrackChecked,
+    youtrackConnected
   ])
 }

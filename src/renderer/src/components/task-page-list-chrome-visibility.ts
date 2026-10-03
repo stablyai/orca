@@ -30,5 +30,8 @@ export function shouldHideTaskPageListChrome({
       return hasJiraDetail
     case 'linear':
       return hasLinearIssueDetail || hasLinearProjectContext || hasLinearViewContext
+    case 'youtrack':
+      // YouTrack shows its detail in a sheet over the list, so the source bar stays.
+      return false
   }
 }
