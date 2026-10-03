@@ -93,7 +93,9 @@ export function handleTerminalFileLink(
             run: () => downloadAndOpenRemoteTerminalFile(fileContext, mappedPath)
           }
   return requestTerminalLinkAction(event, actionContext, {
-    destination: actionDestination ?? mappedPath,
+    // Why: file links may arrive from OSC 8 with a URI or relative target; copy the
+    // resolved path used for file actions while preserving workspace display text.
+    destination: worktreeRoot ? (actionDestination ?? mappedPath) : mappedPath,
     kind: worktreeRoot ? 'workspace' : 'file',
     primary: {
       label: worktreeRoot

@@ -221,13 +221,35 @@ describe('LinkActionPopover', () => {
     await waitFor(() => expect(mocks.writeClipboardText).toHaveBeenCalledTimes(2))
   })
 
-  it('does not offer copy link for non-URL destinations', () => {
+  it('shows a file-specific failure toast and keeps the popover open', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+    Object.assign(window, { api: { ui: { writeClipboardText: mocks.writeClipboardText } } })
+    mocks.writeClipboardText.mockRejectedValue(new Error('denied'))
+    const onClose = vi.fn()
+    const request: LinkActionRequest = {
+      anchorX: 100,
+      anchorY: 200,
+      destination: '/repo/src/main.ts',
+      kind: 'file',
+      primary: { label: 'Open file', run: vi.fn() },
+      restoreFocus: vi.fn()
+    }
+
+    render(<LinkActionPopover request={request} onClose={onClose} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Copy file path' }))
+
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('Failed to copy file path'))
+    expect(screen.getByRole('button', { name: 'Copy file path' })).toBeTruthy()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('does not offer copy actions for non-copyable destinations', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
       destination: '/tmp/example.ts',
-      kind: 'file',
+      kind: 'workspace',
       primary: { label: 'Open file', run: vi.fn() },
       restoreFocus: vi.fn()
     }
@@ -235,6 +257,30 @@ describe('LinkActionPopover', () => {
     render(<LinkActionPopover request={request} onClose={vi.fn()} />)
 
     expect(screen.queryByRole('button', { name: 'Copy link' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Copy file path' })).toBeNull()
+  })
+
+  it('copies the resolved file path without closing the popover', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+    Object.assign(window, { api: { ui: { writeClipboardText: mocks.writeClipboardText } } })
+    mocks.writeClipboardText.mockResolvedValue(undefined)
+    const onClose = vi.fn()
+    const request: LinkActionRequest = {
+      anchorX: 100,
+      anchorY: 200,
+      destination: '/repo/src/main.ts',
+      kind: 'file',
+      primary: { label: 'Open file', run: vi.fn() },
+      restoreFocus: vi.fn()
+    }
+
+    render(<LinkActionPopover request={request} onClose={onClose} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Copy file path' }))
+
+    await waitFor(() => expect(mocks.writeClipboardText).toHaveBeenCalledWith(request.destination))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy())
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Copied file path')
+    expect(onClose).not.toHaveBeenCalled()
   })
 
   it('opens the terminal link setting from the compact settings button', () => {
