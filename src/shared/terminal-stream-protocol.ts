@@ -42,6 +42,8 @@ export type TerminalStreamFrame = {
   payload: Uint8Array
 }
 
+export type TerminalStreamFrameHeader = Omit<TerminalStreamFrame, 'payload'>
+
 export function encodeTerminalStreamFrame(frame: TerminalStreamFrame): Uint8Array {
   const out = new Uint8Array(HEADER_BYTES + frame.payload.length)
   const view = new DataView(out.buffer, out.byteOffset, out.byteLength)
@@ -58,6 +60,11 @@ export function encodeTerminalStreamFrame(frame: TerminalStreamFrame): Uint8Arra
 }
 
 export function decodeTerminalStreamFrame(bytes: Uint8Array): TerminalStreamFrame | null {
+  const header = decodeTerminalStreamFrameHeader(bytes)
+  return header ? { ...header, payload: bytes.slice(HEADER_BYTES) } : null
+}
+
+export function decodeTerminalStreamFrameHeader(bytes: Uint8Array): TerminalStreamFrameHeader | null {
   if (bytes.length < HEADER_BYTES) {
     return null
   }
@@ -74,8 +81,7 @@ export function decodeTerminalStreamFrame(bytes: Uint8Array): TerminalStreamFram
   return {
     opcode,
     streamId: view.getUint32(4, true),
-    seq: high * 0x100000000 + low,
-    payload: bytes.slice(HEADER_BYTES)
+    seq: high * 0x100000000 + low
   }
 }
 

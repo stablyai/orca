@@ -3,6 +3,7 @@ import type {
   TerminalMultiplexConnection,
   TerminalMultiplexFlowControlStage
 } from './terminal-multiplex-connection'
+import { disposeTerminalMultiplexProgress } from './terminal-multiplex-progress'
 
 export function installMultiplexCleanup(
   build: TerminalMultiplexFlowControlStage
@@ -37,6 +38,7 @@ export function installMultiplexCleanup(
     stream.unsubscribeDriver()
     stream.unregisterBinaryHandler()
     streams.delete(streamId)
+    disposeTerminalMultiplexProgress(stream)
     state.flushAllAckPendingOutput()
     // Why: release the runtime exit-waiter for this slot (see the field's note); delete before abort so its .catch no-ops instead of re-detaching.
     stream.exitWaiterAbort.abort()

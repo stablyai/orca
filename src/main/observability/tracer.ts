@@ -112,6 +112,10 @@ export function setActiveSink(sink: TracerSink | null): void {
   activeSink = sink
 }
 
+export function isTracingEnabled(): boolean {
+  return activeSink !== null
+}
+
 /** Force records already handed to the tracer onto disk. Reserve this for
  * crash boundaries where the process may not survive the normal batch window. */
 export function flushActiveSink(): void {
