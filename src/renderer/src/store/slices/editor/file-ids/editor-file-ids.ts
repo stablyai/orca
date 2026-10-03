@@ -4,10 +4,9 @@ import type { DiffSource, EditorOpenTargetOptions, OpenFile } from '../types/ope
 import { areLocalWindowsWslPathAliases } from '../../../../../../shared/cross-platform-path'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
+import { buildOwnedEditorFileId, runtimeOwnerKey } from '../../../../../../shared/editor-file-id'
 
-export function runtimeOwnerKey(runtimeEnvironmentId: string | null | undefined): string | null {
-  return runtimeEnvironmentId?.trim() || null
-}
+export { buildOwnedEditorFileId, runtimeOwnerKey }
 
 export function isSameEditorOwner(
   file: Pick<OpenFile, 'worktreeId' | 'runtimeEnvironmentId'>,
@@ -35,15 +34,6 @@ export function canReuseLocalWslAlias(
     getConnectionIdForFileFromState(state, file.worktreeId, file.filePath) === null &&
     getConnectionIdForFileFromState(state, existing.worktreeId, existing.filePath) === null
   )
-}
-
-export function buildOwnedEditorFileId(
-  filePath: string,
-  worktreeId: string,
-  runtimeEnvironmentId: string | null | undefined
-): string {
-  const runtimeKey = runtimeOwnerKey(runtimeEnvironmentId) ?? 'local'
-  return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
 }
 
 export function buildDiffEditorFileId(

@@ -8,8 +8,15 @@ import { isWorktreeHostIdentity as isHostQualifiedSessionKey } from './worktree/
 import {
   buildWorktreeIdByFileId,
   buildWorktreeIdByTabId,
+  tabIdForPaneKey,
   worktreeIdForPaneKey
 } from './workspace-session-host-records'
+import {
+  hostWonTabRow,
+  reconcileHostWonUnifiedRows,
+  type HostWonTabRow
+} from './workspace-session-base-tab-carryover'
+import { carryBaseEntriesIntoHostRows } from './workspace-session-base-row-carryover'
 
 /**
  * Fold rows a host partition holds alone back into the session the readers assemble.
@@ -43,11 +50,13 @@ import {
  * routes those back to that partition directly, so a row does not depend on a repo catalog naming
  * the host before it can be returned to where it was read from.
  *
- * The one thing the base keeps unconditionally is a workspace it holds **terminal tabs** for. That
- * is the live copy the user is looking at, and merging a stale partition into it would re-add tabs
- * they had closed on every launch. Leaving it alone keeps this a one-shot repair, at the cost of
- * not recovering rows stranded beside a populated workspace — which are stranded on main today too,
- * so it is never a new loss. An EMPTY tab row is not such a copy: an empty list is not evidence
+ * The base keeps a workspace it holds **terminal tabs** for only while the host partition holds
+ * none. When both hold tabs the base row is the leftover — `local` is never pruned for an SSH
+ * workspace, so letting it win revived closed tabs and hid live ones (#22503, #23390) — and the
+ * host row replaces it; `baseTabsTheHostNeverListed` picks the base tabs that survive, and
+ * `carryBaseEntriesIntoHostRows` the unsaved editor drafts and newer browsers. An EMPTY
+ * host row is not ownership (it may be #12721's poisoned list), so the base keeps its tabs.
+ * An EMPTY base tab row is not a live copy either: an empty list is not evidence
  * that anything was closed (`mergeDirectSshRemoteWorkspaceSession` argues this at length, and
  * docs/reference/ssh-execution-boundary.md makes it general — "we could not see it" is
  * `unverifiable`, never proof of absence). Treating it as the truth is what published an empty tab
@@ -80,15 +89,25 @@ function browserPagesWorkspaceId(entry: unknown): string | null {
   return recordWorkspaceId(first)
 }
 
-/** Workspaces the base holds terminal tabs for: its live copies, which adoption never touches. */
-function workspacesTheBaseOwns(base: WorkspaceSessionState): Set<string> {
-  const owned = new Set<string>()
-  for (const [key, tabs] of Object.entries(base.tabsByWorktree ?? {})) {
+function workspacesWithTerminalTabs(session: WorkspaceSessionState): Set<string> {
+  const populated = new Set<string>()
+  for (const [key, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
     if (Array.isArray(tabs) && tabs.length > 0) {
-      owned.add(normalizeWorkspaceSessionKeyToWorkspaceId(key))
+      populated.add(normalizeWorkspaceSessionKeyToWorkspaceId(key))
     }
   }
-  return owned
+  return populated
+}
+
+/** Workspaces the base holds terminal tabs for and the host holds none: the base's own copies. */
+function workspacesTheBaseOwns(
+  base: WorkspaceSessionState,
+  host: WorkspaceSessionState
+): Set<string> {
+  const hostPopulated = workspacesWithTerminalTabs(host)
+  return new Set(
+    [...workspacesWithTerminalTabs(base)].filter((workspaceId) => !hostPopulated.has(workspaceId))
+  )
 }
 
 /**
@@ -108,7 +127,7 @@ function adoptableWorkspaceIds(
   base: WorkspaceSessionState,
   host: WorkspaceSessionState
 ): Set<string> {
-  const owned = workspacesTheBaseOwns(base)
+  const owned = workspacesTheBaseOwns(base, host)
   return collectWorkspaceIds(host, (workspaceId) => owned.has(workspaceId))
 }
 
@@ -295,6 +314,8 @@ export function adoptStrandedHostPartitionSession(
     contested.has(normalizeWorkspaceSessionKeyToWorkspaceId(key))
 
   const next: WorkspaceSessionState = { ...base, tabsByWorktree: { ...base.tabsByWorktree } }
+  const hostWonRows = new Map<string, HostWonTabRow>()
+  const hostWonTabIds = new Set<string>()
   for (const [key, tabs] of Object.entries(host.tabsByWorktree ?? {})) {
     if (!adopts(key) || !Array.isArray(tabs)) {
       continue
@@ -304,7 +325,12 @@ export function adoptStrandedHostPartitionSession(
     // "the base has tabs here" is what let #12721's empty local list win over the host's real one
     // whenever the id happened to be contested.
     if (!isContested(key) || hostHasNothingFor(next.tabsByWorktree[key])) {
-      next.tabsByWorktree[key] = tabs
+      const row = hostWonTabRow(next.tabsByWorktree[key], tabs, base, host, key)
+      next.tabsByWorktree[key] = row.tabs
+      hostWonRows.set(key, row)
+      for (const terminal of tabs) {
+        hostWonTabIds.add(terminal.id)
+      }
     }
   }
   // Why the split's own indexes: they are what decided which partition each tab-, pane- and
@@ -356,12 +382,24 @@ export function adoptStrandedHostPartitionSession(
         }
         break
       }
+      // Why replace for a host-won tab: its host row is the live copy, and a base layout or
+      // reattach id beside it would pair the live tab with a dead relay's PTY.
       case 'tabKeyed':
-        adoptRecord(next, host, field, (key) => adoptsResolved(worktreeIdByTabId.get(key)))
+        adoptRecord(
+          next,
+          host,
+          field,
+          (key) => adoptsResolved(worktreeIdByTabId.get(key)),
+          (key) => hostWonTabIds.has(key)
+        )
         break
       case 'paneKeyed':
-        adoptRecord(next, host, field, (key) =>
-          adoptsResolved(worktreeIdForPaneKey(worktreeIdByTabId, key))
+        adoptRecord(
+          next,
+          host,
+          field,
+          (key) => adoptsResolved(worktreeIdForPaneKey(worktreeIdByTabId, key)),
+          (key) => hostWonTabIds.has(tabIdForPaneKey(key) ?? '')
         )
         break
       case 'sleepingAgentKeyed':
@@ -385,6 +423,9 @@ export function adoptStrandedHostPartitionSession(
         break
     }
   }
+  // Why after the walk: a replaced row's base-only entries are picked against the row that won.
+  const carriedSurfaces = carryBaseEntriesIntoHostRows(next, base, host)
+  reconcileHostWonUnifiedRows(next, base, hostWonRows, carriedSurfaces)
   // Why contested ids are withheld: the write path would route the whole bare id here, carrying the
   // co-claimant's rows into this host's partition — the loss the gap-fill above exists to prevent.
   const adoptedWorkspaceIds = new Set(
