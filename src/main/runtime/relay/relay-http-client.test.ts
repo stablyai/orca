@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { cancelTrackingResponse } from '../../lib/unread-response-body.test-fixtures'
+import { setMainHttpClient } from '../../network/http-client'
 import {
   RelayAssignAbortedError,
   RelayAssignRateGate,
@@ -48,9 +49,47 @@ describe('relay HTTP client', () => {
   let gate = new RelayAssignRateGate()
   beforeEach(() => {
     gate = new RelayAssignRateGate()
+    setMainHttpClient(null)
   })
   const assign = (input: Omit<AssignInput, 'assignRateGate'>) =>
     requestRelayAssignment({ ...input, assignRateGate: gate })
+
+  it('sends relay HTTP through the proxy-aware main client when no fetch is injected', async () => {
+    const mainClientFetch = vi.fn(async (url: string | URL | Request) =>
+      String(url).endsWith('/v1/assign')
+        ? assignSuccessResponse()
+        : Response.json({ relayToken: 'scoped-relay-token', expiresAt: Date.now() + 300_000 })
+    )
+    setMainHttpClient({ fetch: mainClientFetch, proxySession: () => null })
+    const keypair = nacl.box.keyPair()
+
+    await expect(
+      exchangeRelayAuthorization({
+        endpoint: 'https://auth.example/v1/desktop/auth/relay-token',
+        accessToken: 'ordinary-access-token',
+        keypair: {
+          ...keypair,
+          publicKeyB64: Buffer.from(keypair.publicKey).toString('base64')
+        }
+      })
+    ).resolves.toMatchObject({ relayToken: 'scoped-relay-token' })
+    expect(mainClientFetch).toHaveBeenCalledWith(
+      'https://auth.example/v1/desktop/auth/relay-token',
+      expect.objectContaining({ method: 'POST' })
+    )
+
+    await expect(
+      assign({
+        directorUrl: 'https://relay.example',
+        relayToken: 'scoped-token',
+        relayHostId: 'AbCdEf0123_-xyZ9'
+      })
+    ).resolves.toMatchObject({ assignmentEpoch: 4 })
+    expect(mainClientFetch).toHaveBeenCalledWith(
+      'https://relay.example/v1/assign',
+      expect.objectContaining({ method: 'POST' })
+    )
+  })
 
   it('exchanges only the ordinary bearer for a host-bound relay token', async () => {
     const keypair = nacl.box.keyPair()

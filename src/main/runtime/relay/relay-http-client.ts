@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
+import { fetchWithConfiguredProxy } from '../../network/http-client'
 import { parseRelayRetryAfterMs } from '../../../shared/relay-retry-after-header'
 import {
   RelayAssignAbortedError,
@@ -111,7 +112,9 @@ export async function exchangeRelayAuthorization(input: {
   requestDeadlineMs?: number
 }): Promise<RelayAuthorization> {
   const relayHostId = deriveRelayHostId(input.keypair.publicKey)
-  const response = await (input.fetch ?? globalThis.fetch)(input.endpoint, {
+  // The default honors the app's configured proxy; callers may still inject a transport.
+  const send = input.fetch ?? fetchWithConfiguredProxy
+  const response = await send(input.endpoint, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${input.accessToken}`,
@@ -182,7 +185,8 @@ async function sendRelayAssignment(
   if (input.isCurrent && !input.isCurrent()) {
     throw new RelayAssignAbortedError()
   }
-  const response = await (input.fetch ?? globalThis.fetch)(`${input.directorUrl}/v1/assign`, {
+  const send = input.fetch ?? fetchWithConfiguredProxy
+  const response = await send(`${input.directorUrl}/v1/assign`, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${input.relayToken}`,
