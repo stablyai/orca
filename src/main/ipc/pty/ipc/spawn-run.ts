@@ -1,6 +1,11 @@
 import { rejectPaneSpawnReservation, reserveIdlePaneSpawn } from '../pane/spawn-reservation'
 import { ptySizes } from '../delivery/visibility-state'
-import { beginPtyIpcSpawn, resolveEarlyPaneSpawnReservationKey } from './spawn-begin'
+import {
+  beginPtyIpcSpawn,
+  resolveEarlyPaneKey,
+  resolveEarlyPaneSpawnReservationKey
+} from './spawn-begin'
+import { releaseStoppedPaneBinding, stopReplacedPaneOwner } from '../pane/pane-owner-replacement'
 import { preparePtyIpcSpawnPreflight } from './spawn-preflight'
 import { assemblePtyIpcSpawnEnv } from './spawn-env'
 import { buildPtyIpcSpawnOptions } from './spawn-options'
@@ -42,9 +47,12 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
   }
   try {
     if (args.replacesPtyId !== undefined) {
-      // Why: stop before resolving the pane owner, so the spawn below finds a dead owner and
-      // launches fresh instead of reattaching the process this restart exists to replace.
-      await deps.stopReplacedPty(args.replacesPtyId)
+      ctx.replacedPaneOwner = await stopReplacedPaneOwner(deps, {
+        replacesPtyId: args.replacesPtyId,
+        paneKey: resolveEarlyPaneKey(args),
+        worktreeId: args.worktreeId,
+        connectionId: args.connectionId
+      })
     }
     triggerPtySpawnPushTargetMaterialization(deps, args)
     const early = await beginPtyIpcSpawn(ctx)
@@ -78,6 +86,10 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
         ctx.rejectedRegistrationCandidate?.incarnationId
       )
       ctx.pendingRegistrationPtyId = null
+    }
+    if (ctx.replacedPaneOwner) {
+      // Why before releasing the pane: its remount spawns without replacesPtyId and must start fresh.
+      await releaseStoppedPaneBinding(deps.store, ctx.replacedPaneOwner)
     }
     // Why: once the reservation is created, any later throw —
     // spawn failure, persist failure, or a post-spawn helper such as

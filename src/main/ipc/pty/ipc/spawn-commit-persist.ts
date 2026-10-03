@@ -3,6 +3,7 @@ import { closeStartupQueryAuthorityForPty, getRelayPtyId } from '../provider/reg
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
 import { recordCodexPaneAccountForSpawn } from '../host-env/codex-home'
 import { persistAdmittedStablePaneBinding } from '../pane/stable-owner'
+import { swapReplacedPaneBinding } from '../pane/pane-owner-replacement'
 import { claimSshPaneLease } from '../pane/ssh-pane-lease-claim'
 import {
   pendingByPaneKey,
@@ -60,9 +61,13 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<P
         ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
         origin: spawnCommitBindingOrigin(ctx.result)
       }
-      const persisted = args.connectionId
-        ? await ctx.deps.store.persistPtyBinding(binding, toSshExecutionHostId(args.connectionId))
-        : await ctx.deps.store.persistPtyBinding(binding)
+      const hostId = args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined
+      const input = ctx.replacedPaneOwner
+        ? swapReplacedPaneBinding(ctx.deps.store, binding, ctx.replacedPaneOwner, hostId)
+        : binding
+      const persisted = hostId
+        ? await ctx.deps.store.persistPtyBinding(input, hostId)
+        : await ctx.deps.store.persistPtyBinding(input)
       if (persisted === false) {
         throw new Error('terminal_pane_owner_changed')
       }

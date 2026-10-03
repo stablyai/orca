@@ -13,11 +13,12 @@ import {
   pendingRuntimePaneCreatesByOwnerKey
 } from '../pane/spawn-reservation'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
+import { excludeReplacedPaneOwner } from '../pane/pane-owner-replacement'
 import type { PtyIpcSpawnState } from './spawn-state'
 import type { PtySpawnIpcArgs } from './spawn-types'
 
 /** The pane key a spawn names before preflight; null when it names no stable pane. */
-function resolveEarlyPaneKey(args: PtySpawnIpcArgs): string | null {
+export function resolveEarlyPaneKey(args: PtySpawnIpcArgs): string | null {
   const leafId =
     typeof args.leafId === 'string' && isTerminalLeafId(args.leafId) ? args.leafId : null
   return typeof args.worktreeId === 'string' &&
@@ -45,12 +46,15 @@ export async function beginPtyIpcSpawn(
   const initialStablePanePtyId = (() => {
     try {
       return !args.connectionId && initialPaneKey
-        ? resolveStablePaneOwner(
-            ctx.deps.runtime,
-            ctx.deps.store,
-            initialPaneKey,
-            args.worktreeId,
-            args.connectionId
+        ? excludeReplacedPaneOwner(
+            resolveStablePaneOwner(
+              ctx.deps.runtime,
+              ctx.deps.store,
+              initialPaneKey,
+              args.worktreeId,
+              args.connectionId
+            ),
+            ctx.replacedPaneOwner
           )?.ptyId
         : undefined
     } catch {
@@ -87,12 +91,15 @@ export async function beginPtyIpcSpawn(
   }
   ctx.earlyStablePaneOwner =
     initialPaneKey && args.worktreeId
-      ? resolveStablePaneOwner(
-          ctx.deps.runtime,
-          ctx.deps.store,
-          initialPaneKey,
-          args.worktreeId,
-          args.connectionId
+      ? excludeReplacedPaneOwner(
+          resolveStablePaneOwner(
+            ctx.deps.runtime,
+            ctx.deps.store,
+            initialPaneKey,
+            args.worktreeId,
+            args.connectionId
+          ),
+          ctx.replacedPaneOwner
         )
       : null
   ctx.earlyWorktreeId = args.worktreeId
