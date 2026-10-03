@@ -59,6 +59,7 @@ export class BackgroundTransientFactRelay {
       this.trackersBySessionId.set(
         sessionId,
         createTerminalTitleTracker({
+          onCommandStarted: () => this.emitFact(sessionId, { kind: 'command-started' }),
           onBell: () => this.emitFact(sessionId, { kind: 'bell' }),
           onCommandFinished: (exitCode) =>
             this.emitFact(sessionId, { kind: 'command-finished', exitCode }),

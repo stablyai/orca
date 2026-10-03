@@ -8,6 +8,7 @@ export {
   getDaemonEndpointFacts,
   getDaemonProvider,
   listLiveDaemonPtyIds,
+  listLiveDaemonSessions,
   readDaemonPidRecord,
   replaceDaemonProvider,
   shutdownDaemon,

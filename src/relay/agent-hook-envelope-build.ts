@@ -9,7 +9,7 @@ const MAX_HOOK_META_LEN = 64
 
 export function buildRelayHookEnvelope(
   event: AgentHookEventPayload,
-  source: AgentHookSource,
+  source: AgentHookSource | undefined,
   env?: string,
   version?: string,
   options: { isReplay?: boolean } = {}

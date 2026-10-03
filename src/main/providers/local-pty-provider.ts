@@ -1,3 +1,4 @@
+import { captureLocalAgentPresence, probeLocalAgentPresence } from './local-agent-presence'
 import type * as pty from 'node-pty'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import {
@@ -157,6 +158,9 @@ export class LocalPtyProvider implements IPtyProvider {
       childProcessEvidence
     }
   }
+
+  probeAgentPresence = probeLocalAgentPresence
+  captureAgentPresence = captureLocalAgentPresence
 
   getForegroundProcess(id: string): Promise<string | null> {
     return getLocalPtyForegroundProcess(id)

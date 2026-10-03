@@ -1,3 +1,4 @@
+import type { AgentProcessPresence } from './agent-process-presence'
 import type { AgentStatusEntry } from './agent-status-types'
 import type { BrowserCertificateFailure, BrowserLoadError } from './browser-workspace-types'
 import type { RuntimeBrowserPlacement } from './runtime-browser-placement'
@@ -16,6 +17,7 @@ export type RuntimeMobileSessionTerminalTab = {
   /** Host-owned PTY incarnation used to fence remote identity observations. */
   incarnationId?: string | null
   terminalTheme?: RuntimeMobileTerminalTheme
+  agentPresence?: AgentProcessPresence
   agentStatus?: AgentStatusEntry | null
   /** Event-only lead-turn end time for paired clients; never persisted in AgentStatusEntry. */
   turnCompletedAt?: number

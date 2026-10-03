@@ -5,6 +5,7 @@ import {
 import { stripLeadingAgentTitleDecorationOrEmpty } from '../../../src/shared/agent-title-decoration'
 import { resolveExplicitTerminalTitleAgentType } from '../../../src/shared/terminal-title-agent-type'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { AgentProcessPresence } from '../../../src/shared/agent-process-presence'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { isBlankBrowserUrl } from '../browser/browser-url'
 import type { MobileSessionTab } from './mobile-session-route-types'
@@ -21,9 +22,10 @@ import type { MobileSessionTab } from './mobile-session-route-types'
  */
 type MobileTerminalTabAgentIdentity = {
   title: string
+  /** The host's owner of the pane, published beside the turn; absent from older hosts. */
+  agentPresence?: AgentProcessPresence
   agentStatus?: {
     agentType?: AgentStatusEntry['agentType'] | null
-    agentPresence?: AgentStatusEntry['agentPresence']
   } | null
   launchAgent?: TuiAgent | null
 }
@@ -32,7 +34,7 @@ type MobileTerminalTabAgentIdentity = {
 export function resolveMobileTerminalTabOwnedAgentId(
   tab: MobileTerminalTabAgentIdentity
 ): string | null {
-  const presence = tab.agentStatus?.agentPresence
+  const presence = tab.agentPresence
   const owner = selectLiveOwnerAgent(presence)
   if (owner) {
     return owner
@@ -52,10 +54,7 @@ export function resolveMobileTerminalTabAgentId(
   if (ownedAgent) {
     return ownedAgent
   }
-  return paneEvidenceAgent(
-    tab.agentStatus?.agentPresence,
-    resolveExplicitTerminalTitleAgentType(tab.title)
-  )
+  return paneEvidenceAgent(tab.agentPresence, resolveExplicitTerminalTitleAgentType(tab.title))
 }
 
 export function getMobileSessionTabTitle(tab: MobileSessionTab): string {

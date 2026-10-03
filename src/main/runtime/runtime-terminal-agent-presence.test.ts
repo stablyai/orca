@@ -10,8 +10,7 @@ import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { assertTerminalAgentSendable } from './rpc/terminal-agent-send-guard'
-import type { AgentProcessPresence } from '../../shared/agent-process-presence'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentPaneOwner, AgentProcessPresence } from '../../shared/agent-process-presence'
 
 const CURSOR_APPROVAL = readFileSync(
   join(__dirname, '__fixtures__', 'cursor-agent-approval-prompt.txt'),
@@ -219,19 +218,15 @@ describe('headless terminal presence', () => {
   })
 
   it('keeps main rules for a live owner recorded on another host (WSL guest, SSH)', async () => {
-    const row = (connectionId: string | null): AgentStatusIpcPayload => ({
+    const recorded = (connectionId: string | null): AgentPaneOwner => ({
       paneKey: 'tab-1:leaf-1',
       tabId: 'tab-1',
       worktreeId: 'wt-1',
       connectionId,
-      state: 'done',
-      prompt: '',
-      receivedAt: 10,
-      stateStartedAt: 10,
-      agentType: 'claude',
-      agentPresence: owner('claude')
+      presence: owner('claude'),
+      receivedAt: 10
     })
-    const remoteOwner = selectKeyboardAgentPresence([row('wsl:Ubuntu')])
+    const remoteOwner = selectKeyboardAgentPresence([recorded('ssh-1')])
     for (const [title, running] of [
       ['user@host: ~/repo', false],
       ['✳ Claude Code', true]

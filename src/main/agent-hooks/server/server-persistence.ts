@@ -46,8 +46,13 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         launchToken,
         ...persistedPayload
       } = enrichedPayload
-      const launchTokenHash = launchToken?.trim()
-        ? createHash('sha256').update(launchToken.trim()).digest('hex')
+      // Why derived: a row written before its pane's command ended still carries that token.
+      const liveLaunchToken = this.withLiveLaunchToken(
+        { paneKey, launchToken },
+        { requireVoucher: true }
+      ).launchToken?.trim()
+      const launchTokenHash = liveLaunchToken
+        ? createHash('sha256').update(liveLaunchToken).digest('hex')
         : this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
       // `payload.mainAgent` rides inside the payload; the legacy `claudeLeadBoundaryChildOnly` flag it
       // replaced is read at hydrate and never written again.
@@ -55,7 +60,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         ...persistedPayload,
         ...(launchTokenHash ? { launchTokenHash } : {})
       }
-      const commitment = this.toAuthorityEvidence(payload, launchTokenHash)
+      const commitment = launchTokenHash ? this.toAuthorityEvidence(payload, launchTokenHash) : null
       if (commitment && !conflictedCommitments.has(paneKey)) {
         const existing = authorityCommitments[paneKey]
         if (existing && !authorityCommitmentsMatch(existing, commitment)) {

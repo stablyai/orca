@@ -1,4 +1,4 @@
-import type * as pty from 'node-pty'
+import * as AgentPresence from './pty-agent-presence'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
 import { getAgentForegroundContextPaths } from '../../providers/agent-foreground-context-paths'
 import { confirmPtyShellForeground } from './pty-shell-foreground-confirmation'
@@ -14,8 +14,7 @@ import {
 import { readWindowsConsoleAttachedProcessIds } from '../../providers/windows-console-attached-processes'
 import {
   isAgentForegroundWrapperProcess,
-  recognizeAgentProcess,
-  type RecognizedAgentProcess
+  recognizeAgentProcess
 } from '../../../shared/agent-process-recognition'
 import {
   shouldInspectOuterWrapperForegroundName,
@@ -36,32 +35,17 @@ const WINDOWS_IDLE_SHELL_FOREGROUND_REFRESH_RETRY_MS = 15_000
 const SHELL_FOREGROUND_OUTPUT_HOT_WINDOW_MS = 10_000
 const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 5_000
 
-type CachedAgentForeground = { processName: string; pid: number | null; refreshedAt: number }
+export type { PtyForegroundProcessTracker } from './pty-agent-presence'
 
-export type PtyForegroundProcessTracker = {
-  recordOutput(data: string): void
-  markDead(): void
-  /** `rawFallback`: node-pty's own name only, with no identity cache and no background
-   *  process-table refresh -- the cheap-tier tick must not fork a full `ps` as a side effect. */
-  getForegroundProcess(options?: { rawFallback?: boolean }): string | null
-  confirmForegroundProcess(): Promise<string | null>
-  confirmShellForeground(): Promise<boolean>
-}
-
-export function createPtyForegroundProcessTracker(args: {
-  process: pty.IPty
-  shellPath: string
-  cwd?: string
-  sessionId: string
-  startupAgentRecognition: RecognizedAgentProcess | null
-  isDead: () => boolean
-}): PtyForegroundProcessTracker {
+export function createPtyForegroundProcessTracker(
+  args: AgentPresence.PtyForegroundTrackerOptions
+): AgentPresence.PtyForegroundProcessTracker {
   const proc = args.process
   const staticName = ptyProcessNameIsSpawnFile(proc)
   const resolveForeground = createPtyForegroundResolver(proc)
   let lastOutputAt = 0
   // `pid` anchors the identity to the row that proved it (null when ambiguous).
-  let cachedAgentForeground: CachedAgentForeground | null = null
+  let cachedAgentForeground: AgentPresence.CachedAgentForeground | null = null
   const contextPaths = getAgentForegroundContextPaths({
     cwd: args.cwd,
     worktreeId: parsePtySessionId(args.sessionId).worktreeId
@@ -147,7 +131,8 @@ export function createPtyForegroundProcessTracker(args: {
         ? { anchorProcessId: anchor.pid, anchorProcessName: anchor.processName }
         : {})
     })
-      .then<string | void>(({ processName, processId, available, anchorPidForeign }) => {
+      .then<string | void>((resolution) => {
+        const { processName, processId, available, anchorPidForeign } = resolution
         if (args.isDead() || !available) {
           return
         }
@@ -196,7 +181,12 @@ export function createPtyForegroundProcessTracker(args: {
           retireStaleForegroundIdentity()
           return
         }
-        cachedAgentForeground = { processName, pid: processId ?? null, refreshedAt: Date.now() }
+        cachedAgentForeground = {
+          processName,
+          pid: processId ?? null,
+          processStartTime: resolution.processStartTime,
+          refreshedAt: Date.now()
+        }
         startupAgentForeground = null
         return processName
       })
@@ -209,6 +199,10 @@ export function createPtyForegroundProcessTracker(args: {
   }
 
   return {
+    captureAgentPresence: (options) =>
+      AgentPresence.capturePtyAgentPresence(proc, args.isDead, cachedAgentForeground, () =>
+        resolveForeground(proc.pid, getFallbackProcess(), { contextPaths, ...options })
+      ),
     recordOutput: (data) => {
       if (data.length > 0) {
         lastOutputAt = Date.now()
@@ -303,6 +297,7 @@ export function createPtyForegroundProcessTracker(args: {
           cachedAgentForeground = {
             processName,
             pid: resolution.processId ?? null,
+            processStartTime: resolution.processStartTime,
             refreshedAt: Date.now()
           }
           startupAgentForeground = null

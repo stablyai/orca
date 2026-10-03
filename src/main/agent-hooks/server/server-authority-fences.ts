@@ -10,7 +10,20 @@ import type {
 
 export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuthorityAliases {
   // Why: retirement fences a pane and every alias of it, then deletes those aliases.
-  retirePaneAuthority(paneKey: string, retirementId?: string): void {
+  retirePaneAuthority(
+    paneKey: string,
+    retirementId?: string,
+    options?: { authorityOnly?: boolean }
+  ): void {
+    if (options?.authorityOnly) {
+      const keys = new Set([paneKey, this.resolvePaneKeyAlias(paneKey)])
+      this.revokeHydratedAuthorityForPaneKeys(keys)
+      for (const key of keys) {
+        this.currentAuthorityObservations.delete(key)
+      }
+      this.scheduleStatusPersist()
+      return
+    }
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
     const previousFence = this.retiredPaneFencesByKey.get(ownerPaneKey)
     const paneKeys = new Set([paneKey, ownerPaneKey])
@@ -66,6 +79,9 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     }
     for (const row of retiredRows) {
       this.commitStatusRowMutation(row, undefined)
+    }
+    for (const key of paneKeys) {
+      this.writeAgentOwner(key, undefined)
     }
     if (hadStatus || authorityChanged) {
       this.scheduleStatusPersist()

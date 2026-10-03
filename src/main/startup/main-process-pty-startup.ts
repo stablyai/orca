@@ -5,7 +5,8 @@ import { getPtyIdForPaneKey } from '../ipc/pty'
 import {
   getDaemonProvider,
   initDaemonPtyProvider,
-  listLiveDaemonPtyIds
+  listLiveDaemonPtyIds,
+  listLiveDaemonSessions
 } from '../daemon/daemon-init'
 import {
   getCodexPaneAccount,
@@ -33,6 +34,8 @@ import { logStartupMilestone } from './startup-diagnostics'
 import type { WindowsDesktopStartupServices } from './windows-desktop-shell-path-startup'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import { mainProcessState as state } from './main-process-state'
+import { rederiveSurvivingAgentOwners } from './surviving-agent-owner-rederivation'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 export function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
   state.pluginService?.emitEvent(
@@ -157,6 +160,12 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
           }
         }
       }
+      void rederiveSurvivingAgentOwners({
+        listSessions: listLiveDaemonSessions,
+        readWorkspaceSession: () => state.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID),
+        capture: (id, options) => getDaemonProvider()?.captureAgentPresence?.(id, options),
+        admit: (scope, presence) => agentHookServer.ingestForegroundPresence(scope, presence)
+      })
       // Why: retained shells can invoke Codex immediately after the startup gate.
       state.codexRuntimeHome?.reconcileLegacySharedHomeForRetainedPanes()
       logStartupMilestone('startup-service-done', { service: 'daemon-pty-provider' })

@@ -74,6 +74,7 @@ export type DataGapEvent = {
  *  frames the daemon never sees. */
 export type DaemonTransientFact =
   | { kind: 'bell' }
+  | { kind: 'command-started' }
   | { kind: 'command-finished'; exitCode: number | null }
   | { kind: 'pr-link'; link: TerminalGitHubPRLink }
   | { kind: '2031-subscribe' }

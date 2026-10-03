@@ -1,6 +1,6 @@
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import type { AgentProcessPresence } from '../../../shared/agent-process-presence'
+import type { AgentPaneOwner, AgentProcessPresence } from '../../../shared/agent-process-presence'
 import type {
   AgentPresenceReleaseIpcPayload,
   AgentStatusClearIpcPayload,
@@ -110,6 +110,7 @@ export type StatusRowMutationListener = (mutation: AgentHookStatusRowMutation) =
 export type PaneStatusClearListener = (clear: AgentStatusClearIpcPayload) => void
 export type StatusDropListener = (paneKey: string) => void
 export type AgentPresenceReleaseListener = (release: AgentPresenceReleaseIpcPayload) => void
+export type AgentOwnerListener = (owner: AgentPaneOwner) => void
 
 /** What a pane cleanup caller knows about the recorded process owner. */
 export type PaneOwnerDisposition =

@@ -2,8 +2,7 @@ import { createHash } from 'node:crypto'
 
 import type { AgentKind } from '../../../shared/telemetry-events'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import type { AgentProcessPresence } from '../../../shared/agent-process-presence'
-import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
+import type { AgentPaneOwner } from '../../../shared/agent-process-presence'
 import {
   getAgentResumeArgv,
   type AgentProviderSessionMetadata
@@ -51,33 +50,14 @@ export function isValidPiProviderSessionOnly(
   return Boolean(providerSession && agentType === 'pi' && getAgentResumeArgv('pi', providerSession))
 }
 
-/** Temporary until step 3 forwards the check to the WSL relay, which owns no PTY triggers: an
- *  owner no host can ever check must not disable the pane's legacy exit rules. */
-export function isUncheckableAgentOwner(
-  entry: Pick<AgentHookEventPayload, 'connectionId'>
-): boolean {
-  return isWslHookRelayConnectionId(entry.connectionId)
-}
-
-/** The owner as surfaces see it; an uncheckable one is published without its process. */
-export function publishableAgentPresence(
-  entry: Pick<AgentHookEventPayload, 'agentPresence' | 'connectionId'>
-): AgentProcessPresence | undefined {
-  const presence = entry.agentPresence
-  if (!presence?.process || !isUncheckableAgentOwner(entry)) {
-    return presence
-  }
-  const { process: _process, ...unidentified } = presence
-  return unidentified
-}
-
+/** A row as surfaces see it: its turn, labelled with the pane's owner, which the row never stores. */
 export function toAgentStatusIpcPayload(
-  entry: EnrichedAgentHookEventPayload
+  entry: EnrichedAgentHookEventPayload,
+  owner?: AgentPaneOwner
 ): AgentStatusIpcPayload {
-  const agentPresence = publishableAgentPresence(entry)
   return {
     paneKey: entry.paneKey,
-    ...(agentPresence ? { agentPresence } : {}),
+    ...(owner ? { agentPresence: owner.presence } : {}),
     ...(entry.launchToken ? { launchToken: entry.launchToken } : {}),
     tabId: entry.tabId,
     worktreeId: entry.worktreeId,
@@ -96,6 +76,24 @@ export function toAgentStatusIpcPayload(
     ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {}),
     ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {}),
     ...entry.payload
+  }
+}
+
+/** An owner with no turn, in the metadata-only envelope whose status fields are transport placeholders. */
+export function toAgentOwnerIpcPayload(owner: AgentPaneOwner): AgentStatusIpcPayload {
+  return {
+    paneKey: owner.paneKey,
+    agentPresence: owner.presence,
+    tabId: owner.tabId,
+    worktreeId: owner.worktreeId,
+    connectionId: owner.connectionId,
+    receivedAt: owner.receivedAt,
+    stateStartedAt: owner.receivedAt,
+    ...(owner.terminalHandle ? { terminalHandle: owner.terminalHandle } : {}),
+    providerSessionOnly: true,
+    state: 'done',
+    prompt: '',
+    agentType: owner.presence.agent
   }
 }
 

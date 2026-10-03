@@ -1,3 +1,9 @@
+import {
+  captureSessionAgentPresence,
+  probeSessionAgentPresence,
+  readSessionForeground
+} from './terminal-host-agent-presence'
+import type { AgentProcessIdentity } from '../../shared/agent-process-presence'
 import type { Session } from './session'
 import {
   SessionNotFoundError,
@@ -225,14 +231,10 @@ export class TerminalHost {
     )
   }
 
-  // Why: null-not-throw — fetched for the tab-bar icon, so a vanished pane should quietly yield "no agent".
-  getForegroundProcess(sessionId: string): string | null {
-    const session = this.sessions.get(sessionId)
-    if (!session || !session.isAlive) {
-      return null
-    }
-    return session.getForegroundProcess()
-  }
+  captureAgentPresence = captureSessionAgentPresence.bind(null, this.sessions)
+  probeAgentPresence = (id: string, identity: AgentProcessIdentity) =>
+    probeSessionAgentPresence(this.sessions, id, identity)
+  getForegroundProcess = (id: string) => readSessionForeground(this.sessions, id)
 
   inspectProcess(
     sessionId: string,
@@ -312,13 +314,10 @@ export class TerminalHost {
     return takeTerminalHostPendingOutput(this.sessions.get(sessionId), includeSnapshot, opts)
   }
 
-  isKilled(sessionId: string): boolean {
-    return this.killedTombstones.has(sessionId)
-  }
+  isKilled = (sessionId: string): boolean => this.killedTombstones.has(sessionId)
 
-  listSessions(): SessionInfo[] {
-    return listLiveTerminalHostSessions(this.sessions, this.agentSessionOwners)
-  }
+  listSessions = (): SessionInfo[] =>
+    listLiveTerminalHostSessions(this.sessions, this.agentSessionOwners)
 
   dispose(): Promise<void> {
     this.creationFenced = true

@@ -1,3 +1,4 @@
+import type { SessionInfo } from './types'
 import { readFileSync } from 'node:fs'
 import { setLocalPtyProvider } from '../ipc/pty'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
@@ -96,6 +97,26 @@ export async function getCurrentDaemonMacTccAttributionHealth(): Promise<MacDaem
 }
 
 /** Returns null unless every daemon generation supplied an authoritative inventory. */
+/** Every daemon generation's live sessions, or null when any inventory read fails. */
+export async function listLiveDaemonSessions(): Promise<SessionInfo[] | null> {
+  if (!adapter) {
+    return null
+  }
+  const adapters =
+    adapter instanceof DaemonPtyRouter || adapter instanceof DegradedDaemonPtyProvider
+      ? adapter.getAllAdapters()
+      : [adapter]
+  const inventories = await Promise.allSettled(
+    adapters.map((daemonAdapter) => daemonAdapter.listSessions())
+  )
+  if (inventories.some((inventory) => inventory.status === 'rejected')) {
+    return null
+  }
+  return inventories.flatMap((inventory) =>
+    inventory.status === 'fulfilled' ? inventory.value : []
+  )
+}
+
 export async function listLiveDaemonPtyIds(): Promise<string[] | null> {
   if (!adapter) {
     return null

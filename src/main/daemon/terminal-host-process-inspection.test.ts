@@ -23,6 +23,34 @@ function createSubprocess(): SubprocessHandle {
 }
 
 describe('TerminalHost process inspection', () => {
+  it('discards a foreground capture that finishes after its session exits', async () => {
+    const subprocess = createSubprocess()
+    const owner = {
+      agent: 'codex',
+      process: { pid: 42, platform: 'linux', startTime: 'boot:42' }
+    } as const
+    let finish!: (value: typeof owner) => void
+    subprocess.captureAgentPresence = () =>
+      new Promise((resolve) => {
+        finish = resolve
+      })
+    const host = new TerminalHost({ spawnSubprocess: () => subprocess })
+    try {
+      await host.createOrAttach({
+        sessionId: 'session-presence',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      const capture = host.captureAgentPresence('session-presence')
+      subprocess.kill()
+      finish(owner)
+      expect(await capture).toBeUndefined()
+    } finally {
+      await host.dispose()
+    }
+  })
+
   it('returns unverifiable when the expected incarnation is stale', async () => {
     const host = new TerminalHost({ spawnSubprocess: () => createSubprocess() })
     try {

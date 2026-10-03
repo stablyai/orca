@@ -1,5 +1,3 @@
-import { transitionHookPresence } from '../../../shared/agent-hook-presence-transition'
-import { isSameAgentProcess } from '../../../shared/agent-process-presence'
 import {
   reconcileRemoteCodexState,
   markCodexLeadTurnInterrupted
@@ -23,54 +21,36 @@ import { AgentHookServerStatusApplication } from './server-status-application'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
   protected applyNormalizedStatus(
-    incoming: AgentHookEventPayload & { authorityRestartId?: string },
+    event: AgentHookEventPayload & { authorityRestartId?: string },
     onAccepted?: () => void,
     origin: AgentStatusObservationOrigin = 'hook',
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload
   ): EnrichedAgentHookEventPayload | undefined {
-    // Why: a relay already chose the live owner on its own host; re-deciding against a record it
-    // replaced would pin the pane to an owner this desktop can never check. Exits still need our
-    // fence, except the host-stamped replay of the relay's own settled exit.
-    const relayOwner = incoming.connectionId !== null ? incoming.agentPresence : undefined
+    const incoming = this.withLiveLaunchToken(event)
+    // Why: a turn row never stores an owner; only a relay's own host may record one, beside it.
+    const {
+      authorityRestartId,
+      agentPresence: claimedOwner,
+      agentPresenceFromExecutionHost,
+      ...payload
+    } = incoming
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
-    const stored = this.state.lastStatusByPaneKey.get(incoming.paneKey) as
+    const stored = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
-    const storedOwner = stored?.agentPresence?.process
-    // Why: a replayed exit only settles the owner it names against a different identified stored
-    // owner; with no stored process it goes through the transition, which drops an ownerless exit.
-    const relayDecided =
-      relayOwner?.process &&
-      (!relayOwner.ended ||
-        (incoming.agentPresenceFromExecutionHost &&
-          incoming.isReplay === true &&
-          storedOwner !== undefined &&
-          !isSameAgentProcess(storedOwner, relayOwner.process)))
-    const transitioned = relayDecided ? incoming : transitionHookPresence(incoming, stored)
-    if (!transitioned) {
+    const replacesStaleOwner =
+      agentPresenceFromExecutionHost && claimedOwner
+        ? this.applyRemoteOwner(payload, claimedOwner)
+        : false
+    // Why: an exit claim carries no turn; the owner record above settled a host-proved one.
+    if (claimedOwner?.ended) {
+      if (!agentPresenceFromExecutionHost) {
+        this.applyExitClaim(payload.paneKey, claimedOwner, payload.providerSession)
+      }
       return undefined
-    }
-    // Host provenance describes this admission, never the stored row.
-    const { authorityRestartId, agentPresenceFromExecutionHost, ...payload } = {
-      ...incoming,
-      ...transitioned
     }
     if (!this.canWriteLegacyStatusRow(payload)) {
-      return undefined
-    }
-    // Why: the execution host already replaced this owner; the mirrored row is a dead process's, not a parent turn.
-    const hostOwner = agentPresenceFromExecutionHost && payload.agentPresence?.process
-    const replacesStaleOwner = Boolean(
-      hostOwner &&
-      stored?.agentPresence?.process &&
-      !isSameAgentProcess(stored.agentPresence.process, hostOwner)
-    )
-    if (payload.agentPresence?.ended && !replacesStaleOwner) {
-      this.reconcileEndedProcessForPaneKeys([payload.paneKey], {
-        kind: 'owner-exited',
-        presence: payload.agentPresence
-      })
       return undefined
     }
     if (payload.hookEventName === 'UserPromptSubmit') {
@@ -117,6 +97,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
         return undefined
       }
       this.commitStatusRowMutation(rowBefore, enriched)
+      this.supersedeEndedOwner(enriched)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
       this.emitEnrichedStatus(enriched)
@@ -266,6 +247,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       return undefined
     }
     this.commitStatusRowMutation(rowBefore, enriched)
+    this.supersedeEndedOwner(enriched)
     // Why skipped for structured rows: the serializer drops them, so the whole walk and stringify
     // can only ever reproduce the last file — once per debounce window for a streaming chat.
     if (!enriched.structuredHost) {

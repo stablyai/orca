@@ -9,6 +9,7 @@ import {
 import {
   PS_TIMEOUT_MS,
   createProcessTableSnapshotReader,
+  processTableEnv,
   withEvidenceBudget
 } from './process-table-snapshot-reader'
 
@@ -22,6 +23,8 @@ const cheapProcessTableReader = createProcessTableSnapshotReader<CheapProcessTab
     const result = await runProcess({
       program: 'ps',
       args: CHEAP_PS_ARGS,
+      // Same clock as the full capture, whose fingerprints this one is compared with.
+      env: processTableEnv(),
       timeoutMs: PS_TIMEOUT_MS,
       maxOutputBytes: PS_MAX_BUFFER_BYTES
     })

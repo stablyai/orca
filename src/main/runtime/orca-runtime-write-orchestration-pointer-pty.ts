@@ -99,7 +99,7 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     paneKey: string | null
   ): { agentIdentity?: TuiAgent } {
     const rows = paneKey ? (this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? []) : []
-    const presence = [...rows].sort((a, b) => b.receivedAt - a.receivedAt)[0]?.agentPresence
+    const presence = paneKey ? this.getAgentOwnerFn?.(paneKey)?.presence : undefined
     const owner = selectLiveOwnerAgent(presence)
     if (owner) {
       return { agentIdentity: owner }

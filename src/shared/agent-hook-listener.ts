@@ -1,4 +1,3 @@
-import { readAgentProcessIdentity } from './agent-process-presence'
 import { normalizeAgentStatusPayload } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
 import { extractAgentProviderSession } from './agent-session-resume'
@@ -24,14 +23,54 @@ import {
   trackOpenCodePaneLaunchToken
 } from './agent-hook-listener/opencode-session-registry'
 import { readString } from './agent-hook-listener/tool-input-preview'
-/** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
-const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
+/** Session-end reasons that end the agent's process; /clear and /resume keep it running. */
+const SESSION_END_EXIT_REASONS = new Set([
   'prompt_input_exit',
   'logout',
   'other',
   'bypass_permissions_disabled'
 ])
 
+/** A session end that its provider reports as no turn state, for a reason that ends the process,
+ *  becomes an exit claim: never a row. With no live host owner (tmux, WSL) it ends that agent's
+ *  turn as main does; it never mints, revives or re-dates one. The payload only fills the shape. */
+function sessionEndClaim(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>,
+  scope: Pick<AgentHookEventPayload, 'paneKey' | 'tabId' | 'worktreeId'> & {
+    source: AgentHookSource
+    payload?: AgentHookEventPayload['payload']
+    providerSession?: AgentHookEventPayload['providerSession']
+  }
+): AgentHookEventPayload | null {
+  const reason = readString(hookPayload, 'reason')
+  if (
+    eventName !== 'SessionEnd' ||
+    readString(hookPayload, 'agent_id') ||
+    reason === undefined ||
+    !SESSION_END_EXIT_REASONS.has(reason)
+  ) {
+    return null
+  }
+  const payload =
+    scope.payload ??
+    normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: scope.source })
+  return payload
+    ? {
+        paneKey: scope.paneKey,
+        source: scope.source,
+        tabId: scope.tabId,
+        worktreeId: scope.worktreeId,
+        connectionId: null,
+        hookEventName: 'SessionEnd',
+        ...(scope.providerSession ? { providerSession: scope.providerSession } : {}),
+        agentPresence: { agent: scope.source, ended: true },
+        payload
+      }
+    : null
+}
+
+/** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 export function normalizeHookPayload(
   state: HookListenerState,
   source: AgentHookSource,
@@ -145,40 +184,6 @@ export function normalizeHookPayload(
     }
   }
 
-  // Why: presence needs the agent's own process; without it the hook cannot speak for liveness.
-  const agentProcess =
-    source === 'claude' ? readAgentProcessIdentity(record.agentProcess) : undefined
-  const agentPresence = agentProcess ? { agent: source, process: agentProcess } : undefined
-  const sessionEndReason = readString(hookPayloadRecord, 'reason')
-  if (
-    eventName === 'SessionEnd' &&
-    agentPresence &&
-    !readString(hookPayloadRecord, 'agent_id') &&
-    // Why: only reasons that end the process; /clear and /resume keep it running, and an unknown
-    // reason is left to the process check rather than guessed.
-    sessionEndReason !== undefined &&
-    CLAUDE_EXIT_SESSION_END_REASONS.has(sessionEndReason)
-  ) {
-    const payload =
-      previousStatus?.payload ??
-      normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })
-    if (!payload) {
-      return null
-    }
-    return {
-      paneKey,
-      source,
-      launchToken,
-      tabId,
-      worktreeId,
-      connectionId: null,
-      providerSession: providerSession ?? undefined,
-      hookEventName: 'SessionEnd',
-      agentPresence: { ...agentPresence, ended: true as const },
-      payload
-    }
-  }
-
   const extractedPrompt = extractPromptText(hookPayloadRecord)
   const promptText = extractedPrompt.text
   const dispatched = normalizeProviderEvent({
@@ -204,14 +209,20 @@ export function normalizeHookPayload(
   const restoredUnconfirmed =
     source === 'claude' && state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
   if (!transportPayload) {
-    return null
+    return sessionEndClaim(eventName, hookPayloadRecord, {
+      paneKey,
+      source,
+      tabId,
+      worktreeId,
+      payload: previousStatus?.payload,
+      providerSession: providerSession ?? undefined
+    })
   }
   const grokActiveTurn = source === 'grok' ? state.grokActiveTurnByPaneKey.get(paneKey) : undefined
 
   return {
     paneKey,
     source,
-    agentPresence,
     launchToken,
     tabId,
     worktreeId,

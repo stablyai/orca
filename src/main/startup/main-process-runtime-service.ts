@@ -28,6 +28,7 @@ import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import { SkillCloudService } from '../skills/skill-cloud-service'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
+import { agentRunEvidence } from '../../shared/agent-presence-command-observer'
 import {
   AgentStatusObservedPaneIdentities,
   recordObservedAgentStatusPaneIdentity
@@ -117,8 +118,12 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       agentHookServer.getStatusSnapshotForPane(paneKey),
     attestAgentHookCompatibilityAuthority: (candidate) =>
       agentHookServer.attestCompatibilityAuthority(candidate),
-    retireAgentHookCompatibilityAuthority: (paneKey) =>
-      agentHookServer.retirePaneAuthority(paneKey),
+    retireAgentHookCompatibilityAuthority: (paneKey, options) =>
+      agentHookServer.retirePaneAuthority(paneKey, undefined, options),
+    onForegroundAgentPresence: (scope, presence) =>
+      agentHookServer.ingestForegroundPresence(scope, presence),
+    getAgentOwner: (paneKey) => agentHookServer.getAgentOwner(paneKey),
+    getAgentOwners: () => agentHookServer.getAgentOwners(),
     checkHookAgentPresence: (paneKey) => agentHookServer.checkAgentPresence(paneKey),
     reconcileAgentStatusForEndedProcess: (paneKeys) =>
       agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys, { kind: 'terminal-ended' }),
@@ -171,12 +176,26 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
   state.runtime = runtime
+  agentHookServer.setWindowsAgentOwnerProbe((paneKey, identity) =>
+    runtime.probeWindowsAgentOwner(paneKey, identity)
+  )
+  agentHookServer.setPaneLaunchAuthorityReader((paneKey) =>
+    runtime.readPaneLaunchAuthority(paneKey)
+  )
   agentHookServer.setPaneTerminalSleepStopProbe((paneKey) =>
     runtime.isPaneTerminalSleepStopInFlight(paneKey)
   )
-  agentHookServer.subscribeEnrichedStatus((enriched) =>
+  agentHookServer.subscribeEnrichedStatus((enriched) => {
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)
-  )
+    if (!enriched.providerSessionOnly) {
+      runtime.observeAgentPresenceEvidence(
+        enriched.paneKey,
+        enriched.payload.agentType ?? 'unknown',
+        enriched.payload.state !== 'working',
+        agentRunEvidence(enriched)
+      )
+    }
+  })
   // Why before anything can attach: a client host that reattaches to a restarted runtime is only
   // handed its pages back if the runtime found them first.
   runtime.rehydrateClientHostedBrowserPages()

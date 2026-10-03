@@ -1,10 +1,15 @@
+import type { AgentForegroundObservation } from '../../shared/agent-foreground-identity'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
-import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
+import {
+  resolveOuterWrapperForegroundIdentity,
+  resolveOuterWrapperForegroundProcess
+} from '../../shared/foreground-wrapper-agent'
 import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import {
-  getFreshProcessTableSnapshot,
   getFreshShellForegroundSnapshot,
-  getProcessTableSnapshot
+  getFreshProcessTableSnapshot,
+  getProcessTableSnapshot,
+  getProcessTableSnapshotSince
 } from '../../shared/process-table-snapshot-reader'
 import { collectDescendantsFromIndex, getProcessTableIndex } from '../../shared/process-table-index'
 import {
@@ -34,15 +39,7 @@ export {
   type BatchedForegroundProcessResult
 } from './agent-foreground-process-batch'
 
-export type AgentForegroundProcessResolution = {
-  available: boolean
-  processName: string | null
-  /**
-   * Windows: pid of the process a recognized name belongs to — a liveness
-   * anchor callers may check against the pane's job. Absent when the name is a
-   * fallback, ambiguous, or resolved on POSIX (where `+` already marks it).
-   */
-  processId?: number
+export type AgentForegroundProcessResolution = AgentForegroundObservation & {
   /** Windows: the scan proved the caller's `anchorProcessId` is now a non-agent. */
   anchorPidForeign?: boolean
 }
@@ -156,7 +153,7 @@ export async function resolveAgentForegroundProcessWithAvailability(
           : fallbackProcess),
       // The anchor only travels with the name it proved, never with a fallback.
       ...(resolution.processName !== null && resolution.processId !== undefined
-        ? { processId: resolution.processId }
+        ? { processId: resolution.processId, processStartTime: resolution.processStartTime }
         : {}),
       ...(resolution.anchorPidForeign ? { anchorPidForeign: true } : {})
     }
@@ -165,17 +162,36 @@ export async function resolveAgentForegroundProcessWithAvailability(
   try {
     const rows = options.fresh
       ? await getFreshProcessTableSnapshot()
-      : await getProcessTableSnapshot()
+      : options.snapshotNotBeforeMs === undefined
+        ? await getProcessTableSnapshot()
+        : await getProcessTableSnapshotSince(options.snapshotNotBeforeMs, options.stillWanted)
     if (options.fresh && !getProcessTableIndex(rows).byPid.has(shellPid)) {
       return { available: false, processName: fallbackProcess }
     }
-    return {
-      available: true,
-      processName: resolveAgentForegroundProcessFromPs(rows, shellPid) ?? fallbackProcess
-    }
+    const identity = resolveAgentForegroundIdentityFromPs(rows, shellPid)
+    return { available: true, ...identity, processName: identity.processName ?? fallbackProcess }
   } catch {
     // Why: a failed scan cannot prove fallback ownership; callers retain the last recognized agent.
     return { available: false, processName: fallbackProcess }
+  }
+}
+
+export function resolveAgentForegroundIdentityFromPs(
+  rows: readonly ProcessTableRow[],
+  shellPid: number
+): { processName: string | null; processId?: number; processStartTime?: string } {
+  const found = selectAgentForegroundFromPs(rows, shellPid)
+  if (!found) {
+    return { processName: null }
+  }
+  const identity = resolveOuterWrapperForegroundIdentity(
+    found.selected.recognized,
+    found.selected.candidate,
+    found.candidates
+  )
+  return {
+    ...identity,
+    processStartTime: getProcessTableIndex(rows).byPid.get(identity.processId)?.startTime
   }
 }
 

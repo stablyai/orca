@@ -7,9 +7,10 @@ import type { PrepareClaudeAuth } from '../ipc/pty/host-env/types'
 import type { RuntimeTerminalAgentStatusEvent } from './runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentPaneOwner } from '../../shared/agent-process-presence'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
-import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
+import type { AgentHookServer, AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
@@ -81,7 +82,14 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
         connectionId: string | null
         terminalProvenance: 'current_runtime' | 'restored'
       }) => AgentHookAuthorityAttestation | null
-      retireAgentHookCompatibilityAuthority?: (paneKey: string) => void
+      retireAgentHookCompatibilityAuthority?: (
+        paneKey: string,
+        options?: { authorityOnly?: boolean }
+      ) => void
+      onForegroundAgentPresence?: AgentHookServer['ingestForegroundPresence']
+      /** The execution host's owner record for a pane, which exists with or without a turn. */
+      getAgentOwner?: (paneKey: string) => AgentPaneOwner | undefined
+      getAgentOwners?: () => AgentPaneOwner[]
       checkHookAgentPresence?: (
         paneKey: string
       ) => Promise<'live' | 'unverifiable' | 'exited' | null>
@@ -229,6 +237,9 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       deps?.attestAgentHookCompatibilityAuthority ?? null
     this.retireAgentHookCompatibilityAuthorityFn =
       deps?.retireAgentHookCompatibilityAuthority ?? null
+    this.onForegroundAgentPresence = deps?.onForegroundAgentPresence ?? null
+    this.getAgentOwnerFn = deps?.getAgentOwner ?? null
+    this.getAgentOwnersFn = deps?.getAgentOwners ?? null
     this.checkHookAgentPresenceFn = deps?.checkHookAgentPresence ?? null
     this.reconcileAgentStatusForEndedProcessFn = deps?.reconcileAgentStatusForEndedProcess ?? null
     this.dropAgentStatusForWorktreeFn = deps?.dropAgentStatusForWorktree ?? null

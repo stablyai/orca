@@ -12,6 +12,7 @@ export type PtyDataEvent = {
  *  scan authority for a backgrounded PTY (see onBackgroundStreamEvent). */
 export type PtyTransientFact =
   | { kind: 'bell' }
+  | { kind: 'command-started' }
   | { kind: 'command-finished'; exitCode: number | null }
   | { kind: 'pr-link'; link: TerminalGitHubPRLink }
   | { kind: '2031-subscribe' }

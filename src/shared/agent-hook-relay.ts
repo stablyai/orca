@@ -76,7 +76,7 @@ export const REMOTE_AGENT_HOOK_ENV = 'remote' as const
 
 /** Wire envelope for a single hook event flowing relay → Orca. */
 export type AgentHookRelayEnvelope = {
-  source: AgentHookSource
+  source?: AgentHookSource
   paneKey: string
   agentPresence?: AgentProcessPresence
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */

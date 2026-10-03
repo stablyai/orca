@@ -1,4 +1,4 @@
-import { isSameAgentProcess } from '../../../shared/agent-process-presence'
+import { isSameAgentProcess, type AgentPaneOwner } from '../../../shared/agent-process-presence'
 import {
   admitLegacyAgentStatus,
   deleteLegacyAgentStatus,
@@ -12,14 +12,13 @@ import type {
   PaneOwnerDisposition
 } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
-import { isUncheckableAgentOwner } from './server-status-identity'
 
 /** A `providerSessionOnly` remnant carries no state claim, so it cannot gate a pane `working`. */
 function toRetainedRow(
   entry: EnrichedAgentHookEventPayload | null | undefined
 ): EnrichedAgentHookEventPayload | null {
   if (
-    (!entry?.providerSession && !entry?.agentPresence?.process) ||
+    !entry?.providerSession ||
     !entry.payload.agentType ||
     entry.payload.agentType === 'unknown'
   ) {
@@ -29,47 +28,22 @@ function toRetainedRow(
   return { ...resumeIdentity, providerSessionOnly: true, retainedForLiveness: true }
 }
 
-/** What survives a pane cleanup: a still-unverified owner, the ended owner of a surviving
- *  terminal, else resume identity when the terminal outlives its agent. */
-function rowAfterPaneCleanup(
-  entry: EnrichedAgentHookEventPayload | undefined,
-  disposition: PaneOwnerDisposition
-): EnrichedAgentHookEventPayload | undefined {
-  const presence = entry?.agentPresence
-  if (!entry || disposition === 'released') {
-    return undefined
-  }
-  if (!presence?.process) {
-    return disposition === 'agent-exited' ? (toRetainedRow(entry) ?? undefined) : undefined
-  }
-  const retained = toRetainedRow(entry) ?? undefined
-  if (!retained || disposition === 'unverified' || presence.ended) {
-    return retained
-  }
-  // disposition is 'agent-exited': the terminal lives, so the exit is the owner's own.
-  return {
-    ...retained,
-    agentPresence: { ...presence, ended: true },
-    receivedAt: Math.max(Date.now(), entry.receivedAt + 1)
-  }
-}
-
 function endedProcessDisposition(
-  previous: EnrichedAgentHookEventPayload | undefined,
+  owner: AgentPaneOwner | undefined,
   evidence: EndedProcessEvidence
 ): PaneOwnerDisposition | null {
-  const owner =
-    previous && !isUncheckableAgentOwner(previous) ? previous.agentPresence?.process : undefined
+  // Why: an exited owner no longer speaks for the pane, so it must not shield a later turn.
+  const process = owner?.presence.ended ? undefined : owner?.presence.process
   if (evidence.kind === 'terminal-ended') {
     return 'released'
   }
-  if (!owner) {
+  if (!process) {
     return 'agent-exited'
   }
   // Why: only this host's proof about the recorded process may end it; legacy signals never do.
   return evidence.kind === 'owner-exited' &&
     evidence.presence.process &&
-    isSameAgentProcess(owner, evidence.presence.process)
+    isSameAgentProcess(process, evidence.presence.process)
     ? 'agent-exited'
     : null
 }
@@ -81,13 +55,15 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     return toRetainedRow(entry)
   }
 
-  /** Commit what a pane cleanup keeps; the row write publishes any owner it drops. */
+  /** Commit what a pane cleanup keeps: resume identity, once the agent itself has gone. */
   protected commitPaneRowAfterCleanup(
     previous: EnrichedAgentHookEventPayload | undefined,
     disposition: PaneOwnerDisposition
   ): void {
-    const retained = rowAfterPaneCleanup(previous, disposition)
-    const owner = retained?.agentPresence
+    const retained =
+      previous && disposition === 'agent-exited'
+        ? (toRetainedRow(previous) ?? undefined)
+        : undefined
     if (retained) {
       admitLegacyAgentStatus(
         this.state,
@@ -95,11 +71,25 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
         retained,
         AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
       )
-      if (owner?.process && (!previous?.providerSessionOnly || owner !== previous.agentPresence)) {
-        this.emitEnrichedStatus(retained)
-      }
     }
     this.commitStatusRowMutation(previous, retained)
+  }
+
+  /** A release drops the pane's owner; a proven exit keeps it as ended history. Lost contact keeps it. */
+  protected settlePaneOwner(paneKey: string, disposition: PaneOwnerDisposition): void {
+    const owner = this.agentOwnerByPaneKey.get(paneKey)
+    if (!owner || disposition === 'unverified') {
+      return
+    }
+    if (disposition === 'released') {
+      this.writeAgentOwner(paneKey, undefined)
+    } else if (!owner.presence.ended) {
+      this.writeAgentOwner(paneKey, {
+        ...owner,
+        presence: { ...owner.presence, ended: true },
+        receivedAt: Math.max(Date.now(), owner.receivedAt + 1)
+      })
+    }
   }
 
   /** Drop only the status row (user dismissal); do NOT wipe prompt/tool caches since the pane's agent may still be alive. Use clearPaneState for PTY-teardown. */
@@ -198,11 +188,10 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       if (!this.hasLiveClaimsForPaneKey(resolvedPaneKey)) {
         continue
       }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Server admission enriches every stored row with receipt and turn clocks.
-      const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
-        | EnrichedAgentHookEventPayload
-        | undefined
-      const disposition = endedProcessDisposition(previous, evidence)
+      const disposition = endedProcessDisposition(
+        this.agentOwnerByPaneKey.get(resolvedPaneKey),
+        evidence
+      )
       if (!disposition) {
         continue
       }
@@ -224,7 +213,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
    *  itself lives beside `clearPaneCacheState`, so adding a latch cannot leave this behind in a
    *  different file. */
   protected hasLiveClaimsForPaneKey(paneKey: string): boolean {
-    return paneHasStateClaims(this.state, paneKey)
+    return paneHasStateClaims(this.state, paneKey) || this.agentOwnerByPaneKey.has(paneKey)
   }
 
   /** Clear statuses proven to belong to one lost SSH transport. */

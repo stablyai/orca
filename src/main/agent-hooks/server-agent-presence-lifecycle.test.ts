@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { probeAgentProcessPresence } from '../../shared/agent-process-presence-probe'
@@ -12,7 +12,8 @@ import { projectPluginAgentStatusChangedPayload } from '../plugins/plugin-agent-
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
 vi.mock('../../shared/agent-process-presence-probe', () => ({
-  probeAgentProcessPresence: vi.fn(async () => 'live')
+  probeAgentProcessPresence: vi.fn(async () => 'live'),
+  isSuspendedAgentProcess: vi.fn(async () => false)
 }))
 
 const owner = {
@@ -30,7 +31,7 @@ class LifecycleServer extends AgentHookServer {
   }
 
   publish(overrides: Partial<AgentHookEventPayload> = {}): void {
-    this.applyNormalizedStatus({
+    const event: AgentHookEventPayload = {
       paneKey: PANE,
       tabId: 'tab-1',
       worktreeId: 'folder-1',
@@ -40,7 +41,20 @@ class LifecycleServer extends AgentHookServer {
       agentPresence: owner,
       payload: { agentType: 'claude', state: 'working', prompt: 'task' },
       ...overrides
-    })
+    }
+    if (event.connectionId) {
+      this.applyNormalizedStatus({ ...event, agentPresenceFromExecutionHost: true })
+    } else if (event.agentPresence?.ended) {
+      this.reconcileEndedProcessForPaneKeys([event.paneKey], {
+        kind: 'owner-exited',
+        presence: event.agentPresence
+      })
+    } else {
+      if (event.agentPresence) {
+        this.ingestForegroundPresence(event, event.agentPresence)
+      }
+      this.applyNormalizedStatus(event)
+    }
   }
 
   /** What the HTTP ingest does for every admitted hook. */
@@ -123,13 +137,45 @@ describe('host owner lifecycle', () => {
     expect(server.hasVerifiableAgentProcess(PANE)).toBe(false)
   })
 
-  it('rechecks every restored owner once at startup', async () => {
-    vi.mocked(probeAgentProcessPresence).mockResolvedValue('exited')
+  it('never hydrates an owner; the execution host re-derives it from its own reads', async () => {
     const server = await restartWithOwnerRow()
     await flush()
-    expect(server.getStatusSnapshot()).toEqual([
-      expect.objectContaining({ agentPresence: { ...owner, ended: true } })
-    ])
+    expect(server.getAgentOwner(PANE)).toBeUndefined()
+    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('agentPresence')
+    expect(vi.mocked(probeAgentProcessPresence)).not.toHaveBeenCalled()
+  })
+
+  it('strips owners from rows an older build persisted and drops its owner-only rows', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'owner-lifecycle-'))
+    dirs.push(dir)
+    const now = Date.now()
+    const row = {
+      paneKey: PANE,
+      tabId: 'tab-1',
+      worktreeId: 'folder-1',
+      connectionId: null,
+      agentPresence: owner,
+      payload: { agentType: 'claude', state: 'working', prompt: 'task' },
+      receivedAt: now,
+      stateStartedAt: now
+    }
+    const ownerOnly = {
+      ...row,
+      paneKey: GOOD_PANE,
+      tabId: 'tab-good',
+      providerSessionOnly: true,
+      payload: { agentType: 'claude', state: 'done', prompt: '' }
+    }
+    mkdirSync(join(dir, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      join(dir, 'agent-hooks', 'last-status.json'),
+      JSON.stringify({ version: 2, entries: { [PANE]: row, [GOOD_PANE]: ownerOnly } })
+    )
+    const server = createServer()
+    await server.start({ env: 'production', userDataPath: dir })
+    expect(server.getStatusSnapshot().map((entry) => entry.paneKey)).toEqual([PANE])
+    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('agentPresence')
+    expect(server.getAgentOwners()).toEqual([])
   })
 
   it('publishes a release when retirement drops an identified owner', () => {
@@ -153,7 +199,7 @@ describe('host owner lifecycle', () => {
   })
 
   it.each(['silent death', 'dismissal', 'unverified cleanup'])(
-    'hands the pane to the process whose hook proved the old owner dead (%s)',
+    'admits the foreground successor after exact-owner exit proof (%s)',
     async (howOwnerWasLeft) => {
       const server = createServer()
       server.publish()
@@ -162,16 +208,21 @@ describe('host owner lifecycle', () => {
       } else if (howOwnerWasLeft === 'unverified cleanup') {
         server.clearPaneState(PANE, 'unverified')
       }
-      const live = vi.fn()
-      server.subscribeEnrichedStatus(live)
+      const owners = vi.fn()
+      server.setAgentOwnerListener(owners)
       vi.mocked(probeAgentProcessPresence).mockResolvedValue('exited')
+      await server.checkAgentPresence(PANE)
+      server.ingestForegroundPresence(
+        { paneKey: PANE, tabId: 'tab-1', worktreeId: 'folder-1', connectionId: null },
+        replacement
+      )
       server.hook({ agentPresence: replacement })
       await flush()
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({ state: 'working', agentPresence: replacement })
       ])
       expect(server.getStatusSnapshot()[0]?.providerSessionOnly).toBeUndefined()
-      expect(live.mock.calls.some(([row]) => row.agentPresence?.ended)).toBe(false)
+      expect(owners.mock.calls.some(([record]) => record.presence.ended)).toBe(true)
     }
   )
 
@@ -186,7 +237,7 @@ describe('host owner lifecycle', () => {
     server.clearPaneState(PANE, 'unverified')
     resolveProbe('exited')
     await expect(pending).resolves.toBe('exited')
-    expect(server.getStatusSnapshot()[0]?.agentPresence).toEqual({ ...owner, ended: true })
+    expect(server.getAgentOwner(PANE)?.presence).toEqual({ ...owner, ended: true })
   })
 
   it('adopts the owner a relay stamped instead of the stale desktop record', () => {
@@ -205,7 +256,8 @@ describe('host owner lifecycle', () => {
       providerSessionOnly: true,
       agentPresence: { ...replacement, ended: true }
     })
-    expect(server.getStatusSnapshot()[0]?.agentPresence).toEqual({ ...replacement, ended: true })
+    expect(server.getAgentOwner(PANE)?.presence).toEqual({ ...replacement, ended: true })
+    expect(server.getStatusSnapshot()).toEqual([])
     expect(server.getStatusChangeSnapshot()).toEqual([])
   })
 
@@ -220,6 +272,7 @@ describe('host owner lifecycle', () => {
       agentPresence: replacement
     })
     server.dropStatusEntriesForWorktree('folder-1')
+    expect(server.getAgentOwner(PANE)).toBeUndefined()
     expect(server.getStatusSnapshot().map((row) => row.paneKey)).toEqual([GOOD_PANE])
     expect(Object.keys(server.serializedEntries())).toEqual([GOOD_PANE])
   })
@@ -242,7 +295,7 @@ describe('host owner lifecycle', () => {
     expect(server.hasVerifiableAgentProcess(PANE)).toBe(true)
   })
 
-  it('keeps a retained owner row out of the plugin status tap', () => {
+  it('keeps an owner exit out of every turn subscriber, plugins included', () => {
     const server = createServer()
     server.publish()
     const projected = vi.fn()
@@ -251,8 +304,8 @@ describe('host owner lifecycle', () => {
       kind: 'owner-exited',
       presence: { ...owner, ended: true }
     })
-    expect(projected).toHaveBeenCalledTimes(1)
-    expect(projected).toHaveBeenLastCalledWith(null)
+    expect(projected).not.toHaveBeenCalled()
+    expect(server.getAgentOwner(PANE)?.presence.ended).toBe(true)
   })
 
   it('leaves an owner no host can check (WSL) to the legacy exit rules', async () => {
@@ -260,8 +313,9 @@ describe('host owner lifecycle', () => {
     server.publish({ connectionId: 'wsl:Ubuntu' })
     expect(server.hasVerifiableAgentProcess(PANE)).toBe(false)
     await expect(server.checkAgentPresence(PANE)).resolves.toBeNull()
-    // Published without its process, so renderers keep the pre-presence rules for this pane.
-    expect(server.getStatusSnapshot()[0]?.agentPresence).toEqual({ agent: 'claude' })
+    // No owner at all, so renderers keep the pre-presence rules for this pane.
+    expect(server.getAgentOwner(PANE)).toBeUndefined()
+    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('agentPresence')
     expect(
       server.reconcileEndedProcessForPaneKeys([PANE], { kind: 'legacy-shell-foreground' })
     ).toBe(1)

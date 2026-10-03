@@ -44,7 +44,8 @@ describe('platform process evidence', () => {
       verdict: 'live',
       startTime: 'boot-id:100',
       zombie: false,
-      stopped: false
+      stopped: false,
+      foreground: false
     })
     read
       .mockResolvedValueOnce(`4242 (agent) ${['T', ...fields.slice(1)].join(' ')}`)

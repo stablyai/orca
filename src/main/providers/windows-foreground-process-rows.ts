@@ -13,6 +13,7 @@ export type WindowsProcessRow = {
   ppid: number
   name: string
   command: string
+  creationTimeMs?: number
 }
 
 export type WindowsProcessCandidate = WindowsProcessRow & { depth: number }
@@ -22,6 +23,7 @@ function toProcessRow(row: NativeWindowsProcessRow): WindowsProcessRow {
     pid: row.pid,
     ppid: row.ppid,
     name: row.name,
+    ...(row.creationTimeMs !== undefined ? { creationTimeMs: row.creationTimeMs } : {}),
     // Why fall back to the image name: a process that denied a query handle has
     // no command line, and callers match on `command` first.
     command: row.command || row.name

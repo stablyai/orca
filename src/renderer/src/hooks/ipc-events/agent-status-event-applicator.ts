@@ -156,9 +156,8 @@ export function createAgentStatusEventApplicator(args: {
       ownershipConnectionId,
       data.worktreeId ?? owningWorktreeId
     )
-    if (agentPresence === null) {
-      return 'dropped'
-    }
+    // Why no early drop on a stale owner stamp: the owner and the turn keep separate clocks, so
+    // an older owner stamp skips only the owner, never the turn riding with it.
     if (existingStatus && data.receivedAt < existingStatus.updatedAt && !data.providerSessionOnly) {
       return agentPresence ? 'applied' : 'dropped'
     }

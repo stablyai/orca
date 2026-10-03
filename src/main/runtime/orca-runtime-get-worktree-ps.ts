@@ -9,7 +9,10 @@ import {
   applyRuntimeWorktreePsSessionActivity,
   applyRuntimeWorktreePsTerminalActivity
 } from './runtime-worktree-ps-activity'
-import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
+import {
+  attachRuntimeWorktreeAgentRows,
+  attachRuntimeWorktreePresentAgents
+} from './runtime-worktree-agent-rows'
 import { compareWorktreePs } from './runtime-worktree-status-projection'
 import type { Repo } from '../../shared/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
@@ -111,6 +114,16 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
         this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
     })
 
+    attachRuntimeWorktreePresentAgents({
+      owners: this.getAgentOwnersFn?.() ?? [],
+      getSummary: (worktreeId) =>
+        this.getSummaryForRuntimeWorktreeId(
+          summaries,
+          runtimeWorktreeSummaryPathIndex,
+          missingRuntimeWorktreeIds,
+          worktreeId
+        )
+    })
     const sorted = [...summaries.values()].sort(compareWorktreePs)
     // Why: the same cap starvation as worktree.list — a host whose rows all sort last gets no
     // page at all, which is indistinguishable from it having no workspaces (#18104).

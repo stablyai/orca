@@ -221,6 +221,21 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
     // A proven exit drops the owner's row, as a confirmed shell return does.
     expect(store.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
+    // A turn stamped before the owner's last stamp still lands; only the owner part is stale.
+    liveEvent.current?.({
+      ...snapshot[0],
+      state: 'working',
+      prompt: 'same millisecond turn',
+      receivedAt: snapshot[0].receivedAt,
+      agentPresence: {
+        agent: 'claude',
+        process: { pid: 4001, platform: 'linux', startTime: 'birth' }
+      }
+    })
+    await vi.waitFor(() =>
+      expect(store.getState().agentStatusByPaneKey[paneKey]?.prompt).toBe('same millisecond turn')
+    )
+    expect(store.getState().agentPresenceByPaneKey[paneKey]?.presence.ended).toBe(true)
   })
 
   it('projects ordered tab titles across panes in an inactive split snapshot', async () => {

@@ -22,6 +22,7 @@ import {
   startOrcadWithHost
 } from './orcad-lifecycle'
 import { parseArgs } from './orcad-command-arguments'
+import { agentRunEvidence } from '../../shared/agent-presence-command-observer'
 import {
   changedAiVaultSearchSettings,
   type AiVaultSearchSettings
@@ -244,6 +245,12 @@ async function startOrcadRuntime(
         agentHookServer.ingestStructuredChildWork(subject, evidence, provider),
       readChildWork: (subject) => agentHookServer.getStructuredChildWorkViews(subject)
     },
+    retireAgentHookCompatibilityAuthority: (paneKey, options) =>
+      agentHookServer.retirePaneAuthority(paneKey, undefined, options),
+    onForegroundAgentPresence: (scope, presence) =>
+      agentHookServer.ingestForegroundPresence(scope, presence),
+    getAgentOwner: (paneKey) => agentHookServer.getAgentOwner(paneKey),
+    getAgentOwners: () => agentHookServer.getAgentOwners(),
     checkHookAgentPresence: (paneKey) => agentHookServer.checkAgentPresence(paneKey),
     reconcileAgentStatusForEndedProcess: (paneKeys) =>
       agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys, { kind: 'terminal-ended' }),
@@ -275,6 +282,22 @@ async function startOrcadRuntime(
     console.info(`[orcad] agent state rules ${rules.version} (${rules.source})`)
   )
 
+  agentHookServer.subscribeEnrichedStatus((enriched) => {
+    if (!enriched.providerSessionOnly) {
+      runtime.observeAgentPresenceEvidence(
+        enriched.paneKey,
+        enriched.payload.agentType ?? 'unknown',
+        enriched.payload.state !== 'working',
+        agentRunEvidence(enriched)
+      )
+    }
+  })
+  agentHookServer.setWindowsAgentOwnerProbe((paneKey, identity) =>
+    runtime.probeWindowsAgentOwner(paneKey, identity)
+  )
+  agentHookServer.setPaneLaunchAuthorityReader((paneKey) =>
+    runtime.readPaneLaunchAuthority(paneKey)
+  )
   agentHookServer.setPaneTerminalSleepStopProbe((paneKey) =>
     runtime.isPaneTerminalSleepStopInFlight(paneKey)
   )

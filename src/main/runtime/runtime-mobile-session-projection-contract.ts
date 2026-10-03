@@ -1,3 +1,4 @@
+import type { AgentPaneOwner } from '../../shared/agent-process-presence'
 import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type {
   BrowserTabInfo,
@@ -18,6 +19,8 @@ export type RuntimeMobileSessionProjectionHost = {
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
   getLiveBrowserTabs(worktreeId: string): Map<string, BrowserTabInfo>
   getProviderSessionRows(paneKey: string): AgentStatusIpcPayload[] | undefined
+  /** The execution host's owner of a pane; absent in tests and embedders without one. */
+  getAgentOwner?(paneKey: string): AgentPaneOwner | undefined
   getProviderSessionSnapshot(): AgentStatusIpcPayload[]
   getStatusSnapshot(): AgentStatusIpcPayload[]
   getLeafKey(tabId: string, leafId: string): string

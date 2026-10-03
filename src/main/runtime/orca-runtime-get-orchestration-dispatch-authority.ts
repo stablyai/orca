@@ -133,7 +133,20 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     }
   }
 
-  protected retirePtyAgentLaunchAuthority(ptyId: string): void {
+  readPaneLaunchAuthority(paneKey: string): { launchTokenHash: string | null } | null {
+    for (const [id, pty] of this.ptysById) {
+      if (this.collectPaneKeysForPty(id).has(paneKey)) {
+        return {
+          launchTokenHash: pty.launchToken
+            ? createHash('sha256').update(pty.launchToken).digest('hex')
+            : null
+        }
+      }
+    }
+    return null
+  }
+
+  protected retirePtyAgentLaunchAuthority(ptyId: string, authorityOnly = false): void {
     const pty = this.ptysById.get(ptyId)
     if (!pty) {
       return
@@ -150,7 +163,10 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     pty.launchIncarnationId = null
     pty.launchAgent = null
     for (const paneKey of paneKeys) {
-      this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
+      this.retireAgentHookCompatibilityAuthorityFn?.(
+        paneKey,
+        authorityOnly ? { authorityOnly: true } : undefined
+      )
     }
   }
 

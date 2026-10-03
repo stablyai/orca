@@ -123,40 +123,35 @@ export function buildMirroredAgentStatusPatch(
     const retainedSurface = retainedSurfaceByHostTabAndPrunedLeafId
       ?.get(surface.parentTabId)
       ?.get(surface.leafId)
-    const hostEntry = remapHostAgentStatus(surface, retainedSurface)
-    if (!hostEntry) {
-      // Why: snapshots arrive version-ordered, so a pane published without status no longer has an owner here.
-      const paneKey = toMirroredPaneKey(surface, retainedSurface?.leafId)
-      if (paneKey && nextPresenceByPaneKey[paneKey]?.connectionId === environmentId) {
-        const { [paneKey]: _released, ...remaining } = nextPresenceByPaneKey
-        nextPresenceByPaneKey = remaining
-        presenceChanged = true
-      }
-      continue
-    }
-    const presence = readAgentProcessPresence(hostEntry.agentPresence)
-    const previousPresence = nextPresenceByPaneKey[hostEntry.paneKey]
-    // Why: snapshots are already delivery/version ordered and the host re-derives presence for each
-    // one; the published status clock is not a presence clock, so it must not reorder owners.
-    if (!presence?.process && previousPresence?.connectionId === environmentId) {
-      const { [hostEntry.paneKey]: _released, ...remaining } = nextPresenceByPaneKey
+    const paneKey = toMirroredPaneKey(surface, retainedSurface?.leafId)
+    const presence = readAgentProcessPresence(surface.agentPresence)
+    const previousPresence = paneKey ? nextPresenceByPaneKey[paneKey] : undefined
+    // Why: snapshots arrive version-ordered and the host publishes the owner beside the turn, so a
+    // pane published without one no longer has an owner here; the status clock must not reorder it.
+    if (paneKey && !presence?.process && previousPresence?.connectionId === environmentId) {
+      const { [paneKey]: _released, ...remaining } = nextPresenceByPaneKey
       nextPresenceByPaneKey = remaining
       presenceChanged = true
     } else if (
+      paneKey &&
       presence?.process &&
       (previousPresence?.connectionId !== environmentId ||
         !isSameOwnerRecord(previousPresence.presence, presence))
     ) {
       nextPresenceByPaneKey = {
         ...nextPresenceByPaneKey,
-        [hostEntry.paneKey]: {
+        [paneKey]: {
           presence,
-          receivedAt: hostEntry.updatedAt,
+          receivedAt: surface.agentStatus?.updatedAt ?? now,
           connectionId: environmentId,
           worktreeId
         }
       }
       presenceChanged = true
+    }
+    const hostEntry = remapHostAgentStatus(surface, retainedSurface)
+    if (!hostEntry) {
+      continue
     }
     // Why: an exited owner's own status is history; a later agent's status in the pane still shows.
     if (

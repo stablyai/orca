@@ -1,4 +1,12 @@
 /* oxlint-disable max-lines */
+import {
+  AgentPresenceCommandObserver,
+  type AgentRunEvidence
+} from '../shared/agent-presence-command-observer'
+import { captureAgentForegroundIdentity } from '../shared/agent-foreground-identity'
+import type { AgentProcessPresence } from '../shared/agent-process-presence'
+import { resolveExplicitTerminalTitleAgentType } from '../shared/terminal-title-agent-type'
+import { createPtyForegroundResolver } from '../main/daemon/pty-subprocess/spawn-file-foreground-process'
 import { resolveSynchronizedOutputSafeSplit } from '../shared/terminal-synchronized-output-scan'
 import { createTerminalTitleTracker } from '../shared/terminal-output-side-effects'
 import { getDecorativeTitleGateKey } from '../shared/agent-decorative-title-signature'
@@ -727,9 +735,97 @@ export class PtyHandler {
     return this.graceTimeMs
   }
 
-  private agentPresenceTrigger: ((paneKey: string) => void) | null = null
+  private presenceAdmission?: {
+    hasOwner: (paneKey: string) => boolean
+    admit: (
+      scope: { paneKey: string; tabId?: string; worktreeId?: string },
+      presence: AgentProcessPresence
+    ) => Promise<void> | void
+  }
+  private readonly presenceDiscoveries = new Set<string>()
+  private readonly presenceCommands = new AgentPresenceCommandObserver(
+    async (id, current, kind, evidenceAtMs) => {
+      const managed = this.ptys.get(id)
+      if (managed) {
+        await this.discoverAgentOwner(managed, current, kind === 'command', evidenceAtMs)
+      }
+    }
+  )
 
-  setAgentPresenceTrigger(listener: ((paneKey: string) => void) | null): void {
+  setAgentPresenceAdmission(admission: NonNullable<PtyHandler['presenceAdmission']>): void {
+    this.presenceAdmission = admission
+  }
+
+  /** Hook evidence names its agent; each agent costs at most one read per shell command. */
+  discoverPaneAgentOwner(paneKey: string, agent: string, run?: AgentRunEvidence): void {
+    const managed = [...this.ptys.values()].find((pty) => pty.paneKey === paneKey)
+    if (managed) {
+      this.claimAgentOwnerEvidence(managed, agent, run)
+    }
+  }
+
+  private claimAgentOwnerEvidence(managed: ManagedPty, agent: string, run?: AgentRunEvidence): void {
+    this.presenceCommands.evidence(
+      managed.id,
+      agent,
+      () => !managed.disposed && this.ptys.get(managed.id) === managed,
+      0,
+      run
+    )
+  }
+
+  /** Resolves whether the pane is owned afterwards, so evidence knows to back off or re-check. */
+  private async discoverAgentOwner(
+    managed: ManagedPty,
+    current: () => boolean,
+    doubtOwner: boolean,
+    evidenceAtMs: number
+  ): Promise<boolean> {
+    const admission = this.presenceAdmission
+    const paneKey = managed.paneKey
+    const owned = () => Boolean(paneKey && admission?.hasOwner(paneKey))
+    // Why the evidence time: a newer command must not be dropped behind a read for an older one.
+    const discoveryKey = `${managed.id}\0${evidenceAtMs}`
+    if (
+      !admission ||
+      !paneKey ||
+      managed.disposed ||
+      process.platform === 'win32' ||
+      (!doubtOwner && owned()) ||
+      this.presenceDiscoveries.has(discoveryKey)
+    ) {
+      return owned()
+    }
+    const incarnation = managed.incarnationId
+    const wanted = () =>
+      current() &&
+      !managed.disposed &&
+      this.ptys.get(managed.id) === managed &&
+      managed.incarnationId === incarnation
+    this.presenceDiscoveries.add(discoveryKey)
+    try {
+      // Why the bound: a process table that began before the evidence cannot show what it started.
+      const presence = await captureAgentForegroundIdentity(() =>
+        createPtyForegroundResolver(managed.pty)(managed.pty.pid, managed.pty.process || null, {
+          snapshotNotBeforeMs: evidenceAtMs,
+          stillWanted: wanted
+        })
+      )
+      if (presence && wanted() && (doubtOwner || !owned())) {
+        await admission.admit(
+          { paneKey, tabId: managed.tabId, worktreeId: managed.worktreeId },
+          presence
+        )
+      }
+      return owned()
+    } finally {
+      this.presenceDiscoveries.delete(discoveryKey)
+    }
+  }
+
+  private agentPresenceTrigger: ((paneKey: string) => Promise<void>) | null = null
+
+  setAgentPresenceTrigger(listener: ((paneKey: string) => Promise<void>) | null): void {
     this.agentPresenceTrigger = listener
   }
 
@@ -1037,22 +1133,39 @@ export class PtyHandler {
         }
       })
     }
-    const recheckAgentPresence = (): void => {
-      if (managed.paneKey) {
-        this.agentPresenceTrigger?.(managed.paneKey)
-      }
-    }
+    const recheckAgentPresence = (): Promise<void> =>
+      managed.paneKey
+        ? (this.agentPresenceTrigger?.(managed.paneKey) ?? Promise.resolve())
+        : Promise.resolve()
     let lastTitleGateKey: string | null = null
     const presenceTriggers = createTerminalTitleTracker({
       onTitle: (normalizedTitle, rawTitle, meta) => {
         // Why: spinner frames arrive several times a second; only a real title change re-checks.
         const gateKey = getDecorativeTitleGateKey(rawTitle, normalizedTitle)
         if (gateKey !== lastTitleGateKey && !meta?.staleWorkingTitleClear) {
-          recheckAgentPresence()
+          const titleAgent = resolveExplicitTerminalTitleAgentType(normalizedTitle)
+          void recheckAgentPresence().then(() => {
+            if (titleAgent) {
+              this.claimAgentOwnerEvidence(managed, titleAgent)
+            }
+          })
         }
         lastTitleGateKey = gateKey
       },
-      onCommandFinished: recheckAgentPresence
+      onCommandStarted: () => {
+        recheckAgentPresence()
+        // Why no owner check: a shell running commands proves its owner is not in front.
+        if (process.platform !== 'win32' && managed.paneKey) {
+          this.presenceCommands.start(
+            managed.id,
+            () => !managed.disposed && this.ptys.get(managed.id) === managed
+          )
+        }
+      },
+      onCommandFinished: () => {
+        this.presenceCommands.end(managed.id)
+        recheckAgentPresence()
+      }
     })
     managed.pty.onData((data: string) => {
       presenceTriggers.handleChunk(data)
@@ -1077,6 +1190,7 @@ export class PtyHandler {
       }
     })
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
+      this.presenceCommands.end(managed.id)
       presenceTriggers.dispose()
       managed.physicalExit?.markExited()
       if (managed.disposed) {
@@ -3305,6 +3419,7 @@ export class PtyHandler {
   }
 
   private async disposePtys(waitForPhysicalExit: boolean): Promise<void> {
+    this.presenceCommands.stop()
     this.cancelGraceTimer()
     await this.waitForPendingPtyCreations()
     for (const managed of this.ptys.values()) {

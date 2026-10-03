@@ -57,6 +57,41 @@ describe('hook status session-tabs republish', () => {
     }
   })
 
+  it('republishes when a turnless owner is admitted and when its exit is proven', async () => {
+    const server = new AgentHookServer()
+    const touch = vi.fn()
+    const uninstall = installHookStatusSessionTabsRepublish(server, () => ({
+      getTerminalWorktreeIdForHandle: () => null,
+      getTerminalWorktreeIdForPaneKey: () => null,
+      scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree: vi.fn(),
+      touchMobileSessionTabsForWorktree: touch
+    }))
+    const owner = {
+      agent: 'aider',
+      process: { pid: 4242, platform: 'linux', startTime: 'boot:4242' }
+    } as const
+    try {
+      await server.ingestForegroundPresence(
+        { paneKey: PANE, connectionId: null, tabId: 'tab-provider', worktreeId: 'repo::/worktree' },
+        owner
+      )
+      expect(server.getStatusSnapshot()).toEqual([])
+      expect(touch).toHaveBeenCalledTimes(1)
+      expect(touch).toHaveBeenLastCalledWith('repo::/worktree')
+      touch.mockClear()
+      server.reconcileEndedProcessForPaneKeys([PANE], {
+        kind: 'owner-exited',
+        presence: { ...owner, ended: true }
+      })
+      expect(server.getAgentOwner(PANE)?.presence.ended).toBe(true)
+      expect(touch).toHaveBeenCalledTimes(1)
+      expect(touch).toHaveBeenLastCalledWith('repo::/worktree')
+    } finally {
+      uninstall()
+      server.stop()
+    }
+  })
+
   it('deduplicates the old and new ownership of one moved row', () => {
     const server = new AgentHookServer()
     const touch = vi.fn()

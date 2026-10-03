@@ -1,7 +1,7 @@
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../shared/agent-hook-relay'
 
-export type CachedPaneEnvelopeMeta = { source: AgentHookSource; env?: string; version?: string }
+export type CachedPaneEnvelopeMeta = { source?: AgentHookSource; env?: string; version?: string }
 
 export type CachedPaneReplaySelection = {
   event: AgentHookEventPayload

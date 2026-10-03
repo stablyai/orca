@@ -11,7 +11,10 @@ vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }
 const probe = vi.hoisted(() =>
   vi.fn(async (): Promise<'live' | 'unverifiable' | 'exited'> => 'unverifiable')
 )
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
+vi.mock('../../shared/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: probe,
+  isSuspendedAgentProcess: vi.fn(async () => false)
+}))
 const servers: AgentHookServer[] = []
 afterEach(() => {
   for (const server of servers.splice(0)) {
@@ -67,6 +70,16 @@ async function hook(
   expect(response.status).toBe(204)
 }
 
+function capture(server: AgentHookServer, pid = 4001): void {
+  server.ingestForegroundPresence(
+    { paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', connectionId: null },
+    {
+      agent: 'claude',
+      process: { pid, platform: 'darwin', startTime: `birth-${pid}` }
+    }
+  )
+}
+
 function state(server: AgentHookServer): string | null {
   const row = server.getStatusSnapshot().find((entry) => entry.paneKey === PANE)
   return row && !row.providerSessionOnly ? row.state : null
@@ -77,10 +90,40 @@ function visible(server: AgentHookServer): boolean {
 }
 
 describe('host-owned hook presence', () => {
-  it('clears the status on SessionEnd while the terminal survives, without a renderer', async () => {
+  it('checks the owner on an exit hook and clears once the check proves the exit', async () => {
     const server = await createServer()
     await hook(server, 'SessionStart')
+    capture(server)
     expect(visible(server)).toBe(true)
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    // A live owner is checked, never trusted: an exit hook runs while the process still lives.
+    expect(visible(server)).toBe(true)
+    probe.mockResolvedValueOnce('exited')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    await vi.waitFor(() => expect(visible(server)).toBe(false))
+  })
+
+  it('ends its own turn on an exit hook when no owner can be checked (tmux, WSL)', async () => {
+    const server = await createServer()
+    await hook(server, 'SessionStart')
+    await hook(server, 'UserPromptSubmit')
+    expect(state(server)).toBe('working')
+    await hook(server, 'SessionEnd', 'session-a', 'clear')
+    expect(visible(server)).toBe(true)
+    await hook(server, 'SessionEnd', 'other-session', 'prompt_input_exit')
+    expect(visible(server)).toBe(true)
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(visible(server)).toBe(false)
+  })
+
+  it('never mints or resurrects a Done from a Claude exit hook', async () => {
+    const server = await createServer()
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(server.getStatusSnapshot()).toEqual([])
+    await hook(server, 'UserPromptSubmit')
+    await hook(server, 'Stop')
+    server.dropStatusEntry(PANE)
+    expect(visible(server)).toBe(false)
     await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
     expect(visible(server)).toBe(false)
   })
@@ -88,25 +131,33 @@ describe('host-owned hook presence', () => {
   it.each(['clear', 'resume'])('keeps the running process present through %s', async (reason) => {
     const server = await createServer()
     await hook(server, 'SessionStart')
+    capture(server)
     await hook(server, 'SessionEnd', 'session-a', reason)
     expect(visible(server)).toBe(true)
     await hook(server, 'UserPromptSubmit', 'session-b')
     expect(state(server)).toBe('working')
+    probe.mockResolvedValueOnce('exited')
     await hook(server, 'SessionEnd', 'session-b', 'prompt_input_exit')
-    expect(visible(server)).toBe(false)
+    await vi.waitFor(() => expect(visible(server)).toBe(false))
   })
 
-  it('does not resurrect an ended process on a late Stop', async () => {
+  it('treats a hook after the owner exited as a turn of whatever runs now', async () => {
     const server = await createServer()
     await hook(server, 'SessionStart')
-    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
-    await hook(server, 'Stop')
+    capture(server)
+    probe.mockResolvedValueOnce('exited')
+    expect(await server.checkAgentPresence(PANE)).toBe('exited')
     expect(visible(server)).toBe(false)
+    await hook(server, 'Stop')
+    expect(visible(server)).toBe(true)
+    // The exited owner is superseded by the new turn rather than labelling it.
+    expect(server.getAgentOwner(PANE)).toBeUndefined()
   })
 
   it('keeps the pane owned by its agent while a nested agent in it starts and ends', async () => {
     const server = await createServer()
     await hook(server, 'SessionStart', 'outer')
+    capture(server)
     await hook(server, 'UserPromptSubmit', 'outer')
     await hook(server, 'SessionStart', 'nested', undefined, 4002)
     await hook(server, 'UserPromptSubmit', 'nested', undefined, 4002)
@@ -114,17 +165,21 @@ describe('host-owned hook presence', () => {
     expect(visible(server)).toBe(true)
     await hook(server, 'PostToolUse', 'outer')
     expect(state(server)).toBe('working')
+    probe.mockResolvedValueOnce('exited')
     await hook(server, 'SessionEnd', 'outer', 'other')
-    expect(visible(server)).toBe(false)
+    await vi.waitFor(() => expect(visible(server)).toBe(false))
   })
 
-  it('never ends a pane from a SessionEnd without a process identity', async () => {
+  it('ends only the turn of the session that exits; the outer agent reports on', async () => {
     const server = await createServer()
     await hook(server, 'SessionStart', 'outer', undefined, null)
     await hook(server, 'UserPromptSubmit', 'outer', undefined, null)
+    await hook(server, 'SessionEnd', 'nested', 'other', null)
+    expect(state(server)).toBe('working')
+    // A nested run whose SessionStart took over the row ends that row, not the outer agent.
     await hook(server, 'SessionStart', 'nested', undefined, null)
     await hook(server, 'SessionEnd', 'nested', 'other', null)
-    expect(visible(server)).toBe(true)
+    expect(visible(server)).toBe(false)
     await hook(server, 'PostToolUse', 'outer', undefined, null)
     expect(state(server)).toBe('working')
   })
@@ -134,7 +189,6 @@ describe('host-owned hook presence', () => {
     await hook(server, 'UserPromptSubmit', 'outer', undefined, null)
     await hook(server, 'SessionStart', 'nested', undefined, 4002)
     await hook(server, 'SessionEnd', 'nested', 'other', 4002)
-    expect(visible(server)).toBe(true)
     await hook(server, 'PostToolUse', 'outer', undefined, null)
     expect(state(server)).toBe('working')
     expect(await server.checkAgentPresence(PANE)).toBeNull()
@@ -192,7 +246,8 @@ describe('host-owned hook presence', () => {
     await hook(server, 'SessionStart', 'nested', undefined, 4002)
     await hook(server, 'UserPromptSubmit', 'nested', undefined, 4002)
     await hook(server, 'SessionEnd', 'nested', 'other', 4002)
-    expect(visible(server)).toBe(true)
+    // A working Codex turn survives; an idle one the nested run took over ends with that run.
+    expect(visible(server)).toBe(_label === 'working')
     expect(before).not.toBeNull()
     expect(await server.checkAgentPresence(PANE)).toBeNull()
   })
@@ -223,17 +278,21 @@ describe('host-owned hook presence', () => {
     expect(server.hasVerifiableAgentProcess(PANE)).toBe(false)
     const identified = await createServer()
     await hook(identified, 'SessionStart')
+    capture(identified)
     expect(identified.hasVerifiableAgentProcess(PANE)).toBe(true)
+    probe.mockResolvedValueOnce('exited')
     await hook(identified, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    await identified.checkAgentPresence(PANE)
     expect(identified.hasVerifiableAgentProcess(PANE)).toBe(false)
   })
 
-  it('checks each pane once after replaying its spooled hooks', async () => {
+  it('never probes from spooled hooks an owner this runtime has not re-derived', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-presence-spool-'))
     const first = new AgentHookServer()
     servers.push(first)
     await first.start({ env: 'production', userDataPath })
     await hook(first, 'SessionStart')
+    capture(first)
     first.flushStatusPersistSync()
     first.stop()
     const spoolDir = join(userDataPath, 'agent-hooks', 'spool')
@@ -262,12 +321,14 @@ describe('host-owned hook presence', () => {
     const restarted = new AgentHookServer()
     servers.push(restarted)
     await restarted.start({ env: 'production', userDataPath })
-    expect(probe).toHaveBeenCalledOnce()
+    expect(probe).not.toHaveBeenCalled()
+    expect(restarted.getAgentOwner(PANE)).toBeUndefined()
   })
 
   it('keeps unanswered reads and clears only a positive process exit', async () => {
     const server = await createServer()
     await hook(server, 'SessionStart')
+    capture(server)
     expect(await server.checkAgentPresence(PANE)).toBe('unverifiable')
     expect(visible(server)).toBe(true)
     probe.mockResolvedValue('exited')
@@ -279,6 +340,7 @@ describe('host-owned hook presence', () => {
   it('does not apply a delayed process exit to a relaunched agent', async () => {
     const server = await createServer()
     await hook(server, 'SessionStart')
+    capture(server)
     let finish: (value: 'exited') => void = () => {}
     probe.mockImplementationOnce(
       () =>
@@ -287,8 +349,9 @@ describe('host-owned hook presence', () => {
         })
     )
     const pending = server.checkAgentPresence(PANE)
-    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    server.clearPaneState(PANE, 'released')
     await hook(server, 'SessionStart', 'relaunch', undefined, 4002)
+    capture(server, 4002)
     finish('exited')
     expect(await pending).toBe('unverifiable')
     expect(visible(server)).toBe(true)
@@ -305,6 +368,7 @@ describe('host-owned hook presence', () => {
       providerSession: { provider: 'claude', id: 'remote-session' },
       agentPresence: {
         agent: 'claude',
+        observation: { epoch: 'relay-test', sequence: 1 },
         process: { pid: process.pid, platform: process.platform, startTime: 'remote-birth' }
       },
       payload: { state: 'working', prompt: 'remote task', agentType: 'claude' }
@@ -318,33 +382,32 @@ describe('host-owned hook presence', () => {
         ...envelope,
         hookEventName: 'AgentProcessExit',
         providerSessionOnly: true,
-        agentPresence: { ...envelope.agentPresence, ended: true }
+        agentPresence: {
+          ...envelope.agentPresence,
+          observation: { epoch: 'relay-test', sequence: 2 },
+          ended: true
+        }
       },
       'ssh-1'
     )
     expect(visible(server)).toBe(false)
   })
 
-  it('probes the owner only when another process reports, never on its own hooks or retries', async () => {
+  it('keeps retries ownership-neutral and waits for host proof before admitting a successor', async () => {
     const server = await createServer()
     await hook(server, 'SessionStart')
+    capture(server)
     await hook(server, 'UserPromptSubmit')
-    probe.mockResolvedValue('exited')
+    probe.mockClear()
     server.applyTranscriptUpdate()
-    await Promise.resolve()
-    expect(
-      server.getStatusSnapshot().find((row) => row.paneKey === PANE)?.lastAssistantMessage
-    ).toBe('late transcript result')
     expect(probe).not.toHaveBeenCalled()
-    expect(visible(server)).toBe(true)
-    await hook(server, 'SessionStart', 'relaunch', undefined, 4002)
-    await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce())
-    // The proven-dead owner hands the pane to the relaunch instead of ending its first row.
-    await vi.waitFor(() =>
-      expect(server.getStatusSnapshot()[0]?.agentPresence?.process?.pid).toBe(4002)
-    )
-    expect(visible(server)).toBe(true)
     await hook(server, 'UserPromptSubmit', 'relaunch', undefined, 4002)
+    expect(server.getStatusSnapshot()[0]?.agentPresence?.process?.pid).toBe(4001)
+    probe.mockResolvedValueOnce('exited')
+    await server.checkAgentPresence(PANE)
+    capture(server, 4002)
+    await hook(server, 'UserPromptSubmit', 'relaunch', undefined, 4002)
+    expect(server.getStatusSnapshot()[0]?.agentPresence?.process?.pid).toBe(4002)
     expect(state(server)).toBe('working')
   })
 })

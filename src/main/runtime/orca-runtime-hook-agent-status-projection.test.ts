@@ -77,7 +77,19 @@ async function createRuntimeWithHookRows(
         }
       : {}),
     getAgentStatusSnapshot: readRows,
-    ...(statusWiring ? {} : { getAgentProviderSessionRowsForPane: readRows })
+    ...(statusWiring ? {} : { getAgentProviderSessionRowsForPane: readRows }),
+    // Fixture rows stand in for the hook server, which keeps owners beside their rows.
+    getAgentOwner: (paneKey: string) => {
+      const row = readRows().findLast((entry) => entry.paneKey === paneKey && entry.agentPresence)
+      return row?.agentPresence
+        ? {
+            paneKey,
+            connectionId: row.connectionId,
+            presence: row.agentPresence,
+            receivedAt: row.receivedAt
+          }
+        : undefined
+    }
   })
   const internals = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>

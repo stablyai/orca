@@ -51,6 +51,7 @@ export const ptyLastRecognizedForeground = new Map<
   {
     name: string
     pid: number | null
+    processStartTime?: string
     at: number
     steady?: { fingerprint: string; fallbackProcess: string | null } | null
   }

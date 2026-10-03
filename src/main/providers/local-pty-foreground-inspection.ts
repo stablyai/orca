@@ -206,6 +206,7 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
       // Only a positive recognition restarts the age bound.
       ptyLastRecognizedForeground.set(id, {
         name: stable.lastRecognizedAgent,
+        processStartTime: resolution.processStartTime,
         pid:
           stable.lastRecognizedAgent === resolution.processName
             ? (resolution.processId ?? null)

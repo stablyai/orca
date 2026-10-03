@@ -1,4 +1,3 @@
-import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
 import { createHash } from 'node:crypto'
 
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
@@ -129,13 +128,10 @@ export function sanitizeHydratedEntry(
   const providerSession = normalizeAgentProviderSession(record.providerSession) ?? undefined
   const providerSessionOnly = record.providerSessionOnly === true
   const retainedForLiveness = record.retainedForLiveness === true
-  const agentPresence = readAgentProcessPresence(record.agentPresence)
   const validRetainedIdentity = Boolean(
-    retainedForLiveness &&
-    (providerSession || agentPresence?.process) &&
-    payload.agentType &&
-    payload.agentType !== 'unknown'
+    retainedForLiveness && providerSession && payload.agentType && payload.agentType !== 'unknown'
   )
+  // Why: an owner-only row from an older build carries no turn; owners are re-derived, never hydrated.
   if (
     providerSessionOnly &&
     !isValidPiProviderSessionOnly(providerSession, payload.agentType) &&
@@ -157,7 +153,6 @@ export function sanitizeHydratedEntry(
   const turnStartedAt = record.turnStartedAt
   return {
     paneKey,
-    agentPresence,
     source,
     tabId: typeof tabId === 'string' ? tabId : undefined,
     worktreeId: typeof worktreeId === 'string' ? worktreeId : undefined,

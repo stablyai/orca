@@ -50,9 +50,7 @@ export function remapHostAgentStatus(
   return {
     ...normalizeCompatibleAgentStatusEntryForOwner(
       surface.agentStatus,
-      surface.agentStatus.agentPresence?.process
-        ? surface.agentStatus.agentPresence.agent
-        : ownerRecord?.agent,
+      surface.agentPresence?.process ? surface.agentPresence.agent : ownerRecord?.agent,
       {
         ownerIsLaunch: ownerRecord?.ownerIsLaunch === true
       }

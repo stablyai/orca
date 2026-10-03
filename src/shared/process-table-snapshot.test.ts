@@ -14,6 +14,7 @@ import {
   PROCESS_TABLE_EVIDENCE_BUDGET_MS,
   PS_MAX_BUFFER_BYTES,
   PS_TIMEOUT_MS,
+  processTableEnv,
   resetProcessTableSnapshotForTests
 } from './process-table-snapshot-reader'
 import {
@@ -266,6 +267,32 @@ describe('shared process-table capture', () => {
     return () => forks
   }
 
+  it('prints start times on the identity read\'s clock, keeping the caller\'s command charset', async () => {
+    mockPsCaptures('100 1 100 100 Ss+ /bin/zsh\n')
+    await getProcessTableSnapshot()
+    expect(execFileMock).toHaveBeenCalledWith(
+      'ps',
+      expect.any(Array),
+      expect.objectContaining({ env: expect.objectContaining({ TZ: 'UTC0', LC_TIME: 'C' }) }),
+      expect.any(Function)
+    )
+    // A zh_CN user in Shanghai: lstart would be '五 10月/ 2 18:50:02 2026', which Date.parse
+    // cannot read; LC_ALL=C would instead print non-ASCII command text as escapes.
+    const pinned = processTableEnv({
+      LANG: 'zh_CN.UTF-8',
+      LC_ALL: 'zh_CN.UTF-8',
+      TZ: 'Asia/Shanghai',
+      PATH: '/usr/bin'
+    })
+    expect(pinned).toEqual({ LC_CTYPE: 'zh_CN.UTF-8', LC_TIME: 'C', TZ: 'UTC0', PATH: '/usr/bin' })
+    // The character set falls back LC_ALL, then LC_CTYPE, then LANG; no other locale name survives.
+    expect(processTableEnv({ LANG: 'en_US.UTF-8', LC_MESSAGES: 'xx_YY.bogus' })).toEqual({
+      LC_CTYPE: 'en_US.UTF-8',
+      LC_TIME: 'C',
+      TZ: 'UTC0'
+    })
+  })
+
   it('serves the strict and lenient views from ONE ps fork per TTL window', async () => {
     // Why: both views run byte-identical argv, so separate memoizers would double
     // the relay's idle fork rate — the regression issue #6288 removed.
@@ -325,6 +352,18 @@ describe('parseProcessTableRows', () => {
         command: 'node /path/bin/codex --flag'
       }
     ])
+  })
+
+  it('keeps a C-locale Darwin lstart whole, including the padded one-digit day', () => {
+    const [row] = parseProcessTableRows(
+      '4242 501 4242 4242 S+ ttys003 Fri Oct  2 10:50:02 2026 /usr/local/bin/codex --yolo'
+    )
+    expect(row).toMatchObject({
+      pid: 4242,
+      tty: 'ttys003',
+      startTime: 'Fri Oct  2 10:50:02 2026',
+      command: '/usr/local/bin/codex --yolo'
+    })
   })
 
   it('tolerates CRLF and skips header/blank/non-matching lines', () => {

@@ -35,6 +35,12 @@ export type RuntimeWorktreeAgentRow = {
   structuredHostOwned?: true
 }
 
+/** An agent process the execution host recorded in one of this worktree's panes. */
+export type RuntimeWorktreePresentAgent = {
+  paneKey: string
+  agentType: AgentType
+}
+
 export type RuntimeWorktreePsSummary = {
   workspaceKind?: 'git' | 'folder-workspace'
   worktreeId: string
@@ -76,6 +82,9 @@ export type RuntimeWorktreePsSummary = {
   /** Optional discriminator for a working workspace; older clients fall back to ordinary working. */
   workingMode?: AgentWorkingMode
   agents: RuntimeWorktreeAgentRow[]
+  /** Agents present with no turn in `agents`, such as one without hooks. Optional on the wire: old
+   *  hosts never send it, and old readers ignore it. */
+  presentAgents?: RuntimeWorktreePresentAgent[]
   /** See `Worktree.removing`; sent only to clients that advertise background removal. */
   removing?: true
 }

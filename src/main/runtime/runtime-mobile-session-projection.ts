@@ -1,7 +1,4 @@
-import {
-  HOST_AGENT_PRESENCE_STATUS,
-  projectHostAgentPresenceStatus
-} from './runtime-mobile-agent-presence-projection'
+import { HOST_AGENT_PRESENCE } from './runtime-mobile-agent-presence-projection'
 import {
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner,
@@ -249,9 +246,9 @@ export function projectRuntimeMobileSessionTabs(
     const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry
       ? { agentStatus: clientStatusFields as AgentStatusEntry }
       : {}
-    const presenceStatus = projectHostAgentPresenceStatus(getHookRowsForPane(paneKey))
+    const ownerPresence = host.getAgentOwner?.(paneKey)?.presence
     tabs.push({
-      ...(presenceStatus ? { [HOST_AGENT_PRESENCE_STATUS]: presenceStatus } : {}),
+      ...(ownerPresence ? { [HOST_AGENT_PRESENCE]: ownerPresence } : {}),
       type: 'terminal' as const,
       id: tab.id,
       parentTabId: tab.parentTabId,

@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { agentHookServer } from '../agent-hooks/server'
-import { publishableAgentPresence } from '../agent-hooks/server/server-status-identity'
+import { toAgentOwnerIpcPayload } from '../agent-hooks/server/server-status-identity'
 import { setMigrationUnsupportedPtyListener } from '../agent-hooks/migration-unsupported-pty-state'
 import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
 import {
@@ -29,7 +29,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
   agentHookServer.setListener(
     ({
       paneKey,
-      agentPresence: recordedPresence,
+      agentPresence,
       tabId,
       worktreeId,
       connectionId,
@@ -51,10 +51,6 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       if (state.mainWindow?.isDestroyed()) {
         return
       }
-      const agentPresence = publishableAgentPresence({
-        agentPresence: recordedPresence,
-        connectionId
-      })
       // Why: the renderer still derives structured rows from its own feed subscription; forwarding
       // these too would give one pane key two writers until that bridge is retired.
       if (structuredHost) {
@@ -124,6 +120,14 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
     state.mainWindow?.webContents.send('agentStatus:clear', clear)
     getDashboardPopoutWindow()?.webContents.send('agentStatus:clear', clear)
   })
+  agentHookServer.setAgentOwnerListener((owner) => {
+    if (state.mainWindow?.isDestroyed()) {
+      return
+    }
+    const ownerEvent = toAgentOwnerIpcPayload(owner)
+    state.mainWindow?.webContents.send('agentStatus:set', ownerEvent)
+    getDashboardPopoutWindow()?.webContents.send('agentStatus:set', ownerEvent)
+  })
   agentHookServer.setAgentPresenceReleaseListener((release) => {
     if (state.mainWindow?.isDestroyed()) {
       return
@@ -148,6 +152,7 @@ export function clearMainWindowAgentStatusListeners(): void {
   // Why: detach the hook listener on close so the server never fires into destroyed webContents before reopen, and replay runs only on deliberate recreations.
   agentHookServer.setListener(null)
   agentHookServer.setPaneStatusClearListener(null)
+  agentHookServer.setAgentOwnerListener(null)
   agentHookServer.setAgentPresenceReleaseListener(null)
   setMigrationUnsupportedPtyListener(null)
   // Why: stop the spinner timer here — it would fire into destroyed webContents, and per-pane teardown may never run for restored-but-untorn panes.

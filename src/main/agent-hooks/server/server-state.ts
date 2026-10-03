@@ -1,4 +1,4 @@
-import type { AgentProcessVerdict } from '../../../shared/agent-process-presence'
+import type { AgentPaneOwner, AgentProcessVerdict } from '../../../shared/agent-process-presence'
 import type { createServer } from 'node:http'
 import { randomBytes, randomUUID } from 'node:crypto'
 
@@ -31,6 +31,7 @@ import type {
   AgentHookProviderSessionIdentity,
   AgentHookStatusChangeEntry,
   AgentHookStatusFreshnessObservation,
+  AgentOwnerListener,
   AgentPresenceReleaseListener,
   AgentPromptSentDedupeEntry,
   EndedProcessEvidence,
@@ -96,6 +97,11 @@ export abstract class AgentHookServerState {
   protected paneStatusClearListeners = new Set<PaneStatusClearListener>()
   protected statusDropListeners = new Set<StatusDropListener>()
   protected onAgentPresenceReleased: AgentPresenceReleaseListener | null = null
+  protected onAgentOwner: AgentOwnerListener | null = null
+  protected agentOwnerChangeListeners = new Set<StatusRowMutationListener>()
+  // Why memory-only: the execution host re-derives owners from its own foreground reads
+  // (reattach, command start); a persisted copy could only describe a process it cannot check.
+  protected agentOwnerByPaneKey = new Map<string, AgentPaneOwner>()
   /** Orca's own fact that it is stopping a pane's terminal for sleep or hibernation. */
   protected isPaneTerminalSleepStopInFlight: ((paneKey: string) => boolean) | null = null
   protected statusChangeListeners = new Set<StatusChangeListener>()
@@ -286,6 +292,10 @@ export abstract class AgentHookServerState {
   protected abstract hydrateLastStatusFromDisk(): void
   protected abstract captureHydratedAuthorityCommitments(): void
   protected abstract recordCurrentAuthorityObservation(payload: AgentHookEventPayload): void
+  protected abstract withLiveLaunchToken<T extends { paneKey: string; launchToken?: string }>(
+    event: T,
+    options?: { requireVoucher?: boolean }
+  ): T
   protected abstract toAuthorityEvidence(
     payload: AgentHookEventPayload | EnrichedAgentHookEventPayload,
     launchTokenHashOverride?: string

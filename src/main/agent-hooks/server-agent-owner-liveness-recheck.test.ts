@@ -9,7 +9,8 @@ import type { AgentProcessPresence } from '../../shared/agent-process-presence'
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
 vi.mock('../../shared/agent-process-presence-probe', () => ({
-  probeAgentProcessPresence: vi.fn(async () => 'live')
+  probeAgentProcessPresence: vi.fn(async () => 'live'),
+  isSuspendedAgentProcess: vi.fn(async () => false)
 }))
 
 const owner = {
@@ -23,7 +24,7 @@ const sibling = {
 
 class RecheckServer extends AgentHookServer {
   publish(overrides: Partial<AgentHookEventPayload> = {}): void {
-    this.applyNormalizedStatus({
+    const event: AgentHookEventPayload = {
       paneKey: PANE,
       tabId: 'tab-1',
       worktreeId: 'folder-1',
@@ -33,7 +34,11 @@ class RecheckServer extends AgentHookServer {
       agentPresence: owner,
       payload: { agentType: 'claude', state: 'working', prompt: 'task' },
       ...overrides
-    })
+    }
+    if (event.agentPresence) {
+      this.ingestForegroundPresence(event, event.agentPresence)
+    }
+    this.applyNormalizedStatus(event)
   }
 }
 
@@ -99,15 +104,15 @@ describe('host recheck of live process owners', () => {
     server.publish()
     probe.mockResolvedValue('unverifiable')
     await beat(5)
-    expect(server.getStatusSnapshot()[0]?.agentPresence).toEqual(owner)
+    expect(server.getAgentOwner(PANE)?.presence).toEqual(owner)
   })
 
   it('ends an owner whose process is gone and stops checking it', async () => {
     const server = createServer()
     const ended: unknown[] = []
-    server.setListener((event) => {
-      if (event.agentPresence?.ended) {
-        ended.push(event.agentPresence)
+    server.setAgentOwnerListener((event) => {
+      if (event.presence.ended) {
+        ended.push(event.presence)
       }
     })
     server.publish()

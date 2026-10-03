@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentProcessPresence } from '../../../shared/agent-process-presence'
 import {
   applyWebSessionTabsSnapshot,
   shouldApplyWebSessionTabsSnapshot
@@ -27,6 +28,10 @@ function snapshot(
   version?: number,
   surfaces = true
 ) {
+  // The host publishes its owner beside the turn; `agentPresence` in `row` overrides it.
+  const { agentPresence: rowPresence, ...turn } = row
+  const agentPresence: AgentProcessPresence | undefined =
+    'agentPresence' in row ? rowPresence : { ...presence, ...(ended ? { ended: true } : {}) }
   return makeSnapshot(
     surfaces
       ? [
@@ -40,6 +45,7 @@ function snapshot(
             isActive: true,
             status: 'ready',
             terminal: 'terminal-1',
+            ...(agentPresence ? { agentPresence } : {}),
             agentStatus: {
               state: 'done',
               prompt: '',
@@ -48,8 +54,7 @@ function snapshot(
               paneKey: makePaneKey('host-tab-1', LEAF_ID),
               agentType: 'claude',
               stateHistory: [],
-              agentPresence: { ...presence, ...(ended ? { ended: true } : {}) },
-              ...row
+              ...turn
             }
           }
         ]
@@ -196,20 +201,32 @@ describe('paired host presence', () => {
     expect(unidentified?.worktreeId).toBeUndefined()
   })
 
-  it('releases a live owner when a newer snapshot shows the pane without status', () => {
+  it('keeps an owner the pane publishes without a turn, and releases it when the host drops it', () => {
     const state = makeState()
     const live = { ...state, ...applyWebSessionTabsSnapshot(state, snapshot(false), ENV, NOW) }
     const paneKey = Object.keys(live.agentPresenceByPaneKey ?? {})[0]
     expect(live.agentPresenceByPaneKey?.[paneKey]?.presence.process).toBeDefined()
-    const bare = snapshot(false, {}, 2)
-    const tab = bare.tabs[0]
-    if (tab?.type !== 'terminal') {
-      throw new Error('missing terminal')
+    const withoutStatus = (next: ReturnType<typeof snapshot>) => {
+      const tab = next.tabs[0]
+      if (tab?.type !== 'terminal') {
+        throw new Error('missing terminal')
+      }
+      const { agentStatus: _dropped, ...rest } = tab
+      return { ...next, tabs: [rest] }
     }
-    const { agentStatus: _dropped, ...withoutStatus } = tab
-    const next = {
+    const ownerOnly = {
       ...live,
-      ...applyWebSessionTabsSnapshot(live, { ...bare, tabs: [withoutStatus] }, ENV, NOW + 1)
+      ...applyWebSessionTabsSnapshot(live, withoutStatus(snapshot(false, {}, 2)), ENV, NOW + 1)
+    }
+    expect(ownerOnly.agentPresenceByPaneKey?.[paneKey]?.presence).toEqual(presence)
+    const next = {
+      ...ownerOnly,
+      ...applyWebSessionTabsSnapshot(
+        ownerOnly,
+        withoutStatus(snapshot(false, { agentPresence: undefined }, 3)),
+        ENV,
+        NOW + 2
+      )
     }
     expect(next.agentPresenceByPaneKey?.[paneKey]).toBeUndefined()
   })

@@ -29,6 +29,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     if (exitIncarnationId && pty?.incarnationId && exitIncarnationId !== pty.incarnationId) {
       return
     }
+    this.agentPresenceCommands.end(ptyId)
     this.invalidatePtyControllerInventoryForLifecycle(ptyId, pty?.connectionId)
     // A bare exit code is not enough to establish why a process ended: older
     // daemons and SSH relays can report 0 for crashes and wrapper exits.

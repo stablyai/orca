@@ -118,6 +118,14 @@ describe('getCheapProcessTableSnapshot', () => {
     )
   })
 
+  it('prints start markers on the full capture\'s clock, so fingerprints compare', async () => {
+    installPs(' 7 1 7 7 S\n')
+    await getCheapProcessTableSnapshot()
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({ env: expect.objectContaining({ TZ: 'UTC0', LC_TIME: 'C' }) })
+    )
+  })
+
   it('names a clipped capture as truncated, a killed one as a timeout, and a non-zero exit by its code', async () => {
     installPs(' 7 1 7 7 S\n', true)
     await expect(getCheapProcessTableSnapshot()).rejects.toMatchObject({

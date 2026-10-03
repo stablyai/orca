@@ -4,6 +4,7 @@ import {
 } from '../../../src/shared/ended-agent-owner-evidence'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { AgentProcessPresence } from '../../../src/shared/agent-process-presence'
 import { isRuntimeOwnedSshTargetId } from '../../../src/shared/execution-host'
 import {
   isNativeChatSupportedAgent,
@@ -33,6 +34,7 @@ export type MobileNativeChatResolution = {
 export type MobileNativeChatTab = {
   type: string
   launchAgent?: string | null
+  agentPresence?: AgentProcessPresence
   agentStatus?: AgentStatusEntry | null
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
@@ -62,7 +64,7 @@ export function resolveMobileNativeChat(
   if (tab.type !== 'terminal') {
     return null
   }
-  const presence = tab.agentStatus?.agentPresence
+  const presence = tab.agentPresence
   const liveAgent =
     selectLiveOwnerAgent(presence) ?? paneEvidenceAgent(presence, tab.agentStatus?.agentType)
   const agent = liveAgent

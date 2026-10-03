@@ -1,6 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { selectFreshExplicitAgentStatus } from './runtime-hook-agent-row-selection'
-import { OrcaRuntimeWithControllerKnowsPtyIsLive } from './orca-runtime-controller-knows-pty-is-live'
+import { OrcaRuntimeWithAgentPresenceDiscovery } from './orca-runtime-agent-presence-discovery'
 import type { RuntimeTerminalAgentStatus } from '../../shared/runtime-types'
 import type { RuntimeTerminalAgentStatusSnapshot } from './runtime-terminal-agent-status-query'
 import { getDisplayPromptLifecycle } from './runtime-worktree-status-projection'
@@ -15,7 +15,7 @@ import type {
 import { readAgentPromptWaitText } from './agent-prompt-submission-verification'
 import type { AgentStatus } from '../../shared/agent-detection'
 
-export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWithControllerKnowsPtyIsLive {
+export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWithAgentPresenceDiscovery {
   protected async serializeAgentPromptSubmission<T>(
     ptyId: string,
     generation: number,
@@ -69,26 +69,6 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     afterTitleObservation = 0
   ): Promise<PtyForegroundProcessRead> | null {
     return this.ptyForegroundAgent.read(ptyId, afterTitleObservation)
-  }
-
-  protected async recheckHookAgentPresenceForPty(
-    ptyId: string
-  ): Promise<'live' | 'unverifiable' | 'exited' | null> {
-    if (!this.checkHookAgentPresenceFn) {
-      return null
-    }
-    const verdicts = await Promise.all(
-      Array.from(this.collectAgentStatusPaneKeysForPty(ptyId), (paneKey) =>
-        this.checkHookAgentPresenceFn(paneKey)
-      )
-    )
-    if (verdicts.includes('live')) {
-      return 'live'
-    }
-    if (verdicts.includes('unverifiable')) {
-      return 'unverifiable'
-    }
-    return verdicts.includes('exited') ? 'exited' : null
   }
 
   protected confirmPtyAgentExit(ptyId: string, recoverCompletedHook = false): void {

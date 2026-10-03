@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as AgentHookServerModule from '../agent-hooks/server'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import type { AgentPaneOwner } from '../../shared/agent-process-presence'
 
 // Why: cover the agentStatus:drop IPC handler — it must propagate the
 // renderer dismissal to dropStatusEntry so the on-disk last-status file
@@ -15,6 +16,7 @@ const retirePaneAuthority = vi.fn()
 const transferPaneAuthority = vi.fn()
 const canTransferPaneAuthority = vi.fn(() => true)
 const getStatusSnapshot = vi.fn()
+const getAgentOwners = vi.fn((): AgentPaneOwner[] => [])
 const inferInterrupt = vi.fn()
 const clearMigrationUnsupportedPtysByTabPrefix = vi.fn()
 const clearMigrationUnsupportedPtysForPaneKey = vi.fn()
@@ -53,6 +55,7 @@ vi.mock('../agent-hooks/server', async () => {
       transferPaneAuthority,
       canTransferPaneAuthority,
       getStatusSnapshot,
+      getAgentOwners,
       inferInterrupt
     }
   }

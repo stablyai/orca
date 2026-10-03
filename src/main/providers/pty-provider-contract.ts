@@ -1,3 +1,9 @@
+import type {
+  AgentPresenceCaptureOptions,
+  AgentProcessPresence,
+  AgentProcessIdentity,
+  AgentProcessVerdict
+} from '../../shared/agent-process-presence'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentWorkspaceTrustSpawnRequest } from '../../shared/agent-workspace-trust-spawn-request'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
@@ -236,6 +242,11 @@ export type IPtyProvider = {
   setColorQueryReplyColors?: (colors: TerminalOscColorQueryReplyColors) => void
   acknowledgeDataEvent(id: string, charCount: number): void
   hasChildProcesses(id: string): Promise<boolean>
+  probeAgentPresence?(id: string, identity: AgentProcessIdentity): Promise<AgentProcessVerdict>
+  captureAgentPresence?(
+    id: string,
+    options?: AgentPresenceCaptureOptions
+  ): Promise<AgentProcessPresence | undefined>
   getForegroundProcess(id: string): Promise<string | null>
   /** Strong process evidence captured after the caller's command boundary. */
   confirmForegroundProcess?: (id: string) => Promise<string | null>

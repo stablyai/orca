@@ -1,3 +1,4 @@
+import type { AgentProcessIdentity } from '../../shared/agent-process-presence'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { combineUnsubscribes } from './combine-unsubscribes'
 import { shutdownDegradedFallbackSessions } from './degraded-daemon-fallback-shutdown'
@@ -181,21 +182,22 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     this.providerFor(id).acknowledgeDataEvent(id, charCount)
   }
 
-  async hasChildProcesses(id: string): Promise<boolean> {
-    return this.providerFor(id).hasChildProcesses(id)
-  }
+  hasChildProcesses = async (id: string): Promise<boolean> =>
+    this.providerFor(id).hasChildProcesses(id)
 
-  async getForegroundProcess(id: string): Promise<string | null> {
-    return this.providerFor(id).getForegroundProcess(id)
-  }
+  probeAgentPresence = async (id: string, identity: AgentProcessIdentity) =>
+    this.providerFor(id).probeAgentPresence?.(id, identity) ?? ('unverifiable' as const)
+  captureAgentPresence: IPtyProvider['captureAgentPresence'] = async (id, options) =>
+    this.providerFor(id).captureAgentPresence?.(id, options)
+  getForegroundProcess = async (id: string): Promise<string | null> =>
+    this.providerFor(id).getForegroundProcess(id)
   inspectProcess(id: string) {
     return this.hasPty(id)
       ? inspectPtyProviderProcess(this.providerFor(id), id)
       : Promise.reject(new Error('terminal_gone'))
   }
-  async confirmForegroundProcess(id: string): Promise<string | null> {
-    return this.providerFor(id).confirmForegroundProcess?.(id) ?? null
-  }
+  confirmForegroundProcess = async (id: string): Promise<string | null> =>
+    this.providerFor(id).confirmForegroundProcess?.(id) ?? null
   async confirmShellForeground(id: string): Promise<boolean> {
     return (await this.providerFor(id).confirmShellForeground?.(id)) ?? false
   }

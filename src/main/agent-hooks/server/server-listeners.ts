@@ -27,8 +27,14 @@ import { structuredStatusLegacyEvent } from './server-structured-status-row'
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
 export abstract class AgentHookServerListeners extends AgentHookServerState {
+  /** The window shows a turn with its pane's owner; turn subscribers never see the owner. */
+  private withPaneOwner(entry: EnrichedAgentHookEventPayload): EnrichedAgentHookEventPayload {
+    const owner = this.agentOwnerByPaneKey.get(entry.paneKey)
+    return owner ? { ...entry, agentPresence: owner.presence } : entry
+  }
+
   protected emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void {
-    this.onAgentStatus?.(enriched)
+    this.onAgentStatus?.(this.withPaneOwner(enriched))
     for (const listener of this.enrichedStatusListeners) {
       try {
         listener(enriched)
@@ -87,7 +93,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     // Why: replay is best-effort per pane so one throwing listener can't starve the rest.
     for (const payload of this.combinedStatusEntries()) {
       try {
-        listener({ ...payload, isReplay: true })
+        listener({ ...this.withPaneOwner(payload), isReplay: true })
       } catch (err) {
         console.error('[agent-hooks] replay listener threw', err)
       }
@@ -215,7 +221,9 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   /** Snapshot of cached statuses in IPC shape. Used by `agentStatus:getSnapshot` after tabs hydrate so the
    *  dashboard catches up on hook events that fired during startup. */
   getStatusSnapshot(): AgentStatusIpcPayload[] {
-    return this.combinedStatusEntries().map(toAgentStatusIpcPayload)
+    return this.combinedStatusEntries().map((entry) =>
+      toAgentStatusIpcPayload(entry, this.agentOwnerByPaneKey.get(entry.paneKey))
+    )
   }
 
   /** Provider-session identities, including Pi's metadata-only rows. */
@@ -226,8 +234,9 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   getStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
     const legacy = this.state.lastStatusByPaneKey.get(paneKey)
     if (legacy) {
+      const owner = this.agentOwnerByPaneKey.get(paneKey)
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
-      return [toAgentStatusIpcPayload(legacy as EnrichedAgentHookEventPayload)]
+      return [toAgentStatusIpcPayload(legacy as EnrichedAgentHookEventPayload, owner)]
     }
     const rows: AgentStatusIpcPayload[] = []
     for (const subject of this.canonicalSubjectsByPane.get(paneKey)?.values() ?? []) {

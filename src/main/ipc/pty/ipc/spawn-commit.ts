@@ -69,7 +69,8 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
             ...(ctx.preAllocatedHandle ? { terminalHandle: ctx.preAllocatedHandle } : {}),
             ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
             ...(agentLaunchAuthority ? { agentLaunchAuthority } : {}),
-            ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
+            ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {}),
+            ...(ctx.result.isReattach === true ? { reattached: true as const } : {})
           }
         : undefined,
       !args.connectionId

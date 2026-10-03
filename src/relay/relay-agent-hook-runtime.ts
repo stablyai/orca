@@ -41,6 +41,8 @@ export class RelayAgentHookRuntime {
       forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope),
       // Why: the PTY handler is the only component that knows which panes still have a client
       // surface, so it — not the client — decides whether a hook post describes a live pane.
+      onAgentEvidence: (paneKey, agent, run) =>
+        ptyHandler.discoverPaneAgentOwner(paneKey, agent, run),
       isPaneSurfaceRetired: (paneKey) => ptyHandler.isPaneSurfaceRetired(paneKey)
     })
   }
@@ -66,9 +68,13 @@ export class RelayAgentHookRuntime {
   }
 
   private registerPtyEnvironment(): void {
-    this.ptyHandler.setAgentPresenceTrigger((paneKey) => {
-      void this.hookServer.checkAgentPresence(paneKey)
+    this.ptyHandler.setAgentPresenceAdmission({
+      hasOwner: (paneKey) => this.hookServer.hasAgentOwner(paneKey),
+      admit: (scope, presence) => this.hookServer.ingestForegroundPresence(scope, presence)
     })
+    this.ptyHandler.setAgentPresenceTrigger((paneKey) =>
+      this.hookServer.checkAgentPresence(paneKey)
+    )
     this.ptyHandler.addEnvAugmenter(() => this.hookServer.buildPtyEnv())
     this.ptyHandler.addEnvAugmenter((context) => this.buildPluginEnvironment(context))
     this.ptyHandler.setExitListener(({ paneKey, id }) => {

@@ -6,10 +6,15 @@ import { splitWorktreeIdForFilesystem, worktreeIdsEqual } from '../../../shared/
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { structuralValuesEqualIgnoringUndefined } from '../../../shared/structural-value-equality'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import { isSameAgentProcess } from '../../../shared/agent-process-presence'
+import {
+  isSameAgentProcess,
+  type AgentPaneOwner,
+  type AgentProcessPresence
+} from '../../../shared/agent-process-presence'
 import type {
   AgentHookStatusRowIdentity,
   AgentHookStatusRowMutation,
+  AgentOwnerListener,
   EnrichedAgentHookEventPayload,
   StatusRowMutationListener
 } from './server-types'
@@ -63,6 +68,31 @@ function wslDistroForWorktree(worktreeId: string | undefined): string | null {
   return worktreePath ? (parseWslUncPath(worktreePath)?.distro ?? null) : null
 }
 
+function ownerIdentity(owner: AgentPaneOwner | undefined): AgentHookStatusRowIdentity | null {
+  return owner
+    ? {
+        paneKey: owner.paneKey,
+        ...(owner.worktreeId ? { worktreeId: owner.worktreeId } : {}),
+        ...(owner.terminalHandle ? { terminalHandle: owner.terminalHandle } : {})
+      }
+    : null
+}
+
+function remoteOwnerRecord(
+  scope: Pick<AgentHookEventPayload, 'paneKey' | 'connectionId' | 'worktreeId' | 'tabId'>,
+  presence: AgentProcessPresence,
+  recorded: AgentPaneOwner | undefined
+): AgentPaneOwner {
+  return {
+    paneKey: scope.paneKey,
+    connectionId: scope.connectionId,
+    ...(scope.worktreeId ? { worktreeId: scope.worktreeId } : {}),
+    ...(scope.tabId ? { tabId: scope.tabId } : {}),
+    presence,
+    receivedAt: Math.max(Date.now(), (recorded?.receivedAt ?? -1) + 1)
+  }
+}
+
 export abstract class AgentHookServerRowOwnership extends AgentHookServerListeners {
   _resetRowOwnershipForTests(): void {
     this.paneKeyByTerminalHandle.clear()
@@ -113,23 +143,160 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     )
   }
 
-  /** A row write recorded a live owner; the owner recheck arms itself from here. */
+  /** An owner write recorded a live owner; the owner recheck arms itself from here. */
   protected noteLiveAgentOwner(): void {}
+
+  /** The process that owns the pane, as this host recorded it; never a turn. */
+  getAgentOwner(paneKey: string): AgentPaneOwner | undefined {
+    return this.agentOwnerByPaneKey.get(this.resolvePaneKeyAlias(paneKey))
+  }
+
+  getAgentOwners(): AgentPaneOwner[] {
+    return [...this.agentOwnerByPaneKey.values()]
+  }
+
+  /** Multi-subscriber tap on owner changes, shaped like a row mutation so republishers reuse it. */
+  subscribeAgentOwnerChanges(listener: StatusRowMutationListener): () => void {
+    this.agentOwnerChangeListeners.add(listener)
+    return () => {
+      this.agentOwnerChangeListeners.delete(listener)
+    }
+  }
+
+  /** Publishes every owner change; replays the current owners to a new listener. */
+  setAgentOwnerListener(listener: AgentOwnerListener | null): void {
+    this.onAgentOwner = listener
+    for (const owner of listener ? this.agentOwnerByPaneKey.values() : []) {
+      listener?.(owner)
+    }
+  }
+
+  /** Owners follow their surface: a closed tab or a closed pane admits none. */
+  protected isOwnerFenced(paneKey: string): boolean {
+    const resolved = this.resolvePaneKeyAlias(paneKey)
+    return (
+      this.closedAgentStatusPaneKeys.has(paneKey) ||
+      this.closedAgentStatusPaneKeys.has(resolved) ||
+      this.isClosedAgentStatusTabForPaneKey(resolved) ||
+      this.retiredPaneFencesByKey.get(resolved)?.closed === true
+    )
+  }
+
+  /** The one owner mutation, so no path can strand a published owner or skip the recheck. */
+  protected writeAgentOwner(paneKey: string, next: AgentPaneOwner | undefined): void {
+    const before = this.agentOwnerByPaneKey.get(paneKey)
+    if (before === next || (!before && !next)) {
+      return
+    }
+    if (next) {
+      this.agentOwnerByPaneKey.set(paneKey, next)
+    } else {
+      this.agentOwnerByPaneKey.delete(paneKey)
+    }
+    const process = before?.presence.process
+    const carried = next?.presence.process
+    if (process && !(carried && isSameAgentProcess(carried, process))) {
+      this.emitAgentPresenceReleased({ paneKey, process })
+    }
+    if (next) {
+      if (carried && !next.presence.ended) {
+        this.noteLiveAgentOwner()
+      }
+      this.onAgentOwner?.(next)
+    }
+    const change = { before: ownerIdentity(before), after: ownerIdentity(next) }
+    for (const listener of this.agentOwnerChangeListeners) {
+      try {
+        listener(change)
+      } catch (error) {
+        console.error('[agent-hooks] owner change listener threw', error)
+      }
+    }
+    this.notifyStatusChangeListeners()
+  }
+
+  /** A relay's own host decided this owner; this desktop records it and never re-decides. Returns
+   *  true when a different process took the pane, so its predecessor's turn is not inherited. */
+  protected applyRemoteOwner(
+    scope: Pick<
+      AgentHookEventPayload,
+      'paneKey' | 'connectionId' | 'worktreeId' | 'tabId' | 'terminalHandle'
+    >,
+    presence: AgentProcessPresence
+  ): boolean {
+    const { paneKey } = scope
+    const recorded = this.agentOwnerByPaneKey.get(paneKey)
+    const process = presence.process
+    // Temporary: presence-wsl-guest-binding must bind a guest shell before WSL can own a process.
+    if (!process || isWslHookRelayConnectionId(scope.connectionId) || this.isOwnerFenced(paneKey)) {
+      return false
+    }
+    const recordedProcess = recorded?.presence.process
+    const same = Boolean(recordedProcess && isSameAgentProcess(recordedProcess, process))
+    if (presence.ended) {
+      // Why: with no recorded owner there is nothing to order this exit against, so it may be
+      // older than a later unidentified turn; otherwise the fence admitted only newer evidence.
+      if (!recorded || (same && recorded.presence.ended)) {
+        return false
+      }
+      if (!same) {
+        this.writeAgentOwner(paneKey, remoteOwnerRecord(scope, presence, recorded))
+      }
+      this.reconcileEndedProcessForPaneKeys([paneKey], { kind: 'owner-exited', presence })
+      return false
+    }
+    if (same && recorded && !recorded.presence.ended) {
+      // Why: a restated owner advances only the ordering watermark; republishing it is noise.
+      this.agentOwnerByPaneKey.set(paneKey, {
+        ...recorded,
+        presence: { ...recorded.presence, observation: presence.observation }
+      })
+      return false
+    }
+    this.writeAgentOwner(paneKey, remoteOwnerRecord(scope, presence, recorded))
+    return Boolean(recordedProcess && !same)
+  }
+
+  /** A live turn after the owner's exit is something new in the pane; the exited owner's record
+   *  must not label it. A replay restates history, so it leaves the record to suppress it. */
+  protected supersedeEndedOwner(row: Pick<AgentHookEventPayload, 'paneKey' | 'isReplay'>): void {
+    if (!row.isReplay && this.agentOwnerByPaneKey.get(row.paneKey)?.presence.ended) {
+      this.writeAgentOwner(row.paneKey, undefined)
+    }
+  }
+
+  /** An exit claim (a session-end hook, or an older relay's hook-claimed exit) ends that agent's
+   *  turn when no live owner can be checked instead, as main does; it never mints, revives or
+   *  re-dates a turn. A live owner is checked rather than trusted. */
+  protected applyExitClaim(
+    paneKey: string,
+    presence: AgentProcessPresence,
+    session: AgentHookEventPayload['providerSession']
+  ): void {
+    const owner = this.agentOwnerByPaneKey.get(paneKey)
+    if (owner && !owner.presence.ended) {
+      void this.checkAgentPresence(paneKey)
+      return
+    }
+    const row = this.state.lastStatusByPaneKey.get(paneKey)
+    // Why agent and session: a nested run (even of the same agent) must not end another's turn.
+    if (
+      !row ||
+      row.providerSessionOnly ||
+      row.payload.agentType !== presence.agent ||
+      !session ||
+      row.providerSession?.id !== session.id
+    ) {
+      return
+    }
+    this.reconcileEndedProcessForPaneKeys([paneKey], { kind: 'owner-exited', presence })
+  }
 
   protected commitStatusRowMutation(
     before: EnrichedAgentHookEventPayload | null | undefined,
     after: EnrichedAgentHookEventPayload | null | undefined,
     emit = true
   ): boolean {
-    const owner = before?.agentPresence?.process
-    const carried = after?.agentPresence?.process
-    // Why: the one place every row write passes, so no deletion path can strand a renderer owner.
-    if (owner && !(carried && isSameAgentProcess(carried, owner))) {
-      this.emitAgentPresenceReleased({ paneKey: before.paneKey, process: owner })
-    }
-    if (carried && !after?.agentPresence?.ended) {
-      this.noteLiveAgentOwner()
-    }
     if (
       before?.terminalHandle &&
       this.paneKeyByTerminalHandle.get(before.terminalHandle) === before.paneKey

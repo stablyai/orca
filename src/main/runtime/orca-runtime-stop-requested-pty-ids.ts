@@ -177,10 +177,10 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
       if (!ptyId) {
         return undefined
       }
-      const rows = Array.from(this.collectAgentStatusPaneKeysForPty(ptyId)).flatMap(
-        (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? []
+      const owners = Array.from(this.collectAgentStatusPaneKeysForPty(ptyId)).flatMap(
+        (paneKey) => this.getAgentOwnerFn?.(paneKey) ?? []
       )
-      return selectKeyboardAgentPresence(rows)
+      return selectKeyboardAgentPresence(owners)
     } catch {
       return undefined
     }

@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { AgentPresenceCommandObserver } from '../../shared/agent-presence-command-observer'
 import { OrcaRuntimeWithTerminalDrivers } from './orca-runtime-terminal-drivers'
 import { RuntimePreservedBranchCleanup } from './runtime-preserved-branch-cleanup'
 import type { IPtyProvider } from '../providers/types'
@@ -10,9 +11,10 @@ import type {
 } from './runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentPaneOwner } from '../../shared/agent-process-presence'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
-import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
+import type { AgentHookServer, AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import type {
   AiVaultPrepareSessionResumeArgs,
@@ -45,6 +47,10 @@ import { ClaudeAgentTeamsService } from './claude-agent-teams-service'
 import { teardownFolderWorkspacePtys } from './folder-workspace-pty-teardown'
 
 export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
+  protected readonly agentPresenceCommands = new AgentPresenceCommandObserver(
+    (id, current, kind, evidenceAtMs) =>
+      this.discoverAgentPresence(id, current, kind === 'command', evidenceAtMs)
+  )
   protected readonly preservedBranchCleanup = new RuntimePreservedBranchCleanup(() =>
     this.store ? this.requireStore() : null
   )
@@ -88,9 +94,17 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
       }) => AgentHookAuthorityAttestation | null)
     | null
 
-  protected readonly retireAgentHookCompatibilityAuthorityFn: ((paneKey: string) => void) | null
+  protected readonly retireAgentHookCompatibilityAuthorityFn:
+    | ((paneKey: string, options?: { authorityOnly?: boolean }) => void)
+    | null
 
   protected readonly dropAgentStatusForWorktreeFn: ((worktreeId: string) => void) | null
+
+  protected readonly onForegroundAgentPresence: AgentHookServer['ingestForegroundPresence'] | null
+
+  protected readonly getAgentOwnerFn: ((paneKey: string) => AgentPaneOwner | undefined) | null
+
+  protected readonly getAgentOwnersFn: (() => AgentPaneOwner[]) | null
 
   protected readonly checkHookAgentPresenceFn:
     | ((paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>)

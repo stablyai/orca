@@ -165,6 +165,7 @@ describe('RelayAgentHookRuntime wiring', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this stand-in implements every PtyHandler member the hook runtime registers or reads.
     const ptyHandler = {
       addEnvAugmenter: vi.fn(),
+      setAgentPresenceAdmission: vi.fn(),
       setAgentPresenceTrigger: vi.fn(),
       setExitListener: vi.fn(),
       setSurfaceRetiredListener: vi.fn((listener: PtySurfaceRetiredListener | null) => {

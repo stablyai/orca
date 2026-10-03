@@ -92,6 +92,11 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     for (const row of statusRowsToClear) {
       this.commitStatusRowMutation(row, undefined)
     }
+    for (const paneKey of this.agentOwnerByPaneKey.keys()) {
+      if (paneCacheKeyMatchesTab(paneKey, tabId)) {
+        this.writeAgentOwner(paneKey, undefined)
+      }
+    }
     if (statusChanged || authorityChanged) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
@@ -114,7 +119,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
 
   private dropStatusEntriesForWorktrees(matches: (worktreeId: string) => boolean): void {
     const tabIds = new Set<string>()
-    for (const [paneKey, row] of this.state.lastStatusByPaneKey) {
+    for (const [paneKey, row] of [...this.state.lastStatusByPaneKey, ...this.agentOwnerByPaneKey]) {
       const tabId = parsePaneKey(paneKey)?.tabId
       if (tabId && row.worktreeId && matches(row.worktreeId)) {
         tabIds.add(tabId)
@@ -162,6 +167,9 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
       this.notifyPaneKeyAliasPersistenceListener()
     }
     this.commitPaneRowAfterCleanup(previousStatus, owner)
+    for (const key of paneKeys) {
+      this.settlePaneOwner(key, owner)
+    }
     if (hadStatus || authorityChanged) {
       this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
       this.scheduleStatusPersist()

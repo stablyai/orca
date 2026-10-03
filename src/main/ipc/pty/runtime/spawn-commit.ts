@@ -86,7 +86,8 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         leafId: owner.surface.leafId,
         terminalHandle: owner.surface.terminalHandle,
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
-        ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
+        ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {}),
+        reattached: true
       }
     )
     if (rejectedRegistration) {
@@ -178,7 +179,8 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
             leafId: ctx.metadataLeafId,
             ...(args.preAllocatedHandle ? { terminalHandle: args.preAllocatedHandle } : {}),
             ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
-            ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
+            ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {}),
+            ...(ctx.result.isReattach === true ? { reattached: true as const } : {})
           }
         : undefined,
       !args.connectionId

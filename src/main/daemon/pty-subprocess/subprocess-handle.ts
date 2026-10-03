@@ -1,3 +1,4 @@
+import { probeWindowsPtyAgentPresence } from '../../providers/windows-agent-presence'
 import type * as pty from 'node-pty'
 import type { RecognizedAgentProcess } from '../../../shared/agent-process-recognition'
 import { readPtySlavePath } from '../../../shared/pty-slave-line-discipline-echo'
@@ -80,6 +81,9 @@ export function createDaemonPtySubprocessHandle(args: {
     ...(args.startupCommandDeliveredInShellArgs
       ? { startupCommandDeliveredInShellArgs: true }
       : {}),
+    captureAgentPresence: foreground.captureAgentPresence,
+    probeAgentPresence: async (identity) =>
+      dead ? 'unverifiable' : probeWindowsPtyAgentPresence(proc, identity),
     getForegroundProcess: foreground.getForegroundProcess,
     confirmForegroundProcess: foreground.confirmForegroundProcess,
     confirmShellForeground: foreground.confirmShellForeground,

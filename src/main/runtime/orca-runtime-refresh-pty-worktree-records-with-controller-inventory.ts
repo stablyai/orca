@@ -231,6 +231,8 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
         }
         pty.controllerTitle = session.title?.trim() || null
         this.reconcileSubscriberDrivenProviderAttach(session.id)
+        // Why: a surviving terminal whose worktree was not opened since restart re-derives here.
+        this.rederiveSurvivingAgentOwner(session.id, Boolean(restoresExactSurface))
       }
       // Why: fire-and-forget so this listing hot path doesn't serialize a relay round-trip per session and a throw can't abort the sweep below.
       this.refreshPtyForegroundAgent(session.id)

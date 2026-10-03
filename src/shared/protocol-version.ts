@@ -33,7 +33,9 @@ export { SKILL_INSTALL_RESULT_V2_CAPABILITY } from './skill-install-capability'
 // this client build requires a newer server. Exact app-version equality is
 // never required; these numbers define the supported compatibility window.
 
-export const AGENT_PROCESS_PRESENCE_RUNTIME_CAPABILITY = 'agent-process-presence.v1' as const
+// Why v2: v1 carried the owner inside `agentStatus`; v2 is the top-level `tab.agentPresence`. A
+// peer that knows only v1 gets neither shape instead of a field it would not read.
+export const AGENT_PROCESS_PRESENCE_RUNTIME_CAPABILITY = 'agent-process-presence.v2' as const
 
 export const RUNTIME_PROTOCOL_VERSION = 3
 export const MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION = 2

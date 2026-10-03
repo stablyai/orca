@@ -1,5 +1,6 @@
 import { isFreshNonDoneAgentStatus } from '../../shared/agent-status-types'
 import type { RuntimeWorktreeAgentRow, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
+import type { AgentPaneOwner } from '../../shared/agent-process-presence'
 import { mergeWorktreeSummaryStatus } from './runtime-worktree-status-projection'
 import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
 import type { RuntimeWorkingTerminalEvidence } from './runtime-worktree-ps-activity'
@@ -128,4 +129,24 @@ function workingTerminalEvidenceMatchesSource(
     return evidence.ptyId === source.ptyId
   }
   return Boolean(evidence.tabId && evidence.tabId === source.tabId)
+}
+
+/** A live owner with no turn row is still an agent in its worktree; listed beside the turns. */
+export function attachRuntimeWorktreePresentAgents(args: {
+  owners: readonly AgentPaneOwner[]
+  getSummary: (worktreeId: string) => RuntimeWorktreePsSummary | null
+}): void {
+  for (const owner of args.owners) {
+    if (!owner.worktreeId || !owner.presence.process || owner.presence.ended) {
+      continue
+    }
+    const summary = args.getSummary(owner.worktreeId)
+    if (!summary || summary.agents.some((row) => row.paneKey === owner.paneKey)) {
+      continue
+    }
+    summary.presentAgents = [
+      ...(summary.presentAgents ?? []),
+      { paneKey: owner.paneKey, agentType: owner.presence.agent }
+    ]
+  }
 }

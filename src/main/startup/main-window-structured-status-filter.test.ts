@@ -20,6 +20,7 @@ vi.mock('../agent-hooks/server', () => ({
       hooks.listener = listener
     },
     setPaneStatusClearListener: vi.fn(),
+    setAgentOwnerListener: vi.fn(),
     setAgentPresenceReleaseListener: vi.fn()
   }
 }))

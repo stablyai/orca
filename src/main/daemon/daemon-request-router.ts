@@ -1,3 +1,4 @@
+import { readDaemonForeground } from './daemon-agent-presence-request'
 import { performance } from 'node:perf_hooks'
 import { setPtyOwnerHostColors } from '../../shared/pty-owner-color-query-colors'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
@@ -106,9 +107,7 @@ export class DaemonRequestRouter {
       case 'getCwd':
         return { cwd: await this.options.host.getCwd(request.payload.sessionId) }
       case 'getForegroundProcess':
-        return {
-          foregroundProcess: this.options.host.getForegroundProcess(request.payload.sessionId)
-        }
+        return readDaemonForeground(this.options.host, request.payload)
       case 'inspectProcess': {
         const options = {
           ...(request.payload.expectedIncarnationId

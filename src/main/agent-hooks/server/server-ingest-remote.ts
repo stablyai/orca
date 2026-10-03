@@ -1,5 +1,4 @@
 import { admitRemoteAgentPresence } from './server-remote-agent-presence'
-import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
 import { track } from '../../telemetry/client'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { restoreShedStatusFields } from '../../../shared/agent-hook-relay'
@@ -142,9 +141,16 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     const remotePresence = admitRemoteAgentPresence(
       envelope,
       trimmedConnectionId,
-      this.state.lastStatusByPaneKey.get(paneKey)
+      this.getAgentOwner(paneKey)
     )
     if (!remotePresence) {
+      return
+    }
+    const remoteOwner = remotePresence.agentPresence
+    if (remoteOwner?.ended && !remotePresence.agentPresenceFromExecutionHost) {
+      if (envelope.isReplay !== true) {
+        this.applyExitClaim(paneKey, remoteOwner, providerSession)
+      }
       return
     }
     // Why: relay crosses a trust boundary — re-run the canonical normalizer to enforce caps/invariants (returns null on malformed).
@@ -167,9 +173,16 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     )
     if (
       envelope.providerSessionOnly === true &&
-      !readAgentProcessPresence(envelope.agentPresence)?.ended &&
       !isValidPiProviderSessionOnly(providerSession, normalizedPayload.agentType)
     ) {
+      // Why before the status disposition: an owner observation is never a turn, so it can neither
+      // revive a retired pane nor restate the prompt it last carried.
+      if (remotePresence.agentPresenceFromExecutionHost && remoteOwner) {
+        this.applyRemoteOwner(
+          { paneKey, connectionId: trimmedConnectionId, worktreeId, tabId },
+          remoteOwner
+        )
+      }
       return
     }
     // Older relays omit source; canonical OMP identity preserves boundary provenance.

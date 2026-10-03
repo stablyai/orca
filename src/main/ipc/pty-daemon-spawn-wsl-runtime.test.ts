@@ -195,7 +195,8 @@ describe('registerPtyHandlers', () => {
             tabId: 'tab-runtime-reattach',
             leafId,
             incarnationId,
-            providerReattachLaunchIdentity: { incarnationId, launchAgent: 'codex' }
+            providerReattachLaunchIdentity: { incarnationId, launchAgent: 'codex' },
+            reattached: true
           },
           false
         )

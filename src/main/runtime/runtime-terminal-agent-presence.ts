@@ -1,5 +1,4 @@
-import type { AgentProcessPresence } from '../../shared/agent-process-presence'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentPaneOwner, AgentProcessPresence } from '../../shared/agent-process-presence'
 import {
   paneEvidenceAgent,
   paneEvidenceCounts,
@@ -52,17 +51,17 @@ export type RuntimeTerminalAgentPresenceOptions = {
 
 /** The pane's newest recorded owner, as far as this host can vouch for it at the keyboard. */
 export function selectKeyboardAgentPresence(
-  rows: readonly AgentStatusIpcPayload[]
+  owners: readonly AgentPaneOwner[]
 ): AgentProcessPresence | undefined {
-  const row = rows.reduce<AgentStatusIpcPayload | undefined>(
+  const owner = owners.reduce<AgentPaneOwner | undefined>(
     (newest, candidate) =>
       !newest || candidate.receivedAt > newest.receivedAt ? candidate : newest,
     undefined
   )
-  const presence = row?.agentPresence
-  // Why: this host cannot check a live owner recorded on another host (SSH, a WSL guest), so it
-  // must not outrank the pane's own evidence here; that pane keeps main's rules.
-  return presence?.process && !presence.ended && row?.connectionId
+  const presence = owner?.presence
+  // Why: this host cannot check a live owner recorded on another host (SSH), so it must not
+  // outrank the pane's own evidence here; that pane keeps main's rules.
+  return presence?.process && !presence.ended && owner?.connectionId
     ? { agent: presence.agent }
     : presence
 }

@@ -1,34 +1,37 @@
-import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import {
   isSameAgentProcess,
-  readAgentProcessPresence
+  readAgentProcessPresence,
+  type AgentPaneOwner,
+  type AgentProcessPresence
 } from '../../../shared/agent-process-presence'
 
+/** The envelope's owner claim, marked host-decided only when its relay stamped and ordered it. */
 export function admitRemoteAgentPresence(
   envelope: { agentPresence?: unknown },
   connectionId: string | null,
-  previous: AgentHookEventPayload | undefined
-): Pick<AgentHookEventPayload, 'agentPresence' | 'agentPresenceFromExecutionHost'> | null {
+  recorded: AgentPaneOwner | undefined
+): { agentPresence?: AgentProcessPresence; agentPresenceFromExecutionHost?: true } | null {
   const agentPresence = readAgentProcessPresence(envelope.agentPresence)
   const observation = agentPresence?.observation
   if (!connectionId || !observation || !agentPresence?.process) {
     return { agentPresence }
   }
-  const recorded = previous?.agentPresence?.observation
+  const recordedObservation = recorded?.presence.observation
+  const sameConnection = recorded?.connectionId === connectionId
   if (
-    previous?.connectionId === connectionId &&
-    recorded?.epoch === observation.epoch &&
-    recorded.sequence > observation.sequence
+    sameConnection &&
+    recordedObservation?.epoch === observation.epoch &&
+    recordedObservation.sequence > observation.sequence
   ) {
     return null
   }
   if (
-    recorded?.epoch === observation.epoch &&
-    recorded.sequence === observation.sequence &&
-    previous?.connectionId === connectionId &&
-    previous.agentPresence?.process &&
-    (!isSameAgentProcess(previous.agentPresence.process, agentPresence.process) ||
-      previous.agentPresence.ended !== agentPresence.ended)
+    sameConnection &&
+    recordedObservation?.epoch === observation.epoch &&
+    recordedObservation.sequence === observation.sequence &&
+    recorded?.presence.process &&
+    (!isSameAgentProcess(recorded.presence.process, agentPresence.process) ||
+      recorded.presence.ended !== agentPresence.ended)
   ) {
     return null
   }

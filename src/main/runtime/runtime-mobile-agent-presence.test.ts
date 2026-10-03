@@ -6,6 +6,7 @@ import { AGENT_PROCESS_PRESENCE_RUNTIME_CAPABILITY } from '../../shared/protocol
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import type { AgentPaneOwner } from '../../shared/agent-process-presence'
 
 const processIdentity = { pid: 4001, platform: 'linux', startTime: 'boot:123' } as const
 const leafId = '11111111-1111-4111-8111-111111111111'
@@ -35,6 +36,7 @@ function ownerRow(ended: boolean) {
 
 function projection(agentStatus?: AgentStatusEntry) {
   let rows: AgentStatusIpcPayload[] = []
+  let owner: AgentPaneOwner | undefined
   const snapshot: RuntimeMobileSessionTabsSnapshot = {
     worktree: 'folder',
     publicationEpoch: 'epoch',
@@ -61,6 +63,7 @@ function projection(agentStatus?: AgentStatusEntry) {
     ptysById: new Map(),
     getLiveBrowserTabs: () => new Map(),
     getProviderSessionRows: () => rows,
+    getAgentOwner: () => owner,
     getProviderSessionSnapshot: () => rows,
     getStatusSnapshot: () => [],
     getLeafKey: () => '',
@@ -81,6 +84,9 @@ function projection(agentStatus?: AgentStatusEntry) {
     setRows: (next: AgentStatusIpcPayload[]) => {
       rows = next
     },
+    setOwner: (next: AgentPaneOwner | undefined) => {
+      owner = next
+    },
     tabFor: (capabilities: string[]) =>
       projectSessionTabsForClient(
         projectRuntimeMobileSessionTabs(snapshot, host),
@@ -90,40 +96,49 @@ function projection(agentStatus?: AgentStatusEntry) {
   }
 }
 
+function hostOwner(ended: boolean): AgentPaneOwner {
+  return {
+    paneKey,
+    connectionId: null,
+    worktreeId: 'folder',
+    tabId: 'tab',
+    presence: { agent: 'claude', process: processIdentity, ...(ended ? { ended: true } : {}) },
+    receivedAt: 10
+  }
+}
+
 describe('headless mobile owner projection', () => {
-  it('preserves an idle host owner without a renderer or an agent title', () => {
-    const { setRows, tabFor } = projection()
+  it('publishes an idle host owner beside its turn without a renderer or an agent title', () => {
+    const { setRows, setOwner, tabFor } = projection()
     setRows([ownerRow(false)])
-    expect(tabFor(capable)).toMatchObject({
-      agentStatus: { agentPresence: { agent: 'claude', process: processIdentity } }
-    })
-  })
-
-  it('carries a positive exit through the snapshot even with a stale launch hint', () => {
-    const { setRows, tabFor } = projection()
-    setRows([
-      {
-        ...ownerRow(true),
-        model: 'claude-opus',
-        providerSession: { key: 'session_id', id: 'claude-session' }
-      }
-    ])
+    setOwner(hostOwner(false))
     const tab = tabFor(capable)
-    expect(tab).toMatchObject({
-      launchAgent: 'claude',
-      agentStatus: { agentPresence: { agent: 'claude', process: processIdentity, ended: true } }
-    })
-    // An exited owner is identity only; its session, model and type must not reach a successor.
-    const status = tab?.type === 'terminal' ? tab.agentStatus : undefined
-    expect(status).not.toHaveProperty('providerSession')
-    expect(status).not.toHaveProperty('model')
-    expect(status).not.toHaveProperty('agentType')
+    expect(tab).toMatchObject({ agentPresence: { agent: 'claude', process: processIdentity } })
+    expect(tab).not.toHaveProperty('agentStatus.agentPresence')
   })
 
-  it('negotiates the full snapshot and never accepts client-published presence as host evidence', () => {
-    const row = ownerRow(true)
-    const spoofedAuthority = { agentPresenceFromExecutionHost: true }
-    const { setRows, tabFor } = projection({
+  it('publishes a hookless live owner as identity without inventing a done turn', () => {
+    const { setOwner, tabFor } = projection()
+    setOwner(hostOwner(false))
+    expect(tabFor(capable)).toMatchObject({
+      agentPresence: { agent: 'claude', process: processIdentity }
+    })
+    expect(tabFor(capable)).not.toHaveProperty('agentStatus')
+    expect(tabFor([])).not.toHaveProperty('agentPresence')
+  })
+
+  it('carries a positive exit beside the stale launch hint', () => {
+    const { setOwner, tabFor } = projection()
+    setOwner(hostOwner(true))
+    expect(tabFor(capable)).toMatchObject({
+      launchAgent: 'claude',
+      agentPresence: { agent: 'claude', process: processIdentity, ended: true }
+    })
+    expect(tabFor(capable)).not.toHaveProperty('agentStatus')
+  })
+
+  it('never accepts client-published presence as host evidence', () => {
+    const { setOwner, tabFor } = projection({
       state: 'done',
       prompt: '',
       paneKey,
@@ -135,16 +150,16 @@ describe('headless mobile owner projection', () => {
         agent: 'claude',
         process: processIdentity,
         observation: { epoch: 'client', sequence: 999 }
-      },
-      ...spoofedAuthority
+      }
     })
-    setRows([row])
-    // The published row keeps its own fields; only the host's presence replaces the client's.
+    setOwner(hostOwner(true))
     expect(tabFor(capable)).toMatchObject({
-      agentStatus: { agentPresence: row.agentPresence, updatedAt: 99999, stateStartedAt: 99999 }
+      agentPresence: hostOwner(true).presence,
+      agentStatus: { updatedAt: 99999, stateStartedAt: 99999 }
     })
-    expect(tabFor([])).not.toHaveProperty('agentStatus.agentPresence')
-    setRows([])
     expect(tabFor(capable)).not.toHaveProperty('agentStatus.agentPresence')
+    expect(tabFor([])).not.toHaveProperty('agentPresence')
+    setOwner(undefined)
+    expect(tabFor(capable)).not.toHaveProperty('agentPresence')
   })
 })

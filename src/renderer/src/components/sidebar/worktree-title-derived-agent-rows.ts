@@ -1,4 +1,6 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { AgentPresenceByPaneKey } from '@/store/slices/agent-presence'
+import { selectLiveOwnerAgent } from '@/lib/agent-presence-selectors'
 import { formatAgentTypeLabel, isClaudeManagementTitle } from '@/lib/agent-status'
 import { isCursorAgentTitle } from '../../../../shared/agent-title-core'
 import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
@@ -40,6 +42,7 @@ const EMPTY_TERMINAL_LAYOUTS: Record<string, TerminalLayoutSnapshot | undefined>
 const EMPTY_PANE_FOREGROUND: Record<string, TitleDerivedPaneForeground> = {}
 
 export function buildTitleDerivedAgentRows(args: {
+  agentPresenceByPaneKey?: AgentPresenceByPaneKey
   tabs: TerminalTab[]
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
   ptyIdsByTabId?: Record<string, string[]>
@@ -101,6 +104,7 @@ export function buildTitleDerivedAgentRows(args: {
           title,
           ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
           paneForegroundAgentByPaneKey,
+          agentPresenceByPaneKey: args.agentPresenceByPaneKey,
           now: args.now,
           runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
         })
@@ -123,6 +127,7 @@ export function buildTitleDerivedAgentRows(args: {
       title: tab.title,
       ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
       paneForegroundAgentByPaneKey,
+      agentPresenceByPaneKey: args.agentPresenceByPaneKey,
       now: args.now,
       runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
     })
@@ -140,12 +145,13 @@ export function buildTitleDerivedAgentRows(args: {
  * Constructs a dashboard agent row from a terminal tab's title fallback,
  * normalising Pi-compatible agent names to their owner.
  */
-function buildTitleDerivedAgentRow(args: {
+export function buildTitleDerivedAgentRow(args: {
   tab: TerminalTab
   leafId: string
   title: string
   ownerAgentType: AgentType | null
   paneForegroundAgentByPaneKey: Record<string, TitleDerivedPaneForeground>
+  agentPresenceByPaneKey?: AgentPresenceByPaneKey
   now: number
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
 }): DashboardAgentRow | null {
@@ -179,14 +185,17 @@ function buildTitleDerivedAgentRow(args: {
       : isClaudeAgentsTitle
         ? 'claude'
         : resolveTitleDerivedAgentType(title, label, args.ownerAgentType)
-  const agentType = resolveTitleDerivedPaneAgent({
-    title,
-    defaultTitle: args.tab.defaultTitle,
-    titleShowsActivity: Boolean(titleStatus && label),
-    titleAgentType,
-    launchAgentType: args.ownerAgentType,
-    foreground: args.paneForegroundAgentByPaneKey[paneKey]
-  })
+  // Why: the host's recorded owner names the pane even while its title reads as a shell.
+  const agentType =
+    selectLiveOwnerAgent(args.agentPresenceByPaneKey?.[paneKey]?.presence) ??
+    resolveTitleDerivedPaneAgent({
+      title,
+      defaultTitle: args.tab.defaultTitle,
+      titleShowsActivity: Boolean(titleStatus && label),
+      titleAgentType,
+      launchAgentType: args.ownerAgentType,
+      foreground: args.paneForegroundAgentByPaneKey[paneKey]
+    })
   if (!agentType) {
     return null
   }

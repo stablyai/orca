@@ -3,7 +3,7 @@ import { runProcess } from './child-process/run-process'
 import type { AgentProcessIdentity, AgentProcessVerdict } from './agent-process-presence'
 
 export type AgentProcessObservation =
-  | { verdict: 'live'; startTime: string; zombie: boolean; stopped?: boolean }
+  | { verdict: 'live'; startTime: string; zombie: boolean; stopped?: boolean; foreground?: boolean }
   | { verdict: 'unverifiable' | 'exited' }
 
 function isMissing(error: unknown): boolean {
@@ -38,7 +38,8 @@ export async function readAgentProcess(pid: number): Promise<AgentProcessObserva
         verdict: 'live',
         startTime: `${boot}:${fields[19]}`,
         zombie: fields[0] === 'Z',
-        stopped: fields[0] === 'T' || fields[0] === 't'
+        stopped: fields[0] === 'T' || fields[0] === 't',
+        foreground: Number(fields[2]) > 0 && fields[2] === fields[5]
       }
     }
     if (process.platform === 'darwin') {
@@ -57,7 +58,8 @@ export async function readAgentProcess(pid: number): Promise<AgentProcessObserva
             verdict: 'live',
             startTime: match[2],
             zombie: match[1].startsWith('Z'),
-            stopped: match[1].startsWith('T')
+            stopped: match[1].startsWith('T'),
+            foreground: match[1].includes('+')
           }
         }
       }
@@ -72,7 +74,7 @@ export async function readAgentProcess(pid: number): Promise<AgentProcessObserva
   } catch {
     return { verdict: 'unverifiable' }
   }
-  // Why: no Windows hook captures an identity yet, so there is nothing to compare against.
+  // Windows uses the PTY job adapter; a failed identity read never proves exit.
   return { verdict: 'unverifiable' }
 }
 
@@ -93,4 +95,22 @@ export async function probeAgentProcessPresence(
   }
   // Why: a suspended (Ctrl-Z) agent still exists but is not running in its terminal.
   return observed.stopped ? 'unverifiable' : 'live'
+}
+
+/** A stopped (Ctrl-Z) owner still exists but has handed its terminal to whatever runs in front. */
+export async function isSuspendedAgentProcess(
+  identity: AgentProcessIdentity,
+  read: (pid: number) => Promise<AgentProcessObservation> = readAgentProcess,
+  platform: NodeJS.Platform = process.platform
+): Promise<boolean> {
+  if (identity.platform !== platform) {
+    return false
+  }
+  const observed = await read(identity.pid).catch(() => ({ verdict: 'unverifiable' as const }))
+  return (
+    observed.verdict === 'live' &&
+    !observed.zombie &&
+    observed.stopped === true &&
+    observed.startTime === identity.startTime
+  )
 }

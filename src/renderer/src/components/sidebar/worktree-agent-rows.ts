@@ -22,6 +22,7 @@ import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
 import { resolveDecayedAgentRowState } from '@/lib/agent-row-decay-state'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
+import { buildOwnerOnlyAgentRows } from './worktree-owner-agent-rows'
 import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-identity'
 import { buildSubagentChildRows } from './worktree-subagent-child-rows'
 import { compareWorktreeAgentRows } from './worktree-agent-row-order'
@@ -216,6 +217,7 @@ export function buildWorktreeAgentRows(args: {
       paneEvidenceCounts(args.agentPresenceByPaneKey?.[row.paneKey]?.presence, row.agentType)
     )
   )
+  rows.push(...buildOwnerOnlyAgentRows({ ...args, seenPaneKeys }))
 
   // Why: orchestration workers can be attributed to a worktree by main before
   // their tab is present in this renderer. Keep those live rows visible in the

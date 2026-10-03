@@ -32,6 +32,17 @@ describe('BackgroundTransientFactRelay', () => {
     expect(emitted).toEqual([])
   })
 
+  it('forwards split command-start markers before command completion', () => {
+    const { relay, emitted } = createRelay()
+    relay.setSessionBackground('s1', true)
+    relay.onSessionData('s1', '\x1b]133;')
+    relay.onSessionData('s1', 'C\x07\x1b]133;D;0\x07')
+    expect(emitted).toEqual([
+      { sessionId: 's1', fact: { kind: 'command-started' } },
+      { sessionId: 's1', fact: { kind: 'command-finished', exitCode: 0 } }
+    ])
+  })
+
   it('emits command-finished with the OSC 133;D exit code', () => {
     const { relay, emitted } = createRelay()
     relay.setSessionBackground('s1', true)

@@ -1,7 +1,12 @@
+import type { AgentProcessIdentity } from '../../shared/agent-process-presence'
 export type GetForegroundProcessRequest = {
   id: string
   type: 'getForegroundProcess'
   payload: {
+    probeAgentPresence?: AgentProcessIdentity
+    captureAgentPresence?: boolean
+    /** Optional; an older daemon answers from its cached process table. */
+    snapshotNotBeforeMs?: number
     sessionId: string
   }
 }

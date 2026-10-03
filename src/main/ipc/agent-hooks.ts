@@ -7,6 +7,7 @@ import type {
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-question-answered-intent'
 import { agentHookServer } from '../agent-hooks/server'
+import { toAgentOwnerIpcPayload } from '../agent-hooks/server/server-status-identity'
 import { getMigrationUnsupportedPtySnapshot } from '../agent-hooks/migration-unsupported-pty-state'
 import { registerAgentPaneAuthorityIpcHandlers } from './agent-pane-authority-ipc'
 import { registerAgentStatusRowTeardownIpcHandlers } from './agent-status-row-teardown-ipc'
@@ -52,13 +53,18 @@ export function registerAgentHookHandlers(
     // Why: the renderer pulls this after workspace hydration, so startup cannot
     // lose replayed statuses while its local store is still empty. Match the
     // live push enrichment in main/index.ts so parent/child rows survive replay.
-    return (
-      agentHookServer
-        .getStatusSnapshot()
-        // Same rule as the live push: the renderer's feed bridge owns structured rows for now.
-        .filter((entry) => entry.structuredHost === undefined)
-        .map((entry) => enrichAgentStatusIpcPayload(entry, runtime))
-    )
+    const rows = agentHookServer
+      .getStatusSnapshot()
+      // Same rule as the live push: the renderer's feed bridge owns structured rows for now.
+      .filter((entry) => entry.structuredHost === undefined)
+      .map((entry) => enrichAgentStatusIpcPayload(entry, runtime))
+    const panesWithRows = new Set(rows.map((entry) => entry.paneKey))
+    // Why: an owner with no turn reaches the renderer only through its own presence envelope.
+    const owners = agentHookServer
+      .getAgentOwners()
+      .filter((owner) => !panesWithRows.has(owner.paneKey))
+      .map(toAgentOwnerIpcPayload)
+    return [...rows, ...owners]
   })
   ipcMain.handle('agentStatus:inferInterrupt', (_event, request: unknown): boolean => {
     if (typeof request !== 'object' || request === null) {

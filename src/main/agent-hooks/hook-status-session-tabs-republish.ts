@@ -1,4 +1,5 @@
 import type { AgentHookServer } from './server'
+import type { AgentHookStatusRowMutation } from './server/server-types'
 
 type SessionTabsRepublisher = {
   getTerminalWorktreeIdForHandle(handle: string): string | null
@@ -7,10 +8,13 @@ type SessionTabsRepublisher = {
   touchMobileSessionTabsForWorktree(worktreeId: string): void
 }
 
-type StatusStore = Pick<AgentHookServer, 'subscribeStatusFreshness' | 'subscribeStatusRowMutations'>
+type StatusStore = Pick<
+  AgentHookServer,
+  'subscribeStatusFreshness' | 'subscribeStatusRowMutations' | 'subscribeAgentOwnerChanges'
+>
 
 /**
- * Republish `session.tabs` whenever a pane's status row changes.
+ * Republish `session.tabs` whenever a pane's status row or its owner changes.
  *
  * Every producer — hook posts, the relay receivers, and main's own OSC parse — lands in the
  * store, so this is the one signal that a pane's published projection is out of date. Nothing
@@ -31,7 +35,7 @@ export function installHookStatusSessionTabsRepublish(
       : null) ??
     runtime.getTerminalWorktreeIdForPaneKey(identity.paneKey)
 
-  const unsubscribeMutations = statusStore.subscribeStatusRowMutations((mutation) => {
+  const republish = (mutation: AgentHookStatusRowMutation): void => {
     const runtime = getRuntime()
     if (!runtime) {
       return
@@ -49,7 +53,10 @@ export function installHookStatusSessionTabsRepublish(
     for (const worktreeId of worktreeIds) {
       runtime.touchMobileSessionTabsForWorktree(worktreeId)
     }
-  })
+  }
+  const unsubscribeMutations = statusStore.subscribeStatusRowMutations(republish)
+  // Why: an owner with no turn (hookless agent, dismissed turn) changes no row.
+  const unsubscribeOwners = statusStore.subscribeAgentOwnerChanges(republish)
   const unsubscribeFreshness = statusStore.subscribeStatusFreshness((status) => {
     const runtime = getRuntime()
     if (!runtime) {
@@ -62,6 +69,7 @@ export function installHookStatusSessionTabsRepublish(
   })
   return () => {
     unsubscribeMutations()
+    unsubscribeOwners()
     unsubscribeFreshness()
   }
 }

@@ -13,7 +13,10 @@ import { createHookListenerState } from '../../shared/agent-hook-listener/listen
 const probe = vi.hoisted(() =>
   vi.fn(async (): Promise<'live' | 'unverifiable' | 'exited'> => 'live')
 )
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
+vi.mock('../../shared/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: probe,
+  isSuspendedAgentProcess: vi.fn(async () => false)
+}))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
 const owner = {
@@ -65,7 +68,6 @@ async function setup() {
   servers.push(main, relay)
   await relay.start()
   const request = { paneKey: PANE, tabId: 'tab-1', worktreeId: 'folder-1' }
-  // Why: Claude hooks carry the sender's process, so they establish the relay's owner.
   const relayHook = async (...args: Parameters<typeof claudeHook>) => {
     const { port, token } = relay.getCoordinates()
     const response = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
@@ -75,8 +77,11 @@ async function setup() {
     })
     expect(response.status).toBe(204)
   }
+  const capture = (process: AgentProcessIdentity) =>
+    relay.ingestForegroundPresence(request, { agent: 'claude', process })
   return {
     main,
+    capture,
     relay,
     relayHook,
     request,
@@ -90,13 +95,15 @@ describe('execution host presence replay', () => {
   it.each([false, true])(
     'converges after offline exit and replacement (replacement ended=%s)',
     async (ended) => {
-      const { main, relay, relayHook, frames, connect } = await setup()
+      const { main, capture, relay, relayHook, frames, connect } = await setup()
       await relayHook('SessionStart', 'a', owner.process)
+      capture(owner.process)
       connect(false)
       probe.mockResolvedValue('exited')
       await relay.checkAgentPresence(PANE)
       const staleExit = frames.at(-1)!
       await relayHook('SessionStart', 'b', replacement.process)
+      capture(replacement.process)
       if (ended) {
         await relay.checkAgentPresence(PANE)
       } else {
@@ -117,8 +124,9 @@ describe('execution host presence replay', () => {
     }
   )
   it('shows the replacement when the old owner was waiting on permission at disconnect', async () => {
-    const { main, relay, relayHook, connect } = await setup()
+    const { main, capture, relay, relayHook, connect } = await setup()
     await relayHook('SessionStart', 'a', owner.process)
+    capture(owner.process)
     await relayHook('PermissionRequest', 'a', owner.process, { tool_name: 'Bash' })
     expect(main.getStatusSnapshot()[0]).toMatchObject({ state: 'waiting' })
     connect(false)
@@ -127,6 +135,7 @@ describe('execution host presence replay', () => {
     await relay.checkAgentPresence(PANE)
     probe.mockResolvedValue('live')
     await relayHook('SessionStart', 'b', replacement.process)
+    capture(replacement.process)
     await relayHook('PreToolUse', 'b', replacement.process, { tool_name: 'Read' })
     connect(true)
     relay.replayCachedPayloadsForPanes()
@@ -137,14 +146,17 @@ describe('execution host presence replay', () => {
     })
   })
   it('keeps host provenance off the stored row', async () => {
-    const { main, relayHook } = await setup()
+    const { main, capture, relayHook } = await setup()
     await relayHook('SessionStart', 'a', owner.process)
-    expect(main.storedRow(PANE)?.agentPresence).toMatchObject(owner)
+    capture(owner.process)
+    expect(main.getAgentOwner(PANE)?.presence).toMatchObject(owner)
+    expect(main.storedRow(PANE)).not.toHaveProperty('agentPresence')
     expect(main.storedRow(PANE)).not.toHaveProperty('agentPresenceFromExecutionHost')
   })
   it('keeps a later unidentified row when the old owner exit replays', async () => {
-    const { main, relay, relayHook, frames, connect } = await setup()
+    const { main, capture, relay, relayHook, frames, connect } = await setup()
     await relayHook('SessionStart', 'a', owner.process)
+    capture(owner.process)
     probe.mockResolvedValue('exited')
     await relay.checkAgentPresence(PANE)
     // A later agent in the same pane reports only through terminal bytes (no process identity).
@@ -165,20 +177,22 @@ describe('execution host presence replay', () => {
     })
   })
   it('retains the ordering of a connected exit when an older live frame replays', async () => {
-    const { main, relay, relayHook, frames } = await setup()
+    const { main, capture, relay, relayHook, frames } = await setup()
     await relayHook('SessionStart', 'a', owner.process)
+    capture(owner.process)
     const staleLive = frames.at(-1)!
     probe.mockResolvedValue('exited')
     await relay.checkAgentPresence(PANE)
-    const exited = main.getStatusSnapshot()[0]?.agentPresence
+    const exited = main.getAgentOwner(PANE)?.presence
     main.ingestRemote({ ...staleLive, isReplay: true }, 'ssh-1')
-    expect(main.getStatusSnapshot()[0]?.agentPresence).toEqual(exited)
+    expect(main.getAgentOwner(PANE)?.presence).toEqual(exited)
     expect(exited?.ended).toBe(true)
   })
   it('does not accept host provenance from local hook or terminal bytes', async () => {
     const { main, request } = await setup()
     await main.start({ env: 'production' })
     await postHookEvent(main, claudeHook('SessionStart', 'a', owner.process))
+    main.ingestForegroundPresence({ ...request, connectionId: null }, owner)
     const normalized = normalizeHookPayload(
       createHookListenerState(),
       'claude',
@@ -221,12 +235,74 @@ describe('execution host presence replay', () => {
       ...request,
       source: 'claude',
       payload: { state: 'done', prompt: '', agentType: 'claude' },
-      agentPresence: owner
+      agentPresence: { ...owner, observation: { epoch: 'host', sequence: 1 } }
     }
     main.ingestRemote(event, 'ssh-1')
     const mismatchedExit = { ...event, agentPresence: { ...replacement, ended: true } } as const
     main.ingestRemote(mismatchedExit, 'ssh-1')
     main.ingestRemote({ ...mismatchedExit, isReplay: true }, 'ssh-1')
-    expect(main.getStatusSnapshot()[0]?.agentPresence).toEqual(owner)
+    expect(main.getStatusSnapshot()[0]?.agentPresence).toMatchObject(owner)
+  })
+  // Version adapter: an older relay still forwards Claude's hook-claimed exit, unstamped.
+  it('lets an old relay exit clear the turn it names, never mint one or end a host owner', () => {
+    const main = new InspectableServer()
+    servers.push(main)
+    const turn = {
+      paneKey: PANE,
+      tabId: 'tab-1',
+      worktreeId: 'folder-1',
+      source: 'claude',
+      providerSession: { key: 'session_id', id: 'session-a' },
+      hookEventName: 'Stop',
+      payload: { state: 'done', prompt: 'task', agentType: 'claude' }
+    }
+    const legacyExit = {
+      ...turn,
+      hookEventName: 'SessionEnd',
+      agentPresence: { ...owner, ended: true }
+    }
+    const live = () => main.getStatusSnapshot().filter((row) => !row.providerSessionOnly)
+    main.ingestRemote(legacyExit, 'ssh-1')
+    expect(main.getStatusSnapshot()).toEqual([])
+    main.ingestRemote(turn, 'ssh-1')
+    main.ingestRemote({ ...legacyExit, isReplay: true }, 'ssh-1')
+    expect(live()).toHaveLength(1)
+    main.ingestRemote(
+      { ...legacyExit, providerSession: { key: 'session_id', id: 'other' } },
+      'ssh-1'
+    )
+    expect(live()).toHaveLength(1)
+    main.ingestRemote(legacyExit, 'ssh-1')
+    expect(live()).toEqual([])
+    main.ingestRemote(turn, 'ssh-1')
+    main.ingestRemote(
+      { ...turn, agentPresence: { ...owner, observation: { epoch: 'host', sequence: 1 } } },
+      'ssh-1'
+    )
+    main.ingestRemote(legacyExit, 'ssh-1')
+    expect(live()).toHaveLength(1)
+    expect(main.getAgentOwner(PANE)?.presence.ended).toBeUndefined()
+  })
+
+  it('never lets an owner envelope restate a prompt into a retired pane', () => {
+    const main = new InspectableServer()
+    servers.push(main)
+    main.retirePaneAuthority(PANE)
+    main.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'folder-1',
+        source: 'claude',
+        hookEventName: 'UserPromptSubmit',
+        hasExplicitPrompt: true,
+        providerSessionOnly: true,
+        agentPresence: { ...owner, observation: { epoch: 'host', sequence: 1 } },
+        payload: { state: 'working', prompt: 'old prompt', agentType: 'claude' }
+      },
+      'ssh-1'
+    )
+    expect(main.getStatusSnapshot()).toEqual([])
+    expect(main.getAgentOwner(PANE)).toBeUndefined()
   })
 })
