@@ -76,6 +76,7 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     onCloneDestinationChange: vi.fn(),
     onPickCloneDestination: vi.fn(),
     onClone: vi.fn(),
+    onCancelClone: vi.fn(),
     onNestedGroupNameChange: vi.fn(),
     onNestedSelectedPathsChange: vi.fn(),
     onImportNestedRepos: vi.fn(),

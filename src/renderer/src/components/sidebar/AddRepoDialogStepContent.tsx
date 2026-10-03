@@ -70,6 +70,7 @@ type AddRepoDialogStepContentProps = {
   onCloneDestinationChange: (destination: string) => void
   onPickCloneDestination: () => void
   onClone: () => void
+  onCancelClone: () => void
   onNestedGroupNameChange: (name: string) => void
   onNestedSelectedPathsChange: Dispatch<SetStateAction<Set<string>>>
   onImportNestedRepos: (mode: 'group' | 'separate') => void
@@ -140,6 +141,7 @@ export function AddRepoDialogStepContent({
   onCloneDestinationChange,
   onPickCloneDestination,
   onClone,
+  onCancelClone,
   onNestedGroupNameChange,
   onNestedSelectedPathsChange,
   onImportNestedRepos,
@@ -227,6 +229,7 @@ export function AddRepoDialogStepContent({
         onDestChange={onCloneDestinationChange}
         onPickDestination={onPickCloneDestination}
         onClone={onClone}
+        onCancelClone={onCancelClone}
       />
     )
   }
