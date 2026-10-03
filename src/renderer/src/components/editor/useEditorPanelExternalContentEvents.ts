@@ -5,8 +5,10 @@ import {
   getOpenFilesForExternalFileChange,
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   ORCA_EDITOR_FILE_SAVED_EVENT,
+  ORCA_EDITOR_REQUEST_FILE_RELOAD_EVENT,
   type EditorFileSavedDetail,
-  type EditorPathMutationTarget
+  type EditorPathMutationTarget,
+  type EditorRequestFileReloadDetail
 } from './editor-autosave'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import { isReloadableSingleFileDiffTab } from './editor-panel-diff-reload'
@@ -50,6 +52,44 @@ function getExternalEventGeneration(event: Event): number {
   return generation
 }
 
+type OwnedFileReloadDeps = Pick<
+  UseEditorPanelExternalContentEventsParams,
+  'editorViewModeRef' | 'loadDiffContent' | 'loadFileContent'
+>
+
+// Shared by the external-change and explicit reload-request handlers so the
+// per-mode refetch (file body vs diff body, Changes-view diff) cannot drift.
+function forceReloadOwnedFile(
+  file: OpenFile,
+  eventGeneration: number,
+  { editorViewModeRef, loadDiffContent, loadFileContent }: OwnedFileReloadDeps,
+  onDiffInvalidate: (fileId: string) => void
+): void {
+  if (file.mode === 'edit' || file.mode === 'markdown-preview') {
+    // Why force: the reload must replace any in-flight pre-change read so the
+    // tab shows the new on-disk content, not a stale dedupe result.
+    void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath, {
+      force: true,
+      externalEventGeneration: eventGeneration
+    })
+    if (editorViewModeRef.current[file.id] === 'changes') {
+      void loadDiffContent(file, {
+        force: true,
+        externalEventGeneration: eventGeneration
+      })
+    } else {
+      onDiffInvalidate(file.id)
+    }
+    return
+  }
+  if (isReloadableSingleFileDiffTab(file)) {
+    void loadDiffContent(file, {
+      force: true,
+      externalEventGeneration: eventGeneration
+    })
+  }
+}
+
 export function useEditorPanelExternalContentEvents({
   activeContentFileIdRef,
   invalidateContent,
@@ -82,27 +122,12 @@ export function useEditorPanelExternalContentEvents({
           invalidatedFileIds.push(file.id)
           continue
         }
-        if (file.mode === 'edit' || file.mode === 'markdown-preview') {
-          // Why: external writes must replace any in-flight pre-change read so
-          // the tab shows the new on-disk content, not a stale dedupe result.
-          void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath, {
-            force: true,
-            externalEventGeneration: eventGeneration
-          })
-          if (editorViewModeRef.current[file.id] === 'changes') {
-            void loadDiffContent(file, {
-              force: true,
-              externalEventGeneration: eventGeneration
-            })
-          } else {
-            invalidatedDiffFileIds.push(file.id)
-          }
-        } else if (isReloadableSingleFileDiffTab(file)) {
-          void loadDiffContent(file, {
-            force: true,
-            externalEventGeneration: eventGeneration
-          })
-        }
+        forceReloadOwnedFile(
+          file,
+          eventGeneration,
+          { editorViewModeRef, loadDiffContent, loadFileContent },
+          (fileId) => invalidatedDiffFileIds.push(fileId)
+        )
       }
       if (invalidatedFileIds.length > 0) {
         invalidateContent(invalidatedFileIds)
@@ -114,6 +139,44 @@ export function useEditorPanelExternalContentEvents({
     window.addEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
     return () =>
       window.removeEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
+  }, [
+    activeContentFileIdRef,
+    editorViewModeRef,
+    invalidateContent,
+    invalidateDiffContent,
+    isVisibleRef,
+    loadDiffContent,
+    loadFileContent,
+    openFilesRef
+  ])
+
+  useEffect(() => {
+    const handler = (event: Event): void => {
+      const detail = (event as CustomEvent<EditorRequestFileReloadDetail>).detail
+      if (!detail) {
+        return
+      }
+      const file = openFilesRef.current.find((openFile) => openFile.id === detail.fileId)
+      if (!file) {
+        return
+      }
+      // Why no dirty skip: per the requestEditorFileReload contract the draft is
+      // already discarded — this snapshot can still say dirty because that store
+      // write hasn't rendered yet, and skipping would drop an explicit reload.
+      if (!isVisibleRef.current || file.id !== activeContentFileIdRef.current) {
+        invalidateContent([file.id])
+        return
+      }
+      forceReloadOwnedFile(
+        file,
+        getExternalEventGeneration(event),
+        { editorViewModeRef, loadDiffContent, loadFileContent },
+        (fileId) => invalidateDiffContent([fileId])
+      )
+    }
+    window.addEventListener(ORCA_EDITOR_REQUEST_FILE_RELOAD_EVENT, handler as EventListener)
+    return () =>
+      window.removeEventListener(ORCA_EDITOR_REQUEST_FILE_RELOAD_EVENT, handler as EventListener)
   }, [
     activeContentFileIdRef,
     editorViewModeRef,
