@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { Separator } from '../ui/separator'
 import { Input } from '../ui/input'
 import { Textarea } from '../ui/textarea'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 import { cn } from '@/lib/utils'
+import { SettingsSectionStack } from './SettingsSectionStack'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
@@ -283,16 +283,11 @@ export function TerminalPane({
         isMac={isMac}
       />
     ) : null
-  ].filter(Boolean)
+  ]
 
   return (
     <div className="space-y-6">
-      {visibleSections.map((section, index) => (
-        <div key={index} className="space-y-6">
-          {index > 0 ? <Separator /> : null}
-          {section}
-        </div>
-      ))}
+      <SettingsSectionStack sections={visibleSections} spacing="section" />
     </div>
   )
 }
