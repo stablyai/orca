@@ -17,6 +17,7 @@ export type WorkerEffect = {
   requested?: string
   effective?: string
   source?: string
+  baseBranch?: string
   hookFound?: boolean
   startupPolicy?: string
   terminalId?: string
