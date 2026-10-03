@@ -367,7 +367,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     readFileSyncMock.mockReturnValue('{"pid":123}')
     // Why: spy process.kill to force a deterministic ESRCH instead of relying on an unallocated real pid.
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
-      throw new Error('ESRCH')
+      throw Object.assign(new Error('no such process'), { code: 'ESRCH' })
     })
     parseDaemonPidFileMock.mockReturnValue({ pid: 999_999, startedAtMs: null })
 
