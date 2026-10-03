@@ -1,6 +1,11 @@
 import { basename } from 'node:path'
 import { stat } from 'node:fs/promises'
 import { readJsonlLinesFromOffset } from '../usage/jsonl-line-offsets'
+import {
+  digestUsageEventKey,
+  packUsageEventKeyDigests,
+  unpackUsageEventKeyDigests
+} from '../usage/usage-event-key-digest'
 import { attributeCodexUsageEvent } from './codex-usage-event-attribution'
 import type { UsageWorktreeResolver } from '../usage/usage-worktree-resolver'
 import { parseCodexUsageRecord, type CodexUsageParseContext } from './codex-usage-record-parser'
@@ -24,7 +29,8 @@ const { finalizeSessions, mergeSessions, mergeDailyAggregates, sortDailyAggregat
 export type CodexRolloutParseOptions = {
   /** Suffix-only parse for a diverged legacy copied-session bridge. */
   legacySourceSkipBytes?: number
-  claimEventKey?: (eventKey: string) => boolean
+  /** Receives the event key's ownership digest, not the raw key. */
+  claimEventKey?: (eventKeyDigest: string) => boolean
   /** Resume point verified by the caller, with the cached projection to extend. */
   resume?: { state: CodexUsageParseResumeState; previous: CodexUsagePersistedFile }
 }
@@ -105,7 +111,7 @@ export async function parseCodexUsageFile(
   const context = createParseContext(filePath, options)
 
   const events: CodexUsageAttributedEvent[] = []
-  const ownedEventKeys = new Set<string>()
+  const ownedEventKeyDigests = new Set<string>()
   let hasDeferredClaims = false
   let parsedBytes = startOffset
   // Points at the context as of `parsedBytes`, which excludes a partial tail.
@@ -133,11 +139,12 @@ export async function parseCodexUsageFile(
     // Why: fork/resume rollouts start with a copied prefix of the parent file.
     // Events another file already owns are dropped here, but the record still
     // advanced context.previousTotals above, so later deltas stay correct.
-    if (options.claimEventKey && !options.claimEventKey(parsed.eventKey)) {
+    const eventKeyDigest = digestUsageEventKey(parsed.eventKey)
+    if (options.claimEventKey && !options.claimEventKey(eventKeyDigest)) {
       hasDeferredClaims = true
       continue
     }
-    ownedEventKeys.add(parsed.eventKey)
+    ownedEventKeyDigests.add(eventKeyDigest)
     const attributed = await attributeCodexUsageEvent(parsed, resolveWorktree)
     if (attributed) {
       events.push(attributed)
@@ -176,7 +183,7 @@ export async function parseCodexUsageFile(
     return {
       ...processedFile,
       ...appended,
-      ownedEventKeys: [...ownedEventKeys],
+      ownedEventKeyDigests: packUsageEventKeyDigests(ownedEventKeyDigests),
       hasDeferredClaims,
       parseResumeState
     }
@@ -184,7 +191,12 @@ export async function parseCodexUsageFile(
   return {
     ...processedFile,
     ...mergeRolloutProjections(previous, appended),
-    ownedEventKeys: [...new Set([...previous.ownedEventKeys, ...ownedEventKeys])],
+    ownedEventKeyDigests: packUsageEventKeyDigests(
+      new Set([
+        ...unpackUsageEventKeyDigests(previous.ownedEventKeyDigests),
+        ...ownedEventKeyDigests
+      ])
+    ),
     hasDeferredClaims: previous.hasDeferredClaims || hasDeferredClaims,
     parseResumeState
   }
