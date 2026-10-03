@@ -9,6 +9,7 @@ import {
   FileText,
   type LucideIcon
 } from 'lucide-react'
+import { FileMarkdown } from './document-file-icons'
 
 export const FILE_ICON_BY_NAME: Record<string, LucideIcon> = {
   '.babelrc': FileSliders,
@@ -27,21 +28,21 @@ export const FILE_ICON_BY_NAME: Record<string, LucideIcon> = {
   '.prettierrc.json': FileJson,
   '.prettierrc.yaml': FileSliders,
   '.prettierrc.yml': FileSliders,
-  'agents.md': FileText,
+  'agents.md': FileMarkdown,
   authors: FileText,
   'bun.lock': FileBox,
   'bun.lockb': FileBox,
   'cargo.lock': FileBox,
   'cargo.toml': FileBox,
   changelog: FileText,
-  'changelog.md': FileText,
+  'changelog.md': FileMarkdown,
   'cmakelists.txt': FileCog,
   codeowners: FileKey,
   'components.json': FileSliders,
   'composer.json': FileBox,
   'composer.lock': FileBox,
   contributing: FileText,
-  'contributing.md': FileText,
+  'contributing.md': FileMarkdown,
   copying: FileKey,
   dockerfile: FileCog,
   gemfile: FileBox,
@@ -64,7 +65,7 @@ export const FILE_ICON_BY_NAME: Record<string, LucideIcon> = {
   'postcss.config.ts': FileSliders,
   'pyproject.toml': FileBox,
   readme: FileText,
-  'readme.md': FileText,
+  'readme.md': FileMarkdown,
   'requirements-dev.txt': FileBox,
   'requirements.txt': FileBox,
   security: FileLock,

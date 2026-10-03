@@ -1,3 +1,4 @@
+import { getFileIconEntries } from './file-icon-search'
 import type { SettingsSearchEntry } from './settings-search'
 import { getTerminalAppearanceSearchEntries } from './terminal-search'
 import { getLeftSidebarAppearanceEntry, getSidebarEntries } from './appearance-sidebar-search'
@@ -234,6 +235,7 @@ export function getAppearancePaneSearchEntries(
   return [
     ...getAppearanceSectionEntries(),
     ...getThemeEntries(),
+    ...getFileIconEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
     ...getTypographyEntries(),
     ...getZoomEntries(),

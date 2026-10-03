@@ -7,7 +7,7 @@ import {
   toSourceControlRowOpenEvent,
   type SourceControlRowOpenEvent
 } from '../listing/split-open'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { basename, dirname } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import { formatGitHistoryTimestamp } from './git-history-format'
@@ -29,7 +29,7 @@ function CommitFileRow({
   onOpen: (entry: GitBranchChangeEntry, event: SourceControlRowOpenEvent) => void
 }): React.JSX.Element {
   const status = entry.status as GitFileStatus
-  const FileIcon = getFileTypeIcon(entry.path)
+
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
@@ -43,7 +43,8 @@ function CommitFileRow({
       onClick={(event) => onOpen(entry, toSourceControlRowOpenEvent(event))}
       onDoubleClick={(event) => onOpen(entry, toPermanentSourceControlRowOpenEvent(event))}
     >
-      {createElement(FileIcon, {
+      {createElement(FileTypeIcon, {
+        filePath: entry.path,
         className: 'size-3.5 shrink-0',
         style: { color: STATUS_COLORS[status] }
       })}

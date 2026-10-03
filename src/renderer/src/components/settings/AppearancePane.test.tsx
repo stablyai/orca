@@ -242,6 +242,21 @@ describe('AppearancePane', () => {
     delete (window as unknown as { api?: unknown }).api
   })
 
+  it('finds file icons by type and updates both appearance choices', async () => {
+    mocks.state.settingsSearchQuery = 'jupyter'
+    const updateSettings = vi.fn()
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'), updateSettings)
+    const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+    const colored = buttons.find((button) => button.textContent === 'Colored')
+    const monochrome = buttons.find((button) => button.textContent === 'Monochrome')
+    expect(colored).toBeDefined()
+    expect(monochrome).toBeDefined()
+    await act(async () => colored!.click())
+    expect(updateSettings).toHaveBeenLastCalledWith({ coloredFileIcons: true })
+    await act(async () => monochrome!.click())
+    expect(updateSettings).toHaveBeenLastCalledWith({ coloredFileIcons: false })
+  })
+
   it('shows language as a primary interface control without opening Advanced', async () => {
     mocks.state.settingsSearchQuery = ''
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
