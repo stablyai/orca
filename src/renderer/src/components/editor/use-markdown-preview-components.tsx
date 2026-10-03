@@ -21,6 +21,8 @@ import type { MarkdownPreviewFoundation } from './use-markdown-preview-foundatio
 import type { MarkdownPreviewReviewActions } from './use-markdown-preview-review-actions'
 import type { MarkdownPreviewViewport } from './use-markdown-preview-viewport'
 import { useLocalImageSrc } from './useLocalImageSrc'
+import { NativeMarkdownFence } from './NativeMarkdownFence'
+import { getMarkdownPreviewTreeText } from './markdown-preview-document-tree'
 
 export function useMarkdownPreviewComponents({
   foundation,
@@ -153,10 +155,24 @@ export function useMarkdownPreviewComponents({
 
         return <img {...props} src={resolvedSrc} alt={alt ?? ''} onClick={handleImageClick} />
       },
-      code: ({ className, children, ...props }) => {
+      code: ({ node, className, children, ...props }) => {
         if (/language-mermaid/.test(className || '')) {
           return (
             <MermaidBlock content={String(children).trimEnd()} isDark={isDark} htmlLabels={false} />
+          )
+        }
+        const language = /(?:^|\s)language-([a-z][a-z0-9-]{0,63})(?:\s|$)/.exec(
+          className ?? ''
+        )?.[1]
+        if (language) {
+          return (
+            <NativeMarkdownFence
+              language={language}
+              code={(node ? getMarkdownPreviewTreeText(node) : String(children)).replace(/\n$/, '')}
+              className={className}
+            >
+              {children}
+            </NativeMarkdownFence>
           )
         }
         return (
@@ -166,9 +182,35 @@ export function useMarkdownPreviewComponents({
         )
       },
       pre: ({ node, children, ...props }) => {
+        const codeNode = node?.children.find(
+          (child) => child.type === 'element' && child.tagName === 'code'
+        )
+        const classes = codeNode?.type === 'element' ? codeNode.properties.className : undefined
+        if (Array.isArray(classes) && classes.includes('language-mermaid')) {
+          return <>{children}</>
+        }
+        if (
+          Array.isArray(classes) &&
+          classes.some(
+            (value) => typeof value === 'string' && /^language-[a-z][a-z0-9-]{0,63}$/.test(value)
+          )
+        ) {
+          return wrapAnnotatedBlock(
+            'pre',
+            node as MarkdownPreviewPositionNode,
+            <div>{children}</div>
+          )
+        }
         const child = React.Children.toArray(children)[0]
         if (React.isValidElement(child) && child.type === MermaidBlock) {
           return <>{children}</>
+        }
+        if (React.isValidElement(child) && child.type === NativeMarkdownFence) {
+          return wrapAnnotatedBlock(
+            'pre',
+            node as MarkdownPreviewPositionNode,
+            <div>{children}</div>
+          )
         }
         return wrapAnnotatedBlock(
           'pre',

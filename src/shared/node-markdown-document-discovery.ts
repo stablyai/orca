@@ -1,6 +1,8 @@
 import { opendir } from 'node:fs/promises'
 import type { Dirent, Dir } from 'node:fs'
 import { join } from 'node:path'
+import { isMarkdownDocumentPath } from './markdown-document-path'
+export { isMarkdownDocumentPath } from './markdown-document-path'
 import {
   assertMarkdownDocumentPathWithinLimit,
   createMarkdownDocumentListingBudget,
@@ -18,11 +20,6 @@ export type MarkdownDocumentDiscoveryOptions = {
   limits?: Partial<MarkdownDocumentListingLimits>
   readDirectory?: MarkdownDirectoryReader
   signal?: AbortSignal
-}
-
-export function isMarkdownDocumentPath(path: string): boolean {
-  const lowerPath = path.toLowerCase()
-  return lowerPath.endsWith('.md') || lowerPath.endsWith('.mdx') || lowerPath.endsWith('.markdown')
 }
 
 export async function discoverMarkdownRelativePaths(

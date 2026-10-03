@@ -7,6 +7,8 @@ import { Copy, Check } from 'lucide-react'
 import MermaidBlock from './MermaidBlock'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { translate } from '@/i18n/i18n'
+import { useNativeMarkdownOutput } from './use-native-markdown-output'
+import { NativeMarkdownOutput } from './NativeMarkdownOutput'
 import {
   getCodeBlockLanguageLabel,
   getCodeBlockLanguages,
@@ -31,6 +33,7 @@ export function RichMarkdownCodeBlock({
   const isDark = useDocumentDarkTheme()
 
   const isMermaid = language === 'mermaid'
+  const { context, output } = useNativeMarkdownOutput(language, node.textContent)
 
   const clearCopiedResetTimer = useCallback((): void => {
     if (copiedResetTimerRef.current !== null) {
@@ -141,6 +144,7 @@ export function RichMarkdownCodeBlock({
         )}
       </button>
       <NodeViewContent<'pre'> as="pre" />
+      {context && output ? <NativeMarkdownOutput context={context} output={output} /> : null}
       {/* Why: mermaid diagrams render as a live SVG preview below the editable
           source so users can see the result while editing. The code block stays
           editable — the diagram is read-only output. This preview also goes
