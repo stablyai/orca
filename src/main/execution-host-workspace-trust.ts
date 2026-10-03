@@ -15,6 +15,7 @@ import {
   grantClaudeWorkspaceTrust
 } from './claude/claude-folder-trust-file'
 import { isTooBroadToPreTrust } from '../shared/home-or-filesystem-root'
+import { reportCodexTrustWriteRefusals } from './codex/codex-config-toml-checked-edit'
 
 /**
  * What the host that runs the agent knows about where that agent reads trust. Relay-safe:
@@ -141,9 +142,13 @@ export async function applyWorkspaceTrustOnThisHost(
       deadlineMs: host.deadlineMs
     })
   } catch (error) {
-    console.warn(
-      `[agent-trust] ${preset} trust for ${workspacePath} failed; the agent will ask`,
-      error
-    )
+    // Why: a refused Codex config edit recurs every launch, so it logs once per file and message.
+    const unreported = reportCodexTrustWriteRefusals(error)
+    if (unreported.length > 0) {
+      console.warn(
+        `[agent-trust] ${preset} trust for ${workspacePath} failed; the agent will ask`,
+        ...unreported
+      )
+    }
   }
 }

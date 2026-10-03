@@ -233,6 +233,55 @@ describe('applyRelayAgentWorkspaceTrust', () => {
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
   })
+
+  it('edits the host’s quoted ["projects"."…"] table instead of appending a duplicate (#22592)', async () => {
+    const configPath = join(home, '.codex', 'config.toml')
+    mkdirSync(join(home, '.codex'))
+    writeFileSync(configPath, `["projects"."${workspace}"]\ntrust_level = "untrusted"\n`)
+    await applyRelayAgentWorkspaceTrust(
+      { workspacePath: workspace },
+      'codex',
+      { HOME: home },
+      HOST_SHELL
+    )
+    expect(readFileSync(configPath, 'utf-8')).toBe(
+      `["projects"."${workspace}"]\ntrust_level = "trusted"\n`
+    )
+  })
+
+  describe('with a config.toml Codex cannot parse', () => {
+    const unreadable = '[a]\nx = 1\n[a]\ny = 2\n'
+    let configPath: string
+    let warn: ReturnType<typeof vi.spyOn>
+    beforeEach(() => {
+      configPath = join(home, '.codex', 'config.toml')
+      mkdirSync(join(home, '.codex'))
+      writeFileSync(configPath, unreadable)
+      warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    })
+    afterEach(() => {
+      warn.mockRestore()
+    })
+    const attempt = (): Promise<void> =>
+      applyRelayAgentWorkspaceTrust(
+        { workspacePath: workspace },
+        'codex',
+        { HOME: home },
+        HOST_SHELL
+      )
+
+    it('never writes it and names the file in the log', async () => {
+      await expect(attempt()).resolves.toBeUndefined()
+      expect(readFileSync(configPath, 'utf-8')).toBe(unreadable)
+      expect(String(warn.mock.calls[0]?.[0])).toContain(configPath)
+    })
+
+    it('logs the recurring refusal once', async () => {
+      await attempt()
+      await attempt()
+      expect(warn).toHaveBeenCalledTimes(1)
+    })
+  })
 })
 
 describe('buildSshPtySpawnRequest', () => {

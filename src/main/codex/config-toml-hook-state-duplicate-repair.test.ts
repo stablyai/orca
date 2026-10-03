@@ -9,6 +9,7 @@ import {
   upsertProjectTrustLevel,
   type CodexTrustEntry
 } from './config-toml-trust'
+import { CodexConfigTomlEditRefusedError } from './codex-config-toml-checked-edit'
 import {
   createTrustConfigFixture,
   removeTrustConfigFixture
@@ -132,7 +133,7 @@ describe('repairing Orca hooks.state duplicates', () => {
         'model = "gpt-5.5"',
         '',
         `["projects"."${projectPath}"]`,
-        'trust_level = "trusted"',
+        '"trust_level" = "trusted"',
         '',
         '["hooks"."state"]',
         '',
@@ -178,7 +179,7 @@ describe('repairing Orca hooks.state duplicates', () => {
     )
   })
 
-  it('leaves two user-shaped hook tables alone and logs once', () => {
+  it('leaves two user-shaped hook tables alone and refuses the write', () => {
     const broken = [
       '["hooks"."state"."/two-users:stop:0:0"]',
       'enabled = true',
@@ -191,7 +192,8 @@ describe('repairing Orca hooks.state duplicates', () => {
     ].join('\n')
 
     expect(repairOrcaDuplicateTrustTables(broken)).toBe(broken)
-    expect(repairOrcaDuplicateTrustTables(broken)).toBe(broken)
-    expect(warn).toHaveBeenCalledTimes(1)
+    expect(() => upsertHookTrustEntriesInContent(broken, [hookEntry])).toThrow(
+      CodexConfigTomlEditRefusedError
+    )
   })
 })

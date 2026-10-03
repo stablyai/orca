@@ -10,6 +10,7 @@ import { upsertHookTrustEntries } from './config-toml-trust'
 import { getCodexConfigTomlPath, getConfigPath, writeCodexHooksJson } from './codex-hook-definition'
 import { getCodexManagedScriptFileName } from './codex-hook-identity'
 import { cleanupLegacyManagedHookRepresentations } from './codex-hook-legacy-cleanup'
+import { describeHookTrustWriteFailure } from './codex-config-toml-checked-edit'
 import { removeRealHomeCodexHookForOptOut } from './codex-real-home-hook-install'
 import {
   removeRuntimeManagedHookTrustEntries,
@@ -75,12 +76,17 @@ export async function refreshCodexRuntimeUserHooksExclusively(
     removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
     applyMirroredRuntimeUserHookTrustStates(tomlPath, hookPlan.trustEntries)
   } catch (error) {
+    // Why: the legacy sweep edits ~/.codex, not this config; a refused trust write here must not skip it.
+    await cleanupLegacyManagedHookRepresentations()
     return {
       agent: 'codex',
       state: 'error',
       configPath,
       managedHooksPresent: false,
-      detail: `User hooks refreshed but trust entries could not be written: ${error instanceof Error ? error.message : String(error)}. Run /hooks in Codex to approve.`
+      detail: describeHookTrustWriteFailure(
+        'User hooks refreshed but trust entries could not be written',
+        error
+      )
     }
   }
   snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)

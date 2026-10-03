@@ -9,6 +9,7 @@ import {
   upsertHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
+import { parseCodexConfigToml } from './codex-config-toml-document'
 import {
   getMovedCodexUserHookTrust,
   mutateRealHomeHooksPreservingUserTrust
@@ -225,4 +226,45 @@ describe('real-home user hook trust rebasing', () => {
       })
     }
   )
+
+  it.skipIf(process.platform === 'win32')(
+    'replaces a stale table at the new key in any spelling, leaving one table that parses',
+    () => {
+      const orca = command('orca-hook')
+      const user = command('user-hook')
+      writeFileSync(
+        configPath,
+        [
+          `["hooks"."state"."${hooksPath}:stop:0:0"]`,
+          'trusted_hash = "sha256:stale"',
+          '',
+          `["hooks"."state"."${hooksPath}:stop:1:0"]`,
+          'trusted_hash = "sha256:moved"',
+          ''
+        ].join('\n')
+      )
+
+      mutate({ Stop: [{ hooks: [orca] }, { hooks: [user] }] }, { Stop: [{ hooks: [user] }] })
+
+      const after = readFileSync(configPath, 'utf-8')
+      expect(after).toBe(`[hooks.state."${hooksPath}:stop:0:0"]\ntrusted_hash = "sha256:moved"\n`)
+      expect(parseCodexConfigToml(after).ok).toBe(true)
+    }
+  )
+
+  it('leaves a config Codex cannot parse untouched and logs the refusal once', () => {
+    const orca = command('orca-hook')
+    const user = command('user-hook')
+    upsertHookTrustEntries(configPath, [{ ...stopEntry(1, user), trustedHash: 'sha256:user' }])
+    const broken = `not toml at all\n${readFileSync(configPath, 'utf-8')}`
+    writeFileSync(configPath, broken)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    mutate({ Stop: [{ hooks: [orca] }, { hooks: [user] }] }, { Stop: [{ hooks: [user] }] })
+    mutate({ Stop: [{ hooks: [orca] }, { hooks: [user] }] }, { Stop: [{ hooks: [user] }] })
+
+    expect(readFileSync(configPath, 'utf-8')).toBe(broken)
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(String(warn.mock.calls[0]?.[0])).toContain('[codex-config]')
+  })
 })

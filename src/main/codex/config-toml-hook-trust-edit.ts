@@ -13,43 +13,152 @@ import {
   findHookTrustBlockRanges,
   type HookTrustBlockRange
 } from './config-toml-hook-trust-blocks'
-import { CODEX_HOOK_TRUST_KEY, escapeTomlBasicString } from './config-toml-syntax'
-import { repairOrcaDuplicateTrustTables } from './config-toml-project-duplicate-repair'
+import {
+  CODEX_HOOK_TRUST_KEY,
+  escapeTomlBasicString,
+  parseHookStateTomlHeaderKey
+} from './config-toml-syntax'
+import { applyCheckedCodexConfigTomlEdit } from './codex-config-toml-checked-edit'
+import { readTomlValueAtPath } from './codex-config-toml-document'
+import {
+  readTomlAssignmentValue,
+  scanTomlStructure,
+  tomlKeyPathsEqual
+} from './codex-config-toml-structure'
 
 export function upsertHookTrustContent(
   existingContent: string,
   entries: readonly CodexTrustEntry[]
 ): string {
-  const existing = repairOrcaDuplicateTrustTables(stripLeadingBom(existingContent))
-  let updated = entries.some((entry) =>
+  // Why: nothing to write, so a config Codex cannot parse must not turn into a refusal.
+  if (entries.length === 0) {
+    return existingContent
+  }
+  const existing = stripLeadingBom(existingContent)
+  const writes = entries.map((entry) => ({
+    keys: getTrustKeyWriteVariants(computeCodexTrustKey(entry)),
+    hash: entry.trustedHash ?? computeCodexTrustedHash(entry),
+    explicitEnabled: entry.enabled
+  }))
+  const needsParentTable = entries.some((entry) =>
     usesWindowsCodexPathSeparators(normalizeCodexTrustSourcePath(entry.sourcePath))
   )
-    ? ensureHooksStateParentTable(existing)
-    : existing
-  for (const entry of entries) {
-    updated = upsertTrustBlocks(
-      updated,
-      getTrustKeyWriteVariants(computeCodexTrustKey(entry)),
-      entry.trustedHash ?? computeCodexTrustedHash(entry),
-      entry.enabled
-    )
+  const updated = applyCheckedCodexConfigTomlEdit(
+    existing,
+    (content) => {
+      let next = needsParentTable ? ensureHooksStateParentTable(content) : content
+      for (const write of writes) {
+        next = upsertTrustBlocks(next, write.keys, write.hash, write.explicitEnabled)
+      }
+      return {
+        content: next,
+        ownedPaths: getOwnedHookStatePaths(
+          content,
+          writes.flatMap((write) => write.keys)
+        ),
+        expected: writes.flatMap((write) =>
+          write.keys.map((key) => ({
+            path: ['hooks', 'state', key, 'trusted_hash'],
+            value: write.hash
+          }))
+        )
+      }
+    },
+    {
+      collapsesOwnedDuplicates: (content) =>
+        stripHookTrustBlocks(
+          content,
+          new Set(writes.flatMap((write) => write.keys).map(normalizeCodexHookTrustLookupKey))
+        )
+    }
+  )
+  return updated === existing ? existingContent : updated
+}
+
+function stripHookTrustBlocks(content: string, normalizedKeys: ReadonlySet<string>): string {
+  let cursor = 0
+  let stripped = ''
+  for (const range of findHookTrustBlockRanges(content, normalizedKeys)) {
+    stripped += content.slice(cursor, range.start)
+    cursor = range.end
   }
-  return updated
+  return stripped + content.slice(cursor)
 }
 
 export function removeHookTrustContent(content: string, keys: readonly string[]): string {
   const normalizedKeys = new Set(keys.map(normalizeCodexHookTrustLookupKey))
-  const ranges = findHookTrustBlockRanges(content, normalizedKeys)
-  if (ranges.length === 0) {
+  if (findHookTrustBlockRanges(content, normalizedKeys).length === 0) {
     return content
   }
-  let cursor = 0
-  let updated = ''
-  for (const range of ranges) {
-    updated += content.slice(cursor, range.start)
-    cursor = range.end
+  return applyCheckedCodexConfigTomlEdit(
+    content,
+    (input) => ({
+      content: stripHookTrustBlocks(input, normalizedKeys),
+      ownedPaths: getOwnedHookStatePaths(input, keys)
+    }),
+    { collapsesOwnedDuplicates: (input) => stripHookTrustBlocks(input, normalizedKeys) }
+  )
+}
+
+/** Sets `enabled` on existing hooks.state tables only; a missing table stays missing. */
+export function setHookTrustEnabledContent(
+  existingContent: string,
+  states: readonly { key: string; enabled: boolean }[]
+): string {
+  const existing = stripLeadingBom(existingContent)
+  const keys = new Set(states.map((state) => normalizeCodexHookTrustLookupKey(state.key)))
+  if (findHookTrustBlockRanges(existing, keys).length === 0) {
+    return existingContent
   }
-  return updated + content.slice(cursor)
+  const updated = applyCheckedCodexConfigTomlEdit(existing, (content) => {
+    let next = content
+    for (const { key, enabled } of states) {
+      next = setEnabledInTrustBlocks(next, key, enabled)
+    }
+    return {
+      content: next,
+      ownedPaths: getOwnedHookStatePaths(
+        content,
+        states.map((state) => state.key)
+      ).map((path) => [...path, 'enabled'])
+    }
+  })
+  return updated === existing ? existingContent : updated
+}
+
+function setEnabledInTrustBlocks(content: string, key: string, enabled: boolean): string {
+  const ranges = findHookTrustBlockRanges(content, new Set([normalizeCodexHookTrustLookupKey(key)]))
+  let next = content
+  // Why: no toReversed(); the SSH relay runs this on Node 18.
+  for (let index = ranges.length - 1; index >= 0; index -= 1) {
+    const range = ranges[index]
+    const enabledLine = scanTomlStructure(next.slice(range.contentStart, range.end)).find(
+      (line) => line.kind === 'assignment' && tomlKeyPathsEqual(line.keySegments, ['enabled'])
+    )
+    if (enabledLine?.kind === 'assignment') {
+      const valueStart = range.contentStart + enabledLine.lineStart + enabledLine.valueOffset
+      const token = /^(?:true|false)/.exec(next.slice(valueStart))
+      if (token) {
+        next = `${next.slice(0, valueStart)}${enabled}${next.slice(valueStart + token[0].length)}`
+      }
+    } else if (!enabled) {
+      const eol = next.includes('\r\n') ? '\r\n' : '\n'
+      next = `${next.slice(0, range.contentStart)}enabled = false${eol}${next.slice(range.contentStart)}`
+    }
+  }
+  return next
+}
+
+/** The written keys plus every spelling of them the edit replaces. */
+function getOwnedHookStatePaths(content: string, keys: readonly string[]): string[][] {
+  const normalized = new Set(keys.map(normalizeCodexHookTrustLookupKey))
+  const owned = new Set(keys)
+  for (const block of findAllHookTrustBlocks(content)) {
+    if (normalized.has(normalizeCodexHookTrustLookupKey(block.key))) {
+      owned.add(block.key)
+    }
+  }
+  return [...owned].map((key) => ['hooks', 'state', key])
 }
 
 /**
@@ -63,39 +172,75 @@ export function moveHookTrustContent(
   existingContent: string,
   moves: readonly { oldKey: string; newKey: string }[]
 ): string {
-  const content = stripLeadingBom(existingContent)
-  if (findAllHookTrustBlocks(content).some(({ key }) => !CODEX_HOOK_TRUST_KEY.test(key))) {
+  const existing = stripLeadingBom(existingContent)
+  const touchedKeys = new Set(
+    moves.flatMap(({ oldKey, newKey }) => [oldKey, newKey]).map(normalizeCodexHookTrustLookupKey)
+  )
+  // Why: nothing to move, so a config Codex cannot parse must not turn into a refusal.
+  if (
+    findHookTrustBlockRanges(existing, touchedKeys).length === 0 ||
+    findAllHookTrustBlocks(existing).some(({ key }) => !CODEX_HOOK_TRUST_KEY.test(key))
+  ) {
     return existingContent
   }
-  const bodies = moves.flatMap(({ oldKey, newKey }) => {
-    const [range] = findHookTrustBlockRanges(
-      content,
-      new Set([normalizeCodexHookTrustLookupKey(oldKey)])
-    )
-    return range ? [{ newKey, body: content.slice(range.contentStart, range.end).trimEnd() }] : []
-  })
-  let updated = removeHookTrustContent(content, [
-    ...moves.map(({ oldKey }) => oldKey),
-    ...moves.map(({ newKey }) => newKey)
-  ])
-  if (bodies.length === 0) {
-    return updated
-  }
-  if (
-    bodies.some(({ newKey }) =>
-      usesWindowsCodexPathSeparators(parseCodexTrustKey(newKey)?.sourcePath ?? '')
-    )
-  ) {
-    updated = ensureHooksStateParentTable(updated)
-  }
-  const blocks = bodies.flatMap(({ newKey, body }) =>
-    getTrustKeyWriteVariants(newKey).map(
-      (key) => `[hooks.state.${formatHookStateTableKey(key)}]${body ? `\n${body}` : ''}`
-    )
+  const updated = applyCheckedCodexConfigTomlEdit(
+    existing,
+    (content, table) => {
+      const moved = moves.flatMap(({ oldKey, newKey }) => {
+        const [range] = findHookTrustBlockRanges(
+          content,
+          new Set([normalizeCodexHookTrustLookupKey(oldKey)])
+        )
+        const sourceKey = range
+          ? parseHookStateTomlHeaderKey(content.slice(range.start, range.headerLineEnd))
+          : null
+        return range && sourceKey !== null
+          ? [
+              {
+                sourceKey,
+                newKey,
+                newKeys: getTrustKeyWriteVariants(newKey),
+                body: content.slice(range.contentStart, range.end).trimEnd()
+              }
+            ]
+          : []
+      })
+      let next = stripHookTrustBlocks(content, touchedKeys)
+      if (moved.length > 0) {
+        if (
+          moved.some(({ newKey }) =>
+            usesWindowsCodexPathSeparators(parseCodexTrustKey(newKey)?.sourcePath ?? '')
+          )
+        ) {
+          next = ensureHooksStateParentTable(next)
+        }
+        const blocks = moved.flatMap(({ newKeys, body }) =>
+          newKeys.map(
+            (key) => `[hooks.state.${formatHookStateTableKey(key)}]${body ? `\n${body}` : ''}`
+          )
+        )
+        next = appendTomlBlock(next, blocks.join('\n\n'))
+      }
+      return {
+        content: next,
+        ownedPaths: getOwnedHookStatePaths(content, [
+          ...moves.flatMap(({ oldKey, newKey }) => [oldKey, newKey]),
+          ...moved.flatMap(({ newKeys }) => newKeys)
+        ]),
+        // Why: a move carries the block's values unchanged, so each new key must hold them.
+        expected: table
+          ? moved.flatMap(({ sourceKey, newKeys }) =>
+              newKeys.map((key) => ({
+                path: ['hooks', 'state', key],
+                value: readTomlValueAtPath(table, ['hooks', 'state', sourceKey])
+              }))
+            )
+          : []
+      }
+    },
+    { collapsesOwnedDuplicates: (content) => stripHookTrustBlocks(content, touchedKeys) }
   )
-  const separator =
-    updated.length === 0 || updated.endsWith('\n\n') ? '' : updated.endsWith('\n') ? '\n' : '\n\n'
-  return `${updated}${separator}${blocks.join('\n\n')}\n`
+  return updated === existing ? existingContent : updated
 }
 
 function upsertTrustBlocks(
@@ -109,7 +254,7 @@ function upsertTrustBlocks(
     new Set(keys.map(normalizeCodexHookTrustLookupKey))
   )
   if (ranges.length === 0) {
-    return appendTrustBlocks(content, keys, hash, explicitEnabled ?? true)
+    return appendTomlBlock(content, buildTrustBlocks(keys, hash, explicitEnabled ?? true))
   }
   const enabled = explicitEnabled ?? !ranges.some((range) => isBlockDisabled(content, range))
   const block = buildTrustBlocks(keys, hash, enabled)
@@ -126,22 +271,17 @@ function upsertTrustBlocks(
 }
 
 function isBlockDisabled(content: string, range: HookTrustBlockRange): boolean {
-  const block = content.slice(range.headerLineEnd, range.end)
-  const enabledMatch = /^[ \t]*enabled[ \t]*=[ \t]*(true|false)[ \t\r]*(?:#.*)?$/m.exec(block)
-  return enabledMatch?.[1] === 'false'
+  return scanTomlStructure(content.slice(range.contentStart, range.end)).some(
+    (line) =>
+      line.kind === 'assignment' &&
+      tomlKeyPathsEqual(line.keySegments, ['enabled']) &&
+      readTomlAssignmentValue(line) === false
+  )
 }
 
-function appendTrustBlocks(
-  content: string,
-  keys: readonly string[],
-  hash: string,
-  enabled: boolean
-): string {
-  const block = buildTrustBlocks(keys, hash, enabled)
-  if (content.length === 0) {
-    return `${block}\n`
-  }
-  const separator = content.endsWith('\n\n') ? '' : content.endsWith('\n') ? '\n' : '\n\n'
+function appendTomlBlock(content: string, block: string): string {
+  const separator =
+    content.length === 0 || content.endsWith('\n\n') ? '' : content.endsWith('\n') ? '\n' : '\n\n'
   return `${content}${separator}${block}\n`
 }
 

@@ -18,7 +18,6 @@ type TomlTable = {
 }
 
 const ORCA_TRUST_LINE = 'trust_level = "trusted"'
-const loggedRefusals = new Set<string>()
 
 /**
  * Removes the duplicates older Orca builds wrote beside Codex-spelled trust
@@ -26,7 +25,7 @@ const loggedRefusals = new Set<string>()
  * empty `[hooks.state]` that repeats a table the user (or Codex) wrote in
  * another spelling, and the bare `trust_level` line Orca inserted under a
  * quoted `"trust_level"`. The user's table always wins; anything else leaves
- * the content untouched.
+ * the content untouched, and the checked writer that called this reports it.
  */
 export function repairOrcaDuplicateTrustTables(content: string): string {
   const lines = content.split('\n')
@@ -48,7 +47,7 @@ export function repairOrcaDuplicateTrustTables(content: string): string {
         (userTables.length !== 1 ||
           group.some((table) => table !== survivor && table.header === survivor.header)))
     ) {
-      return refuseRepair(content, `duplicate table ${group[0]?.header}`)
+      return content
     }
     for (const table of group) {
       if (table !== survivor) {
@@ -60,7 +59,7 @@ export function repairOrcaDuplicateTrustTables(content: string): string {
     if (getTrustTableKind(survivor) === 'project') {
       const insertedLine = findOrcaInsertedTrustLine(lines, survivor)
       if (insertedLine === 'unsafe') {
-        return refuseRepair(content, `duplicate trust_level in ${survivor.header}`)
+        return content
       }
       if (insertedLine !== null) {
         removedLines.add(insertedLine)
@@ -73,10 +72,7 @@ export function repairOrcaDuplicateTrustTables(content: string): string {
   const kept = lines.filter((_, index) => !removedLines.has(index)).join('\n')
   const repaired = content.endsWith('\n') && !kept.endsWith('\n') ? `${kept}\n` : kept
   // Why: a partial repair would still fail Codex's parse, so only write a file it can load.
-  const remainingDuplicate = findDuplicateTable(repaired)
-  return remainingDuplicate === null
-    ? repaired
-    : refuseRepair(content, `duplicate table ${remainingDuplicate} remains`)
+  return findDuplicateTable(repaired) === null ? repaired : content
 }
 
 function readTomlTables(lines: string[]): TomlTable[] {
@@ -185,14 +181,6 @@ function findDuplicateTable(content: string): string | null {
     seen.add(key)
   }
   return null
-}
-
-function refuseRepair(content: string, reason: string): string {
-  if (!loggedRefusals.has(reason)) {
-    loggedRefusals.add(reason)
-    console.warn(`[codex-config] Left a duplicate in config.toml unrepaired: ${reason}`)
-  }
-  return content
 }
 
 function stripCr(line: string | undefined): string {

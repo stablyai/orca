@@ -1,6 +1,10 @@
 import type { HookCommandConfig, HookDefinition } from '../agent-hooks/installer-utils'
 import { createCodexHookTrustEntry } from './codex-hook-identity'
 import { computeTrustKey, moveHookTrustEntries, type CodexTrustEntry } from './config-toml-trust'
+import {
+  CodexConfigTomlEditRefusedError,
+  reportCodexConfigTomlEditRefusal
+} from './codex-config-toml-checked-edit'
 
 type HooksByEvent = Record<string, HookDefinition[]>
 
@@ -81,6 +85,10 @@ export function mutateRealHomeHooksPreservingUserTrust(args: {
   } catch (error) {
     // Why no rollback: the hooks write is what was asked for; Codex lists the
     // moved hooks for review, which the user can approve there.
-    console.warn('[codex-user-hook-trust] could not move shifted user hook trust:', error)
+    if (error instanceof CodexConfigTomlEditRefusedError) {
+      reportCodexConfigTomlEditRefusal(error, 'Skipped moving shifted user hook trust')
+    } else {
+      console.warn('[codex-user-hook-trust] could not move shifted user hook trust:', error)
+    }
   }
 }

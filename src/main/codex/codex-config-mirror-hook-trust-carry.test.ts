@@ -255,7 +255,8 @@ describe('carrying plain-Codex hook trust into the managed Codex home', () => {
     const runtimeConfig = mirror()
 
     expect(countHookTrustTables(runtimeConfig, PLUGIN_KEY)).toBe(1)
-    expect(runtimeConfig).toContain('sha256:first')
+    // Why: the bare copy has the shape older Orca wrote, so the repair keeps Codex's spelling.
+    expect(runtimeConfig).toContain('sha256:second')
     expectNoDuplicateTables(runtimeConfig)
   })
 

@@ -20,7 +20,8 @@ import type {
  * blank, which is silent by design — but the stall can persist for every launch
  * (a downed WSL distro, an unhydrated cloud-synced home), leaving "Orca ignores
  * my config edits" with nothing to diagnose. Derived on demand from the same
- * predicates the mirror uses, so the two can never disagree.
+ * source predicates the mirror uses; a pass that stalls on content (a refused
+ * settings promotion or an unparseable merge result) still reads as synced here.
  */
 export function getCodexConfigSyncStatus(
   homes: CodexSettingsPromotionHomes = {

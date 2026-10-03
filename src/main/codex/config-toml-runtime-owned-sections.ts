@@ -6,8 +6,13 @@ import {
   updateTomlLineScanState
 } from './config-toml-line-scan'
 import { parseTomlTableHeaderPath } from './config-toml-key-path'
+import {
+  CODEX_HOOK_TRUST_KEY,
+  mayNameTomlKeys,
+  parseHookStateTomlHeaderKey,
+  parseStandardTableHeaderSegments
+} from './config-toml-syntax'
 import { findProjectTrustLevelEntries } from './config-toml-project-trust-level'
-import { CODEX_HOOK_TRUST_KEY, parseHookStateTomlHeaderKey } from './config-toml-syntax'
 import {
   codexHookSourcePathsEqual,
   getCodexExplicitHomeHookSourcePath,
@@ -99,11 +104,14 @@ export function isRuntimePreservedTomlSection(header: string): boolean {
 }
 
 export function isRuntimeHookTrustTomlSection(header: string): boolean {
-  const table = parseTomlTableHeaderPath(header)
+  if (!mayNameTomlKeys(header, ['hooks', 'state'])) {
+    return false
+  }
+  const segments = parseStandardTableHeaderSegments(header)
   // Why: Codex's config writer materializes the parent table on Windows. It is
   // part of runtime-owned trust and must survive the next config mirror too.
   // Its `["hooks"."state"]` spelling is the same table (#22592).
-  return !!table && !table.isArray && table.segments[0] === 'hooks' && table.segments[1] === 'state'
+  return segments !== null && segments[0] === 'hooks' && segments[1] === 'state'
 }
 
 // Why: user-layer keys name the home's own hooks.json/config.toml; plugin/project keys don't.
@@ -169,8 +177,16 @@ export function getMcpServerTomlSectionName(header: string): string | null {
 export function getTomlSectionHeaderKey(header: string): string {
   const projectPath = parseCodexProjectHeaderPath(header)
   return projectPath === null
-    ? header.trim()
+    ? getDecodedTomlSectionIdentity(header)
     : `project:${normalizeCodexProjectPathForLookup(projectPath)}`
+}
+
+// Why (#22592): spellings of one table share one identity, as they do for Codex.
+function getDecodedTomlSectionIdentity(header: string): string {
+  const table = parseTomlTableHeaderPath(header)
+  return table
+    ? `${table.isArray ? 'array' : 'table'}:${JSON.stringify(table.segments)}`
+    : header.trim()
 }
 
 // Why: configs written before WSL tails compared case-sensitively can hold a
@@ -178,7 +194,7 @@ export function getTomlSectionHeaderKey(header: string): string {
 export function getRevocationTomlSectionHeaderKey(header: string): string {
   const projectPath = parseCodexProjectHeaderPath(header)
   return projectPath === null
-    ? header.trim()
+    ? getDecodedTomlSectionIdentity(header)
     : `project:${normalizeCodexProjectPathForRevocationLookup(projectPath)}`
 }
 
@@ -187,7 +203,17 @@ export function getRevocationTomlSectionHeaderKey(header: string): string {
 export function deduplicateProjectTomlSections(sections: TomlSection[]): TomlSection[] {
   const deduplicated: TomlSection[] = []
   const projectIndexes = new Map<string, number>()
+  const hookTrustIdentities = new Set<string>()
   for (const section of sections) {
+    if (isRuntimeHookTrustTomlSection(section.header)) {
+      // Why: two definitions of one hooks.state table make the whole file unreadable to Codex.
+      const identity = getDecodedTomlSectionIdentity(section.header)
+      if (!hookTrustIdentities.has(identity)) {
+        hookTrustIdentities.add(identity)
+        deduplicated.push(section)
+      }
+      continue
+    }
     if (!isRuntimeProjectTomlSection(section.header)) {
       deduplicated.push(section)
       continue

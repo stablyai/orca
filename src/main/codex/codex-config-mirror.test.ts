@@ -699,7 +699,8 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
 
     const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
     expect(runtimeConfig.match(/\[projects\./g)).toHaveLength(1)
-    expect(runtimeConfig).toContain('[projects."c:\\\\gemini_etl"]')
+    // Why (#22592): the basic-string copy has the exact shape Orca appended, so the other one stays.
+    expect(runtimeConfig).toContain("[projects.'c:\\gemini_etl']")
   })
 
   it('keeps untrusted when self-healing duplicate project tables', () => {

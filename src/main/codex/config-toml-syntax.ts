@@ -20,27 +20,48 @@ export function escapeTomlBasicString(value: string): string {
 // Why: Codex's hook_key is `{source}:{event}:{group}:{handler}` for any label (unchanged 0.141-0.158).
 export const CODEX_HOOK_TRUST_KEY = /^(.+):[a-z_]+:(?:0|[1-9]\d*):(?:0|[1-9]\d*)$/
 
+// Why (#22592): identity is the decoded key path, so `["hooks"."state"."k"]`
+// and `[hooks.state.'k']` are the same table Codex sees.
 export function parseHookStateTomlHeaderKey(line: string): string | null {
-  return parseTomlTableHeaderLeafKey(line, ['hooks', 'state'])
-}
-
-export function parseProjectTomlHeaderPath(line: string): string | null {
-  return parseTomlTableHeaderLeafKey(line, ['projects'])
-}
-
-// Why (#22592): Codex writes `["projects"."/p"]`; every spelling of the key path must match.
-function parseTomlTableHeaderLeafKey(line: string, parent: readonly string[]): string | null {
-  const header = getTomlTableHeader(line.replace(/\r$/, ''))
-  const table = header === null ? null : parseTomlTableHeaderPath(header)
-  if (
-    !table ||
-    table.isArray ||
-    table.segments.length !== parent.length + 1 ||
-    parent.some((segment, index) => table.segments[index] !== segment)
-  ) {
+  if (!mayNameTomlKeys(line, ['hooks', 'state'])) {
     return null
   }
-  return table.segments.at(-1) ?? null
+  const segments = parseStandardTableHeaderSegments(line)
+  return segments?.length === 3 && segments[0] === 'hooks' && segments[1] === 'state'
+    ? (segments[2] ?? null)
+    : null
+}
+
+// Only the canonical `[projects."path"]` whose path is printable with no `"` or `\`; else the full parse.
+const PLAIN_PROJECT_HEADER =
+  /^[ \t]*\[[ \t]*projects[ \t]*\.[ \t]*"([ !#-[\]-~\u0080-\uffff]*)"[ \t]*\][ \t]*(?:#.*)?$/
+
+export function parseProjectTomlHeaderPath(line: string): string | null {
+  if (!mayNameTomlKeys(line, ['projects'])) {
+    return null
+  }
+  const withoutCr = line.replace(/\r$/, '')
+  const plain = PLAIN_PROJECT_HEADER.exec(withoutCr)
+  if (plain) {
+    return plain[1] ?? null
+  }
+  const segments = parseStandardTableHeaderSegments(withoutCr)
+  return segments?.length === 2 && segments[0] === 'projects' ? (segments[1] ?? null) : null
+}
+
+/**
+ * Why: header parsing runs per table on every mirror pass. A key spells its
+ * name literally unless a basic-string escape is used, so a line without the
+ * names and without a backslash cannot name that table.
+ */
+export function mayNameTomlKeys(line: string, keys: readonly string[]): boolean {
+  return line.includes('\\') || keys.every((key) => line.includes(key))
+}
+
+export function parseStandardTableHeaderSegments(line: string): readonly string[] | null {
+  const header = getTomlTableHeader(line.replace(/\r$/, ''))
+  const parsed = header === null ? null : parseTomlTableHeaderPath(header)
+  return parsed && !parsed.isArray ? parsed.segments : null
 }
 
 export function findNextTomlTableHeader(text: string): number {
@@ -98,33 +119,4 @@ function isCompleteTomlTableHeader(line: string): boolean {
     index += 1
   }
   return false
-}
-
-function unescapeTomlBasicStringEscape(next: string): string {
-  const escaped: Record<string, string> = {
-    n: '\n',
-    r: '\r',
-    t: '\t',
-    b: '\b',
-    f: '\f',
-    '"': '"',
-    '\\': '\\'
-  }
-  return escaped[next] ?? `\\${next}`
-}
-
-export function unescapeTomlBasicString(escaped: string): string {
-  let result = ''
-  let index = 0
-  while (index < escaped.length) {
-    const char = escaped[index]
-    if (char === '\\' && index + 1 < escaped.length) {
-      result += unescapeTomlBasicStringEscape(escaped[index + 1]!)
-      index += 2
-      continue
-    }
-    result += char
-    index += 1
-  }
-  return result
 }
