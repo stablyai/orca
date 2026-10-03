@@ -1,6 +1,7 @@
+import { PI_STATUS_OWNER_ENV_KEYS } from '../../shared/pi-status-owner-env'
+
 export const PI_PROCESS_OWNER_ENV_KEYS = [
-  'ORCA_PI_STATUS_OWNED',
-  'ORCA_PRIME_AGENT_STATUS_OWNED',
+  ...PI_STATUS_OWNER_ENV_KEYS,
   'ORCA_PI_TITLE_MARKER_OWNED'
 ] as const
 
