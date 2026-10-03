@@ -190,6 +190,11 @@ export async function syncRuntimeGraph(): Promise<void> {
     commitMobileSessionPublication(mobileSessionTabs, result?.mobileSessionResyncWorktrees)
     const currentState = graphState.getStoreState()
     currentState?.setRuntimeAgentOrchestrationByPaneKey?.(result?.agentOrchestrationByPaneKey ?? {})
+    // Absent edges with the unavailable flag means the host could not ask its db, not zero
+    // placements; committing [] there un-nests every delegated card until the db returns.
+    if (!result?.delegatedWorktreeEdgesUnavailable) {
+      currentState?.setDelegatedWorktreeEdges?.(result?.delegatedWorktreeEdges ?? [])
+    }
     for (const resolution of result?.nativeChatLaunchDraftResolutions ?? []) {
       if (currentState) {
         applyNativeChatLaunchDraftResolved(currentState, {

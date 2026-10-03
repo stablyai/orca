@@ -8,6 +8,7 @@ import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
+import type { DelegatedWorktreeEdge } from '../../../../../../shared/worktree/delegated-worktree-edge'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
@@ -31,6 +32,7 @@ type SectionRowsArgs = {
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
+  delegatedWorktreeEdges: readonly DelegatedWorktreeEdge[]
   prCache: AppState['prCache'] | null
   settings: AppState['settings']
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
@@ -165,7 +167,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         args.visibleFolderWorkspacesForRows,
         hostLabelById,
         defaultHostId,
-        args.pinnedDisplayPolicy
+        args.pinnedDisplayPolicy,
+        args.delegatedWorktreeEdges
       ),
     [
       args.groupBy,
@@ -178,6 +181,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       args.workspaceStatuses,
       args.projectOrderBy,
       args.worktreeLineageById,
+      args.delegatedWorktreeEdges,
       args.worktreeMap,
       args.settings,
       args.projectGrouping,

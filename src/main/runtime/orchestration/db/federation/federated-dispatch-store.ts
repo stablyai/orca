@@ -84,6 +84,40 @@ export function isFederatedDispatchRelayEligible(
   )
 }
 
+export type DelegatedWorktreePlacementRow = {
+  dispatch_id: string
+  environment_id: string
+  remote_worktree_id: string
+  creator_handle: string | null
+  creator_pane_key: string | null
+}
+
+/**
+ * Where each remote worker landed, and which coordinator terminal sent it.
+ *
+ * Settled Dispatches are included on purpose: a released worker keeps its
+ * workspace, and its card should not jump out of the tree when it finishes.
+ * Newest first, so the cap keeps the most recent placements.
+ */
+export function listDelegatedWorktreePlacements(
+  this: OrchestrationDb,
+  limit: number
+): DelegatedWorktreePlacementRow[] {
+  const rows = this.db
+    .prepare(
+      `SELECT fd.dispatch_id, fd.environment_id, fd.remote_worktree_id,
+              dc.creator_handle, dc.creator_pane_key
+       FROM federated_dispatches fd
+       INNER JOIN dispatch_contexts dc ON dc.id = fd.dispatch_id
+       WHERE fd.remote_worktree_id IS NOT NULL
+       ORDER BY fd.rowid DESC
+       LIMIT ?`
+    )
+    .all(limit)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the SELECT list names exactly these five columns.
+  return rows as DelegatedWorktreePlacementRow[]
+}
+
 export function updateFederatedDispatchResources(
   this: OrchestrationDb,
   params: {
@@ -129,6 +163,7 @@ export type FederatedDispatchStoreMethods = {
   getFederatedDispatch: typeof getFederatedDispatch
   listFederatedDispatchesByIds: typeof listFederatedDispatchesByIds
   listActiveFederatedDispatches: typeof listActiveFederatedDispatches
+  listDelegatedWorktreePlacements: typeof listDelegatedWorktreePlacements
   findNextTerminalFederatedDispatchPendingAcknowledgment: typeof findNextTerminalFederatedDispatchPendingAcknowledgment
   isFederatedDispatchRelayEligible: typeof isFederatedDispatchRelayEligible
   updateFederatedDispatchResources: typeof updateFederatedDispatchResources
@@ -140,6 +175,7 @@ export function attachFederatedDispatchStore(ctor: { prototype: object }): void 
     getFederatedDispatch,
     listFederatedDispatchesByIds,
     listActiveFederatedDispatches,
+    listDelegatedWorktreePlacements,
     findNextTerminalFederatedDispatchPendingAcknowledgment,
     isFederatedDispatchRelayEligible,
     updateFederatedDispatchResources,

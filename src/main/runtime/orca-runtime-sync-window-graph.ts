@@ -315,6 +315,7 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     }
 
     const agentOrchestrationByPaneKey = this.agentOrchestrationProjection.buildByPaneKey()
+    const delegatedEdges = this.delegatedWorktreeEdgeProjection.build()
     const nativeChatLaunchDraftResolutions =
       this.getNativeChatLaunchDraftResolutionClientEventSnapshot().map(
         ({ tabId, text, createdAt }) => ({ tabId, text, createdAt })
@@ -322,6 +323,11 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     return {
       ...this.getStatus(),
       ...(agentOrchestrationByPaneKey ? { agentOrchestrationByPaneKey } : {}),
+      // An unanswerable db publishes the unavailable flag instead of `[]`, so readers
+      // keep the edges they already have rather than un-nesting every delegated card.
+      ...(delegatedEdges.known
+        ? { delegatedWorktreeEdges: delegatedEdges.edges }
+        : { delegatedWorktreeEdgesUnavailable: true }),
       ...(nativeChatLaunchDraftResolutions.length > 0 ? { nativeChatLaunchDraftResolutions } : {}),
       ...(mobileSessionResyncWorktrees.size > 0
         ? { mobileSessionResyncWorktrees: [...mobileSessionResyncWorktrees] }

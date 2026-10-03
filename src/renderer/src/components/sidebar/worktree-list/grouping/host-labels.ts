@@ -12,6 +12,7 @@ import {
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   getProjectGroupingForRepo,
+  getRenderedRepoIds,
   type ProjectGroupingIndex,
   type WorktreeGroupEntry
 } from './project-grouping'
@@ -51,7 +52,7 @@ export function getMixedHostContextLabels(
   // Host identity, not the rendered label, determines whether rows are ambiguous:
   // two hosts can intentionally share a user-facing label.
   const uniqueHostIds = new Set<ExecutionHostId>()
-  for (const repoId of group.repoIds) {
+  for (const repoId of getRenderedRepoIds(group)) {
     const label = getRepoHostLabel(repoId, repoMap, projectIndex, hostLabelById)
     if (!label) {
       continue
