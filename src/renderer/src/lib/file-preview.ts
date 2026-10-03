@@ -1,13 +1,18 @@
 import { toast } from 'sonner'
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-session'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { basename, getRelativePathInsideRoot } from '@/lib/path'
+import { basename } from '@/lib/path'
 import { getConnectionIdForFile } from '@/lib/connection-context'
-import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { activateBrowserWorkspaceTab } from '@/lib/browser-workspace-tab-activation'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getWorkspaceFilePreviewPlan,
+  REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
+  type WorkspaceFilePreviewPlan
+} from '@/lib/workspace-file-preview-plan'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -19,76 +24,39 @@ import type { BrowserPageConversionLeg } from '@/store/slices/browser-page-conve
 import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
 
 export type PreviewableLanguage = 'html'
-/** Still the answer for flows that need a real `file://` URL (e.g. dropping a file on a browser pane). */
-export const REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE =
-  'Open in Orca Browser is only available for local files.'
+export { getWorkspaceFilePreviewPlan, REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE }
+export type { WorkspaceFilePreviewPlan }
 
-/** Localized lazily: a module constant would freeze the language at import time. */
-function pairedOutsideWorktreeMessage(): string {
-  return translate(
-    'auto.lib.file.preview.pairedOutsideWorktree',
-    "Files outside the workspace can't be previewed on a paired server yet."
-  )
-}
-
-/**
- * How a previewable document should be rendered.
- *
- * `browser-tab` keeps local workspaces on the pre-existing embedded browser tab.
- * `doc-preview` renders the document locally from the owning workspace's disk
- * over the `orca-preview` scheme, which is the only option for SSH and paired
- * workspaces: client-hosted browser guests refuse `file:` by design, and a
- * `file://` URL would resolve on the wrong machine anyway.
- */
-export type WorkspaceFilePreviewPlan =
-  | { status: 'browser-tab'; url: string; title: string }
-  | { status: 'doc-preview' }
-  | { status: 'unsupported'; message: string; reason: 'no-channel' | 'outside-worktree' }
-
-export function getWorkspaceFilePreviewPlan(
-  state: AppState,
+/** A web client streams the server's initial file navigation; later file navigations are denied. */
+function openRuntimeFilePreviewTab(
+  plan: Extract<WorkspaceFilePreviewPlan, { status: 'runtime-browser-tab' }>,
   worktreeId: string,
-  filePath: string
-): WorkspaceFilePreviewPlan {
-  const connectionId = getConnectionIdForFileFromState(state, worktreeId, filePath)
-  if (connectionId === undefined) {
-    // Why: an unresolved owner can't pick a channel — reading it locally would hand a
-    // remote path to this machine's filesystem.
-    return {
-      status: 'unsupported',
-      message: REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
-      reason: 'no-channel'
-    }
-  }
-  if (connectionId !== null) {
-    return { status: 'doc-preview' }
-  }
-  // Why: the doc preview needs no browser at all, so a paired runtime without the
-  // screencast capability still previews documents.
-  if (getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {
-    const worktreeRoot = state.getKnownWorktreeById(worktreeId)?.path ?? null
-    if (worktreeRoot && !getRelativePathInsideRoot(filePath, worktreeRoot)) {
-      // Why: the host's files.read is worktree-scoped, so this would 404 at request time with
-      // nothing telling the user which boundary they hit.
-      return {
-        status: 'unsupported',
-        message: pairedOutsideWorktreeMessage(),
-        reason: 'outside-worktree'
+  options: { targetGroupId?: string; activate: boolean; clientTargetGroupCreated?: boolean }
+): void {
+  const failureMessage = translate(
+    'auto.lib.file.preview.runtimeOpenFailed',
+    'The paired runtime could not open this file in the browser.'
+  )
+  void createWebRuntimeSessionBrowserTab({
+    worktreeId,
+    environmentId: plan.environmentId,
+    url: plan.url,
+    stagedTitle: plan.title,
+    targetGroupId: options.targetGroupId,
+    clientTargetGroupId: options.targetGroupId,
+    clientTargetGroupCreated: options.clientTargetGroupCreated,
+    focusOnCreate: options.activate,
+    placementPreference: 'server'
+  })
+    .then((created) => {
+      if (!created) {
+        toast.error(failureMessage)
       }
-    }
-    return { status: 'doc-preview' }
-  }
-  const availability = getClientCreationActionPolicy(state, worktreeId)['managed-browser']
-  if (availability.state !== 'enabled') {
-    return { status: 'unsupported', message: availability.reason, reason: 'no-channel' }
-  }
-  return {
-    status: 'browser-tab',
-    url: absolutePathToFileUri(filePath),
-    title: basename(filePath) || filePath
-  }
+    })
+    .catch(() => toast.error(failureMessage))
 }
 
+/** Keep known boundary errors actionable so opening the menu can explain them. */
 export function canShowWorkspaceFileBrowserAction(
   state: AppState,
   worktreeId: string,
@@ -100,6 +68,7 @@ export function canShowWorkspaceFileBrowserAction(
   return plan.status !== 'unsupported' || plan.reason === 'outside-worktree'
 }
 
+/** Subscribe to owner changes while evaluating the current plan when the action runs. */
 export function useWorkspaceFileBrowserActionPredicate(
   worktreeId: string | null
 ): (filePath: string) => boolean {
@@ -164,6 +133,7 @@ export function getWorkspaceFileBrowserOpenTarget(params: {
   }
 }
 
+/** Reuse an open document before creating another desktop preview grant. */
 function openDocPreviewTab(
   state: AppState,
   params: { filePath: string; worktreeId: string; targetGroupId?: string; activate: boolean }
@@ -200,6 +170,7 @@ function openDocPreviewTab(
   })
 }
 
+/** Open the planned preview and report asynchronous server creation failures. */
 export function openFileInBrowserTab(params: {
   filePath: string
   worktreeId: string
@@ -211,6 +182,10 @@ export function openFileInBrowserTab(params: {
   }
   if (plan.status === 'doc-preview') {
     openDocPreviewTab(state, { ...params, activate: true })
+    return plan
+  }
+  if (plan.status === 'runtime-browser-tab') {
+    openRuntimeFilePreviewTab(plan, params.worktreeId, { activate: true })
     return plan
   }
 
@@ -303,10 +278,7 @@ export function canPreviewLanguage(language: string): language is PreviewableLan
   return language === 'html'
 }
 
-// Why: "Open Preview to the Side" mirrors the VS Code pattern — the rendered
-// view goes into the group to the right of the editor, creating a right split
-// if one doesn't already exist. Keeps the editor source visible alongside the
-// preview instead of replacing the active tab.
+/** Open HTML beside its source in a right split, creating that split when needed. */
 export function openFilePreviewToSide(params: {
   language: string
   filePath: string
@@ -357,6 +329,15 @@ export function openFilePreviewToSide(params: {
       worktreeId,
       targetGroupId,
       activate: false
+    })
+    return
+  }
+
+  if (plan.status === 'runtime-browser-tab') {
+    openRuntimeFilePreviewTab(plan, worktreeId, {
+      targetGroupId,
+      activate: false,
+      clientTargetGroupCreated: !existingSibling
     })
     return
   }

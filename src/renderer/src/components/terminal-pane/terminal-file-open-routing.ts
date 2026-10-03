@@ -65,8 +65,7 @@ export function getTerminalFileContext(
   return buildWorkspaceFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
 }
 
-// Why: a WSL-runtime pane prints POSIX paths even when the worktree lives on a
-// Windows drive, so the distro must come from the pane runtime, not the path shape.
+/** Map a WSL pane's POSIX path using its distro, even for Windows worktrees. */
 export function mapTerminalFilePath(
   filePath: string,
   worktreePath: string,
@@ -135,6 +134,7 @@ function schedulePendingEditorReveal(callback: () => void): void {
   pendingEditorRevealFrameIds.push(firstFrameId)
 }
 
+/** Route a terminal file link through its local, SSH, or paired execution owner. */
 export function openDetectedFilePath(
   filePath: string,
   line: number | null,
@@ -223,10 +223,9 @@ export function openDetectedFilePath(
         openHtmlFileInBrowser(mappedFilePath, worktreeId)
         return
       }
-      // Why: the same gesture renders remote HTML too, through the doc preview; only an
-      // unsupported plan (e.g. a paired doc outside the worktree) falls back to source.
+      // Why: a remote HTML preview uses the owning host's available preview route.
       const plan = getWorkspaceFilePreviewPlan(useAppStore.getState(), worktreeId, mappedFilePath)
-      if (plan.status === 'doc-preview') {
+      if (plan.status === 'doc-preview' || plan.status === 'runtime-browser-tab') {
         activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
         openFileInBrowserTab({ filePath: mappedFilePath, worktreeId })
         return
