@@ -2,6 +2,7 @@ import type { PreloadApi } from '../../../../preload/api-types'
 import { callAbortableRuntimeEnvironment } from '../../runtime/abortable-runtime-environment-call'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
+import { createGitBlameApi } from './web-git-blame-api'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironment, updateEnvironmentFromResponse } from './web-runtime-session'
 import {
@@ -41,6 +42,7 @@ export async function callAbortableRuntimeStatus<TResult>(
 
 export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
   return {
+    ...createGitBlameApi(),
     status: async ({
       worktreePath,
       includeIgnored,

@@ -140,7 +140,8 @@
         "portsToggleDescription": "Afficher les ports actifs de l'espace de travail. Cliquez dessus pour les ports par espace de travail et les écouteurs externes.",
         "antigravityToggleDescription": "Afficher l'utilisation de l'abonnement Antigravity pour l'espace de travail actif.",
         "grokToggleDescription": "Afficher l'utilisation des crédits de l'abonnement Grok lorsque vous êtes connecté via Grok CLI.",
-        "cursorToggleDescription": "Afficher l'utilisation du forfait Cursor lorsque vous êtes connecté via cursor-agent ou Cursor IDE."
+        "cursorToggleDescription": "Afficher l'utilisation du forfait Cursor lorsque vous êtes connecté via cursor-agent ou Cursor IDE.",
+        "lineBlameToggleDescription": "Affiche l'auteur et la date du dernier commit ayant modifié la ligne sous le curseur."
       },
       "menuBarIcon": {
         "title": "Afficher l'icône dans la barre de menus",
@@ -4064,6 +4065,10 @@
             "autoDescription": "Rester éveillé pendant qu'un agent travaille",
             "offDescription": "Autoriser le comportement de veille normal du système"
           },
+          "LineBlameStatusSegment": {
+            "uncommitted": "Non validé",
+            "uncommittedTooltip": "Cette ligne contient des modifications non validées."
+          },
           "RuntimeHostStatusRow": {
             "previous_connection_closed": "La connexion précédente a été fermée",
             "workspace_window_closed": "La fenêtre de l'espace de travail est fermée",
@@ -7289,7 +7294,9 @@
           "f1b3ceeb98": "Diff Afficher les espaces",
           "94a479cef3": "Afficher les différences d'espaces de début et de fin dans les différences.",
           "collapseUnchangedTitle": "Réduire les régions inchangées",
-          "collapseUnchangedDescription": "Afficher uniquement les lignes modifiées et un peu de contexte environnant dans un fichier de comparaison, en cachant le reste derrière des bandes extensibles. Le diff Afficher toutes les modifications se réduit toujours de cette façon."
+          "collapseUnchangedDescription": "Afficher uniquement les lignes modifiées et un peu de contexte environnant dans un fichier de comparaison, en cachant le reste derrière des bandes extensibles. Le diff Afficher toutes les modifications se réduit toujours de cette façon.",
+          "inlineBlameTitle": "Git blame en ligne",
+          "inlineBlameDescription": "Affiche en fin de ligne qui a modifié en dernier la ligne du curseur."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -9311,6 +9318,10 @@
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Pourcentages d'utilisation",
             "usagePercentageDisplayDescription": "Choisissez si les limites des fournisseurs affichent le pourcentage utilisé ou restant.",
+            "lineBlameTitle": "Auteur de la ligne",
+            "lineBlameDescription": "Affiche dans la barre d'état qui a modifié en dernier la ligne actuelle.",
+            "lineBlameKeywordAuthor": "auteur",
+            "lineBlameKeywordLine": "ligne",
             "tray": {
               "tray": "plateau",
               "system": "barre d'état système",
@@ -15536,6 +15547,9 @@
           "insertColumnRight": "Insérer une colonne à droite",
           "deleteRow": "Supprimer la ligne",
           "deleteColumn": "Supprimer la colonne"
+        },
+        "useInlineGitBlame": {
+          "uncommitted": "Modifications non validées"
         },
         "CheckRunAnnotations": {
           "copy": "Copier les annotations"

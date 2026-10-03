@@ -9,6 +9,7 @@ import { isFeatureInteractionId } from '../feature-interactions'
 import type { FeatureInteractionId } from '../feature-interactions'
 import { ACTIVITY_GROUP_BY_VALUES, THREAD_READ_FILTER_VALUES } from '../agents-view-thread-filters'
 import { isReleaseChannel } from '../release-channel'
+import { STATUS_BAR_ITEMS } from '../ui-chrome-types'
 import type { ReleaseChannel } from '../release-channel'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields-params'
 import { TaskResumeState } from './task-resume-state-params'
@@ -60,21 +61,9 @@ export const RightSidebarTabParam = z.custom<StaticRightSidebarTab | `plugin:${s
 
 export const AgentActivityDisplayMode = z.enum(['compact', 'full'])
 
-export const StatusBarItem = z.enum([
-  'claude',
-  'codex',
-  'gemini',
-  'antigravity',
-  'opencode-go',
-  'kimi',
-  'minimax',
-  'grok',
-  'cursor',
-  'zcode',
-  'ssh',
-  'resource-usage',
-  'ports'
-])
+// Derived from the shared array so a new status-bar item cannot drift out of the
+// wire schema: a hand-copied enum here silently rejected 'line-blame' over RPC.
+export const StatusBarItem = z.enum(STATUS_BAR_ITEMS)
 
 export const WorkspaceStatusDefinition = z.object({
   id: z.string(),
@@ -187,6 +176,7 @@ export const UiUpdateFields = z
     _grokStatusBarDefaultAdded: z.boolean().optional(),
     _cursorStatusBarDefaultAdded: z.boolean().optional(),
     _zcodeStatusBarDefaultAdded: z.boolean().optional(),
+    _lineBlameStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),
