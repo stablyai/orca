@@ -6,7 +6,7 @@ import type { RpcTransport } from './transport'
 import { createStaticWebClientHandler } from './static-web-client-handler'
 import { RemoteRuntimeServerHeartbeat } from './remote-runtime-server-heartbeat'
 
-const MAX_WS_MESSAGE_BYTES = 1024 * 1024
+export const MAX_WS_MESSAGE_BYTES = 1024 * 1024
 // Why: one desktop remote-host client can hold many concurrent streams, so keep the cap high enough that stale streams don't starve control RPCs.
 const MAX_WS_CONNECTIONS = 128
 // Why: bound pre-upgrade descriptor use above the WS cap so raw sockets can't grow without bound.

@@ -161,7 +161,7 @@ describe('terminal quick commands', () => {
     ])
   })
 
-  it('keeps larger reusable agent prompts while bounding shell commands separately', () => {
+  it('keeps agent prompts whole while bounding shell commands', () => {
     const largePrompt = 'Review this diff.\n'.repeat(320)
     const overLimitPrompt = 'x'.repeat(6001)
     const overLimitCommand = 'y'.repeat(4001)
@@ -202,7 +202,7 @@ describe('terminal quick commands', () => {
         label: 'Review with cap',
         action: 'agent-prompt',
         agent: 'codex',
-        prompt: 'x'.repeat(6000),
+        prompt: overLimitPrompt,
         scope: { type: 'global' }
       },
       {

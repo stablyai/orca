@@ -149,9 +149,8 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
     []
   )
   const saveQuickCommand = useCallback(
-    (command: TerminalQuickCommand): void => {
-      void useAppStore.getState().upsertTerminalQuickCommand(quickCommandEditorHostId, command)
-    },
+    (command: TerminalQuickCommand): Promise<boolean> =>
+      useAppStore.getState().upsertTerminalQuickCommand(quickCommandEditorHostId, command),
     [quickCommandEditorHostId]
   )
   useEffect(() => {

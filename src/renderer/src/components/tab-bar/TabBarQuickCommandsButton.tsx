@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal-quick-command-host-prompt-limit'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   createTerminalQuickCommandDraft,
@@ -118,11 +119,8 @@ export function TabBarQuickCommandsButton({
     })
   }
 
-  const handleSaveCommand = (next: TerminalQuickCommand): void => {
-    if (editor) {
-      void useAppStore.getState().upsertTerminalQuickCommand(editor.hostId, next)
-    }
-  }
+  const handleSaveCommand = async (next: TerminalQuickCommand): Promise<boolean> =>
+    editor ? await useAppStore.getState().upsertTerminalQuickCommand(editor.hostId, next) : false
 
   const handleDeleteCommand = async (entry: HostedTerminalQuickCommand): Promise<void> => {
     const { command } = entry
@@ -156,6 +154,9 @@ export function TabBarQuickCommandsButton({
       historyId: entry.key
     })
   }
+  const editorPromptMaxLength = useAppStore((state) =>
+    editor ? getTerminalQuickCommandHostPromptMaxLength(state, editor.hostId) : undefined
+  )
   const editorRepos = editor?.hostId.startsWith('runtime:')
     ? repos.filter((repo) => getRepoExecutionHostId(repo) === editor.hostId)
     : repos
@@ -204,6 +205,7 @@ export function TabBarQuickCommandsButton({
           mode={editor?.mode ?? 'add'}
           command={editor?.command ?? createTerminalQuickCommandDraft({ type: 'repo', repoId })}
           repos={editorRepos}
+          agentPromptMaxLength={editorPromptMaxLength}
           onOpenChange={(open) => !open && setEditor(null)}
           onSave={handleSaveCommand}
         />
@@ -233,6 +235,7 @@ export function TabBarQuickCommandsButton({
         mode={editor?.mode ?? 'add'}
         command={editor?.command ?? createTerminalQuickCommandDraft({ type: 'repo', repoId })}
         repos={editorRepos}
+        agentPromptMaxLength={editorPromptMaxLength}
         onOpenChange={(open) => !open && setEditor(null)}
         onSave={handleSaveCommand}
       />

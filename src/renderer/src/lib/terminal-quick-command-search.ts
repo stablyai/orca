@@ -79,13 +79,28 @@ function scoreQuickCommand(command: TerminalQuickCommand, query: string): number
     score = Math.min(score, scoreCandidate(query, command.agent, 200))
   }
   if (score > 400) {
-    score = Math.min(score, scoreCandidate(query, getTerminalQuickCommandBody(command), 400))
+    score = Math.min(score, scoreNormalizedCandidate(query, normalizedCommandBody(command), 400))
   }
   return score
 }
 
+// Why: prompt bodies can total megabytes; normalize each saved command once, not per keystroke.
+const normalizedBodies = new WeakMap<TerminalQuickCommand, string>()
+
+function normalizedCommandBody(command: TerminalQuickCommand): string {
+  let normalized = normalizedBodies.get(command)
+  if (normalized === undefined) {
+    normalized = normalizeSearchText(getTerminalQuickCommandBody(command))
+    normalizedBodies.set(command, normalized)
+  }
+  return normalized
+}
+
 function scoreCandidate(query: string, rawCandidate: string, baseScore: number): number {
-  const candidate = normalizeSearchText(rawCandidate)
+  return scoreNormalizedCandidate(query, normalizeSearchText(rawCandidate), baseScore)
+}
+
+function scoreNormalizedCandidate(query: string, candidate: string, baseScore: number): number {
   if (!candidate) {
     return NO_MATCH
   }
