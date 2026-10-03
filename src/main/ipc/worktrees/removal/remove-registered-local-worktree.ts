@@ -222,6 +222,9 @@ async function finishLocalWorktreeRemoval({
         refreshedRegisteredWorktree.head
       )
     } catch (error) {
+      // Why: git can drop the worktree before failing (its folder can't be deleted), so no exit below
+      // may leave a cached listing that still has it.
+      runWorktreeChangeInvalidators(repoId)
       // Why: Git for Windows can deregister a clean worktree before its recursive filesystem deletion fails transiently.
       const recoveredRemovalResult = await recoverLocalWindowsWorktreeRemoval({
         error,

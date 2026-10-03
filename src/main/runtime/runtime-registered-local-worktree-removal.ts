@@ -223,6 +223,9 @@ export async function finishRuntimeLocalWorktreeRemoval(
         refreshed.head
       )
     } catch (error) {
+      // Why: git can drop the worktree before failing (its folder can't be deleted), so no exit below
+      // may leave a cached listing that still has it.
+      runWorktreeChangeInvalidators(repo.id)
       const recovered = await recoverLocalWindowsWorktreeRemoval({
         error,
         force: args.force,

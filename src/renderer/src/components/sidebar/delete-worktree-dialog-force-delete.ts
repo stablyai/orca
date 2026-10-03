@@ -7,7 +7,10 @@ import {
 } from '../../../../shared/worktree/removal'
 import type { RemoveWorktreeOptions } from '@/store/slices/worktree-removal-options'
 import type { RendererRemoveWorktreeResult } from '@/store/slices/renderer-remove-worktree-result'
-import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
+import {
+  commitFocusIfFailedDeleteRemovedWorktree,
+  prepareActiveWorktreeFocusAfterDelete
+} from './active-worktree-focus-after-delete'
 import { showWorkspaceListChangedToast } from './stale-workspace-list-toast'
 
 /**
@@ -54,6 +57,10 @@ export function runDialogForceDelete(args: {
   deletePromise
     .then((result) => {
       if (!result.ok) {
+        void commitFocusIfFailedDeleteRemovedWorktree(
+          toWorktreeRemovalTarget(forceTarget),
+          commitFocus
+        )
         toast.error(
           translate(
             'auto.components.sidebar.DeleteWorktreeDialog.42e610d6cf',
@@ -69,6 +76,10 @@ export function runDialogForceDelete(args: {
       onDeleted?.([toWorktreeRemovalTarget(forceTarget)])
     })
     .catch((err: unknown) => {
+      void commitFocusIfFailedDeleteRemovedWorktree(
+        toWorktreeRemovalTarget(forceTarget),
+        commitFocus
+      )
       toast.error(
         translate(
           'auto.components.sidebar.DeleteWorktreeDialog.4f6750ca7b',

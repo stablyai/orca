@@ -59,11 +59,18 @@ export async function removeRegisteredRemoteWorktree(
         allowUnverifiedStop: args.allowUnverifiedPtyStop
       })
     })
-    rawRemovalResult = await withWorktreeRemoveStageSpan('git_remove', 'remote', async () =>
-      Object.keys(remoteRemoveOptions).length > 0
-        ? provider!.removeWorktree(canonicalWorktreePath, args.force, remoteRemoveOptions)
-        : provider!.removeWorktree(canonicalWorktreePath, args.force)
-    )
+    try {
+      rawRemovalResult = await withWorktreeRemoveStageSpan('git_remove', 'remote', async () =>
+        Object.keys(remoteRemoveOptions).length > 0
+          ? provider!.removeWorktree(canonicalWorktreePath, args.force, remoteRemoveOptions)
+          : provider!.removeWorktree(canonicalWorktreePath, args.force)
+      )
+    } catch (error) {
+      // Why: git can drop the worktree before failing (its folder can't be deleted), so no exit below
+      // may leave a cached listing that still has it.
+      runWorktreeChangeInvalidators(repoId)
+      throw error
+    }
     // Why: the worktree is unlisted from here on; a scan that began before the removal is overtaken.
     runWorktreeChangeInvalidators(repoId)
     removalCompleted = true

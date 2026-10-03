@@ -3,7 +3,10 @@ import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { translate } from '@/i18n/i18n'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
-import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
+import {
+  commitFocusIfFailedDeleteRemovedWorktree,
+  prepareActiveWorktreeFocusAfterDelete
+} from './active-worktree-focus-after-delete'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import type { WorktreeDeleteWithToastOptions } from './worktree-delete-request'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
@@ -97,6 +100,7 @@ export function runWorktreeDeleteWithToast(
     // buttons — leaving the user stuck one step further in, which is the dead end this gate has
     // now produced three times. Routing back through the same toast keeps every retry actionable.
     const failed = (description: string): void => {
+      void commitFocusIfFailedDeleteRemovedWorktree(target, commitRetryFocus)
       const retryState = getDeleteStateForWorktreeHost(
         { id: worktreeId, hostId: target.executionHostId ?? undefined },
         useAppStore.getState().deleteStateByWorktreeId
@@ -156,6 +160,9 @@ export function runWorktreeDeleteWithToast(
         }
         return true
       }
+      if (focusSuccessor) {
+        void commitFocusIfFailedDeleteRemovedWorktree(target, commitFocus)
+      }
       showFailureToast(
         result.error,
         getDeleteStateForWorktreeHost(
@@ -166,6 +173,9 @@ export function runWorktreeDeleteWithToast(
       return false
     })
     .catch((err: unknown) => {
+      if (focusSuccessor) {
+        void commitFocusIfFailedDeleteRemovedWorktree(target, commitFocus)
+      }
       toast.error(
         translate(
           'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',

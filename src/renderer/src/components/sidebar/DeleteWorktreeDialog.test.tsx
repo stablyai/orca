@@ -110,7 +110,8 @@ vi.mock('./delete-worktree-flow', () => ({
 }))
 
 vi.mock('./active-worktree-focus-after-delete', () => ({
-  prepareActiveWorktreeFocusAfterDelete: () => vi.fn()
+  prepareActiveWorktreeFocusAfterDelete: () => vi.fn(),
+  commitFocusIfFailedDeleteRemovedWorktree: vi.fn()
 }))
 
 vi.mock('./stale-workspace-list-toast', () => ({

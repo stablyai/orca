@@ -52,9 +52,16 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
   let completed = false
   try {
     await args.stopPtys()
-    rawResult = await (Object.keys(removeOptions).length > 0
-      ? provider.removeWorktree(registeredWorktree.path, args.force, removeOptions)
-      : provider.removeWorktree(registeredWorktree.path, args.force))
+    try {
+      rawResult = await (Object.keys(removeOptions).length > 0
+        ? provider.removeWorktree(registeredWorktree.path, args.force, removeOptions)
+        : provider.removeWorktree(registeredWorktree.path, args.force))
+    } catch (error) {
+      // Why: git can drop the worktree before failing (its folder can't be deleted), so no exit below
+      // may leave a cached listing that still has it.
+      runWorktreeChangeInvalidators(repo.id)
+      throw error
+    }
     // Why: the worktree is unlisted from here on; a scan that began before the removal is overtaken.
     runWorktreeChangeInvalidators(repo.id)
     completed = true
