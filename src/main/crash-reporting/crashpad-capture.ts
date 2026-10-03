@@ -16,6 +16,7 @@ import {
   parseMinidumpCrashSignature,
   type MinidumpCrashSignature
 } from './minidump-crash-signature'
+import { noteRendererCrashSignature } from './renderer-allocation-check-signatures'
 
 // Why: Crashpad writes the dump from the handler process while Electron
 // delivers process-gone on the main thread; the two race. Poll a short window
@@ -336,6 +337,8 @@ export async function captureMinidumpSignature(
           return null
         }
         claimedDumpPaths.set(dump.filePath, dump.mtimeMs)
+        // Why: the low-commit recovery gate reads this when the next renderer death decides whether to reload.
+        noteRendererCrashSignature(crashedAtMs, signature)
         return { filePath: dump.filePath, sizeBytes, signature }
       } finally {
         reservedDumpPaths.delete(dump.filePath)

@@ -214,3 +214,105 @@ describe('createLowCommitOomRecoveryGate', () => {
     expect(verdict).toBeNull()
   })
 })
+
+// Scan-37 r29 (launch e0a3d440): SkBitmap tryAllocPixels CHECK, then the reload died of 0xC00000FD 2.9 s later.
+describe('when commit exhaustion surfaces as a renderer crash', () => {
+  const ALLOC_CHECK: Electron.RenderProcessGoneDetails = {
+    reason: 'crashed',
+    exitCode: -2147483645
+  }
+  const STACK_OVERFLOW: Electron.RenderProcessGoneDetails = {
+    reason: 'crashed',
+    exitCode: -1073741571
+  }
+  const CHECK_AT = Date.parse('2026-10-03T11:29:51.755Z')
+  const OVERFLOW_AT = Date.parse('2026-10-03T11:29:54.641Z')
+  type Death = {
+    details: Electron.RenderProcessGoneDetails
+    at: number
+    preGoneMB: number
+    ageMs: number
+    goneTimeMB: number
+  }
+  const R29: Death[] = [
+    { details: ALLOC_CHECK, at: CHECK_AT, preGoneMB: 9, ageMs: 1_384, goneTimeMB: 11 },
+    { details: STACK_OVERFLOW, at: OVERFLOW_AT, preGoneMB: 9, ageMs: 4_271, goneTimeMB: 431 }
+  ]
+
+  // Recovers every death; `allocationChecks` are the gone times whose dump named an allocation CHECK.
+  function replay(
+    deaths: Death[],
+    allocationChecks: number[] = [CHECK_AT],
+    platform: NodeJS.Platform = 'win32'
+  ) {
+    return withPlatform(platform, () => {
+      let current = deaths[0]
+      const gate = createLowCommitOomRecoveryGate(
+        () => ({
+          systemMemoryPreGoneSwapFreeMB: current.preGoneMB,
+          systemMemoryPreGoneSampleAgeMs: current.ageMs
+        }),
+        () => ({ systemMemorySwapFreeMB: current.goneTimeMB }),
+        (goneAt) => allocationChecks.includes(goneAt)
+      )
+      return deaths.map((death) => {
+        current = death
+        const verdict = gate.assess(death.details, death.at)
+        gate.recordRecoveredDeath(death.details, death.at)
+        return verdict && gate.confirmsHold(death.details, death.at) ? verdict : null
+      })
+    })
+  }
+
+  it('holds the reload after an allocation CHECK on a starved host', () => {
+    expect(replay(R29)).toEqual([
+      null,
+      { availableCommitMB: 431, sincePreviousOomMs: 2_886, commitReading: 'gone-time' }
+    ])
+  })
+
+  it('holds the reload of a repeat allocation CHECK whose dump landed before recovery', () => {
+    const second = { ...R29[0], at: OVERFLOW_AT, ageMs: 1_000 }
+    expect(replay([R29[0], second], [CHECK_AT, OVERFLOW_AT])[1]).toEqual({
+      availableCommitMB: 9,
+      sincePreviousOomMs: 2_886,
+      commitReading: 'pre-gone'
+    })
+  })
+
+  it('reloads a repeat CHECK whose dump never named an allocation failure', () => {
+    const second = { ...R29[0], at: OVERFLOW_AT, ageMs: 1_000 }
+    expect(replay([R29[0], second])[1]).toBeNull()
+  })
+
+  it('reloads when the CHECK is not an allocation failure', () => {
+    expect(replay(R29, [])[1]).toBeNull()
+  })
+
+  it('reloads when the first crash left commit healthy', () => {
+    expect(replay([{ ...R29[0], preGoneMB: 4_000, goneTimeMB: 4_000 }, R29[1]])[1]).toBeNull()
+  })
+
+  it('reloads when commit recovered by the repeat crash', () => {
+    expect(replay([R29[0], { ...R29[1], preGoneMB: 2_000, goneTimeMB: 2_000 }])[1]).toBeNull()
+  })
+
+  it('reloads an ordinary crash on a starved host', () => {
+    const ordinary = { ...R29[1], details: { reason: 'crashed', exitCode: 5 } as const }
+    expect(replay([R29[0], ordinary])[1]).toBeNull()
+    expect(replay([{ ...R29[0], details: ordinary.details }, R29[1]])[1]).toBeNull()
+  })
+
+  it('does not let an unconfirmed CHECK hide the OOM before it', () => {
+    const oom = { ...R29[0], details: OOM, at: CHECK_AT - 2_000 }
+    expect(replay([oom, R29[0], R29[1]], [])[2]).toEqual({
+      availableCommitMB: 431,
+      sincePreviousOomMs: 4_886,
+      commitReading: 'gone-time'
+    })
+  })
+
+  it('reloads on macOS', () => {
+    expect(replay(R29, [CHECK_AT], 'darwin')[1]).toBeNull()
+  })
+})

@@ -208,7 +208,7 @@ export function installMainWindowFocusLifecycle(args: {
         return
       }
       lowCommitOomGate.recordRecoveredDeath(details, goneAt)
-      if (lowCommit) {
+      if (lowCommit && lowCommitOomGate.confirmsHold(details, goneAt)) {
         // Why: a reload would OOM again on the starved host; only the user can free commit.
         recoveryReloadWatchdog.escalate(
           {
