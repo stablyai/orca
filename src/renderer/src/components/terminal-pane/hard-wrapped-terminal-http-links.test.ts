@@ -125,4 +125,23 @@ describe('hard-wrapped terminal HTTP candidate bounds', () => {
       buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, rows.length)[0]?.text
     ).toBe(fullUrl)
   })
+
+  it('reconstructs framed URL rows when background text varies to the left of the frame', () => {
+    const rowTexts = [
+      '        │  https://dash.cloudflare.com/oauth2/auth?response_type=code& │',
+      '   todo │  client_id=123&redirect_uri=http%3A%2F%2Flocalhost%3A8976%2F │',
+      '  Final │  callback&scope=account%3Aread&state=xyz                     │'
+    ]
+    const rows = rowTexts.map(bufferLineWithCellColumns)
+
+    const candidates = buildHardWrappedHttpLogicalLineCandidates(
+      { getLine: (y) => rows[y] },
+      rows.length
+    )
+
+    expect(candidates[0]?.text).toBe(
+      'https://dash.cloudflare.com/oauth2/auth?response_type=code&client_id=123&redirect_uri=http%3A%2F%2Flocalhost%3A8976%2Fcallback&scope=account%3Aread&state=xyz'
+    )
+    expect(candidates[0]?.rows).toHaveLength(3)
+  })
 })
