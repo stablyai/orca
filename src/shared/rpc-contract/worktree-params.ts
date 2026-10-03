@@ -13,6 +13,7 @@ import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { WorkspaceLinkedItemSchema } from '../workspace-linked-item-schema'
 import { TaskSourceContextSchema } from '../task-source-context-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-linked-item-source-context'
+import { isValidWorkspaceUrl } from '../workspace-url'
 
 export const OptionalExecutionHostId = z
   .string()
@@ -142,6 +143,14 @@ export const WorktreeSet = WorktreeSelector.extend({
   sparsePresetId: OptionalString,
   baseRef: OptionalString,
   workspaceStatus: OptionalString,
+  // Why: '' clears; anything else must be an absolute http(s) link.
+  workspaceUrl: z
+    .string()
+    .refine(
+      (value) => value === '' || isValidWorkspaceUrl(value),
+      'URL must be an absolute http(s) URL'
+    )
+    .optional(),
   pushTarget: z
     .object({
       remoteName: z.string(),

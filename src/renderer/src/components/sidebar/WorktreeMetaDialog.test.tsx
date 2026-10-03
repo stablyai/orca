@@ -431,6 +431,30 @@ describe('WorktreeMetaDialog issue link row', () => {
     expect(updates.comment).toBe('updated note')
   })
 
+  it('seeds the saved link and writes only the edited link', async () => {
+    openDialog({ worktree: { workspaceUrl: 'https://app.test' } })
+    const linkInput = screen.getByLabelText<HTMLInputElement>('Link')
+    expect(linkInput.value).toBe('https://app.test')
+
+    fireEvent.change(linkInput, { target: { value: 'https://app.test/admin' } })
+    await act(async () => {
+      fireEvent.click(saveButton())
+    })
+
+    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(1))
+    const updates = updateWorktreeMeta.mock.calls[0]?.[1] ?? {}
+    expect(updates.workspaceUrl).toBe('https://app.test/admin')
+    expect(updates).not.toHaveProperty('comment')
+  })
+
+  it('blocks saving a link that is not http(s)', () => {
+    openDialog()
+
+    fireEvent.change(screen.getByLabelText('Link'), { target: { value: 'app.test' } })
+
+    expect(saveButton().disabled).toBe(true)
+  })
+
   it('blocks saving an unparseable Linear value', () => {
     openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
 

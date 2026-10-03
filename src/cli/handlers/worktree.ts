@@ -14,17 +14,12 @@ import {
 } from '../omitted-host-scope-selectors'
 import { RuntimeClientError } from '../runtime-client'
 import {
-  getOptionalNullableNumberFlag,
   getOptionalNumberFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../flags'
-import {
-  getOptionalWorktreeSelector,
-  getRequiredWorktreeSelector,
-  resolveCurrentWorktreeSelector
-} from '../selectors'
+import { getRequiredWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { printLineageSummary } from './worktree-lineage-summary'
@@ -38,22 +33,7 @@ import {
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
-
-function assertParentWorktreeFlagsCompatible(flags: Map<string, string | boolean>): void {
-  if (flags.has('parent-worktree') && flags.get('no-parent') === true) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Choose either --parent-worktree or --no-parent, not both.'
-    )
-  }
-  const parentWorktree = flags.get('parent-worktree')
-  if (
-    flags.has('parent-worktree') &&
-    (typeof parentWorktree !== 'string' || parentWorktree === '')
-  ) {
-    throw new RuntimeClientError('invalid_argument', 'Missing required --parent-worktree')
-  }
-}
+import { worktreeSetHandler } from './worktree-set'
 
 function getEnvParentWorkspace(): string | undefined {
   const workspaceId = process.env.ORCA_WORKSPACE_ID
@@ -254,23 +234,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printLineageSummary(result.result, json)
     printResult(result, json, formatWorktreeShow)
   },
-  'worktree set': async ({ flags, client, cwd, json }) => {
-    assertParentWorktreeFlagsCompatible(flags)
-    const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
-      allowNull: true
-    })
-    const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.set', {
-      worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
-      displayName: getOptionalStringFlag(flags, 'display-name'),
-      linkedIssue: getOptionalNullableNumberFlag(flags, 'issue'),
-      ...linearIssueLink,
-      comment: getOptionalStringFlag(flags, 'comment'),
-      workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
-      parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
-      noParent: flags.get('no-parent') === true
-    })
-    printResult(result, json, formatWorktreeShow)
-  },
+  'worktree set': worktreeSetHandler,
   'worktree rm': async ({ flags, client, cwd, json }) => {
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     const resolved = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
