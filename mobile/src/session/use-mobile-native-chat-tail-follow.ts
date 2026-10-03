@@ -4,6 +4,9 @@ import type { FlatList, NativeScrollEvent, NativeSyntheticEvent } from 'react-na
 /** Distance from the bottom, in points, still treated as "at the tail". */
 const AT_TAIL_SLOP = 80
 
+/** A user gesture's progress; each native event is honored only in the phase that expects it. */
+type UserScrollPhase = 'idle' | 'dragging' | 'released' | 'momentum'
+
 function isAtTail(event: NativeScrollEvent): boolean {
   const { contentOffset, contentSize, layoutMeasurement } = event
   return contentSize.height - (contentOffset.y + layoutMeasurement.height) <= AT_TAIL_SLOP
@@ -53,7 +56,7 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
   // Event handlers read intent at event time, before a re-render lands.
   const followingRef = useRef(true)
   const atTailRef = useRef(true)
-  const userScrollActiveRef = useRef(false)
+  const userScrollPhaseRef = useRef<UserScrollPhase>('idle')
   const userScrollSettleFrameRef = useRef<number | null>(null)
 
   // Single writer, so the event-time ref and the render flag cannot disagree.
@@ -104,7 +107,7 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
 
   const jumpToTail = useCallback(() => {
     clearUserScrollSettle()
-    userScrollActiveRef.current = false
+    userScrollPhaseRef.current = 'idle'
     setAtTail(true)
     setFollowing(true)
     pinToTail()
@@ -112,17 +115,14 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
 
   const beginUserScroll = useCallback(() => {
     clearUserScrollSettle()
-    userScrollActiveRef.current = true
+    userScrollPhaseRef.current = 'dragging'
     setFollowing(false)
   }, [clearUserScrollSettle, setFollowing])
 
   const finishUserScroll = useCallback(
     (finishedAtTail: boolean) => {
-      if (!userScrollActiveRef.current) {
-        return
-      }
       clearUserScrollSettle()
-      userScrollActiveRef.current = false
+      userScrollPhaseRef.current = 'idle'
       setAtTail(finishedAtTail)
       setFollowing(finishedAtTail)
       if (finishedAtTail) {
@@ -134,10 +134,11 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
 
   const endUserDrag = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (!userScrollActiveRef.current) {
+      if (userScrollPhaseRef.current !== 'dragging') {
         return
       }
       clearUserScrollSettle()
+      userScrollPhaseRef.current = 'released'
       const releasedAtTail = isAtTail(event.nativeEvent)
       userScrollSettleFrameRef.current = requestAnimationFrame(() => {
         userScrollSettleFrameRef.current = null
@@ -147,21 +148,29 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
     [clearUserScrollSettle, finishUserScroll]
   )
 
+  // Android also emits this for animated programmatic scrolls, so only a release hands off to it.
   const beginMomentum = useCallback(() => {
-    if (userScrollActiveRef.current) {
-      clearUserScrollSettle()
+    if (userScrollPhaseRef.current !== 'released') {
+      return
     }
+    clearUserScrollSettle()
+    userScrollPhaseRef.current = 'momentum'
   }, [clearUserScrollSettle])
 
+  // iOS also emits this, with no begin, after every non-animated pin — even mid-drag.
   const endMomentum = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) =>
-      finishUserScroll(isAtTail(event.nativeEvent)),
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (userScrollPhaseRef.current !== 'momentum') {
+        return
+      }
+      finishUserScroll(isAtTail(event.nativeEvent))
+    },
     [finishUserScroll]
   )
 
   const detachFromTail = useCallback(() => {
     clearUserScrollSettle()
-    userScrollActiveRef.current = false
+    userScrollPhaseRef.current = 'idle'
     setAtTail(false)
     setFollowing(false)
   }, [clearUserScrollSettle, setAtTail, setFollowing])
