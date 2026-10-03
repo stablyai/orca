@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,10 +23,22 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   onMenuOpenChange
 }: SidebarWorkspaceOptionsMenuProps) {
   const [open, setOpen] = useState(false)
+  const openRef = useRef(false)
   const { hasAnyFilter, activeFilterCount, activeFilterLabel } = useWorkspaceOptionsFilterBadge()
+
+  // Radix does not report a close when hiding the sidebar unmounts this menu.
+  useEffect(
+    () => () => {
+      if (openRef.current) {
+        onMenuOpenChange?.(false)
+      }
+    },
+    [onMenuOpenChange]
+  )
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
+      openRef.current = next
       setOpen(next)
       onMenuOpenChange?.(next)
     },

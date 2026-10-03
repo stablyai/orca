@@ -126,12 +126,6 @@ function Sidebar({
   }, [repoCount, startupWorktreeRefreshCompleted, fetchAllWorktrees])
 
   useEffect(() => {
-    if (!sidebarOpen && workspaceBoardRenderedOpen) {
-      closeWorkspaceBoard()
-    }
-  }, [closeWorkspaceBoard, sidebarOpen, workspaceBoardRenderedOpen])
-
-  useEffect(() => {
     if (!showAgentDashboard && agentDashboardDrawerOpen) {
       setAgentDashboardDrawerOpen(false)
     }
@@ -254,17 +248,15 @@ function Sidebar({
         {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
         {activeModal === 'forget-ssh-workspace' ? <ForgetSshWorkspaceDialog /> : null}
       </React.Suspense>
-      {sidebarOpen ? (
-        <WorkspaceKanbanDrawer
-          leftSidebarStyle={leftSidebarStyle}
-          open={workspaceBoardRenderedOpen}
-          statusBarVisible={statusBarVisible}
-          dragPreview={workspaceBoardDragPreviewOpen}
-          preserveOpenForMenu={workspaceBoardMenuOpen}
-          onOpenChange={handleWorkspaceBoardOpenChange}
-          onMenuOpenChange={setWorkspaceBoardMenuOpen}
-        />
-      ) : null}
+      <WorkspaceKanbanDrawer
+        leftSidebarStyle={leftSidebarStyle}
+        open={workspaceBoardRenderedOpen}
+        statusBarVisible={statusBarVisible}
+        dragPreview={workspaceBoardDragPreviewOpen}
+        preserveOpenForMenu={workspaceBoardMenuOpen}
+        onOpenChange={handleWorkspaceBoardOpenChange}
+        onMenuOpenChange={setWorkspaceBoardMenuOpen}
+      />
       {showAgentDashboard ? (
         <React.Suspense fallback={null}>
           <AgentDashboardSidebarHost
