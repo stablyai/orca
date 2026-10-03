@@ -1277,8 +1277,9 @@ export class SshRelaySession {
       mux,
       createSftp,
       {
-        downloadFile: (sourcePath, destinationPath) =>
+        downloadFile: (sourcePath, destinationPath, options) =>
           this.requireReadyConnection().downloadFile(sourcePath, destinationPath, {
+            ...options,
             hostPlatform
           }),
         openFileUploadSession: () =>

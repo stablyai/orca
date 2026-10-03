@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import { createUploadProgressPanel } from '@/components/transfer-progress/upload-progress-panel'
 import { translate } from '@/i18n/i18n'
 import type { FileExplorerOperationOwner } from './file-explorer-types'
 import { captureFileExplorerOperationGuard } from './file-explorer-operation-owner'
@@ -82,6 +83,7 @@ export function useFileExplorerImport({
       const { paths, destinationDir } = data
 
       void (async () => {
+        const panel = createUploadProgressPanel()
         try {
           if (getRelativePathInsideRoot(destinationDir, displayRootRef.current) === null) {
             return
@@ -100,7 +102,7 @@ export function useFileExplorerImport({
             },
             paths,
             destinationDir,
-            { assertCurrent: operationGuard.assertCurrent }
+            { assertCurrent: operationGuard.assertCurrent, progress: panel.progress }
           )
 
           // Refresh the destination directory once per gesture
@@ -111,7 +113,8 @@ export function useFileExplorerImport({
           // snap the tree viewport away from the user's drop target.
           const imported = results.filter((r) => r.status === 'imported')
           const skipped = results.filter((r) => r.status === 'skipped')
-          const failed = results.filter((r) => r.status === 'failed')
+          // Why: a cancel is the user's own decision, not a failure to report back.
+          const failed = results.filter((r) => r.status === 'failed' && r.cancelled !== true)
 
           if (
             imported.length > 0 &&
@@ -141,6 +144,7 @@ export function useFileExplorerImport({
             )
           }
         } catch (err) {
+          panel.close()
           toast.error(extractIpcErrorMessage(err, 'Failed to import files.'))
         } finally {
           clearNativeDragStateRef.current()

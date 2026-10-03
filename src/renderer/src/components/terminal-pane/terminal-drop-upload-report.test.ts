@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import { reportTerminalDropUploadSkipsAndFailures } from './terminal-drop-upload-report'
+import {
+  failuresToReport,
+  reportTerminalDropUploadSkipsAndFailures
+} from './terminal-drop-upload-report'
 
 const mocks = vi.hoisted(() => ({
   translate: vi.fn((key: string, fallback: string) => `${key}:${fallback}`)
@@ -47,7 +50,8 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
       { value0: 1, value1: 'file' }
     )
     expect(toast.error).toHaveBeenCalledWith(
-      expect.not.stringContaining('/secret/project/file.txt')
+      expect.not.stringContaining('/secret/project/file.txt'),
+      { description: undefined }
     )
   })
 
@@ -75,6 +79,14 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
     ])
   })
 
+  it('names the workspace on a failure raised while the user is elsewhere', () => {
+    reportTerminalDropUploadSkipsAndFailures([], [{ reason: 'a' }], 'Dropped into ux-polish')
+
+    expect(toast.error).toHaveBeenCalledWith(expect.any(String), {
+      description: 'Dropped into ux-polish'
+    })
+  })
+
   it('keeps upload wording for failures', () => {
     reportTerminalDropUploadSkipsAndFailures([], [{ reason: 'a' }, { reason: 'b' }])
 
@@ -83,5 +95,43 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
       'Failed to upload {{value0}} {{value1}}.',
       { value0: 2, value1: 'files' }
     )
+  })
+})
+
+describe('reportTerminalDropUploadSkipsAndFailures leftovers', () => {
+  it('names what a failure left on the host after the workspace', () => {
+    vi.mocked(toast.error).mockClear()
+    reportTerminalDropUploadSkipsAndFailures(
+      [],
+      [
+        { reason: 'Upload cancelled; 3 partial items left under /r/out' },
+        { reason: 'Upload cancelled; partial upload left at /r/a.bin' },
+        { reason: 'disk full' }
+      ],
+      'Dropped into ux-polish'
+    )
+
+    expect(vi.mocked(toast.error).mock.calls[0]?.[1]).toEqual({
+      description:
+        'Dropped into ux-polish. Upload cancelled; 3 partial items left under /r/out (+1 more)'
+    })
+  })
+})
+
+describe('failuresToReport', () => {
+  const cancelled = new Set(['/a', '/b'])
+  const isCancelled = (item: { sourcePath: string }): boolean => cancelled.has(item.sourcePath)
+
+  it('drops a clean cancel but keeps a cancel that left files and every real failure', () => {
+    const failed = [
+      { sourcePath: '/a', reason: 'Upload cancelled' },
+      { sourcePath: '/b', reason: 'Upload cancelled; partial upload left at /r/b.bin' },
+      { sourcePath: '/c', reason: 'disk full' }
+    ]
+
+    expect(failuresToReport(failed, isCancelled).map((item) => item.sourcePath)).toEqual([
+      '/b',
+      '/c'
+    ])
   })
 })

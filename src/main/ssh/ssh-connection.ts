@@ -83,13 +83,15 @@ import {
   requiresSystemSshForSecurityKey,
   shouldUseSystemSshTransport
 } from './ssh-transport-selection'
-import type { RemoteHostPlatform } from './ssh-remote-platform'
+import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
+import { removeCreatedEntryViaSystemSsh } from './system-ssh-remote-remove'
 import {
   resolveSftpTransferPathIfMapped,
   type SftpNamespacePathMapping
 } from './sftp-namespace-resolution'
 import type { FileUploadSession } from '../providers/types'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
+import type { RemoteDownloadTransferObserver } from '../../shared/remote-download-progress'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import {
   createLinkedSshFileTransferSignal,
@@ -574,32 +576,42 @@ export class SshConnection {
   async downloadFile(
     remotePath: string,
     localPath: string,
-    options?: SshRemoteFileOptions
+    options?: SshRemoteFileOptions & RemoteDownloadTransferObserver
   ): Promise<void> {
     if (!this.useSystemSshTransport) {
-      const sftp = await this.sftp()
-      try {
-        const { fastGetViaSftp } = await import('../providers/ssh-filesystem-provider-sftp')
-        await fastGetViaSftp(sftp, remotePath, localPath)
-      } finally {
-        sftp.end()
-      }
+      const { downloadFileViaSftp } = await import('../providers/ssh-filesystem-download')
+      await downloadFileViaSftp((sftpOptions) => this.sftp(sftpOptions), remotePath, localPath, {
+        signal: options?.signal,
+        onBytesTransferred: options?.onBytesTransferred
+      })
       return
     }
-    await downloadFileViaSystemSsh(this.target, remotePath, localPath, {
-      signal: this.systemOperationAbortController.signal,
-      hostPlatform: options?.hostPlatform,
-      ...this.getSystemSshBuildArgsOptions()
-    })
+    const linkedSignal = createLinkedSshFileTransferSignal(
+      [this.systemOperationAbortController.signal, options?.signal].filter(
+        (signal): signal is AbortSignal => signal !== undefined
+      )
+    )
+    try {
+      await downloadFileViaSystemSsh(this.target, remotePath, localPath, {
+        signal: linkedSignal.signal,
+        onBytesTransferred: options?.onBytesTransferred,
+        hostPlatform: options?.hostPlatform,
+        ...this.getSystemSshBuildArgsOptions()
+      })
+    } finally {
+      linkedSignal.dispose()
+    }
   }
 
   async openFileUploadSession(options?: SshRemoteFileOptions): Promise<FileUploadSession> {
     if (!this.useSystemSshTransport) {
       const sftp = await this.sftp()
       const { uploadFile } = await import('./sftp-upload')
+      const { removeCreatedSftpEntry } = await import('./sftp-remove-created-entry')
       return {
         uploadFile: (localPath, remotePath, uploadOptions) =>
           uploadFile(sftp, localPath, remotePath, uploadOptions),
+        removeCreatedEntry: (remotePath, kind) => removeCreatedSftpEntry(sftp, remotePath, kind),
         close: () => sftp.end()
       }
     }
@@ -607,13 +619,34 @@ export class SshConnection {
     const signal = this.systemOperationAbortController.signal
     const buildArgsOptions = this.getSystemSshBuildArgsOptions()
     return {
-      uploadFile: (localPath, remotePath, uploadOptions) =>
-        uploadFileViaSystemSsh(this.target, localPath, remotePath, {
-          signal,
-          hostPlatform: options?.hostPlatform,
-          exclusive: uploadOptions?.exclusive,
-          ...buildArgsOptions
-        }),
+      uploadFile: async (localPath, remotePath, uploadOptions) => {
+        const linkedSignal = createLinkedSshFileTransferSignal(
+          [signal, uploadOptions?.signal].filter((s): s is AbortSignal => s !== undefined)
+        )
+        try {
+          await uploadFileViaSystemSsh(this.target, localPath, remotePath, {
+            signal: linkedSignal.signal,
+            hostPlatform: options?.hostPlatform,
+            exclusive: uploadOptions?.exclusive,
+            onRemoteCreated: uploadOptions?.onRemoteCreated,
+            onBytesTransferred: uploadOptions?.onBytesTransferred,
+            ...buildArgsOptions
+          })
+        } finally {
+          linkedSignal.dispose()
+        }
+      },
+      // Why: a Windows host has no POSIX rmdir/rm; the ledger keeps folders and deletes
+      // files by path after its identity check.
+      ...(options?.hostPlatform && isWindowsRemoteHost(options.hostPlatform)
+        ? {}
+        : {
+            removeCreatedEntry: (remotePath: string, kind: 'file' | 'directory') =>
+              removeCreatedEntryViaSystemSsh(this.target, remotePath, kind, {
+                signal,
+                ...buildArgsOptions
+              })
+          }),
       close: () => {}
     }
   }

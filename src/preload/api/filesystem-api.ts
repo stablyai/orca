@@ -17,6 +17,7 @@ import type {
   LocalLogTailWatchArgs
 } from '../../shared/local-log-tail-types'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
+import type { RemoteDownloadProgress } from '../../shared/remote-download-progress'
 import type {
   CreateVenvResult,
   KernelFrameEvent,
@@ -56,10 +57,12 @@ export type FilesystemApi = {
     downloadFile: (args: {
       filePath: string
       connectionId: string
+      downloadId?: string
     }) => Promise<{ canceled: true } | { canceled: false; destinationPath: string }>
     downloadFolder: (args: {
       dirPath: string
       connectionId: string
+      downloadId?: string
     }) => Promise<{ canceled: true } | { canceled: false; destinationPath: string }>
     saveDownloadedFile: (args: {
       suggestedName: string
@@ -79,6 +82,8 @@ export type FilesystemApi = {
       transferId: string
     }) => Promise<{ canceled: false; destinationPath: string }>
     cancelDownloadedFile: (args: { transferId: string }) => Promise<{ ok: true }>
+    cancelDownload: (args: { downloadId: string }) => Promise<{ ok: true; canceled: boolean }>
+    onDownloadProgress: (callback: (progress: RemoteDownloadProgress) => void) => () => void
     listMarkdownDocuments: (args: {
       rootPath: string
       connectionId?: string
@@ -147,6 +152,8 @@ export type FilesystemApi = {
         destDir: string
         connectionId?: string
         ensureDir?: boolean
+        /** Per-source ids for SSH upload progress and cancel; see fs:uploadProgress. */
+        uploadIds?: Record<string, string>
       } & SshMutationExpectation
     ) => Promise<{ results: ImportItemResult[] }>
     stageExternalPathsForRuntimeUpload: (args: {
@@ -155,11 +162,23 @@ export type FilesystemApi = {
     uploadExternalFileToRuntime: (
       args: RuntimeUploadFileStreamRequest
     ) => Promise<{ byteLength: number }>
+    onUploadProgress: (
+      callback: (progress: {
+        uploadId: string
+        sentBytes: number
+        totalBytes: number
+        fileSequence?: number
+        kind?: 'file' | 'directory'
+      }) => void
+    ) => () => void
+    cancelRuntimeUpload: (args: { uploadId: string }) => Promise<void>
+    releaseRuntimeUpload: (args: { uploadId: string }) => Promise<void>
     resolveDroppedPathsForAgent: (
       args: {
         paths: string[]
         worktreePath: string
         connectionId?: string
+        uploadIds?: Record<string, string>
       } & SshMutationExpectation
     ) => Promise<ResolveDroppedPathsResult>
     watchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>

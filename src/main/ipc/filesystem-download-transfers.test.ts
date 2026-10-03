@@ -248,7 +248,7 @@ describe('registerFilesystemHandlers', () => {
 
     const tempPath = provider.downloadFile.mock.calls[0][1]
     expect(path.dirname(tempPath)).toBe(path.normalize('/downloads'))
-    expect(provider.downloadFile).toHaveBeenCalledWith('/remote/report.pdf', tempPath)
+    expect(provider.downloadFile).toHaveBeenCalledWith('/remote/report.pdf', tempPath, undefined)
     expect(renameMock).toHaveBeenCalledWith(tempPath, '/downloads/report.pdf')
     expect(rmMock).not.toHaveBeenCalledWith(tempPath, expect.anything())
   })

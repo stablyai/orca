@@ -9,6 +9,7 @@ import {
   latchLateSftpStreamErrors,
   type SftpStreamErrorLatch
 } from './sftp-stream-late-error'
+import { observeSftpUpload, type SftpUploadObservers } from './sftp-upload-observers'
 
 export function mkdirSftp(
   sftp: SFTPWrapper,
@@ -30,11 +31,16 @@ export function mkdirSftp(
   })
 }
 
+export type SftpUploadFileOptions = {
+  exclusive?: boolean
+  signal?: AbortSignal
+} & SftpUploadObservers
+
 export function uploadFile(
   sftp: SFTPWrapper,
   localPath: string,
   remotePath: string,
-  options?: { exclusive?: boolean; signal?: AbortSignal }
+  options?: SftpUploadFileOptions
 ): Promise<void> {
   return uploadFileAndJoinTeardown(sftp, localPath, remotePath, options)
 }
@@ -43,7 +49,7 @@ async function uploadFileAndJoinTeardown(
   sftp: SFTPWrapper,
   localPath: string,
   remotePath: string,
-  options?: { exclusive?: boolean; signal?: AbortSignal }
+  options?: SftpUploadFileOptions
 ): Promise<void> {
   const handle = await open(localPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
   let handleClose: Promise<void> | undefined
@@ -77,6 +83,7 @@ async function uploadFileAndJoinTeardown(
     // outlives it, ssh2 throws it synchronously into the socket handler (#15479).
     writeStreamErrors = latchLateSftpStreamErrors(writeStream, remotePath)
     readStream = handle.createReadStream({ autoClose: false })
+    observeSftpUpload(writeStream, readStream, options)
     const abortTransfer = (): void => {
       const reason =
         options?.signal?.reason instanceof Error

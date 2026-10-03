@@ -6,6 +6,7 @@ import type {
 import { callRuntimeRpc, getActiveRuntimeTarget, RuntimeRpcCallError } from './runtime-rpc-client'
 import type {
   RuntimeFileDownloadResult,
+  RuntimeFileDownloadTransfer,
   RuntimeFileOperationArgs,
   RuntimeFileReadArgs,
   RuntimeReadableFileContent
@@ -103,7 +104,8 @@ export async function readRuntimeFilePreview(
 export async function downloadRuntimeFile(
   context: RuntimeFileOperationArgs,
   filePath: string,
-  suggestedName: string
+  suggestedName: string,
+  transfer?: RuntimeFileDownloadTransfer
 ): Promise<RuntimeFileDownloadResult> {
   assertExternalSshReadOwnership(
     context.settings,
@@ -116,7 +118,11 @@ export async function downloadRuntimeFile(
       throw new Error('Remote file is outside the owning runtime worktree')
     }
     if (context.connectionId) {
-      return window.api.fs.downloadFile({ filePath, connectionId: context.connectionId })
+      return window.api.fs.downloadFile({
+        filePath,
+        connectionId: context.connectionId,
+        downloadId: transfer?.downloadId
+      })
     }
     const result = await readRuntimeFilePreview(context, filePath)
     return window.api.fs.saveDownloadedFile({
@@ -127,7 +133,10 @@ export async function downloadRuntimeFile(
   }
 
   if (!(await remoteChunkedDownloadAvailable(remoteArgs))) {
-    return downloadRemoteFileViaPreview(remoteArgs, suggestedName)
+    // Why: an older server answers in one preview-capped reply (10 MB binary); the panel
+    // still appears so the user sees it working and can cancel before the save.
+    transfer?.trackLocalProgress(null).flush()
+    return downloadRemoteFileViaPreview(remoteArgs, suggestedName, transfer?.signal)
   }
 
   const download = await window.api.fs.startDownloadedFile({ suggestedName })
@@ -136,15 +145,21 @@ export async function downloadRuntimeFile(
   }
 
   let finished = false
+  // Why: the size only feeds the progress bar, so an old or failing stat must not block the download.
+  const progress = transfer
+    ? transfer.trackLocalProgress(await readRemoteDownloadSize(remoteArgs).catch(() => null))
+    : undefined
   try {
     let offset = 0
     for (;;) {
+      transfer?.signal.throwIfAborted()
       const chunk = await readRemoteDownloadChunk(remoteArgs, offset)
       if (chunk.bytesRead > 0) {
         await window.api.fs.appendDownloadedFileChunk({
           transferId: download.transferId,
           contentBase64: chunk.contentBase64
         })
+        progress?.addBytes(chunk.bytesRead)
       }
       offset += chunk.bytesRead
       if (chunk.eof) {
@@ -154,10 +169,13 @@ export async function downloadRuntimeFile(
         throw new Error('Remote download stalled before reaching EOF')
       }
     }
+    // Why: a cancel during the final append would otherwise still commit the file.
+    transfer?.signal.throwIfAborted()
     const result = await window.api.fs.finishDownloadedFile({ transferId: download.transferId })
     finished = true
     return result
   } finally {
+    progress?.flush()
     if (!finished) {
       await window.api.fs.cancelDownloadedFile({ transferId: download.transferId }).catch(() => {})
     }
@@ -207,9 +225,20 @@ async function readRemoteDownloadChunk(
   )
 }
 
+async function readRemoteDownloadSize(remoteArgs: RemoteFileDownloadArgs): Promise<number> {
+  const stat = await callRuntimeRpc<{ size: number }>(
+    remoteArgs.target,
+    'files.stat',
+    { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
+    { timeoutMs: 15_000 }
+  )
+  return stat.size
+}
+
 async function downloadRemoteFileViaPreview(
   remoteArgs: RemoteFileDownloadArgs,
-  suggestedName: string
+  suggestedName: string,
+  signal?: AbortSignal
 ): Promise<RuntimeFileDownloadResult> {
   try {
     const result = await callRuntimeRpc<RuntimeFilePreviewResult>(
@@ -223,6 +252,8 @@ async function downloadRemoteFileViaPreview(
     if (result.isBinary && !result.content && !result.isImage && !result.mimeType) {
       throw new Error(REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE)
     }
+    // Why: older servers return the whole file in one reply, so cancel can only stop the save.
+    signal?.throwIfAborted()
     return window.api.fs.saveDownloadedFile({
       suggestedName,
       content: result.content,

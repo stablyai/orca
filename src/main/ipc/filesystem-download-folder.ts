@@ -7,6 +7,10 @@ import { sanitizeLocalDownloadFilename } from '../local-download-filename'
 import { promoteLocalDownloadedFolder } from '../local-downloaded-folder-promotion'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { isENOENT } from './filesystem-path-containment'
+import {
+  beginRemoteDownloadSession,
+  parseRemoteDownloadId
+} from './filesystem/remote-download-sessions'
 
 type DownloadFolderResult = { canceled: true } | { canceled: false; destinationPath: string }
 
@@ -51,10 +55,11 @@ export function registerFilesystemDownloadFolderHandlers(): void {
     'fs:downloadFolder',
     async (
       event,
-      args: { dirPath?: string; connectionId?: string }
+      args: { dirPath?: string; connectionId?: string; downloadId?: string }
     ): Promise<DownloadFolderResult> => {
       const dirPath = validateRequiredString(args?.dirPath, 'dirPath')
       const connectionId = validateRequiredString(args?.connectionId, 'connectionId')
+      const downloadId = parseRemoteDownloadId(args?.downloadId)
       const provider = requireSshFilesystemProvider(connectionId)
       if (!provider.downloadFolder) {
         throw new Error(
@@ -92,12 +97,18 @@ export function registerFilesystemDownloadFolderHandlers(): void {
         await assertDownloadFolderDestinationAvailable(destinationPath)
 
         const tempPath = createSiblingTransferPath(destinationPath, 'download')
+        // Why: the folder is walked lazily, so its total size is unknown until the walk ends.
+        const session = beginRemoteDownloadSession(event.sender, downloadId, null)
+        const signal = session?.observer.signal
+          ? AbortSignal.any([abortController.signal, session.observer.signal])
+          : abortController.signal
         try {
-          await provider.downloadFolder(dirPath, tempPath, { signal: abortController.signal })
-          abortController.signal.throwIfAborted()
-          await promoteLocalDownloadedFolder(tempPath, destinationPath, abortController.signal)
+          await provider.downloadFolder(dirPath, tempPath, { ...session?.observer, signal })
+          signal.throwIfAborted()
+          await promoteLocalDownloadedFolder(tempPath, destinationPath, signal)
           return { canceled: false, destinationPath }
         } finally {
+          session?.end()
           await cleanupLocalTransferDirectory(tempPath)
         }
       } finally {

@@ -58,7 +58,11 @@ describe('SshFilesystemProvider downloadFolder', () => {
 
     expect(provider.downloadFolder).toBeUndefined()
     await provider.downloadFile('/remote/report.pdf', '/downloads/report.pdf')
-    expect(downloadFile).toHaveBeenCalledWith('/remote/report.pdf', '/downloads/report.pdf')
+    expect(downloadFile).toHaveBeenCalledWith(
+      '/remote/report.pdf',
+      '/downloads/report.pdf',
+      undefined
+    )
   })
 
   it('downloads a recursive tree through one SFTP session', async () => {

@@ -38,8 +38,18 @@ const request = {
   expectedEnvironmentRuntimeId: 'rt-1'
 }
 
-function fakeSender(): EventEmitter {
-  return new EventEmitter()
+let nextSenderId = 0
+
+function fakeSender(): EventEmitter & {
+  id: number
+  isDestroyed: () => boolean
+  send: ReturnType<typeof vi.fn>
+} {
+  return Object.assign(new EventEmitter(), {
+    id: ++nextSenderId,
+    isDestroyed: () => false,
+    send: vi.fn()
+  })
 }
 
 function listenerCount(sender: EventEmitter): number {
@@ -147,6 +157,29 @@ describe('fs:uploadExternalFileToRuntime', () => {
     expect(sweepMock).toHaveBeenCalledTimes(1)
   })
 
+  it("does not let another renderer cancel this renderer's upload id", async () => {
+    const owner = fakeSender()
+    const other = fakeSender()
+    streamMock.mockImplementation(async ({ cancelSignal }: { cancelSignal: AbortSignal }) => {
+      await handlers.get('fs:cancelRuntimeUpload')!({ sender: other }, { uploadId: 'same-id' })
+      expect(cancelSignal.aborted).toBe(false)
+
+      await handlers.get('fs:cancelRuntimeUpload')!({ sender: owner }, { uploadId: 'same-id' })
+      expect(cancelSignal.aborted).toBe(true)
+      await handlers.get('fs:releaseRuntimeUpload')!({ sender: owner }, { uploadId: 'same-id' })
+      return { byteLength: 0 }
+    })
+
+    await expect(
+      handlers.get('fs:uploadExternalFileToRuntime')!(
+        { sender: owner },
+        { ...request, uploadId: 'same-id' }
+      )
+    ).resolves.toEqual({ byteLength: 0 })
+    owner.emit('destroyed')
+    other.emit('destroyed')
+  })
+
   it('does not sweep when the stream fails while the renderer is still alive', async () => {
     const sender = fakeSender()
     streamMock.mockRejectedValue(new Error("File changed since it was staged: 'file.bin'"))
@@ -172,5 +205,31 @@ describe('fs:uploadExternalFileToRuntime', () => {
     // that the handler would surface the sweep error instead of the upload's.
     await expect(invoke(sender)).rejects.toThrow('sweep exploded')
     expect(listenerCount(sender)).toBe(0)
+  })
+
+  it("echoes the file's sequence on its progress so the renderer can drop a stale event", async () => {
+    const sender = Object.assign(fakeSender(), {
+      id: 1,
+      isDestroyed: () => false,
+      send: vi.fn()
+    })
+    streamMock.mockImplementation(
+      async (args: { onProgress?: (p: { sentBytes: number; totalBytes: number }) => void }) => {
+        args.onProgress?.({ sentBytes: 1, totalBytes: 1 })
+        return { byteLength: 1 }
+      }
+    )
+
+    await handlers.get('fs:uploadExternalFileToRuntime')!(
+      { sender },
+      { ...request, uploadId: 'u1', fileSequence: 4 }
+    )
+
+    expect(sender.send).toHaveBeenCalledWith('fs:uploadProgress', {
+      uploadId: 'u1',
+      sentBytes: 1,
+      totalBytes: 1,
+      fileSequence: 4
+    })
   })
 })

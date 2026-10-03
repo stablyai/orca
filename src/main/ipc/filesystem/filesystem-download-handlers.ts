@@ -8,6 +8,11 @@ import { registerFilesystemDownloadFolderHandlers } from '../filesystem-download
 import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import {
+  beginRemoteDownloadSession,
+  parseRemoteDownloadId,
+  registerRemoteDownloadCancelHandler
+} from './remote-download-sessions'
+import {
   cleanupLocalTransferPath,
   decodeDownloadedFileContent,
   DOWNLOAD_SESSION_TTL_MS,
@@ -31,10 +36,11 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     'fs:downloadFile',
     async (
       event,
-      args: { filePath?: string; connectionId?: string }
+      args: { filePath?: string; connectionId?: string; downloadId?: string }
     ): Promise<DownloadFileResult> => {
       const filePath = validateRequiredString(args?.filePath, 'filePath')
       const connectionId = validateRequiredString(args?.connectionId, 'connectionId')
+      const downloadId = parseRemoteDownloadId(args?.downloadId)
       const provider = requireSshFilesystemProvider(connectionId)
       const remoteStat = await provider.stat(filePath)
       if (remoteStat.type === 'directory') {
@@ -57,13 +63,17 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
       const destinationPath = dialogResult.filePath
       const { existed } = await inspectDownloadDestination(destinationPath)
       const tempPath = createSiblingTransferPath(destinationPath, 'download')
+      const session = beginRemoteDownloadSession(event.sender, downloadId, remoteStat.size)
       let promoted = false
       try {
-        await provider.downloadFile(filePath, tempPath)
+        await provider.downloadFile(filePath, tempPath, session?.observer)
+        // Why: a cancel that lands after the last byte must still keep the file out of place.
+        session?.observer.signal?.throwIfAborted()
         await promoteDownloadedFile(tempPath, destinationPath, existed)
         promoted = true
         return { canceled: false, destinationPath }
       } finally {
+        session?.end()
         if (!promoted) {
           await cleanupLocalTransferPath(tempPath)
         }
@@ -72,6 +82,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
   )
 
   registerFilesystemDownloadFolderHandlers()
+  registerRemoteDownloadCancelHandler()
 
   ipcMain.handle(
     'fs:saveDownloadedFile',

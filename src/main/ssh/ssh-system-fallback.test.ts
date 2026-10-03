@@ -647,13 +647,17 @@ describe('spawnSystemSsh', () => {
     const dest = join(dir, 'payload.bin')
 
     try {
-      const promise = downloadFileViaSystemSsh(createTarget(), '/remote/payload.bin', dest)
+      const onBytesTransferred = vi.fn()
+      const promise = downloadFileViaSystemSsh(createTarget(), '/remote/payload.bin', dest, {
+        onBytesTransferred
+      })
       proc.stdout.emit('data', Buffer.from('payload'))
       proc.stdout.emit('end')
       proc.emit('close', 0, null)
 
       await expect(promise).resolves.toBeUndefined()
       expect(readFileSync(dest)).toEqual(Buffer.from('payload'))
+      expect(onBytesTransferred).toHaveBeenCalledWith(7)
       const args = spawnMock.mock.calls[0][1] as string[]
       expect(args.at(-1)).toContain('cat')
       expect(args.at(-1)).toContain('/remote/payload.bin')

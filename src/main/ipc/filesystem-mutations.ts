@@ -7,6 +7,8 @@ import { resolveAuthorizedPath } from './filesystem-auth'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalDroppedPathsForAgent } from './dropped-path-resolution'
 import { importExternalPathsSsh } from './filesystem-import-ssh'
+import { toSshImportProgressTarget } from './filesystem-import-ssh-progress'
+import { registerRuntimeUploadCancelHandlers } from './runtime-upload-cancel-ipc'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
@@ -25,6 +27,11 @@ import {
 import { streamExternalFileToRuntime } from './runtime-upload-file-stream'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import { sweepAbandonedRuntimeUploadTempPath } from './runtime-upload-temp-sweep'
+import {
+  RUNTIME_UPLOAD_PROGRESS_CHANNEL,
+  throttleRuntimeUploadProgress
+} from './runtime-upload-progress'
+import { registerCancellableUpload, scopeRuntimeUploadId } from './runtime-upload-cancellation'
 import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload-staging-contract'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
 
@@ -149,12 +156,13 @@ export function registerFilesystemMutationHandlers(store: Store): void {
   ipcMain.handle(
     'fs:importExternalPaths',
     async (
-      _event,
+      event,
       args: {
         sourcePaths: string[]
         destDir: string
         connectionId?: string
         ensureDir?: boolean
+        uploadIds?: Record<string, string>
       } & SshMutationExpectation
     ): Promise<{ results: ImportItemResult[] }> => {
       assertSshMutationExpectation(
@@ -166,6 +174,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       if (args.connectionId) {
         return importExternalPathsSsh(args.sourcePaths, args.destDir, args.connectionId, {
           ensureDir: args.ensureDir,
+          progress: toSshImportProgressTarget(event, args.uploadIds),
           assertCurrent: () =>
             assertSshMutationExpectation(
               args.connectionId,
@@ -233,11 +242,30 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       // move in main, a reload or close has to stop the transfer explicitly,
       // or a multi-GB upload outlives the window that asked for it.
       const lifetime = abortWhenRendererGone(event.sender)
+      const uploadId = args.uploadId
+      // Why: replies to the frame that asked, so a second window's drop cannot
+      // move this one's progress bar.
+      const emit = uploadId
+        ? throttleRuntimeUploadProgress((progress) => {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send(RUNTIME_UPLOAD_PROGRESS_CHANNEL, progress)
+            }
+          })
+        : null
+      const cancellation = uploadId
+        ? registerCancellableUpload(scopeRuntimeUploadId(event.sender.id, uploadId))
+        : null
       try {
         return await streamExternalFileToRuntime({
           ...request,
           userDataPath,
-          signal: lifetime.signal
+          signal: lifetime.signal,
+          cancelSignal: cancellation?.signal,
+          onProgress:
+            emit && uploadId
+              ? ({ sentBytes, totalBytes }) =>
+                  emit({ uploadId, sentBytes, totalBytes, fileSequence: args.fileSequence })
+              : undefined
         })
       } catch (error) {
         if (lifetime.signal.aborted) {
@@ -247,10 +275,13 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         }
         throw error
       } finally {
+        cancellation?.release()
         lifetime.dispose()
       }
     }
   )
+
+  registerRuntimeUploadCancelHandlers()
 
   // Why: terminal drag-and-drop resolver. Local worktrees pass paths through
   // unchanged (reference-in-place; preserves zero-latency drop). SSH worktrees
@@ -261,11 +292,12 @@ export function registerFilesystemMutationHandlers(store: Store): void {
   ipcMain.handle(
     'fs:resolveDroppedPathsForAgent',
     async (
-      _event,
+      event,
       args: {
         paths: string[]
         worktreePath: string
         connectionId?: string
+        uploadIds?: Record<string, string>
       } & SshMutationExpectation
     ): Promise<ResolveDroppedPathsResult> => {
       assertSshMutationExpectation(
@@ -287,6 +319,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       const destDir = `${worktreePath}/.orca/drops`
       const { results } = await importExternalPathsSsh(args.paths, destDir, args.connectionId, {
         ensureDir: true,
+        progress: toSshImportProgressTarget(event, args.uploadIds),
         assertCurrent: () =>
           assertSshMutationExpectation(
             args.connectionId,
@@ -297,7 +330,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       })
       const resolvedPaths: string[] = []
       const skipped: { sourcePath: string; reason: ImportSkipReason }[] = []
-      const failed: { sourcePath: string; reason: string }[] = []
+      const failed: ResolveDroppedPathsResult['failed'] = []
       // Iterate in input order so injected paths align with the user's drop order.
       for (const r of results) {
         if (r.status === 'imported') {
@@ -305,7 +338,11 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         } else if (r.status === 'skipped') {
           skipped.push({ sourcePath: r.sourcePath, reason: r.reason })
         } else {
-          failed.push({ sourcePath: r.sourcePath, reason: r.reason })
+          failed.push({
+            sourcePath: r.sourcePath,
+            reason: r.reason,
+            ...(r.cancelled ? { cancelled: true } : {})
+          })
         }
       }
       return { resolvedPaths, skipped, failed }

@@ -194,6 +194,44 @@ describe('sftp-upload', () => {
     }
   })
 
+  it('settles a cancelled upload only after the remote handle has closed', async () => {
+    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-close-'))
+    const localPath = join(localDir, 'big.bin')
+    const controller = new AbortController()
+    const order: string[] = []
+    // Why: like ssh2's WriteStream, destroy finishes only once the server acks CLOSE, so a
+    // rollback unlink queued after this upload settles can never race an open handle.
+    const remoteWrite = new Writable({
+      write() {},
+      destroy(error, callback) {
+        setTimeout(() => {
+          order.push('remote-close')
+          callback(error)
+        }, 20)
+      }
+    })
+    const sftp = createSftpMock()
+    vi.mocked(sftp.createWriteStream).mockReturnValue(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: uploadFile only pipes into and destroys the stream, which a Writable provides.
+      remoteWrite as never
+    )
+    try {
+      await writeFile(localPath, Buffer.alloc(1024 * 1024, 7))
+      const upload = uploadFile(sftp, localPath, '/remote/big.bin', {
+        exclusive: true,
+        signal: controller.signal
+      }).catch(() => order.push('upload-settled'))
+      await vi.waitFor(() => expect(sftp.createWriteStream).toHaveBeenCalledTimes(1))
+
+      controller.abort()
+      await upload
+
+      expect(order).toEqual(['remote-close', 'upload-settled'])
+    } finally {
+      await rm(localDir, { recursive: true, force: true })
+    }
+  })
+
   it('joins the local read when the remote write fails', async () => {
     const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-failure-'))
     const localPath = join(localDir, 'relay.js')

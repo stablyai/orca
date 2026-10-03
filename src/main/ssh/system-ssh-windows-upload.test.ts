@@ -219,6 +219,19 @@ describe('Windows upload over sftp', () => {
     expect(sftpBatches).toHaveLength(1)
   })
 
+  it('reports an exclusive upload as ours only once its no-clobber publish succeeded', async () => {
+    writeFileSync(join(localDir, 'notes.txt'), 'x')
+    const onRemoteCreated = vi.fn()
+
+    await uploadFileViaSystemSsh(target, join(localDir, 'notes.txt'), `${remoteRoot}/notes.txt`, {
+      hostPlatform,
+      exclusive: true,
+      onRemoteCreated
+    })
+
+    expect(onRemoteCreated).toHaveBeenCalledTimes(1)
+  })
+
   it('creates the parent chain and sends the payload in one round trip', async () => {
     writeFileSync(join(localDir, 'relay.js'), 'x')
 
@@ -397,13 +410,18 @@ describe('Windows upload over sftp', () => {
       })
     })
 
+    const onRemoteCreated = vi.fn()
     await expect(
       uploadFileViaSystemSsh(target, join(localDir, 'import.bin'), `${remoteRoot}/import.bin`, {
         hostPlatform,
-        exclusive: true
+        exclusive: true,
+        onRemoteCreated
       })
     ).rejects.toThrow()
 
+    // Why: a refused publish means the name belongs to someone else; claiming it would let a
+    // cancel delete their file.
+    expect(onRemoteCreated).not.toHaveBeenCalled()
     const sweep = commands.at(-1)!
     expect(sweep.script).toContain('[System.IO.File]::Delete($staging)')
     // Tolerated, not asserted: the previous writer may still hold the file, and losing contact is
