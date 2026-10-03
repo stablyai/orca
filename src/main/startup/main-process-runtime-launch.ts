@@ -84,13 +84,7 @@ function installRuntimeRpc(
     exposeNetworkByDefault: Boolean(serveOptions) || isE2E,
     ...(isE2E ? { wsPort: e2eWsPort } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
-    ...(serveOptions?.wsPort !== undefined
-      ? {
-          wsPort: serveOptions.wsPort,
-          // Why: only explicit `orca serve --port` overrides a stale STA-1511 fallback (issue #8535); default/dev stay fallback-first for pairing stability.
-          preferPinnedWsPort: true
-        }
-      : {}),
+    ...(serveOptions?.wsPort !== undefined ? { wsPort: serveOptions.wsPort } : {}),
     webClientRoot: getBundledWebClientRoot()
   })
   state.runtimeRpc = runtimeRpc

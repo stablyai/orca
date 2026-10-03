@@ -37,7 +37,6 @@ export class RuntimeRpcState {
   protected readonly platform: NodeJS.Platform
   protected readonly enableWebSocket: boolean
   protected readonly wsPort: number
-  protected readonly preferPinnedWsPort: boolean
   protected readonly exposeNetworkByDefault: boolean
   protected readonly pinnedBindHost: string | null
   protected readonly webClientRoot: string | undefined
@@ -99,7 +98,6 @@ export class RuntimeRpcState {
     platform = process.platform,
     enableWebSocket = false,
     wsPort = DEFAULT_WS_PORT,
-    preferPinnedWsPort = false,
     exposeNetworkByDefault = false,
     pinnedBindHost,
     webClientRoot,
@@ -115,7 +113,6 @@ export class RuntimeRpcState {
     this.platform = platform
     this.enableWebSocket = enableWebSocket
     this.wsPort = wsPort
-    this.preferPinnedWsPort = preferPinnedWsPort
     this.exposeNetworkByDefault = exposeNetworkByDefault
     this.pinnedBindHost = pinnedBindHost ?? null
     this.webClientRoot = webClientRoot

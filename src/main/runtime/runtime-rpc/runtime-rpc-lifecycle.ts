@@ -88,10 +88,11 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           const { transport, endpoint } = await this.startWebSocketTransport({
             host,
             port: this.wsPort,
-            preferPinnedPort: this.preferPinnedWsPort,
             // Why: stable fallback port across restarts keeps paired devices' endpoints valid (STA-1511); wsPort 0 = random (E2E).
             ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
           })
+          // Why record only on drift and never clear on a pinned bind: the pin is tried first, so a stale
+          // entry can't pre-empt it, and keeping it makes the next drift window reuse the same port.
           if (this.wsPort !== 0 && transport.resolvedPort !== this.wsPort) {
             writeWsFallbackPort(this.userDataPath, transport.resolvedPort)
           }
@@ -162,7 +163,6 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
   protected async startWebSocketTransport(options: {
     host: string
     port: number
-    preferPinnedPort: boolean
     fallbackPort?: number
   }): Promise<{ transport: WebSocketTransport; endpoint: string }> {
     const deviceRegistry = this.deviceRegistry
@@ -174,8 +174,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       host: options.host,
       port: options.port,
       staticRoot: this.webClientRoot,
-      ...(options.fallbackPort !== undefined ? { fallbackPort: options.fallbackPort } : {}),
-      ...(options.preferPinnedPort ? { preferPinnedPort: true } : {})
+      ...(options.fallbackPort !== undefined ? { fallbackPort: options.fallbackPort } : {})
     })
     const mobileSocketWiring = this.ensureMobileSocketWiring(deviceRegistry, e2eeKeypair)
     this.detachWebSocketWiring = mobileSocketWiring.attachTransport(wsTransport)

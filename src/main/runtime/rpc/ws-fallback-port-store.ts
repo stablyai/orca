@@ -4,10 +4,11 @@ import { join } from 'node:path'
 // Why: when the preferred WS port is taken (second Orca instance), the OS
 // assigns a random port. Paired mobile devices store ws://ip:port endpoints,
 // so a port that changes on every restart permanently orphans those pairings
-// (STA-1511). Persist the assigned fallback so the same instance re-binds the
-// same port next launch — the transport binds a persisted fallback BEFORE the
-// preferred port, so pairings survive even when the preferred port is free
-// again.
+// (STA-1511). Persist the assigned fallback so every launch that still finds
+// the preferred port taken re-binds the same port. The entry is deliberately
+// never cleared: the transport tries the preferred port first, so a stale
+// entry costs nothing, and keeping it is what makes a later drift window reuse
+// the same port instead of drawing a fresh random one.
 
 const FALLBACK_PORT_FILE = 'mobile-ws-fallback-port.json'
 
