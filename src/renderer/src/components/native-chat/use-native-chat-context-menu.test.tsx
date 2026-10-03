@@ -3,8 +3,10 @@
  */
 import React, { createRef, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ImageBlobPng from '@/lib/image-blob-png'
+import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../shared/clipboard-image'
 import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu,
@@ -14,6 +16,9 @@ import {
 type ItemProps = { onSelect?: () => void; children?: ReactNode }
 
 const items = vi.hoisted(() => ({ list: [] as ItemProps[] }))
+const imageCopy = vi.hoisted(() => ({
+  convertImageBlobToPng: vi.fn()
+}))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children?: ReactNode }) => children,
@@ -37,6 +42,7 @@ vi.mock('lucide-react', () => {
     Clipboard: Icon,
     Copy: Icon,
     GitFork: Icon,
+    Image: Icon,
     Maximize2: Icon,
     MessageSquarePlus: Icon,
     Minimize2: Icon,
@@ -51,6 +57,11 @@ vi.mock('lucide-react', () => {
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
+}))
+
+vi.mock('@/lib/image-blob-png', async (importOriginal) => ({
+  ...(await importOriginal<typeof ImageBlobPng>()),
+  convertImageBlobToPng: imageCopy.convertImageBlobToPng
 }))
 
 const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
@@ -113,6 +124,60 @@ function Harness({
   return menu
 }
 
+function ImageHarness({ enabled = true }: { enabled?: boolean }) {
+  const rootRef = createRef<HTMLDivElement>()
+  const { menu, onContextMenuCapture } = useNativeChatContextMenu({
+    rootRef,
+    enabled,
+    actions: { ...emptyNativeChatContextMenuActions, onPaste: vi.fn() }
+  })
+  return (
+    <div ref={rootRef} onContextMenuCapture={onContextMenuCapture}>
+      <button type="button" data-native-chat-copy-image-src="blob:full-size">
+        <img alt="shot" src="data:thumbnail" />
+      </button>
+      <p>text</p>
+      {menu}
+    </div>
+  )
+}
+
+function copyImageItem(): ItemProps | undefined {
+  return items.list.findLast((candidate) => childrenText(candidate.children) === 'Copy image')
+}
+
+function stubClipboardImageWrite(): ReturnType<typeof vi.fn> {
+  const writeClipboardImage = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal('api', { ui: { writeClipboardImage } })
+  return writeClipboardImage
+}
+
+async function rightClickImageAndCopy({
+  blobFor = (src: string) => new Blob([src]),
+  revokeBeforeSelect = false
+}: { blobFor?: (src: string) => Blob; revokeBeforeSelect?: boolean } = {}): Promise<{
+  writeClipboardImage: ReturnType<typeof vi.fn>
+}> {
+  const writeClipboardImage = stubClipboardImageWrite()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (src: string) => ({ blob: async () => blobFor(src) }))
+  )
+  render(<ImageHarness />)
+  fireEvent.contextMenu(screen.getByRole('img', { name: 'shot' }))
+  if (revokeBeforeSelect) {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+  }
+  await act(async () => copyImageItem()?.onSelect?.())
+  return { writeClipboardImage }
+}
+
+function pngOfText(): void {
+  imageCopy.convertImageBlobToPng.mockImplementation(
+    async (blob: Blob) => new Blob([`png:${await blob.text()}`], { type: 'image/png' })
+  )
+}
+
 describe('useNativeChatContextMenu', () => {
   beforeEach(() => {
     items.list = []
@@ -121,6 +186,73 @@ describe('useNativeChatContextMenu', () => {
   afterEach(() => {
     cleanup()
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+    imageCopy.convertImageBlobToPng.mockReset()
+    toasts.error.mockReset()
+    toasts.success.mockReset()
+  })
+
+  it('copies the right-clicked image as a PNG of its full-size source', async () => {
+    pngOfText()
+
+    const { writeClipboardImage } = await rightClickImageAndCopy()
+
+    await waitFor(() =>
+      expect(writeClipboardImage).toHaveBeenCalledWith(
+        `data:image/png;base64,${Buffer.from('png:blob:full-size').toString('base64')}`
+      )
+    )
+    expect(toasts.success).toHaveBeenCalledWith('Image copied')
+    expect(toasts.error).not.toHaveBeenCalled()
+  })
+
+  it('offers no image copy when the right-click is not on an image', () => {
+    render(<ImageHarness />)
+    fireEvent.contextMenu(screen.getByText('text'))
+
+    expect(copyImageItem()).toBeUndefined()
+  })
+
+  it('copies an image whose blob URL was revoked after the menu opened', async () => {
+    pngOfText()
+
+    const { writeClipboardImage } = await rightClickImageAndCopy({ revokeBeforeSelect: true })
+
+    await waitFor(() => expect(writeClipboardImage).toHaveBeenCalledOnce())
+    expect(toasts.error).not.toHaveBeenCalled()
+  })
+
+  it('releases the read image when the pane hides with the menu open', () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ blob: async () => new Blob(['image']) }))
+    )
+    const { rerender } = render(<ImageHarness />)
+    fireEvent.contextMenu(screen.getByRole('img', { name: 'shot' }))
+    expect(copyImageItem()).toBeDefined()
+
+    rerender(<ImageHarness enabled={false} />)
+    // Inspect a render after the hide effect has settled.
+    items.list = []
+    rerender(<ImageHarness enabled={false} />)
+
+    expect(copyImageItem()).toBeUndefined()
+  })
+
+  it('reports an image too large to copy instead of copying nothing silently', async () => {
+    const actual = await vi.importActual<typeof ImageBlobPng>('@/lib/image-blob-png')
+    imageCopy.convertImageBlobToPng.mockImplementation(actual.convertImageBlobToPng)
+
+    const { writeClipboardImage } = await rightClickImageAndCopy({
+      blobFor: () => new Blob([new Uint8Array(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1)])
+    })
+
+    await waitFor(() => expect(toasts.error).toHaveBeenCalled())
+    expect(writeClipboardImage).not.toHaveBeenCalled()
+    expect(toasts.success).not.toHaveBeenCalled()
+    expect(toasts.error).toHaveBeenCalledWith("Couldn't copy image", {
+      description: 'The image is too large to copy.'
+    })
   })
 
   it('restores the bridge switch-to-terminal action when supplied', () => {

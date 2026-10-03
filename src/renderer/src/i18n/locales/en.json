@@ -17785,6 +17785,10 @@
         "viewAttachment": "View image",
         "imagePreview": "Full-size image preview",
         "imagePreviewUnavailable": "Preview unavailable",
+        "copyImage": "Copy image",
+        "copyImageFailed": "Couldn't copy image",
+        "copyImageTooLarge": "The image is too large to copy.",
+        "imageCopied": "Image copied",
         "workspaceAttachmentMismatch": "Files can only be attached to their source workspace.",
         "attachmentOwnerChanged": "This workspace changed hosts while attaching — drop the files again.",
         "attachmentUnreadable": "Couldn't read the dropped files."

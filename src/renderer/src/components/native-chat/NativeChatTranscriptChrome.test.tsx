@@ -87,6 +87,26 @@ describe('NativeChatImageAttachments', () => {
     expect(FakeIntersectionObserver.instances[0]?.disconnect).toHaveBeenCalledOnce()
   })
 
+  it('offers the full-size file of a sent image to the chat copy menu', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(
+        createElement(NativeChatImageAttachments, {
+          blocks: [{ type: 'image-ref' as const, path: '/repo/image.png' }],
+          runtimeContext: runtimeContext('wt-1')
+        })
+      )
+      await flushPromises()
+    })
+
+    expect(container.querySelector('button')?.getAttribute('data-native-chat-copy-image-src')).toBe(
+      'blob:owner-1'
+    )
+
+    root.unmount()
+  })
+
   it('preserves same-image errors but retries when the runtime owner changes', async () => {
     const container = document.createElement('div')
     const root = createRoot(container)

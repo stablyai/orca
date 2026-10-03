@@ -10,6 +10,7 @@ import {
   Clipboard,
   Copy,
   GitFork,
+  Image as ImageIcon,
   Maximize2,
   MessageSquarePlus,
   Minimize2,
@@ -29,6 +30,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
+import { copyNativeChatImage, readNativeChatCopyImage } from './native-chat-image-copy'
 import { isMacPlatform, nativeChatToggleShortcutLabel } from './native-chat-shortcut'
 import { TabWorkspaceLayoutMenuSection } from '@/components/tab-bar/TabWorkspaceLayoutMenuSection'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
@@ -38,6 +40,7 @@ type NativeChatContextMenuState = {
   open: boolean
   point: { x: number; y: number }
   selectedText: string
+  image?: Promise<Blob>
 }
 
 type UseNativeChatContextMenuArgs = {
@@ -121,6 +124,7 @@ export function useNativeChatContextMenu({
     selectedText: ''
   })
   const shortcutLabel = nativeChatToggleShortcutLabel(isMacPlatform())
+  const { image } = state
 
   const rememberCurrentSelection = useCallback(() => {
     const selectedText = getNativeChatSelectedText(rootRef.current)
@@ -139,7 +143,9 @@ export function useNativeChatContextMenu({
 
   useEffect(() => {
     if (!enabled) {
-      setState((current) => (current.open ? { ...current, open: false } : current))
+      setState((current) =>
+        current.open ? { ...current, open: false, image: undefined } : current
+      )
     }
   }, [enabled])
 
@@ -152,7 +158,8 @@ export function useNativeChatContextMenu({
       setState({
         open: true,
         point: { x: event.clientX, y: event.clientY },
-        selectedText
+        selectedText,
+        image: readNativeChatCopyImage(event.target)
       })
     },
     [rootRef]
@@ -179,11 +186,25 @@ export function useNativeChatContextMenu({
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent
+          data-native-chat-context-menu=""
           className="w-56"
           sideOffset={0}
           align="start"
-          onCloseAutoFocus={(event) => event.preventDefault()}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            // Drop the read image once the menu has faded out, so a large file isn't held.
+            setState((prev) => ({ ...prev, image: undefined }))
+          }}
         >
+          {image ? (
+            <>
+              <DropdownMenuItem onSelect={() => void copyNativeChatImage(image)}>
+                <ImageIcon />
+                {translate('components.native-chat.composer.copyImage', 'Copy image')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           <DropdownMenuItem
             disabled={state.selectedText.trim().length === 0}
             onSelect={() => void window.api.ui.writeClipboardText(state.selectedText)}
