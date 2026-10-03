@@ -1,0 +1,15 @@
+{
+  "title": "Terminaldarstellung",
+  "system": "Automatisch (Smartphone)",
+  "dark": "Dunkel",
+  "light": "Hell",
+  "desktop": "Desktop übernehmen",
+  "systemHint": "Den Hell- oder Dunkelmodus des Smartphones verwenden.",
+  "desktopHint": "Die Terminalfarben des verbundenen Desktops verwenden.",
+  "saveError": "Die Terminaldarstellung konnte nicht gespeichert werden. Die Auswahl gilt bis zum nächsten App-Start.",
+  "loadError": "Die gespeicherte Terminaldarstellung konnte nicht geladen werden.",
+  "history": "Agentenverlauf",
+  "historyHint": "Agentensitzungen anzeigen und fortsetzen",
+  "checks": "Prüfungen",
+  "checksHint": "Prüfungen des Pull Requests öffnen"
+}

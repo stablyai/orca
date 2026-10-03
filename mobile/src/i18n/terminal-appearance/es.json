@@ -1,0 +1,15 @@
+{
+  "title": "Apariencia del terminal",
+  "system": "Automática (teléfono)",
+  "dark": "Oscura",
+  "light": "Clara",
+  "desktop": "Seguir el escritorio",
+  "systemHint": "Usar el modo claro u oscuro del teléfono.",
+  "desktopHint": "Usar los colores del terminal del escritorio conectado.",
+  "saveError": "No se pudo guardar la apariencia del terminal. La selección se mantendrá hasta que reinicies la app.",
+  "loadError": "No se pudo cargar la apariencia guardada del terminal.",
+  "history": "Historial de agentes",
+  "historyHint": "Ver y reanudar sesiones de agentes",
+  "checks": "Comprobaciones",
+  "checksHint": "Abrir las comprobaciones de la solicitud de incorporación"
+}

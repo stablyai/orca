@@ -1,0 +1,15 @@
+{
+  "title": "Apparence du terminal",
+  "system": "Automatique (téléphone)",
+  "dark": "Sombre",
+  "light": "Claire",
+  "desktop": "Suivre l’ordinateur",
+  "systemHint": "Utiliser le mode clair ou sombre du téléphone.",
+  "desktopHint": "Utiliser les couleurs du terminal de l’ordinateur connecté.",
+  "saveError": "Impossible d’enregistrer l’apparence du terminal. Votre choix sera conservé jusqu’au redémarrage de l’application.",
+  "loadError": "Impossible de charger l’apparence enregistrée du terminal.",
+  "history": "Historique des agents",
+  "historyHint": "Consulter et reprendre les sessions d’agents",
+  "checks": "Vérifications",
+  "checksHint": "Ouvrir les vérifications de la pull request"
+}

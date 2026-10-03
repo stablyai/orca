@@ -1,0 +1,15 @@
+{
+  "title": "终端外观",
+  "system": "自动（跟随手机）",
+  "dark": "深色",
+  "light": "浅色",
+  "desktop": "跟随桌面端",
+  "systemHint": "跟随手机的浅色或深色模式。",
+  "desktopHint": "使用已连接桌面端的终端配色。",
+  "saveError": "无法保存终端外观。当前选择会保留到应用重启。",
+  "loadError": "无法加载已保存的终端外观。",
+  "history": "智能体历史",
+  "historyHint": "查看并继续智能体会话",
+  "checks": "检查",
+  "checksHint": "查看拉取请求的检查结果"
+}
