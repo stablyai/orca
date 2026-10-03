@@ -3,6 +3,7 @@ import { useWorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-lo
 import { useWorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filter'
 import { useWorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
 import { useWorktreeJumpPaletteOpenTabs } from './use-worktree-jump-palette-open-tabs'
+import { useWorktreeJumpPaletteTranscriptMatches } from './use-worktree-jump-palette-transcript-matches'
 import { useWorktreeJumpPaletteRecentTabs } from './use-worktree-jump-palette-recent-tabs'
 import { useWorktreeJumpPaletteProjectTargets } from './use-worktree-jump-palette-project-targets'
 import { useWorktreeJumpPaletteQuickActions } from './use-worktree-jump-palette-quick-actions'
@@ -69,12 +70,17 @@ export function useWorktreeJumpPaletteController({
     ...filter,
     ...evaluation
   })
+  const transcriptMatches = useWorktreeJumpPaletteTranscriptMatches({
+    ...storeState,
+    ...localState
+  })
   const openTabs = useWorktreeJumpPaletteOpenTabs({
     ...storeState,
     ...localState,
     ...filter,
     ...worktrees,
-    ...evaluation
+    ...evaluation,
+    ...transcriptMatches
   })
   const recentTabs = useWorktreeJumpPaletteRecentTabs({
     ...storeState,

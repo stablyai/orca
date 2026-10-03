@@ -15,7 +15,6 @@ import { comparePaletteRankedItems } from '@/lib/cmd-j-section-leadership'
 import { getPaletteWorktreeIdentity } from '@/lib/palette-repo-resolution'
 import type {
   BrowserPaletteItem,
-  OpenTabPaletteItem,
   SimulatorPaletteItem,
   WorkspaceTabPaletteItem,
   WorktreePaletteItem
@@ -28,9 +27,10 @@ import {
   encodePaletteIdentity,
   type PaletteSearchContext
 } from '@/lib/palette-match/palette-ranking'
+import { useWorkspaceTabTranscriptMerge } from './use-worktree-jump-palette-transcript-tab-merge'
+import type { WorktreeJumpPaletteTranscriptMatches } from './use-worktree-jump-palette-transcript-matches'
 import {
   buildBrowserPaletteItems,
-  buildOpenTabPaletteItems,
   buildSimulatorPaletteItems,
   buildWorkspaceTabPaletteItems
 } from './worktree-jump-palette-open-tab-items'
@@ -41,8 +41,9 @@ const EMPTY_WORKSPACE_TAB_ENTRIES: SearchableWorkspaceTab[] = []
 
 type WorktreeJumpPaletteOpenTabsInput = WorktreeJumpPaletteStoreState &
   WorktreeJumpPaletteWorktrees &
-  Pick<WorktreeJumpPaletteFilter, 'repoMap' | 'repoByHostIdentity'> &
-  Pick<WorktreeJumpPaletteLocalState, 'deferredQuery'> & {
+  Pick<WorktreeJumpPaletteFilter, 'repoMap' | 'repoByHostIdentity' | 'filterModel'> &
+  Pick<WorktreeJumpPaletteLocalState, 'deferredQuery'> &
+  WorktreeJumpPaletteTranscriptMatches & {
     paletteSearchContext: PaletteSearchContext
   }
 
@@ -52,6 +53,8 @@ export function useWorktreeJumpPaletteOpenTabs({
   allWorktrees,
   repoMap,
   repoByHostIdentity,
+  filterModel,
+  transcriptMatches,
   worktreeOrder,
   browserTabsByWorktree,
   browserPagesByWorkspace,
@@ -268,14 +271,19 @@ export function useWorktreeJumpPaletteOpenTabs({
     () => buildSimulatorPaletteItems(simulatorMatches),
     [simulatorMatches]
   )
-  const workspaceTabItems = useMemo<WorkspaceTabPaletteItem[]>(
+  const titleWorkspaceTabItems = useMemo<WorkspaceTabPaletteItem[]>(
     () => buildWorkspaceTabPaletteItems(workspaceTabMatches),
     [workspaceTabMatches]
   )
-  const openTabItems = useMemo<OpenTabPaletteItem[]>(
-    () => buildOpenTabPaletteItems({ browserItems, simulatorItems, workspaceTabItems }),
-    [browserItems, simulatorItems, workspaceTabItems]
-  )
+  const { workspaceTabItems, openTabItems } = useWorkspaceTabTranscriptMerge({
+    filterModel,
+    transcriptMatches,
+    titleWorkspaceTabItems,
+    workspaceTabEntries,
+    browserItems,
+    simulatorItems,
+    paletteSearchContext
+  })
 
   return {
     browserPageEntries,
