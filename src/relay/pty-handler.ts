@@ -434,6 +434,8 @@ type PtyProcessSummary = {
   title: string
   worktreeId?: string
   terminalHandle?: string
+  /** ORCA_PANE_KEY this PTY was spawned with; attach identity never replaces it. */
+  paneKey?: string
   foregroundProcessEvidence?: ForegroundProcessEvidence
   agentSessionOwners?: AgentSessionOwnerBinding[]
   /** Age on the HOST's clock. Published instead of a creation timestamp so a client with a skewed
@@ -3040,6 +3042,7 @@ export class PtyHandler {
           : {}),
         ...(managed.worktreeId ? { worktreeId: managed.worktreeId } : {}),
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {}),
+        ...(managed.paneKey ? { paneKey: managed.paneKey } : {}),
         ...(foregroundProcessEvidence ? { foregroundProcessEvidence } : {}),
         ...(this.agentSessionOwners.listForPty(id).length
           ? { agentSessionOwners: this.agentSessionOwners.listForPty(id) }

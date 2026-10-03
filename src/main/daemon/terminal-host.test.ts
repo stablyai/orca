@@ -789,4 +789,28 @@ describe('TerminalHost', () => {
       expect(onData).not.toHaveBeenCalled()
     })
   })
+
+  // The activation gate matches sleeping records against this key, so a viewer that reattaches
+  // the PTY from its own pane must not rewrite the pane the agent was launched for.
+  it('lists the pane key a session was spawned for, not the pane that reattaches it', async () => {
+    const spawn = (paneKey: string) =>
+      host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        env: { ORCA_PANE_KEY: paneKey },
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+    const launchedFor = 'client-tab:11111111-1111-4111-8111-111111111111'
+    const respawnedFor = 'desktop-tab:22222222-2222-4222-8222-222222222222'
+
+    await spawn(launchedFor)
+    await spawn(respawnedFor)
+    expect(host.listSessions().map((session) => session.paneKey)).toEqual([launchedFor])
+
+    lastSubprocess._onExitCb?.(0)
+    await vi.waitFor(() => expect(host.listSessions()).toHaveLength(0))
+    await spawn(respawnedFor)
+    expect(host.listSessions().map((session) => session.paneKey)).toEqual([respawnedFor])
+  })
 })

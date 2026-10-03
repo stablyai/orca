@@ -370,6 +370,8 @@ export type SessionInfo = {
   shellState: ShellReadyState
   isAlive: boolean
   terminalHandle?: string
+  /** ORCA_PANE_KEY this PTY was spawned with; reattaching from another pane does not change it. */
+  paneKey?: string
   wslDistro?: string | null
   pid: number | null
   cwd: string | null

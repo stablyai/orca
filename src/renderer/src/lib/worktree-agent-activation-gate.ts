@@ -4,7 +4,10 @@ import { parsePtySessionId, PTY_SESSION_ID_SEPARATOR } from '../../../shared/pty
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
-import { listActivationPtySessions } from './worktree-activation-pty-inventory'
+import {
+  listActivationPtySessions,
+  resolveActivationPtyListScope
+} from './worktree-activation-pty-inventory'
 import {
   resumeSleepingAgentSessionsForWorktree,
   type ResumeSleepingAgentSessionsOptions
@@ -102,14 +105,36 @@ function sessionBelongsToWorkspace(sessionId: string, worktreeId: string): boole
   )
 }
 
+// Why either signal rather than a preference: a relay row's worktreeId can be seeded from the
+// host's own ORCA_WORKTREE_ID, so it must widen the id-prefix match, never replace it — a session
+// dropped from this set is a live agent the gate would fork a second writer onto.
+function liveSessionsInWorkspace(
+  sessions: readonly PtyListedSession[],
+  worktreeId: string
+): PtyListedSession[] {
+  return sessions.filter(
+    (session) =>
+      (session.worktreeId !== undefined && worktreeIdsEqual(session.worktreeId, worktreeId)) ||
+      sessionBelongsToWorkspace(session.id, worktreeId)
+  )
+}
+
 function liveSleepingAgentClaims(
   store: ActivationStore,
   worktreeId: string,
-  livePtyIds: ReadonlySet<string>,
+  liveSessions: readonly PtyListedSession[],
   structuredInventory: StructuredActivationInventory | null
 ): { keys: Set<string>; claimedPtyIds: Set<string> } {
   const keys = new Set<string>()
   const claimedPtyIds = new Set<string>()
+  const livePtyIds = new Set(liveSessions.map((session) => session.id))
+  // Why: a PTY another client spawned keeps that client's pane key, which the agent reports from,
+  // even after this renderer adopts the PTY onto a tab of its own with no layout for that pane.
+  const livePtyIdBySpawnPaneKey = new Map(
+    liveSessions.flatMap((session) =>
+      session.paneKey ? [[session.paneKey, session.id] as const] : []
+    )
+  )
   for (const record of Object.values(store.sleepingAgentSessionsByPaneKey)) {
     if (record.worktreeId !== worktreeId) {
       continue
@@ -129,8 +154,12 @@ function liveSleepingAgentClaims(
       continue
     }
     const persistedPtyId = layoutPtyId ?? (tabPtyIds?.length === 1 ? tabPtyIds[0] : undefined)
-    if (persistedPtyId && livePtyIds.has(persistedPtyId)) {
-      claimedPtyIds.add(persistedPtyId)
+    const livePtyId =
+      persistedPtyId && livePtyIds.has(persistedPtyId)
+        ? persistedPtyId
+        : livePtyIdBySpawnPaneKey.get(record.paneKey)
+    if (livePtyId) {
+      claimedPtyIds.add(livePtyId)
       keys.add(getProviderSessionClaimKey(record))
     }
   }
@@ -183,14 +212,7 @@ export async function runWorktreeAgentActivationGate(
     return 'blocked'
   }
 
-  // Why either signal rather than a preference: a relay row's worktreeId can be seeded from the
-  // host's own ORCA_WORKTREE_ID, so it must widen the id-prefix match, never replace it — a session
-  // dropped from this set is a live agent the gate would fork a second writer onto.
-  const liveWorkspaceSessions = sessions.filter(
-    (session) =>
-      (session.worktreeId !== undefined && worktreeIdsEqual(session.worktreeId, worktreeId)) ||
-      sessionBelongsToWorkspace(session.id, worktreeId)
-  )
+  const liveWorkspaceSessions = liveSessionsInWorkspace(sessions, worktreeId)
   const liveWorkspacePtyIds = new Set(liveWorkspaceSessions.map((session) => session.id))
   let liveSurfaceAdopted = false
   if (liveWorkspaceSessions.length > 0) {
@@ -223,7 +245,7 @@ export async function runWorktreeAgentActivationGate(
   const claims = liveSleepingAgentClaims(
     store,
     worktreeId,
-    liveWorkspacePtyIds,
+    liveWorkspaceSessions,
     structuredInventory
   )
   const hasUnclaimedRecovery = Object.values(store.sleepingAgentSessionsByPaneKey).some(
@@ -275,6 +297,29 @@ export function gateWorktreeAgentActivation(
   })
   inFlightByWorktreeId.set(worktreeId, gate)
   return gate
+}
+
+/** Claim keys of this workspace's sleeping records that a live PTY still owns; null when the census
+ *  fails, which cannot prove an agent gone. A workspace a paired runtime owns claims nothing here:
+ *  this renderer takes no census of it, and its host-mirror checks decide instead. */
+export async function readLiveSleepingAgentClaimKeys(
+  worktreeId: string
+): Promise<Set<string> | null> {
+  if (!resolveActivationPtyListScope(useAppStore.getState(), worktreeId)) {
+    return new Set()
+  }
+  let sessions: PtyListedSession[]
+  try {
+    sessions = await listActivationPtySessions(useAppStore.getState(), worktreeId)
+  } catch {
+    return null
+  }
+  return liveSleepingAgentClaims(
+    useAppStore.getState(),
+    worktreeId,
+    liveSessionsInWorkspace(sessions, worktreeId),
+    null
+  ).keys
 }
 
 export function waitForWorktreeAgentActivationGateForTests(
