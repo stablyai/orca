@@ -488,6 +488,9 @@
   "auto.components.TaskPage.fe28c9821f": {
     "ko": "보기"
   },
+  "auto.components.TaskPage.linearEmptyUnfilteredScope": {
+    "ko": "이 워크스페이스 범위에 이슈가 없습니다. 검색하거나 팀을 조정해 보세요."
+  },
   "auto.components.Terminal.5b2c1a9e44": {
     "ko": "agent CLI를 찾지 못했습니다. 하나를 설치하거나 설정에서 기본 agent를 선택하세요."
   },
@@ -1151,6 +1154,9 @@
   "auto.components.feature.wall.review.notes.diff.rows.f621c734f8": {
     "ko": "메모 · 줄"
   },
+  "auto.components.floating.terminal.FloatingTerminalToggleButton.4cb418b991": {
+    "ko": "플로팅 워크스페이스 표시, 새 활동"
+  },
   "auto.components.github.CloseReasonDropdown.e1f2a3b4c5": {
     "ko": "닫기 사유 선택"
   },
@@ -1372,6 +1378,15 @@
   },
   "auto.components.jira.connect.dialog.fdd26d81cc": {
     "ko": "Atlassian 계정 설정"
+  },
+  "auto.components.linear-issue-attribute-filter-dropdowns.allWorkspacesBody": {
+    "ko": "상태, 담당자, 레이블 필터는 단일 Linear 워크스페이스의 ID를 사용합니다. 해당 속성으로 필터링할 워크스페이스 하나를 선택하세요."
+  },
+  "auto.components.linear-issue-attribute-filter-dropdowns.allWorkspacesTitle": {
+    "ko": "워크스페이스 선택"
+  },
+  "auto.components.linear-issue-attribute-filter-dropdowns.teamRequired": {
+    "ko": "이 워크스페이스의 상태, 담당자, 레이블을 로드하려면 팀을 선택하세요."
   },
   "auto.components.linear.api.key.dialog.57a66522c8": {
     "ko": "연결 중"
@@ -1955,6 +1970,12 @@
   "auto.components.right.sidebar.right.panel.comment.composer.542bf6a7e2": {
     "ko": "기울임"
   },
+  "auto.components.right.sidebar.source.control.ai.push.failure.launch.216f762bd7": {
+    "ko": "워크스페이스 연결을 확인할 수 없습니다."
+  },
+  "auto.components.right.sidebar.source.control.ai.recovery.launch.216f762bd7": {
+    "ko": "워크스페이스 연결을 확인할 수 없습니다."
+  },
   "auto.components.right.sidebar.source.control.discard.confirmation.2ae5a785b3": {
     "ko": "스테이징되지 않은 변경 사항을 모두 삭제하시겠습니까?"
   },
@@ -2320,6 +2341,12 @@
   },
   "auto.components.settings.IntegrationsPane.e74de656ce": {
     "ko": "glab auth login"
+  },
+  "auto.components.settings.LinearAgentSkillGuide.noteLinkedBody": {
+    "ko": "작업에서 만든 워크트리는 이슈가 컨텍스트로 연결되어 있어 이슈 작업이 가장 원활합니다."
+  },
+  "auto.components.settings.LinearAgentSkillPane.howToUseDescription": {
+    "ko": "카드를 클릭해 프롬프트를 복사하세요. 스킬을 설치한 후 Linear에 연결된 워크트리에서 사용하세요."
   },
   "auto.components.settings.ManageSessionsSection.2896a50f50": {
     "ko": "terminal {{value0}}(으)로 이동"
@@ -4082,6 +4109,9 @@
   "auto.components.setup.guide.SetupGuideProgressRing.dac3a4724a": {
     "ko": "설정 단계 {{value1}}개 중 {{value0}}개 완료"
   },
+  "auto.components.shared.useDaemonActions.a702d4196e": {
+    "ko": "이 작업은 모든 워크스페이스의 모든 터미널 탭을 닫고 현재 터미널 세션의 종료를 요청합니다. 저장되지 않은 터미널 작업은 손실됩니다. 데몬 자체는 계속 실행되며 새 터미널은 즉시 열 수 있습니다. 이 작업은 되돌릴 수 없습니다."
+  },
   "auto.components.shared.useDaemonActions.d18f3005c2": {
     "ko": "세션 {{value0}}개{{value1}}이(가) 종료를 거부했습니다."
   },
@@ -4151,6 +4181,9 @@
   "auto.components.sidebar.DeleteWorktreeWarningPanels.c4f96a6e18": {
     "ko": "메인 워크트리"
   },
+  "auto.components.sidebar.ForgetSshWorkspaceDialog.disconnectedBody": {
+    "ko": "이 워크스페이스의 SSH 호스트가 연결되어 있지 않습니다. 재연결하여 원격에서도 삭제하거나 Orca에서만 제거하세요."
+  },
   "auto.components.sidebar.HostRemoveDialog.1a2b3c4d5e": {
     "ko": "{{value0}} 제거됨"
   },
@@ -4171,6 +4204,15 @@
   },
   "auto.components.sidebar.HostRemoveDialog.8b9c0d1e2f": {
     "ko": "호스트 제거"
+  },
+  "auto.components.sidebar.HostRemoveDialog.manyWorkspaces": {
+    "ko": "워크스페이스 {{count}}개"
+  },
+  "auto.components.sidebar.HostRemoveDialog.oneWorkspace": {
+    "ko": "워크스페이스 1개"
+  },
+  "auto.components.sidebar.HostRemoveDialog.workspacesFailed": {
+    "ko": "이 호스트에서 워크스페이스 {{count}}개를 제거할 수 없었습니다. 재시도할 수 있도록 호스트가 유지되었습니다."
   },
   "auto.components.sidebar.HostRenameDialog.1a2b3c4d5e": {
     "ko": "호스트 이름 바꾸기"
@@ -4341,7 +4383,7 @@
     "ko": "고정"
   },
   "auto.components.sidebar.WorktreeContextMenu.8d9cd19d09": {
-    "ko": "상위 워크스페이스 열기"
+    "ko": "상위 워크트리 열기"
   },
   "auto.components.sidebar.WorktreeContextMenu.8dacff1fe0": {
     "ko": "읽음으로 표시"
@@ -4360,6 +4402,9 @@
   },
   "auto.components.sidebar.WorktreeList.f94466bc39": {
     "ko": "그룹 삭제 후에도 {{value0}}/{{value1}} 프로젝트{{value2}}가 남아 있습니다."
+  },
+  "auto.components.sidebar.WorktreeList.failedUnnestWorkspace": {
+    "ko": "워크스페이스 펼치기 실패"
   },
   "auto.components.sidebar.WorktreeList.groupDeleteFailed": {
     "ko": "그룹을 삭제하지 못했습니다."
@@ -4393,6 +4438,12 @@
   },
   "auto.components.sidebar.add.repo.local.start.actions.sshCreateUnavailable": {
     "ko": "아직 SSH 호스트에서는 사용할 수 없습니다."
+  },
+  "auto.components.sidebar.delete.worktree.toast.locked": {
+    "ko": "이 워크스페이스는 Git에 의해 잠겨 있습니다. 저장소에서 git worktree unlock <worktree-path>을 실행한 후 삭제를 다시 시도하세요."
+  },
+  "auto.components.sidebar.delete.worktree.toast.lockedReason": {
+    "ko": "이 워크스페이스는 Git에 의해 잠겨 있습니다. Git 보고: {{value0}}. 저장소에서 git worktree unlock <worktree-path>을 실행한 후 삭제를 다시 시도하세요."
   },
   "auto.components.sidebar.index.b826a98b6f": {
     "ko": "사용 중"
@@ -4805,6 +4856,9 @@
   "auto.components.tab.group.AiVaultSessionDropLayer.openLocalWorkspace": {
     "ko": "세션을 재개하기 전에 로컬 워크스페이스를 여세요."
   },
+  "auto.components.tab.group.AiVaultSessionDropLayer.openSupportedWorkspace": {
+    "ko": "세션을 재개하기 전에 워크스페이스를 여세요."
+  },
   "auto.components.tab.group.AiVaultSessionDropLayer.sessionQueued": {
     "ko": "세션이 대기열에 추가됨"
   },
@@ -4901,6 +4955,12 @@
   "auto.components.terminal.pane.TerminalSessionStateSaveFailureDialog.6bee0c8f17": {
     "ko": "디스크 공간 분석기 열기"
   },
+  "auto.components.terminal.pane.TerminalSshReconnectOverlay.removeWorkspaceButton": {
+    "ko": "워크스페이스 제거"
+  },
+  "auto.components.terminal.pane.TerminalSshReconnectOverlay.removedBody": {
+    "ko": "이 워크스페이스의 SSH 호스트가 제거되어 더 이상 연결할 수 없습니다. 워크스페이스를 제거하여 정리하세요 — 원격 파일은 그대로 남아 있습니다."
+  },
   "auto.components.terminal.quick.commands.TerminalQuickCommandAppendEnterSwitch.5fa607d807": {
     "ko": "Enter 추가"
   },
@@ -4972,6 +5032,9 @@
   },
   "auto.lib.projectSkillRuntime.wslUnavailable": {
     "ko": "이 스킬을 설치하려면 프로젝트 런타임에 WSL이 필요합니다."
+  },
+  "auto.lib.sidebarWorktreeActivation.wakeEphemeralVmFailed": {
+    "ko": "임시 VM 워크스페이스 활성화 실패"
   },
   "auto.lib.source.control.agent.action.plan.3f0ea9aa0d": {
     "ko": "agent 시작 명령을 만들 수 없습니다."
