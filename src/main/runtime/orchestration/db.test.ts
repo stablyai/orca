@@ -22,7 +22,17 @@ function setDispatchTimes(
     .run(dispatchedAt, heartbeatAt, id)
 }
 
-describe('OrchestrationDb', () => {
+const hasSqlite = (() => {
+  try {
+    return (
+      typeof process.getBuiltinModule === 'function' && !!process.getBuiltinModule('node:sqlite')
+    )
+  } catch {
+    return false
+  }
+})()
+
+describe.skipIf(!hasSqlite)('OrchestrationDb', () => {
   let db: OrchestrationDb | undefined
 
   afterEach(() => {
