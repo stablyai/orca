@@ -80,10 +80,6 @@ export function InlineUsageBars({
   )
 }
 
-export function isUnavailableInactiveUsage(limits: ProviderRateLimits | null | undefined): boolean {
-  return limits?.status === 'error' && !limits.session && !limits.weekly && !limits.fableWeekly
-}
-
 export function InlineUsageSignInAction({
   isFetching,
   isSigningIn,

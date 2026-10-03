@@ -10,6 +10,8 @@ const CODEX_AUTH_ERROR_PATTERNS = [
   /refresh token (?:has expired|was already used|was revoked)/i,
   /you have since logged out or signed in to another account/i,
   /please (?:log out and )?sign in again/i,
+  /please try signing in again/i,
+  /authentication token has been invalidated/i,
   /please reauthenticate/i,
   /not logged in/i,
   /sign in with chatgpt/i,

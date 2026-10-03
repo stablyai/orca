@@ -2,17 +2,29 @@ import { net, session } from 'electron'
 import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
 
 // Why: the OAuth client id and token endpoint are the public Claude Code
-// values, verified against the installed `claude` binary (2.1.177) and the
-// claude-swap reference tool. Orca owns the refresh so a single-use refresh
-// token is rotated and persisted atomically, instead of being scraped back
-// after the CLI rotates it (the lossy path that strands stale tokens).
+// values. The refresh body matches `claude` 2.1.286 (`Pde`): JSON, the public
+// client id, and the prod scope list. A form body without scopes no longer
+// matches the CLI, so an inactive account's still-valid refresh token never
+// became a usage window.
 const OAUTH_TOKEN_URL = 'https://platform.claude.com/v1/oauth/token'
 const OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e'
+
+// Prod Claude Code 2.1.286 (`yJe` with PLUGINS_SCOPE_REGISTERED). Project
+// scopes are re-requested only when the stored blob already has them (`N5r`).
+const CLAUDE_CODE_REFRESH_SCOPES = [
+  'user:profile',
+  'user:inference',
+  'user:sessions:claude_code',
+  'user:mcp_servers',
+  'user:file_upload',
+  'user:plugins'
+]
+const CLAUDE_CODE_PROJECT_SCOPES = ['user:projects:read', 'user:projects:write']
 
 // Refresh slightly ahead of expiry so a token doesn't expire mid-launch. The
 // CLI uses the same 5-minute skew for its own refresh decision.
 const OAUTH_EXPIRY_BUFFER_MS = 5 * 60 * 1000
-const REFRESH_TIMEOUT_MS = 10_000
+const REFRESH_TIMEOUT_MS = 30_000
 
 type ClaudeOauthBlob = {
   accessToken?: unknown
@@ -52,6 +64,13 @@ export function parseClaudeOauthBlob(credentialsJson: string): ClaudeOauthBlob |
 export function readRefreshToken(credentialsJson: string): string | null {
   const oauth = parseClaudeOauthBlob(credentialsJson)
   const token = oauth?.refreshToken
+  return typeof token === 'string' && token.trim() !== '' ? token.trim() : null
+}
+
+/** Read a stored access token, or null when absent/blank. */
+export function readAccessToken(credentialsJson: string): string | null {
+  const oauth = parseClaudeOauthBlob(credentialsJson)
+  const token = oauth?.accessToken
   return typeof token === 'string' && token.trim() !== '' ? token.trim() : null
 }
 
@@ -113,6 +132,137 @@ export function applyRefreshedToken(
   return JSON.stringify(parsed)
 }
 
+function storedScopeList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value
+    .filter((item): item is string => typeof item === 'string' && item.trim() !== '')
+    .map((item) => item.trim())
+}
+
+function uniqueScopes(scopes: string[]): string[] {
+  const seen = new Set<string>()
+  const unique: string[] = []
+  for (const scope of scopes) {
+    if (seen.has(scope)) {
+      continue
+    }
+    seen.add(scope)
+    unique.push(scope)
+  }
+  return unique
+}
+
+function claudeCodeRefreshPlan(credentialsJson: string): {
+  refreshToken: string
+  clientId: string
+  scopes: string[] | null
+  storedScopeFallback: string[] | null
+} | null {
+  const refreshToken = readRefreshToken(credentialsJson)
+  if (!refreshToken) {
+    return null
+  }
+  const oauth = parseClaudeOauthBlob(credentialsJson)
+  const storedScopes = storedScopeList(oauth?.scopes)
+  const rawClientId = oauth?.clientId
+  const storedClientId =
+    typeof rawClientId === 'string' && rawClientId.trim() !== '' ? rawClientId.trim() : null
+  const subscriptionType = oauth?.subscriptionType
+  const hasSubscription = typeof subscriptionType === 'string' && subscriptionType.trim() !== ''
+  const hasInference = storedScopes.includes('user:inference')
+  // Why: Claude Code expands to its prod scope list only for a first-party
+  // login (no stored client id) that already has inference or a subscription.
+  // A third-party client id keeps the scopes that client was granted.
+  const expand = storedClientId === null && (hasInference || hasSubscription)
+  const expanded = uniqueScopes([
+    ...CLAUDE_CODE_REFRESH_SCOPES,
+    ...CLAUDE_CODE_PROJECT_SCOPES.filter((scope) => storedScopes.includes(scope))
+  ])
+  // Why: a third-party client with no stored scopes must not be handed the first-party list.
+  // Omitting scope asks the server to keep the grant that client already has.
+  const scopes: string[] | null = expand
+    ? expanded
+    : storedScopes.length > 0
+      ? storedScopes
+      : storedClientId
+        ? null
+        : [...CLAUDE_CODE_REFRESH_SCOPES]
+  const requested = scopes ?? []
+  const storedScopeFallback =
+    expand && storedScopes.length > 0 && storedScopes.join(' ') !== requested.join(' ')
+      ? storedScopes
+      : null
+  return {
+    refreshToken,
+    clientId: storedClientId ?? OAUTH_CLIENT_ID,
+    scopes,
+    storedScopeFallback
+  }
+}
+
+type RefreshPostResult =
+  | { ok: true; data: TokenEndpointResponse }
+  | { ok: false; status: number; errorCode: string | null }
+
+function oauthErrorCode(body: unknown): string | null {
+  if (!body || typeof body !== 'object') {
+    return null
+  }
+  const error = (body as { error?: unknown }).error
+  if (typeof error === 'string' && error.trim() !== '') {
+    return error
+  }
+  if (
+    error &&
+    typeof error === 'object' &&
+    typeof (error as { type?: unknown }).type === 'string'
+  ) {
+    const type = (error as { type: string }).type.trim()
+    return type !== '' ? type : null
+  }
+  return null
+}
+
+async function postClaudeRefreshGrant(input: {
+  refreshToken: string
+  clientId: string
+  scopes: string[] | null
+}): Promise<RefreshPostResult> {
+  const body: Record<string, string> = {
+    grant_type: 'refresh_token',
+    refresh_token: input.refreshToken,
+    client_id: input.clientId
+  }
+  if (input.scopes && input.scopes.length > 0) {
+    body.scope = input.scopes.join(' ')
+  }
+  const res = await net.fetch(OAUTH_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS)
+  })
+  if (res.ok) {
+    return { ok: true, data: (await res.json()) as TokenEndpointResponse }
+  }
+  let errorCode: string | null = null
+  try {
+    errorCode = oauthErrorCode(await res.json())
+  } catch {
+    errorCode = null
+  }
+  return { ok: false, status: res.status, errorCode }
+}
+
+function warnRefreshRejection(status: number, errorCode: string | null): void {
+  // Why: status and error code only. The body can echo the refresh token.
+  console.warn(
+    `[claude-oauth-refresh] token endpoint returned ${status}${errorCode ? ` ${errorCode}` : ''}`
+  )
+}
+
 /**
  * Refresh the OAuth token for a stored credentials blob.
  *
@@ -125,8 +275,8 @@ export async function refreshClaudeOauthCredentials(
   credentialsJson: string,
   now: number = Date.now()
 ): Promise<string | null> {
-  const refreshToken = readRefreshToken(credentialsJson)
-  if (!refreshToken) {
+  const plan = claudeCodeRefreshPlan(credentialsJson)
+  if (!plan) {
     return null
   }
 
@@ -136,30 +286,27 @@ export async function refreshClaudeOauthCredentials(
   }).catch(() => {})
 
   try {
-    // Why: the `claude` CLI posts grant_type=refresh_token as
-    // application/x-www-form-urlencoded with the public client id. net.fetch
-    // routes through Chromium's stack so the env proxy bridge above applies.
-    const res = await net.fetch(OAUTH_TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-        client_id: OAUTH_CLIENT_ID
-      }).toString(),
-      signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS)
-    })
-    if (!res.ok) {
-      // Why: surface the status (never the token) so a throttle (429) or a
-      // dead refresh token (400/401 invalid_grant) is diagnosable in the
-      // field, instead of a silent null that looks identical to success.
-      // Callers keep the existing credentials on null — a transient 429 just
-      // means the still-valid token is reused until the next attempt.
-      console.warn(`[claude-oauth-refresh] token endpoint returned ${res.status}`)
+    // Why: net.fetch routes through Chromium's stack so the env proxy bridge
+    // above applies. The body matches Claude Code 2.1.286, which posts JSON.
+    let result = await postClaudeRefreshGrant(plan)
+    if (
+      !result.ok &&
+      result.status === 400 &&
+      result.errorCode === 'invalid_scope' &&
+      plan.storedScopeFallback
+    ) {
+      warnRefreshRejection(result.status, result.errorCode)
+      result = await postClaudeRefreshGrant({
+        refreshToken: plan.refreshToken,
+        clientId: plan.clientId,
+        scopes: plan.storedScopeFallback
+      })
+    }
+    if (!result.ok) {
+      warnRefreshRejection(result.status, result.errorCode)
       return null
     }
-    const data = (await res.json()) as TokenEndpointResponse
-    return applyRefreshedToken(credentialsJson, data, now)
+    return applyRefreshedToken(credentialsJson, result.data, now)
   } catch (error) {
     console.warn(
       '[claude-oauth-refresh] token refresh request failed:',

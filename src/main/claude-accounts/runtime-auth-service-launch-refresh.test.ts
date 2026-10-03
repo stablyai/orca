@@ -245,4 +245,134 @@ describe('ClaudeRuntimeAuthService', () => {
 
     expect(readManagedCredentialsForTest('account-1', managedAuthPath1)).toBe(runtimeRotated)
   })
+
+  it('materializes a refresh token another caller already rotated', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const account1Stale = createClaudeCredentialsJson('one@example.com', 'one-stale', null, 1_000)
+    const account1Rotated = createClaudeCredentialsJson(
+      'one@example.com',
+      'one-rotated',
+      null,
+      9_999_999_999_999
+    )
+    const managedAuthPath1 = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      account1Stale
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath1, { email: 'one@example.com' })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    vi.mocked(isOauthTokenExpiring).mockImplementation((credentialsJson: string) =>
+      credentialsJson.includes('one-stale')
+    )
+
+    const { readManagedClaudeKeychainCredentials } = await import('./keychain')
+    let reads = 0
+    vi.mocked(readManagedClaudeKeychainCredentials).mockImplementation(
+      async (accountId: string) => {
+        reads += 1
+        return testState.managedKeychainCredentials.get(accountId) ?? null
+      }
+    )
+    const { withClaudeManagedCredentialRotation } = await import('./managed-credential-rotation')
+    let allowWrite: () => void = () => {}
+    const writeGate = new Promise<void>((resolve) => {
+      allowWrite = resolve
+    })
+    const hold = withClaudeManagedCredentialRotation('account-1', async () => {
+      await writeGate
+      testState.managedKeychainCredentials.set('account-1', account1Rotated)
+      writeFileSync(join(managedAuthPath1, '.credentials.json'), account1Rotated, 'utf-8')
+    })
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    const syncing = service.syncForCurrentSelection()
+    const startedAt = Date.now()
+    while (reads < 1) {
+      if (Date.now() - startedAt > 2_000) {
+        throw new Error('selection did not read the stale credential snapshot')
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+    allowWrite()
+    await hold
+    await syncing
+
+    expect(refreshClaudeOauthCredentials).not.toHaveBeenCalled()
+    expect(readManagedCredentialsForTest('account-1', managedAuthPath1)).toBe(account1Rotated)
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(account1Rotated)
+    vi.mocked(isOauthTokenExpiring).mockImplementation(() => false)
+  })
+
+  it('materializes a newer access token when the refresh token did not change', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const account1Stale = createClaudeCredentialsJson('one@example.com', 'one-stale', null, 1_000)
+    const account1FreshAccess = `${JSON.stringify({
+      claudeAiOauth: {
+        email: 'one@example.com',
+        accessToken: 'one-fresh-access',
+        refreshToken: 'one-stale-refresh',
+        expiresAt: 9_999_999_999_999
+      }
+    })}\n`
+    const managedAuthPath1 = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      account1Stale
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath1, { email: 'one@example.com' })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    vi.mocked(isOauthTokenExpiring).mockImplementation((credentialsJson: string) =>
+      credentialsJson.includes('"accessToken":"one-stale"')
+    )
+
+    const { readManagedClaudeKeychainCredentials } = await import('./keychain')
+    let reads = 0
+    vi.mocked(readManagedClaudeKeychainCredentials).mockImplementation(
+      async (accountId: string) => {
+        reads += 1
+        return testState.managedKeychainCredentials.get(accountId) ?? null
+      }
+    )
+    const { withClaudeManagedCredentialRotation } = await import('./managed-credential-rotation')
+    let allowWrite: () => void = () => {}
+    const writeGate = new Promise<void>((resolve) => {
+      allowWrite = resolve
+    })
+    const hold = withClaudeManagedCredentialRotation('account-1', async () => {
+      await writeGate
+      testState.managedKeychainCredentials.set('account-1', account1FreshAccess)
+      writeFileSync(join(managedAuthPath1, '.credentials.json'), account1FreshAccess, 'utf-8')
+    })
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    const syncing = service.syncForCurrentSelection()
+    const startedAt = Date.now()
+    while (reads < 1) {
+      if (Date.now() - startedAt > 2_000) {
+        throw new Error('selection did not read the stale credential snapshot')
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+    allowWrite()
+    await hold
+    await syncing
+
+    expect(refreshClaudeOauthCredentials).not.toHaveBeenCalled()
+    expect(readManagedCredentialsForTest('account-1', managedAuthPath1)).toBe(account1FreshAccess)
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(account1FreshAccess)
+    vi.mocked(isOauthTokenExpiring).mockImplementation(() => false)
+  })
 })

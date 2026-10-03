@@ -8,6 +8,10 @@ import {
   resolveOwnedClaudeManagedAuthPath,
   writeClaudeManagedAuthFile
 } from '../managed-auth-path'
+import {
+  storedOauthCredentialDiffers,
+  withClaudeManagedCredentialRotation
+} from '../managed-credential-rotation'
 import { isOauthTokenExpiring, refreshClaudeOauthCredentials } from '../oauth-refresh'
 import {
   readManagedClaudeKeychainCredentials,
@@ -50,30 +54,42 @@ export class ClaudeRuntimeAuthManagedCredentials extends ClaudeRuntimeAuthCreden
 
   /**
    * Proactively refresh an account's OAuth token and persist the rotation to
-   * managed storage. Returns the refreshed credentials JSON, or null when no
-   * refresh happened (token valid, no refresh token, or network failure).
+   * managed storage. Returns the credentials to materialize, or null when this
+   * call should keep the snapshot it already captured.
    *
-   * Caller guarantees this account isn't the live/active one and runs inside the
-   * serialized mutation queue, so the single-use refresh token can't rotate concurrently.
+   * Inactive usage previews rotate the same single-use token outside this
+   * service's mutation queue. Re-read inside that account's rotation queue and,
+   * when the stored access or refresh token already differs, materialize that
+   * blob instead of refreshing the stale snapshot.
    */
   protected async refreshManagedAccountTokenIfNeeded(
     account: ClaudeManagedAccount,
     credentialsJson: string
   ): Promise<string | null> {
-    if (!isOauthTokenExpiring(credentialsJson)) {
-      return null
-    }
-    const refreshed = await refreshClaudeOauthCredentials(credentialsJson)
-    if (!refreshed || !this.isValidCredentialsJsonObject(refreshed)) {
-      return null
-    }
-    try {
-      await this.writeManagedCredentials(account, refreshed)
-    } catch (error) {
-      console.warn('[claude-runtime-auth] Failed to persist refreshed Claude token:', error)
-      return null
-    }
-    return refreshed
+    // Why: an inactive preview may already have rotated this single-use token.
+    // Re-read inside the shared queue and materialize that blob instead of
+    // refreshing the snapshot this call captured earlier.
+    return withClaudeManagedCredentialRotation(account.id, async () => {
+      const latest = await this.readManagedCredentials(account)
+      const source = latest && this.isValidCredentialsJsonObject(latest) ? latest : credentialsJson
+      // Why: a refresh can replace the access token and keep the same refresh
+      // token. Comparing only the refresh token drops that newer access token.
+      const replacedBySomeoneElse = storedOauthCredentialDiffers(source, credentialsJson)
+      if (!isOauthTokenExpiring(source)) {
+        return replacedBySomeoneElse ? source : null
+      }
+      const refreshed = await refreshClaudeOauthCredentials(source)
+      if (!refreshed || !this.isValidCredentialsJsonObject(refreshed)) {
+        return replacedBySomeoneElse ? source : null
+      }
+      try {
+        await this.writeManagedCredentials(account, refreshed)
+      } catch (error) {
+        console.warn('[claude-runtime-auth] Failed to persist refreshed Claude token:', error)
+        return null
+      }
+      return refreshed
+    })
   }
 
   protected async readManagedOauthAccount(account: ClaudeManagedAccount): Promise<unknown> {
