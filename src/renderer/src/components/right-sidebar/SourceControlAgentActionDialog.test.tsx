@@ -14,6 +14,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 const mocks = vi.hoisted(() => ({
   ensureDetectedAgents: vi.fn(),
   ensureRemoteDetectedAgents: vi.fn(),
+  ensureRuntimeDetectedAgents: vi.fn(),
   onOpenChange: vi.fn(),
   onSaveAgentDefault: vi.fn(),
   onLaunched: vi.fn(),
@@ -117,7 +118,8 @@ function resetStore(settings: GlobalSettings, repos: Repo[] = []): void {
       settings,
       repos,
       ensureDetectedAgents: mocks.ensureDetectedAgents,
-      ensureRemoteDetectedAgents: mocks.ensureRemoteDetectedAgents
+      ensureRemoteDetectedAgents: mocks.ensureRemoteDetectedAgents,
+      ensureRuntimeDetectedAgents: mocks.ensureRuntimeDetectedAgents
     },
     true
   )
@@ -180,6 +182,7 @@ describe('SourceControlAgentActionDialog', () => {
     vi.clearAllMocks()
     mocks.ensureDetectedAgents.mockResolvedValue(['codex'])
     mocks.ensureRemoteDetectedAgents.mockResolvedValue(['codex'])
+    mocks.ensureRuntimeDetectedAgents.mockResolvedValue(['codex'])
     mocks.onStart.mockResolvedValue(true)
     mocks.planSourceControlAgentActionLaunch.mockReturnValue({
       ok: true,
@@ -258,6 +261,21 @@ describe('SourceControlAgentActionDialog', () => {
       commandInput: 'Resolve conflicts.',
       agentArgs: '--model saved'
     })
+  })
+  it('detects agents on the Remote Orca Server that owns the workspace', async () => {
+    const worktreeId = 'repo-1::/repo-1'
+    resetStore(settingsWithGlobalRecipe(), [repoWithSavedRecipe('', null, 'runtime:env-1')])
+    useAppStore.setState({
+      activeWorktreeId: worktreeId,
+      activeWorkspaceExecutionHostId: 'runtime:env-1'
+    })
+
+    renderControlledDialog({ repoId: 'repo-1', worktreeId, connectionId: null })
+
+    await vi.waitFor(() => expect(mocks.onStart).toHaveBeenCalledTimes(1))
+    expect(mocks.ensureRuntimeDetectedAgents).toHaveBeenCalledWith('env-1')
+    expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
+    expect(mocks.ensureRemoteDetectedAgents).not.toHaveBeenCalled()
   })
   it('omits saved arguments from a structured local launch', async () => {
     setLocalRuntimeCapabilitiesForTests([STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY])
