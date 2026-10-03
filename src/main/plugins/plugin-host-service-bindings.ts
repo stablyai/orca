@@ -4,9 +4,12 @@ import type { PluginHostServices } from './plugin-host-methods'
 import { PluginSecretsStore } from './plugin-secrets-store'
 import { PluginKvStore } from './plugin-storage-store'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { PluginMarkdownSourceAuthority } from './plugin-markdown-source'
 
 /** Structural subset of OrcaRuntimeService exposed to plugin facade bindings. */
 export type PluginRuntimeDelegate = {
+  getRuntimeId?: PluginMarkdownSourceAuthority['getRuntimeId']
+  showTerminalWorkspaceLaunchScope?: PluginMarkdownSourceAuthority['showTerminalWorkspaceLaunchScope']
   resolveActiveWorktreeContext(): Promise<{
     worktreeId: string
     path: string

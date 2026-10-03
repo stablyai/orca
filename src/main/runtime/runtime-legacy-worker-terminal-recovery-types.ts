@@ -3,6 +3,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import type { ExecutionHostId } from '../../shared/execution-host'
 
 export type LegacyWorkerTerminalRecoveryResult = {
   adoptedDispatchIds: string[]
@@ -26,9 +27,12 @@ export type TerminalWorkspaceLaunchScope = {
   id: string
   path: string
   connectionId: string | null
+  executionHostId?: ExecutionHostId
   repo: Repo | null
   folderWorkspace: FolderWorkspace | null
 }
+
+export type TerminalWorkspaceLookupOptions = { materializePushTarget?: boolean }
 
 export type LegacyWorkerRecoveryWorkspace = {
   scope: TerminalWorkspaceLaunchScope

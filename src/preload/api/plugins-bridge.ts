@@ -6,6 +6,13 @@ import type {
 import type { PluginConsentRequest } from '../../shared/plugins/plugin-consent-request'
 import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
 import type {
+  PluginMarkdownRenderRequest,
+  PluginMarkdownRenderResult,
+  PluginMarkdownRendererRegistration,
+  PluginMarkdownSourceRequest,
+  PluginMarkdownSourceResult
+} from '../../shared/plugins/plugin-markdown-renderer'
+import type {
   PluginHostInstallResult,
   PluginHostInstallSource,
   PluginHostListEntry,
@@ -14,6 +21,14 @@ import type {
 } from '../api-types'
 
 export const pluginsApi = {
+  listMarkdownRenderers: (): Promise<PluginMarkdownRendererRegistration[]> =>
+    ipcRenderer.invoke('plugins:listMarkdownRenderers'),
+  resolveMarkdownSource: (args: PluginMarkdownSourceRequest): Promise<PluginMarkdownSourceResult> =>
+    ipcRenderer.invoke('plugins:resolveMarkdownSource', args),
+  renderMarkdown: (args: PluginMarkdownRenderRequest): Promise<PluginMarkdownRenderResult> =>
+    ipcRenderer.invoke('plugins:renderMarkdown', args),
+  cancelMarkdownRender: (args: { sessionId: string }): Promise<void> =>
+    ipcRenderer.invoke('plugins:cancelMarkdownRender', args),
   list: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:list'),
   listLanguagePacks: () => ipcRenderer.invoke('plugins:listLanguagePacks'),
   consent: (args: PluginConsentRequest): Promise<PluginHostListEntry[]> =>

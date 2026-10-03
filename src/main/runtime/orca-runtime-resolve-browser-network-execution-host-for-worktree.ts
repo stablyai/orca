@@ -4,6 +4,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
 import {
   LOCAL_EXECUTION_HOST_ID,
+  getRepoExecutionHostId,
   getWorktreeExecutionHostId,
   parseExecutionHostId
 } from '../../shared/execution-host'
@@ -15,7 +16,10 @@ import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-sc
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
-import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
+import type {
+  TerminalWorkspaceLaunchScope,
+  TerminalWorkspaceLookupOptions
+} from './runtime-legacy-worker-terminal-recovery-types'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import type { ResolvedTerminalWorkspaceLaunchTarget } from './orca-runtime-core'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './orca-runtime-core'
@@ -91,14 +95,17 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
 
   protected async resolveTerminalWorkspaceLaunchScope(
     selector: string,
-    createdWorktree?: Worktree
+    createdWorktree?: Worktree,
+    options: TerminalWorkspaceLookupOptions = {}
   ): Promise<TerminalWorkspaceLaunchScope> {
-    return (await this.resolveTerminalWorkspaceLaunchTarget(selector, createdWorktree)).scope
+    return (await this.resolveTerminalWorkspaceLaunchTarget(selector, createdWorktree, options))
+      .scope
   }
 
   protected async resolveTerminalWorkspaceLaunchTarget(
     selector: string,
-    createdWorktree?: Worktree
+    createdWorktree?: Worktree,
+    options: TerminalWorkspaceLookupOptions = {}
   ): Promise<ResolvedTerminalWorkspaceLaunchTarget> {
     const floatingTerminalSelector =
       selector === FLOATING_TERMINAL_WORKTREE_ID ||
@@ -120,7 +127,13 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     const folderScope = await this.resolveFolderWorkspaceLaunchScope(selector)
     if (folderScope) {
       return {
-        scope: folderScope,
+        scope:
+          options.materializePushTarget === false
+            ? {
+                ...folderScope,
+                executionHostId: getRepoExecutionHostId(folderScope.folderWorkspace)
+              }
+            : folderScope,
         managedWorktree: this.folderWorkspaceToResolvedWorktree(folderScope.folderWorkspace)
       }
     }
@@ -141,19 +154,24 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     }
     // Metadata only (display name, hook settings); the routing decision is `resolution.connectionId`.
     const repo = resolution.repo ?? this.store?.getRepo(worktree.repoId) ?? null
-    triggerTerminalSpawnPushTargetMaterialization(
-      worktree.path,
-      worktree.pushTarget,
-      repo,
-      this.store,
-      worktree.repoId,
-      worktree.id
-    )
+    if (options.materializePushTarget !== false) {
+      triggerTerminalSpawnPushTargetMaterialization(
+        worktree.path,
+        worktree.pushTarget,
+        repo,
+        this.store,
+        worktree.repoId,
+        worktree.id
+      )
+    }
     return {
       scope: {
         id: worktree.id,
         path: worktree.path,
         connectionId: resolution.connectionId,
+        ...(options.materializePushTarget === false
+          ? { executionHostId: getWorktreeExecutionHostId(worktree, repo) }
+          : {}),
         repo,
         folderWorkspace: null
       },

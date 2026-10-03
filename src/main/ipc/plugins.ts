@@ -116,6 +116,29 @@ export function registerPluginHandlers(
     await pluginService.whenReady()
     return pluginService.contentPacks.languagePacks.list()
   })
+  ipcMain.handle('plugins:listMarkdownRenderers', async () => {
+    await pluginService.whenReady()
+    return pluginService.markdown.list()
+  })
+  ipcMain.handle('plugins:resolveMarkdownSource', async (_event, args: unknown) => {
+    await pluginService.whenReady()
+    return pluginService.markdown.resolveSource(args)
+  })
+  ipcMain.handle('plugins:renderMarkdown', async (event, args: unknown) => {
+    const ownerKey = rendererPanelOwner(event.sender.id)
+    const lease = bindPluginPanelOwnerLifecycle(event.sender, () => {
+      pluginService.panels.revokeOwner(ownerKey)
+      pluginService.markdown.revokeOwner(ownerKey)
+    })
+    await pluginService.whenReady()
+    if (!lease.isCurrent()) {
+      return { status: 'error', code: 'stale-context', message: 'The renderer was closed.' }
+    }
+    return pluginService.markdown.render(ownerKey, args)
+  })
+  ipcMain.handle('plugins:cancelMarkdownRender', (event, args: unknown) => {
+    pluginService.markdown.cancel(rendererPanelOwner(event.sender.id), args)
+  })
   ipcMain.handle('plugins:consent', async (event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = parsePluginConsentArgs(args)
@@ -149,9 +172,10 @@ export function registerPluginHandlers(
     'plugins:readPanelEntry',
     async (event, args: unknown): Promise<PluginPanelEntry | null> => {
       const ownerKey = rendererPanelOwner(event.sender.id)
-      const ownerLease = bindPluginPanelOwnerLifecycle(event.sender, () =>
+      const ownerLease = bindPluginPanelOwnerLifecycle(event.sender, () => {
         pluginService.panels.revokeOwner(ownerKey)
-      )
+        pluginService.markdown.revokeOwner(ownerKey)
+      })
       await pluginService.whenReady()
       const parsed = readPanelEntryArgsSchema.parse(args)
       const entry = await pluginService.panels.open(ownerKey, parsed.pluginKey, parsed.panelId)
