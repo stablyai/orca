@@ -21,6 +21,10 @@ export function formatUiAutomationScheduleDescriptor(
     )
   }
   if (descriptor.kind === 'custom') {
+    // A scheduler-valid RRULE no preset sentence names shows its raw, locale-free syntax.
+    if (descriptor.expression) {
+      return descriptor.expression
+    }
     return translate(
       'auto.components.automations.automation.schedule.label.ba20c92073',
       'Custom schedule'

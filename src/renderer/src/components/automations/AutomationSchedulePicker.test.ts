@@ -128,6 +128,12 @@ describe('AutomationSchedulePicker', () => {
     }
   )
 
+  it('shows the raw RRULE for a valid multi-day weekly schedule instead of Invalid (#24985)', () => {
+    const rrule = 'FREQ=WEEKLY;BYDAY=TU,TH,SA;BYHOUR=8;BYMINUTE=0'
+
+    expect(formatUiAutomationSchedule(rrule)).toBe(rrule)
+  })
+
   it('localizes the valid-custom-cron status without matching English copy (#14404)', async () => {
     await i18n.changeLanguage('zh')
 

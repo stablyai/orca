@@ -109,6 +109,22 @@ describe('automation schedules', () => {
     expect(formatAutomationSchedule('FREQ=YEARLY')).toBe('Invalid schedule')
   })
 
+  it('falls back to the raw RRULE for a valid multi-day weekly schedule (#24985)', () => {
+    const rrule = 'FREQ=WEEKLY;BYDAY=TU,TH,SA;BYHOUR=8;BYMINUTE=0'
+    expect(formatAutomationSchedule(rrule)).toBe(rrule)
+  })
+
+  it('exposes a valid multi-day weekly RRULE as custom carrying the raw expression (#24985)', () => {
+    const rrule = 'FREQ=WEEKLY;BYDAY=MO,WE,FR,SU;BYHOUR=8;BYMINUTE=0'
+    expect(describeAutomationSchedule(rrule)).toEqual({ kind: 'custom', expression: rrule })
+  })
+
+  it('still labels genuinely invalid multi-day weekly rules as invalid', () => {
+    const rrule = 'FREQ=WEEKLY;BYDAY=TU,NO;BYHOUR=8;BYMINUTE=0'
+    expect(formatAutomationSchedule(rrule)).toBe('Invalid schedule')
+    expect(describeAutomationSchedule(rrule)).toEqual({ kind: 'invalid' })
+  })
+
   it('formats hourly schedules using the stored minute', () => {
     expect(formatAutomationSchedule('FREQ=HOURLY;BYMINUTE=5')).toBe('Hourly at :05')
   })
