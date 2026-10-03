@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSnooze } from '../../shared/workspace-snooze'
+import { WorktreeMetaPreconditionError } from '../runtime/runtime-managed-worktree-metadata'
 import {
   createWorkspaceSnoozeWakeService,
   type WorkspaceSnoozeStore,
@@ -47,7 +48,11 @@ describe('createWorkspaceSnoozeWakeService', () => {
     await service.wakeDue()
 
     const updates = { snooze: null, isUnread: true, lastActivityAt: NOW }
-    expect(runtime.updateManagedWorktreeMeta).toHaveBeenCalledWith('id:repo::/due', updates)
+    expect(runtime.updateManagedWorktreeMeta).toHaveBeenCalledWith(
+      'id:repo::/due',
+      updates,
+      expect.any(Function)
+    )
     expect(runtime.updateFolderWorkspace).toHaveBeenCalledWith('folder-1', updates)
   })
 
@@ -70,5 +75,26 @@ describe('createWorkspaceSnoozeWakeService', () => {
 
     expect(runtime.updateManagedWorktreeMeta).toHaveBeenCalledOnce()
     expect(runtime.updateFolderWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('has the runtime refuse the worktree write if the snooze changes during resolution', async () => {
+    const { worktreeMeta, runtime, service } = createHarness()
+    worktreeMeta['repo::/due'] = { snooze: dueSnooze }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let preconditionVerdicts: boolean[] = []
+    runtime.updateManagedWorktreeMeta.mockImplementationOnce(async (_selector, _updates, check) => {
+      preconditionVerdicts = [
+        check({ snooze: dueSnooze }),
+        check({ snooze: { snoozedAt: 9_000, wakeAt: 50_000 } }),
+        check({})
+      ]
+      throw new WorktreeMetaPreconditionError('repo::/due')
+    })
+
+    await service.wakeDue()
+
+    expect(preconditionVerdicts).toEqual([true, false, false])
+    // A refused precondition is a skip, not a failure to retry or report.
+    expect(warn).not.toHaveBeenCalled()
   })
 })

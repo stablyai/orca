@@ -1,6 +1,7 @@
 import type { WorkspaceSnooze } from '../../shared/workspace-snooze'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import { WorktreeMetaPreconditionError } from '../runtime/runtime-managed-worktree-metadata'
 import { WorkspaceSnoozeWakeService, type SnoozedWorkspace } from './workspace-snooze-wake-service'
 
 type WakeUpdates = { snooze: null; isUnread: true; lastActivityAt: number }
@@ -15,7 +16,11 @@ export type WorkspaceSnoozeStore = {
 
 /** The slice of the runtime the wake service writes through. */
 export type WorkspaceSnoozeWakeRuntime = {
-  updateManagedWorktreeMeta(selector: string, updates: WakeUpdates): Promise<unknown>
+  updateManagedWorktreeMeta(
+    selector: string,
+    updates: WakeUpdates,
+    precondition: (current: Pick<WorktreeMeta, 'snooze'> | undefined) => boolean
+  ): Promise<unknown>
   updateFolderWorkspace(id: string, updates: WakeUpdates): Promise<unknown>
 }
 
@@ -28,14 +33,27 @@ export function createWorkspaceSnoozeWakeService(
     wake: async (workspace, now) => {
       // Why re-read with no await before the write: the user may have re-snoozed or woken it
       // since the pass listed it, and clearing that newer snooze would lose their choice.
-      if (readStoredSnooze(store, workspace)?.snoozedAt !== workspace.snooze.snoozedAt) {
+      const unchanged = (snooze: WorkspaceSnooze | null | undefined): boolean =>
+        snooze?.snoozedAt === workspace.snooze.snoozedAt
+      if (!unchanged(readStoredSnooze(store, workspace))) {
         return
       }
       const updates: WakeUpdates = { snooze: null, isUnread: true, lastActivityAt: now }
       // Why the runtime and not the store: it routes host-qualified rows and notifies every client.
-      await (workspace.kind === 'worktree'
-        ? runtime.updateManagedWorktreeMeta(`id:${workspace.id}`, updates)
-        : runtime.updateFolderWorkspace(workspace.id, updates))
+      if (workspace.kind === 'folder-workspace') {
+        await runtime.updateFolderWorkspace(workspace.id, updates)
+        return
+      }
+      try {
+        // Why a precondition too: the runtime awaits worktree resolution before it writes.
+        await runtime.updateManagedWorktreeMeta(`id:${workspace.id}`, updates, (meta) =>
+          unchanged(meta?.snooze)
+        )
+      } catch (error) {
+        if (!(error instanceof WorktreeMetaPreconditionError)) {
+          throw error
+        }
+      }
     }
   })
 }
