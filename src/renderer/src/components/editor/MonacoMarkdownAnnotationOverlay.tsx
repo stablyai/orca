@@ -28,7 +28,7 @@ export function MonacoMarkdownAnnotationOverlay({
     <>
       {commentPopover && shouldShowMarkdownAnnotations && (
         <DiffCommentPopover
-          key={commentPopover.lineNumber}
+          key={`${commentPopover.startLine ?? commentPopover.lineNumber}:${commentPopover.lineNumber}`}
           lineNumber={commentPopover.lineNumber}
           startLine={commentPopover.startLine}
           top={commentPopover.top}

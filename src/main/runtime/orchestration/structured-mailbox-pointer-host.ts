@@ -6,9 +6,15 @@
  * the send and reports what the host said.
  */
 
+import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestration-timing-budgets'
+import { agentSessionSendSubmission } from '../../../shared/agent-session-wire'
 import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-delivery'
+import type {
+  StructuredMailboxPointerHost,
+  StructuredPointerGateFacts
+} from './structured-mailbox-pointer-delivery'
+import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
 import {
   structuredSessionGateFacts,
   type StructuredSessionGateFacts
@@ -38,15 +44,29 @@ export function structuredSessionPointerCallerKey(sessionId: string): string {
  * idle-with-history is the normal steady state of a working agent. Shared so the pointer lane and
  * group addressing cannot disagree about it.
  */
-export function readStructuredSessionGateFacts(
+export async function readStructuredSessionGateFacts(
   sessionId: string
-): StructuredSessionGateFacts | null {
+): Promise<StructuredSessionGateFacts | null> {
+  const snapshot = await readSessionJournal(sessionId)
+  return snapshot ? structuredSessionGateFacts(snapshot.items) : null
+}
+
+/** The pointer lane's gate: the shared idle facts, plus what each recorded send settled as. */
+async function readPointerGateFacts(sessionId: string): Promise<StructuredPointerGateFacts | null> {
+  const snapshot = await readSessionJournal(sessionId)
+  return snapshot
+    ? { ...structuredSessionGateFacts(snapshot.items), submissions: snapshot.submissions }
+    : null
+}
+
+async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return null
   }
   try {
-    return structuredSessionGateFacts(host.journalSnapshot(sessionId).items)
+    // Opens a conversation the idle sweep closed; that starts no agent.
+    return await host.journalSnapshot(sessionId)
   } catch (error) {
     // Not attached is a retain reason, not a failure; anything else is still unreadable.
     if ((error as Error)?.message !== AGENT_SESSION_NOT_ATTACHED.code) {
@@ -59,7 +79,7 @@ export function readStructuredSessionGateFacts(
 export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHost {
   return {
     readGateFacts(sessionId) {
-      return readStructuredSessionGateFacts(sessionId)
+      return readPointerGateFacts(sessionId)
     },
 
     currentFence(sessionId) {
@@ -94,8 +114,22 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
           ? { kind: 'unattached' }
           : { kind: 'sent', state: 'rejected' }
       }
-      // `pending` is not yet an acknowledgement; only `accepted` may consume mail.
-      const state = result.value.submission.dispatchState
+      // `pending` is not yet an acknowledgement; only `accepted` may consume mail. Accepted is not
+      // delivered, so wait out a start; a wait that runs out parks for the next journal edge.
+      const answered = agentSessionSendSubmission(result.value)
+      const submission =
+        answered?.dispatchState === 'pending'
+          ? (agentSessionSendSubmission(
+              (
+                await host
+                  .waitForSendSettlement(input.sessionId, result.value.clientMessageId, {
+                    budgetMs: ORCHESTRATION_READINESS_TIMEOUT_MS
+                  })
+                  .catch(() => undefined)
+              )?.value
+            ) ?? answered)
+          : answered
+      const state = submission?.dispatchState
       return {
         kind: 'sent',
         state: state === 'accepted' ? 'accepted' : state === 'rejected' ? 'rejected' : 'unknown'

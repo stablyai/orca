@@ -12,31 +12,14 @@ import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WslPathTranslation from './command-runner/wsl-path-translation'
 
-const {
-  gitExecFileAsyncMock,
-  gitExecFileSyncMock,
-  statMock,
-  readFileMock,
-  resolveGitDirMock,
-  moveWorktreeDirectoryToTrashMock,
-  restoreWorktreeDirectoryFromTrashMock,
-  scheduleWorktreeTrashDeletionMock
-} = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  gitExecFileSyncMock: vi.fn(),
-  statMock: vi.fn(),
-  readFileMock: vi.fn(),
-  resolveGitDirMock: vi.fn(),
-  moveWorktreeDirectoryToTrashMock: vi.fn(),
-  restoreWorktreeDirectoryFromTrashMock: vi.fn(),
-  scheduleWorktreeTrashDeletionMock: vi.fn()
-}))
-
-vi.mock('../worktree-trash', () => ({
-  moveWorktreeDirectoryToTrash: moveWorktreeDirectoryToTrashMock,
-  restoreWorktreeDirectoryFromTrash: restoreWorktreeDirectoryFromTrashMock,
-  scheduleWorktreeTrashDeletion: scheduleWorktreeTrashDeletionMock
-}))
+const { gitExecFileAsyncMock, gitExecFileSyncMock, statMock, readFileMock, resolveGitDirMock } =
+  vi.hoisted(() => ({
+    gitExecFileAsyncMock: vi.fn(),
+    gitExecFileSyncMock: vi.fn(),
+    statMock: vi.fn(),
+    readFileMock: vi.fn(),
+    resolveGitDirMock: vi.fn()
+  }))
 
 // Why the real translator: an identity mock removes the Linux -> UNC rewrite that production
 // always applies, which is the only reason the Linux spelling would ever reach the comparison.
@@ -119,7 +102,9 @@ describe('worktree path comparison across path syntaxes', () => {
   })
 
   it('collapses dot segments in both case-sensitive syntaxes', () => {
-    expect(areWorktreePathsEqual(`${UNC}\\.\\feature`, `${UNC}\\x\\..\\feature`, 'win32')).toBe(true)
+    expect(areWorktreePathsEqual(`${UNC}\\.\\feature`, `${UNC}\\x\\..\\feature`, 'win32')).toBe(
+      true
+    )
     expect(
       areWorktreePathsEqual('/home/alice/ws/./feature', '/home/alice/ws/x/../feature', 'win32')
     ).toBe(true)
@@ -149,11 +134,7 @@ describe('removeWorktree branch selection on a Windows desktop', () => {
     readFileMock.mockReset()
     readFileMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
     resolveGitDirMock.mockReset()
-    resetWorktreeRemovalState({
-      moveWorktreeDirectoryToTrashMock,
-      restoreWorktreeDirectoryFromTrashMock,
-      scheduleWorktreeTrashDeletionMock
-    })
+    resetWorktreeRemovalState()
   })
 
   afterEach(() => {
@@ -180,12 +161,9 @@ branch refs/heads/feature
       'git worktree list --porcelain': { stdout: listing }
     })
 
-    await removeWorktree(
-      '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo',
-      `${UNC}\\feature`,
-      true,
-      { wslDistro: 'Ubuntu' }
-    )
+    await removeWorktree('\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo', `${UNC}\\feature`, true, {
+      wslDistro: 'Ubuntu'
+    })
 
     const calls = getGitCalls()
     expect(calls).toContain('git branch -d -- feature')

@@ -144,6 +144,15 @@ export const TerminalWait = TerminalHandle.extend({
   timeoutMs: OptionalFiniteNumber
 })
 
+const TerminalColorQueryReplyColorsParam = z.object({
+  foreground: z.string().max(128).optional(),
+  background: z.string().max(128).optional()
+})
+
+export const TerminalSetViewerColors = z.object({
+  colors: TerminalColorQueryReplyColorsParam
+})
+
 export const TerminalCreateParams = z.object({
   worktree: OptionalString,
   clientMutationId: z.string().min(1).max(128).optional(),
@@ -173,12 +182,8 @@ export const TerminalCreateParams = z.object({
     .optional(),
   launchToken: OptionalString,
   launchAgent: z.string().refine(isTuiAgent).optional(),
-  terminalColorQueryReplies: z
-    .object({
-      foreground: z.string().max(128).optional(),
-      background: z.string().max(128).optional()
-    })
-    .optional(),
+  terminalKittyKeyboardProtocol: z.boolean().optional(),
+  terminalColorQueryReplies: TerminalColorQueryReplyColorsParam.optional(),
   title: OptionalString,
   focus: z.unknown().optional(),
   rendererBacked: z.unknown().optional(),
@@ -234,5 +239,6 @@ export const AgentTeamsTmuxCompat = z.object({
 
 export const AgentTeamsPrepareLaunch = z.object({
   paneKey: requiredString('Missing pane key'),
-  env: z.record(z.string(), z.string()).optional()
+  env: z.record(z.string(), z.string()).optional(),
+  prepareAuth: z.boolean().optional()
 })

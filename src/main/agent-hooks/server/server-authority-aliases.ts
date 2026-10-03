@@ -144,6 +144,9 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     }
     const previousOwnerPaneKey = this.resolvePaneKeyAlias(fromPaneKey)
     const physicalPaneKey = this.getPhysicalPaneKeyForAuthority(fromPaneKey, ptyId)
+    for (const key of [fromPaneKey, previousOwnerPaneKey, physicalPaneKey, toPaneKey]) {
+      this.takeRetiredPaneRestartId(key)
+    }
     const existing = this.legacyPaneKeyAliases.get(physicalPaneKey)
     const normalizedPtyId = ptyId?.trim() || existing?.ptyId || null
     const previousStatus = this.state.lastStatusByPaneKey.get(previousOwnerPaneKey) as
@@ -223,7 +226,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
       this.promptSentDedupeByPaneKey.set(toPaneKey, promptDedupe)
     }
     this.clearAssistantMessageRetry(previousOwnerPaneKey)
-    this.clearCodexSubagentPoll(previousOwnerPaneKey)
+    this.clearTranscriptPoll(previousOwnerPaneKey)
     // Why: the live process keeps posting the physical source key after detach; persist a chain-safe mapping to the current owner.
     this.legacyPaneKeyAliases.set(physicalPaneKey, {
       stablePaneKey: toPaneKey,

@@ -91,6 +91,8 @@ export type MarkdownDocState =
       saving?: boolean
       saveError?: string
       readOnlyReason?: string
+      truncated?: true
+      byteLength?: number
     }
   | { status: 'error'; message: string }
 
@@ -106,6 +108,8 @@ export type RenderableDiffLine = MobileHighlightedDiffLine<MobileDiffLine>
 
 export type DiffCommentActions = {
   comments: DiffComment[]
+  /** Notes a new agent session is still being started with. */
+  sendingCommentIds: ReadonlySet<string>
   busy: boolean
   onAdd: (filePath: string, lineNumber: number, body: string) => Promise<boolean>
   onDelete: (commentId: string) => Promise<void>
@@ -136,10 +140,6 @@ export type DirtyMarkdownDraft = {
   tabId: string
   title: string
   content: string
-}
-
-export type TerminalCreateResult = {
-  tab: Extract<MobileSessionTab, { type: 'terminal' }>
 }
 
 export type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error'

@@ -32,81 +32,81 @@ describe('formatNativeChatDuration', () => {
 })
 
 describe('describeNativeChatTurnStatus', () => {
-  it('prefers the settled duration over the thinking and counting labels', () => {
-    expect(
-      describeNativeChatTurnStatus({ thinking: true, workedSeconds: 184, elapsedSeconds: 9 })
-    ).toEqual({ key: 'workedFor', duration: '3m 4s' })
+  it('prefers the settled duration over the running clock', () => {
+    expect(describeNativeChatTurnStatus({ workedSeconds: 184, elapsedSeconds: 9 })).toEqual({
+      key: 'workedFor',
+      duration: '3m 4s'
+    })
   })
 
-  it('reports thinking before the turn produces output', () => {
-    expect(
-      describeNativeChatTurnStatus({ thinking: true, workedSeconds: null, elapsedSeconds: 9 })
-    ).toEqual({ key: 'thinking', duration: null })
+  it.each([
+    ['cancellation', 'interruptedAfter'],
+    ['superseded', 'interruptedAfter'],
+    // A turn anything but the user cut short reads as a failure does.
+    ['interruption', 'failedAfter'],
+    ['failure', 'failedAfter'],
+    ['success', 'workedFor'],
+    ['unconfirmed', 'workedFor'],
+    [undefined, 'workedFor']
+  ] as const)('heads a settled %s turn with %s', (verdict, key) => {
+    expect(describeNativeChatTurnStatus({ workedSeconds: 12, elapsedSeconds: 0, verdict })).toEqual(
+      { key, duration: '12s' }
+    )
   })
 
-  it('counts once the turn has output', () => {
-    expect(
-      describeNativeChatTurnStatus({ thinking: false, workedSeconds: null, elapsedSeconds: 12 })
-    ).toEqual({ key: 'workingFor', duration: '12s' })
+  it('counts from the first second of the turn', () => {
+    expect(describeNativeChatTurnStatus({ workedSeconds: null, elapsedSeconds: 0 })).toEqual({
+      key: 'workingFor',
+      duration: '0s'
+    })
   })
 })
 
 describe('describeNativeChatActiveTurnLabel', () => {
   it('lets provider activity beat both fallbacks', () => {
     expect(
-      describeNativeChatActiveTurnLabel({
-        activityText: 'Reading src/main.ts',
-        thinking: true,
-        elapsedSeconds: 12
-      })
+      describeNativeChatActiveTurnLabel({ activityText: 'Reading src/main.ts', thinking: true })
     ).toEqual({ source: 'activity', text: 'Reading src/main.ts' })
   })
 
   it('falls back to reasoning when the provider says nothing usable', () => {
-    expect(
-      describeNativeChatActiveTurnLabel({ activityText: '   ', thinking: true, elapsedSeconds: 12 })
-    ).toEqual({ source: 'status', key: 'thinking', duration: null })
-    expect(
-      describeNativeChatActiveTurnLabel({ activityText: null, thinking: true, elapsedSeconds: 12 })
-    ).toEqual({ source: 'status', key: 'thinking', duration: null })
+    expect(describeNativeChatActiveTurnLabel({ activityText: '   ', thinking: true })).toEqual({
+      source: 'status',
+      key: 'thinking'
+    })
+    expect(describeNativeChatActiveTurnLabel({ activityText: null, thinking: true })).toEqual({
+      source: 'status',
+      key: 'thinking'
+    })
   })
 
-  it('falls back to the running clock when the turn is neither talking nor reasoning', () => {
-    expect(describeNativeChatActiveTurnLabel({ thinking: false, elapsedSeconds: 184 })).toEqual({
+  // The clock belongs to the turn bar; repeating it here is two rows saying "Working for".
+  it('falls back to plain working, never the clock, when neither applies', () => {
+    expect(describeNativeChatActiveTurnLabel({ thinking: false })).toEqual({
       source: 'status',
-      key: 'workingFor',
-      duration: '3m 4s'
+      key: 'working'
     })
   })
 })
 
 describe('formatNativeChatActiveTurnLabel', () => {
-  it('renders the one live row in English for platforms without i18n', () => {
+  it('renders the live tail line in English for platforms without i18n', () => {
     expect(
-      formatNativeChatActiveTurnLabel({
-        activityText: 'Running pnpm test',
-        thinking: false,
-        elapsedSeconds: 4
-      })
+      formatNativeChatActiveTurnLabel({ activityText: 'Running pnpm test', thinking: false })
     ).toBe('Running pnpm test')
-    expect(formatNativeChatActiveTurnLabel({ thinking: true, elapsedSeconds: 4 })).toBe('Thinking')
-    expect(formatNativeChatActiveTurnLabel({ thinking: false, elapsedSeconds: 12 })).toBe(
-      'Working for 12s'
-    )
+    expect(formatNativeChatActiveTurnLabel({ thinking: true })).toBe('Thinking')
+    expect(formatNativeChatActiveTurnLabel({ thinking: false })).toBe('Working…')
   })
 })
 
 describe('formatNativeChatTurnStatusLabel', () => {
-  it('renders each state in English for platforms without i18n', () => {
-    expect(
-      formatNativeChatTurnStatusLabel({ thinking: true, workedSeconds: null, elapsedSeconds: 0 })
-    ).toBe('Thinking')
-    expect(
-      formatNativeChatTurnStatusLabel({ thinking: false, workedSeconds: null, elapsedSeconds: 12 })
-    ).toBe('Working for 12s')
-    expect(
-      formatNativeChatTurnStatusLabel({ thinking: false, workedSeconds: 184, elapsedSeconds: 0 })
-    ).toBe('Worked for 3m 4s')
+  it('renders the turn bar in English for platforms without i18n', () => {
+    expect(formatNativeChatTurnStatusLabel({ workedSeconds: null, elapsedSeconds: 12 })).toBe(
+      'Working for 12s'
+    )
+    expect(formatNativeChatTurnStatusLabel({ workedSeconds: 184, elapsedSeconds: 0 })).toBe(
+      'Worked for 3m 4s'
+    )
   })
 })
 
@@ -147,6 +147,30 @@ describe('reduceNativeChatTurnTiming', () => {
       }
     )
     expect(next.u1?.startedAt).toBe(500)
+  })
+
+  it('does not move a live turn later before its request origin arrives', () => {
+    const optimistic = reduceNativeChatTurnTiming(
+      {},
+      { activeTurnKey: 'u1', validTurnKeys, isWorking: true, now: 1_000 }
+    )
+    const turnStarted = reduceNativeChatTurnTiming(optimistic, {
+      activeTurnKey: 'u1',
+      validTurnKeys,
+      isWorking: true,
+      workingStartedAt: 8_000,
+      now: 8_000
+    })
+    const exactOrigin = reduceNativeChatTurnTiming(turnStarted, {
+      activeTurnKey: 'u1',
+      validTurnKeys,
+      isWorking: true,
+      workingStartedAt: 900,
+      now: 8_100
+    })
+
+    expect(turnStarted).toBe(optimistic)
+    expect(exactOrigin.u1).toEqual({ startedAt: 900, workedSeconds: null })
   })
 
   it('settles the turn to whole elapsed seconds when work stops', () => {
@@ -288,6 +312,42 @@ describe('reduceNativeChatTurnTiming', () => {
 })
 
 describe('selectNativeChatTurnStatuses', () => {
+  it('keeps the selected live start monotonic until the exact request origin arrives', () => {
+    const optimistic = reduceNativeChatTurnTiming(
+      {},
+      { activeTurnKey: 'u1', validTurnKeys: new Set(['u1']), isWorking: true, now: 1_000 }
+    )
+    const turnStarted = reduceNativeChatTurnTiming(optimistic, {
+      activeTurnKey: 'u1',
+      validTurnKeys: new Set(['u1']),
+      isWorking: true,
+      workingStartedAt: 8_000,
+      now: 8_000
+    })
+    const beforeEcho = selectNativeChatTurnStatuses(turnStarted, {
+      activeTurnKey: 'u1',
+      isWorking: true,
+      workingStartedAt: 8_000,
+      thinking: false
+    })
+    const exactOrigin = reduceNativeChatTurnTiming(turnStarted, {
+      activeTurnKey: 'u1',
+      validTurnKeys: new Set(['u1']),
+      isWorking: true,
+      workingStartedAt: 900,
+      now: 8_100
+    })
+    const afterEcho = selectNativeChatTurnStatuses(exactOrigin, {
+      activeTurnKey: 'u1',
+      isWorking: true,
+      workingStartedAt: 900,
+      thinking: false
+    })
+
+    expect(beforeEcho.active?.startedAt).toBe(1_000)
+    expect(afterEcho.active?.startedAt).toBe(900)
+  })
+
   it('carries the reasoning verdict it is given onto the working turn', () => {
     const { active } = selectNativeChatTurnStatuses(
       { u1: { startedAt: 1_000, workedSeconds: null } },
@@ -319,6 +379,24 @@ describe('selectNativeChatTurnStatuses', () => {
       { activeTurnKey: 'u1', isWorking: true, thinking: false }
     )
     expect(completedByTurn).toEqual({})
+  })
+
+  it('keeps the just-ended turn live until its local duration is stamped', () => {
+    const running = { u1: { startedAt: 1_000, workedSeconds: null } }
+    const { active } = selectNativeChatTurnStatuses(running, {
+      activeTurnKey: 'u1',
+      isWorking: false,
+      thinking: true
+    })
+    expect(active).toEqual({ startedAt: 1_000, thinking: false, workedSeconds: null })
+    // The host saying it never saw the end still wins.
+    const unverifiable = selectNativeChatTurnStatuses(running, {
+      activeTurnKey: 'u1',
+      isWorking: false,
+      thinking: false,
+      settledByTurn: new Map([['u1', null]])
+    })
+    expect(unverifiable.active).toBeNull()
   })
 })
 

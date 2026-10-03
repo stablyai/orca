@@ -181,8 +181,9 @@ describe('runtime-status slice', () => {
 
     const map = store.getState().runtimeStatusByEnvironmentId
     expect(map.size).toBe(1)
-    // Generation 0: a first publication is not a reconnect, and going offline never bumps.
-    expect(map.get('env-a')).toEqual({ status: null, checkedAt: 5, connectionGeneration: 0 })
+    // Both counters 0: a first publication is not a reconnect, and going offline never bumps.
+    const counters = { connectionGeneration: 0, hostContactEpoch: 0 }
+    expect(map.get('env-a')).toEqual({ status: null, checkedAt: 5, ...counters })
   })
 
   it('retains a learned paired device id after disconnecting a legacy environment', () => {

@@ -1,3 +1,4 @@
+import type { Readable } from 'node:stream'
 import type { ClientChannel } from 'ssh2'
 import type { SshConnection } from './ssh-connection'
 import { createSshOperationAbortError, type SshExecOptions } from './ssh-connection-utils'
@@ -18,6 +19,8 @@ type ExecCommandOptions = SshExecOptions & {
   // folding stderr into stdout, where it would match the probe's own token strings.
   // On the system-ssh transport this stream also carries local OpenSSH noise; log-only.
   onStderr?: (stderr: string) => void
+  /** Streamed into the command's stdin, then EOF. A read error terminates the command. */
+  stdin?: Readable
 }
 
 type SshCommandTerminationError = Error & {
@@ -48,7 +51,7 @@ export async function execCommand(
   command: string,
   options?: ExecCommandOptions
 ): Promise<string> {
-  const { timeoutMs = EXEC_TIMEOUT_MS, onStderr, ...execOptions } = options ?? {}
+  const { timeoutMs = EXEC_TIMEOUT_MS, onStderr, stdin, ...execOptions } = options ?? {}
   const signal = options?.signal
   if (signal?.aborted) {
     throw createSshOperationAbortError()
@@ -82,6 +85,11 @@ export async function execCommand(
       channel.off('data', onStdoutData)
       channel.stderr.off('data', onStderrData)
       channel.off('close', onClose)
+      if (stdin) {
+        stdin.off('error', fail)
+        stdin.unpipe(channel.stdin)
+        stdin.destroy()
+      }
     }
     const settle = (fn: typeof resolve | typeof reject, val: string | Error): void => {
       if (settled) {
@@ -193,6 +201,11 @@ export async function execCommand(
     channel.on('data', onStdoutData)
     channel.stderr.on('data', onStderrData)
     channel.on('close', onClose)
+    if (stdin) {
+      stdin.on('error', fail)
+      // Why `.stdin`: ssh2 aliases it to the channel, and a system-ssh channel only ends it there.
+      stdin.pipe(channel.stdin)
+    }
     if (signal?.aborted) {
       onAbort()
     }

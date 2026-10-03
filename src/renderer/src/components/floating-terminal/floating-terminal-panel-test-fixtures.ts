@@ -38,6 +38,7 @@ export type FloatingPanelStoreState = {
   closeFile: (fileId: string) => void
   closeUnifiedTab: (tabId: string) => Tab | null
   markFileDirty: (fileId: string, dirty: boolean) => void
+  clearEditorDraft: (fileId: string) => void
   activateTab: (tabId: string) => void
   setActiveTab: (tabId: string) => void
   setTabCustomTitle: (tabId: string, title: string | null) => void

@@ -9,6 +9,7 @@ import {
   type SetStateAction
 } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import type {
   BrowserAnnotationIntent,
@@ -88,6 +89,7 @@ export function useBrowserPageGrabAnnotations({
   handleCancelPendingBrowserAnnotation: () => void
   handleGrabActionShortcut: (key: 'c' | 's') => void
 } {
+  const mountedRef = useMountedRef()
   const toolTargetIdRef = useRef(toolTargetId)
   const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [grabIntent, setGrabIntent] = useState<GrabIntent>('copy')
@@ -132,6 +134,9 @@ export function useBrowserPageGrabAnnotations({
 
   const showGrabToast = useCallback(
     (message: string, type: 'success' | 'error', payload?: BrowserGrabPayload | null) => {
+      if (!mountedRef.current) {
+        return
+      }
       let x = 0
       let y = 0
       let below = true
@@ -157,7 +162,7 @@ export function useBrowserPageGrabAnnotations({
       setGrabToast({ message, type, x, y, below, payload: payload ?? null })
       grabToastTimerRef.current = setTimeout(() => dismissGrabToast(), 2000)
     },
-    [containerRef, dismissGrabToast, webviewRef]
+    [containerRef, dismissGrabToast, mountedRef, webviewRef]
   )
 
   // Why: the same in-guest picker powers two flows — Cmd/Ctrl+C copies, the toolbar action creates a pending annotation.

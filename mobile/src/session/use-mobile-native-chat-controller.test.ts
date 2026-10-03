@@ -33,6 +33,7 @@ const structuredOptionSnapshot: SessionOptionDescriptor[] = [
       choices: [{ value: 'gpt-fast', label: 'GPT Fast' }]
     },
     valueSource: 'reported',
+    transport: 'agent-session',
     settable: true
   }
 ]
@@ -89,6 +90,7 @@ vi.mock('./use-mobile-structured-agent-session', () => ({
   useMobileStructuredAgentSession: () => ({
     session: structuredSessionState,
     ...structuredActivity,
+    queued: { cards: [], send: vi.fn(), delete: vi.fn(), edit: vi.fn() },
     sendWithOutcome: structuredSendWithOutcome,
     cancel: structuredCancel,
     cancelPrompt: structuredCancelPrompt,

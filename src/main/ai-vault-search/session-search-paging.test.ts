@@ -203,10 +203,18 @@ describe('a cursor is refused rather than reinterpreted', () => {
 
 describe('cursor encoding', () => {
   const request: SessionSearchRequest = { query: 'needle', filters: { scopePaths: ['/a'] } }
+  const incarnation = 'index-a'
 
   it('round-trips an offset within its own generation and query', () => {
     const key = sessionSearchPageKey(request)
-    expect(decodeSessionSearchCursor(encodeSessionSearchCursor(7, 40, key), 7, key)).toBe(40)
+    expect(
+      decodeSessionSearchCursor(
+        encodeSessionSearchCursor(7, 40, key, incarnation),
+        7,
+        key,
+        incarnation
+      )
+    ).toBe(40)
   })
 
   it('keys a request by what changes its ranking, and not by its page size', () => {
@@ -225,7 +233,7 @@ describe('cursor encoding', () => {
   })
 
   it.each([
-    ['a negative offset', encodeSessionSearchCursor(1, -1, 'k'), 1],
+    ['a negative offset', encodeSessionSearchCursor(1, -1, 'k', incarnation), 1],
     ['a non-integer offset', Buffer.from('{"g":1,"o":1.5,"k":"k"}').toString('base64url'), 1],
     ['a payload that is not an object', Buffer.from('"nope"').toString('base64url'), undefined],
     ['text that is not base64url JSON', 'zzz!!', undefined],
@@ -246,13 +254,22 @@ describe('cursor encoding', () => {
     // wrong with the cursor, and the generation it claimed whenever that
     // survived parsing.
     try {
-      decodeSessionSearchCursor(cursor, 7, 'k')
+      decodeSessionSearchCursor(cursor, 7, 'k', incarnation)
       expect.unreachable('a malformed cursor is not an empty one')
     } catch (error) {
       const rejected = error as SessionSearchCursorError
       expect(rejected.rejection).toBe('malformed')
       expect(rejected.actualGeneration).toBe(7)
       expect(rejected.expectedGeneration).toBe(claimed)
+    }
+  })
+
+  it('treats legacy and previous-incarnation cursors as stale', () => {
+    const legacy = Buffer.from('{"g":7,"o":1,"k":"k"}').toString('base64url')
+    for (const cursor of [legacy, encodeSessionSearchCursor(7, 1, 'k', 'index-before')]) {
+      expect(() => decodeSessionSearchCursor(cursor, 7, 'k', incarnation)).toThrow(
+        'stale-generation'
+      )
     }
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { AdvertisedUrlWatcher } from './advertised-url-watcher'
+import { AdvertisedUrlWatcher, MAX_ADVERTISED_URL_SCAN_SNAPSHOTS } from './advertised-url-watcher'
 import { classifyHost, extractUrlCandidates, stripTerminalControls } from './advertised-url-parsing'
 
 const WORKTREE = 'repo::/repo'
@@ -309,6 +309,19 @@ describe('AdvertisedUrlWatcher.ingest', () => {
     expect(internals.ptyToWorktree.has(PTY)).toBe(false)
     expect(internals.scanSnapshots.has(WORKTREE)).toBe(false)
     expect(events).toEqual([{ worktreeId: WORKTREE, port: 3001 }])
+  })
+
+  it('bounds scan snapshot growth when worktree ids churn', () => {
+    const watcher = new AdvertisedUrlWatcher()
+
+    for (let index = 0; index < MAX_ADVERTISED_URL_SCAN_SNAPSHOTS + 4; index += 1) {
+      watcher.reconcileScan([`repo::/worktree-${index}`], [])
+    }
+
+    const internals = watcher as unknown as {
+      scanSnapshots: Map<string, Map<number, number | undefined>>
+    }
+    expect(internals.scanSnapshots.size).toBe(MAX_ADVERTISED_URL_SCAN_SNAPSHOTS)
   })
 
   it('different worktrees on the same port are tracked independently', () => {

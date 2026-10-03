@@ -13,6 +13,9 @@ const CASTING_DISABLE_PATTERN =
   /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*typescript\/consistent-type-assertions/
 const ANTI_SLOP_DISABLE_PATTERN =
   /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*\banti-slop\//
+const REACT_DOCTOR_DISABLE_PATTERN =
+  /^\s*\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s+react-doctor\/[\w-]+(?:\s*,\s*react-doctor\/[\w-]+)*\s*(?:--(?:(?!\*\/).)*)?(?:\*\/)?\s*$/
+const EXPLICIT_DISABLE_RULE_PATTERN = /(?:-disable(?:-next-line|-line)?\s+|^)[\w-]+(?:\/[\w-]+)?/
 export const OXLINT_SCANS = [
   {
     // Why: no --config, so Oxlint keeps discovering nested configs. Pinning the root
@@ -25,12 +28,28 @@ export const OXLINT_SCANS = [
     args: ['--config', 'config/oxlint-code-quality-casting.json']
   },
   {
+    // Why the allow: CI's `audit:code-quality:native` runs before the mobile install, so it can
+    // never see a cycle inside mobile/ — locally, where mobile/node_modules exists, it would.
+    label: 'focused plugins',
+    args: [
+      '--config',
+      'config/oxlint-code-quality-native-plugins.json',
+      '--allow',
+      'import/no-cycle'
+    ]
+  },
+  {
     label: 'type-aware code quality',
     args: ['--type-aware', '--config', 'config/oxlint-code-quality-type-aware.json']
   },
   {
     label: 'React Doctor',
-    args: ['--config', 'config/oxlint-react-doctor.json']
+    args: [
+      '--config',
+      'config/oxlint-react-doctor.json',
+      '--report-unused-disable-directives-severity',
+      'warn'
+    ]
   },
   {
     // Why changed-lines only: the renderer carries ~4.7k pre-existing restyle/raw-color
@@ -125,9 +144,14 @@ function resolveBase(root, requestedBase) {
 }
 
 export function collectAddedLineRanges(root, requestedBase) {
-  const base = resolveBase(root, requestedBase)
-  const mergeBase = runGit(root, ['merge-base', base, 'HEAD']).trim()
-  const comparisonBase = resolvePullRequestDiffBase(root, mergeBase)
+  // On a pull_request checkout HEAD is the merge commit, so its first parent is the base side and
+  // no merge base has to be computed. Resolving it first is what lets CI checkout shallowly: the
+  // payload base SHA can lag HEAD^1 by any number of commits and need not be in the graph at all.
+  // Off that ref (local runs) the requested base is an arbitrary branch tip, so the merge base is
+  // still what isolates this branch's own lines.
+  const comparisonBase =
+    resolvePullRequestDiffBase(root, null) ??
+    runGit(root, ['merge-base', resolveBase(root, requestedBase), 'HEAD']).trim()
   const changedFiles = splitNullDelimited(
     runGit(root, ['diff', '--name-only', '-z', '--diff-filter=ACMRTUB', comparisonBase, '--'])
   )
@@ -163,7 +187,7 @@ export function collectAddedLineRanges(root, requestedBase) {
     const lineCount = readFileSync(absolutePath, 'utf8').split(/\r?\n/).length
     rangesByFile.set(file, [{ start: 1, end: lineCount }])
   }
-  return { base, comparisonBase, rangesByFile }
+  return { comparisonBase, rangesByFile }
 }
 
 function parseOxlintOutput(stdout, label) {
@@ -332,16 +356,34 @@ export function isCastingDirectiveUnusedWarning(diagnostic, root) {
   )
 }
 
-// Why: the anti-slop rules live in a JS plugin that only config/oxlint-anti-slop.json loads, so
-// the root scan never sees those rule names and reports every anti-slop suppression as unused.
-// `audit:anti-slop` is the scan that enforces them.
-export function isAntiSlopDirectiveUnusedWarning(diagnostic, root) {
+// Unloaded plugin directives are checked by their owning scan.
+export function isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, scanLabel) {
   if (!/^Unused (?:oxlint|eslint)-disable/.test(diagnostic.message ?? '')) {
     return false
   }
+  if (scanLabel === 'React Doctor') {
+    const labels = diagnostic.labels ?? []
+    return (
+      labels.length > 0 &&
+      labels.every(({ span }) => {
+        if (span.offset === undefined || span.length === undefined) {
+          return false
+        }
+        const file = path.isAbsolute(diagnostic.filename)
+          ? diagnostic.filename
+          : path.join(root, diagnostic.filename)
+        // Oxlint spans use UTF-8 byte offsets, including before non-ASCII comments.
+        const directive = readFileSync(file)
+          .subarray(span.offset, span.offset + span.length)
+          .toString('utf8')
+        const rules = directive.split('--')[0]
+        return EXPLICIT_DISABLE_RULE_PATTERN.test(rules) && !/\breact-doctor\//.test(rules)
+      })
+    )
+  }
   return (diagnostic.labels ?? []).some((label) =>
-    diagnosticHighlightedLines(root, diagnostic.filename, label.span).some((line) =>
-      ANTI_SLOP_DISABLE_PATTERN.test(line)
+    diagnosticHighlightedLines(root, diagnostic.filename, label.span).some(
+      (line) => ANTI_SLOP_DISABLE_PATTERN.test(line) || REACT_DOCTOR_DISABLE_PATTERN.test(line)
     )
   )
 }
@@ -403,10 +445,12 @@ export function main(
   root = process.cwd(),
   requestedBase = process.argv.slice(2).find((argument) => argument !== '--')
 ) {
-  const { base, comparisonBase, rangesByFile } = collectAddedLineRanges(root, requestedBase)
+  const { comparisonBase, rangesByFile } = collectAddedLineRanges(root, requestedBase)
   const files = [...rangesByFile.keys()]
   if (files.length === 0) {
-    console.log(`Changed-code quality gate: no changed JavaScript or TypeScript since ${base}.`)
+    console.log(
+      `Changed-code quality gate: no changed JavaScript or TypeScript since ${comparisonBase.slice(0, 12)}.`
+    )
     return 0
   }
 
@@ -418,7 +462,7 @@ export function main(
       (diagnostic) =>
         !isSuppressedDiagnostic(diagnostic, root) &&
         !isCastingDirectiveUnusedWarning(diagnostic, root) &&
-        !isAntiSlopDirectiveUnusedWarning(diagnostic, root) &&
+        !isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, scan.label) &&
         diagnosticTouchesAddedLines(diagnostic, rangesByFile, root, baseBlocks)
     )
     for (const diagnostic of diagnostics) {

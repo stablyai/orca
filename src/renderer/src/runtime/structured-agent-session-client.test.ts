@@ -2,6 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
@@ -29,6 +30,7 @@ vi.mock('./local-runtime-capabilities', () => ({
 
 import {
   callStructuredAgentSession,
+  readStructuredAgentSessionConversationOutline,
   subscribeStructuredAgentSession,
   supportsStructuredAgentSessionPromptCancel
 } from './structured-agent-session-client'
@@ -147,5 +149,49 @@ describe('subscribeStructuredAgentSession', () => {
     expect(callbacks.onClose).toBe(onClose)
     callbacks.onClose?.()
     expect(onClose).toHaveBeenCalledOnce()
+  })
+})
+
+describe('conversation outline read', () => {
+  const outline = {
+    sessionId: 'session-1',
+    cursor: { epoch: 'epoch-1', sequence: 9 },
+    entries: [],
+    omittedEntries: 0
+  }
+
+  beforeEach(() => {
+    vi.resetAllMocks()
+  })
+
+  it('never calls a host that does not advertise the outline', async () => {
+    mocks.supportsCapability.mockResolvedValue(false)
+    const target = { kind: 'environment', environmentId: 'env-old' } as const
+    await expect(readStructuredAgentSessionConversationOutline(target, 'session-1')).resolves.toBe(
+      null
+    )
+    expect(mocks.supportsCapability).toHaveBeenCalledWith(
+      'env-old',
+      AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY
+    )
+    expect(mocks.call).not.toHaveBeenCalled()
+  })
+
+  it('reads it from a capable host and lets a failed read reject for a retry', async () => {
+    mocks.readLocalCapabilities.mockReturnValue([
+      AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY
+    ])
+    mocks.call.mockResolvedValueOnce(outline)
+    const target = { kind: 'local' } as const
+    await expect(readStructuredAgentSessionConversationOutline(target, 'session-1')).resolves.toBe(
+      outline
+    )
+    expect(mocks.call).toHaveBeenCalledWith(target, 'agentSession.conversationOutline', {
+      sessionId: 'session-1'
+    })
+    mocks.call.mockRejectedValueOnce(new Error('structured_agent_session_not_attached'))
+    await expect(
+      readStructuredAgentSessionConversationOutline(target, 'session-1')
+    ).rejects.toThrow('structured_agent_session_not_attached')
   })
 })

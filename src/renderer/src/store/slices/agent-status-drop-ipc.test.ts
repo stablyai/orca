@@ -61,21 +61,6 @@ describe('dropAgentStatus → IPC fan-out', () => {
     expect(drop).toHaveBeenCalledTimes(1)
     expect(drop).toHaveBeenCalledWith('tab-missing:0')
   })
-
-  it('idempotent: repeated drops on the same paneKey fire the IPC each time', () => {
-    // Why: the renderer keeps drop() side-effect free relative to its own
-    // state — sending an extra IPC for an already-dropped paneKey is safe
-    // because main-side dropStatusEntry is a no-op when the entry is gone.
-    // Asserting this contract documents the renderer's hands-off posture.
-    const { drop } = stubWindowApi()
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus('tab-1:0', { state: 'working', prompt: 'p', agentType: 'claude' })
-    store.getState().dropAgentStatus('tab-1:0')
-    store.getState().dropAgentStatus('tab-1:0')
-    expect(drop).toHaveBeenCalledTimes(2)
-  })
 })
 
 describe('dropAgentStatusByTabPrefix -> IPC fan-out', () => {

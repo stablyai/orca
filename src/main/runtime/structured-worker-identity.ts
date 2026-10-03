@@ -25,15 +25,21 @@ import {
   structuredAgentSessionTabId
 } from '../../shared/structured-agent-session-projection'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
+import { isOrcaSessionId, type OrcaSessionId } from '../../shared/orca-session-address'
+import {
+  STRUCTURED_WORKER_HANDLE_PREFIX,
+  isStructuredWorkerHandle
+} from '../../shared/structured-worker-handle'
 import {
   parseWorkerTerminalHostScope,
   type WorkerTerminalHostScope
 } from './orchestration/worker-terminal-process-liveness'
 
-// Deliberately not `term_`: `issueHandle` revalidates the renderer graph epoch against the
-// renderer-driven leaves map, so a main-minted `term_` leaf evaporates on the next window reload.
-const STRUCTURED_WORKER_HANDLE_PREFIX = 'structworker_'
-const STRUCTURED_WORKER_INCARNATION_PREFIX = 'structured:'
+export {
+  STRUCTURED_WORKER_HANDLE_PREFIX,
+  isStructuredWorkerHandle
+} from '../../shared/structured-worker-handle'
+export const STRUCTURED_WORKER_INCARNATION_PREFIX = 'structured:'
 
 export type StructuredWorkerIdentity = {
   handle: string
@@ -46,10 +52,6 @@ export type StructuredWorkerIdentity = {
   hostScope: WorkerTerminalHostScope
 }
 
-export function isStructuredWorkerHandle(handle: string | null | undefined): boolean {
-  return typeof handle === 'string' && handle.startsWith(STRUCTURED_WORKER_HANDLE_PREFIX)
-}
-
 export function mintStructuredWorkerHandle(): string {
   return `${STRUCTURED_WORKER_HANDLE_PREFIX}${randomUUID()}`
 }
@@ -57,12 +59,13 @@ export function mintStructuredWorkerHandle(): string {
 /**
  * A RANDOM leaf, minted once per worker and persisted with the rest of the identity.
  *
- * Emphatically not `structuredAgentSessionPaneKey`, which is a sha256 of the session id. A pane
- * key is an identity credential on its own: `orchestration.check` is identity-gated, not
- * capability-gated, and accepts a caller-supplied `terminalPaneKey` that `getActiveDispatchForIdentity`
- * matches by leaf suffix. A derivable pane key would therefore let anyone who learns a session id —
- * which the tab id embeds in plain text — read and consume that worker's mailbox with no token.
- * PTY pane keys are safe only because their leaf UUID is random; this one has to be too.
+ * Emphatically not `structuredAgentSessionPaneKey`, which is a sha256 of the session id. A request
+ * that names no session — a PTY agent's, or any on the paired-client route, which refuses session
+ * ids — identifies its caller by pane: `orchestration.check` accepts a caller-supplied
+ * `terminalPaneKey` that `getActiveDispatchForIdentity` matches by leaf suffix. A pane key derivable
+ * from the session id, which the tab id embeds in plain text, would let such a request read and
+ * consume this worker's mailbox. On the same-host socket route the session id itself names the
+ * worker with no token, by design; the pane key is no credential there and must not become one.
  *
  * Restart stability comes from persisting the minted key, not from re-deriving it.
  */
@@ -105,7 +108,7 @@ function persistedStructuredWorkerPaneKeyIsValid(
  *
  * NOT the runtime fence: the fence is an owner-generation counter that the host bumps during its
  * own transparent crash recovery, so fencing identity on it would make a recovered — but same —
- * worker fail `verifyDispatchCapability` forever and wedge release as `identity_unproven`. The
+ * worker fail its process check forever and wedge release as `identity_unproven`. The
  * session id is minted once per dispatch and survives that recovery, so it is the lineage.
  */
 export function structuredWorkerProcessIncarnation(sessionId: string): string {
@@ -122,6 +125,14 @@ export function sessionIdFromStructuredWorkerIncarnation(
   return sessionId.length > 0 ? sessionId : null
 }
 
+/** The Orca session id a `structured:<sessionId>` incarnation names; null for any other. */
+export function structuredWorkerOrcaSessionIdForIncarnation(
+  processIncarnation: string | null | undefined
+): OrcaSessionId | null {
+  const sessionId = sessionIdFromStructuredWorkerIncarnation(processIncarnation)
+  return sessionId !== null && isOrcaSessionId(sessionId) ? sessionId : null
+}
+
 /** Structured sessions can only exist local and outside WSL; anything else is not our authority. */
 export function structuredWorkerHostScope(
   location: AgentSessionExecutionLocation
@@ -131,16 +142,60 @@ export function structuredWorkerHostScope(
     : null
 }
 
-/** Whether the durable record still describes THIS worker under this host. */
+/**
+ * Whether the durable record still describes THIS worker under this host — ownership, not whether
+ * its process runs. A released lease is a worker at rest while its chat tab is listed; released
+ * with the tab gone is retired. `tabListed` is the persisted tab index's answer.
+ */
 export function structuredWorkerRecordIsCurrent(
-  record: AgentSessionRecord | null | undefined
+  record: AgentSessionRecord | null | undefined,
+  tabListed: boolean
 ): boolean {
   return Boolean(
     record &&
-    record.lease.runtimeKind === 'native' &&
-    record.lease.claimStatus !== 'released' &&
+    // Why: a conflicted claim may name a terminal an older build recorded as owner, not this worker.
+    record.lease.claimStatus !== 'conflicted' &&
+    (record.lease.claimStatus !== 'released' || tabListed) &&
     structuredWorkerHostScope(record.location)
   )
+}
+
+type StructuredWorkerResourceRow = {
+  terminal_handle: string
+  pane_key: string | null
+  process_incarnation: string | null
+  worktree_id: string | null
+  host_scope: string | null
+}
+
+/** A worker's identity as its durable worker-terminal resource row records it, or null for a row
+ *  that is not a structured worker's or whose pane key does not belong to its own session. */
+export function structuredWorkerIdentityFromRow(
+  row: StructuredWorkerResourceRow
+): StructuredWorkerIdentity | null {
+  const sessionId = sessionIdFromStructuredWorkerIncarnation(row.process_incarnation)
+  const hostScope = parseWorkerTerminalHostScope(row.host_scope)
+  const paneKey = row.pane_key
+  if (
+    !sessionId ||
+    !hostScope ||
+    !row.worktree_id ||
+    !paneKey ||
+    !isStructuredWorkerHandle(row.terminal_handle) ||
+    !persistedStructuredWorkerPaneKeyIsValid(paneKey, sessionId)
+  ) {
+    return null
+  }
+  return {
+    handle: row.terminal_handle,
+    sessionId,
+    // The row does not carry the provider; callers that need it read the durable record.
+    agent: null,
+    paneKey,
+    processIncarnation: structuredWorkerProcessIncarnation(sessionId),
+    worktreeId: row.worktree_id,
+    hostScope
+  }
 }
 
 export class StructuredWorkerIdentityRegistry {
@@ -182,35 +237,9 @@ export class StructuredWorkerIdentityRegistry {
    * only place a structured worker's pane key and host scope outlive this process. A row whose
    * pane key does not belong to its own recorded session is refused rather than trusted.
    */
-  rehydrate(row: {
-    terminal_handle: string
-    pane_key: string | null
-    process_incarnation: string | null
-    worktree_id: string | null
-    host_scope: string | null
-  }): StructuredWorkerIdentity | null {
-    const sessionId = sessionIdFromStructuredWorkerIncarnation(row.process_incarnation)
-    const hostScope = parseWorkerTerminalHostScope(row.host_scope)
-    if (
-      !sessionId ||
-      !hostScope ||
-      !row.worktree_id ||
-      !isStructuredWorkerHandle(row.terminal_handle) ||
-      // The durable row bootstraps the registry after restart, so validate it before registration.
-      !persistedStructuredWorkerPaneKeyIsValid(row.pane_key, sessionId)
-    ) {
-      return null
-    }
-    return this.register({
-      handle: row.terminal_handle,
-      sessionId,
-      // The row does not carry the provider; callers that need it read the durable record.
-      agent: null,
-      paneKey: row.pane_key,
-      processIncarnation: structuredWorkerProcessIncarnation(sessionId),
-      worktreeId: row.worktree_id,
-      hostScope
-    })
+  rehydrate(row: StructuredWorkerResourceRow): StructuredWorkerIdentity | null {
+    const identity = structuredWorkerIdentityFromRow(row)
+    return identity ? this.register(identity) : null
   }
 
   clear(): void {

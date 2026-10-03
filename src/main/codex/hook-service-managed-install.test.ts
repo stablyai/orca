@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { homedir, tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
@@ -28,15 +29,14 @@ vi.mock('os', async (importOriginal) => {
 })
 
 import { CodexHookService } from './hook-service'
+import { getManagedCommand } from './codex-hook-definition'
 import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation-queue'
-
-const WINDOWS_POWERSHELL_LAUNCHER =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -EncodedCommand \S+$/
 
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
 
 function localManagedCodexEvents(): string[] {
   return [
+    'Interrupt',
     'PermissionRequest',
     'PostToolUse',
     'PreToolUse',
@@ -184,10 +184,7 @@ describe('CodexHookService', () => {
     expect(Object.keys(hooksConfig)).toEqual(['hooks'])
   })
 
-  // Why: #6078 — a Windows user profile path like `C:\Users\Jane Doe` used to
-  // be written verbatim as the hook command, so Codex split it at the space and
-  // the hook exited with code 1. Keep spaced paths on the encoded launcher so
-  // `cmd.exe /C` never sees the raw script path.
+  // #6078: a spaced profile path must still reach the script through Windows' own cmd.exe.
   it.skipIf(process.platform !== 'win32')(
     'wraps the managed hook command when the profile path contains a space (#6078)',
     async () => {
@@ -208,18 +205,19 @@ describe('CodexHookService', () => {
 
         for (const eventName of localManagedCodexEvents()) {
           const command = hooksConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
+          expect(command).toBe(
+            getManagedCommand(join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd'))
+          )
         }
       } finally {
-        rmSync(spaceHome, { recursive: true, force: true })
+        removeTreeSync(spaceHome)
       }
     }
   )
 
-  // Why: cmd.exe expands `%` and treats `^` as an escape even inside otherwise
-  // plausible paths. Keep those rare cases on the encoded launcher from #6078.
+  // Preserve literal-path quoting when constructing commands for shell metacharacters.
   it.skipIf(process.platform !== 'win32')(
-    'keeps the encoded launcher when the profile path contains cmd metacharacters',
+    'quotes the script path when the profile contains cmd metacharacters',
     async () => {
       const metacharHome = join(tmpdir(), 'orca %ORCA_TEST% ^ home')
       mkdirSync(metacharHome, { recursive: true })
@@ -238,10 +236,12 @@ describe('CodexHookService', () => {
 
         for (const eventName of localManagedCodexEvents()) {
           const command = hooksConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
+          expect(command).toBe(
+            getManagedCommand(join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd'))
+          )
         }
       } finally {
-        rmSync(metacharHome, { recursive: true, force: true })
+        removeTreeSync(metacharHome)
       }
     }
   )
@@ -266,9 +266,11 @@ describe('CodexHookService', () => {
       const cmdSafe = /^[A-Za-z0-9_.:\\~-]+$/.test(join(homes.tmpHome, '.orca', 'agent-hooks'))
       if (cmdSafe) {
         expect(command).not.toMatch(/powershell/i)
-        expect(command).toMatch(/\\agent-hooks\\codex-hook\.cmd$/)
+        expect(command).toMatch(/\/agent-hooks\/codex-hook\.cmd$/)
       } else {
-        expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
+        expect(command).toBe(
+          getManagedCommand(join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd'))
+        )
       }
     }
   )
@@ -410,8 +412,8 @@ describe('CodexHookService', () => {
       expect(readFileSync(systemHooksPath, 'utf-8')).toBe(existingSystemHooks)
     } finally {
       process.env.ORCA_USER_DATA_PATH = homes.userDataDir
-      rmSync(devUserDataDir, { recursive: true, force: true })
-      rmSync(prodUserDataDir, { recursive: true, force: true })
+      removeTreeSync(devUserDataDir)
+      removeTreeSync(prodUserDataDir)
     }
   })
 })

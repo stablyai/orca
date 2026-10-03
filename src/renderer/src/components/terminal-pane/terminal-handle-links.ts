@@ -144,7 +144,7 @@ export function focusRendererTerminalHandle(
   store.setActiveWorktree(target.worktreeId)
   store.markWorktreeVisited(target.worktreeId)
   store.setActiveView('terminal')
-  store.setActiveTabType('terminal')
+  store.setActiveTabType('terminal', target.worktreeId)
   store.revealWorktreeInSidebar(target.worktreeId)
   if (target.leafId) {
     activateTabAndFocusPane(target.tabId, target.leafId)

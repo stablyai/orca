@@ -729,3 +729,73 @@ describe('control lease jitter', () => {
     vi.advanceTimersByTime(0)
   })
 })
+
+describe('paced drain and the phones of a host not yet told', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  const laterHostId = 'qrstuvwxyz012345'
+  const laterIdentity = { ...identity, sub: 'user-2', relayHostId: laterHostId }
+
+  async function twoHostCell(): Promise<{
+    h: ReturnType<typeof harness>
+    told: FakeSocket
+    untold: FakeSocket
+  }> {
+    const h = harness()
+    const told = await activeHost(h)
+    const untold = new FakeSocket()
+    await h.activate(untold as unknown as WebSocket, laterIdentity, null, 1, false, 1, '1.4.197')
+    // Both hosts now dial in, so the credential mocks have to answer for either.
+    h.store.resolveResume.mockImplementation(async (hostId: string) => ({
+      userId: hostId === laterHostId ? laterIdentity.sub : identity.sub
+    }))
+    h.store.reserveCredential.mockImplementation(async (hostId: string) => ({
+      ...reservation,
+      userId: hostId === laterHostId ? laterIdentity.sub : identity.sub,
+      relayHostId: hostId
+    }))
+    return { h, told, untold }
+  }
+
+  async function dial(h: ReturnType<typeof harness>, hostId: string): Promise<FakeSocket> {
+    const client = new FakeSocket()
+    await h.registry.acceptClient(client as unknown as WebSocket, hostId, 'credential')
+    return client
+  }
+
+  it('serves a host whose drain has not been sent and refuses one whose has', async () => {
+    const { h, told, untold } = await twoHostCell()
+    h.registry.drain(0, { paceWindowMs: 40_000 })
+
+    const refused = await dial(h, identity.relayHostId)
+    expect(refused.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, expect.any(String))
+    expect(told.send).not.toHaveBeenCalledWith(expect.stringContaining('conn-open'))
+
+    const served = await dial(h, laterHostId)
+    expect(served.close).not.toHaveBeenCalled()
+    expect(untold.send).toHaveBeenCalledWith(expect.stringContaining('conn-open'))
+  })
+
+  it('refuses that host\'s phones as soon as its own drain is sent', async () => {
+    const { h, untold } = await twoHostCell()
+    h.registry.drain(0, { paceWindowMs: 40_000 })
+    await vi.advanceTimersByTimeAsync(40_000)
+    expect(untold.send).toHaveBeenCalledWith(expect.stringContaining('"type":"drain"'))
+
+    const refused = await dial(h, laterHostId)
+    expect(refused.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, expect.any(String))
+  })
+
+  it('keeps an unpaced drain refusing every phone at once', async () => {
+    const { h } = await twoHostCell()
+    h.registry.drain(0)
+    for (const hostId of [identity.relayHostId, laterHostId]) {
+      const refused = await dial(h, hostId)
+      expect(refused.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, expect.any(String))
+    }
+  })
+})

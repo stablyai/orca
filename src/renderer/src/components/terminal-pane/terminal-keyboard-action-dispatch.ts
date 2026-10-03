@@ -23,6 +23,8 @@ type ActionDispatchContext = {
   persistLayoutSnapshot: () => void
   toggleExpandPane: (paneId: number) => void
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
+  focusSearchInput: () => void
+  searchOpenRef: React.RefObject<boolean>
   onRequestClosePane: (paneId: number) => void
   onClearPaneScrollback: (pane: ManagedPane) => void
   onSetTitle: (paneId: number) => void
@@ -51,6 +53,8 @@ export function dispatchTerminalShortcutAction(
     persistLayoutSnapshot,
     toggleExpandPane,
     setSearchOpen,
+    focusSearchInput,
+    searchOpenRef,
     onRequestClosePane,
     onClearPaneScrollback,
     onSetTitle,
@@ -75,10 +79,6 @@ export function dispatchTerminalShortcutAction(
     event.stopImmediatePropagation()
     return
   }
-  if (event.repeat) {
-    return
-  }
-
   if (action.type === 'copySelection') {
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
     if (!pane || !pane.terminal.getSelection()) {
@@ -86,16 +86,26 @@ export function dispatchTerminalShortcutAction(
     }
     event.preventDefault()
     event.stopImmediatePropagation()
-    void copyTerminalSelection({
-      terminal: pane.terminal,
-      writeClipboardText: window.api.ui.writeTerminalClipboardText
-    }).catch(() => {})
+    if (!event.repeat) {
+      armNativeOnlyShortcut(event)
+      void copyTerminalSelection({
+        terminal: pane.terminal,
+        writeClipboardText: window.api.ui.writeTerminalClipboardText
+      }).catch(() => {})
+    }
+    return
+  }
+  if (event.repeat) {
     return
   }
   if (action.type === 'toggleSearch') {
     event.preventDefault()
     event.stopImmediatePropagation()
-    setSearchOpen((prev) => !prev)
+    if (searchOpenRef.current) {
+      focusSearchInput()
+    } else {
+      setSearchOpen(true)
+    }
     return
   }
   if (action.type === 'clearActivePane') {

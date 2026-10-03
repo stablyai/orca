@@ -95,7 +95,7 @@ export async function callRuntimeRpc<TResult>(
   return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
 }
 
-async function ensureRuntimeEnvironmentCompatible(
+export async function ensureRuntimeEnvironmentCompatible(
   environmentId: string,
   options: {
     timeoutMs?: number

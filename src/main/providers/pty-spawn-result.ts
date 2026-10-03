@@ -52,8 +52,8 @@ export type PtySpawnResult = {
   }
   /** Kitty keyboard flags persisted in the daemon snapshot, threaded so the
    *  re-seeded runtime emulator answers hidden `CSI ? u` with the real flags
-   *  (terminal-query-authority.md §kitty). Never replayed into a renderer
-   *  xterm — POST_REPLAY_REATTACH_RESET's kitty reset stays authoritative. */
+   *  (terminal-query-authority.md §kitty). Renderers re-assert them in their
+   *  replay epilogue, after the payload's screen switches. */
   snapshotKittyKeyboardFlags?: number
   /** Renderer-domain sequence main reconciled for the attach boundary those
    *  flags describe. Set by main, not the provider. */

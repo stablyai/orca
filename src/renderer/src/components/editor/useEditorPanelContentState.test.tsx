@@ -41,6 +41,8 @@ vi.mock('@/lib/connection-context', () => ({
   isWorktreeConnectionResolved: mocks.isWorktreeConnectionResolved
 }))
 
+vi.mock('@/lib/worktree-host-connection-phase', () => import('./local-host-test-fixture'))
+
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: vi.fn(() => null)
 }))

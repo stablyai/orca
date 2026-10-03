@@ -9,6 +9,7 @@ import {
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
+import { getWorktreeDeleteErrorToShow } from './worktree-delete-error-display'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
@@ -168,7 +169,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     ? getDeleteStateForWorktreeHost(worktree, deleteStateByWorktreeId)
     : undefined
   const isDeleting = deleteStates.some((state) => state.isDeleting)
-  const deleteError = !isBatchDelete ? (deleteState?.error ?? null) : null
+  const deleteError = !isBatchDelete ? getWorktreeDeleteErrorToShow(worktree, deleteState) : null
   const canForceDelete = !isBatchDelete && (deleteState?.canForceDelete ?? false)
   const gitStatusByWorktreeIdentity = useDeleteWorktreeStatusHydration({
     isOpen,

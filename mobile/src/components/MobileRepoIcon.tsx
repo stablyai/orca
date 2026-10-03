@@ -23,7 +23,7 @@ import {
   Wrench
 } from 'lucide-react-native'
 import { Image, StyleSheet, Text, View } from 'react-native'
-import type { RepoIcon } from '../../../src/shared/repo-icon'
+import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-schema'
 import { colors } from '../theme/mobile-theme'
 
 // The lucide names the desktop repo-icon picker offers (src/renderer/src/
@@ -53,7 +53,9 @@ const REPO_LUCIDE_ICONS: Record<string, LucideIcon> = {
 }
 
 type Props = {
-  repoIcon?: RepoIcon | null
+  // Why the decoded catalog icon rather than the host's `RepoIcon`: this component reads
+  // `type`/`src`/`label`/`emoji`/`name` and never `source`, and a `RepoIcon` still satisfies it.
+  repoIcon?: MobileRenderableRepoIcon | null
   size?: number
   color?: string
 }

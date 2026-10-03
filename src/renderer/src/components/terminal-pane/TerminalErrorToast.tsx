@@ -3,6 +3,10 @@ import { translate } from '@/i18n/i18n'
 import { resolveClientEnvironmentFooter } from '@/lib/client-environment-info'
 import { Button } from '@/components/ui/button'
 import { hasClientEnvironmentFooter } from '../../../../shared/client-environment-info'
+import {
+  localizeTerminalSpawnHints,
+  withoutTerminalSpawnIssueRequest
+} from './terminal-spawn-error-display'
 
 const SSH_PREFIX = 'SSH connection is not active'
 // Produced by pty-connection.ts reportError() when a PTY reattach can't reach its SSH host.
@@ -112,7 +116,7 @@ function humanizeUnreattachableSession(error: string): string {
 
 /** Swaps raw daemon-boundary codes for copy a user can act on. */
 export function humanizeTerminalError(error: string): string {
-  let humanized = error
+  let humanized = localizeTerminalSpawnHints(error)
   if (humanized.includes(PANE_OWNER_UNVERIFIED_MARKER)) {
     const explanation = isPaneOwnerUnverifiedError(humanized)
       ? translate(
@@ -178,7 +182,11 @@ export function TerminalErrorToast({
   // Restart cannot recover a session after its owning daemon exits.
   const showIssueLink =
     !ssh && !paneOwnerUnverified && !showDaemonRestart && !isExplainedTerminalError(error)
-  const displayError = humanizeTerminalError(error)
+  const humanizedError = humanizeTerminalError(error)
+  // Why: the toast appends its own linked request, so the host's plain-text one would repeat it.
+  const displayError = showIssueLink
+    ? withoutTerminalSpawnIssueRequest(humanizedError)
+    : humanizedError
   const tint = paneOwnerUnverified
     ? null
     : ssh

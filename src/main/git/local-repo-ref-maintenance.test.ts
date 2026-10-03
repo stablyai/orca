@@ -77,7 +77,12 @@ describe('local repo ref maintenance target', () => {
   it('reads either Git auto-maintenance opt-out, and unset keys as consent', async () => {
     for (const stdout of [
       'maintenance.auto false\n',
+      'maintenance.auto NO\n',
+      'maintenance.auto off\n',
+      'maintenance.auto 0\n',
+      'maintenance.auto \n',
       'gc.auto 0\n',
+      'gc.auto 0k\n',
       'gc.auto 6700\nmaintenance.auto false\n'
     ]) {
       gitExecFileAsyncMock.mockResolvedValue({ stdout, stderr: '' })
@@ -91,8 +96,18 @@ describe('local repo ref maintenance target', () => {
     await expect(target().isOptedOut?.(NO_ABORT)).resolves.toBe(false)
 
     // `git config --get-regexp` exits non-zero when nothing matches.
-    gitExecFileAsyncMock.mockRejectedValue(new Error('exit 1'))
+    gitExecFileAsyncMock.mockRejectedValue(Object.assign(new Error('key unset'), { code: 1 }))
     await expect(target().isOptedOut?.(NO_ABORT)).resolves.toBe(false)
+  })
+
+  it('fails closed when the auto-maintenance config cannot be read', async () => {
+    for (const error of [
+      new Error('spawn failed'),
+      Object.assign(new Error('bad config'), { code: 128 })
+    ]) {
+      gitExecFileAsyncMock.mockRejectedValue(error)
+      await expect(target().isOptedOut?.(NO_ABORT)).resolves.toBe(true)
+    }
   })
 
   it('walks the POSIX refs directory for a native repo', async () => {

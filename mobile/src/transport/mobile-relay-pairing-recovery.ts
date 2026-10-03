@@ -1,12 +1,10 @@
 import { Platform } from 'react-native'
-import {
-  DeviceCredentialInstalledSchema,
-  PairingGetEndpointsResultSchema,
-  type DeviceCredentialInstalled,
-  type MobileRelayEndpoint
+import type {
+  DeviceCredentialInstalled,
+  PairingGetEndpointsResult
 } from '../../../src/shared/mobile-relay-credential-contract'
 import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
-import { loadHosts, saveHost } from './host-store'
+import { loadHosts, savePairedHost } from './host-store'
 import {
   promotePairingJournalCredential,
   readMobileRelayCredentialBundle,
@@ -25,7 +23,7 @@ import {
   type PairingCandidateClient
 } from './mobile-relay-physical-client'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
-import type { HostProfile } from './types'
+import { relayHost } from './pairing-relay-host'
 import {
   relayCredentialProvision,
   relayPairingEndpointsRead
@@ -40,7 +38,7 @@ type RecoveryDependencies = {
   readCredentialBundle: typeof readMobileRelayCredentialBundle
   writeCredentialBundle: typeof writeMobileRelayCredentialBundle
   loadHosts: typeof loadHosts
-  saveHost: typeof saveHost
+  savePairedHost: typeof savePairedHost
   connectRelay: typeof connectMobileRelayForPairing
   resolveInviteDirector: typeof resolvePairingInviteThroughDirector
   now: () => number
@@ -54,7 +52,7 @@ const defaultDependencies: RecoveryDependencies = {
   readCredentialBundle: readMobileRelayCredentialBundle,
   writeCredentialBundle: writeMobileRelayCredentialBundle,
   loadHosts,
-  saveHost,
+  savePairedHost,
   connectRelay: connectMobileRelayForPairing,
   resolveInviteDirector: resolvePairingInviteThroughDirector,
   now: Date.now,
@@ -98,7 +96,7 @@ async function runRecovery(
   const bundle = await dependencies.readCredentialBundle(journal.metadata.host.id).catch(() => null)
   const hosts = await dependencies.loadHosts().catch(() => [])
   const existing = hosts.find(({ id }) => id === journal!.metadata.host.id)
-  if (existing?.relayHostId === journal.metadata.relay.relayHostId && bundle) {
+  if (existing?.relay?.relayHostId === journal.metadata.relay.relayHostId && bundle) {
     await dependencies.clearJournal(journal.metadata.journalId)
     return 'recovered'
   }
@@ -135,9 +133,7 @@ async function runRecovery(
           reqId: journal.metadata.installReqId,
           newResumeTokenHash: journal.metadata.pendingResumeTokenHash
         })
-        const installed = DeviceCredentialInstalledSchema.parse(
-          relayCredentialProvision.interpret(installReply)
-        )
+        const installed = relayCredentialProvision.interpret(installReply)
         const reconciled = await getRecoveryStatus(client, journal, 'invite')
         assertCommitted(reconciled, installed)
         observedCommitted = true
@@ -226,7 +222,7 @@ async function getRecoveryStatus(
     installReqId: journal.metadata.installReqId,
     ...(kind === 'resume' ? { resumeConfirmReqId: journal.metadata.resumeConfirmReqId } : {})
   })
-  return PairingGetEndpointsResultSchema.parse(relayPairingEndpointsRead.interpret(reply))
+  return relayPairingEndpointsRead.interpret(reply)
 }
 
 async function transitionToInviteAuthorization(
@@ -248,7 +244,7 @@ async function transitionToInviteAuthorization(
 
 async function publishCommitted(
   journal: MobileRelayPairingJournal,
-  endpoints: ReturnType<typeof PairingGetEndpointsResultSchema.parse>,
+  endpoints: PairingGetEndpointsResult,
   dependencies: RecoveryDependencies
 ): Promise<void> {
   if (endpoints.installStatus?.state !== 'committed' || !endpoints.relay) {
@@ -269,25 +265,8 @@ async function publishCommitted(
   await dependencies.writeCredentialBundle(
     promotePairingJournalCredential({ journal: reconciledJournal, installed })
   )
-  await dependencies.saveHost(relayHost(reconciledJournal, endpoints.relay))
+  await dependencies.savePairedHost(relayHost(reconciledJournal, endpoints.relay))
   await dependencies.clearJournal(journal.metadata.journalId)
-}
-
-function relayHost(journal: MobileRelayPairingJournal, relay: MobileRelayEndpoint): HostProfile {
-  const host = journal.metadata.host
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return {
-    ...host,
-    deviceToken: journal.secrets.deviceToken,
-    endpoints: [
-      { id: 'direct-primary', kind: 'lan', url: host.endpoint },
-      { id: 'relay-primary', kind: 'relay', url: url.toString() }
-    ],
-    relayHostId: relay.relayHostId,
-    relay
-  }
 }
 
 function pairingRelay(journal: MobileRelayPairingJournal): PairingRelay {
@@ -295,7 +274,7 @@ function pairingRelay(journal: MobileRelayPairingJournal): PairingRelay {
 }
 
 function assertCommitted(
-  endpoints: ReturnType<typeof PairingGetEndpointsResultSchema.parse>,
+  endpoints: PairingGetEndpointsResult,
   installed: DeviceCredentialInstalled
 ): void {
   if (

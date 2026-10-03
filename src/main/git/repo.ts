@@ -3,22 +3,21 @@ import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-outp
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './hosted-remote-url'
 import {
   DEFAULT_BASE_REF_PROBE_TIMEOUT_MS,
-  getDefaultBaseRef,
   getDefaultBaseRefAsync,
   gitExecOptions,
   type LocalGitExecOptions
 } from './repo-default-base-ref'
-import { gitExecFileAsync, gitExecFileSync } from './runner'
+import { gitExecFileAsync } from './runner'
 
 export {
   isGitRepo,
+  inspectGitRepoForRegistration,
   getGitRepoRoot,
   getLinkedWorktreeMainRepoRoot,
   normalizeGitRepoRootForInputPath
 } from './repo-detection'
 export {
   DEFAULT_BASE_REF_PROBES,
-  getDefaultBaseRef,
   getBaseRefDefault,
   resolveDefaultBaseRefViaExec,
   resolveDefaultBaseRefWithLocalGit
@@ -43,9 +42,10 @@ export function getRepoName(path: string): string {
 }
 
 /** Get the remote origin URL, or null if not set. */
-export function getRemoteUrl(path: string): string | null {
+export async function getRemoteUrl(path: string): Promise<string | null> {
   try {
-    return gitExecFileSync(['remote', 'get-url', 'origin'], { cwd: path }).trim()
+    const { stdout } = await gitExecFileAsync(['remote', 'get-url', 'origin'], { cwd: path })
+    return stdout.trim()
   } catch {
     return null
   }
@@ -86,7 +86,15 @@ export async function getRecentDriftSubjects(
 ): Promise<string[]> {
   try {
     const { stdout } = await gitExecFileAsync(
-      ['log', '--format=%s', '-n', String(limit), `${localRef}..${remoteRef}`],
+      [
+        'log',
+        '--no-show-signature',
+        '--no-color',
+        '--format=%s',
+        '-n',
+        String(limit),
+        `${localRef}..${remoteRef}`
+      ],
       {
         ...gitExecOptions(repoPath, options),
         timeout: DEFAULT_BASE_REF_PROBE_TIMEOUT_MS
@@ -168,16 +176,16 @@ export async function getDefaultRemote(
 }
 
 /** Build a hosted file URL when the origin belongs to a supported provider. */
-export function getRemoteFileUrl(
+export async function getRemoteFileUrl(
   repoPath: string,
   relativePath: string,
   line: number
-): string | null {
-  const remoteUrl = getRemoteUrl(repoPath)
+): Promise<string | null> {
+  const remoteUrl = await getRemoteUrl(repoPath)
   if (!remoteUrl) {
     return null
   }
-  const defaultBaseRef = getDefaultBaseRef(repoPath)
+  const defaultBaseRef = await getDefaultBaseRefAsync(repoPath)
   if (!defaultBaseRef) {
     return null
   }
@@ -190,7 +198,7 @@ export function getRemoteFileUrl(
 }
 
 /** Build a hosted commit URL when the origin belongs to a supported provider. */
-export function getRemoteCommitUrl(repoPath: string, sha: string): string | null {
-  const remoteUrl = getRemoteUrl(repoPath)
+export async function getRemoteCommitUrl(repoPath: string, sha: string): Promise<string | null> {
+  const remoteUrl = await getRemoteUrl(repoPath)
   return remoteUrl ? buildHostedRemoteCommitUrl(remoteUrl, sha) : null
 }

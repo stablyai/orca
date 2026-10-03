@@ -566,7 +566,84 @@ describe('useRuntimeFileListForWorktree', () => {
     }
   })
 
-  it('does not restart local listings when only the query changes', async () => {
+  it('never renders the previous listing once the remote query changes', async () => {
+    vi.useFakeTimers()
+    seedRemoteWorktree()
+    const states: RuntimeFileListState[] = []
+    searchRuntimeFilePathsMock.mockResolvedValue({ files: ['src/tar.ts'], truncated: true })
+
+    try {
+      const root = await renderProbe({
+        enabled: true,
+        onState: (state) => states.push(state),
+        query: 'tar',
+        worktreeId: 'wt-remote'
+      })
+      await act(async () => vi.advanceTimersByTimeAsync(120))
+      await flushEffects()
+      expect(states.at(-1)).toMatchObject({ files: ['src/tar.ts'], truncated: true })
+
+      const rendersBeforeChange = states.length
+      await act(async () => {
+        root.render(
+          createElement(HookProbe, {
+            enabled: true,
+            onState: (state: RuntimeFileListState) => states.push(state),
+            query: 'target',
+            worktreeId: 'wt-remote'
+          })
+        )
+      })
+
+      // Why: the render before the effect restarts the request is the one that can leak.
+      expect(states.length).toBeGreaterThan(rendersBeforeChange)
+      for (const state of states.slice(rendersBeforeChange)) {
+        expect(state).toMatchObject({ files: [], loading: true, truncated: false })
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reports the new remote query as loading after the previous one failed', async () => {
+    vi.useFakeTimers()
+    seedRemoteWorktree()
+    const states: RuntimeFileListState[] = []
+    searchRuntimeFilePathsMock.mockRejectedValue(new Error('scan failed'))
+
+    try {
+      const root = await renderProbe({
+        enabled: true,
+        onState: (state) => states.push(state),
+        query: 'tar',
+        worktreeId: 'wt-remote'
+      })
+      await act(async () => vi.advanceTimersByTimeAsync(120))
+      await flushEffects()
+      expect(states.at(-1)).toMatchObject({ files: [], loading: false, loadError: 'scan failed' })
+
+      const rendersBeforeChange = states.length
+      await act(async () => {
+        root.render(
+          createElement(HookProbe, {
+            enabled: true,
+            onState: (state: RuntimeFileListState) => states.push(state),
+            query: 'target',
+            worktreeId: 'wt-remote'
+          })
+        )
+      })
+
+      expect(states.length).toBeGreaterThan(rendersBeforeChange)
+      for (const state of states.slice(rendersBeforeChange)) {
+        expect(state).toMatchObject({ files: [], loading: true })
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the local listing across query changes without restarting it', async () => {
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
     useAppStore.setState({
       folderWorkspaces: [makeFolderWorkspace()],
@@ -574,20 +651,23 @@ describe('useRuntimeFileListForWorktree', () => {
       repos: [],
       worktreesByRepo: {}
     } as Partial<AppState>)
+    const states: RuntimeFileListState[] = []
 
     const root = await renderProbe({
       enabled: true,
-      onState: () => {},
+      onState: (state) => states.push(state),
       query: 'one',
       worktreeId: workspaceKey
     })
     await waitForListRuntimeFilesCall()
+    await flushEffects()
+    expect(states.at(-1)?.files).toEqual(['packages/app/package.json'])
 
     await act(async () => {
       root.render(
         createElement(HookProbe, {
           enabled: true,
-          onState: () => {},
+          onState: (state: RuntimeFileListState) => states.push(state),
           query: 'two',
           worktreeId: workspaceKey
         })
@@ -596,5 +676,9 @@ describe('useRuntimeFileListForWorktree', () => {
     await flushEffects()
 
     expect(listRuntimeFilesMock).toHaveBeenCalledTimes(1)
+    expect(states.at(-1)).toMatchObject({
+      files: ['packages/app/package.json'],
+      loading: false
+    })
   })
 })

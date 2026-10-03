@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { resetLocalStructuredChatsForTests } from '@/runtime/local-structured-chats'
 import { act } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createRoot, type Root } from 'react-dom/client'
@@ -258,14 +259,52 @@ describe('ExperimentalPane', () => {
     })
 
     expect(container.textContent).toContain('Use updated structured native chat')
-    // The one opt-in gates both providers, so its copy must not name only Codex.
-    expect(container.textContent).toContain(
-      'Opt in to the host-owned structured chat runtime for Codex and Claude.'
-    )
+    // The one setting governs both providers, so its copy must not name only Codex.
+    expect(container.textContent).toContain('Open new Codex and Claude agents as structured chats.')
     expect(container.textContent).toContain(
       'Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
     )
     expect(container.textContent).toContain('Default view')
+    root.unmount()
+  })
+
+  // Those settings govern the chats this machine holds, which keep running with the setting off.
+  it('shows the structured chat settings while this machine holds chats, whatever the setting', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        app: {
+          holdsStructuredAgentSessions: async () => true,
+          onStructuredAgentSessionsHeldChanged: () => () => undefined
+        }
+      }
+    })
+    try {
+      const { root, container } = await renderExperimentalPane({
+        updateSettings: vi.fn(),
+        settings: { ...getDefaultSettings('/tmp'), experimentalNativeChat: true }
+      })
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      expect(container.textContent).toContain('Resume working chats automatically after a restart')
+      root.unmount()
+    } finally {
+      resetLocalStructuredChatsForTests()
+      Reflect.deleteProperty(window, 'api')
+    }
+  })
+
+  it('hides the structured chat settings on a machine that holds none with the setting off', async () => {
+    const { root, container } = await renderExperimentalPane({
+      updateSettings: vi.fn(),
+      settings: { ...getDefaultSettings('/tmp'), experimentalNativeChat: true }
+    })
+
+    expect(container.textContent).not.toContain(
+      'Resume working chats automatically after a restart'
+    )
     root.unmount()
   })
 

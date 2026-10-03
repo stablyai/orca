@@ -1,19 +1,18 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
-import { rpcReadUnchecked } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import type { MobileGitBranchCompareResult } from '../source-control/mobile-branch-compare'
 import { gitStatusProjectionReader } from '../source-control/mobile-git-read-operations'
 import {
-  readMobileBranchCompareResult,
-  readMobileReviewGitDiffResult,
-  readMobileReviewWorktreeMetadata,
-  type MobileReviewGitDiffResult,
-  type MobileReviewWorktreeMetadata
-} from './mobile-diff-review-rpc'
+  branchCompareProjectionSchema,
+  reviewGitDiffSchema,
+  reviewWorktreeMetadataSchema
+} from './diff-review-reply-schema'
 
 // What the review screen and the PR branch-context loader read. Both work from the same three
 // projections — normalized status, normalized branch compare, the review notes on the worktree —
-// and neither reads a raw host payload.
+// and neither reads a raw host payload. Each projection is a schema in diff-review-reply-schema.ts,
+// which records the consumer line behind every requirement.
 
 /**
  * git.status read for the PR branch context. The third policy on this method, and the only one that
@@ -36,16 +35,16 @@ export const branchContextStatusRead = bindDeferredRpcOperation(
 const branchCompareProjectionReader: RpcCompatibleReader<
   unknown,
   'normalized-branch-compare',
-  MobileGitBranchCompareResult | null
-> = (raw) => rpcReadUnchecked('normalized-branch-compare', readMobileBranchCompareResult(raw))
+  MobileGitBranchCompareResult
+> = rpcResultVariant('normalized-branch-compare', branchCompareProjectionSchema)
 
 /**
  * git.branchCompare, second reader on the method. The Changes screen publishes the host payload
  * verbatim through `gitBranchCompareRead`; this one normalizes. The projection is not a superset —
- * it answers null when `summary` or `entries` is not the expected shape, or when `baseRef`,
- * `compareRef` or `changedFiles` is missing — and review and PR context both depend on that null to
- * report "committed changes response was invalid" rather than rendering a partial compare. Sharing
- * the verbatim reader would hand them a payload they would then have to re-parse.
+ * it refuses when `summary` or `entries` is not the expected shape, or when `baseRef`,
+ * `compareRef` or `changedFiles` is missing — and review and PR context both depend on that
+ * refusal to report a failed compare rather than rendering a partial one. Sharing the verbatim
+ * reader would hand them a payload they would then have to re-parse.
  */
 export const reviewBranchCompareRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -68,12 +67,6 @@ export const branchContextCompareRead = bindDeferredRpcOperation(
   })
 )
 
-const reviewMetadataReader: RpcCompatibleReader<
-  unknown,
-  'review-worktree-metadata',
-  MobileReviewWorktreeMetadata
-> = (raw) => rpcReadUnchecked('review-worktree-metadata', readMobileReviewWorktreeMetadata(raw))
-
 /**
  * worktree.show, second reader on the method. `worktreeSummaryRead` projects `{ baseRef, linkedPR }`
  * and drops everything else, so it would answer the review screen with no notes at all for every
@@ -87,15 +80,11 @@ export const reviewWorktreeMetadataRead = bindDeferredRpcOperation(
     method: 'worktree.show',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: reviewMetadataReader
+    read: rpcResultVariant('review-worktree-metadata', reviewWorktreeMetadataSchema)
   })
 )
 
-const reviewDiffReader: RpcCompatibleReader<
-  unknown,
-  'review-file-diff',
-  MobileReviewGitDiffResult | null
-> = (raw) => rpcReadUnchecked('review-file-diff', readMobileReviewGitDiffResult(raw))
+const reviewDiffReader = rpcResultVariant('review-file-diff', reviewGitDiffSchema)
 
 /**
  * The worktree file diff. Its refusal carries meaning the acceptance policy cannot: `diff_too_large`
@@ -116,8 +105,8 @@ export const reviewFileDiffRead = bindDeferredRpcOperation(
 /**
  * The committed-range equivalent, second reader on git.branchDiff. `gitBranchDiffRead` hands the
  * Changes screen's branch preview the host payload verbatim; review needs the
- * text/binary/too-large discrimination, and a reply that matches none of the three has to read as
- * null so the screen says the diff was invalid instead of rendering an empty file.
+ * text/binary/too-large discrimination, and a reply that matches none of the three has to refuse
+ * so the screen names the failure instead of rendering an empty file.
  */
 export const reviewBranchFileDiffRead = bindDeferredRpcOperation(
   defineRpcOperation({

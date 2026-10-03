@@ -29,7 +29,8 @@ describePostgres('real PostgreSQL query failure phases', () => {
       event: 'orca_relay_postgres_query_failed',
       phase: 'execute',
       code: '57014',
-      connectionTimeout: false
+      connectionTimeout: false,
+      transient: true
     })
     expect(await database.query('SELECT 1 AS ok')).toEqual([{ ok: 1 }])
   })
@@ -58,6 +59,7 @@ describePostgres('real PostgreSQL query failure phases', () => {
         phase: 'acquire',
         code: 'unknown',
         connectionTimeout: true,
+        transient: true,
         poolTotal: 1,
         poolIdle: 0
       })

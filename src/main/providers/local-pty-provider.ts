@@ -14,6 +14,11 @@ import {
 } from './local-pty-foreground-inspection'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import type { PtyProcessInspection } from './pty-process-inspection'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import {
+  _resetPtyOwnerHostColorsForTest,
+  setPtyOwnerHostColors
+} from '../../shared/pty-owner-color-query-colors'
 import {
   advanceLoadGeneration,
   clearPtyState,
@@ -118,8 +123,13 @@ export class LocalPtyProvider implements IPtyProvider {
   clearBuffer(id: string): Promise<void> {
     return clearLocalPtyBuffer(id)
   }
+  // A direct PTY keeps no terminal model of its own.
+  async resetInputModes(_id: string): Promise<void> {}
   closeStartupQueryAuthority(id: string): number {
     return closeLocalPtyStartupQueryAuthority(id)
+  }
+  setColorQueryReplyColors(colors: TerminalOscColorQueryReplyColors): void {
+    setPtyOwnerHostColors(colors)
   }
   acknowledgeDataEvent(_id: string, _charCount: number): void {
     /* no flow control for local */
@@ -132,20 +142,18 @@ export class LocalPtyProvider implements IPtyProvider {
   async inspectProcess(id: string): Promise<PtyProcessInspection> {
     const proc = ptyProcesses.get(id)
     const foregroundProcess = await getLocalPtyForegroundProcess(id)
-    // Both fields have to describe one PTY: cleanup plus reactivation across the await above would
-    // otherwise pair the old pane's identity with the replacement's children. The child read below
-    // is synchronous, so this recheck is the last point either answer can drift.
+    const childProcessEvidence = await inspectLocalPtyChildProcesses(id)
+    // Neither asynchronous inspection may publish a replacement pane's identity.
     if (ptyProcesses.get(id) !== proc) {
       return {
         foregroundProcess: null,
-        hasChildProcesses: false,
+        hasChildProcesses: true,
         childProcessEvidence: 'unverifiable'
       }
     }
-    const childProcessEvidence = inspectLocalPtyChildProcesses(id)
     return {
       foregroundProcess,
-      hasChildProcesses: childProcessEvidence === 'children',
+      hasChildProcesses: childProcessEvidence !== 'no-children',
       childProcessEvidence
     }
   }
@@ -224,4 +232,5 @@ export function _resetLocalPtyProviderStateForTest(): void {
     clearPtyState(id)
   }
   resetLoadGeneration()
+  _resetPtyOwnerHostColorsForTest()
 }

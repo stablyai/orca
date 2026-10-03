@@ -31,6 +31,7 @@ function buildArgs(
     selectedAgent: 'codex',
     trimmedCommandInput: 'Fix the bug',
     agentArgs: '--model gpt-5',
+    agentArgsApply: true,
     commandTemplate: '{basePrompt}',
     saveTargetValue: 'none',
     actionId: 'resolveComments',
@@ -356,5 +357,60 @@ describe('runSourceControlAgentActionStart', () => {
     } finally {
       vi.stubGlobal('console', originalConsole)
     }
+  })
+})
+
+describe('runSourceControlAgentActionStart CLI arguments applicability', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  // Why: `undefined` is what reaches the global Agents arguments; an empty string would beat
+  // that fallback and launch the agent with no arguments at all.
+  it('omits the per-action arguments so a terminal launch resolves the global setting', async () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'tab-1' }
+    })
+
+    await expect(
+      runSourceControlAgentActionStart(buildArgs({ agentArgsApply: false }))
+    ).resolves.toBe(true)
+
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledTimes(1)
+    const launchCall = mocks.launchAgentInNewTab.mock.calls[0]?.[0]
+    expect(launchCall).toHaveProperty('agentArgs', undefined)
+  })
+
+  it('omits them on the onStart branch too', async () => {
+    const onStart = vi.fn().mockResolvedValue(true)
+
+    await expect(
+      runSourceControlAgentActionStart(
+        buildArgs({ agentArgsApply: false, onStart, worktreeId: undefined, groupId: undefined })
+      )
+    ).resolves.toBe(true)
+
+    expect(onStart).toHaveBeenCalledWith({
+      agent: 'codex',
+      commandInput: 'Fix the bug',
+      agentArgs: undefined
+    })
+  })
+
+  // Why: the field being absent must not rewrite a value the user saved for terminal launches.
+  it('still saves the recipe with the arguments the user had stored', async () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'tab-1' }
+    })
+
+    await runSourceControlAgentActionStart(
+      buildArgs({ agentArgsApply: false, saveTargetValue: 'global' })
+    )
+
+    expect(mocks.onSaveAgentDefault).toHaveBeenCalledWith(
+      expect.anything(),
+      'resolveComments',
+      expect.objectContaining({ agentArgs: '--model gpt-5' })
+    )
   })
 })

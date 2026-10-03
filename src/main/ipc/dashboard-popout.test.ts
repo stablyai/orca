@@ -132,18 +132,9 @@ describe('registerDashboardPopoutHandlers', () => {
 
     store.getSettings.mockReturnValue({ experimentalAgentDashboardPopout: true })
     handlers.get('dashboardPopout:open')!({ sender: mainSender } as never)
-    expect(createPopoutMock).toHaveBeenCalledWith(store, undefined, {
+    expect(createPopoutMock).toHaveBeenCalledWith(store, {
       getKeybindings: expect.any(Function)
     })
-
-    handlers.get('dashboardPopout:open')!({ sender: mainSender } as never, 'map')
-    expect(createPopoutMock).toHaveBeenLastCalledWith(store, 'map', {
-      getKeybindings: expect.any(Function)
-    })
-
-    createPopoutMock.mockClear()
-    handlers.get('dashboardPopout:open')!({ sender: mainSender } as never, 'invalid')
-    expect(createPopoutMock).not.toHaveBeenCalled()
   })
 
   it('auto-closes the popout when the feature is disabled', () => {

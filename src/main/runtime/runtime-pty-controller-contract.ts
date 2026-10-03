@@ -12,6 +12,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { PtyProviderBufferSnapshot, PtyProcessInfo, PtySpawnResult } from '../providers/types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 
 export type RuntimePtyController = {
   claimStablePaneCreate?(args: {
@@ -61,8 +62,11 @@ export type RuntimePtyController = {
     /** Windows shell to spawn AS this PTY, instead of the host default. */
     shellOverride?: string
     isNewSession?: boolean
+    /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
+    initiallyHidden?: boolean
     persistHostSessionBinding?: boolean
     expectedSourceBinding?: PtyBindingSourceExpectation
+    terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }
     agentSessionEnsure?: {
       claim: AgentSessionExecutionClaim
@@ -90,14 +94,13 @@ export type RuntimePtyController = {
     stablePaneOwner?: { handle: string; tabId: string; leafId: string }
     agentSessionEnsure?: AgentSessionClaimedSpawnResult
   }>
-  write(ptyId: string, data: string): boolean
-  writeAgentSessionProof?(
+  write(ptyId: string, data: string, inputKind: TerminalInputKind): boolean
+  /** Three-valued settlement; local providers settle synchronously. */
+  writeWithSettlement?(
     ptyId: string,
     data: string,
-    authority: { sessionId: string; spawnToken: string }
-  ): boolean
-  /** Three-valued settlement; local providers settle synchronously. */
-  writeWithSettlement?(ptyId: string, data: string): WriteSettlement | Promise<WriteSettlement>
+    inputKind: TerminalInputKind
+  ): WriteSettlement | Promise<WriteSettlement>
   /** Attach-only adoption of a live local daemon session so its output streams
    *  to main without a renderer pane; never creates, resizes, or focuses.
    *  False on doubt (absent session, SSH-scoped id, non-daemon provider). */
@@ -108,7 +111,9 @@ export type RuntimePtyController = {
     ptyId: string,
     opts?: { keepHistory?: boolean; deadlineMs?: number }
   ): Promise<boolean>
-  markReversibleStops?(ptyIds: readonly string[]): () => void
+  /** Durably records a kill order for an explicit close's unconfirmed stop, replayed when its SSH
+   *  host reconnects. True only when an order was written; local PTYs have no later host to ask. */
+  recordUnconfirmedStop?(ptyId: string): boolean
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>
   inspectProcess?(
@@ -119,6 +124,7 @@ export type RuntimePtyController = {
   confirmShellForeground?(ptyId: string): Promise<boolean>
   hasChildProcesses?(ptyId: string): Promise<boolean>
   clearBuffer?(ptyId: string): Promise<void>
+  resetInputModes?(ptyId: string): Promise<void>
   resize?(ptyId: string, cols: number, rows: number): boolean
   // Why: exact-id mobile polls should not enumerate every local and SSH PTY.
   hasPty?(ptyId: string): boolean | null

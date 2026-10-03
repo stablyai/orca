@@ -11,7 +11,7 @@ export type AgentChildWorkFreshnessInput = {
 export function resolveAgentChildWorkFreshness(
   input: AgentChildWorkFreshnessInput
 ): AgentChildWorkState {
-  if (input.membership === 'settled') {
+  if (input.membership === 'settled' || input.state === 'idle' || input.state === 'done') {
     return input.state
   }
   return input.parentEvidenceFresh && input.transportObservation === 'live'

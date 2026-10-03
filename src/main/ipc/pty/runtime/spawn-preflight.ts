@@ -1,3 +1,4 @@
+import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { PtySpawnResult } from '../../../providers/types'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
@@ -11,7 +12,6 @@ import {
   resolveCodexHomeAfterManagedAuthReadiness,
   shouldSkipCodexHomeEnvForWindowsShell,
   shouldStripInheritedOrcaCodexHome,
-  isCodexStatusHooksEnabled,
   codexHomePathsEqual
 } from '../host-env/codex-home'
 import { promoteAgentTeamsShimPath } from '../host-env/path'
@@ -41,6 +41,7 @@ import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
 import { stampWslOrchestrationCompatibilityHost } from '../../../pty/wsl-orca-env'
 import { ensureCodexStateDbBackfillRecoveryStarted } from '../../../codex/codex-state-db-backfill-recovery'
 import { clearProviderPtyState } from '../provider/state-cleanup'
+import { awaitExplicitPiOmpGuestReadiness } from '../../../agent-hooks/wsl-pi-omp-guest-readiness'
 import type { RuntimePtySpawnState } from './spawn-state'
 
 export async function prepareRuntimePtySpawn(
@@ -85,7 +86,14 @@ export async function prepareRuntimePtySpawn(
           projectRuntime: resolveLocalProjectRuntimeForWorktreeId(ctx.deps.store, args.worktreeId),
           fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
         })
-      : { shellOverride: undefined, terminalWindowsWslDistro: null }
+      : {
+          shellOverride:
+            args.shellOverride ??
+            (process.platform === 'win32'
+              ? undefined
+              : ctx.deps.getSettings?.()?.terminalDefaultShell || undefined),
+          terminalWindowsWslDistro: null
+        }
   ctx.daemonShellOverride = ctx.terminalRuntimeOptions.shellOverride
   ctx.isDaemonHostSpawn =
     !args.connectionId &&
@@ -128,8 +136,7 @@ export async function prepareRuntimePtySpawn(
         launchAgent: args.launchAgent,
         providerSession: args.resumeProviderSession,
         target: ctx.codexSelectionTarget,
-        launchEnv: args.env,
-        workspacePath: ctx.cwd
+        launchEnv: args.env
       })
   const codexResumeLaunch = codexResumePreparation
     ? await ctx.deps.resolveCodexResumeLaunch(args.command, codexResumePreparation)
@@ -179,10 +186,7 @@ export async function prepareRuntimePtySpawn(
     ctx.env = { ...ctx.env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
   }
   const selectLaunchCodexHome = async (): Promise<string | null> =>
-    (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.env, {
-      workspacePath: ctx.cwd,
-      launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
-    })) ?? null
+    (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.env)) ?? null
   ctx.selectedCodexHomePath =
     !ctx.preAdoptedStablePane && !args.connectionId
       ? getCompatibleSelectedCodexHomePath(
@@ -210,17 +214,12 @@ export async function prepareRuntimePtySpawn(
       resolveCurrent: async () =>
         getCompatibleSelectedCodexHomePath(
           ctx.codexSelectionTarget,
-          (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.env, {
-            workspacePath: ctx.cwd,
-            launchAgent: 'codex'
-          })) ?? null
+          (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.env)) ?? null
         ),
       resolveAfterUnavailable: async (unavailableManagedHomePath) =>
         getCompatibleSelectedCodexHomePath(
           ctx.codexSelectionTarget,
           (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.env, {
-            workspacePath: ctx.cwd,
-            launchAgent: 'codex',
             unavailableManagedHomePath
           })) ?? null
         )
@@ -251,6 +250,19 @@ export async function prepareRuntimePtySpawn(
       throw new Error('Invalid PTY session id')
     }
     try {
+      ctx.env ??= {}
+      await inheritOmpLaunchEnvironment(ctx.env, {
+        isWsl: shouldSkipCodexHomeEnvForWindowsShell(ctx.daemonShellOverride, ctx.cwd),
+        launchAgent: args.launchAgent,
+        launchCommand: ctx.launchCommand
+      })
+      await awaitExplicitPiOmpGuestReadiness({
+        isWsl: shouldSkipCodexHomeEnvForWindowsShell(ctx.daemonShellOverride, ctx.cwd),
+        distro: ctx.codexSelectionTarget.runtime === 'wsl' ? ctx.expectedWslDistro : null,
+        codexHomePath: ctx.selectedCodexHomePath,
+        launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+        launchCommand: ctx.launchCommand
+      })
       ctx.env = buildPtyHostEnv(ctx.sessionId, ctx.env ?? {}, {
         isPackaged: getAppEnvironment().isPackaged(),
         resourcesPath: process.resourcesPath,
@@ -263,7 +275,7 @@ export async function prepareRuntimePtySpawn(
         isWsl: shouldSkipCodexHomeEnvForWindowsShell(ctx.daemonShellOverride, ctx.cwd),
         wslDistro: ctx.codexSelectionTarget.runtime === 'wsl' ? ctx.expectedWslDistro : null,
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
-        codexStatusHooksEnabled: isCodexStatusHooksEnabled(ptySettings),
+        disabledTuiAgents: ptySettings?.disabledTuiAgents,
         networkProxySettings: ptySettings,
         routeBrowserOpensToClient: ctx.deps.runtime?.shouldRelayTerminalBrowserOpens?.(),
         deferGitConfigGuardToDaemon:

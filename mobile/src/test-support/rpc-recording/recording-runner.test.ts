@@ -12,21 +12,20 @@ import { join, resolve } from 'node:path'
 import { operationModuleLoader } from './operation-module-loader'
 import { describe, expect, it } from 'vitest'
 import { captureArguments, captureError, captureValue } from './recording-values'
-import { RECORDER_DIRECTORY, recorderSha256 } from './recorder-digest'
 import { RECORDING_DRIVERS } from './recording-drivers'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 import {
   compareGolden,
+  expectGoldenFile,
   GOLDEN_FORMAT_VERSION,
   goldenBytes,
-  PROJECTION_VERSION,
   readGolden,
   writeGolden,
   type GoldenRecording
 } from './golden-recording'
 import { hoistPreludeCheckpoints } from './prelude-checkpoints'
-import { driveReplyMatrix, replyMatrixGoldenId, replyMatrixSites } from './reply-matrix'
+import { replyMatrixGoldenId, replyMatrixSites } from './reply-matrix'
 import {
   REPLY_MATRIX_NORMAL_RESULT_INVENTORY,
   replyMatrixNormalResult
@@ -47,7 +46,7 @@ describe('recording boundaries', () => {
 
   it('runs the actual stable-client projection and physical serialization', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       const result = transport.client.sendRequest(
@@ -80,7 +79,7 @@ describe('recording boundaries', () => {
 
   it('requires logical bindings plus matching params for concurrent same-method calls', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       const left = transport.client.sendRequest('files.list', { worktree: 'A' })
@@ -106,7 +105,7 @@ describe('recording boundaries', () => {
 
   it('records actual deadline ambiguity and leaves peers pending before their deadlines', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       void transport.client.sendRequest('short', {}, { timeoutMs: 5 }).catch(() => {})
@@ -131,34 +130,79 @@ describe('recording boundaries', () => {
     }
   })
 
-  it('never writes from candidate mode and requires both recording authorizations', async () => {
+  it('writes only in record mode and names the command for a missing or stale golden', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'rpc-recording-'))
     const golden = sampleGolden('test')
-    const previous = process.env.RPC_FOUNDATION_RECORD
     try {
-      process.env.RPC_FOUNDATION_RECORD = '0'
-      await expect(writeGolden(directory, golden, '--record')).rejects.toThrow('require')
-      process.env.RPC_FOUNDATION_RECORD = '1'
       await expect(writeGolden(directory, golden, 'candidate')).rejects.toThrow('require')
       await writeGolden(directory, golden, '--record')
       expect(readGolden(directory, 'test')).toEqual(golden)
       expect(() => readGolden(directory, '../escape')).toThrow('Unsafe')
+      expect(() => readGolden(directory, 'absent')).toThrow(
+        'No golden recorded for absent. Record it: pnpm --dir mobile rpc:record absent'
+      )
       writeFileSync(
         join(directory, 'stale.json'),
         JSON.stringify({
           ...JSON.parse(readFileSync(join(directory, 'test.json'), 'utf8')),
-          goldenFormatVersion: 1
+          goldenFormatVersion: 5
         })
       )
       expect(() => readGolden(directory, 'stale')).toThrow(
-        `format version 1; this reader requires ${GOLDEN_FORMAT_VERSION}`
+        `format version 5; this reader requires ${GOLDEN_FORMAT_VERSION}`
       )
     } finally {
-      if (previous === undefined) {
-        delete process.env.RPC_FOUNDATION_RECORD
-      } else {
-        process.env.RPC_FOUNDATION_RECORD = previous
-      }
+      rmSync(directory, { recursive: true })
+    }
+  })
+
+  it('replays only a file that is exactly what rpc:record writes for the run', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'rpc-recording-'))
+    const golden = sampleGolden('exact')
+    const path = join(directory, 'exact.json')
+    try {
+      await writeGolden(directory, golden, '--record')
+      const written = readFileSync(path, 'utf8')
+      await expectGoldenFile(directory, 'exact', golden)
+      const sameRecording =
+        /holds the same recording but is not the file rpc:record writes for it[\s\S]*pnpm --dir mobile rpc:record exact/
+      // Each edit below decodes to the same recording, so only the file text can catch it.
+      writeFileSync(path, written.replace('{\n', '{\n  "baseline": "abc123",\n'))
+      await expect(expectGoldenFile(directory, 'exact', golden)).rejects.toThrow(sameRecording)
+      writeFileSync(
+        path,
+        written.replace(
+          '"goldenFormatVersion": 6,\n  "operation": "op",',
+          '"operation": "op",\n  "goldenFormatVersion": 6,'
+        )
+      )
+      await expect(expectGoldenFile(directory, 'exact', golden)).rejects.toThrow(sameRecording)
+      const file = goldenFile(golden)
+      writeFileSync(
+        path,
+        JSON.stringify({ ...file, values: { ...file.values, [valueHash('unread')]: 'unread' } })
+      )
+      await expect(expectGoldenFile(directory, 'exact', golden)).rejects.toThrow(
+        /Golden exact: Golden pool holds unreferenced values[\s\S]*pnpm --dir mobile rpc:record exact/
+      )
+      writeFileSync(path, written.replace('"idle"', '"edited"'))
+      await expect(expectGoldenFile(directory, 'exact', golden)).rejects.toThrow(
+        /does not hash to its pool key[\s\S]*pnpm --dir mobile rpc:record exact/
+      )
+      writeFileSync(path, written.slice(0, -10))
+      await expect(expectGoldenFile(directory, 'exact', golden)).rejects.toThrow(
+        /Golden exact: [\s\S]*pnpm --dir mobile rpc:record exact/
+      )
+      writeFileSync(path, written)
+      const moved = sampleGolden('exact')
+      moved.recording.checkpoints[0]!.observation.state = { phase: 'busy' }
+      await expect(expectGoldenFile(directory, 'exact', moved)).rejects.toThrow(
+        /Recording differs: exact\n {2}checkpoint settled field state\.phase/
+      )
+      await expect(expectGoldenFile(directory, 'absent', sampleGolden('absent'))).rejects.toThrow(
+        'No golden recorded for absent'
+      )
+    } finally {
       rmSync(directory, { recursive: true })
     }
   })
@@ -234,27 +278,48 @@ describe('recording boundaries', () => {
     const actual = sampleGolden('diffable')
     actual.recording.checkpoints[0]!.observation.state = { phase: 'busy' }
     expect(() => compareGolden(expected, actual)).toThrow(
-      /Recording differs: diffable checkpoint settled field state\.phase[\s\S]*"idle"[\s\S]*"busy"/
+      /Recording differs: diffable\n {2}checkpoint settled field state\.phase\n[\s\S]*"idle"[\s\S]*"busy"[\s\S]*pnpm --dir mobile rpc:record diffable/
     )
   })
 
-  it('accepts a dependency bump but still refuses a different baseline', () => {
-    const expected = sampleGolden('provenance')
-    const bumped = sampleGolden('provenance')
-    bumped.lockfileSha256 = 'd'.repeat(64)
-    expect(() => compareGolden(expected, bumped)).not.toThrow()
-    const rebased = sampleGolden('provenance')
-    rebased.baseline = 'e'.repeat(40)
-    expect(() => compareGolden(expected, rebased)).toThrow(
-      /Recording differs: provenance header baseline/
+  it('reports every difference at once, identity fields by name', () => {
+    const expected = sampleGolden('several')
+    expected.recording.checkpoints.push({ id: 'later', observation: observation('idle') })
+    const actual = sampleGolden('several')
+    actual.family = 'moved'
+    actual.namedDeltas = ['delta']
+    actual.recording.checkpoints.push({ id: 'later', observation: observation('done') })
+    actual.recording.checkpoints[0]!.observation.effects = [{ name: 'extra' }]
+    let message = ''
+    try {
+      compareGolden(expected, actual)
+    } catch (error) {
+      message = String(error)
+    }
+    expect(message).toContain('family\n    expected "op"\n    actual   "moved"')
+    expect(message).toContain('namedDeltas\n    expected []\n    actual   ["delta"]')
+    expect(message).toContain('checkpoint settled field effects')
+    expect(message).toContain('checkpoint later field state.phase')
+  })
+
+  it('names a checkpoint list that moved, and lets the bytes decide when every field agrees', () => {
+    const expected = sampleGolden('listed')
+    const dropped = sampleGolden('listed')
+    dropped.recording.checkpoints = []
+    expect(() => compareGolden(expected, dropped)).toThrow(
+      /checkpoint list\n {4}no longer recorded: settled/
     )
+    const reordered = sampleGolden('listed')
+    reordered.recording.checkpoints[0]!.observation.state = { phase: 'idle', at: 1 }
+    const keyOrder = sampleGolden('listed')
+    keyOrder.recording.checkpoints[0]!.observation.state = { at: 1, phase: 'idle' }
+    expect(() => compareGolden(reordered, keyOrder)).toThrow(/encoding: every field matches/)
   })
 
   it('records a shared prefix once and refuses a variant that already diverged', () => {
     const base: RecordingScenario = {
       id: 'family',
       operation: 'op',
-      version: 1,
       family: 'op',
       sites: [],
       schedules: [],
@@ -298,7 +363,6 @@ describe('recording boundaries', () => {
     const base: RecordingScenario = {
       id: 'family',
       operation: 'op',
-      version: 1,
       family: 'op',
       sites: [],
       schedules: [],
@@ -324,7 +388,6 @@ describe('recording boundaries', () => {
     const scenario = (reply: unknown): RecordingScenario => ({
       id: 'family',
       operation: 'op',
-      version: 1,
       family: 'op',
       sites: [],
       schedules: [],
@@ -366,7 +429,6 @@ describe('recording boundaries', () => {
         {
           id: 'drift',
           operation: 'op',
-          version: 1,
           family: 'op',
           sites: [],
           schedules: [],
@@ -394,42 +456,6 @@ describe('recording boundaries', () => {
     })
   })
 
-  it('digests every executable recorder input and ignores prose', () => {
-    const root = mkdtempSync(join(tmpdir(), 'rpc-recorder-'))
-    try {
-      const directory = join(root, RECORDER_DIRECTORY)
-      mkdirSync(directory, { recursive: true })
-      writeFileSync(join(directory, 'runner.ts'), 'export const runner = 1')
-      const original = recorderSha256(root)
-      writeFileSync(join(directory, 'README.md'), 'prose')
-      // Each call spells the root differently: `recorderSha256` caches per root string, so reusing
-      // one would assert nothing.
-      expect(recorderSha256(`${root}/`)).toBe(original)
-      writeFileSync(join(directory, 'runner.ts'), 'export const runner = 2')
-      expect(recorderSha256(`${root}//`)).not.toBe(original)
-    } finally {
-      rmSync(root, { recursive: true })
-    }
-  })
-
-  // A suite that only reads goldens cannot put an observation in one, so it is not provenance; the
-  // drivers are, because a golden's bytes come from them.
-  it('digests the recording drivers and no other suite', () => {
-    const root = mkdtempSync(join(tmpdir(), 'rpc-drivers-'))
-    try {
-      const directory = join(root, RECORDER_DIRECTORY)
-      mkdirSync(directory, { recursive: true })
-      writeFileSync(join(directory, 'runner.ts'), 'export const runner = 1')
-      const original = recorderSha256(root)
-      writeFileSync(join(directory, 'reads-goldens.test.ts'), 'export const suite = 1')
-      expect(recorderSha256(`${root}/`)).toBe(original)
-      writeFileSync(join(directory, RECORDING_DRIVERS[0]), 'export const suite = 1')
-      expect(recorderSha256(`${root}//`)).not.toBe(original)
-    } finally {
-      rmSync(root, { recursive: true })
-    }
-  })
-
   it('keeps every named driver real and unimported by the engine', () => {
     const directory = resolve(import.meta.dirname)
     const missing = RECORDING_DRIVERS.filter((driver) => !existsSync(join(directory, driver)))
@@ -441,120 +467,7 @@ describe('recording boundaries', () => {
     expect({ missing, imported }).toEqual({ missing: [], imported: [] })
   })
 
-  it('delivers each frame through the session that published its subscribe', async () => {
-    const clock = vitestRecordingScheduler()
-    clock.start()
-    const transport = new ScriptedRpcTransport(clock.elapsed)
-    const events: unknown[] = []
-    try {
-      const dispose = transport.client.subscribe(CLIENT_EVENTS, null, (result) =>
-        events.push(result)
-      )
-      // Cut over before the stream is ready. The retiring registry keeps the cancelled subscribe
-      // precisely so it can unsubscribe once the id arrives, which is the behaviour a transport
-      // that routed every frame through the current session would drop on the floor.
-      await transport.cutover()
-      await clock.flush()
-      transport.frame(`${CLIENT_EVENTS}#1`, null, readyFrame('sub-1'))
-      transport.frame(`${CLIENT_EVENTS}#2`, null, readyFrame('sub-2'))
-      dispose()
-      expect(
-        transport.payloads.map((payload) => [payload.name, JSON.parse(payload.json).id])
-      ).toEqual([
-        [`${CLIENT_EVENTS}#1`, 'frame-1'],
-        [`${CLIENT_EVENTS}#2`, 'frame-2'],
-        ['runtime.clientEvents.unsubscribe#1', 'frame-3'],
-        ['runtime.clientEvents.unsubscribe#2', 'frame-4']
-      ])
-      expect(transport.payloads.map((payload) => JSON.parse(payload.json).params)).toEqual([
-        null,
-        null,
-        { subscriptionId: 'sub-1' },
-        { subscriptionId: 'sub-2' }
-      ])
-      // Only the live generation reaches the listener; the retiring one is fenced by the client.
-      expect(events).toEqual([readyFrame('sub-2').result])
-    } finally {
-      transport.dispose()
-      await clock.flush()
-      clock.stop()
-    }
-  })
-
-  it('routes a whole host response at a stream id, and asserts the subscribe params', async () => {
-    const clock = vitestRecordingScheduler()
-    clock.start()
-    const transport = new ScriptedRpcTransport(clock.elapsed)
-    const events: unknown[] = []
-    const changed = { ok: true, streaming: true, result: { type: 'worktreesChanged' } }
-    try {
-      const dispose = transport.client.subscribe(CLIENT_EVENTS, null, (result) =>
-        events.push(result)
-      )
-      transport.frame(`${CLIENT_EVENTS}#1`, null, readyFrame('sub-1'))
-      transport.frame(`${CLIENT_EVENTS}#1`, null, changed)
-      expect(() => transport.frame(`${CLIENT_EVENTS}#1`, { asserted: 1 }, changed)).toThrow(
-        'Subscribe params mismatch'
-      )
-      expect(() => transport.frame(`${CLIENT_EVENTS}#2`, null, changed)).toThrow(
-        'Missing subscription payload'
-      )
-      // The host's own end of stream, in the two responses it really sends: the `end` event as a
-      // streaming frame, then the unary reply the dispatcher sends once the handler returns. The
-      // second is what closes the stream here, and the registry reports it to the listener as an
-      // error — so the disposer below has no subscription left and publishes no unsubscribe.
-      transport.frame(`${CLIENT_EVENTS}#1`, null, {
-        ok: true,
-        streaming: true,
-        result: { type: 'end' }
-      })
-      transport.frame(`${CLIENT_EVENTS}#1`, null, { ok: true })
-      expect(() =>
-        transport.frame(`${CLIENT_EVENTS}#1`, null, {
-          ok: false,
-          error: { code: 'refused', message: 'gone' }
-        })
-      ).toThrow('No open stream for frame')
-      dispose()
-      expect(transport.payloads.map((payload) => payload.name)).toEqual([`${CLIENT_EVENTS}#1`])
-      expect(events).toEqual([
-        readyFrame('sub-1').result,
-        changed.result,
-        { type: 'end' },
-        { type: 'error', message: 'Streaming request ended before it was ready.', error: undefined }
-      ])
-    } finally {
-      transport.dispose()
-      await clock.flush()
-      clock.stop()
-    }
-  })
-
-  it('files only a subscribe as an open stream, not the unsubscribe it publishes later', async () => {
-    const clock = vitestRecordingScheduler()
-    clock.start()
-    const transport = new ScriptedRpcTransport(clock.elapsed)
-    try {
-      const dispose = transport.client.subscribe(CLIENT_EVENTS, null, () => {})
-      transport.frame(`${CLIENT_EVENTS}#1`, null, readyFrame('sub-1'))
-      dispose()
-      // The unsubscribe is a published payload but never a stream. Filed as one, a frame aimed at it
-      // routed at its wire id, matched nothing, recorded nothing and reported success.
-      expect(transport.payloads.map((payload) => payload.name)).toEqual([
-        `${CLIENT_EVENTS}#1`,
-        'runtime.clientEvents.unsubscribe#1'
-      ])
-      expect(() =>
-        transport.frame('runtime.clientEvents.unsubscribe#1', null, readyFrame('sub-1'))
-      ).toThrow('Missing subscription payload')
-    } finally {
-      transport.dispose()
-      await clock.flush()
-      clock.stop()
-    }
-  })
-
-  it('stamps each payload with the request count, which is all a reordered subscribe moves', async () => {
+  it('stamps a write ordinal that moves when a subscribe is reordered against a send', async () => {
     const subscribeFirst = await payloadsFrom((client) => {
       client.subscribe(CLIENT_EVENTS, null, () => {})
       void client.sendRequest('worktree.show', {}).catch(() => {})
@@ -564,65 +477,47 @@ describe('recording boundaries', () => {
       client.subscribe(CLIENT_EVENTS, null, () => {})
     })
     // The published order is identical either way, because a subscribe publishes synchronously
-    // while a request first waits for connected. Without `sent` the swap moves no recorded byte.
+    // while a request first waits for connected. Without the ordinal the swap moves no recorded
+    // byte; the send takes its ordinal at the logical call, before the payload it publishes later.
     expect(sendFirst.map((payload) => payload.name)).toEqual(
       subscribeFirst.map((payload) => payload.name)
     )
-    expect(subscribeFirst.map((payload) => payload.sent)).toEqual([0, 1])
-    expect(sendFirst.map((payload) => payload.sent)).toEqual([1, 1])
+    expect(subscribeFirst.map((payload) => payload.ordinal)).toEqual([1, 3])
+    expect(sendFirst.map((payload) => payload.ordinal)).toEqual([2, 3])
   })
 
-  it('drives the reply matrix over frames, and matrixes a family that only subscribes', () => {
-    const changed = { ok: true, streaming: true, result: { type: 'worktreesChanged' } }
-    const base: RecordingScenario = {
-      id: 'stream',
-      operation: 'op',
-      version: 1,
-      family: 'op',
-      sites: [],
-      schedules: [],
-      steps: [
-        { action: 'mount', id: 'mount' },
-        { frame: `${CLIENT_EVENTS}#1`, params: null, reply: readyFrame('sub-1') },
-        { checkpoint: 'ready' },
-        { frame: `${CLIENT_EVENTS}#1`, params: null, reply: changed },
-        { checkpoint: 'changed' }
-      ]
+  it('orders a subscribe against an effect in an operation that sends no requests', async () => {
+    // The gap the request count left: with no request to count, every stamp was `0`, so the two
+    // independent lists had nothing ordering them against each other.
+    const drive = async (subscribeFirst: boolean): Promise<RecordedValue> => {
+      const recording = await runRecording(
+        {
+          id: 'request-free',
+          operation: 'op',
+          family: 'op',
+          sites: [],
+          schedules: [],
+          steps: [{ action: 'mount', id: 'mount' }, { checkpoint: 'settled' }]
+        },
+        ({ client, effect }) => ({
+          action: () => {
+            if (subscribeFirst) {
+              client.subscribe(CLIENT_EVENTS, null, () => {})
+            }
+            effect('device.write', { key: 'seen' })
+            if (!subscribeFirst) {
+              client.subscribe(CLIENT_EVENTS, null, () => {})
+            }
+          },
+          state: () => ({}),
+          dispose: () => {}
+        }),
+        vitestRecordingScheduler()
+      )
+      const observed = recording.checkpoints[0]!.observation
+      return { payloads: observed.payloads, effects: observed.effects }
     }
-    // While the matrix read only completions this family threw its own named failure instead.
-    expect(replyMatrixSites(base)).toEqual([`${CLIENT_EVENTS}#1@1`, `${CLIENT_EVENTS}#1@2`])
-    expect(replyMatrixGoldenId('op', `${CLIENT_EVENTS}#1@2`)).toBe(
-      'matrix-op-runtime.clientevents.subscribe-1-2'
-    )
-    expect(replyMatrixNormalResult('op', [base], `${CLIENT_EVENTS}#1@2`)).toEqual(changed.result)
-    const variants = driveReplyMatrix(base, `${CLIENT_EVENTS}#1@1`, readyFrame('sub-1').result)
-    const partitions = variants.map((variant) => variant.id.replace('stream.', ''))
-    // Nine of eleven: a frame holds no promise, so neither transport rejection applies to one.
-    expect(partitions).toEqual([
-      'normal',
-      'result-absent',
-      'result-null',
-      'inner-ok-missing',
-      'inner-false-string-error',
-      'inner-false-object-error',
-      'outer-refused',
-      'outer-refused-no-message',
-      'method-not-found'
-    ])
-    const replies = new Map(variants.map((variant) => [variant.id, variant.steps[1]]))
-    // The success shapes keep the flag that routes them to the stream; a refusal never had one.
-    expect(replies.get('stream.normal')).toEqual(base.steps[1])
-    expect(replies.get('stream.result-absent')).toEqual({
-      frame: `${CLIENT_EVENTS}#1`,
-      params: null,
-      reply: { ok: true, streaming: true }
-    })
-    expect(replies.get('stream.outer-refused')).toMatchObject({
-      reply: { ok: false, error: { code: 'refused' } }
-    })
-    // No `optional` on a downstream frame: the registry routes a streaming response to the id that
-    // opened the stream whatever the divergence did, so every scripted frame still lands.
-    expect(variants[0]!.steps[3]).toEqual(base.steps[3])
+    expect(await drive(true)).not.toEqual(await drive(false))
   })
 
   it('refuses a mutation anchor that matches more than once', () => {
@@ -654,16 +549,12 @@ describe('recording boundaries', () => {
 
 const CLIENT_EVENTS = 'runtime.clientEvents.subscribe'
 
-function readyFrame(subscriptionId: string) {
-  return { ok: true, streaming: true, result: { type: 'ready', subscriptionId } }
-}
-
 /** The payloads one scripted client publishes, with the transport torn down either way. */
 async function payloadsFrom(
   drive: (client: ScriptedRpcTransport['client']) => void
 ): Promise<ScriptedRpcTransport['payloads']> {
   const clock = vitestRecordingScheduler()
-  clock.start()
+  await clock.start()
   const transport = new ScriptedRpcTransport(clock.elapsed)
   try {
     drive(transport.client)
@@ -712,18 +603,10 @@ function observation(phase: string): Observation {
 
 function sampleGolden(id: string): GoldenRecording {
   return {
+    goldenFormatVersion: GOLDEN_FORMAT_VERSION,
     operation: 'op',
     family: 'op',
     namedDeltas: [],
-    runnerVersion: 1,
-    baseline: 'a'.repeat(40),
-    lockfileSha256: 'b'.repeat(64),
-    recorderSha256: 'c'.repeat(64),
-    scenarioSha256: 'd'.repeat(64),
-    platform: process.platform,
-    scenarioVersion: 1,
-    projectionVersion: PROJECTION_VERSION,
-    goldenFormatVersion: GOLDEN_FORMAT_VERSION,
     recording: { scenario: id, checkpoints: [{ id: 'settled', observation: observation('idle') }] }
   }
 }

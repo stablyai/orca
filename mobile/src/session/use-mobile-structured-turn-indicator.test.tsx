@@ -2,7 +2,10 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
+import type {
+  AgentSessionSubscribeEvent,
+  AgentSessionTurnActivity
+} from '../../../src/shared/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
@@ -13,12 +16,17 @@ function journalItem(
   return { itemId: `item-${sequence}`, revision: 1, sequence, observedAt: sequence, body }
 }
 
-function snapshot(items: AgentJournalRenderItem[], fence: number): AgentSessionSubscribeEvent {
+function snapshot(
+  items: AgentJournalRenderItem[],
+  fence: number,
+  activity?: AgentSessionTurnActivity
+): AgentSessionSubscribeEvent {
   const newest = items.length
   return {
     type: 'snapshot',
     sessionId: 'session-1',
     fence,
+    ...(activity ? { activity } : {}),
     page: {
       sessionId: 'session-1',
       epoch: 'epoch-1',
@@ -36,7 +44,7 @@ function snapshot(items: AgentJournalRenderItem[], fence: number): AgentSessionS
       hasOlder: false,
       hasNewer: false
     }
-  } as AgentSessionSubscribeEvent
+  }
 }
 
 /** What the one live indicator row reads, resolved off the session journal. */
@@ -126,13 +134,39 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
               input: { command: 'pnpm lint' },
               state: 'running'
             }),
-            journalItem(4, { kind: 'status', text: 'Updating the plan' })
+            journalItem(4, { kind: 'status', text: 'Context compacted' })
+          ],
+          3,
+          { turnId: 'turn-1', text: 'Updating the plan' }
+        )
+      )
+    })
+
+    expect(hook?.turnIndicator).toEqual({ thinking: false, activityText: 'Updating the plan' })
+  })
+
+  it('never reads a journal status row as the live activity', async () => {
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    await vi.waitFor(() => expect(listener).not.toBeNull())
+
+    act(() => {
+      listener?.(
+        snapshot(
+          [
+            runningTurn,
+            journalItem(2, {
+              kind: 'status',
+              tone: 'warning',
+              text: 'Claude hit a temporary problem and is retrying.'
+            })
           ],
           3
         )
       )
     })
 
-    expect(hook?.turnIndicator).toEqual({ thinking: false, activityText: 'Updating the plan' })
+    expect(hook?.turnIndicator).toEqual({ thinking: false, activityText: null })
   })
 })

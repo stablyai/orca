@@ -337,14 +337,21 @@ describe('startStructuredAgentLaunch', () => {
     expect(toast.error).not.toHaveBeenCalled()
   })
 
-  it('names the refused agent in the launch failure toast', async () => {
-    const worktreeId = 'wt-claude-toast'
+  // The chat's Retry line says a failed start; a toast beside it said it twice, again per Retry.
+  it('leaves a failed start and each failed Retry to the chat, with no toast', async () => {
+    const worktreeId = 'wt-claude-refused'
     mocks.launch.mockRejectedValue(new StructuredAgentSessionCreateRefusalError('unsupported'))
 
-    startStructuredAgentLaunch(worktreeId, 'claude')
+    const { sessionId } = startStructuredAgentLaunch(worktreeId, 'claude')
+    await flushLaunchSettlement()
+    expect(getStructuredAgentSessionLaunchLifecycle(worktreeId, sessionId)).toBe('failed')
+
+    expect(retryStructuredAgentSessionLaunch(worktreeId, sessionId)).toBe(true)
     await flushLaunchSettlement()
 
-    expect(toast.error).toHaveBeenCalledWith('Could not open Claude chat', expect.anything())
+    expect(mocks.launch).toHaveBeenCalledTimes(2)
+    expect(getStructuredAgentSessionLaunchLifecycle(worktreeId, sessionId)).toBe('failed')
+    expect(toast.error).not.toHaveBeenCalled()
     expect(toast.message).not.toHaveBeenCalled()
   })
 
@@ -505,22 +512,27 @@ describe('startStructuredAgentLaunch', () => {
     expect(toast.error).not.toHaveBeenCalled()
   })
 
-  it('keeps the raw error out of the failure toast', async () => {
-    const worktreeId = 'wt-no-raw-error-in-toast'
+  it('logs the raw error of an unconfirmed start and leaves the telling to the chat', async () => {
+    const worktreeId = 'wt-raw-error-logged'
     const intent = launchIntent(worktreeId)
+    const raw = new Error("EEXIST: file already exists, mkdir '/tmp/o97b/agent-sessions'")
     mocks.createIntent.mockReturnValueOnce(intent)
-    mocks.launch.mockRejectedValue(
-      new Error("EEXIST: file already exists, mkdir '/tmp/o97b/agent-sessions'")
-    )
+    mocks.launch.mockRejectedValue(raw)
     vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([])
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    startStructuredAgentLaunch(worktreeId, 'codex')
-    await flushLaunchSettlement()
+    try {
+      startStructuredAgentLaunch(worktreeId, 'codex')
+      await flushLaunchSettlement()
 
-    expect(toast.error).toHaveBeenCalledOnce()
-    const description = String(vi.mocked(toast.error).mock.calls[0]?.[1]?.description ?? '')
-    expect(description).not.toContain('EEXIST')
-    expect(description).not.toContain('/tmp/')
+      expect(getStructuredAgentSessionLaunchLifecycle(worktreeId, intent.sessionId)).toBe(
+        'visibility-unknown'
+      )
+      expect(warn).toHaveBeenCalledWith('[native-chat] structured launch failed', raw)
+      expect(toast.error).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('retries an absent unknown outcome with the exact same intent', async () => {
@@ -553,7 +565,6 @@ describe('startStructuredAgentLaunch', () => {
 
     startStructuredAgentLaunch(worktreeId, 'codex')
     await flushLaunchSettlement()
-    expect(toast.error).toHaveBeenCalledOnce()
 
     vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
       publishedSnapshot(worktreeId, intent.sessionId)
@@ -563,26 +574,6 @@ describe('startStructuredAgentLaunch', () => {
 
     expect(mocks.createIntent).toHaveBeenCalledOnce()
     expect(mocks.launch).toHaveBeenCalledTimes(2)
-    expect(toast.error).toHaveBeenCalledOnce()
-  })
-
-  it('replays the same intent after an absent unknown outcome', async () => {
-    const worktreeId = 'wt-replay-unknown'
-    const intent = launchIntent(worktreeId)
-    mocks.createIntent.mockReturnValueOnce(intent)
-    mocks.launch
-      .mockRejectedValueOnce(new Error('offline'))
-      .mockResolvedValueOnce({ sessionId: intent.sessionId, fence: 1 })
-    vi.mocked(refreshLocalStructuredSessionTabs)
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([publishedSnapshot(worktreeId, intent.sessionId)])
-
-    startStructuredAgentLaunch(worktreeId, 'codex')
-    await flushLaunchSettlement()
-
-    expect(mocks.createIntent).toHaveBeenCalledOnce()
-    expect(mocks.launch).toHaveBeenCalledTimes(2)
-    expect(mocks.launch.mock.calls[1]?.[0]).toBe(intent)
     expect(toast.error).not.toHaveBeenCalled()
   })
 
@@ -660,7 +651,7 @@ describe('startStructuredAgentLaunch', () => {
     expect(mocks.launch.mock.calls[1]?.[0].params.envelope.clientOperationId).not.toBe(
       first.params.envelope.clientOperationId
     )
-    expect(toast.error).toHaveBeenCalledOnce()
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('does not stage the preserved launch prompt again on retry', async () => {

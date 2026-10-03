@@ -1,7 +1,7 @@
 // The rail itself: a column of ticks down the right edge of the transcript, one
 // per user message, with a hover panel that previews them and jumps on click.
 
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -22,20 +22,111 @@ function railItemLabel(item: NativeChatRailItem): string {
     : translate('components.native-chat.railEmptyMessage', 'Message')
 }
 
+type NativeChatMessageRailMode = 'hover' | 'interactive' | null
+
+function NativeChatMessageRailItems({
+  mode,
+  items,
+  activeId,
+  pendingId,
+  onSelect
+}: {
+  mode: NativeChatMessageRailMode
+  items: readonly NativeChatRailItem[]
+  activeId: string | null
+  pendingId: string | null
+  onSelect: (item: NativeChatRailItem) => void
+}): React.JSX.Element {
+  const listRef = useRef<HTMLUListElement>(null)
+  const currentItemRef = useRef<HTMLButtonElement>(null)
+  const previousMode = useRef<NativeChatMessageRailMode>(null)
+
+  const open = mode !== null
+  // Reveal the lit row when the list opens or its rows shift — not when a hover
+  // preview turns interactive, which a press on an item does: moving the list
+  // then slides the item out from under the pointer and the click is lost. Nor
+  // while a picked item pages in: each landed page shifts the rows under it.
+  useLayoutEffect(() => {
+    if (open && activeId !== null && items.length > 0 && pendingId === null) {
+      currentItemRef.current?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [activeId, items, open, pendingId])
+
+  // Entering interactive from the rail moves focus into the list; entering it by
+  // focusing an item already put focus where the reader chose.
+  useLayoutEffect(() => {
+    if (
+      mode === 'interactive' &&
+      previousMode.current !== 'interactive' &&
+      !listRef.current?.contains(document.activeElement)
+    ) {
+      const focusTarget =
+        (activeId === null ? null : currentItemRef.current) ??
+        listRef.current?.querySelector<HTMLButtonElement>('button')
+      focusTarget?.focus({ preventScroll: true })
+    }
+    previousMode.current = mode
+  }, [activeId, mode])
+
+  return (
+    <ul ref={listRef} className="scrollbar-sleek max-h-64 overflow-y-auto overflow-x-hidden">
+      {items.map((item) => (
+        <li key={item.id}>
+          <button
+            type="button"
+            ref={item.id === activeId ? currentItemRef : undefined}
+            onClick={() => onSelect(item)}
+            aria-current={item.id === activeId ? 'true' : undefined}
+            aria-busy={item.id === pendingId ? true : undefined}
+            data-current={item.id === activeId}
+            className={cn(
+              'flex w-full cursor-pointer rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              item.id === activeId && 'bg-accent'
+            )}
+          >
+            <span
+              className={cn(
+                'line-clamp-2 text-xs leading-snug',
+                item.id === activeId ? 'text-foreground' : 'text-muted-foreground',
+                item.id === pendingId && 'animate-pulse'
+              )}
+            >
+              {railItemLabel(item)}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export const NativeChatMessageRail = memo(function NativeChatMessageRail({
   rail,
   scrollRef,
-  onSelect
+  onSelect,
+  onReaderScroll,
+  pendingId = null
 }: {
   rail: NativeChatMessageRailState
   scrollRef: React.RefObject<HTMLDivElement | null>
   onSelect: (item: NativeChatRailItem) => void
+  /** The reader scrolled the transcript through the rail. */
+  onReaderScroll?: () => void
+  /** A tick whose older history is still paging in. */
+  pendingId?: string | null
 }): React.JSX.Element | null {
   // Hover preserves focus; activation enters the focus-managed prompt picker.
-  const [mode, setMode] = useState<'hover' | 'interactive' | null>(null)
+  const [mode, setMode] = useState<NativeChatMessageRailMode>(null)
+  // A pick that pages history in keeps the list open, its item pulsing, until the
+  // jump lands or is abandoned; then it closes as any pick does.
+  const [heldId, setHeldId] = useState<string | null>(null)
+  if (heldId !== null && (heldId !== pendingId || mode === null)) {
+    setHeldId(null)
+    setMode(null)
+  }
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
   const restoreFocus = useRef(false)
+  const open = mode !== null
   const cancelClose = (): void => {
     if (closeTimer.current !== null) {
       clearTimeout(closeTimer.current)
@@ -56,14 +147,13 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
     },
     []
   )
-
   if (!rail.visible) {
     return null
   }
 
   return (
     <Popover
-      open={mode !== null}
+      open={open}
       onOpenChange={(open) => {
         cancelClose()
         if (open) {
@@ -94,7 +184,6 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
               event.preventDefault()
               restoreFocus.current = true
               setMode('interactive')
-              contentRef.current?.querySelector('button')?.focus()
             }
           }}
           // The rail overlays the transcript without being inside it, so a wheel
@@ -112,6 +201,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
                   ? element.clientHeight
                   : 1
             element.scrollTop += event.deltaY * scale
+            onReaderScroll?.()
           }}
           className="group/rail absolute inset-y-0 right-[14px] z-10 flex w-4 cursor-default flex-col items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
@@ -130,7 +220,6 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
         </button>
       </PopoverTrigger>
       <PopoverContent
-        ref={contentRef}
         side="left"
         align="center"
         aria-label={translate('components.native-chat.railLabel', 'Your messages')}
@@ -142,45 +231,27 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
           restoreFocus.current = true
           setMode('interactive')
         }}
-        onOpenAutoFocus={(event) => {
-          if (mode === 'hover') {
-            event.preventDefault()
-          }
-        }}
+        onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => {
           if (!restoreFocus.current) {
             event.preventDefault()
           }
         }}
       >
-        <ul className="scrollbar-sleek max-h-64 overflow-y-auto overflow-x-hidden">
-          {rail.items.map((item) => (
-            <li key={item.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  onSelect(item)
-                  setMode(null)
-                }}
-                aria-current={item.id === rail.activeId ? 'true' : undefined}
-                data-current={item.id === rail.activeId}
-                className={cn(
-                  'flex w-full cursor-pointer rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  item.id === rail.activeId && 'bg-accent'
-                )}
-              >
-                <span
-                  className={cn(
-                    'line-clamp-2 text-xs leading-snug',
-                    item.id === rail.activeId ? 'text-foreground' : 'text-muted-foreground'
-                  )}
-                >
-                  {railItemLabel(item)}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <NativeChatMessageRailItems
+          mode={mode}
+          items={rail.items}
+          activeId={rail.activeId}
+          pendingId={pendingId}
+          onSelect={(item) => {
+            onSelect(item)
+            if (item.slotIndex === null) {
+              setHeldId(item.id)
+            } else {
+              setMode(null)
+            }
+          }}
+        />
       </PopoverContent>
     </Popover>
   )

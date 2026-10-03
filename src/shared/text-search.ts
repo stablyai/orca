@@ -12,7 +12,7 @@ import { normalizeSearchResult } from './search-match-count'
 import { escapeRegex } from './string-utils'
 import type { SearchFileResult, SearchOptions, SearchResult } from './code-search-types'
 import { pushSearchMatch } from './text-search-match-accumulator'
-import { splitSearchGlobPatterns, toGitGlobPathspec } from './text-search-glob-patterns'
+import { splitSearchGlobPatterns, toGitGlobPathspecs } from './text-search-glob-patterns'
 import { joinSearchRoot, normalizeRelativePath, relativeToSearchRoot } from './text-search-paths'
 
 export type SearchAccumulator = {
@@ -75,12 +75,12 @@ export function buildRgArgs(query: string, target: string, opts: SearchOptionsLi
     args.push('--fixed-strings')
   }
   if (opts.includePattern) {
-    for (const pat of splitSearchGlobPatterns(opts.includePattern)) {
+    for (const pat of splitSearchGlobPatterns(opts.includePattern, 'rg')) {
       args.push('--glob', pat)
     }
   }
   if (opts.excludePattern) {
-    for (const pat of splitSearchGlobPatterns(opts.excludePattern)) {
+    for (const pat of splitSearchGlobPatterns(opts.excludePattern, 'rg')) {
       args.push('--glob', `!${pat}`)
     }
   }
@@ -172,6 +172,8 @@ export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string
   const gitArgs: string[] = [
     '-c',
     'submodule.recurse=false',
+    '-c',
+    'grep.column=false',
     'grep',
     '-n',
     '-I',
@@ -195,20 +197,26 @@ export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string
   gitArgs.push('-e', query, '--')
 
   let hasPathspecs = false
+  let hasIncludePathspecs = false
   if (opts.includePattern) {
-    for (const pat of splitSearchGlobPatterns(opts.includePattern)) {
-      gitArgs.push(toGitGlobPathspec(pat))
-      hasPathspecs = true
+    for (const pat of splitSearchGlobPatterns(opts.includePattern, 'git')) {
+      const pathspecs = toGitGlobPathspecs(pat)
+      gitArgs.push(...pathspecs)
+      hasPathspecs ||= pathspecs.length > 0
+      hasIncludePathspecs ||= pathspecs.length > 0
     }
   }
   if (opts.excludePattern) {
-    for (const pat of splitSearchGlobPatterns(opts.excludePattern)) {
-      gitArgs.push(toGitGlobPathspec(pat, true))
-      hasPathspecs = true
+    for (const pat of splitSearchGlobPatterns(opts.excludePattern, 'git')) {
+      const pathspecs = toGitGlobPathspecs(pat, true)
+      gitArgs.push(...pathspecs)
+      hasPathspecs ||= pathspecs.length > 0
     }
   }
   // Why: git grep needs a pathspec to search the working tree; '.' means everything under cwd.
-  if (!hasPathspecs) {
+  if (opts.includePattern && !hasIncludePathspecs) {
+    gitArgs.push(':(top,literal).git')
+  } else if (!hasPathspecs) {
     gitArgs.push('.')
   }
   return gitArgs

@@ -111,6 +111,11 @@ export function useTerminalPaneFoundation(
     caseSensitive: false,
     regex: false
   })
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const focusSearchInput = useCallback((): void => {
+    searchInputRef.current?.focus()
+    searchInputRef.current?.select()
+  }, [])
   const [pendingCloseConfirmation, setPendingCloseConfirmation] = useState<{
     paneId: number
     copyKind: CloseTerminalDialogCopyKind
@@ -118,7 +123,9 @@ export function useTerminalPaneFoundation(
   const [quickCommandEditorOpen, setQuickCommandEditorOpen] = useState(false)
   const [quickCommandEditorHostId, setQuickCommandEditorHostId] =
     useState<ExecutionHostId>(LOCAL_EXECUTION_HOST_ID)
-  const [chatLeafId, setChatLeafId] = useState<string | null>(null)
+  const [chatLeafId, setChatLeafId] = useState<string | null>(
+    () => useAppStore.getState().terminalLayoutsByTabId[tabId]?.chatLeafId ?? null
+  )
   const onAgentExitedRef = useRef<(leafId: string) => void>(() => {})
   const [tabWideAgentHintLeafId, setTabWideAgentHintLeafId] = useState<string | null | undefined>(
     undefined
@@ -141,7 +148,9 @@ export function useTerminalPaneFoundation(
   const [ptyRecoveryStatesByPaneId, setPtyRecoveryStatesByPaneId] = useState<
     Record<number, VisiblePtyRecoveryState>
   >({})
-  const [sessionStateSaveFailureOpen, setSessionStateSaveFailureOpen] = useState(false)
+  const [sessionStateSaveFailureMessage, setSessionStateSaveFailureMessage] = useState<
+    string | null
+  >(null)
   const daemonActions = useDaemonActions()
   const { refreshMobileOverlays } = useMobileOverlayTicks({
     managerRef,
@@ -200,6 +209,8 @@ export function useTerminalPaneFoundation(
     setSearchOpen,
     searchOpenRef,
     searchStateRef,
+    searchInputRef,
+    focusSearchInput,
     pendingCloseConfirmation,
     setPendingCloseConfirmation,
     quickCommandEditorOpen,
@@ -226,8 +237,8 @@ export function useTerminalPaneFoundation(
     setTerminalError,
     ptyRecoveryStatesByPaneId,
     setPtyRecoveryStatesByPaneId,
-    sessionStateSaveFailureOpen,
-    setSessionStateSaveFailureOpen,
+    sessionStateSaveFailureMessage,
+    setSessionStateSaveFailureMessage,
     daemonActions,
     refreshMobileOverlays
   }

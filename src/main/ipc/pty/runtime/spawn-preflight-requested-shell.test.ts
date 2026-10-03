@@ -43,7 +43,6 @@ function makeDeps(): PtyRuntimeControllerDeps {
     finishPtyShutdown,
     trustedTerminalHandleEnv: new Set(),
     retiredRejectedPtyIds: new Map(),
-    reversibleStopOwnersByPtyId: new Map(),
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only `operations.ts` (write/clearBuffer) reads `mainWindow`; the spawn preflight and option build never touch it, and a real BrowserWindow cannot exist in vitest.
     mainWindow: {} as BrowserWindow
   }

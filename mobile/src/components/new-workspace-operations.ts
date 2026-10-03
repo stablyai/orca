@@ -1,6 +1,9 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
-import { rpcReadUnchecked, rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import {
+  newWorkspaceRepoHooksSchema,
+  newWorkspaceUiTrustSchema
+} from './new-workspace-reply-schema'
 
 // The New Workspace drawer's own reads. Its SSH connect, SSH state and agent detection are the
 // workspace-create operations in ../tasks/mobile-workspace-source-operations.ts, asked with the
@@ -12,6 +15,11 @@ import { rpcReadUnchecked, rpcUncheckedPayloadReader } from '../transport/rpc-re
  * The tasks create path (`repo.setup-hooks`) throws the host's message because it cannot decide
  * whether to run setup without an answer. The drawer only decorates a form: a refusal leaves the
  * advanced section on its defaults and the message is never shown, so refusal is a skip here.
+ *
+ * The skip is also what carries an unreadable reply: the reader answers `compatible: false`, this
+ * policy raises `RpcIncompatibleReplyError` naming `repo.hooks`, and
+ * use-new-workspace-setup-script.ts:61 catches it into the same default details a property-read
+ * throw already landed on.
  */
 export const newWorkspaceSetupHooksRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -19,14 +27,9 @@ export const newWorkspaceSetupHooksRead = bindDeferredRpcOperation(
     method: 'repo.hooks',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('repo-hooks')
+    read: rpcResultVariant('repo-hooks', newWorkspaceRepoHooksSchema)
   })
 )
-
-// Reads `ui` the way the drawer always has: through optional chaining, so a null or absent result
-// is untrusted-but-not-fatal rather than the property-read throw the Tasks screen's reader keeps.
-const optionalUiMemberReader: RpcCompatibleReader<unknown, 'optional-ui-member', unknown> = (raw) =>
-  rpcReadUnchecked('optional-ui-member', raw == null ? undefined : Object(raw).ui)
 
 /** Persisted UI state, read for the trusted-hooks record only. A refused read trusts nothing. */
 export const newWorkspaceUiStateRead = bindDeferredRpcOperation(
@@ -35,6 +38,6 @@ export const newWorkspaceUiStateRead = bindDeferredRpcOperation(
     method: 'ui.get',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: optionalUiMemberReader
+    read: rpcResultVariant('optional-ui-member', newWorkspaceUiTrustSchema)
   })
 )

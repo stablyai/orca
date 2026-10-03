@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { z } from 'zod'
+import { persistMirrored } from '../storage/mirrored-storage-keys'
 import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
@@ -86,11 +87,13 @@ function parseJournal(raw: string | null): OperationJournal {
 }
 
 async function writeEntries(entries: OperationEntry[]): Promise<void> {
-  if (entries.length === 0) {
-    await AsyncStorage.removeItem(STORAGE_KEY)
-    return
-  }
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 1, entries }))
+  // Through the one write path, which notes the mirror on an accepted write and on nothing else
+  // (ruling 35). The rejection this can raise is the point of the key: a journal the device never
+  // wrote must not reach the page, and the composer above catches it as "Message not sent".
+  await persistMirrored(
+    STORAGE_KEY,
+    entries.length === 0 ? null : JSON.stringify({ v: 1, entries })
+  )
 }
 
 async function serialize<T>(action: () => Promise<T>): Promise<T> {
@@ -104,12 +107,16 @@ async function serialize<T>(action: () => Promise<T>): Promise<T> {
 
 export async function getOrCreateMobileStructuredSendOperation(input: {
   operationKey: string
+  /** The same intent under its other delivery: a retained entry there is replayed
+   *  as-is, so the key that matched — never a stored field — says how it was sent. */
+  alternateOperationKey?: string
   callerIdentity: string
   payloadFingerprint: string
   attachmentPaths: readonly string[]
   createOperationId: () => string
   now?: number
 }): Promise<{
+  operationKey: string
   operationId: string
   retained: boolean
   payloadFingerprint: string
@@ -120,12 +127,19 @@ export async function getOrCreateMobileStructuredSendOperation(input: {
     const callerFingerprint = mobileStructuredSendCallerFingerprint(input.callerIdentity)
     const journal = parseJournal(await AsyncStorage.getItem(STORAGE_KEY))
     const entries = journal.entries
-    const existing = entries.find((entry) => entry.operationKey === input.operationKey)
+    const existing =
+      entries.find((entry) => entry.operationKey === input.operationKey) ??
+      entries.find(
+        (entry) =>
+          input.alternateOperationKey !== undefined &&
+          entry.operationKey === input.alternateOperationKey
+      )
     if (existing) {
       if (existing.callerFingerprint !== callerFingerprint) {
         throw new Error('Structured send caller identity changed')
       }
       return {
+        operationKey: existing.operationKey,
         operationId: existing.operationId,
         retained: true,
         payloadFingerprint: existing.payloadFingerprint,
@@ -150,6 +164,7 @@ export async function getOrCreateMobileStructuredSendOperation(input: {
     })
     await writeEntries([...entries, entry])
     return {
+      operationKey: input.operationKey,
       operationId,
       retained: false,
       payloadFingerprint: input.payloadFingerprint,
@@ -176,7 +191,9 @@ export async function clearMobileStructuredSendOperation(input: {
   })
 }
 
-/** Reconcile an ack-lost operation once the authoritative journal settles it. */
+/** Reconcile an ack-lost operation once the authoritative journal settles it, or hands it off:
+ *  a submission naming the operation's id as its `queuedMessageId` is that send's queued draft
+ *  going out, in whatever state, so the send reached the host and its id is spent. */
 export async function clearMobileStructuredSettledSendOperations(input: {
   submissions: readonly AgentJournalSubmission[]
 }): Promise<void> {
@@ -187,13 +204,20 @@ export async function clearMobileStructuredSettledSendOperations(input: {
         : []
     )
   )
-  if (settled.size === 0) {
+  const handedOff = new Set(
+    input.submissions.flatMap((submission) =>
+      submission.queuedMessageId !== undefined ? [submission.queuedMessageId] : []
+    )
+  )
+  if (settled.size === 0 && handedOff.size === 0) {
     return
   }
   return serialize(async () => {
     const journal = parseJournal(await AsyncStorage.getItem(STORAGE_KEY))
     const entries = journal.entries.filter(
-      (entry) => !settled.has(`${entry.payloadFingerprint}\u0000${entry.operationId}`)
+      (entry) =>
+        !settled.has(`${entry.payloadFingerprint}\u0000${entry.operationId}`) &&
+        !handedOff.has(entry.operationId)
     )
     if (entries.length !== journal.entries.length) {
       await writeEntries(entries)
@@ -201,7 +225,57 @@ export async function clearMobileStructuredSettledSendOperations(input: {
   })
 }
 
-/** Test-only: drain in-memory serialization while preserving durable storage. */
+/**
+ * Spend the ids the host publishes as queued drafts. A draft is named by the
+ * operation id of the send that created it, so seeing one is the host's own
+ * receipt of that send — the `queued` answer a lost acknowledgement never
+ * brought. Without this, a draft another device later withdraws leaves an entry
+ * that no submission will ever settle.
+ */
+export async function clearMobileStructuredQueuedSendOperations(input: {
+  queuedMessageIds: readonly string[]
+}): Promise<void> {
+  if (input.queuedMessageIds.length === 0) {
+    return
+  }
+  const held = new Set(input.queuedMessageIds)
+  return serialize(async () => {
+    const journal = parseJournal(await AsyncStorage.getItem(STORAGE_KEY))
+    const entries = journal.entries.filter((entry) => !held.has(entry.operationId))
+    if (entries.length !== journal.entries.length) {
+      await writeEntries(entries)
+    }
+  })
+}
+
+/** Ids sent past a saved record storage would not clear, keyed by the operation key that record
+ *  matched, for this app run only: a retry of that text replays the same id instead of minting
+ *  another, which could deliver it twice. An entry dies at app restart, when the host answers the
+ *  id as spent, or when a saved record takes the id over; a replay the host keeps keeps it. */
+const bypassedOperationIds = new Map<string, string>()
+
+export function bypassedMobileStructuredSendOperationId(operationKey: string): string | undefined {
+  return bypassedOperationIds.get(operationKey)
+}
+
+export function rememberBypassedMobileStructuredSendOperation(
+  operationKey: string,
+  operationId: string
+): void {
+  bypassedOperationIds.set(operationKey, operationId)
+}
+
+export function forgetBypassedMobileStructuredSendOperation(
+  operationKey: string,
+  operationId: string
+): void {
+  if (bypassedOperationIds.get(operationKey) === operationId) {
+    bypassedOperationIds.delete(operationKey)
+  }
+}
+
+/** Test-only: drain in-memory serialization and bypassed ids while preserving durable storage. */
 export function resetMobileStructuredSendOperationJournalForTests(): void {
   mutations.tail = Promise.resolve()
+  bypassedOperationIds.clear()
 }

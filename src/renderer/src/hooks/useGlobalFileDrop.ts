@@ -20,6 +20,7 @@ import {
   type NativeFileDropRejectedPayload
 } from '../../../shared/native-file-drop'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
+import { describeDropTempCopyFailure } from '@/lib/drop-temp-copy-failure-copy'
 
 export function getEditorFileDropSettingsForWorktree(
   store: WorktreeRuntimeOwnerState,
@@ -120,7 +121,7 @@ export function useGlobalFileDrop(): void {
                 continue
               }
               const maybeRelative = toWorktreeRelativePath(result.destPath, worktreePath)
-              store.setActiveTabType('editor')
+              store.setActiveTabType('editor', activeWorktreeId)
               store.openFile(
                 {
                   filePath: result.destPath,
@@ -181,7 +182,7 @@ export function useGlobalFileDrop(): void {
             // tab-strip editor target. Keeping the editor-open path centralized
             // here avoids the regression where CLI drops were all coerced into
             // editor tabs once the renderer lost the original drop surface.
-            store.setActiveTabType('editor')
+            store.setActiveTabType('editor', activeWorktreeId)
             store.openFile({
               filePath,
               relativePath,
@@ -207,6 +208,17 @@ export function getNativeFileDropRejectionMessage(data: NativeFileDropRejectedPa
   description: string
   title: string
 } {
+  if (data.reason === 'temp-copy-failed') {
+    return {
+      description: describeDropTempCopyFailure(data.commonReason),
+      title: translate(
+        'auto.hooks.useGlobalFileDrop.nativeDropTempCopyFailed',
+        "Orca couldn't copy {{count}} dropped files.",
+        { count: data.pathCount }
+      )
+    }
+  }
+
   if (data.reason === 'unresolved-paths') {
     return {
       description: translate(

@@ -1,6 +1,6 @@
-// Live tool-activity derivation and copy for the native-chat "Running …" row,
-// shared by the desktop renderer (as its i18n fallback strings) and the mobile
-// app (used directly — mobile ships English only) so the two surfaces never drift.
+// Live tool-activity derivation and copy for native chat's tool runs. Mobile's
+// "Running …" row renders this copy directly (it ships English only); desktop
+// uses the count and failure strings as i18n fallbacks, so the two never drift.
 
 import { createToolInputDisplay } from './native-chat-tool-summary'
 import { isToolCallBlock, type NativeChatBlock } from './native-chat-types'
@@ -14,7 +14,12 @@ export const NATIVE_CHAT_TOOL_ACTIVITY_COPY = {
   runningNamed: 'Running {{toolName}}',
   countOne: '1 tool call',
   countN: '{{value0}} tool calls',
-  moreCalls: '+{{value0}} more'
+  moreCalls: '+{{value0}} more',
+  /** Quiet decoration on a settled collapsed header; the run's lines carry the
+   *  detail. Count-agnostic wording so one entry serves any number. */
+  failedCount: '{{value0}} failed',
+  /** Spoken form of the same mark — `1 failed` alone does not say failed what. */
+  failedCallsLabel: 'Failed tool calls: {{value0}}'
 } as const
 
 /** Tools whose call is a shell command, so the row reads as terminal activity
@@ -65,6 +70,17 @@ export function formatActiveToolLabel(descriptor: NativeChatActiveToolDescriptor
   return NATIVE_CHAT_TOOL_ACTIVITY_COPY[descriptor.key]
     .replaceAll('{{preview}}', descriptor.preview)
     .replaceAll('{{toolName}}', descriptor.toolName)
+}
+
+/** What a live run names beside its sentence: the command itself, or the tool's
+ *  word and argument. Tense-free on purpose — the sentence carries the state, so
+ *  this never claims a call that just finished is still running. */
+export function describeLatestToolCall(call: NativeChatToolCallBlock): string {
+  const { toolName, preview, isCommand } = describeActiveToolCall(call)
+  if (isCommand) {
+    return preview || toolName
+  }
+  return preview ? `${toolName} ${preview}` : toolName
 }
 
 /** The most recent still-running call in a run, or null once the run is settled.

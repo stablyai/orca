@@ -144,6 +144,26 @@ describe('buildAgentStartupPlan', () => {
     ).toBe("traecli -- 'help me name this config'")
   })
 
+  it('delivers the Muse prompt after its composer is ready', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'muse',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'muse',
+      launchCommand: 'muse --trust-workspace',
+      expectedProcess: 'muse',
+      followupPrompt: 'Summarize the failing tests',
+      launchConfig: {
+        ...emptyLaunchConfig('muse'),
+        agentCommand: 'muse --trust-workspace'
+      }
+    })
+  })
+
   it('passes the prompt to Prime Agent as a positional argv behind a `--` separator', () => {
     expect(
       buildAgentStartupPlan({
@@ -252,12 +272,12 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'devin',
-      launchCommand: "devin '--permission-mode' 'bypass'",
+      launchCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
       expectedProcess: 'devin',
       followupPrompt: 'Trace the failing test',
       launchConfig: {
-        agentCommand: "devin '--permission-mode' 'bypass'",
-        agentArgs: '--permission-mode bypass',
+        agentCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
+        agentArgs: '--permission-mode bypass --respect-workspace-trust false',
         agentEnv: {}
       }
     })
@@ -289,23 +309,6 @@ describe('buildAgentStartupPlan', () => {
         platform: 'darwin'
       })
     ).toBeNull()
-  })
-
-  it('uses -i flag for copilot to start an interactive session with initial prompt', () => {
-    expect(
-      buildAgentStartupPlan({
-        agent: 'copilot',
-        prompt: 'Fix the bug',
-        cmdOverrides: {},
-        platform: 'darwin'
-      })
-    ).toEqual({
-      agent: 'copilot',
-      launchCommand: "copilot -i 'Fix the bug'",
-      expectedProcess: 'copilot',
-      followupPrompt: null,
-      launchConfig: emptyLaunchConfig('copilot')
-    })
   })
 })
 
@@ -409,6 +412,8 @@ describe('isShellProcess', () => {
     expect(isShellProcess('C:\\Program Files\\Git\\bin\\bash.exe')).toBe(true)
     expect(isShellProcess('pwsh.exe')).toBe(true)
     expect(isShellProcess('/bin/zsh')).toBe(true)
+    expect(isShellProcess('/bin/ksh')).toBe(true)
+    expect(isShellProcess('dash')).toBe(true)
     expect(isShellProcess('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')).toBe(
       true
     )

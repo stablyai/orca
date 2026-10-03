@@ -4,10 +4,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-  MIN_COMPATIBLE_RUNTIME_SERVER_VERSION
-} from '../../shared/protocol-version'
+import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION } from '../../shared/protocol-version'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import * as environmentStore from '../../shared/runtime-environment-store'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 

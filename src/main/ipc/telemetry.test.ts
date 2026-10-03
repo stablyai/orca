@@ -161,6 +161,7 @@ describe('telemetry IPC handlers', () => {
       bucket_source: 'crossed_now'
     })
     handler({}, 'daemon_audit_eligibility', {})
+    handler({}, 'agent_token_usage', {})
     expect(trackMock).not.toHaveBeenCalled()
     expect(getCohortAtEmitMock).not.toHaveBeenCalled()
   })

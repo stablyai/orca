@@ -9,6 +9,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -19,6 +20,7 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 const { closeStructuredAgentSessionChild } = await import('./structured-agent-session-close')
 
 const SESSION = 'session-1'
+const TAB_ID = 'tab-of-session-1'
 
 function record(sessionId: string): AgentSessionRecord {
   return {
@@ -84,19 +86,25 @@ function installHost(options: HostOptions = {}) {
       throw new Error('the event sink could not be flushed')
     }
   })
+  const log = recordingStructuredAgentSessionLogger()
   hostRef.current = {
-    deps: { store: { getRecord: (id: string) => (id === SESSION ? entry : null) } },
-    hasSession: (sessionId: string) => held.has(sessionId),
-    getPersistedVisibleSessionTabIndex: () => {
-      if (options.indexThrows) {
-        throw new Error('visible tab index unreadable')
+    deps: {
+      logger: log.logger,
+      store: {
+        getRecord: (id: string) => (id === SESSION ? entry : null),
+        getSessionTabId: (id: string) => {
+          if (options.indexThrows) {
+            throw new Error('visible tab index unreadable')
+          }
+          return visible.has(id) ? TAB_ID : null
+        }
       }
-      return { present: true, sessionIds: [...visible] }
     },
+    hasSession: (sessionId: string) => held.has(sessionId),
     setSessionTabVisibility,
     close
   }
-  return { close, setSessionTabVisibility, visible }
+  return { close, setSessionTabVisibility, visible, log }
 }
 
 describe('closeStructuredAgentSessionChild tab-visibility rollback', () => {
@@ -133,7 +141,7 @@ describe('closeStructuredAgentSessionChild tab-visibility rollback', () => {
     expect(host.visible.has(SESSION)).toBe(true)
     expect(host.setSessionTabVisibility.mock.calls).toEqual([
       [SESSION, false],
-      [SESSION, true]
+      [SESSION, true, TAB_ID]
     ])
   })
 
@@ -147,7 +155,7 @@ describe('closeStructuredAgentSessionChild tab-visibility rollback', () => {
     expect(host.visible.has(SESSION)).toBe(true)
     expect(host.setSessionTabVisibility.mock.calls).toEqual([
       [SESSION, false],
-      [SESSION, true]
+      [SESSION, true, TAB_ID]
     ])
   })
 
@@ -202,11 +210,11 @@ describe('closeStructuredAgentSessionChild tab-visibility rollback', () => {
   })
 
   it('keeps the original failure when the restore itself throws', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const host = installHost({ stuck: true })
+    const restoreFailure = new Error('agent_session_identity_required')
     host.setSessionTabVisibility.mockImplementation(async (_sessionId, isVisible) => {
       if (isVisible) {
-        throw new Error('agent_session_identity_required')
+        throw restoreFailure
       }
     })
 
@@ -215,7 +223,9 @@ describe('closeStructuredAgentSessionChild tab-visibility rollback', () => {
     expect(outcome.stopped).toBe(false)
     expect(outcome.closeAttempted).toBe(true)
     expect(outcome.reason).not.toContain('agent_session_identity_required')
-    expect(warn).toHaveBeenCalled()
+    expect(host.log.entries.map((entry) => entry.fields)).toEqual([
+      { scope: 'close-tab-restore', sessionId: SESSION, error: restoreFailure }
+    ])
   })
 
   it('claims nothing when the visible-tab index cannot be read', async () => {

@@ -18,10 +18,8 @@ import {
 } from './mobile-tasks-dependencies'
 import {
   EMPTY_GITHUB_PROJECT_SETTINGS,
-  type LinearStatusResponse,
   type RuntimeTaskSettings,
   type TaskResumeState,
-  type TaskRuntimeStatus,
   getTaskPresetQuery,
   githubKindFromQuery,
   isTaskProvider,
@@ -203,8 +201,7 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
       }
       // The guard stays between the request and the interpretation: a screen that has moved on
       // must not raise a refusal it no longer owns.
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-      const status = taskRuntimeStatusRead.interpret(statusReply) as TaskRuntimeStatus
+      const status = taskRuntimeStatusRead.interpret(statusReply)
       if (!status.capabilities?.includes(MOBILE_TASKS_CAPABILITY)) {
         // Why: Tasks is additive RPC surface, so old desktop builds can still
         // pair but must not receive the newer task-specific method calls.
@@ -275,7 +272,7 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
       setRuntimeTaskSettings(settings)
       const uiRead = taskUiStateRead.interpret(uiReply)
       const uiState = uiRead.accepted
-        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema checks the `{ ui }` container and leaves both members `unknown`, because each is forwarded whole and re-read field by field with its own defaults downstream.
           (uiRead.value as
             | {
                 taskResumeState?: TaskResumeState
@@ -289,15 +286,9 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
       setGithubProjectHiddenFieldIdsByView(resume.githubProjectHiddenFieldIdsByView ?? {})
 
       const preflightRead = taskPreflightRead.interpret(preflightReply)
-      const preflight = preflightRead.accepted
-        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-          (preflightRead.value as { glab?: { installed?: boolean } })
-        : null
+      const preflight = preflightRead.accepted ? preflightRead.value : null
       const linearRead = taskLinearStatusRead.interpret(linearStatusReply)
-      const linearStatus = linearRead.accepted
-        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-          (linearRead.value as LinearStatusResponse)
-        : null
+      const linearStatus = linearRead.accepted ? linearRead.value : null
       const preferredProviders = normalizeVisibleTaskProviders(settings.visibleTaskProviders)
       const linearIsConnected = linearStatus?.connected === true
       const availableProviders = filterAvailableTaskProviders(preferredProviders, {

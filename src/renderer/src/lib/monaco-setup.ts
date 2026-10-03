@@ -1,4 +1,5 @@
 import { loader } from '@monaco-editor/react'
+import { editorModelRegistry } from './editor-model-registry'
 import * as monaco from 'monaco-editor'
 import { typescript as monacoTS } from 'monaco-editor'
 import 'monaco-editor/min/vs/editor/editor.main.css'
@@ -12,11 +13,13 @@ import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
 import { registerNimLanguage } from './monaco-languages/register-nim'
 import { registerShellMarkdownAliases } from './monaco-languages/register-shell-markdown-aliases'
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
+import { registerTypstLanguage } from './monaco-languages/register-typst'
 import { registerVueLanguage } from './monaco-languages/register-vue'
 import { installMonacoDelayerCancellationGuard } from './monaco-delayer-cancellation-guard'
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
 import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
 import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
+import { runMonacoSetupSteps } from './monaco-setup-steps'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -75,22 +78,29 @@ monacoTS.javascriptDefaults.setCompilerOptions({
   jsx: monacoTS.JsxEmit.Preserve
 })
 
-registerVueLanguage(monaco)
-registerSvelteLanguage(monaco)
-registerAstroLanguage(monaco)
-registerNimLanguage(monaco)
-registerJsonlLanguage(monaco)
-registerShellMarkdownAliases(monaco)
-installMonacoDelayerCancellationGuard()
-installMonacoDiffEditorDisposalGuard(monaco)
-installMonacoPeekReferencesPreviewOptions()
-// Why: Monaco's built-in context-menu Paste reads navigator.clipboard, which is
-// blocked in Orca's sandboxed renderer. Route it through the trusted IPC bridge
-// so right-click Paste works like Cmd+V (which already works via native events).
-installMonacoContextMenuPaste(monaco)
+runMonacoSetupSteps([
+  ['Vue language registration', () => registerVueLanguage(monaco)],
+  ['Svelte language registration', () => registerSvelteLanguage(monaco)],
+  ['Astro language registration', () => registerAstroLanguage(monaco)],
+  ['Nim language registration', () => registerNimLanguage(monaco)],
+  ['Typst language registration', () => registerTypstLanguage(monaco)],
+  ['JSONL language registration', () => registerJsonlLanguage(monaco)],
+  ['shell Markdown alias registration', () => registerShellMarkdownAliases(monaco)],
+  ['delayer cancellation guard', installMonacoDelayerCancellationGuard],
+  ['diff editor disposal guard', () => installMonacoDiffEditorDisposalGuard(monaco)],
+  ['peek references preview options', installMonacoPeekReferencesPreviewOptions],
+  // Why: Monaco's built-in context-menu Paste reads navigator.clipboard, which is blocked in
+  // Orca's sandboxed renderer. Route it through the trusted IPC bridge so right-click Paste
+  // works like Cmd+V (which already works via native events).
+  ['context-menu paste', () => installMonacoContextMenuPaste(monaco)]
+])
 
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })
 
+const unregisterEditorModelRegistry = editorModelRegistry.register(monaco)
+if (import.meta.hot) {
+  import.meta.hot.dispose(unregisterEditorModelRegistry)
+}
 // Re-export for convenience
 export { monaco }

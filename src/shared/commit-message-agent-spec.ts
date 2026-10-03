@@ -1,3 +1,4 @@
+import { OMP_MODEL_LIST_ARGS, parseOmpModelList } from './omp-model-list-probe'
 import type { TuiAgent } from './tui-agent'
 import { isTuiAgentEnabled } from './tui-agent-selection'
 import { labelFromModelId } from './model-id-label'
@@ -88,6 +89,29 @@ export type CommitMessageAgentCapability = {
 }
 
 export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageAgentSpec>> = {
+  omp: {
+    id: 'omp',
+    label: 'OMP',
+    binary: 'omp',
+    promptDelivery: 'stdin',
+    buildArgs: ({ model, thinkingLevel }) => [
+      '--print',
+      '--no-session',
+      '--no-tools',
+      '--no-extensions',
+      '--no-skills',
+      '--no-rules',
+      '--mode',
+      'text',
+      ...(model && model !== 'default' ? ['--model', model] : []),
+      ...(thinkingLevel ? ['--thinking', thinkingLevel] : [])
+    ],
+    singletonOptions: [['--model'], ['--thinking']],
+    modelSource: 'dynamic',
+    modelDiscovery: { binary: 'omp', args: OMP_MODEL_LIST_ARGS, parse: parseOmpModelList },
+    models: [{ id: 'default', label: 'Config default' }],
+    defaultModelId: 'default'
+  },
   ...buildPrimaryCommitMessageAgentSpecs({
     CLAUDE_THINKING_LEVELS,
     OPENAI_THINKING_LEVELS,
@@ -188,13 +212,6 @@ export function getCommitMessageAgentCapability(
 ): CommitMessageAgentCapability | undefined {
   const spec = getCommitMessageAgentSpec(agentId)
   return spec ? toCommitMessageAgentCapability(spec) : undefined
-}
-
-export function getCommitMessageModelCapability(
-  agentId: TuiAgent,
-  modelId: string
-): CommitMessageModelCapability | undefined {
-  return getCommitMessageAgentCapability(agentId)?.models.find((m) => m.id === modelId)
 }
 
 /** Ordered list of agents that have a non-interactive mode wired up. */

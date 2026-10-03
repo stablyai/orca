@@ -17,7 +17,7 @@ import {
   hasUnansweredStructuredAgentSessionDispatch,
   projectStructuredAgentSessionStatus
 } from '../../src/shared/structured-agent-session-projection'
-import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { readAgentSessionHistory } from '../../src/main/native-chat/agent-session-wire/agent-session-history-page'
 import { AgentSessionSubscribers } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-subscribers'
 import { StructuredAgentSessionStatusFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-status-feed'
@@ -32,6 +32,7 @@ import {
   getStructuredAgentSessionReadOwner,
   resetStructuredAgentSessionReadOwnersForTests
 } from '../../src/renderer/src/components/native-chat/structured-agent-session-read-owner'
+import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 
 const SESSION = 'cursor-body-regression'
 const target = { kind: 'local' } as const
@@ -57,7 +58,7 @@ async function fixture() {
       agent: 'codex',
       providerHandle: { kind: 'codex', threadId: 'thread-1' }
     },
-    journalDir: join(root, 'journal')
+    stateDirectory: join(root, 'journal')
   })
   async function appendOutput(index: number) {
     await journal.appendItem(
@@ -125,6 +126,7 @@ describe('structured session cursor/body regression', () => {
       const { journal, appendOutput, accept } = await fixture()
       let hostSummary: AgentSessionStatusSummary | undefined
       const feed = new StructuredAgentSessionStatusFeed({
+        logger: createStructuredAgentSessionLogger(),
         sessions: new Map([
           [
             SESSION,

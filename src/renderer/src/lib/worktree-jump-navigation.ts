@@ -60,6 +60,7 @@ export function jumpToWorktreeFromSidebar(
 
   // Why the workspace dispatcher: it owns the folder-vs-worktree split and the folder path-status gate.
   const activated = activateAndRevealWorkspace(worktreeId, {
+    navigationIntent: 'user-open',
     ...(hiddenBeforeActivation ? { revealInSidebar: false, clearSidebarFilters: false } : {}),
     ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {})
   })

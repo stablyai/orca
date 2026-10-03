@@ -5,7 +5,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { release } from 'node:os'
-import { isWslUncPath, parseWslUncPath } from '../../shared/wsl-paths'
+import { isWslUncPath, uncRouteKey } from '../../shared/wsl-paths'
 import { wslUncDirectoryExists, wslUncDirectoryExistsAsync } from '../wsl'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 
@@ -24,22 +24,7 @@ type UncRouteLane = {
 
 const uncRouteLanes = new Map<string, UncRouteLane>()
 
-/**
- * Groups paths by the host that must answer for them, so many dead
- * subdirectories of one share share a lane. Returns null for local-disk paths,
- * which never block long enough to be worth queueing.
- */
-export function uncRouteKey(cwd: string): string | null {
-  if (!cwd.startsWith('\\\\')) {
-    return null
-  }
-  const wslInfo = parseWslUncPath(cwd)
-  if (wslInfo) {
-    return `wsl:${wslInfo.distro.trim().toLowerCase()}`
-  }
-  const server = cwd.slice(2).split(/[\\/]/, 1)[0]
-  return `unc:${server.toLowerCase()}`
-}
+export { uncRouteKey } from '../../shared/wsl-paths'
 
 async function withUncRouteLane<T>(cwd: string, run: () => Promise<T>): Promise<T> {
   const key = uncRouteKey(cwd)
@@ -162,18 +147,7 @@ export function validateWorkingDirectoryAsync(
   if (!signal) {
     return validation
   }
-  const shared = validation
-  // The shared probe outlives this caller; keep it from surfacing as unhandled.
-  void shared.catch(() => {})
-  return new Promise<void>((resolve, reject) => {
-    const onAbort = (): void => reject(new WorkingDirectoryValidationAbortedError(cwd))
-    if (signal.aborted) {
-      onAbort()
-      return
-    }
-    signal.addEventListener('abort', onAbort, { once: true })
-    shared.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
-  })
+  return waitForWorkingDirectoryValidation(validation, cwd, signal)
 }
 
 function validateWorkingDirectoryUncached(cwd: string): Promise<void> {
@@ -201,4 +175,53 @@ async function probeWorkingDirectory(cwd: string): Promise<void> {
   if (!stats.isDirectory()) {
     throw new Error(`Working directory "${cwd}" is not a directory.`)
   }
+}
+
+type WorkingDirectoryWaiterHolder = {
+  waiter: {
+    signal: AbortSignal
+    onAbort: () => void
+    resolve: () => void
+    reject: (error: unknown) => void
+  } | null
+}
+
+function takeWorkingDirectoryWaiter(
+  holder: WorkingDirectoryWaiterHolder
+): WorkingDirectoryWaiterHolder['waiter'] {
+  const waiter = holder.waiter
+  holder.waiter = null
+  waiter?.signal.removeEventListener('abort', waiter.onAbort)
+  return waiter
+}
+
+// Keep reaction order while an abandoned caller's signal and resolver become collectible.
+function observeWorkingDirectoryValidation(
+  promise: Promise<void>,
+  holder: WorkingDirectoryWaiterHolder
+): void {
+  void promise.then(
+    () => takeWorkingDirectoryWaiter(holder)?.resolve(),
+    (error: unknown) => takeWorkingDirectoryWaiter(holder)?.reject(error)
+  )
+}
+
+function waitForWorkingDirectoryValidation(
+  shared: Promise<void>,
+  cwd: string,
+  signal: AbortSignal
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const holder: WorkingDirectoryWaiterHolder = { waiter: null }
+    const onAbort = (): void => {
+      takeWorkingDirectoryWaiter(holder)?.reject(new WorkingDirectoryValidationAbortedError(cwd))
+    }
+    holder.waiter = { signal, onAbort, resolve, reject }
+    if (signal.aborted) {
+      onAbort()
+      return
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    observeWorkingDirectoryValidation(shared, holder)
+  })
 }

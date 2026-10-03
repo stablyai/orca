@@ -11,7 +11,11 @@ import {
   parseCodexTrustKey
 } from './codex-trust-identity'
 import { writeTomlConfigAtomically } from './config-toml-atomic-write'
-import { removeHookTrustContent, upsertHookTrustContent } from './config-toml-hook-trust-edit'
+import {
+  moveHookTrustContent,
+  removeHookTrustContent,
+  upsertHookTrustContent
+} from './config-toml-hook-trust-edit'
 import { CodexHookTrustEntryMap, readHookTrustContent } from './config-toml-hook-trust-read'
 import { upsertProjectTrustContent } from './config-toml-project-trust'
 import { escapeTomlBasicString, parseProjectTomlHeaderPath } from './config-toml-syntax'
@@ -28,6 +32,7 @@ export type CodexEventLabel =
   | 'subagent_start'
   | 'subagent_stop'
   | 'stop'
+  | 'interrupt'
 
 export type CodexTrustEntry = {
   /** Path on disk to the hooks.json that declares the hook (the "key_source"). */
@@ -105,6 +110,21 @@ export function upsertHookTrustEntries(
 ): void {
   const existing = readTomlForMutation(configPath)
   const updated = upsertHookTrustEntriesInContent(existing, entries)
+  if (updated !== existing) {
+    writeConfigAtomically(configPath, updated)
+  }
+}
+
+/** Moves hook trust blocks to new keys verbatim; see moveHookTrustContent. */
+export function moveHookTrustEntries(
+  configPath: string,
+  moves: readonly { oldKey: string; newKey: string }[]
+): void {
+  if (moves.length === 0 || !existsSync(configPath)) {
+    return
+  }
+  const existing = readTomlForMutation(configPath)
+  const updated = moveHookTrustContent(existing, moves)
   if (updated !== existing) {
     writeConfigAtomically(configPath, updated)
   }

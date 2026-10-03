@@ -3,6 +3,7 @@ import type { ComposerModel } from './composer-model'
 type IssueSourceActionsInput = Pick<
   ComposerModel,
   | 'baseBranch'
+  | 'baseBranchNamesWorkspace'
   | 'branchAutoNameRef'
   | 'isProjectGroupTarget'
   | 'lastAutoNameRef'
@@ -59,6 +60,7 @@ import type { TaskSourceContext } from '../../../../shared/task-source-context'
 export function useIssueSourceActions(input: IssueSourceActionsInput) {
   const {
     baseBranch,
+    baseBranchNamesWorkspace,
     branchAutoNameRef,
     isProjectGroupTarget,
     lastAutoNameRef,
@@ -161,7 +163,9 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
-      setBaseBranch(undefined)
+      if (baseBranchNamesWorkspace) {
+        setBaseBranch(undefined)
+      }
       setCompareBaseRef(undefined)
       setPushTarget(undefined)
       setBranchNameOverride(undefined)
@@ -187,6 +191,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     },
     [
       name,
+      baseBranchNamesWorkspace,
       branchAutoNameRef,
       lastAutoNameRef,
       setBaseBranch,
@@ -213,7 +218,9 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     setLinkedGitLabMR(null)
     setLinkedWorkItem(null)
     setLinkedTaskSourceContext(null)
-    setBaseBranch(undefined)
+    if (baseBranchNamesWorkspace) {
+      setBaseBranch(undefined)
+    }
     setCompareBaseRef(undefined)
     setPushTarget(undefined)
     setBranchNameOverride(undefined)
@@ -233,6 +240,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     }
   }, [
     name,
+    baseBranchNamesWorkspace,
     branchAutoNameRef,
     lastAutoNameRef,
     lastAutoNoteRef,
@@ -263,9 +271,11 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     }
     return buildWorkspaceSourceSelection({
       linkedWorkItem,
-      baseBranch
+      // Why: only a branch picked to NAME the workspace becomes a source pill; a base ref
+      // chosen in the composer's own picker must leave a typed name on screen.
+      baseBranch: baseBranchNamesWorkspace ? baseBranch : undefined
     }) as SmartWorkspaceNameSelection | null
-  }, [baseBranch, isProjectGroupTarget, linkedWorkItem])
+  }, [baseBranch, baseBranchNamesWorkspace, isProjectGroupTarget, linkedWorkItem])
 
   return {
     handleSmartLinearIssueSelect,

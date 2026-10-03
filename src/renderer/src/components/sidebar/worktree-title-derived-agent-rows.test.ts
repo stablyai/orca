@@ -4,6 +4,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
+import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-identity'
 
 const LEAF_ID_1 = '77777777-7777-4777-8777-777777777777'
 const LEAF_ID_2 = '88888888-8888-4888-8888-888888888888'
@@ -41,6 +42,10 @@ function makeSingleLayout(leafId: string): TerminalLayoutSnapshot {
     activeLeafId: leafId,
     expandedLeafId: null
   }
+}
+
+function processRead(agent: TuiAgent): TitleDerivedPaneForeground {
+  return { agent, agentEvidence: 'process-read', shellForeground: false }
 }
 
 describe('buildTitleDerivedAgentRows', () => {
@@ -369,7 +374,11 @@ describe('buildTitleDerivedAgentRows', () => {
   })
 
   it('still resolves Claude from a title that presents Claude, owner or not', () => {
-    const rowsFor = (title: string, launchAgent?: TuiAgent) =>
+    const rowsFor = (
+      title: string,
+      launchAgent?: TuiAgent,
+      foreground?: TitleDerivedPaneForeground
+    ) =>
       buildWorktreeAgentRows({
         tabs: [makeTab('tab-1', launchAgent ? { launchAgent } : {})],
         entries: [],
@@ -377,12 +386,19 @@ describe('buildTitleDerivedAgentRows', () => {
         runtimePaneTitlesByTabId: { 'tab-1': { 1: title } },
         ptyIdsByTabId: { 'tab-1': ['pty-agent'] },
         terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+        ...(foreground
+          ? { paneForegroundAgentByPaneKey: { [makePaneKey('tab-1', LEAF_ID_1)]: foreground } }
+          : {}),
         now: 2000
       })
 
     expect(rowsFor('⠋ Claude Code').map((row) => row.agentType)).toEqual(['claude'])
-    // Pane reuse: the user exited OpenCode and ran claude in the same pane.
+    // Pane reuse: the user exited OpenCode and ran claude in the same pane. The launch record is
+    // a latch with no run id, so the title outranks it even before any process read.
     expect(rowsFor('✳ Claude Code', 'opencode').map((row) => row.agentType)).toEqual(['claude'])
+    expect(
+      rowsFor('✳ Claude Code', 'opencode', processRead('claude')).map((row) => row.agentType)
+    ).toEqual(['claude'])
     // No owner to defend the pane: naming Claude stays the only available identity.
     expect(rowsFor('⠋ use Claude Sonnet').map((row) => row.agentType)).toEqual(['claude'])
     expect(rowsFor('zsh', 'opencode')).toHaveLength(0)
@@ -400,5 +416,311 @@ describe('buildTitleDerivedAgentRows', () => {
     })
 
     expect(rows).toHaveLength(0)
+  })
+})
+
+// #23767: Codex retitles its pane to the project name, so a title-gated row vanished while
+// Codex kept running. A live process read now identifies the pane; the title sets activity.
+describe('hook-less agent rows identified by the foreground process', () => {
+  const PANE_KEY = makePaneKey('tab-1', LEAF_ID_1)
+
+  function rowsFor(args: {
+    title: string
+    launchAgent?: TuiAgent
+    foreground?: TitleDerivedPaneForeground
+    ptyIds?: string[]
+    layout?: TerminalLayoutSnapshot
+  }) {
+    return buildWorktreeAgentRows({
+      tabs: [
+        makeTab('tab-1', {
+          defaultTitle: 'Terminal 1',
+          ...(args.launchAgent ? { launchAgent: args.launchAgent } : {})
+        })
+      ],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: args.title } },
+      ptyIdsByTabId: { 'tab-1': args.ptyIds ?? ['pty-agent'] },
+      terminalLayoutsByTabId: { 'tab-1': args.layout ?? makeSingleLayout(LEAF_ID_1) },
+      ...(args.foreground ? { paneForegroundAgentByPaneKey: { [PANE_KEY]: args.foreground } } : {}),
+      now: 2000
+    })
+  }
+
+  const summarize = (rows: ReturnType<typeof rowsFor>) =>
+    rows.map((row) => [row.agentType, row.state, row.entry.prompt, row.entry.lastAssistantMessage])
+
+  it('keeps a launched Codex row when Codex retitles the pane to the project name', () => {
+    const foreground = processRead('codex')
+    expect(summarize(rowsFor({ title: 'Codex', launchAgent: 'codex', foreground }))).toEqual([
+      ['codex', 'idle', 'Codex', 'Idle']
+    ])
+    expect(summarize(rowsFor({ title: 'demo-repo', launchAgent: 'codex', foreground }))).toEqual([
+      ['codex', 'idle', 'Codex', 'Idle']
+    ])
+  })
+
+  it('never keeps a plain-title row on the launch record alone', () => {
+    // No process read (WSL, a launch that never started), or a read that found no agent (after an
+    // SSH exit, or a parked pane's boundary retiring its unconfirmable read): no row, as before.
+    expect(rowsFor({ title: 'demo-repo', launchAgent: 'codex' })).toHaveLength(0)
+    expect(
+      rowsFor({
+        title: 'demo-repo',
+        launchAgent: 'codex',
+        foreground: { agent: null, shellForeground: false }
+      })
+    ).toHaveLength(0)
+  })
+
+  it("does not trust a reattach's launch record as a process read", () => {
+    // Reattach seeds the daemon's launch agent, which can outlive the process while Orca is
+    // closed; a background pane is not re-read until it is shown.
+    const launchSeed: TitleDerivedPaneForeground = {
+      agent: 'codex',
+      agentEvidence: 'launch-record',
+      shellForeground: false
+    }
+    expect(rowsFor({ title: 'demo-repo', launchAgent: 'codex', foreground: launchSeed })).toEqual(
+      []
+    )
+    expect(rowsFor({ title: 'demo-repo', foreground: launchSeed })).toEqual([])
+    expect(
+      rowsFor({ title: 'demo-repo', foreground: { ...launchSeed, agentEvidence: undefined } })
+    ).toEqual([])
+    // Once a real read confirms the same agent, the row comes back.
+    expect(
+      summarize(
+        rowsFor({ title: 'demo-repo', launchAgent: 'codex', foreground: processRead('codex') })
+      )
+    ).toEqual([['codex', 'idle', 'Codex', 'Idle']])
+  })
+
+  it('rows a hand-typed agent from its foreground process, whatever its title says', () => {
+    for (const agent of ['codex', 'claude', 'gemini', 'opencode', 'grok'] as const) {
+      const rows = rowsFor({ title: 'demo-repo', foreground: processRead(agent) })
+      expect(rows.map((row) => [row.paneKey, row.agentType, row.state])).toEqual([
+        [PANE_KEY, agent, 'idle']
+      ])
+    }
+  })
+
+  it('scopes process evidence to its own pane inside a split', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'claude' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'demo-repo', 2: 'demo-repo' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-left', 'pty-right'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
+      paneForegroundAgentByPaneKey: {
+        [makePaneKey('tab-1', LEAF_ID_2)]: processRead('codex')
+      },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.paneKey, row.agentType])).toEqual([
+      [makePaneKey('tab-1', LEAF_ID_2), 'codex']
+    ])
+  })
+
+  it('lets the title drive activity without deciding who the agent is', () => {
+    const foreground = processRead('codex')
+    expect(summarize(rowsFor({ title: '⠋ demo-repo', foreground }))).toEqual([
+      ['codex', 'working', 'Codex', 'Running']
+    ])
+    expect(summarize(rowsFor({ title: 'demo-repo', foreground }))).toEqual([
+      ['codex', 'idle', 'Codex', 'Idle']
+    ])
+    // A title naming another agent does not outrank the process that is actually running.
+    expect(summarize(rowsFor({ title: '⠋ Gemini CLI', foreground }))).toEqual([
+      ['codex', 'working', 'Codex', 'Running']
+    ])
+  })
+
+  it('drops the row once the agent is really gone', () => {
+    // The process tracker proved the shell is back.
+    expect(
+      rowsFor({
+        title: 'demo-repo',
+        launchAgent: 'codex',
+        foreground: { agent: null, shellForeground: true }
+      })
+    ).toHaveLength(0)
+    // A shell or default title outranks a process read that has not caught up yet.
+    expect(
+      rowsFor({
+        title: 'zsh',
+        launchAgent: 'codex',
+        foreground: processRead('codex')
+      })
+    ).toHaveLength(0)
+    expect(rowsFor({ title: 'Terminal 1', launchAgent: 'codex' })).toHaveLength(0)
+    // Git Bash has no command marks, so its prompt title is what retires a stale process read.
+    expect(
+      rowsFor({
+        title: 'MINGW64:/c/Users/dev/demo-repo',
+        foreground: processRead('codex')
+      })
+    ).toHaveLength(0)
+    // Codex clears its title on exit; a pane without command marks never re-reads the process.
+    expect(rowsFor({ title: '', foreground: processRead('codex') })).toHaveLength(0)
+    expect(
+      rowsFor({ title: '  ', launchAgent: 'codex', foreground: processRead('codex') })
+    ).toHaveLength(0)
+    // The PTY exited.
+    expect(
+      rowsFor({
+        title: 'demo-repo',
+        launchAgent: 'codex',
+        foreground: processRead('codex'),
+        ptyIds: []
+      })
+    ).toHaveLength(0)
+  })
+
+  it('makes no row from a plain title when nothing identifies an agent', () => {
+    expect(rowsFor({ title: 'demo-repo' })).toHaveLength(0)
+    expect(
+      rowsFor({ title: 'demo-repo', foreground: { agent: null, shellForeground: false } })
+    ).toHaveLength(0)
+  })
+})
+
+// Why: `runtimePaneTitlesByTabId` mixes two disjoint id spaces — live PaneManager
+// ids (>= 1) and the `-(leafIndex + 1)` slots a parked tab mints — so attributing a
+// title by its position in the numerically sorted slot list puts one split pane's
+// lifecycle on its sibling's row (STA-3264).
+describe('split-pane runtime title attribution', () => {
+  const LEAF_ID_3 = '99999999-9999-4999-8999-999999999999'
+
+  function makeNestedSplitLayout(): TerminalLayoutSnapshot {
+    // Split once (leaf 1 | leaf 2), then split the FIRST pane again (leaf 3).
+    // Layout traversal order is [1, 3, 2]; pane-creation order is [1, 2, 3].
+    return {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: LEAF_ID_1 },
+          second: { type: 'leaf', leafId: LEAF_ID_3 }
+        },
+        second: { type: 'leaf', leafId: LEAF_ID_2 }
+      },
+      activeLeafId: LEAF_ID_1,
+      expandedLeafId: null
+    }
+  }
+
+  function rowsFor(
+    paneTitles: Record<string, string>,
+    layout: TerminalLayoutSnapshot,
+    ptyIds: string[]
+  ) {
+    return buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { title: '⠋ Codex' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': paneTitles },
+      ptyIdsByTabId: { 'tab-1': ptyIds },
+      terminalLayoutsByTabId: { 'tab-1': layout },
+      now: 2000
+    })
+  }
+
+  it('keeps a finished split pane out of Running while its sibling keeps working', () => {
+    // A parked split tab reports its panes through synthetic slots numbered off the
+    // in-order leaf list: -1 is the first leaf, -2 the second.
+    const rows = rowsFor({ '-1': 'Codex', '-2': '⠋ Codex' }, makeSplitLayout(), ['pty-a', 'pty-b'])
+
+    expect(rows.map((row) => [row.paneKey, row.state, row.entry.lastAssistantMessage])).toEqual([
+      [makePaneKey('tab-1', LEAF_ID_1), 'idle', 'Idle'],
+      [makePaneKey('tab-1', LEAF_ID_2), 'working', 'Running']
+    ])
+  })
+
+  it('lets a revealed tab’s live slots outrank the parked slots it left behind', () => {
+    // Revealing a parked tab mounts live slots without clearing the parked ones, so
+    // both id spaces describe the same two leaves at once. The live pair is current:
+    // leaf 1 has finished, leaf 2 is still working.
+    const rows = rowsFor(
+      { '-1': '⠋ Codex', '-2': '⠋ Codex', 1: 'Codex', 2: '⠋ Codex' },
+      makeSplitLayout(),
+      ['pty-a', 'pty-b']
+    )
+
+    expect(rows.map((row) => [row.paneKey, row.state])).toEqual([
+      [makePaneKey('tab-1', LEAF_ID_1), 'idle'],
+      [makePaneKey('tab-1', LEAF_ID_2), 'working']
+    ])
+  })
+
+  it('does not let sibling panes inherit each other’s agent or state', () => {
+    const rows = rowsFor(
+      { 1: 'Antigravity', 2: '⠋ Codex', 3: '⠋ Gemini CLI' },
+      makeNestedSplitLayout(),
+      ['pty-a', 'pty-b', 'pty-c']
+    )
+
+    expect(
+      rows
+        .map((row) => [row.paneKey, row.agentType, row.state])
+        .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    ).toEqual([
+      [makePaneKey('tab-1', LEAF_ID_1), 'antigravity', 'idle'],
+      [makePaneKey('tab-1', LEAF_ID_2), 'codex', 'working'],
+      [makePaneKey('tab-1', LEAF_ID_3), 'gemini', 'working']
+    ])
+  })
+
+  it('does not recycle a closed split pane’s row onto a surviving sibling', () => {
+    // Panes 1|2|3 were open; closing pane 1 promotes the surviving pair and clears
+    // only that pane's slot, leaving the survivors' live ids sparse (2, 3).
+    const survivingLayout: TerminalLayoutSnapshot = {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: LEAF_ID_2 },
+        second: { type: 'leaf', leafId: LEAF_ID_3 }
+      },
+      activeLeafId: LEAF_ID_2,
+      expandedLeafId: null
+    }
+    const rows = rowsFor({ 2: '⠋ Codex', 3: 'Gemini CLI' }, survivingLayout, ['pty-b', 'pty-c'])
+
+    expect(rows.map((row) => [row.paneKey, row.agentType, row.state])).toEqual([
+      [makePaneKey('tab-1', LEAF_ID_2), 'codex', 'working'],
+      [makePaneKey('tab-1', LEAF_ID_3), 'gemini', 'idle']
+    ])
+    expect(rows.some((row) => row.paneKey === makePaneKey('tab-1', LEAF_ID_1))).toBe(false)
+  })
+
+  it('uses live PTY bindings when sparse pane ids no longer match layout order', () => {
+    // Closing the first pane and splitting the second leaves ids 2 and 4 while
+    // the surviving layout is ordered [new pane, old pane]. The PTY bindings
+    // are the only authoritative bridge from those sparse runtime slots to leaves.
+    const survivingLayout: TerminalLayoutSnapshot = {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: LEAF_ID_3 },
+        second: { type: 'leaf', leafId: LEAF_ID_2 }
+      },
+      activeLeafId: LEAF_ID_3,
+      expandedLeafId: null,
+      ptyIdsByLeafId: {
+        [LEAF_ID_2]: 'pty-old',
+        [LEAF_ID_3]: 'pty-new'
+      }
+    }
+    const rows = rowsFor({ 2: 'Codex', 4: '⠋ Gemini CLI' }, survivingLayout, ['pty-old', 'pty-new'])
+
+    expect(rows.map((row) => [row.paneKey, row.agentType, row.state])).toEqual([
+      [makePaneKey('tab-1', LEAF_ID_2), 'codex', 'idle'],
+      [makePaneKey('tab-1', LEAF_ID_3), 'gemini', 'working']
+    ])
   })
 })

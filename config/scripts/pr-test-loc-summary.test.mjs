@@ -233,7 +233,7 @@ describe('PR test LoC summary', () => {
   })
 
   it('is a no-checkout GitHub-hosted PR workflow', () => {
-    expect(locJob['runs-on']).toBe('ubuntu-latest')
+    expect(locJob['runs-on']).toBe('ubuntu-slim')
     expect(locJob.steps).toHaveLength(1)
     expect(locStep.run).toContain('gh api')
     expect(locStep.run).toContain('pr-test-loc-table.mjs')

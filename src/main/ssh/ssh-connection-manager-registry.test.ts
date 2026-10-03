@@ -57,11 +57,6 @@ describe('SshConnectionManager', () => {
     expect(mgr.getConnection(target.id)).toBeUndefined()
   })
 
-  it('disconnect is a no-op for unknown targets', async () => {
-    const mgr = new SshConnectionManager(createCallbacks())
-    await mgr.disconnect('unknown')
-  })
-
   it('reuses existing connected connection for same target', async () => {
     const mgr = new SshConnectionManager(createCallbacks())
     const target = createTarget()

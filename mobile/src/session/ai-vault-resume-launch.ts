@@ -19,7 +19,7 @@ import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-te
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { reviewTerminalCreateRun, reviewTerminalSendRun } from './mobile-review-terminal-operations'
-import type { MobileReviewTerminalTab } from './mobile-diff-review-rpc'
+import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
 import type { MobileAiVaultResumeTargetStatus } from '../agent-history/agent-history-resume-target'
 
 export function buildMobileAiVaultResumeCommand(args: {
@@ -175,9 +175,6 @@ export async function resumeAiVaultSessionInTerminal(
     () => reviewTerminalCreateRun.interpret(created),
     'Failed to create terminal'
   )
-  if (!terminalTab) {
-    throw new Error('Created terminal response was invalid')
-  }
   const sent = await reviewTerminalSendRun.request(
     client,
     {

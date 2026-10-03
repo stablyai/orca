@@ -40,12 +40,13 @@ import {
   structuredWorkerTerminalState,
   type StructuredWorkerObservation
 } from '../../structured-worker-authority'
+import { structuredWorkerOwned } from '../../structured-worker-custody'
 import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
 import type { WorkerTerminalReleaseState } from '../../orchestration/worker-terminal-ownership'
 import { releaseStructuredWorkerSession } from './orchestration-structured-worker-session'
 import { closeStructuredAgentSessionChild } from '../../structured-agent-session-close'
 
-export { observeStructuredWorker, type StructuredWorkerObservation }
+export { observeStructuredWorker, structuredWorkerOwned, type StructuredWorkerObservation }
 
 /** The structured worker behind a dispatch, or null when a PTY worker owns it. */
 export function resolveStructuredWorkerForDispatch(
@@ -83,13 +84,13 @@ export async function stopStructuredWorker(
   return closeStructuredAgentSessionChild(identity.sessionId, {
     ...(runtime ? { runtime } : {}),
     // Between the close and the proof, never after: an unsettled close returns early, and a
-    // surviving hold keeps the provider child un-evictable for the life of the app.
+    // surviving redrive subscription keeps nudging a session no dispatch owns.
     afterClose: () => releaseStructuredWorkerSession(dispatchId, runtime)
   })
 }
 
 /** The structured half of `worker-read`, or null when a PTY worker owns the dispatch. */
-export function readStructuredWorkerOutput(args: {
+export async function readStructuredWorkerOutput(args: {
   db: OrchestrationDb
   dispatchId: string
   workerState: string
@@ -98,7 +99,7 @@ export function readStructuredWorkerOutput(args: {
   source?: 'auto' | 'transcript' | 'terminal'
   cursor?: string | number
   limit?: number
-}): OrchestrationWorkerReadTranscriptResult | null {
+}): Promise<OrchestrationWorkerReadTranscriptResult | null> {
   const identity = resolveStructuredWorkerForDispatch(args.db, args.dispatchId)
   if (!identity) {
     return null
@@ -123,7 +124,7 @@ export function readStructuredWorkerOutput(args: {
 }
 
 /** Journal page in the shape `worker-read --source transcript` already serves. */
-export function readStructuredWorkerJournal(args: {
+export async function readStructuredWorkerJournal(args: {
   identity: StructuredWorkerIdentity
   dispatchId: string
   workerState: string
@@ -131,8 +132,8 @@ export function readStructuredWorkerJournal(args: {
   agent: AgentType
   cursor?: string | number
   limit?: number
-}): OrchestrationWorkerReadTranscriptResult {
-  const page = readStructuredJournalPage(args.identity.sessionId)
+}): Promise<OrchestrationWorkerReadTranscriptResult> {
+  const page = await readStructuredJournalPage(args.identity.sessionId)
   if (!page) {
     throw new OrchestrationError(
       'transcript_required',
@@ -213,11 +214,13 @@ function structuredJournalPrefixIdentity(args: {
 }
 
 /** Freezes the journal before the session is closed, so a released worker is still readable. */
-export function captureStructuredWorkerArchive(
+export async function captureStructuredWorkerArchive(
   identity: StructuredWorkerIdentity,
   agent: AgentType
-): WorkerStructuredJournalArchive {
-  const page = readStructuredJournalPage(identity.sessionId)
+): Promise<WorkerStructuredJournalArchive> {
+  // Opens a conversation at rest or one the idle sweep closed, so a resting worker's journal is
+  // still preserved.
+  const page = await readStructuredJournalPage(identity.sessionId)
   if (page) {
     return buildStructuredJournalArchive({
       agent,
@@ -232,10 +235,9 @@ export function captureStructuredWorkerArchive(
   // the worker's chat tab is a routine user action that does exactly that, so throwing there wedges
   // release on evidence that can never come and leaves `worker-abandon` as the only exit.
   //
-  // `exited` is the only verdict that qualifies: it needs a released lease WITH death evidence.
-  // `unverifiable` — no host installed, a lease handed to a TUI owner — means we could not look,
-  // and retaining is still right.
-  if (observeStructuredWorker(identity).status !== 'exited') {
+  // Only a worker this runtime no longer owns qualifies — released with its chat tab gone. An owned
+  // one, running or at rest, keeps its journal, and so does one we could not look at.
+  if (structuredWorkerOwned(identity.sessionId) !== false) {
     throw new OrchestrationError(
       'archive_failed',
       'Output could not be preserved for this structured worker; the session was retained.'

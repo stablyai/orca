@@ -1,11 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { readFileSync, rmSync, mkdtempSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
-import { getDefaultWorkspaceSession } from '../shared/constants'
-import { isTerminalLeafId } from '../shared/stable-pane-id'
 import {
+  closeTestStores,
   testState,
   createStore,
   dataFile,
@@ -16,6 +10,14 @@ import {
   makeWorktreeLineage,
   makeWorkspaceLineage
 } from './persistence-test-harness'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { readFileSync, rmSync, mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
+import { getDefaultWorkspaceSession } from '../shared/constants'
+import { isTerminalLeafId } from '../shared/stable-pane-id'
+
 import { worktreeWorkspaceKey } from '../shared/workspace-scope'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
@@ -63,7 +65,8 @@ describe('Store host-partitioned workspace sessions', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

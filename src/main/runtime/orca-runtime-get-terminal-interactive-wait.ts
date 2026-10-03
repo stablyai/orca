@@ -6,6 +6,7 @@ import type {
   RuntimeTerminalInteractiveWait
 } from '../../shared/runtime-types'
 import type { RuntimeTerminalAgentStatusSnapshot } from './runtime-terminal-agent-status-query'
+import type { AgentStatus } from '../../shared/agent-detection'
 import { withTimeout } from './runtime-async-boundaries'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './orca-runtime-core'
 import { parsePaneKey } from '../../shared/stable-pane-id'
@@ -14,24 +15,32 @@ import { selectExactWorkerProviderSession } from './orchestration/worker-provide
 import type { TuiAgent } from '../../shared/tui-agent'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { OrchestrationError } from './orchestration/orchestration-error'
+import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
+import { resolveStartupShell, type AgentStartupShell } from '../../shared/tui-agent-startup-shell'
+import { isTuiAgent } from '../../shared/tui-agent-config'
+import { resolveConfiguredWorkerAgent } from './orchestration/configured-worker-agent-selector'
 
 export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAdoptTerminalOrphansFromInventory {
   async getTerminalInteractiveWait(
     handle: string
   ): Promise<RuntimeTerminalInteractiveWait | null | undefined> {
     let ptyId: string
-    let terminal: RuntimeTerminalAgentStatusSnapshot
+    let inputs: {
+      terminal: RuntimeTerminalAgentStatusSnapshot
+      lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
+    }
     try {
       ptyId = this.getTerminalAgentStatusPtyId(handle)
-      terminal = this.getTerminalAgentStatusSnapshot(handle, ptyId)
+      inputs = this.getTerminalWaitPermissionInputs(handle, ptyId)
     } catch {
       return undefined
     }
+    const { terminal, lifecycle } = inputs
     const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle)
     const promptReason = this.resolveAuthoritativeTerminalWaitPermission(
       terminal,
       explicitStatus,
-      this.agentPromptLifecycleByPtyId.get(ptyId)
+      lifecycle
     )
     if (promptReason) {
       return {
@@ -176,6 +185,42 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
       observedAfter,
       statuses: this.getAgentStatusSnapshotFn?.() ?? []
     })
+  }
+
+  resolveOrchestrationAgentLauncher(
+    selector: string,
+    platform: NodeJS.Platform = process.platform,
+    shell?: AgentStartupShell
+  ): TuiAgent | undefined {
+    return resolveConfiguredWorkerAgent(
+      selector,
+      this.store?.getSettings().agentCmdOverrides ?? {},
+      platform,
+      shell
+    )
+  }
+
+  async resolveOrchestrationAgentLauncherForTarget(
+    selector: string,
+    target: { repo?: string; worktree?: string }
+  ): Promise<TuiAgent | undefined> {
+    if (isTuiAgent(selector)) {
+      return selector
+    }
+    const repo = target.repo ? await this.resolveRepoSelector(target.repo) : null
+    const workspace = repo
+      ? { repo, path: repo.path, connectionId: repo.connectionId }
+      : await this.resolveTerminalWorkspaceLaunchScope(target.worktree)
+    const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
+    const shell = resolveStartupShell(
+      platform,
+      resolveLocalWindowsAgentStartupShell({
+        platform,
+        isRemote: Boolean(workspace.connectionId),
+        terminalWindowsShell: this.store?.getSettings().terminalWindowsShell
+      })
+    )
+    return this.resolveOrchestrationAgentLauncher(selector, platform, shell)
   }
 
   validateOrchestrationAgentLauncher(agent: TuiAgent): void {

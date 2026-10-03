@@ -4,9 +4,14 @@ allowBuilds:
 minimumReleaseAge: 4320
 
 overrides:
+  brace-expansion@>=1.0.0 <1.1.21: 1.1.21
+  brace-expansion@>=5.0.0 <5.0.12: 5.0.12
+  dompurify@>=3.4.13 <3.4.16: 3.4.16
   xcode>uuid: 11.1.1
+  query-string: 9.5.1
 
 patchedDependencies:
   expo-notifications@55.0.27: patches/expo-notifications@55.0.27.patch
+  query-string@9.5.1: patches/query-string@9.5.1.patch
   react-native-webview@13.16.2: patches/react-native-webview@13.16.2.patch
   react-native@0.83.10: patches/react-native@0.83.10.patch

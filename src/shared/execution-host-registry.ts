@@ -1,4 +1,4 @@
-import type { RuntimeHostStatusSnapshot } from './runtime-host-status'
+import type { RuntimeEnvironmentStatus } from './runtime-host-status'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getLocalExecutionHostLabel,
@@ -49,14 +49,7 @@ type RuntimeEnvironmentSummary = {
   source?: RuntimeEnvironmentSource
 }
 
-type RuntimeHostStatus = {
-  snapshot?: RuntimeHostStatusSnapshot
-  status?: RuntimeStatus | null
-  remoteControl?: RuntimeStatus['remoteControl'] | null
-  appVersion?: string | null
-}
-
-type RuntimeStatusByEnvironmentId = ReadonlyMap<string, RuntimeHostStatus>
+type RuntimeStatusByEnvironmentId = ReadonlyMap<string, RuntimeEnvironmentStatus>
 
 export type ExecutionHostSource = 'configured-only' | 'include-references'
 

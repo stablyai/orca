@@ -1,6 +1,5 @@
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
-import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -15,7 +14,6 @@ type LaunchAgentSessionContinuationArgs = {
   prompt: string
   worktreeId: string
   groupId?: string | null
-  workspacePath: string
   initialCwd?: string | null
   launchSource: LaunchSource
 }
@@ -73,7 +71,6 @@ export async function launchAgentSessionContinuation({
   prompt,
   worktreeId,
   groupId,
-  workspacePath,
   initialCwd,
   launchSource
 }: LaunchAgentSessionContinuationArgs): Promise<boolean> {
@@ -81,19 +78,27 @@ export async function launchAgentSessionContinuation({
     return false
   }
 
-  const connectionId = getConnectionIdFromState(useAppStore.getState(), worktreeId)
-  await preflightAgentTrust({ agent, workspacePath, connectionId })
-
   const label = getAgentLabel(agent)
+  // Why: the paste helper writes blind when the agent's composer was never observed, so a
+  // written prompt is not a delivered one. Claiming success there is how the whole handoff
+  // could vanish silently (#22479).
+  let deliveryUnconfirmed = false
   const result = launchAgentInNewTab({
     agent,
     worktreeId,
     ...(groupId ? { groupId } : {}),
     prompt,
-    promptDelivery: 'submit-after-ready',
+    promptDelivery: agent === 'claude' ? 'draft' : 'submit-after-ready',
     launchSource,
     ...(initialCwd ? { initialCwd } : {}),
-    onPromptDelivered: () =>
+    onPromptDeliveryUnconfirmed: () => {
+      deliveryUnconfirmed = true
+    },
+    onPromptDelivered: () => {
+      if (deliveryUnconfirmed) {
+        notifyDeliveryUnconfirmed(label, prompt)
+        return
+      }
       toast.success(
         translate(
           'components.agentSessionContinuation.sent',
@@ -101,6 +106,7 @@ export async function launchAgentSessionContinuation({
           { agent: label }
         )
       )
+    }
   })
   if (!result) {
     notifyLaunchFailed(label)
@@ -111,12 +117,12 @@ export async function launchAgentSessionContinuation({
     void result.promptDeliveryResult
       .then((delivery) => {
         if (!delivery.delivered && !delivery.failureNotified) {
-          notifyDeliveryFailed(label)
+          notifyDeliveryFailed(label, prompt)
         }
       })
       .catch((error) => {
         console.error('Agent session continuation prompt delivery failed', error)
-        notifyDeliveryFailed(label)
+        notifyDeliveryFailed(label, prompt)
       })
   }
   return true
@@ -132,12 +138,38 @@ function notifyLaunchFailed(agentLabel: string): void {
   )
 }
 
-function notifyDeliveryFailed(agentLabel: string): void {
+function notifyDeliveryFailed(agentLabel: string, prompt: string): void {
   toast.error(
     translate(
       'components.agentSessionContinuation.deliveryFailed',
       'The new {{agent}} session started, but its context could not be sent.',
       { agent: agentLabel }
-    )
+    ),
+    copyPromptToastAction(prompt)
   )
+}
+
+/** The prompt was written to the PTY but the agent never showed an input-ready composer. */
+function notifyDeliveryUnconfirmed(agentLabel: string, prompt: string): void {
+  toast.warning(
+    translate(
+      'components.agentSessionContinuation.deliveryUnconfirmed',
+      'Orca could not confirm {{agent}} received the session context. Check the new session, and paste it yourself if its input is empty.',
+      { agent: agentLabel }
+    ),
+    copyPromptToastAction(prompt)
+  )
+}
+
+function copyPromptToastAction(prompt: string): {
+  action: { label: string; onClick: () => void }
+} {
+  return {
+    action: {
+      label: translate('components.agentSessionContinuation.copyPrompt', 'Copy prompt'),
+      onClick: () => {
+        void window.api.ui.writeClipboardText(prompt)
+      }
+    }
+  }
 }

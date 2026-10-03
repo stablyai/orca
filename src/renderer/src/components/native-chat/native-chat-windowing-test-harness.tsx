@@ -22,10 +22,10 @@ export const TRANSCRIPT_LENGTH = 200
  *  document disagree. */
 export const BELOW_TRANSCRIPT_PX = 24
 
-/** Everything the document holds above the spacer: the scroll root's top gutter,
- *  and the "load earlier" block whenever there is older history to page in. This
- *  is the virtualizer's `scrollMargin`, and it is the larger half of the gap
- *  between the document's end and the end the virtualizer computes. */
+/** Everything the document holds above the spacer: the scroll root's top gutter
+ *  and any chrome in flow before the window. This is the virtualizer's
+ *  `scrollMargin`, and it is the larger half of the gap between the document's
+ *  end and the end the virtualizer computes. */
 
 /** Heights the stubbed layout reports per row index, when a case wants a row to
  *  measure as something other than its estimate. Empty means "every row at its
@@ -36,8 +36,21 @@ export const BELOW_TRANSCRIPT_PX = 24
 export const layout: {
   belowTranscriptPx: number
   aboveTranscriptPx: number
+  /** When set, derives the space above the spacer from the rendered DOM instead
+   *  of the fixed `aboveTranscriptPx`, so chrome that mounts or unmounts in flow
+   *  moves the window the way it would in a browser. */
+  aboveSpacerPx: ((spacer: HTMLElement) => number) | null
   measuredRowHeights: readonly number[]
-} = { belowTranscriptPx: BELOW_TRANSCRIPT_PX, aboveTranscriptPx: 0, measuredRowHeights: [] }
+} = {
+  belowTranscriptPx: BELOW_TRANSCRIPT_PX,
+  aboveTranscriptPx: 0,
+  aboveSpacerPx: null,
+  measuredRowHeights: []
+}
+
+function aboveTranscriptPx(spacer: HTMLElement | null): number {
+  return spacer && layout.aboveSpacerPx ? layout.aboveSpacerPx(spacer) : layout.aboveTranscriptPx
+}
 
 export function marker(index: number): NativeChatMessage {
   return {
@@ -91,18 +104,36 @@ export function reservedTranscriptHeight(root: ParentNode): number {
 export function stubLayout({
   scrollGeometry = false,
   offsetChain = false,
-  viewportHeight = () => VIEWPORT_PX
+  viewportHeight = () => VIEWPORT_PX,
+  isVisible = () => true
 }: {
   scrollGeometry?: boolean
   /** Give the spacer an `offsetTop` and a chain to walk up to the scroll root,
    *  so `scrollMargin` can be something other than zero. */
   offsetChain?: boolean
   viewportHeight?: () => number
+  /** A hidden transcript measures as nothing, the way `display: none` does. */
+  isVisible?: () => boolean
 } = {}): () => void {
-  const scrollTops = new WeakMap<HTMLElement, number>()
+  let scrollTops = new WeakMap<HTMLElement, number>()
+  let wasLaidOut = isVisible()
+  /** Losing the box drops the retained offset, the way `display: none` does in a
+   *  browser: a revealed pane reads a reader's place back only if production
+   *  restored it. */
+  const laidOut = (): boolean => {
+    const nowLaidOut = isVisible()
+    if (wasLaidOut && !nowLaidOut) {
+      scrollTops = new WeakMap()
+    }
+    wasLaidOut = nowLaidOut
+    return nowLaidOut
+  }
   const restores = [
     overrideLayoutProperty('offsetHeight', {
       get(this: HTMLElement): number {
+        if (!laidOut()) {
+          return 0
+        }
         if (this.hasAttribute('data-native-chat-scroll')) {
           return viewportHeight()
         }
@@ -125,21 +156,29 @@ export function stubLayout({
     restores.push(
       overrideLayoutProperty('clientHeight', {
         get(this: HTMLElement): number {
-          return this.hasAttribute('data-native-chat-scroll') ? viewportHeight() : 0
+          return this.hasAttribute('data-native-chat-scroll') && laidOut() ? viewportHeight() : 0
         }
       }),
       overrideLayoutProperty('scrollHeight', {
         get(this: HTMLElement): number {
-          return this.hasAttribute('data-native-chat-scroll')
-            ? layout.aboveTranscriptPx + reservedTranscriptHeight(this) + layout.belowTranscriptPx
+          return this.hasAttribute('data-native-chat-scroll') && laidOut()
+            ? aboveTranscriptPx(this.querySelector<HTMLElement>('[data-native-chat-window]')) +
+                reservedTranscriptHeight(this) +
+                layout.belowTranscriptPx
             : 0
         }
       }),
       overrideLayoutProperty('scrollTop', {
         get(this: HTMLElement): number {
+          if (this.hasAttribute('data-native-chat-scroll') && !laidOut()) {
+            return 0
+          }
           return scrollTops.get(this) ?? 0
         },
         set(this: HTMLElement, value: number): void {
+          if (this.hasAttribute('data-native-chat-scroll') && !laidOut()) {
+            return
+          }
           // A browser clamps; without this `scrollTop = scrollHeight` would park
           // the view past the end and every distance-from-bottom would read 0.
           const max = Math.max(0, this.scrollHeight - this.clientHeight)
@@ -152,7 +191,7 @@ export function stubLayout({
     restores.push(
       overrideLayoutProperty('offsetTop', {
         get(this: HTMLElement): number {
-          return this.hasAttribute('data-native-chat-window') ? layout.aboveTranscriptPx : 0
+          return this.hasAttribute('data-native-chat-window') ? aboveTranscriptPx(this) : 0
         }
       }),
       // happy-dom has no `offsetParent` at all, so production's walk to the
@@ -240,15 +279,17 @@ export function session(messages: NativeChatMessage[]): NativeChatLiveSession {
     agent: 'codex',
     hasMore: false,
     loadingEarlier: false,
+    olderHistoryGeneration: 0,
     loadEarlier: vi.fn(),
     readPhase: 'ready'
   }
 }
 
-export function list(messages: NativeChatMessage[]): React.JSX.Element {
+export function list(messages: NativeChatMessage[], isVisible = true): React.JSX.Element {
   return (
     <NativeChatMessageList
       session={session(messages)}
+      isVisible={isVisible}
       isWorking={false}
       expandSignal={false}
       fontScale={1}

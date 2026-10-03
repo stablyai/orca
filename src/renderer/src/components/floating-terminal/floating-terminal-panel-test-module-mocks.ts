@@ -120,6 +120,7 @@ export function createTerminalSaveDialogModule() {
       handleSaveDialogDiscard: () => {
         if (saveDialogBox.fileId) {
           mocks.markFileDirty(saveDialogBox.fileId, false)
+          mocks.clearEditorDraft(saveDialogBox.fileId)
           mocks.closeFile(saveDialogBox.fileId)
         }
         saveDialogBox.fileId = null

@@ -118,7 +118,13 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('forwards a Claude UserPromptSubmit POST through to ingestRemote', async () => {
+  it.each([
+    { agent: 'claude', input: { hook_event_name: 'UserPromptSubmit', prompt: 'roundtrip' } },
+    {
+      agent: 'opencode2',
+      input: { hook_event_name: 'MessagePart', role: 'user', text: 'roundtrip' }
+    }
+  ])('forwards a $agent prompt through the relay to ingestRemote', async ({ agent, input }) => {
     const events: { paneKey: string; payload: unknown; connectionId: string | null }[] = []
     orcaServer.setListener((event) => {
       events.push({
@@ -129,7 +135,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     })
 
     const { port, token } = hookServer.getCoordinates()
-    const res = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
+    const res = await fetch(`http://127.0.0.1:${port}/hook/${agent}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -141,7 +147,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
         worktreeId: 'wt-7',
         env: 'remote',
         version: '1',
-        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'roundtrip' }
+        payload: input
       })
     })
     expect(res.status).toBe(204)
@@ -159,7 +165,78 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     const payload = events[0].payload as { state: string; prompt: string; agentType: string }
     expect(payload.state).toBe('working')
     expect(payload.prompt).toBe('roundtrip')
-    expect(payload.agentType).toBe('claude')
+    expect(payload.agentType).toBe(agent)
+  })
+
+  it.each([0, 1, 2, 3])(
+    'delivers Cursor form payloads with %i BOMs to the host-owned status store',
+    async (count) => {
+      const { port, token } = hookServer.getCoordinates()
+      for (const [hookEventName, state] of [
+        ['beforeSubmitPrompt', 'working'],
+        ['stop', 'done']
+      ]) {
+        const payload = Buffer.concat([
+          ...Array.from({ length: count }, () => Buffer.from([0xef, 0xbb, 0xbf])),
+          Buffer.from(
+            JSON.stringify({
+              hook_event_name: hookEventName,
+              prompt: 'Synthetic café 😀',
+              status: 'completed'
+            })
+          )
+        ])
+        const response = await fetch(`http://127.0.0.1:${port}/hook/cursor`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: new URLSearchParams({
+            paneKey: `tab-7:${LEAF_7}`,
+            worktreeId: 'folder:synthetic-cursor',
+            payload: payload.toString('utf8')
+          }).toString()
+        })
+        expect(response.status).toBe(204)
+        await expect
+          .poll(() => orcaServer.getStatusSnapshot())
+          .toEqual([
+            expect.objectContaining({
+              paneKey: `tab-7:${LEAF_7}`,
+              worktreeId: 'folder:synthetic-cursor',
+              connectionId: 'conn-test',
+              state,
+              agentType: 'cursor',
+              prompt: 'Synthetic café 😀'
+            })
+          ])
+      }
+    }
+  )
+
+  it('acknowledges malformed Cursor form payloads without publishing status', async () => {
+    const { port, token } = hookServer.getCoordinates()
+    for (const payload of [
+      '',
+      '\uFEFF\uFEFFnot json',
+      ' \uFEFF{}',
+      '{\uFEFF"hook_event_name":"stop"}',
+      '\uFEFF\uFEFF{"hook_event_name":"unknown"}'
+    ]) {
+      const response = await fetch(`http://127.0.0.1:${port}/hook/cursor`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: new URLSearchParams({ paneKey: `tab-7:${LEAF_7}`, payload }).toString()
+      })
+      expect(response.status).toBe(204)
+    }
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(hookServer.replayCachedPayloadsForPanes()).toBe(0)
+    expect(orcaServer.getStatusSnapshot()).toEqual([])
   })
 
   it('sheds an oversized assistant message through the production publication path', async () => {

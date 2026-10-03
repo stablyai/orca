@@ -1,14 +1,15 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../shared/execution-host'
+import type { AppState } from '@/store/types'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { requestsCwdOutsideWorkspaceRootForWorkspace } from '../../../shared/terminal-startup-cwd'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { workspaceKindForWorktreeId } from '../../../shared/workspace-launch-kind'
 import {
-  hasExplicitTuiAgentArgs,
-  hasExplicitTuiLaunchCustomization,
+  hasExplicitTuiLaunchCommand,
   type AgentLaunchRoutingInput
 } from '@/lib/agent-launch-routing'
 // Why: the `connection-context` facade imports the store root; the resolver's own module keeps
@@ -42,28 +43,27 @@ export type ProspectiveWorkspace = {
   runtimeEnvironmentId?: string | null
 }
 
-export type AgentLaunchRouteStore = Parameters<typeof getExecutionHostIdForWorktree>[0] &
+export type AgentLaunchRouteStore = {
+  settings?: AgentLaunchRoutingInput['settings']
+  /** Where each workspace's root is, so a cwd naming it is not read as a custom directory. First
+   *  in the intersection so these lookups resolve to the full records. */
+  worktreesByRepo?: AppState['worktreesByRepo']
+  folderWorkspaces?: AppState['folderWorkspaces']
+} & Parameters<typeof getExecutionHostIdForWorktree>[0] &
   Parameters<typeof getLocalProjectExecutionRuntimeContext>[0] &
-  Parameters<typeof getConnectionIdFromState>[0] & {
-    settings?: AgentLaunchRoutingInput['settings']
-  }
+  Parameters<typeof getConnectionIdFromState>[0]
 
 export type AgentLaunchRouteArgs = {
   agent: TuiAgent
   workspace: ProspectiveWorkspace
   prompt?: string
   promptDelivery?: NativeChatLaunchPromptDelivery
-  /** A cwd or explicit CLI args only a terminal can apply. */
-  tuiCustomization?: { cwd?: string | null; agentArgs?: string | null }
+  /** A working directory only a terminal can apply; a structured session runs in its workspace. */
+  tuiCustomization?: { cwd?: string | null }
   initialSessionOptions?: Readonly<Record<string, unknown>>
 }
 
-export function workspaceKindForWorktreeId(worktreeId: string): ProspectiveWorkspaceKind {
-  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-    return 'floating'
-  }
-  return parseWorkspaceKey(worktreeId)?.type === 'folder' ? 'folder' : 'git-worktree'
-}
+export { workspaceKindForWorktreeId }
 
 function resolveExecutionHostId(store: AgentLaunchRouteStore, workspace: ProspectiveWorkspace) {
   if (workspace.worktreeId) {
@@ -130,10 +130,18 @@ export function buildAgentLaunchRouteInput(
       workspace,
       executionHostId
     ),
-    requiresTuiLaunchCustomization:
-      Boolean(tuiCustomization?.cwd?.trim()) ||
-      hasExplicitTuiAgentArgs(agent, tuiCustomization?.agentArgs) ||
-      hasExplicitTuiLaunchCustomization(store.settings, agent),
+    // A cwd decides the route only when it names somewhere other than the workspace root; the
+    // host applies the same rule (`agent-launch-mode.ts`), so the two never disagree on it.
+    requiresTuiLaunchCommand:
+      requestsCwdOutsideWorkspaceRootForWorkspace({
+        workspaceId: workspace.worktreeId,
+        requestedCwd: tuiCustomization?.cwd,
+        workspacePath: workspace.worktreeId
+          ? findWorktreeById(store.worktreesByRepo ?? {}, workspace.worktreeId)?.path
+          : undefined,
+        resolveFolderWorkspacePath: (folderWorkspaceId) =>
+          store.folderWorkspaces?.find((entry) => entry.id === folderWorkspaceId)?.folderPath
+      }) || hasExplicitTuiLaunchCommand(store.settings, agent),
     initialSessionOptions: args.initialSessionOptions
   }
 }

@@ -123,6 +123,20 @@ export function getWorkerTerminalResourceByHandle(
     .get(terminalHandle) as WorkerTerminalResourceRow | undefined
 }
 
+export function getWorkerTerminalResourceByProcessIncarnation(
+  this: OrchestrationDb,
+  processIncarnation: string
+): WorkerTerminalResourceRow | undefined {
+  const row = this.db
+    .prepare(
+      `SELECT * FROM worker_terminal_resources
+        WHERE process_incarnation = ? ORDER BY updated_at DESC LIMIT 1`
+    )
+    .get(processIncarnation)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns the row shape its schema and row type define, like every row cast in db/.
+  return row as WorkerTerminalResourceRow | undefined
+}
+
 export function getWorkerTerminalResourceFormerlyOwnedBy(
   this: OrchestrationDb,
   dispatchId: string
@@ -238,6 +252,7 @@ export type WorkerTerminalResourceStoreMethods = {
   createWorkerTerminalResourceStatement: typeof createWorkerTerminalResourceStatement
   getWorkerTerminalResource: typeof getWorkerTerminalResource
   getWorkerTerminalResourceByHandle: typeof getWorkerTerminalResourceByHandle
+  getWorkerTerminalResourceByProcessIncarnation: typeof getWorkerTerminalResourceByProcessIncarnation
   getWorkerTerminalResourceByOwner: typeof getWorkerTerminalResourceByOwner
   getWorkerTerminalResourceFormerlyOwnedBy: typeof getWorkerTerminalResourceFormerlyOwnedBy
   recordWorkerTerminalRecoveryAttempt: typeof recordWorkerTerminalRecoveryAttempt
@@ -251,6 +266,7 @@ export function attachWorkerTerminalResourceStore(ctor: { prototype: object }): 
     createWorkerTerminalResourceStatement,
     getWorkerTerminalResource,
     getWorkerTerminalResourceByHandle,
+    getWorkerTerminalResourceByProcessIncarnation,
     getWorkerTerminalResourceByOwner,
     getWorkerTerminalResourceFormerlyOwnedBy,
     recordWorkerTerminalRecoveryAttempt,

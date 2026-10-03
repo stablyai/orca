@@ -78,6 +78,7 @@ export function buildManagedWorktreeCreateArgs(
       : undefined,
     ...(params.startupAgent ? { startupAgent: params.startupAgent } : {}),
     ...(params.startupPrompt !== undefined ? { startupPrompt: params.startupPrompt } : {}),
+    ...(params.launchSource ? { startupLaunchSource: params.launchSource } : {}),
     startupDraft: params.startupDraft,
     lineage: {
       parentWorkspace: params.parentWorkspace,

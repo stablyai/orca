@@ -38,6 +38,11 @@ describe('shouldUseRendererBackedCodexTerminal', () => {
     expect(shouldUseRendererBackedCodexTerminal('codex --help')).toBe(false)
   })
 
+  it('reads --no-daemon as a flag, not the subcommand', () => {
+    expect(shouldUseRendererBackedCodexTerminal('codex --no-daemon resume --last')).toBe(true)
+    expect(shouldUseRendererBackedCodexTerminal('codex --no-daemon exec summarize')).toBe(false)
+  })
+
   it('ignores non-Codex commands', () => {
     expect(shouldUseRendererBackedCodexTerminal(undefined)).toBe(false)
     expect(shouldUseRendererBackedCodexTerminal('claude')).toBe(false)

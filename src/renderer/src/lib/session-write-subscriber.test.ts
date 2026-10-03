@@ -102,6 +102,27 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('writes when the gate is already open at creation, with no store tick to wake it', () => {
+    // Why the store-write spy: every other case here opens the gate *after* creating the
+    // subscriber, so the opening setState is itself the tick that produces the first write. With
+    // the gate already open only the creation-time seed can, and equal catalogs no longer publish
+    // a tick to stand in for it.
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const storeTicks = vi.fn()
+    const unsubStoreTicks = useAppStore.subscribe(storeTicks)
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    vi.advanceTimersByTime(200)
+
+    expect(storeTicks).not.toHaveBeenCalled()
+    expect(persist).toHaveBeenCalledTimes(1)
+
+    unsubStoreTicks()
+    cleanup()
+  })
+
   it('re-checks the hydration gate when a pending debounce fires', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
@@ -186,6 +207,25 @@ describe('createSessionWriteSubscriber', () => {
           })
         }
       }
+    })
+    cleanup()
+  })
+
+  it('persists defaultTerminalTabsAppliedByWorktreeId after markDefaultTerminalTabsApplied', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    const worktreeId = 'repo1::/wt-1'
+    useAppStore.getState().markDefaultTerminalTabsApplied(worktreeId)
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.defaultTerminalTabsAppliedByWorktreeId).toEqual({
+      [worktreeId]: true
     })
     cleanup()
   })

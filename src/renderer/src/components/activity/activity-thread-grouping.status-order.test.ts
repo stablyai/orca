@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentTurnOutcome } from '../../../../shared/agent-turn-outcome'
 import { buildActivityThreadGroups, getActivityThreadGroup } from './activity-thread-grouping'
-import { threadAgentState } from './activity-thread-presentation'
+import { activityThreadStatusId } from './activity-thread-presentation'
 import type { AgentPaneThread } from './activity-thread-types'
 import {
   makeRepo,
@@ -14,7 +15,13 @@ import {
 } from './ActivityPrototypePage-test-fixtures'
 import { buildActivityEvents } from './activity-event-builder'
 
-type StatusFixture = { paneKey: string; state: AgentStatusEntry['state']; at: number }
+type StatusFixture = {
+  paneKey: string
+  state: AgentStatusEntry['state']
+  at: number
+  /** The main agent's verdict on its finished turn. */
+  outcome?: AgentTurnOutcome
+}
 
 function makeStatusThreads(fixtures: StatusFixture[]): AgentPaneThread[] {
   const repo = makeRepo()
@@ -31,7 +38,16 @@ function makeStatusThreads(fixtures: StatusFixture[]): AgentPaneThread[] {
         paneKey: fixture.paneKey,
         terminalTitle: 'Claude',
         stateHistory: [],
-        agentType: 'claude'
+        agentType: 'claude',
+        ...(fixture.outcome
+          ? {
+              mainAgent: {
+                state: fixture.state,
+                outcome: fixture.outcome,
+                stateStartedAt: fixture.at
+              }
+            }
+          : {})
       } satisfies AgentStatusEntry
     ])
   )
@@ -59,6 +75,37 @@ describe('status group order', () => {
     const groups = buildActivityThreadGroups(threads, 'status')
 
     expect(groups.map((group) => group.key)).toEqual(['working', 'done'])
+  })
+
+  it("ranks a user's Stop and a replaced turn below live work, above Done", () => {
+    for (const outcome of ['cancellation', 'superseded'] as const) {
+      const groups = buildActivityThreadGroups(
+        makeStatusThreads([
+          { paneKey: PANE_KEY, state: 'working', at: 1_000 },
+          { paneKey: PANE_KEY_2, state: 'done', at: 3_000 },
+          { paneKey: PANE_KEY_3, state: 'done', at: 5_000, outcome }
+        ]),
+        'status'
+      )
+
+      expect(
+        groups.map((group) => group.key),
+        outcome
+      ).toEqual(['working', 'interrupted', 'done'])
+    }
+  })
+
+  it('keeps a failure and an unproven end above live work', () => {
+    const groups = buildActivityThreadGroups(
+      makeStatusThreads([
+        { paneKey: PANE_KEY, state: 'working', at: 5_000 },
+        { paneKey: PANE_KEY_2, state: 'done', at: 1_000, outcome: 'unconfirmed' },
+        { paneKey: PANE_KEY_3, state: 'done', at: 3_000, outcome: 'interruption' }
+      ]),
+      'status'
+    )
+
+    expect(groups.map((group) => group.key)).toEqual(['failed', 'unconfirmed', 'working'])
   })
 
   it('keeps attention headers in a fixed order regardless of thread recency', () => {
@@ -108,7 +155,7 @@ describe('status group order', () => {
     expect(groups.map((group) => group.state)).toEqual(['blocked', 'working', 'done'])
     for (const group of groups) {
       for (const thread of group.threads) {
-        expect(threadAgentState(thread)).toBe(group.state)
+        expect(activityThreadStatusId(thread)).toBe(group.state)
       }
     }
   })
