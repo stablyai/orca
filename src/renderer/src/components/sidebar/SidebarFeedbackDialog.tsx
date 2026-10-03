@@ -352,6 +352,7 @@ export function SidebarFeedbackDialog({
 
         <SidebarFeedbackImageAttachments
           images={images}
+          pendingCount={pendingImageReadCount}
           disabled={isSubmitting}
           isDragActive={isDragActive}
           onAddFiles={handleAddFiles}

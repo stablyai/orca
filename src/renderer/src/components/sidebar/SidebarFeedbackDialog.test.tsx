@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('sonner', () => ({
   toast: {
     error: vi.fn(),
+    info: vi.fn(),
     success: vi.fn(),
     warning: mocks.toastWarning
   }
@@ -222,6 +223,8 @@ describe('SidebarFeedbackDialog image submission', () => {
     expect((send as HTMLButtonElement).disabled).toBe(true)
     fireEvent.click(send)
     expect(mocks.submit).not.toHaveBeenCalled()
+    // Why: a shrink can run for a while, and no thumbnail yet reads as a dropped file.
+    expect(await screen.findByText('Preparing attachments…')).not.toBeNull()
 
     await act(async () => {
       finishRead?.({
@@ -235,11 +238,13 @@ describe('SidebarFeedbackDialog image submission', () => {
             previewUrl: 'blob:shot'
           }
         ],
-        errors: []
+        errors: [],
+        notices: []
       })
     })
 
     await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false))
+    await waitFor(() => expect(screen.queryByText('Preparing attachments…')).toBeNull())
     const remove = screen.getByRole('button', { name: 'Remove shot.png' })
     expect(remove.dataset.slot).toBe('button')
     expect(remove.dataset.size).toBe('icon-xs')
@@ -248,6 +253,36 @@ describe('SidebarFeedbackDialog image submission', () => {
     expect(mocks.submit.mock.calls[0]?.[0].images).toEqual([
       { contentType: 'image/png', data: new Uint8Array([1]) }
     ])
+  })
+
+  it('does not flash the preparing hint for an image that reads at once', async () => {
+    mocks.readFeedbackImageFiles.mockResolvedValue({
+      images: [
+        {
+          id: 'small',
+          name: 'small.png',
+          contentType: 'image/png',
+          bytes: 5,
+          data: new Uint8Array([1]),
+          previewUrl: 'blob:small'
+        }
+      ],
+      errors: [],
+      notices: []
+    })
+    const { container } = render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')
+    fireEvent.change(input!, {
+      target: { files: [new File(['image'], 'small.png', { type: 'image/png' })] }
+    })
+
+    expect(screen.queryByText('Preparing attachments…')).toBeNull()
+    await screen.findByRole('button', { name: 'Remove small.png' })
+    // Past the show delay: a hint that had started would still be up for its minimum time.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    })
+    expect(screen.queryByText('Preparing attachments…')).toBeNull()
   })
 
   it('warns when the server cannot confirm image delivery', async () => {
@@ -262,7 +297,8 @@ describe('SidebarFeedbackDialog image submission', () => {
           previewUrl: 'blob:shot'
         }
       ],
-      errors: []
+      errors: [],
+      notices: []
     })
     mocks.submit.mockResolvedValue({ ok: true, imagesDelivered: false })
     const onOpenChange = vi.fn()
@@ -298,7 +334,8 @@ describe('SidebarFeedbackDialog image submission', () => {
           previewUrl: 'blob:shot'
         }
       ],
-      errors: []
+      errors: [],
+      notices: []
     })
     mocks.submit.mockResolvedValue({
       ok: true,
@@ -341,7 +378,8 @@ describe('SidebarFeedbackDialog image submission', () => {
           previewUrl: 'blob:shot'
         }
       ],
-      errors: []
+      errors: [],
+      notices: []
     })
     mocks.submit.mockResolvedValue({
       ok: true,
@@ -379,7 +417,8 @@ describe('SidebarFeedbackDialog image submission', () => {
           previewUrl: 'blob:shot'
         }
       ],
-      errors: []
+      errors: [],
+      notices: []
     })
     const { container, unmount } = render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
     const input = container.querySelector<HTMLInputElement>('input[type="file"]')
@@ -393,14 +432,16 @@ describe('SidebarFeedbackDialog image submission', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:shot')
   })
 
-  it('does not consume text when the pasted image cannot be attached', () => {
+  it('does not consume text when the pasted image cannot be attached', async () => {
     mocks.readFeedbackImageFiles.mockResolvedValue({
       images: [],
-      errors: ['huge.png is larger than 4.0 MB.']
+      errors: ['huge.gif is larger than 4.0 MB.'],
+      notices: []
     })
     render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
     const textarea = screen.getByPlaceholderText('What could we improve?')
-    const file = new File(['image'], 'huge.png', { type: 'image/png' })
+    // Why: PNGs over budget are shrunk; GIFs are not, so this one stays unattachable.
+    const file = new File(['image'], 'huge.gif', { type: 'image/gif' })
     Object.defineProperty(file, 'size', { value: 4 * 1024 * 1024 + 1 })
     const paste = new Event('paste', { bubbles: true, cancelable: true })
     Object.defineProperty(paste, 'clipboardData', {
@@ -410,7 +451,7 @@ describe('SidebarFeedbackDialog image submission', () => {
     fireEvent(textarea, paste)
 
     expect(paste.defaultPrevented).toBe(false)
-    expect(mocks.readFeedbackImageFiles).toHaveBeenCalledWith([file], 0, 0)
+    await waitFor(() => expect(mocks.readFeedbackImageFiles).toHaveBeenCalledWith([file], 0, 0))
   })
 
   // Why: the byte budget, not the count, is what binds after one full-screen
@@ -428,7 +469,8 @@ describe('SidebarFeedbackDialog image submission', () => {
           previewUrl: 'blob:full'
         }
       ],
-      errors: []
+      errors: [],
+      notices: []
     })
     const { container } = render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
     const input = container.querySelector<HTMLInputElement>('input[type="file"]')
@@ -446,6 +488,51 @@ describe('SidebarFeedbackDialog image submission', () => {
     expect(paste.defaultPrevented).toBe(false)
   })
 
+  // Why: a screenshot still shrinking will commit at most half the budget; holding
+  // its raw size against the gate would let a second paste spill into the textarea.
+  it('consumes a second oversized paste while the first is still shrinking', async () => {
+    const shrunk = (name: string) => ({
+      images: [
+        {
+          id: name,
+          name: `${name}.png`,
+          contentType: 'image/png',
+          bytes: 1_750_000,
+          data: new Uint8Array([1]),
+          previewUrl: `blob:${name}`
+        }
+      ],
+      errors: [],
+      notices: []
+    })
+    let finishFirstShrink: ((value: unknown) => void) | undefined
+    mocks.readFeedbackImageFiles
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishFirstShrink = resolve
+        })
+      )
+      .mockResolvedValueOnce(shrunk('second'))
+    render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    const textarea = screen.getByPlaceholderText('What could we improve?')
+    const pasteScreenshot = (name: string): Event => {
+      const file = new File(['x'], `${name}.png`, { type: 'image/png' })
+      Object.defineProperty(file, 'size', { value: 6 * 1024 * 1024 })
+      const paste = new Event('paste', { bubbles: true, cancelable: true })
+      Object.defineProperty(paste, 'clipboardData', { value: { files: [file] } })
+      fireEvent(textarea, paste)
+      return paste
+    }
+
+    expect(pasteScreenshot('first').defaultPrevented).toBe(true)
+    expect(pasteScreenshot('second').defaultPrevented).toBe(true)
+    await act(async () => finishFirstShrink?.(shrunk('first')))
+
+    await screen.findByRole('button', { name: 'Remove first.png' })
+    await screen.findByRole('button', { name: 'Remove second.png' })
+    expect(mocks.readFeedbackImageFiles).toHaveBeenNthCalledWith(2, expect.any(Array), 1, 1_750_000)
+  })
+
   it('stops offering Attach once the byte budget is spent, below the count limit', async () => {
     mocks.readFeedbackImageFiles.mockResolvedValue({
       images: [
@@ -458,7 +545,8 @@ describe('SidebarFeedbackDialog image submission', () => {
           previewUrl: 'blob:full'
         }
       ],
-      errors: []
+      errors: [],
+      notices: []
     })
     const { container } = render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
     expect(screen.getByRole('button', { name: 'Attach' }).hasAttribute('disabled')).toBe(false)
@@ -473,21 +561,26 @@ describe('SidebarFeedbackDialog image submission', () => {
     expect(screen.getByRole('button', { name: 'Attach' }).hasAttribute('disabled')).toBe(true)
   })
 
-  it('counts committed and in-flight image bytes against the total budget', async () => {
-    mocks.readFeedbackImageFiles.mockResolvedValueOnce({
+  it('sizes each queued batch against what the batches before it committed', async () => {
+    const committed = (name: string, bytes: number) => ({
       images: [
         {
-          id: 'first',
-          name: 'first.png',
+          id: name,
+          name: `${name}.png`,
           contentType: 'image/png',
-          bytes: 1000,
+          bytes,
           data: new Uint8Array([1]),
-          previewUrl: 'blob:first'
+          previewUrl: `blob:${name}`
         }
       ],
-      errors: []
+      errors: [],
+      notices: []
     })
-    mocks.readFeedbackImageFiles.mockReturnValue(new Promise(() => {}))
+    mocks.readFeedbackImageFiles
+      .mockResolvedValueOnce(committed('first', 1000))
+      // A shrunk image commits far fewer bytes than its file size.
+      .mockResolvedValueOnce(committed('second', 150))
+      .mockReturnValue(new Promise(() => {}))
     const { container } = render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
     const input = container.querySelector<HTMLInputElement>('input[type="file"]')
     fireEvent.change(input!, {
@@ -501,8 +594,9 @@ describe('SidebarFeedbackDialog image submission', () => {
     fireEvent.change(input!, { target: { files: [second] } })
     fireEvent.change(input!, { target: { files: [third] } })
 
+    await waitFor(() => expect(mocks.readFeedbackImageFiles).toHaveBeenCalledTimes(3))
     expect(mocks.readFeedbackImageFiles).toHaveBeenNthCalledWith(2, [second], 1, 1000)
-    expect(mocks.readFeedbackImageFiles).toHaveBeenNthCalledWith(3, [third], 2, 1200)
+    expect(mocks.readFeedbackImageFiles).toHaveBeenNthCalledWith(3, [third], 2, 1150)
   })
 
   it('rejects images added after submission starts instead of clearing them unsent', async () => {

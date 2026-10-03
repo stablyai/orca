@@ -737,7 +737,8 @@
             "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
             "invalidImage": "{{fileName}} is not a valid supported image.",
             "additionalErrors": "{{count}} additional images could not be attached.",
-            "totalTooLarge": "{{fileName}} superaría el total de {{maxSize}} de archivos adjuntos."
+            "totalTooLarge": "{{fileName}} superaría el total de {{maxSize}} de archivos adjuntos.",
+            "compressed": "{{fileName}} se comprimió de {{originalSize}} a {{size}} para ajustarse al límite de archivos adjuntos."
           }
         }
       },
@@ -5386,6 +5387,7 @@
           "parkTerminal": "Park terminal"
         },
         "SidebarFeedbackImageAttachments": {
+          "preparing": "Preparando archivos adjuntos…",
           "attachImages": "Attach",
           "removeImage": "Remove {{fileName}}",
           "screenshotsHint": "Adjunta hasta {{count}} capturas de pantalla, {{maxSize}} en total"

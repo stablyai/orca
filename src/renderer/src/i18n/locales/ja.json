@@ -879,7 +879,8 @@
             "dimensionsTooLarge": "{{fileName}} は画像サイズが大きすぎるため、安全にプレビューできません。",
             "invalidImage": "{{fileName}} は有効な画像として読み取れません。",
             "additionalErrors": "ほかに {{count}} 件の画像を添付できませんでした。",
-            "totalTooLarge": "{{fileName}} を追加すると添付ファイルの合計が {{maxSize}} を超えます。"
+            "totalTooLarge": "{{fileName}} を追加すると添付ファイルの合計が {{maxSize}} を超えます。",
+            "compressed": "{{fileName}} を添付ファイルの上限に収めるため、{{originalSize}} から {{size}} に圧縮しました。"
           }
         }
       },
@@ -6210,6 +6211,7 @@
           "parkTerminal": "ターミナルを退避"
         },
         "SidebarFeedbackImageAttachments": {
+          "preparing": "添付ファイルを準備しています…",
           "attachImages": "Attach",
           "removeImage": "{{fileName}} を削除",
           "screenshotsHint": "スクリーンショットを最大 {{count}} 件、合計 {{maxSize}} まで添付できます"

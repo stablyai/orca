@@ -879,7 +879,8 @@
             "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
             "invalidImage": "{{fileName}} is not a valid supported image.",
             "additionalErrors": "{{count}} additional images could not be attached.",
-            "totalTooLarge": "{{fileName}}을(를) 포함하면 첨부 파일 합계가 {{maxSize}}를 초과합니다."
+            "totalTooLarge": "{{fileName}}을(를) 포함하면 첨부 파일 합계가 {{maxSize}}를 초과합니다.",
+            "compressed": "{{fileName}}을(를) 첨부 파일 한도에 맞추기 위해 {{originalSize}}에서 {{size}}(으)로 압축했습니다."
           }
         }
       },
@@ -6210,6 +6211,7 @@
           "parkTerminal": "Park terminal"
         },
         "SidebarFeedbackImageAttachments": {
+          "preparing": "첨부 파일을 준비하는 중…",
           "attachImages": "Attach",
           "removeImage": "Remove {{fileName}}",
           "screenshotsHint": "최대 {{count}}장, 총 {{maxSize}}까지 스크린샷을 첨부하세요."

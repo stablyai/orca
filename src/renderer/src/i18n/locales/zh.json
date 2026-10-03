@@ -879,7 +879,8 @@
             "dimensionsTooLarge": "{{fileName}} 的尺寸过大，无法安全预览。",
             "invalidImage": "{{fileName}} 不是有效的受支持图片。",
             "additionalErrors": "还有 {{count}} 张图片无法附加。",
-            "totalTooLarge": "{{fileName}} 将使附件总大小超过 {{maxSize}}。"
+            "totalTooLarge": "{{fileName}} 将使附件总大小超过 {{maxSize}}。",
+            "compressed": "已将 {{fileName}} 从 {{originalSize}} 压缩到 {{size}}，以符合附件大小限制。"
           }
         }
       },
@@ -6210,6 +6211,7 @@
           "parkTerminal": "Park terminal"
         },
         "SidebarFeedbackImageAttachments": {
+          "preparing": "正在准备附件…",
           "attachImages": "Attach",
           "removeImage": "Remove {{fileName}}",
           "screenshotsHint": "最多附加 {{count}} 张截图，总计 {{maxSize}}"

@@ -1024,7 +1024,8 @@
             "totalTooLarge": "{{fileName}} would bring the attachments over {{maxSize}} in total.",
             "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
             "invalidImage": "{{fileName}} is not a valid supported image.",
-            "additionalErrors": "{{count}} additional images could not be attached."
+            "additionalErrors": "{{count}} additional images could not be attached.",
+            "compressed": "{{fileName}} was compressed from {{originalSize}} to {{size}} to fit the attachment limit."
           }
         }
       },
@@ -6375,6 +6376,7 @@
         "SidebarFeedbackImageAttachments": {
           "screenshotsHint": "Attach up to {{count}} screenshots, {{maxSize}} total",
           "attachImages": "Attach",
+          "preparing": "Preparing attachments…",
           "removeImage": "Remove {{fileName}}"
         },
         "WorkspaceKanbanSearchField": {
