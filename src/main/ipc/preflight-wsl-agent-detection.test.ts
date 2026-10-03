@@ -7,10 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const runWslProcessMock = vi.hoisted(() => vi.fn())
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
-import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
+import {
+  detectWslCommandsOnPath,
+  detectWslOpenCodeCliGeneration
+} from './preflight-wsl-agent-detection'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
+import { classifyOpenCodeCliGeneration } from '../../shared/opencode-cli-generation'
 
-type RunWslProcessSpec = { distro?: string; loginPath: string; script: string }
+type RunWslProcessSpec = { distro?: string; loginPath: string; script: string; shell?: string }
 
 function lastSpec(): RunWslProcessSpec {
   const call = runWslProcessMock.mock.calls.at(-1)
@@ -161,6 +165,138 @@ it('still counts a genuine guest install', async () => {
   expect(await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])).toEqual(
     new Set(['claude'])
   )
+})
+
+describe('detectWslOpenCodeCliGeneration', () => {
+  beforeEach(() => {
+    runWslProcessMock.mockReset()
+  })
+
+  it('probes the resolved guest opencode and classifies v2', async () => {
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: true,
+      code: 0,
+      stdout: 'opencode v2.0.22\n',
+      stderr: '',
+      timedOut: false
+    })
+
+    await expect(detectWslOpenCodeCliGeneration({ distro: 'Ubuntu' })).resolves.toBe('v2')
+    const { script, shell } = lastSpec()
+    // The probe must reuse the name walk's mount-skipping lookup and execute
+    // the resolved guest path, not a bare `command -v opencode`.
+    expect(script).toContain('"$resolved" --version')
+    expect(script).not.toContain('command -v opencode')
+    expect(shell).toBe('sh')
+  })
+
+  it('classifies a v1 guest', async () => {
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: true,
+      code: 0,
+      stdout: '1.18.34\n',
+      stderr: '',
+      timedOut: false
+    })
+
+    await expect(detectWslOpenCodeCliGeneration({ distro: 'Ubuntu' })).resolves.toBe('v1')
+  })
+
+  it('returns null, not an install verdict, when the probe fails', async () => {
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: true,
+      code: 127,
+      stdout: '',
+      stderr: 'not found',
+      timedOut: false
+    })
+
+    await expect(detectWslOpenCodeCliGeneration({ distro: 'Ubuntu' })).resolves.toBeNull()
+  })
+
+  it('returns null when wsl.exe cannot be started', async () => {
+    runWslProcessMock.mockRejectedValue(new Error('spawn wsl.exe ENOENT'))
+
+    await expect(detectWslOpenCodeCliGeneration({ distro: 'Ubuntu' })).resolves.toBeNull()
+  })
+})
+
+describe('the opencode generation probe, run by a real POSIX shell', () => {
+  // Not a mock: the mount-skip is shell logic and awk, and only the shell can
+  // be trusted about which of two same-named PATH entries it resolves.
+  const itPosix = process.platform === 'win32' ? it.skip : it
+
+  const plantCli = (dir: string, name: string, versionLine: string): void => {
+    mkdirSync(dir, { recursive: true })
+    const file = join(dir, name)
+    writeFileSync(file, `#!/bin/sh\necho ${versionLine}\n`)
+    chmodSync(file, 0o755)
+  }
+
+  // Runs the exact guest script, with /proc/mounts faked for the test host.
+  const runProbeScript = async (winMount: string, pathEntries: string[]): Promise<string> => {
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: true,
+      code: 0,
+      stdout: '',
+      stderr: '',
+      timedOut: false
+    })
+    await detectWslOpenCodeCliGeneration({ distro: 'Ubuntu' })
+    const script = String(runWslProcessMock.mock.calls.at(-1)?.[0].script).replace(
+      /_orca_win_mounts=\$\([^)]*\)/g,
+      `_orca_win_mounts=${winMount}`
+    )
+    return String(
+      execFileSync('/bin/sh', ['-c', script], {
+        encoding: 'utf8',
+        env: { HOME: winMount, PATH: [...pathEntries, '/usr/bin', '/bin'].join(':') }
+      })
+    )
+  }
+
+  itPosix('classifies the guest v1 behind a Windows v2 opencode that shadows it', async () => {
+    // A Windows-mounted v2 `opencode` sits ahead of a genuine guest v1 install.
+    // Re-resolving with a bare `command -v` picks the Windows binary and reports
+    // v2, so the caller drops the v1 id and HIDES the guest install. The probe
+    // must apply the name walk's mount skip and classify the guest binary.
+    const root = mkdtempSync(join(tmpdir(), 'orca-opencode-shadow-'))
+    try {
+      const winMount = join(root, 'winmnt')
+      const win = join(winMount, 'c/npm')
+      const guest = join(root, 'home/bin')
+      plantCli(win, 'opencode', 'opencode v2.0.22')
+      plantCli(guest, 'opencode', '1.18.34')
+      plantCli(guest, 'opencode2', '1.18.34')
+
+      const out = await runProbeScript(winMount, [win, guest])
+
+      expect(out).toContain('1.18.34')
+      expect(classifyOpenCodeCliGeneration(out)).toBe('v1')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  itPosix('still classifies a guest v2 behind a Windows v1 opencode (reported case)', async () => {
+    // Symmetric case: the mount skip must not turn the original #24987 false
+    // positive back into a false negative. The guest v2 wins over Windows v1.
+    const root = mkdtempSync(join(tmpdir(), 'orca-opencode-shadow-v2-'))
+    try {
+      const winMount = join(root, 'winmnt')
+      const win = join(winMount, 'c/npm')
+      const guest = join(root, 'home/bin')
+      plantCli(win, 'opencode', '1.18.34')
+      plantCli(guest, 'opencode', 'opencode v2.0.22')
+      plantCli(guest, 'opencode2', 'opencode v2.0.22')
+
+      const out = await runProbeScript(winMount, [win, guest])
+
+      expect(classifyOpenCodeCliGeneration(out)).toBe('v2')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('the detection script itself, run by a real POSIX shell', () => {

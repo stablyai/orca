@@ -1,5 +1,6 @@
 import { runProcess } from '../../shared/child-process/run-process'
 import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
+import { classifyOpenCodeCliGeneration } from '../../shared/opencode-cli-generation'
 import { createHash } from 'node:crypto'
 import { realpath, stat } from 'node:fs/promises'
 
@@ -81,10 +82,8 @@ async function probeBackend(
     if (result.code !== 0 || result.timedOut || result.outputTruncated) {
       return null
     }
-    const version = /^(?:opencode\s+)?v?([12])\.\d+\.\d+(?:[-+][\w.-]+)?$/i.exec(
-      result.stdout.trim()
-    )
-    return version?.[1] === '1' ? 'v1' : version?.[1] === '2' ? 'v2' : null
+    const version = classifyOpenCodeCliGeneration(result.stdout)
+    return version
   } catch {
     return null
   }

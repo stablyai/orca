@@ -8,6 +8,7 @@ import { isPwshAvailableAsync } from '../main/pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
+import { filterRelayOpenCodeDetectedIds } from '../shared/opencode-cli-detection'
 import { runProcess } from '../shared/child-process/run-process'
 
 const execFileAsync = promisify(execFile)
@@ -85,26 +86,35 @@ export class PreflightHandler {
         (command.requiredCommands ?? []).every((required) => foundCommands.has(required))
     )
     const versions: Record<string, string> = {}
+    const executablePaths = new Map(results.map((result) => [result.cmd, result.executablePath]))
     for (const command of detectedCommands) {
+      const executablePath = executablePaths.get(command.cmd)
       if (
-        command.id !== 'claude' ||
-        command.reportVersion !== true ||
-        versions.claude !== undefined
+        command.id === 'claude' &&
+        command.reportVersion === true &&
+        versions.claude === undefined &&
+        executablePath
       ) {
-        continue
-      }
-      const executablePath = results.find((result) => result.cmd === command.cmd)?.executablePath
-      if (!executablePath) {
-        continue
-      }
-      const version = await probeCommandVersion(executablePath)
-      if (version) {
-        versions[command.id] = version
+        const version = await probeCommandVersion(executablePath)
+        if (version) {
+          versions.claude = version
+        }
       }
     }
 
+    const detectedIds = [...new Set(detectedCommands.map(({ id }) => id))]
+    // Why: a v2-only host resolves BOTH opencode ids (the v2 package ships both
+    // bins), which would otherwise report the v1 entry (#24987). Only the
+    // ambiguous pair is worth a spawn; a single id is returned untouched.
+    const agents = await filterRelayOpenCodeDetectedIds(
+      detectedCommands,
+      detectedIds,
+      executablePaths,
+      probeCommandVersion
+    )
+
     return {
-      agents: [...new Set(detectedCommands.map(({ id }) => id))],
+      agents,
       ...(Object.keys(versions).length > 0 ? { versions } : {})
     }
   }

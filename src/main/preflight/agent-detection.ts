@@ -18,6 +18,7 @@ import { mergePersistedWindowsPathAsync } from '../pty/windows-environment-path'
 import { getActiveMultiplexer } from '../ssh/ssh-target-registry'
 import {
   detectWslCommandsOnPath,
+  detectWslOpenCodeCliGeneration,
   type WslPreflightTarget
 } from '../ipc/preflight-wsl-agent-detection'
 import { detectCommandsInInstallDirs } from '../ipc/local-agent-install-dir-detection'
@@ -44,6 +45,8 @@ import {
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   resolveDetectedTuiAgentIds
 } from '../ipc/tui-agent-detection-commands'
+import { filterOpenCodeDetectedIds } from '../../shared/opencode-cli-detection'
+import { detectLocalOpenCodeCliGeneration } from './opencode-generation-probe'
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
 import { prunePreflightWslCache } from '../preflight-wsl-cache'
 
@@ -122,10 +125,6 @@ export function _resetPreflightCache(): void {
   preflightCacheEpoch += 1
 }
 
-function uniqueAgentIds(ids: Iterable<string>): string[] {
-  return [...new Set(ids)]
-}
-
 async function detectCommandRuntime(
   command: string,
   context?: PreflightRuntimeContext
@@ -149,18 +148,18 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
       wslTarget,
       getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, 'wsl')
     )
-    return resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, 'wsl')
+    const detected = resolveDetectedTuiAgentIds(
+      KNOWN_TUI_AGENT_DETECTION_COMMANDS,
+      foundCommands,
+      'wsl'
+    )
+    return filterOpenCodeDetectedIds(detected, () => detectWslOpenCodeCliGeneration(wslTarget))
   }
 
-  const probeCommands = getTuiAgentDetectionProbeCommands(
-    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    process.platform
-  )
   const pathChecks = await Promise.all(
-    probeCommands.map(async (cmd) => ({
-      cmd,
-      installedOnPath: await isCommandOnPath(cmd)
-    }))
+    getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, process.platform).map(
+      async (cmd) => ({ cmd, installedOnPath: await isCommandOnPath(cmd) })
+    )
   )
   const missedCommands = pathChecks.filter((check) => !check.installedOnPath).map(({ cmd }) => cmd)
   // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
@@ -171,11 +170,15 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
       .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))
       .map(({ cmd }) => cmd)
   )
-  return resolveDetectedTuiAgentIds(
+  const detected = resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     foundCommands,
     process.platform
   )
+  // Why: the probe stays on the fs-only local path unless BOTH opencode ids
+  // resolve, so the #9297 zero-spawn guarantee is preserved for every other
+  // startup. See filterOpenCodeDetectedIds for the v2-package reason.
+  return filterOpenCodeDetectedIds(detected, detectLocalOpenCodeCliGeneration)
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(
@@ -250,7 +253,7 @@ export async function detectRemoteAgents(args: { connectionId: string }): Promis
   const result = (await mux.request('preflight.detectAgents', {
     commands: KNOWN_TUI_AGENT_DETECTION_COMMANDS
   })) as { agents: string[] }
-  return uniqueAgentIds(result.agents)
+  return [...new Set(result.agents)]
 }
 
 async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {

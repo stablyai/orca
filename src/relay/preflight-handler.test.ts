@@ -345,3 +345,75 @@ describe('PreflightHandler', () => {
     }
   })
 })
+
+function openCodeDetectionHandler(): (params: Record<string, unknown>) => Promise<unknown> {
+  const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+  const dispatcher = {
+    onRequest: vi.fn(
+      (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+        requestHandlers.set(method, handler)
+      }
+    )
+  }
+  new PreflightHandler(dispatcher as never)
+  const handler = requestHandlers.get('preflight.detectAgents')
+  expect(handler).toBeDefined()
+  return handler!
+}
+
+function stubOpenCodeLookups(present: readonly string[]): void {
+  execFileAsyncMock.mockImplementation(async (_file, args) => {
+    const script = String(args[1])
+    const command = present.find((candidate) => script.includes(`'${candidate}'`))
+    if (command) {
+      return { stdout: `__ORCA_AGENT_PATH__/relay/path/${command}\n` }
+    }
+    throw new Error('not found')
+  })
+}
+
+describe('PreflightHandler opencode generation', () => {
+  const commands = [
+    { id: 'opencode', cmd: 'opencode' },
+    { id: 'opencode2', cmd: 'opencode2' }
+  ]
+
+  it('reports only opencode2 when the v2 package resolves both bins', async () => {
+    stubOpenCodeLookups(['opencode', 'opencode2'])
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: 'opencode v2.0.22\n',
+      stderr: '',
+      timedOut: false
+    })
+
+    await expect(openCodeDetectionHandler()({ commands })).resolves.toEqual({
+      agents: ['opencode2']
+    })
+  })
+
+  it('keeps opencode for a genuine v1 install', async () => {
+    stubOpenCodeLookups(['opencode', 'opencode2'])
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: '1.18.34\n',
+      stderr: '',
+      timedOut: false
+    })
+
+    await expect(openCodeDetectionHandler()({ commands })).resolves.toEqual({
+      agents: ['opencode', 'opencode2']
+    })
+  })
+
+  it('does not spawn a version probe when only one opencode id resolves', async () => {
+    stubOpenCodeLookups(['opencode'])
+
+    await expect(openCodeDetectionHandler()({ commands })).resolves.toEqual({
+      agents: ['opencode']
+    })
+    expect(runProcessMock).not.toHaveBeenCalled()
+  })
+})
