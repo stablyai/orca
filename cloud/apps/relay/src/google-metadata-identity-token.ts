@@ -13,7 +13,10 @@ export async function googleMetadataIdentityToken(
     headers: { 'Metadata-Flavor': 'Google' },
     signal: AbortSignal.timeout(METADATA_IDENTITY_TIMEOUT_MS)
   })
-  if (!response.ok) throw new Error(`metadata_identity_${response.status}`)
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined)
+    throw new Error(`metadata_identity_${response.status}`)
+  }
   const token = (await response.text()).trim()
   if (token.length === 0 || token.length > 16 * 1024) {
     throw new Error('metadata_identity_invalid')

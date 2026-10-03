@@ -70,7 +70,10 @@ export function startRegionalRehomeWorker(
             }),
             signal: AbortSignal.timeout(options.requestTimeoutMs ?? 10_000)
           })
-          if (!response.ok) throw new Error(`regional_rehome_source_${response.status}`)
+          if (!response.ok) {
+            await response.body?.cancel().catch(() => undefined)
+            throw new Error(`regional_rehome_source_${response.status}`)
+          }
           const body = IdleRegionalRehomeResponseSchema.parse(await response.json())
           tally(body.reason ? `${body.outcome}:${body.reason}` : body.outcome)
           if (body.outcome === 'committed') {
