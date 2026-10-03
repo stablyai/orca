@@ -110,7 +110,11 @@ export function CaffeinateStatusSegment({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
-          {ariaLabel}
+          {ariaLabel}.{' '}
+          {translate(
+            'auto.components.status.bar.CaffeinateStatusSegment.tooltipDescription',
+            'Caffeinate prevents idle sleep while active. Closing a MacBook lid may still put it to sleep.'
+          )}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent
