@@ -76,15 +76,17 @@ export function MobileNativeChatTurnStatus({
   )
 }
 
-/** The live turn's tail line: a spinner beside what the provider says it is doing,
- *  else "Thinking", else "Working…". The clock stays in the turn bar. Desktop
- *  parity: `NativeChatTurnActivityLine`. */
+/** The live turn's tail line: a spinner beside "Stopping…" once the person's Stop is ending the
+ *  turn, else what the provider says it is doing, else "Thinking", else "Working…". The clock
+ *  stays in the turn bar. Desktop parity: `NativeChatTurnActivityLine`. */
 export function MobileNativeChatTurnActivity({
   thinking,
-  activityText
+  activityText,
+  stopping = false
 }: {
   thinking: boolean
   activityText?: string | null
+  stopping?: boolean
 }): React.JSX.Element {
   return (
     <View
@@ -94,7 +96,7 @@ export function MobileNativeChatTurnActivity({
     >
       <ActivityIndicator size="small" color={colors.textMuted} />
       <Text style={styles.label} numberOfLines={1}>
-        {formatNativeChatActiveTurnLabel({ activityText, thinking })}
+        {formatNativeChatActiveTurnLabel({ activityText, thinking, stopping })}
       </Text>
     </View>
   )

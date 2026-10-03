@@ -28,6 +28,7 @@ import {
 } from './structured-agent-session-message-projection'
 import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'
 import { useStructuredAgentSessionTransportState } from './use-structured-agent-session-transport-state'
+import { useStructuredAgentSessionStopPress } from './use-structured-agent-session-stop-press'
 import { useStructuredAgentSessionTransport } from './use-structured-agent-session-transport'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 import type { StructuredAgentSessionLaunchView } from './use-native-chat-provisional-launch'
@@ -38,6 +39,7 @@ import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-
 import { outboxOutsideQueuedCards } from './structured-agent-session-queued-cards'
 import { structuredAgentSessionStartFailureFacts } from './structured-agent-session-delivery-notices'
 import { hostStatesTurnScopes } from '../../../../shared/native-chat-turn-membership'
+import { agentStopDisplayStatus } from '../../../../shared/agent-stop-display-status'
 
 export type { StructuredPromptItem } from './structured-agent-session-message-projection'
 
@@ -57,10 +59,13 @@ export function useStructuredAgentSession(args: {
   composerScopeKey?: string
   /** The chat-wide "queue follow-ups" setting; off keeps mid-turn sends immediate. */
   queueFollowUps?: boolean
+  /** The host says a person's Stop is still ending this session's work. */
+  hostStopping?: boolean
 }) {
   const {
     agent,
     composerScopeKey,
+    hostStopping = false,
     isVisible,
     launch,
     providerStarting = false,
@@ -115,14 +120,26 @@ export function useStructuredAgentSession(args: {
     () => (transportState.queuedMessages ?? []).map((message) => message.messageId),
     [transportState.queuedMessages]
   )
+  const stopPress = useStructuredAgentSessionStopPress(sessionId)
+  const stopping =
+    agentStopDisplayStatus({
+      working: transportState.isWorking,
+      hostStopping,
+      stopPressed: stopPress.pressed
+    }) === 'stopping'
+  const queueDelivery = useMemo(
+    () => ({ capability: queueCapability, enabled: queueFollowUps }),
+    [queueCapability, queueFollowUps]
+  )
   const outboxController = useStructuredAgentSessionOutbox({
     sessionId,
     target,
     fence: transportState.fence,
     submissions: transportState.submissions,
     composerScopeKey,
-    queueDelivery: { capability: queueCapability, enabled: queueFollowUps },
-    queuedMessageIds
+    queueDelivery,
+    queuedMessageIds,
+    stopping
   })
 
   const threadGoal = useStructuredAgentSessionThreadGoal({
@@ -156,12 +173,8 @@ export function useStructuredAgentSession(args: {
   // A queued send is a card, never a transcript bubble.
   const isWorking = transportState.isWorking
   const transcriptOutbox = useMemo(
-    () =>
-      outboxOutsideQueuedCards(outbox, queuedMessageIds, isWorking, {
-        capability: queueCapability,
-        enabled: queueFollowUps
-      }),
-    [isWorking, outbox, queueCapability, queueFollowUps, queuedMessageIds]
+    () => outboxOutsideQueuedCards(outbox, queuedMessageIds, isWorking, queueDelivery),
+    [isWorking, outbox, queueDelivery, queuedMessageIds]
   )
   const messages = useStructuredAgentSessionMessages(
     transportState.journalItems,
@@ -229,19 +242,24 @@ export function useStructuredAgentSession(args: {
     backgroundTasks: transportState.backgroundTasks,
     turnId: transportState.turnId,
     canStop,
+    /** This client's Stop request is in flight. */
+    stopPressed: stopPress.pressed,
     stop: () => {
       if (stopsConversation) {
         // Unsent text this client still owns goes back to its composer — a local move.
         // Host-held drafts are never withdrawn by a Stop: the host pauses them and
         // they stay visible as cards, on every device, until the user acts on one.
         outboxController.withdrawUnsent()
-        return mutate('agentSession.cancel', 'agentSession.cancel', {})
+        return stopPress.track(() => mutate('agentSession.cancel', 'agentSession.cancel', {}))
       }
-      return transportState.turnId
-        ? mutate('agentSession.cancel', 'agentSession.cancel', { turnId: transportState.turnId })
+      const turnId = transportState.turnId
+      return turnId
+        ? stopPress.track(() => mutate('agentSession.cancel', 'agentSession.cancel', { turnId }))
         : Promise.resolve(null)
     },
     queuedMessages: queuedController,
+    /** The host holds a send made while the agent works as a queued card. */
+    queueCapable,
     cancel: async (turnId: string, prompt?: StructuredPromptCancelTarget) => {
       // Capability negotiation must complete before mutate fingerprints the payload:
       // older hosts reject the strict prompt field.

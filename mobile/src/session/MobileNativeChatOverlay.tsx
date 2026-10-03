@@ -68,7 +68,10 @@ export function MobileNativeChatOverlay({
     onEdit: queued.edit,
     pause: queued.pause,
     onResume: queued.resume,
-    sessionKey: queued.sessionKey
+    sessionKey: queued.sessionKey,
+    // Nothing steers into a turn a Stop is ending; the host holds such a send until it ends.
+    // The indicator's `stopping` is the display status, decided once in the session hook.
+    steerHeld: controller.nativeChatTurnIndicator?.stopping === true
   })
   if (!controller.showNativeChat) {
     return null

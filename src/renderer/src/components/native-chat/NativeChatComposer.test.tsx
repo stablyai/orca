@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   composerIsComposing: null as (() => boolean) | null,
   attachmentIsComposing: null as (() => boolean) | null,
   flushPendingAttachments: vi.fn(),
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: null until the mocked field renders and records its props.
   fieldProps: null as {
     onSend?: () => void
     onStop?: () => void
@@ -26,6 +27,8 @@ const mocks = vi.hoisted(() => ({
     sessionOptionsSnapshot?: SessionOptionDescriptor[]
     attachDisabled?: boolean
     sendButtonDisabled?: boolean
+    isStopping?: boolean
+    afterStop?: 'queue' | 'send'
     autocomplete?: { mode: string; items?: { kind: string; name: string }[] }
   } | null,
   modelSwitchOutcome: 'applied' as 'applied' | 'rejected' | 'unknown',
@@ -243,6 +246,26 @@ describe('NativeChatComposer', () => {
     expect(mocks.cancelPendingSends.mock.invocationCallOrder[0]).toBeLessThan(
       onStop.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
     )
+  })
+
+  it("disables Stop while a person's Stop is ending the turn, and says so", () => {
+    const props = {
+      terminalTabId: 'tab-1',
+      paneKey: 'tab-1:leaf-1',
+      targetPtyId: 'pty-1',
+      agent: 'codex' as const,
+      isWorking: true,
+      onStop: vi.fn()
+    }
+    const { rerender } = render(<NativeChatComposer {...props} />)
+    expect(mocks.fieldProps?.sendButtonDisabled).toBe(false)
+
+    rerender(<NativeChatComposer {...props} isStopping />)
+
+    expect(mocks.fieldProps).toMatchObject({ sendButtonDisabled: true, isStopping: true })
+    // Answered: Stop is back, and the placeholder says a message sent now runs after the stop.
+    rerender(<NativeChatComposer {...props} afterStop="send" />)
+    expect(mocks.fieldProps).toMatchObject({ sendButtonDisabled: false, afterStop: 'send' })
   })
 
   it('associates a delayed submit with its optimistic cache entry', () => {

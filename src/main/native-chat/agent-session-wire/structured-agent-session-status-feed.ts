@@ -25,7 +25,7 @@ import { structuredAgentSessionProviderSessionMetadata } from './structured-agen
 import { structuredStatusChildWork } from './structured-agent-session-status-child-work'
 import {
   StructuredAgentSessionJournalProjections,
-  type StructuredAgentSessionStatusState
+  type StructuredAgentSessionJournalProjection
 } from './structured-agent-session-status-journal-projection'
 import { structuredStatusSummariesEqual } from './structured-agent-session-status-summary-equality'
 import {
@@ -168,7 +168,8 @@ export class StructuredAgentSessionStatusFeed {
     }
   }
 
-  /** Revoke live execution authority while retaining the last projection for reload history. */
+  /** Revoke live execution authority while retaining the last projection for reload history. A
+   *  Stop still ending work is live state too: with the host gone, nothing here is ending it. */
   revokeLive(sessionId: string): void {
     const previous = this.published.get(sessionId)
     if (!previous) {
@@ -178,6 +179,7 @@ export class StructuredAgentSessionStatusFeed {
       hostExecutionOwned: _hostExecutionOwned,
       hostExecutionPhase: _hostExecutionPhase,
       hostExecutionChild: _hostExecutionChild,
+      stopping: _stopping,
       ...retained
     } = previous
     this.published.set(sessionId, retained)
@@ -188,15 +190,15 @@ export class StructuredAgentSessionStatusFeed {
     })
   }
 
-  /** The projection behind the session's row and the latest request it read, cached per commit,
-   *  so the completion feed follows the same request without snapshotting the journal again. */
-  statusState(
+  /** The projection behind the session's row, cached per commit: the latest request it read, so
+   *  the completion feed follows it without snapshotting the journal again, and its `stopping`,
+   *  which the steer hold reads instead of deriving it again. */
+  journalProjection(
     sessionId: string,
     journal?: AgentSessionJournal
-  ): StructuredAgentSessionStatusState | null {
-    const session = this.deps.sessions.get(sessionId)
-    const source = journal ?? session?.journal
-    return source ? this.projections.read(source, this.deps.getRecord(sessionId)).state : null
+  ): StructuredAgentSessionJournalProjection | null {
+    const source = journal ?? this.deps.sessions.get(sessionId)?.journal
+    return source ? this.projections.read(source, this.deps.getRecord(sessionId)) : null
   }
 
   /** Re-projects one session after its journal changed; equal projections are not re-sent. */
@@ -209,7 +211,7 @@ export class StructuredAgentSessionStatusFeed {
     const record = this.deps.getRecord(sessionId)
     const projection = this.projections.read(source, record)
     this.retireSettledChildrenOnNewTurn(sessionId, session, projection.acceptedSendKey)
-    const summary = this.summaryFor(sessionId, session, source, record, projection.state)
+    const summary = this.summaryFor(sessionId, session, source, record, projection)
     const previous = this.published.get(sessionId)
     if (previous && structuredStatusSummariesEqual(previous, summary)) {
       if (!this.ownership.matchesLocation(sessionId, session.params.location)) {
@@ -262,7 +264,7 @@ export class StructuredAgentSessionStatusFeed {
     session: StatusFeedSession,
     journal: AgentSessionJournal,
     record: AgentSessionRecord | null,
-    state: StructuredAgentSessionStatusState
+    { state, stopping }: Pick<StructuredAgentSessionJournalProjection, 'state' | 'stopping'>
   ): AgentSessionStatusSummary {
     const projected = state.summary
     const providerSession = structuredAgentSessionProviderSessionMetadata(record)
@@ -281,6 +283,8 @@ export class StructuredAgentSessionStatusFeed {
           }
         : {}),
       ...projected,
+      // Only a working session is still being stopped; any other status already ended that work.
+      ...(stopping && projected.status === 'working' ? { stopping: true as const } : {}),
       ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
         ? { rewindBlockedReason: 'outcome-unknown' as const }
         : {}),

@@ -33,6 +33,8 @@ async function wiredSession() {
     cursor: () => ({ epoch: 'epoch-1', sequence: ++sequence }),
     isReadOnly: false,
     lastActivityAt: () => 1,
+    // No Stop was ever pressed here.
+    stopMarks: { latest: () => null, revision: () => 0 },
     snapshot: () => ({
       items: [...run.journalItems.values()]
         .sort((a, b) => a.sequence - b.sequence)
@@ -46,7 +48,7 @@ async function wiredSession() {
       [
         parent.sessionId,
         {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the feed reads only the cursor, read-only flag, activity clock and snapshot served here.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the feed reads only the cursor, read-only flag, activity clock, Stop marks and snapshot served here.
           journal: journal as unknown as Journal,
           params: {
             location: {

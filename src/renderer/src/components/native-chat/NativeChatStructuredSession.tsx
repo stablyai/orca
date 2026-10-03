@@ -24,6 +24,7 @@ import { NativeChatLaunchRetry } from './NativeChatLaunchRetry'
 import { useNativeChatProvisionalLaunch } from './use-native-chat-provisional-launch'
 import { useStructuredAgentSessionHostExecution } from './StructuredAgentSessionStatusBridge'
 import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
+import { nativeChatStructuredStopControls } from './native-chat-structured-stop-controls'
 import { useAppStore } from '../../store'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { NativeChatThreadGoalBanner } from './NativeChatThreadGoalBanner'
@@ -55,10 +56,12 @@ export function NativeChatStructuredSession(
     ...props,
     composerScopeKey: paneKey,
     queueFollowUps,
+    hostStopping: hostExecution.stopping,
     providerStarting: hostExecution.phase === 'starting',
     transportEnabled: provisionalLaunch.transportEnabled,
     ...(provisionalLaunch.launch ? { launch: provisionalLaunch.launch } : {})
   })
+  const stopControls = nativeChatStructuredStopControls(controller, hostExecution.stopping)
   const launchDraftSignal = useNativeChatLaunchDraftSignal({
     terminalTabId: props.tabId,
     agent: props.agent,
@@ -293,6 +296,7 @@ export function NativeChatStructuredSession(
             settledTurns={controller.settledTurns}
             awaitingInput={prompt === null ? null : 'shown'}
             turnActivity={controller.turnActivity}
+            stopping={stopControls.stopping}
             onLinkClick={onLinkClick}
             allowFileUriLinks={onLinkClick !== undefined}
             runtimeContext={imageRuntimeContext}
@@ -309,9 +313,8 @@ export function NativeChatStructuredSession(
       {/* Host-held drafts, never transcript rows. Above the status area, so running shells and agents sit next to the composer. */}
       <NativeChatQueuedMessageList
         controller={controller.queuedMessages}
-        focusComposer={() => {
-          composerRef.current?.focus()
-        }}
+        steerHeld={stopControls.stopping}
+        focusComposer={() => composerRef.current?.focus()}
       />
       <NativeChatStructuredSessionStatus
         sessionId={props.sessionId}
@@ -395,8 +398,7 @@ export function NativeChatStructuredSession(
           agent={props.agent}
           canSend={!prompt}
           isWorking={controller.canStop}
-          onStop={() => void controller.stop()}
-          steerQueued={controller.queuedMessages.steerNewest}
+          {...stopControls.composer}
           structuredTransport={structuredTransport}
           launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft: true }}
         />

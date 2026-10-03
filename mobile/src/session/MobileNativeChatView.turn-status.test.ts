@@ -197,7 +197,7 @@ describe('MobileNativeChatView', () => {
       expect(props.structuredActivityUi).toBe(true)
       expect(props.turnStatus).toMatchObject({ workedSeconds: null })
       // Nothing reports reasoning, so the tail line reads plain working instead of guessing.
-      expect(footerProps()).toEqual({ thinking: false, activityText: null })
+      expect(footerProps()).toEqual({ thinking: false, activityText: null, stopping: false })
       expect(listIds().at(-1)).toBe('a1')
       expect(props.activeTurnIsWorking).toBe(true)
       expect(workingIndicators()).toHaveLength(0)

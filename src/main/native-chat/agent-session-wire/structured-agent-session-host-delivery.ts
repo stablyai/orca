@@ -35,6 +35,9 @@ export type StructuredAgentSessionConversationDelivery = {
    *  queue. Enqueued through the session's serialize, never read here, so a commit that lands while
    *  a step is deciding to stop wakes the loop after that step rather than being lost to it. */
   afterCommit: (sessionId: string, journal: AgentSessionJournal) => void
+  /** A person's Stop settle opened or closed. It writes no row, so only what reads the settle
+   *  moves: the session's status row and the steer hold's handover. Never activity. */
+  afterSettleEdge: (sessionId: string, journal: AgentSessionJournal) => void
   /** Stops the loop and the resettle on a proof of death; quit's first step. */
   dispose: () => void
   /** Indexes a conversation some other open produced, as `open` would have. */
@@ -55,7 +58,10 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     startedFor: string
   ) => Promise<StructuredAgentSessionResumeOutcome>
   reset: (sessionId: string, journal: AgentSessionJournal, reset: AgentJournalResetReason) => void
-  clientDelivery: Pick<StructuredAgentSessionClientDelivery, 'publishRestored' | 'readChildWork'>
+  clientDelivery: Pick<
+    StructuredAgentSessionClientDelivery,
+    'publishRestored' | 'readChildWork' | 'readStopping' | 'publishStatus'
+  >
 }): StructuredAgentSessionConversationDelivery {
   const { deps, sessions } = input
   const loop = new StructuredAgentSessionDeliveryLoop({
@@ -80,6 +86,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     logger: deps.logger,
     record: (sessionId) => deps.store.getRecord(sessionId),
     readChildWork: input.clientDelivery.readChildWork,
+    stopping: input.clientDelivery.readStopping,
     now: () => deps.now?.() ?? Date.now()
   })
   const adoptOpened = async (
@@ -143,6 +150,10 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   return {
     loop,
     afterCommit,
+    afterSettleEdge: (sessionId, journal) => {
+      input.clientDelivery.publishStatus(sessionId)
+      afterCommit(sessionId, journal)
+    },
     adoptOpened,
     dispose: () => {
       loop.dispose()

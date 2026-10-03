@@ -156,6 +156,25 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(nodeTypes(rows[1]!)).toContain('CornerDownRight')
   })
 
+  it("holds Steer while a person's Stop ends the turn; Delete still works", async () => {
+    const onSend = vi.fn(async () => true)
+    const onDelete = vi.fn(async () => true)
+    const mounted = await mount({
+      cards: [card({ messageId: 'w' })],
+      onSend,
+      onDelete,
+      steerHeld: true
+    })
+    const steer = mounted.root.findByProps({
+      accessibilityLabel: 'Submit without interrupting the model'
+    })
+    expect(steer.props.disabled).toBe(true)
+    expect(steer.props.accessibilityState).toEqual({ disabled: true })
+    const trash = mounted.root.findByProps({ accessibilityLabel: 'Delete this queued message' })
+    await act(async () => trash.props.onPress())
+    expect(onDelete).toHaveBeenCalledWith('w')
+  })
+
   it('deletes a card from its trash button', async () => {
     const onDelete = vi.fn(async () => true)
     const mounted = await mount({ cards: [card({ messageId: 'w' })], onDelete })

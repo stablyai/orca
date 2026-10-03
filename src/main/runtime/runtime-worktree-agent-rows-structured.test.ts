@@ -82,6 +82,16 @@ beforeEach(() => {
 })
 
 describe('worktree ps reports structured sessions', () => {
+  it("lists a person's Stop still ending the turn, and drops it once the host does", () => {
+    expect(attach([summary({ stopping: true })]).agents[0]).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'working', stopping: true }
+    })
+    const ended = attach([summary({ stopping: true }), summary({ updatedAt: 1_757_030_401_000 })])
+    expect(ended.agents[0]?.state).toBe('working')
+    expect(ended.agents[0]?.mainAgent).not.toHaveProperty('stopping')
+  })
+
   it('a busy structured session is not reported idle', () => {
     const row = attach([summary()])
     expect(row.agents).toHaveLength(1)

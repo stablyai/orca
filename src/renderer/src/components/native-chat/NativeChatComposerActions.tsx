@@ -17,6 +17,8 @@ export type NativeChatComposerActionsProps = {
   dictationDisabled: boolean
   sendDisabled: boolean
   isWorking: boolean
+  /** This client's Stop request is in flight: the Stop control is disabled and says so. */
+  isStopping?: boolean
   isDictating: boolean
   isDictationHoldMode: boolean
   onAttach: () => void
@@ -39,6 +41,7 @@ export function NativeChatComposerActions({
   dictationDisabled,
   sendDisabled,
   isWorking,
+  isStopping = false,
   isDictating,
   isDictationHoldMode,
   onAttach,
@@ -150,7 +153,9 @@ export function NativeChatComposerActions({
           data-native-chat-critical-action={isWorking ? 'stop' : undefined}
           aria-label={
             isWorking
-              ? translate('components.native-chat.stop', 'Stop the agent')
+              ? isStopping
+                ? translate('components.native-chat.status.stopping', 'Stopping…')
+                : translate('components.native-chat.stop', 'Stop the agent')
               : translate('components.native-chat.composer.send', 'Send')
           }
           disabled={sendDisabled}

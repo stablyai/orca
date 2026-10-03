@@ -58,6 +58,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       agent,
       canSend = true,
       isWorking = false,
+      isStopping = false,
+      afterStop,
       onStop,
       onOptimisticSend,
       optimisticSendOutcome,
@@ -186,7 +188,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     // mid-save would ship the message without the image the chip promises.
     const hasPendingAttachment = imageAttachments.some((attachment) => attachment.pending)
     const sendButtonDisabled = isWorking
-      ? !hasPty || !onStop
+      ? !hasPty || !onStop || isStopping
       : disabled || hasPendingAttachment || (draft.trim() === '' && imageAttachments.length === 0)
 
     const { attachExternalPaths, resolveAttachmentOwner } = useNativeChatExternalAttachments({
@@ -372,6 +374,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         imageAttachments={imageAttachments}
         sendButtonDisabled={sendButtonDisabled}
         isWorking={isWorking}
+        isStopping={isStopping}
+        afterStop={afterStop}
         attachDisabled={disabled}
         dictationDisabled={dictationDisabled}
         isDictating={isDictating}

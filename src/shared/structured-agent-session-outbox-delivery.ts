@@ -55,11 +55,13 @@ export function structuredAgentSessionEntryAttempt(
 export function parseStructuredAgentSessionOutboxQueueFields(entry: {
   sentDelivery?: unknown
   outlivedStop?: unknown
-}): Pick<StructuredAgentSessionOutboxEntry, 'sentDelivery' | 'outlivedStop'> {
+  sentWhileStopping?: unknown
+}): Pick<StructuredAgentSessionOutboxEntry, 'sentDelivery' | 'outlivedStop' | 'sentWhileStopping'> {
   return {
     ...(entry.sentDelivery === 'queue-if-active' || entry.sentDelivery === null
       ? { sentDelivery: entry.sentDelivery }
       : {}),
-    ...(entry.outlivedStop === true ? { outlivedStop: true as const } : {})
+    ...(entry.outlivedStop === true ? { outlivedStop: true as const } : {}),
+    ...(entry.sentWhileStopping === true ? { sentWhileStopping: true as const } : {})
   }
 }

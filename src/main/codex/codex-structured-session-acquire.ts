@@ -237,6 +237,7 @@ export async function acquireCodexStructuredSession(input: {
       historyPath: opened.historyPath,
       historyMode: opened.historyMode,
       activeTurnIds: new Set(),
+      abortedTurnIds: new Set(),
       prompts: acquisition.prompts,
       options,
       reportedOptions: reportedCodexThreadOptions(opened),

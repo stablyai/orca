@@ -761,7 +761,8 @@ describe('StructuredAgentSessionStatusBridge', () => {
     )
     expect(executions.at(-1)).toEqual({
       phase: 'starting',
-      childKey: 'child-2'
+      childKey: 'child-2',
+      stopping: false
     })
     expect(executions.some(({ phase }) => phase === 'starting')).toBe(true)
   })

@@ -57,13 +57,15 @@ export function useStructuredAgentSessionStatusSummary(
   return { summary, observation }
 }
 
-/** The host's child state, projected to stable primitives so journal updates do not re-render chat. */
+/** The host's child state, projected to stable primitives so journal updates do not re-render chat.
+ *  `stopping`: the host says a person's Stop is still ending the work; an older host never does. */
 export function useStructuredAgentSessionHostExecution(
   sessionId: string,
   target: RuntimeClientTarget
 ): {
   phase: NonNullable<AgentSessionStatusSummary['hostExecutionPhase']> | null
   childKey: string | number | null
+  stopping: boolean
 } {
   const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
   useEffect(() => feed.activate(), [feed])
@@ -80,7 +82,12 @@ export function useStructuredAgentSessionHostExecution(
     },
     () => null
   )
-  return { phase, childKey }
+  const stopping = useSyncExternalStore(
+    feed.subscribe,
+    () => feed.getSnapshot().get(sessionId)?.stopping === true,
+    () => false
+  )
+  return { phase, childKey, stopping }
 }
 
 /** The host's child records for the row, and the legacy roster readers of `subagents` keep. A host
@@ -121,7 +128,8 @@ function projectStatus(
   const agentStatus = structuredAgentSessionAgentStatus({
     status: summary.status,
     childWork: children ?? summary.backgroundTasks,
-    turnOutcome: summary.turnOutcome
+    turnOutcome: summary.turnOutcome,
+    ...(summary.stopping ? { stopping: summary.stopping } : {})
   })
   const current = store.agentStatusByPaneKey?.[paneKey]
   // Same continuity rule as the host ingest, on the main agent's own clock.

@@ -41,6 +41,7 @@ export function useMobileNativeChatTurnDisclosure({
   turnJournal = null,
   thinking = false,
   activityText = null,
+  stopping = false,
   scopeKey
 }: {
   messages: readonly NativeChatMessage[]
@@ -55,6 +56,8 @@ export function useMobileNativeChatTurnDisclosure({
   thinking?: boolean
   /** What the provider says the live turn is doing; outranks the other labels. */
   activityText?: string | null
+  /** A person's Stop is ending the live turn: the sends the host holds draw after its status. */
+  stopping?: boolean
   /** Host/worktree/tab identity for timing and disclosure isolation. */
   scopeKey: string
 }): {
@@ -83,7 +86,9 @@ export function useMobileNativeChatTurnDisclosure({
   }, [enabled, messages, turnJournal])
   // A message waiting behind the live turn draws after that turn's live status, not in the list.
   const waiting = useMemo(() => {
-    const ids = enabled ? nativeChatMessagesWaitingBehindLiveTurn(rows, turnJournal?.items) : null
+    const ids = enabled
+      ? nativeChatMessagesWaitingBehindLiveTurn(rows, turnJournal?.items, stopping)
+      : null
     if (!ids?.size) {
       return { listMessages: rows, waitingRows: [], indexById: null }
     }
@@ -92,7 +97,7 @@ export function useMobileNativeChatTurnDisclosure({
       waitingRows: rows.flatMap((item, index) => (ids.has(item.id) ? [{ item, index }] : [])),
       indexById: new Map(rows.map((message, index) => [message.id, index]))
     }
-  }, [enabled, rows, turnJournal])
+  }, [enabled, rows, stopping, turnJournal])
   const turnStatuses = useMobileNativeChatTurnStatus({
     turnKeys,
     liveTurnKey,

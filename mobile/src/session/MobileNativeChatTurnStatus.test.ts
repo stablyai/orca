@@ -109,7 +109,11 @@ describe('MobileNativeChatTurnStatus', () => {
 })
 
 describe('MobileNativeChatTurnActivity', () => {
-  function render(props: { thinking: boolean; activityText?: string | null }): ReactTestRenderer {
+  function render(props: {
+    thinking: boolean
+    activityText?: string | null
+    stopping?: boolean
+  }): ReactTestRenderer {
     act(() => {
       renderer = create(createElement(MobileNativeChatTurnActivity, props))
     })
@@ -133,6 +137,11 @@ describe('MobileNativeChatTurnActivity', () => {
     const tree = render({ thinking: true, activityText: 'Running pnpm test' })
     expect(labels(tree.root)).toEqual(['Running pnpm test'])
     expect(spinners(tree.root)).toHaveLength(1)
+  })
+
+  it("reads Stopping over provider activity once a person's Stop is ending the turn", () => {
+    const tree = render({ thinking: false, activityText: 'Running pnpm test', stopping: true })
+    expect(labels(tree.root)).toEqual(['Stopping…'])
   })
 
   it('announces the live line to assistive tech', () => {

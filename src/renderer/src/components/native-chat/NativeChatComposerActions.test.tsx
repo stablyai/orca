@@ -36,6 +36,29 @@ import { NativeChatComposerActions } from './NativeChatComposerActions'
 afterEach(() => cleanup())
 
 describe('NativeChatComposerActions', () => {
+  it("names the Stop control Stopping while a person's Stop is ending the turn", () => {
+    const props = {
+      attachDisabled: false,
+      dictationDisabled: false,
+      isWorking: true,
+      isDictating: false,
+      isDictationHoldMode: false,
+      onAttach: vi.fn(),
+      onDictationToggle: vi.fn(),
+      onDictationHoldStart: vi.fn(),
+      onDictationHoldEnd: vi.fn(),
+      onSend: vi.fn(),
+      sessionOptionsSurface: null,
+      sessionOptionsSnapshot: []
+    }
+    const { rerender } = render(<NativeChatComposerActions {...props} sendDisabled={false} />)
+    expect(screen.getByRole('button', { name: 'Stop the agent' })).toBeTruthy()
+
+    rerender(<NativeChatComposerActions {...props} sendDisabled isStopping />)
+
+    expect(screen.getByRole('button', { name: 'Stopping…' }).hasAttribute('disabled')).toBe(true)
+  })
+
   it('places session option pickers immediately beside dictation', () => {
     render(
       <NativeChatComposerActions

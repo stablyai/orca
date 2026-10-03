@@ -65,7 +65,9 @@ export function projectStructuredAgentSessionMessages(
           blocks: entry.body.blocks,
           ...(entry.state === 'rejected' || structuredAgentSessionEntryHeldForRetry(entry)
             ? { unsent: true as const }
-            : {}),
+            : entry.sentWhileStopping
+              ? { sentWhileStopping: true as const }
+              : {}),
           // A send the journal recorded before refusing it keeps its place there.
           ...(recorded ? { journalPosition: agentJournalItemPosition(recorded) } : {})
         }

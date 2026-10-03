@@ -13,12 +13,14 @@ import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-ha
 import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import type {
-  NativeChatLiveTurnIndicator,
-  NativeChatSettledTurns
+import {
+  NATIVE_CHAT_TURN_STATUS_COPY,
+  type NativeChatLiveTurnIndicator,
+  type NativeChatSettledTurns
 } from '../../../src/shared/native-chat-turn-status'
 import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import { colors } from '../theme/mobile-theme'
+import { mobileNativeChatComposerPlaceholder } from './mobile-native-chat-composer-placeholder'
 import { styles } from './mobile-native-chat-view-styles'
 import { mobileNativeChatListFooter } from './mobile-native-chat-list-footer'
 import {
@@ -266,6 +268,11 @@ export function MobileNativeChatView({
   // Per-turn status rows: one live indicator while the turn runs, then a settled
   // "Worked for N" row. The structured lane owns them; the bridge lane keeps its
   // three-dot indicator.
+  // The display status, decided once in the session hook.
+  const stopping = turnIndicator?.stopping === true
+  // Only this phone's own request holds Stop: a repeat is how a stuck stop escalates.
+  const stopHeld = agentWorking === true && turnIndicator?.stopRequestInFlight === true
+  const stoppingCopy = NATIVE_CHAT_TURN_STATUS_COPY.stopping
   const turns = useMobileNativeChatTurnDisclosure({
     messages: data,
     enabled: structuredActivityUi,
@@ -275,6 +282,7 @@ export function MobileNativeChatView({
     turnJournal,
     thinking: turnIndicator?.thinking === true,
     activityText: turnIndicator?.activityText ?? null,
+    stopping,
     scopeKey: sendSurfaceId
   })
   const hasPendingStructuredInteraction =
@@ -300,6 +308,7 @@ export function MobileNativeChatView({
       <MobileNativeChatTurnActivity
         thinking={turns.active.thinking}
         activityText={turns.activeActivityText}
+        stopping={stopping}
       />
     ) : null
 
@@ -409,11 +418,12 @@ export function MobileNativeChatView({
           <Pressable
             style={({ pressed }) => [styles.stopButton, pressed && styles.pressed]}
             onPress={onStop}
+            disabled={stopHeld}
             hitSlop={8}
-            accessibilityLabel="Stop the agent"
+            accessibilityLabel={stopHeld ? stoppingCopy : 'Stop the agent'}
           >
             <Square size={13} color={colors.statusRed} strokeWidth={2.4} fill={colors.statusRed} />
-            <Text style={styles.stopLabel}>Stop</Text>
+            <Text style={styles.stopLabel}>{stopHeld ? stoppingCopy : 'Stop'}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -448,13 +458,7 @@ export function MobileNativeChatView({
         onMicPressIn={onMicPressIn}
         onMicPressOut={onMicPressOut}
         disabled={lockReason !== null}
-        placeholder={
-          lockReason === 'disconnected'
-            ? 'Reconnecting…'
-            : lockReason === 'waiting'
-              ? 'Waiting for terminal…'
-              : 'Message, @files, /commands'
-        }
+        placeholder={mobileNativeChatComposerPlaceholder(lockReason, turnIndicator?.afterStop)}
         filePaths={filePaths}
         onNeedFiles={onNeedFiles}
       />
