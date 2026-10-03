@@ -21411,6 +21411,90 @@
         "A tombstone that exhausts its retries stays on disk until the next startup, unchanged from before."
       ],
       "demotionRule": "Keep experimental or demote if the reused listing strands a displaced root, crosses the admission cap, rearms an exhausted retry through another root, hands one tombstone to removal twice, or touches a recreated live history path."
+    },
+    {
+      "id": "terminal-performance.consumed-side-effect-retention",
+      "title": "Terminal side-effect queues release successfully applied and evicted effects",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-unit",
+      "surfaces": ["terminal output side effects", "renderer memory census"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Provider-independent queue and mocked IPC output contracts run on macOS. Remote-runtime uses this processor but has no live session run. Native mobile uses another processor and is unaffected; host ownership, ACKs, wire, paths, folder/git identity, PTY lifecycle and output bytes are unchanged. Linux, Windows, WSL and live remote execution are gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/terminal-pane/pty-output-side-effect-queue.ts"
+      ],
+      "invariant": "Release consumed title/payload objects after successful apply or overflow carry, preserving callback order, 64-effect drains, the 512-effect pending cap, bell and payload carry, empty-tail coalescing, reentrant clear/flush/enqueue, thrown-apply behavior and output delivery.",
+      "oracle": "Forced GC collects all 64 applied effects from a 100-effect bounded drain while the remaining 36 stay alive and deliver in order; it also collects the first evicted effect in a 513-effect burst while all 512 survivors remain alive. Clearing during apply immediately releases all 99 other pending effects, as the original queue did. Census reports 36 retained objects after the bounded drain. Explicit reentrant and error cases produce the same observations against the original queue.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/terminal-pane/pty-output-side-effect-queue-retention.test.ts src/renderer/src/components/terminal-pane/pty-output-side-effect-queue-reentrancy.test.ts src/renderer/src/components/terminal-pane/pty-side-effect-pending-census.test.ts src/renderer/src/components/terminal-pane/pty-transport-output-side-effects.test.ts src/renderer/src/components/terminal-pane/pty-transport-eager-buffer-replay.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/pty-output-side-effect-queue-retention.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-output-side-effect-queue-reentrancy.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-side-effect-pending-census.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-transport-output-side-effects.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-transport-eager-buffer-replay.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-output-side-effect-queue-retention.test.ts",
+          "assertions": [
+            "releases applied effects while preserving every pending effect and its delivery order",
+            "releases an evicted effect before the compaction threshold",
+            "releases every pending effect immediately when clear is called during apply"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-output-side-effect-queue-reentrancy.test.ts",
+          "assertions": [
+            "keeps empty-tail coalescing observable during the apply callback",
+            "delivers the same effect requeued after clear without releasing its new slot",
+            "preserves nested flush order and effects enqueued after the inner compaction",
+            "preserves thrown apply errors and their existing empty-tail coalescing"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/terminal-pane/pty-output-side-effect-queue-retention.test.ts src/renderer/src/components/terminal-pane/pty-output-side-effect-queue-reentrancy.test.ts src/renderer/src/components/terminal-pane/pty-side-effect-pending-census.test.ts src/renderer/src/components/terminal-pane/pty-transport-output-side-effects.test.ts src/renderer/src/components/terminal-pane/pty-transport-eager-buffer-replay.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.66,
+          "summary": "46 tests across five files passed. Four reentrant/error cases also pass against an isolated original-queue copy; stock and candidate both release 99 pending effects when clear runs during apply."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Focused renderer queue/output tests, including forced GC; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local author and independent review validation; no CI soak. Reference-lifetime tests require the test runner's existing --expose-gc."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Original queue fails both WeakRef collection assertions: all 64 applied effects and the evicted effect remain reachable. Clearing only consumed slots passes while all pending effects stay live. Baseline and candidate both pass all four reentrant/error observations."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Retained objects fall from 100 to 36 after one bounded drain and from 513 to 512 after one overflow eviction before compaction. Release is constant work per consumed effect; no changed drain limit, timer, polling, batching, cache, transport call or subprocess. Existing compaction cadence remains; clear truncates then replaces its backing array to preserve immediate release and protect reentrant same-object requeue."
+      },
+      "knownGaps": [
+        "No real renderer heap-byte or input-latency measurement; references and complete delivery are the deterministic oracle.",
+        "No live Linux, Windows, WSL, SSH or paired-runtime session run; these use provider-independent queue code.",
+        "Thrown apply callbacks keep their consumed reference until the original compaction boundary to preserve exception/coalescing behavior."
+      ],
+      "promotionCriteria": [
+        "Collect CI soak with zero unexplained GC flakes and retain callback-order, overflow-carry and reentrancy assertions."
+      ],
+      "demotionRule": "Keep experimental; investigate delivery, coalescing, error-path or pending-reference regressions without weakening the retention or fidelity oracle."
     }
   ]
 }
