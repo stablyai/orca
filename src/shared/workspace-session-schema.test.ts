@@ -40,6 +40,32 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
+  it('preserves a persisted OpenFile id across session parsing', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        wt: [
+          {
+            id: 'persisted-open-file-id',
+            filePath: '/tmp/a.ts',
+            relativePath: 'a.ts',
+            worktreeId: 'wt',
+            language: 'typescript'
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.openFilesByWorktree?.wt?.[0]?.id).toBe('persisted-open-file-id')
+    }
+  })
+
   it('drops an open file with blank external SSH ownership, keeping the session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

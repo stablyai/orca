@@ -104,6 +104,7 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(patch.openFilesByWorktree).toEqual({
       'wt-1': [
         {
+          id: '/tmp/demo.ts',
           filePath: '/tmp/demo.ts',
           relativePath: 'demo.ts',
           worktreeId: 'wt-1',
