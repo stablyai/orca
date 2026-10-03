@@ -80,7 +80,7 @@ describe('orca terminal read --screen', () => {
   })
 
   it('requests the rendered screen with --screen', async () => {
-    queueFixtures(callMock, readFixture({ source: 'screen' }))
+    queueFixtures(callMock, readFixture({ source: 'screen', renderable: true }))
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(['terminal', 'read', '--terminal', 'term_abc', '--screen', '--json'], '/tmp/repo')
@@ -89,6 +89,23 @@ describe('orca terminal read --screen', () => {
       'terminal.read',
       expect.objectContaining({ terminal: 'term_abc', screen: true })
     )
+  })
+
+  it('preserves explicit renderability in JSON output', async () => {
+    queueFixtures(
+      callMock,
+      readFixture({ source: 'screen-unavailable', renderable: false, tail: [] })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['terminal', 'read', '--terminal', 'term_example', '--screen', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      result: { terminal: { source: 'screen-unavailable', renderable: false, tail: [] } }
+    })
   })
 
   it('reports which question was answered in human output', async () => {
