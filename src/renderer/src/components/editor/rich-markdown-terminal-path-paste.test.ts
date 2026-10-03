@@ -53,6 +53,80 @@ describe('rich markdown terminal path paste', () => {
     ).toBe(true)
   })
 
+  it('preserves a drive path with a spaced folder and surrounding prose', () => {
+    const { editor, inserted } = makeEditor()
+    const text = 'Read C:\\Users\\My Project\\README.md before editing.'
+    const event = makePasteEvent(
+      text,
+      '<span>Read C:\\Users\\My Project\\</span><a href="http://README.md">README.md</a> before editing.'
+    )
+
+    expect(handleRichMarkdownTerminalPathPaste(editor, event)).toBe(true)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(inserted).toEqual([text])
+  })
+
+  it('preserves a UNC path with a spaced folder and surrounding prose', () => {
+    const { editor, inserted } = makeEditor()
+    const text = 'Review \\\\build-server\\Team Docs\\README.md with the release notes.'
+    const event = makePasteEvent(
+      text,
+      '<span>Review \\\\build-server\\Team Docs\\</span><a href="http://README.md">README.md</a> with the release notes.'
+    )
+
+    expect(handleRichMarkdownTerminalPathPaste(editor, event)).toBe(true)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(inserted).toEqual([text])
+  })
+
+  it('retains UNC share-root path basenames', () => {
+    expect(
+      shouldPasteTerminalWindowsPathAsPlainText({
+        plainText: 'Open \\\\server\\Share.md before editing.',
+        htmlText:
+          '<span>Open \\\\server\\</span><a href="http://Share.md">Share.md</a> before editing.'
+      })
+    ).toBe(true)
+  })
+
+  it('matches an unspaced path basename with regex metacharacters', () => {
+    expect(
+      shouldPasteTerminalWindowsPathAsPlainText({
+        plainText: 'Open C:\\Users\\$README.md before editing.',
+        htmlText: '<a href="http://$README.md">$README.md</a>'
+      })
+    ).toBe(true)
+  })
+
+  it('does not match a path when the linked basename is only a filename prefix', () => {
+    expect(
+      shouldPasteTerminalWindowsPathAsPlainText({
+        plainText: 'Open C:\\Users\\README.md.backup before editing.',
+        htmlText: '<a href="http://README.md">README.md</a>'
+      })
+    ).toBe(false)
+  })
+
+  it('does not treat valid filename punctuation as the end of a basename', () => {
+    expect(
+      shouldPasteTerminalWindowsPathAsPlainText({
+        plainText: 'Open C:\\Users\\README.md,backup before editing.',
+        htmlText: '<a href="http://README.md">README.md</a>'
+      })
+    ).toBe(false)
+  })
+
+  it('does not match a Windows path to an unrelated same-sentence link', () => {
+    expect(
+      shouldPasteTerminalWindowsPathAsPlainText({
+        plainText: 'Open C:\\Users\\NOTES.txt and review README.md before editing.',
+        htmlText: '<a href="http://README.md">README.md</a>'
+      })
+    ).toBe(false)
+  })
+
   it('does not claim ordinary links or non-Windows paths', () => {
     expect(
       shouldPasteTerminalWindowsPathAsPlainText({
