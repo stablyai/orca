@@ -2,6 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import { createNotificationDeliveryService } from './notification-delivery-service'
 import type { NotificationDeliveryDependencies } from './notification-delivery-service'
+import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-notification-controller'
+import {
+  createHarness as createPushHarness,
+  registration,
+  flush
+} from '../runtime/push/push-dispatcher.test-fixture'
 import type {
   NotificationDispatchRequest,
   NotificationSettings
@@ -81,6 +87,130 @@ beforeEach(() => {
 })
 
 describe('createNotificationDeliveryService', () => {
+  it.each([
+    [false, false],
+    [false, true],
+    [true, false]
+  ] as const)('mutes unresolved completions with CLI: %s, automation: %s', (cli, automation) => {
+    const harness = makeHarness(
+      makeSettings({ cliWorktreeTaskComplete: cli, automationWorktreeTaskComplete: automation })
+    )
+    expect(createNotificationDeliveryService(harness.deps).dispatch(makeRequest())).toEqual({
+      delivered: false,
+      reason: 'source-disabled'
+    })
+    expect(harness.deliverNative).not.toHaveBeenCalled()
+    expect(harness.dispatchMobileNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ desktopAllowed: false })
+    )
+    expect(harness.setTrayAttention).toHaveBeenCalledWith(true)
+  })
+
+  it.each(['blocked', 'waiting'] as const)(
+    'preserves %s attention banners and phone pushes when provenance completions are muted',
+    async (agentState) => {
+      const harness = makeHarness(
+        makeSettings({ cliWorktreeTaskComplete: false, automationWorktreeTaskComplete: false })
+      )
+      const controller = new RuntimeMobileNotificationController()
+      const push = createPushHarness({
+        devices: [{ deviceId: 'phone', pushRegistration: registration() }]
+      })
+      controller.onDispatched((event) => push.dispatcher.enqueue(event))
+      harness.deps.dispatchMobileNotification = (event) => controller.dispatch(event)
+      const service = createNotificationDeliveryService(harness.deps)
+      for (const workspaceOrigin of ['cli', 'automation', undefined] as const) {
+        now += 60_000
+        expect(service.dispatch(makeRequest({ workspaceOrigin, agentState }))).toEqual({
+          delivered: true
+        })
+      }
+      await flush()
+      expect(push.sends).toHaveLength(3)
+      expect(push.sends[0].notification.agentState).toBe('needs-input')
+    }
+  )
+
+  it.each(['cli', undefined] as const)(
+    'keeps muted %s completions out of phone pushes without suppressing later ordinary completions',
+    async (workspaceOrigin) => {
+      const harness = makeHarness(makeSettings({ cliWorktreeTaskComplete: false }))
+      const controller = new RuntimeMobileNotificationController()
+      const push = createPushHarness({
+        devices: [{ deviceId: 'phone', pushRegistration: registration() }]
+      })
+      controller.onDispatched((event) => push.dispatcher.enqueue(event))
+      harness.deps.dispatchMobileNotification = (event) => controller.dispatch(event)
+      const service = createNotificationDeliveryService(harness.deps)
+      service.dispatch(makeRequest({ workspaceOrigin }))
+      await flush()
+      expect(push.sends).toHaveLength(0)
+      expect(controller.getMissedSince(0)[0]).toMatchObject({
+        desktopAllowed: false,
+        legacySocketAllowed: false
+      })
+      service.dispatch(makeRequest({ workspaceOrigin: 'other' }))
+      await flush()
+      expect(push.sends).toHaveLength(1)
+      expect(harness.deliverNative).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it.each(['cli', 'automation', 'other', undefined] as const)(
+    'keeps the master switch authoritative for %s and old settings enabled',
+    (workspaceOrigin) => {
+      const enabled = makeHarness(makeSettings())
+      expect(
+        createNotificationDeliveryService(enabled.deps).dispatch(makeRequest({ workspaceOrigin }))
+      ).toEqual({ delivered: true })
+      const muted = makeHarness(
+        makeSettings({
+          agentTaskComplete: false,
+          cliWorktreeTaskComplete: true,
+          automationWorktreeTaskComplete: true
+        })
+      )
+      expect(
+        createNotificationDeliveryService(muted.deps).dispatch(makeRequest({ workspaceOrigin }))
+      ).toEqual({ delivered: false, reason: 'source-disabled' })
+    }
+  )
+
+  it.each(['cli', 'automation'] as const)(
+    'does not apply the %s completion setting to terminal bells',
+    (workspaceOrigin) => {
+      const harness = makeHarness(
+        makeSettings({ cliWorktreeTaskComplete: false, automationWorktreeTaskComplete: false })
+      )
+      expect(
+        createNotificationDeliveryService(harness.deps).dispatch(
+          makeRequest({ workspaceOrigin, source: 'terminal-bell' })
+        )
+      ).toEqual({ delivered: true })
+    }
+  )
+
+  it.each(['cli', 'automation'] as const)(
+    'mutes %s banners and push eligibility but preserves tray attention',
+    (workspaceOrigin) => {
+      const harness = makeHarness(
+        makeSettings({
+          cliWorktreeTaskComplete: false,
+          automationWorktreeTaskComplete: false
+        })
+      )
+      const result = createNotificationDeliveryService(harness.deps).dispatch(
+        makeRequest({ workspaceOrigin })
+      )
+      expect(result).toEqual({ delivered: false, reason: 'source-disabled' })
+      expect(harness.deliverNative).not.toHaveBeenCalled()
+      expect(harness.setTrayAttention).toHaveBeenCalledWith(true)
+      expect(harness.dispatchMobileNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ desktopAllowed: false })
+      )
+    }
+  )
+
   it('lights the tray dot before the enabled/cooldown gates can reject the event', () => {
     const harness = makeHarness(makeSettings({ enabled: false }))
     const result = createNotificationDeliveryService(harness.deps).dispatch(makeRequest())

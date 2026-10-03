@@ -29,6 +29,64 @@ function stateWithWorkspace() {
 }
 
 describe('notification workspace labels', () => {
+  it.each(['cli', 'automation'] as const)(
+    'classifies %s-created folder repositories through their persisted worktree metadata',
+    (origin) => {
+      const state = stateWithWorkspace()
+      const repo = { ...state.repos[0], kind: 'folder' as const }
+      const id = `${repo.id}::${repo.path}::workspace:folder-instance`
+      state.repos = [repo]
+      state.worktreesByRepo.repo = [
+        makeWorktree({
+          id,
+          repoId: repo.id,
+          path: repo.path,
+          orcaCreationSource: 'desktop',
+          ...(origin === 'cli'
+            ? { cliProvenance: { kind: 'created-by-cli' as const, createdAt: 1 } }
+            : {
+                automationProvenance: {
+                  kind: 'created-by-automation' as const,
+                  automationId: 'automation-1',
+                  automationNameSnapshot: 'Daily',
+                  automationRunId: 'run-1',
+                  automationRunTitleSnapshot: 'Daily run',
+                  createdAt: 1,
+                  executionTargetType: 'local' as const,
+                  executionTargetId: 'repo',
+                  projectId: 'project'
+                }
+              })
+        })
+      ]
+      for (const workspaceId of [id, `worktree:${id}`]) {
+        expect(getNotificationWorkspaceLabels(state, workspaceId).workspaceOrigin).toBe(origin)
+      }
+    }
+  )
+
+  it.each(['local', 'ssh:server', 'runtime:server'] as const)(
+    'carries provenance for worktrees on %s',
+    (hostId) => {
+      const state = stateWithWorkspace()
+      state.worktreesByRepo.repo = [
+        makeWorktree({
+          id: 'wt',
+          repoId: 'repo',
+          hostId,
+          cliProvenance: { kind: 'created-by-cli', createdAt: 1 }
+        })
+      ]
+      expect(getNotificationWorkspaceLabels(state, 'worktree:wt')).toMatchObject({
+        workspaceOrigin: 'cli'
+      })
+      state.worktreesByRepo.repo = [
+        makeWorktree({ id: 'wt', repoId: 'repo', hostId, orcaCreationSource: 'cli' })
+      ]
+      expect(getNotificationWorkspaceLabels(state, 'wt')).toMatchObject({ workspaceOrigin: 'cli' })
+    }
+  )
+
   it('includes the only project without reading agent inventories', () => {
     const state = stateWithWorkspace()
     Object.defineProperty(state, 'agentStatusByPaneKey', {
@@ -43,10 +101,12 @@ describe('notification workspace labels', () => {
     })
     expect(getNotificationWorkspaceLabels(state, 'wt')).toEqual({
       repoLabel: 'Orca',
+      workspaceOrigin: 'other',
       worktreeLabel: 'Feature'
     })
     expect(getNotificationWorkspaceLabels(state, 'worktree:wt')).toEqual({
       repoLabel: 'Orca',
+      workspaceOrigin: 'other',
       worktreeLabel: 'Feature'
     })
   })
@@ -63,6 +123,7 @@ describe('notification workspace labels', () => {
     ]
     expect(getNotificationWorkspaceLabels(state, 'remote')).toEqual({
       repoLabel: 'Orca',
+      workspaceOrigin: 'other',
       worktreeLabel: 'Remote feature'
     })
   })
@@ -96,11 +157,13 @@ describe('notification workspace labels', () => {
       ]
       expect(getNotificationWorkspaceLabels(state, 'folder:folder-id')).toEqual({
         repoLabel: 'Personal',
+        workspaceOrigin: 'other',
         worktreeLabel: 'Website'
       })
       state.projectGroups = []
       expect(getNotificationWorkspaceLabels(state, 'folder:folder-id')).toEqual({
         repoLabel: undefined,
+        workspaceOrigin: 'other',
         worktreeLabel: 'Website'
       })
     }
@@ -133,6 +196,7 @@ describe('notification workspace labels', () => {
       }))
       expect(getNotificationWorkspaceLabels(state, 'folder:remote-folder')).toEqual({
         repoLabel: 'Remote group',
+        workspaceOrigin: 'other',
         worktreeLabel: 'Remote folder'
       })
     }
@@ -181,6 +245,7 @@ describe('notification workspace labels', () => {
     }
     expect(getNotificationWorkspaceLabels(state, 'dup::/laptop/dup', 'Terminal')).toEqual({
       repoLabel: 'Dup Local',
+      workspaceOrigin: 'other',
       worktreeLabel: 'Laptop main'
     })
   })
@@ -203,6 +268,7 @@ describe('notification workspace labels', () => {
     // Last-wins on the bare id would answer "Dup Remote" for this local row.
     expect(getNotificationWorkspaceLabels(state, 'dup::/laptop/dup', 'Terminal')).toEqual({
       repoLabel: undefined,
+      workspaceOrigin: 'other',
       worktreeLabel: 'Laptop main'
     })
   })
@@ -214,6 +280,7 @@ describe('notification workspace labels', () => {
     )
     expect(getNotificationWorkspaceLabels(state, 'folder:duplicate', 'Terminal')).toEqual({
       repoLabel: undefined,
+      workspaceOrigin: 'other',
       worktreeLabel: 'Terminal'
     })
   })
@@ -279,8 +346,27 @@ describe('notification workspace labels', () => {
         state.activeWorkspaceExecutionHostId = hostId
         expect(getNotificationWorkspaceLabels(state, COLLIDING_ID, 'Terminal')).toEqual({
           repoLabel: HOSTS[hostId].repo.displayName,
+          workspaceOrigin: 'other',
           worktreeLabel: HOSTS[hostId].row.displayName
         })
+      }
+    )
+
+    it.each(['local', 'ssh:build-box'] as const)(
+      'uses provenance only from the owning %s row',
+      (hostId) => {
+        const state = stateWithCollidingHosts(hostId === 'local' ? 'ssh:build-box' : 'local')
+        state.worktreesByRepo.repo1 = state.worktreesByRepo.repo1.map((row) => ({
+          ...row,
+          ...(row.hostId === 'ssh:build-box'
+            ? { cliProvenance: { kind: 'created-by-cli' as const, createdAt: 1 } }
+            : {})
+        }))
+        state.activeWorktreeId = COLLIDING_ID
+        state.activeWorkspaceExecutionHostId = hostId
+        expect(getNotificationWorkspaceLabels(state, COLLIDING_ID).workspaceOrigin).toBe(
+          hostId === 'ssh:build-box' ? 'cli' : 'other'
+        )
       }
     )
 
@@ -304,10 +390,12 @@ describe('notification workspace labels', () => {
       const state = stateWithWorkspace()
       expect(getNotificationWorkspaceLabels(state, id, 'My terminal')).toEqual({
         repoLabel: undefined,
+        ...(id === 'missing-worktree' ? {} : { workspaceOrigin: 'other' }),
         worktreeLabel: 'My terminal'
       })
       expect(getNotificationWorkspaceLabels(state, id, '  ')).toEqual({
         repoLabel: undefined,
+        ...(id === 'missing-worktree' ? {} : { workspaceOrigin: 'other' }),
         worktreeLabel: 'workspace'
       })
     }

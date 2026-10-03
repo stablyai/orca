@@ -68,6 +68,9 @@ export function mergeRuntimeFolderWorkspace(
       ? { automationProvenance: meta.automationProvenance }
       : {}),
     ...(meta.cliProvenance !== undefined ? { cliProvenance: meta.cliProvenance } : {}),
+    ...(meta.orcaCreationSource !== undefined
+      ? { orcaCreationSource: meta.orcaCreationSource }
+      : {}),
     ...(meta.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
     workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     diffComments: meta.diffComments,
