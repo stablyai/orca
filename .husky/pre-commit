@@ -1,2 +1,6 @@
 #!/usr/bin/env sh
+# Preserve the user's shared commit checks when Husky selects its own hooks directory.
+g=$(git config --global --get core.hooksPath)
+[ -x "$g/pre-commit" ] || { echo "COMMIT BLOCKED: shared pre-commit hook missing" >&2; exit 1; }
+"$g/pre-commit" "$@" || exit $?
 pnpm exec lint-staged
