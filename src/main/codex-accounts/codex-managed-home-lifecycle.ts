@@ -11,7 +11,11 @@ import { toWindowsWslPath } from '../wsl'
 import { runWslProcess } from '../wsl/wsl-runner'
 import type { CodexAccountAddTarget, ManagedCodexHomeLocation } from './codex-account-service-types'
 import { writeFileAtomically } from './fs-utils'
-import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
+import {
+  ManagedCodexHomeTemporarilyUnavailableError,
+  UntrustedManagedCodexHomeError,
+  MISSING_MANAGED_HOME_MESSAGE
+} from './host-codex-managed-home-ownership'
 import type { CodexManagedHomePath } from './codex-managed-home-path'
 
 const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
@@ -91,13 +95,19 @@ export class CodexManagedHomeLifecycle {
     this.safeRemove(managedHomePath, accountId)
   }
 
-  safeRemove(candidatePath: string, expectedAccountId: string): void {
+  safeRemove(candidatePath: string, expectedAccountId: string): boolean {
     let managedHomePath: string
     try {
       managedHomePath = this.paths.assert(candidatePath, expectedAccountId)
     } catch (error) {
+      if (
+        error instanceof UntrustedManagedCodexHomeError &&
+        error.message === MISSING_MANAGED_HOME_MESSAGE
+      ) {
+        return true
+      }
       console.warn('[codex-accounts] Refusing to remove untrusted managed home:', error)
-      return
+      return false
     }
 
     try {
@@ -106,7 +116,7 @@ export class CodexManagedHomeLifecycle {
       // Why: this runs from error-cleanup paths; a still-held Windows handle
       // must not mask the original failure with an ENOTEMPTY from rmSync.
       console.warn('[codex-accounts] Failed to remove managed home:', error)
-      return
+      return false
     }
 
     if (parseWslUncPath(managedHomePath)) {
@@ -115,7 +125,7 @@ export class CodexManagedHomeLifecycle {
       } catch {
         // Best-effort cleanup
       }
-      return
+      return true
     }
 
     // Why: homes live at <accounts-root>/<uuid>/home; removing the home/ leaf leaves an empty <uuid>/ behind.
@@ -129,6 +139,7 @@ export class CodexManagedHomeLifecycle {
     } catch {
       // Best-effort cleanup
     }
+    return true
   }
 
   private async tryCreateWslHome(

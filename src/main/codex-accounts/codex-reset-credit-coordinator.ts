@@ -171,8 +171,11 @@ export class CodexResetCreditCoordinator {
     })
   }
 
-  discardForRemovedAccount(accountId: string): Promise<void> {
-    return this.ledger.discardForRemovedAccount(accountId)
+  persistAccountRemoval(
+    accountId: string,
+    updates: Parameters<Store['updateCodexAccountSettingsAndFlush']>[0]
+  ): Promise<void> {
+    return this.ledger.persistAccountRemoval(accountId, updates)
   }
 
   private startAttempt(

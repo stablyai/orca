@@ -6620,6 +6620,8 @@
           "973741a871": "Keep existing Gemini CLI sessions available. Gemini credentials do not sign you into Antigravity.",
           "0c64dc2a64": "Gemini CLI (legacy)",
           "db209ee572": "Remove",
+          "codexRemovalPending": "Removal pending",
+          "codexRemovalRetry": "Choose Remove to retry cleanup.",
           "8a0f870153": "Re-authenticate",
           "3d245ef7d9": "Codex reported this sign-in is out of date",
           "589eba1eee": "Needs re-auth",

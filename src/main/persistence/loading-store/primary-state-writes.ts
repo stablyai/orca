@@ -28,6 +28,9 @@ export class PrimaryStateWriteOperations {
   flushOrThrow(): void {
     const context = this[primaryStateWriteOperationsContext]
     const { runtime } = context
+    if (runtime.codexAccountSettingsPreviewActive) {
+      throw new Error('Cannot persist during a Codex account settings preview')
+    }
     if (runtime.quitFlushStarted || runtime.profileMaintenancePending) {
       throw new Error('Cannot synchronously flush after final persistence has started')
     }
@@ -53,6 +56,9 @@ export class PrimaryStateWriteOperations {
   /** Expected refusals return persist: false; thrown callbacks stop saving to protect partial state. */
   runDurableMutation<T>(mutate: () => DurableProfileStateMutation<T>): Promise<T> {
     const { runtime } = this[primaryStateWriteOperationsContext]
+    if (runtime.codexAccountSettingsPreviewActive) {
+      return Promise.reject(new Error('Cannot persist during a Codex account settings preview'))
+    }
     if (runtime.writesFrozen || runtime.quitFlushStarted || runtime.profileMaintenancePending) {
       return Promise.reject(new Error('Cannot mutate finalized profile persistence'))
     }

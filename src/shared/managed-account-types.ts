@@ -15,6 +15,7 @@ export type CodexManagedAccount = {
 
 export type CodexManagedAccountSummary = {
   id: string
+  removalPending?: boolean
   email: string
   managedHomeRuntime?: 'host' | 'wsl'
   wslDistro?: string | null

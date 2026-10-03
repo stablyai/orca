@@ -3,6 +3,13 @@ import type { CodexResetCreditAttemptLedger } from '../../shared/codex-reset-cre
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import { ProfileStateWriterError } from '../persistence/profile-state/profile-state-writer-errors'
 import { CodexResetCreditLedger } from './codex-reset-credit-ledger'
+import type { Store } from '../persistence'
+
+const removedSettings = {
+  codexManagedAccounts: [],
+  activeCodexManagedAccountId: null,
+  activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} }
+}
 
 function scope(accountId: string): CodexResetCreditExpectedScope {
   return {
@@ -20,6 +27,18 @@ function setup() {
     getCodexResetCreditAttemptLedger: () => structuredClone(durable),
     replaceCodexResetCreditAttemptLedgerAndFlush: vi.fn(
       async (next: CodexResetCreditAttemptLedger) => {
+        await barrier()
+        durable = structuredClone(next)
+      }
+    ),
+    updateCodexAccountSettingsAndFlush: vi.fn(async () => {
+      await barrier()
+    }),
+    updateCodexAccountSettingsAndResetLedgerAndFlush: vi.fn(
+      async (
+        _updates: Parameters<Store['updateCodexAccountSettingsAndFlush']>[0],
+        next: CodexResetCreditAttemptLedger
+      ) => {
         await barrier()
         durable = structuredClone(next)
       }
@@ -82,7 +101,7 @@ describe('async reset-credit ledger', () => {
     const gate = Promise.withResolvers<void>()
     barrier.mockImplementationOnce(() => gate.promise)
     const pendingSecond = ledger.markProviderPending('second', second)
-    const removed = ledger.discardForRemovedAccount('account-1')
+    const removed = ledger.persistAccountRemoval('account-1', removedSettings)
     await vi.waitFor(() => expect(barrier).toHaveBeenCalledTimes(2))
     expect(ledger.get('first')).toBe(first)
 
@@ -101,7 +120,9 @@ describe('async reset-credit ledger', () => {
     const attempt = ledger.createFresh('first', scope('account-1'))
     await ledger.markProviderPending('first', attempt)
     barrier.mockRejectedValueOnce(new Error('disk full'))
-    await expect(ledger.discardForRemovedAccount('account-1')).rejects.toThrow('disk full')
+    await expect(ledger.persistAccountRemoval('account-1', removedSettings)).rejects.toThrow(
+      'disk full'
+    )
     expect(ledger.get('first')).toBe(attempt)
     expect(ledger.getUnresolvedKey(attempt.accountScopeKey)).toBe('first')
   })
@@ -124,7 +145,7 @@ describe('async reset-credit ledger', () => {
     expect(ledger.get('first')).toBe(attempt)
     expect(ledger.getClaimedKey(attempt.scopeKey)).toBe('first')
     expect(store.replaceCodexResetCreditAttemptLedgerAndFlush).toHaveBeenCalledOnce()
-    await expect(ledger.discardForRemovedAccount('account-1')).rejects.toThrow(
+    await expect(ledger.persistAccountRemoval('account-1', removedSettings)).rejects.toThrow(
       'durability is unknown'
     )
   })

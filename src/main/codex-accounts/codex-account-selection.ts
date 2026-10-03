@@ -9,7 +9,9 @@ import type { CodexRuntimeHomeService } from './runtime-home-service'
 import type { CodexConfigMirror } from './codex-config-mirror'
 import type { CodexAccountServiceLifecycle } from './codex-account-service-types'
 import { toCodexManagedAccountSummary } from './codex-account-service-types'
+import { reconcileCodexAccountRemoval } from './codex-account-removal-reconciliation'
 import {
+  getCodexSelectionLaneKey,
   getCodexSelectionTargetForAccount,
   getSelectedCodexAccountIdForTarget,
   normalizeCodexAccountSelectionTarget,
@@ -27,8 +29,11 @@ type CodexAccountSelectionDependencies = {
   configMirror: CodexConfigMirror
   lifecycle: CodexAccountServiceLifecycle
   resolveSystemDefault: () => CodexSystemDefaultIdentity
-  removeManagedHome: (candidatePath: string, expectedAccountId: string) => void
-  discardResetAttempts: (accountId: string) => Promise<void>
+  removeManagedHome: (candidatePath: string, expectedAccountId: string) => boolean
+  persistAccountRemoval: (
+    accountId: string,
+    updates: Parameters<Store['updateCodexAccountSettingsAndFlush']>[0]
+  ) => Promise<void>
 }
 
 export class CodexAccountSelection {
@@ -41,10 +46,15 @@ export class CodexAccountSelection {
 
   snapshot(): CodexRateLimitAccountsState {
     const settings = this.dependencies.store.getSettings()
+    const accountIds = new Set(settings.codexManagedAccounts.map((account) => account.id))
+    const recovery = (settings.codexAccountRemovalRecovery ?? [])
+      .filter((account) => !accountIds.has(account.id))
+      .map((account) => ({ ...toCodexManagedAccountSummary(account), removalPending: true }))
     return {
-      accounts: settings.codexManagedAccounts
-        .map(toCodexManagedAccountSummary)
-        .sort((a, b) => b.updatedAt - a.updatedAt),
+      accounts: [
+        ...settings.codexManagedAccounts.map(toCodexManagedAccountSummary),
+        ...recovery
+      ].sort((a, b) => b.updatedAt - a.updatedAt),
       activeAccountId: normalizeCodexRuntimeSelection(settings).host,
       activeAccountIdsByRuntime: normalizeCodexRuntimeSelection(settings),
       systemDefault: this.dependencies.resolveSystemDefault()
@@ -62,35 +72,80 @@ export class CodexAccountSelection {
   }
 
   async remove(accountId: string): Promise<CodexRateLimitAccountsState> {
-    const account = this.requireAccount(accountId)
     const settings = this.dependencies.store.getSettings()
-    const nextAccounts = settings.codexManagedAccounts.filter((entry) => entry.id !== accountId)
-    const nextSelection = removeCodexAccountIdFromSelection(
-      normalizeCodexRuntimeSelection(settings),
-      accountId
-    )
-    const nextActiveId =
-      settings.activeCodexManagedAccountId === accountId ? null : nextSelection.host
-
-    this.dependencies.store.updateSettings({
-      codexManagedAccounts: nextAccounts,
-      activeCodexManagedAccountId: nextActiveId,
-      activeCodexManagedAccountIdsByRuntime: nextSelection
-    })
-    this.dependencies.runtimeHome.syncForCurrentSelection()
-    if (account.managedHomeRuntime === 'host' && nextSelection.host === null) {
-      this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
-    }
-
-    this.dependencies.removeManagedHome(account.managedHomePath, account.id)
-    this.dependencies.rateLimits.evictInactiveCodexCache(accountId)
-    try {
-      await this.dependencies.discardResetAttempts(accountId)
-    } catch (error) {
-      // Removal already succeeded; retain the ledger's safety guards if cleanup fails.
-      console.warn('[codex-accounts] Removed account, but credit ledger cleanup failed:', error)
-    }
+    const account =
+      settings.codexManagedAccounts.find((entry) => entry.id === accountId) ??
+      settings.codexAccountRemovalRecovery?.find((entry) => entry.id === accountId) ??
+      this.requireAccount(accountId)
     const accountTarget = getCodexSelectionTargetForAccount(account)
+    const nextAccounts = settings.codexManagedAccounts.filter((entry) => entry.id !== accountId)
+    const nextSelection = pruneInvalidCodexRuntimeSelection(
+      removeCodexAccountIdFromSelection(normalizeCodexRuntimeSelection(settings), accountId),
+      nextAccounts
+    )
+
+    const settingsUpdate = {
+      codexManagedAccounts: nextAccounts,
+      activeCodexManagedAccountId: nextSelection.host,
+      activeCodexManagedAccountIdsByRuntime: nextSelection
+    }
+    const touchedTargets = new Map<string, CodexAccountSelectionTarget>()
+    try {
+      const reconciledUpdate = this.dependencies.store.withCodexAccountSettingsPreview(
+        settingsUpdate,
+        () =>
+          reconcileCodexAccountRemoval(
+            this.dependencies.store,
+            (target) => {
+              touchedTargets.set(getCodexSelectionLaneKey(target), target)
+              this.dependencies.runtimeHome.syncForCurrentSelection(target)
+            },
+            accountTarget,
+            normalizeCodexRuntimeSelection(settings)
+          )
+      )
+      // Retain the target before the destructive commit, so restart can retry lost acknowledgements.
+      await this.dependencies.store.retainCodexAccountRemovalRecoveryAndFlush(account)
+      await this.dependencies.persistAccountRemoval(accountId, reconciledUpdate)
+    } catch (error) {
+      for (const target of touchedTargets.values()) {
+        try {
+          this.dependencies.runtimeHome.syncForCurrentSelection(target)
+        } catch (rollbackError) {
+          console.error(
+            '[codex-accounts] Failed to restore runtime after account removal rollback:',
+            rollbackError
+          )
+        }
+      }
+      throw error
+    }
+    const committedHost = normalizeCodexRuntimeSelection(this.dependencies.store.getSettings()).host
+    if (
+      committedHost === null &&
+      (account.managedHomeRuntime !== 'wsl' ||
+        normalizeCodexRuntimeSelection(settings).host !== null)
+    ) {
+      try {
+        this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
+      } catch (error) {
+        console.error(
+          '[codex-accounts] Failed to reconcile host lifecycle after account removal:',
+          error
+        )
+      }
+    }
+
+    if (this.dependencies.removeManagedHome(account.managedHomePath, account.id)) {
+      await this.dependencies.store.clearCodexAccountRemovalRecoveryAndFlush(account.id)
+    }
+    // Why: a removed account can no longer appear in the switcher dropdown,
+    // so purge its cached usage to avoid stale entries.
+    try {
+      this.dependencies.rateLimits.evictInactiveCodexCache(accountId)
+    } catch (error) {
+      console.error('[codex-accounts] Failed to evict removed account quota cache:', error)
+    }
     this.startQuotaRefresh(
       getSelectedCodexAccountIdForTarget(settings, accountTarget) === accountId
         ? accountId
@@ -170,10 +225,15 @@ export class CodexAccountSelection {
     outgoingAccountId: string | null | undefined,
     target: CodexAccountSelectionTarget | undefined
   ): void {
-    void this.dependencies.rateLimits
-      .refreshForCodexAccountChange(outgoingAccountId, target)
-      .catch((error) => {
-        console.error('[codex-accounts] Quota refresh after account change failed:', error)
-      })
+    const logFailure = (error: unknown): void => {
+      console.error('[codex-accounts] Quota refresh after account change failed:', error)
+    }
+    try {
+      void this.dependencies.rateLimits
+        .refreshForCodexAccountChange(outgoingAccountId, target)
+        .catch(logFailure)
+    } catch (error) {
+      logFailure(error)
+    }
   }
 }

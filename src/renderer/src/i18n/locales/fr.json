@@ -6534,6 +6534,8 @@
           "973741a871": "Configurer les paramètres du fournisseur Gemini.",
           "0c64dc2a64": "Gemini",
           "db209ee572": "Supprimer",
+          "codexRemovalPending": "Suppression en attente",
+          "codexRemovalRetry": "Choisissez Supprimer pour réessayer le nettoyage.",
           "8a0f870153": "Réauthentifier",
           "3d245ef7d9": "Codex signale que cette connexion est périmée",
           "589eba1eee": "Réauthentification requise",

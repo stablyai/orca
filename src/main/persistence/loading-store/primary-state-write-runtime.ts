@@ -3,6 +3,7 @@ import type { StoreRuntimeState } from './store-runtime-state'
 export type PrimaryStateWriteOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'activeViewPreference'
+  | 'codexAccountSettingsPreviewActive'
   | 'dataFile'
   | 'dirtyProfileStateDomains'
   | 'durableMutationPhase'

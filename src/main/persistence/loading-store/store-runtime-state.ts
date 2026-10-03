@@ -49,6 +49,7 @@ export class StoreRuntimeState {
   pendingSnapshotFileWork: Promise<void> | null = null
   writeGeneration = 0
   writesFrozen = false
+  codexAccountSettingsPreviewActive = false
   fatalMutationError: Error | null = null
   durableMutationPhase: 'mutate' | 'rollback' | null = null
   profileMaintenancePending = false
