@@ -91,7 +91,7 @@ export async function prepareOpenCodePtyLaunch(options: {
     const last = parsed.ok ? parsed.tokens.length - 1 : -1
     if (
       parsed.ok &&
-      !isOpenCodeRunCommand(parsed.tokens) &&
+      !isOpenCodeRunCommand(parsed.tokens, shell) &&
       parsed.tokens.filter((token) => token === '--prompt').length === 1 &&
       parsed.tokens[last - 1] === '--prompt' &&
       parsed.tokens[last] === body &&

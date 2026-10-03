@@ -21,7 +21,7 @@ export function openCodeStartupPromptEnv(
   if (
     (agent !== 'opencode' && agent !== 'opencode2') ||
     !parsed.ok ||
-    isOpenCodeRunCommand(parsed.tokens)
+    isOpenCodeRunCommand(parsed.tokens, shell)
   ) {
     return env ? { env: { ...env } } : {}
   }
