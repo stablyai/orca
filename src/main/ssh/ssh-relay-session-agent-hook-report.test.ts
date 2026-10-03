@@ -3,7 +3,6 @@
 // Split from ssh-relay-session.test.ts to respect the max-lines lint budget.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { SshRelaySession } from './ssh-relay-session'
-import type { SshConnection } from './ssh-connection'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
 const { muxRequestMock, openConsumerSessionMock } = vi.hoisted(() => ({
@@ -132,8 +131,7 @@ describe('SshRelaySession agent hook install report', () => {
           ? { agents: ['claude', 'codex'] }
           : { home: '/home/orca', installers: statuses.length, errors: 1, statuses }
     )
-    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const mockConn = {} as SshConnection
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
     await session.establish(mockConn)
@@ -164,8 +162,7 @@ describe('SshRelaySession agent hook install report', () => {
           ? { agents: ['codex'] }
           : { home: '/home/orca', installers: statuses.length, errors: 0, statuses }
     )
-    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const mockConn = {} as SshConnection
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
     await session.establish(mockConn)
@@ -241,7 +238,7 @@ describe('SshRelaySession agent hook install report', () => {
   })
 
   it('records an error report when the remote hook install throws', async () => {
-    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     muxRequestMock.mockImplementation(async (method: string) => {
       if (method === 'session.resolveHome') {
         return { resolvedPath: '/home/orca' }
@@ -251,7 +248,6 @@ describe('SshRelaySession agent hook install report', () => {
       }
       throw new Error('remote installer unavailable')
     })
-    const mockConn = {} as SshConnection
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
     await session.establish(mockConn)
@@ -276,11 +272,9 @@ describe('SshRelaySession agent hook install report', () => {
       remoteRelayDir: 'C:/Users/me/.orca-remote/relay-v1',
       nodePath: 'C:/Program Files/nodejs/node.exe',
       sockPath: '\\\\.\\pipe\\orca-relay-123'
-    } as never)
-    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const mockConn = {
-      writeFile: vi.fn().mockResolvedValue(undefined)
-    } as unknown as SshConnection
+    })
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    mockConn.writeFile = vi.fn().mockResolvedValue(undefined)
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
     await session.establish(mockConn)
@@ -297,8 +291,7 @@ describe('SshRelaySession agent hook install report', () => {
 
   it('records a skipped report when remote agent hooks are disabled', async () => {
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '0'
-    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const mockConn = { sftp: vi.fn() } as unknown as SshConnection
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
     await session.establish(mockConn)
@@ -355,8 +348,7 @@ describe('SshRelaySession agent hook install report', () => {
       }
       return installed('new reconnect')
     })
-    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const mockConn = {} as SshConnection
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
     await vi.waitFor(() =>

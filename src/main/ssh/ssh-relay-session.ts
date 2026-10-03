@@ -1539,6 +1539,7 @@ export class SshRelaySession {
         agents,
         ...(detected.claudeVersion ? { claudeVersion: detected.claudeVersion } : {})
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The relay handler returns this shared contract; the statuses check below rejects older relays without report details.
       const result = (await mux.request(
         AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
         params

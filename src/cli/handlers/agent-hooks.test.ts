@@ -146,12 +146,12 @@ describe('agent hooks CLI handler', () => {
       id: 'test-status',
       ok: true,
       result: {
-        app: { running: true, pid: 123 },
-        runtime: { state: 'running', reachable: true, runtimeId: 'rt-1' },
+        app: { running: true, pid: null },
+        runtime: { state: 'running', reachable: true, runtimeId: null },
         graph: { state: 'running' }
       },
       _meta: { runtimeId: 'test' }
-    } as never)
+    })
     const local = [
       {
         agent: 'codex',
@@ -188,7 +188,7 @@ describe('agent hooks CLI handler', () => {
     await main(['agent', 'hooks', 'status', '--json'], userDataPath)
 
     expect(callMock).toHaveBeenCalledWith('agentHooks.status', undefined, { timeoutMs: 10_000 })
-    const printed = vi.mocked(console.log).mock.calls.at(-1)?.[0] as string
+    const printed = String(vi.mocked(console.log).mock.calls.at(-1)?.[0])
     const parsed = JSON.parse(printed)
     expect(parsed.result).toMatchObject({
       appliedBy: 'runtime',
@@ -200,8 +200,15 @@ describe('agent hooks CLI handler', () => {
   it('preserves local diagnostics with explicitly unavailable SSH status on older runtimes', async () => {
     getDefaultUserDataPathMock.mockReturnValue(userDataPath)
     getCliStatusMock.mockResolvedValueOnce({
-      result: { runtime: { reachable: true } }
-    } as never)
+      id: 'test-status',
+      ok: true,
+      result: {
+        app: { running: true, pid: null },
+        runtime: { state: 'running', reachable: true, runtimeId: null },
+        graph: { state: 'running' }
+      },
+      _meta: { runtimeId: 'test' }
+    })
     callMock.mockRejectedValueOnce(
       new RuntimeRpcFailureError({
         id: 'legacy',
@@ -212,7 +219,7 @@ describe('agent hooks CLI handler', () => {
     )
     await main(['agent', 'hooks', 'status', '--json'], userDataPath)
     expect(process.exitCode).not.toBe(1)
-    const printed = vi.mocked(console.log).mock.calls.at(-1)?.[0] as string
+    const printed = String(vi.mocked(console.log).mock.calls.at(-1)?.[0])
     expect(JSON.parse(printed).result).toMatchObject({
       appliedBy: 'offline',
       remotes: null,
@@ -226,12 +233,12 @@ describe('agent hooks CLI handler', () => {
       id: 'test-status',
       ok: true,
       result: {
-        app: { running: true, pid: 123 },
-        runtime: { state: 'running', reachable: true, runtimeId: 'rt-1' },
+        app: { running: true, pid: null },
+        runtime: { state: 'running', reachable: true, runtimeId: null },
         graph: { state: 'running' }
       },
       _meta: { runtimeId: 'test' }
-    } as never)
+    })
     callMock.mockRejectedValueOnce(new Error('agentHooks.status timed out'))
 
     await main(['agent', 'hooks', 'status', '--json'], userDataPath)
@@ -263,7 +270,7 @@ describe('agent hooks CLI handler', () => {
     await main(['agent', 'hooks', 'status', '--json'], userDataPath)
 
     expect(callMock).not.toHaveBeenCalled()
-    const printed = vi.mocked(console.log).mock.calls.at(-1)?.[0] as string
+    const printed = String(vi.mocked(console.log).mock.calls.at(-1)?.[0])
     const parsed = JSON.parse(printed)
     expect(parsed.result).toMatchObject({
       appliedBy: 'offline',
