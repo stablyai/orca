@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { MetaIconBadge } from './WorktreeCardMetadataControls'
-import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
+import { getReviewDecisionDotLabel, getReviewLabel, ReviewIcon } from './worktree-review-helpers'
 import type {
   WorktreeCardMetaBadgesProps,
   WorktreeCardMetaBadgesRootProps
@@ -143,13 +143,19 @@ export const WorktreeCardMetaBadges = React.forwardRef<
       )}
       {review && (
         <MetaIconBadge
-          label={translate(
-            'auto.components.sidebar.WorktreeCardMeta.3ea2702e62',
-            'Linked {{value0}} #{{value1}}',
-            { value0: getReviewLabel(review), value1: review.number }
-          )}
+          label={[
+            translate(
+              'auto.components.sidebar.WorktreeCardMeta.3ea2702e62',
+              'Linked {{value0}} #{{value1}}',
+              { value0: getReviewLabel(review), value1: review.number }
+            ),
+            getReviewDecisionDotLabel(review)
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         >
-          <ReviewIcon review={review} />
+          {/* Why: the decision dot wraps the svg, so MetaIconBadge's [&>svg] sizing can't reach it. */}
+          <ReviewIcon review={review} className="size-3.5" />
         </MetaIconBadge>
       )}
     </div>

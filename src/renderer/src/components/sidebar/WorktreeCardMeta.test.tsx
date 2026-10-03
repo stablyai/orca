@@ -301,6 +301,31 @@ describe('WorktreeCardDetailsHover', () => {
     expect(markup).toContain('In Progress')
   })
 
+  it('keeps the review icon badge-sized when a decision dot wraps it', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardMetaBadges
+        issue={null}
+        linearIssue={null}
+        review={{
+          provider: 'github',
+          number: 1,
+          title: 'Approved PR',
+          state: 'open',
+          status: 'success',
+          url: 'https://github.com/o/r/pull/1',
+          updatedAt: '2026-01-01T00:00:00Z',
+          mergeable: 'MERGEABLE',
+          reviewDecision: 'APPROVED'
+        }}
+        comment={null}
+      />
+    )
+
+    expect(markup).toContain('data-review-decision-dot')
+    expect(markup).toMatch(/<svg[^>]*class="[^"]*size-3\.5/)
+    expect(markup).toContain('Linked PR #1 · Approved')
+  })
+
   it('shows the Jira icon badge and linked issue details', () => {
     const jiraIssue = {
       identifier: 'KAN-1',

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { ReviewIcon } from './worktree-review-helpers'
+import { ReviewDecisionBadge } from './WorktreeCardMetadataStatusBadges'
 import { derivePipelineStatus } from '../../../../main/gitlab/mappers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 
@@ -124,5 +125,52 @@ describe('ReviewIcon', () => {
     expect(stateless('failure')).toContain('text-rose-500/85')
     expect(stateless('pending')).toContain('text-amber-500/85')
     expect(stateless('success')).not.toContain('text-emerald-500/80')
+  })
+})
+
+describe('review decision', () => {
+  const openPR = (
+    reviewDecision?: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null,
+    state: 'open' | 'merged' = 'open'
+  ): WorktreeCardPrDisplay => ({
+    provider: 'github',
+    number: 1,
+    title: 'PR',
+    state,
+    status: 'success',
+    url: 'https://github.com/o/r/pull/1',
+    updatedAt: '2026-01-01T00:00:00Z',
+    mergeable: 'MERGEABLE',
+    reviewDecision
+  })
+  const icon = (review: WorktreeCardPrDisplay): string =>
+    renderToStaticMarkup(<ReviewIcon review={review} className="size-3" />)
+  const badge = (review: WorktreeCardPrDisplay): string =>
+    renderToStaticMarkup(<ReviewDecisionBadge review={review} />)
+
+  it('marks approved and changes-requested PRs with a dot separate from the CI tone', () => {
+    expect(icon(openPR('APPROVED'))).toContain('bg-status-success')
+    expect(icon(openPR('CHANGES_REQUESTED'))).toContain('bg-status-warning')
+    expect(icon(openPR('CHANGES_REQUESTED'))).toContain('text-emerald-500/80')
+  })
+
+  it('leaves the icon undotted without a verdict or once the PR is finished', () => {
+    for (const review of [
+      openPR('REVIEW_REQUIRED'),
+      openPR(null),
+      openPR(undefined),
+      openPR('APPROVED', 'merged')
+    ]) {
+      expect(icon(review)).not.toContain('data-review-decision-dot')
+    }
+  })
+
+  it('labels each decision in the hover badge and hides it when absent', () => {
+    expect(badge(openPR('APPROVED'))).toContain('Review: Approved')
+    expect(badge(openPR('CHANGES_REQUESTED'))).toContain('Review: Changes requested')
+    expect(badge(openPR('REVIEW_REQUIRED'))).toContain('Review: Required')
+    expect(badge(openPR(null))).toBe('')
+    expect(badge(openPR('APPROVED', 'merged'))).toBe('')
+    expect(badge({ provider: 'github', number: 1, title: 'Loading PR...' })).toBe('')
   })
 })

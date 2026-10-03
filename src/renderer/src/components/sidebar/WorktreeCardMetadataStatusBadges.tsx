@@ -1,8 +1,9 @@
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
-import { CircleCheck, CircleDot, CircleX, Clock, GitMerge } from 'lucide-react'
+import { CircleAlert, CircleCheck, CircleDot, CircleX, Clock, Eye, GitMerge } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PullRequestIcon, checksLabel } from './WorktreeCardHelpers'
+import { getActiveReviewDecision } from './worktree-review-helpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import type { IssueInfo } from '../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
@@ -151,6 +152,54 @@ export function ReviewStateBadge({
       {label === 'MR' ? <GitMerge /> : <PullRequestIcon />}
     </MetadataStatusBadge>
   )
+}
+
+export function ReviewDecisionBadge({
+  review
+}: {
+  review: WorktreeCardPrDisplay
+}): React.JSX.Element | null {
+  const decision = getActiveReviewDecision(review)
+  if (decision === 'APPROVED') {
+    return (
+      <MetadataStatusBadge
+        label={translate(
+          'auto.components.sidebar.WorktreeCardMetadataStatusBadges.reviewApproved',
+          'Review: Approved'
+        )}
+        className="border-emerald-500/25 bg-emerald-500/5 text-emerald-600 dark:text-emerald-300"
+      >
+        <CircleCheck />
+      </MetadataStatusBadge>
+    )
+  }
+  if (decision === 'CHANGES_REQUESTED') {
+    return (
+      <MetadataStatusBadge
+        label={translate(
+          'auto.components.sidebar.WorktreeCardMetadataStatusBadges.reviewChangesRequested',
+          'Review: Changes requested'
+        )}
+        className="border-amber-500/25 bg-amber-500/5 text-amber-600 dark:text-amber-300"
+      >
+        <CircleAlert />
+      </MetadataStatusBadge>
+    )
+  }
+  if (decision === 'REVIEW_REQUIRED') {
+    return (
+      <MetadataStatusBadge
+        label={translate(
+          'auto.components.sidebar.WorktreeCardMetadataStatusBadges.reviewRequired',
+          'Review: Required'
+        )}
+        className="border-border bg-muted/30 text-muted-foreground"
+      >
+        <Eye />
+      </MetadataStatusBadge>
+    )
+  }
+  return null
 }
 
 export function ReviewChecksBadge({
