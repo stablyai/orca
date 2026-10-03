@@ -58,6 +58,7 @@ function renderSession(session: AiVaultSession, blocked = false) {
           worktreeId: blocked ? null : 'worktree-1',
           usesSessionWorktree: false
         })}
+        getSessionContinuationWorkspaceId={() => 'worktree-1'}
         getSessionResumeActions={() => ({
           worktree: { worktreeId: null, disabled: true },
           newTab: { worktreeId: 'worktree-1', disabled: blocked }

@@ -58,6 +58,7 @@ vi.mock('./ai-vault-session-launch-actions', () => ({
     handleResume: vi.fn(),
     handleResumeInNewChat: vi.fn(),
     handleContinueInNewSession: vi.fn(),
+    getContinuationWorkspaceId: vi.fn(() => null),
     continuationRequest: null,
     handleContinuationDialogOpenChange: vi.fn()
   })
