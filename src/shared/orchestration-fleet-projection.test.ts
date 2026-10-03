@@ -625,4 +625,122 @@ describe('fleet liveness and attention after a host verdict', () => {
 
     expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
   })
+
+  it('points an abandoned worker still owning its terminal at interrupt, not worker-release', () => {
+    const projected = projectOrchestrationFleet({
+      workers: [
+        worker('1', {
+          workerState: 'abandoned',
+          dispatchStatus: 'failed',
+          workerStage: 'abandoned',
+          terminalState: 'retained',
+          resource: {
+            id: 'resource-1',
+            ownerDispatchId: '1',
+            worktreeId: 'workspace-1',
+            paneKey: 'tab-1:leaf-1',
+            hostScope: null,
+            ownershipState: 'owned',
+            releaseState: 'active',
+            updatedAt: '2026-09-04T00:00:00.000Z'
+          }
+        })
+      ],
+      statuses: [],
+      now: 10_000
+    })
+
+    expect(projected.workers[0]!.nextAction).toEqual({
+      kind: 'interrupt',
+      argv: ['terminal', 'send', '--terminal', 'term-1', '--interrupt']
+    })
+  })
+
+  it('asks nothing of an abandoned worker with no terminal handle instead of worker-release', () => {
+    const projected = projectOrchestrationFleet({
+      workers: [
+        worker('1', {
+          workerState: 'abandoned',
+          dispatchStatus: 'failed',
+          workerStage: 'abandoned',
+          agentTerminalHandle: null,
+          terminalState: 'retained',
+          resource: {
+            id: 'resource-1',
+            ownerDispatchId: '1',
+            worktreeId: 'workspace-1',
+            paneKey: 'tab-1:leaf-1',
+            hostScope: null,
+            ownershipState: 'owned',
+            releaseState: 'active',
+            updatedAt: '2026-09-04T00:00:00.000Z'
+          }
+        })
+      ],
+      statuses: [],
+      now: 10_000
+    })
+
+    expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
+  })
+
+  it.each(['transferred', 'user_owned'] as const)(
+    'asks nothing of an abandoned worker whose terminal is already %s instead of interrupting it',
+    (ownershipState) => {
+      const projected = projectOrchestrationFleet({
+        workers: [
+          worker('1', {
+            workerState: 'abandoned',
+            dispatchStatus: 'failed',
+            workerStage: 'abandoned',
+            terminalState: 'retained',
+            resource: {
+              id: 'resource-1',
+              ownerDispatchId: '1',
+              worktreeId: 'workspace-1',
+              paneKey: 'tab-1:leaf-1',
+              hostScope: null,
+              ownershipState,
+              releaseState: 'active',
+              updatedAt: '2026-09-04T00:00:00.000Z'
+            }
+          })
+        ],
+        statuses: [],
+        now: 10_000
+      })
+
+      expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
+    }
+  )
+
+  it('still suggests release for a succeeded worker that owns its terminal', () => {
+    const projected = projectOrchestrationFleet({
+      workers: [
+        worker('1', {
+          workerState: 'succeeded',
+          dispatchStatus: 'completed',
+          workerStage: 'worker_done',
+          terminalState: 'retained',
+          resource: {
+            id: 'resource-1',
+            ownerDispatchId: '1',
+            worktreeId: 'workspace-1',
+            paneKey: 'tab-1:leaf-1',
+            hostScope: null,
+            ownershipState: 'owned',
+            releaseState: 'active',
+            updatedAt: '2026-09-04T00:00:00.000Z'
+          }
+        })
+      ],
+      statuses: [],
+      now: 10_000
+    })
+
+    expect(projected.workers[0]!.nextAction).toEqual({
+      kind: 'release',
+      argv: ['orchestration', 'worker-release', '--dispatch', '1']
+    })
+  })
 })

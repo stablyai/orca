@@ -83,8 +83,11 @@ export type FleetResourceProjection =
   | { state: 'absent'; reason: 'unsupervised' | 'not_materialized' }
 
 export type FleetNextAction = {
-  /** `recover` = proven exit with no worker outcome; read the transcript, then stop or abandon. */
-  kind: 'inspect' | 'release' | 'recover' | 'none'
+  /**
+   * `recover` = proven exit with no worker outcome; read the transcript, then stop or abandon.
+   * `interrupt` = abandoned Dispatch that still owns its terminal; send interrupt, not release.
+   */
+  kind: 'inspect' | 'release' | 'recover' | 'interrupt' | 'none'
   argv: string[]
 }
 
