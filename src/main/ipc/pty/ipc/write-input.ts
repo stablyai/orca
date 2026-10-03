@@ -153,6 +153,7 @@ export function createPtyWriteInput(deps: {
     lastInputAtByPty.set(args.id, performance.now())
     interactiveOutputCharsByPty.set(args.id, 0)
     runtime?.terminalRunFacts?.recordInput(args.id, args.inputKind, args.data)
+    runtime?.notePtyInput(args.id)
   }
 
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {

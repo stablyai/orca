@@ -4,16 +4,17 @@ import { isAnteHeadlessOneShotCommand } from './ante-headless-command'
 import { isDshNonInteractiveCommand } from './dsh-launch-command'
 import { isMuseHeadlessOneShotCommand } from './muse-headless-command'
 import { isZCodeHeadlessOneShotCommand } from './zcode-headless-command'
+import { isBobHeadlessOneShotCommand } from './bob-headless-command'
 import { isPrimeAgentHeadlessOneShotCommand } from './prime-agent-headless-command'
 import { isPrintModeHeadlessOneShotCommand } from './print-mode-headless-command'
 import type { TuiAgent } from './tui-agent'
 
 // Why: a table (not an if-chain) so adding an agent is one entry; Claude and Trae share
 // the same `--print` one-shot contract, Ante's `--prompt` form, Prime Agent's
-// `--mode` forms, Muse's `exec` subcommand, and ZCode's `--prompt`/`--target` forms need
-// their own matchers. DSH's entry is wider than a one-shot: `dsh` also boots a web server
-// and JSON-RPC stdio profiles, and none of those can answer a prompt in the pane either,
-// which is what this table gates.
+// `--mode` forms, Muse's `exec` subcommand, ZCode's `--prompt`/`--target` forms, and Bob's
+// positional form need their own matchers. DSH's entry is wider than a one-shot: `dsh` also
+// boots a web server and JSON-RPC stdio profiles, and none of those can answer a prompt in
+// the pane either, which is what this table gates.
 const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   Record<TuiAgent, (tokens: readonly string[]) => boolean>
 > = {
@@ -25,7 +26,8 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   ante: isAnteHeadlessOneShotCommand,
   muse: isMuseHeadlessOneShotCommand,
   zcode: isZCodeHeadlessOneShotCommand,
-  dsh: isDshNonInteractiveCommand
+  dsh: isDshNonInteractiveCommand,
+  bob: isBobHeadlessOneShotCommand
 }
 
 export function isHeadlessOneShotAgentCommand(agent: TuiAgent, tokens: readonly string[]): boolean {

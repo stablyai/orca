@@ -271,6 +271,25 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: first-launch trust menu swallows the bracketed paste; pre-write trust so it skips (see agent-trust-presets.ts).
     preflightTrust: 'copilot'
   },
+  bob: {
+    detectCmd: 'bob',
+    // Why: Bob Shell 2.x puts the TUI behind `chat` (bare `bob` only opens it on a TTY,
+    // and `--auto-approve` is a `chat` option). `--trust` skips the first-launch "Do you trust
+    // this folder?" select, which otherwise swallows the injected prompt paste (captured on 2.0.2).
+    launchCmd: 'bob chat --trust',
+    // Why: MordechaiHadad/bob is a Neovim version manager that also installs as `bob`,
+    // and any stray script can hold the name too. Neovim in the help text excludes the
+    // hit; otherwise Bob Shell's own banner/IBM license line must be present. A failed
+    // probe keeps the agent so a real install is never hidden.
+    detectIdentityExclusion: {
+      args: ['--help'],
+      excludePattern: /\bneo\s?vim\b|\bnvim\b/i,
+      requirePattern: /Bob in your terminal|\bIBM\b|\bbob ?shell\b/i
+    },
+    // Why: Bob Shell 2.x has no interactive initial-prompt flag (`-p`/`run` are
+    // headless and need BOB_API_KEY), so inject after the chat UI is up.
+    promptInjectionMode: 'stdin-after-start'
+  },
   grok: {
     detectCmd: 'grok',
     // Why: argv (grok takes a positional prompt) so multi-line/special-char text isn't mangled as raw PTY keystrokes.

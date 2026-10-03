@@ -230,6 +230,15 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://github.com/autohandai/code-cli'
   },
   {
+    id: 'bob',
+    label: translate('auto.lib.agent.catalog.ibm_bob_label', 'IBM Bob'),
+    // Why: the Settings override seeds from this; a bare `bob` override would drop
+    // `chat --trust`, and `--auto-approve` is fatal outside the chat subcommand.
+    cmd: getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.bob, getCatalogPlatform()),
+    faviconDomain: 'bob.ibm.com',
+    homepageUrl: 'https://bob.ibm.com/docs/shell/getting-started/bobshell-examples'
+  },
+  {
     id: 'cline',
     label: translate('auto.lib.agent.catalog.cbaf0c2e0b', 'Cline'),
     cmd: 'cline',
@@ -391,10 +400,7 @@ export function AgentIcon({
   if (agent === 'copilot') {
     return <CopilotIcon size={size} />
   }
-  if (agent === 'opencode') {
-    return <OpenCodeIcon size={size} />
-  }
-  if (agent === 'opencode2') {
+  if (agent === 'opencode' || agent === 'opencode2') {
     return <OpenCodeIcon size={size} />
   }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
