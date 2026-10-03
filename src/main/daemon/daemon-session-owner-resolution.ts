@@ -36,10 +36,23 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
   private readonly routeIncarnations = new Map<string, string | undefined>()
   private epoch = 0
 
+  private readonly providers: T[]
+
   constructor(
-    private readonly providers: readonly T[],
+    providers: readonly T[],
     private readonly routes: Map<string, IPtyProvider>
-  ) {}
+  ) {
+    this.providers = [...providers]
+  }
+
+  /** Removes a provider that can no longer be contacted, including from later inventories. */
+  dropProvider(provider: T): void {
+    const index = this.providers.indexOf(provider)
+    if (index !== -1) {
+      this.providers.splice(index, 1)
+    }
+    this.invalidateProvider(provider)
+  }
 
   invalidateProvider(provider: T): void {
     this.epoch += 1
