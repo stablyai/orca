@@ -12,7 +12,7 @@ export type BrowserNetworkTunnelSourceReceiveStream = {
   pendingToSocketBytes: number
   unsettledToSocket: BrowserNetworkTunnelSourceDataSettlement[]
   readableDemand: boolean
-  socket: { push: (bytes: Buffer | null) => boolean }
+  socket: { pushBytes: (bytes: Uint8Array<ArrayBufferLike> | null) => boolean }
 }
 
 type BrowserNetworkTunnelSourceData = {
@@ -115,12 +115,12 @@ function flushBrowserNetworkSourceData(stream: BrowserNetworkTunnelSourceReceive
       bytes: bytes.byteLength,
       releaseApplicationBytes: pending.releaseApplicationBytes
     })
-    if (!stream.socket.push(Buffer.from(bytes))) {
+    if (!stream.socket.pushBytes(bytes)) {
       stream.readableDemand = false
     }
   }
   if (stream.remoteEnded && stream.pendingToSocket.length === 0 && !stream.readableEnded) {
     stream.readableEnded = true
-    stream.socket.push(null)
+    stream.socket.pushBytes(null)
   }
 }

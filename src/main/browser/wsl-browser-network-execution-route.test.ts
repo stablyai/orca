@@ -3,7 +3,7 @@ import { PassThrough, Writable } from 'node:stream'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserNetworkTunnelSession } from './browser-network-tunnel-session'
-import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
+import type { BrowserNetworkTunnelSocket } from '../../shared/browser-network-tunnel-stream-state'
 import {
   BrowserNetworkTunnelStreamFrameDecoder,
   encodeBrowserNetworkTunnelStreamFrame

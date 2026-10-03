@@ -1,18 +1,11 @@
 import { Duplex } from 'node:stream'
-import { BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES } from './browser-network-tunnel-stream-state'
-
-type BrowserNetworkTunnelDuplexOptions = {
-  writeBytes: (bytes: Uint8Array<ArrayBufferLike>, callback: (error?: Error | null) => void) => void
-  requestRead: () => void
-  consumeReadBytes: (bytes: number) => void
-  finishWrite: (callback: (error?: Error | null) => void) => void
-  destroyStream: (error: Error | null, callback: (error?: Error | null) => void) => void
-}
+import { BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES } from '../../shared/browser-network-tunnel-stream-state'
+import type { BrowserNetworkTunnelClientSocketCallbacks } from '../../shared/browser-network-tunnel-client-socket'
 
 export class BrowserNetworkTunnelDuplex extends Duplex {
-  private readonly options: BrowserNetworkTunnelDuplexOptions
+  private readonly options: BrowserNetworkTunnelClientSocketCallbacks
 
-  constructor(options: BrowserNetworkTunnelDuplexOptions) {
+  constructor(options: BrowserNetworkTunnelClientSocketCallbacks) {
     super({
       allowHalfOpen: true,
       readableHighWaterMark: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
@@ -21,6 +14,14 @@ export class BrowserNetworkTunnelDuplex extends Duplex {
     // (pre-open failures, opened-frame races), and an unobserved 'error' crashes the process.
     this.on('error', () => {})
     this.options = options
+  }
+
+  pushBytes(bytes: Uint8Array<ArrayBufferLike> | null): boolean {
+    return this.push(bytes === null ? null : Buffer.from(bytes))
+  }
+
+  onReadableEnd(callback: () => void): void {
+    this.once('end', callback)
   }
 
   override _read(): void {
