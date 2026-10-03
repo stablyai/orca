@@ -140,7 +140,7 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
   // Judged before the kill: a stop that ends nothing writes nothing.
   const recorded = (await stopEndsWork(context, sessionId, session, ending))
     ? recordStopEvent(context, sessionId, session, ending)
-    : Promise.resolve()
+    : Promise.resolve(null)
   // The obligation OUTLIVES the child. `child` is ended the instant the adapter proves the exit,
   // so a step that aborts after that point would otherwise leave the retry reading "no child
   // here" and skipping the settlement and the lease release it still owes.
@@ -233,6 +233,9 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
       session.owesProviderChildWindDown = { ...owed, failedAt: session.journal.cursor() }
     }
     throw error
+  } finally {
+    // A person's close binds what its child's end cut; done, proven or not, it binds no more.
+    void recorded.then((settle) => session.journal.stopMarks.settled(settle))
   }
 }
 

@@ -109,9 +109,17 @@ export function mutateWithChatStop<TValue>(
           }
           return { ok: true, value: { ...named, cancelled: withdrewAny } }
         }
+        const reach = hadQueued ? 'unrecorded' : stopReachesUnrecordedWork(ctx, turnId)
+        const priorStop = ctx.journal.stopMarks.latest()
         // Issued, not awaited, before the interrupt or any child end; the `finally` awaits it.
-        const effect =
-          hadQueued || stopReachesUnrecordedWork(ctx, turnId) ? tookEffect() : Promise.resolve()
+        const effect = reach === 'unrecorded' ? tookEffect() : Promise.resolve()
+        // Its settle binds the latest Stop only when that Stop is this press's own, or the one in
+        // force this press repeats; a late Stop or an event not yet written binds nothing. A write
+        // is in the fold by its call's return, so a newer latest Stop is this press's event.
+        const ownsLatestStop =
+          reach === 'unrecorded'
+            ? ctx.journal.stopMarks.latest()?.sequence !== priorStop?.sequence
+            : reach === 'repeat'
         try {
           return await performCancel(
             { ...ctx, failureTextContext: structuredAgentSessionFailureWordsContext(record) },
@@ -130,7 +138,8 @@ export function mutateWithChatStop<TValue>(
               endSession: (owed) => {
                 windDown = owed
               },
-              withdrewQueued: withdrew
+              withdrewQueued: withdrew,
+              ...(ownsLatestStop ? { opensSettle: true as const } : {})
             }
           )
         } finally {

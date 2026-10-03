@@ -223,12 +223,16 @@ describe('a Codex send made after Codex answered an earlier one, before it opene
     expect(await rig.sending).toEqual({ state: 'admitted' })
     expect(rig.methods()).toEqual(['thread/start', 'turn/start', 'turn/steer'])
     expect(await rig.adapter.cancelTurn({ sessionId: 'session-1', fence: 7 })).toEqual({
-      cancelled: true
+      cancelled: true,
+      turnId: 'turn-1'
     })
-    expect(rig.settlements.map(({ clientMessageId }) => clientMessageId).sort()).toEqual([
-      'client-1',
-      'client-2'
-    ])
+    // Codex answers the interrupt, then ends the turn, which settles both.
+    await vi.waitFor(() =>
+      expect(rig.settlements.map(({ clientMessageId }) => clientMessageId).sort()).toEqual([
+        'client-1',
+        'client-2'
+      ])
+    )
   })
 
   it('starts its own turn when that turn ends without opening', async () => {

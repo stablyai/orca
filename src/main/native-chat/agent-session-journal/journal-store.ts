@@ -155,6 +155,10 @@ export class AgentSessionJournal {
     return this.state.epoch
   }
 
+  get agent(): AgentSessionJournalIdentity['agent'] {
+    return this.identity.agent
+  }
+
   /** Whether a row at this sequence was on disk when this handle opened, so an earlier handle
    *  wrote it. Sequences restart with each epoch, so a row of a later epoch never was. */
   wroteBeforeOpen(sequence: number | undefined): boolean {

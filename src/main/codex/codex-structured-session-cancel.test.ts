@@ -143,7 +143,7 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
 
     await expect(
       adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
-    ).resolves.toEqual({ cancelled: true })
+    ).resolves.toEqual({ cancelled: true, turnId: 'turn-1' })
     expect(codex.connections[0].calls.at(-1)).toEqual({
       method: 'turn/interrupt',
       params: { threadId: THREAD_ID, turnId: 'turn-1' }
@@ -288,7 +288,7 @@ describe('a Codex Stop is the interrupt alone', () => {
         params: expect.objectContaining({ turn: { id: 'turn-1', status: 'interrupted' } })
       })
     )
-    await expect(stopped).resolves.toEqual({ cancelled: true })
+    await expect(stopped).resolves.toEqual({ cancelled: true, turnId: 'turn-1' })
   })
 
   it('reads and kills no processes, from the send through the Stop', async () => {
@@ -299,7 +299,7 @@ describe('a Codex Stop is the interrupt alone', () => {
     for (const work of Object.values(processWork)) {
       expect(work).not.toHaveBeenCalled()
     }
-    await expect(stopped).resolves.toEqual({ cancelled: true })
+    await expect(stopped).resolves.toEqual({ cancelled: true, turnId: 'turn-1' })
     for (const work of Object.values(processWork)) {
       expect(work).not.toHaveBeenCalled()
     }

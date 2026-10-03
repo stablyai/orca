@@ -240,7 +240,9 @@ describe('a Stop that names no turn', () => {
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
 
     expect(closeSession).toHaveBeenCalledExactlyOnceWith(SESSION)
-    expect(await statusRows()).toEqual(['Cancellation requested.'])
+    // Its turn never opened, so the child's end took the send back: no row stays to report on it.
+    expect((await submission(id))?.dispatchState).toBe('rejected')
+    expect(await statusRows()).toEqual([])
   })
 
   it('says the agent did not stop, in its words, when it refused because its turn is not running', async () => {
@@ -271,7 +273,9 @@ describe('a Stop that names no turn', () => {
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
 
     expect(closeSession).toHaveBeenCalledExactlyOnceWith(SESSION)
-    expect(await statusRows()).toEqual(['Cancellation requested.'])
+    // Its turn never opened, so the child's end took the send back: no row stays to report on it.
+    expect((await submission(id))?.dispatchState).toBe('rejected')
+    expect(await statusRows()).toEqual([])
   })
 
   it('says the agent did not stop, in its words, when it could not interrupt and the child end is unproven', async () => {
@@ -295,7 +299,7 @@ describe('a Stop that names no turn', () => {
     expect(await statusRows()).toEqual(["Codex didn't stop: failed to interrupt turn."])
   })
 
-  it('reads as requested when the child exit was proven and only a later cleanup step failed', async () => {
+  it('counts as stopped when the child exit was proven and only a later cleanup step failed', async () => {
     const { id, result } = send('hello')
     await result
     await eventually(async () => expect((await submission(id))?.handedOverAt).toBeDefined())
@@ -312,7 +316,8 @@ describe('a Stop that names no turn', () => {
         fields: expect.objectContaining({ scope: 'stop-child', sessionId: SESSION })
       })
     )
-    expect(await statusRows()).toEqual(['Cancellation requested.'])
+    expect((await submission(id))?.dispatchState).toBe('rejected')
+    expect(await statusRows()).toEqual([])
   })
 
   it('says the Stop is unconfirmed, not that nothing ran, when neither the interrupt nor the child end is proven', async () => {

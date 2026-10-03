@@ -7,6 +7,8 @@ import type { StructuredAgentSessionStopCause } from './structured-agent-session
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
+import type { JournalStopSettle } from '../agent-session-journal/queued-message-pause'
+import { sentSinceStop } from './structured-agent-session-queued-stop'
 
 /** How a stop ends the child, and why (`lastEndedChild`). A person's Stop wrote its event in its
  *  own step (`recorded` names its reason); any other stop names the reason its event records, with
@@ -63,23 +65,37 @@ export async function stopEndsWork(
       journal.submissions(),
       child.fence
     )
-  // A host stop of work a person's Stop is already ending must not supersede that Stop's reason.
+  return working && (ending.cause === 'user-close' || !defersToPersonsStop(session))
+}
+
+/** A host stop of work a person's Stop is already ending must not supersede that Stop's reason:
+ *  the turn it decides, or, with no turn running, the work under the queue pause it still holds,
+ *  with nothing sent since, which a host's event would lift. */
+function defersToPersonsStop(session: StructuredAgentSessionHostSession): boolean {
+  const { journal } = session
+  const live = journal.activeTurnId()
+  if (live !== null) {
+    return journal.stopMarks.personStopDecides(live)
+  }
+  const inForce = journal.queuedMessages.userStopInForce()
   return (
-    working &&
-    (ending.cause === 'user-close' || !journal.stopMarks.personStopDecides(journal.activeTurnId()))
+    (inForce !== null && !sentSinceStop(journal, inForce)) ||
+    journal.stopMarks.personStopDecides(null)
   )
 }
 
 /** Writes this stop's event (`JournalStopEvent`). Issued before the kill and never awaited by it:
- *  bookkeeping, reported on failure. */
+ *  bookkeeping, reported on failure. A person's close that named no turn opens its settle once its
+ *  event lands, as a person's Stop does, so a turn the child's end cuts is theirs; the caller
+ *  closes it once that end is done. */
 export function recordStopEvent(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string,
   session: StructuredAgentSessionHostSession,
   ending: StructuredAgentSessionStopEnding
-): Promise<void> {
+): Promise<JournalStopSettle | null> {
   if ('recorded' in ending) {
-    return Promise.resolve()
+    return Promise.resolve(null)
   }
   const turnId = session.journal.activeTurnId()
   return session.journal
@@ -88,12 +104,14 @@ export function recordStopEvent(
       structuredAgentSessionConversationFence(context.deps.store, sessionId)
     )
     .then(
-      () => undefined,
-      (error: unknown) =>
+      () => (ending.cause === 'user-close' ? session.journal.stopMarks.beginSettle() : null),
+      (error: unknown) => {
         context.deps.logger.warn("a host stop's Stop event row skipped", {
           scope: 'stop-event',
           sessionId,
           error
         })
+        return null
+      }
     )
 }
