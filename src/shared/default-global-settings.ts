@@ -109,6 +109,8 @@ export function buildDefaultSettings(args: {
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,
     terminalClipboardOnSelect: false,
+    // Why: opt-in. Terminals default to handing the mouse to a TUI that asks for it (iTerm2, Ghostty, kitty).
+    terminalSelectionOverMouseReporting: false,
     // Why: only the run of spaces shared by every selected line is dropped, so
     // relative indentation survives and the clipboard loses only the gutter.
     terminalCopyTrimsGutter: true,

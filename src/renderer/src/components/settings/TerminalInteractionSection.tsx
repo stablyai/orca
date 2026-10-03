@@ -8,6 +8,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { getTerminalRightClickToPasteSearchEntry } from './terminal-windows-search'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../terminal-pane/osc52-clipboard-setting-anchor'
+import { TERMINAL_SELECTION_OVER_MOUSE_REPORTING_SETTING_ID } from '../terminal-pane/terminal-selection-over-mouse-reporting-setting-anchor'
 import { isMacPlatform } from '../terminal-pane/terminal-link-open-hints'
 import { translate } from '@/i18n/i18n'
 import {
@@ -53,6 +54,15 @@ export function TerminalInteractionSection({
     : translate(
         'auto.components.settings.TerminalPane.16753eea48',
         'Right-click pastes the clipboard. Ctrl+right-click opens the context menu.'
+      )
+  const selectionOverMouseReportingDescription = isMac
+    ? translate(
+        'components.settings.TerminalInteraction.selectionOverMouseReportingDescription',
+        'Drag selects text even while a terminal app such as Codex, vim, or htop captures the mouse. Hold Option to send clicks and drags to the app instead.'
+      )
+    : translate(
+        'components.settings.TerminalInteraction.selectionOverMouseReportingDescriptionNonMac',
+        'Drag selects text even while a terminal app such as Codex, vim, or htop captures the mouse. Hold Alt to send clicks and drags to the app instead.'
       )
   return (
     <section key="pane-interaction" className="space-y-3">
@@ -268,6 +278,44 @@ export function TerminalInteractionSection({
             onChange={() =>
               updateSettings({
                 terminalClipboardOnSelect: !settings.terminalClipboardOnSelect
+              })
+            }
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
+          id={TERMINAL_SELECTION_OVER_MOUSE_REPORTING_SETTING_ID}
+          title={translate(
+            'components.settings.TerminalInteraction.selectionOverMouseReporting',
+            'Select Text in Mouse-Aware Apps'
+          )}
+          description={selectionOverMouseReportingDescription}
+          keywords={[
+            'mouse',
+            'selection',
+            'select',
+            'copy',
+            'drag',
+            'tui',
+            'codex',
+            'vim',
+            'htop',
+            'option',
+            'alt',
+            'mouse reporting',
+            'mouse tracking'
+          ]}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'components.settings.TerminalInteraction.selectionOverMouseReporting',
+              'Select Text in Mouse-Aware Apps'
+            )}
+            description={selectionOverMouseReportingDescription}
+            checked={settings.terminalSelectionOverMouseReporting}
+            onChange={() =>
+              updateSettings({
+                terminalSelectionOverMouseReporting: !settings.terminalSelectionOverMouseReporting
               })
             }
           />
