@@ -56,7 +56,7 @@ test.describe('SSH skill installation', () => {
   test.skip(!RUN_DOCKER_SSH, 'Set ORCA_E2E_SSH_DOCKER=1 to run Docker-backed SSH tests.')
   test.skip(process.platform === 'win32', 'Docker SSH tests use POSIX ssh tooling.')
 
-  test('installs and removes global, Git-worktree, and folder copies through the real relay', async ({
+  test('installs and removes global and Git-worktree copies, and refuses SSH folder installs', async ({
     orcaPage
   }, testInfo: TestInfo) => {
     test.slow()
@@ -114,17 +114,34 @@ test.describe('SSH skill installation', () => {
       await removeAndVerify(orcaPage, target, worktreeDestination, worktreePath)
 
       const folderWorkspaceId = await createRemoteFolderWorkspace(orcaPage, remote.targetId)
-      const folderDestination: SkillInstallDestination = {
-        scope: 'workspace',
-        folderWorkspaceId
-      }
-      const folderPath = `${REMOTE_FOLDER}/.agents/skills/remote-e2e-skill`
-      await installAndVerify(orcaPage, target, folderDestination, folderPath)
-      await removeAndVerify(orcaPage, target, folderDestination, folderPath)
+      const folderOperation = await orcaPage.evaluate(
+        ({ destination, packageId, versionId }) =>
+          window.api.skills.installPackageVersion({
+            packageId,
+            versionId,
+            destination
+          }),
+        {
+          destination: { scope: 'workspace' as const, folderWorkspaceId },
+          packageId: REMOTE_SKILL_PACKAGE_ID,
+          versionId: REMOTE_SKILL_VERSION_ID
+        }
+      )
+      expect(folderOperation, JSON.stringify(folderOperation, null, 2)).toMatchObject({
+        status: 'ok',
+        value: {
+          status: 'failed',
+          failure: { category: 'admission', code: 'skill-install-workspace-not-found' }
+        }
+      })
+      expect(
+        execDockerSshRelayTargetCommand(target, `test ! -e ${REMOTE_FOLDER}/.agents && echo absent`)
+      ).toBe('absent')
 
+      // Grant is minted in IPC before destination resolution; the refused folder still POSTs.
       expect(fixture.requests.filter((request) => request.method === 'POST')).toHaveLength(3)
       expect(fixture.requests.filter((request) => request.path === '/package.tar.gz')).toHaveLength(
-        3
+        2
       )
       expect(
         fixture.requests
