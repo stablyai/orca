@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
+import { normalizeStoredAutomationWorktreeRetention } from '../../../shared/automation-worktree-retention'
 import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
 import {
   applyAutomationExecutionTarget,
@@ -103,6 +104,10 @@ export function createAutomation(
       input.workspaceMode,
       input.setupDecision
     ),
+    worktreeRetention:
+      input.workspaceMode === 'new_per_run'
+        ? normalizeStoredAutomationWorktreeRetention(input.worktreeRetention)
+        : undefined,
     reuseSession: input.workspaceMode === 'existing' ? (input.reuseSession ?? false) : false,
     timezone: input.timezone,
     rrule: input.rrule,
@@ -206,6 +211,12 @@ export function updateAutomation(
               definedUpdates.setupDecision
             )
           : normalizeAutomationSetupDecisionForWorkspaceMode(workspaceMode, current.setupDecision)
+        : undefined,
+    worktreeRetention:
+      workspaceMode === 'new_per_run'
+        ? Object.hasOwn(definedUpdates, 'worktreeRetention')
+          ? normalizeStoredAutomationWorktreeRetention(definedUpdates.worktreeRetention)
+          : normalizeStoredAutomationWorktreeRetention(current.worktreeRetention)
         : undefined,
     reuseSession:
       workspaceMode === 'existing'

@@ -9,7 +9,8 @@ const AUTOMATION_TARGET_FLAGS = [
   'project-host-setup',
   'source-context',
   'workspace-mode',
-  'base-branch'
+  'base-branch',
+  'worktree-retention'
 ]
 const AUTOMATION_SCHEDULE_FLAGS = ['trigger', 'schedule', 'time', 'day', 'timezone']
 const AUTOMATION_PRECHECK_FLAGS = ['precheck', 'precheck-timeout']
@@ -60,7 +61,8 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'Use --source-context with a JSON TaskSourceContext when task/provider data should come from a specific host/account; pass null on edit to clear it.',
       'Use --workspace to run in an existing worktree; otherwise the automation creates a new worktree per run.',
       'Use --precheck to run a bounded command before scheduled runs; exit code 0 continues, anything else records a skipped run.',
-      'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.'
+      'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.',
+      'For new-per-run, --worktree-retention defaults to reclaim-clean-success: after a successful run Orca removes that worktree only when it is still on the base commit and git status is clean. keep-last:<n> retains the newest n worktrees. keep disables removal. default clears a saved override.'
     ],
     examples: [
       'orca automations create --name "Daily review" --trigger daily --prompt "Review open changes" --provider codex',
