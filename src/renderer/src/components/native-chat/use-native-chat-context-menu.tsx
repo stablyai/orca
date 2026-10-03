@@ -29,6 +29,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
+import { isEditableTarget } from '@/lib/editable-target'
+import { APP_MENU_SELECTION_ACTION_EVENT } from '@/lib/app-menu-selection-actions'
 import { isMacPlatform, nativeChatToggleShortcutLabel } from './native-chat-shortcut'
 import { TabWorkspaceLayoutMenuSection } from '@/components/tab-bar/TabWorkspaceLayoutMenuSection'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
@@ -136,6 +138,30 @@ export function useNativeChatContextMenu({
     document.addEventListener('selectionchange', rememberCurrentSelection)
     return () => document.removeEventListener('selectionchange', rememberCurrentSelection)
   }, [enabled, rememberCurrentSelection])
+
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    const onAppMenuSelectionAction = (event: Event): void => {
+      if (!(event instanceof CustomEvent) || event.detail !== 'copy') {
+        return
+      }
+      const root = rootRef.current
+      if (!root || hasFocusedEditableSelection(root)) {
+        return
+      }
+      const selectedText = getNativeChatSelectedText(root)
+      if (selectedText.trim().length === 0) {
+        return
+      }
+      event.preventDefault()
+      void window.api.ui.writeClipboardText(selectedText).catch(() => undefined)
+    }
+    window.addEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
+    return () =>
+      window.removeEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
+  }, [enabled, rootRef])
 
   useEffect(() => {
     if (!enabled) {
@@ -354,4 +380,18 @@ function nodeBelongsToRoot(node: Node | null, root: HTMLElement): boolean {
     return false
   }
   return root.contains(node)
+}
+
+function hasFocusedEditableSelection(root: HTMLElement): boolean {
+  const active = document.activeElement
+  if (!isEditableTarget(active)) {
+    return false
+  }
+  if (!root.contains(active)) {
+    return true
+  }
+  if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
+    return active.selectionStart !== active.selectionEnd
+  }
+  return true
 }

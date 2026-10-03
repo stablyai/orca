@@ -1,10 +1,11 @@
 /**
  * @vitest-environment happy-dom
  */
-import React, { createRef, type ReactNode } from 'react'
+import React, { createRef, useRef, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { dispatchAppMenuSelectionAction } from '@/lib/app-menu-selection-actions'
 import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu,
@@ -113,14 +114,106 @@ function Harness({
   return menu
 }
 
+function SelectionHarness({ enabled = true }: { enabled?: boolean }) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  useNativeChatContextMenu({
+    rootRef,
+    enabled,
+    actions: { ...emptyNativeChatContextMenuActions, onPaste: vi.fn() }
+  })
+  return (
+    <div ref={rootRef}>
+      <span>Transcript selection</span>
+      <textarea aria-label="Composer" defaultValue="Composer selection" />
+    </div>
+  )
+}
+
 describe('useNativeChatContextMenu', () => {
   beforeEach(() => {
     items.list = []
   })
 
   afterEach(() => {
+    window.getSelection()?.removeAllRanges()
     cleanup()
     vi.restoreAllMocks()
+  })
+
+  it('copies selected transcript text through the clipboard bridge for the app menu', () => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { ui: { writeClipboardText } }
+    })
+    const view = render(<SelectionHarness />)
+    const range = document.createRange()
+    range.selectNodeContents(view.getByText('Transcript selection'))
+    window.getSelection()?.addRange(range)
+
+    let claimed = false
+    act(() => {
+      claimed = dispatchAppMenuSelectionAction('copy')
+    })
+
+    expect(claimed).toBe(true)
+    expect(writeClipboardText).toHaveBeenCalledWith('Transcript selection')
+  })
+
+  it('leaves focused composer text selection to native copy', () => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { ui: { writeClipboardText } }
+    })
+    const view = render(<SelectionHarness />)
+    const range = document.createRange()
+    range.selectNodeContents(view.getByText('Transcript selection'))
+    window.getSelection()?.addRange(range)
+    const composer = view.getByRole('textbox', { name: 'Composer' })
+    if (!(composer instanceof HTMLTextAreaElement)) {
+      throw new Error('Expected a textarea composer')
+    }
+    composer.focus()
+    composer.setSelectionRange(0, composer.value.length)
+
+    expect(dispatchAppMenuSelectionAction('copy')).toBe(false)
+    expect(writeClipboardText).not.toHaveBeenCalled()
+  })
+
+  it('does not copy a selection from a hidden native chat', () => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { ui: { writeClipboardText } }
+    })
+    const view = render(<SelectionHarness enabled={false} />)
+    const range = document.createRange()
+    range.selectNodeContents(view.getByText('Transcript selection'))
+    window.getSelection()?.addRange(range)
+
+    expect(dispatchAppMenuSelectionAction('copy')).toBe(false)
+    expect(writeClipboardText).not.toHaveBeenCalled()
+  })
+
+  it('leaves selections outside the native chat to their owning surface', () => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { ui: { writeClipboardText } }
+    })
+    const view = render(
+      <>
+        <SelectionHarness />
+        <div>Other pane selection</div>
+      </>
+    )
+    const range = document.createRange()
+    range.selectNodeContents(view.getByText('Other pane selection'))
+    window.getSelection()?.addRange(range)
+
+    expect(dispatchAppMenuSelectionAction('copy')).toBe(false)
+    expect(writeClipboardText).not.toHaveBeenCalled()
   })
 
   it('restores the bridge switch-to-terminal action when supplied', () => {
