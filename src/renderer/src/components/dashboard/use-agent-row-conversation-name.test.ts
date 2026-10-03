@@ -216,6 +216,26 @@ describe('useAgentRowConversationName', () => {
       expect(useAgentRowConversationName(sessionB)).toBe('Redis cache strategy')
     })
 
+    it('gives a generated title only to the pane whose prompt produced it', () => {
+      setSplitStore('\u2733 Linear work log')
+      storeState.current.settings = { tabAutoGenerateTitle: true }
+      storeState.current.tabsByWorktree['wt-1'][0] = {
+        id: 'tab-1',
+        worktreeId: 'wt-1',
+        customTitle: null,
+        title: '\u2733 Linear work log',
+        generatedTitle: 'Fix intake flow',
+        generatedTitlePaneKey: `tab-1:${LEAF_A}`
+      }
+
+      expect(useAgentRowConversationName(splitRow(LEAF_A, '\u2733 Linear work log'))).toBe(
+        'Fix intake flow'
+      )
+      expect(useAgentRowConversationName(splitRow(LEAF_B, '\u2733 Linear work log'))).toBe(
+        'Redis cache strategy'
+      )
+    })
+
     it('does not rename the sibling row when the other pane is clicked', () => {
       // Clicking pane B re-syncs the tab title to B's; both rows must be unmoved.
       setSplitStore('\u2733 Redis cache strategy')
