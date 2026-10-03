@@ -22,6 +22,8 @@ Claude's `CLAUDE.md` and Codex's `AGENTS.md` (at repo root or nested) are left a
 
 **Settings → Agents → Agent status hooks** controls the Orca-managed hooks that report working / waiting / done into the UI. Turning the setting off removes those managed hooks and stops reinstalling them; turning it back on restores them **without restarting Orca** (on Windows, the WSL hook relay follows the same live gate). CLI equivalents: `orca agent hooks status|on|off --json`.
 
+For OMP, the managed status extension does not listen for OMP's tool approval events by default: since OMP 18.4.3, any extension listening for them turns off OMP's speculative task launch. As a result, an OMP pane shows working, not needs-attention, while OMP waits on an Approve/Deny prompt. To report those prompts, export `ORCA_OMP_APPROVAL_STATUS=1` in the shell OMP starts from (for example, your shell profile); that also turns speculative task launch back off.
+
 ## Surviving a restart
 
 Hook endpoints are written to disk (`{userData}/agent-hooks/endpoint.env` on POSIX, `endpoint.cmd` on Windows) and re-sourced on every hook invocation, so long-lived agent sessions keep reaching the live Orca server even after an app restart — no more dead-port POSTs from a PTY that outlived the previous session.

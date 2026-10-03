@@ -30,8 +30,8 @@ describe('OMP model reporting', () => {
     await harness.callHook('agent_start', undefined, { model: DEEPSEEK })
     await settled(harness.fetchMock, 1)
     await harness.callHook(
-      'tool_call',
-      { toolName: 'bash', input: { command: 'ls' } },
+      'tool_execution_start',
+      { toolName: 'bash', args: { command: 'ls' } },
       { model: DEEPSEEK }
     )
     await settled(harness.fetchMock, 2)
@@ -43,7 +43,7 @@ describe('OMP model reporting', () => {
         model_switch_command: 'orca-model'
       },
       {
-        hook_event_name: 'tool_call',
+        hook_event_name: 'tool_execution_start',
         model: 'deepseek/deepseek-v4-pro',
         model_switch_command: 'orca-model',
         tool_name: 'bash',
