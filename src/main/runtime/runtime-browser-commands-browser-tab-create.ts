@@ -39,10 +39,10 @@ export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCo
       navigation: params.navigation,
       clientKind: caller?.clientKind
     })
+    // Server/streamed pages also need the folder-aware resolver; the generic
+    // worktree resolver intentionally rejects `folder:<id>` selectors.
     const worktree = params.worktree
-      ? params.placement?.kind === 'client'
-        ? await this.host.resolveBrowserWorkspace(params.worktree)
-        : await this.host.resolveWorktreeSelector(params.worktree)
+      ? await this.host.resolveBrowserWorkspace(params.worktree)
       : undefined
     const worktreeId = worktree?.id
     const sessionPartition = browserSessionRegistry.resolveKnownPartition(params.profileId)
