@@ -128,6 +128,72 @@ export class SessionTerminationController {
     await this.waitForPhysicalExit(timeoutMs)
   }
 
+  /**
+   * SIGTERM the PTY's process groups, then SIGKILL if the process is still alive.
+   * A root that exits during the grace still gets a group SIGKILL: its children
+   * can ignore SIGTERM after the shell is gone. The two waits together stay
+   * inside `timeoutMs`. Handles without group signals keep the direct force-kill.
+   */
+  async signalGroupsThenForceKillWithinBudget(
+    timeoutMs = IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
+  ): Promise<void> {
+    if (this.deps.isExited()) {
+      return
+    }
+    if (!this._isTerminating) {
+      this._isTerminating = true
+      this.deps.releaseProducerPause({ resume: true })
+    }
+    // Win32's signalProcessGroups is a no-op. Waiting out the grace there would
+    // only delay the ConPTY force-kill that still owns the tree.
+    if (process.platform === 'win32' || !this.deps.subprocess.signalProcessGroups) {
+      await this.requestForceKillWithRetry()
+      await this.waitForPhysicalExit(timeoutMs)
+      return
+    }
+    // The graceful 5s timer would SIGKILL during this grace and skip SessionEnd.
+    this.cancelForceKillFallback()
+    const startedAt = Date.now()
+    // Why not a shared constant: this grace is only the catchable-signal window
+    // before the existing force-kill, and it must not grow the close budgets.
+    const groupSignalGraceMs = 2_000
+    const graceMs = Math.min(groupSignalGraceMs, Math.max(0, timeoutMs))
+    try {
+      this.deps.subprocess.signalProcessGroups('SIGTERM')
+    } catch (error) {
+      console.warn('[Session] failed to signal PTY process groups before force-kill:', error)
+    }
+    if (this.deps.isExited()) {
+      this.killRemainingProcessGroups()
+      return
+    }
+    if (graceMs > 0) {
+      try {
+        await this.physicalExit.waitForExit(
+          graceMs,
+          () => new Error(`Timed out waiting for PTY process exit: ${this.deps.sessionId}`)
+        )
+        this.killRemainingProcessGroups()
+        return
+      } catch {
+        // The group ignored SIGTERM. SIGKILL still has to run inside the same budget.
+      }
+    }
+    if (this.deps.isExited()) {
+      this.killRemainingProcessGroups()
+      return
+    }
+    await this.requestForceKillWithRetry(Math.max(0, timeoutMs - (Date.now() - startedAt)))
+    if (this.deps.isExited()) {
+      return
+    }
+    const remainingMs = Math.max(0, timeoutMs - (Date.now() - startedAt))
+    if (remainingMs === 0) {
+      throw new Error(`Timed out waiting for PTY process exit: ${this.deps.sessionId}`)
+    }
+    await this.waitForPhysicalExit(remainingMs)
+  }
+
   signal(sig: string): void {
     if (this.deps.isExited()) {
       return
@@ -170,6 +236,15 @@ export class SessionTerminationController {
     }, delayMs)
   }
 
+  /** Children that ignored SIGTERM stay up after the PTY root exits. */
+  private killRemainingProcessGroups(): void {
+    try {
+      this.deps.subprocess.signalProcessGroups?.('SIGKILL')
+    } catch (error) {
+      console.warn('[Session] failed to SIGKILL PTY process groups after the root exited:', error)
+    }
+  }
+
   private requestForceKill(): void {
     if (this.deps.isExited() || this.forceKillSent) {
       return
@@ -183,7 +258,8 @@ export class SessionTerminationController {
     }
   }
 
-  private async requestForceKillWithRetry(): Promise<void> {
+  private async requestForceKillWithRetry(budgetMs?: number): Promise<void> {
+    const startedAt = Date.now()
     let lastError: unknown
     for (let attempt = 0; attempt < SESSION_FORCE_KILL_MAX_ATTEMPTS; attempt++) {
       try {
@@ -192,16 +268,24 @@ export class SessionTerminationController {
       } catch (error) {
         lastError = error
       }
-      if (attempt + 1 < SESSION_FORCE_KILL_MAX_ATTEMPTS) {
-        try {
-          await this.physicalExit.waitForExit(
-            SESSION_FORCE_KILL_RETRY_MS,
-            () => new Error(`Retrying force-kill for PTY ${this.deps.sessionId}`)
-          )
-          return
-        } catch {
-          // The bounded waiter detached; retry the still-owned subprocess.
-        }
+      if (attempt + 1 >= SESSION_FORCE_KILL_MAX_ATTEMPTS) {
+        break
+      }
+      const remainingMs =
+        budgetMs == null
+          ? SESSION_FORCE_KILL_RETRY_MS
+          : Math.min(SESSION_FORCE_KILL_RETRY_MS, budgetMs - (Date.now() - startedAt))
+      if (remainingMs <= 0) {
+        break
+      }
+      try {
+        await this.physicalExit.waitForExit(
+          remainingMs,
+          () => new Error(`Retrying force-kill for PTY ${this.deps.sessionId}`)
+        )
+        return
+      } catch {
+        // The bounded waiter detached; retry the still-owned subprocess.
       }
     }
     throw lastError

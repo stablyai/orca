@@ -18,7 +18,9 @@ function createPlainShellSession(overrides: Partial<Session> = {}): Session {
     pid: 4242,
     isAlive: true,
     forceKillAndWaitForExit: vi.fn(async () => {}),
+    signalGroupsThenForceKillWithinBudget: vi.fn(async () => {}),
     beginTermination: vi.fn(() => true),
+    isTerminating: false,
     kill: vi.fn(),
     terminateOwnedTree: vi.fn(() => 'terminated' as const),
     scheduleForceDisposeFallback: vi.fn(),
@@ -152,7 +154,8 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
     )
     const session = createPlainShellSession({
       launchAgent: 'claude',
-      forceKillAndWaitForExit: vi.fn(() => rootCompletion)
+      forceKillAndWaitForExit: vi.fn(() => rootCompletion),
+      signalGroupsThenForceKillWithinBudget: vi.fn(() => rootCompletion)
     })
     const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
 
@@ -173,6 +176,42 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
     finishRoot()
     await immediate
     expect(settled).toBe(true)
+    expect(session.signalGroupsThenForceKillWithinBudget).toHaveBeenCalled()
+    expect(session.forceKillAndWaitForExit).not.toHaveBeenCalled()
+  })
+
+  it('signals an agent process group on immediate close and leaves plain shells on force-kill', async () => {
+    setPlatform('linux')
+    killWithDescendantSweepMock.mockImplementation(async (_pid: number, killRoot: () => void) => {
+      killRoot()
+    })
+    const agent = createPlainShellSession({ launchAgent: 'claude' })
+    const plain = createPlainShellSession()
+    const agentTeardown = new TerminalSessionTeardown(new Map([['agent', agent]]))
+    const plainTeardown = new TerminalSessionTeardown(new Map([['plain', plain]]))
+
+    await agentTeardown.killSession('agent', agent, true)
+    await plainTeardown.killSession('plain', plain, true)
+
+    expect(agent.signalGroupsThenForceKillWithinBudget).toHaveBeenCalledTimes(1)
+    expect(agent.forceKillAndWaitForExit).not.toHaveBeenCalled()
+    expect(plain.forceKillAndWaitForExit).toHaveBeenCalled()
+    expect(plain.signalGroupsThenForceKillWithinBudget).not.toHaveBeenCalled()
+  })
+
+  it('escalates an already-terminating agent through the group signal', async () => {
+    const session = createPlainShellSession({
+      launchAgent: 'claude',
+      beginTermination: vi.fn(() => false),
+      isTerminating: true
+    })
+    const teardown = new TerminalSessionTeardown(new Map())
+
+    await teardown.killSession('s1', session, true)
+
+    expect(session.signalGroupsThenForceKillWithinBudget).toHaveBeenCalledTimes(1)
+    expect(session.forceKillAndWaitForExit).not.toHaveBeenCalled()
+    expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
   })
 
   it('non-immediate (graceful) kill uses the plain kill path without a sweep', async () => {
