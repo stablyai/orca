@@ -6317,6 +6317,14 @@
           "copied": "命令已复制",
           "retry": "立即重试",
           "restored": "Git 已恢复正常。工作树已刷新。"
+        },
+        "WorktreeLineageHiddenActivity": {
+          "permission": "{{value0}} 个等待权限",
+          "working": "{{value0}} 个工作中",
+          "monitoring": "{{value0}} 个监控后台任务中",
+          "unread": "{{value0}} 个未读",
+          "failed": "{{value0}} 个已失败",
+          "interrupted": "{{value0}} 个已中断"
         }
       },
       "shared": {

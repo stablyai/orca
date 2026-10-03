@@ -6317,6 +6317,14 @@
           "copied": "명령이 복사됨",
           "retry": "지금 다시 시도",
           "restored": "Git이 다시 작동합니다. 워크트리를 새로고침했습니다."
+        },
+        "WorktreeLineageHiddenActivity": {
+          "permission": "{{value0}}개 권한 대기 중",
+          "working": "{{value0}}개 작업 중",
+          "monitoring": "{{value0}}개 백그라운드 작업 모니터링 중",
+          "unread": "{{value0}}개 읽지 않음",
+          "failed": "{{value0}}개 실패",
+          "interrupted": "{{value0}}개 중단됨"
         }
       },
       "shared": {

@@ -45,7 +45,7 @@ const sleepingStatusIconClassName = 'size-[13px] text-muted-foreground'
 // Why: a left-edge badge overlays unread on the status glyph without widening
 // the lane or indenting the title; ring-sidebar cuts the dot out from busy icons.
 const newCardUnreadAlertClassName =
-  'pointer-events-none absolute left-0 top-1/2 size-[6px] -translate-y-1/2 rounded-full bg-amber-500 ring-2 ring-sidebar'
+  'pointer-events-none absolute left-0 top-1/2 size-[6px] -translate-y-1/2 rounded-full bg-worktree-unread ring-2 ring-sidebar'
 
 function overlayNewCardUnreadStatus(
   status: React.JSX.Element,

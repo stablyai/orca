@@ -6506,6 +6506,14 @@
           "copied": "Command copied",
           "retry": "Retry now",
           "restored": "Git is working again. Worktrees refreshed."
+        },
+        "WorktreeLineageHiddenActivity": {
+          "permission": "{{value0}} waiting for permission",
+          "working": "{{value0}} working",
+          "monitoring": "{{value0}} monitoring background tasks",
+          "unread": "{{value0}} unread",
+          "failed": "{{value0}} failed",
+          "interrupted": "{{value0}} interrupted"
         }
       },
       "shared": {

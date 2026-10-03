@@ -301,4 +301,56 @@ test.describe('Worktree Lineage', () => {
     ).toBeVisible()
     await expect(childRow.getByRole('treeitem').filter({ hasText: childAgentPrompt })).toBeVisible()
   })
+
+  test('shows collapsed child work on the child workspace toggle', async ({ orcaPage }) => {
+    const { parentId, childId } = await seedLineageScenario(orcaPage)
+    const parentRow = worktreeOption(orcaPage, parentId)
+    const childRow = worktreeOption(orcaPage, childId)
+
+    await parentRow.click()
+    await expect(childRow).toBeVisible()
+    await seedWorkspaceAgentStatus(orcaPage, childId, 'HIDDEN_CHILD')
+
+    const hideToggle = parentRow.getByRole('button', { name: 'Hide 1 child workspace' })
+    await expect(hideToggle.locator('[data-agent-spinner]')).toHaveCount(0)
+    await hideToggle.click()
+    await expect(childRow).toBeHidden()
+
+    const showToggle = parentRow.getByRole('button', { name: 'Show 1 child workspace' })
+    await expect(showToggle).toHaveAccessibleDescription('1 working')
+    await expect(showToggle.locator('[data-agent-spinner]')).toBeVisible()
+    await captureSidebarEvidence(orcaPage, 'lineage-collapsed-child-working.png')
+
+    await showToggle.click()
+    await expect(childRow).toBeVisible()
+    await expect(hideToggle.locator('[data-agent-spinner]')).toHaveCount(0)
+  })
+
+  test('badges the child workspace toggle when a collapsed child is unread', async ({
+    orcaPage
+  }) => {
+    const { parentId, childId } = await seedLineageScenario(orcaPage)
+    const parentRow = worktreeOption(orcaPage, parentId)
+    const childRow = worktreeOption(orcaPage, childId)
+
+    await parentRow.click()
+    await parentRow.getByRole('button', { name: 'Hide 1 child workspace' }).click()
+    await expect(childRow).toBeHidden()
+    const showToggle = parentRow.getByRole('button', { name: 'Show 1 child workspace' })
+    await expect(showToggle.locator('[data-lineage-hidden-unread]')).toHaveCount(0)
+
+    await orcaPage.evaluate((childId) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      // Why: the same action agent-completion attention calls; that trigger has its own
+      // e2e coverage in droid-notification.spec.ts.
+      store.getState().markWorktreeUnread(childId)
+    }, childId)
+
+    await expect(showToggle).toHaveAccessibleDescription('1 unread')
+    await expect(showToggle.locator('[data-lineage-hidden-unread]')).toBeVisible()
+    await captureSidebarEvidence(orcaPage, 'lineage-collapsed-child-unread.png')
+  })
 })

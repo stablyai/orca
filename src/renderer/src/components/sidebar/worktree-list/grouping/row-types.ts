@@ -4,6 +4,7 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { DetectedWorktree, Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { LineageHiddenDescendants } from '../../worktree-lineage-descendants'
 
 export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
 export type PinnedWorktreeDisplayPolicy = 'single-location' | 'duplicate-in-groups'
@@ -43,6 +44,8 @@ export type WorktreeRow = {
   lineageChildCount: number
   lineageGroupKey?: string
   lineageCollapsed?: boolean
+  /** What a collapsed lineage hides, grandchildren included. */
+  lineageHiddenDescendants?: LineageHiddenDescendants
   hostContextLabel?: string
 }
 
