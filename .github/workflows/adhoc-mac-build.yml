@@ -6,7 +6,9 @@ name: Adhoc macOS + Windows Dev Build
 #
 # Deliberately narrow scope:
 #   - macOS and Windows desktop installers. Linux keeps using RC/stable.
-#   - No tests, no lint, no e2e. PR CI and release-cut remain the gates.
+#   - No tests, no lint, no e2e. PR CI and release-cut remain the gates. The one
+#     exception is the orcad template: like release-cut, it is merged from the
+#     node-server lanes that build and qualify each SSH target's slot.
 #   - macOS is signed and notarized so TCC grants survive updates.
 #   - Windows is unsigned; the published release notes explain the one-time
 #     SmartScreen/manual-install requirement.
@@ -93,9 +95,59 @@ jobs:
     with:
       ref: ${{ inputs.ref || github.ref_name }}
 
-  build-adhoc-mac:
-    needs: relay-windows-process-tree
+  # Why: a branch cut before the orcad template landed has none to build or ship.
+  orcad-template-support:
     if: github.repository == 'stablyai/orca'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      ships: ${{ steps.detect.outputs.ships }}
+    steps:
+      - name: Checkout the template packager only
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref_name }}
+          sparse-checkout: |
+            /config/scripts/packaged-orcad-template.cjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Detect whether the ref ships the orcad template
+        id: detect
+        shell: bash
+        run: |
+          if [[ -f config/scripts/packaged-orcad-template.cjs ]]; then
+            echo "ships=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "ships=false" >>"$GITHUB_OUTPUT"
+            echo "::notice::This ref predates the orcad template; the build ships without it."
+          fi
+
+  # Design D2, as release-cut does: every desktop build ships the orcad template (server JS plus
+  # every target's addons), merged from the node-server lanes that qualify each slot at this ref.
+  # Without it an adhoc build cannot deploy managed orcad to an SSH host. No secrets, like the
+  # relay job, and the mac job vets the ref before anything is signed.
+  orcad-template:
+    needs: orcad-template-support
+    if: needs.orcad-template-support.outputs.ships == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/node-server-tests.yml
+    with:
+      ref: ${{ inputs.ref || github.ref_name }}
+      build_template: true
+
+  build-adhoc-mac:
+    needs: [relay-windows-process-tree, orcad-template-support, orcad-template]
+    # Why not the implicit success(): a ref without the orcad template skips that job on purpose.
+    if: >-
+      !cancelled() && github.repository == 'stablyai/orca' &&
+      needs.relay-windows-process-tree.result == 'success' &&
+      needs.orcad-template-support.result == 'success' &&
+      (needs.orcad-template.result == 'success' ||
+        (needs.orcad-template.result == 'skipped' &&
+          needs.orcad-template-support.outputs.ships == 'false'))
     # Why an environment: it gives the signing/notary/App secrets somewhere to
     # live that a stale copy of this workflow on an old branch cannot reach.
     # Referencing it is a no-op until repo settings give it teeth; the intended
@@ -109,6 +161,7 @@ jobs:
       version: ${{ steps.adhoc.outputs.version }}
       head_sha: ${{ steps.adhoc.outputs.head_sha }}
       published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
+      ships_orcad_template: ${{ needs.orcad-template-support.outputs.ships }}
     runs-on: blacksmith-6vcpu-macos-15
     # Why 150: it must exceed the worst case the retry budgets below can produce
     # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
@@ -292,6 +345,14 @@ jobs:
           # sshd's job for a standard user on a Windows SSH host.
           ORCA_REQUIRE_RELAY_NATIVE_ADDONS: x64,arm64
 
+      # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
+      - name: Download the orcad deployment template
+        if: needs.orcad-template-support.outputs.ships == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
+
       # Why the token is minted here and not at the top: installation tokens live
       # one hour, everything before this point writes nothing, and the notary round
       # trip inside the publish step can be tens of minutes. Minting after the build
@@ -366,6 +427,8 @@ jobs:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           ORCA_ADHOC_BUILD_VERSION: ${{ steps.adhoc.outputs.version }}
           ORCA_BUILD_COMMIT: ${{ steps.adhoc.outputs.commit }}
+          # beforePack and afterPack fail the package when the template is absent.
+          ORCA_REQUIRE_ORCAD_TEMPLATE: ${{ needs.orcad-template-support.outputs.ships == 'true' && '1' || '' }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
           # Why all three: electron-builder's notarize step authenticates to the
@@ -514,3 +577,4 @@ jobs:
       tag: ${{ needs.build-adhoc-mac.outputs.tag }}
       ref: ${{ needs.build-adhoc-mac.outputs.head_sha }}
       version: ${{ needs.build-adhoc-mac.outputs.version }}
+      orcad_template: ${{ needs.build-adhoc-mac.outputs.ships_orcad_template == 'true' }}

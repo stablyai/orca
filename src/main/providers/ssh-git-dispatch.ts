@@ -49,6 +49,21 @@ export function _getSshGitProviderGenerationCacheSize(): number {
   return sshProviderGenerations.size
 }
 
+export function unregisterSshGitProviderIfCurrent(
+  connectionId: string,
+  expected: SshGitProvider,
+  expectedGeneration: number
+): boolean {
+  if (
+    sshProviders.get(connectionId) !== expected ||
+    getSshGitProviderGeneration(connectionId) !== expectedGeneration
+  ) {
+    return false
+  }
+  unregisterSshGitProvider(connectionId)
+  return true
+}
+
 export function getSshGitProvider(connectionId: string): SshGitProvider | undefined {
   return sshProviders.get(connectionId)
 }

@@ -462,6 +462,9 @@ async function deployAndLaunchRelayInner(
         continue
       }
       if (!(err instanceof RelayDirectoryGcConflictError)) {
+        if (ladder.length > 1 && !deploySignal?.aborted) {
+          run.unresolved(step)
+        }
         throw err
       }
       // Why: GC atomically moves the old install aside; wait for its sibling claim to clear, then recompute install state.

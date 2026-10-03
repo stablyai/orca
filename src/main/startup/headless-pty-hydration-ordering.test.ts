@@ -55,8 +55,9 @@ describe('headless PTY registry hydration ordering', () => {
 
   it('starts the orcad hook owner after Store hydration and before daemon PTY recovery', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/orcad/orcad-entry.ts'), 'utf8')
-    const cleanup = source.indexOf('registerCleanup(async () => {')
-    const hookStop = source.indexOf('agentHookServer.stop()', cleanup)
+    // Each runtime resource registers its own cleanup; the hook owner's must precede its start.
+    const cleanup = source.indexOf('registerCleanup(')
+    const hookStop = source.indexOf('registerCleanup(() => agentHookServer.stop())', cleanup)
     const store = source.indexOf('createOrcadProfileStateStartup(runtimeUserDataPath)')
     const hookStart = source.indexOf('await agentHookServer.start(', store)
     const daemon = source.indexOf('await startOrcadDaemon()', hookStart)
@@ -64,7 +65,7 @@ describe('headless PTY registry hydration ordering', () => {
     const handlersAndHydration = source.indexOf('await registerHeadlessPtyRuntime(', hookEnv)
 
     expect(cleanup).toBeGreaterThanOrEqual(0)
-    expect(hookStop).toBeGreaterThan(cleanup)
+    expect(hookStop).toBeGreaterThanOrEqual(cleanup)
     expect(store).toBeGreaterThan(hookStop)
     expect(hookStart).toBeGreaterThan(store)
     expect(daemon).toBeGreaterThan(hookStart)

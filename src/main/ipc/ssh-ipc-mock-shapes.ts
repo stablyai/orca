@@ -97,6 +97,7 @@ export type SshIpcMockModules = {
   sshConfigHostPicker: SshIpcMockModule
   electron: SshIpcMockModule
   sshPtyOutputIntakeRegistry: SshIpcMockModule
+  hostServerConnect: SshIpcMockModule
   sshConnectionStore: SshIpcMockModule
   sshConnectionManager: SshIpcMockModule
   sshRelayDeploy: SshIpcMockModule

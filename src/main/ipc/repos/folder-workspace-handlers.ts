@@ -18,13 +18,14 @@ import {
   FolderWorkspaceUpdateArgs,
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
+import { visibleFolderWorkspaces } from '../../ssh/orcad-retained-source'
 
 export function registerFolderWorkspaceHandlers(
   mainWindow: BrowserWindow,
   store: Store,
   runtime: OrcaRuntimeService
 ): void {
-  ipcMain.handle('folderWorkspaces:list', (): FolderWorkspace[] => store.getFolderWorkspaces())
+  ipcMain.handle('folderWorkspaces:list', (): FolderWorkspace[] => visibleFolderWorkspaces(store))
 
   ipcMain.handle('folderWorkspaces:getPathStatus', async (_event, rawArgs: unknown) => {
     const args = parseProjectGroupIpcArgs(

@@ -37,11 +37,14 @@ export const NODE_NETWORK_E2E_SPEC =
   'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts'
 export const LOCALHOST_SSH_E2E_SPEC = 'tests/e2e/ssh-localhost.spec.ts'
 export const NATIVE_IME_E2E_SPEC = 'tests/e2e/terminal-ibus-hangul-native.spec.ts'
+// Needs the packaged orcad slot, which only its own job builds.
+export const ORCAD_SERVE_MODE_SWITCH_E2E_SPEC = 'tests/e2e/orcad-serve-mode-switch.spec.ts'
 export const DEDICATED_E2E_SPECS = [
   ...DOCKER_SSH_E2E_SPECS,
   NODE_NETWORK_E2E_SPEC,
   LOCALHOST_SSH_E2E_SPEC,
-  NATIVE_IME_E2E_SPEC
+  NATIVE_IME_E2E_SPEC,
+  ORCAD_SERVE_MODE_SWITCH_E2E_SPEC
 ]
 const dedicatedSpecs = new Set(DEDICATED_E2E_SPECS)
 const dockerSpecs = new Set(DOCKER_SSH_E2E_SPECS)
@@ -76,7 +79,12 @@ export function classifyE2eJobs(input, sshSourceChanged = 'false') {
     e2e_needs_build:
       runChanged ||
       sshSourceChanged !== 'false' ||
-      specs.some((spec) => dockerSpecs.has(spec) || spec === LOCALHOST_SSH_E2E_SPEC)
+      specs.some(
+        (spec) =>
+          dockerSpecs.has(spec) ||
+          spec === LOCALHOST_SSH_E2E_SPEC ||
+          spec === ORCAD_SERVE_MODE_SWITCH_E2E_SPEC
+      )
   }
 }
 

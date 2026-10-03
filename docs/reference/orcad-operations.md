@@ -102,11 +102,16 @@ It refuses to start when:
 A root that is merely too permissive and that we own is tightened to `0700` rather than
 refused — orcad stores credentials there unsealed (no OS keyring on this host), so the goal
 is a private root, and refusing when we could just fix it helps nobody. We refuse when the
-permissions are not ours to fix. Windows is exempt from the owner and mode checks: ACLs are
-not expressible as a POSIX mode, and `statSync().mode` there reports a synthesized one.
+permissions are not ours to fix. Windows has no owner or mode check, because ACLs are not
+expressible as a POSIX mode and `statSync().mode` there reports a synthesized one. Instead
+orcad restricts the root's ACL to its own user with `icacls` (the same verified restriction
+`secure-file.ts` applies to credential files) and refuses with `orcad_data_root_shared` when
+that cannot be applied.
 
 A dead holder's record is reclaimed (PID plus process start time, so a recycled PID does not
-read as alive). A record belonging to a different identity is never reclaimed.
+read as alive). On Windows the start time is the kernel creation time read through the
+process-tree addon the slot stages; without the addon it is null and the PID alone fences,
+which errs toward "held". A record belonging to a different identity is never reclaimed.
 
 **The lock scopes one role — who is the runtime.** It deliberately says nothing about the
 daemon, which lives under `<data-root>/daemon` and fences its own endpoint with its own PID
@@ -150,6 +155,47 @@ An external supervisor (systemd, launchd, a process manager). orcad conforms to 
   exits with code 1 if teardown stalls. The bundled runtime also stops gracefully if its
   launcher's IPC channel closes. On POSIX, both the launcher and runtime ignore `SIGHUP`,
   so terminal hangups do not stop a headless host. Use `SIGTERM` or `SIGINT` to stop it.
+- **Stop requests.** A file stops orcad the same way `SIGTERM` does, without a PID that may
+  since have been reused by another process:
+  - `.orcad-stop-request` beside `orcad.js` in the running slot. orcad deletes it and stops.
+  - An instance-bound request in the data root, named
+    `.orcad-managed-stop-request.<sha256 of the instance lock nonce>`. orcad stops only when it
+    names this orcad's version, runtime ID, PID, start time and lock nonce, and while the
+    instance lock still holds that record. The file is kept as evidence.
+  - `orcad --complete-managed-stop '<request JSON>'` writes that request, waits for the
+    instance to exit, and prints one JSON line whose `verdict` is `live`, `unverifiable` or
+    `exited`. `exited` needs proof: no process with that PID, or a PID whose start time shows
+    it now belongs to another process. On `exited` it writes
+    `<data-root>/orcad-stop-receipts/<transactionId>.json`. It exits 0 whenever it printed a
+    verdict, 64 for a malformed invocation, and 1 for a failure before any verdict, which is
+    never evidence of exit.
+  - A request with `retireIdleDaemon: true` asks orcad to retire the terminal daemon too. This
+    is best effort and never blocks or fails the stop:
+    - The daemon is retired only when it proves it owns no live session across every
+      generation.
+    - A busy daemon (`live`) or one whose state cannot be proven (`unverifiable`) stays up with
+      its terminals, and orcad reopens new-terminal admission before exiting.
+    - The completed-stop receipt records `retirement` as `retired`, `live` or `unverifiable`.
+      If orcad exits without recording an outcome, the receipt says `unverifiable`.
+  - `orcad --cancel-managed-stop '<request JSON>'` withdraws a request orcad has not acted on.
+    orcad and the canceller each try to create `<transactionId>.decision.json` exclusively,
+    so exactly one wins. `canceled` means orcad keeps running and the request file is removed;
+    `dispatched` means orcad already began stopping, and only the completion can say how it
+    ended.
+  - A build advertises all of the above with `health.stopRequests: 1` in its readiness line.
+    Clients stop such a build through the slot request file and older builds with `SIGTERM`,
+    after corroborating the PID with readiness either way. A launch clears a slot request
+    that the previous process never consumed.
+- **Decommissioning a managed slot.** An Orca client decommissions through the same activation
+  journal and fence as deploy and rollback. It refuses while the terminal census reports live
+  or uncounted terminals, stops the instance with a managed request that also asks to retire
+  the daemon, and records that no version is active only after `exited` is proven. A stop
+  that did not finish is cancelled; if orcad already acted on it, or the host cannot answer,
+  the fence stays for recovery.
+- **Instance lock.** `<data-root>/orcad.lock` names the running orcad. A record that is
+  unreadable, malformed or over 64 KiB is never reclaimed: orcad exits 78 until an operator
+  removes it. A shutdown whose teardown failed keeps the lock until the process exits, so a
+  second orcad cannot start beside a writer that may still be running.
 - **Exit codes.**
 
   | Code | Meaning                                                      | Supervisor should    |
@@ -201,6 +247,31 @@ fell back to the service cgroup. To retire a process-scoped deployment, apply th
 above, stop orcad, then stop the daemon named by `health.terminalDaemon.pid`.
 Only report it `exited` after verification on the execution host; loss of contact is
 `unverifiable`.
+
+### Windows hosts
+
+What differs on a Windows SSH host, and what deliberately does not:
+
+- **Stop path.** A signal is TerminateProcess on Windows: no flush, no lock release. The
+  slot's `.orcad-stop-request` file (and the managed, instance-bound request) is therefore the
+  only graceful stop. A detached orcad receives no console control events, so the listener
+  (`fs.watch` plus a one-second poll) is what stops it; the packaged-slot test proves it exits
+  cleanly within the 15 s shutdown deadline on every server lane, Windows included.
+- **Exit proof.** `--complete-managed-stop` proves a reused PID by the addon's creation time.
+  Without the addon a live PID stays `live` or `unverifiable`, never `exited`.
+- **Daemon endpoint.** The terminal daemon listens on a named pipe
+  (`\\?\pipe\orca-terminal-host-v<protocol>-<suffix>`), not a socket under the data root.
+- **Leaving sshd's job.** orcad is started outside the SSH session's kill-on-close job, so the
+  daemon it forks inherits no such job and outlives the connection the same way.
+- **Per-PTY jobs.** Each ConPTY child gets its own job (`windows-pty-job.ts`), and Git Bash /
+  MSYS panes follow [`windows-msys-job-breakaway.md`](./windows-msys-job-breakaway.md)
+  unchanged. A ConPTY smoke test runs inside a process started exactly that way (breakaway,
+  no window) on the Windows server lanes.
+- **No daemon-host relocation.** The desktop copies its runtime to `%LOCALAPPDATA%` because
+  the NSIS updater deletes the install directory under a running daemon
+  ([`windows-daemon-host-relocation.md`](./windows-daemon-host-relocation.md)). orcad slots are
+  versioned directories that nothing deletes while a process runs from them: Windows refuses
+  to delete a running image, and GC treats an in-use slot as live.
 
 ## Health
 

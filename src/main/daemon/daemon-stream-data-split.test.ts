@@ -18,7 +18,8 @@ function write(
   rawLength = data.length,
   seq?: number,
   transformed = false,
-  sessionId = 'session-1'
+  sessionId = 'session-1',
+  incarnationId?: string
 ): string[] {
   const lines: string[] = []
   const socket: Pick<Socket, 'write'> = {
@@ -27,7 +28,16 @@ function write(
       return true
     })
   }
-  writeStreamDataEvents(socket, sessionId, data, maxLineBytes, rawLength, seq, transformed)
+  writeStreamDataEvents(
+    socket,
+    sessionId,
+    data,
+    maxLineBytes,
+    rawLength,
+    seq,
+    transformed,
+    incarnationId
+  )
   return lines
 }
 
@@ -84,6 +94,15 @@ describe('writeStreamDataEvents serialization budget', () => {
     expect(encodeNdjson).toHaveBeenCalledTimes(1)
   })
 
+  it('retains incarnation metadata in the single-encode fast path', () => {
+    const line = encodeStreamDataEvent('session-1', 'é🐙', undefined, undefined, false, 'epoch-1')
+    vi.mocked(encodeNdjson).mockClear()
+    expect(
+      write('é🐙', Buffer.byteLength(line), 3, undefined, false, 'session-1', 'epoch-1')
+    ).toEqual([line])
+    expect(encodeNdjson).toHaveBeenCalledTimes(1)
+  })
+
   it('does not add a duplicate full-data sizing probe to oversized writes', () => {
     const data = '🐙\x1b[0m'.repeat(100)
     const expected = previousWrites(data, 160)
@@ -102,6 +121,24 @@ describe('writeStreamDataEvents serialization budget', () => {
 })
 
 describe('writeStreamDataEvents wire parity', () => {
+  it.each([undefined, 9000])('budgets incarnation metadata on oversized writes (seq=%s)', (seq) => {
+    const data = '🐙é中\x1b[0m"\\\n'.repeat(100)
+    const incarnationId = 'epoch-'.repeat(16)
+    const lines = write(data, 384, data.length, seq, false, 'session-1', incarnationId)
+    expect(lines.length).toBeGreaterThan(1)
+    let consumed = 0
+    const chunks = lines.map((line) => {
+      expect(Buffer.byteLength(line, 'utf8')).toBeLessThanOrEqual(384)
+      const { payload } = JSON.parse(line)
+      expect(payload.incarnationId).toBe(incarnationId)
+      expect(typeof payload.data).toBe('string')
+      consumed += payload.data.length
+      expect(payload.seq).toBe(seq === undefined ? undefined : seq - data.length + consumed)
+      return payload.data
+    })
+    expect(chunks.join('')).toBe(data)
+  })
+
   it('preserves exact frames, chunk boundaries and metadata across payloads and caps', () => {
     const payloads = [
       '',

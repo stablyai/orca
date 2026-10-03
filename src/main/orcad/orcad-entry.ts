@@ -22,6 +22,10 @@ import {
   startOrcadWithHost
 } from './orcad-lifecycle'
 import { parseArgs } from './orcad-command-arguments'
+import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
+import { installOrcadStopRequestListeners } from './orcad-stop-request-listener'
+import { prepareOrcadManagedStop } from './orcad-managed-stop-admission'
+import type { OrcadManagedStopContext } from '../../shared/orcad-stop-request'
 import {
   changedAiVaultSearchSettings,
   type AiVaultSearchSettings
@@ -37,12 +41,17 @@ function createNodeAppEnvironment(): AppEnvironment {
   // The main signal handler awaits runtime and browser teardown before process.exit.
   // Keep will-quit callbacks synchronous, but never let them pre-empt that async barrier.
   runOrcadQuitHandlers = (): void => {
+    const errors: unknown[] = []
     for (const handler of quitHandlers.splice(0)) {
       try {
         handler()
       } catch (error) {
-        console.error('[orcad] shutdown handler failed:', error)
+        errors.push(error)
       }
+    }
+    // Why throw: a quit handler that failed may leave a writer running, which keeps the lock.
+    if (errors.length > 0) {
+      throw new AggregateError(errors, 'orcad_quit_handlers_failed')
     }
   }
   return {
@@ -91,12 +100,19 @@ export type OrcadOptions = {
   json?: boolean
   noPairing?: boolean
   pairingAddress?: string
+  /** Desktop `orca serve` parity: a mobile-scoped offer with a terminal QR. */
+  mobilePairing?: boolean
+  /** Desktop `orca serve` parity: print only the ephemeral-VM recipe line. */
+  recipeJson?: boolean
+  projectRoot?: string
   /** Literal IP to bind. Defaults to loopback; see orcad-bind-address.ts. */
   bind?: string
 }
 
 export type OrcadHandle = {
   readiness: ServeReadiness
+  /** What an instance-bound stop request must name to stop this process. */
+  managedStop: OrcadManagedStopContext
   stop(): Promise<void>
 }
 
@@ -107,7 +123,7 @@ export type OrcadHandle = {
  */
 export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandle> {
   installOrcadHostAdapters()
-  return startOrcadWithHost(
+  const { readiness, instance, stop } = await startOrcadWithHost(
     resolveUserDataPath(),
     (registerCleanup) => startOrcadRuntime(options, registerCleanup),
     () => {
@@ -117,11 +133,13 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
       closeOrcadObservability = () => {}
     }
   )
+  const version = process.env.ORCA_VERSION ?? '0.0.0-orcad'
+  return { readiness, managedStop: { version, runtimeId: readiness.runtimeId, instance }, stop }
 }
 
 async function startOrcadRuntime(
   options: OrcadOptions,
-  registerCleanup: (cleanup: () => Promise<void>) => void
+  registerCleanup: (cleanup: OrcadRuntimeCleanup) => void
 ): Promise<Pick<OrcadHandle, 'readiness'>> {
   const { OrcaRuntimeService } = await import('../runtime/orca-runtime')
   const { OrcaRuntimeRpcServer } = await import('../runtime/runtime-rpc')
@@ -132,6 +150,8 @@ async function startOrcadRuntime(
   closeOrcadObservability = installOrcadObservability()
   const { resolveAdvertisedPairingEndpoint } = await import('../runtime/pairing-endpoint')
   const { ServeReadinessPublisher } = await import('../server/serve-readiness')
+  const { assertServeProjectRoot, renderServePairingQr } =
+    await import('../server/serve-pairing-output')
   const { createOrcadProfileStateStartup } = await import('./orcad-profile-state-startup')
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
   const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-init')
@@ -145,35 +165,28 @@ async function startOrcadRuntime(
   const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =
     await import('../runtime/agent-status-observed-pane-identity')
 
-  let rpc: InstanceType<typeof OrcaRuntimeRpcServer> | null = null
+  const { disposeWatcherProcessAndWait } = await import('../ipc/parcel-watcher-process')
+
   let profileStoreForShutdown:
     | { flushFinalOrThrowAsync(): Promise<void>; freezeWritesAsync(): Promise<void> }
     | undefined
   let uninstallHookStatusRepublish = (): void => {}
   let uninstallObservedStatusIdentity = (): void => {}
+  // Cleanups run in reverse: RPC, then recovery and watchers, then the final flush, then daemon.
+  registerCleanup(() => agentHookServer.stop())
+  registerCleanup(() => uninstallHookStatusRepublish())
+  registerCleanup(() => uninstallObservedStatusIdentity())
+  // Why disconnect and not shut down: the daemon must outlive this process, or an orcad
+  // restart goes back to killing every running terminal.
+  registerCleanup(() => stopOrcadDaemon())
   registerCleanup(async () => {
-    try {
-      await rpc?.stop()
-    } finally {
-      try {
-        // Stop accepting RPC writes before the final persistence barrier. A SQLite-backed
-        // orcad has no JSON mirror to absorb a debounced write after SIGTERM.
-        if (profileStoreForShutdown) {
-          await flushOrcadProfileStoreForShutdown(profileStoreForShutdown)
-        }
-      } finally {
-        try {
-          // Why disconnect and not shut down: the daemon must outlive this process, or an
-          // orcad restart goes back to killing every running terminal.
-          await stopOrcadDaemon()
-        } finally {
-          uninstallObservedStatusIdentity()
-          uninstallHookStatusRepublish()
-          agentHookServer.stop()
-        }
-      }
+    // A SQLite-backed orcad has no JSON mirror to absorb a debounced write after SIGTERM.
+    if (profileStoreForShutdown) {
+      await flushOrcadProfileStoreForShutdown(profileStoreForShutdown)
     }
   })
+  // Watcher children outlive a disposal that does not wait for them.
+  registerCleanup(() => disposeWatcherProcessAndWait())
   const { DesktopPushService } = await import('../runtime/push/desktop-push-service')
   const { resolvePushGatewayOrigin } = await import('../runtime/push/push-gateway-origin')
 
@@ -303,11 +316,14 @@ async function startOrcadRuntime(
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
 
+  // A retry armed during recovery would otherwise write after the final profile flush.
+  registerCleanup(() => runtime.stopLegacyWorkerTerminalRecovery())
+
   // Recovery binds terminal and dispatch identities; only now can startup observations be fenced.
   observedStatusCapture.attach(runtime)
 
   const bindHost = resolveOrcadBindHost(options.bind)
-  rpc = new OrcaRuntimeRpcServer({
+  const rpc = new OrcaRuntimeRpcServer({
     runtime,
     userDataPath: runtimeUserDataPath,
     enableWebSocket: true,
@@ -318,6 +334,8 @@ async function startOrcadRuntime(
     pinnedBindHost: bindHost,
     ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {})
   })
+  // Stops first: no RPC may write while the rest of the runtime is torn down.
+  registerCleanup(() => rpc.stop())
   await rpc.start()
   const pushService = DesktopPushService.create({
     runtime,
@@ -340,8 +358,8 @@ async function startOrcadRuntime(
       } as const)
     : rpc.createPairingOffer({
         address: options.pairingAddress,
-        name: `CLI ${new Date().toLocaleDateString()}`,
-        scope: 'runtime'
+        name: `${options.mobilePairing ? 'Mobile' : 'CLI'} ${new Date().toLocaleDateString()}`,
+        scope: options.mobilePairing ? 'mobile' : 'runtime'
       })
 
   const readiness: ServeReadiness = {
@@ -358,8 +376,8 @@ async function startOrcadRuntime(
           endpoint: offer.endpoint,
           deviceId: offer.deviceId,
           webClientUrl: offer.webClientUrl,
-          scope: 'runtime',
-          qr: null
+          scope: options.mobilePairing ? 'mobile' : 'runtime',
+          qr: options.mobilePairing ? await renderServePairingQr(offer.pairingUrl) : null
         }
       : offer,
     // Why in the readiness payload: this is the one message a supervisor and a deploy
@@ -368,9 +386,12 @@ async function startOrcadRuntime(
     health: await collectOrcadHealth(getAppEnvironment().getVersion(), profileStateAuthority)
   }
 
-  await new ServeReadinessPublisher().publish(readiness, {
-    mode: options.json ? 'json' : 'human'
-  })
+  await new ServeReadinessPublisher().publish(
+    readiness,
+    options.recipeJson && options.projectRoot
+      ? { mode: 'recipe-json', projectRoot: assertServeProjectRoot(options.projectRoot) }
+      : { mode: options.json ? 'json' : 'human' }
+  )
 
   return { readiness }
 }
@@ -395,6 +416,12 @@ export { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-lifecycle'
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
   const startup = startOrcad(parseArgs(argv))
-  installOrcadShutdownSignals(async () => (await startup).stop())
-  await startup
+  const requestShutdown = installOrcadShutdownSignals(async () => (await startup).stop())
+  const handle = await startup
+  // Why after startup: a managed request must name the runtime and instance this run became.
+  installOrcadStopRequestListeners(() => requestShutdown('stop request'), {
+    installRoot: resolveOrcadInstallRoot(),
+    managedStop: handle.managedStop,
+    beforeManagedStop: prepareOrcadManagedStop
+  })
 }

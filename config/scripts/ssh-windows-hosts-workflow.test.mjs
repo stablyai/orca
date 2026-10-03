@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import {
   WINDOWS_FORBIDDEN_TOOLS,
-  WINDOWS_HOST_CELL_IDS
+  WINDOWS_HOST_CELL_IDS,
+  WINDOWS_ORCAD_CELL_IDS
 } from '../../src/main/ssh/ssh-windows-host-cells.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
@@ -171,14 +172,16 @@ describe('SSH Windows-host workflow', () => {
   it('defaults to every cell the TypeScript lane knows', () => {
     const defaults = /\{\$cells=@\(([^)]*)\)\}/.exec(runStep.run)?.[1]
     expect(defaults?.split(',').map((id) => id.trim().replaceAll("'", ''))).toEqual([
-      ...WINDOWS_HOST_CELL_IDS
+      ...WINDOWS_HOST_CELL_IDS,
+      ...WINDOWS_ORCAD_CELL_IDS
     ])
     const invoker = readFileSync(
       join(projectDir, 'config/ci/windows-ssh-provider/invoke-pinned-relay-cells.ps1'),
       'utf8'
     )
-    for (const id of WINDOWS_HOST_CELL_IDS) {
+    for (const id of [...WINDOWS_HOST_CELL_IDS, ...WINDOWS_ORCAD_CELL_IDS]) {
       expect(invoker).toContain(`'${id}'`)
     }
+    expect(invoker).toContain('src/main/ssh/orcad-windows-host-lane.test.ts')
   })
 })

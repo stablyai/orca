@@ -9,8 +9,13 @@ import { runRelayDaemon } from './relay-daemon'
 import { relayLogLine } from './relay-diagnostic-log'
 import { configureRelayBundledRipgrep } from './relay-bundled-ripgrep'
 import { runRelayRuntimeSelfTestCommand } from './relay-runtime-self-test'
-import { runRelayWindowsBreakawayLaunchIfRequested } from './relay-windows-breakaway-launch'
+import { runWindowsBreakawayLaunchIfRequested } from '../shared/windows-breakaway-launcher'
+import { RELAY_WINDOWS_BREAKAWAY_CONTRACT } from '../shared/windows-breakaway-launch'
 import { RELAY_RUNTIME_SELF_TEST_FLAG } from '../shared/relay-runtime-self-test-report'
+import {
+  isRelayResetPreparationReadMode,
+  readRelayResetPreparationStdin
+} from './relay-reset-preparation-reader'
 
 async function main(): Promise<void> {
   const selfTestFlag = process.argv.indexOf(RELAY_RUNTIME_SELF_TEST_FLAG)
@@ -18,7 +23,12 @@ async function main(): Promise<void> {
     await runRelayRuntimeSelfTestCommand(process.argv[selfTestFlag + 1] ?? '')
     return
   }
-  if (runRelayWindowsBreakawayLaunchIfRequested(process.argv)) {
+  if (runWindowsBreakawayLaunchIfRequested(RELAY_WINDOWS_BREAKAWAY_CONTRACT, process.argv)) {
+    return
+  }
+  // A read-only exec: the SSH account's own file access is the authority; no daemon starts.
+  if (isRelayResetPreparationReadMode(process.argv)) {
+    process.stdout.write(await readRelayResetPreparationStdin(process.stdin))
     return
   }
   const options = parseRelayLaunchOptions(process.argv)

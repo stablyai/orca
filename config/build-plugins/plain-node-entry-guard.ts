@@ -43,6 +43,7 @@ const PLAIN_NODE_ENTRY_NAMES = [
   'parcel-watcher-process-entry',
   'computer-sidecar',
   'wsl-transcript-fs-process-entry',
+  'orcad/orcad-local-serve-selection-entry',
   ...CLI_MAIN_ENTRY_NAMES
 ] as const
 

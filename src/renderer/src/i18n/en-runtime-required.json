@@ -1756,6 +1756,37 @@
             }
           }
         },
+        "managedServers": {
+          "move": {
+            "action": "Move to managed server",
+            "cancel": "Cancel",
+            "close": "Close",
+            "confirm": "I have closed every terminal on this host. Running terminals cannot move and stop the move.",
+            "converted": "Moved. {{name}} now serves these projects.",
+            "description": "Orca installs a server on {{host}} and moves this host’s projects onto it. The host keeps everything until the server confirms it has a copy.",
+            "moves": "What moves",
+            "resume": "Resume",
+            "running": "Installing the server and copying projects. You can close Settings; the move resumes from where it stopped.",
+            "submit": "Move host",
+            "title": "Move to managed server"
+          },
+          "moves": {
+            "automations": "Automations: {{count}}",
+            "folderWorkspaces": "Folder workspaces: {{count}}",
+            "projectGroups": "Project groups: {{count}}",
+            "repositories": "Repositories: {{count}}",
+            "session": "Closed tabs and saved layouts"
+          },
+          "search": {
+            "description": "Deploy and run an Orca server on your own SSH hosts, and move an SSH host’s projects onto one.",
+            "keywordMigrate": "migrate",
+            "keywordServer": "server"
+          }
+        },
+        "managedServersExperimentalSetting": {
+          "description": "Shows Managed servers under Remote Orca Servers, and Move to managed server on SSH hosts. macOS and Linux hosts only.",
+          "toggleLabel": "Toggle Managed servers"
+        },
         "mobile": {
           "settings": {
             "search": {

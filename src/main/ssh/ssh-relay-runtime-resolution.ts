@@ -25,9 +25,17 @@ import {
 import type { PinnedRuntimeRefusal } from './ssh-relay-runtime-self-test'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import type { HostNodeVersion } from './ssh-remote-node-toolchain-probe'
-import { trackSshRemoteRuntimeResolved } from './ssh-remote-runtime-telemetry'
+import {
+  trackSshRemoteRuntimeResolved,
+  type SshRemoteRuntimeOutcome
+} from './ssh-remote-runtime-telemetry'
 
-export type RelayRuntimeSelfTestOutcome = 'passed' | 'refused' | 'failed' | 'not_run'
+export type RelayRuntimeSelfTestOutcome =
+  | 'passed'
+  | 'refused'
+  | 'failed'
+  | 'unverifiable'
+  | 'not_run'
 export type RelayRuntimeTransfer = 'uploaded' | 'cached' | 'none'
 
 export type RelayRuntimeDecisionStore = {
@@ -118,9 +126,24 @@ export class RelayRuntimeLadderRun {
       }
     }
     this.persist(rung)
+    this.track(rung, 'resolved')
+  }
+
+  /** A rung whose self-test was unverifiable or failed: nothing settles, but the attempt counts. */
+  unresolved(step: RelayRuntimeStep): void {
+    if (step === 'D' || step === 'legacy') {
+      return
+    }
+    if (this.selfTest === 'unverifiable' || this.selfTest === 'failed') {
+      this.track(step, this.selfTest)
+    }
+  }
+
+  private track(rung: SshRemoteRuntimeRung, outcome: SshRemoteRuntimeOutcome): void {
     if (this.host) {
       trackSshRemoteRuntimeResolved(this.targetId, {
         rung,
+        outcome,
         host: this.host,
         facts: this.facts,
         firstRefusal: this.firstRefusal,

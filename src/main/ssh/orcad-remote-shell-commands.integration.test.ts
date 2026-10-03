@@ -37,6 +37,11 @@ import {
   parseOrcadStopOutcome,
   stopOrcadCommand
 } from './orcad-remote-process-control'
+import { shellEscape } from './ssh-connection-utils'
+import {
+  orcadReadinessWaitCommand,
+  parseOrcadReadinessWaitOutput
+} from './orcad-remote-readiness-wait'
 import {
   captureOrcadStateSnapshotCommand,
   compareOrcadStateSnapshotCommand,
@@ -49,6 +54,7 @@ import {
   restoreOrcadStateSnapshotCommand
 } from './orcad-state-snapshot'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
+import { ORCAD_STOP_REQUEST_FILENAME } from '../../shared/orcad-stop-request'
 
 const host = getRemoteHostPlatform('linux-x64')
 let root = ''
@@ -86,20 +92,39 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
-async function launchTestRuntime(legacyWrapper = false): Promise<{
+async function launchTestRuntime(
+  legacyWrapper = false,
+  stopRequests = false
+): Promise<{
   runtimePid: number
   recordedPid: number
   terminatedFile: string
 }> {
   const terminatedFile = join(versionDir, 'terminated')
+  const requestFile = join(versionDir, ORCAD_STOP_REQUEST_FILENAME)
   writeFileSync(
     join(versionDir, 'orcad.js'),
     [
+      `const fs = require('node:fs');`,
       `process.on('SIGTERM', () => {`,
-      `  require('node:fs').writeFileSync(${JSON.stringify(terminatedFile)}, 'terminated');`,
+      `  fs.writeFileSync(${JSON.stringify(terminatedFile)}, 'terminated');`,
       `  process.exit(0);`,
       `});`,
-      `console.log(JSON.stringify({type: 'orca_server_ready', health: {pid: process.pid}}));`,
+      ...(stopRequests
+        ? [
+            // Like orcad's listener: consume the slot request, then stop.
+            `setInterval(() => {`,
+            `  if (fs.existsSync(${JSON.stringify(requestFile)})) {`,
+            `    fs.unlinkSync(${JSON.stringify(requestFile)});`,
+            `    fs.writeFileSync(${JSON.stringify(terminatedFile)}, 'requested');`,
+            `    process.exit(0);`,
+            `  }`,
+            `}, 20);`
+          ]
+        : []),
+      `console.log(JSON.stringify({type: 'orca_server_ready', health: {pid: process.pid${
+        stopRequests ? ', stopRequests: 1' : ''
+      }}}));`,
       `setTimeout(() => process.exit(1), 10_000);`
     ].join('\n')
   )
@@ -338,6 +363,21 @@ describe('liveness and stop commands, run for real', () => {
     expect(stopTestRuntime()).toBe('already-exited')
   })
 
+  it('stops a build that consumes stop requests by request file, not by signal', async () => {
+    const { terminatedFile } = await launchTestRuntime(false, true)
+    expect(stopTestRuntime()).toBe('stopped')
+    expect(readFileSync(terminatedFile, 'utf8')).toBe('requested')
+    expect(existsSync(join(versionDir, ORCAD_STOP_REQUEST_FILENAME))).toBe(false)
+  })
+
+  it('clears a stop request the previous process never consumed before launching', async () => {
+    writeFileSync(join(versionDir, ORCAD_STOP_REQUEST_FILENAME), '')
+    const { runtimePid } = await launchTestRuntime(false, true)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('LIVE')
+    expect(runtimePid).toBeGreaterThan(1)
+  })
+
   it('refuses a legacy wrapper PID both before and after its shell exits', async () => {
     const { runtimePid, recordedPid, terminatedFile } = await launchTestRuntime(true)
     expect(recordedPid).not.toBe(runtimePid)
@@ -475,5 +515,45 @@ describe('liveness and stop commands, run for real', () => {
         sh(stopOrcadCommand(host, versionDir, { waitSeconds: 1, nodePath: process.execPath }))
       )
     ).toBe('no-pid')
+  })
+})
+
+describe('host-side readiness wait, run for real', () => {
+  const readiness = () => join(versionDir, ORCAD_READINESS_FILENAME)
+  const line = `${JSON.stringify({ type: 'orca_server_ready', runtimeId: 'r1' })}\n`
+
+  it('returns a finished line without waiting out its bound', () => {
+    writeFileSync(readiness(), line)
+    const started = Date.now()
+    const result = parseOrcadReadinessWaitOutput(
+      host,
+      sh(orcadReadinessWaitCommand(host, versionDir, 10))
+    )
+    expect(Date.now() - started).toBeLessThan(5_000)
+    expect(result).toMatchObject({ state: 'ready', readiness: { runtimeId: 'r1' } })
+  })
+
+  it('waits for a line still being written, and answers pending when its bound ends', () => {
+    writeFileSync(readiness(), line.slice(0, 10))
+    // The writer finishes after the wait starts; the shell must pick it up mid-wait.
+    sh(
+      `(sleep 1; printf '%s\\n' ${shellEscape(line.trimEnd().slice(10))} >> ${shellEscape(readiness())}) >/dev/null 2>&1 &`
+    )
+    expect(
+      parseOrcadReadinessWaitOutput(host, sh(orcadReadinessWaitCommand(host, versionDir, 10)))
+    ).toMatchObject({ state: 'ready' })
+    writeFileSync(readiness(), '{"type":"orca_ser')
+    expect(
+      parseOrcadReadinessWaitOutput(host, sh(orcadReadinessWaitCommand(host, versionDir, 1)))
+    ).toEqual({ state: 'pending' })
+  })
+
+  it('reads a missing file as pending', () => {
+    expect(
+      parseOrcadReadinessWaitOutput(
+        host,
+        sh(orcadReadinessWaitCommand(host, `${versionDir}-none`, 0))
+      )
+    ).toEqual({ state: 'pending' })
   })
 })

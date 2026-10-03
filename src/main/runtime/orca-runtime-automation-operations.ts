@@ -198,6 +198,10 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
     return this.legacyWorkerRecovery.reconcile(options)
   }
 
+  stopLegacyWorkerTerminalRecovery(): Promise<void> {
+    return this.legacyWorkerRecovery.stop()
+  }
+
   protected updateLegacyWorkerTerminalRecoveryRetry(
     plan: LegacyWorkerTerminalRecoveryPlan,
     deferredDispatchIds: ReadonlySet<string>,

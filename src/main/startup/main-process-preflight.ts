@@ -46,6 +46,7 @@ import {
 import { setSpawnObserver } from '../../shared/child-process/spawn-observer'
 import { settledDiffCache } from '../git/source-control/git-read-cache-invalidation'
 import { reserveServeStdoutForReadiness } from '../server/serve-stdout-boundary'
+import { acquireDesktopProfileInstanceLock } from './desktop-profile-instance-lock'
 import { createServeDesktopActivationGate } from './serve-desktop-activation'
 import {
   shouldBypassSingleInstanceLock,
@@ -88,15 +89,17 @@ import { registerDocPreviewSchemePrivileges } from '../browser/doc-preview-proto
 import { startCrashpadCapture } from '../crash-reporting/crashpad-capture'
 import { CrashReportStore } from '../crash-reporting/crash-report-store'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
-import { GpuCrashDiagnosticsRecorder } from '../crash-reporting/gpu-crash-diagnostics'
 import { getMainProcessLifecycleIdentity } from '../crash-reporting/main-process-lifecycle-identity'
 import {
   ensureVirtualDisplayForHeadlessServe,
   hasUsableLinuxDisplay,
   MISSING_LINUX_DISPLAY_MESSAGE
 } from './ensure-virtual-display'
-import { maybeApplyGpuFallbackForThisLaunch, registerGpuLifecycleHandlers } from './gpu-lifecycle'
+import {
+  createGpuCrashDiagnosticsRecorder,
+  maybeApplyGpuFallbackForThisLaunch,
+  registerGpuLifecycleHandlers
+} from './gpu-lifecycle'
 import { mainProcessState as state } from './main-process-state'
 import { initializeSyntheticTitleRuntime } from './synthetic-title-runtime'
 import { initializeBrowserProcessUserAgent } from '../browser/browser-process-user-agent'
@@ -268,6 +271,14 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
     app.exit(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
     return false
   }
+  // Why after Electron's lock: that one fences other desktops; this one fences orcad `orca serve`.
+  if (!skip && !bypass) {
+    const profileLock = acquireDesktopProfileInstanceLock(getCanonicalUserDataPath())
+    if (profileLock.state === 'held') {
+      app.exit(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
+      return false
+    }
+  }
   state.profileStateAdmission = acquireProfileStateRuntimeAdmission(getCanonicalUserDataPath())
   // Renderer and worker defaults must be fixed before any session exists.
   initializeBrowserProcessUserAgent(
@@ -351,16 +362,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // first renderer spawns; a CHECK before this point is still exit-code-only.
   startCrashpadCapture()
   state.crashReports = CrashReportStore.fromUserData()
-  state.gpuCrashDiagnostics =
-    process.platform === 'win32'
-      ? new GpuCrashDiagnosticsRecorder({
-          provider: {
-            getGPUInfo: (infoType) => app.getGPUInfo(infoType),
-            getGPUFeatureStatus: () => app.getGPUFeatureStatus()
-          },
-          recordBreadcrumb: (data) => recordDurableCrashBreadcrumb('gpu_crash_hardware', data)
-        })
-      : null
+  state.gpuCrashDiagnostics = createGpuCrashDiagnosticsRecorder()
   recordCrashBreadcrumb('app_started', {
     packaged: app.isPackaged,
     platform: process.platform,

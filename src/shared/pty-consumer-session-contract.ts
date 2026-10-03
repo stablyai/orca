@@ -1,4 +1,5 @@
 export const PTY_CONSUMER_SESSION_PROTOCOL_VERSION = 1
+export const PTY_CONSUMER_RESUME_CLIENT_METHOD = 'pty.resumeClient'
 export const PTY_CONSUMER_OWNER_GRACE_MS = 30_000
 export const PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR = -32041
 // Why: recovery is blocked only while the incumbent owner's grant publication is still settling — a

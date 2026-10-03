@@ -11,6 +11,7 @@ import {
 } from '../ssh/ssh-config-host-picker'
 import { rotateSshProviderAuthority } from '../ssh/ssh-provider-authority'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
+import { isManagedOrcadSshTarget, isRuntimeOwnedSshTarget } from '../ssh/ssh-connection-store'
 import { getCurrentMainWindow } from './ssh-ipc-context'
 import { removeRegisteredSshTarget } from './ssh-session-teardown'
 
@@ -34,16 +35,42 @@ function takeRepoReadoptions(): SshRepoReadoption[] {
   return repoReadoptions
 }
 
-// Why: generations and the runtime ladder cache are main-owned; a renderer must not forge them.
+// Why: generations, provisioning, the server fence and the runtime ladder cache are main-owned;
+// a renderer must not forge them.
 function omitRendererSshTargetGeneration<
-  T extends { generation?: unknown; remoteRuntimeResolution?: unknown }
->(value: T): Omit<T, 'generation' | 'remoteRuntimeResolution'> {
+  T extends {
+    generation?: unknown
+    orcadProvisioning?: unknown
+    orcadFence?: unknown
+    managedServerUnavailable?: unknown
+    remoteRuntimeResolution?: unknown
+  }
+>(
+  value: T
+): Omit<
+  T,
+  | 'generation'
+  | 'orcadProvisioning'
+  | 'orcadFence'
+  | 'managedServerUnavailable'
+  | 'remoteRuntimeResolution'
+> {
   const {
     generation: _generation,
+    orcadProvisioning: _orcadProvisioning,
+    orcadFence: _orcadFence,
+    managedServerUnavailable: _managedServerUnavailable,
     remoteRuntimeResolution: _remoteRuntimeResolution,
     ...rest
   } = value
   return rest
+}
+
+function assertNotRuntimeOwned(targetId: string, action: string): void {
+  const target = getSshTargetRegistryStore()!.getTarget(targetId)
+  if (target && (isRuntimeOwnedSshTarget(target) || isManagedOrcadSshTarget(target))) {
+    throw new Error(`Managed runtime SSH targets cannot be ${action} from SSH settings.`)
+  }
 }
 
 export function registerSshTargetCrudHandlers(): void {
@@ -67,6 +94,7 @@ export function registerSshTargetCrudHandlers(): void {
   ipcMain.handle(
     'ssh:updateTarget',
     (_event, args: { id: string; updates: SshTargetUpdateInput }) => {
+      assertNotRuntimeOwned(args.id, 'edited')
       return getSshTargetRegistryStore()!.updateTarget(
         args.id,
         omitRendererSshTargetGeneration(args.updates)
@@ -75,6 +103,7 @@ export function registerSshTargetCrudHandlers(): void {
   )
 
   ipcMain.handle('ssh:removeTarget', async (_event, args: { id: string }) => {
+    assertNotRuntimeOwned(args.id, 'removed')
     await removeRegisteredSshTarget(args.id)
   })
 

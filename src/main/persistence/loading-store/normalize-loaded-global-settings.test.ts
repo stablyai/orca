@@ -36,6 +36,15 @@ describe('retired Agents sidebar setting', () => {
   })
 })
 
+describe('retired managed servers experiment', () => {
+  it('drops the stored toggle, since managed servers are the default SSH path', () => {
+    expect('experimentalManagedServers' in normalizeLegacyProfile({})).toBe(false)
+    expect(
+      'experimentalManagedServers' in normalizeLegacyProfile({ experimentalManagedServers: true })
+    ).toBe(false)
+  })
+})
+
 describe('structured chat shell environment settings', () => {
   it('keeps a valid saved list and an explicit opt-out', () => {
     const normalized = normalizeLegacyProfile({

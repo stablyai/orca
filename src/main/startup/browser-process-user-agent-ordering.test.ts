@@ -114,6 +114,9 @@ vi.mock('../server/serve-stdout-boundary')
 vi.mock('./serve-desktop-activation', () => ({
   createServeDesktopActivationGate: () => ({})
 }))
+vi.mock('./desktop-profile-instance-lock', () => ({
+  acquireDesktopProfileInstanceLock: vi.fn(() => ({ state: 'unavailable' }))
+}))
 vi.mock('./single-instance-lock', () => ({
   shouldBypassSingleInstanceLock: () => false,
   shouldSkipSingleInstanceLock: () => false,

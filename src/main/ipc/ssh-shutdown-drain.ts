@@ -61,22 +61,34 @@ async function settleTasksWithinMs(
   return { timedOut: [...pending], errors }
 }
 
-function sshShutdownTasks(targetIds: readonly string[]): SshShutdownTask[] {
+/** Which targets the quit drain may detach; a target it may not keeps its session and transport. */
+export type SshShutdownDetachPredicate = (targetId: string) => boolean
+
+const detachEveryTarget: SshShutdownDetachPredicate = () => true
+
+function sshShutdownTasks(
+  targetIds: readonly string[],
+  mayDetach: SshShutdownDetachPredicate
+): SshShutdownTask[] {
   return [
     ...targetIds
-      .filter((targetId) => activeSessions.has(targetId))
+      .filter((targetId) => activeSessions.has(targetId) && mayDetach(targetId))
       .map((targetId) => ({
         targetId,
         promise: teardownActiveSshSession(targetId, (session) => session.detachAndPersist())
       })),
-    { targetId: '*transports', promise: connectionManager?.disconnectAll() ?? Promise.resolve() }
+    {
+      targetId: '*transports',
+      promise: connectionManager?.disconnectAll(mayDetach) ?? Promise.resolve()
+    }
   ]
 }
 
 async function drainSshShutdown(
   targetIds: readonly string[],
   inFlight: readonly SshShutdownTask[],
-  detachErrors: readonly unknown[] = []
+  detachErrors: readonly unknown[] = [],
+  mayDetach: SshShutdownDetachPredicate = detachEveryTarget
 ): Promise<SshShutdownResult> {
   const deadline = Date.now() + SSH_SHUTDOWN_BUDGET_MS
   const unfinished: SshShutdownUnfinished[] = []
@@ -96,12 +108,12 @@ async function drainSshShutdown(
     return settled.timedOut.length === 0
   }
 
-  await runPhase('drain', sshShutdownTasks(targetIds))
+  await runPhase('drain', sshShutdownTasks(targetIds, mayDetach))
   // Why a second drain after the join: a connect paused in old-session teardown still publishes its
   // replacement session and opens a transport before it reaches the cancellation checkpoint, so the
   // first drain can miss both.
   if (await runPhase('in-flight-join', inFlight)) {
-    await runPhase('final-drain', sshShutdownTasks([...activeSessions.keys()]))
+    await runPhase('final-drain', sshShutdownTasks([...activeSessions.keys()], mayDetach))
   }
 
   if (errors.length > 0 || unfinished.length > 0) {
@@ -123,7 +135,9 @@ async function drainSshShutdown(
 //
 // Why no fence latch here: the committed quit path sets it before calling this, so it is already on
 // for the snapshot below. Called without that gate (tests), this degrades to a plain drain.
-export function beginSshShutdown(): Promise<SshShutdownResult> {
+export function beginSshShutdown(
+  mayDetach: SshShutdownDetachPredicate = detachEveryTarget
+): Promise<SshShutdownResult> {
   if (sshShutdownDrain) {
     return sshShutdownDrain
   }
@@ -136,13 +150,18 @@ export function beginSshShutdown(): Promise<SshShutdownResult> {
     ...[...testConnectionProbes].map((promise) => ({ targetId: '*probe', promise }))
   ]
   for (const targetId of Array.from(connectInFlight.keys())) {
-    invalidateConnectAttempt(targetId)
+    if (mayDetach(targetId)) {
+      invalidateConnectAttempt(targetId)
+    }
   }
   const targetIds = [...activeSessions.keys()]
   // Why before any await: this is the whole point of the split. Each session marks its recovery lease
   // detached in memory now, and the final flush persists it — the remote PTYs keep running.
   const detachErrors: unknown[] = []
-  for (const session of activeSessions.values()) {
+  for (const [targetId, session] of activeSessions) {
+    if (!mayDetach(targetId)) {
+      continue
+    }
     // Why per-session: this runs synchronously inside a non-async will-quit listener, so one throw
     // (teardownProviders -> webContents.send on a destroyed renderer, routine on quit) would escape
     // it and skip every later session, the drain assignment, and the store flush that persists all
@@ -153,6 +172,6 @@ export function beginSshShutdown(): Promise<SshShutdownResult> {
       detachErrors.push(error)
     }
   }
-  sshShutdownDrain = drainSshShutdown(targetIds, inFlight, detachErrors)
+  sshShutdownDrain = drainSshShutdown(targetIds, inFlight, detachErrors, mayDetach)
   return sshShutdownDrain
 }

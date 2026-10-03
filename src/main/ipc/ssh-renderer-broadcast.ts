@@ -12,8 +12,11 @@ import {
   enrichSshForwardEntries,
   getWorktreeIdsForConnection
 } from '../ports/ssh-advertised-url-enrichment'
+import { isRuntimeOwnedSshTarget } from '../ssh/ssh-connection-store'
 import { getSshProviderAuthority } from '../ssh/ssh-provider-authority'
 import { getSshPlainSshMode } from '../ssh/ssh-plain-ssh-mode'
+import { getSshHostServerStatus } from '../ssh/ssh-host-server-status'
+import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
 import { activeSessions } from './ssh-active-relay-sessions'
 import {
   connectionManager,
@@ -30,8 +33,9 @@ export function broadcastSshState(
   targetId: string,
   state: SshConnectionState
 ): void {
-  // Why: runtime-owned (ephemeral-VM) targets are hidden from the renderer, so broadcasting their state only triggers wasted listTargets() lookups.
-  if (isRuntimeOwnedSshTargetId(targetId)) {
+  const target = getSshTargetRegistryStore()?.getTarget(targetId)
+  // Why: owned targets are hidden from clients; broadcasting them leaks internal transport state into persisted reconnect hints.
+  if (isRuntimeOwnedSshTargetId(targetId) || (target && isRuntimeOwnedSshTarget(target))) {
     currentRuntime?.invalidateSshWorktreeScanCache?.(targetId)
     return
   }
@@ -48,13 +52,15 @@ function withSshRemotePlatform(targetId: string, state: SshConnectionState): Ssh
   const remotePlatform = activeSessions.get(targetId)?.getHostPlatform()?.os
   const authority = getSshProviderAuthority(targetId)
   const plainSsh = state.status === 'connected' ? getSshPlainSshMode(targetId) : undefined
+  const managedServer = state.managedServer ?? getSshHostServerStatus(targetId)
   return {
     ...state,
     targetId,
     providerEpoch: authority.providerEpoch,
     connectionGeneration: authority.connectionGeneration,
     ...(remotePlatform ? { remotePlatform } : {}),
-    ...(plainSsh ? { plainSsh } : {})
+    ...(plainSsh ? { plainSsh } : {}),
+    ...(managedServer ? { managedServer } : {})
   }
 }
 

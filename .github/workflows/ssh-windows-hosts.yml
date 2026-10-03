@@ -31,8 +31,10 @@ on:
       - 'config/scripts/relay-windows-process-tree-prepared-addon*.mjs'
       - 'config/scripts/windows-process-tree-gyp-rebuild.mjs'
       - 'src/shared/relay-windows-breakaway-launch.ts'
+      - 'src/shared/windows-breakaway-launch*.ts'
       - '!src/**/*.test.ts'
       - 'src/main/ssh/ssh-relay-windows-host-lane.test.ts'
+      - 'src/main/ssh/orcad-windows-host-lane.test.ts'
       - 'config/ci/windows-ssh-provider/**'
       - '.github/workflows/ssh-windows-hosts.yml'
       - '.github/actions/prepare-orcad-prebuilds/**'
@@ -147,7 +149,7 @@ jobs:
           $receipts=Join-Path $pwd '.build/ssh-windows-host-receipts'
           New-Item -ItemType Directory -Force -Path $receipts | Out-Null
           $cells=@($env:CELLS -split ',' | ForEach-Object {$_.Trim()} | Where-Object {$_})
-          if(-not $cells.Count){$cells=@('pinned-cmd','pinned-powershell','legacy-opt-out')}
+          if(-not $cells.Count){$cells=@('pinned-cmd','pinned-powershell','legacy-opt-out','orcad-cmd','orcad-powershell')}
           $archive=''
           $preparation=''
           if('${{ matrix.server }}' -eq 'inbox' -and '${{ matrix.arch }}' -eq 'arm64'){$preparation=Join-Path $receipts 'inbox-capability-preparation.json'}

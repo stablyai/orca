@@ -340,7 +340,8 @@ jobs:
               . != "tests/e2e/paired-startup-exec-readiness.spec.ts" and
               . != "tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts" and
               . != "tests/e2e/ssh-localhost.spec.ts" and
-              . != "tests/e2e/terminal-ibus-hangul-native.spec.ts"
+              . != "tests/e2e/terminal-ibus-hangul-native.spec.ts" and
+              . != "tests/e2e/orcad-serve-mode-switch.spec.ts"
             )' <<<"$TEST_FILES_JSON" > "$RUNNER_TEMP/general-e2e-specs"
           fi
           mapfile -t TEST_FILES < "$RUNNER_TEMP/general-e2e-specs"
@@ -507,6 +508,48 @@ jobs:
           ORCA_BACKGROUND_LAUNCH: '1'
           ORCA_RUN_DOCKER_SSH_BROWSER_E2E: '1'
         run: node_modules/.bin/vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts
+
+  orcad-serve-mode-switch:
+    name: orca serve Electron/orcad mode switch (D7)
+    needs: [build, prepare-native-cache]
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - name: Install headless tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential ripgrep xvfb openbox x11-utils
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+      - uses: actions/download-artifact@v8
+        with:
+          name: e2e-build-out
+          path: out/
+      # The packaged orcad slot the T6-11 launcher runs: its own node-pty under the pinned Node.
+      - name: Build this runner's orcad slot
+        run: |
+          pnpm build:orcad-prebuilds
+          pnpm build:orcad-prebuilds --require-slots "$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
+          pnpm build:orcad
+      - name: Switch serve hosts on one profile
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_ORCAD_SERVE: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/orcad-serve-mode-switch.spec.ts --project=electron-headless --workers=1
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: orcad-serve-mode-switch-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
 
   ssh-localhost:
     name: localhost SSH terminal and hooks

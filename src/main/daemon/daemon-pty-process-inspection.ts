@@ -127,7 +127,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       // Why: an unminted session id (worktreeId === null) can't be tied to a live worktree, so it's treated as an orphan.
       const { worktreeId } = parsePtySessionId(session.sessionId)
 
-      if (worktreeId === null || !validWorktreeIds.has(worktreeId)) {
+      if (!this.recoveryOnly && (worktreeId === null || !validWorktreeIds.has(worktreeId))) {
         try {
           await this.client.request('kill', { sessionId: session.sessionId })
         } catch {

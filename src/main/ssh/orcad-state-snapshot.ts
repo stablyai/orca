@@ -16,24 +16,15 @@
  * massacre the daemon exists to prevent.
  */
 import { shellEscape } from './ssh-connection-utils'
-import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
-import { assertPosixOrcadHost as assertPosixHost } from './orcad-remote-host-support'
+import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
+import type { OrcadWindowsHostStateOp } from './orcad-windows-host-state-ops'
+import {
+  ORCAD_SNAPSHOT_MEMBERS,
+  ORCAD_STATE_RESTORE_STAGE_DIRNAME
+} from './orcad-state-snapshot-members'
+import { orcadWindowsHostOpCommand } from './orcad-remote-windows-node'
 
-/**
- * Root-relative paths a rollback needs restored. Everything else under the data root is
- * either regenerable, or owned by a process that survives the rollback.
- */
-export const ORCAD_SNAPSHOT_MEMBERS = [
-  'orca-profile-index.json',
-  // Pre-profiles layout; still read as a migration source.
-  'orca-data.json',
-  'profiles',
-  // Cross-profile SQLite moves must survive an orcad rollback too.
-  'profile-move-intents'
-] as const
-
-/** Never captured and never restored — see the module comment. */
-export const ORCAD_SNAPSHOT_EXCLUDED = ['daemon', 'logs'] as const
+export { ORCAD_SNAPSHOT_EXCLUDED, ORCAD_SNAPSHOT_MEMBERS } from './orcad-state-snapshot-members'
 
 /**
  * The member names go into the command unquoted (see `captureOrcadStateSnapshotCommand`), so
@@ -47,6 +38,24 @@ function assertPlainMemberName(member: string): string {
   return member
 }
 
+const RESTORE_STAGE_DIRNAME = ORCAD_STATE_RESTORE_STAGE_DIRNAME
+
+/** The Windows host-script op, or null on POSIX; `baseDir` is `~/.orca-remote`. */
+function windowsStateCommand(
+  host: RemoteHostPlatform,
+  baseDir: string | undefined,
+  op: OrcadWindowsHostStateOp,
+  args: string[]
+): string | null {
+  if (!isWindowsRemoteHost(host)) {
+    return null
+  }
+  if (!baseDir) {
+    throw new Error('Windows orcad state commands need the ~/.orca-remote directory')
+  }
+  return orcadWindowsHostOpCommand(host, baseDir, op, args)
+}
+
 function noSymlinkedStateCommand(path: string): string {
   return `links=$(find ${path} -type l -print) && [ -z "$links" ]`
 }
@@ -55,6 +64,11 @@ export function orcadSnapshotDirName(fullVersion: string, takenAtMs: number): st
   // Why the version and the timestamp: two activations of one version (a re-deploy after a
   // rejected activation) must not overwrite each other's snapshot.
   return `pre-${fullVersion}-${takenAtMs}`
+}
+
+/** The newer build's state, kept so an interrupted rollback can put it back. */
+export function orcadRollbackRescueDirName(fullVersion: string, takenAtMs: number): string {
+  return `rollback-rescue-${fullVersion}-${takenAtMs}`
 }
 
 /**
@@ -68,9 +82,13 @@ export function orcadSnapshotDirName(fullVersion: string, takenAtMs: number): st
 export function captureOrcadStateSnapshotCommand(
   host: RemoteHostPlatform,
   userDataDir: string,
-  snapshotDir: string
+  snapshotDir: string,
+  baseDir?: string
 ): string {
-  assertPosixHost(host)
+  const windows = windowsStateCommand(host, baseDir, 'snapshot-capture', [userDataDir, snapshotDir])
+  if (windows) {
+    return windows
+  }
   const root = shellEscape(userDataDir)
   const dir = shellEscape(snapshotDir)
   const archive = shellEscape(joinRemotePath(host, snapshotDir, 'state.tar'))
@@ -111,19 +129,36 @@ export function parseOrcadSnapshotCapture(output: string): OrcadSnapshotCapture 
 
 export function probeOrcadStateSnapshotCommand(
   host: RemoteHostPlatform,
-  snapshotDir: string
+  snapshotDir: string,
+  baseDir?: string
 ): string {
-  assertPosixHost(host)
+  const windows = windowsStateCommand(host, baseDir, 'snapshot-probe', [snapshotDir])
+  if (windows) {
+    return windows
+  }
   const archive = shellEscape(joinRemotePath(host, snapshotDir, 'state.tar'))
   return `test -f ${archive} && echo PRESENT || echo ABSENT`
+}
+
+export type OrcadSnapshotPresence = 'present' | 'absent' | 'unverifiable'
+
+/** A lost probe is `unverifiable`, never `absent`. */
+export function parseOrcadSnapshotPresence(output: string): OrcadSnapshotPresence {
+  const value = output.trim().split('\n').pop()?.trim()
+  if (value === 'PRESENT') {
+    return 'present'
+  }
+  return value === 'ABSENT' ? 'absent' : 'unverifiable'
 }
 
 /**
  * Restore the snapshot over the data root.
  *
- * Two things make this safe to run: the members are removed before extraction (so a file the
- * new version added is gone rather than half-shadowed), and neither the removal nor the
- * extraction can reach `<root>/daemon`, because the member list never names it.
+ * Three things make this safe to run: the archive is extracted into a stage first, so an
+ * unreadable archive fails before live state is touched; the members are then removed before
+ * the staged copies move in (so a file the new version added is gone rather than
+ * half-shadowed); and neither step can reach `<root>/daemon`, because the member list never
+ * names it.
  *
  * The caller must have stopped orcad first. This does not check — it cannot, from a shell —
  * so `orcad-remote-deploy.ts` owns that ordering.
@@ -131,20 +166,54 @@ export function probeOrcadStateSnapshotCommand(
 export function restoreOrcadStateSnapshotCommand(
   host: RemoteHostPlatform,
   userDataDir: string,
-  snapshotDir: string
+  snapshotDir: string,
+  baseDir?: string
 ): string {
-  assertPosixHost(host)
+  const windows = windowsStateCommand(host, baseDir, 'snapshot-restore', [userDataDir, snapshotDir])
+  if (windows) {
+    return windows
+  }
   const root = shellEscape(userDataDir)
   const archive = shellEscape(joinRemotePath(host, snapshotDir, 'state.tar'))
+  const stage = shellEscape(joinRemotePath(host, userDataDir, RESTORE_STAGE_DIRNAME))
   const removals = ORCAD_SNAPSHOT_MEMBERS.map(
-    (member) => `rm -rf ${root}/${shellEscape(member)};`
-  ).join(' ')
+    (member) => `rm -rf ${root}/${shellEscape(member)}`
+  ).join(' && ')
+  const replacements = ORCAD_SNAPSHOT_MEMBERS.map((member) => {
+    const name = shellEscape(member)
+    return `if [ -e ${stage}/${name} ]; then mv ${stage}/${name} ${root}/${name}; fi`
+  }).join(' && ')
+  const stagedMemberChecks = ORCAD_SNAPSHOT_MEMBERS.map(
+    (member) => `[ -e ${stage}/${shellEscape(member)} ]`
+  ).join(' || ')
   return [
     `test -f ${archive} || { echo MISSING; exit 0; };`,
+    'umask 077;',
     `test -d ${root} || mkdir -p ${root};`,
-    removals,
-    `tar -C ${root} -xf ${archive} && echo RESTORED || echo FAILED`
+    // Re-extracting from the intact archive makes an interrupted restore safe to rerun.
+    `rm -rf ${stage}; mkdir -p ${stage} || { echo FAILED; exit 0; };`,
+    // Extraction proves every archived byte is readable before live state is removed.
+    `tar -C ${stage} -xf ${archive} 2>/dev/null || { rm -rf ${stage}; echo FAILED; exit 0; };`,
+    `${stagedMemberChecks} || { rm -rf ${stage}; echo FAILED; exit 0; };`,
+    `if ${removals} && ${replacements}; then rm -rf ${stage}; echo RESTORED; else echo FAILED; fi`
   ].join(' ')
+}
+
+/** Restore an originally empty state root after a candidate populated it. */
+export function clearOrcadStateSnapshotMembersCommand(
+  host: RemoteHostPlatform,
+  userDataDir: string,
+  baseDir?: string
+): string {
+  const windows = windowsStateCommand(host, baseDir, 'snapshot-clear', [userDataDir])
+  if (windows) {
+    return windows
+  }
+  const root = shellEscape(userDataDir)
+  const removals = ORCAD_SNAPSHOT_MEMBERS.map(
+    (member) => `rm -rf ${root}/${shellEscape(member)}`
+  ).join(' && ')
+  return `test -d ${root} || mkdir -p ${root}; if ${removals}; then echo RESTORED; else echo FAILED; fi`
 }
 
 export type OrcadSnapshotRestore = 'restored' | 'missing' | 'failed'
@@ -161,9 +230,13 @@ export function parseOrcadSnapshotRestore(output: string): OrcadSnapshotRestore 
 export function compareOrcadStateSnapshotCommand(
   host: RemoteHostPlatform,
   userDataDir: string,
-  snapshotDir: string
+  snapshotDir: string,
+  baseDir?: string
 ): string {
-  assertPosixHost(host)
+  const windows = windowsStateCommand(host, baseDir, 'snapshot-compare', [userDataDir, snapshotDir])
+  if (windows) {
+    return windows
+  }
   const root = shellEscape(userDataDir)
   const dir = shellEscape(snapshotDir)
   const archive = shellEscape(joinRemotePath(host, snapshotDir, 'state.tar'))
@@ -200,8 +273,15 @@ export function orcadSnapshotIsUnchanged(output: string): boolean {
  * caller compares; an `UNKNOWN` becomes `null`, which `assessOrcadRollback` treats as "yes,
  * assume writes".
  */
-export function newestStateMtimeCommand(host: RemoteHostPlatform, userDataDir: string): string {
-  assertPosixHost(host)
+export function newestStateMtimeCommand(
+  host: RemoteHostPlatform,
+  userDataDir: string,
+  baseDir?: string
+): string {
+  const windows = windowsStateCommand(host, baseDir, 'state-newest-mtime', [userDataDir])
+  if (windows) {
+    return windows
+  }
   const root = shellEscape(userDataDir)
   const paths = ORCAD_SNAPSHOT_MEMBERS.map((member) => `${root}/${shellEscape(member)}`).join(' ')
   return [

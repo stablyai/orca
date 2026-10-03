@@ -11,6 +11,7 @@ import {
   SSH_REMOTE_RUNTIMES
 } from '../../../shared/ssh-types'
 import { normalizeSshPendingPtyKill } from '../../../shared/ssh-pending-pty-kill'
+import { getLegacyManagedOrcadOwnerEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 
 export type LegacySshTarget = SshTarget & {
   remoteWorkspaceSyncEnabled?: unknown
@@ -65,7 +66,50 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   if (remoteRuntimeResolution) {
     normalized.remoteRuntimeResolution = remoteRuntimeResolution
   }
-  return normalized
+  return normalizeManagedServerUnavailable(migrateLegacyManagedOrcadOwner(normalized))
+}
+
+/**
+ * Phase-3 builds fenced a managed host through `owner`, which shipped builds hide. Moving the fence
+ * to `orcadFence` keeps the host visible, and reachable over its relay, after a downgrade.
+ */
+function migrateLegacyManagedOrcadOwner(target: SshTarget): SshTarget {
+  const environmentId = getLegacyManagedOrcadOwnerEnvironmentId(target.owner)
+  if (!environmentId) {
+    return normalizeOrcadFence(target)
+  }
+  const { owner: _legacyOwner, ...rest } = target
+  return { ...rest, orcadFence: target.orcadFence ?? { environmentId } }
+}
+
+function normalizeManagedServerUnavailable(target: SshTarget): SshTarget {
+  if (target.managedServerUnavailable === undefined) {
+    return target
+  }
+  const { reason, appVersion } = target.managedServerUnavailable ?? {}
+  if (typeof reason === 'string' && typeof appVersion === 'string') {
+    return { ...target, managedServerUnavailable: { reason, appVersion } }
+  }
+  const { managedServerUnavailable: _malformed, ...rest } = target
+  return rest
+}
+
+function normalizeOrcadFence(target: SshTarget): SshTarget {
+  if (target.orcadFence === undefined) {
+    return target
+  }
+  const { environmentId, sourceChangedAt } = target.orcadFence ?? {}
+  if (typeof environmentId === 'string' && environmentId.length > 0) {
+    return {
+      ...target,
+      orcadFence: {
+        environmentId,
+        ...(typeof sourceChangedAt === 'string' ? { sourceChangedAt } : {})
+      }
+    }
+  }
+  const { orcadFence: _malformed, ...rest } = target
+  return rest
 }
 
 // Why strict: a malformed cache entry is dropped, which only costs one rung A attempt.

@@ -6,15 +6,44 @@ import { SshConnection, type SshConnectionCallbacks } from './ssh-connection'
 // 300-line oxlint max-lines threshold while preserving a clear
 // single-responsibility boundary (connection lifecycle vs. pool management).
 
+// Bounds an owned drain so a host that never confirms close cannot hang its caller.
+const OWNED_CONNECTION_DRAIN_TIMEOUT_MS = 10_000
+
 export class SshConnectionManager {
   private connections = new Map<string, SshConnection>()
   private callbacks: SshConnectionCallbacks
   // Why: attempt identity lets disconnect unblock a replacement without the
   // cancelled attempt later clearing the replacement's state.
   private connectingTargets = new Map<string, symbol>()
+  // Local operation and teardown bookkeeping; never a verdict on remote process exit.
+  private pendingTargetOperations = new Map<string, number>()
+  private unconfirmedTargetTeardowns = new Set<string>()
+  // Counts every connection a target allocated, retired pool entries included, until it closes.
+  private readonly unclosedTransportsByTarget = new Map<string, number>()
 
   constructor(callbacks: SshConnectionCallbacks) {
     this.callbacks = callbacks
+  }
+
+  private registerConnection(targetId: string, connection: SshConnection): void {
+    this.unclosedTransportsByTarget.set(
+      targetId,
+      (this.unclosedTransportsByTarget.get(targetId) ?? 0) + 1
+    )
+    let observed = false
+    connection.subscribeTransportClosure(() => {
+      if (observed) {
+        return
+      }
+      observed = true
+      const remaining = (this.unclosedTransportsByTarget.get(targetId) ?? 1) - 1
+      if (remaining === 0) {
+        this.unclosedTransportsByTarget.delete(targetId)
+      } else {
+        this.unclosedTransportsByTarget.set(targetId, remaining)
+      }
+    })
+    this.connections.set(targetId, connection)
   }
 
   setCallbacks(callbacks: SshConnectionCallbacks): void {
@@ -25,6 +54,10 @@ export class SshConnectionManager {
   }
 
   async connect(target: SshTarget): Promise<SshConnection> {
+    return this.trackTargetOperation(target.id, () => this.connectTarget(target))
+  }
+
+  private async connectTarget(target: SshTarget): Promise<SshConnection> {
     const existing = this.connections.get(target.id)
     if (existing?.getState().status === 'connected') {
       return existing
@@ -43,13 +76,16 @@ export class SshConnectionManager {
       }
 
       const conn = new SshConnection(target, this.callbacks)
-      this.connections.set(target.id, conn)
+      this.registerConnection(target.id, conn)
 
       try {
         await conn.connect()
       } catch (err) {
-        if (this.connections.get(target.id) === conn) {
-          this.connections.delete(target.id)
+        // Why: a failed startup can still hold sockets, so it is disconnected, not just forgotten.
+        try {
+          await this.disconnectConnection(target.id, conn)
+        } catch (cleanupError) {
+          throw new AggregateError([err, cleanupError], 'ssh_connection_startup_cleanup_failed')
         }
         throw err
       }
@@ -63,6 +99,29 @@ export class SshConnectionManager {
   }
 
   async disconnect(targetId: string): Promise<void> {
+    return this.trackTargetOperation(targetId, () => this.disconnectTarget(targetId), true)
+  }
+
+  /** Drains only the registered connection for this target; local closure is not remote exit. */
+  async disconnectAndDrain(targetId: string, signal: AbortSignal): Promise<void> {
+    return this.trackTargetOperation(
+      targetId,
+      async () => {
+        this.connectingTargets.delete(targetId)
+        const conn = this.connections.get(targetId)
+        if (!conn) {
+          return
+        }
+        await conn.disconnectAndDrain(signal)
+        if (this.connections.get(targetId) === conn) {
+          this.connections.delete(targetId)
+        }
+      },
+      true
+    )
+  }
+
+  private async disconnectTarget(targetId: string): Promise<void> {
     // Why: disconnect invalidates the old attempt immediately so a reconnect
     // need not wait for the cancelled socket's late completion.
     this.connectingTargets.delete(targetId)
@@ -81,11 +140,19 @@ export class SshConnectionManager {
    * Why: a cancelled connect whose transport opened late owns that exact connection — disconnecting
    * by target id would tear down the replacement's live transport instead.
    */
-  async disconnectConnection(targetId: string, conn: SshConnection): Promise<void> {
-    await conn.disconnect()
-    if (this.connections.get(targetId) === conn) {
-      this.connections.delete(targetId)
-    }
+  async disconnectConnection(targetId: string, conn: SshConnection, drain = false): Promise<void> {
+    return this.trackTargetOperation(
+      targetId,
+      async () => {
+        await (drain
+          ? conn.disconnectAndDrain(AbortSignal.timeout(OWNED_CONNECTION_DRAIN_TIMEOUT_MS))
+          : conn.disconnect())
+        if (this.connections.get(targetId) === conn) {
+          this.connections.delete(targetId)
+        }
+      },
+      true
+    )
   }
 
   async reconnect(targetId: string): Promise<void> {
@@ -93,7 +160,33 @@ export class SshConnectionManager {
     if (!conn) {
       return
     }
-    await conn.reconnect()
+    await this.trackTargetOperation(targetId, () => conn.reconnect())
+  }
+
+  private async trackTargetOperation<T>(
+    targetId: string,
+    operation: () => Promise<T>,
+    retainFailure = false
+  ): Promise<T> {
+    this.pendingTargetOperations.set(
+      targetId,
+      (this.pendingTargetOperations.get(targetId) ?? 0) + 1
+    )
+    try {
+      return await operation()
+    } catch (error) {
+      if (retainFailure) {
+        this.unconfirmedTargetTeardowns.add(targetId)
+      }
+      throw error
+    } finally {
+      const remaining = (this.pendingTargetOperations.get(targetId) ?? 1) - 1
+      if (remaining === 0) {
+        this.pendingTargetOperations.delete(targetId)
+      } else {
+        this.pendingTargetOperations.set(targetId, remaining)
+      }
+    }
   }
 
   getConnection(targetId: string): SshConnection | undefined {
@@ -112,9 +205,27 @@ export class SshConnectionManager {
     return states
   }
 
-  async disconnectAll(): Promise<void> {
-    const disconnects = Array.from(this.connections.values()).map((c) => c.disconnect())
-    await Promise.allSettled(disconnects)
-    this.connections.clear()
+  async disconnectAll(shouldDisconnect: (targetId: string) => boolean = () => true): Promise<void> {
+    await Promise.allSettled(
+      Array.from(this.connections).map(async ([targetId, connection]) => {
+        if (!shouldDisconnect(targetId)) {
+          return
+        }
+        await this.trackTargetOperation(
+          targetId,
+          async () => {
+            try {
+              await connection.disconnect()
+            } finally {
+              // A later registration or an excluded target is not this drain's to remove.
+              if (this.connections.get(targetId) === connection) {
+                this.connections.delete(targetId)
+              }
+            }
+          },
+          true
+        )
+      })
+    )
   }
 }

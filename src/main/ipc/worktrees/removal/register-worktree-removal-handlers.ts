@@ -1,7 +1,10 @@
 import { ipcMain } from 'electron'
 import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-generation'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getSshTargetIdForExecutionHost
+} from '../../../../shared/execution-host'
 import { withWorktreeSpan } from '../../../observability/instrumentation'
 import { parseWorktreeId } from '../../worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
@@ -17,6 +20,7 @@ import {
   waitForPendingWorktreeRemoval
 } from '../../../worktree-background-removal'
 import { runSerializedWorktreeRemovalAcceptance } from '../../../worktree-removal-acceptance-queue'
+import { runSshProviderContinuation } from '../../../ssh/ssh-provider-continuations'
 
 export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): void {
   const { store, options, worktreeRemovalsInFlight } = context
@@ -36,6 +40,7 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
       if (pending) {
         return { ...(await pending), catalogVersion: getLocalWorktreeCatalogVersion(repoId) }
       }
+      const targetId = getSshTargetIdForExecutionHost(removalHostId) ?? repo.connectionId
       const inFlightKey = getWorktreeRemovalInFlightKey(args.worktreeId, removalHostId)
       const optionsKey = getWorktreeRemovalOptionsKey(args)
       const inFlightRemoval = worktreeRemovalsInFlight.get(inFlightKey)
@@ -48,11 +53,15 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
 
       // Why: concurrent stale-toast/double-click/sidebar races can hit the same worktree; share the op so only one path touches Git and disk.
       const removal = withWorktreeSpan({ stage: 'remove', path: worktreePath }, async () => {
+        const execute = () =>
+          executeWorktreeRemoval(context, args, repo, repoId, worktreePath, removalHostId)
         const accept = async (): Promise<RemoveWorktreeResult> =>
           // Why: another client's removal of this worktree may have been accepted during the wait.
           waitForPendingWorktreeRemoval(args.worktreeId, removalHostId)
             ? { removing: true }
-            : executeWorktreeRemoval(context, args, repo, repoId, worktreePath, removalHostId)
+            : targetId
+              ? runSshProviderContinuation(targetId, execute)
+              : execute()
         const accepted = await (repo.connectionId
           ? accept()
           : runSerializedWorktreeRemovalAcceptance(repo.path, accept))

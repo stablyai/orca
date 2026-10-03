@@ -85,7 +85,8 @@ export abstract class RelayDispatcherFrameCodec extends RelayDispatcherCapacityS
     frame: PreparedRelayFrame,
     lane: DispatcherWriterLane,
     onSettled: (result: SinkWriteSettlement) => void = () => {},
-    controlOverflow: 'close-client' | 'reject' = 'close-client'
+    controlOverflow: 'close-client' | 'reject' = 'close-client',
+    publicationAdmission?: () => boolean
   ): boolean {
     if (this.disposed || client.closed) {
       return false
@@ -95,9 +96,12 @@ export abstract class RelayDispatcherFrameCodec extends RelayDispatcherCapacityS
       return encodePreparedJsonRpcFrame(frame.payload, seq, client.highestReceivedSeq)
     }
     const admissionParams = frame.ptyDataAdmissionParams
-    const isStillAdmitted = admissionParams
-      ? () => this.admitsPtyDataPublication(client.id, admissionParams)
-      : undefined
+    const isStillAdmitted =
+      admissionParams || publicationAdmission
+        ? () =>
+            (publicationAdmission?.() ?? true) &&
+            (!admissionParams || this.admitsPtyDataPublication(client.id, admissionParams))
+        : undefined
     return client.writer.enqueue(
       lane,
       encode,

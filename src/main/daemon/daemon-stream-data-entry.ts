@@ -2,6 +2,7 @@ import type { PendingStreamDataBatch } from './daemon-stream-keep-tail-drop'
 import { writeStreamDataEvents } from './daemon-stream-data-split'
 import { encodeNdjson } from './ndjson'
 import { accountDaemonStreamEntry } from './daemon-stream-entry-accounting'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 
 export type DaemonStreamEnqueueOptions = {
   flushImmediately?: boolean
@@ -9,6 +10,7 @@ export type DaemonStreamEnqueueOptions = {
   rawLength?: number
   transformed?: boolean
   seq?: number
+  incarnationId?: PtyIncarnationId
 }
 
 export function appendDaemonStreamData(
@@ -23,7 +25,8 @@ export function appendDaemonStreamData(
     last?.sessionId === sessionId &&
     !last.control &&
     !last.transformed &&
-    options.transformed !== true
+    options.transformed !== true &&
+    last.incarnationId === options.incarnationId
   ) {
     last.data += data
     const rawLengthBefore = last.sequenceChars ?? last.data.length - data.length
@@ -39,7 +42,8 @@ export function appendDaemonStreamData(
           ? {}
           : { sequenceChars: options.rawLength }),
         ...(options.transformed ? { transformed: true } : {}),
-        ...(options.seq === undefined ? {} : { seq: options.seq })
+        ...(options.seq === undefined ? {} : { seq: options.seq }),
+        ...(options.incarnationId === undefined ? {} : { incarnationId: options.incarnationId })
       })
     )
   }
@@ -91,7 +95,8 @@ export function flushDaemonStreamSession(
         maxLineBytes,
         entry.sequenceChars ?? entry.data.length,
         entry.seq,
-        entry.transformed
+        entry.transformed,
+        entry.incarnationId
       )
     }
   }

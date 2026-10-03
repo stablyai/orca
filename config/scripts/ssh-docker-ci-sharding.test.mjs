@@ -33,6 +33,7 @@ it('gives every removed SSH spec a dedicated owner even for test-only edits', ()
     expect(job.if, spec).toContain(`contains(inputs.test_files, '${spec}')`)
   }
   expect(excluded.filter((spec) => !owned.includes(spec)).sort()).toEqual([
+    'tests/e2e/orcad-serve-mode-switch.spec.ts',
     'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts',
     'tests/e2e/ssh-localhost.spec.ts',
     'tests/e2e/terminal-ibus-hangul-native.spec.ts'

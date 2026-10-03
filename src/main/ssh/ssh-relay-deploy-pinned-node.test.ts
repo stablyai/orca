@@ -389,6 +389,8 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
     )
     expect(resolveRemoteNodePath).not.toHaveBeenCalled()
     expect(detachedLaunchCommand(conn)).toBeUndefined()
+    // No self-test ran, so there is no unverifiable runtime outcome to report.
+    expect(track).not.toHaveBeenCalled()
   })
 
   it('releases the staged addons after the attempt', async () => {

@@ -47,7 +47,7 @@ export function isUnconfirmedSshCommandTermination(
 }
 
 export async function execCommand(
-  conn: SshConnection,
+  conn: Pick<SshConnection, 'exec' | 'usesSystemSshTransport'>,
   command: string,
   options?: ExecCommandOptions
 ): Promise<string> {

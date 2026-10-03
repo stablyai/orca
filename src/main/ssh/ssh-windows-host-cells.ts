@@ -50,9 +50,21 @@ export function windowsHostCell(
   }
 }
 
+/** Managed orcad on the pinned node.exe, per DefaultShell: deploy, readiness, stop request, exit. */
+export const WINDOWS_ORCAD_CELL_IDS = ['orcad-cmd', 'orcad-powershell'] as const
+export type WindowsOrcadCellId = (typeof WINDOWS_ORCAD_CELL_IDS)[number]
+
+export function isWindowsOrcadCellId(id: string): id is WindowsOrcadCellId {
+  return WINDOWS_ORCAD_CELL_IDS.some((candidate) => candidate === id)
+}
+
+export function windowsOrcadCellShell(id: WindowsOrcadCellId): WindowsSshDefaultShell {
+  return id === 'orcad-cmd' ? 'cmd' : 'powershell'
+}
+
 /** Written by config/ci/windows-ssh-provider/invoke-pinned-relay-cells.ps1, one per run. */
 export type WindowsHostCellDescriptor = {
-  cell: WindowsHostCellId
+  cell: WindowsHostCellId | WindowsOrcadCellId
   target: WindowsServerTarget
   host: string
   port: number
@@ -78,7 +90,9 @@ export function parseWindowsHostCellDescriptor(text: string): WindowsHostCellDes
     throw new Error('Windows host cell descriptor must be a JSON object')
   }
   const record = Object.fromEntries(Object.entries(parsed))
-  const cell = WINDOWS_HOST_CELL_IDS.find((id) => id === record.cell)
+  const cell =
+    WINDOWS_HOST_CELL_IDS.find((id) => id === record.cell) ??
+    WINDOWS_ORCAD_CELL_IDS.find((id) => id === record.cell)
   if (!cell) {
     throw new Error(`Unknown Windows host cell: ${String(record.cell)}`)
   }
@@ -109,7 +123,7 @@ export function readWindowsHostCellDescriptor(path: string): WindowsHostCellDesc
 
 export function windowsHostSshTarget(
   descriptor: WindowsHostCellDescriptor,
-  cell: WindowsHostCell,
+  cell: Pick<WindowsHostCell, 'id' | 'remoteRuntime'>,
   runId: string
 ): SshTarget {
   return {

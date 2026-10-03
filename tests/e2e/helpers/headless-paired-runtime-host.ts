@@ -36,6 +36,10 @@ export type HeadlessPairedRuntimeHost = {
     betweenProcesses?: () => void | Promise<void>
   }) => Promise<void>
   userDataDir: string
+  /** The isolated launch environment, for another host started on the same profile. */
+  env: NodeJS.ProcessEnv
+  /** Electron's own argv for this serve host, without the serve flags. */
+  electronArgs: string[]
 }
 
 type HeadlessHostCleanup = () => Promise<void> | void
@@ -143,6 +147,8 @@ export async function launchHeadlessPairedRuntimeHost(
       client: new RuntimeClient(userDataDir, 5_000),
       offer,
       userDataDir,
+      env: isolation.env,
+      electronArgs: options.executablePath ? [] : getOrcaElectronLaunchArgs(mainPath, false),
       restartServeProcess: async (restartOptions = {}) => {
         if (options.pinnedServePort !== true) {
           throw new Error(
