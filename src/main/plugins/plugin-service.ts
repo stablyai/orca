@@ -207,7 +207,7 @@ export class PluginService {
     })
   }
 
-  private canStartPluginWork(plugin: ValidDiscoveredPlugin): boolean {
+  canStartPluginWork(plugin: ValidDiscoveredPlugin): boolean {
     return !this.installed.isRemoving(plugin) && this.isRuntimeApproved(plugin)
   }
 
@@ -237,7 +237,7 @@ export class PluginService {
    *  callers deny uniformly (no probe-able distinction). */
   getGrantedCapabilities(pluginKey: string): PluginCapabilityKind[] | null {
     const plugin = this.findValidPlugin(pluginKey)
-    return plugin && this.canStartPluginWork(plugin)
+    return plugin && this.isRuntimeApproved(plugin)
       ? capabilityKinds(plugin.manifest.capabilities)
       : null
   }

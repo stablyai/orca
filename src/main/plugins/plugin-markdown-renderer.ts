@@ -201,7 +201,7 @@ export class PluginMarkdownRenderer {
 }
 
 export function createServicePluginMarkdownRenderer(
-  service: Pick<PluginService, 'getDiscovered' | 'getGrantedCapabilities' | 'invokeCommand'>,
+  service: Pick<PluginService, 'getDiscovered' | 'canStartPluginWork' | 'invokeCommand'>,
   authority: () => Partial<PluginMarkdownSourceAuthority> | null
 ): PluginMarkdownRenderer {
   const resolveSourceRequest = (raw: unknown): Promise<PluginMarkdownSourceResult> => {
@@ -221,7 +221,7 @@ export function createServicePluginMarkdownRenderer(
       service
         .getDiscovered()
         .filter((plugin): plugin is ValidDiscoveredPlugin => !isInvalidDiscoveredPlugin(plugin)),
-    available: (plugin) => service.getGrantedCapabilities(plugin.pluginKey) !== null,
+    available: (plugin) => service.canStartPluginWork(plugin),
     resolveSource: (source) =>
       resolveSourceRequest({
         fileId: source.fileId,

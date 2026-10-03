@@ -122,5 +122,28 @@ describe('native Markdown service integration', () => {
       reason: 'disabled-provider'
     })
     expect(invoke).toHaveBeenCalledTimes(1)
+    consent = fingerprintPluginConsent(manifest)
+    let finishRender: (value: unknown) => void = () => undefined
+    invoke.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishRender = resolve
+        })
+    )
+    const pending = service.markdown.render('renderer:1', request)
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledTimes(2))
+    let finishRemoval: () => void = () => undefined
+    const removal = service.removePlugin(
+      'orca-samples.query',
+      () =>
+        new Promise((resolve) => {
+          finishRemoval = resolve
+        })
+    )
+    await vi.waitFor(() => expect(service.markdown.list()[0]?.available).toBe(false))
+    finishRender(response)
+    expect(await pending).toMatchObject({ status: 'error', code: 'stale-context' })
+    finishRemoval()
+    await removal
   })
 })
