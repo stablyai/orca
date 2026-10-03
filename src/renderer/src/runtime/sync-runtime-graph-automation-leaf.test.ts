@@ -108,7 +108,7 @@ async function captureGraph(): Promise<RuntimeSyncWindowGraph> {
 describe('syncRuntimeGraph background automation tabs', () => {
   it('publishes an unmounted automation tab leaf when its PTY is still live (eager buffer present)', async () => {
     vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
-      ptyId === AUTO_PTY ? { flush: () => '', dispose: () => {} } : undefined
+      ptyId === AUTO_PTY ? { peek: () => '', flush: () => '', dispose: () => {} } : undefined
     )
 
     const graph = await captureGraph()

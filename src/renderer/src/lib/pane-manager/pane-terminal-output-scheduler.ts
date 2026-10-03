@@ -1,7 +1,8 @@
 import {
   failTerminalWriteStallWatch,
   isTerminalWritePipelineCertifiedDead,
-  recordTerminalParseProgress
+  recordTerminalParseProgress,
+  requestTerminalWritePipelineProbe
 } from './terminal-write-pipeline-health'
 import { exposeTerminalOutputSchedulerDebugApi as exposeDebugApi } from './pane-terminal-output-scheduler-debug'
 import { flushTerminalOutputImpl } from './pane-terminal-output-flusher'
@@ -68,7 +69,10 @@ export function requestTerminalBacklogRecovery(terminal: TerminalOutputTarget): 
   requestRegisteredTerminalBacklogRecovery(terminal)
 }
 
-export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Promise<void> {
+export function waitForTerminalOutputParsed(
+  terminal: TerminalOutputTarget,
+  options: { keepWaiting?: () => boolean } = {}
+): Promise<void> {
   flushTerminalOutput(terminal)
   if (isTerminalWritePipelineCertifiedDead(terminal)) {
     // Why: a dead pipeline cannot settle; recovery owns it and serializers must not enqueue probe writes during a pending remount retry.
@@ -93,7 +97,19 @@ export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Pro
       recordTerminalParseProgress(terminal)
       finish()
     }
-    timer = setTimeout(finish, PARSE_SETTLE_TIMEOUT_MS)
+    const onSettleTimeout = (): void => {
+      // Why: a caller about to change the grid must not overtake bytes still in xterm's FIFO;
+      // the stall watch certifies a wedged parser dead, which is what ends a slow wait.
+      if (options.keepWaiting?.() && !isTerminalWritePipelineCertifiedDead(terminal)) {
+        timer = setTimeout(onSettleTimeout, PARSE_SETTLE_TIMEOUT_MS)
+        return
+      }
+      finish()
+    }
+    timer = setTimeout(onSettleTimeout, PARSE_SETTLE_TIMEOUT_MS)
+    if (options.keepWaiting) {
+      requestTerminalWritePipelineProbe(terminal)
+    }
     try {
       terminal.write('', finishParsed)
     } catch {

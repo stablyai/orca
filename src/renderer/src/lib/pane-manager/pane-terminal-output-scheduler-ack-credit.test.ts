@@ -248,6 +248,78 @@ describe('pane terminal output scheduler', () => {
       }
     })
 
+    it('keeps waiting past the settle timeout until the probe parses', async () => {
+      vi.useFakeTimers()
+      const { waitForTerminalOutputParsed } = await loadScheduler()
+      const { _resetWritePipelineHealthForTests } = await import('./terminal-write-pipeline-health')
+      const terminal = createTerminal()
+      let parsed: (() => void) | undefined
+      terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+        parsed ??= callback
+      })
+      try {
+        let settled = false
+        const wait = waitForTerminalOutputParsed(terminal, { keepWaiting: () => true }).then(
+          () => (settled = true)
+        )
+
+        await vi.advanceTimersByTimeAsync(2_000)
+        expect(settled).toBe(false)
+
+        parsed?.()
+        await wait
+        expect(settled).toBe(true)
+      } finally {
+        _resetWritePipelineHealthForTests(terminal)
+      }
+    })
+
+    it('stops waiting once the caller no longer needs the parse', async () => {
+      vi.useFakeTimers()
+      const { waitForTerminalOutputParsed } = await loadScheduler()
+      const { _resetWritePipelineHealthForTests } = await import('./terminal-write-pipeline-health')
+      const terminal = createTerminal()
+      terminal.write.mockImplementation(() => {})
+      try {
+        let keepWaiting = true
+        let settled = false
+        const wait = waitForTerminalOutputParsed(terminal, {
+          keepWaiting: () => keepWaiting
+        }).then(() => (settled = true))
+
+        await vi.advanceTimersByTimeAsync(1_000)
+        expect(settled).toBe(false)
+
+        keepWaiting = false
+        await vi.advanceTimersByTimeAsync(1_000)
+        await wait
+        expect(settled).toBe(true)
+      } finally {
+        _resetWritePipelineHealthForTests(terminal)
+      }
+    })
+
+    it('stops waiting once the stall watch certifies the parser dead', async () => {
+      vi.useFakeTimers()
+      const { waitForTerminalOutputParsed } = await loadScheduler()
+      const { _resetWritePipelineHealthForTests, WRITE_PIPELINE_STALL_CHECK_MS } =
+        await import('./terminal-write-pipeline-health')
+      const terminal = createTerminal()
+      terminal.write.mockImplementation(() => {})
+      try {
+        let settled = false
+        const wait = waitForTerminalOutputParsed(terminal, { keepWaiting: () => true }).then(
+          () => (settled = true)
+        )
+
+        await vi.advanceTimersByTimeAsync(WRITE_PIPELINE_STALL_CHECK_MS * 2 + 1_000)
+        await wait
+        expect(settled).toBe(true)
+      } finally {
+        _resetWritePipelineHealthForTests(terminal)
+      }
+    })
+
     it('certifies a terminal whose parsed-output probe throws synchronously', async () => {
       const { waitForTerminalOutputParsed } = await loadScheduler()
       const { _resetWritePipelineHealthForTests, isTerminalWritePipelineCertifiedDead } =
