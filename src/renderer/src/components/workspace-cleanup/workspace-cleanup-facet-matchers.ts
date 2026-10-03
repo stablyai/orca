@@ -1,3 +1,4 @@
+import { matchesRuntimePathPrefix } from '../../../../shared/runtime-path-prefix-match'
 import type { WorkspaceCleanupFacets } from './workspace-cleanup-facets'
 import type {
   WorkspaceCleanupActivityFilter,
@@ -163,7 +164,16 @@ export function matchesWorkspaceCleanupLocation(
     return false
   }
   const prefix = filter.pathPrefix.trim()
-  return prefix.length === 0 || facets.path.startsWith(prefix)
+  return (
+    prefix.length === 0 ||
+    // No test needs this branch — `matchesRuntimePathPrefix` covers every case we
+    // know of. It stays because it is the only *structural* guarantee that this
+    // filter can never hide a row plain `startsWith` showed, so the preparation
+    // pipeline never has to be exhaustively re-proved to stay safe. It also skips
+    // preparation entirely for the common exact-typing case.
+    facets.path.startsWith(prefix) ||
+    matchesRuntimePathPrefix(facets.pathPrefixKey, prefix)
+  )
 }
 
 export function matchesWorkspaceCleanupSafety(
