@@ -2,14 +2,19 @@
 
 ## Scope
 
-Orca ships `@xterm/xterm` with four source changes it needs and upstream has
-not taken: the IME composition hooks, the `xterm-composition-*` custom events
-they raise, the `ICompositionHelper` surface those hooks widen, and a `SortedList`
-fix. pnpm applies them through `config/patches/@xterm__xterm@<version>.patch`.
+Orca ships `@xterm/xterm` with source changes it needs and upstream has not
+taken: the IME composition hooks, the `xterm-composition-*` custom events they
+raise, the `ICompositionHelper` surface those hooks widen, the `WidthCache`
+export the IME preedit renderer measures with, a `SortedList` fix, and a guard
+that refuses mouse reports with non-finite coordinates (#20983). pnpm applies
+them through `config/patches/@xterm__xterm@<version>.patch`.
 
-That patch touches eight files. Four are hand-authored source
+That patch touches eleven files. Seven are hand-authored source
 (`src/browser/CoreBrowserTerminal.ts`, `src/browser/Types.ts`,
-`src/browser/input/CompositionHelper.ts`, `src/common/SortedList.ts`) and four
+`src/browser/input/CompositionHelper.ts`,
+`src/browser/renderer/dom/WidthCache.ts`,
+`src/browser/services/MouseCoordsService.ts`,
+`src/browser/services/MouseService.ts`, `src/common/SortedList.ts`) and four
 are the build output those sources produce (`lib/xterm.js`, `lib/xterm.mjs`,
 and both sourcemaps). The bundle half is 7.3 MB of minified code. It is
 generated, and this document exists so nobody edits it by hand.
@@ -271,7 +276,7 @@ rerun. The bundle hunks need no attention at any point.
 A vendored `@xterm/xterm` fork removes the patch entirely, but it moves Orca off
 the published package, so every upstream beta becomes a merge rather than a
 version bump, and Orca inherits responsibility for building and publishing a
-package it does not own. The patch is four small source hunks against a commit
+package it does not own. The patch is a few small source edits against a commit
 that reproduces byte for byte; a fork is a much larger standing cost for the
 same result.
 

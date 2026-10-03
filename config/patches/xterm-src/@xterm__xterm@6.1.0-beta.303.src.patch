@@ -1247,6 +1247,38 @@ index d45938515e7a9903de0da0d61716fd42e4deea0c..17d6577e388eb2e4397338093e353738
    private _canvas: OffscreenCanvas | HTMLCanvasElement;
    private _ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
  
+diff --git a/src/browser/services/MouseCoordsService.ts b/src/browser/services/MouseCoordsService.ts
+index 7e110ea988bd320e99e24f5b87628ad7f3adff72..c2c51e2b20c024ec79d3731edb94fb61bfb35336 100644
+--- a/src/browser/services/MouseCoordsService.ts
++++ b/src/browser/services/MouseCoordsService.ts
+@@ -35,6 +35,10 @@ export class MouseCoordsService implements IMouseCoordsService {
+     if (!this._charSizeService.hasValidSize) {
+       return undefined;
+     }
++    // A detached element has no computed padding, so coords can be NaN.
++    if (!Number.isFinite(coords[0]) || !Number.isFinite(coords[1])) {
++      return undefined;
++    }
+     coords[0] = Math.min(Math.max(coords[0], 0), this._renderService.dimensions.css.canvas.width - 1);
+     coords[1] = Math.min(Math.max(coords[1], 0), this._renderService.dimensions.css.canvas.height - 1);
+     return {
+diff --git a/src/browser/services/MouseService.ts b/src/browser/services/MouseService.ts
+index 353e0581da7a95c9473d6169cd9ec548bc3bfe30..d587c02426b284b9567208c02b0d59d1feb24f8e 100644
+--- a/src/browser/services/MouseService.ts
++++ b/src/browser/services/MouseService.ts
+@@ -495,9 +495,9 @@ export class MouseService implements IMouseService {
+    * to fulfill protocol and encoding restrictions.
+    */
+   private _triggerMouseEvent(e: ICoreMouseEvent): boolean {
+-    // range check for col/row
+-    if (e.col < 0 || e.col >= this._bufferService.cols
+-      || e.row < 0 || e.row >= this._bufferService.rows) {
++    // range check for col/row, written to also reject NaN coordinates
++    if (!(e.col >= 0 && e.col < this._bufferService.cols
++      && e.row >= 0 && e.row < this._bufferService.rows)) {
+       return false;
+     }
+ 
 diff --git a/src/common/SortedList.ts b/src/common/SortedList.ts
 index 8a10076e3963e33b4a7d1e4602333eb3f4772dc9..c6dcf18b762e3c56fe22e9c2d49b8e550d96f915 100644
 --- a/src/common/SortedList.ts
