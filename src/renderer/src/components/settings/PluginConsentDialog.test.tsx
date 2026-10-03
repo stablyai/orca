@@ -138,6 +138,16 @@ describe('PluginConsentDialog', () => {
     expect(document.body.textContent).not.toContain('full access to your files')
   })
 
+  it('discloses Markdown renderer languages, commands, and document source access', async () => {
+    await renderConsent(
+      { ...plugin, markdownRenderers: [{ language: 'query', commandId: 'render-query' }] },
+      vi.fn().mockResolvedValue(undefined)
+    )
+    expect(document.body.textContent).toContain('Markdown renderers')
+    expect(document.body.textContent).toContain('query → render-query')
+    expect(document.body.textContent).toContain('source text and document context')
+  })
+
   it('describes inert content without pretending it requested permissions', async () => {
     await renderConsent(
       {

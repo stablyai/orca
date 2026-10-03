@@ -12,6 +12,10 @@ import { useMarkdownPreviewDocument } from './use-markdown-preview-document'
 import { useMarkdownPreviewDocumentSearch } from './use-markdown-preview-document-search'
 import type { VirtualMarkdownPreviewNavigation } from './VirtualMarkdownPreviewBody'
 import { useMarkdownPreviewViewport } from './use-markdown-preview-viewport'
+import {
+  NativeMarkdownRenderContext,
+  useNativeMarkdownRenderContext
+} from './native-markdown-render-context'
 
 export {
   decodeMarkdownPreviewAnchor,
@@ -55,6 +59,17 @@ export default function MarkdownPreview({
     largePreview: incomingLargePreview
   })
   const largePreview = exceedsMarkdownRichModeSizeLimit(foundation.renderedContent)
+  const nativeRenderContext = useNativeMarkdownRenderContext(
+    {
+      filePath,
+      sourceFileId: foundation.resolvedSourceFileId,
+      sourceWorktreeId: foundation.resolvedSourceWorktreeId,
+      sourceRuntimeEnvironmentId: foundation.resolvedSourceRuntimeEnvironmentId
+    },
+    foundation.worktreeRoot,
+    foundation.sourceOwner,
+    foundation.resolvedSourceWorktreeId === foundation.sourceRoutingWorktreeId
+  )
   const recordBeforeSwap = useCallback(() => {
     foundation.rootRef.current?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
   }, [foundation.rootRef])
@@ -97,19 +112,21 @@ export default function MarkdownPreview({
   })
 
   return (
-    <MarkdownPreviewSurface
-      largePreview={largePreview}
-      documentState={documentState}
-      documentSearch={documentSearch}
-      largeNavigationRef={largeNavigationRef}
-      scrollCacheKey={scrollCacheKey}
-      foundation={foundation}
-      viewport={viewport}
-      reviewActions={reviewActions}
-      components={components}
-      filePath={filePath}
-      showTableOfContents={showTableOfContents}
-      onCloseTableOfContents={onCloseTableOfContents}
-    />
+    <NativeMarkdownRenderContext.Provider value={nativeRenderContext}>
+      <MarkdownPreviewSurface
+        largePreview={largePreview}
+        documentState={documentState}
+        documentSearch={documentSearch}
+        largeNavigationRef={largeNavigationRef}
+        scrollCacheKey={scrollCacheKey}
+        foundation={foundation}
+        viewport={viewport}
+        reviewActions={reviewActions}
+        components={components}
+        filePath={filePath}
+        showTableOfContents={showTableOfContents}
+        onCloseTableOfContents={onCloseTableOfContents}
+      />
+    </NativeMarkdownRenderContext.Provider>
   )
 }

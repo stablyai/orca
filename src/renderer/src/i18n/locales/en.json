@@ -1,4 +1,10 @@
 {
+  "plugins": {
+    "markdownRenderers": {
+      "heading": "Markdown renderers",
+      "disclosure": "Matching code blocks send their source text and document context to this plugin’s background worker."
+    }
+  },
   "sidebar": {
     "revealFiltered": {
       "title": "Reveal hidden workspace?",
