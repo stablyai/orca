@@ -1,5 +1,9 @@
 import type { RefObject } from 'react'
 import { Input } from '@/components/ui/input'
+import {
+  isImeOwnedKeyboardEvent,
+  useImeEnterGestureOwnership
+} from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
 import type { WorktreeReviewProvider } from './worktree-meta-updates'
 
@@ -18,6 +22,7 @@ export function WorktreeReviewLinkField({
   provider,
   value
 }: WorktreeReviewLinkFieldProps): React.JSX.Element {
+  const enterGesture = useImeEnterGestureOwnership()
   const isGitLab = provider === 'gitlab'
   return (
     <div className="space-y-1">
@@ -30,7 +35,20 @@ export function WorktreeReviewLinkField({
         ref={inputRef}
         value={value}
         onChange={(event) => onValueChange(event.target.value)}
-        onKeyDown={onKeyDown}
+        onCompositionStart={() => enterGesture.setComposing(true)}
+        onCompositionEnd={() => enterGesture.setComposing(false)}
+        onKeyUp={enterGesture.onKeyUp}
+        onBlur={enterGesture.reset}
+        onKeyDown={(event) => {
+          if (
+            enterGesture.ownsKeyDown(event) ||
+            enterGesture.isComposing() ||
+            isImeOwnedKeyboardEvent(event)
+          ) {
+            return
+          }
+          onKeyDown(event)
+        }}
         placeholder={
           isGitLab
             ? translate(
