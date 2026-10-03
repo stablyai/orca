@@ -165,6 +165,9 @@ async function launchServeMode(
   // Why: a phone paired to a headless host still registers and unregisters its token;
   // it simply never receives a push, because nothing dispatches notifications here.
   startDesktopPushService(runtimeRpc)
+  // Why: serve is the primary way a phone reaches a headless host — without the relay
+  // provider, Anywhere pairing can never mint an invite on exactly the machines that need it.
+  startDesktopRelayService(runtimeRpc)
   settleDesktopActivation()
   // Why: every attempt must reach app.quit(); a page beforeunload can veto an earlier signal.
   registerServeSignalHandlers(process, () => app.quit())
@@ -213,6 +216,43 @@ async function launchServeMode(
   await printServeReady(serveOptions)
 }
 
+// Why shared: Relay pairing is the only pairing path a headless `orca serve` host can offer a
+// phone on another network, so both launch modes install the provider. Requires the persisted
+// proxy already applied and runtimeRpc.start() to have run — the constructor reads the E2EE
+// keypair and mobile socket wiring that start() creates.
+function startDesktopRelayService(runtimeRpc: OrcaRuntimeRpcServer): void {
+  const cloudAuth = getOrcaCloudAuthConfig()
+  if (!cloudAuth.configured) {
+    return
+  }
+  try {
+    const relayService = new DesktopRelayService({
+      authConfig: cloudAuth.config,
+      userDataPath: getProfileUserDataPath(),
+      appVersion: app.getVersion(),
+      runtimeRpc,
+      onStatus: publishDesktopRelayStatus
+    })
+    state.desktopRelayService = relayService
+    runtimeRpc.setMobileRelayPairingProvider({
+      createPairingRelay: (relayDeviceId) => relayService.createPairingRelay(relayDeviceId),
+      onDeviceRevokeQueued: (item) => relayService.onDeviceRevokeQueued(item),
+      onDemandStateChanged: () => relayService.demandStateChanged(),
+      getEndpoints: (context, params) => relayService.getEndpoints(context, params),
+      provisionRelay: (context, params) => relayService.provisionRelay(context, params)
+    })
+    relayService.start()
+    // Why: sleeping past relay-token expiry kills the broker with no retry
+    // timer; resume is the moment that state becomes recoverable.
+    powerMonitor.on('resume', () => state.desktopRelayService?.ensureLive())
+  } catch (error) {
+    console.warn(
+      '[relay] Desktop relay startup unavailable:',
+      error instanceof Error ? error.message : String(error)
+    )
+  }
+}
+
 async function launchDesktopMode(
   runtimeRpc: OrcaRuntimeRpcServer,
   shellPathReady: Promise<void>,
@@ -252,35 +292,7 @@ async function launchDesktopMode(
   // Why after the proxy await: the push gateway client is an app-owned fetcher, so it must not
   // issue its first request ahead of the persisted proxy.
   startDesktopPushService(runtimeRpc)
-  const cloudAuth = getOrcaCloudAuthConfig()
-  if (cloudAuth.configured) {
-    try {
-      const relayService = new DesktopRelayService({
-        authConfig: cloudAuth.config,
-        userDataPath: getProfileUserDataPath(),
-        appVersion: app.getVersion(),
-        runtimeRpc,
-        onStatus: publishDesktopRelayStatus
-      })
-      state.desktopRelayService = relayService
-      runtimeRpc.setMobileRelayPairingProvider({
-        createPairingRelay: (relayDeviceId) => relayService.createPairingRelay(relayDeviceId),
-        onDeviceRevokeQueued: (item) => relayService.onDeviceRevokeQueued(item),
-        onDemandStateChanged: () => relayService.demandStateChanged(),
-        getEndpoints: (context, params) => relayService.getEndpoints(context, params),
-        provisionRelay: (context, params) => relayService.provisionRelay(context, params)
-      })
-      relayService.start()
-      // Why: sleeping past relay-token expiry kills the broker with no retry
-      // timer; resume is the moment that state becomes recoverable.
-      powerMonitor.on('resume', () => state.desktopRelayService?.ensureLive())
-    } catch (error) {
-      console.warn(
-        '[relay] Desktop relay startup unavailable:',
-        error instanceof Error ? error.message : String(error)
-      )
-    }
-  }
+  startDesktopRelayService(runtimeRpc)
   // Why: macOS notification permission dialog must fire after the window is shown, else it's hidden behind the maximized window.
   win.once('show', () => {
     // Why: store can be null if init failed earlier; bail rather than throw inside an Electron event listener.
