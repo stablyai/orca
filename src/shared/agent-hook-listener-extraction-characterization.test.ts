@@ -33,7 +33,7 @@ const ROUTES = {
   '/hook/hermes': 'hermes',
   '/hook/devin': 'devin',
   '/hook/kimi': 'kimi',
-  '/hook/jcode': 'jcode'
+  '/hook/jcode': 'jcode',
   '/hook/junie': 'junie'
 } as const
 function normalizeProviderState(

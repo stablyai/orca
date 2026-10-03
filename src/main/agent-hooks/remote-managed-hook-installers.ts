@@ -31,7 +31,7 @@ export type RemoteManagedHookInstallOptions = {
   deferTrustUntilConfigToml?: boolean
   /** Explicit GROK_HOME for remote runtimes that redirect Grok's config. */
   grokHomeDir?: string
-/** Login-shell KIRO_HOME on the execution host; it replaces ~/.kiro outright. */
+  /** Login-shell KIRO_HOME on the execution host; it replaces ~/.kiro outright. */
   kiroHomeDir?: string
   /** Explicit JUNIE_HOME for remote runtimes that redirect Junie's config. */
   junieHomeDir?: string

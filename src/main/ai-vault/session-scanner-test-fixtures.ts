@@ -295,7 +295,7 @@ export async function writeJcodeSessionFixture(
       ]
     })
   )
-
+}
 
 // Junie: <sessions>/session-*/events.jsonl plus the shared sessions/index.jsonl that
 // carries title and cwd. Transcript events are discriminated by `kind`, not `type`.

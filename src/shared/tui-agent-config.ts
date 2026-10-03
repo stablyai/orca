@@ -350,7 +350,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'stdin-after-start'
   },
   // prettier-ignore
-  jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' }
+  jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' },
   junie: {
     detectCmd: 'junie',
     launchCmd: 'junie',
