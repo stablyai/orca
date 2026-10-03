@@ -102,6 +102,10 @@ export function settleDeadWorkerTerminalRelease(
     requestingDispatchId: string
     resourceId: string
     processIncarnation: string
+    expectedResource?: Pick<
+      WorkerTerminalResourceRow,
+      'owner_dispatch_id' | 'terminal_handle' | 'host_scope' | 'release_state'
+    >
   }
 ):
   | { disposition: 'released'; resource: WorkerTerminalResourceRow }
@@ -123,18 +127,21 @@ export function settleDeadWorkerTerminalRelease(
     const owner = this.getWorkerDispatch(resource.owner_dispatch_id)
     const requesterSettled = Boolean(requester && WORKER_SETTLED_STATES.includes(requester.state))
     const ownerSettled = Boolean(owner && WORKER_SETTLED_STATES.includes(owner.state))
-    // A positive process-exit verdict only proves the exact process is gone; release is terminal
-    // cleanup and must also preserve the worker's output. The archive is only ever written while
-    // `release_state = 'requested'`, so an owner asking to release a pane that never reached that
-    // state can never produce one — demanding it retained the pane forever. That one case settles
-    // as `unavailable`; wherever the capture is still reachable the archive stays mandatory.
+    // A proven-dead, unresolved original process cannot produce a new archive; record the loss.
     const archive = this.getWorkerTerminalArchive(resource.owner_dispatch_id)
     const archiveUnreachable =
       resource.owner_dispatch_id === params.requestingDispatchId &&
-      (resource.release_state === 'not_requested' || resource.release_state === 'retained')
+      (['not_requested', 'retained'].includes(resource.release_state) ||
+        (params.expectedResource !== undefined &&
+          ['requested', 'unknown'].includes(resource.release_state)))
     if (
       !priorOwners ||
       !requesterRelated ||
+      (params.expectedResource !== undefined &&
+        (resource.owner_dispatch_id !== params.expectedResource.owner_dispatch_id ||
+          resource.terminal_handle !== params.expectedResource.terminal_handle ||
+          resource.host_scope !== params.expectedResource.host_scope ||
+          resource.release_state !== params.expectedResource.release_state)) ||
       !requesterSettled ||
       !ownerSettled ||
       resource.process_incarnation !== params.processIncarnation ||

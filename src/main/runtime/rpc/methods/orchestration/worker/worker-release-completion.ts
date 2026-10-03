@@ -2,8 +2,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import type {
   WorkerTerminalArchiveKind,
   WorkerTerminalArchiveStatus,
-  WorkerTerminalResourceRow,
-  WorkerTerminalRetainedReason
+  WorkerTerminalResourceRow
 } from '../../../../orchestration/worker-terminal-ownership'
 import {
   captureWorkerOutputArchive,
@@ -19,21 +18,20 @@ import { workerTerminalLeaseIsCurrent } from './worker-terminal-release-lease'
 import { resolveStructuredWorkerForDispatch } from '../../orchestration-structured-worker-lifecycle'
 import { stopStructuredWorkerForRelease } from './structured-worker-release-stop'
 import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
+import { releaseProvenDeadMissingWorkerTerminal } from './worker-release-missing-terminal'
+import {
+  releasePendingRecovery,
+  releaseUnknownRecovery,
+  retainedReason,
+  type WorkerReleaseReceipt
+} from './worker-release-receipt'
 
 export {
   archiveSummary,
   exposeWorkerTerminalResource
 } from './worker-terminal-resource-presentation'
-
-export type WorkerReleaseReceipt = {
-  dispatchId: string
-  state: 'released' | 'already_released' | 'retained' | 'release_pending' | 'release_unknown'
-  reason?: WorkerTerminalRetainedReason
-  processAction: 'closed_agent_terminal' | 'closed_exited_terminal' | 'none'
-  archive: { source: string | null; status: string | null } | null
-  recovery?: string
-  lastError?: string
-}
+export { releaseUnknownRecovery } from './worker-release-receipt'
+export type { WorkerReleaseReceipt } from './worker-release-receipt'
 
 type WorkerTerminalReleaseArgs = {
   runtime: OrcaRuntimeService
@@ -134,35 +132,14 @@ async function completeWorkerTerminalReleaseOnce(
     }
   }
   if (observation.status === 'missing' || observation.status === 'unattached') {
-    // Re-resolution by process incarnation (inspectWorkerTerminal) already failed, so no live PTY
-    // carries this worker's exact incarnation. If that incarnation is provably gone, settle
-    // released BEFORE the recovery defer: proof of death outranks deferral, so a provably-exited
-    // worker never languishes in release_pending across recovery passes.
-    if (resource.process_incarnation) {
-      const processLiveness = await runtime.inspectTerminalProcessIncarnationLiveness(
-        resource.process_incarnation,
-        resource.host_scope
-      )
-      if (processLiveness === 'exited') {
-        // Prefer incarnation-fenced settle (dispatch relation + process_incarnation CAS).
-        const reconciled = db.settleDeadWorkerTerminalRelease({
-          requestingDispatchId: dispatchId,
-          resourceId: resource.id,
-          processIncarnation: resource.process_incarnation
-        })
-        if (reconciled.disposition === 'released') {
-          runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
-          return {
-            dispatchId,
-            state: 'released',
-            processAction: 'none',
-            archive: archiveSummary(reconciled.resource)
-          }
-        }
-        // settleDead retains when the archive is still mandatory and missing (e.g. requested but
-        // never committed). Do NOT plain-settle: that would discard output and break recovery's
-        // "archive is mandatory" invariant. Fall through to recovery pending / unknown instead.
-      }
+    const deadRelease = await releaseProvenDeadMissingWorkerTerminal({
+      runtime,
+      db,
+      dispatchId,
+      resource
+    })
+    if (deadRelease) {
+      return deadRelease
     }
     if (args.mode === 'recovery') {
       // No death certificate yet: inventory may still be incomplete during startup/reconnect
@@ -172,8 +149,7 @@ async function completeWorkerTerminalReleaseOnce(
         state: 'release_pending',
         processAction: 'none',
         archive: archiveSummary(resource),
-        recovery:
-          'The recorded terminal has not been rediscovered yet; recovery will retry after the next terminal inventory.'
+        recovery: releasePendingRecovery()
       }
     }
     // Why: the handle resolves nowhere, but the PTY could have been re-homed after a restart —
@@ -313,18 +289,4 @@ async function completeWorkerTerminalReleaseOnce(
       observation.status === 'exited' ? 'closed_exited_terminal' : 'closed_agent_terminal',
     archive: archiveSummary(released)
   }
-}
-
-export function releaseUnknownRecovery(dispatchId: string): string {
-  return `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then retry worker-release with a fresh request ID (omit --retry-request to let the CLI generate one). Reusing the prior request ID only replays this release_unknown receipt. Never substitute a broad terminal close.`
-}
-
-function retainedReason(resource: WorkerTerminalResourceRow): WorkerTerminalRetainedReason {
-  if (resource.retained_reason) {
-    return resource.retained_reason as WorkerTerminalRetainedReason
-  }
-  if (resource.ownership_state === 'user_owned') {
-    return 'user_takeover'
-  }
-  return 'identity_unproven'
 }

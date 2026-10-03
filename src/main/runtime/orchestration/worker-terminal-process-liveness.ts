@@ -1,4 +1,6 @@
 import type { PtyProcessInfo } from '../../providers/pty-process-info'
+import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
+import type { WorkerTerminalHostScope } from '../../../shared/worker-terminal-host-scope'
 
 // One reader for the durable `host_scope` column; re-exported so the process-liveness
 // path keeps its import site while the parse itself lives beside the fleet consumers.
@@ -42,4 +44,25 @@ export function classifyWorkerTerminalProcessIncarnation(
   )
     ? 'unverifiable'
     : 'exited'
+}
+
+// Only minted UUID incarnations unambiguously separate a PTY id from its incarnation.
+export function workerTerminalPtyIdForDeathProbe(
+  processIncarnation: string,
+  hostScope: WorkerTerminalHostScope
+): string | null {
+  const separator = processIncarnation.lastIndexOf(':')
+  const incarnation = processIncarnation.slice(separator + 1)
+  if (
+    separator <= 0 ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(incarnation)
+  ) {
+    return null
+  }
+  const ptyId = processIncarnation.slice(0, separator)
+  const ssh = parseAppSshPtyId(ptyId)
+  if (hostScope.kind === 'ssh') {
+    return ssh?.connectionId === hostScope.targetId ? ptyId : null
+  }
+  return ssh || ptyId.startsWith('ssh:') || ptyId.startsWith('remote:') ? null : ptyId
 }

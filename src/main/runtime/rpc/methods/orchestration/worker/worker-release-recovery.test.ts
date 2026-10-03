@@ -194,7 +194,7 @@ describe('orchestration worker release recovery', () => {
     expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps a requested release pending after positive exit when no archive was committed', async () => {
+  it('settles proven-dead requested release with truthful unavailable output', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
     const requested = db.requestWorkerTerminalRelease(dispatchId)
@@ -209,13 +209,14 @@ describe('orchestration worker release recovery', () => {
 
     await expect(reconcileRequestedWorkerTerminalReleases(runtime)).resolves.toMatchObject({
       attempted: 1,
-      released: 0,
-      pending: 1,
+      released: 1,
+      pending: 0,
       unknown: 0
     })
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
-      release_state: 'requested',
-      ownership_state: 'owned'
+      release_state: 'released',
+      ownership_state: 'released',
+      archive_status: 'unavailable'
     })
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
   })
