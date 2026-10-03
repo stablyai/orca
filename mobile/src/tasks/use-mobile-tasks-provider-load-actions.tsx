@@ -1,4 +1,5 @@
 import type { RuntimeHydrationModel } from './use-mobile-tasks-runtime-hydration'
+import { readJiraConnection } from './jira-mobile-connection'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
@@ -39,6 +40,7 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
     connState,
     defaultLinearTeamSelectionRef,
     githubKind,
+    setJiraConnection,
     setLinearConnected,
     setLinearTeams,
     setLinearWorkspaces,
@@ -47,6 +49,16 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
     taskUiReady,
     tasksSupported
   } = model
+  // Why: Jira is connected from desktop, so nothing on the phone tells us it
+  // happened. The status cached at hydration has to be re-read or connecting while
+  // this screen is open leaves it stuck on the connect prompt.
+  const refreshJiraConnection = useCallback(async (): Promise<void> => {
+    if (!client || connState !== 'connected' || !tasksSupported) {
+      return
+    }
+    setJiraConnection(await readJiraConnection(client))
+  }, [client, connState, tasksSupported, setJiraConnection])
+
   const loadLinearContext = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !tasksSupported) {
       return
@@ -220,6 +232,7 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
     [appliedQuery, githubKind]
   )
   return Object.assign(model, {
+    refreshJiraConnection,
     loadLinearContext,
     persistLinearTeamSelection,
     fetchGitHubItemsPage,

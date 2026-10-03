@@ -163,7 +163,7 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
 }
 
 /**
- * What this tree measures, per class, over all 793 goldens.
+ * What this tree measures, per class, over all 795 goldens.
  *
  * A pin, not a description: `bridgedParityTallyDrift` holds every number below to itself exactly,
  * in both directions, and this module's test pins their sum to the size of the corpus. A class that
@@ -183,8 +183,9 @@ export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'iden
   // Settling a refused reply moved three goldens here out of `write-ordinal`: a rejection that
   // now arrives differs before the ordinal that also moved does. Nothing stopped replaying
   // identically, and the corpus is a fixed size, so a shuffle between two excluded classes cannot
-  // hide one.
-  'result-absent-settlement': 342,
+  // hide one. Two more arrived with Jira: the hydration and workspace-context groups each ask
+  // `jira.status`, so each family gained one absent-result partition.
+  'result-absent-settlement': 344,
   // Four left here and two left `write-ordinal` for the class below, which is the `cancel` a
   // refused stream frame now posts: the run stops at a renamed occurrence before it reaches the
   // checkpoint or the ordinal that used to be what differed first.

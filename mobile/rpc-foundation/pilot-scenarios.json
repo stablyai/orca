@@ -501,6 +501,18 @@
           }
         },
         {
+          "complete": "jira.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
           "checkpoint": "settled"
         }
       ],
@@ -572,6 +584,18 @@
           }
         },
         {
+          "complete": "jira.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
           "checkpoint": "settled"
         }
       ],
@@ -629,6 +653,18 @@
         },
         {
           "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "complete": "jira.status#1",
           "params": {
             "$undefined": true
           },
@@ -1526,6 +1562,18 @@
           }
         },
         {
+          "complete": "jira.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
           "checkpoint": "settled"
         }
       ]
@@ -1608,6 +1656,18 @@
           }
         },
         {
+          "complete": "jira.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
           "checkpoint": "settled"
         }
       ]
@@ -1676,6 +1736,18 @@
         },
         {
           "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "complete": "jira.status#1",
           "params": {
             "$undefined": true
           },
@@ -2809,6 +2881,18 @@
           }
         },
         {
+          "complete": "jira.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
           "checkpoint": "settled"
         },
         {
@@ -2866,6 +2950,18 @@
         },
         {
           "complete": "linear.status#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "complete": "jira.status#2",
           "params": {
             "$undefined": true
           },
@@ -3411,6 +3507,18 @@
           }
         },
         {
+          "complete": "jira.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
           "checkpoint": "settled"
         },
         {
@@ -3476,6 +3584,18 @@
         },
         {
           "complete": "linear.status#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "complete": "jira.status#2",
           "params": {
             "$undefined": true
           },

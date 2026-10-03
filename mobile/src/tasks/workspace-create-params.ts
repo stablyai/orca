@@ -5,7 +5,10 @@ import type {
 } from '../../../src/shared/worktree/create-types'
 import type { GitPushTarget } from '../../../src/shared/worktree/types'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
-import { getWorkspaceSourceName } from '../../../src/shared/new-workspace/workspace-source'
+import {
+  buildJiraWorkspaceSource,
+  getWorkspaceSourceName
+} from '../../../src/shared/new-workspace/workspace-source'
 import { resolveMobileWorkspaceCreateName } from './mobile-workspace-name'
 import type { WorkspaceAgentChoice } from './workspace-agent-selection'
 
@@ -51,10 +54,20 @@ type WorkspaceCreateLinearItem = {
   }
 }
 
+type WorkspaceCreateJiraItem = {
+  provider: 'jira'
+  source: {
+    key: string
+    title: string
+    url: string
+  }
+}
+
 export type WorkspaceCreateTaskItem =
   | WorkspaceCreateGitHubItem
   | WorkspaceCreateGitLabItem
   | WorkspaceCreateLinearItem
+  | WorkspaceCreateJiraItem
 
 /** The outgoing worktree.create params, so the builder and the operation agree by type. */
 export type WorkspaceCreateParams = RpcSendParams<'worktree.create'>
@@ -123,7 +136,9 @@ export function buildTaskWorkspaceCreateParams(args: {
           url: item.source.url,
           linearIdentifier: item.source.identifier
         })
-      : getWorkspaceSourceName({ provider: item.provider, ...item.source })
+      : item.provider === 'jira'
+        ? getWorkspaceSourceName(buildJiraWorkspaceSource(item.source))
+        : getWorkspaceSourceName({ provider: item.provider, ...item.source })
   const displayName = nameIsAutoManaged
     ? { displayName: sourceName.displayName, displayNameKind: 'generated' as const }
     : workspaceName?.trim()
@@ -165,6 +180,21 @@ export function buildTaskWorkspaceCreateParams(args: {
       ...(item.source.type === 'issue'
         ? { linkedGitLabIssue: item.source.number }
         : { linkedGitLabMR: item.source.number })
+    }
+  }
+
+  if (item.provider === 'jira') {
+    // Why: there is no flat linkedJiraIssue field on worktree.create — Jira links
+    // ride the durable linkedWorkItem payload, same as the desktop composer.
+    return {
+      repo: `id:${targetRepoId}`,
+      name: resolveMobileWorkspaceCreateName({
+        draft: workspaceName,
+        fallback: item.source.key.toLowerCase()
+      }),
+      ...displayName,
+      linkedWorkItem: buildJiraWorkspaceSource(item.source),
+      ...common
     }
   }
 

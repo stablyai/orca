@@ -3,6 +3,9 @@ import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import type { LinearIssue } from '../../../src/shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../src/shared/repo-types'
 import type { RpcClient } from '../transport/rpc-client'
+import type { JiraIssue, JiraSiteSelection } from '../../../src/shared/jira-types'
+import { buildJiraIssueSearchJql } from '../../../src/shared/new-workspace/smart-workspace-source-results'
+import { jiraIssueSearchRead } from './mobile-jira-operations'
 import { repoBaseRefSearchRead } from './mobile-workspace-source-operations'
 import {
   githubWorkItemSearchRead,
@@ -15,6 +18,7 @@ import type { MrStateFilter } from './mobile-composer-source-types'
 
 const GITLAB_PER_PAGE = 50
 const LINEAR_LIMIT = 50
+const JIRA_LIMIT = 50
 const BRANCH_LIMIT = 20
 
 // Why: the desktop Smart picker returns BOTH issues and PRs — the runtime's
@@ -91,6 +95,27 @@ export async function searchLinearIssues(
       )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: linearIssueRowSchema requires all nine members this row is read for (`id`, `identifier`, `title`, `url`, `updatedAt`, `priority`, `labels`, `state`, `team`), so the only gap left is `labelIds`: the schema salvages it to `string[] | undefined` while the shared LinearIssue declares it `string[]`. No mobile code reads it.
   return issues as LinearIssue[]
+}
+
+// Unlike the Tasks search box (raw JQL), the composer field is free text that
+// buildJiraIssueSearchJql turns into a key or text-match query — same as desktop.
+// A null JQL means "nothing to search yet", so the tab stays empty until typed in.
+export async function searchJiraIssues(
+  client: RpcClient,
+  query: string,
+  siteId: JiraSiteSelection | null | undefined
+): Promise<JiraIssue[]> {
+  const jql = buildJiraIssueSearchJql(query)
+  if (!jql) {
+    return []
+  }
+  return jiraIssueSearchRead.interpret(
+    await jiraIssueSearchRead.request(client, {
+      jql,
+      limit: JIRA_LIMIT,
+      siteId: siteId ?? undefined
+    })
+  )
 }
 
 export async function searchBranches(

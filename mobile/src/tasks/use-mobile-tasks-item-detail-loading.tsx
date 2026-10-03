@@ -1,4 +1,6 @@
 import type { ItemDetailMetadataEffectsModel } from './use-mobile-tasks-item-detail-metadata-effects'
+import { fetchJiraIssueDetail } from './mobile-jira-task-source'
+import { createJiraTask } from './mobile-tasks-item-mapping'
 import {
   type HostedReviewDecision,
   buildGitLabCheckSummary,
@@ -134,6 +136,45 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
                 : candidate
             )
           )
+        }
+        return
+      }
+
+      if (actionItem.provider === 'jira') {
+        const { issue, comments } = await fetchJiraIssueDetail(client, {
+          key: actionItem.source.key,
+          siteId: actionItem.source.siteId
+        })
+        if (!stale) {
+          setDetailPayload({
+            provider: 'jira',
+            description: issue.description ?? '',
+            comments,
+            labels: issue.labels ?? [],
+            assignee: issue.assignee?.displayName,
+            projectName: issue.project.name || issue.project.key,
+            issueTypeName: issue.issueType.name,
+            priorityName: issue.priority?.name
+          })
+          setActionItem((current) => {
+            if (current?.provider !== 'jira' || current.source.key !== issue.key) {
+              return current
+            }
+            // Returning a new object every time would re-trigger this effect, which depends on
+            // actionItem — the detail would refetch forever. So swap only on a real change, and
+            // compare every field the drawer reads off the task (title and status included) or
+            // the opposite defect appears: a title or status edited after the list loaded would
+            // stay stale behind the guard.
+            const alreadyHydrated =
+              current.title === issue.title &&
+              current.status === issue.status.name &&
+              current.source.description === issue.description &&
+              (current.source.labels ?? []).length === (issue.labels ?? []).length &&
+              current.source.assignee?.accountId === issue.assignee?.accountId
+            return alreadyHydrated
+              ? current
+              : (createJiraTask(issue) as Extract<TaskItem, { provider: 'jira' }>)
+          })
         }
         return
       }

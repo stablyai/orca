@@ -15,6 +15,8 @@ import {
   taskRepositoryMeta
 } from './mobile-tasks-legacy-foundation'
 import { styles } from './mobile-tasks-legacy-styles'
+import { PROVIDER_LABELS } from './mobile-task-view-options'
+import { jiraSiteLabel } from './jira-mobile-connection'
 
 export function useMobileTasksPickerProjection(model: DetailCommentRenderersModel) {
   const {
@@ -29,6 +31,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     githubRepoSources,
     hostedRepos,
     items,
+    jiraConnection,
     linearTeams,
     provider,
     reposById,
@@ -69,10 +72,20 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     provider === 'github' || provider === 'gitlab'
       ? ((selectedCreateTarget as RepoSummary | null)?.displayName ?? 'Select target')
       : ((selectedCreateTarget as LinearTeam | null)?.name ?? 'Select target')
-  const providerLabel =
-    provider === 'github' ? 'GitHub' : provider === 'gitlab' ? 'GitLab' : 'Linear'
+  const providerLabel = PROVIDER_LABELS[provider]
   const showHeaderCreateTask =
     provider === 'linear' || (provider === 'github' && githubMode === 'items')
+  const jiraSiteOptions = useMemo<PickerOption<string>[]>(
+    () => [
+      { value: 'all', label: 'All sites' },
+      ...jiraConnection.sites.map((site) => ({
+        value: site.id,
+        label: jiraSiteLabel(site),
+        subtitle: site.siteUrl
+      }))
+    ],
+    [jiraConnection.sites]
+  )
   const providerOptions = useMemo(
     () => PROVIDER_OPTIONS.filter((option) => visibleProviders.includes(option.value)),
     [visibleProviders]
@@ -211,6 +224,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     createTargetOptions,
     selectedCreateTarget,
     selectedCreateTargetLabel,
+    jiraSiteOptions,
     providerLabel,
     showHeaderCreateTask,
     providerOptions,
