@@ -832,7 +832,9 @@
 .markdown-body th,
 .markdown-body td {
   padding: 8px 14px;
-  border: 1px solid var(--border);
+  /* Why: --border is ~7% white in dark mode, so table grid lines are nearly invisible;
+     --input matches --border in light mode and is stronger in dark. */
+  border: 1px solid var(--input);
   text-align: left;
 }
 
