@@ -107,7 +107,7 @@ import { handleMainProcessPreflightFailure } from './main-process-preflight-fail
 
 export type MainProcessPreflightOptions = {
   focusExistingWindow: () => void
-  requestDesktopActivation: (argv?: readonly string[]) => void
+  requestDesktopActivation: (argv?: readonly string[], launchData?: unknown) => void
 }
 
 /** Performs all module-scope work that must happen before Electron's ready event. */

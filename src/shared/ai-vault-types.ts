@@ -109,6 +109,7 @@ export type AiVaultSession = {
   model: string | null
   filePath: string
   codexHome: string | null
+  grokHome?: string | null
   createdAt: string | null
   updatedAt: string | null
   modifiedAt: string

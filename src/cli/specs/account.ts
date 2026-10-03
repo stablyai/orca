@@ -7,6 +7,33 @@ import { GLOBAL_FLAGS, type CommandSpec } from '../args'
 // way to manage Claude and Codex accounts.
 export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['account', 'usage'],
+    summary: 'Read usage for saved Grok accounts on this host',
+    usage: 'orca account usage --agent grok [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent'],
+    examples: ['orca account usage --agent grok --json']
+  },
+  {
+    path: ['account', 'select'],
+    summary: 'Choose the Grok account for new local sessions',
+    usage: 'orca account select --agent grok --account-id <id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'account-id', 'system'],
+    notes: [
+      'Use --system instead of --account-id to use the system Grok login. Existing sessions keep their account.'
+    ],
+    examples: ['orca account select --agent grok --account-id <id>']
+  },
+  {
+    path: ['account', 'import'],
+    summary: 'Save an existing Grok login in Orca',
+    usage: 'orca account import --agent grok --source-home <folder> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'source-home'],
+    notes: [
+      'Copies only the login into an Orca-owned account folder. Does not select the account.'
+    ],
+    examples: ['orca account import --agent grok --source-home <folder>']
+  },
+  {
     path: ['account', 'add'],
     summary: 'Add a managed Claude or Codex account by signing in on this Orca host',
     usage: 'orca account add [--agent claude|codex] [--json]',

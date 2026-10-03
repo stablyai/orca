@@ -66,6 +66,7 @@ vi.mock('./cursor-auth', () => ({
 }))
 
 vi.mock('./grok-auth', () => ({
+  getGrokHome: () => '/test/grok',
   readGrokAuthSession: vi.fn(() => ({ status: 'missing' }))
 }))
 
@@ -175,6 +176,7 @@ describe('RateLimitService', () => {
     expect(fetchGrokRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGrokRateLimits).toHaveBeenCalledWith({
       authReadResult,
+      authHome: '/test/grok',
       signal: expect.any(AbortSignal)
     })
     expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
@@ -185,6 +187,20 @@ describe('RateLimitService', () => {
     expect(fetchMiniMaxRateLimits).not.toHaveBeenCalled()
     expect(service.getState().grokAuthConfigured).toBe(true)
     expect(service.getState().grok?.status).toBe('ok')
+  })
+
+  it('discards an old Grok result when the selected account changes during a request', async () => {
+    const service = new RateLimitService()
+    const old = deferred<ProviderRateLimits>()
+    vi.mocked(fetchGrokRateLimits).mockImplementationOnce(() => old.promise)
+    vi.mocked(fetchGrokRateLimits).mockResolvedValueOnce(okProvider('grok', 12))
+    const first = service.refreshGrok()
+    await flushMicrotasks()
+    const switched = service.refreshForGrokAccountChange()
+    expect(service.getState().grok?.session).toBeNull()
+    old.resolve(okProvider('grok', 99))
+    await Promise.all([first, switched])
+    expect(service.getState().grok?.session?.usedPercent).toBe(12)
   })
 
   it('does not refetch Claude when a Codex account switch is queued during fetchAll', async () => {
@@ -452,7 +468,7 @@ describe('RateLimitService', () => {
       expect.objectContaining({
         authPreparation: undefined,
         allowPtyFallback: false,
-        allowUsagePanelSupplement: true,
+        allowUsagePanelSupplement: process.platform !== 'win32',
         signal: expect.any(AbortSignal)
       })
     )
@@ -470,6 +486,7 @@ describe('RateLimitService', () => {
     )
     expect(fetchGrokRateLimits).toHaveBeenCalledWith({
       signal: expect.any(AbortSignal),
+      authHome: undefined,
       authReadResult: { status: 'missing' }
     })
 

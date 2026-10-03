@@ -45,7 +45,7 @@ describe('headless lock-loss exit contract', () => {
     expect(activationEnd).toBeGreaterThan(activationStart)
 
     expect(entrySource.slice(activationStart, activationEnd)).toContain(
-      'shouldActivateDesktopForSecondInstance(argv)'
+      'shouldActivateDesktopForSecondInstance(argv, launchData)'
     )
   })
 

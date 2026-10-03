@@ -81,6 +81,7 @@ export abstract class RateLimitServiceState {
   protected activeFetchAbortControllers = new Set<AbortController>()
   protected fetchIdleResolvers: (() => void)[] = []
   protected codexFetchGeneration = 0
+  protected grokFetchGeneration = 0
   protected claudeFetchGeneration = 0
   // Why: statusline ingest must attribute live windows to the selected account without re-running the side-effectful auth sync per post.
   protected lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null

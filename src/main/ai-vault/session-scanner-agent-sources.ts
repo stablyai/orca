@@ -5,6 +5,7 @@ import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
+import { getManagedGrokAccountHomes } from '../grok-accounts/paths'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
 import {
   clineMessagesPathForMetadata,
@@ -176,11 +177,16 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     contentDependencyPath: cursorChatMetaPath
   },
   grok: {
-    rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.grokSessionsDir ?? resolveGrokSessionsDir(), wslHomeDirs, [
+    rootDirs: (options, wslHomeDirs) => [
+      ...sessionRootDirs(options.grokSessionsDir ?? resolveGrokSessionsDir(), wslHomeDirs, [
         '.grok',
         'sessions'
       ]),
+      ...(options.additionalGrokSessionsDirs ??
+        (options.grokSessionsDir
+          ? []
+          : getManagedGrokAccountHomes().map((home) => join(home, 'sessions'))))
+    ],
     extensions: ['.json'],
     filePredicate: (filePath) => basename(filePath) === 'summary.json'
   },

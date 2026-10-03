@@ -1,4 +1,5 @@
 import type { App } from 'electron'
+import { isBackgroundLaunch } from '../window/foreground-activation-policy'
 import { argvRequestsServeMode } from './serve-mode-argv'
 import { writeStartupDiagnosticLine, type StartupDiagnosticSink } from './startup-diagnostics'
 
@@ -15,8 +16,19 @@ export const SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE = 3
 // Why not `argv.includes('--serve')`: the documented systemd unit runs `<binary> serve --port …`, so a
 // duplicate start hands this handler CLI-form argv the CLI redirect never rewrote (#12677) — matching only
 // the flag form would promote the live headless server to a desktop window, un-fixing #11935.
-export function shouldActivateDesktopForSecondInstance(argv: readonly string[] = []): boolean {
-  return !argvRequestsServeMode(argv)
+export function shouldActivateDesktopForSecondInstance(
+  argv: readonly string[] = [],
+  launchData?: unknown
+): boolean {
+  return (
+    !argvRequestsServeMode(argv) &&
+    !(
+      typeof launchData === 'object' &&
+      launchData !== null &&
+      'backgroundLaunch' in launchData &&
+      launchData.backgroundLaunch === true
+    )
+  )
 }
 
 /**
@@ -39,12 +51,12 @@ export function shouldActivateDesktopForSecondInstance(argv: readonly string[] =
  */
 export function acquireSingleInstanceLock(
   app: App,
-  onSecondInstance: (argv: readonly string[]) => void
+  onSecondInstance: (argv: readonly string[], launchData?: unknown) => void
 ): boolean {
-  if (!app.requestSingleInstanceLock()) {
+  if (!app.requestSingleInstanceLock({ backgroundLaunch: isBackgroundLaunch() })) {
     return false
   }
-  app.on('second-instance', (_event, argv) => onSecondInstance(argv))
+  app.on('second-instance', (_event, argv, _cwd, launchData) => onSecondInstance(argv, launchData))
   return true
 }
 

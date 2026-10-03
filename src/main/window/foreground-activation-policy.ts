@@ -38,6 +38,40 @@ export function isWindowlessLaunch(env: PolicyEnv = process.env): boolean {
   )
 }
 
+/** A normal shortcut launch can reopen a runtime that was started for background work. */
+export function restoreDesktopActivationForUserLaunch(
+  launchData: unknown,
+  options: {
+    env?: NodeJS.ProcessEnv
+    app?: Pick<ActivationPolicyApp, 'setActivationPolicy'>
+    platform?: NodeJS.Platform
+    warn?: (message: string, error: unknown) => void
+  } = {}
+): boolean {
+  const env = options.env ?? process.env
+  if (
+    env.ORCA_BACKGROUND_LAUNCH !== '1' ||
+    env.ORCA_E2E_HEADLESS === '1' ||
+    env.ORCA_E2E_HEADFUL === '1' ||
+    typeof launchData !== 'object' ||
+    launchData === null ||
+    !('backgroundLaunch' in launchData) ||
+    launchData.backgroundLaunch !== false
+  ) {
+    return false
+  }
+  delete env.ORCA_BACKGROUND_LAUNCH
+  if ((options.platform ?? process.platform) === 'darwin') {
+    try {
+      const app = options.app ?? electronApp
+      app.setActivationPolicy('regular')
+    } catch (error) {
+      options.warn?.('[window] Failed to restore desktop activation policy', error)
+    }
+  }
+  return true
+}
+
 /**
  * macOS: a windowless run still claims a Dock tile and the menu bar as it starts
  * and exits. `accessory` drops both while leaving programmatic activation intact.

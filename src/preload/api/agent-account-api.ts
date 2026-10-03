@@ -6,6 +6,7 @@ import type {
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
 import type { CursorAccountStatus, GrokAccountStatus } from '../../shared/rate-limit-types'
 import type { ZcodePlanCredentialsStatus } from '../../shared/zcode-plan-sites'
+import type { GrokAccountsState } from '../../shared/grok-account-types'
 
 export type CodexAccountsApi = {
   list: () => Promise<CodexRateLimitAccountsState>
@@ -62,6 +63,11 @@ export type ClaudeAccountsApi = {
 
 export type GrokAccountsApi = {
   getStatus: () => Promise<GrokAccountStatus>
+  list: () => Promise<GrokAccountsState>
+  add: () => Promise<GrokAccountsState>
+  reauthenticate: (accountId: string) => Promise<GrokAccountsState>
+  select: (accountId: string | null) => Promise<GrokAccountsState>
+  cancelLogin: () => Promise<void>
 }
 
 export type CursorAccountsApi = {

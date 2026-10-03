@@ -1,10 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { resolveGrokHomeDir } from '../../shared/grok-session-paths'
+import { getSelectedGrokAccountHome } from '../grok-accounts/paths'
 
 // Why: when GROK_HOME is set, auth.json must be the same path Grok CLI uses.
 export function getGrokHome(): string {
-  return resolveGrokHomeDir()
+  return getSelectedGrokAccountHome() ?? resolveGrokHomeDir()
 }
 
 export function getGrokAuthPath(): string {
@@ -82,12 +83,12 @@ function isPreferredGrokAuthKey(key: string): boolean {
   return key === PREFERRED_GROK_AUTH_ISSUER || key.startsWith(`${PREFERRED_GROK_AUTH_ISSUER}::`)
 }
 
-export function readGrokAuthSession(): GrokAuthReadResult {
-  const path = getGrokAuthPath()
-  if (!existsSync(path)) {
-    return { status: 'missing' }
-  }
+export function readGrokAuthSession(home?: string): GrokAuthReadResult {
   try {
+    const path = home ? join(home, 'auth.json') : getGrokAuthPath()
+    if (!existsSync(path)) {
+      return { status: 'missing' }
+    }
     const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
     if (typeof parsed !== 'object' || parsed === null) {
       return { status: 'error', error: 'Grok auth file is invalid' }

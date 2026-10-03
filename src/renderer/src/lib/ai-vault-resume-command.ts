@@ -15,6 +15,7 @@ import {
   type SleepingAgentLaunchConfig
 } from '../../../shared/agent-session-resume'
 import { normalizeAiVaultResumeFilePath } from '../../../shared/ai-vault-resume-path'
+import { getAiVaultResumeAccountHome } from './ai-vault-resume-home'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -35,7 +36,7 @@ import {
 
 type AiVaultResumeCommandSession = Pick<
   AiVaultSession,
-  'agent' | 'sessionId' | 'cwd' | 'codexHome'
+  'agent' | 'sessionId' | 'cwd' | 'codexHome' | 'grokHome'
 > &
   Partial<
     Pick<AiVaultSession, 'executionHostId' | 'executionHostPlatform' | 'resumeCommand' | 'filePath'>
@@ -153,7 +154,7 @@ function buildAiVaultResumeForWorktree(
     args.session.executionHostPlatform
       ? args.session.executionHostPlatform
       : getAiVaultResumePlatform(args.state, args.worktreeId)
-  const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
+  const codexHome = getAiVaultResumeAccountHome(args.session.codexHome, platform)
   const isLocalSession =
     !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
   const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, platform)
@@ -194,7 +195,16 @@ function buildAiVaultResumeForWorktree(
         args.session.agent,
         args.state.settings?.agentDefaultArgs
       ),
-      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.state.settings?.agentDefaultEnv),
+      agentEnv: {
+        ...resolveTuiAgentLaunchEnv(args.session.agent, args.state.settings?.agentDefaultEnv),
+        ...(args.session.agent === 'grok' && args.session.grokHome
+          ? {
+              GROK_HOME:
+                getAiVaultResumeAccountHome(args.session.grokHome, platform) ??
+                args.session.grokHome
+            }
+          : {})
+      },
       ...(args.session.agent === 'omp' && resumeFilePath
         ? { ompResumeFilePath: resumeFilePath }
         : {})
@@ -288,18 +298,6 @@ export function getAiVaultAgentProviderSession(
       : null
   }
   return { key: 'session_id', id: session.sessionId }
-}
-
-function getAiVaultResumeCodexHome(
-  codexHome: string | null,
-  platform: NodeJS.Platform
-): string | null {
-  // Why: WSL UNC Codex homes must be POSIX when invoking Linux commands.
-  // Keep original paths unchanged for non-Linux targets.
-  if (!codexHome || platform !== 'linux') {
-    return codexHome
-  }
-  return parseWslUncPath(codexHome)?.linuxPath ?? codexHome
 }
 
 function getAiVaultResumePlatform(

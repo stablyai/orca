@@ -18673,5 +18673,11 @@
     "addTypedPath": "Add",
     "noDirectories": "No folders added yet.",
     "removePath": "Remove {{name}}"
+  },
+  "grokAccounts": {
+    "openSwitcher": "Grokの詳細とアカウント切り替えを開く",
+    "accountLabel": "Grokアカウント",
+    "loadingAccounts": "アカウントを読み込み中…",
+    "hostOnly": "Orcaを実行しているコンピューターでGrokアカウントを管理してください。"
   }
 }

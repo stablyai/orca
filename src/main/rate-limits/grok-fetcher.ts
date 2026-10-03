@@ -4,12 +4,8 @@ import type {
   RateLimitWindow,
   UsageRateLimitMetadata
 } from '../../shared/rate-limit-types'
-import {
-  isGrokAccessTokenFresh,
-  readGrokAuthSession,
-  type GrokAuthReadResult,
-  type GrokAuthSession
-} from './grok-auth'
+import { isGrokAccessTokenFresh, type GrokAuthReadResult, type GrokAuthSession } from './grok-auth'
+import { readGrokAuthSessionForUsage } from './grok-token-renewal'
 
 // Why: billing URL and headers must match Grok CLI or xAI rejects the request.
 const GROK_CLI_PROXY_BASE =
@@ -288,11 +284,10 @@ async function fetchMonthlyUsageFallback(
   return { kind: 'window', window: mapMonthlyUsage(config), config }
 }
 
-// Why: Orca never runs grok login; it only reads the session file the CLI updates.
 export async function fetchGrokRateLimits(
-  options: { signal?: AbortSignal; authReadResult?: GrokAuthReadResult } = {}
+  options: { signal?: AbortSignal; authReadResult?: GrokAuthReadResult; authHome?: string } = {}
 ): Promise<ProviderRateLimits> {
-  const readResult = options.authReadResult ?? readGrokAuthSession()
+  const readResult = await readGrokAuthSessionForUsage(options)
   if (readResult.status === 'missing') {
     return result('unavailable', 'Not signed in to Grok — run grok login')
   }

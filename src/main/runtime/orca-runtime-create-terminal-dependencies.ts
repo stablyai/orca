@@ -35,3 +35,4 @@ export const BACKGROUND_TERMINAL_SPAWN_FLAGS = {
   initiallyHidden: true,
   persistHostSessionBinding: true
 } as const
+export { resolveGrokRuntimeLaunchOptions } from './grok-terminal-create-options'

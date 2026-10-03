@@ -2,7 +2,7 @@ import { fetchClaudeRateLimits } from '../claude-fetcher'
 import { fetchCodexRateLimits } from '../codex-fetcher'
 import { fetchGeminiRateLimits } from '../gemini-usage-fetcher'
 import { fetchGrokRateLimits } from '../grok-fetcher'
-import { readGrokAuthSession } from '../grok-auth'
+import { getGrokHome, readGrokAuthSession } from '../grok-auth'
 import { fetchCursorRateLimits } from '../cursor-fetcher'
 import { readCursorAuthSession } from '../cursor-auth'
 import { fetchZcodeRateLimits } from '../zcode-usage-fetcher'
@@ -49,6 +49,7 @@ export type FetchAllCyclePrepared = {
     PromiseSettledResult<ProviderRateLimits>
   ]
   grokResultPromise: Promise<SettledProviderResult>
+  grokGeneration: number
   cursorResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
   antigravityResultPromise: Promise<SettledProviderResult>
@@ -98,7 +99,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const miniMaxApiKey = miniMaxConfigResult.config.apiKey
     const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
+    const grokGeneration = this.grokFetchGeneration
     const grokAuthReadResult = readGrokAuthSession()
+    const grokHome = grokAuthReadResult.status === 'ok' ? getGrokHome() : undefined
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
 
     // Discard stale data on config change — it belongs to a different session/workspace.
@@ -203,6 +206,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const missingWslCodexHome =
       codexFetchGated || codexHomePath ? null : this.getMissingWslCodexHomeResult(codexTarget)
     const grokResultPromise = fetchGrokRateLimits({
+      authHome: grokHome,
       signal,
       authReadResult: grokAuthReadResult
     }).then(
@@ -307,6 +311,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         miniMaxResult
       ],
       grokResultPromise,
+      grokGeneration,
       cursorResultPromise,
       zcodeResultPromise,
       antigravityResultPromise
