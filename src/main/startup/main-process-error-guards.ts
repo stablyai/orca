@@ -61,11 +61,17 @@ let recordWindowStartedAt = 0
 let recordWindowCount = 0
 let recordsSuppressed = 0
 
+let uncaughtExceptionRecorded = false
+
 /** Durably record a main-process fatal/near-fatal error before default handling runs. Exported for tests. */
 export function recordFatalMainProcessError(kind: FatalMainProcessErrorKind, error: unknown): void {
-  // Why: only rejections can storm; the one uncaught-exception record before the fatal re-throw
-  // must never be lost to a window a storm already exhausted.
-  if (kind === 'main_unhandled_rejection') {
+  // Why exempt, and why only the first: the record before the re-throw must never be lost to a
+  // window a rejection storm already exhausted. But the re-throw does not always end the process
+  // — a win32 main survived one and ran 4h20m longer — so once the guard re-arms, later uncaught
+  // exceptions can storm exactly like rejections and take the same window.
+  const exemptFromWindow = kind === 'main_uncaught_exception' && !uncaughtExceptionRecorded
+  uncaughtExceptionRecorded ||= kind === 'main_uncaught_exception'
+  if (!exemptFromWindow) {
     const now = Date.now()
     // Why: a backward clock jump (sleep/resume, NTP) would otherwise trap an exhausted window and suppress every breadcrumb until wall time catches up.
     if (now < recordWindowStartedAt || now - recordWindowStartedAt >= RECORD_WINDOW_MS) {
@@ -100,22 +106,33 @@ export function recordFatalMainProcessError(kind: FatalMainProcessErrorKind, err
 }
 
 export function installUncaughtPipeErrorGuard(): void {
+  const arm = (): void => {
+    process.on('uncaughtException', onUncaughtException)
+  }
   const onUncaughtException = (error: unknown): void => {
     const errorCode = readErrorProperty(error, 'code')
     if (errorCode === 'EIO' || errorCode === 'EPIPE') {
       return
     }
 
-    // Why (issue #9441): the re-throw below exits with a clean code and no macOS crash report; record durably first or the death is undiagnosable in the field.
+    // Why (issue #9441): the re-throw below leaves no macOS crash report, so record durably
+    // first or the fault is undiagnosable in the field.
     recordFatalMainProcessError('main_uncaught_exception', error)
     process.off('uncaughtException', onUncaughtException)
     // Why: throwing inside an uncaughtException handler exits with status 7 and hides the fault; re-throw next tick for the real stack.
     setImmediate(() => {
+      // Why queued before the throw: this runs only if the re-throw did NOT end the
+      // process. That is not hypothetical — a win32 main survived a RangeError here
+      // and ran 4h20m more with main-process reporting silently disarmed, which is
+      // the blind spot #9441 closed. Electron's own permanent uncaughtException listener
+      // absorbs the re-throw, so in the main process it always survives; the nesting exists
+      // so the guard can never catch its own throw.
+      setImmediate(arm)
       throw error
     })
   }
 
-  process.on('uncaughtException', onUncaughtException)
+  arm()
   removeBootstrapFatalExitGuard()
 }
 
