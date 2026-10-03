@@ -43,6 +43,7 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
   const activeModal = useAppStore((s) => s.activeModal)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const setupGuideSidebarDismissed = useAppStore((s) => s.setupGuideSidebarDismissed)
+  const prefersBlankTerminal = useAppStore((s) => s.settings?.defaultTuiAgent === 'blank')
   const setSetupGuideSidebarDismissed = useAppStore((s) => s.setSetupGuideSidebarDismissed)
   // Why: the sidebar count must be warmed before click so it matches the modal
   // count instead of changing while the lazy modal is mounting.
@@ -52,7 +53,7 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
   const showSetupGuideEntry = shouldShowSetupGuideEntry({
     ready: getSetupGuideSidebarEntryReady(persistedUIReady, setupProgress.ready),
     setupComplete,
-    dismissed: setupGuideSidebarDismissed
+    dismissed: setupGuideSidebarDismissed || prefersBlankTerminal
   })
   const lastVisibleProgressRef = React.useRef<FeatureWallSetupProgress | null>(null)
   if (showSetupGuideEntry) {
@@ -62,7 +63,7 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
   // checklist is visibly available, keep that stable row through the refresh.
   const renderedProgress = showSetupGuideEntry
     ? setupProgress
-    : !setupProgress.ready && !setupGuideSidebarDismissed
+    : !setupProgress.ready && !setupGuideSidebarDismissed && !prefersBlankTerminal
       ? lastVisibleProgressRef.current
       : null
   const handleHideSetupGuide = React.useCallback(() => {

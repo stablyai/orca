@@ -174,6 +174,20 @@ describe('SettingsSidebar', () => {
     expect(markup).toContain('5 of 8 setup steps complete')
   })
 
+  it('hides incomplete setup progress when No agent is selected', () => {
+    expect(
+      renderSidebar('agents', { ...getDefaultSettings('/tmp'), defaultTuiAgent: 'blank' })
+    ).not.toContain('Onboarding checklist')
+  })
+
+  it('shows incomplete setup progress again after changing back to an agent', () => {
+    const settings = { ...getDefaultSettings('/tmp'), defaultTuiAgent: 'blank' as const }
+    expect(renderSidebar('agents', settings)).not.toContain('Onboarding checklist')
+    expect(renderSidebar('agents', { ...settings, defaultTuiAgent: 'codex' })).toContain(
+      'Onboarding checklist, 5 of 8 done. Show setup guide.'
+    )
+  })
+
   it('does not render the setup guide row after every checklist step is complete', () => {
     mocks.useSettingsSetupGuideProgress.mockReturnValue(
       makeSetupGuideProgress({

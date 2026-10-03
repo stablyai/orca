@@ -68,8 +68,7 @@ export function getFeatureWallSetupProgress(
     computerUseUnavailable: input.computerUseUnavailable === true
   })
   const stepDone: Record<FeatureWallSetupStepId, boolean> = {
-    'default-agent':
-      Boolean(input.settings?.defaultTuiAgent) && input.settings?.defaultTuiAgent !== 'blank',
+    'default-agent': Boolean(input.settings?.defaultTuiAgent),
     'add-two-repos': input.gitRepoCount >= 2,
     notifications:
       input.settings?.notifications.enabled === true &&

@@ -9,6 +9,7 @@ import {
   getFirstIncompleteFeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 function makeInput(
   overrides: Partial<FeatureWallSetupProgressInput> = {}
@@ -41,6 +42,26 @@ function makeWorktree(
 }
 
 describe('getFeatureWallSetupProgress', () => {
+  it.each([
+    ['blank', true],
+    ['claude', true],
+    ['codex', true],
+    [null, false]
+  ] as const)('counts default agent %s as configured: %s', (defaultTuiAgent, done) => {
+    const settings = getDefaultSettings('/home/test')
+    settings.defaultTuiAgent = defaultTuiAgent
+    settings.notifications.enabled = false
+    const progress = getFeatureWallSetupProgress(
+      makeInput({
+        settings
+      })
+    )
+
+    expect(progress.stepDone['default-agent']).toBe(done)
+    expect(progress.coreDoneCount).toBe(done ? 1 : 0)
+    expect(progress.stepDone['agent-capabilities']).toBe(false)
+  })
+
   it('tracks Add 2 projects from durable git repo count', () => {
     expect(getFeatureWallSetupProgress(makeInput({ gitRepoCount: 1 })).stepDone).toMatchObject({
       'add-two-repos': false
@@ -126,32 +147,36 @@ describe('getFeatureWallSetupProgress', () => {
     expect(progress.coreTotal).toBe(8)
   })
 
-  it('marks all active steps complete without historical terminal split interaction', () => {
-    const progress = getFeatureWallSetupProgress(
-      makeInput({
-        settings: {
-          defaultTuiAgent: 'claude',
-          notifications: { enabled: true, agentTaskComplete: true }
-        } as never,
-        featureInteractions: {
-          browser: { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
-        },
-        worktreesByRepo: {
-          'repo-1': [makeWorktree('main', { isMainWorktree: true }), makeWorktree('worktree-1')]
-        },
-        hasConnectedTaskSource: true,
-        hasSetupScript: true,
-        gitRepoCount: 2,
-        browserUseSkillInstalled: true,
-        computerUseSkillInstalled: true,
-        computerUsePermissionsReady: true,
-        orchestrationSkillInstalled: true
-      })
-    )
+  it.each(['blank', 'claude'] as const)(
+    'marks all active steps complete with default %s without historical terminal split interaction',
+    (defaultTuiAgent) => {
+      const settings = getDefaultSettings('/home/test')
+      settings.defaultTuiAgent = defaultTuiAgent
+      settings.notifications.enabled = true
+      settings.notifications.agentTaskComplete = true
+      const progress = getFeatureWallSetupProgress(
+        makeInput({
+          settings,
+          featureInteractions: {
+            browser: { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
+          },
+          worktreesByRepo: {
+            'repo-1': [makeWorktree('main', { isMainWorktree: true }), makeWorktree('worktree-1')]
+          },
+          hasConnectedTaskSource: true,
+          hasSetupScript: true,
+          gitRepoCount: 2,
+          browserUseSkillInstalled: true,
+          computerUseSkillInstalled: true,
+          computerUsePermissionsReady: true,
+          orchestrationSkillInstalled: true
+        })
+      )
 
-    expect(progress.coreDoneCount).toBe(8)
-    expect(Object.values(progress.stepDone).every(Boolean)).toBe(true)
-  })
+      expect(progress.coreDoneCount).toBe(8)
+      expect(Object.values(progress.stepDone).every(Boolean)).toBe(true)
+    }
+  )
 
   it('does not mark the step complete from the main checkout alone', () => {
     expect(
