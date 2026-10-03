@@ -1,4 +1,4 @@
-import type { RateLimitWindow } from '../../shared/rate-limit-types'
+import type { ExtraUsageBalance, RateLimitWindow } from '../../shared/rate-limit-types'
 
 const SESSION_WINDOW_MINUTES = 300
 const WEEKLY_WINDOW_MINUTES = 10_080
@@ -97,6 +97,58 @@ export function parseOpenCodeGoUsageApiPayload(text: string): OpenCodeGoUsageWin
     session,
     weekly,
     monthly: percentMeterToWindow(payload.usage.monthly, MONTHLY_WINDOW_MINUTES)
+  }
+}
+
+// Contract verified in CodexBar #3796 and steipete/CodexBar#3783 comment 5754087068.
+export function parseOpenCodeGoBillingStatusPayload(text: string): number | null {
+  if (!text || text.length > MAX_STATUS_PAYLOAD_CHARS) {
+    return null
+  }
+  let payload: unknown
+  try {
+    payload = JSON.parse(text)
+  } catch {
+    return null
+  }
+  if (
+    !isRecord(payload) ||
+    payload.billingMode !== 'prepaid' ||
+    payload.mode !== 'pay-as-you-go' ||
+    typeof payload.balanceMicroCents !== 'string' ||
+    !/^-?\d+$/.test(payload.balanceMicroCents)
+  ) {
+    return null
+  }
+  const microCents = Number(payload.balanceMicroCents)
+  return Number.isSafeInteger(microCents) ? microCents / 100_000_000 : null
+}
+
+export function makeOpenCodeGoZenBalance(balance: number): ExtraUsageBalance {
+  return {
+    balance,
+    unit: 'currency',
+    currencyCode: 'USD',
+    enabled: true,
+    disabledReason: null,
+    spent: null,
+    spendLimit: null,
+    spentPercent: null,
+    resetsAt: null
+  }
+}
+
+export function isOpenCodeGoExplicitNoAccessPayload(text: string): boolean {
+  if (!text || text.length > MAX_STATUS_PAYLOAD_CHARS) {
+    return false
+  }
+  try {
+    const payload: unknown = JSON.parse(text)
+    return (
+      payload === null || (isRecord(payload) && payload.access === null && !('error' in payload))
+    )
+  } catch {
+    return false
   }
 }
 
