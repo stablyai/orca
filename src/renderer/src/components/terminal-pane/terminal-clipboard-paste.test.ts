@@ -363,7 +363,7 @@ describe('terminal clipboard paste', () => {
     expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
   })
 
-  it('keeps normal single-line text paste on the stale Ctrl+C protection path', async () => {
+  it('keeps bracketed paste for single-line text after Ctrl+C', async () => {
     const observedIgnoreBracketedPasteMode: boolean[] = []
     const terminal = {
       modes: { bracketedPasteMode: true },
@@ -385,7 +385,7 @@ describe('terminal clipboard paste', () => {
     })
 
     expect(terminal.paste).toHaveBeenCalledWith('a69ce28e1d092e0c8825cd1a109ac36409962bc1')
-    expect(observedIgnoreBracketedPasteMode).toEqual([true])
+    expect(observedIgnoreBracketedPasteMode).toEqual([false])
     expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
   })
 })
