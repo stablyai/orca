@@ -20,11 +20,12 @@ export type StructuredAgentSessionOutboxAdmission =
  * disagree with the other about which entry is holding the queue.
  *
  * A `dispatching` entry is not a barrier: the host appended its journal row inside the
- * per-session serialize chain before dispatching, so nothing behind it can overtake it, and
- * waiting for its echo costs delivery of everything queued behind it. An `unconfirmed` entry
- * is a barrier — sending past it would reorder around a message that may yet land. One the
- * user was told did not go through is not: it lands only by its own Retry, so what the user
- * sends after it goes out as they send it.
+ * per-session serialize chain before dispatching, so it keeps its place, and waiting for its echo
+ * costs delivery of everything queued behind it. One whose start was refused before it ran is the
+ * exception the host makes: it waits for its next try while the messages behind it go first. An
+ * `unconfirmed` entry is a barrier — sending past it would reorder around a message that may yet
+ * land. One the user was told did not go through is not: it lands only by its own Retry, so what
+ * the user sends after it goes out as they send it.
  */
 export function admitStructuredAgentSessionOutboxEntry(
   entries: readonly StructuredAgentSessionOutboxEntry[]

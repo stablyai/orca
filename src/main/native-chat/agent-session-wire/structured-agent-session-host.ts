@@ -124,8 +124,7 @@ export class StructuredAgentSessionHost {
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       // Quit drains a delivery start before it evicts, so the child it produces is stopped.
       trackStart: (start) => this.tasks.trackAttach(start),
-      ensureProviderChild: (sessionId, startedFor) =>
-        agentStart.ensureStructuredAgentSessionAgent(this.attachContext(), sessionId, startedFor),
+      attachContext: () => this.attachContext(),
       reset: (sessionId, journal, reset) =>
         this.subscribers.reset(
           sessionId,
@@ -156,6 +155,7 @@ export class StructuredAgentSessionHost {
           structuredAgentSessionConversationFence(deps.store, sessionId)
         ),
       publishStatus: this.clientDelivery.publishStatusAndSettlement,
+      wakeDelivery: (sessionId) => this.conversationDelivery.loop.wake(sessionId),
       serialize: (sessionId, task) => this.tasks.trackAttach(this.serialize(sessionId, task)),
       now: () => this.now()
     })
@@ -304,6 +304,7 @@ export class StructuredAgentSessionHost {
   setOption = this.mutations.setOption
   changeThreadGoal = this.mutations.changeThreadGoal
   readOptions = this.mutations.readOptions
+  retryMessage = this.mutations.retryMessage
 
   rewind = (caller: StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
     rewindStructuredAgentSession(this.mutationContext(), this.attachContext(), caller, params)
@@ -315,8 +316,7 @@ export class StructuredAgentSessionHost {
   readCommands = (sessionId: string) => ({ commands: this.clientDelivery.readCommands(sessionId) })
 
   /** From the record store, never the session map: an idle-released chat has no map entry. */
-  handoffStatus = (sessionId: string): SessionWire.AgentSessionHandoffStatus =>
-    structuredAgentSessionOwnerStatus(this.deps, sessionId)
+  handoffStatus = (sessionId: string) => structuredAgentSessionOwnerStatus(this.deps, sessionId)
 
   history: StructuredAgentSessionBackgroundTaskChannel['history'] = (request, scope) =>
     this.backgroundTasks.history(request, scope)

@@ -18,6 +18,7 @@ import {
   useStructuredAgentSessionHostStopsConversation
 } from '@/runtime/structured-agent-session-host-capability'
 import { hasUnsentStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox-stop-withdrawal'
+import { isRetryingStructuredAgentSessionStart } from '../../../../shared/structured-agent-session-start-retry'
 import {
   legacyAgentSessionSelectedOptionId,
   type AgentSessionPromptResponse
@@ -35,6 +36,7 @@ import { useStructuredAgentSessionThreadGoal } from './use-structured-agent-sess
 import { useStructuredAgentSessionContextUsage } from './use-structured-agent-session-context-usage'
 import { useStructuredAgentSessionRailOutline } from './use-structured-agent-session-rail-outline'
 import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
+import { useStructuredAgentSessionRetryInPlace } from './use-structured-agent-session-retry-in-place'
 import { outboxOutsideQueuedCards } from './structured-agent-session-queued-cards'
 import { structuredAgentSessionStartFailureFacts } from './structured-agent-session-delivery-notices'
 import { hostStatesTurnScopes } from '../../../../shared/native-chat-turn-membership'
@@ -124,6 +126,12 @@ export function useStructuredAgentSession(args: {
     queueDelivery: { capability: queueCapability, enabled: queueFollowUps },
     queuedMessageIds
   })
+  const { retry, retriesInPlace, retryWaitsForHost } = useStructuredAgentSessionRetryInPlace({
+    target,
+    mutate,
+    submissions: transportState.submissions,
+    outboxRetry: outboxController.retry
+  })
 
   const threadGoal = useStructuredAgentSessionThreadGoal({
     journalItems: transportState.journalItems,
@@ -144,14 +152,17 @@ export function useStructuredAgentSession(args: {
 
   const prompts = pendingStructuredSessionPrompts(transportState.journalItems)
   const { outbox } = outboxController
+  const { submissions } = transportState
   // A host that takes a Stop naming no turn gets Stop from the send until the work settles; every
   // Stop before a turn opens needs that form. An older host can stop only a turn it has opened.
   const stopsConversation =
     useStructuredAgentSessionHostStopsConversation(target) && transportState.fence !== null
+  // A message waiting for its next start is not work in progress, but a Stop still withdraws it.
   const canStop =
     transportState.turnId !== null ||
     (stopsConversation &&
       (transportState.isWorking ||
+        transportState.submissions.some(isRetryingStructuredAgentSessionStart) ||
         hasUnsentStructuredAgentSessionOutboxEntry(outbox, transportState.submissions)))
   // A queued send is a card, never a transcript bubble.
   const isWorking = transportState.isWorking
@@ -166,7 +177,8 @@ export function useStructuredAgentSession(args: {
   const messages = useStructuredAgentSessionMessages(
     transportState.journalItems,
     transcriptOutbox,
-    transportState.submissions
+    submissions,
+    retriesInPlace
   )
   const queuedController = useStructuredAgentSessionQueuedMessages({
     enabled: queueCapable && transportState.fence !== null,
@@ -215,13 +227,14 @@ export function useStructuredAgentSession(args: {
     outbox,
     failedHere: outboxController.failedHere,
     /** The journal's rows for sent messages, which carry a rejected message's whole fact. */
-    submissions: transportState.submissions,
+    submissions,
     // A message typed during a command queues behind it on the host.
     send: (...input: Parameters<typeof outboxController.send>) =>
       // Legacy: an older host refuses sends while a command runs; removable once those hosts age out.
       (!commandPending.current || hostStatesTurnScopes(transportState.journalItems)) &&
       outboxController.send(...input),
-    retry: outboxController.retry,
+    retry,
+    retryWaitsForHost,
     isWorking: transportState.isWorking,
     workingStartedAt: transportState.turnTiming.workingStartedAt,
     settledTurns: transportState.turnTiming.settledTurns,

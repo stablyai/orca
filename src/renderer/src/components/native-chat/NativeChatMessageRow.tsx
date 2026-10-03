@@ -33,6 +33,8 @@ import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 export type NativeChatDeliveryNotice = {
   text: string
   onRetry?: () => void
+  /** The host has not said yet how it takes this Retry: shown, but takes no press. */
+  retryPending?: true
   onDismiss?: () => void
 }
 
@@ -195,7 +197,14 @@ export const MessageRow = memo(function MessageRow({
               </Button>
             ) : null}
             {deliveryNotice.onRetry ? (
-              <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onRetry}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={deliveryNotice.onRetry}
+                disabled={deliveryNotice.retryPending === true}
+                aria-busy={deliveryNotice.retryPending === true}
+              >
                 <RotateCcw className="size-3" />
                 {translate(
                   'auto.components.native.chat.NativeChatStructuredSession.a5e7f14068',

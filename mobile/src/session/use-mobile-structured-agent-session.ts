@@ -158,8 +158,11 @@ export function useMobileStructuredAgentSession(args: {
   })
 
   const messages = useMemo(
-    () => projectStructuredAgentSessionMessages(state.items, [], state.submissions),
-    [state.items, state.submissions]
+    () =>
+      projectStructuredAgentSessionMessages(state.items, [], state.submissions, {
+        showsFailedStartsSentElsewhere: hostSupport?.retryMessage === true
+      }),
+    [state.items, state.submissions, hostSupport?.retryMessage]
   )
   const turnId = activeStructuredAgentSessionTurnId(state.items)
   const turnTiming = useMobileStructuredAgentTurnTiming(state, turnId)

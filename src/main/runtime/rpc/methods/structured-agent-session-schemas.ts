@@ -22,6 +22,7 @@ export {
   RespondToQuestionParams,
   RestartResumableParams,
   RestartResumeParams,
+  RetryMessageParams,
   RewindParams,
   SendParams,
   SessionId,

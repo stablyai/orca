@@ -42,7 +42,7 @@ function transcript(items: AgentJournalRenderItem[]) {
   return (
     <NativeChatMessageList
       session={{
-        messages: projectStructuredAgentSessionMessages(items, [], []),
+        messages: projectStructuredAgentSessionMessages(items, [], [], true),
         status: 'ready',
         sessionId: 'live-codex',
         agent: 'codex',

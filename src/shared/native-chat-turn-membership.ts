@@ -125,21 +125,27 @@ export type NativeChatTurnMembership = {
   drawOrder: readonly number[] | null
 }
 
-type NativeChatTurnMember = { id: string; role: NativeChatRole; unsent?: true }
+type NativeChatTurnMember = {
+  id: string
+  role: NativeChatRole
+  unsent?: true
+  waitingToStart?: true
+}
 
 /**
  * Places each row in its turn. A user entry that anchors a turn, or is scoped to none, keys
  * itself; one delivered into a running turn (a steer) takes that turn's key. A host that states no
  * scope is read by journal order instead (`nativeChatJournalOrderTurnKeys`). `opensTurn` narrows
  * which rows may key themselves, for rows that interleave a subagent's with the conversation's. A
- * message shown as not sent is in no turn, so it is never the live one.
+ * message shown as not sent, or waiting for its next start, is in no turn, so it is never the live
+ * one.
  */
 export function nativeChatTurnMembership(
   messages: readonly NativeChatTurnMember[],
   journal?: NativeChatTurnJournal | null,
   opensTurn: NativeChatOpensTurn = nativeChatUserRowOpensTurn
 ): NativeChatTurnMembership {
-  const opens: NativeChatOpensTurn = (message) => !isUnsent(message) && opensTurn(message)
+  const opens: NativeChatOpensTurn = (message) => !inNoTurn(message) && opensTurn(message)
   if (!journal) {
     const turnKeys = withoutUnsent(messages, nativeChatRowTurnKeys(messages, null, opens))
     return { turnKeys, liveTurnKey: newestUserTurnKey(messages, turnKeys), drawOrder: null }
@@ -167,7 +173,7 @@ export function nativeChatTurnMembership(
   const anchoring = new Set(anchors.values())
   const scopes = new Map(journal.items.map((item) => [item.itemId, item.turnScope]))
   const turnKeys = messages.map((message) => {
-    if (message.unsent === true) {
+    if (inNoTurn(message)) {
       return undefined
     }
     const scope = scopes.get(message.id)
@@ -185,16 +191,22 @@ export function nativeChatTurnMembership(
   }
 }
 
-function isUnsent(message: { id: string; role: NativeChatRole }): boolean {
-  return 'unsent' in message && message.unsent === true
+function inNoTurn(message: { id: string; role: NativeChatRole }): boolean {
+  return (
+    ('unsent' in message && message.unsent === true) ||
+    ('waitingToStart' in message && message.waitingToStart === true)
+  )
 }
 
-/** An unsent row neither keys a turn nor inherits the one before it. */
+/** An unsent or waiting row neither keys a turn nor inherits the one before it. */
 function withoutUnsent(
   messages: readonly NativeChatTurnMember[],
   turnKeys: (string | undefined)[]
 ): (string | undefined)[] {
-  return turnKeys.map((turnKey, index) => (messages[index]?.unsent === true ? undefined : turnKey))
+  return turnKeys.map((turnKey, index) => {
+    const message = messages[index]
+    return message && inNoTurn(message) ? undefined : turnKey
+  })
 }
 
 /** Each root record's anchor, or null for a record that names no opener (only older hosts write
@@ -250,8 +262,6 @@ function newestUserTurnKey(
   messages: readonly NativeChatTurnMember[],
   turnKeys: readonly (string | undefined)[]
 ): string | undefined {
-  const index = messages.findLastIndex(
-    (message) => message.role === 'user' && message.unsent !== true
-  )
+  const index = messages.findLastIndex((message) => message.role === 'user' && !inNoTurn(message))
   return index === -1 ? undefined : turnKeys[index]
 }

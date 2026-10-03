@@ -69,6 +69,22 @@ export function placeHandedOverMessage(
   })
 }
 
+/** A queued message that leaves the queue without a handover, its start failed for good: placed
+ *  where that was written, which is where it was drawn while it waited. Its turn scope is kept. */
+export function placeQueuedMessageAt(
+  state: JournalReducerState,
+  submission: AgentJournalSubmission,
+  row: Extract<JournalRow, { kind: 'dispatch' }>
+): void {
+  const itemId = agentJournalSubmissionKey(submission.clientMessageId)
+  const item = state.items.get(itemId)
+  if (!submission.handoverRecorded || !item) {
+    return
+  }
+  const { sequenceIndex: _acceptedAt, ...accepted } = item
+  state.items.set(itemId, { ...accepted, sequence: row.seq })
+}
+
 export function acceptSubmissionFromProviderItem(
   state: JournalReducerState,
   providerItemId: string,

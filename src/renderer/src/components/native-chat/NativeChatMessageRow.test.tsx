@@ -164,7 +164,11 @@ describe('MessageRow send mode', () => {
 })
 
 describe('a user message that did not go through', () => {
-  function renderUser(deliveryNotice?: { text: string; onRetry?: () => void }) {
+  function renderUser(deliveryNotice?: {
+    text: string
+    onRetry?: () => void
+    retryPending?: true
+  }) {
     return render(
       <MessageRow
         message={{
@@ -190,6 +194,17 @@ describe('a user message that did not go through', () => {
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     expect(onRetry).toHaveBeenCalledOnce()
+  })
+
+  it('shows a Retry already pressed as pending, taking no second press', () => {
+    const onRetry = vi.fn()
+    renderUser({ text: 'Codex stopped.', onRetry, retryPending: true })
+
+    const retry = screen.getByRole('button', { name: 'Retry' })
+    expect(retry).toBeDisabled()
+    expect(retry).toHaveAttribute('aria-busy', 'true')
+    fireEvent.click(retry)
+    expect(onRetry).not.toHaveBeenCalled()
   })
 
   it('offers no Retry where the surface cannot send it again', () => {

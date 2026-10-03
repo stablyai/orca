@@ -31,7 +31,9 @@ it('holds the same facts while the start rows state nothing new', () => {
     { initialProps: { items: [row] } }
   )
   const first = result.current
-  expect(first).toEqual([{ kind: 'providerStartFailed' }])
+  expect(first).toEqual([
+    { itemId: row.itemId, fact: { kind: 'providerStartFailed' }, observedAt: 1 }
+  ])
 
   rerender({ items: [row, startFailureRow('other-start', { kind: 'providerStartFailed' })] })
   expect(result.current).not.toBe(first)

@@ -56,8 +56,9 @@ export function refuseAgentSessionMutation(refusal: AgentSessionWireRefusal): {
 }
 
 export type AgentSessionMutationSessionPreparation =
-  | { ok: true }
-  | { ok: false; refusal: AgentSessionWireRefusal }
+  /** `startPending`: the agent the call needs is still proving its start, which the call waits
+   *  for outside the session's queue. */
+  { ok: true; startPending?: true } | { ok: false; refusal: AgentSessionWireRefusal }
 
 export type AgentSessionMutationRequest<TValue> = {
   store: AgentSessionRecordStore
@@ -107,6 +108,10 @@ export async function admitAndRunAgentSessionMutation<TValue>(
       const prepared = await request.prepareSession(ledger.decision.decision, ledger.record)
       if (!prepared.ok) {
         return prepared
+      }
+      // Waited on outside the queue by `serializeAwaitingAgentStart`, which never passes one on.
+      if (prepared.startPending) {
+        throw new Error('an agent start the call needs must be waited on outside the session queue')
       }
     }
   }

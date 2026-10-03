@@ -19,6 +19,8 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   /** A start that did not land, with no one to blame: Orca's fault, a failed spawn, a close. */
   'startFailed',
   'notSignedIn',
+  /** The agent's command is on neither the host's PATH nor its usual install directories. */
+  'providerMissing',
   'historyTooLarge',
   'managedAccountEnvOverride',
   'accountSwitchInProgress',

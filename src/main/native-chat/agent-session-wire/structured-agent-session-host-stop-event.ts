@@ -32,8 +32,9 @@ const STOP_EVENT_DRAIN_TIMEOUT_MS = 1_000
 /**
  * Whether this stop ends work its event must record: a running turn or an unanswered send, a start's
  * own included, read once the sink drained what the provider already said. A start that carries
- * no send ends nothing. A person's Stop wrote its own event, and quit, the idle sweep's rest and a
- * retry of a stop already owed write none.
+ * no send ends nothing, nor does one whose start failed: it took nothing, and its messages say the
+ * failure. A person's Stop wrote its own event, and quit, the idle sweep's rest and a retry of a
+ * stop already owed write none.
  */
 export async function stopEndsWork(
   context: StructuredAgentSessionLifetimeContext,
@@ -42,7 +43,14 @@ export async function stopEndsWork(
   ending: StructuredAgentSessionStopEnding
 ): Promise<boolean> {
   const { child, journal } = session
-  if ('recorded' in ending || ending.quit || ending.resting || ending.retry || !child) {
+  if (
+    'recorded' in ending ||
+    ending.quit ||
+    ending.resting ||
+    ending.retry ||
+    !child ||
+    child.startFailed
+  ) {
     return false
   }
   // A failed drain has nothing more to deliver, so the journal's read as it stands holds. One

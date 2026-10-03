@@ -16,7 +16,8 @@ import { classifyDispatchRejection } from './structured-agent-session-dispatch-r
 import { parseStructuredAgentSessionOutboxQueueFields } from './structured-agent-session-outbox-delivery'
 
 /** `rejected`: the host settled the send as not delivered. The drain never sends it again on its
- *  own and nothing queues behind it; only the user's Retry does. */
+ *  own and nothing queues behind it; only the user's Retry does, as a new id, or, on a host that
+ *  queues a message no agent took again, under this one (the stream's `pending` then moves it on). */
 export type StructuredAgentSessionOutboxState =
   | 'queued'
   | 'dispatching'

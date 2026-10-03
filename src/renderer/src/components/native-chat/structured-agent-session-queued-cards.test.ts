@@ -92,6 +92,23 @@ describe('queued message cards', () => {
     expect(cards[1]?.hold).toBe('behind-returned')
   })
 
+  it('a card returned because its agent failed to start holds nothing behind it', () => {
+    const cards = projectQueuedMessageCards(
+      [
+        draft('failed', 1, {
+          state: 'returned',
+          returnedReason: "Codex couldn't restart. Send your message to try again.",
+          returnedRejection: { kind: 'restartFailed' }
+        }),
+        draft('behind', 2)
+      ],
+      [],
+      IDLE
+    )
+    expect(cards[0]?.hold).toBe('returned')
+    expect(cards[1]?.hold).toBe('turn')
+  })
+
   it('a paused draft says so, carrying the host marker for the caption to localize', () => {
     const cards = projectQueuedMessageCards(
       [draft('a', 1, { paused: true, pausedReason: 'send_failed' })],

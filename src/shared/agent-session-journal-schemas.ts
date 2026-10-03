@@ -14,6 +14,7 @@
 // newer build must not be misread as malformed (see journal-row-schema.ts).
 
 import { z } from 'zod'
+import { AgentJournalStartRetrySchema, FailureFact } from './agent-session-journal-failure-schemas'
 import { AgentSessionContextUsageSchema } from './agent-session-context-usage-schema'
 import type {
   AgentJournalItemBody,
@@ -201,14 +202,6 @@ const ThreadGoalState = z.union([
   z.object({ state: z.string() }).refine((value) => !['set', 'cleared'].includes(value.state))
 ])
 
-/** Open like `state`: a kind, audience or refusal detail a newer host writes must not turn the row
- *  malformed; the fact reader is where an unplaceable one is dropped. */
-const FailureFact = z.object({
-  kind: z.string().min(1),
-  detail: z.object({ text: z.string(), audience: z.string().min(1) }).optional(),
-  refusal: z.object({ code: z.string().min(1), details: z.looseObject({}).optional() }).optional()
-})
-
 export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
   MessageBody,
   z.object({
@@ -329,6 +322,8 @@ export const AgentJournalSubmissionSchema = z.object({
   handoverRecorded: z.literal(true).optional(),
   handedOverAt: z.number().optional(),
   rejection: FailureFact.optional(),
+  // A malformed one drops the field, never the submission.
+  startRetry: AgentJournalStartRetrySchema.optional().catch(undefined),
   // Listed, or the parse strips it: this schema drops unknown keys.
   queuedMessageId: z.string().min(1).optional()
 })

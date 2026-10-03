@@ -94,7 +94,6 @@ describe('provider-exit settlement', () => {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
         cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
-        itemBody: () => null,
         snapshot: () => ({
           items: [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })]
         }),
@@ -170,7 +169,6 @@ describe('provider-exit settlement', () => {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
         cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
-        itemBody: () => null,
         snapshot: () => ({ items }),
         appendLifecycleBatch,
         markPendingSubmissionsUnknown: vi.fn(async () => [])
@@ -289,11 +287,9 @@ describe('provider-exit settlement', () => {
         child: { generation: GENERATION, fence: 7, phase: 'ready' },
         journal: {
           cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
-          itemBody: () => null,
           snapshot: () => ({ items }),
           appendLifecycleBatch,
-          markPendingSubmissionsUnknown: vi.fn(async () => []),
-          rejectPendingSubmissions: vi.fn(async () => [])
+          markPendingSubmissionsUnknown: vi.fn(async () => [])
         }
       }
 
@@ -348,11 +344,9 @@ describe('provider-exit settlement', () => {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
         cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
-        itemBody: () => null,
         snapshot: () => ({ items: [] }),
         appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
         markPendingSubmissionsUnknown,
-        rejectPendingSubmissions: vi.fn(async () => []),
         submissions: () => [{ clientMessageId: 'client-1', dispatchState: 'pending' }]
       }
     }
@@ -401,9 +395,7 @@ describe('provider-exit settlement', () => {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
         cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
-        itemBody: () => null,
         markPendingSubmissionsUnknown: vi.fn(async () => []),
-        rejectPendingSubmissions: vi.fn(async () => []),
         snapshot: () => ({
           items: [lifecycleItem('turn-failing', 1, { state: 'running', startedAt: 1 })]
         }),

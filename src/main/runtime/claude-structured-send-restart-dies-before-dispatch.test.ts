@@ -1,8 +1,8 @@
 // A send is accepted into a chat whose Claude child is gone, and its delivery restarts the child.
 // When that child dies before it proves its start, the message was never handed to it — delivery
-// waits for the start — so the send settles `rejected` with the child's own diagnostic, never as a
-// delivery nobody can confirm, and a client that was subscribed the whole time receives the
-// failure row and the rejected submission over the wire. Against the production runtime, adapter,
+// waits for the start — so the send is rejected with the child's own diagnostic, never left as a
+// delivery nobody can confirm, and a client that was subscribed the whole time receives
+// that over the wire, with no row beside it. Against the production runtime, adapter,
 // record store and host, with only the CLI scripted.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -118,7 +118,10 @@ function received(events: AgentSessionSubscribeEvent[]) {
       }
     }
     for (const entry of page.submissions) {
-      submissions.set(entry.clientMessageId, entry.dispatchState)
+      submissions.set(
+        entry.clientMessageId,
+        entry.dispatchState === 'rejected' ? `rejected: ${entry.reason}` : entry.dispatchState
+      )
     }
     if (event.fence !== undefined) {
       fences.push(event.fence)
@@ -128,7 +131,7 @@ function received(events: AgentSessionSubscribeEvent[]) {
 }
 
 describe('a send whose restarted Claude child dies before it proves its start', () => {
-  it('settles rejected with the diagnostic, keeps one failure row, and a Retry is one new attempt', async () => {
+  it('is rejected with the diagnostic, adds no row, and a new send is one new attempt', async () => {
     claude.behave(SESSION, { initHangs: true })
     const host = await claude.install()
     await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
@@ -146,29 +149,29 @@ describe('a send whose restarted Claude child dies before it proves its start', 
     await eventually(async () =>
       expect(await submission(host, sent)).toMatchObject({
         dispatchState: 'rejected',
-        // Worded for the user: the red line under the composer shows it as it stands.
         reason: STARTUP_TEXT,
         rejection: { kind: 'providerStartFailed' }
       })
     )
-    expect(await statusRows(host)).toEqual([STARTUP_TEXT, STARTUP_TEXT])
+    expect(await submission(host, sent)).not.toHaveProperty('startRetry')
+    expect(await statusRows(host)).toEqual([])
     expect(fence(host)).toBe(releasedFence + 2)
     expect(claude.children(SESSION)).toHaveLength(2)
     expect(claude.child(SESSION).calls).not.toContain('send')
 
-    // Retry under a new id: one restart, and once the CLI is healthy the message is written.
+    // A new send: one restart, and once the CLI is healthy the message is written.
     claude.behave(SESSION, {})
     await send(host, 'hello again')
     await eventually(() => expect(claude.children(SESSION)).toHaveLength(3))
     await eventually(() => expect(claude.child(SESSION).calls).toContain('send'))
     expect(claude.child(SESSION).calls.filter((call) => call === 'send')).toHaveLength(1)
-    expect(await statusRows(host)).toHaveLength(2)
+    expect(await statusRows(host)).toEqual([])
   })
 
-  // A restart refused because its child died before it was handed over leaves one row, from the
-  // delivery, in the words any failed start uses, and rejects the message with them.
+  // A restart refused because its child died before it was handed over is recorded on the message,
+  // in the words any failed start uses, with no row beside it.
   it.each(['spawn', 'start-time-read'] as const)(
-    'leaves one row for a restart whose child exits at %s',
+    'records a restart whose child exits at %s on the message',
     async (at) => {
       claude.behave(SESSION, { initHangs: true })
       const host = await claude.install()
@@ -187,8 +190,9 @@ describe('a send whose restarted Claude child dies before it proves its start', 
         })
       )
       await waitForStructuredAgentSessionRecovery()
+      expect(await submission(host, sent)).not.toHaveProperty('startRetry')
 
-      expect(await statusRows(host)).toEqual([STARTUP_TEXT, STARTUP_TEXT])
+      expect(await statusRows(host)).toEqual([])
     }
   )
 
@@ -213,8 +217,8 @@ describe('a send whose restarted Claude child dies before it proves its start', 
 
       await eventually(() => {
         const seen = received(events)
-        expect(seen.submissions.get(sent)).toBe('rejected')
-        expect(seen.statusTexts).toContainEqual(STARTUP_TEXT)
+        expect(seen.submissions.get(sent)).toBe(`rejected: ${STARTUP_TEXT}`)
+        expect(seen.statusTexts).toEqual([])
         // The subscriber ended up on the fence the exit published, not the one the restart did.
         expect(seen.fences.at(-1)).toBe(fence(host))
       })
@@ -245,7 +249,7 @@ describe('a chat whose Claude CLI keeps failing to start, seen by a subscriber o
     return rows
   }
 
-  it('shows one row naming the cause per failed attempt, however the start died, and none once the CLI is fixed', async () => {
+  it('shows the cause on each message whose start died, however it died, and no row at all', async () => {
     claude.behave(SESSION, { initHangs: true })
     const host = await claude.install()
     const events: AgentSessionSubscribeEvent[] = []
@@ -261,23 +265,16 @@ describe('a chat whose Claude CLI keeps failing to start, seen by a subscriber o
     })
     try {
       await failLatestStart(host, 1)
-      await eventually(() => expect([...shownRows(events).values()]).toEqual([STARTUP_FAILURE]))
 
       // Send: accepted, and its delivery restarts the child, which dies before starting.
       const sent = await send(host, 'hello?')
       await failLatestStart(host, 2)
-      await eventually(async () =>
-        expect(await submission(host, sent)).toMatchObject({
-          dispatchState: 'rejected',
-          reason: STARTUP_FAILURE
-        })
-      )
       await eventually(() =>
-        expect([...shownRows(events).values()]).toEqual([STARTUP_FAILURE, STARTUP_FAILURE])
+        expect(received(events).submissions.get(sent)).toBe(`rejected: ${STARTUP_FAILURE}`)
       )
 
-      // Retry while still broken: this restart dies before its child is handed over, so the
-      // delivery's start is refused. Still one row, saying the same thing, on the rejected message.
+      // Sent again while still broken: this restart dies before its child is handed over, so the
+      // delivery's start is refused, and the new message says the same thing.
       claude.behave(SESSION, {
         exitsDuringSpawn: {
           diagnostic: 'claude stream-json exited (code 1): claude: not signed in (rig)',
@@ -285,26 +282,16 @@ describe('a chat whose Claude CLI keeps failing to start, seen by a subscriber o
         }
       })
       const retried = await send(host, 'hello?')
-      await eventually(async () =>
-        expect(await submission(host, retried)).toMatchObject({
-          dispatchState: 'rejected',
-          reason: STARTUP_FAILURE
-        })
+      await eventually(() =>
+        expect(received(events).submissions.get(retried)).toBe(`rejected: ${STARTUP_FAILURE}`)
       )
       await waitForStructuredAgentSessionRecovery()
-      await eventually(() =>
-        expect([...shownRows(events).values()]).toEqual([
-          STARTUP_FAILURE,
-          STARTUP_FAILURE,
-          STARTUP_FAILURE
-        ])
-      )
 
-      // The CLI is fixed: Retry delivers and adds no row.
+      // The CLI is fixed: a new send delivers.
       claude.behave(SESSION, {})
       await expect(attempt(host, 'hello?')).resolves.toMatchObject({ ok: true })
       await eventually(() => expect(claude.child(SESSION).calls).toContain('send'))
-      expect(shownRows(events).size).toBe(3)
+      expect(shownRows(events).size).toBe(0)
     } finally {
       unsubscribe()
     }

@@ -229,6 +229,30 @@ describe('OrchestrationDb worker Dispatch state', () => {
     expect(d.getTask(task.id)?.status).toBe('failed')
   })
 
+  // The worker never had its task: its preamble was rejected for good after the start went unknown.
+  it('fails a start left unknown once it is proven never to have run the task', () => {
+    const d = createDb()
+    const task = d.createTask({ runId: 'run_legacy_local', spec: 'worker' })
+    const started = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
+    d.markWorkerStartUnknown(started.dispatch.id, 'turn_start_unobserved', 'agent not started')
+    expect(d.getTask(task.id)?.status).toBe('blocked')
+
+    expect(
+      d.failWorkerStart(started.dispatch.id, 'dispatch_input', 'preamble not delivered')
+    ).toMatchObject({
+      state: 'failed',
+      stage: 'dispatch_input',
+      last_error: 'preamble not delivered'
+    })
+    expect(d.getDispatchContextById(started.dispatch.id)?.status).toBe('failed')
+    expect(d.getTask(task.id)?.status).toBe('failed')
+  })
+
   it('allows retry only from the Task current terminal Dispatch', () => {
     const d = createDb()
     const task = d.createTask({ runId: 'run_legacy_local', spec: 'retry current' })

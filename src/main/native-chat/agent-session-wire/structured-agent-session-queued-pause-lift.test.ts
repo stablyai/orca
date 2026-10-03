@@ -354,11 +354,17 @@ describe("a restart's pause", () => {
     await next.result
     await rig.settleAccepted(next.id, 'b')
     await eventually(async () => expect(await rig.handoff(first)).toBeDefined())
+    // This rig's start for it fails and returns its card, which holds nothing back.
+    await eventually(async () =>
+      expect((await rig.drafts()).find((draft) => draft.messageId === first)?.state).toBe(
+        'returned'
+      )
+    )
+    await eventually(async () => expect(await rig.handoff(second)).toBeDefined())
     // Reopened, that turn is "before this open", yet the pause it ended stays ended:
     // the lift adopted the rows into this process.
     await rig.host.close(HOST_TEST_SESSION, 'evict')
     expect(await rig.queuePause()).toBeNull()
-    expect(await rig.drafts()).toContainEqual({ messageId: second, state: 'waiting' })
   })
 })
 

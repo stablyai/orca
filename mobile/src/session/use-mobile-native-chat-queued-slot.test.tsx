@@ -33,6 +33,7 @@ const CARD = {
   state: 'waiting' as const,
   paused: false,
   needsAttention: false,
+  holdsQueue: false,
   caption: null
 }
 

@@ -36,8 +36,34 @@ describe('structured agent session message projection', () => {
     const refusedItem = { ...item(0), itemId: agentJournalSubmissionKey(rejected.clientMessageId) }
     const acceptedItem = item(1)
     expect(
-      projectStructuredAgentSessionMessages([refusedItem, acceptedItem], [], [rejected])
+      projectStructuredAgentSessionMessages([refusedItem, acceptedItem], [], [rejected], true)
     ).toMatchObject([{ id: acceptedItem.itemId, role: 'user' }])
+  })
+
+  it('marks a message waiting for its next start, and only that one, as waiting to start', () => {
+    const queued = (index: number, startRetry?: AgentJournalSubmission['startRetry']) => ({
+      ...submission(index),
+      dispatchState: 'pending' as const,
+      providerItemId: null,
+      resolvedAt: null,
+      handoverRecorded: true as const,
+      ...(startRetry ? { startRetry } : {})
+    })
+    const waiting = queued(0, {
+      attempts: 1,
+      reason: 'A Claude account switch is in progress.',
+      rejection: { kind: 'accountSwitchInProgress' },
+      failedAt: 1,
+      nextAttemptAt: 15_001
+    })
+    const items = [0, 1].map((index) => ({
+      ...item(index),
+      itemId: agentJournalSubmissionKey(`client-${index}`)
+    }))
+    expect(projectStructuredAgentSessionMessages(items, [], [waiting, queued(1)], true)).toEqual([
+      expect.objectContaining({ id: items[0]!.itemId, queued: true, waitingToStart: true }),
+      expect.not.objectContaining({ waitingToStart: true })
+    ])
   })
 
   it('keeps a refused local draft available through its outbox', () => {
@@ -50,9 +76,9 @@ describe('structured agent session message projection', () => {
       attachments: [],
       queuedAt: 1
     })
-    expect(projectStructuredAgentSessionMessages([refusedItem], [draft], [rejected])).toMatchObject(
-      [{ id: refusedItem.itemId, blocks: [{ text: 'An unsent draft' }] }]
-    )
+    expect(
+      projectStructuredAgentSessionMessages([refusedItem], [draft], [rejected], true)
+    ).toMatchObject([{ id: refusedItem.itemId, blocks: [{ text: 'An unsent draft' }] }])
   })
 
   it.each([5, 10])('renders %i rapid accepted desktop sends exactly once', (sendCount) => {
@@ -68,7 +94,8 @@ describe('structured agent session message projection', () => {
     const messages = projectStructuredAgentSessionMessages(
       Array.from({ length: sendCount }, (_, index) => item(index)),
       outbox,
-      Array.from({ length: sendCount }, (_, index) => submission(sendCount - index - 1))
+      Array.from({ length: sendCount }, (_, index) => submission(sendCount - index - 1)),
+      true
     )
 
     expect(messages.filter((message) => message.role === 'user')).toHaveLength(sendCount)
@@ -103,8 +130,8 @@ describe('structured agent session message projection', () => {
       resolvedAt: null
     }
 
-    const messages = projectStructuredAgentSessionMessages([walItem], outbox, [pending])
-    const optimistic = projectStructuredAgentSessionMessages([], outbox, [])
+    const messages = projectStructuredAgentSessionMessages([walItem], outbox, [pending], true)
+    const optimistic = projectStructuredAgentSessionMessages([], outbox, [], true)
 
     expect(messages.filter((message) => message.role === 'user')).toHaveLength(1)
     expect(messages.map((message) => message.id)).toEqual([walItem.itemId])
@@ -122,7 +149,7 @@ describe('structured agent session message projection', () => {
       })
     ]
 
-    expect(projectStructuredAgentSessionMessages([], outbox, [])).toMatchObject([
+    expect(projectStructuredAgentSessionMessages([], outbox, [], true)).toMatchObject([
       { id: agentJournalSubmissionKey('client-pending'), role: 'user' }
     ])
   })

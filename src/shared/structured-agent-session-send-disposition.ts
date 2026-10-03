@@ -84,7 +84,9 @@ function dropEntry(input: SendDispositionInput): StructuredAgentSessionOutboxEnt
  * already renders the message.
  *
  * A `rejected` submission takes the other path — the message provably did not
- * happen, so Retry rotates the id and sends it as a genuinely new message.
+ * happen, so Retry queues the same message again where the host can
+ * (`agentSession.retryMessage`), or else rotates the id and sends it as a
+ * genuinely new message.
  */
 function refusedRedelivery(
   entry: StructuredAgentSessionOutboxEntry,

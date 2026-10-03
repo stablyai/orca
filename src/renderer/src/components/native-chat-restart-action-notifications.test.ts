@@ -75,3 +75,32 @@ it('leads with the unconfirmed count when nothing was refused', () => {
     ]
   ])
 })
+
+// Its agent did not start and it waits to start again: the chat says so, and nothing was resumed.
+it('announces nothing for a chat whose start failed and is waiting to start again', () => {
+  announceRestartResults(
+    ['a'],
+    [{ sessionId: 'a', outcome: 'pending', startFailed: true }],
+    [],
+    actions
+  )
+  expect(toast).not.toHaveBeenCalled()
+})
+
+// The host files no failed start, so its own outcome is what says the chat was not resumed.
+it('counts a chat whose start failed for good as not resumed, though the host filed nothing', () => {
+  announceRestartResults(
+    ['a'],
+    [{ sessionId: 'a', outcome: 'refused', startFailed: true }],
+    [],
+    actions
+  )
+  expect(vi.mocked(toast).mock.calls.map(([text]) => text)).toEqual(['1 chat couldn’t be resumed'])
+})
+
+it('still counts an unconfirmed send the host no longer lists as resumed', () => {
+  announceRestartResults(['a'], [{ sessionId: 'a', outcome: 'pending' }], [], actions)
+  expect(vi.mocked(toast).mock.calls.map(([text]) => text)).toEqual([
+    'Resumed 1 chat and asked it to continue'
+  ])
+})

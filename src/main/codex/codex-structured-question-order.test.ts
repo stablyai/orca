@@ -202,12 +202,9 @@ function drawnPromptRows(): string[][] {
   const { receipts } = structuredQuestionTranscript(client.items)
   // The desktop list's projection: its comparator adds only a rank for rows the host never writes.
   const rows = projectNativeChatTranscriptMessages(
-    projectStructuredAgentSessionMessages(
-      client.items,
-      [],
-      client.submissions,
-      projectStructuredQuestionMessages
-    )
+    projectStructuredAgentSessionMessages(client.items, [], client.submissions, {
+      projectItems: projectStructuredQuestionMessages
+    })
   )
   return rows.flatMap((row) => {
     const prompt = receipts.get(row.id)

@@ -68,7 +68,7 @@ const JOURNAL: AgentJournalRenderItem[] = [
 /** The renderer's own path from journal items to rail items, as the list runs it. */
 function loadedRailItems(items: AgentJournalRenderItem[], submissions: AgentJournalSubmission[]) {
   const projected = createNativeChatMessageListProjection()(
-    projectStructuredAgentSessionMessages(items, [], submissions)
+    projectStructuredAgentSessionMessages(items, [], submissions, true)
   ).conversation
   const messages = omitNativeChatThreadGoalRows(projectNativeChatTaskListFrames(projected))
   let turn: string | undefined

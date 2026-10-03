@@ -43,7 +43,7 @@ function drawn(
   submissions: AgentJournalSubmission[] = []
 ): string[] {
   return createNativeChatMessageListProjection()(
-    projectStructuredAgentSessionMessages(items, outbox, submissions)
+    projectStructuredAgentSessionMessages(items, outbox, submissions, true)
   ).conversation.map(({ id }) => id)
 }
 

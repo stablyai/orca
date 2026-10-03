@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalRenderItem,
-  AgentJournalSubmission,
   AgentJournalTurnLifecycle
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
@@ -13,124 +12,17 @@ import {
   DISPATCH_REJECTED_PROVIDER_CLOSED
 } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/structured-agent-session-projection'
-import { StructuredAgentSessionTurnCompletionFeed } from './structured-agent-session-turn-completion-feed'
-
-const LOCATION = {
-  executionHostId: 'local',
-  wslDistro: null,
-  workspaceId: 'workspace-1',
-  workspaceKind: 'git-worktree'
-} as const
-
-const START_FAILURE = 'Claude is not signed in.'
-
-function turn(
-  turnId: string,
-  state: AgentJournalTurnLifecycle['state'],
-  outcome?: AgentJournalTurnLifecycle['outcome']
-): AgentJournalTurnLifecycle {
-  return { turnId, state, ...(outcome ? { outcome } : {}) }
-}
-
-function turnItem(lifecycle: AgentJournalTurnLifecycle, sequence: number): AgentJournalRenderItem {
-  return {
-    itemId: `codex:turn:${lifecycle.turnId}`,
-    revision: 1,
-    sequence,
-    observedAt: sequence,
-    body: { kind: 'turn', ...lifecycle }
-  }
-}
-
-function userEntry(clientMessageId: string, sequence: number): AgentJournalRenderItem {
-  return {
-    itemId: agentJournalSubmissionKey(clientMessageId),
-    revision: 0,
-    sequence,
-    observedAt: sequence,
-    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: clientMessageId }] }
-  }
-}
-
-function sent(
-  clientMessageId: string,
-  fields: Partial<AgentJournalSubmission> & Pick<AgentJournalSubmission, 'dispatchState'>
-): AgentJournalSubmission {
-  return {
-    clientMessageId,
-    fence: 1,
-    payloadFingerprint: clientMessageId,
-    providerItemId: null,
-    reason: null,
-    submittedAt: 10,
-    resolvedAt: 20,
-    handoverRecorded: true,
-    ...fields
-  }
-}
-
-const pending = (clientMessageId: string, fence = 1) =>
-  sent(clientMessageId, { dispatchState: 'pending', fence, handedOverAt: 11, resolvedAt: null })
-const refused = (clientMessageId: string, reason = START_FAILURE) =>
-  sent(clientMessageId, { dispatchState: 'rejected', reason })
-
-function harness(): {
-  feed: StructuredAgentSessionTurnCompletionFeed
-  setTurn: (next: AgentJournalTurnLifecycle | null) => void
-  setJournal: (
-    items: AgentJournalRenderItem[],
-    submissions: AgentJournalSubmission[],
-    fence?: number
-  ) => void
-  setCursor: (next: { epoch: string; sequence: number }) => void
-  observe: () => void
-  events: AgentSessionTurnCompletionEvent[]
-  outcomes: () => [string, string][]
-  /** Whether each completion said the user is being asked something. */
-  awaitingUser: () => boolean[]
-  listen: () => () => void
-} {
-  let items: AgentJournalRenderItem[] = []
-  let submissions: AgentJournalSubmission[] = []
-  let fence: number | undefined
-  let cursor = { epoch: 'epoch-1', sequence: 0 }
-  const journal = { cursor: () => cursor }
-  const sessions = new Map([['session-1', { journal, params: { location: LOCATION } }]])
-  const feed = new StructuredAgentSessionTurnCompletionFeed({
-    sessions,
-    now: () => 1_700,
-    // The status feed's projection, computed as it computes it.
-    readStatusState: () => projectStructuredAgentSessionStatusState(items, submissions, fence)
-  })
-  const events: AgentSessionTurnCompletionEvent[] = []
-  return {
-    feed,
-    setTurn: (next) => {
-      items = next ? [turnItem(next, 1)] : []
-      submissions = []
-    },
-    setJournal: (nextItems, nextSubmissions, nextFence) => {
-      items = nextItems
-      submissions = nextSubmissions
-      fence = nextFence
-      cursor = { ...cursor, sequence: cursor.sequence + 1 }
-    },
-    setCursor: (next) => {
-      cursor = next
-    },
-    observe: () => feed.observe('session-1'),
-    events,
-    outcomes: () =>
-      events.flatMap((event): [string, string][] =>
-        event.type === 'completion' ? [[event.completion.turnId, event.completion.outcome]] : []
-      ),
-    awaitingUser: () =>
-      events.flatMap((event) =>
-        event.type === 'completion' ? [event.completion.awaitingUser === true] : []
-      ),
-    listen: () => feed.subscribe({ id: 'sub', emit: (event) => events.push(event) })
-  }
-}
+import {
+  LOCATION,
+  START_FAILURE,
+  harness,
+  pending,
+  refused,
+  sent,
+  turn,
+  turnItem,
+  userEntry
+} from './structured-agent-session-turn-completion-feed-test-harness'
 
 describe('StructuredAgentSessionTurnCompletionFeed', () => {
   it('emits a completion when a turn settles with a success outcome', () => {
@@ -556,6 +448,209 @@ describe('a request the agent or its start refused', () => {
       [M3, 'failure']
     ])
   })
+
+  const failedStart = (clientMessageId: string) =>
+    sent(clientMessageId, {
+      dispatchState: 'rejected',
+      reason: "Codex couldn't start.",
+      rejection: { kind: 'startFailed' }
+    })
+
+  it('notifies a failed start once, the moment it is final, though a later send is still owed', () => {
+    const h = harness()
+    h.listen()
+    h.observe()
+    const queued = [userEntry('m1', 1), userEntry('m2', 2)]
+    h.setJournal(queued, [pending('m1'), pending('m2')])
+    h.observe()
+    h.setJournal(queued, [failedStart('m1'), pending('m2')])
+    h.observe()
+    const accepted = sent('m2', { dispatchState: 'accepted' })
+    h.setJournal([...queued, turnItem(turn('t2', 'running'), 3)], [failedStart('m1'), accepted])
+    h.observe()
+    h.setJournal(
+      [...queued, turnItem(turn('t2', 'completed', 'success'), 3)],
+      [failedStart('m1'), accepted]
+    )
+    h.observe()
+    h.observe()
+    expect(h.outcomes()).toEqual([
+      [M1, 'failure'],
+      ['t2', 'success']
+    ])
+  })
+
+  it('notifies a lone failed start exactly once', () => {
+    const h = harness()
+    h.listen()
+    h.observe()
+    h.setJournal([userEntry('m1', 1)], [pending('m1')])
+    h.observe()
+    h.setJournal([userEntry('m1', 1)], [failedStart('m1')])
+    h.observe()
+    h.observe()
+    expect(h.outcomes()).toEqual([[M1, 'failure']])
+  })
+
+  // The person ended the wait, so its end is not news; the message still reads as failed.
+  it.each([
+    ['the chat closed', 'chatClosed'],
+    ['Orca restarted', 'hostRestarted']
+  ] as const)(
+    'notifies nothing for a send whose wait for its next start ended because %s',
+    (_end, rejectionCause) => {
+      const h = afterSuccessfulTurn()
+      const items = [userEntry('m1', 1), settledTurn, userEntry('m2', 3)]
+      const accepted = sent('m1', { dispatchState: 'accepted' })
+      const waitFailure = { kind: 'accountSwitchInProgress' as const }
+      const waiting = sent('m2', {
+        dispatchState: 'pending',
+        resolvedAt: null,
+        startRetry: {
+          attempts: 1,
+          reason: 'A Claude account switch is in progress.',
+          rejection: waitFailure,
+          failedAt: 30,
+          nextAttemptAt: 15_030
+        }
+      })
+      const ended = sent('m2', {
+        dispatchState: 'rejected',
+        reason: 'A Claude account switch is in progress. Try again after it finishes.',
+        rejection: waitFailure,
+        rejectionCause,
+        resolvedAt: 40
+      })
+      h.setJournal(items, [accepted, waiting])
+      h.observe()
+      h.setJournal(items, [accepted, ended])
+      h.observe()
+      h.observe()
+
+      expect(h.outcomes()).toEqual([['t1', 'success']])
+      expect(
+        projectStructuredAgentSessionStatusState(items, [accepted, ended]).latestRequest
+      ).toMatchObject({ kind: 'refused-send', id: M2, outcome: 'failure' })
+    }
+  )
+
+  // A conversation command is not a request: the session's verdict passes it over, and so does this.
+  it('notifies nothing for a /compact whose start failed for good', () => {
+    const h = afterSuccessfulTurn()
+    const compact: AgentJournalRenderItem = {
+      ...userEntry('m2', 3),
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: '/compact' }],
+        command: { name: 'compact' }
+      }
+    }
+    const items = [userEntry('m1', 1), settledTurn, compact]
+    const accepted = sent('m1', { dispatchState: 'accepted' })
+    h.setJournal(items, [accepted, pending('m2')])
+    h.observe()
+    h.setJournal(items, [accepted, failedStart('m2')])
+    h.observe()
+    h.observe()
+
+    expect(h.outcomes()).toEqual([['t1', 'success']])
+  })
+
+  // Its failure is not final while it waits, and a Stop that withdraws it brings back a request
+  // already announced.
+  it('notifies nothing for a send waiting for its next start, nor when a Stop withdraws it', () => {
+    const h = afterSuccessfulTurn()
+    const items = [userEntry('m1', 1), settledTurn, userEntry('m2', 3)]
+    const accepted = sent('m1', { dispatchState: 'accepted' })
+    const waiting = sent('m2', {
+      dispatchState: 'pending',
+      resolvedAt: null,
+      startRetry: {
+        attempts: 1,
+        reason: 'A Claude account switch is in progress.',
+        rejection: { kind: 'accountSwitchInProgress' },
+        failedAt: 30,
+        nextAttemptAt: 15_030
+      }
+    })
+    h.setJournal(items, [accepted, waiting])
+    h.observe()
+    h.setJournal(items, [accepted, refused('m2', DISPATCH_REJECTED_CANCELLED)])
+    h.observe()
+    expect(h.outcomes()).toEqual([['t1', 'success']])
+  })
+
+  // A waiting send lets later ones go first, so its final failure can come after their turn ends.
+  it.each([
+    [
+      'after the later turn succeeded',
+      50,
+      [
+        ['t2', 'success'],
+        [M1, 'failure']
+      ]
+    ],
+    [
+      'before the later turn succeeded',
+      25,
+      [
+        [M1, 'failure'],
+        ['t2', 'success']
+      ]
+    ]
+  ] as const)(
+    'notifies the final failure of a send that waited, once, when it comes %s',
+    (_order, finalFailureAt, expected) => {
+      const h = harness()
+      h.listen()
+      h.observe()
+      const waiting = sent('m1', {
+        dispatchState: 'pending',
+        resolvedAt: null,
+        startRetry: {
+          attempts: 1,
+          reason: START_FAILURE,
+          rejection: { kind: 'accountSwitchInProgress' },
+          failedAt: 15,
+          nextAttemptAt: 30
+        }
+      })
+      const failed = sent('m1', {
+        dispatchState: 'rejected',
+        reason: START_FAILURE,
+        rejection: { kind: 'accountSwitchInProgress' },
+        resolvedAt: finalFailureAt
+      })
+      const accepted = sent('m2', { dispatchState: 'accepted' })
+      const items = (state: 'running' | 'completed') => [
+        userEntry('m1', 1),
+        userEntry('m2', 2),
+        turnItem(
+          {
+            turnId: 't2',
+            state,
+            ...(state === 'completed' ? { outcome: 'success', completedAt: 40 } : {})
+          },
+          3
+        )
+      ]
+      h.setJournal([userEntry('m1', 1), userEntry('m2', 2)], [waiting, pending('m2')])
+      h.observe()
+      h.setJournal(items('running'), [waiting, accepted])
+      h.observe()
+      if (finalFailureAt < 40) {
+        h.setJournal(items('running'), [failed, accepted])
+        h.observe()
+      }
+      h.setJournal(items('completed'), [finalFailureAt < 40 ? failed : waiting, accepted])
+      h.observe()
+      h.setJournal(items('completed'), [failed, accepted])
+      h.observe()
+      h.observe()
+      expect(h.outcomes()).toEqual(expected)
+    }
+  )
 
   it('does not wait on a send left pending at an older fence', () => {
     const h = harness()

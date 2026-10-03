@@ -135,7 +135,7 @@ function list(phase: Phase, scoped: boolean, outbox: StructuredAgentSessionOutbo
   return (
     <NativeChatMessageList
       session={{
-        messages: projectStructuredAgentSessionMessages(items, outbox, submissions),
+        messages: projectStructuredAgentSessionMessages(items, outbox, submissions, true),
         status: phase === 'done' ? 'ready' : 'working',
         sessionId: 'session-1',
         agent: 'claude',

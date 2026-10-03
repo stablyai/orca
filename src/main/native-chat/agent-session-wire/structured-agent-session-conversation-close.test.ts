@@ -226,7 +226,7 @@ describe('the sweep and the lease (P2-20)', () => {
 })
 
 describe('a start that never finishes (P2-15)', () => {
-  it('is stopped by the sweep, and the delivery loop alone writes its one row and rejection', async () => {
+  it('is stopped by the sweep, and the delivery loop alone records it on the message', async () => {
     const stopReason = 'Codex never finished starting, so Orca stopped it.'
     const order: string[] = []
     const started = Promise.withResolvers<void>()
@@ -241,16 +241,17 @@ describe('a start that never finishes (P2-15)', () => {
       providerChildPhase: 'starting' as const
     }))
     Object.assign(rig.host.deps.adapter, { awaitStarted: () => started.promise })
-    const reject = AgentSessionJournal.prototype.rejectQueuedSubmissions
-    vi.spyOn(AgentSessionJournal.prototype, 'rejectQueuedSubmissions').mockImplementation(function (
+    const resolve = AgentSessionJournal.prototype.resolveDispatch
+    vi.spyOn(AgentSessionJournal.prototype, 'resolveDispatch').mockImplementation(function (
       this: AgentSessionJournal,
-      ...args
+      input
     ) {
-      // Not the open's sweep of an earlier process's leftovers.
-      if (args[1].rejection.kind !== 'hostRestarted') {
-        order.push(`rejected: ${args[1].reason}`)
+      if (input.state === 'rejected') {
+        order.push(`rejected: ${input.reason}`)
+      } else if (input.state === 'pending' && 'startRetry' in input) {
+        order.push(`pending: ${input.startRetry.reason}`)
       }
-      return reject.apply(this, args)
+      return resolve.call(this, input)
     })
     const reader = collectSubscriber()
     const attached = await rig.host.attach(CALLER, hostTestAttachParams(null))
@@ -264,10 +265,14 @@ describe('a start that never finishes (P2-15)', () => {
     expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
     await vi.waitFor(() =>
       expect(readerSaw(reader.events).submissions).toContainEqual(
-        expect.objectContaining({ dispatchState: 'rejected', reason: stopReason })
+        expect.objectContaining({
+          dispatchState: 'rejected',
+          reason: stopReason,
+          rejection: { kind: 'hostStopped' }
+        })
       )
     )
-    // One rejection, written after the stop by the loop, with the stop's own words.
+    // One record, written after the stop by the loop, with the stop's own words.
     expect(order).toEqual(['stopped', `rejected: ${stopReason}`])
     const errorRows = reader.events.flatMap((event) =>
       event.type === 'batch'
@@ -276,9 +281,7 @@ describe('a start that never finishes (P2-15)', () => {
           )
         : []
     )
-    expect(errorRows.map((item) => (item.body.kind === 'status' ? item.body.text : null))).toEqual([
-      stopReason
-    ])
+    expect(errorRows).toEqual([])
     expect(rig.adapter.dispatch).not.toHaveBeenCalled()
 
     const again = await rig.host.send(CALLER, restTestSend('try again', fence()))

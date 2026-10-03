@@ -2,18 +2,27 @@ import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-ses
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { agentJournalItemPosition } from './agent-session-journal-position'
 import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
+import { isRetryingStructuredAgentSessionStart } from './structured-agent-session-start-retry'
 import { collapseProviderRetryRuns } from './native-chat-provider-retry-runs'
 import type { NativeChatMessage } from './native-chat-types'
 import type { StructuredAgentSessionOutboxEntry } from './structured-agent-session-outbox'
 import { structuredAgentSessionEntryHeldForRetry } from './structured-agent-session-outbox-admission'
 import { reconcileStructuredAgentSessionOutboxWithQueue } from './structured-agent-session-draft-hand-off'
+import { failedStartsSentElsewhere } from './structured-agent-session-failed-start-elsewhere'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
 
 export function projectStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
   outbox: readonly StructuredAgentSessionOutboxEntry[],
   submissions: readonly AgentJournalSubmission[],
-  projectItems = projectStructuredItemsToNativeChat
+  {
+    projectItems = projectStructuredItemsToNativeChat,
+    showsFailedStartsSentElsewhere = true
+  }: {
+    projectItems?: typeof projectStructuredItemsToNativeChat
+    /** Whether the host can queue one again: an older host's are left hidden, as before. */
+    showsFailedStartsSentElsewhere?: boolean
+  } = {}
 ): NativeChatMessage[] {
   const optimistic = reconcileStructuredAgentSessionOutboxWithQueue(outbox, submissions)
   // Refused sends are ledger evidence, not conversation history; local drafts remain in the outbox.
@@ -22,12 +31,22 @@ export function projectStructuredAgentSessionMessages(
       .filter((submission) => submission.dispatchState === 'rejected')
       .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
   )
+  // Sent from elsewhere and refused for good by a failed start: shown as unsent, as this client's
+  // own would be, in the conversation where the journal recorded it.
+  const unsentElsewhere = new Set(
+    showsFailedStartsSentElsewhere
+      ? failedStartsSentElsewhere(submissions, outbox).map((submission) =>
+          agentJournalSubmissionKey(submission.clientMessageId)
+        )
+      : []
+  )
   const visibleItems: AgentJournalRenderItem[] = []
   const refused = new Map<string, AgentJournalRenderItem>()
   for (const item of items) {
     if (rejected.has(item.itemId)) {
       refused.set(item.itemId, item)
-    } else {
+    }
+    if (!rejected.has(item.itemId) || unsentElsewhere.has(item.itemId)) {
       visibleItems.push(item)
     }
   }
@@ -39,11 +58,27 @@ export function projectStructuredAgentSessionMessages(
       .filter(isQueuedAgentJournalSubmission)
       .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
   )
+  const waiting = new Set(
+    submissions
+      .filter(isRetryingStructuredAgentSessionStart)
+      .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
+  )
   const delivered: NativeChatMessage[] = []
   const held: NativeChatMessage[] = []
   for (const message of projectItems(visibleItems)) {
     if (queued.has(message.id)) {
-      held.push({ ...message, queued: true })
+      held.push({
+        ...message,
+        queued: true,
+        ...(waiting.has(message.id) ? { waitingToStart: true as const } : {})
+      })
+    } else if (unsentElsewhere.has(message.id)) {
+      const recorded = refused.get(message.id)
+      delivered.push({
+        ...message,
+        unsent: true,
+        ...(recorded ? { journalPosition: agentJournalItemPosition(recorded) } : {})
+      })
     } else {
       delivered.push(message)
     }

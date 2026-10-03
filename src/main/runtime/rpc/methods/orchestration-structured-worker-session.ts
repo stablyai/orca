@@ -15,6 +15,8 @@ import { randomUUID } from 'node:crypto'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../../shared/agent-session-definitive-refusal'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session-journal-types'
 import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../../shared/orchestration-timing-budgets'
+import { STRUCTURED_AGENT_SESSION_START_RETRY_DELAYS_MS } from '../../../../shared/structured-agent-session-start-retry'
+import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
 import { agentSessionSendSubmission } from '../../../../shared/agent-session-wire'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -213,13 +215,32 @@ type StructuredWorkerPreambleHost = Pick<
   deps: { store: { getRecord: (sessionId: string) => { lease: { runtimeFence: number } } | null } }
 }
 
+/** How long a held preamble is watched for its own verdict: every try of its start, each of which
+ *  may take a whole start. */
+const PREAMBLE_VERDICT_WAIT_MS =
+  STRUCTURED_AGENT_SESSION_START_RETRY_DELAYS_MS.reduce((total, delay) => total + delay, 0) +
+  (STRUCTURED_AGENT_SESSION_START_RETRY_DELAYS_MS.length + 1) *
+    STRUCTURED_AGENT_SESSION_START_WAIT_MS
+
+/** Why a preamble provably did not happen, as `dispatch_preamble_undelivered` says it. */
+function preambleUndeliveredReason(submission: {
+  reason?: string | null
+  rejection?: { kind: string }
+}): string {
+  return `The dispatch preamble was not delivered${
+    submission.rejection ? ` (${submission.rejection.kind})` : ''
+  }: ${reasonClause(submission.reason)}.`
+}
+
 /** Delivers the dispatch preamble as the worker's first turn. `pending`: the worker's agent had
- *  not taken it within the wait; the host still holds it for that agent, and never re-sends it. */
+ *  not taken it within the wait; the host still holds it for that agent, and never re-sends it.
+ *  `whenUndelivered` hears it if the host later rejects it for good, its start's tries spent. */
 export async function sendStructuredWorkerPreamble(args: {
   host: StructuredWorkerPreambleHost
   sessionId: string
   dispatchId: string
   preamble: string
+  whenUndelivered?: (reason: string) => void
 }): Promise<'accepted' | 'pending'> {
   const body: AgentJournalMessageItem = {
     kind: 'message',
@@ -259,6 +280,21 @@ export async function sendStructuredWorkerPreamble(args: {
           )?.value
         ) ?? answered)
       : answered
+  if (submission?.dispatchState === 'pending' && args.whenUndelivered) {
+    const { whenUndelivered } = args
+    void args.host
+      .waitForSendSettlement(args.sessionId, result.value.clientMessageId, {
+        until: 'verdict',
+        budgetMs: PREAMBLE_VERDICT_WAIT_MS
+      })
+      .then((settled) => {
+        const verdict = agentSessionSendSubmission(settled?.value)
+        if (verdict?.dispatchState === 'rejected') {
+          whenUndelivered(preambleUndeliveredReason(verdict))
+        }
+      })
+      .catch(() => undefined)
+  }
   if (submission?.dispatchState === 'accepted' || submission?.dispatchState === 'pending') {
     return submission.dispatchState
   }
@@ -270,9 +306,7 @@ export async function sendStructuredWorkerPreamble(args: {
     // pending receipt; only this one lets the caller retry knowing nothing landed.
     throw new OrchestrationError(
       'dispatch_preamble_undelivered',
-      `The dispatch preamble was not delivered${
-        submission.rejection ? ` (${submission.rejection.kind})` : ''
-      }: ${reasonClause(submission.reason)}.`
+      preambleUndeliveredReason(submission)
     )
   }
   // Only `accepted` is an acknowledgement — the same rule the mail lane already applies. A thrown

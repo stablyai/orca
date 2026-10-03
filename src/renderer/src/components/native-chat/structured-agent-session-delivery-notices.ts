@@ -8,9 +8,10 @@
 // queue moves.
 //
 // A message the host recorded and then rejected is worded from the journal's own fact, found by id;
-// the message keeps only a smaller copy, read when its submission is not loaded. A rejection that
-// is a failed start's, the fact its loaded row states, says only that it was not sent: the row
-// already says why.
+// the message keeps only a smaller copy, read when its submission is not loaded. A message whose
+// start was refused before it ran and that waits for its next try says why and that Orca tries
+// again, whoever sent it. A rejection that is a failed start's, the fact a loaded start row from an older host
+// states, says only that it was not sent: the row already says why.
 
 import {
   readAgentSessionFailureFact,
@@ -32,26 +33,58 @@ import {
   admitStructuredAgentSessionOutboxEntry,
   structuredAgentSessionEntryHeldForRetry
 } from '../../../../shared/structured-agent-session-outbox-admission'
-import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-session-failure-words'
+import {
+  agentSessionFailureSentence,
+  type AgentSessionFailureWordsContext
+} from '../../../../shared/agent-session-failure-words'
+import { joinSentences } from '../../../../shared/sentence-joining'
+import { isRetryingStructuredAgentSessionStart } from '../../../../shared/structured-agent-session-start-retry'
+import { failedStartsSentElsewhere } from '../../../../shared/structured-agent-session-failed-start-elsewhere'
+import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { structuredAgentSessionAttemptFailureParts } from '../../../../shared/structured-agent-session-send-disposition'
 import { translate } from '@/i18n/i18n'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 
-/** The facts the chat's loaded start-failure rows state. */
+/** A message waiting for its next start: the failure in the reader's language, with no step of the
+ *  person's own to try again, then that Orca will. */
+function startRetryingNoticeText(submission: AgentJournalSubmission, agentName: string): string {
+  const fact = readWholeAgentSessionFailureFact(submission.startRetry?.rejection)
+  const reason = fact
+    ? agentSessionFailureSentence(
+        fact,
+        'rejection',
+        { agentName, orcaRetries: true },
+        sayAgentSessionFailureTranslated
+      )
+    : (submission.startRetry?.reason ?? '')
+  return joinSentences([
+    ...(reason ? [reason] : []),
+    translate('components.native-chat.startRetrying', 'Orca will try again shortly.')
+  ])
+}
+
+/** A loaded start-failure row an older host wrote: the failure it states, and when. */
+export type StatedStartFailure = {
+  itemId: string
+  fact: AgentSessionFailureFact
+  observedAt: number
+}
+
+/** What the chat's loaded start-failure rows state. */
 export function structuredAgentSessionStartFailureFacts(
   items: readonly AgentJournalRenderItem[]
-): AgentSessionFailureFact[] {
-  const facts: AgentSessionFailureFact[] = []
+): StatedStartFailure[] {
+  const stated: StatedStartFailure[] = []
   for (const item of items) {
     if (item.body.kind === 'status' && isStructuredAgentSessionStartFailureRow(item.itemId)) {
       const fact = readAgentSessionFailureFact(item.body.failure)
       if (fact) {
-        facts.push(fact)
+        stated.push({ itemId: item.itemId, fact, observedAt: item.observedAt })
       }
     }
   }
-  return facts
+  return stated
 }
 
 /** Whether two facts are one failure: a start's row and the messages it rejected share one. */
@@ -72,15 +105,37 @@ export function sameAgentSessionFailureFact(
   )
 }
 
-/** Whether a loaded start-failure row already states this failure. Matching is identity, not
+/** Whether one of these start-failure rows already states this failure. Matching is identity, not
  *  wording: what this build can read is enough. */
 export function agentSessionFailureStatedByStartRow(
   failure: unknown,
-  startFailures: readonly AgentSessionFailureFact[]
+  startFailures: readonly StatedStartFailure[]
 ): boolean {
   const fact = readAgentSessionFailureFact(failure)
   return (
-    fact !== undefined && startFailures.some((stated) => sameAgentSessionFailureFact(stated, fact))
+    fact !== undefined &&
+    startFailures.some((stated) => sameAgentSessionFailureFact(stated.fact, fact))
+  )
+}
+
+/** Whether the row of the start that rejected this message already says why: the same failure,
+ *  written after the message was sent and no later than its rejection, as the older host wrote
+ *  both. An older row with an equal failure is another start's. */
+function rejectionStatedByItsStartRow(
+  recorded: AgentJournalSubmission | undefined,
+  startFailures: readonly StatedStartFailure[]
+): boolean {
+  const resolvedAt = recorded?.resolvedAt
+  return (
+    recorded !== undefined &&
+    resolvedAt !== null &&
+    resolvedAt !== undefined &&
+    agentSessionFailureStatedByStartRow(
+      recorded.rejection,
+      startFailures.filter(
+        ({ observedAt }) => observedAt >= recorded.submittedAt && observedAt <= resolvedAt
+      )
+    )
   )
 }
 
@@ -88,7 +143,7 @@ function deliveryNoticeText(
   entry: StructuredAgentSessionOutboxEntry,
   context: AgentSessionFailureWordsContext,
   recorded: AgentJournalSubmission | undefined,
-  startFailures: readonly AgentSessionFailureFact[],
+  startFailures: readonly StatedStartFailure[],
   failedHere: ReadonlySet<string>
 ): string {
   // A send attempted before a Stop and then interrupted may already be with the host.
@@ -114,10 +169,7 @@ function deliveryNoticeText(
   if (structuredAgentSessionEntryHeldForRetry(entry) && !failedHere.has(entry.clientMessageId)) {
     return agentSessionWriteNoticeText(agentSessionWriteNotDoneParts('send'))
   }
-  if (
-    entry.state === 'rejected' &&
-    agentSessionFailureStatedByStartRow(recorded?.rejection, startFailures)
-  ) {
+  if (entry.state === 'rejected' && rejectionStatedByItsStartRow(recorded, startFailures)) {
     return agentSessionWriteNoticeText(agentSessionWriteNotDoneParts('send'))
   }
   return agentSessionWriteNoticeText(
@@ -135,13 +187,22 @@ export function structuredAgentSessionDeliveryNotices(
   outbox: readonly StructuredAgentSessionOutboxEntry[],
   agentName: string,
   retry: (clientMessageId: string) => void,
-  /** The journal's rows, whose rejected ones carry more of a rejection than the message keeps. */
+  /** The journal's rows, whose rejected ones carry more of a rejection than the message keeps, and
+   *  whose queued ones may be waiting out a refused start. */
   submissions: readonly AgentJournalSubmission[],
   /** What the loaded start-failure rows state, from `structuredAgentSessionStartFailureFacts`. */
-  startFailures: readonly AgentSessionFailureFact[],
+  startFailures: readonly StatedStartFailure[],
   /** Ids whose send failed or was refused while this chat was open: only they word their cause. */
-  failedHere: ReadonlySet<string>
+  failedHere: ReadonlySet<string>,
+  /** Messages whose Retry waits for the host to say whether it can queue them again. */
+  retryWaitsForHost: ReadonlySet<string> = new Set()
 ): ReadonlyMap<string, NativeChatDeliveryNotice> {
+  const retryControlFor = (
+    clientMessageId: string
+  ): Pick<NativeChatDeliveryNotice, 'onRetry' | 'retryPending'> => ({
+    onRetry: () => retry(clientMessageId),
+    ...(retryWaitsForHost.has(clientMessageId) ? { retryPending: true as const } : {})
+  })
   const admission = admitStructuredAgentSessionOutboxEntry(outbox)
   const held = admission.state === 'blocked' ? admission.entry.clientMessageId : null
   const stalledFrom = admission.state === 'blocked' ? outbox.indexOf(admission.entry) : -1
@@ -168,9 +229,33 @@ export function structuredAgentSessionDeliveryNotices(
       )
       notices.set(
         agentJournalSubmissionKey(entry.clientMessageId),
-        retryControl ? { text, onRetry: () => retry(entry.clientMessageId) } : { text }
+        retryControl ? { text, ...retryControlFor(entry.clientMessageId) } : { text }
       )
     }
+  }
+  for (const submission of submissions) {
+    if (isRetryingStructuredAgentSessionStart(submission)) {
+      notices.set(agentJournalSubmissionKey(submission.clientMessageId), {
+        text: startRetryingNoticeText(submission, agentName)
+      })
+    }
+  }
+  // Drawn only where the host can queue it again in place, so each has its Retry.
+  for (const submission of failedStartsSentElsewhere(submissions, outbox)) {
+    const { clientMessageId } = submission
+    const fact = readWholeAgentSessionFailureFact(submission.rejection)
+    const text = fact
+      ? agentSessionFailureSentence(
+          fact,
+          'rejection',
+          { agentName, retryControl: true },
+          sayAgentSessionFailureTranslated
+        )
+      : (submission.reason ?? '')
+    notices.set(agentJournalSubmissionKey(clientMessageId), {
+      text,
+      ...retryControlFor(clientMessageId)
+    })
   }
   return notices
 }

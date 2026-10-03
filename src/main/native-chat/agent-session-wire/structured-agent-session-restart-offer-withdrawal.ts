@@ -45,8 +45,9 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
         session.journal.submissions().some(
           (submission) =>
             (submission.acceptedSequence ?? 0) > taken.sequence &&
-            // The offer's own continuation, still queued or rejected, never reached the agent: a
-            // retry sends a new one. One handed over may have, answered or not.
+            // The offer's own continuation, still queued or rejected, never reached the agent: its
+            // Retry queues it again, or sends a new one on an older host. One handed over may have,
+            // answered or not.
             !(
               (isQueuedAgentJournalSubmission(submission) ||
                 submission.dispatchState === 'rejected') &&

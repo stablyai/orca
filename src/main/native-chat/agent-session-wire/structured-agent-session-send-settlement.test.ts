@@ -95,6 +95,64 @@ describe('a wait that also ends behind a running command', () => {
   })
 })
 
+describe("a wait for the message's own verdict", () => {
+  /** A queued message waiting out a refused start, then rejected for good. */
+  function waitingJournal(
+    dispatchState: 'pending' | 'rejected'
+  ): Pick<AgentSessionJournal, 'submissions' | 'cursor' | 'activeTurnId'> {
+    return {
+      cursor: () => ({ epoch: 'epoch-1', sequence: dispatchState === 'pending' ? 2 : 3 }),
+      activeTurnId: () => null,
+      submissions: () => [
+        {
+          clientMessageId: 'client-1',
+          fence: 1,
+          payloadFingerprint: 'fingerprint',
+          dispatchState,
+          providerItemId: null,
+          reason: dispatchState === 'rejected' ? 'A Claude account switch is in progress.' : null,
+          submittedAt: 1,
+          resolvedAt: dispatchState === 'rejected' ? 3 : null,
+          handoverRecorded: true,
+          ...(dispatchState === 'pending'
+            ? {
+                startRetry: {
+                  attempts: 1,
+                  reason: 'A Claude account switch is in progress.',
+                  rejection: { kind: 'accountSwitchInProgress' },
+                  failedAt: 2,
+                  nextAttemptAt: 15_002
+                }
+              }
+            : {})
+        }
+      ]
+    }
+  }
+
+  it('waits through the tries of a refused start, which end every other wait', async () => {
+    const settlements = new StructuredAgentSessionSendSettlement(() => waitingJournal('pending'))
+    await expect(settlements.wait('session-1', 'client-1')).resolves.toMatchObject({
+      value: { submission: { dispatchState: 'pending' } }
+    })
+    let settled = false
+    const verdict = settlements
+      .wait('session-1', 'client-1', { until: 'verdict' })
+      .then((result) => {
+        settled = true
+        return result
+      })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    settlements.publish('session-1', waitingJournal('rejected'))
+
+    await expect(verdict).resolves.toMatchObject({
+      value: { submission: { dispatchState: 'rejected' } }
+    })
+  })
+})
+
 describe('structured send settlement compatibility wait', () => {
   afterEach(() => vi.useRealTimers())
 

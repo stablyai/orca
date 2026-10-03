@@ -17,7 +17,8 @@ import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import {
   interruptedRestart,
-  statusNotes
+  statusNotes,
+  terminalStartRefusal
 } from './structured-agent-session-restart-interruption-test-harness'
 import { CALLER, envelope } from './structured-agent-session-host-test-harness'
 import { STRUCTURED_AGENT_SESSION_IDLE_MS } from './structured-agent-session-idle-sweep'
@@ -165,10 +166,11 @@ it('still writes the message id the previous build requires on every marker', as
   expect(capsule.entries[0]?.marker).toHaveProperty('latestUserItemId')
 })
 
-/** Sends a message whose start fails, and waits for it to be rejected. */
+/** Sends a message whose start fails for good, and waits for it to be rejected. A start that may
+ *  yet land keeps the chat open while it waits for its next try. */
 async function sendWhoseStartFails(state: Awaited<ReturnType<typeof offered>>) {
-  state.acquire.mockRejectedValueOnce(new Error('Not signed in'))
-  const params = userSend('while signed out')
+  state.acquire.mockRejectedValueOnce(terminalStartRefusal())
+  const params = userSend('while the history is too large')
   await state.host.send(CALLER, params)
   await vi.waitFor(async () =>
     expect(
@@ -177,6 +179,43 @@ async function sendWhoseStartFails(state: Awaited<ReturnType<typeof offered>>) {
       )
     ).toMatchObject({ dispatchState: 'rejected' })
   )
+}
+
+/** The agent the next continuation starts refuses it, so the action files a retryable refusal. */
+function agentRefusesContinuation(state: Awaited<ReturnType<typeof offered>>) {
+  const acquire = state.acquire.getMockImplementation()
+  if (!acquire) {
+    throw new Error('the harness acquire has no implementation')
+  }
+  state.acquire.mockImplementationOnce(async (input) => ({
+    ...(await acquire(input)),
+    acquisitionGeneration: 'generation-continuation'
+  }))
+  refuseNextDispatch(state)
+}
+
+function refuseNextDispatch(state: Awaited<ReturnType<typeof offered>>) {
+  state.dispatch.mockResolvedValueOnce({
+    state: 'rejected',
+    ...agentSessionFailureWords(
+      agentSessionFailureFact('providerRejected', {
+        detail: { text: 'the provider refused the turn', audience: 'log' }
+      }),
+      { surface: 'rejection' }
+    )
+  })
+}
+
+/** The child the continuation started exits after proving its start. */
+function continuationAgentExits(state: Awaited<ReturnType<typeof offered>>) {
+  return state.host.handleAdapterEvent({
+    type: 'ended',
+    sessionId: SESSION,
+    fence: state.store.getRecord(SESSION)?.lease.runtimeFence ?? 0,
+    acquisitionGeneration: 'generation-continuation',
+    reason: 'codex app-server exited',
+    cause: 'unexpected-exit'
+  })
 }
 
 // A message the user sent is activity even when its start then failed.
@@ -217,9 +256,10 @@ it('keeps the offer withdrawn after the idle sweep closes the chat and it is rea
 it('keeps a failure not retryable after the user moved on and the sweep closed the chat', async () => {
   const state = await offered()
   const { host, clock } = state
-  state.acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
+  agentRefusesContinuation(state)
   const resumed = await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(resumed.failed).toMatchObject([{ sessionId: SESSION, retryable: true }])
+  await continuationAgentExits(state)
   await sendWhoseStartFails(state)
   expect(await host.restartResume.listFailures()).toMatchObject([{ retryable: false }])
   clock.now += STRUCTURED_AGENT_SESSION_IDLE_MS + 1
@@ -249,7 +289,7 @@ it('resumes more than a day after the quit', async () => {
 it('keeps a failed resume retryable more than a day later, after the ledger pruned its row', async () => {
   const state = await offered()
   const { host, clock, store } = state
-  state.acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
+  agentRefusesContinuation(state)
   const first = await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(first.failed).toMatchObject([{ sessionId: SESSION, retryable: true }])
   clock.now += DAY_AND_AN_HOUR
@@ -271,24 +311,8 @@ it('keeps a failed resume retryable more than a day later, after the ledger prun
 // running or since stopped, is still the offer's, so the offer stays retryable.
 it('keeps a resume retryable when its agent started but refused the continuation', async () => {
   const state = await offered()
-  const { host, store } = state
-  const acquire = state.acquire.getMockImplementation()
-  if (!acquire) {
-    throw new Error('the harness acquire has no implementation')
-  }
-  state.acquire.mockImplementationOnce(async (input) => ({
-    ...(await acquire(input)),
-    acquisitionGeneration: 'generation-continuation'
-  }))
-  state.dispatch.mockResolvedValueOnce({
-    state: 'rejected',
-    ...agentSessionFailureWords(
-      agentSessionFailureFact('providerRejected', {
-        detail: { text: 'the provider refused the turn', audience: 'log' }
-      }),
-      { surface: 'rejection' }
-    )
-  })
+  const { host } = state
+  agentRefusesContinuation(state)
 
   const first = await host.restartResume.continueAfterRestart([SESSION], 'modal')
 
@@ -297,15 +321,7 @@ it('keeps a resume retryable when its agent started but refused the continuation
   expect(await host.restartResume.listFailures()).toMatchObject([
     { sessionId: SESSION, retryable: true }
   ])
-  // The child the continuation started exits after proving its start.
-  await host.handleAdapterEvent({
-    type: 'ended',
-    sessionId: SESSION,
-    fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 0,
-    acquisitionGeneration: 'generation-continuation',
-    reason: 'codex app-server exited',
-    cause: 'unexpected-exit'
-  })
+  await continuationAgentExits(state)
   expect(await host.restartResume.listFailures()).toMatchObject([
     { sessionId: SESSION, retryable: true }
   ])
@@ -341,11 +357,11 @@ it('keeps an unanswered continuation the agent was handed from being sent again'
 it("names the user's prompt on a failed retry, not the rejected continuation", async () => {
   const state = await offered('submission')
   const { host } = state
-  state.acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
+  agentRefusesContinuation(state)
   const first = await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(first.failed).toMatchObject([{ latestPrompt: 'Perform the original task' }])
 
-  state.acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
+  refuseNextDispatch(state)
   const retried = await host.restartResume.continueAfterRestart([SESSION], 'retry')
 
   expect(retried.failed).toMatchObject([

@@ -10,8 +10,7 @@
 
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { leftoverRejection } from './structured-agent-session-start-attempt-failure'
 import {
   evictStructuredAgentSession,
   STRUCTURED_AGENT_SESSION_EVICTION_STEPS,
@@ -62,9 +61,10 @@ type ConversationCloseDeps = Pick<StructuredAgentSessionHostDeps, 'logger'> & {
 }
 
 /** A conversation's handle closes with nothing queued: what is still queued when the chat closes,
- *  or the app quits, will not be handed over. Best effort: the next open's delivery loop rejects a
- *  leftover itself. `which` narrows it to the messages a close that did not complete closed.
- *  Resolves false when the rejection failed; the failure is reported, never thrown. */
+ *  or the app quits, will not be handed over. One waiting out a refused start keeps that failure, so
+ *  it reads as failed. Best effort: the next open's delivery loop rejects a leftover itself. `which`
+ *  narrows it to the messages a close that did not complete closed. Resolves false when the
+ *  rejection failed; the failure is reported, never thrown. */
 export async function abandonQueuedStructuredAgentSessionMessages(
   deps: ConversationCloseDeps,
   sessionId: string,
@@ -74,7 +74,7 @@ export async function abandonQueuedStructuredAgentSessionMessages(
   return journal
     .rejectQueuedSubmissions(
       structuredAgentSessionConversationFence(deps.store, sessionId),
-      agentSessionFailureWords(agentSessionFailureFact('chatClosed'), { surface: 'rejection' }),
+      leftoverRejection(journal, deps.store.getRecord(sessionId), 'chatClosed'),
       which
     )
     .then(
@@ -193,7 +193,11 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
         // Only a turn no adapter settled: one with no close, or whose settle threw. Whether it was
         // a person's Stop is its event's to say (`turnEndAfterStop`).
         verdict: { state: 'interrupted', completedAt: context.now() },
-        showUnexpectedExitOutcome: false
+        showUnexpectedExitOutcome: false,
+        // The host failing a start it is stopping: what that child was handed is the loop's.
+        ...(cause === 'host-stop' && stopping?.phase === 'starting'
+          ? { unprovenStart: true as const }
+          : {})
       })
       if (!settled.ok) {
         context.deps.logger.warn("settling a closed agent's work failed", {

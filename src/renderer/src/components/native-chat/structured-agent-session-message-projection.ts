@@ -9,9 +9,13 @@ import { projectStructuredQuestionMessages } from './structured-agent-question-p
 export function projectStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
   outbox: readonly StructuredAgentSessionOutboxEntry[],
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmission[],
+  showsFailedStartsSentElsewhere: boolean
 ) {
-  return projectMessages(items, outbox, submissions, projectStructuredQuestionMessages)
+  return projectMessages(items, outbox, submissions, {
+    projectItems: projectStructuredQuestionMessages,
+    showsFailedStartsSentElsewhere
+  })
 }
 
 export type StructuredPromptItem = AgentJournalRenderItem & {

@@ -4,7 +4,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
-import { ensureStructuredAgentSessionAgentForOperation } from './structured-agent-session-agent-start'
+import {
+  ensureStructuredAgentSessionAgentForOperation,
+  structuredAgentSessionOperationStartOutcome
+} from './structured-agent-session-agent-start'
 import { recordStructuredAgentSessionOptionIntent } from './structured-agent-session-options-read'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
@@ -36,6 +39,24 @@ describe('an operation whose agent start throws', () => {
     expect(log.entries.map((entry) => entry.fields)).toEqual([
       { scope: 'operation-agent-start', sessionId: SESSION, error: cause }
     ])
+  })
+})
+
+describe('an operation that waited on the start it caused', () => {
+  it('is answered with why that start failed, once it has', () => {
+    expect(structuredAgentSessionOperationStartOutcome({ kind: 'notSignedIn' })).toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'notSignedIn' },
+        message:
+          'The agent is not signed in for the selected account. Sign in, then send your message again.'
+      }
+    })
+  })
+
+  it('goes ahead once that start proved itself', () => {
+    expect(structuredAgentSessionOperationStartOutcome(undefined)).toEqual({ ok: true })
   })
 })
 

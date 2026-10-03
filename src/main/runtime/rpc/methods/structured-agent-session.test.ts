@@ -174,7 +174,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(32)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(33)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {

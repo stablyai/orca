@@ -107,7 +107,8 @@ describe('claude structured auth parity with the terminal preflight', () => {
       })
     ).rejects.toMatchObject({
       message: CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
-      reason: 'managedAccountEnvOverride'
+      reason: 'managedAccountEnvOverride',
+      needsUser: true
     })
   })
 
@@ -119,7 +120,8 @@ describe('claude structured auth parity with the terminal preflight', () => {
       })({ identity: IDENTITY })
     ).rejects.toMatchObject({
       message: CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
-      reason: 'managedAccountEnvOverride'
+      reason: 'managedAccountEnvOverride',
+      needsUser: true
     })
   })
 
@@ -169,7 +171,8 @@ describe('claude structured auth parity with the terminal preflight', () => {
       resolverFor({ stripAuthEnv: true, authSwitchSettleTimeoutMs: 20 })({ identity: IDENTITY })
     ).rejects.toMatchObject({
       message: CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
-      reason: 'accountSwitchInProgress'
+      reason: 'accountSwitchInProgress',
+      needsUser: false
     })
   })
 
@@ -194,7 +197,8 @@ describe('claude structured auth parity with the terminal preflight', () => {
       adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
     ).rejects.toMatchObject({
       message: CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
-      reason: 'accountSwitchInProgress'
+      reason: 'accountSwitchInProgress',
+      needsUser: false
     })
     // Nothing was spawned, so the refusal must not have opened a connection.
     expect(claude.connections).toHaveLength(0)
@@ -241,7 +245,8 @@ describe('claude structured auth parity with the terminal preflight', () => {
       adapter.acquire({ identity: identityFor(), fence: 8, spawnToken: 'spawn-10' })
     ).rejects.toMatchObject({
       message: CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
-      reason: 'accountSwitchInProgress'
+      reason: 'accountSwitchInProgress',
+      needsUser: false
     })
     // No replacement child was opened, so nothing is left running unowned.
     expect(claude.connections).toHaveLength(1)

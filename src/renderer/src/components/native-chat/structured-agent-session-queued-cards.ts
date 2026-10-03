@@ -5,6 +5,7 @@ import type { UnreadAgentSessionFailureFact } from '../../../../shared/agent-ses
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
 import { handedOffQueuedMessageIds } from '../../../../shared/structured-agent-session-draft-hand-off'
+import { queuedCardHoldsQueue } from '../../../../shared/structured-agent-session-dispatch-rejection'
 import {
   structuredAgentSessionEntryAsksToQueue,
   type StructuredAgentSessionQueueDelivery
@@ -75,7 +76,7 @@ export function projectQueuedMessageCards(
               : session.hasPendingPrompt
                 ? 'awaiting-answer'
                 : 'turn'
-    behindReturned = behindReturned || message.state === 'returned'
+    behindReturned = behindReturned || queuedCardHoldsQueue(message)
     return {
       messageId: message.messageId,
       position: message.position,

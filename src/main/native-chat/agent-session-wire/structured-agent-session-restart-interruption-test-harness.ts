@@ -1,3 +1,4 @@
+import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // A chat interrupted mid-turn by a restart, rebuilt on a fresh host over the same store, for the
 // restart-resume ownership and failure tests.
@@ -202,4 +203,10 @@ export async function supersededRefusal(userAnswers?: 'before' | 'after') {
     writing.mockRestore()
     admitting.mockRestore()
   }
+}
+
+/** A start refusal whose own words send the person to a new chat: the continuation is not tried
+ *  again, and its message says why. */
+export function terminalStartRefusal(): AgentSessionAcquisitionRefusal {
+  return AgentSessionAcquisitionRefusal.historyTooLarge('the conversation is too large to restore')
 }

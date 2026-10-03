@@ -26,7 +26,7 @@ type UnexpectedExitLifecycleEvent = StructuredAgentSessionEndedEvent & {
 export type StructuredAgentSessionUnexpectedExitSession = Pick<
   StructuredAgentSessionHostSession,
   'child' | 'lastEndedChild'
-> & { journal: DeadGenerationJournal & Pick<AgentSessionJournal, 'cursor' | 'itemBody'> }
+> & { journal: DeadGenerationJournal & Pick<AgentSessionJournal, 'cursor'> }
 
 export type StructuredAgentSessionUnexpectedExitContext<
   TSession extends StructuredAgentSessionUnexpectedExitSession = StructuredAgentSessionHostSession
@@ -36,6 +36,8 @@ export type StructuredAgentSessionUnexpectedExitContext<
   flushLifecycle: (sessionId: string) => Promise<StructuredAgentSessionSinkBarrier>
   publishFence: (sessionId: string, session: TSession) => void
   publishStatus?: (sessionId: string) => void
+  /** Hands a failed start to the delivery loop, which records it on the messages it was for. */
+  wakeDelivery?: (sessionId: string) => void
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
   logger: StructuredAgentSessionLogger
@@ -65,7 +67,7 @@ export async function settleUnexpectedStructuredAgentSessionExit<
       return
     }
     // The host's own phase decides, so a provider that omits the flag still gets a start that
-    // failed told as one: the row says so.
+    // failed told as one.
     const exitedDuringStartup =
       unexpectedEvent.startupUnproven === true || child.phase === 'starting'
     const endChild = (): void => {
@@ -80,6 +82,9 @@ export async function settleUnexpectedStructuredAgentSessionExit<
         rootGone: true
       })
       context.publishStatus?.(unexpectedEvent.sessionId)
+      if (exitedDuringStartup) {
+        context.wakeDelivery?.(unexpectedEvent.sessionId)
+      }
     }
     const record = context.store.getRecord(unexpectedEvent.sessionId)
     if (!record || record.lease.handoffStage !== null) {
@@ -108,15 +113,12 @@ export async function settleUnexpectedStructuredAgentSessionExit<
         stableSettlementId,
         verdict: { state: 'interrupted', completedAt: observedAt },
         exitedDuringStartup,
-        failureTextContext: structuredAgentSessionFailureWordsContext(record, session.journal),
-        // A failed start always says why: no response was running to carry the reason.
-        showUnexpectedExitOutcome:
-          exitedDuringStartup ||
-          unfinishedStructuredAgentSessionWorkWasInterrupted(
-            unfinishedWork,
-            session.journal,
-            observedAt
-          )
+        failureTextContext: structuredAgentSessionFailureWordsContext(record),
+        showUnexpectedExitOutcome: unfinishedStructuredAgentSessionWorkWasInterrupted(
+          unfinishedWork,
+          session.journal,
+          observedAt
+        )
       })
     } finally {
       // Provider exit was positively observed, so release the owner even when
@@ -170,9 +172,7 @@ async function retryUnexpectedExitSettlement(input: {
     showUnexpectedExitOutcome: input.showUnexpectedExitOutcome,
     ...(input.event.failure ? { exitFailure: input.event.failure } : {}),
     failureTextContext: input.failureTextContext,
-    ...(input.exitedDuringStartup
-      ? { exitedDuringStartup: { generation: input.event.acquisitionGeneration } }
-      : {})
+    ...(input.exitedDuringStartup ? { unprovenStart: true as const } : {})
   })
   if (!settled.ok) {
     logExitFailure(input.context, input.event, 'exit-settlement', settled.error)

@@ -5,18 +5,30 @@ vi.mock('./worker-topology', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   monitorWorkerSetup: () => {}
 }))
+const teardown = vi.hoisted(() => vi.fn(async () => undefined))
+vi.mock('./failed-worker-start-teardown', () => ({ tearDownFailedWorkerStart: teardown }))
 
 const { deliverAndSettleWorkerStartReadiness } = await import('./worker-start-readiness-settlement')
 
-function settle(delivered: 'accepted' | undefined) {
+/** `verdict`: what the host finally answers for a preamble it held. */
+function settle(delivered: 'accepted' | undefined, verdict = new Promise<unknown>(() => {})) {
+  let state = 'starting'
   const db = {
-    getWorkerDispatch: () => ({ state: 'starting' }),
-    markWorkerStartUnknown: vi.fn(() => ({
-      stage: 'turn_start_unobserved',
-      residual_resources: '[]'
-    })),
-    markWorkerDispatchReady: vi.fn(() => ({ state: 'ready', stage: 'ready' }))
+    getWorkerDispatch: () => ({ state }),
+    markWorkerStartUnknown: vi.fn(() => {
+      state = 'start_unknown'
+      return { stage: 'turn_start_unobserved', residual_resources: '[]' }
+    }),
+    markWorkerDispatchReady: vi.fn(() => ({ state: 'ready', stage: 'ready' })),
+    failWorkerStart: vi.fn(() => {
+      state = 'failed'
+    }),
+    insertMessage: vi.fn((message: { to: string; type: string }) => ({
+      to_handle: message.to,
+      type: message.type
+    }))
   }
+  const notifyMessageArrived = vi.fn()
   const host = {
     deps: { store: { getRecord: () => ({ lease: { runtimeFence: 1 } }) } },
     send: async () => ({
@@ -24,18 +36,21 @@ function settle(delivered: 'accepted' | undefined) {
       value: { clientMessageId: 'c1', submission: { dispatchState: 'pending', reason: null } }
     }),
     // undefined: the worker's agent was still starting when the wait ran out.
-    waitForSendSettlement: async () =>
-      delivered
-        ? { value: { clientMessageId: 'c1', submission: { dispatchState: delivered } } }
-        : undefined
+    waitForSendSettlement: async (_session: string, _id: string, options?: { until?: string }) =>
+      options?.until === 'verdict'
+        ? verdict
+        : delivered
+          ? { value: { clientMessageId: 'c1', submission: { dispatchState: delivered } } }
+          : undefined
   }
   const args = {
     runtime: {
       getNestedWorkerMaxDepth: () => 3,
-      getTerminalOrchestrationCliCommand: () => 'orca'
+      getTerminalOrchestrationCliCommand: () => 'orca',
+      notifyMessageArrived
     },
     db,
-    run: { id: 'run_1' },
+    run: { id: 'run_1', legacy: 0 },
     task: { id: 't1', spec: 'do the thing' },
     dispatchId: 'd1',
     dispatchDepth: 0,
@@ -55,7 +70,7 @@ function settle(delivered: 'accepted' | undefined) {
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fakes implement exactly the runtime, db and host members this settlement reaches.
   const receipt = deliverAndSettleWorkerStartReadiness(args as never)
-  return { db, receipt }
+  return { db, receipt, notifyMessageArrived }
 }
 
 describe('a structured worker whose agent outlasts the preamble wait', () => {
@@ -85,5 +100,59 @@ describe('a structured worker whose agent outlasts the preamble wait', () => {
 
     await expect(receipt).resolves.toMatchObject({ state: 'ready', turnStart: 'observed' })
     expect(db.markWorkerStartUnknown).not.toHaveBeenCalled()
+  })
+})
+
+describe('a structured worker whose held preamble the host later rejects for good', () => {
+  it('fails the start it left unknown, tears it down, and tells the Run once', async () => {
+    teardown.mockClear()
+    const rejected = Promise.withResolvers<unknown>()
+    const { db, receipt, notifyMessageArrived } = settle(undefined, rejected.promise)
+    await expect(receipt).resolves.toMatchObject({ state: 'outcome_unknown' })
+    expect(db.failWorkerStart).not.toHaveBeenCalled()
+
+    rejected.resolve({
+      value: {
+        clientMessageId: 'c1',
+        submission: {
+          dispatchState: 'rejected',
+          reason: 'A Claude account switch is in progress. Try again after it finishes.',
+          rejection: { kind: 'accountSwitchInProgress' }
+        }
+      }
+    })
+
+    await vi.waitFor(() => expect(db.failWorkerStart).toHaveBeenCalledOnce())
+    expect(db.failWorkerStart).toHaveBeenCalledWith(
+      'd1',
+      'dispatch_input',
+      'The dispatch preamble was not delivered (accountSwitchInProgress): A Claude account switch is in progress. Try again after it finishes.'
+    )
+    expect(teardown).toHaveBeenCalledWith(expect.objectContaining({ dispatchId: 'd1' }))
+    expect(db.insertMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'run:run_1', type: 'escalation', runId: 'run_1' })
+    )
+    expect(notifyMessageArrived).toHaveBeenCalledWith('run:run_1', 'escalation')
+  })
+
+  it('does nothing when it lands, or when the worker moved on first', async () => {
+    teardown.mockClear()
+    const landed = settle(
+      undefined,
+      Promise.resolve({ value: { submission: { dispatchState: 'accepted' } } })
+    )
+    await landed.receipt
+    const reported = Promise.withResolvers<unknown>()
+    const movedOn = settle(undefined, reported.promise)
+    await movedOn.receipt
+    movedOn.db.markWorkerDispatchReady()
+    // The worker reported before the verdict: it is no longer a start to settle.
+    movedOn.db.getWorkerDispatch = () => ({ state: 'ready' })
+    reported.resolve({ value: { submission: { dispatchState: 'rejected', reason: 'x' } } })
+    await new Promise((resolve) => setImmediate(resolve))
+
+    expect(landed.db.failWorkerStart).not.toHaveBeenCalled()
+    expect(movedOn.db.failWorkerStart).not.toHaveBeenCalled()
+    expect(teardown).not.toHaveBeenCalled()
   })
 })
