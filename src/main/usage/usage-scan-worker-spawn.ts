@@ -1,3 +1,5 @@
+import { claudeProfileRoutingEnabled } from '../../shared/claude-profile-routing'
+import { claudeTranscriptScanRoots } from '../claude-usage/transcript-file-discovery'
 import { existsSync } from 'node:fs'
 import { Worker } from 'node:worker_threads'
 import { currentWorkerEntryLayout, resolveWorkerThreadEntryPath } from '../worker-thread-entry-path'
@@ -71,7 +73,12 @@ export async function scanClaudeUsageFilesViaWorker(
   dailyAggregates: ClaudeUsageDailyAggregate[]
 }> {
   const value = await scanClaudeUsageOnWorker(
-    (body) => getSharedClient().scan(body),
+    (body) =>
+      getSharedClient().scan(
+        claudeProfileRoutingEnabled() && body.providerId === 'claude'
+          ? { ...body, transcriptRoots: claudeTranscriptScanRoots() }
+          : body
+      ),
     worktrees,
     previous
   )

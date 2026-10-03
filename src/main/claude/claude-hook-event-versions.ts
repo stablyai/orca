@@ -1,5 +1,6 @@
 import { hasReachedAppVersion, isValidAppVersion } from '../../shared/app-version'
 import { runProcess } from '../../shared/child-process/run-process'
+import { realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
 
 // Why: Claude 1.0.23 through 2.1.100 validate `hooks` against a closed event enum and discard the
@@ -83,4 +84,26 @@ export async function probeClaudeCliVersion(executablePath: string): Promise<str
   } catch {
     return null
   }
+}
+
+const probedVersions = new Map<string, string>()
+/** Keyed by the resolved binary's identity, so an upgrade probes again; only successes are kept. */
+export async function probeClaudeCliVersionCached(executablePath: string): Promise<string | null> {
+  let key: string
+  try {
+    const realPath = realpathSync(executablePath)
+    const stat = statSync(realPath)
+    key = `${realPath}\0${stat.mtimeMs}\0${stat.size}`
+  } catch {
+    return probeClaudeCliVersion(executablePath)
+  }
+  const cached = probedVersions.get(key)
+  if (cached) {
+    return cached
+  }
+  const version = await probeClaudeCliVersion(executablePath)
+  if (version) {
+    probedVersions.set(key, version)
+  }
+  return version
 }

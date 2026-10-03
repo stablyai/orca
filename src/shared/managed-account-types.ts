@@ -81,12 +81,18 @@ export type ClaudeManagedAccountSummary = {
   createdAt: number
   updatedAt: number
   lastAuthenticatedAt: number
+  /** Set only by a host that routes Claude through account profiles. */
+  profileReadiness?: ClaudeProfileReadiness
 }
+
+export type ClaudeProfileReadiness = 'ready' | 'sign-in-required' | 'unsupported'
 
 export type ClaudeRateLimitAccountsState = {
   accounts: ClaudeManagedAccountSummary[]
   activeAccountId: string | null
   activeAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
+  /** Why new launches may not reach the selected account yet; the picker stays usable. */
+  profileRoutingIssue?: string
 }
 
 export type ClaudeManagedAccountRuntimeSelection = {

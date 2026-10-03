@@ -38,7 +38,7 @@ export function installManagedStatusLine(
   if (slot === 'user' || (slot === 'empty' && existsSync(markerPath))) {
     return config
   }
-  const statusLineScriptPath = getStatusLineScriptPath(settings)
+  const statusLineScriptPath = getStatusLineScriptPath(settings, userHome)
   writeManagedScript(statusLineScriptPath, getManagedStatusLineScript('local'))
   const next = applyManagedStatusLine(
     config,

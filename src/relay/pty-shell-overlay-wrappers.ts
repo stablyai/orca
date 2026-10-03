@@ -27,6 +27,7 @@ const SHELL_READY_MARKER_ESCAPED = '\\033]777;orca-shell-ready\\007'
 function getRelayZshWrapperSpec(): ZshStartupHookSpec {
   return {
     headerLabel: 'Orca relay zsh overlay wrapper',
+    claudeAccountAuthority: false,
     readyMarkerEscaped: SHELL_READY_MARKER_ESCAPED,
     osc133CommandMarkers: false,
     startupCommandDelivery: false,

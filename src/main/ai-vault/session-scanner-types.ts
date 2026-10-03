@@ -14,6 +14,8 @@ import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
+  /** This host's Claude profile `projects` dirs, resolved where the account owner lives. */
+  claudeProfileProjectsDirs?: readonly string[]
   codebuddyProjectsDir?: string
   qoderProjectsDir?: string
   codexSessionsDir?: string

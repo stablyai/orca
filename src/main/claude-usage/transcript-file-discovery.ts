@@ -1,3 +1,4 @@
+import { claudeProfileReaderRoots } from '../claude-accounts/claude-profile-reader-roots'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { readdir } from 'node:fs/promises'
@@ -31,8 +32,16 @@ function appendDiscoveredFiles(target: string[], source: readonly string[]): voi
   }
 }
 
-export async function listClaudeTranscriptFiles(): Promise<string[]> {
-  const roots = [CLAUDE_PROJECTS_DIR, CLAUDE_TRANSCRIPTS_DIR]
+export function claudeTranscriptScanRoots(): string[] {
+  return [
+    ...claudeProfileReaderRoots([CLAUDE_PROJECTS_DIR], 'projects'),
+    ...claudeProfileReaderRoots([CLAUDE_TRANSCRIPTS_DIR], 'transcripts')
+  ]
+}
+
+export async function listClaudeTranscriptFiles(
+  roots = claudeTranscriptScanRoots()
+): Promise<string[]> {
   const files = await Promise.all(
     roots.map(async (root) => {
       try {

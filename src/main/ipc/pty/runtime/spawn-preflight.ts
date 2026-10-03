@@ -1,3 +1,4 @@
+import { getClaudeProfileRoutingAuthority } from '../../../claude-accounts/claude-profile-routing-authority'
 import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { PtySpawnResult } from '../../../providers/types'
@@ -145,6 +146,12 @@ export async function prepareRuntimePtySpawn(
   // Why: the drop still applies here, but this controller's result has no field for
   // notifyResumeUnavailable — runtime/relay panes start fresh without the notice.
   ctx.launchCommand = codexResumeLaunch.command
+  if (!args.connectionId && ctx.codexSelectionTarget.runtime !== 'wsl') {
+    const profileEnv = getClaudeProfileRoutingAuthority()?.terminalEnv()
+    if (profileEnv) {
+      args.env = { ...args.env, ...profileEnv }
+    }
+  }
   ctx.claudeAuth =
     ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
       ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)

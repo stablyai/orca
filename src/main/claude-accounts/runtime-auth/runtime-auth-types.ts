@@ -1,7 +1,9 @@
+import type { ClaudeProfileLaunchDescriptor } from '../claude-profile-routing-service'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
 import type { ClaudeEnvPatch } from '../environment'
 
 export type ClaudeRuntimeAuthPreparation = {
+  profileLaunch?: ClaudeProfileLaunchDescriptor
   configDir: string
   runtime?: 'host' | 'wsl'
   wslDistro?: string | null

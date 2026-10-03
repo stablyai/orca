@@ -1,3 +1,4 @@
+import { getClaudeProfileRoutingAuthority } from '../claude-accounts/claude-profile-routing-authority'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
@@ -101,7 +102,12 @@ function structuredAdoptionAccountHomeCandidates(input: {
   selectedAccountHomePath: string
 }): string[] {
   if (input.agent === 'claude') {
-    return [input.selectedAccountHomePath, join(homedir(), '.claude')]
+    return [
+      ...new Set([
+        input.selectedAccountHomePath,
+        ...(getClaudeProfileRoutingAuthority()?.historyRoots() ?? [join(homedir(), '.claude')])
+      ])
+    ]
   }
   return [
     input.selectedAccountHomePath,

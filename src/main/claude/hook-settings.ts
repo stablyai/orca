@@ -55,8 +55,8 @@ export function getPosixStatusLineScriptFileName(settings = CLAUDE_HOOK_SETTINGS
   return `${getStatusLineScriptBaseName(settings)}.sh`
 }
 
-export function getStatusLineScriptPath(settings = CLAUDE_HOOK_SETTINGS): string {
-  return getSharedManagedScriptPath(getStatusLineScriptFileName(settings))
+export function getStatusLineScriptPath(settings = CLAUDE_HOOK_SETTINGS, home?: string): string {
+  return getSharedManagedScriptPath(getStatusLineScriptFileName(settings), home)
 }
 
 export function getManagedScriptFileName(settings = CLAUDE_HOOK_SETTINGS): string {
@@ -69,8 +69,8 @@ export function getPosixManagedScriptFileName(settings = CLAUDE_HOOK_SETTINGS): 
   return `${settings.scriptBaseName}.sh`
 }
 
-export function getManagedScriptPath(settings = CLAUDE_HOOK_SETTINGS): string {
-  return getSharedManagedScriptPath(getManagedScriptFileName(settings))
+export function getManagedScriptPath(settings = CLAUDE_HOOK_SETTINGS, home?: string): string {
+  return getSharedManagedScriptPath(getManagedScriptFileName(settings), home)
 }
 
 export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_SETTINGS): string {

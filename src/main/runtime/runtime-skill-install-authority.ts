@@ -1,3 +1,5 @@
+import { selectedClaudeProfileHome } from '../claude-accounts/claude-profile-reader-roots'
+import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { getWslHome } from '../wsl'
 import { parseWslUncPath } from '../../shared/wsl-paths'
@@ -91,7 +93,7 @@ export async function resolveSkillSshTarget(
 }
 
 export async function resolveSkillProviderRoots(
-  host: RuntimeSkillCommandHost,
+  host: Pick<RuntimeSkillCommandHost, 'getClaudeConfigDirectory'>,
   destination: {
     scope: 'global' | 'workspace'
     homeDirectory: string
@@ -110,11 +112,15 @@ export async function resolveSkillProviderRoots(
       ? { grok }
       : {}
     : resolveEnvironmentSkillProviderRoots()
-  const config = host.getClaudeConfigDirectory?.(
-    destination.wslDistro
-      ? { runtime: 'wsl', wslDistro: destination.wslDistro }
-      : { runtime: 'host' }
-  )
+  // Why: a profile's skills link to the personal ~/.claude/skills; System Default keeps its own dir.
+  const config =
+    !destination.wslDistro && selectedClaudeProfileHome()
+      ? join(destination.homeDirectory, '.claude')
+      : host.getClaudeConfigDirectory?.(
+          destination.wslDistro
+            ? { runtime: 'wsl', wslDistro: destination.wslDistro }
+            : { runtime: 'host' }
+        )
   return withClaudeSkillProviderRoot(roots, config)
 }
 

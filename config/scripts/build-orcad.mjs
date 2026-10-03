@@ -209,6 +209,10 @@ function buildForkedChild(entryPoint, outfile) {
 }
 
 const childResults = await Promise.all([
+  buildForkedChild(
+    join(ROOT, ORCAD_CHILD_ENTRY_POINTS.claudeProfile),
+    join(OUT_DIR, 'claude-profile-worker-entry.js')
+  ),
   buildForkedChild(WATCHER_ENTRY, WATCHER_OUT_FILE),
   buildForkedChild(DAEMON_ENTRY, DAEMON_OUT_FILE),
   buildForkedChild(FOREIGN_SQLITE_READER_ENTRY, FOREIGN_SQLITE_READER_OUT_FILE),

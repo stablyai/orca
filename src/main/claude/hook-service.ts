@@ -65,7 +65,8 @@ type ClaudeHookInstallOptions = {
 type ClaudeHookTargetOptions = ClaudeHookInstallOptions & {
   /** Explicit managed profile on this host; omitted for the existing default-home behavior. */
   configDir?: string
-  /** The home whose default settings a profile follows; defaults to os.homedir(). */
+  /** The home whose default settings a profile follows and whose ~/.orca holds the hook scripts;
+   *  defaults to os.homedir(). A worker thread must pass it: its homedir() ignores its env. */
   userHome?: string
 }
 
@@ -126,7 +127,7 @@ export class ClaudeHookService {
       return refused
     }
     const configPath = getConfigPath(this.options.settings, options.configDir)
-    const scriptPath = getManagedScriptPath(this.options.settings)
+    const scriptPath = getManagedScriptPath(this.options.settings, options.userHome)
     const config = readHooksJson(configPath)
     if (!config) {
       return {
@@ -191,7 +192,7 @@ export class ClaudeHookService {
       return refused
     }
     const configPath = getConfigPath(this.options.settings, options.configDir)
-    const scriptPath = getManagedScriptPath(this.options.settings)
+    const scriptPath = getManagedScriptPath(this.options.settings, options.userHome)
     const config = readHooksJson(configPath)
     if (!config) {
       return {

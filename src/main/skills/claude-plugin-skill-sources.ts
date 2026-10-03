@@ -1,3 +1,4 @@
+import { selectedClaudeProfileHome } from '../claude-accounts/claude-profile-reader-roots'
 import { open, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative, sep, type posix } from 'node:path'
 import { stablePathId, type SkillScanRoot } from './skill-discovery-sources'
@@ -28,13 +29,14 @@ const defaultPathApi: SkillDiscoveryPathApi = { basename, isAbsolute, join, rela
 export function getClaudePluginMetadataPaths(
   homeDir: string,
   cwd: string,
-  pathApi: SkillDiscoveryPathApi = defaultPathApi
+  pathApi: SkillDiscoveryPathApi = defaultPathApi,
+  configHome = pathApi.join(homeDir, '.claude')
 ): { installedPlugins: string; settings: string[] } {
   return {
-    installedPlugins: pathApi.join(homeDir, '.claude', 'plugins', 'installed_plugins.json'),
+    installedPlugins: pathApi.join(configHome, 'plugins', 'installed_plugins.json'),
     // Claude merges user, project, then project-local settings in this order.
     settings: [
-      pathApi.join(homeDir, '.claude', 'settings.json'),
+      pathApi.join(configHome, 'settings.json'),
       pathApi.join(cwd, '.claude', 'settings.json'),
       pathApi.join(cwd, '.claude', 'settings.local.json')
     ]
@@ -208,7 +210,12 @@ export async function discoverClaudePluginSkillSources(args: {
   homeDir: string
   cwd: string
 }): Promise<SkillScanRoot[]> {
-  const paths = getClaudePluginMetadataPaths(args.homeDir, args.cwd)
+  const paths = getClaudePluginMetadataPaths(
+    args.homeDir,
+    args.cwd,
+    defaultPathApi,
+    selectedClaudeProfileHome()
+  )
   const [installedPlugins, ...settings] = await Promise.all(
     [paths.installedPlugins, ...paths.settings].map(readMetadataFile)
   )

@@ -29,6 +29,7 @@
 import { getPosixOmpShellWrapper } from './pty/omp-shell-wrapper'
 import { WSL_MANAGED_CLI_PATH_RESTORE } from './wsl-managed-cli-path-restore'
 import { getPosixCodexShellLaunchPreflight } from '../shared/codex-shell-function'
+import { getPosixClaudeShellFunction } from '../shared/claude-shell-function'
 import {
   getZshShellReadyMarkerRegistrationBlock,
   SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
@@ -59,6 +60,8 @@ export type ZshStartupHookSpec = {
   startupCommandDelivery: boolean
   /** Comment heading the overlay restores inside the hook. */
   overlayRestoreComment: string
+  /** Direct SSH has no managed account authority; the full host runtime does. */
+  claudeAccountAuthority?: boolean
   restores: ZshWrapperRestoreSpec
 }
 
@@ -173,7 +176,11 @@ ${joinBlocks([
   spec.restores.managedWslCli ? indentBlock(WSL_MANAGED_CLI_PATH_RESTORE, '  ') : null,
   featureGuard('overlay', getOverlayRestoreBlocks(spec)),
   // Why outside the overlay guard: a system-default Codex home carries no overlay key.
-  indentBlock(getPosixCodexShellLaunchPreflight(), '  ').replace(/\n$/, ''),
+  indentBlock(
+    getPosixCodexShellLaunchPreflight() +
+      (spec.claudeAccountAuthority === false ? '' : getPosixClaudeShellFunction()),
+    '  '
+  ).replace(/\n$/, ''),
   // Why no /etc/zshrc repair branch: ZDOTDIR was handed back before that file
   // ran, so the value it derives is the user's own path. #11044 is unreachable.
   `  if [[ -n "\${_orca_histfile:-}" ]]; then
