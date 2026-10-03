@@ -11,7 +11,8 @@ import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../termin
 import { logStartupMilestone } from '../../startup/startup-diagnostics'
 import {
   PROTECTED_SECRET_SLOT,
-  sshPtyOwnerLeaseSecretSlot
+  sshPtyOwnerLeaseSecretSlot,
+  sshTargetHttpProxySecretSlot
 } from '../../protected-secret-persistence'
 import {
   isLegacyOpenCodeGoApiKey,
@@ -177,6 +178,43 @@ export class LoadedStateParsingOperations {
             return normalized
           })
           .filter((record): record is SshPtyConsumerRecovery => record !== null)
+
+        // Why: per-host proxy URLs seal through the same safeStorage slots as the local
+        // httpProxyUrl, so they decrypt here with the same STA-3442 fail-closed contract:
+        // unavailable/empty-failed stays sealed (ciphertext retained for later recovery),
+        // plaintext passes as the upgrade path, and garbage never re-persists.
+        parsed.sshTargets = (Array.isArray(parsed.sshTargets) ? parsed.sshTargets : []).map(
+          (target) => {
+            if (
+              typeof target?.id !== 'string' ||
+              typeof target?.httpProxyUrl !== 'string' ||
+              target.httpProxyUrl === ''
+            ) {
+              return target
+            }
+            const slot = sshTargetHttpProxySecretSlot(target.id)
+            const decrypted = this.runtime.protectedSecrets.decryptWithStatus(
+              slot,
+              target.httpProxyUrl,
+              (value) => normalizeProxyUrl(value).ok
+            )
+            if (
+              decrypted.status === 'unavailable' ||
+              (decrypted.status === 'failed' && !decrypted.plaintext)
+            ) {
+              return { ...target, httpProxyUrl: '' }
+            }
+            if (normalizeProxyUrl(decrypted.plaintext).ok) {
+              return { ...target, httpProxyUrl: decrypted.plaintext }
+            }
+            console.warn(
+              `[persistence] httpProxyUrl for SSH target ${target.id} could not be decrypted — clearing it. Re-enter it in the host's Advanced settings.`
+            )
+            this.runtime.protectedSecrets.removeRetainedBlob(slot)
+            this.runtime.loadNeedsSave = true
+            return { ...target, httpProxyUrl: '' }
+          }
+        )
 
         const terminalSettings = prepareLoadedTerminalSettings(parsed, () => {
           this.runtime.loadNeedsSave = true

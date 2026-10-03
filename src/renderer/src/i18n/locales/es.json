@@ -7398,6 +7398,12 @@
           "4808966c41": "Eliminar destino SSH"
         },
         "SshTargetForm": {
+          "httpProxyUrl": "Proxy HTTP",
+          "httpProxyUrlPlaceholder": "http://proxy.example.com:8080",
+          "httpProxyUrlHelp": "Se aplica como HTTP_PROXY/HTTPS_PROXY a las terminales de este host. Debe ser accesible desde el propio host, no desde esta máquina. Admite URL http, https, socks, socks4 y socks5.",
+          "httpProxyBypassRules": "Reglas de exclusión del proxy",
+          "httpProxyBypassRulesPlaceholder": "localhost, 127.0.0.1, *.internal",
+          "httpProxyBypassRulesHelp": "Opcional. Separe los hosts con comas, punto y coma o saltos de línea.",
           "fea9cb402e": "Cancelar",
           "1b19b00e93": "Los tiempos de espera acotados deben estar entre 60 segundos y 7 días.",
           "137e88ce8d": "Los terminales remotos siguen ejecutándose después de que Orca se desconecta de este host.",

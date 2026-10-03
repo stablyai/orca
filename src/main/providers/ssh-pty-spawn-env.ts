@@ -5,8 +5,12 @@ export function buildSshPtySpawnEnv(args: {
   env: Record<string, string> | undefined
   envToDelete?: readonly string[]
   remoteCliBridgeEnv?: RemoteCliBridgeEnv
+  /** Per-host HTTP proxy env resolved from the target's own settings; overrides the
+   *  forwarded pane env but yields to explicit envToDelete deletions, matching the
+   *  local "managed defaults cannot restore explicitly removed values" rule. */
+  targetProxyEnv?: Record<string, string>
 }): Record<string, string> {
-  const merged = { ...args.env }
+  const merged = { ...args.env, ...args.targetProxyEnv }
   if (args.remoteCliBridgeEnv) {
     const pathDelimiter = args.remoteCliBridgeEnv.pathDelimiter ?? ':'
     const pathKey = merged.PATH !== undefined ? 'PATH' : merged.Path !== undefined ? 'Path' : null

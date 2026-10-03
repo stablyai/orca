@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../../../shared/network-proxy'
 import {
   getEditingTargetFromSshConfigHost,
   getSshTargetDraftConnectionFields,
@@ -82,6 +83,15 @@ export async function saveNewSshHostFromForm({
   const identityFile = form.identityFile.trim() || undefined
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
+  // Why: same validation as the Settings edit path — a malformed URL must be
+  // rejected, not silently dropped when the Advanced form is shared by both.
+  const httpProxy = normalizeProxyUrl(form.httpProxyUrl)
+  if (form.httpProxyUrl.trim() && !httpProxy.ok) {
+    toast.error(httpProxy.message)
+    return 'validation-failed'
+  }
+  const httpProxyUrl = httpProxy.value || undefined
+  const httpProxyBypassRules = normalizeProxyBypassRules(form.httpProxyBypassRules) || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
   const remoteRuntime = form.remoteRuntime === 'auto' ? undefined : form.remoteRuntime
   const target = {
@@ -95,6 +105,8 @@ export async function saveNewSshHostFromForm({
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
+    ...(httpProxyUrl ? { httpProxyUrl } : {}),
+    ...(httpProxyBypassRules ? { httpProxyBypassRules } : {}),
     ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
     ...(remoteRuntime ? { remoteRuntime } : {})
   }
