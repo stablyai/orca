@@ -193,7 +193,7 @@ describe('registerOrcaProfileHandlers', () => {
     await vi.advanceTimersByTimeAsync(150)
 
     expect(appRelaunchMock).toHaveBeenCalledOnce()
-    expect(relaunchAppMock).toHaveBeenCalledWith('profile-switch')
+    expect(relaunchAppMock).toHaveBeenCalledWith('profile-switch', 'app-quit')
     // Why quit, not exit: before-quit/will-quit teardown (scrollback capture,
     // PTY kill, daemon checkpoints) must run on a profile switch.
     expect(appQuitMock).toHaveBeenCalledOnce()
@@ -353,7 +353,7 @@ describe('registerOrcaProfileHandlers', () => {
 
     expect(appRelaunchMock).toHaveBeenCalledOnce()
     expect(ipcEvent.sender.send).toHaveBeenCalledWith('app:restart-committed')
-    expect(relaunchAppMock).toHaveBeenCalledWith('profile-transfer')
+    expect(relaunchAppMock).toHaveBeenCalledWith('profile-transfer', 'app-quit')
     expect(appQuitMock).toHaveBeenCalledOnce()
     expect(appExitMock).not.toHaveBeenCalled()
   })
@@ -381,7 +381,7 @@ describe('registerOrcaProfileHandlers', () => {
     expect(store.resumeMaintenance).not.toHaveBeenCalled()
     expect(ipcEvent.sender.send).toHaveBeenCalledWith('app:restart-committed')
     await vi.advanceTimersByTimeAsync(150)
-    expect(relaunchAppMock).toHaveBeenCalledWith('profile-transfer')
+    expect(relaunchAppMock).toHaveBeenCalledWith('profile-transfer', 'app-quit')
     expect(appQuitMock).toHaveBeenCalledOnce()
   })
 
@@ -451,7 +451,7 @@ describe('registerOrcaProfileHandlers', () => {
     expect(setActiveOrcaProfileMock).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(150)
     expect(ipcEvent.sender.send).toHaveBeenCalledWith('app:restart-committed')
-    expect(relaunchAppMock).toHaveBeenCalledWith('profile-transfer')
+    expect(relaunchAppMock).toHaveBeenCalledWith('profile-transfer', 'app-quit')
     expect(appQuitMock).toHaveBeenCalledOnce()
   })
 

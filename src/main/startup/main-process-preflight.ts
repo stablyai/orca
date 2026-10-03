@@ -73,6 +73,7 @@ import { setSpeechServiceFactories } from '../speech/speech-runtime-service'
 import { setWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
 import { desktopWorktreeWatcherRemoval } from '../ipc/filesystem-watcher'
 import { setDefaultProxySessionResolver } from '../network/proxy-settings'
+import { startMainSessionExitTracking } from '../crash-reporting/main-unclean-exit-report'
 import { initDataPath, getCanonicalUserDataPath } from '../persistence'
 import { applyMacPressAndHoldDefaultAtStartup } from '../macos-press-and-hold-default'
 import { initSessionParseCachePersistence } from '../ai-vault/session-parse-cache-persistence'
@@ -347,9 +348,18 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Why: Electron freezes the privileged scheme table at ready, so the doc-preview
   // scheme must be declared here or its webview loses fetch/secure-origin privileges.
   registerDocPreviewSchemePrivileges()
+  // Why before Crashpad: the previous launch's unclean exit decides which dump to read before pruning.
+  const previousUncleanMainSession = startMainSessionExitTracking(
+    getCanonicalUserDataPath(),
+    app.getVersion()
+  )
   // Why: must precede app.whenReady() so Crashpad is installed before the
   // first renderer spawns; a CHECK before this point is still exit-code-only.
-  startCrashpadCapture()
+  startCrashpadCapture({
+    previousUncleanSessionStartedAtMs: previousUncleanMainSession
+      ? Date.parse(previousUncleanMainSession.startedAt)
+      : undefined
+  })
   state.crashReports = CrashReportStore.fromUserData()
   state.gpuCrashDiagnostics =
     process.platform === 'win32'

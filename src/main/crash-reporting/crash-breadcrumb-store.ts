@@ -36,6 +36,14 @@ type CoalescedBreadcrumbState = {
 let breadcrumbs: CrashReportBreadcrumb[] = []
 let retainedBreadcrumbs = new Map<string, CrashReportBreadcrumb>()
 let coalescedBreadcrumbs = new Map<string, CoalescedBreadcrumbState>()
+// Why injected: keeps file I/O out of the in-memory ring.
+let breadcrumbRecordedListener: ((createdAt: string) => void) | null = null
+
+export function setCrashBreadcrumbRecordedListener(
+  listener: ((createdAt: string) => void) | null
+): void {
+  breadcrumbRecordedListener = listener
+}
 
 function retainedBreadcrumbKey(breadcrumb: CrashReportBreadcrumb): string | null {
   if (breadcrumb.name !== 'renderer_memory_highwater') {
@@ -70,6 +78,7 @@ export function recordCrashBreadcrumb(
   if (!breadcrumb) {
     return
   }
+  breadcrumbRecordedListener?.(breadcrumb.createdAt)
   const retainedKey = retainedBreadcrumbKey(breadcrumb)
   if (retainedKey) {
     retainedBreadcrumbs.delete(retainedKey)

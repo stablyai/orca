@@ -6,6 +6,7 @@ import { browserManager } from '../browser/browser-manager'
 import { getBrowserClientHostId } from '../browser/browser-client-host-id'
 import { formatBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
 import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
+import { recordMainSessionExitSync } from '../crash-reporting/main-session-exit-marker'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import type { Store } from '../persistence'
@@ -148,6 +149,8 @@ export function createMainWindow(
   if (process.platform === 'win32') {
     mainWindow.on('session-end', (event) => {
       markSystemSessionEnding()
+      // Why sync: Windows may terminate the process before any async write or will-quit runs.
+      recordMainSessionExitSync('os-session-end')
       // Why: killed/exit-1 tree kills look identical from a user task-kill and an
       // OS shutdown; this is the only positive OS-shutdown signal bundles get.
       recordDurableCrashBreadcrumb('system_session_end', {
