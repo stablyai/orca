@@ -9,6 +9,7 @@ import {
   sanitizeCrashReportBreadcrumbs,
   sanitizeCrashReportDetails,
   type CrashReportCreateInput,
+  type CrashReportDetailValue,
   type CrashReportRecord,
   type CrashReportStatus
 } from '../../shared/crash-reporting'
@@ -37,6 +38,27 @@ function isRelatedCrashEvent(anchor: CrashReportRecord, candidate: CrashReportRe
     anchor.appVersion === candidate.appVersion &&
     anchor.platform === candidate.platform
   )
+}
+
+/**
+ * Applies an amend. A `null` value WITHDRAWS the key rather than storing it — see
+ * `attachDetails`. Nothing emits a null detail as data, and `record` never routes
+ * through here, so the initial write can still store one if a producer ever needs it.
+ * `undefined` is not a withdrawal: sanitize drops it and the stored key survives.
+ */
+function mergeCrashReportDetails(
+  details: Record<string, CrashReportDetailValue>,
+  extraDetails: Record<string, unknown>
+): Record<string, CrashReportDetailValue> {
+  const merged = { ...details }
+  for (const [key, value] of Object.entries(sanitizeCrashReportDetails(extraDetails))) {
+    if (value === null) {
+      delete merged[key]
+    } else {
+      merged[key] = value
+    }
+  }
+  return merged
 }
 
 function isRetryableWindowsFileOperationError(error: unknown): boolean {
@@ -111,6 +133,11 @@ export class CrashReportStore {
    * Merges late-arriving details into an existing report. Crashpad finishes
    * writing the minidump after the process-gone event that created the record,
    * so the signature can only be folded in afterwards.
+   *
+   * A `null` value withdraws the key instead of storing it: an amend can also disprove a
+   * label the first write made on partial evidence, and a merge alone could never take one
+   * back (report 11a9d459 kept a one-incident sibling attribution beside the repeat count
+   * that contradicted it).
    */
   async attachDetails(
     id: string,
@@ -122,10 +149,7 @@ export class CrashReportStore {
         if (report.id !== id) {
           return report
         }
-        result = {
-          ...report,
-          details: { ...report.details, ...sanitizeCrashReportDetails(extraDetails) }
-        }
+        result = { ...report, details: mergeCrashReportDetails(report.details, extraDetails) }
         return result
       })
       return { reports: nextReports, result }
