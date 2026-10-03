@@ -171,11 +171,16 @@ export function useAutomationsPageDestinationForm({
     if (!createOpen || editingAutomationId !== null || createTarget !== 'orca') {
       return
     }
-    setDraft((current) =>
-      !current.projectId || editorProjects.some((project) => project.id === current.projectId)
-        ? current
-        : { ...current, projectId: '', workspaceId: '', baseBranch: '' }
-    )
+    setDraft((current) => {
+      const eligible = (id: string): boolean => editorProjects.some((project) => project.id === id)
+      const extraProjectIds = current.extraProjectIds.filter(eligible)
+      if (!current.projectId || eligible(current.projectId)) {
+        return extraProjectIds.length === current.extraProjectIds.length
+          ? current
+          : { ...current, extraProjectIds }
+      }
+      return { ...current, projectId: '', extraProjectIds, workspaceId: '', baseBranch: '' }
+    })
   }, [createOpen, createTarget, editingAutomationId, editorProjects, setDraft])
 
   const dialogWorktrees = useMemo(() => {
