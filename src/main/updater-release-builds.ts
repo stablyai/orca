@@ -1,4 +1,5 @@
 import { net } from 'electron'
+import { cancelUnreadResponseBody } from './lib/unread-response-body'
 import {
   findInstallerAssetName,
   getReleaseRepoForChannel,
@@ -193,6 +194,7 @@ export async function listReleaseBuilds(
     // request still lists a public repo — fall back instead of failing the picker.
     rejectReleaseApiToken()
     signedIn = false
+    await cancelUnreadResponseBody(res)
     res = await fetchReleases(repo, null)
   } else if (token && isRateLimited(res) && isPrimaryRateLimited(res)) {
     // Why: the token's bucket and the per-IP bucket are separate, so the other one may
@@ -201,9 +203,11 @@ export async function listReleaseBuilds(
     if (resetAtMs !== null && credential) {
       recordGhPrimaryRateLimit('core', resetAtMs, credential.rateLimitScope)
     }
+    await cancelUnreadResponseBody(res)
     res = await fetchReleases(repo, null)
   }
   if (!res.ok) {
+    await cancelUnreadResponseBody(res)
     throw releaseListError(res, repo, channel, signedIn)
   }
   const payload: unknown = await res.json()
