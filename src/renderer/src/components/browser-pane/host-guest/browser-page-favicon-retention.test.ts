@@ -39,7 +39,9 @@ function createHarness(startUrl: string) {
     faviconUrlRef,
     setAddressBarValue: vi.fn(),
     annotationViewportBridgeTokenRef: ref('token'),
-    setBrowserOverlayViewport: vi.fn()
+    setBrowserOverlayViewport: vi.fn(),
+    clearBrowserPageAnnotationsRef: ref(vi.fn()),
+    cancelGrabSessionRef: ref(vi.fn())
   })
   const loading = createBrowserPageWebviewLoadingHandlers({
     webview,
@@ -53,11 +55,8 @@ function createHarness(startUrl: string) {
     trackNextLoadingEventRef: ref(true),
     keepAddressBarFocusRef: ref(false),
     recoveryNavigationValidationRef: ref(null),
-    clearBrowserPageAnnotationsRef: ref(vi.fn()),
-    onUpdatePageStateRef,
     onSetUrlRef: ref(vi.fn()),
-    setPendingAnnotationPayload: vi.fn(),
-    setBrowserOverlayViewport: vi.fn(),
+    onUpdatePageStateRef,
     setAddressBarValue: vi.fn(),
     focusAddressBarNow: () => false
   })

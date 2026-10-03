@@ -41,6 +41,8 @@ export type BrowserPageWebviewNavigationHandlersArgs = {
   setAddressBarValue: Dispatch<SetStateAction<string>>
   annotationViewportBridgeTokenRef: MutableRefObject<string>
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
+  clearBrowserPageAnnotationsRef: MutableRefObject<(pageId: string) => void>
+  cancelGrabSessionRef: MutableRefObject<() => void>
 }
 
 export type BrowserPageWebviewNavigationHandlers = {
@@ -67,7 +69,9 @@ export function createBrowserPageWebviewNavigationHandlers({
   faviconUrlRef,
   setAddressBarValue,
   annotationViewportBridgeTokenRef,
-  setBrowserOverlayViewport
+  setBrowserOverlayViewport,
+  clearBrowserPageAnnotationsRef,
+  cancelGrabSessionRef
 }: BrowserPageWebviewNavigationHandlersArgs): BrowserPageWebviewNavigationHandlers {
   const clearFaviconIfOriginChanges = (
     event: Electron.DidStartNavigationEvent | Electron.DidRedirectNavigationEvent
@@ -146,6 +150,17 @@ export function createBrowserPageWebviewNavigationHandlers({
     const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
     if (event.isMainFrame !== false && pendingRecoveryNavigation?.started) {
       pendingRecoveryNavigation.committed = true
+    }
+    // Why: a reload replaces the document without changing the URL, invalidating captured
+    // element rects like a navigation does. did-navigate is the main-frame commit signal — the
+    // one moment that replacement is a fact. In-page (hash/pushState) and subframe loads never
+    // reach it, so polling pages that refresh an iframe keep the annotate session alive. Tear
+    // the whole session down here, grab state machine included, so no half-closed state survives
+    // with only Esc able to dismiss it.
+    if (event.isMainFrame !== false) {
+      clearBrowserPageAnnotationsRef.current(browserTabId)
+      setBrowserOverlayViewport({ scrollX: 0, scrollY: 0, version: 0 })
+      cancelGrabSessionRef.current()
     }
     const preserveRecoveryError =
       activeLoadFailureRef.current?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
