@@ -4,8 +4,11 @@ import {
   splitOpenCodeSqliteCandidate
 } from './session-scanner-opencode-sqlite-paths'
 import type { SessionFileCandidate } from './session-scanner-types'
-import { errorMessage } from './session-scanner-values'
-import SyncDatabase from '../sqlite/sync-database'
+import type SyncDatabase from '../sqlite/sync-database'
+import {
+  openOpenCodeDatabaseReadonly,
+  openCodeDatabaseScanIssue
+} from './session-scanner-opencode-sqlite-open'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 
 // Why: the opencode2 beta stores sessions in a channel-scoped SQLite DB
@@ -20,12 +23,6 @@ type SessionRow = {
   id: string
   time_created: number
   time_updated: number
-}
-
-function openReadonlyDatabase(dbPath: string): SyncDatabase {
-  const db = new SyncDatabase(dbPath, { readonly: true, fileMustExist: true })
-  db.pragma('query_only = ON')
-  return db
 }
 
 function canReadOpenCode2Sessions(db: SyncDatabase): boolean {
@@ -102,7 +99,7 @@ export async function listOpenCode2SqliteSessions(args: {
   for (const dbPath of args.dbPaths) {
     let db: SyncDatabase | null = null
     try {
-      db = openReadonlyDatabase(dbPath)
+      db = openOpenCodeDatabaseReadonly(dbPath)
       if (!canReadOpenCode2Sessions(db)) {
         continue
       }
@@ -114,11 +111,7 @@ export async function listOpenCode2SqliteSessions(args: {
         candidates.push(rowToCandidate(row, dbPath))
       }
     } catch (err) {
-      args.issues.push({
-        agent: 'opencode2',
-        path: dbPath,
-        message: errorMessage(err)
-      })
+      args.issues.push(openCodeDatabaseScanIssue(dbPath, err, 'opencode2'))
     } finally {
       db?.close()
     }

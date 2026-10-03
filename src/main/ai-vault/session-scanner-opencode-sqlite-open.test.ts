@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import Database from '../sqlite/sync-database'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
+import { listOpenCode2SqliteSessions } from './session-scanner-opencode2-sqlite-list'
 import {
   openCodeBusyTimeoutMs,
   openCodeDatabaseScanIssue,
@@ -93,6 +94,29 @@ async function holdWriteLock(path: string, releaseDelayMs: number): Promise<Work
 }
 
 describe('listOpenCodeSqliteSessions against a database OpenCode is writing to', () => {
+  it('lets a brief v2 lock finish and reports a persistent lock as an OpenCode 2 scope', async () => {
+    const path = seededDatabase('opencode-next.db', 'v1')
+    const db = new Database(path)
+    db.exec(`CREATE TABLE session_v2 (id TEXT PRIMARY KEY, time_created INTEGER, time_updated INTEGER);
+      INSERT INTO session_v2 VALUES ('v2', 1700000000000, 1700000001000)`)
+    db.close()
+    const brief = await holdWriteLock(path, 250)
+    brief.postMessage('reader-started')
+    const issues: AiVaultScanIssue[] = []
+    const candidates = await listOpenCode2SqliteSessions({ dbPaths: [path], limit: 10, issues })
+    expect(candidates).toHaveLength(1)
+    expect(issues).toEqual([])
+    await brief.terminate()
+
+    await holdWriteLock(path, 60_000)
+    const start = performance.now()
+    expect(await listOpenCode2SqliteSessions({ dbPaths: [path], limit: 10, issues })).toEqual([])
+    expect(performance.now() - start).toBeGreaterThan(1200)
+    expect(performance.now() - start).toBeLessThan(4500)
+    expect(issues).toMatchObject([{ agent: 'opencode2', kind: 'scope' }])
+    expect(issues[0]?.message).toContain('OpenCode 2 is writing to opencode-next.db')
+  })
+
   it('reports the failure as a whole source, not as a skipped transcript', async () => {
     const path = seededDatabase('opencode.db', 'session-a')
     await holdWriteLock(path, 60_000)

@@ -20,7 +20,8 @@ import {
   decodeOpenCode2Message,
   parseOpenCode2MessageRow
 } from './session-scanner-opencode2-message'
-import SyncDatabase from '../sqlite/sync-database'
+import type SyncDatabase from '../sqlite/sync-database'
+import { openOpenCodeDatabaseReadonly } from './session-scanner-opencode-sqlite-open'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 import type { TranscriptMessage, TranscriptMessageSink } from './session-transcript-consumers'
 
@@ -60,12 +61,6 @@ type PreviewRow = {
   type: string | null
   data: string
   time_created: number
-}
-
-function openReadonlyDatabase(dbPath: string): SyncDatabase {
-  const db = new SyncDatabase(dbPath, { readonly: true, fileMustExist: true })
-  db.pragma('query_only = ON')
-  return db
 }
 
 function canReadOpenCode2Sessions(db: SyncDatabase): boolean {
@@ -244,7 +239,7 @@ export async function parseOpenCode2SqliteSession(args: {
   const { dbPath, sessionId, platform } = args
   let db: SyncDatabase | null = null
   try {
-    db = openReadonlyDatabase(dbPath)
+    db = openOpenCodeDatabaseReadonly(dbPath)
     if (!canReadOpenCode2Sessions(db)) {
       return null
     }

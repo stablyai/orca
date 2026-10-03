@@ -85,10 +85,10 @@ export function readOpenCodeDatabase<T>(args: {
 export function openCodeDatabaseScanIssue(
   dbPath: string,
   error: unknown,
-  agent: 'opencode' | 'zcode' = 'opencode'
+  agent: 'opencode' | 'opencode2' | 'zcode' = 'opencode'
 ): AiVaultScanIssue {
   const name = basename(dbPath)
-  const label = agent === 'zcode' ? 'ZCode' : 'OpenCode'
+  const label = agent === 'zcode' ? 'ZCode' : agent === 'opencode2' ? 'OpenCode 2' : 'OpenCode'
   // `fileMustExist` already proved the database file is there before SQLite ran,
   // so this needs no fs probe of its own — an extra sync stat on a 9p share is
   // exactly the hang the WSL transcript gate exists to prevent.
