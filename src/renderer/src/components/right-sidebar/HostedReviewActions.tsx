@@ -325,6 +325,7 @@ export default function HostedReviewActions({
   if (review.state === 'merged') {
     return (
       <MergedReviewActions
+        isMainWorktree={worktree.isMainWorktree}
         isDeletingWorktree={isDeletingWorktree}
         onDeleteWorktree={handleDeleteWorktree}
       />
