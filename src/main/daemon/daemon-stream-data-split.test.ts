@@ -99,6 +99,15 @@ describe('writeStreamDataEvents serialization budget', () => {
     expect(encodeNdjson).toHaveBeenCalledTimes(1)
     expect(lines).toEqual([encodeStreamDataEvent('session-1', data, 1234, 5000, true)])
   })
+
+  it('bounds binary search iterations to maxLineBytes window for oversized payloads', () => {
+    const data = 'a'.repeat(4000)
+    vi.mocked(encodeNdjson).mockClear()
+    const lines = write(data, 160)
+    expect(lines.length).toBe(49)
+    // Why: bounding high to start + maxLineBytes caps search depth to <=8 iterations per chunk instead of 12-13.
+    expect(vi.mocked(encodeNdjson).mock.calls.length).toBeLessThan(400)
+  })
 })
 
 describe('writeStreamDataEvents wire parity', () => {
