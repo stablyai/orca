@@ -192,6 +192,12 @@ describe('OrchestrationPane', () => {
     expect(markup).toContain('Re-check')
   })
 
+  it('includes worker model and effort terms in settings search', () => {
+    expect(getOrchestrationPaneSearchEntries()[0].keywords).toEqual(
+      expect.arrayContaining(['worker model', 'worker effort', 'model', 'effort'])
+    )
+  })
+
   it('renders nested worker depth as an unbounded positive whole-number input', () => {
     const markup = renderToStaticMarkup(<OrchestrationPane {...getPaneProps()} />)
 

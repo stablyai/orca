@@ -29,6 +29,10 @@ import {
   normalizeMobilePairingCustomAddresses
 } from '../../../../shared/mobile-pairing-custom-address'
 import {
+  normalizeOrchestrationDefaultWorkerAgent,
+  normalizeOrchestrationWorkerPreferenceUpdates
+} from '../../../../shared/orchestration-worker-model-settings'
+import {
   hydrateOwnerWorktreeVisibilityDefaults,
   type WorktreeVisibilityDefaultsByHost
 } from './worktree-visibility-owner-settings'
@@ -54,8 +58,7 @@ type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
 }
 
 function normalizeRuntimeEnvironmentId(value: string | null | undefined): string | null {
-  const trimmed = value?.trim()
-  return trimmed ? trimmed : null
+  return value?.trim() || null
 }
 
 function normalizeSettingsUpdates(
@@ -64,7 +67,6 @@ function normalizeSettingsUpdates(
 ): Partial<GlobalSettings> {
   const { terminalScrollbackBytes: _legacyScrollbackBytes, ...sanitizedUpdates } =
     updates as LegacyTerminalScrollbackSettingsUpdate
-  void _legacyScrollbackBytes
   if ('terminalQuickCommands' in updates) {
     sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
       updates.terminalQuickCommands
@@ -101,6 +103,15 @@ function normalizeSettingsUpdates(
     sanitizedUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)
     sanitizedUpdates.agentYoloDefaultsMigrated = true
   }
+  if ('orchestrationDefaultWorkerAgent' in updates) {
+    sanitizedUpdates.orchestrationDefaultWorkerAgent = normalizeOrchestrationDefaultWorkerAgent(
+      updates.orchestrationDefaultWorkerAgent
+    )
+  }
+  Object.assign(
+    sanitizedUpdates,
+    normalizeOrchestrationWorkerPreferenceUpdates(updates, currentSettings)
+  )
   if ('agentDefaultEnv' in updates) {
     sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
     sanitizedUpdates.agentYoloDefaultsMigrated = true
