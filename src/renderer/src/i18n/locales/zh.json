@@ -3987,6 +3987,13 @@
             "resumingAriaOne": "正在恢复 1 个聊天。点击查看详情。",
             "resumingAria": "正在恢复 {{value0}} 个聊天。点击查看详情。",
             "resumingTooltip": "正在恢复中断的聊天并请它们继续…"
+          },
+          "CopilotStatusSegment": {
+            "badge": "Copilot",
+            "signedInAs": "GitHub Copilot",
+            "signIn": "点击登录 GitHub Copilot",
+            "deviceCode": "已复制 Copilot 登录代码 {{code}}，请在浏览器中粘贴。",
+            "signInFailed": "Copilot 登录失败"
           }
         }
       },

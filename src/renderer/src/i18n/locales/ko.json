@@ -3987,6 +3987,13 @@
             "resumingAriaOne": "채팅 1개 재개 중. 자세히 보려면 클릭하세요.",
             "resumingAria": "채팅 {{value0}}개 재개 중. 자세히 보려면 클릭하세요.",
             "resumingTooltip": "중단된 채팅을 복원하고 계속하도록 요청하는 중…"
+          },
+          "CopilotStatusSegment": {
+            "badge": "Copilot",
+            "signedInAs": "GitHub Copilot",
+            "signIn": "클릭하여 GitHub Copilot에 로그인",
+            "deviceCode": "Copilot 로그인 코드 {{code}}을(를) 복사했습니다. 브라우저에 붙여넣으세요.",
+            "signInFailed": "Copilot 로그인에 실패했습니다"
           }
         }
       },
