@@ -138,7 +138,9 @@ export function canStartTaskPageGitHubWorkItemMutation(args: {
 export function beginTaskPageGitHubWorkItemMutation(
   args: BeginTaskPageGitHubWorkItemMutationArgs
 ): BeginTaskPageGitHubWorkItemMutationResult {
-  setTaskPageGitHubMutationQueryKey(args.queryKey)
+  if (args.queryKey !== undefined) {
+    setTaskPageGitHubMutationQueryKey(args.queryKey)
+  }
   const { sourceScope, built } = resolveTaskPageGitHubMutation(args)
   const skipMeQualifiers = args.skipMeQualifiers ?? false
   const key = {
@@ -159,7 +161,14 @@ export function beginTaskPageGitHubWorkItemMutation(
     if (!existing) {
       const ops = listPendingTaskPageGitHubOpsForItem(args.item.repoId, args.item.id, sourceScope)
       const snapshot = stripFamilyPendingFromList(args.item, built.family, ops)
-      setConfirmedListSnapshot(sourceScope, args.item.repoId, args.item.id, built.family, snapshot)
+      setConfirmedListSnapshot(
+        sourceScope,
+        args.item.repoId,
+        args.item.id,
+        built.family,
+        snapshot,
+        'seed'
+      )
     }
   }
 
@@ -186,15 +195,17 @@ export function beginTaskPageGitHubWorkItemMutation(
     sourceContext: args.sourceContext
   })
 
-  recomputeSoftHideForItem({
-    item: { ...args.item, ...merged },
-    sourceScope,
-    query: args.query,
-    queryKey: args.queryKey,
-    viewerLogin: args.viewerLogin,
-    skipMeQualifiers,
-    updateSticky: false
-  })
+  if (args.query && args.queryKey !== undefined) {
+    recomputeSoftHideForItem({
+      item: { ...args.item, ...merged },
+      sourceScope,
+      query: args.query,
+      queryKey: args.queryKey,
+      viewerLogin: args.viewerLogin ?? null,
+      skipMeQualifiers,
+      updateSticky: false
+    })
+  }
   notifyTaskPageGitHubMutationRegistry()
 
   return {

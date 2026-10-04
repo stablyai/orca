@@ -1,4 +1,12 @@
 import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
+import {
+  clearTaskPageGitHubListSnapshots,
+  getConfirmedListSnapshot,
+  deleteConfirmedListSnapshot,
+  writeTaskPageGitHubListSnapshot
+} from './task-page-github-work-item-list-snapshots'
+export { getConfirmedListSnapshot, deleteConfirmedListSnapshot }
+export { deleteUnconfirmedListSnapshot } from './task-page-github-work-item-list-snapshots'
 import type {
   PendingOp,
   StickyHideEntry,
@@ -15,8 +23,7 @@ export type {
 import {
   serializeTaskPageGitHubMutationKey,
   taskPageGitHubItemKey,
-  taskPageGitHubLastConfirmedKey,
-  taskPageGitHubSnapshotKey
+  taskPageGitHubLastConfirmedKey
 } from './task-page-github-work-item-mutation-keys'
 import { clearTaskPageGitHubQuietStates } from './task-page-github-work-item-quiet-state'
 export {
@@ -36,7 +43,6 @@ type Listener = () => void
 const listeners = new Set<Listener>()
 const pendingByKey = new Map<string, PendingOp>()
 const generations = new Map<string, number>()
-const confirmedSnapshots = new Map<string, GitHubAssignableUser[]>()
 const lastConfirmedClientValues = new Map<string, unknown>()
 /**
  * Why: after confirm, pending ops are gone but lastConfirmed/snapshots stay keyed
@@ -78,7 +84,7 @@ export function getTaskPageGitHubConfirmedAuthorityItemKeys(): ReadonlySet<strin
  * hard-refreshes so search can adopt for non-pending families (design tier 3).
  */
 export function clearTaskPageGitHubConfirmedAuthority(): void {
-  confirmedSnapshots.clear()
+  clearTaskPageGitHubListSnapshots()
   lastConfirmedClientValues.clear()
   itemSourceScopeByItemKey.clear()
 }
@@ -208,31 +214,16 @@ export function getSourceScopeFromPendingOps(
   }
   return undefined
 }
-export function getConfirmedListSnapshot(
-  sourceScope: string | null,
-  repoId: string,
-  itemId: string,
-  family: TaskPageGitHubListFamily
-): GitHubAssignableUser[] | undefined {
-  return confirmedSnapshots.get(taskPageGitHubSnapshotKey(sourceScope, repoId, itemId, family))
-}
 export function setConfirmedListSnapshot(
   sourceScope: string | null,
   repoId: string,
   itemId: string,
   family: TaskPageGitHubListFamily,
-  users: readonly GitHubAssignableUser[]
+  users: readonly GitHubAssignableUser[],
+  provenance: 'seed' | 'confirmed' = 'confirmed'
 ): void {
   rememberItemSourceScope(repoId, itemId, sourceScope)
-  confirmedSnapshots.set(taskPageGitHubSnapshotKey(sourceScope, repoId, itemId, family), [...users])
-}
-export function deleteConfirmedListSnapshot(
-  sourceScope: string | null,
-  repoId: string,
-  itemId: string,
-  family: TaskPageGitHubListFamily
-): void {
-  confirmedSnapshots.delete(taskPageGitHubSnapshotKey(sourceScope, repoId, itemId, family))
+  writeTaskPageGitHubListSnapshot(sourceScope, repoId, itemId, family, users, provenance)
 }
 export function getLastConfirmedClientValue(
   sourceScope: string | null,
@@ -317,7 +308,7 @@ export function gcStickyHidesAbsentFromPages(
 export function resetTaskPageGitHubMutationRegistryForTests(): void {
   pendingByKey.clear()
   generations.clear()
-  confirmedSnapshots.clear()
+  clearTaskPageGitHubListSnapshots()
   lastConfirmedClientValues.clear()
   itemSourceScopeByItemKey.clear()
   stickyHideByItemKey.clear()

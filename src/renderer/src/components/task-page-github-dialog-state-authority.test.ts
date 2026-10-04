@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
-import { assertTaskPageGitHubDialogStateAuthority } from './task-page-github-dialog-state-authority'
+import {
+  assertTaskPageGitHubDialogStateAuthority,
+  resolveTaskPageGitHubDialogAssigneeUsers
+} from './task-page-github-dialog-state-authority'
 import {
   adoptQuietSearchFieldsForItem,
   applyPendingTaskPageGitHubMutationsToItems,
@@ -183,5 +186,17 @@ describe('dialog state authority (STA-3343)', () => {
     setLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state', 'merged')
     expect(superseded.revert()).toBe(false)
     expect(getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state')).toBe('merged')
+  })
+})
+
+describe('dialog assignee profiles', () => {
+  const me = { login: 'me', name: 'Me', avatarUrl: 'https://avatars/me' }
+  const other = { login: 'other', name: null, avatarUrl: '' }
+
+  it('resolves dialog logins to known profiles and falls back to a bare user', () => {
+    expect(resolveTaskPageGitHubDialogAssigneeUsers(['ME', 'ghost'], [other, me])).toEqual([
+      me,
+      { login: 'ghost', name: null, avatarUrl: '' }
+    ])
   })
 })
