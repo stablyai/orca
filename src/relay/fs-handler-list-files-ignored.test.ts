@@ -71,6 +71,21 @@ describe('relay quick open ignored file listing', () => {
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
   })
 
+  it.each(['invalid', 'incomplete'] as const)('rejects %s UTF-8 filename bytes', async (kind) => {
+    const child = createMockProcess()
+    spawnMock.mockReturnValue(child)
+    const promise = listFilesWithRg('/remote/root')
+
+    child.stdout?.emit('data', Buffer.from(kind === 'invalid' ? [0xff] : [0xe2, 0x82]))
+    if (kind === 'incomplete') {
+      child.emit('close', 0, null)
+    }
+    await expect(promise).rejects.toThrow('not valid UTF-8')
+    if (kind === 'invalid') {
+      expect(child.kill).toHaveBeenCalled()
+    }
+  })
+
   it('uses one broad rg pass for unbounded listings and keeps blocklists/excludes', async () => {
     const ignoredProc = createMockProcess()
 
@@ -80,10 +95,10 @@ describe('relay quick open ignored file listing', () => {
     expect(spawnMock).toHaveBeenCalledTimes(1)
 
     setTimeout(() => {
-      ignoredProc.stdout?.emit('data', 'src/index.ts\n')
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\n')
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'node_modules/pkg/index.js\n')
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'packages/other/src/x.ts\n')
+      ignoredProc.stdout?.emit('data', 'src/index.ts\0')
+      ignoredProc.stdout?.emit('data', 'dist/generated.js\0')
+      ignoredProc.stdout?.emit('data', 'node_modules/pkg/index.js\0')
+      ignoredProc.stdout?.emit('data', 'packages/other/src/x.ts\0')
       ignoredProc.emit('close', 0, null)
     }, 10)
 
@@ -106,10 +121,7 @@ describe('relay quick open ignored file listing', () => {
     spawnMock.mockImplementation(() => (++callIndex === 1 ? primaryProc : ignoredProc))
 
     const promise = listFilesWithRg('/remote/root', [], { maxResults: 2 })
-    ;(primaryProc.stdout as unknown as EventEmitter).emit(
-      'data',
-      'src/one.ts\nsrc/two.ts\nsrc/three.ts\n'
-    )
+    primaryProc.stdout?.emit('data', 'src/one.ts\0src/two.ts\0src/three.ts\0')
 
     await expect(promise).resolves.toEqual(['src/one.ts', 'src/two.ts'])
     expect(primaryProc.kill).toHaveBeenCalled()
@@ -127,14 +139,11 @@ describe('relay quick open ignored file listing', () => {
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
     expect(spawnMock.mock.calls[0][1]).toContain('--no-ignore-vcs')
-    ;(ignoredProc.stdout as unknown as EventEmitter).emit(
+    ignoredProc.stdout?.emit(
       'data',
-      `${Array.from({ length: 100_100 }, (_, index) => `data/payload-${index}.bin`).join('\n')}\n`
+      `${Array.from({ length: 100_100 }, (_, index) => `data/payload-${index}.bin`).join('\0')}\0`
     )
-    ;(ignoredProc.stdout as unknown as EventEmitter).emit(
-      'data',
-      'src/components/target.ts\nscripts/check-target.ts\n'
-    )
+    ignoredProc.stdout?.emit('data', 'src/components/target.ts\0scripts/check-target.ts\0')
     ignoredProc.emit('close', 0, null)
 
     await expect(promise).resolves.toEqual(['scripts/check-target.ts', 'src/components/target.ts'])
@@ -148,11 +157,11 @@ describe('relay quick open ignored file listing', () => {
     const promise = listFilesWithRg('/remote/root', [], { maxResults: 2 })
     expect(spawnMock).toHaveBeenCalledTimes(1)
     expect(spawnMock.mock.calls[0][1]).not.toContain('--no-ignore-vcs')
-    primary.stdout?.emit('data', 'src/index.ts\n')
+    primary.stdout?.emit('data', 'src/index.ts\0')
     primary.emit('close', 0, null)
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
     expect(spawnMock.mock.calls[1][1]).toContain('--no-ignore-vcs')
-    broad.stdout?.emit('data', 'src/index.ts\ndist/generated.js\ndist/extra.js\n')
+    broad.stdout?.emit('data', 'src/index.ts\0dist/generated.js\0dist/extra.js\0')
 
     await expect(promise).resolves.toEqual(['src/index.ts', 'dist/generated.js'])
     expect(broad.kill).toHaveBeenCalled()
@@ -168,14 +177,11 @@ describe('relay quick open ignored file listing', () => {
       maxResults: 32,
       searchQuery: 'target'
     })
-    ;(failed.stdout as unknown as EventEmitter).emit('data', 'src/target.ts\n')
+    failed.stdout?.emit('data', 'src/target.ts\0')
     failed.emit('error', Object.assign(new Error('spawn rg EAGAIN'), { code: 'EAGAIN' }))
 
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
-    ;(succeeded.stdout as unknown as EventEmitter).emit(
-      'data',
-      'src/target.ts\nsrc/another-target.ts\n'
-    )
+    succeeded.stdout?.emit('data', 'src/target.ts\0src/another-target.ts\0')
     succeeded.emit('close', 0, null)
 
     await expect(promise).resolves.toEqual(['src/target.ts', 'src/another-target.ts'])
@@ -193,7 +199,7 @@ describe('relay quick open ignored file listing', () => {
       searchQuery: 'target'
     })
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
-    ;(succeeded.stdout as unknown as EventEmitter).emit('data', 'src/target.ts\n')
+    succeeded.stdout?.emit('data', 'src/target.ts\0')
     succeeded.emit('close', 0, null)
 
     await expect(promise).resolves.toEqual(['src/target.ts'])
@@ -209,7 +215,7 @@ describe('relay quick open ignored file listing', () => {
     failed.emit('error', Object.assign(new Error('spawn rg EAGAIN'), { code: 'EAGAIN' }))
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
 
-    succeeded.stdout?.emit('data', 'src/index.ts\ndist/generated.js\n')
+    succeeded.stdout?.emit('data', 'src/index.ts\0dist/generated.js\0')
     succeeded.emit('close', 0, null)
 
     await expect(promise).resolves.toEqual(['src/index.ts', 'dist/generated.js'])
@@ -305,18 +311,12 @@ describe('relay quick open ignored file listing', () => {
     const promise = listFilesWithGit(root, ['packages/other'])
 
     setTimeout(() => {
-      ;(primaryProc.stdout as unknown as EventEmitter).emit(
-        'data',
-        `${staged('100644', 'src/index.ts')}\0`
-      )
-      ;(primaryProc.stdout as unknown as EventEmitter).emit(
-        'data',
-        `${staged('100644', 'tab\tfile.txt')}\0`
-      )
+      primaryProc.stdout?.emit('data', `${staged('100644', 'src/index.ts')}\0`)
+      primaryProc.stdout?.emit('data', `${staged('100644', 'tab\tfile.txt')}\0`)
       primaryProc.emit('close', 0, null)
 
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/\0')
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'packages/other/src/x.ts\0')
+      ignoredProc.stdout?.emit('data', 'dist/\0')
+      ignoredProc.stdout?.emit('data', 'packages/other/src/x.ts\0')
       ignoredProc.emit('close', 0, null)
     }, 10)
 
@@ -346,7 +346,7 @@ describe('relay quick open ignored file listing', () => {
     spawnMock.mockImplementation(() => (++callIndex === 1 ? primaryProc : ignoredProc))
 
     const promise = listFilesWithGit('/remote/root', [], { maxResults: 2 })
-    ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/one.ts\0src/two.ts')
+    primaryProc.stdout?.emit('data', 'src/one.ts\0src/two.ts')
     primaryProc.emit('close', 0, null)
     await expect(promise).resolves.toEqual(['src/one.ts', 'src/two.ts'])
     expect(primaryProc.kill).toHaveBeenCalled()
@@ -359,10 +359,7 @@ describe('relay quick open ignored file listing', () => {
     spawnMock.mockReturnValue(primaryProc)
 
     const promise = listFilesWithGit('/remote/root', [], { maxResults: 1 })
-    ;(primaryProc.stdout as unknown as EventEmitter).emit(
-      'data',
-      `discarded/\0${staged('100644', 'src/kept.ts')}\0`
-    )
+    primaryProc.stdout?.emit('data', `discarded/\0${staged('100644', 'src/kept.ts')}\0`)
 
     await expect(promise).resolves.toEqual(['src/kept.ts'])
     expect(primaryProc.kill).toHaveBeenCalled()
@@ -389,7 +386,7 @@ describe('relay quick open ignored file listing', () => {
     const promise = listFilesWithGit(root)
 
     setTimeout(() => {
-      ;(primaryProc.stdout as unknown as EventEmitter).emit(
+      primaryProc.stdout?.emit(
         'data',
         `${staged('100644', 'README.md')}\0${staged('160000', 'packages/app')}\0packages/lib/\0`
       )
@@ -419,11 +416,11 @@ describe('relay quick open ignored file listing', () => {
       const promise = listFilesWithGit('/remote/root')
 
       setTimeout(() => {
-        ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
+        primaryProc.stdout?.emit('data', 'src/index.ts\0')
         primaryProc.emit('close', 0, null)
 
         // Entries streamed before the kill are kept alongside the primary pass.
-        ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
+        ignoredProc.stdout?.emit('data', 'dist/generated.js\0')
         ignoredProc.emit('close', null, 'SIGTERM')
       }, 10)
 
@@ -449,7 +446,7 @@ describe('relay quick open ignored file listing', () => {
       const promise = listFilesWithGit('/remote/root')
 
       setTimeout(() => {
-        ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
+        primaryProc.stdout?.emit('data', 'src/index.ts\0')
         primaryProc.emit('close', 0, null)
 
         ignoredProc.emit('close', 128, null)
@@ -475,10 +472,10 @@ describe('relay quick open ignored file listing', () => {
     const promise = listFilesWithGit('/remote/root')
 
     setTimeout(() => {
-      ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
+      primaryProc.stdout?.emit('data', 'src/index.ts\0')
       primaryProc.emit('close', null, 'SIGTERM')
 
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
+      ignoredProc.stdout?.emit('data', 'dist/generated.js\0')
       ignoredProc.emit('close', 0, null)
     }, 10)
 
@@ -500,7 +497,7 @@ describe('relay quick open ignored file listing', () => {
     setTimeout(() => {
       primaryProc.emit('close', 128, null)
 
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
+      ignoredProc.stdout?.emit('data', 'dist/generated.js\0')
       ignoredProc.emit('close', 0, null)
     }, 10)
 
@@ -733,12 +730,12 @@ describe('relay quick open ignored file listing', () => {
     expect(() => probe.emit('error', error)).not.toThrow()
   })
 
-  it('keeps post-spawn rg search errors on the existing empty-result path', async () => {
+  it('rejects post-spawn rg search errors instead of returning an empty result', async () => {
     const started = createMockProcess()
     Object.defineProperty(started, 'pid', { value: 1 })
     spawnMock.mockReturnValueOnce(started)
     const ordinaryFailure = searchWithRg('/remote/root', 'ok', { maxResults: 100 })
     started.emit('error', new Error('post-spawn failure'))
-    await expect(ordinaryFailure).resolves.toMatchObject({ files: [], totalMatches: 0 })
+    await expect(ordinaryFailure).rejects.toThrow('post-spawn failure')
   })
 })

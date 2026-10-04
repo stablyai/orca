@@ -52,7 +52,7 @@ describe('relay list-files cancellation', () => {
     const promise = listFilesWithRg('/remote/root', [], { signal: controller.signal })
 
     // Partial output before the abort — must be discarded, not resolved.
-    ignoredProc.stdout?.emit('data', 'src/index.ts\n')
+    ignoredProc.stdout?.emit('data', 'src/index.ts\0')
     controller.abort()
 
     await expect(promise).rejects.toSatisfy(isFileListingCancellation)
@@ -81,8 +81,8 @@ describe('relay list-files cancellation', () => {
     const promise = listFilesWithRg('/remote/root', [], { signal: controller.signal })
 
     setTimeout(() => {
-      ignoredProc.stdout?.emit('data', 'src/index.ts\n')
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/out.js\n')
+      ignoredProc.stdout?.emit('data', 'src/index.ts\0')
+      ignoredProc.stdout?.emit('data', 'dist/out.js\0')
       ignoredProc.emit('close', 0, null)
     }, 5)
 

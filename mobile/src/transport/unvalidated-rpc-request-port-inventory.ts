@@ -77,7 +77,7 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // driven. The runner itself is no longer the blocker: `ScenarioStep` carries `frame`, and
   // `notifications.desktop-stream` is a recorded stream family. The two members are left out here
   // because the engine gains `useFocusEffect` on its own track.
-  { file: 'app/h/[hostId]/accounts.tsx', references: 2 },
+  { file: 'app/h/[hostId]/accounts.tsx', references: 1 },
 
   // app/ — Expo route screens
   // Holdout: not the screen. It renders to completion under inert reanimated and gesture-handler

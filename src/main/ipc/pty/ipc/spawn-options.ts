@@ -65,7 +65,7 @@ export async function buildPtyIpcSpawnOptions(
     ctx.combinedEnvToDelete = removeCodexHomeDeletionRequests(ctx.combinedEnvToDelete)
   }
   deleteRequestedEnvKeys(ctx.spawnEnv, ctx.combinedEnvToDelete)
-  ctx.spawnEnv = await prepareOpenCodePtyLaunch({
+  const openCodeLaunch = await prepareOpenCodePtyLaunch({
     command: ctx.launchCommand,
     agent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
     env: ctx.spawnEnv,
@@ -77,6 +77,8 @@ export async function buildPtyIpcSpawnOptions(
       ? { wsl: { distro: ctx.expectedWslDistro ?? undefined } }
       : {})
   })
+  ctx.spawnEnv = openCodeLaunch.env
+  ctx.launchCommand = openCodeLaunch.command
   promoteAgentTeamsShimPath(ctx.spawnEnv, ctx.requestedAgentTeamsPath)
   ctx.spawnOptions = {
     cols: args.cols,

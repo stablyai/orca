@@ -54,13 +54,11 @@ export const RPC_SUBSCRIPTION_SITES: readonly RpcSubscriptionSite[] = [
     }
   },
   {
-    file: 'src/home/use-mobile-home-host-connections.ts',
+    file: 'src/home/mobile-home-host-subscriptions.ts',
     method: 'accounts.subscribe',
     release: 'ready-id',
-    coverage: {
-      kind: 'walled',
-      wall: 'Wired on a per-host client from `useAllHostClients`, and the runner hands an adapter one client rather than the multi-host context that hook reads.'
-    }
+    // The extracted wiring takes one client and plain setters; a stream scenario can mount it.
+    coverage: { kind: 'unwritten-scenario' }
   },
   // The browser tab's screencast. Frames are pixels, not JSON.
   {

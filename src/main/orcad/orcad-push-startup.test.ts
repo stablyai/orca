@@ -1,7 +1,8 @@
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences'
 import { DeviceRegistry } from '../runtime/device-registry'
 import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-notification-controller'
 import { PushUnregisterOutbox } from '../runtime/push/push-unregister-outbox'
@@ -14,6 +15,9 @@ const state = vi.hoisted(() => ({
   controller: null as RuntimeMobileNotificationController | null,
   registry: null as DeviceRegistry | null,
   rpcStarted: false,
+  onSettingsChanged: vi.fn<ProfilePreferences['onSettingsChanged']>(),
+  removeSettingsListener: vi.fn(),
+  startDaemon: vi.fn(async () => {}),
   browserProvider: vi.fn(async () => null),
   register: vi.fn(async () => ({ ok: true, registrationId: 'headless-registration' })),
   send: vi.fn(async () => ({ ok: true, results: [] }))
@@ -26,7 +30,7 @@ vi.mock('./orcad-app-paths', () => ({
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: state.browserProvider }))
 vi.mock('./orcad-instance-lock', () => ({ acquireOrcadInstanceLock: () => ({ release() {} }) }))
 vi.mock('./orcad-daemon-supervision', () => ({
-  startOrcadDaemon: async () => {},
+  startOrcadDaemon: state.startDaemon,
   stopOrcadDaemon: async () => {}
 }))
 vi.mock('./orcad-health', () => ({ collectOrcadHealth: async () => ({}) }))
@@ -44,6 +48,7 @@ vi.mock('./orcad-profile-state-startup', () => ({
   createOrcadProfileStateStartup: async () => ({
     store: {
       getSettings: () => ({}),
+      onSettingsChanged: state.onSettingsChanged,
       flushFinalOrThrowAsync: async () => {},
       freezeWritesAsync: async () => {}
     },
@@ -124,6 +129,10 @@ vi.mock('../runtime/push/push-gateway-client', () => ({
   }
 }))
 
+beforeEach(() => {
+  state.onSettingsChanged.mockReturnValue(state.removeSettingsListener)
+})
+
 afterEach(() => {
   rmSync(state.root, { recursive: true, force: true })
   vi.clearAllMocks()
@@ -176,6 +185,11 @@ it('starts push after RPC identity is available and stops dispatch on shutdown',
   expect(readdirSync(profileStateAccessPaths(state.root).participants)).toEqual([])
   acquireProfileStateMaintenance(state.root).release()
   expect(state.controller.getListenerCount()).toBe(0)
+  expect(state.rpcStarted).toBe(false)
+  expect(state.onSettingsChanged).toHaveBeenCalledOnce()
+  expect(state.removeSettingsListener).toHaveBeenCalledOnce()
+  await host.stop()
+  expect(state.removeSettingsListener).toHaveBeenCalledOnce()
   expect(await state.controller.registerPushDevice({} as never)).toMatchObject({
     registered: false
   })
@@ -186,6 +200,17 @@ it('releases admission when host setup fails before a runtime exists', async () 
   state.browserProvider.mockRejectedValueOnce(new Error('browser setup failed'))
   const { startOrcad } = await import('./orcad-entry')
   await expect(startOrcad()).rejects.toThrow('browser setup failed')
+  expect(readdirSync(profileStateAccessPaths(state.root).participants)).toEqual([])
+  acquireProfileStateMaintenance(state.root).release()
+})
+
+it('unsubscribes settings when daemon startup fails after hook setup', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-daemon-failure-'))
+  state.startDaemon.mockRejectedValueOnce(new Error('daemon setup failed'))
+  const { startOrcad } = await import('./orcad-entry')
+  await expect(startOrcad()).rejects.toThrow('daemon setup failed')
+  expect(state.onSettingsChanged).toHaveBeenCalledOnce()
+  expect(state.removeSettingsListener).toHaveBeenCalledOnce()
   expect(readdirSync(profileStateAccessPaths(state.root).participants)).toEqual([])
   acquireProfileStateMaintenance(state.root).release()
 })

@@ -6,7 +6,7 @@
  * Centralized to stop local/relay listFiles from drifting on blocklist, ignores, exclusions,
  * timeouts, and buffering. See docs/design/share-quick-open-file-listing.md.
  */
-import { relativePathInsideRoot } from './cross-platform-path'
+import { isWindowsAbsolutePathLike, relativePathInsideRoot } from './cross-platform-path'
 
 // ─── Hidden-dir blocklist ────────────────────────────────────────────
 
@@ -93,7 +93,7 @@ export function buildExcludePathPrefixes(rootPath: string, excludePaths?: unknow
     if (relativePath === null) {
       continue
     }
-    let rel = relativePath.replace(/\\/g, '/')
+    let rel = isWindowsAbsolutePathLike(rootPath) ? relativePath.replace(/\\/g, '/') : relativePath
     if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {
       continue
     }
@@ -204,6 +204,8 @@ export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
 
   const primary = [
     '--files',
+    '--no-config',
+    '--null',
     '--hidden',
     ...sepArgs,
     ...hiddenDirGlobs,
@@ -214,6 +216,8 @@ export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
   // Ignored pass: --no-ignore-vcs broadens to gitignored/parent/global ignored files; blocklist globs still guard.
   const ignoredPass = [
     '--files',
+    '--no-config',
+    '--null',
     '--hidden',
     '--no-ignore-vcs',
     ...sepArgs,
@@ -234,20 +238,18 @@ export type RgOutputMode =
   | { kind: 'cwd-relative' }
 
 /**
- * Convert one rg --files stdout line into a root-relative, `/`-separated path.
- * Returns `null` for lines that escape the root (symlink edge cases) or can't be normalized.
+ * Convert one NUL-delimited rg --files record into a root-relative, `/`-separated path.
+ * Returns `null` for records that escape the root (symlink edge cases) or can't be normalized.
  * Callers do any WSL translation first, keeping WSL out of the shared module.
  */
 export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMode): string | null {
-  let line = rawLine
-  // Strip CR so CRLF from rg on Windows doesn't leak into results.
-  if (line.length > 0 && line.charCodeAt(line.length - 1) === 13) {
-    line = line.substring(0, line.length - 1)
-  }
+  const line = rawLine
   if (!line) {
     return null
   }
-  const normalized = line.replace(/\\/g, '/')
+  const windowsPath =
+    outputMode.kind === 'absolute' && isWindowsAbsolutePathLike(outputMode.rootPath)
+  const normalized = windowsPath ? line.replace(/\\/g, '/') : line
   if (outputMode.kind === 'cwd-relative') {
     let rel = normalized
     if (rel.startsWith('./')) {
@@ -262,7 +264,8 @@ export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMo
   }
   // Absolute mode: strip the root prefix.
   // Why: only replace backslashes; collapsing repeated slashes would break Windows UNC roots (`\\server\share`).
-  const normalizedRoot = `${outputMode.rootPath.replace(/\\/g, '/').replace(/\/+$/, '')}/`
+  const root = windowsPath ? outputMode.rootPath.replace(/\\/g, '/') : outputMode.rootPath
+  const normalizedRoot = `${root.replace(/\/+$/, '')}/`
   if (normalized.startsWith(normalizedRoot)) {
     const rel = normalized.substring(normalizedRoot.length)
     if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {

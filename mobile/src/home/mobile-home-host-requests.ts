@@ -1,4 +1,6 @@
 import { settingsRead } from '../transport/settings-read-operations'
+import { getHostAccountEvidence } from '../accounts/host-account-evidence'
+import { isHostAccountResult } from '../accounts/host-account-result'
 import { decodeAccountsSnapshot, type AccountsSnapshot } from '../components/AccountUsage'
 import type { HomeStatsRow } from '../stats/home-stats-total'
 import { taskLinearStatusRead, taskPreflightRead } from '../tasks/mobile-task-runtime-operations'
@@ -49,16 +51,40 @@ export function fetchMobileHomeAccounts(
   setSnapshots: HomeAccountsSetter,
   disposed: () => boolean
 ): void {
-  homeHostAccountsRead
-    .requestSingleFlight(client, hostId)
+  const generation = client.getGeneration?.()
+  const evidence = getHostAccountEvidence(client, hostId)
+  let retired = false
+  const unsubscribe = client.onStateChange((state) => {
+    if (state !== 'connected' || client.getGeneration?.() !== generation) {
+      retired = true
+    }
+  })
+  const request = homeHostAccountsRead.requestSingleFlight(client, hostId)
+  const read = evidence.read(request)
+  request
     .then((reply) => {
       const accounts = homeHostAccountsRead.interpret(reply)
-      if (!disposed() && accounts.accepted) {
-        const snapshot = decodeAccountsSnapshot(accounts.value)
-        setSnapshots((previous) => ({ ...previous, [hostId]: snapshot }))
+      if (
+        !retired &&
+        !disposed() &&
+        accounts.accepted &&
+        isHostAccountResult(accounts.value) &&
+        read.accept()
+      ) {
+        try {
+          const snapshot = decodeAccountsSnapshot(accounts.value)
+          setSnapshots((previous) => ({ ...previous, [hostId]: snapshot }))
+        } catch {
+          setSnapshots((previous) => {
+            const next = { ...previous }
+            delete next[hostId]
+            return next
+          })
+        }
       }
     })
     .catch(() => {})
+    .finally(unsubscribe)
 }
 
 export function fetchMobileHomeTaskProviders(

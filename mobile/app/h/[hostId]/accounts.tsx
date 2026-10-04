@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useSyncExternalStore } from 'react'
 import {
   View,
   Text,
@@ -15,6 +15,8 @@ import { loadHosts } from '../../../src/transport/host-store'
 import { useHostClient } from '../../../src/transport/client-context'
 import { colors, spacing } from '../../../src/theme/mobile-theme'
 import { styles } from '../../../src/accounts/mobile-accounts-screen-styles'
+import { useHostAccountsRefresh } from '../../../src/accounts/use-host-accounts-refresh'
+import { getHostAccountEvidence } from '../../../src/accounts/host-account-evidence'
 import { useNow } from '../../../src/hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../../../src/components/AgentIcons'
 import {
@@ -34,20 +36,42 @@ import {
 } from '../../../src/components/codex-reset-credit'
 import { CodexResetCreditAction } from '../../../src/components/CodexResetCreditAction'
 import { useCodexResetCreditAction } from '../../../src/components/use-codex-reset-credit-action'
+import { DeepSeekBalanceCard } from '../../../src/components/DeepSeekBalanceCard'
+import type { RpcClient } from '../../../src/transport/rpc-client'
+import type { ConnectionState } from '../../../src/transport/types'
 
 export default function AccountsScreen() {
+  const { hostId } = useLocalSearchParams<{ hostId: string }>()
+  const { client, clientId, state } = useHostClient(hostId)
+  const subscribe = useCallback(
+    (listener: () => void) => client?.onStateChange(listener) ?? (() => {}),
+    [client]
+  )
+  const readScope = useCallback(
+    () => JSON.stringify([hostId, clientId, state, client?.getGeneration?.()]),
+    [client, clientId, hostId, state]
+  )
+  const scope = useSyncExternalStore(subscribe, readScope, readScope)
+  return <HostAccountsScreen key={scope} hostId={hostId} client={client} connState={state} />
+}
+
+function HostAccountsScreen({
+  hostId,
+  client,
+  connState
+}: {
+  hostId: string
+  client: RpcClient | null
+  connState: ConnectionState
+}) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { hostId } = useLocalSearchParams<{ hostId: string }>()
-
-  // Why: shared client per host. See docs/mobile-shared-client-per-host.md.
-  const { client, state: connState } = useHostClient(hostId)
   const [hostName, setHostName] = useState<string>('')
   const [snapshot, setSnapshot] = useState<AccountsSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
   const [clockEnabled, setClockEnabled] = useState(false)
+  const accountEvidence = client ? getHostAccountEvidence(client, hostId) : null
 
   const acceptSnapshot = useCallback((nextSnapshot: AccountsSnapshot) => {
     setSnapshot(nextSnapshot)
@@ -59,6 +83,14 @@ export default function AccountsScreen() {
     setSnapshot(null)
     setError('Invalid accounts snapshot from host')
   }, [])
+  const { refresh, refreshing } = useHostAccountsRefresh({
+    client,
+    hostId,
+    connState,
+    onSnapshot: acceptSnapshot,
+    onInvalidSnapshot: rejectInvalidSnapshot,
+    onError: setError
+  })
   const {
     supported: codexResetSupported,
     resetting: resettingCodex,
@@ -112,44 +144,28 @@ export default function AccountsScreen() {
     if (!client || connState !== 'connected') {
       return
     }
+    let disposed = false
     const unsubscribe = client.subscribe('accounts.subscribe', null, (payload) => {
-      if (!payload || typeof payload !== 'object') {
+      if (disposed || !payload || typeof payload !== 'object') {
         return
       }
-      const evt = payload as { type?: string; snapshot?: unknown }
-      if (evt.type === 'ready' || evt.type === 'snapshot') {
+      if ('type' in payload && (payload.type === 'ready' || payload.type === 'snapshot')) {
+        accountEvidence?.retire()
         try {
-          acceptSnapshot(decodeAccountsSnapshot(evt.snapshot))
+          acceptSnapshot(
+            decodeAccountsSnapshot('snapshot' in payload ? payload.snapshot : undefined)
+          )
         } catch {
           rejectInvalidSnapshot()
         }
       }
     })
-    return unsubscribe
-  }, [acceptSnapshot, client, connState, rejectInvalidSnapshot])
-
-  const refresh = useCallback(async () => {
-    if (!client) {
-      return
+    return () => {
+      disposed = true
+      accountEvidence?.retire()
+      unsubscribe()
     }
-    setRefreshing(true)
-    try {
-      const res = await client.sendRequest('accounts.list')
-      if (res.ok) {
-        acceptSnapshot(decodeAccountsSnapshot(res.result))
-      } else {
-        setError(res.error.message)
-      }
-    } catch (e) {
-      if (e instanceof Error && e.message === 'Invalid accounts snapshot from host') {
-        rejectInvalidSnapshot()
-      } else {
-        setError(e instanceof Error ? e.message : String(e))
-      }
-    } finally {
-      setRefreshing(false)
-    }
-  }, [acceptSnapshot, client, rejectInvalidSnapshot])
+  }, [acceptSnapshot, accountEvidence, client, connState, rejectInvalidSnapshot])
 
   const selectAccount = useCallback(
     async (provider: ProviderKey, accountId: string | null) => {
@@ -379,6 +395,7 @@ export default function AccountsScreen() {
           </View>
         ) : (
           <>
+            <DeepSeekBalanceCard snapshot={snapshot} />
             {renderProviderSection('claude', 'Claude')}
             {renderProviderSection('codex', 'Codex')}
             <View style={styles.footerHint}>

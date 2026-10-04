@@ -35,6 +35,13 @@ import { RetiredPaneSurfaceRegistry } from './retired-pane-surfaces'
 import { applyScrubSafeAgentEnvAliases } from '../shared/agent-hook-scrub-safe-env'
 import { addWslEnvKeys } from '../shared/wsl-env'
 import {
+  OPENCODE_STARTUP_PROMPT_SHA256_ENV,
+  OPENCODE_STARTUP_PROMPT_NONCE_ENV,
+  OPENCODE_STARTUP_PROMPT_ENDPOINT_ENV,
+  OPENCODE_STARTUP_PROMPT_BODY_ENV,
+  OPENCODE_STARTUP_PROMPT_SHELL_ENV
+} from '../shared/opencode-startup-prompt'
+import {
   ORCA_IMAGE_PROTOCOL_ENV,
   ORCA_IMAGE_PROTOCOL_VALUE
 } from '../shared/terminal-image-protocol'
@@ -2043,6 +2050,16 @@ export class PtyHandler {
       envToDelete
     )
     delete spawnEnv.ORCA_OPENCODE_PLUGIN_API
+    // Relay input streams lack driving-input provenance, so native intent is unavailable.
+    for (const key of [
+      OPENCODE_STARTUP_PROMPT_SHA256_ENV,
+      OPENCODE_STARTUP_PROMPT_NONCE_ENV,
+      OPENCODE_STARTUP_PROMPT_ENDPOINT_ENV,
+      OPENCODE_STARTUP_PROMPT_BODY_ENV,
+      OPENCODE_STARTUP_PROMPT_SHELL_ENV
+    ]) {
+      delete spawnEnv[key]
+    }
     const openCodeCapabilities = await probeOpenCodeLaunchCapabilities({
       command,
       agent: launchAgent,

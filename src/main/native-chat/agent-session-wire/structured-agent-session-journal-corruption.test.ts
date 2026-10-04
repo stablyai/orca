@@ -51,6 +51,8 @@ const stop = (turnEnvelope = envelope('agentSession.cancel', { turnId: 'turn-1' 
 // T-corrupt-midsession.
 it('refuses a send as corrupt when SQLite reports damage, and still stops the agent', async () => {
   await attach()
+  // Compare settled directories; attach's advisory withdrawal releases its temporary lock.
+  await hostTestRecoveryCapsuleSettled()
   const files = await readdir(root, { recursive: true })
   const damaged = sqliteError('database disk image is malformed', 11)
   vi.spyOn(openTestJournalHostDatabase(root), 'transaction').mockImplementation(() => {

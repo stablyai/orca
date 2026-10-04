@@ -45,7 +45,7 @@ const nativeImeSpec = readFileSync(
 const filterStep = prWorkflow.jobs.code_paths.steps.find(
   (step) => step.name === 'Filter changed E2E specs'
 )
-const rollbackStep = prWorkflow.jobs.static_analysis.steps.find(
+const rollbackStep = prWorkflow.jobs.preflight.steps.find(
   (step) => step.name === 'Check VM runtime rollback compatibility'
 )
 const verifyStep = prWorkflow.jobs.verify.steps.find(
@@ -133,7 +133,7 @@ describe('PR E2E gate contract', () => {
     for (const job of prWorkflow.jobs.verify.needs) {
       const envVar = job.replaceAll('-', '_').toUpperCase()
       expect(verifyStep.env[envVar]).toBe(`\${{ needs.${job}.result }}`)
-      if (job === 'code_paths') {
+      if (job === 'code_paths' || job === 'preflight') {
         continue
       }
       expect(successLoop).toContain(`"$${envVar}"`)

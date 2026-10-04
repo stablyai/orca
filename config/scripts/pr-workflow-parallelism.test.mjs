@@ -27,6 +27,7 @@ const shellContractFiles = [
   'src/main/pty/omp-shell-wrapper-alias-safety.test.ts',
   'src/main/pty/omp-shell-wrapper.node-pty.test.ts',
   'src/main/shell-startup-feature-channel.test.ts',
+  'src/main/zsh-deferred-startup-line-init.live-shell.test.ts',
   'src/main/zsh-scoped-histfile.live-shell.test.ts',
   'src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts',
   'src/main/zsh-wrapper-version-mismatch.live-shell.test.ts',
@@ -54,7 +55,7 @@ const realZshUsage =
 describe('PR workflow parallelism', () => {
   it('keeps lightweight orchestration jobs on the free slim runner', () => {
     expect(workflow.jobs.code_paths['runs-on']).toBe('ubuntu-slim')
-    expect(workflow.jobs.typecheck['runs-on']).toBe('ubuntu-24.04-arm')
+    expect(workflow.jobs.preflight['runs-on']).toBe('ubuntu-24.04-arm')
     expect(workflow.jobs.verify['runs-on']).toBe('ubuntu-slim')
     expect(prTestLocWorkflow.jobs.loc['runs-on']).toBe('ubuntu-slim')
     expect(releasePolicyWorkflow.jobs.enforce['runs-on']).toBe('ubuntu-slim')
@@ -79,7 +80,7 @@ describe('PR workflow parallelism', () => {
     const installStep = sharedTest.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
-    const staticInstall = workflow.jobs.static_analysis.steps.find(
+    const staticInstall = workflow.jobs.preflight.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
     const nodeNextPrimerInstall = nodeNextWorkflow.jobs.test_native_cache.steps.find(
@@ -91,7 +92,7 @@ describe('PR workflow parallelism', () => {
     expect(nodeNextWorkflow.jobs.test.uses).toBe('./.github/workflows/unit-tests.yml')
     expect(JSON.parse(nodeNextWorkflow.jobs.test.with.node_versions)).toEqual(['24', '26'])
     expect(workflow.jobs.test.with.runner).toBe('ubuntu-24.04-arm')
-    expect(workflow.jobs.static_analysis['runs-on']).toBe('ubuntu-24.04-arm')
+    expect(workflow.jobs.preflight['runs-on']).toBe('ubuntu-24.04-arm')
     expect(sharedTest['runs-on']).toBe('${{ inputs.runner }}')
     expect(unitTestWorkflow.on.workflow_call.inputs.runner.default).toBe('ubuntu-latest')
     expect(nodeNextWorkflow.jobs.test.with.runner).toBeUndefined()
@@ -121,7 +122,7 @@ describe('PR workflow parallelism', () => {
     }
     expect(staticInstall.with['native-runtime']).toBe('node')
     expect(staticInstall.with['node-version']).toBe('24')
-    expect(workflow.jobs.test.needs).toContain('static_analysis')
+    expect(workflow.jobs.test.needs).toContain('preflight')
     expect(workflow.jobs.test_native_cache).toBeUndefined()
     expect(nodeNextPrimerInstall.with['native-runtime']).toBe('node')
     expect(nodeNextPrimerInstall.with['node-version']).toBe('${{ matrix.node }}')
@@ -348,11 +349,11 @@ describe('PR workflow parallelism', () => {
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
 
-    for (const jobName of ['typecheck', 'git_compatibility']) {
+    for (const jobName of ['git_compatibility']) {
       expect(installFor(jobName).with, jobName).toBeUndefined()
     }
     expect(installFor('xterm_patch_sync')).toBeUndefined()
-    expect(installFor('static_analysis').with['native-runtime']).toBe('node')
+    expect(installFor('preflight').with['native-runtime']).toBe('node')
     expect(installFor('shell_contracts').with['native-runtime']).toBe('node')
     expect(sharedTestInstall.with['native-runtime']).toBe('node')
     expect(installFor('package').with['native-runtime']).toBe('electron')
@@ -478,7 +479,7 @@ describe('PR workflow parallelism', () => {
   })
 
   it('reuses TypeScript incremental state across typecheck runs', () => {
-    const steps = workflow.jobs.typecheck.steps
+    const steps = workflow.jobs.preflight.steps
     const cacheIndex = steps.findIndex((step) => step.name === 'Cache TypeScript incremental state')
     const checkIndex = steps.findIndex((step) => step.run === 'pnpm run typecheck')
 
@@ -543,8 +544,7 @@ describe('PR workflow parallelism', () => {
   it('keeps verify as the aggregate required check', () => {
     expect(workflow.jobs.verify.needs).toEqual([
       'code_paths',
-      'static_analysis',
-      'typecheck',
+      'preflight',
       'git_compatibility',
       'codex_index_heal_contract',
       'xterm_patch_sync',

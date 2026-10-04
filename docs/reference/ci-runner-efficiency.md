@@ -1858,6 +1858,32 @@ the imported helper has no top-level side effects, and the Linux rebuild branch
 is unchanged. Focused tests verify its Linux/macOS no-op behavior. Final-head PR
 checks qualify separately.
 
+## October 4 reusable cells for terminal context scans
+
+Terminal cursor-context scans now request one reusable cell per invocation when
+the adapter offers getNullCell, and pass it through all unchanged text/style
+scans. Adapters without that optional method keep the existing allocating path.
+The scratch cell is local and no cell reference escapes into returned context.
+Browser composer/readiness text, colors, bold flags and wrapping are unchanged.
+
+Three alternating one-worker ARM pairs in
+[37182789677](https://github.com/stablyai/orca/actions/runs/37182789677)
+ran all 19 original cases from readiness census suite 2. Baseline complete
+invocations were 37.141 / 37.879 / 37.090 seconds; candidate invocations were
+33.887 / 33.387 / 32.916 seconds. Median 37.141 to 33.387 seconds saves 10.1%.
+This is a focused workload measurement, not a whole-shard or queue-delay claim.
+
+Separate baseline/candidate captures retained all 192 cases across six census
+suites. Every context and visible projection matched: 643,926 of each, with
+7,465,308,324 complete length-prefixed payload bytes hashed per test/type/order.
+The canonical capture digest was
+`f7440c0f1b5bbb57127cd29245530029415c8e9e243c1744359f330b3c7ace19`.
+These captures run outside the timing samples. All 41 cursor/composer/browser
+consumer checks passed. Seven faults for lost dim filtering, wide continuation,
+bold prompt, custom foreground, wrap preservation, adapter fallback and scratch
+reuse failed their intended assertions. Node and web typecheck, lint and format
+passed. Two added controls prove per-call scratch lifetime and adapter parity.
+
 ## October 3 producer follow-up: automatic selection for the measured profile
 
 The first producer rollout in [#24927](https://github.com/stablyai/orca/pull/24927)
@@ -1895,6 +1921,36 @@ automatic selection and cold publication, not a new timing result. Local
 verification passed eight suites / 184 tests, the changed-code quality gate and
 compiled-composite actionlint.
 
+## October 4 shared PR preflight capacity
+
+Static analysis and the unchanged compiler now share one ARM runner and guarded
+Node 24 install. Static checks finish and all background work joins before the
+compiler starts; unit planning still overlaps compilation. Each phase keeps its
+classifier output. Successful no-op background bodies register every required
+join when a phase is unselected or an earlier step failed. Unit and package
+consumers depend on physical job success, including action cleanup.
+
+Three counterbalanced pairs in
+[37180613601](https://github.com/stablyai/orca/actions/runs/37180613601)
+used the same frozen checkout `f199a20c3acd`, Node 24.21.0, pnpm 12.8.1,
+policy hashes, native cache hits, warm TypeScript cache and 10,787-file unit plan.
+Both arms used the PR root-only download-store policy. Total active job time was
+152 / 153 / 151 seconds separately and 138 / 133 / 129 combined. Excluding the
+extra measurement-only evidence steps gives 151 / 151 / 149 versus
+136 / 132 / 128 seconds: median 151 to 132, saving 19 seconds (12.6%).
+Two heavy runner admissions become one. This saves capacity; it does not prove a
+whole-PR latency or queue gain. The median active dependency barrier increases
+from 116 to 132 seconds because compilation follows static checks.
+
+The separate physical-failure run
+[37180755694](https://github.com/stablyai/orca/actions/runs/37180755694)
+proved that an included TypeScript error failed the actual compiler, its planner
+still joined, and unit/package admissions skipped. A registered late action post
+failure also blocked both consumers after successful foreground checks and
+published shards. All 12 unselected/prior-failure no-op backgrounds joined, and
+the downstream audit passed. Local workflow contracts passed 239 tests across
+12 suites; lint and formatting passed.
+
 ## October 3 retired-cache collection observation
 
 The same owner-collection assertion failed in unit shard 3 of
@@ -1911,6 +1967,47 @@ strongly: the owner-collection assertion failed, with the other six tests passin
 The source was restored afterward. Extra collection turns therefore preserve the
 strong-retention oracle. Hosted qualification is still required; these observations
 do not prove a particular VM-retention cause or quantify avoided retries.
+
+## October 4 terminal oracle execution
+
+Three measured test-support changes preserve the original seeds, payloads,
+chunk boundaries and meaningful assertions. Serializer comparisons reuse cells
+and format only the first mismatch instead of allocating descriptors for every
+cell. The terminal parity writer submits every original chunk in FIFO order and
+awaits the final parser callback. The independent legacy frame oracle memoizes
+measured code-point widths. Its discarded algebra-only case never called
+production and still passed when production always threw.
+
+Three alternating one-worker hosted ARM pairs measured complete invocations:
+
+| Cohort | Baseline median | Candidate median | Saving |
+| --- | --- | --- | --- |
+| Serializer replay/fuzz/descriptor checks | 71.675s | 46.581s | 35.0% |
+| Emulator/reconciliation/color parity | 24.095s | 5.411s | 77.5% |
+| Frame equivalence | 18.472s | 13.736s | 25.6% |
+
+[37180517143](https://github.com/stablyai/orca/actions/runs/37180517143)
+retained 116 timed serializer passes and three existing/paired-control skips.
+Separate captures matched all 190,796,645 raw bytes over 1,611 scenarios and
+8,617 checkpoints (SHA256 `00ab219cfb31456af2ecd5e766d1b82d47abc751f6f2de0d7f795e36a936d3c7`),
+including complete outputs and diagnostic payloads. Twenty candidate controls
+passed; formatting/color/blank/clipping fault controls detected regressions.
+
+[37181073275](https://github.com/stablyai/orca/actions/runs/37181073275)
+retained all 16 parity cases and default fuzz counts. Captures matched 2,325
+batches, 28,182 original chunks and 1,698,285 input bytes, with identical
+terminal state and serialization per terminal/batch. Independent terminal
+completion order differs, so comparison uses canonical per-terminal ordering
+(SHA256 `c38ac1dbbefb9f6dc33ecfe7c495d65b707c1664614544622af93cfc1850e421`).
+All 73 callback/parser/other-consumer controls passed; first-callback, reversed
+chunks, missing empty boundary and early-completion faults failed.
+
+The frame candidate passed all 19 retained cases directly against the original
+uncached legacy oracle, preserving 4,000 short and 800 near-cap seeded trials.
+Sequence, surrogate width, byte width and span-transform faults failed real
+assertions. A part-array alternative was rejected after adding time locally.
+Hosted Node typecheck passed. These are focused workload savings, not measured
+whole-shard or queue-delay improvements; application behavior is unchanged.
 
 ## October 3 unit-selection evidence: include failed references
 
@@ -1940,6 +2037,49 @@ The collector succeeded after one unit shard failed, while required verification
 remained red. Its review recognized all five shards as a complete reference
 (10,608 files, 8,965,977 worker-ms). This was again a full fallback with
 `selectionEvaluated: false`, not evidence for enabling selected tests.
+
+## October 4 runtime imports and recovery fixtures
+
+Three helper-only tests now import the existing terminal modules directly rather
+than initializing the runtime service. Ten copied-loop cases never exercised
+runtime memoization: they passed with its cache, timestamp update or prune
+invalidation disabled. Two actual helper checks remain. The existing runtime
+prune suite now exercises real leaf cache reuse, split prompt timestamps,
+ordinary output, fresh prompts and detection after retained-history eviction.
+Each of those three production faults fails a real runtime assertion.
+
+Recovery tests now seed three exact fixture variants once, after the seed child
+has closed. Each crash still receives an independent byte-for-byte copy of the
+entire database/WAL family and remapped paths. Buffer.equals retains exact byte
+comparison without recursive matcher overhead. All 46 original crash boundaries
+and retries remain. Four additional copy-isolation/WAL checks run, and teardown
+requires that all seed bytes remain unchanged after the full suite.
+
+Three alternating one-worker hosted ARM pairs in
+[37182181976](https://github.com/stablyai/orca/actions/runs/37182181976)
+measured these complete invocations:
+
+| Cohort | Baseline seconds | Candidate seconds | Median saving |
+| --- | --- | --- | --- |
+| Three imports only, same 15 tests | 19.257 / 19.167 / 19.363 | 1.769 / 1.768 / 1.768 | 90.8% |
+| Final four-file runtime cohort | 22.312 / 22.122 / 21.969 | 13.494 / 13.793 / 13.601 | 38.5% |
+| Recovery crash boundaries | 24.082 / 24.075 / 24.814 | 8.061 / 8.105 / 9.074 | 66.3% |
+
+The final runtime cohort has seven real cases versus 16 including the copied
+loops; its new runtime case is included in candidate timing. Recovery has 50
+passes versus the original 46. Hosted Node typecheck passed. Recovery faults for
+last-byte database/WAL corruption, shared database paths, missing WAL copies and
+accepted/unaccepted seed collision failed the intended assertions. These are
+focused workload savings, not measured whole-shard or queue-delay gains.
+
+An independent local cache screen left both caches disabled. Across 14 unchanged
+files and 92 cases, a warm Vitest transform cache reduced median invocation time
+3.090 to 1.948 seconds, excluding archive costs; its cold arm increased time to
+3.281 seconds. Node compilation caching showed no gain. Controls reproduced stale
+transforms after TypeScript configuration or plugin-option changes, so persisted
+reuse requires a complete transform-input stamp and hosted net-cost evidence.
+A separate 130,000-pane leaf-collection optimization was restored: its complete
+migration-file timing stayed within noise. The regression fixture remains.
 
 ## October 3 removal fixture cleanup ordering
 

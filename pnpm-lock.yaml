@@ -166,6 +166,7 @@ overrides:
   monaco-editor>dompurify: 3.4.16
 
 patchedDependencies:
+  '@streamparser/json@0.0.26': b2cf43861e5b4e485e97ffa7449ea65acab4d65dd983ab8c0508f1c68f7d80c9
   '@vscode/windows-process-tree@0.8.0': 9da74aa3d17243aa53dcdc95c9f06e97437e7fbccf098aeb017579e2d24cbac2
   '@xterm/addon-image@0.10.0-beta.300': e5254a46d6f57bef4a8a19683bfa685afa0ca0127545aea53b54a48104ca3562
   '@xterm/addon-ligatures@0.11.0-beta.300': 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
@@ -198,7 +199,7 @@ importers:
         version: 2.5.6
       '@streamparser/json':
         specifier: 0.0.26
-        version: 0.0.26
+        version: 0.0.26(patch_hash=b2cf43861e5b4e485e97ffa7449ea65acab4d65dd983ab8c0508f1c68f7d80c9)
       '@xterm/addon-serialize':
         specifier: 0.15.0-beta.300
         version: 0.15.0-beta.300(patch_hash=b35533fe252e7e45433150170348889f4e08a6c17f7017ac34ea694d831fec7f)(@xterm/xterm@6.1.0-beta.303(patch_hash=dd0ccc59cd1ccf99f4d76e5aa2456da165fa0804dce19a833d7638bd07ffa393))
@@ -10208,7 +10209,7 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@streamparser/json@0.0.26': {}
+  '@streamparser/json@0.0.26(patch_hash=b2cf43861e5b4e485e97ffa7449ea65acab4d65dd983ab8c0508f1c68f7d80c9)': {}
 
   '@swc/core-darwin-arm64@1.15.46':
     optional: true

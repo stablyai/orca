@@ -66,6 +66,7 @@ vi.mock('./transport/host-store', () => ({ loadHosts: dependencies.loadHosts }))
 
 vi.mock('./transport/client-context', () => {
   const client = {
+    onStateChange: () => () => {},
     sendRequest: async (method: string, params?: unknown, options?: unknown) => {
       if (method === 'status.get') {
         return {
