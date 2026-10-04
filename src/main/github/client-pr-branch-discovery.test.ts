@@ -415,10 +415,10 @@ describe('getPRForBranch', () => {
     expect(pr?.number).toBe(5001)
   })
 
-  it('falls back to the branch list when REST misses a PR from a fork', async () => {
+  it('uses the current commit to discover a fork when origin is inferred as canonical', async () => {
     resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
       candidates: [{ owner: 'stablyai', repo: 'orca' }],
-      headRepo: { owner: 'innocarpe', repo: 'orca' }
+      headRepo: { owner: 'stablyai', repo: 'orca' }
     })
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: '[]' })
@@ -451,7 +451,7 @@ describe('getPRForBranch', () => {
             headRefName: 'fix/pr-branch-fork-lookup',
             baseRefOid: 'base-oid',
             headRefOid: 'head-oid',
-            headRepositoryOwner: { login: 'innocarpe' }
+            headRepositoryOwner: { login: 'dcieslak19973' }
           }
         ])
       })
@@ -472,13 +472,23 @@ describe('getPRForBranch', () => {
         })
       })
 
-    const pr = await getPRForBranch('/repo-root', 'fix/pr-branch-fork-lookup')
+    const pr = await getPRForBranch(
+      '/repo-root',
+      'fix/pr-branch-fork-lookup',
+      null,
+      undefined,
+      null,
+      {
+        currentHeadOid: 'head-oid'
+      }
+    )
 
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
       [
         'api',
-        'repos/stablyai/orca/pulls?head=innocarpe%3Afix%2Fpr-branch-fork-lookup&state=all&per_page=1'
+        'repos/stablyai/orca/pulls?head=stablyai%3Afix%2Fpr-branch-fork-lookup&state=all&per_page=10',
+        '--include'
       ],
       { cwd: '/repo-root' }
     )
@@ -498,8 +508,46 @@ describe('getPRForBranch', () => {
       number: 12956,
       title: 'Hydrated fork PR',
       prRepo: { owner: 'stablyai', repo: 'orca' },
-      headRepo: { owner: 'innocarpe', repo: 'orca' }
+      headRepo: { owner: 'dcieslak19973', repo: 'orca' }
     })
+  })
+
+  it('does not select an inferred fork PR when its head commit differs from the current worktree', async () => {
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 12960,
+          title: 'Same-name PR from another fork',
+          state: 'OPEN',
+          url: 'https://github.com/stablyai/orca/pull/12960',
+          statusCheckRollup: [],
+          updatedAt: '2026-08-09T00:00:00Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'fix/pr-branch-fork-lookup',
+          headRefOid: 'other-head-oid',
+          headRepositoryOwner: { login: 'dcieslak19973' }
+        }
+      ])
+    })
+
+    const result = await lookupPRByBranchName({
+      candidates: [{ owner: 'stablyai', repo: 'orca' }],
+      headRepo: { owner: 'stablyai', repo: 'orca' },
+      headRepoInferred: true,
+      branchName: 'fix/pr-branch-fork-lookup',
+      currentHeadOid: 'head-oid',
+      ghOptions: { cwd: '/repo-root' },
+      executionScope: 'test'
+    })
+
+    expect(result).toMatchObject({ data: null, dataRepo: null, dataHeadRepo: null })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalledWith(
+      expect.arrayContaining(['pr', 'view']),
+      expect.anything()
+    )
   })
 
   it('does not run a broad fallback for a known head repository', async () => {
@@ -519,7 +567,8 @@ describe('getPRForBranch', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'api',
-        'repos/stablyai/orca/pulls?head=innocarpe%3Afix%2Fpr-branch-fork-lookup&state=all&per_page=1'
+        'repos/stablyai/orca/pulls?head=innocarpe%3Afix%2Fpr-branch-fork-lookup&state=all&per_page=10',
+        '--include'
       ],
       { cwd: '/repo-root' }
     )
@@ -588,6 +637,7 @@ describe('getPRForBranch', () => {
       headRepo: { owner: 'innocarpe', repo: 'orca' },
       headRepoInferred: true,
       branchName: 'fix/pr-branch-fork-lookup',
+      currentHeadOid: 'head-oid',
       ghOptions: { cwd: '/repo-root' },
       executionScope: 'test'
     })
