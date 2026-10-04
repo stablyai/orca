@@ -1,0 +1,11 @@
+{
+  "name": "orca",
+  "description": "Bundled Orca agent skills: orca-cli, orchestration, computer-use, orca-emulator (iOS), orca-emulator-android, orca-linear, linear-tickets, orca-per-workspace-env",
+  "author": {
+    "name": "stablyai",
+    "url": "https://github.com/stablyai"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/stablyai/orca",
+  "keywords": ["orca", "agent-orchestration", "multi-agent", "computer-use", "linear", "ide"]
+}
