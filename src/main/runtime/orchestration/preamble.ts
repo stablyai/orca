@@ -2,6 +2,7 @@ import type { OrchestrationCliCommand } from './cli-command'
 import type { RuntimeAgentPromptWriteOptions } from '../runtime-terminal-contracts'
 import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../shared/orca-dispatch-status-prompt'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address-prefix'
+import { parseTaskSpecFlag } from './task-spec-flag'
 
 export type PreambleParams = {
   taskId: string
@@ -44,6 +45,14 @@ export type PreambleParams = {
 // cadence tuning is a single-line change (Q1 in DESIGN_DOC_PREAMBLE_FIX.md).
 const HEARTBEAT_INTERVAL_MIN = 5
 
+// Why: workers that must post proof to their own review need the posting ban lifted only there.
+function outsidePostingRule(allowReviewPosting: boolean): string {
+  return allowReviewPosting
+    ? `You may push this task's branch and open, update, or comment on its pull request (merge request on GitLab).
+Don't post to Slack, other repositories, or other channels during the run; report through these commands.`
+    : "Don't post to Slack, GitHub, or other channels during the run; report through these commands."
+}
+
 /** Terminal agents keep their handle's wording; only a session is named by its Orca session ID. */
 function dispatchIdentityLines(params: PreambleParams): string {
   const isSession = (handle: string) => handle.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
@@ -66,6 +75,7 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   // socket. Without this, agents inside the dev Electron app would call the
   // production CLI and talk to the wrong Orca instance (Section 6.4).
   const cli = params.devMode ? 'orca-dev' : (params.cliCommand ?? 'orca')
+  const reviewPosting = parseTaskSpecFlag(params.taskSpec, 'allow-review-posting')
   const postDoneInstructions = buildPostWorkerDoneInstructions({
     cli,
     workerKind: params.workerKind ?? 'prompt-returning-agent'
@@ -80,7 +90,7 @@ ${dispatchIdentityLines(params)}
 
 The coordinator cannot see this terminal, so reach it with the \`${cli} orchestration\`
 commands below; a question or result left only in this terminal never gets to it.
-Don't post to Slack, GitHub, or other channels during the run; report through these commands.
+${outsidePostingRule(reviewPosting.enabled)}
 
 === CLI COMMANDS ===
 
@@ -151,7 +161,7 @@ ${postDoneInstructions}`
   return `${header}${drift}${subDispatch}
 
 === TASK ===
-${params.taskSpec}`
+${reviewPosting.strippedSpec}`
 }
 
 export type DispatchPreambleSendOptions = Pick<

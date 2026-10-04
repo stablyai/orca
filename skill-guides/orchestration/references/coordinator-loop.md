@@ -40,6 +40,20 @@ connected worker server must advertise launch-preference support before Orca
 forwards either field. Compare `launch.requested` with `launch.effective`; never
 claim a model or effort from requested arguments alone.
 
+## Review posting
+
+The preamble tells every worker not to post to Slack, GitHub, or other
+channels. When a worker must push its branch and post proof to its own pull
+request, put this line in its spec:
+
+```text
+allow-review-posting: true
+```
+
+The preamble then permits posting to that branch and review only, and Orca
+removes the line from the worker's TASK block. A misspelled or `false` value
+keeps the default.
+
 ## Reuse after settlement
 
 Choose the terminal's next owner before acknowledging the Delivery. When the
