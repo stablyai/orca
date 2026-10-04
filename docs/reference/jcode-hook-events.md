@@ -144,8 +144,8 @@ Launcher fix: https://github.com/1jehuang/jcode/pull/1490
 
 ## Hook installation health
 
-Orca reports hooks as installed only when all six events use the current
-shell-quoted managed command and the managed script exists. Missing scripts,
+Orca's local hook status reports `installed` only when all six events use the
+current shell-quoted managed command and the managed script exists. Missing scripts,
 old home paths, platform-switched commands, and legacy unquoted commands report
 `partial` with a repair reason, not a user-owned hook warning. Reinstalling hooks
 recreates the script and updates only Orca-owned commands. User-owned commands

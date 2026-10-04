@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -137,6 +137,25 @@ describe('JcodeHookService', () => {
     expect(readFileSync(configPath, 'utf8')).not.toContain('previous')
   })
 
+  it('does not report complete stale event coverage as installed when the current script exists', () => {
+    const service = new JcodeHookService()
+    service.install()
+    const staleCommand = getJcodeManagedCommand('/Users/previous/.orca/agent-hooks/jcode-hook.sh')
+    writeFileSync(
+      getJcodeConfigPath(),
+      `[hooks]\n${JCODE_HOOK_EVENTS.map((event) => `${event} = ${tomlQuoteString(staleCommand)}`).join('\n')}\n`,
+      'utf8'
+    )
+
+    const status = service.getStatus()
+    expect(status.state).toBe('partial')
+    expect(status.managedHooksPresent).toBe(true)
+    expect(status.detail).toBe(
+      `Managed hook command outdated for events: ${JCODE_HOOK_EVENTS.join(', ')}`
+    )
+    expect(service.install().state).toBe('installed')
+  })
+
   it('reports legacy unquoted commands as outdated even when the script exists', () => {
     const service = new JcodeHookService()
     service.install()
@@ -206,6 +225,8 @@ describe('JcodeHookService', () => {
     expect(before).toContain('turn_end')
     const status = new JcodeHookService().remove()
     expect(status.state).toBe('not_installed')
+    expect(status.detail).toBeNull()
+    expect(existsSync(getJcodeManagedScriptPath())).toBe(true)
     const after = readFileSync(getJcodeConfigPath(), 'utf8')
     expect(after).not.toContain(getJcodeManagedScriptPath())
   })
