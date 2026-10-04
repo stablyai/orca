@@ -425,6 +425,20 @@ describe('getPRForBranch', () => {
       .mockResolvedValueOnce({
         stdout: JSON.stringify([
           {
+            number: 12960,
+            title: 'Same-name PR from another fork',
+            state: 'OPEN',
+            url: 'https://github.com/stablyai/orca/pull/12960',
+            statusCheckRollup: [],
+            updatedAt: '2026-08-09T00:00:00Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'fix/pr-branch-fork-lookup',
+            headRefOid: 'other-head-oid',
+            headRepositoryOwner: { login: 'another-fork' }
+          },
+          {
             number: 12956,
             title: 'Existing fork PR',
             state: 'OPEN',
@@ -436,7 +450,8 @@ describe('getPRForBranch', () => {
             baseRefName: 'main',
             headRefName: 'fix/pr-branch-fork-lookup',
             baseRefOid: 'base-oid',
-            headRefOid: 'head-oid'
+            headRefOid: 'head-oid',
+            headRepositoryOwner: { login: 'innocarpe' }
           }
         ])
       })
@@ -475,7 +490,7 @@ describe('getPRForBranch', () => {
         '--repo',
         'stablyai/orca',
         '--head',
-        'innocarpe:fix/pr-branch-fork-lookup'
+        'fix/pr-branch-fork-lookup'
       ]),
       { cwd: '/repo-root' }
     )
@@ -508,6 +523,77 @@ describe('getPRForBranch', () => {
       ],
       { cwd: '/repo-root' }
     )
+  })
+
+  it('filters an unqualified branch-list result to the requested head owner', async () => {
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 52,
+            title: 'Candidate fork PR',
+            state: 'OPEN',
+            url: 'https://github.com/stablyai/orca/pull/52',
+            statusCheckRollup: [],
+            updatedAt: '2026-08-09T00:00:00Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'same-name',
+            headRefOid: 'head-oid',
+            headRepositoryOwner: { login: 'stablyai' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 52,
+          title: 'Hydrated candidate PR',
+          state: 'OPEN',
+          url: 'https://github.com/stablyai/orca/pull/52',
+          statusCheckRollup: [],
+          updatedAt: '2026-08-09T00:00:00Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'same-name',
+          baseRefOid: 'base-oid',
+          headRefOid: 'head-oid'
+        })
+      })
+
+    const result = await lookupPRByBranchName({
+      candidates: [{ owner: 'stablyai', repo: 'orca' }],
+      headRepo: null,
+      headRepoInferred: false,
+      branchName: 'same-name',
+      ghOptions: { cwd: '/repo-root' },
+      executionScope: 'test'
+    })
+
+    expect(result.data?.number).toBe(52)
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      expect.arrayContaining(['--head', 'same-name', '--limit', '100']),
+      { cwd: '/repo-root' }
+    )
+  })
+
+  it('returns inferred fallback failures as pending errors', async () => {
+    const fallbackError = new Error('branch list unavailable')
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockRejectedValueOnce(fallbackError)
+
+    const result = await lookupPRByBranchName({
+      candidates: [{ owner: 'stablyai', repo: 'orca' }],
+      headRepo: { owner: 'innocarpe', repo: 'orca' },
+      headRepoInferred: true,
+      branchName: 'fix/pr-branch-fork-lookup',
+      ghOptions: { cwd: '/repo-root' },
+      executionScope: 'test'
+    })
+
+    expect(result).toMatchObject({ data: null, dataRepo: null, pendingError: fallbackError })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
   it('returns null for empty branch (e.g. during rebase with detached HEAD)', async () => {
