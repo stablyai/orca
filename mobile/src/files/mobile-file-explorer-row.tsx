@@ -8,6 +8,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react-native'
 import { triggerSelection } from '../platform/haptics'
+import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import { colors, spacing } from '../theme/mobile-theme'
 import { type FileExplorerRow, isMarkdownPath, type TreeNode } from './file-tree'
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
@@ -82,12 +83,13 @@ function TreeRow(props: {
   const { item, expanded, onPreviewFile, onToggleDirectory } = props
   const isDirectory = item.kind === 'directory'
   const isExpanded = expanded.has(item.relativePath)
-  // Images render in the mobile viewer (via files.readPreview), so a binary
-  // image is openable; only non-previewable binaries are unavailable.
+  // Images render in the mobile viewer (via files.readPreview) and PDF/media
+  // binaries open the OS handoff screen, so both are openable rows; only other
+  // binaries are unavailable.
   const previewable =
     item.kind !== 'directory' &&
     canPreviewMobileFileRow({ kind: item.kind, relativePath: item.relativePath })
-  const isImage = item.kind === 'binary' && previewable
+  const isImage = item.kind === 'binary' && classifyMobileArtifact(item.relativePath) === 'image'
   const disabled = item.kind === 'binary' && !previewable
   const markdown = item.kind === 'text' && isMarkdownPath(item.relativePath)
 
