@@ -2,7 +2,8 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   repoAddProjectReceiptSchema,
-  repoCreateResultSchema
+  repoCreateResultSchema,
+  serverDirectoryBrowseSchema
 } from './repo-add-project-reply-schema'
 
 // Bringing a new project onto the paired host from the Add project sheet. All three run over
@@ -42,9 +43,11 @@ export const repoCreateRun = bindDeferredRpcOperation(
 )
 
 /**
- * repo.add for a directory that already exists on the host. v1 sends no `kind`: the host
- * validates that the path is a git repository and throws otherwise, which is the mobile
- * contract — folder workspaces are not offered from the phone yet.
+ * repo.add for a directory that already exists on the host. The first attempt sends `kind: 'git'`
+ * (the desktop default, src/renderer/src/store/repos/repo-add-actions.ts:33); the host validates
+ * the path and throws `Not a valid git repository` for anything else, which is the signal the
+ * sheet turns into its folder-workspace confirmation — the same try-git-then-downgrade order the
+ * desktop Add project dialog uses (same file, :59-92).
  */
 export const repoAddExistingRun = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -53,5 +56,20 @@ export const repoAddExistingRun = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('added-repo', repoAddProjectReceiptSchema)
+  })
+)
+
+/**
+ * files.browseServerDir, the absolute-path listing the Add project sheet walks. It skips rather
+ * than throws so the sheet renders the host's refusal inline and stays on the folder it was
+ * showing, the way the Files tab's directory read does.
+ */
+export const serverDirectoryBrowseRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'files.browse-server-directory-or-skip',
+    method: 'files.browseServerDir',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('server-directory', serverDirectoryBrowseSchema)
   })
 )

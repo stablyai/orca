@@ -6,7 +6,9 @@ import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvag
 // DirEntry rows from readFileExplorerDir, RuntimeFileListResult from listMobileFiles.
 
 /**
- * One directory's entries.
+ * One directory's entries, for both the Files tab's `files.readDir` and the Add project sheet's
+ * `files.browseServerDir` — the two host methods return the same DirEntry trio, one relative to a
+ * worktree and one to an absolute path.
  *
  * The payload is the array itself, and it is required: MobileFileExplorerPanel.tsx:157 puts it
  * straight into the directory cache, where flattenDirectoryCache (file-tree.ts:58) sorts and walks

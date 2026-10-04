@@ -7,6 +7,7 @@ vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   Platform: { OS: 'android', select: (options: { android?: unknown }) => options.android },
   Pressable: 'Pressable',
+  ScrollView: 'ScrollView',
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',
   TextInput: 'TextInput',
@@ -27,8 +28,10 @@ vi.mock(
 vi.mock('./BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 
 import { REPO_CLONE_TIMEOUT_MS } from '../tasks/workspace-create-timeout'
+import { AddProjectFolderBrowser } from './AddProjectFolderBrowser'
 import { AddProjectModal } from './AddProjectModal'
 import { ActionSheetContent } from './ActionSheetModal'
+import { ConfirmContent } from './ConfirmModal'
 
 const repoRow = {
   id: 'repo-added',
@@ -36,6 +39,21 @@ const repoRow = {
   displayName: 'fresh-clone',
   badgeColor: '#aabbcc',
   kind: 'git'
+}
+
+/** A files.browseServerDir reply: `dirs` list as directories, `files` as plain files. */
+function listing(resolvedPath: string, dirs: string[], files: string[] = []) {
+  return {
+    ok: true,
+    result: {
+      resolvedPath,
+      entries: [
+        ...dirs.map((name) => ({ name, isDirectory: true, isSymlink: false })),
+        ...files.map((name) => ({ name, isDirectory: false, isSymlink: false }))
+      ]
+    },
+    _meta: { runtimeId: 'r' }
+  }
 }
 
 // ElementType only admits DOM intrinsics in this program, while the react-native mock renders
@@ -175,9 +193,11 @@ describe('AddProjectModal', () => {
     expect(errorText).toContain('Name cannot be empty')
   })
 
-  it('sends the typed host path for an existing folder', async () => {
+  it('walks the host filesystem and adds the folder it lands on', async () => {
     const sendRequest = vi
       .fn()
+      .mockResolvedValueOnce(listing('/home/dev', ['projects'], ['notes.txt']))
+      .mockResolvedValueOnce(listing('/home/dev/projects', ['orca']))
       .mockResolvedValue({ ok: true, result: { repo: repoRow }, _meta: { runtimeId: 'r' } })
     const tree = render(sendRequest)
 
@@ -186,11 +206,150 @@ describe('AddProjectModal', () => {
         .find((a) => a.label === 'Browse folder')!
         .onPress()
     )
-    act(() => textInputs(tree)[0]!.props.onChangeText('/srv/orca'))
-    act(() => button(tree, 'Add project').props.onPress())
+    await flushUpdates()
+    // A phone has no way to know a host path, so the sheet opens on the host's own home
+    // rather than asking for one to type.
+    expect(sendRequest).toHaveBeenNthCalledWith(1, 'files.browseServerDir', { path: '~' })
+
+    act(() => button(tree, 'projects').props.onPress())
+    await flushUpdates()
+    expect(sendRequest).toHaveBeenNthCalledWith(2, 'files.browseServerDir', {
+      path: '/home/dev/projects'
+    })
+    // Files are never selectable: only a folder can be a project.
+    expect(() => button(tree, 'notes.txt')).toThrow()
+
+    act(() => button(tree, 'Add this folder as a project').props.onPress())
+    await flushUpdates()
+    expect(sendRequest).toHaveBeenLastCalledWith('repo.add', {
+      path: '/home/dev/projects',
+      kind: 'git'
+    })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the transport error and drops the spinner when the browse call rejects', async () => {
+    const sendRequest = vi.fn().mockRejectedValue(new Error('Connection lost'))
+    const tree = render(sendRequest)
+
+    act(() =>
+      startActions(tree)
+        .find((a) => a.label === 'Browse folder')!
+        .onPress()
+    )
     await flushUpdates()
 
-    expect(sendRequest).toHaveBeenCalledWith('repo.add', { path: '/srv/orca' })
+    const errorText = tree.root
+      .findAllByType(hostType('Text'))
+      .flatMap((node) => node.props.children)
+    expect(errorText).toContain('Connection lost')
+    // A rejected browse must clear loading; the spinner otherwise spins forever.
+    expect(tree.root.findAllByType(hostType('ActivityIndicator'))).toHaveLength(0)
+  })
+
+  it('offers the folder downgrade only after the host refuses the path', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce(listing('/srv', ['legacy']))
+      .mockRejectedValueOnce(new Error('Not a valid git repository'))
+      .mockResolvedValueOnce({ ok: true, result: { repo: repoRow }, _meta: { runtimeId: 'r' } })
+    const tree = render(sendRequest)
+
+    act(() =>
+      startActions(tree)
+        .find((a) => a.label === 'Browse folder')!
+        .onPress()
+    )
+    await flushUpdates()
+    act(() => button(tree, 'Add this folder as a project').props.onPress())
+    await flushUpdates()
+
+    expect(sendRequest).toHaveBeenLastCalledWith('repo.add', { path: '/srv', kind: 'git' })
+    const confirm = tree.root.findByType(ConfirmContent)
+    expect(confirm.props.message).toContain('not a Git repository')
+
+    // ConfirmContent fires onCancel on confirm; the sheet must survive that beat, so the
+    // browser a refusal falls back to is not the one a success flashes through.
+    act(() => {
+      confirm.props.onConfirm()
+      confirm.props.onCancel()
+    })
+    // The browser behind a confirmed add would be a flash, not a destination.
+    expect(tree.root.findAllByType(AddProjectFolderBrowser)).toHaveLength(0)
+
+    await flushUpdates()
+    expect(sendRequest).toHaveBeenLastCalledWith('repo.add', { path: '/srv', kind: 'folder' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('walks a Windows host with the separator that host used', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce(listing('C:\\Users\\dev', ['projects']))
+      .mockResolvedValueOnce(listing('C:\\Users\\dev\\projects', []))
+      .mockResolvedValueOnce(listing('C:\\Users\\dev', ['projects']))
+      .mockResolvedValueOnce(listing('C:\\Users', ['dev']))
+      .mockResolvedValue(listing('C:\\', ['Users']))
+    const tree = render(sendRequest)
+
+    act(() =>
+      startActions(tree)
+        .find((a) => a.label === 'Browse folder')!
+        .onPress()
+    )
+    await flushUpdates()
+    act(() => button(tree, 'projects').props.onPress())
+    await flushUpdates()
+    expect(sendRequest).toHaveBeenNthCalledWith(2, 'files.browseServerDir', {
+      path: 'C:\\Users\\dev\\projects'
+    })
+
+    act(() => button(tree, 'Parent folder').props.onPress())
+    await flushUpdates()
+    expect(sendRequest).toHaveBeenNthCalledWith(3, 'files.browseServerDir', {
+      path: 'C:\\Users\\dev'
+    })
+    act(() => button(tree, 'Parent folder').props.onPress())
+    await flushUpdates()
+    // A drive root keeps its separator — "C:" alone is drive-relative on Windows.
+    expect(sendRequest).toHaveBeenNthCalledWith(4, 'files.browseServerDir', { path: 'C:\\Users' })
+    act(() => button(tree, 'Parent folder').props.onPress())
+    await flushUpdates()
+    expect(sendRequest).toHaveBeenNthCalledWith(5, 'files.browseServerDir', { path: 'C:\\' })
+
+    act(() => button(tree, 'Parent folder').props.onPress())
+    await flushUpdates()
+    // The mounted-drive list is the Windows top; a drive root has nothing above it.
+    expect(sendRequest).toHaveBeenNthCalledWith(6, 'files.browseServerDir', { path: '/' })
+  })
+
+  it('returns to the browser when the folder downgrade is declined', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce(listing('/srv', ['legacy']))
+      .mockRejectedValueOnce(new Error('Not a valid git repository'))
+      .mockResolvedValue(listing('/srv', ['legacy']))
+    const tree = render(sendRequest)
+
+    act(() =>
+      startActions(tree)
+        .find((a) => a.label === 'Browse folder')!
+        .onPress()
+    )
+    await flushUpdates()
+    act(() => button(tree, 'Add this folder as a project').props.onPress())
+    await flushUpdates()
+
+    await act(async () => {
+      tree.root.findByType(ConfirmContent).props.onCancel()
+      await Promise.resolve()
+    })
+    expect(tree.root.findByType(AddProjectFolderBrowser)).toBeDefined()
+    expect(sendRequest).not.toHaveBeenCalledWith(
+      'repo.add',
+      expect.objectContaining({ kind: 'folder' })
+    )
+    expect(onClose).not.toHaveBeenCalled()
   })
 
   it('keeps the submit button disabled until the field has content', () => {

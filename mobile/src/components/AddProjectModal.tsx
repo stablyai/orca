@@ -10,11 +10,17 @@ import { REPO_CLONE_TIMEOUT_MS } from '../tasks/workspace-create-timeout'
 import type { RpcClient } from '../transport/rpc-client'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { ActionSheetContent } from './ActionSheetModal'
+import { AddProjectFolderBrowser } from './AddProjectFolderBrowser'
 import { BottomDrawer } from './BottomDrawer'
+import { ConfirmContent } from './ConfirmModal'
 import { newWorktreeFormStyles as formStyles } from './new-worktree-form-styles'
 import type { MobileWorkspaceRepo } from './new-worktree-modal-types'
 
-type AddProjectView = 'start' | 'clone' | 'create' | 'addExisting'
+type AddProjectView = 'start' | 'clone' | 'create' | 'addExisting' | 'confirmFolder'
+
+// The host's refusal for a directory that is not a git repository; the same substring the desktop
+// Add project dialog watches for to offer the folder downgrade.
+const NOT_A_GIT_REPOSITORY = 'Not a valid git repository'
 
 type AddProjectModalProps = {
   visible: boolean
@@ -88,11 +94,14 @@ function AddProjectModalContent({
   const [view, setView] = useState<AddProjectView>('start')
   const [cloneUrl, setCloneUrl] = useState('')
   const [projectName, setProjectName] = useState('')
-  const [existingPath, setExistingPath] = useState('')
+  const [folderCandidate, setFolderCandidate] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // Why: a ref, not state — ConfirmContent calls onConfirm then onCancel in the same tick, so the
+  // flag has to be readable before React re-renders.
+  const confirmingFolderRef = useRef(false)
 
-  const value = view === 'clone' ? cloneUrl : view === 'create' ? projectName : existingPath
+  const value = view === 'clone' ? cloneUrl : projectName
   const canSubmit = value.trim().length > 0 && !busy && client != null
 
   const submit = useCallback(() => {
@@ -125,10 +134,7 @@ function AddProjectModalContent({
         }
         return toMobileRepo(reply.repo)
       }
-      const reply = repoAddExistingRun.interpret(
-        await repoAddExistingRun.request(client, { path: existingPath.trim() })
-      )
-      return toMobileRepo(reply.repo)
+      throw new Error('Unsupported add project step')
     }
     run()
       .then((repo) => onAdded(repo))
@@ -136,7 +142,38 @@ function AddProjectModalContent({
         setError(cause instanceof Error ? cause.message : String(cause))
       })
       .finally(() => setBusy(false))
-  }, [canSubmit, client, cloneUrl, existingPath, onAdded, projectName, view])
+  }, [canSubmit, client, cloneUrl, onAdded, projectName, view])
+
+  // Why: the same order the desktop dialog uses — try git, and only offer the folder downgrade
+  // once the host has refused the path, so a git repository never lands in folder mode.
+  const addFolder = useCallback(
+    async (path: string, kind: 'git' | 'folder'): Promise<void> => {
+      if (!client || busy) {
+        return
+      }
+      setBusy(true)
+      setError('')
+      try {
+        const reply = repoAddExistingRun.interpret(
+          await repoAddExistingRun.request(client, { path, kind })
+        )
+        onAdded(toMobileRepo(reply.repo))
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause)
+        if (kind === 'git' && message.includes(NOT_A_GIT_REPOSITORY)) {
+          setFolderCandidate(path)
+          setView('confirmFolder')
+        } else {
+          // Why: back to the browser, the only step with an error row; ConfirmContent has none.
+          setError(message)
+          setView('addExisting')
+        }
+      } finally {
+        setBusy(false)
+      }
+    },
+    [busy, client, onAdded]
+  )
 
   if (view === 'start') {
     return (
@@ -168,6 +205,41 @@ function AddProjectModalContent({
     )
   }
 
+  if (view === 'addExisting') {
+    return (
+      <AddProjectFolderBrowser
+        client={client}
+        busy={busy}
+        error={error}
+        onBack={() => setView('start')}
+        onPick={(path) => void addFolder(path, 'git')}
+      />
+    )
+  }
+
+  if (view === 'confirmFolder') {
+    return (
+      <ConfirmContent
+        title="Add as a folder project?"
+        message={`${folderCandidate} is not a Git repository. Folder projects have no worktrees, source control, pull requests, or checks.`}
+        confirmLabel="Add folder"
+        onConfirm={() => {
+          // Why: ConfirmContent also fires onCancel on confirm; hold this sheet until the add
+          // settles so a success does not flash the browser first and a refusal still has a
+          // place to land. addFolder's own catch is what leaves this view.
+          confirmingFolderRef.current = true
+          void addFolder(folderCandidate, 'folder')
+        }}
+        onCancel={() => {
+          if (!confirmingFolderRef.current) {
+            setView('addExisting')
+          }
+          confirmingFolderRef.current = false
+        }}
+      />
+    )
+  }
+
   const copy = {
     clone: {
       title: 'Clone from URL',
@@ -182,13 +254,6 @@ function AddProjectModalContent({
       placeholder: 'my-project',
       hint: "An empty git repository with an initial commit, created in the host's default projects folder.",
       button: 'Create project'
-    },
-    addExisting: {
-      title: 'Browse folder',
-      label: 'Project path',
-      placeholder: '/home/dev/my-project',
-      hint: 'The absolute path of an existing git repository on this host.',
-      button: 'Add project'
     }
   }[view]
 
@@ -212,9 +277,7 @@ function AddProjectModalContent({
         <TextInput
           style={formStyles.input}
           value={value}
-          onChangeText={
-            view === 'clone' ? setCloneUrl : view === 'create' ? setProjectName : setExistingPath
-          }
+          onChangeText={view === 'clone' ? setCloneUrl : setProjectName}
           placeholder={copy.placeholder}
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
