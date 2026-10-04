@@ -624,4 +624,103 @@ describe('OrcaRuntimeService', () => {
       status: 'ready'
     })
   })
+
+  it.each([
+    { savedAgent: true, label: 'saved agent type' },
+    { savedAgent: false, label: 'host status when the saved agent type is missing' }
+  ])('resumes the prior Codex conversation using $label', async ({ savedAgent }) => {
+    const { runtime } = makePendingAgentTabActivationRuntime({
+      agent: 'codex',
+      providerSessionId: 'codex-session-1',
+      omitLaunchAgent: !savedAgent
+    })
+    Object.defineProperty(runtime, 'resolveTerminalWorkspaceLaunchScope', {
+      value: vi.fn().mockResolvedValue({
+        id: TEST_WORKTREE_ID,
+        path: TEST_WORKTREE_PATH,
+        connectionId: null,
+        repo: null,
+        folderWorkspace: null
+      })
+    })
+    Object.defineProperty(runtime, 'markWorkspaceTrustedForAgent', {
+      value: vi.fn().mockResolvedValue(undefined)
+    })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(listed.tabs[0]).toMatchObject({
+      type: 'terminal',
+      status: 'pending-handle',
+      ...(savedAgent ? { launchAgent: 'codex' } : {}),
+      agentStatus: {
+        providerSession: { key: 'session_id', id: 'codex-session-1' }
+      }
+    })
+    if (!savedAgent) {
+      expect(listed.tabs[0]).not.toHaveProperty('launchAgent')
+    }
+
+    const create = vi
+      .fn()
+      .mockResolvedValue({ tab: listed.tabs[0], publicationEpoch: 'test', snapshotVersion: 1 })
+    Object.defineProperty(runtime, 'createRuntimeOwnedMobileSessionTerminal', { value: create })
+    await runtime.activateMobileSessionTab(
+      `id:${TEST_WORKTREE_ID}`,
+      `host-tab::${HEADLESS_LEAF_ID}`,
+      undefined,
+      { notifyClients: false }
+    )
+
+    expect(create).toHaveBeenCalledWith(
+      TEST_WORKTREE_ID,
+      false,
+      undefined,
+      expect.objectContaining({
+        command: expect.stringContaining('resume'),
+        resumeProviderSession: { key: 'session_id', id: 'codex-session-1' },
+        launchAgent: 'codex',
+        identity: expect.objectContaining({ sessionId: 'serve-dead-pty' })
+      })
+    )
+  })
+
+  it('does not resume a Codex identity into a Claude tab', async () => {
+    const { runtime } = makePendingAgentTabActivationRuntime({
+      agent: 'claude',
+      statusAgent: 'codex',
+      providerSessionId: 'codex-session-1'
+    })
+    Object.defineProperty(runtime, 'resolveTerminalWorkspaceLaunchScope', {
+      value: vi.fn().mockResolvedValue({
+        id: TEST_WORKTREE_ID,
+        path: TEST_WORKTREE_PATH,
+        connectionId: null,
+        repo: null,
+        folderWorkspace: null
+      })
+    })
+    Object.defineProperty(runtime, 'markWorkspaceTrustedForAgent', {
+      value: vi.fn().mockResolvedValue(undefined)
+    })
+    const create = vi.fn().mockResolvedValue({})
+    Object.defineProperty(runtime, 'createRuntimeOwnedMobileSessionTerminal', { value: create })
+
+    await runtime.activateMobileSessionTab(
+      `id:${TEST_WORKTREE_ID}`,
+      `host-tab::${HEADLESS_LEAF_ID}`,
+      undefined,
+      { notifyClients: false }
+    )
+
+    expect(create).toHaveBeenCalledWith(
+      TEST_WORKTREE_ID,
+      false,
+      undefined,
+      expect.objectContaining({
+        command: expect.stringContaining('claude'),
+        launchAgent: 'claude',
+        resumeProviderSession: undefined
+      })
+    )
+  })
 })

@@ -15,6 +15,18 @@ import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { navigationTargetsHost } from '../../shared/runtime-navigation'
 import { isAutomaticTabActivation } from '../../shared/tab-activation-intent'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
+import {
+  isResumableTuiAgent,
+  normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
+} from '../../shared/agent-session-resume'
+import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
+import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
+import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { selectRuntimeHookAgentRowForPane } from './runtime-mobile-agent-status-projection'
+import type { TuiAgent } from '../../shared/tui-agent'
+import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 
 export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
   protected async performMobileSessionPtyRecordsRefresh(
@@ -158,15 +170,68 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
         // bare materialize would put a plain shell under the agent icon.
         // Re-resolve the launch like the create path; providers skip startup
         // commands when attaching to live sessions, so this cannot double-launch.
-        let agentStartup: Awaited<
-          ReturnType<OrcaRuntimeService['resolveMobileSessionTerminalCommand']>
-        > = {}
-        if (tab.launchAgent) {
+        let agentStartup: {
+          command?: string
+          env?: Record<string, string>
+          launchConfig?: SleepingAgentLaunchConfig
+          launchAgent?: TuiAgent
+          startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
+          resumeProviderSession?: AgentProviderSessionMetadata
+        } = {}
+        const status = publicTab?.type === 'terminal' ? publicTab.agentStatus : null
+        const paneKey = this.getLeafKey(tab.parentTabId, tab.leafId)
+        const hookRows =
+          this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ??
+          this.getAgentProviderSessionSnapshotFn?.().filter((row) => row.paneKey === paneKey) ??
+          []
+        const hook = selectRuntimeHookAgentRowForPane(hookRows)
+        const agent =
+          tab.launchAgent ??
+          (isResumableTuiAgent(hook.providerSessionAgentType)
+            ? hook.providerSessionAgentType
+            : undefined)
+        const providerSession =
+          agent &&
+          hook.providerSessionAgentType === agent &&
+          status?.terminalResumeEligible !== false
+            ? normalizeAgentProviderSession(hook.providerSession)
+            : null
+        // A hook's provider identity can restore tabs that lost launchAgent without mixing agents.
+        if (agent) {
           try {
             const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
-            agentStartup = await this.resolveMobileSessionTerminalCommand(workspace, {
-              agent: tab.launchAgent
-            })
+            const settings = this.store?.getSettings()
+            const canResume =
+              settings &&
+              providerSession &&
+              isResumableTuiAgent(agent) &&
+              isTuiAgentEnabled(agent, settings.disabledTuiAgents)
+            const resume = canResume
+              ? buildAgentResumeStartupPlan({
+                  ...resolveAgentStartupPlanInputs({
+                    agent,
+                    settings,
+                    platform: this.getAgentLaunchPlatformForWorkspace(workspace),
+                    isRemote: Boolean(workspace.connectionId)
+                  }),
+                  providerSession
+                })
+              : null
+            if (resume) {
+              await this.markWorkspaceTrustedForAgent(agent, workspace.connectionId, workspace.path)
+              agentStartup = {
+                command: resume.launchCommand,
+                env: resume.env,
+                launchConfig: resume.launchConfig,
+                launchAgent: agent,
+                startupCommandDelivery: resume.startupCommandDelivery,
+                resumeProviderSession: providerSession
+              }
+            } else if (tab.launchAgent) {
+              agentStartup = await this.resolveMobileSessionTerminalCommand(workspace, {
+                agent: tab.launchAgent
+              })
+            }
           } catch {
             // Why: a disabled or unresolvable agent must not make the tab
             // untappable; fall back to the plain-shell materialize.
@@ -184,7 +249,8 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
             env: agentStartup.env,
             startupCommandDelivery: agentStartup.startupCommandDelivery,
             launchConfig: agentStartup.launchConfig,
-            launchAgent: tab.launchAgent,
+            launchAgent: agentStartup.launchAgent ?? tab.launchAgent,
+            resumeProviderSession: agentStartup.resumeProviderSession,
             targetGroupId
           })
         } catch (err) {
