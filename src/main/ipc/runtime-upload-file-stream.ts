@@ -6,6 +6,7 @@ import type {
   StagedRuntimeUploadFileIdentity
 } from '../../shared/runtime-upload-staging-contract'
 import { authorizeExternalPath } from './filesystem-auth'
+import { RuntimeUploadCancelledError } from './runtime-upload-cancellation'
 import { formatByteCeiling, REMOTE_IMPORT_MAX_FILE_BYTES } from './runtime-import-limits'
 import {
   isRuntimeEnvironmentManuallyDisconnected,
@@ -25,6 +26,13 @@ export type RuntimeUploadFileStreamArgs = RuntimeUploadFileStreamRequest & {
   userDataPath: string
   /** Aborts the transfer; the caller's lifetime is what raises it today. */
   signal?: AbortSignal
+  /**
+   * The user's cancel. Unlike `signal` it never aborts the in-flight chunk: the
+   * renderer deletes the temp path, so no straggling append may land after it.
+   */
+  cancelSignal?: AbortSignal
+  /** Called after each slice lands, so the drop UI can show how far along the file is. */
+  onProgress?: (progress: { sentBytes: number; totalBytes: number }) => void
 }
 
 /**
@@ -58,6 +66,7 @@ export async function streamExternalFileToRuntime(
   assertMatchesStagedIdentity(lstatResult, args.expected, displayPath)
 
   args.signal?.throwIfAborted()
+  throwIfCancelled(args.cancelSignal)
 
   const handle = await open(sourcePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
   try {
@@ -86,6 +95,7 @@ export async function streamExternalFileToRuntime(
       // Why: a zero-byte source produces no slices, but the destination still
       // has to exist before commitUpload renames it into place.
       await sendChunk(args, '', false)
+      args.onProgress?.({ sentBytes: 0, totalBytes: 0 })
     } else {
       const buffer = Buffer.allocUnsafe(Math.min(RUNTIME_UPLOAD_SLICE_BYTES, totalBytes))
       let offset = 0
@@ -93,12 +103,16 @@ export async function streamExternalFileToRuntime(
         // Why: checked per slice, so an abort stops the transfer at the next
         // boundary instead of after the whole file has moved.
         args.signal?.throwIfAborted()
+        throwIfCancelled(args.cancelSignal)
         const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, offset)
         if (bytesRead === 0) {
           throw new Error(`File truncated during upload: '${displayPath}'`)
         }
         await sendChunk(args, buffer.subarray(0, bytesRead).toString('base64'), offset > 0)
         offset += bytesRead
+        // Why: reported after the chunk is acknowledged, so the bar tracks bytes the
+        // runtime actually has rather than bytes handed to the socket.
+        args.onProgress?.({ sentBytes: offset, totalBytes })
       }
     }
 
@@ -185,6 +199,12 @@ async function sendChunk(
   )
   if (response.ok !== true) {
     throw new Error(response.error.message || response.error.code)
+  }
+}
+
+function throwIfCancelled(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new RuntimeUploadCancelledError()
   }
 }
 
