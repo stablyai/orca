@@ -121,7 +121,18 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
     reauthenticate: () => Promise.resolve(empty),
     remove: ({ accountId }) =>
       callRuntimeResult<ClaudeRateLimitAccountsState>('accounts.removeClaude', { accountId }),
-    select: async ({ accountId }) => {
+    select: async ({ accountId, runtime }) => {
+      // Why: there is no targeted Claude select RPC, and the server reads an
+      // untargeted null selection as the host lane. Refuse it for WSL rather
+      // than clear the wrong lane; a concrete account id carries its own lane.
+      if (runtime === 'wsl' && accountId === null) {
+        throw new Error(
+          translate(
+            'auto.web.preloadApi.claudeWslDefaultUnavailable',
+            'Switching a WSL lane back to the system default is only available in the desktop app.'
+          )
+        )
+      }
       const next = await callRuntimeResult<ClaudeRateLimitAccountsState>('accounts.selectClaude', {
         accountId
       })
@@ -147,10 +158,19 @@ export function createCodexAccountsApi(): PreloadApi['codexAccounts'] {
     reauthenticate: () => Promise.resolve(empty),
     remove: ({ accountId }) =>
       callRuntimeResult<CodexRateLimitAccountsState>('accounts.removeCodex', { accountId }),
-    select: async ({ accountId }) => {
-      const next = await callRuntimeResult<CodexRateLimitAccountsState>('accounts.selectCodex', {
-        accountId
-      })
+    select: async ({ accountId, runtime, wslDistro }) => {
+      // Why: a WSL lane must reach the server with its target, or a null
+      // (system default) selection would clear the host lane instead. Mirrors
+      // the mobile app, which uses the targeted RPC for WSL.
+      const next =
+        runtime === 'wsl'
+          ? await callRuntimeResult<CodexRateLimitAccountsState>('accounts.selectCodexForTarget', {
+              accountId,
+              target: { runtime: 'wsl', wslDistro: wslDistro ?? null }
+            })
+          : await callRuntimeResult<CodexRateLimitAccountsState>('accounts.selectCodex', {
+              accountId
+            })
       void refreshAndPublishRateLimits()
       return next
     },

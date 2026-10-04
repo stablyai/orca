@@ -43,6 +43,21 @@ export function publishRateLimits(state: RateLimitState | null | undefined): voi
   }
 }
 
+function readSnapshotRateLimits(result: unknown): RateLimitState | null {
+  if (typeof result !== 'object' || result === null || !('snapshot' in result)) {
+    return null
+  }
+  const { snapshot } = result
+  if (typeof snapshot !== 'object' || snapshot === null || !('rateLimits' in snapshot)) {
+    return null
+  }
+  return isRateLimitState(snapshot.rateLimits) ? snapshot.rateLimits : null
+}
+
+function isRateLimitState(value: unknown): value is RateLimitState {
+  return typeof value === 'object' && value !== null && 'claude' in value && 'codex' in value
+}
+
 function scheduleResubscribe(): void {
   stream = null
   if (resubscribeTimer || listeners.size === 0) {
@@ -65,26 +80,29 @@ function startStream(): void {
   }
   streamStarting = true
   let handle: { unsubscribe: () => void } | null = null
-  void getClientForEnvironment(environment)
-    .subscribe('accounts.subscribe', null, {
-      onResponse: (response) => {
-        if (!response.ok) {
-          return
+  // Why: getClientForEnvironment throws synchronously for a manually
+  // disconnected server; starting inside the chain turns that into a rejection
+  // so streamStarting is always reset and a later reconnect can resubscribe.
+  void Promise.resolve()
+    .then(() =>
+      getClientForEnvironment(environment).subscribe('accounts.subscribe', null, {
+        onResponse: (response) => {
+          if (response.ok) {
+            publishRateLimits(readSnapshotRateLimits(response.result))
+          }
+        },
+        onError: () => {
+          if (stream === handle) {
+            scheduleResubscribe()
+          }
+        },
+        onClose: () => {
+          if (stream === handle) {
+            scheduleResubscribe()
+          }
         }
-        const result = response.result as { snapshot?: AccountsSnapshot } | undefined
-        publishRateLimits(result?.snapshot?.rateLimits)
-      },
-      onError: () => {
-        if (stream === handle) {
-          scheduleResubscribe()
-        }
-      },
-      onClose: () => {
-        if (stream === handle) {
-          scheduleResubscribe()
-        }
-      }
-    })
+      })
+    )
     .then((subscription) => {
       handle = subscription
       stream = subscription

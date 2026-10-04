@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import { createEmptyRateLimitState } from '../../../shared/rate-limit-state-factory'
 import {
@@ -13,12 +13,16 @@ type SubscriptionCallbacks = {
   onClose?: () => void
 }
 
-function usageState(claudeSessionPercent: number): RateLimitState {
-  const state = createEmptyRateLimitState()
-  return {
-    ...state,
-    claude: { marker: `claude-${claudeSessionPercent}` } as unknown as RateLimitState['claude']
-  }
+// Distinct, comparable states without hand-building a provider snapshot.
+function usageState(inactiveCodexAccounts: number): RateLimitState {
+  return createEmptyRateLimitState({
+    inactiveCodexAccounts: Array.from({ length: inactiveCodexAccounts }, (_, index) => ({
+      accountId: `codex-${index}`,
+      rateLimits: null,
+      updatedAt: 0,
+      isFetching: false
+    }))
+  })
 }
 
 function snapshot(rateLimits: RateLimitState | null, claudeActive: string | null = null) {
@@ -41,6 +45,24 @@ function ok(result: unknown): RuntimeRpcResponse<unknown> {
   return { id: 'r', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
+function notFound(method: string): RuntimeRpcFailure {
+  return {
+    id: 'r',
+    ok: false,
+    error: { code: 'method_not_found', message: method },
+    _meta: { runtimeId: 'runtime-1' }
+  }
+}
+
+function isForcedRefresh(params: unknown): boolean {
+  return (
+    typeof params === 'object' &&
+    params !== null &&
+    'refreshUsage' in params &&
+    params.refreshUsage === true
+  )
+}
+
 describe('web rate limits and accounts preload API', () => {
   let calls: { method: string; params: unknown }[]
   let callResults: Record<string, unknown>
@@ -56,12 +78,7 @@ describe('web rate limits and accounts preload API', () => {
         call(method: string, params: unknown): Promise<RuntimeRpcResponse<unknown>> {
           calls.push({ method, params })
           if (!(method in callResults)) {
-            return Promise.resolve({
-              id: 'r',
-              ok: false,
-              error: { code: 'method_not_found', message: method },
-              _meta: { runtimeId: 'runtime-1' }
-            } as RuntimeRpcResponse<unknown>)
+            return Promise.resolve(notFound(method))
           }
           return Promise.resolve(ok(callResults[method]))
         }
@@ -113,9 +130,7 @@ describe('web rate limits and accounts preload API', () => {
     await api.rateLimits.fetchInactiveClaudeAccounts()
 
     const refreshCalls = calls.filter(
-      (call) =>
-        call.method === 'accounts.list' &&
-        (call.params as { refreshUsage: boolean }).refreshUsage === true
+      (call) => call.method === 'accounts.list' && isForcedRefresh(call.params)
     )
     expect(refreshCalls).toHaveLength(2)
   })
@@ -185,5 +200,51 @@ describe('web rate limits and accounts preload API', () => {
       method: 'accounts.selectCodex',
       params: { accountId: 'codex-b' }
     })
+  })
+
+  it('selects a WSL Codex lane through the targeted RPC so the host lane is untouched', async () => {
+    const selected = snapshot(null).codex
+    callResults['accounts.selectCodexForTarget'] = selected
+    const { api } = await install()
+
+    await expect(
+      api.codexAccounts.select({ accountId: null, runtime: 'wsl', wslDistro: 'Ubuntu' })
+    ).resolves.toEqual(selected)
+    expect(calls).toContainEqual({
+      method: 'accounts.selectCodexForTarget',
+      params: { accountId: null, target: { runtime: 'wsl', wslDistro: 'Ubuntu' } }
+    })
+    expect(calls.some((call) => call.method === 'accounts.selectCodex')).toBe(false)
+  })
+
+  it('refuses a WSL Claude system-default switch instead of clearing the host lane', async () => {
+    callResults['accounts.selectClaude'] = snapshot(null).claude
+    const { api } = await install()
+
+    await expect(
+      api.claudeAccounts.select({ accountId: null, runtime: 'wsl', wslDistro: 'Ubuntu' })
+    ).rejects.toThrow(/desktop app/)
+    expect(calls.some((call) => call.method === 'accounts.selectClaude')).toBe(false)
+  })
+
+  it('reopens the usage stream after a manual disconnect is lifted', async () => {
+    const { api } = await install()
+    const session = await import('./preload-api/web-runtime-session')
+    api.rateLimits.onUpdate(() => {})
+    await vi.waitFor(() => expect(subscriptions).toHaveLength(1))
+
+    vi.useFakeTimers()
+    const environmentId = session.requireActiveEnvironment().id
+    session.manuallyDisconnectedEnvironmentIds.add(environmentId)
+    subscriptions[0].callbacks.onClose?.()
+    // The retry while disconnected must fail quietly and keep retrying.
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(subscriptions).toHaveLength(1)
+
+    session.manuallyDisconnectedEnvironmentIds.delete(environmentId)
+    await vi.advanceTimersByTimeAsync(5_000)
+    vi.useRealTimers()
+
+    await vi.waitFor(() => expect(subscriptions).toHaveLength(2))
   })
 })

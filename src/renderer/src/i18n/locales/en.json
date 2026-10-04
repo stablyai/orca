@@ -427,6 +427,9 @@
             "07f788de83": "WebSocket"
           }
         }
+      },
+      "preloadApi": {
+        "claudeWslDefaultUnavailable": "Switching a WSL lane back to the system default is only available in the desktop app."
       }
     },
     "store": {
