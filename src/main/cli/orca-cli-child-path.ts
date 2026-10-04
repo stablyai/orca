@@ -39,12 +39,16 @@ export function prependOrcaCliDirToChildPath(
   opts: OrcaCliChildPathOptions
 ): string | null {
   const platform = opts.platform ?? process.platform
+  delete env.ORCA_CLI_BIN_DIR
   // Why: matches node:path's `delimiter` for the running platform, but stays correct when a test
   // drives a foreign platform through the seam.
   const pathDelimiter = platform === 'win32' ? ';' : delimiter
   // Why: dev mode needs the launcher PATH override so `orca` resolves to the dev build instead of the production binary at /usr/local/bin/orca.
   if (!opts.isPackaged) {
     const devCliBin = join(opts.userDataPath, 'cli', 'bin')
+    if (platform !== 'win32') {
+      env.ORCA_CLI_BIN_DIR = devCliBin
+    }
     const inheritedPath = readInheritedPath(env, platform)
     // Why: an empty PATH segment resolves as `.` in some shells (commands run from cwd); avoid a trailing delimiter.
     env[resolvePathEnvKey(env, platform)] = inheritedPath
@@ -55,6 +59,7 @@ export function prependOrcaCliDirToChildPath(
     // Why: bare-`orca` shim scoped to Orca PTYs — Linux CLI installs as `orca-ide` to avoid shadowing GNOME's /usr/bin/orca screen reader (stablyai/orca#7904).
     const shimDir = ensureLinuxTerminalOrcaCliShimDir({ userDataPath: opts.userDataPath })
     if (shimDir) {
+      env.ORCA_CLI_BIN_DIR = shimDir
       const inheritedEntries = readInheritedPath(env, platform)
         .split(pathDelimiter)
         .filter((entry) => entry.length > 0 && entry !== shimDir)
@@ -64,6 +69,9 @@ export function prependOrcaCliDirToChildPath(
   } else if (opts.resourcesPath && (platform === 'darwin' || platform === 'win32')) {
     // Why: global CLI registration is optional, but agents in Orca-managed PTYs must always reach this app's bundled CLI.
     const bundledCliBin = join(opts.resourcesPath, 'bin')
+    if (platform === 'darwin') {
+      env.ORCA_CLI_BIN_DIR = bundledCliBin
+    }
     const inheritedPath = readInheritedPath(env, platform)
     env[resolvePathEnvKey(env, platform)] = inheritedPath
       ? `${bundledCliBin}${pathDelimiter}${inheritedPath}`

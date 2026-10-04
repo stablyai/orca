@@ -7,8 +7,13 @@ export function buildSshPtySpawnEnv(args: {
   remoteCliBridgeEnv?: RemoteCliBridgeEnv
 }): Record<string, string> {
   const merged = { ...args.env }
+  // The client CLI path cannot be restored on the execution host.
+  delete merged.ORCA_CLI_BIN_DIR
   if (args.remoteCliBridgeEnv) {
     const pathDelimiter = args.remoteCliBridgeEnv.pathDelimiter ?? ':'
+    if (pathDelimiter === ':') {
+      merged.ORCA_CLI_BIN_DIR = args.remoteCliBridgeEnv.binDir
+    }
     const pathKey = merged.PATH !== undefined ? 'PATH' : merged.Path !== undefined ? 'Path' : null
     if (pathKey) {
       const pathValue = merged[pathKey] ?? ''

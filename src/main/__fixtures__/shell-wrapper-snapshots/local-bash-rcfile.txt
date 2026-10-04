@@ -33,6 +33,12 @@ __orca_restore_agent_teams_path() {
   export PATH="${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
 }
 __orca_restore_agent_teams_path
+if [ -n "${ORCA_CLI_BIN_DIR:-}" ]; then
+  case "${PATH:-}" in
+    "$ORCA_CLI_BIN_DIR"|"$ORCA_CLI_BIN_DIR":*) ;;
+    *) export PATH="$ORCA_CLI_BIN_DIR${PATH:+:$PATH}" ;;
+  esac
+fi
 if [ -n "${ORCA_WSL_CLI_DIR:-}" ]; then
   if [ -x "$ORCA_WSL_CLI_DIR/${ORCA_CLI_COMMAND:-}" ]; then
     export PATH="$ORCA_WSL_CLI_DIR${PATH:+:$PATH}"
