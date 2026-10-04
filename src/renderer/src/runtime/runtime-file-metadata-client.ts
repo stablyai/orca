@@ -46,7 +46,11 @@ export async function statRuntimePath(
 export function isMissingRuntimePathError(error: unknown): boolean {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
   return (
-    message.includes('enoent') || message.includes('not found') || message.includes('no such file')
+    message.includes('enoent') ||
+    message.includes('not found') ||
+    message.includes('no such file') ||
+    // Why: a file where a directory should be (a path glued across two terminal rows) is absent too.
+    message.includes('enotdir')
   )
 }
 

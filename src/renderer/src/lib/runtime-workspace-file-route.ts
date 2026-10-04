@@ -19,6 +19,9 @@ export type RuntimeWorkspaceFileRoute = {
   executionHostId: ExecutionHostId
 }
 
+/** A found route also names the owning workspace root, which file RPCs resolve against. */
+export type ResolvedWorkspaceFileRoute = RuntimeWorkspaceFileRoute & { rootPath: string }
+
 function workspaceMatchesExecutionHost(
   state: AppState,
   workspaceId: string,
@@ -43,7 +46,7 @@ export function findWorkspaceFileRoute(
   state: AppState,
   executionHostId: ExecutionHostId,
   absolutePath: string
-): RuntimeWorkspaceFileRoute | null {
+): ResolvedWorkspaceFileRoute | null {
   const roots = getIndexedAllWorktrees(state.worktreesByRepo).flatMap((worktree) =>
     workspaceMatchesExecutionHost(state, worktree.id, executionHostId)
       ? [{ workspaceId: worktree.id, rootPath: worktree.path, executionHostId }]
@@ -58,7 +61,12 @@ export function findWorkspaceFileRoute(
 
   const owner = findRuntimeWorkspaceFileOwner(roots, absolutePath, executionHostId)
   return owner && owner.relativePath !== ''
-    ? { worktreeId: owner.workspaceId, relativePath: owner.relativePath, executionHostId }
+    ? {
+        worktreeId: owner.workspaceId,
+        relativePath: owner.relativePath,
+        executionHostId,
+        rootPath: owner.rootPath
+      }
     : null
 }
 
@@ -66,7 +74,7 @@ export function findRuntimeWorkspaceFileRoute(
   state: AppState,
   runtimeEnvironmentId: string,
   absolutePath: string
-): RuntimeWorkspaceFileRoute | null {
+): ResolvedWorkspaceFileRoute | null {
   const ownerId = runtimeEnvironmentId.trim()
   if (!ownerId) {
     return null

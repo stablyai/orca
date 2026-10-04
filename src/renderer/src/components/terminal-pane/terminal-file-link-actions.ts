@@ -3,7 +3,8 @@ import {
   mapTerminalFilePath,
   openDetectedFilePath,
   shouldOpenTerminalFileWithSystemDefault,
-  terminalLinkWslDistro
+  terminalLinkWslDistro,
+  type FileOpenFailure
 } from './terminal-file-open-routing'
 import { isTerminalLinkDirectActivation } from './terminal-link-activation'
 import {
@@ -13,6 +14,7 @@ import {
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { translate } from '@/i18n/i18n'
+import { showFileLinkOpenFailureToast } from '@/components/native-chat/native-chat-file-link-toasts'
 
 export type TerminalFileLinkActionDeps = {
   worktreeId: string
@@ -30,10 +32,15 @@ export function handleTerminalFileLink(
   actionContext?: TerminalLinkActionContext | null,
   actionDestination?: string
 ): boolean {
+  // Why: the link is underlined because its path existed, so a failed open must say why.
+  const openDeps = {
+    ...deps,
+    onOpenFailure: (failure: FileOpenFailure) => showFileLinkOpenFailureToast(filePath, failure)
+  }
   if (isTerminalLinkDirectActivation(event)) {
     event?.preventDefault?.()
     openDetectedFilePath(filePath, line, column, {
-      ...deps,
+      ...openDeps,
       openWithSystemDefault: Boolean(event?.shiftKey)
     })
     return true
@@ -47,7 +54,8 @@ export function handleTerminalFileLink(
   const fileContext = getTerminalFileContext(
     deps.worktreeId,
     deps.worktreePath,
-    deps.runtimeEnvironmentId
+    deps.runtimeEnvironmentId,
+    mappedPath
   )
   const worktreeRoot = resolveKnownWorktreeRootPathLink(mappedPath)
   const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext, mappedPath)
@@ -68,7 +76,10 @@ export function handleTerminalFileLink(
                 'Open folder'
               ),
           run: () =>
-            openDetectedFilePath(filePath, line, column, { ...deps, openWithSystemDefault: true })
+            openDetectedFilePath(filePath, line, column, {
+              ...openDeps,
+              openWithSystemDefault: true
+            })
         }
       : null
     : canOpenWithSystemDefault
@@ -78,7 +89,10 @@ export function handleTerminalFileLink(
             'Open with default app'
           ),
           run: () =>
-            openDetectedFilePath(filePath, line, column, { ...deps, openWithSystemDefault: true })
+            openDetectedFilePath(filePath, line, column, {
+              ...openDeps,
+              openWithSystemDefault: true
+            })
         }
       : // Why the path shape and not a stat: the popover is built synchronously on hover, and a
         // remote stat per link would put a round-trip in front of every terminal path. A directory
@@ -105,7 +119,7 @@ export function handleTerminalFileLink(
             'auto.components.terminal.pane.TerminalLinkActionPopover.openFile',
             'Open file'
           ),
-      run: () => openDetectedFilePath(filePath, line, column, deps)
+      run: () => openDetectedFilePath(filePath, line, column, openDeps)
     },
     ...(systemDefaultRow ? { alternate: systemDefaultRow } : {})
   })

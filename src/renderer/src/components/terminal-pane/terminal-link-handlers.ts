@@ -156,7 +156,8 @@ export function createFilePathLinkProvider(
               const fileContext = getTerminalFileContext(
                 worktreeId,
                 worktreePath,
-                runtimeEnvironmentId
+                runtimeEnvironmentId,
+                mappedPath
               )
               const isRemoteRuntimePath = isRemoteRuntimeFileOperation(fileContext, mappedPath)
               const cacheKey = getTerminalPathExistsCacheKey({

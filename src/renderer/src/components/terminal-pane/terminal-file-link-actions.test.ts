@@ -5,7 +5,12 @@ const mocks = vi.hoisted(() => ({
   canOpenWithSystemDefault: true,
   downloadAndOpen: vi.fn(),
   openDetectedFilePath: vi.fn(),
+  showOpenFailure: vi.fn(),
   worktreeRoot: false
+}))
+
+vi.mock('@/components/native-chat/native-chat-file-link-toasts', () => ({
+  showFileLinkOpenFailureToast: mocks.showOpenFailure
 }))
 
 vi.mock('./terminal-file-open-routing', () => ({
@@ -78,9 +83,16 @@ describe('terminal file link actions', () => {
     )
     actionRequest.primary.run()
     actionRequest.alternate.run()
-    expect(mocks.openDetectedFilePath).toHaveBeenNthCalledWith(1, '/repo/src/main.ts', 12, 4, deps)
+    const openDeps = { ...deps, onOpenFailure: expect.any(Function) }
+    expect(mocks.openDetectedFilePath).toHaveBeenNthCalledWith(
+      1,
+      '/repo/src/main.ts',
+      12,
+      4,
+      openDeps
+    )
     expect(mocks.openDetectedFilePath).toHaveBeenNthCalledWith(2, '/repo/src/main.ts', 12, 4, {
-      ...deps,
+      ...openDeps,
       openWithSystemDefault: true
     })
   })
@@ -156,5 +168,15 @@ describe('terminal file link actions', () => {
     handleTerminalFileLink('/repo/docs/', null, null, plainEvent(), deps, context(request))
 
     expect(request.mock.calls[0][0]).not.toHaveProperty('alternate')
+  })
+
+  it('says why a direct click on an underlined file link opened nothing', () => {
+    const event = Object.assign(plainEvent(), { metaKey: true })
+    handleTerminalFileLink('/repo/src/main.ts', null, null, event, deps, null)
+
+    const failure = { verdict: 'unverifiable', error: new Error('timeout') }
+    mocks.openDetectedFilePath.mock.calls[0][3].onOpenFailure(failure)
+
+    expect(mocks.showOpenFailure).toHaveBeenCalledWith('/repo/src/main.ts', failure)
   })
 })
