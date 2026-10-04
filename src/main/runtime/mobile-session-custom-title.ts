@@ -216,7 +216,7 @@ export function releaseEchoedManualTerminalTitles(
     }
     const baseline = pty.manualTitleBaseline
     if (typeof pty.manualTitle === 'string') {
-      if (custom && (custom === pty.manualTitle.trim() || custom !== baseline)) {
+      if (custom === pty.manualTitle.trim() || custom !== baseline) {
         releasePendingManualTitle(pty)
       }
       continue

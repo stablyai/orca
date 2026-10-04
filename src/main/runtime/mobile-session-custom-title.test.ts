@@ -71,7 +71,7 @@ function projectTitle(args: {
         leafId: 'leaf',
         ptyId: pty.ptyId,
         title: args.snapshotTitle ?? 'Shell',
-        ...(args.customTitle ? { customTitle: args.customTitle } : {}),
+        ...(args.customTitle !== undefined ? { customTitle: args.customTitle } : {}),
         isActive: true
       }
     ]
@@ -137,7 +137,7 @@ function releaseFixture(customTitle?: string): {
 } {
   const pty: { manualTitle?: string | null; manualTitleBaseline?: string } = {}
   const tabs: { type: string; ptyId: string; customTitle?: string | null }[] = [
-    { type: 'terminal', ptyId: 'pty-1', ...(customTitle ? { customTitle } : {}) }
+    { type: 'terminal', ptyId: 'pty-1', ...(customTitle !== undefined ? { customTitle } : {}) }
   ]
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: release reads only tab type, pty id, and custom title.
   const snapshot = { tabs } as unknown as RuntimeMobileSessionTabsSnapshot
@@ -207,6 +207,22 @@ it('does not let the custom title from rename time erase the phone name', () => 
   tabs[0] = { type: 'terminal', ptyId: 'pty-1', customTitle: 'Desktop name' }
   releaseEchoedManualTerminalTitles(snapshot, ptys, [])
   expect(pty.manualTitle).toBeUndefined()
+})
+
+it('releases a pending rename when the desktop clears its custom title', () => {
+  const { pty, tabs, snapshot } = releaseFixture('Old mac name')
+  pty.manualTitle = 'Phone name'
+  pty.manualTitleBaseline = 'Old mac name'
+  const ptys = new Map([['pty-1', pty]])
+
+  releaseEchoedManualTerminalTitles(snapshot, ptys, [])
+  expect(pty.manualTitle).toBe('Phone name')
+
+  tabs[0] = { type: 'terminal', ptyId: 'pty-1', customTitle: '' }
+  releaseEchoedManualTerminalTitles(snapshot, ptys, [])
+  expect(pty.manualTitle).toBeUndefined()
+  expect(pty.manualTitleBaseline).toBeUndefined()
+  expect(readStickyMobileTerminalTitle(tabs[0], pty)).toEqual({ kind: 'unset' })
 })
 
 it('drops an explicit clear when the desktop publishes a different custom title', () => {
