@@ -14,6 +14,19 @@ function line(record: unknown): string {
   return `${JSON.stringify(record)}\n`
 }
 
+function tokenCountLine(inputTokens: number): string {
+  return line({
+    type: 'event_msg',
+    payload: {
+      type: 'token_count',
+      info: {
+        last_token_usage: { input_tokens: inputTokens, output_tokens: 0 },
+        model_context_window: 272_000
+      }
+    }
+  })
+}
+
 describe('RelayAgentHookServer Codex subagent transcript polling', () => {
   const dirs: string[] = []
 
@@ -68,16 +81,77 @@ describe('RelayAgentHookServer Codex subagent transcript polling', () => {
       })
 
       expect(response.status).toBe(204)
-      expect(forward.mock.calls[0]?.[0].payload.subagents).toHaveLength(1)
+      expect(forward.mock.calls[0]?.[0].payload!.subagents).toHaveLength(1)
 
       appendFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_complete' } }))
       await vi.waitFor(
         () => {
-          expect(forward.mock.calls.at(-1)?.[0].payload.subagents).toBeUndefined()
+          expect(forward.mock.calls.at(-1)?.[0].payload!.subagents).toBeUndefined()
           expect(forward).toHaveBeenCalledTimes(2)
         },
         { timeout: 2_000, interval: 50 }
       )
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('forwards a context-only poll change once and retains it for the next poll', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'relay-hook-codex-context-'))
+    dirs.push(dir)
+    const parentPath = join(dir, 'rollout-parent.jsonl')
+    const childPath = join(dir, `rollout-child-${CHILD_ID}.jsonl`)
+    writeFileSync(
+      parentPath,
+      tokenCountLine(10_000) +
+        line({
+          type: 'event_msg',
+          payload: {
+            type: 'sub_agent_activity',
+            occurred_at_ms: 1234,
+            agent_thread_id: CHILD_ID,
+            agent_path: '/root/pr_review',
+            kind: 'started'
+          }
+        })
+    )
+    writeFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_started' } }))
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      await fetch(`http://127.0.0.1:${port}/hook/codex`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          payload: {
+            hook_event_name: 'PostToolUse',
+            session_id: 'root-session',
+            transcript_path: parentPath,
+            tool_name: 'collaborationspawn_agent'
+          }
+        })
+      })
+      expect(forward).toHaveBeenCalledTimes(1)
+
+      appendFileSync(parentPath, tokenCountLine(64_000))
+      await vi.waitFor(
+        () => {
+          expect(forward).toHaveBeenCalledTimes(2)
+          expect(forward.mock.calls[1]?.[0].payload!.contextUsage).toEqual(
+            expect.objectContaining({ usedTokens: 64_000, maxTokens: 272_000 })
+          )
+        },
+        { timeout: 2_000, interval: 50 }
+      )
+      await new Promise((resolve) => setTimeout(resolve, 1_150))
+      expect(forward).toHaveBeenCalledTimes(2)
     } finally {
       server.stop()
     }

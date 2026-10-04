@@ -2,6 +2,8 @@ export type AgentStatusLegacyIngressDestination = '2B' | '6'
 
 export type AgentStatusLegacyIngressCaller =
   | 'main-status-update'
+  | 'main-context-usage-update'
+  | 'main-context-pressure-disable'
   | 'main-status-cleanup'
   | 'main-pane-alias-transfer'
   | 'main-status-hydration'
@@ -40,6 +42,24 @@ export const AGENT_STATUS_LEGACY_INGRESS_MANIFEST = Object.freeze([
     destination: '2B',
     gate: 'Trusted PTY scope plus owner-atomic producer handover',
     allowedModes: ['current-producer', 'older-peer']
+  }),
+  entry({
+    caller: 'main-context-usage-update',
+    sourcePath: 'src/main/agent-hooks/server/server-context-usage.ts',
+    reason: 'A validated context-usage reading updates the owning pane row in place.',
+    owner: 'main-agent-hooks',
+    destination: '2B',
+    gate: 'Feature flag plus established row identity and provider-session match',
+    allowedModes: ['current-producer']
+  }),
+  entry({
+    caller: 'main-context-pressure-disable',
+    sourcePath: 'src/main/agent-hooks/server/server-runtime-env.ts',
+    reason: 'Toggling the feature off clears the stored reading on each held row.',
+    owner: 'main-agent-hooks',
+    destination: '2B',
+    gate: 'Settings-driven disable only; no admission when enabled',
+    allowedModes: ['current-producer']
   }),
   entry({
     caller: 'main-status-cleanup',

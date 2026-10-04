@@ -4,6 +4,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
+import { agentContextUsageEqual } from '../../../../shared/agent-context-pressure'
 import { mainAgentStatusEqual } from '../../../../shared/main-agent-status'
 import type {
   WebSessionTabsBatchContext,
@@ -64,6 +65,7 @@ export function agentStatusEntryEqual(
     a.promptInteractionKey === b.promptInteractionKey &&
     a.restoredUnconfirmed === b.restoredUnconfirmed &&
     agentProviderSessionsEqual(a.agentType, a.providerSession, b.providerSession) &&
+    agentContextUsageEqual(a.contextUsage, b.contextUsage) &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
   )
 }

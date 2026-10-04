@@ -1,5 +1,6 @@
 import type { StructuredHostStatus } from '../../shared/agent-hook-listener/listener-event'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
+import type { AgentContextUsage } from '../../shared/agent-context-pressure'
 import type { AgentMainAgentStatus } from '../../shared/main-agent-status'
 
 export type RuntimeWorktreeAgentSource = {
@@ -11,6 +12,7 @@ export type RuntimeWorktreeAgentSource = {
   state: ParsedAgentStatusPayload['state']
   workingMode?: ParsedAgentStatusPayload['workingMode']
   agentType: string | null
+  model: string | null
   prompt: string
   lastAssistantMessage: string | null
   toolName: string | null
@@ -19,6 +21,7 @@ export type RuntimeWorktreeAgentSource = {
   mainAgent?: AgentMainAgentStatus
   stateStartedAt: number
   updatedAt: number
+  contextUsage?: AgentContextUsage | null
   /** Projected by the structured session host; `owned` rows stay fresh past the staleness window. */
   structuredHost?: StructuredHostStatus
 }

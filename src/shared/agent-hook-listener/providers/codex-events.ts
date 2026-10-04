@@ -64,7 +64,12 @@ export function buildCodexStatusPayload(
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     interrupted: mainAgentTurnInterrupted(lead),
     subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey)),
-    mainAgent: codexMainAgentStatusForPayload(lead)
+    mainAgent: codexMainAgentStatusForPayload(lead),
+    // Why: SessionStart re-read the rollout just above; nothing found means a fresh
+    // session, so null explicitly clears the pane's previous-session reading.
+    contextUsage:
+      state.codexSubagentTranscriptByPaneKey.get(paneKey)?.contextUsage ??
+      (eventName === 'SessionStart' ? null : undefined)
   })
 }
 

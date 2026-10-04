@@ -18,9 +18,9 @@ import {
 } from './server-claude-status-rules'
 import { isStaleGrokTurnEnd } from './server-grok-status-rules'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
-import { AgentHookServerStatusApplication } from './server-status-application'
+import { AgentHookServerContextUsage } from './server-context-usage'
 
-export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
+export abstract class AgentHookServerStatusUpdate extends AgentHookServerContextUsage {
   protected applyNormalizedStatus(
     incoming: AgentHookEventPayload & { authorityRestartId?: string },
     onAccepted?: () => void,
@@ -181,8 +181,15 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       return previous
     }
     const effectivePayload = latch.event
-    if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
-      const held = withHeldChildWaitMainAgent(previous, effectivePayload)
+    const contextGatedPayload =
+      !this.contextPressureEnabled && effectivePayload.payload.contextUsage !== undefined
+        ? {
+            ...effectivePayload,
+            payload: { ...effectivePayload.payload, contextUsage: null }
+          }
+        : effectivePayload
+    if (previous && shouldKeepClaudePermissionVisible(previous, contextGatedPayload)) {
+      const held = withHeldChildWaitMainAgent(previous, contextGatedPayload)
       // Why: a child's prompt leaves the main agent running, so the held row takes its `mainAgent` and
       // must take the same event's background evidence; a main agent's own prompt blocks it, so not there.
       if (previous.toolAgentId) {
@@ -202,26 +209,43 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       return held
     }
     if (
-      effectivePayload.payload.state !== 'done' ||
-      effectivePayload.payload.lastAssistantMessage
+      contextGatedPayload.payload.state !== 'done' ||
+      contextGatedPayload.payload.lastAssistantMessage
     ) {
-      this.clearAssistantMessageRetry(effectivePayload.paneKey)
+      this.clearAssistantMessageRetry(contextGatedPayload.paneKey)
     }
     onAccepted?.()
     if (!identity.inheritedFromActivePane) {
-      this.maybeTrackAgentPromptSent(effectivePayload, previous)
+      this.maybeTrackAgentPromptSent(contextGatedPayload, previous)
     }
     // Why carried forward only within one host: main's OSC parse resolves the handle, so a later
     // hook must not erase its terminal join; a connection change must not inherit another host's.
-    const { claudeRunningNonAgentTask: _unpaired, ...unpairedPayload } = effectivePayload
-    const runningNonAgentTask = pairedClaudeNonAgentWork(previous, effectivePayload)
+    const { claudeRunningNonAgentTask: _unpaired, ...unpairedPayload } = contextGatedPayload
+    const runningNonAgentTask = pairedClaudeNonAgentWork(previous, contextGatedPayload)
     const pairedPayload =
       runningNonAgentTask === undefined
         ? unpairedPayload
         : { ...unpairedPayload, claudeRunningNonAgentTask: runningNonAgentTask }
+    // Why: most hook events omit contextUsage (Claude's arrives via applyPaneContextUsage;
+    // codex payloads carry their rollout reading directly); inherit the pane's last reading
+    // so persistence/snapshot replay keep it across pings.
+    // An agentType change means a new session, whose reading no longer applies.
+    const contextPreservedPayload =
+      pairedPayload.payload.contextUsage === undefined &&
+      pairedPayload.hookEventName !== 'SessionStart' &&
+      previous?.payload.contextUsage != null &&
+      previous.payload.agentType === pairedPayload.payload.agentType
+        ? {
+            ...pairedPayload,
+            payload: {
+              ...pairedPayload.payload,
+              contextUsage: previous.payload.contextUsage
+            }
+          }
+        : pairedPayload
     const enriched = {
-      ...this.attachStatusTiming(pairedPayload, now, observedAt),
-      observation: this.stampObservation(pairedPayload, origin, observedAt ?? now)
+      ...this.attachStatusTiming(contextPreservedPayload, now, observedAt),
+      observation: this.stampObservation(contextPreservedPayload, origin, observedAt ?? now)
     }
     if (
       typeof enriched.payload.turnCompletedAt === 'number' &&

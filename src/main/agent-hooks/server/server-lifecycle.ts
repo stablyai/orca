@@ -6,6 +6,7 @@ import {
   CLAUDE_STATUSLINE_PATHNAME,
   parseClaudeStatusLineBody
 } from '../../../shared/claude-statusline-rate-limits'
+import { parseClaudeStatusLineContextUsage } from '../../../shared/claude-statusline-context-window'
 import { mergeAgentHookRequestHeaders } from '../../../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../../../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../../../shared/agent-hook-listener/source-routing'
@@ -87,6 +88,17 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           const statusLineEvent = parseClaudeStatusLineBody(body)
           if (statusLineEvent) {
             this.onClaudeStatusLine?.(statusLineEvent)
+          }
+          // Feature-off skips the second parse of the same body (relay parity).
+          const contextReading = this.contextPressureEnabled
+            ? parseClaudeStatusLineContextUsage(body)
+            : null
+          if (contextReading) {
+            this.applyPaneContextUsage(
+              contextReading.paneKey,
+              contextReading.usage,
+              contextReading.sessionId
+            )
           }
           res.writeHead(204)
           res.end()

@@ -1,5 +1,14 @@
 import { isFreshNonDoneAgentStatus } from '../../shared/agent-status-types'
-import type { RuntimeWorktreeAgentRow, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
+import {
+  resolveContextPressure,
+  type ContextPressureConfig
+} from '../../shared/agent-context-pressure'
+import { clampUsedPercent } from '../../shared/usage-percentage-display'
+import type {
+  RuntimeWorktreeAgentContextPressure,
+  RuntimeWorktreeAgentRow,
+  RuntimeWorktreePsSummary
+} from '../../shared/runtime-types'
 import { mergeWorktreeSummaryStatus } from './runtime-worktree-status-projection'
 import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
 import type { RuntimeWorkingTerminalEvidence } from './runtime-worktree-ps-activity'
@@ -12,6 +21,35 @@ type OrchestrationDisplay = {
   parentPaneKey?: string | null
 }
 
+/** Host-computed pressure for one worktree.ps agent row, or undefined when the
+ *  experimental gate is off or the session has no usable reading — the wire
+ *  field stays absent so mobile honestly renders nothing. */
+function resolveWorktreeAgentRowContextPressure(
+  source: RuntimeWorktreeAgentSource,
+  config: ContextPressureConfig | null
+): RuntimeWorktreeAgentContextPressure | undefined {
+  if (!config || !source.contextUsage) {
+    return undefined
+  }
+  const snapshot = resolveContextPressure({
+    usage: source.contextUsage,
+    model: source.model,
+    agentType: source.agentType,
+    config
+  })
+  // Why clamp: integer percent keeps polled rows byte-stable between readings.
+  return snapshot
+    ? {
+        level: snapshot.level,
+        usedPercent: clampUsedPercent(snapshot.usedPercent),
+        usedTokens: snapshot.usedTokens,
+        limitTokens: snapshot.limitTokens,
+        limitSource: snapshot.limitSource,
+        usedTokensSource: snapshot.usedTokensSource
+      }
+    : undefined
+}
+
 export function attachRuntimeWorktreeAgentRows(args: {
   summaries: Map<string, RuntimeWorktreePsSummary>
   pathIndex: RuntimeWorktreeSummaryPathIndex
@@ -22,6 +60,8 @@ export function attachRuntimeWorktreeAgentRows(args: {
     readonly RuntimeWorkingTerminalEvidence[]
   >
   orchestrationByPaneKey: Record<string, OrchestrationDisplay> | null | undefined
+  /** Resolved once per worktree.ps build; null when the experimental flag is off. */
+  contextPressureConfig: ContextPressureConfig | null
   getSummary: (
     summaries: Map<string, RuntimeWorktreePsSummary>,
     pathIndex: RuntimeWorktreeSummaryPathIndex,
@@ -47,6 +87,10 @@ export function attachRuntimeWorktreeAgentRows(args: {
       continue
     }
     const orchestration = args.orchestrationByPaneKey?.[source.paneKey]
+    const contextPressure = resolveWorktreeAgentRowContextPressure(
+      source,
+      args.contextPressureConfig
+    )
     const row: RuntimeWorktreeAgentRow = {
       paneKey: source.paneKey,
       parentPaneKey: orchestration?.parentPaneKey ?? null,
@@ -63,6 +107,7 @@ export function attachRuntimeWorktreeAgentRows(args: {
       ...(source.mainAgent ? { mainAgent: source.mainAgent } : {}),
       stateStartedAt: source.stateStartedAt,
       updatedAt: source.updatedAt,
+      ...(contextPressure ? { contextPressure } : {}),
       ...(source.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {})
     }
     const rows = rowsByWorktree.get(summary.worktreeId)

@@ -144,6 +144,7 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
       hookSnapshots: store.getStatusSnapshot()
     }),
     orchestrationByPaneKey: null,
+    contextPressureConfig: null,
     getSummary: (map, _paths, _missing, id) => map.get(id) ?? null
   })
   return row

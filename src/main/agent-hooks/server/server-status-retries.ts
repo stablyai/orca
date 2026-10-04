@@ -87,7 +87,16 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       return
     }
     const update = transcriptPollUpdate(source, original, normalized)
-    const next = update ? this.applyNormalizedStatus(update) : original
+    let next = update ? this.applyNormalizedStatus(update) : original
+    if (!update && normalized.payload.contextUsage !== undefined) {
+      // Why: the poll's rollout re-read can surface a fresh token_count between hook
+      // events; re-arm off the stored row or the identity check ends the poll.
+      this.applyPaneContextUsage(original.paneKey, normalized.payload.contextUsage)
+      next =
+        (this.state.lastStatusByPaneKey.get(original.paneKey) as
+          | EnrichedAgentHookEventPayload
+          | undefined) ?? next
+    }
     if (next) {
       this.scheduleTranscriptPoll(source, body, next)
     }

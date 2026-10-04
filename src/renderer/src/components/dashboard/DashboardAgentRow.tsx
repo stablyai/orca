@@ -1,6 +1,11 @@
 import React, { useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
+import { ContextPressureIndicator } from '@/components/ContextPressureIndicator'
+import {
+  resolveEntryContextPressure,
+  useContextPressureConfig
+} from '@/components/sidebar/context-pressure-selection'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -176,6 +181,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   // Why: the elapsed gap is the whole content of an `unverifiable` row, so it rides the
   // row's own timestamp slot rather than hiding in a hover tooltip.
   const noUpdateLabel = dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : null
+  const contextPressureConfig = useContextPressureConfig()
+  // Per-agent rows show all three levels (green = comfortably below the limit);
+  // null (flag off or no provider data) renders nothing.
+  const contextPressure = resolveEntryContextPressure(agent.entry, contextPressureConfig)
 
   // Why: always show the chevron so the row's right edge doesn't flicker as content grows/shrinks.
 
@@ -292,6 +301,17 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           >
             +{childAgentCount}
           </span>
+        )}
+        {contextPressure && (
+          <ContextPressureIndicator
+            level={contextPressure.level}
+            usedPercent={contextPressure.usedPercent}
+            usedTokens={contextPressure.usedTokens}
+            limitTokens={contextPressure.limitTokens}
+            limitSource={contextPressure.limitSource}
+            usedTokensSource={contextPressure.usedTokensSource}
+            size={stateDotSize}
+          />
         )}
         <DashboardAgentRowTrailingControls
           paneKey={agent.paneKey}

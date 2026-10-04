@@ -189,6 +189,7 @@ export type {
   RuntimeRepoSearchRefs,
   RuntimeSpeechModelSummary,
   RuntimeSpeechSetupState,
+  RuntimeWorktreeAgentContextPressure,
   RuntimeWorktreeAgentRow,
   RuntimeWorktreeCreateResult,
   RuntimeWorktreeListResult,

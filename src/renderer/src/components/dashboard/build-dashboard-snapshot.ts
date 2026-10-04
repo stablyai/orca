@@ -5,6 +5,7 @@ import {
   type DashboardSnapshot,
   type DashboardWorkspace
 } from '../../../../shared/dashboard-snapshot'
+import { getContextPressureConfig } from '../sidebar/context-pressure-selection'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
@@ -46,6 +47,7 @@ import { buildDashboardSnapshotFilterOptions } from './dashboard-snapshot-filter
 import { groupSubagentsByParentPaneKey } from './dashboard-subagent-cards'
 import { selectDashboardOrchestration } from './dashboard-orchestration-selection'
 import { dashboardRowBucketProjection } from './dashboard-row-bucket'
+import { dashboardCardContextPressure } from './dashboard-card-context-pressure'
 
 /** The store slices the snapshot builder reads. Kept as a Pick so unit tests
  *  can pass a partial store without constructing the whole AppState. */
@@ -99,6 +101,8 @@ export function buildDashboardSnapshot(
   const includeCardDetails = options.includeCardDetails !== false
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const showIdle = state.settings?.experimentalAgentDashboardShowIdle === true
+  // Resolved once per snapshot build; null when the experimental flag is off.
+  const contextPressureConfig = getContextPressureConfig(state.settings)
   const activeWorktrees = collectActiveDashboardWorkspaces(state, includeCardDetails)
   const filterOptions =
     options.includeFilterOptions === false
@@ -248,6 +252,7 @@ export function buildDashboardSnapshot(
         // board and the sidebar bold/mute the same agents at the same time.
         unseen,
         askSummary: bucket === 'attention' ? (row.entry.interactivePrompt ?? undefined) : undefined,
+        contextPressure: dashboardCardContextPressure(row, contextPressureConfig),
         conversationName: boundedLabelOrUndefined(
           rowConversationName(
             row,

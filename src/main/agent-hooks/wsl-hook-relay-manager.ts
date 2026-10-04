@@ -34,6 +34,7 @@ import {
   resumeWslStoppedRelays
 } from './wsl-hook-relay-state-machine'
 import type { WslRelayDistroState } from './wsl-hook-relay-state'
+import { WslContextPressureRelayState } from './wsl-hook-relay-state'
 export class WslHookRelayManager {
   private deps: WslHookRelayManagerDeps
   private recovery: WslRelayRecovery
@@ -42,6 +43,7 @@ export class WslHookRelayManager {
   private defaultDistro: string | null = null
   private disposed = false
   private warnedBundleMissing = false
+  private contextPressure = new WslContextPressureRelayState()
   constructor(deps: Partial<WslHookRelayManagerDeps> = {}) {
     this.deps = { ...defaultWslHookRelayDeps, ...deps }
     this.recovery = new WslRelayRecovery({
@@ -93,6 +95,10 @@ export class WslHookRelayManager {
       ? (state?.opencode2OverlayDir ?? null)
       : (state?.opencodeOverlayDir ?? null)
   }
+  setContextPressureEnabled(enabled: boolean): void {
+    this.contextPressure.setEnabled(enabled, this.states.values())
+  }
+
   getGuestAgentPath(distro: string | null, kind: 'pi' | 'omp'): string | null {
     const state = this.stateFor(distro)
     return kind === 'pi' ? (state?.piAgentDir ?? null) : (state?.ompStatusExtension ?? null)
@@ -265,6 +271,7 @@ export class WslHookRelayManager {
     }
     state.guestHome = homeResult.home
     state.guestEndpointFilePath = wslHookRelayEndpointFilePath(homeResult.home, instanceKey)
+    this.contextPressure.sync(mux)
     await runWslRelayGuestInstall(this.deps, state, mux, homeResult.home)
     if (state.phase === 'failed' || state.mux !== mux) {
       return

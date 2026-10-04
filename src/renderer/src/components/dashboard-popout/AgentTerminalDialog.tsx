@@ -13,6 +13,7 @@ import {
 import { AgentTerminalPreview } from './AgentTerminalPreview'
 import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'
 import { translate } from '@/i18n/i18n'
+import { ContextPressureIndicator } from '@/components/ContextPressureIndicator'
 import { cn } from '@/lib/utils'
 
 /** Routing payload for focusing an agent's pane in the main window. */
@@ -62,6 +63,16 @@ function AgentTerminalFrame({
           {formatAgentTypeLabel(card.agentType)} ·{' '}
           {agentStateLabel(dashboardCardDisplayState(card))}
         </span>
+        {card.contextPressure ? (
+          <ContextPressureIndicator
+            level={card.contextPressure.level}
+            usedPercent={card.contextPressure.usedPercent}
+            usedTokens={card.contextPressure.usedTokens}
+            limitTokens={card.contextPressure.limitTokens}
+            limitSource={card.contextPressure.limitSource}
+            usedTokensSource={card.contextPressure.usedTokensSource}
+          />
+        ) : null}
         <Button
           type="button"
           variant="ghost"

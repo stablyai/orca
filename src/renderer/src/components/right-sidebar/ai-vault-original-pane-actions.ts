@@ -12,15 +12,22 @@ import { translate } from '@/i18n/i18n'
 import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
 import {
   createLazyAiVaultOriginalPaneIndex,
+  findAiVaultSessionLiveEntryInIndex,
   findAiVaultSessionLiveStateInIndex,
   findOriginalAiVaultSessionPaneInIndex
 } from './ai-vault-original-pane-index'
+import {
+  getContextPressureConfig,
+  resolveEntryContextPressure
+} from '../sidebar/context-pressure-selection'
+import type { ContextPressureSnapshot } from '../../../../shared/agent-context-pressure'
 
 export function useAiVaultOriginalPaneActions(): {
   getOriginalPaneTarget: (
     session: AiVaultSession
   ) => ReturnType<typeof findOriginalAiVaultSessionPane>
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
+  getSessionContextPressure: (session: AiVaultSession) => ContextPressureSnapshot | null
   isStructuredSessionOpen: (session: AiVaultSession) => boolean
   jumpToOriginalPane: (session: AiVaultSession) => void
   jumpToWorktree: (worktreeId: string) => void
@@ -67,6 +74,14 @@ export function useAiVaultOriginalPaneActions(): {
     (session: AiVaultSession) =>
       findAiVaultSessionLiveStateInIndex(getOriginalPaneIndex(), session),
     [getOriginalPaneIndex]
+  )
+  const contextPressureConfig = useAppStore((state) => getContextPressureConfig(state.settings))
+  const getSessionContextPressure = useCallback(
+    (session: AiVaultSession) => {
+      const entry = findAiVaultSessionLiveEntryInIndex(getOriginalPaneIndex(), session)
+      return entry ? resolveEntryContextPressure(entry, contextPressureConfig) : null
+    },
+    [contextPressureConfig, getOriginalPaneIndex]
   )
 
   const jumpToOriginalPane = useCallback(
@@ -119,6 +134,7 @@ export function useAiVaultOriginalPaneActions(): {
   return {
     getOriginalPaneTarget,
     getSessionLiveState,
+    getSessionContextPressure,
     isStructuredSessionOpen,
     jumpToOriginalPane,
     jumpToWorktree

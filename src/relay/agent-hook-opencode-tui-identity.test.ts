@@ -82,7 +82,7 @@ describe('legacy TUI identity admitted by the execution-host relay', () => {
     })
     forward.mockClear()
     expect(server.replayCachedPayloadsForPanes()).toBe(2)
-    expect(forward.mock.calls.map(([event]) => [event.paneKey, event.payload.state])).toEqual([
+    expect(forward.mock.calls.map(([event]) => [event.paneKey, event.payload?.state])).toEqual([
       [PANE_A, 'working'],
       [PANE_B, 'done']
     ])

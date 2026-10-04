@@ -75,7 +75,7 @@ describe('relay process presence', () => {
         'claude'
       )
       await Promise.resolve()
-      expect(forward.mock.lastCall?.[0].payload.lastAssistantMessage).toBe('late result')
+      expect(forward.mock.lastCall?.[0].payload?.lastAssistantMessage).toBe('late result')
       expect(probe).not.toHaveBeenCalled()
 
       await server.checkAgentPresence(paneKey)

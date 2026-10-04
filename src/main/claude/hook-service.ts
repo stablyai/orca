@@ -1,4 +1,4 @@
-import { existsSync, rmSync, writeFileSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
@@ -25,12 +25,15 @@ import {
 export { getManagedScript }
 import { getManagedStatusLineScript } from './statusline-script'
 import {
+  installManagedClaudeStatusLine,
+  installRemoteClaudeStatusLineForHome,
+  rewriteManagedClaudeStatusLine
+} from './statusline-toggle'
+import {
   applyManagedHooks,
-  applyManagedStatusLine,
   CLAUDE_HOOK_SETTINGS,
   getManagedScriptFileName,
   getConfigPath,
-  getManagedCommand,
   getManagedLifecycleHook,
   getManagedScriptPath,
   getPosixManagedScriptFileName,
@@ -39,7 +42,6 @@ import {
   getStatusLineInstallMarkerPath,
   getStatusLineScriptFileName,
   getStatusLineScriptPath,
-  getStatusLineSlotState,
   hasSameManagedHookInvocation,
   removeManagedHooks,
   removeManagedStatusLine,
@@ -72,9 +74,18 @@ const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
 
 export class ClaudeHookService {
   private readonly options: ClaudeHookServiceOptions
+  private contextPressureEnabled = true
 
   constructor(options: ClaudeHookServiceOptions = DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS) {
     this.options = options
+  }
+
+  setContextPressureEnabled(enabled: boolean, reinstall = true): void {
+    const changed = this.contextPressureEnabled !== enabled
+    this.contextPressureEnabled = enabled
+    if (changed && reinstall && this.options.agent === 'claude') {
+      rewriteManagedClaudeStatusLine(this.options.settings, enabled)
+    }
   }
 
   private get usesWindowsEntry(): boolean {
@@ -154,7 +165,7 @@ export class ClaudeHookService {
     // Why: no agent gate — the statusline script only ever exists for claude, so presence is the gate.
     await refreshManagedScriptIfPresent(
       getStatusLineScriptPath(this.options.settings),
-      getManagedStatusLineScript('local')
+      getManagedStatusLineScript('local', this.contextPressureEnabled)
     )
   }
 
@@ -195,28 +206,12 @@ export class ClaudeHookService {
     return this.getStatus(options)
   }
 
-  // Why: the statusline feed is opportunistic (usage display, not agent status); a user who deleted the
-  // managed entry has opted out, and the marker distinguishes that deletion from a first install.
   private installManagedStatusLine(config: HooksConfig): HooksConfig {
-    const scriptFileName = getStatusLineScriptFileName(this.options.settings)
-    const markerPath = getStatusLineInstallMarkerPath(this.options.settings)
-    const slot = getStatusLineSlotState(config, scriptFileName)
-    if (slot === 'user' || (slot === 'empty' && existsSync(markerPath))) {
-      return config
-    }
-    const statusLineScriptPath = getStatusLineScriptPath(this.options.settings)
-    writeManagedScript(statusLineScriptPath, getManagedStatusLineScript('local'))
-    const next = applyManagedStatusLine(
+    return installManagedClaudeStatusLine(
+      this.options.settings,
       config,
-      getManagedCommand(statusLineScriptPath),
-      scriptFileName
+      this.contextPressureEnabled
     )
-    try {
-      writeFileSync(markerPath, '')
-    } catch {
-      // Best-effort: a missing marker only means one future user deletion gets re-installed once.
-    }
-    return next
   }
 
   // Why: a Claude that predates statusLine discards the whole settings file over Orca's; dropping the
@@ -271,10 +266,19 @@ export class ClaudeHookService {
       // Why: write scripts before settings to avoid settings pointing to missing scripts.
       // Why: SSH scripts always use POSIX .sh paths, regardless of the local OS.
       await writeManagedScriptRemote(sftp, remoteScriptPath, this.managedScript('posix'))
-      // Why: no statusline install here — this path serves SSH remotes and WSL guests, whose relay hook
-      // listener doesn't route /statusline/claude, and an SSH box's Claude login can be a different
-      // account than the locally selected one, so its usage must not feed the local bar (live feed is host-local only).
-      await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
+      // Why: the remote statusline posts context_window only — never rate_limits, which stays
+      // host-local — gated live by the relay's ORCA_CONTEXT_PRESSURE_ENABLED endpoint flag.
+      const nextConfigWithStatusLine =
+        this.options.agent === 'claude'
+          ? await installRemoteClaudeStatusLineForHome(
+              sftp,
+              nextConfig,
+              remoteHome,
+              this.options.settings,
+              this.contextPressureEnabled
+            )
+          : nextConfig
+      await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfigWithStatusLine)
 
       return {
         agent: this.options.agent,

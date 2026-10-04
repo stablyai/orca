@@ -114,7 +114,7 @@ describe('manual Claude compact hook stream', () => {
     const token = env.ORCA_AGENT_HOOK_TOKEN
     const events: string[] = []
     const unsubscribe = server.subscribeEnrichedStatus((event) => {
-      events.push(`${event.hookEventName}:${event.payload.state}`)
+      events.push(`${event.hookEventName}:${event.payload?.state}`)
     })
 
     await postHook(port, token, claudeHook('UserPromptSubmit', TURN_PROMPT_ID, { prompt: 'work' }))
@@ -196,7 +196,7 @@ describe('manual Claude compact hook stream', () => {
 
     const emitted: string[] = []
     const unsubscribe = server.subscribeEnrichedStatus((event) => {
-      emitted.push(`${event.hookEventName}:${event.payload.state}`)
+      emitted.push(`${event.hookEventName}:${event.payload?.state}`)
     })
     await postHook(port, token, claudeHook('PostCompact', COMPACT_PROMPT_ID, { trigger: 'manual' }))
 
@@ -223,7 +223,7 @@ describe('manual Claude compact hook stream', () => {
     })
     servers.push(main, relay)
     const unsubscribe = main.subscribeEnrichedStatus((event) => {
-      emitted.push(`${event.hookEventName}:${event.payload.state}`)
+      emitted.push(`${event.hookEventName}:${event.payload?.state}`)
     })
     await relay.start({ publishEndpoint: false })
     const { port, token } = relay.getCoordinates()
@@ -344,12 +344,12 @@ describe('manual Claude compact hook stream', () => {
     servers.push(server)
     const emitted: string[] = []
     const unsubscribe = server.subscribeEnrichedStatus((event) => {
-      emitted.push(`${event.hookEventName}:${event.payload.state}`)
+      emitted.push(`${event.hookEventName}:${event.payload?.state}`)
     })
     server.ingestRemote(turnEnvelope(), 'conn-a')
     server.ingestRemote(legacyRelayCompactEnvelope('done'), 'conn-a')
     const applied = server._getStateForTests().lastStatusByPaneKey.get(PANE_KEY)
-    expect(applied?.payload.state).toBe('done')
+    expect(applied?.payload?.state).toBe('done')
 
     server.ingestRemote(legacyRelayCompactEnvelope('done'), 'conn-a')
 

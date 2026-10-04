@@ -234,13 +234,10 @@ export type RuntimeTerminalPromptDelivery = {
   baselinePermissionSequence?: number
 }
 
-export type RuntimeTerminalAgentStatusState = 'working' | 'permission' | 'idle' | null
-
-export type RuntimeTerminalAgentStatus = {
-  handle: string
-  isRunningAgent: boolean
-  status: RuntimeTerminalAgentStatusState
-}
+export type {
+  RuntimeTerminalAgentStatus,
+  RuntimeTerminalAgentStatusState
+} from './runtime-terminal-agent-status'
 
 export type RuntimeTerminalPresentation = 'background' | 'focused'
 

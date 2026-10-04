@@ -3,6 +3,7 @@
 // a narrow interrupt fallback synthesizes a final `done` when an agent misses its cancellation hook.
 
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import { normalizeAgentContextUsage, type AgentContextUsage } from './agent-context-pressure'
 import type { AgentMainAgentStatus } from './main-agent-status'
 import type { AgentStateHistoryEntry } from './agent-state-history'
 import { isAgentTurnOutcome } from './agent-turn-outcome'
@@ -159,6 +160,8 @@ export type AgentStatusEntry = {
   terminalResumeEligible?: false
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** Provider-reported context-window usage; null = explicitly cleared, absent = never reported. */
+  contextUsage?: AgentContextUsage | null
   /** True for a nonterminal state hydrated from last-status.json with no live hook since:
    *  the transition may have been missed while no receiver was up, so freshness gates
    *  treat the row as stale immediately. Cleared by any accepted live event. */
@@ -196,6 +199,8 @@ export type AgentStatusPayload = {
   turnCompletedAt?: number
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
+  /** Context-window usage reading; undefined = no update, null = explicit clear. */
+  contextUsage?: AgentContextUsage | null
   /** The main agent's own state and last-turn verdict. See AgentMainAgentStatus. Producers publish it
    *  beside the combined `state`; a reader that predates it keeps reading `state`. */
   mainAgent?: AgentMainAgentStatus
@@ -344,7 +349,8 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
     turnCompletedAt: normalizeTurnCompletedAtField(obj.turnCompletedAt, state),
     subagents: normalizeAgentSubagentsField(obj.subagents),
-    mainAgent: normalizeMainAgentStatusField(obj.mainAgent)
+    mainAgent: normalizeMainAgentStatusField(obj.mainAgent),
+    contextUsage: normalizeAgentContextUsage(obj.contextUsage)
   }
 }
 

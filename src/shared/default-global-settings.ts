@@ -15,6 +15,10 @@ import {
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from './left-sidebar-appearance'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
+import {
+  DEFAULT_CONTEXT_PRESSURE_CRITICAL_PERCENT,
+  DEFAULT_CONTEXT_PRESSURE_WARN_PERCENT
+} from './agent-context-pressure'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 
 export function buildDefaultSettings(args: {
@@ -252,6 +256,13 @@ export function buildDefaultSettings(args: {
     agentHibernationIdleMs: 30 * 60 * 1000,
     experimentalNewWorktreeCardStyle: false,
     experimentalEphemeralVms: false,
+    // Why off: context-pressure ingestion/UI is still experimental; the toggle keeps it fully inert.
+    experimentalContextPressure: false,
+    // Why 70/90: yellow early enough to steer or compact before red signals imminent exhaustion.
+    contextPressureWarnPercent: DEFAULT_CONTEXT_PRESSURE_WARN_PERCENT,
+    contextPressureCriticalPercent: DEFAULT_CONTEXT_PRESSURE_CRITICAL_PERCENT,
+    // Why empty: no user soft caps until configured; provider/model limits still apply.
+    contextPressureSoftLimits: {},
     compactWorktreeCards: false,
     // Why: local desktop stays the default until the user picks a saved runtime environment.
     activeRuntimeEnvironmentId: null,

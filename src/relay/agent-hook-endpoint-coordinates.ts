@@ -8,6 +8,7 @@ import {
   ORCA_HOOK_PROTOCOL_VERSION,
   ORCA_HOOK_RAW_JSON_TRANSPORT
 } from '../shared/agent-hook-types'
+import { writeEndpointFile } from '../shared/agent-hook-listener/endpoint-publication'
 
 // Why: relay's userData equivalent under $HOME so each user on a shared dev box gets their own 0o700 dir.
 const RELAY_HOOKS_DIR_NAME = '.orca-relay'
@@ -60,4 +61,28 @@ export function buildRelayHookPtyEnv(coordinates: {
     env.ORCA_AGENT_HOOK_ENDPOINT = coordinates.endpointFilePath
   }
   return env
+}
+
+/** Republishes the endpoint file for a listening hook server; no-op false while
+ *  the server has no live port/token. */
+export function writeRelayHookEndpointFile(coordinates: {
+  endpointDir: string
+  endpointFilePath: string
+  port: number
+  token: string
+  env: string
+  contextPressureEnabled: boolean
+}): boolean {
+  if (coordinates.port <= 0 || !coordinates.token) {
+    return false
+  }
+  return writeEndpointFile(coordinates.endpointDir, coordinates.endpointFilePath, {
+    port: coordinates.port,
+    token: coordinates.token,
+    env: coordinates.env,
+    version: ORCA_HOOK_PROTOCOL_VERSION,
+    openCodeTui: true,
+    transport: ORCA_HOOK_RAW_JSON_TRANSPORT,
+    contextPressureEnabled: coordinates.contextPressureEnabled
+  })
 }

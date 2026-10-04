@@ -1,9 +1,11 @@
 import { migrateExplorerDisplayRoots } from '../../../shared/file-explorer-display-root'
 import {
+  DEFAULT_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeProperties,
   isDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
 } from '../../../shared/constants'
+import type { WorktreeCardProperty } from '../../../shared/ui-chrome-types'
 import { isExistingPersistedProfile } from '../../../shared/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../../../shared/usage-percentage-display-change-notice'
 import { normalizePersistedWorkspaceStatuses } from '../../../shared/workspace-statuses'
@@ -79,6 +81,8 @@ export function normalizeLoadedUiState(
   const expandedCardPropsMigrated = parsed.ui?._expandedWorktreeCardPropertiesDefaulted === true
   const jiraIssueCardPropDefaulted = parsed.ui?._jiraIssueWorktreeCardPropertyDefaulted === true
   const hostCardPropDefaulted = parsed.ui?._hostWorktreeCardPropertyDefaulted === true
+  const contextPressureCardPropertyMigrated =
+    parsed.ui?._contextPressureWorktreeCardPropertyDefaulted === true
   const hadExperimentOn = readDeprecatedExperimentFlag(parsed)
   const deliberateUncheck =
     hadExperimentOn && Array.isArray(rawCardProps) && !rawCardProps.includes('inline-agents')
@@ -88,6 +92,7 @@ export function normalizeLoadedUiState(
     Array.isArray(rawCardProps) &&
     !rawCardProps.includes('inline-agents')
   const needsLegacyDefaultedCompactMigration =
+    !contextPressureCardPropertyMigrated &&
     loadedCompactWorktreeCards &&
     parsed.ui?._worktreeCardModeDefaulted === true &&
     isDefaultedCompactWorktreeCardProperties(rawCardProps)
@@ -115,16 +120,34 @@ export function normalizeLoadedUiState(
       }
       return next
     })()
+    const autoIssuedDefaultProperties = DEFAULT_WORKTREE_CARD_PROPERTIES.filter(
+      (property) => property !== 'context-pressure' && property !== 'host'
+    )
+    const preJiraDefaultProperties = autoIssuedDefaultProperties.filter(
+      (property) => property !== 'jira-issue'
+    )
+    const matchesAutoIssuedDefault = (properties: WorktreeCardProperty[]) =>
+      properties.length === expandedCandidate.length &&
+      properties.every((property) => expandedCandidate.includes(property))
+    const isAutoIssuedDefault =
+      parsed.ui?._worktreeCardModeDefaulted === true &&
+      !loadedCompactWorktreeCards &&
+      (matchesAutoIssuedDefault(autoIssuedDefaultProperties) ||
+        matchesAutoIssuedDefault(preJiraDefaultProperties))
     // Why: 'jira-issue' joined the defaults after the expansion migration already stamped upgraded profiles, so it needs its own one-shot backfill.
     const jiraCandidate =
       jiraIssueCardPropDefaulted || expandedCandidate.includes('jira-issue')
         ? expandedCandidate
         : [...expandedCandidate, 'jira-issue' as const]
+    const contextPressureCandidate =
+      !contextPressureCardPropertyMigrated && isAutoIssuedDefault
+        ? [...jiraCandidate, 'context-pressure' as const]
+        : jiraCandidate
     // Why: the host pill was unconditional before it became a property, so existing profiles get it back once rather than silently losing it.
     const hostCandidate =
-      hostCardPropDefaulted || jiraCandidate.includes('host')
-        ? jiraCandidate
-        : [...jiraCandidate, 'host' as const]
+      hostCardPropDefaulted || contextPressureCandidate.includes('host')
+        ? contextPressureCandidate
+        : [...contextPressureCandidate, 'host' as const]
     const normalized = normalizeWorktreeCardProperties(hostCandidate)
     const changed =
       normalized.length !== rawCardProps.length ||
@@ -136,7 +159,8 @@ export function normalizeLoadedUiState(
     !inlineAgentsMigrated ||
     !expandedCardPropsMigrated ||
     !jiraIssueCardPropDefaulted ||
-    !hostCardPropDefaulted
+    !hostCardPropDefaulted ||
+    !contextPressureCardPropertyMigrated
   ) {
     markNeedsSave()
   }
@@ -221,6 +245,7 @@ export function normalizeLoadedUiState(
     _inlineAgentsDefaultedForAllUsers: true,
     _expandedWorktreeCardPropertiesDefaulted: true,
     _jiraIssueWorktreeCardPropertyDefaulted: true,
+    _contextPressureWorktreeCardPropertyDefaulted: true,
     _hostWorktreeCardPropertyDefaulted: true
   }
 }

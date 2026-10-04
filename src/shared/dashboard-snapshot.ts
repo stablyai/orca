@@ -1,4 +1,5 @@
 import type { AgentType, AgentWorkingMode } from './agent-status-types'
+import type { AgentContextUsage, ContextPressureLimitSource } from './agent-context-pressure'
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
 import type { TuiAgent } from './tui-agent'
@@ -79,6 +80,16 @@ export type DashboardWorkspace = {
   review?: DashboardCardReview
 }
 
+/** Exact context-window pressure for a card session; absent means unknown. */
+export type DashboardCardContextPressure = {
+  level: 'ok' | 'warning' | 'critical'
+  usedPercent: number
+  usedTokens: number
+  limitTokens: number
+  limitSource: ContextPressureLimitSource
+  usedTokensSource?: AgentContextUsage['usedTokensSource']
+}
+
 export type DashboardCard = {
   /** Stable identity for React keys. */
   paneKey: string
@@ -140,6 +151,9 @@ export type DashboardCard = {
   unseen: boolean
   /** Short summary of the pending question when bucket === 'attention'. */
   askSummary?: string
+  /** Present only when the experimental context-pressure flag is on and the
+   *  session has reliable data; absent means unknown. */
+  contextPressure?: DashboardCardContextPressure
   /** The tab's conversation name, resolved exactly as the sidebar's agent rows
    *  resolve it. Undefined when no usable name exists (status-only titles). */
   conversationName?: string

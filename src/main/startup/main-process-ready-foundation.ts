@@ -23,6 +23,8 @@ import {
   setDefaultWslDistroOverride
 } from '../git/runner'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
+import { agentHookServer } from '../agent-hooks/server'
+import { claudeHookService } from '../claude/hook-service'
 import {
   attachClaudeLivePtyPersistence,
   onLiveClaudePtysDrained,
@@ -207,6 +209,15 @@ export async function initializeReadyFoundation(): Promise<void> {
     }
   }
   wslHookRelayManager.setManagedHookSettingsResolver(() => state.store?.getSettings() ?? null)
+  agentHookServer.setContextPressureEnabled(
+    store.getSettings().experimentalContextPressure === true
+  )
+  claudeHookService.setContextPressureEnabled(
+    store.getSettings().experimentalContextPressure === true
+  )
+  wslHookRelayManager.setContextPressureEnabled(
+    store.getSettings().experimentalContextPressure === true
+  )
   logStartupMilestone('store-loaded')
   // Why: pre-`ready` startup reads this flag from a marker so it never has to parse orca-data.json.
   writeHttp1CompatibilityMarker(
@@ -217,6 +228,12 @@ export async function initializeReadyFoundation(): Promise<void> {
   // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
   store.onSettingsChanged((updates, settings) => {
+    if ('experimentalContextPressure' in updates) {
+      const enabled = settings.experimentalContextPressure === true
+      agentHookServer.setContextPressureEnabled(enabled)
+      claudeHookService.setContextPressureEnabled(enabled)
+      wslHookRelayManager.setContextPressureEnabled(enabled)
+    }
     if ('electronHttp1CompatibilityMode' in updates) {
       writeHttp1CompatibilityMarker(
         canonicalUserDataPath,

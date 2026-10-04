@@ -111,6 +111,7 @@
     "../src/main/claude/hook-settings.ts",
     "../src/main/claude/hook-service.ts",
     "../src/main/claude/statusline-script.ts",
+    "../src/main/claude/statusline-toggle.ts",
     "../src/main/claude/windows-hook-files.ts",
     "../src/main/claude-accounts/keychain.ts",
     "../src/main/macos-keychain/generic-password.ts",

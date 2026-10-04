@@ -2,6 +2,7 @@ import { SubagentExpansionProvider } from './ai-vault-subagent-expansion'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { ContextPressureSnapshot } from '../../../../shared/agent-context-pressure'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { translate } from '@/i18n/i18n'
@@ -40,6 +41,7 @@ export function AiVaultSessionVirtualList({
   getOriginalPaneTarget,
   isStructuredSessionOpen,
   getSessionLiveState,
+  getSessionContextPressure,
   getWorktreeInfo,
   getSessionResumeState,
   getSessionResumeActions,
@@ -71,6 +73,7 @@ export function AiVaultSessionVirtualList({
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
   isStructuredSessionOpen: (session: AiVaultSession) => boolean
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
+  getSessionContextPressure: (session: AiVaultSession) => ContextPressureSnapshot | null
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
@@ -216,6 +219,7 @@ export function AiVaultSessionVirtualList({
                 getOriginalPaneTarget={getOriginalPaneTarget}
                 isStructuredSessionOpen={isStructuredSessionOpen}
                 getSessionLiveState={getSessionLiveState}
+                getSessionContextPressure={getSessionContextPressure}
                 getWorktreeInfo={getWorktreeInfo}
                 getSessionResumeState={getSessionResumeState}
                 getSessionResumeActions={getSessionResumeActions}

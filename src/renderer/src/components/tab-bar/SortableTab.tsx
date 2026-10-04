@@ -25,6 +25,7 @@ import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
+import { TerminalTabContextPressure } from './TerminalTabContextPressure'
 import {
   isTerminalTabActivityLive,
   resolveTerminalTabActivityStatus,
@@ -238,6 +239,7 @@ export default function SortableTab({
         showUnreadActivity={showUnreadActivity}
         isActive={isActive}
       />
+      {!isEditing && <TerminalTabContextPressure tabId={tab.id} />}
       {isPinned && !isEditing && (
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
       )}

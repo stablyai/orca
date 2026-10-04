@@ -72,6 +72,7 @@ function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummar
       hookSnapshots: store.getStatusSnapshot()
     }),
     orchestrationByPaneKey: null,
+    contextPressureConfig: null,
     getSummary: (map, _p, _m, id) => map.get(id) ?? null
   })
   return row

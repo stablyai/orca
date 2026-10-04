@@ -159,10 +159,10 @@ describe('publishAgentHookEnvelope', () => {
 
       const published = decodeEnvelopes(primary)
       expect(published).toHaveLength(1)
-      expect(published[0].payload.lastAssistantMessage).toBeUndefined()
-      expect(published[0].payload.interactivePrompt).toBe('q'.repeat(128))
-      expect(published[0].payload.subagents).toHaveLength(2)
-      expect(published[0].payload.state).toBe('working')
+      expect(published[0].payload?.lastAssistantMessage).toBeUndefined()
+      expect(published[0].payload?.interactivePrompt).toBe('q'.repeat(128))
+      expect(published[0].payload?.subagents).toHaveLength(2)
+      expect(published[0].payload?.state).toBe('working')
       expect(published[0].paneKey).toBe('tab-1:4f1b0f4e-0000-4000-8000-000000000001')
       expect(published[0].connectionId).toBeNull()
       expect(primary.closes).toBe(0)
@@ -181,7 +181,7 @@ describe('publishAgentHookEnvelope', () => {
       expect(stderr).not.toHaveBeenCalled()
 
       const unsendable = makeEnvelope({})
-      unsendable.payload.prompt = 'p'.repeat(40_000)
+      unsendable.payload!.prompt = 'p'.repeat(40_000)
       publishAgentHookEnvelope(dispatcher, unsendable)
       expect(stderr).toHaveBeenCalledTimes(1)
       expect(String(stderr.mock.calls[0][0])).toContain('Dropped agent.hook')
@@ -202,9 +202,9 @@ describe('publishAgentHookEnvelope', () => {
 
       const published = decodeEnvelopes(primary)
       expect(published).toHaveLength(1)
-      expect(published[0].payload.lastAssistantMessage).toBeUndefined()
-      expect(published[0].payload.subagents).toBeUndefined()
-      expect(published[0].payload.interactivePrompt).toBe('q'.repeat(6_000))
+      expect(published[0].payload?.lastAssistantMessage).toBeUndefined()
+      expect(published[0].payload?.subagents).toBeUndefined()
+      expect(published[0].payload?.interactivePrompt).toBe('q'.repeat(6_000))
       expect(primary.closes).toBe(0)
     } finally {
       dispatcher.dispose()
@@ -221,15 +221,15 @@ describe('publishAgentHookEnvelope', () => {
         interactivePrompt: 4_000,
         subagents: 40
       })
-      envelope.payload.state = 'waiting'
+      envelope.payload!.state = 'waiting'
       publishAgentHookEnvelope(dispatcher, envelope)
 
       const published = decodeEnvelopes(primary)
       expect(published).toHaveLength(1)
-      expect(published[0].payload.state).toBe('waiting')
-      expect(published[0].payload.interactivePrompt).toBe('q'.repeat(4_000))
-      expect(published[0].payload.subagents).toBeUndefined()
-      expect(published[0].payload.lastAssistantMessage).toBeUndefined()
+      expect(published[0].payload?.state).toBe('waiting')
+      expect(published[0].payload?.interactivePrompt).toBe('q'.repeat(4_000))
+      expect(published[0].payload?.subagents).toBeUndefined()
+      expect(published[0].payload?.lastAssistantMessage).toBeUndefined()
       expect(primary.closes).toBe(0)
     } finally {
       dispatcher.dispose()
@@ -247,10 +247,10 @@ describe('publishAgentHookEnvelope', () => {
 
       const published = decodeEnvelopes(primary)
       expect(published).toHaveLength(1)
-      expect(published[0].payload.lastAssistantMessage).toBeUndefined()
-      expect(published[0].payload.subagents).toBeUndefined()
-      expect(published[0].payload.interactivePrompt).toBeUndefined()
-      expect(published[0].payload.state).toBe('working')
+      expect(published[0].payload?.lastAssistantMessage).toBeUndefined()
+      expect(published[0].payload?.subagents).toBeUndefined()
+      expect(published[0].payload?.interactivePrompt).toBeUndefined()
+      expect(published[0].payload?.state).toBe('working')
       expect(primary.closes).toBe(0)
     } finally {
       dispatcher.dispose()
@@ -266,8 +266,8 @@ describe('publishAgentHookEnvelope', () => {
         lastAssistantMessage: 6_000,
         subagents: 2
       })
-      envelope.payload.state = 'waiting'
-      envelope.payload.interactivePrompt = JSON.stringify({
+      envelope.payload!.state = 'waiting'
+      envelope.payload!.interactivePrompt = JSON.stringify({
         questions: [
           {
             question: 'q'.repeat(13_000),
@@ -279,8 +279,8 @@ describe('publishAgentHookEnvelope', () => {
 
       const published = decodeEnvelopes(primary)
       expect(published).toHaveLength(1)
-      expect(published[0].payload.state).toBe('waiting')
-      const card = JSON.parse(published[0].payload.interactivePrompt!) as {
+      expect(published[0].payload?.state).toBe('waiting')
+      const card = JSON.parse(published[0].payload?.interactivePrompt ?? '') as {
         questions: { question: string; options: { label: string }[] }[]
       }
       expect(card.questions[0].question.length).toBeLessThan(13_000)
@@ -299,8 +299,8 @@ describe('publishAgentHookEnvelope', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     try {
       const envelope = makeEnvelope({})
-      envelope.payload.state = 'waiting'
-      envelope.payload.interactivePrompt = JSON.stringify({
+      envelope.payload!.state = 'waiting'
+      envelope.payload!.interactivePrompt = JSON.stringify({
         questions: [{ options: [{ label: 'answer'.repeat(3_000) }] }]
       })
       publishAgentHookEnvelope(dispatcher, envelope)
@@ -362,7 +362,7 @@ describe('publishAgentHookEnvelope', () => {
 
       const published = decodeEnvelopes(primary)
       expect(published).toHaveLength(1)
-      expect(published[0].payload.interactivePrompt).toBeUndefined()
+      expect(published[0].payload?.interactivePrompt).toBeUndefined()
       expect(primary.closes).toBe(0)
     } finally {
       dispatcher.dispose()
@@ -374,7 +374,7 @@ describe('publishAgentHookEnvelope', () => {
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
     try {
       const envelope = makeEnvelope({})
-      envelope.payload.prompt = 'p'.repeat(40_000)
+      envelope.payload!.prompt = 'p'.repeat(40_000)
       publishAgentHookEnvelope(dispatcher, envelope)
 
       expect(decodeEnvelopes(primary)).toHaveLength(0)
@@ -402,8 +402,8 @@ describe('publishAgentHookEnvelope', () => {
       publishAgentHookEnvelope(dispatcher, envelope)
 
       expect(envelope).toEqual(before)
-      expect(envelope.payload.lastAssistantMessage).toBe('a'.repeat(6_000))
-      expect(envelope.payload.subagents).toHaveLength(40)
+      expect(envelope.payload?.lastAssistantMessage).toBe('a'.repeat(6_000))
+      expect(envelope.payload?.subagents).toHaveLength(40)
     } finally {
       dispatcher.dispose()
     }
@@ -420,7 +420,7 @@ describe('publishAgentHookEnvelope', () => {
       for (const client of [primary, secondary]) {
         const published = decodeEnvelopes(client)
         expect(published).toHaveLength(1)
-        expect(published[0].payload.lastAssistantMessage).toBeUndefined()
+        expect(published[0].payload?.lastAssistantMessage).toBeUndefined()
         expect(client.closes).toBe(0)
       }
     } finally {
@@ -436,7 +436,7 @@ describe('publishAgentHookEnvelope', () => {
     try {
       dispatcher.attachClient(secondary.write, secondary.options)
       const envelope = makeEnvelope({})
-      envelope.payload.prompt = 'p'.repeat(40_000)
+      envelope.payload!.prompt = 'p'.repeat(40_000)
       publishAgentHookEnvelope(dispatcher, envelope)
       publishAgentHookEnvelope(dispatcher, envelope)
 
@@ -469,8 +469,8 @@ describe('publishAgentHookEnvelope shed marker', () => {
         'lastAssistantMessage',
         createShedSubagentsField(makeSubagents(40))
       ])
-      expect(published[0].payload.subagents).toBeUndefined()
-      expect(published[0].payload.interactivePrompt).toBe('q'.repeat(6_000))
+      expect(published[0].payload?.subagents).toBeUndefined()
+      expect(published[0].payload?.interactivePrompt).toBe('q'.repeat(6_000))
     } finally {
       dispatcher.dispose()
     }
@@ -488,7 +488,7 @@ describe('publishAgentHookEnvelope shed marker', () => {
       publishAgentHookEnvelope(dispatcher, shedding)
       // The hook server replays this exact object, so the marker must live on the wire copy only.
       expect((shedding as PublishedEnvelope).shedFields).toBeUndefined()
-      expect(shedding.payload.lastAssistantMessage).toBe('a'.repeat(20_000))
+      expect(shedding.payload?.lastAssistantMessage).toBe('a'.repeat(20_000))
     } finally {
       dispatcher.dispose()
     }
@@ -510,7 +510,7 @@ describe('publishAgentHookEnvelope redelivery', () => {
     try {
       saturateProducerQueue(dispatcher, primary)
       const envelope = makeEnvelope({})
-      envelope.payload.state = 'done'
+      envelope.payload!.state = 'done'
       publishAgentHookEnvelope(dispatcher, envelope)
       expect(decodeEnvelopes(primary)).toHaveLength(0)
 
@@ -523,7 +523,7 @@ describe('publishAgentHookEnvelope redelivery', () => {
       vi.advanceTimersByTime(250)
       const published = decodeEnvelopes(primary)
       expect(published).toHaveLength(1)
-      expect(published[0].payload.state).toBe('done')
+      expect(published[0].payload?.state).toBe('done')
       expect(published[0].paneKey).toBe('tab-1:4f1b0f4e-0000-4000-8000-000000000001')
       expect(primary.closes).toBe(0)
     } finally {
@@ -538,7 +538,7 @@ describe('publishAgentHookEnvelope redelivery', () => {
       saturateProducerQueue(dispatcher, primary)
       for (const state of ['working', 'waiting', 'done'] as const) {
         const envelope = makeEnvelope({})
-        envelope.payload.state = state
+        envelope.payload!.state = state
         publishAgentHookEnvelope(dispatcher, envelope)
       }
 
@@ -548,7 +548,7 @@ describe('publishAgentHookEnvelope redelivery', () => {
 
       const published = decodeEnvelopes(primary)
       expect(published).toHaveLength(1)
-      expect(published[0].payload.state).toBe('done')
+      expect(published[0].payload?.state).toBe('done')
     } finally {
       dispatcher.dispose()
     }
@@ -629,7 +629,7 @@ describe('publishAgentHookEnvelope redelivery', () => {
       primary.blocked = false
       primary.drain()
       const accepted = makeEnvelope({})
-      accepted.payload.state = 'done'
+      accepted.payload!.state = 'done'
       publishAgentHookEnvelope(dispatcher, accepted)
       expect(vi.getTimerCount()).toBe(idleTimers)
 

@@ -18,7 +18,7 @@ it('skips decoding 1,000 message/token records and unchanged reads, but retains 
   const irrelevantRecords = Array.from({ length: 1_000 }, (_, i) =>
     JSON.stringify({
       type: 'event_msg',
-      payload: { type: i % 2 ? 'agent_message' : 'token_count', message: 'message' }
+      payload: { type: i % 2 ? 'agent_message' : 'agent_reasoning', message: 'message' }
     })
   ).join('\n')
   appendFileSync(path, `${irrelevantRecords}\n`)

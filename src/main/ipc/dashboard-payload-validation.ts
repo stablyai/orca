@@ -18,6 +18,7 @@ import {
   admitDashboardWorkspaces,
   isDashboardWorkspaceList
 } from './dashboard-workspace-payload-validation'
+import { isDashboardContextPressure } from './dashboard-context-pressure-validation'
 import { isDashboardFilterOptions } from './dashboard-filter-payload-validation'
 export { isDashboardSpawnAgentArgs } from './dashboard-agent-launch-validation'
 
@@ -291,6 +292,7 @@ function isDashboardCard(value: unknown): boolean {
     (card.statusUpdatedAt === undefined || isFiniteNumber(card.statusUpdatedAt)) &&
     typeof card.unseen === 'boolean' &&
     isOptionalBoundedString(card.askSummary, AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH) &&
+    isDashboardContextPressure(card.contextPressure) &&
     isOptionalBoundedString(card.conversationName, MAX_LABEL_LENGTH) &&
     isDashboardTerminalInput(card.terminalInput)
   )

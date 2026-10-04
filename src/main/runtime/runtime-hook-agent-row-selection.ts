@@ -6,6 +6,7 @@ import {
   type ParsedAgentStatusPayload
 } from '../../shared/agent-status-types'
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
+import type { AgentContextUsage } from '../../shared/agent-context-pressure'
 import type { RuntimeTerminalAgentStatus } from '../../shared/runtime-types'
 import { mapExplicitAgentStateToRuntimeTerminalStatus } from './runtime-worktree-status-projection'
 
@@ -74,6 +75,7 @@ export function selectFreshExplicitAgentStatus(args: {
   status: NonNullable<RuntimeTerminalAgentStatus['status']>
   updatedAt: number
   stateStartedAt: number
+  contextUsage: AgentContextUsage | null | undefined
 } | null {
   const row = selectFreshExplicitAgentStatusRow({
     handles: [args.handle],
@@ -84,7 +86,9 @@ export function selectFreshExplicitAgentStatus(args: {
     ? {
         status: mapExplicitAgentStateToRuntimeTerminalStatus(row.state),
         updatedAt: row.receivedAt,
-        stateStartedAt: typeof row.stateStartedAt === 'number' ? row.stateStartedAt : row.receivedAt
+        stateStartedAt:
+          typeof row.stateStartedAt === 'number' ? row.stateStartedAt : row.receivedAt,
+        contextUsage: row.contextUsage
       }
     : null
 }

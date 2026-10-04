@@ -5,6 +5,7 @@ import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { Badge } from '@/components/ui/badge'
 import CacheTimer from './CacheTimer'
+import { ContextPressureIndicator } from '@/components/ContextPressureIndicator'
 import { WorktreeHostContextBadge } from './WorktreeHostContextBadge'
 import { CONFLICT_OPERATION_LABELS } from './WorktreeCardHelpers'
 import { TruncatedSidebarLabel } from './truncated-sidebar-label'
@@ -30,7 +31,8 @@ export function WorktreeCardMetaRow({
     detachedHeadDisplay,
     conflictOperation,
     cacheStartedAt,
-    cacheTtlMs
+    cacheTtlMs,
+    worktreeContextPressure
   } = card
   const {
     showRepoBadgeInMetaRow,
@@ -98,6 +100,19 @@ export function WorktreeCardMetaRow({
         )}
 
         {cacheStartedAt != null && <CacheTimer startedAt={cacheStartedAt} ttlMs={cacheTtlMs} />}
+
+        {worktreeContextPressure && (
+          <ContextPressureIndicator
+            level={worktreeContextPressure.level}
+            usedPercent={worktreeContextPressure.usedPercent}
+            usedTokens={worktreeContextPressure.usedTokens}
+            limitTokens={worktreeContextPressure.limitTokens}
+            limitSource={worktreeContextPressure.limitSource}
+            usedTokensSource={worktreeContextPressure.usedTokensSource}
+            size="sm"
+            tooltipSide="right"
+          />
+        )}
       </div>
 
       {showMetaRowDetails && (

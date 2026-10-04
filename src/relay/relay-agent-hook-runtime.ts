@@ -7,7 +7,8 @@ import { PluginOverlayManager } from './plugin-overlay'
 import { installOpenCodePluginInCanonicalConfig } from './opencode-canonical-config'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
-  AGENT_HOOK_REQUEST_REPLAY_METHOD
+  AGENT_HOOK_REQUEST_REPLAY_METHOD,
+  AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD
 } from '../shared/agent-hook-relay'
 import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
@@ -184,6 +185,17 @@ export class RelayAgentHookRuntime {
     this.dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => ({
       replayed: this.hookServer.replayCachedPayloadsForPanes()
     }))
+    const setContextPressure = (params: Record<string, unknown>): { enabled: boolean } => {
+      const enabled = params.enabled === true
+      this.hookServer.setContextPressureEnabled(enabled)
+      return { enabled }
+    }
+    this.dispatcher.onNotification(AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD, (params) => {
+      setContextPressure(params)
+    })
+    this.dispatcher.onRequest(AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD, async (params) =>
+      setContextPressure(params)
+    )
     registerManagedHookInstaller(this.dispatcher)
     this.dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => {
       const startupPrompt = params.opencodeStartupPromptSource

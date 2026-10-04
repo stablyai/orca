@@ -19,6 +19,10 @@ import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
 import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
 import { normalizeMachineName } from '../../../shared/machine-name'
+import {
+  normalizeContextPressureSoftLimits,
+  normalizeContextPressureThresholds
+} from '../../../shared/agent-context-pressure'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   addMobilePairingCustomAddress,
@@ -214,6 +218,21 @@ export function updateSettings(
         mobilePairingCustomAddress
       )
     }
+  }
+  if ('contextPressureWarnPercent' in updates || 'contextPressureCriticalPercent' in updates) {
+    const thresholds = normalizeContextPressureThresholds(
+      updates.contextPressureWarnPercent ?? operations.state.settings.contextPressureWarnPercent,
+      updates.contextPressureCriticalPercent ??
+        operations.state.settings.contextPressureCriticalPercent
+    )
+    sanitizedUpdates.contextPressureWarnPercent = thresholds.warnPercent
+    sanitizedUpdates.contextPressureCriticalPercent = thresholds.criticalPercent
+  }
+  if ('contextPressureSoftLimits' in updates) {
+    // Why: caps ride IPC from any client; keep the persisted record bounded and integer-valued.
+    sanitizedUpdates.contextPressureSoftLimits = normalizeContextPressureSoftLimits(
+      updates.contextPressureSoftLimits
+    )
   }
   const historyWithPreviousLayout = buildWorkspaceDirHistoryForUpdate(
     operations.state.settings,

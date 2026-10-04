@@ -1,4 +1,6 @@
 import { join } from 'node:path'
+import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
+import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
 import {
   getEndpointFileName,
   writeEndpointFile
@@ -8,6 +10,7 @@ import {
   ORCA_HOOK_RAW_JSON_TRANSPORT
 } from '../../../shared/agent-hook-types'
 import { AgentHookServerIngestRemote } from './server-ingest-remote'
+import type { EnrichedAgentHookEventPayload } from './server-types'
 
 export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRemote {
   buildPtyEnv(): Record<string, string> {
@@ -49,9 +52,45 @@ export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRem
       env: this.env,
       version: ORCA_HOOK_PROTOCOL_VERSION,
       openCodeTui: true,
-      transport: ORCA_HOOK_RAW_JSON_TRANSPORT
+      transport: ORCA_HOOK_RAW_JSON_TRANSPORT,
+      contextPressureEnabled: this.contextPressureEnabled
     })
     this.endpointFileWritten = ok
+  }
+
+  setContextPressureEnabled(enabled: boolean): void {
+    if (this.contextPressureEnabled === enabled) {
+      return
+    }
+    this.contextPressureEnabled = enabled
+    this.maybeWriteEndpointFile()
+    if (enabled) {
+      return
+    }
+    let changed = false
+    for (const entry of this.state.lastStatusByPaneKey.values()) {
+      // == null: rows already explicitly cleared need no re-emit/re-persist on toggle-off.
+      if (entry.providerSessionOnly || entry.payload.contextUsage == null) {
+        continue
+      }
+      const enriched = entry as EnrichedAgentHookEventPayload
+      const updated: EnrichedAgentHookEventPayload = {
+        ...enriched,
+        payload: { ...enriched.payload, contextUsage: null }
+      }
+      admitLegacyAgentStatus(
+        this.state,
+        'main-context-pressure-disable',
+        updated,
+        AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+      )
+      this.emitEnrichedStatus(updated)
+      changed = true
+    }
+    if (changed) {
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+    }
   }
 
   protected configureEndpointPaths(userDataPath: string, endpointNamespace?: string): void {

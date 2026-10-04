@@ -44,6 +44,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       state: entry.state,
       ...(entry.workingMode ? { workingMode: entry.workingMode } : {}),
       agentType: entry.agentType ?? null,
+      model: entry.model ?? null,
       prompt: entry.prompt,
       lastAssistantMessage: entry.lastAssistantMessage ?? null,
       toolName: entry.toolName ?? null,
@@ -53,6 +54,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       stateStartedAt: entry.stateStartedAt,
       // A replay advances delivery order, not the age of the evidence shown by worktree.ps.
       updatedAt: entry.evidenceObservedAt ?? entry.receivedAt,
+      contextUsage: entry.contextUsage,
       ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {})
     })
   }

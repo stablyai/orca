@@ -21,6 +21,8 @@ import {
   upsertCodexSubagent,
   type CodexSubagentRoster
 } from './codex-subagent-roster'
+import { readCodexRolloutContextUsage } from './codex-rollout-context-usage'
+import type { AgentContextUsage } from './agent-context-pressure'
 
 // Why: retire a child whose rollout stays unreadable this long, else a deleted/never-written file pins a phantom row forever.
 const CHILD_UNREADABLE_GRACE_MS = 60_000
@@ -46,6 +48,8 @@ export type CodexSubagentTranscriptState = {
   reviewersByPath: Map<string, CodexApprovalsReviewer>
   /** Who resolves this turn's approvals in the parent rollout. */
   approvalsReviewer?: CodexApprovalsReviewer
+  /** Latest token_count occupancy reading seen in the parent rollout. */
+  contextUsage?: AgentContextUsage
 }
 
 // Why: Codex files each rollout under its OWN local start date, so a session running past midnight spawns children into a sibling day directory.
@@ -215,6 +219,7 @@ export function reconcileCodexSubagentTranscript(
     state.reviewersByPath.clear()
     // Why: a different rollout is a different session, so its predecessor's reviewer is void.
     state.approvalsReviewer = undefined
+    state.contextUsage = undefined
   }
   const parentRecords = readJsonlCursor(state.parent, isCodexStatusTranscriptLine)
   changed ||=
@@ -227,6 +232,11 @@ export function reconcileCodexSubagentTranscript(
       ? undefined
       : (readApprovalsReviewer(parentRecords) ?? state.approvalsReviewer)
   for (const recordValue of parentRecords ?? []) {
+    const usage = readCodexRolloutContextUsage(recordValue)
+    if (usage) {
+      state.contextUsage = usage
+      continue
+    }
     const activity = readActivity(recordValue)
     if (!activity) {
       continue

@@ -80,6 +80,7 @@ function renderRow(
         searchHit={overrides.searchHit}
         subagentResume={overrides.subagentResume}
         liveState={null}
+        contextPressure={null}
         resumeStartup={{ command: 'gemini --resume sess-1' }}
         realHomeResumeStartup={{ command: 'gemini --resume sess-1' }}
         worktreeInfo={overrides.worktreeInfo ?? null}

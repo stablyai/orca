@@ -6,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
 import { hasWorktreeCardDetails } from './WorktreeCardMeta'
 import { usePromptCacheCountdownStartedAt } from './CacheTimer'
+import { useWorktreeContextPressure } from './context-pressure-selection'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import type { WorktreeCardProps } from './worktree-card-model'
 import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
@@ -241,6 +242,11 @@ export function useWorktreeCardSecondaryDetails({
   // Why: derived from the settings the card already subscribes to — a third store
   // subscription for this one field costs a listener per card on every store write.
   const cacheTtlMs = showAggregateCacheTimer ? (settings?.promptCacheTtlMs ?? 0) : 0
+  const showContextPressure = cardProps.includes('context-pressure')
+  // Worst-of context pressure across the worktree's live agents. Aggregate
+  // surface: warning/critical only (alertOnly), so an at-risk workspace stays
+  // visible even when its per-agent rows are collapsed or hidden.
+  const worktreeContextPressure = useWorktreeContextPressure(worktree.id, showContextPressure, true)
 
   return {
     showUnreadEmphasis,
@@ -270,6 +276,7 @@ export function useWorktreeCardSecondaryDetails({
     hasDetails,
     hasPorts,
     cacheStartedAt,
-    cacheTtlMs
+    cacheTtlMs,
+    worktreeContextPressure
   }
 }

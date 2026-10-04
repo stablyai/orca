@@ -44,6 +44,7 @@ function renderSession(session: AiVaultSession, blocked = false) {
         index={0}
         start={0}
         activeStickyHeaderIndex={null}
+        getSessionContextPressure={() => null}
         measureElement={vi.fn()}
         collapsedGroups={new Set()}
         expandedSessionIds={new Set()}

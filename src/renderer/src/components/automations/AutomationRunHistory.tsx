@@ -25,6 +25,7 @@ import {
   shouldHandleAutomationRunHistoryKey
 } from './automation-run-history-keyboard-navigation'
 import { translate } from '@/i18n/i18n'
+import { AutomationRunContextPressure } from './AutomationRunContextPressure'
 
 // Date line + workspace detail line inside the row padding; the occurrence line
 // is the only optional one, so the estimate can be exact without measuring.
@@ -357,7 +358,8 @@ export function AutomationRunHistory({
                             'n/a'
                           )}
                     </div>
-                    <div className="flex justify-start">
+                    <div className="flex items-center justify-start gap-1.5">
+                      <AutomationRunContextPressure paneKey={run.terminalPaneKey} />
                       <Badge variant={getAutomationRunStatusVariant(run.status)}>
                         {getAutomationRunStatusLabel(run.status)}
                       </Badge>

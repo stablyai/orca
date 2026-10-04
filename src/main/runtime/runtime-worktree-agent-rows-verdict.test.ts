@@ -124,6 +124,7 @@ function ingest(summary: AgentSessionStatusSummary, children: AgentChildWorkEvid
       hookSnapshots
     }),
     orchestrationByPaneKey: null,
+    contextPressureConfig: null,
     getSummary: (map, _p, _m, id) => map.get(id) ?? null
   })
   return { status: hookSnapshots[0], ps: row.agents[0] }

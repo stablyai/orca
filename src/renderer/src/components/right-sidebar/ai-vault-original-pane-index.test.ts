@@ -4,6 +4,7 @@ import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import {
   buildAiVaultOriginalPaneIndex,
   createLazyAiVaultOriginalPaneIndex,
+  findAiVaultSessionLiveEntryInIndex,
   findAiVaultSessionLiveStateInIndex,
   findOriginalAiVaultSessionPaneInIndex
 } from './ai-vault-original-pane-index'
@@ -250,5 +251,58 @@ describe('AI Vault original-pane index', () => {
         findAiVaultSessionLiveState(state, session)
       )
     }
+  })
+
+  it('returns a live entry only on an unambiguous match, while the state chip takes the first', () => {
+    const liveEntry = (paneKey: string, tabId: string): AgentStatusEntry => ({
+      state: 'working',
+      prompt: 'Target session work',
+      updatedAt: 1,
+      stateStartedAt: 1,
+      agentType: 'codex',
+      paneKey,
+      tabId,
+      worktreeId: 'wt-1',
+      stateHistory: [],
+      providerSession: { key: 'session_id', id: 'target-session' },
+      contextUsage: { usedTokens: 150_000, maxTokens: 200_000 }
+    })
+    const baseState = {
+      retainedAgentsByPaneKey: {},
+      sleepingAgentSessionsByPaneKey: {},
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    }
+    const one = buildAiVaultOriginalPaneIndex({
+      ...baseState,
+      agentStatusByPaneKey: {
+        'tab-a:11111111-1111-4111-8111-111111111111': liveEntry(
+          'tab-a:11111111-1111-4111-8111-111111111111',
+          'tab-a'
+        )
+      }
+    } as never)
+    expect(findAiVaultSessionLiveEntryInIndex(one, SESSION)?.contextUsage).toEqual({
+      usedTokens: 150_000,
+      maxTokens: 200_000
+    })
+
+    // Same provider session live in two panes: a reading belongs to ONE pane, so the
+    // pressure lookup resolves ambiguity to null while the state chip keeps first-match.
+    const two = buildAiVaultOriginalPaneIndex({
+      ...baseState,
+      agentStatusByPaneKey: {
+        'tab-a:11111111-1111-4111-8111-111111111111': liveEntry(
+          'tab-a:11111111-1111-4111-8111-111111111111',
+          'tab-a'
+        ),
+        'tab-b:22222222-2222-4222-8222-222222222222': liveEntry(
+          'tab-b:22222222-2222-4222-8222-222222222222',
+          'tab-b'
+        )
+      }
+    } as never)
+    expect(findAiVaultSessionLiveEntryInIndex(two, SESSION)).toBeNull()
+    expect(findAiVaultSessionLiveStateInIndex(two, SESSION)).toBe('working')
   })
 })

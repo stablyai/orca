@@ -187,3 +187,20 @@ export function findAiVaultSessionLiveStateInIndex(
   }
   return promptMatchedStates.length === 1 ? promptMatchedStates[0] : null
 }
+
+/** Stricter than the state lookup above on purpose: state is roughly interchangeable
+ *  across panes sharing a provider session, but a context reading belongs to ONE pane —
+ *  showing another pane's occupancy would be wrong, so ambiguity resolves to null. */
+export function findAiVaultSessionLiveEntryInIndex(
+  index: AiVaultOriginalPaneIndex,
+  session: AiVaultSession
+): LiveEntry | null {
+  const direct = index.liveByProvider.get(providerKey(session.agent, session.sessionId))
+  if (direct?.length === 1) {
+    return direct[0]
+  }
+  const promptMatched = (index.liveWithoutProviderByAgent.get(session.agent) ?? []).filter(
+    (entry) => promptsMatchSession(session, entry)
+  )
+  return promptMatched.length === 1 ? promptMatched[0] : null
+}

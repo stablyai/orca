@@ -100,6 +100,12 @@ export type RuntimeStore = {
     githubProjects?: GlobalSettings['githubProjects']
     experimentalNewWorktreeCardStyle?: GlobalSettings['experimentalNewWorktreeCardStyle']
     compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
+    // Why: worktree.ps computes each mobile agent row's context pressure
+    // host-side, so the gate and thresholds never need to cross to clients.
+    experimentalContextPressure?: GlobalSettings['experimentalContextPressure']
+    contextPressureWarnPercent?: GlobalSettings['contextPressureWarnPercent']
+    contextPressureCriticalPercent?: GlobalSettings['contextPressureCriticalPercent']
+    contextPressureSoftLimits?: GlobalSettings['contextPressureSoftLimits']
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
     minimaxEndpoint?: GlobalSettings['minimaxEndpoint']

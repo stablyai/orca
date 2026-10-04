@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
+import { getContextPressureSearchEntry } from './context-pressure-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
@@ -180,6 +181,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ]
     },
     getNewWorktreeCardStyleSearchEntry(),
+    getContextPressureSearchEntry(),
     getEphemeralVmsSearchEntry()
   ]
 )
@@ -220,6 +222,12 @@ export function getExperimentalSearchEntry() {
       translate(
         'auto.components.settings.experimental.search.newWorktreeCardStyle.title',
         'New card style'
+      )
+    ),
+    contextPressure: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.contextPressure.title',
+        'Context pressure'
       )
     ),
     ephemeralVms: findEntry(

@@ -135,7 +135,7 @@ describe('a relayed Claude cancel with a live subagent (captured)', () => {
 
     // The child's tool activity after the cancel: the relay's record still has the main agent working.
     const childTool = hookAt(records, 9)
-    expect(childTool.payload.agent_id).toBeDefined()
+    expect(childTool.payload?.agent_id).toBeDefined()
     await pane.post(childTool.payload)
     expect(row(pane.desktop)).toMatchObject({
       state: 'working',

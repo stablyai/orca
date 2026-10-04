@@ -37,6 +37,7 @@ import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD,
+  AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD,
   isRemoteAgentHooksEnabled
 } from '../../shared/agent-hook-relay'
 import { AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES } from '../../shared/agent-status-legacy-adapter'
@@ -386,6 +387,7 @@ export class SshRelaySession {
   private readonly ptyConsumerClientInstanceId: string
   private ptyConsumerSessionState: SshPtyConsumerSessionState | null = null
   private activeCompatibilityAttachmentIds = new Set<string>()
+  private settingsCleanup: (() => void) | null = null
 
   constructor(
     readonly targetId: string,
@@ -400,6 +402,7 @@ export class SshRelaySession {
     ) => void
   ) {
     this.ptyConsumerClientInstanceId = claimSshPtyConsumerRecovery(targetId, store).clientInstanceId
+    this.bindContextPressureSettings()
   }
 
   refreshEnvironment(
@@ -409,11 +412,38 @@ export class SshRelaySession {
     runtime?: OrcaRuntimeService,
     onDetectedPortsChanged?: (targetId: string, ports: DetectedPort[], platform: string) => void
   ): void {
+    if (this.store !== store) {
+      this.settingsCleanup?.()
+      this.settingsCleanup = null
+    }
     this.getMainWindow = getMainWindow
     this.store = store
     this.portForwardManager = portForwardManager
     this.runtime = runtime
     this.onDetectedPortsChanged = onDetectedPortsChanged
+    this.bindContextPressureSettings()
+  }
+
+  private bindContextPressureSettings(): void {
+    if (this.settingsCleanup) {
+      return
+    }
+    const store = this.store as Partial<Pick<Store, 'getSettings' | 'onSettingsChanged'>>
+    this.settingsCleanup =
+      store.onSettingsChanged?.((updates, settings) => {
+        if ('experimentalContextPressure' in updates) {
+          this.sendContextPressureSetting(settings.experimentalContextPressure === true)
+        }
+      }) ?? null
+  }
+
+  private sendContextPressureSetting(enabled: boolean): void {
+    this.mux?.notify(AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD, { enabled })
+  }
+
+  private contextPressureSettingEnabled(): boolean {
+    const store = this.store as Partial<Pick<Store, 'getSettings'>>
+    return store.getSettings?.().experimentalContextPressure === true
   }
 
   setOnRelayLost(cb: (targetId: string) => void): void {
@@ -923,6 +953,8 @@ export class SshRelaySession {
     // a half-torn session; only the durability barriers below are deferred onto the returned promise.
     this.releaseRelayLossWatcher()
     this.abortController?.abort()
+    this.settingsCleanup?.()
+    this.settingsCleanup = null
     this.stopPortScanning()
     this.broadcastEmptyLists()
     this.teardownProviders('shutdown')
@@ -1000,6 +1032,8 @@ export class SshRelaySession {
     detachSshPtyConsumerRecovery(this.targetId, this.ptyConsumerClientInstanceId)
     this.releaseRelayLossWatcher()
     this.abortController?.abort()
+    this.settingsCleanup?.()
+    this.settingsCleanup = null
     this.stopPortScanning()
     this.broadcastEmptyLists()
     this.teardownProviders('connection_lost')
@@ -1020,6 +1054,8 @@ export class SshRelaySession {
       detachSshPtyConsumerRecovery(this.targetId, this.ptyConsumerClientInstanceId)
       this.releaseRelayLossWatcher()
       this.abortController?.abort()
+      this.settingsCleanup?.()
+      this.settingsCleanup = null
       this.stopPortScanning()
       this.broadcastEmptyLists()
       // Why: disconnect keeps PTY ownership so a later manual connect can reattach.
@@ -1152,6 +1188,7 @@ export class SshRelaySession {
     shouldContinue: (() => boolean) | undefined,
     connectionIncarnation: string
   ): Promise<boolean> {
+    this.sendContextPressureSetting(this.contextPressureSettingEnabled())
     await this.registerRelayRoots(mux)
     if (shouldContinue && !shouldContinue()) {
       return false
@@ -1760,7 +1797,9 @@ export class SshRelaySession {
           advertisedAgentStatusCapabilities: AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES,
           evidenceAgeMs: envelope.evidenceAgeMs,
           statusUnavailable: envelope.statusUnavailable,
-          payload: envelope.payload
+          payload: envelope.payload,
+          contextUsage: envelope.contextUsage,
+          contextSessionId: envelope.contextSessionId
         },
         this.targetId
       )

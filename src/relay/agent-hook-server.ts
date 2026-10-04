@@ -18,28 +18,26 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 
 import {
-  ORCA_HOOK_PROTOCOL_VERSION,
-  ORCA_HOOK_RAW_JSON_TRANSPORT
-} from '../shared/agent-hook-types'
-import {
   clearAllListenerCaches,
   clearPaneCacheState,
   createHookListenerState,
   type HookListenerState
 } from '../shared/agent-hook-listener/listener-state'
 import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
-import {
-  getEndpointFileName,
-  writeEndpointFile
-} from '../shared/agent-hook-listener/endpoint-publication'
+import { getEndpointFileName } from '../shared/agent-hook-listener/endpoint-publication'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import {
   createHookTransportInterferenceTracker,
   describeHookTransportInterference
 } from '../shared/agent-hook-transport-interference'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from '../shared/agent-hook-relay'
+import { RelayContextPressure } from './agent-hook-context-pressure'
 import type { SpoolRecord } from '../shared/agent-hook-spool'
-import { buildRelayHookPtyEnv, defaultEndpointDir } from './agent-hook-endpoint-coordinates'
+import {
+  buildRelayHookPtyEnv,
+  defaultEndpointDir,
+  writeRelayHookEndpointFile
+} from './agent-hook-endpoint-coordinates'
 import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
 import { drainRelayHookSpool, ingestRelayHookSpoolRecord } from './agent-hook-spool-ingest'
 import { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
@@ -53,6 +51,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   private endpointDir: string
   private endpointFilePath: string
   private endpointFileWritten = false
+  readonly contextPressure = new RelayContextPressure()
   private state: HookListenerState = createHookListenerState()
   private transportInterference = createHookTransportInterferenceTracker((report) => {
     process.stderr.write(`${describeHookTransportInterference(report)}\n`)
@@ -158,19 +157,19 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   }
 
   publishEndpointFile(): boolean {
-    if (this.port <= 0 || !this.token) {
-      this.endpointFileWritten = false
-      return false
-    }
-    this.endpointFileWritten = writeEndpointFile(this.endpointDir, this.endpointFilePath, {
+    this.endpointFileWritten = writeRelayHookEndpointFile({
+      endpointDir: this.endpointDir,
+      endpointFilePath: this.endpointFilePath,
       port: this.port,
       token: this.token,
       env: this.env,
-      version: ORCA_HOOK_PROTOCOL_VERSION,
-      openCodeTui: true,
-      transport: ORCA_HOOK_RAW_JSON_TRANSPORT
+      contextPressureEnabled: this.contextPressure.isEnabled
     })
     return this.endpointFileWritten
+  }
+
+  setContextPressureEnabled(enabled: boolean): void {
+    this.contextPressure.setEnabled(enabled, () => this.publishEndpointFile())
   }
 
   stop(): void {
@@ -257,7 +256,9 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       applyEvent: (event, source, env, version) => this.applyEvent(event, source, env, version),
       ingestTmuxHook: (source, body) => this.ingestCanonicalTmuxHook(source, body, this.env),
       retryScheduler: this.retryScheduler,
-      transportInterference: this.transportInterference
+      transportInterference: this.transportInterference,
+      handleClaudeStatusline: (body) =>
+        this.contextPressure.handleClaudeStatusline(body, this.forward)
     })
   }
 

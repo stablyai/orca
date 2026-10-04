@@ -5,6 +5,7 @@ import {
   type AgentHookUnavailableEnvelope,
   type AgentHookRelayEnvelope
 } from '../shared/agent-hook-relay'
+import type { ParsedAgentStatusPayload } from '../shared/agent-status-types'
 import type { RelayDispatcher } from './dispatcher'
 
 // Why: shed the biggest, most reconstructible fields first — state/paneKey must survive or the pane
@@ -37,6 +38,7 @@ type RedeliveryState = {
 }
 
 const redeliveryByDispatcher = new WeakMap<RelayDispatcher, RedeliveryState>()
+type StatusPayloadEnvelope = AgentHookRelayEnvelope & { payload: ParsedAgentStatusPayload }
 // Why: some agents submit option labels verbatim, so only presentation-only fields may shrink.
 const COMPACTABLE_INTERACTIVE_PROMPT_FIELDS = new Set([
   'description',
@@ -79,9 +81,9 @@ function compactInteractivePromptValue(value: unknown, maxStringLength: number):
 
 function fitWaitingInteractivePrompt(
   dispatcher: RelayDispatcher,
-  envelope: AgentHookRelayEnvelope,
+  envelope: StatusPayloadEnvelope,
   shedFields: readonly string[]
-): AgentHookRelayEnvelope | null {
+): StatusPayloadEnvelope | null {
   const prompt = envelope.payload.interactivePrompt
   if (!prompt) {
     return null
@@ -98,7 +100,7 @@ function fitWaitingInteractivePrompt(
       : JSON.stringify(compactInteractivePromptValue(parsed, limit))
   let low = 1
   let high = prompt.length
-  let fitted: AgentHookRelayEnvelope | null = null
+  let fitted: StatusPayloadEnvelope | null = null
   while (low <= high) {
     const mid = Math.floor((low + high) / 2)
     const candidate = {
@@ -163,7 +165,7 @@ export function publishAgentHookEnvelope(
   if (clientIds.length === 0) {
     return
   }
-  if (envelope.payload === null) {
+  if (envelope.payload === null || envelope.payload === undefined) {
     const params = { ...envelope }
     if (!fitsProducerFrame(dispatcher, params)) {
       clearPendingEnvelope(dispatcher, envelope.paneKey)
@@ -182,7 +184,7 @@ export function publishAgentHookEnvelope(
   // frame a smaller later client forces us to shed. A single sink writes nothing when it rejects,
   // so there the attempt itself is the measurement — one encode instead of a probe plus a publish.
   const measureBeforePublish = clientIds.length > 1
-  let candidate = envelope
+  let candidate: StatusPayloadEnvelope = { ...envelope, payload: envelope.payload }
   const shedFields: string[] = []
   let step = 0
   for (;;) {

@@ -1,4 +1,9 @@
 import type { AgentStatusState, AgentType, AgentWorkingMode } from './agent-status-types'
+import type {
+  AgentContextUsage,
+  ContextPressureLevel,
+  ContextPressureLimitSource
+} from './agent-context-pressure'
 import type { AgentMainAgentStatus } from './main-agent-status'
 import type { BaseRefSearchResult, Repo } from './repo-types'
 import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
@@ -9,6 +14,16 @@ import type {
 } from './worktree/lineage-types'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { GitWorktreeInfo, Worktree } from './worktree/types'
+
+/** Context pressure for one agent row; absent when disabled or unknown. */
+export type RuntimeWorktreeAgentContextPressure = {
+  level: ContextPressureLevel
+  usedPercent: number
+  usedTokens?: number
+  limitTokens?: number
+  limitSource?: ContextPressureLimitSource
+  usedTokensSource?: AgentContextUsage['usedTokensSource']
+}
 
 export type RuntimeWorktreeAgentRow = {
   paneKey: string
@@ -29,6 +44,8 @@ export type RuntimeWorktreeAgentRow = {
   mainAgent?: AgentMainAgentStatus
   stateStartedAt: number
   updatedAt: number
+  /** See RuntimeWorktreeAgentContextPressure — absent means "show nothing". */
+  contextPressure?: RuntimeWorktreeAgentContextPressure
   restoredUnconfirmed?: boolean
   /** The structured session host still runs this row's provider child, so it is fresh regardless
    *  of age. Optional on the wire: old hosts never send it. */

@@ -7,6 +7,7 @@ import {
 } from '../../shared/agent-detection'
 import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
 import type { RuntimeTerminalAgentStatus } from '../../shared/runtime-types'
+import type { AgentContextUsage } from '../../shared/agent-context-pressure'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import {
@@ -35,9 +36,11 @@ type Dependencies = {
   getLiveLeaf(handle: string): { leaf: RuntimeLeafRecord }
   getPrimaryLeaf(ptyId: string): RuntimeLeafRecord | null
   getTabTitle(tabId: string): string | null
-  getExplicitStatus(
-    handle: string
-  ): { status: NonNullable<RuntimeTerminalAgentStatus['status']>; updatedAt: number } | null
+  getExplicitStatus(handle: string): {
+    status: NonNullable<RuntimeTerminalAgentStatus['status']>
+    updatedAt: number
+    contextUsage?: AgentContextUsage | null
+  } | null
   getLifecycleStatus(
     ptyId: string
   ): { status: AgentStatus | null; updatedAt: number } | null | undefined
@@ -112,7 +115,11 @@ export class RuntimeTerminalAgentStatusQuery {
       return {
         handle,
         isRunningAgent,
-        status: isRunningAgent ? explicitStatus.status : null
+        status: isRunningAgent ? explicitStatus.status : null,
+        // Why: a reclaimed shell isn't running the reporting agent — its reading no longer applies.
+        ...(isRunningAgent && explicitStatus.contextUsage != null
+          ? { contextUsage: explicitStatus.contextUsage }
+          : {})
       }
     }
     if (terminal.titleStatus) {

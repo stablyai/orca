@@ -25,12 +25,15 @@ import {
   SessionMetadata
 } from './ai-vault-session-row-display'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { ContextPressureSnapshot } from '../../../../shared/agent-context-pressure'
+import { ContextPressureIndicator } from '@/components/ContextPressureIndicator'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import { AiVaultSearchEvidence } from './AiVaultSearchEvidence'
 
 export function VaultSessionRow({
   session,
   liveState,
+  contextPressure,
   resumeStartup,
   realHomeResumeStartup,
   worktreeInfo,
@@ -61,6 +64,7 @@ export function VaultSessionRow({
 }: {
   session: AiVaultSession
   liveState: AgentStatusState | null
+  contextPressure: ContextPressureSnapshot | null
   resumeStartup: AiVaultResumeStartup
   realHomeResumeStartup: AiVaultResumeStartup
   worktreeInfo: AiVaultSessionWorktreeInfo | null
@@ -156,7 +160,7 @@ export function VaultSessionRow({
             onToggleDetails()
           }}
         >
-          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-1">
             <div
               className={cn(
                 'min-w-0 text-[13px] font-medium leading-5 text-foreground',
@@ -206,6 +210,17 @@ export function VaultSessionRow({
               deleteBlockedReason={deleteBlockedReason}
               onRequestDelete={requestDelete}
             />
+            {contextPressure ? (
+              <ContextPressureIndicator
+                level={contextPressure.level}
+                usedPercent={contextPressure.usedPercent}
+                usedTokens={contextPressure.usedTokens}
+                limitTokens={contextPressure.limitTokens}
+                limitSource={contextPressure.limitSource}
+                usedTokensSource={contextPressure.usedTokensSource}
+                tooltipSide="bottom"
+              />
+            ) : null}
           </div>
           {searchHit ? <AiVaultSearchEvidence hit={searchHit} /> : null}
           {!detailsExpanded && !searchHit ? (

@@ -17,6 +17,7 @@ import {
   transcriptPollUpdate
 } from '../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../shared/agent-transcript-poll-scheduler'
+import { agentContextUsageEqual } from '../shared/agent-context-pressure'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
@@ -124,9 +125,13 @@ export class AgentHookResultRetryScheduler {
       return
     }
     const update = transcriptPollUpdate(source, original, event)
-    const next = update ?? original
-    if (update) {
-      this.host.applyEvent(update, source, env, version)
+    // Why: the poll's rollout re-read can surface a fresh token_count between hook events.
+    const contextChanged =
+      event.payload.contextUsage !== undefined &&
+      !agentContextUsageEqual(event.payload.contextUsage, original.payload.contextUsage)
+    const next = update ?? (contextChanged ? event : original)
+    if (next !== original) {
+      this.host.applyEvent(next, source, env, version)
     }
     this.scheduleTranscriptPoll(source, body, next, env, version)
   }

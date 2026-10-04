@@ -36,6 +36,8 @@ function serializeAgentStatusEntry(
     lastAssistantMessage: entry.lastAssistantMessage ?? null,
     lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
     interrupted: entry.interrupted ?? null,
+    // Why: context-pressure readings arrive on otherwise-unchanged entries; without this the mobile republish never fires.
+    contextUsage: entry.contextUsage ?? null,
     // A failure changes the verdict and leaves `interrupted` as it was.
     mainAgent: mainAgentKey(entry.mainAgent)
   })

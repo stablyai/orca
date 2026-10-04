@@ -778,10 +778,13 @@ describe('ClaudeHookService.installRemote', () => {
     expect(script).toContain('--data-binary @-')
     expect(script).toContain('--data-urlencode "payload@-"')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/claude-hook.sh')).toBe(0o755)
-    // Why: no remote statusLine — this path serves SSH remotes and WSL guests, whose relay
-    // listener doesn't route /statusline/claude and whose accounts aren't attributable locally.
-    expect(parsed.statusLine).toBeUndefined()
-    expect(fs.files.get('/home/dev/.orca/agent-hooks/claude-statusline.sh')).toBeUndefined()
+    // Remote commands stay HOME-relative, like the managed hook command above.
+    const statusLineCmd = parsed.statusLine.command as string
+    expect(statusLineCmd).toContain('"${HOME-}/.orca/agent-hooks/claude-statusline.sh"')
+    expect(statusLineCmd).not.toContain('/home/dev/.orca/agent-hooks/claude-statusline.sh')
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/claude-statusline.sh')).toContain(
+      '/statusline/claude'
+    )
   })
 
   it('writes only the events the remote Claude knows, adding newer ones once it upgrades', async () => {

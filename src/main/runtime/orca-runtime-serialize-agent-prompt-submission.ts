@@ -13,6 +13,7 @@ import type {
   AgentPromptWaitTextCache
 } from './agent-prompt-submission-verification'
 import { readAgentPromptWaitText } from './agent-prompt-submission-verification'
+import type { AgentContextUsage } from '../../shared/agent-context-pressure'
 import type { AgentStatus } from '../../shared/agent-detection'
 
 export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWithControllerKnowsPtyIsLive {
@@ -248,6 +249,7 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     status: NonNullable<RuntimeTerminalAgentStatus['status']>
     updatedAt: number
     stateStartedAt: number
+    contextUsage: AgentContextUsage | null | undefined
   } | null {
     return selectFreshExplicitAgentStatus({
       handle,

@@ -574,7 +574,8 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
     for (const [agent, script] of scripts) {
       const captureIndex = Math.max(
         script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`),
-        script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
+        script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`),
+        script.indexOf('payload=\nwhile IFS= read -r orca_statusline_line')
       )
       const firstExitIndex = script.indexOf('exit 0')
       expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)

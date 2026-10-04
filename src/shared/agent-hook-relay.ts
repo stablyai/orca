@@ -26,6 +26,7 @@ import type { AgentProcessPresence } from './agent-process-presence'
 import { createHash } from 'node:crypto'
 
 import type { AgentSubagentSnapshot, ParsedAgentStatusPayload } from './agent-status-types'
+import type { AgentContextUsage } from './agent-context-pressure'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { AgentHookTarget } from './agent-hook-types'
 
@@ -125,9 +126,13 @@ export type AgentHookRelayEnvelope = {
    *  protocol-version diagnostic fire on remote events the same as on local. */
   version?: string
   /** Pre-normalized status payload from the relay's `normalizeHookPayload`.
-   *  Orca's `ingestRemote` validates it again at the SSH trust boundary. */
+   *  Orca's `ingestRemote` validates it again at the SSH trust boundary.
+   *  Absent on context-only readings (`contextUsage` envelopes). */
   evidenceAgeMs?: number
-  payload: ParsedAgentStatusPayload
+  payload?: ParsedAgentStatusPayload
+  /** Normalized context-only reading from a remote statusline. */
+  contextUsage?: AgentContextUsage | null
+  contextSessionId?: string
 }
 
 /** Older clients ignore the null payload; newer clients clear only the selected projection. */
@@ -235,6 +240,9 @@ export const AGENT_HOOK_INSTALL_PLUGINS_METHOD = 'agent_hook.installPlugins' as 
 /** JSON-RPC request method that asks the remote relay to install every
  *  managed hook using its local filesystem instead of WAN-bound SFTP. */
 export const AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD = 'agent_hook.installManagedHooks' as const
+
+/** Updates the relay endpoint flag sourced by managed Claude statusline scripts. */
+export const AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD = 'agent_hook.setContextPressure' as const
 
 export type AgentHookInstallManagedHooksParams = {
   /** SHA-256 fingerprint of the server key negotiated by Orca's SSH transport. */

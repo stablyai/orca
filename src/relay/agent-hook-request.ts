@@ -12,6 +12,7 @@ import type { AgentHookSource } from '../shared/agent-hook-relay'
 import type { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
 import { hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
 import { bindOpenCodeTuiSession } from '../shared/agent-hook-listener/opencode-session-registry'
+import { CLAUDE_STATUSLINE_PATHNAME } from '../shared/claude-statusline-rate-limits'
 
 export async function handleRelayHookRequest(
   req: IncomingMessage,
@@ -31,6 +32,8 @@ export async function handleRelayHookRequest(
     ingestTmuxHook?: (source: AgentHookSource, body: unknown) => Promise<boolean>
     retryScheduler: AgentHookResultRetryScheduler
     transportInterference: ReturnType<typeof createHookTransportInterferenceTracker>
+    /** Statusline posts carry no agent status; the host decides what a reading forwards. */
+    handleClaudeStatusline?: (body: unknown) => void
   }
 ): Promise<void> {
   if (req.method !== 'POST') {
@@ -51,6 +54,12 @@ export async function handleRelayHookRequest(
   })
   try {
     const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
+    if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
+      options.handleClaudeStatusline?.(await readRequestBody(req))
+      res.writeHead(204)
+      res.end()
+      return
+    }
     const source = resolveHookSource(pathname)
     if (!source) {
       res.writeHead(404)

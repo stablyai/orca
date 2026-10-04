@@ -1,4 +1,5 @@
 import type { AppState } from '../types'
+import { agentContextUsageEqual } from '../../../../shared/agent-context-pressure'
 import { resolveAgentStatusLiveEntryMainAgent } from './agent-status-live-entry-main-agent'
 import { resolveAgentStatusLiveEntryStateHistory } from './agent-status-live-entry-state-history'
 import type {
@@ -196,6 +197,16 @@ export function buildAgentStatusLiveEntry(
       : undefined) ??
     matchedRegistryLaunchConfig ??
     matchedSleepingLaunchConfig
+  // Why: most hook pings omit contextUsage ("no update") — cache the last reading across
+  // the turn like `model`; an explicit null clears it. Reuse the prior ref when equal so
+  // identity-comparing subscribers skip re-renders on repeat readings.
+  const previousContextUsage =
+    canReuseExistingProviderSession && !providerSessionChanged ? existing?.contextUsage : undefined
+  const contextUsage =
+    payload.contextUsage === undefined ||
+    agentContextUsageEqual(previousContextUsage, payload.contextUsage)
+      ? previousContextUsage
+      : payload.contextUsage
   const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
   const entry: AgentStatusEntry = {
     state: payload.state,
@@ -247,6 +258,7 @@ export function buildAgentStatusLiveEntry(
       ? { terminalResumeEligible: false as const }
       : {}),
     ...(promptInteractionKey ? { promptInteractionKey } : {}),
+    contextUsage,
     ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     acceptedStatusSeq: (existing?.acceptedStatusSeq ?? 0) + 1,
     ...(payload.observation ? { observation: payload.observation } : {}),

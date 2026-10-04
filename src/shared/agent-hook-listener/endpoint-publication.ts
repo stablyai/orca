@@ -23,6 +23,7 @@ export type EndpointFileFields = {
   version: string
   transport?: string
   openCodeTui?: boolean
+  contextPressureEnabled?: boolean
 }
 
 /** Atomically write the endpoint file at `endpointDir/<getEndpointFileName()>`.
@@ -46,6 +47,9 @@ export function writeEndpointFile(
   }
   if (fields.openCodeTui) {
     valuesToWrite.push(['ORCA_AGENT_HOOK_OPENCODE_TUI', '1'])
+  }
+  if (fields.contextPressureEnabled !== undefined) {
+    valuesToWrite.push(['ORCA_CONTEXT_PRESSURE_ENABLED', fields.contextPressureEnabled ? '1' : '0'])
   }
   for (const [key, value] of valuesToWrite) {
     if (!isShellSafeEndpointValue(value)) {

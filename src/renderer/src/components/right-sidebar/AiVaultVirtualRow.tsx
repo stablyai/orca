@@ -1,4 +1,5 @@
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { ContextPressureSnapshot } from '../../../../shared/agent-context-pressure'
 import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
@@ -44,6 +45,7 @@ export function AiVaultVirtualRow({
   getOriginalPaneTarget,
   isStructuredSessionOpen,
   getSessionLiveState,
+  getSessionContextPressure,
   getWorktreeInfo,
   getSessionResumeState,
   getSessionResumeActions,
@@ -76,6 +78,7 @@ export function AiVaultVirtualRow({
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
   isStructuredSessionOpen: (session: AiVaultSession) => boolean
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
+  getSessionContextPressure: (session: AiVaultSession) => ContextPressureSnapshot | null
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
@@ -173,6 +176,7 @@ export function AiVaultVirtualRow({
           session={row.session}
           searchHit={searchHit}
           liveState={getSessionLiveState(row.session)}
+          contextPressure={getSessionContextPressure(row.session)}
           resumeStartup={resumeStartup}
           realHomeResumeStartup={
             canBuildResumeStartup

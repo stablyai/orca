@@ -33,6 +33,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     conflictOperation,
     cardProps,
     cacheStartedAt,
+    worktreeContextPressure,
     hasDetails,
     hasPorts,
     showStatus,
@@ -104,10 +105,11 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     showDetachedHeadInMetaRow ||
     showConflictOperationBadge ||
     cacheStartedAt != null ||
+    worktreeContextPressure != null ||
     showMetaRowDetails
   )
   const hasMetaRow = compactCards
-    ? hasMetadataBadge || cacheStartedAt != null
+    ? hasMetadataBadge || cacheStartedAt != null || worktreeContextPressure != null
     : hasDetailedMetaRowContent
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
   // Why: normalize the title once so title/branch de-dupe and identity-only hover eligibility stay in sync.

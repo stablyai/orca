@@ -21,7 +21,8 @@ import { FAILURE_COOLDOWN_BASE_MS, type WslHookRelayManagerDeps } from './wsl-ho
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
-  AGENT_HOOK_REQUEST_REPLAY_METHOD
+  AGENT_HOOK_REQUEST_REPLAY_METHOD,
+  AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD
 } from '../../shared/agent-hook-relay'
 
 type GuestHarness = {
@@ -153,9 +154,11 @@ describe('WslHookRelayManager', () => {
   const opencodeOverlayDir = `${home}/.orca-relay/opencode-overlays/deadbeefcafe`
   const opencode2OverlayDir = `${home}/.orca-relay/opencode2-overlays/deadbeefcafe`
   let harnesses: GuestHarness[]
+  let contextPressureSettings: boolean[]
 
   beforeEach(() => {
     harnesses = []
+    contextPressureSettings = []
   })
 
   afterEach(() => {
@@ -199,6 +202,9 @@ describe('WslHookRelayManager', () => {
       agents: detectedAgents,
       ...(claudeVersion ? { versions: { claude: claudeVersion } } : {})
     }))
+    harness.guestDispatcher.onNotification(AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD, (params) => {
+      contextPressureSettings.push(params.enabled === true)
+    })
     // A guest bundle predating the plugin overlay omits this handler (-32601).
     if (registerInstallPlugins) {
       harness.guestDispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async () => ({
@@ -264,6 +270,9 @@ describe('WslHookRelayManager', () => {
     manager.ensureForDistro('Ubuntu', codexHome)
     manager.ensureForDistro('Ubuntu', codexHome)
     await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(contextPressureSettings).toEqual([false]))
+    manager.setContextPressureEnabled(true)
+    await vi.waitFor(() => expect(contextPressureSettings).toEqual([false, true]))
     expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
     expect(deps.installCodex).toHaveBeenCalledWith(codexHome, 'Ubuntu')
     // Codex is owned by the canonical runtime-host writer, not the relay adapter.

@@ -368,6 +368,7 @@ export default function AiVaultPanel(): React.JSX.Element {
             getOriginalPaneTarget={paneActions.getOriginalPaneTarget}
             isStructuredSessionOpen={paneActions.isStructuredSessionOpen}
             getSessionLiveState={paneActions.getSessionLiveState}
+            getSessionContextPressure={paneActions.getSessionContextPressure}
             getWorktreeInfo={getSessionWorktreeInfo}
             onToggleGroup={toggleGroup}
             onJumpToOriginalPane={paneActions.jumpToOriginalPane}
