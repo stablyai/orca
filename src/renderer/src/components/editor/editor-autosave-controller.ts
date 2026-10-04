@@ -78,7 +78,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
 
       const content = store.getState().editorDrafts[file.id] ?? detail.fallbackContent
       if (content === undefined) {
-        detail.resolve()
+        detail.reject('No editor content is available to restore this file.')
         return
       }
 

@@ -15764,6 +15764,11 @@
           "a0af0198aa": "Large diffs are not rendered by default.",
           "c3d9f4a712": "This diff's size isn't known yet, so it loads on request.",
           "f7fa7a40d0": "Load diff"
+        },
+        "MissingEditorFileBanner": {
+          "78159b1fa5": "This file was moved or deleted on disk. Your unsaved edits are preserved and will not be saved automatically.",
+          "47ab026ad5": "Restoring…",
+          "0c5e9c04dc": "Restore File"
         }
       },
       "diff": {

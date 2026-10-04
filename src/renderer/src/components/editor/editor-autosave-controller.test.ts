@@ -788,4 +788,40 @@ describe('attachEditorAutosaveController', () => {
       cleanup()
     }
   })
+
+  it('rejects a direct save when no draft or fallback content is available', async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        fs: {
+          writeFile
+        }
+      }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/missing.md',
+      relativePath: 'missing.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      await expect(requestEditorFileSave({ fileId: '/repo/missing.md' })).rejects.toThrow(
+        'No editor content is available to restore this file.'
+      )
+      expect(writeFile).not.toHaveBeenCalled()
+    } finally {
+      cleanup()
+    }
+  })
 })
