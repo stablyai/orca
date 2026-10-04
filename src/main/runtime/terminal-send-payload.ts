@@ -4,6 +4,7 @@ import {
 } from '../../shared/terminal-input'
 import { terminalInterruptBytes } from '../../shared/terminal-interrupt-bytes'
 
+/** Builds terminal.send bytes using the PTY's current kitty flags for Ctrl+C. */
 export function buildTerminalSendPayload(
   action: {
     text?: string

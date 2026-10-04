@@ -1,4 +1,5 @@
 import { keybindingMatchesInput } from '../../../../shared/keybindings'
+import { terminalInterruptBytes } from '../../../../shared/terminal-interrupt-bytes'
 import { isHangulJamoKeyText } from './hangul-jamo-key'
 import { getLayoutBaseCharacterForCode } from '../../lib/keyboard-layout/layout-base-character'
 import { isTerminalImeCandidateSelectionKeyEvent } from './terminal-ime-candidate-key-release-guard'
@@ -40,7 +41,11 @@ export type XtermImeKeyboardOptions = {
   isLinux: boolean
 }
 
-export const TERMINAL_INTERRUPT_INPUT = '\x03'
+/** Encodes Ctrl+C using the shared bytes for the pane's current kitty flags. */
+export function resolveTerminalInterruptKeyboardInput(kittyKeyboardFlags: number): string {
+  return terminalInterruptBytes(kittyKeyboardFlags)
+}
+
 const TERMINAL_MODIFIER_KEYS = new Set(['Alt', 'AltGraph', 'Control', 'Meta', 'Shift'])
 const TERMINAL_IME_OWNED_KEYS = new Set([
   'ArrowDown',
