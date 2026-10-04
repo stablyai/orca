@@ -138,7 +138,8 @@ export class OffscreenPageHost {
         return
       }
       // Why drop popups: Electron gives no position for them; selects are drawn by showSelectMenu.
-      if (event.texture.textureInfo.widgetType === 'popup') {
+      // Why drop hidden frames: nobody sees them, and showing the pane again repaints it.
+      if (event.texture.textureInfo.widgetType === 'popup' || !page.features.frameRate.visible) {
         event.texture.release()
         return
       }

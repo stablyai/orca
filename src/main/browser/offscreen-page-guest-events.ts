@@ -6,6 +6,12 @@ import type {
 
 export const OFFSCREEN_PAGE_EVENT_CHANNEL = 'offscreen-page:event'
 
+// Why: these never change url, title, history or loading, and a chatty page logs every frame.
+const STATELESS_EVENTS = new Set<OffscreenPageGuestEvent['type']>([
+  'console-message',
+  'found-in-page'
+])
+
 export function readOffscreenPageGuestState(contents: WebContents): OffscreenPageGuestState {
   return {
     url: contents.getURL(),
@@ -18,8 +24,8 @@ export function readOffscreenPageGuestState(contents: WebContents): OffscreenPag
 }
 
 /**
- * Re-emits the page's WebContents events in the shape a <webview> element fires them, each with a
- * fresh state snapshot, so the renderer element can answer webview's synchronous getters.
+ * Re-emits the page's WebContents events in the shape a <webview> element fires them, with a fresh
+ * state snapshot whenever the event can change it, so the renderer element can answer webview's synchronous getters.
  * Returns the unsubscribe function.
  */
 export function forwardOffscreenPageGuestEvents(
@@ -28,7 +34,10 @@ export function forwardOffscreenPageGuestEvents(
 ): () => void {
   const send = (type: OffscreenPageGuestEvent['type'], detail: Record<string, unknown> = {}) => {
     if (!contents.isDestroyed()) {
-      emit({ type, detail, state: readOffscreenPageGuestState(contents) })
+      const state = STATELESS_EVENTS.has(type)
+        ? {}
+        : { state: readOffscreenPageGuestState(contents) }
+      emit({ type, detail, ...state })
     }
   }
   const handlers: [string, (...args: never[]) => void][] = [

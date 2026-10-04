@@ -152,9 +152,25 @@ export function createOffscreenPageFrames(
     hovered = to
   }
 
+  // The move still waiting its turn; a newer move takes its place rather than queueing behind it.
+  let waitingMove: { params: OffscreenPageMouseParams; reply: Promise<unknown> } | null = null
+
   return {
-    sendMouse(params) {
-      return inOrder(async () => {
+    sendMouse(newest) {
+      if (newest.type !== 'mouseMoved') {
+        // Why: a later move must never be issued ahead of a press or release queued before it.
+        waitingMove = null
+      } else if (waitingMove) {
+        // Why: a hit test per move can fall behind a fast pointer; only where it is now matters.
+        waitingMove.params = newest
+        return waitingMove.reply
+      }
+      const queued = { params: newest, reply: Promise.resolve<unknown>(undefined) }
+      queued.reply = inOrder(async () => {
+        if (waitingMove === queued) {
+          waitingMove = null
+        }
+        const { params } = queued
         const { chain, target } = capture
           ? captured(capture, params)
           : await frameChain(params.x, params.y)
@@ -189,6 +205,10 @@ export function createOffscreenPageFrames(
         )
         return { reply, settled }
       })
+      if (newest.type === 'mouseMoved') {
+        waitingMove = queued
+      }
+      return queued.reply
     },
     leave() {
       return inOrder(() => {

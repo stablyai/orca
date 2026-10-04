@@ -46,4 +46,16 @@ describe('createOffscreenPageFrameRate', () => {
     rate.dispose()
     expect(contents.listenerCount('input-event')).toBe(0)
   })
+
+  it('repaces and repaints only when visibility changes, not on every viewport sync', () => {
+    const contents = fakeContents()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every WebContents member the pacer touches.
+    const rate = createOffscreenPageFrameRate(contents as never)
+    expect(rate.visible).toBe(false)
+    rate.setVisible(true)
+    rate.setVisible(true)
+    expect(rate.visible).toBe(true)
+    expect(contents.setFrameRate).toHaveBeenCalledOnce()
+    expect(contents.invalidate).toHaveBeenCalledOnce()
+  })
 })

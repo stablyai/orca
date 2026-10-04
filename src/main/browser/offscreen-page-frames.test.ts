@@ -143,4 +143,27 @@ describe('createOffscreenPageFrames', () => {
     message('Target.detachedFromTarget', { sessionId: 'S1' })
     expect(await frames.locate(30, 50)).toEqual({ x: 30, y: 50 })
   })
+
+  it('collapses moves waiting behind a slow hit test into the newest, without passing a press', async () => {
+    const { attachFrame, frames, mouseSends, move } = fakePage()
+    attachFrame()
+    const first = move(30, 50)
+    void move(31, 51)
+    void move(32, 52)
+    const press = frames.sendMouse({
+      type: 'mousePressed',
+      x: 33,
+      y: 53,
+      buttons: 1,
+      button: 'left'
+    })
+    void move(34, 54)
+    const last = move(35, 55)
+    await Promise.all([first, press, last])
+    expect(mouseSends().filter(([sessionId]) => sessionId === 'S1')).toEqual([
+      ['S1', 'mouseMoved', 22, 32],
+      ['S1', 'mousePressed', 23, 33],
+      ['S1', 'mouseMoved', 25, 35]
+    ])
+  })
 })

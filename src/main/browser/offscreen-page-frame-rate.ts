@@ -12,12 +12,14 @@ const INPUT_BOOST_MS = 3000
 
 export type OffscreenPageFrameRate = {
   setVisible(visible: boolean): void
+  /** Whether the page's pane is on screen, so its frames are worth delivering. */
+  readonly visible: boolean
   dispose(): void
 }
 
 /** Paces an offscreen page: 60fps while shown or driven, slow otherwise. */
 export function createOffscreenPageFrameRate(contents: WebContents): OffscreenPageFrameRate {
-  let visible = false
+  let visible: boolean | null = null
   let boostTimer: ReturnType<typeof setTimeout> | null = null
 
   const apply = (): void => {
@@ -45,12 +47,19 @@ export function createOffscreenPageFrameRate(contents: WebContents): OffscreenPa
 
   return {
     setVisible(next) {
+      // Why: every pane resize syncs the viewport; only a change of visibility needs repacing.
+      if (next === visible) {
+        return
+      }
       visible = next
       apply()
       if (next && !contents.isDestroyed()) {
         // Why: a newly shown pane needs a frame even when the page itself is idle.
         contents.invalidate()
       }
+    },
+    get visible() {
+      return visible === true
     },
     dispose() {
       if (boostTimer) {
