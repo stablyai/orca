@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import {
   MAX_CODEX_PROMPT_JOURNAL_BINDINGS,
   MAX_CODEX_PROMPT_REGISTRY_BYTES,
@@ -86,14 +87,17 @@ export function codexMcpToolApprovalDecisions(params: unknown): CodexMcpToolAppr
 }
 
 /**
- * MCP elicitations carry no item id. The request id restarts with each app-server process, but a
- * turn never outlives its process, so the turn id makes the key unique for the thread's journal.
+ * MCP elicitations carry no item id, and their turn id is optional. The request id restarts with
+ * each app-server process, and each process gets a fresh registry, so the registry's own id makes
+ * the key unique for the thread's journal.
  */
-function readPromptItemId(request: { id: number | string; method: string; params: unknown }) {
+function readPromptItemId(
+  request: { id: number | string; method: string; params: unknown },
+  registryId: string
+) {
   if (request.method === CODEX_MCP_ELICITATION_METHOD) {
-    const turnId = readString(request.params, 'turnId')
-    return turnId && isCodexMcpToolApproval(request.params)
-      ? `mcp-elicitation:${turnId}:${request.id}`
+    return isCodexMcpToolApproval(request.params)
+      ? `mcp-elicitation:${registryId}:${request.id}`
       : null
   }
   return readString(request.params, 'itemId')
@@ -101,6 +105,7 @@ function readPromptItemId(request: { id: number | string; method: string; params
 
 /** Session-local callback ownership; none of this state is reconstructed from the journal. */
 export class CodexPromptRegistry {
+  private readonly registryId = randomUUID()
   private readonly byAddress = new Map<string, CodexPendingPrompt>()
   private readonly journalItemIds = new Map<string, string>()
   private readonly boundPrompts = new Map<string, CodexPendingPrompt>()
@@ -120,7 +125,7 @@ export class CodexPromptRegistry {
     method: string
     params: unknown
   }): CodexPendingPrompt | null {
-    const codexItemId = readPromptItemId(request)
+    const codexItemId = readPromptItemId(request, this.registryId)
     const threadId = readString(request.params, 'threadId')
     if (!isCodexPromptMethod(request.method) || !codexItemId || !threadId) {
       return null
