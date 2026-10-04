@@ -59,6 +59,18 @@ describe('resolveAnotherDevicePairingAddress', () => {
       })
     ).toBe(EN0.address)
   })
+
+  it('uses Thunderbolt Bridge as the Share this host fallback when it is the only interface', () => {
+    expect(
+      resolveAnotherDevicePairingAddress({
+        interfaces: [BRIDGE],
+        selectedAddress: '',
+        preferredInterfaceName: null,
+        preferredAddress: '',
+        platform: 'darwin'
+      })
+    ).toBe(BRIDGE.address)
+  })
 })
 
 describe('selectRuntimePairingIntent', () => {

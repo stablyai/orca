@@ -171,7 +171,7 @@ describe('MobilePage pairing connection mode', () => {
           listDevices: vi.fn().mockResolvedValue({ devices: [] }),
           listNetworkInterfaces
         },
-        shell: { openUrl: vi.fn() }, platform: { get: () => ({ platform: 'darwin' as const }) },
+        shell: { openUrl: vi.fn() },
         ui: { writeClipboardText: vi.fn().mockResolvedValue(undefined) }
       }
     })

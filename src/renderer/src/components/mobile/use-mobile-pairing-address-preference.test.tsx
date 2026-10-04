@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 
 type StoreState = {
@@ -47,13 +47,6 @@ function renderPreference(networkInterfaces: readonly MobileNetworkInterface[] =
   )
   return { result, onSelectionInvalidated }
 }
-
-beforeEach(() => {
-  Object.defineProperty(window, 'api', {
-    configurable: true,
-    value: { platform: { get: () => ({ platform: 'darwin' as const }) } }
-  })
-})
 
 afterEach(() => cleanup())
 

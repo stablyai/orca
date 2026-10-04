@@ -105,7 +105,15 @@ export function RuntimePairingGeneratorForm({
   const customAddressResult =
     intent === 'custom' ? parseServerShareAddress(selectedAddress) : { ok: true as const }
   const customAddressInvalid = selectedAddress !== '' && !customAddressResult.ok
-  const canGenerate = selectedAddress !== '' && (intent !== 'custom' || customAddressResult.ok)
+  const selectedInterfaceAvailable = networkInterfaces.some(
+    (networkInterface) =>
+      networkInterface.address === selectedAddress &&
+      (!retainedInterfaceName || networkInterface.name === retainedInterfaceName)
+  )
+  const canGenerate =
+    selectedAddress !== '' &&
+    (intent !== 'another' || selectedInterfaceAvailable) &&
+    (intent !== 'custom' || customAddressResult.ok)
 
   return (
     <>
@@ -300,6 +308,14 @@ export function RuntimePairingGeneratorForm({
             ) : null}
           </div>
         )}
+        {intent === 'another' && selectedAddress !== '' && !selectedInterfaceAvailable ? (
+          <p role="alert" className="text-xs text-destructive">
+            {translate(
+              'auto.components.settings.RuntimePairingUrlGenerator.selectedInterfaceUnavailable',
+              'The selected network interface is unavailable. Reconnect it before generating a link.'
+            )}
+          </p>
+        ) : null}
         {staleGeneratedLink && selectedAddress !== '' ? (
           <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
             {translate(
