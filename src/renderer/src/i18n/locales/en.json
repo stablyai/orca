@@ -8689,6 +8689,8 @@
           "ca76d06fd2": "Agent Task Complete",
           "deff6d30da": "Native system notifications for background events.",
           "841c8c549f": "Enable Notifications",
+          "b50c251b25": "Show Dock Badge",
+          "4e76a4246d": "Show the unread count on the macOS Dock icon.",
           "0fadad17ce": "Notification sound could not be played",
           "406feb0aa6": "Test notification was not delivered",
           "6fc3781729": "Notifications are disabled",
