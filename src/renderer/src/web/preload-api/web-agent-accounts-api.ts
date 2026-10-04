@@ -65,6 +65,16 @@ export function createCursorAccountsApi(): NonNullable<Partial<PreloadApi>['curs
   }
 }
 
+export function createOpenCodeGoCredentialsApi(): PreloadApi['opencodeGoCredentials'] {
+  const notConfigured = { apiKeyConfigured: false }
+  return {
+    getStatus: () => Promise.resolve(notConfigured),
+    saveApiKey: () =>
+      Promise.reject(new Error('OpenCode Go key storage is only available in the desktop app.')),
+    clearApiKey: () => Promise.resolve(notConfigured)
+  }
+}
+
 export function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAccounts']> {
   const unsigned = {
     signedIn: false,

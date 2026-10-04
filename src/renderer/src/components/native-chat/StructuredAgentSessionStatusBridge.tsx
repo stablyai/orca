@@ -28,9 +28,12 @@ import {
   structuredAgentSessionDatedMainAgent,
   structuredAgentSessionRowStateStartedAt
 } from '../../../../shared/structured-agent-session-status-started-at'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
-import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import {
+  structuredAgentSessionOwnerForTab,
+  structuredAgentSessionTargetForHost
+} from '@/runtime/structured-agent-session-owner'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import { getStructuredAgentSessionTabs, type StructuredTab } from './structured-agent-session-tabs'
 
@@ -196,14 +199,25 @@ function projectStatus(
   )
 }
 
-function StructuredAgentSessionStatusProjection({ tab }: { tab: StructuredTab }): null {
-  const environmentId = useAppStore((state) =>
-    getRuntimeEnvironmentIdForWorktree(state, tab.worktreeId)
-  )
-  const target = useMemo(
-    () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId }),
-    [environmentId]
-  )
+/** Reads the chat's status from the host recorded on its tab; a chat no host can be named for has
+ *  none to read. */
+function StructuredAgentSessionStatusProjection({
+  tab
+}: {
+  tab: StructuredTab
+}): React.JSX.Element | null {
+  const owner = useAppStore((state) => structuredAgentSessionOwnerForTab(state, tab))
+  const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
+  return target ? <StructuredAgentSessionOwnedStatusProjection tab={tab} target={target} /> : null
+}
+
+function StructuredAgentSessionOwnedStatusProjection({
+  tab,
+  target
+}: {
+  tab: StructuredTab
+  target: RuntimeClientTarget
+}): null {
   const { summary, observation } = useStructuredAgentSessionStatusSummary(tab.entityId, target)
   useEffect(() => {
     projectStatus(tab, summary, observation)

@@ -125,7 +125,8 @@ export async function getRemoteCount(path: string): Promise<number> {
 /** Resolve the configured push remote without assuming a provider. */
 export async function getDefaultRemote(
   path: string,
-  options: LocalGitExecOptions = {}
+  options: LocalGitExecOptions = {},
+  knownRemoteNames?: readonly string[]
 ): Promise<string> {
   const defaultRef = await getDefaultBaseRefAsync(path, options)
   const defaultBranch = defaultRef
@@ -150,11 +151,14 @@ export async function getDefaultRemote(
   }
 
   try {
-    const { stdout } = await gitExecFileAsync(['remote'], gitExecOptions(path, options))
-    const remotes = stdout
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
+    let remotes = knownRemoteNames
+    if (remotes === undefined) {
+      const { stdout } = await gitExecFileAsync(['remote'], gitExecOptions(path, options))
+      remotes = stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+    }
     if (remotes.includes('origin')) {
       return 'origin'
     }

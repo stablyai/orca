@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
-import { basename, dirname, extname, join, relative } from 'node:path'
+import { basename, dirname, join } from 'node:path'
+import { pathSegments } from './session-file-discovery'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deletion'
@@ -214,6 +215,18 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     extensions: ['.json'],
     filePredicate: (filePath) => basename(filePath).startsWith('session_')
   },
+  jcode: {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(
+        options.jcodeSessionsDir ??
+          join(process.env.JCODE_HOME?.trim() || join(homedir(), '.jcode'), 'sessions'),
+        wslHomeDirs,
+        ['.jcode', 'sessions']
+      ),
+    extensions: ['.json'],
+    // Why: skip the live .journal.jsonl appends and consolidated backups.
+    filePredicate: (filePath) => basename(filePath).startsWith('session_')
+  },
   rovo: {
     rootDirs: (options, wslHomeDirs) =>
       sessionRootDirs(options.rovoSessionsDir ?? ROVO_SESSIONS_DIR, wslHomeDirs, [
@@ -329,27 +342,5 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
  * predicate. This is the delete validator's accept rule, so a path no scan
  * would ever list can't become a delete target either.
  */
-export function isDiscoverableSessionFile(
-  source: AiVaultAgentSource,
-  rootDir: string,
-  filePath: string
-): boolean {
-  if (!source.extensions.includes(extname(filePath).toLowerCase())) {
-    return false
-  }
-  if (source.filePredicate && !source.filePredicate(filePath)) {
-    return false
-  }
-  const { directoryPredicate } = source
-  if (!directoryPredicate) {
-    return true
-  }
-  // Indexed like walkSessionFiles: depth 0 is a child of rootDir.
-  return pathSegments(relative(rootDir, dirname(filePath)))
-    .filter(Boolean)
-    .every((name, depth) => directoryPredicate(name, depth))
-}
 
-function pathSegments(filePath: string): string[] {
-  return filePath.split(/[\\/]/)
-}
+export { isDiscoverableSessionFile } from './session-file-discovery'

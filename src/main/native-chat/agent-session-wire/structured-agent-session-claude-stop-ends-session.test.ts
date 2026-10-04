@@ -32,6 +32,7 @@ import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-rec
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { createStoppedClaudeDeadline } from './structured-agent-session-stop-deadline.test-fixture'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import {
   HOST_TEST_NOW as NOW,
@@ -133,6 +134,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
   await rm(root, { recursive: true, force: true })
@@ -214,6 +217,18 @@ function stop(turnId?: string) {
   return host.cancel(CALLER, { envelope: envelope('agentSession.cancel', fields), ...fields })
 }
 
+/** Resolves once everything queued on the session's lane so far has run: a Stop's second step. */
+const laneDrained = (): Promise<void> => host['tasks'].serialize(SESSION, async () => {})
+
+const stopAcrossGrace = createStoppedClaudeDeadline({
+  host: () => host,
+  adapter: () => adapter,
+  claude: () => claude,
+  sessionId: SESSION,
+  stop,
+  laneDrained
+})
+
 /** How many person's Stop events the journal holds when the child's close begins. */
 function stopEventsAtClose(connection: FakeConnection): () => number | undefined {
   let atClose: number | undefined
@@ -229,11 +244,6 @@ function stopEventsAtClose(connection: FakeConnection): () => number | undefined
     return close()
   }
   return () => atClose
-}
-
-/** Resolves once everything queued on the session's lane so far has run: a Stop's second step. */
-function laneDrained(): Promise<void> {
-  return host['tasks'].serialize(SESSION, async () => {})
 }
 
 function wrote(connection: FakeConnection, text: string): boolean {
@@ -369,14 +379,15 @@ it('ends the child once the grace runs out when Claude says nothing after a Stop
   claude.routes.interrupt = () => ({ still_queued: [], cancelled: [] })
   const clientMessageId = await sendUnechoed(connection)
 
-  const asked = Date.now()
-  await expect(stop()).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+  await expect(stopAcrossGrace(connection, 'request-end')).resolves.toMatchObject({
+    ok: true,
+    value: { cancelled: true }
+  })
   await laneDrained()
 
   // As before the wait: the send Claude never answered is doubt once its child ends.
   expect(connection.closed).toBe(true)
   expect(eventsAtClose()).toBe(1)
-  expect(Date.now() - asked).toBeLessThan(CLAUDE_STOP_GRACE_MS + 1_500)
   expect(await dispatch(clientMessageId)).toMatchObject({ state: 'unknown' })
 }, 15_000)
 
@@ -447,13 +458,14 @@ it('ends the child within the grace when Claude never answers the interrupt', as
   const eventsAtClose = stopEventsAtClose(connection)
   await openTurn(connection)
 
-  const asked = Date.now()
-  await expect(stop()).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+  await expect(stopAcrossGrace(connection, 'interrupt')).resolves.toMatchObject({
+    ok: true,
+    value: { cancelled: true }
+  })
   await laneDrained()
 
   expect(connection.closed).toBe(true)
   expect(eventsAtClose()).toBe(1)
-  expect(Date.now() - asked).toBeLessThan(CLAUDE_STOP_GRACE_MS + 1_500)
   expect(await turnOutcome()).toBe('cancellation')
   expect(await statusTexts()).toEqual(['Cancellation requested.'])
 }, 15_000)
@@ -672,7 +684,15 @@ it.each([
     await eventually(() => expect(wrote(connection, 'Follow-up.')).toBe(true))
 
     // As the phone sends it: the turn it last saw working.
-    await expect(stop(ended)).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+    await expect(
+      _answer === 'fails'
+        ? stop(ended)
+        : stopAcrossGrace(
+            connection,
+            interrupt === NEVER_ANSWERS ? 'interrupt' : 'request-end',
+            ended
+          )
+    ).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
     await laneDrained()
 
     expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(true)

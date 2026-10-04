@@ -39,6 +39,8 @@ const AGENT_HOOK_SOURCES = [
   'claude',
   'codex',
   'qoder',
+  'qoder-cn',
+  'qwen-code',
   'codebuddy',
   'gemini',
   'antigravity',
@@ -59,7 +61,8 @@ const AGENT_HOOK_SOURCES = [
   'kimi',
   'muse',
   'zcode',
-  'dsh'
+  'dsh',
+  'jcode'
 ] as const
 
 export type AgentHookSource = (typeof AGENT_HOOK_SOURCES)[number]

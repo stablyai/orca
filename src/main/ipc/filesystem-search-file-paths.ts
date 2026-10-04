@@ -1,3 +1,5 @@
+import { getQuickOpenRgOutputMode } from '../../shared/quick-open-ripgrep-output-mode'
+import { RipgrepFilenameDecoder } from '../../shared/ripgrep-filename-decoder'
 import { sep } from 'node:path'
 import type { Store } from '../persistence'
 import { fileListingCancellationError } from '../../shared/file-listing-cancellation'
@@ -6,8 +8,7 @@ import {
   buildRgArgsForQuickOpen,
   normalizeQuickOpenRgLine,
   shouldExcludeQuickOpenRelPath,
-  shouldIncludeQuickOpenPath,
-  type RgOutputMode
+  shouldIncludeQuickOpenPath
 } from '../../shared/quick-open-filter'
 import { isQuickOpenQueryTooLarge, QuickOpenPathRanker } from '../../shared/quick-open-path-search'
 import {
@@ -110,7 +111,11 @@ function scanRipgrepPaths(args: {
     return Promise.reject(fileListingCancellationError(args.signal))
   }
   return new Promise((resolve, reject) => {
-    const pathAccumulator = new QuickOpenSubprocessPathAccumulator(0x0a)
+    const filenameDecoder = new RipgrepFilenameDecoder((error) => {
+      killSpawnedRipgrepProcess(child)
+      finish(error)
+    }, Boolean(args.wslDistroForOutput))
+    const pathAccumulator = new QuickOpenSubprocessPathAccumulator(0)
     let done = false
     let parseablePathCount = 0
     let processErrorObserved = false
@@ -141,7 +146,7 @@ function scanRipgrepPaths(args: {
           : rawLine
       const relPath = normalizeQuickOpenRgLine(
         translated,
-        getOutputMode(rawLine, translated, args.authorizedRootPath)
+        getQuickOpenRgOutputMode(rawLine, translated, args.authorizedRootPath)
       )
       if (relPath === null) {
         return
@@ -178,11 +183,19 @@ function scanRipgrepPaths(args: {
         resolve()
       }
     }
-    const handleStdoutData = (chunk: string): void => {
-      pathAccumulator.push(chunk, (path) => {
+    const handleStdoutData = (chunk: Buffer | string): void => {
+      const decoded = filenameDecoder.decode(chunk)
+      if (decoded === null) {
+        return
+      }
+      const result = pathAccumulator.push(decoded, (path) => {
         processLine(path)
         return true
       })
+      if (result === 'path-too-large') {
+        killSpawnedRipgrepProcess(child)
+        finish(new Error('Quick Open file path exceeds the listing limit'))
+      }
     }
     const handleStderrData = (): void => {
       /* drain */
@@ -233,6 +246,9 @@ function scanRipgrepPaths(args: {
         finish(new Error(`rg killed by ${signal}`))
         return
       }
+      if (!filenameDecoder.finish()) {
+        return
+      }
       const trailingPath = pathAccumulator.finish()
       if (trailingPath) {
         processLine(trailingPath)
@@ -249,7 +265,6 @@ function scanRipgrepPaths(args: {
       finish(fileListingCancellationError(args.signal))
     }
 
-    child.stdout?.setEncoding('utf-8')
     child.stdout?.on('data', handleStdoutData)
     child.stderr?.on('data', handleStderrData)
     child.once('error', handleError)
@@ -264,13 +279,4 @@ function scanRipgrepPaths(args: {
       handleAbort()
     }
   })
-}
-
-function getOutputMode(rawLine: string, translatedLine: string, rootPath: string): RgOutputMode {
-  return translatedLine !== rawLine ||
-    rawLine.startsWith('/') ||
-    /^[A-Za-z]:[\\/]/.test(rawLine) ||
-    rawLine.startsWith('\\\\')
-    ? { kind: 'absolute', rootPath }
-    : { kind: 'cwd-relative' }
 }

@@ -29,6 +29,19 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     return this.getState()
   }
 
+  invalidateOpenCodeGoCredentialState(options: { apiKeyCleared?: boolean } = {}): void {
+    this.opencodeFetchGeneration += 1
+    // Why: a key from env, OpenCode's DB or auth.json survives a cookie change; only clearing the saved key hides the chip.
+    if (options.apiKeyCleared) {
+      this.openCodeGoApiKeyConfigured = false
+    }
+    // Why: a credential change must discard the snapshot and any result still in flight.
+    this.updateState({
+      ...this.state,
+      opencodeGo: this.withFetchingStatus(null, 'opencode-go')
+    })
+  }
+
   invalidateMiniMaxCredentialState(): void {
     this.minimaxFetchGeneration += 1
     // Why: saving/forgetting the cookie can race an in-flight fetch; clear the visible snapshot before any old-cookie result returns.

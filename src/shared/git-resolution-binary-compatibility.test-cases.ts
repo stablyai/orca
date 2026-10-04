@@ -65,7 +65,7 @@ export function registerGitResolutionBinaryCompatibilityCases(
     )
     expect(
       buildGitSshPolicyEnv({}, overridden.command, overridden.variant).env.GIT_SSH_COMMAND
-    ).toBe("ssh -i 'key with spaces' -o BatchMode=yes")
+    ).toBe('ssh -o BatchMode=yes -i "key with spaces"')
   })
 
   it('resolves default bases from exact refs with symbolic chains and dangling targets', async () => {

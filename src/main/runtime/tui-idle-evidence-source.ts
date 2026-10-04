@@ -134,7 +134,9 @@ export function ptyTuiIdleEvidence(
     record: pty,
     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
     readPositiveBodyEvidence: () =>
-      (agent !== 'qoder' && source.getAdoptedPtyIdleStatus(pty) === 'idle') ||
+      (agent !== 'qoder' &&
+        agent !== 'qoder-cn' &&
+        source.getAdoptedPtyIdleStatus(pty) === 'idle') ||
       isKnownReadyPromptBody(waitText(), agent, readScreen, pty.lastOutputAt !== null),
     readQuietReadyBodyEvidence: () => isQuietReadyScreenBody(waitText(), agent, readScreen),
     readAgentRuleVerdict: () => readAgentRuleVerdict(agent, pty, readScreen, waitText),

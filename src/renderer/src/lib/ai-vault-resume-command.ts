@@ -1,3 +1,8 @@
+import {
+  assertAntigravityReferenceTarget,
+  buildAntigravityReferenceStartup
+} from './ai-vault-antigravity-reference-startup'
+import { isAntigravityReferenceSession } from '../../../shared/antigravity-session-origin'
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import {
   buildAiVaultResumeCommand,
@@ -125,11 +130,13 @@ function buildAiVaultResumeForWorktree(
    *  Spawned startups drop them through `envToDelete` instead. */
   clearEnvNames?: readonly string[]
 ): AiVaultResumeStartup {
+  assertAntigravityReferenceTarget(args)
   const providerSession = getAiVaultAgentProviderSession(args.session)
   if (
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
     args.session.resumeCommand &&
+    !isAntigravityReferenceSession(args.session) &&
     args.session.agent !== 'omp' &&
     !(args.session.agent === 'codex' && args.session.codexHome === null) &&
     !args.commandOverride?.trim()
@@ -160,6 +167,19 @@ function buildAiVaultResumeForWorktree(
       : undefined
   const cwd = embedCwd ? args.session.cwd : null
   const startupCwd = !embedCwd && args.session.cwd ? { cwd: args.session.cwd } : {}
+  if (isAntigravityReferenceSession(args.session)) {
+    const reference = buildAntigravityReferenceStartup({
+      session: { ...args.session, filePath: resumeFilePath },
+      cwd,
+      platform,
+      shell: liveShell,
+      commandOverride: args.commandOverride,
+      settings: args.state.settings
+    })
+    if (reference) {
+      return { ...reference, ...startupCwd }
+    }
+  }
   if (providerSession && isResumableTuiAgent(args.session.agent)) {
     const startupPlan = buildAgentResumeStartupPlan({
       agent: args.session.agent,
@@ -254,6 +274,9 @@ export function getAiVaultAgentProviderSession(
   session: Pick<AiVaultSession, 'agent' | 'sessionId'> & { filePath?: string }
 ): AgentProviderSessionMetadata | null {
   if (!isResumableTuiAgent(session.agent)) {
+    return null
+  }
+  if (isAntigravityReferenceSession(session)) {
     return null
   }
   if (session.agent === 'antigravity' || session.agent === 'cursor') {

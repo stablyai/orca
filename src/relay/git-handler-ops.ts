@@ -7,7 +7,8 @@
  */
 import * as path from 'node:path'
 import { isMissingGitBlobPath } from '../shared/git-blob-absence'
-import { bufferToBlob, parseBranchDiff } from './git-handler-utils'
+import { bufferToBlob } from './git-handler-utils'
+import { parseGitChangeList } from '../shared/git-change-list'
 import { buildDiffResult } from './git-diff-result'
 import { isGitBufferOverflowError, isGitReadInterruptedError } from './git-buffer-overflow'
 import { readWorkingDiffFile } from './git-working-file-read'
@@ -228,6 +229,14 @@ export async function branchCompare(
     return { summary, entries: [] }
   }
 
+  // Git must confirm equal raw tips are the same commit before skipping the reads.
+  if (baseOid === headOid && mergeBase === headOid) {
+    summary.commitsAhead = 0
+    summary.commitsBehind = 0
+    summary.status = 'ready'
+    return { summary, entries: [] }
+  }
+
   try {
     const [entries, { stdout: countOut }] = await Promise.all([
       loadBranchChanges(mergeBase, headOid),
@@ -273,12 +282,11 @@ export async function branchDiffEntries(
     return []
   }
 
-  // Why: see core.quotePath rationale in getStatusOp — keep UTF-8 paths intact.
   const { stdout } = await git(
-    ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
+    ['diff', '--name-status', '-z', '-M', '-C', mergeBase, headOid, '--'],
     worktreePath
   )
-  const allChanges = parseBranchDiff(stdout)
+  const allChanges = parseGitChangeList(stdout, 'name-status')
 
   // Why: the IPC handler for single-file branch diff sends filePath/oldPath
   // to avoid reading blobs for every changed file — only the matched file.
@@ -304,8 +312,8 @@ export async function branchDiffEntries(
 
   const results: Record<string, unknown>[] = []
   for (const change of changes) {
-    const fp = change.path as string
-    const oldP = (change.oldPath as string) ?? fp
+    const fp = change.path
+    const oldP = change.oldPath ?? fp
     try {
       const left = await readBlobAtOid(gitBuffer, worktreePath, mergeBase, oldP)
       const right = await readBlobAtOid(gitBuffer, worktreePath, headOid, fp)

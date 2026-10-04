@@ -1,4 +1,7 @@
 {
+  "osDocumentOpen": {
+    "failed": "Failed to open the file."
+  },
   "sidebar": {
     "revealFiltered": {
       "title": "Reveal hidden workspace?",
@@ -644,7 +647,9 @@
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
           "opencode2_label": "OpenCode 2",
-          "codebuddy_label": "CodeBuddy"
+          "codebuddy_label": "CodeBuddy",
+          "qoder_cn_label": "Qoder CLI China",
+          "jcode_label": "Jcode"
         },
         "skill": {
           "cli": {
@@ -2182,7 +2187,8 @@
         "c679af7ad9": "Refresh My Todos",
         "dfd72673e7": "Failed to save project selection.",
         "b797bdd7c3": "Clear search",
-        "99c2755218": "Jira JQL, e.g. project = ABC AND statusCategory != Done",
+        "jiraTextMatchesNotice": "Showing text matches. Jira couldn't run this search as JQL.",
+        "99c2755218": "Search issues or enter JQL, e.g. project = ABC",
         "2ff9fd71fd": "Refresh Jira issues",
         "0b65d3fb2c": "Search Linear projects...",
         "eec0c5c079": "Search Linear issues...",
@@ -2301,7 +2307,7 @@
         "6edf402e11": "overview",
         "9ae151b26b": "linear",
         "94d900518d": "No issues match the selected preset.",
-        "f51e254d35": "Try a different JQL query.",
+        "f51e254d35": "Try different search terms or JQL.",
         "4645a7814f": "jira",
         "e224d76876": "MR",
         "bbec4717ee": "mr",
@@ -5318,7 +5324,12 @@
           "86f0ae1257": "Delete Workspaces"
         },
         "DeleteWorktreeDirtyChangeHint": {
-          "8e2994ce28": "Deleting this workspace permanently removes these changes from disk."
+          "8e2994ce28": "Deleting this workspace permanently removes these changes from disk.",
+          "showLoadedPaths": "Show loaded paths",
+          "loadedPathsNotice": "Loaded paths may be incomplete or out of date.",
+          "loadedChangedPaths": "Loaded changed paths",
+          "unresolvedConflict": "Unresolved conflict",
+          "moreLoadedPaths": "and {{value0}} more loaded paths"
         },
         "DeleteWorktreeLineageNotice": {
           "ad407c2d55": "more",
@@ -7285,7 +7296,7 @@
             "defaultViewNative": "Chat UI",
             "structuredTitle": "Use updated structured native chat",
             "structuredCopy": "Open new Codex and Claude agents as structured chats. Off opens them in the terminal-backed chat. Chats that already exist stay as they are.",
-            "structuredScope": "Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.",
+            "structuredScope": "Runs on this machine and on paired Orca servers running a version that supports it; older servers keep terminal chat. WSL and SSH hosts continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.",
             "structuredToggleLabel": "Toggle updated structured native chat",
             "resumeTitle": "Resume working chats automatically after a restart",
             "resumeCopy": "When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.",
@@ -8122,6 +8133,8 @@
           "c7ef4415de": "Display Name",
           "b0a0c14a1c": "Project-specific display details for the sidebar and tabs.",
           "removeProjectAllHosts": "Remove this project from Orca on all configured hosts.",
+          "removeProjectCheckout": "Remove this checkout from Orca. Other checkouts of this project stay.",
+          "removeProjectKeepCheckouts": "Remove this project from Orca. Checkouts that have their own settings stay.",
           "0909e5d650": "Remove Project",
           "ee5a290616": "Opened as folder. Git features are unavailable for this workspace.",
           "323debba71": "Type:",
@@ -10304,7 +10317,13 @@
             "72539aede4": "system",
             "51ae2183e1": "desktop",
             "0534c76311": "Master switch for Orca desktop notifications.",
-            "4a210b2f72": "Enable Notifications"
+            "4a210b2f72": "Enable Notifications",
+            "machines": "Machines",
+            "machinesDescription": "Choose which machines can show notifications on this computer, such as SSH machines or paired servers.",
+            "host": "host",
+            "remote": "remote",
+            "ssh": "ssh",
+            "mute": "mute"
           }
         },
         "orchestration": {
@@ -12320,6 +12339,11 @@
           "hostOnly": "Change the plan site and API key in the desktop app on the computer running Orca.",
           "detailsUnavailable": "Plan credential details are only readable on the computer running Orca.",
           "siteUnavailable": "Host plan site unavailable"
+        },
+        "NotificationHostToggles": {
+          "offCount": "{{count}} off",
+          "machines": "Machines",
+          "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it."
         }
       },
       "right": {
@@ -15102,7 +15126,12 @@
         "CsvViewer": {
           "eedd0d37a7": "columns",
           "ac31d2cd60": "rows",
-          "a233d55b77": "Empty file"
+          "a233d55b77": "Empty file",
+          "delimiterComma": "Comma",
+          "delimiterSemicolon": "Semicolon",
+          "delimiterTab": "Tab",
+          "delimiterAuto": "Auto ({{delimiter}})",
+          "delimiter": "Delimiter"
         },
         "DiffNotesSendMenu": {
           "f1aa04b5cf": "This file",
@@ -18053,7 +18082,11 @@
         "queuePausedCleared": "Queue paused after you cleared the conversation",
         "queuePaused": "Queue paused",
         "resume": "Resume"
-      }
+      },
+      "structuredSessionHostDeclined": "Opened {{value0}} in a terminal",
+      "structuredSessionHostDeclinedDescription": "This server can't run a {{value0}} chat in this workspace.",
+      "structuredSessionHostUnreachable": "Could not reach {{value0}}",
+      "structuredSessionHostUnreachableDescription": "Orca did not open a {{value0}} chat. Check the connection to the server and try again."
     },
     "tab": {
       "bar": {
@@ -18697,6 +18730,11 @@
     }
   },
   "aiVault": {
+    "antigravityReferenceDescription": "Continues in a new Antigravity CLI conversation using this transcript as a reference.",
+    "antigravityIdeToCli": "IDE → CLI",
+    "antigravity2ToCli": "2.0 → CLI",
+    "continueInCli": "Continue in CLI",
+    "continueInCliNewTab": "Continue in CLI in New Tab",
     "subagents": {
       "loading": "Loading subagents…",
       "loadError": "Could not load all subagents.",
@@ -18840,6 +18878,23 @@
         "google": "google",
         "accounts": "accounts"
       }
+    },
+    "managedData": {
+      "description": "Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.",
+      "copied": "Copied",
+      "add": "Copy add account command",
+      "refresh": "Refresh accounts",
+      "upgrade": "If accounts do not appear, update or restart the Orca host.",
+      "system": "System default",
+      "active": "Active",
+      "select": "Select",
+      "remove": "Remove",
+      "removeTitle": "Remove managed account?",
+      "removeDescription": "Stop agents using this profile first. Removal deletes its saved credentials and conversation data. Your system login stays unchanged.",
+      "cancel": "Cancel"
     }
+  },
+  "fileSearch": {
+    "failed": "Search failed. Try again."
   }
 }

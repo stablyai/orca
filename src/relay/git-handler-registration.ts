@@ -61,6 +61,7 @@ export function registerGitHandlers(
     handlers.sync.rebaseFromBase(p, context)
   )
   dispatcher.onRequest('git.branchDiff', (p, context) => handlers.objectDiff.branchDiff(p, context))
+  dispatcher.onRequest('git.reviewDiff', (p, context) => handlers.objectDiff.reviewDiff(p, context))
   dispatcher.onRequest('git.commitDiff', (p, context) => handlers.objectDiff.commitDiff(p, context))
   dispatcher.onRequest('git.listWorktrees', (p, context) =>
     handlers.worktree.listWorktrees(p, context)

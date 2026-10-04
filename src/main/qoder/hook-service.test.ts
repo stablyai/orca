@@ -11,8 +11,9 @@ vi.mock('node:os', async (importOriginal) => ({
 vi.mock('electron', () => ({ app: { getPath: () => sandbox.home } }))
 import { getManagedLifecycleHook, hasSameManagedHookInvocation } from '../claude/hook-settings'
 import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
-import { qoderHookService, QODER_HOOK_EVENTS } from './hook-service'
+import { qoderCnHookService, qoderHookService, QODER_HOOK_EVENTS } from './hook-service'
 import { markQoderWorkspaceTrusted, withQoderTrustedWorkspace } from './workspace-trust'
+import { qwenCodeHookService, QWEN_CODE_HOOK_EVENTS } from '../qwen-code/hook-service'
 
 beforeAll(() => {
   sandbox.home = mkdtempSync(join(tmpdir(), 'orca-qoder-test-'))
@@ -96,3 +97,52 @@ describe('Qoder Windows hook shell', () => {
     }
   })
 })
+
+it.each([
+  {
+    service: qoderCnHookService,
+    directory: '.qoder-cn',
+    source: 'qoder-cn',
+    events: QODER_HOOK_EVENTS
+  },
+  {
+    service: qwenCodeHookService,
+    directory: '.qwen',
+    source: 'qwen-code',
+    events: QWEN_CODE_HOOK_EVENTS
+  }
+])(
+  'installs and removes $source hooks without changing user settings',
+  ({ service, directory, source, events }) => {
+    const configDir = join(sandbox.home, directory)
+    mkdirSync(configDir, { recursive: true })
+    const path = join(configDir, 'settings.json')
+    const userHook = { matcher: '', hooks: [{ type: 'command', command: 'echo user-owned' }] }
+    writeFileSync(
+      path,
+      JSON.stringify({
+        model: 'custom',
+        statusLine: { command: 'user-status' },
+        hooks: { Stop: [userHook] }
+      })
+    )
+    expect(service.install().state).toBe('installed')
+    const installed = JSON.parse(readFileSync(path, 'utf8'))
+    expect(Object.keys(installed.hooks).sort()).toEqual([...events].sort())
+    expect(installed.statusLine).toEqual({ command: 'user-status' })
+    expect(
+      readFileSync(join(sandbox.home, '.orca', 'agent-hooks', `${source}-hook.sh`), 'utf8')
+    ).toContain(`/hook/${source}`)
+    if (source === 'qoder-cn') {
+      markQoderWorkspaceTrusted('/cn-workspace', sandbox.home, '.qoder-cn')
+      expect(JSON.parse(readFileSync(path, 'utf8')).permissions.trustDirectories).toEqual([
+        '/cn-workspace'
+      ])
+    }
+    expect(service.remove().state).toBe('not_installed')
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({
+      model: 'custom',
+      hooks: { Stop: [userHook] }
+    })
+  }
+)

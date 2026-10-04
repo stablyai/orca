@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { RESUMABLE_TUI_AGENTS } from '../../../shared/agent-session-resume'
 import {
   AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QODER_CN_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QWEN_CODE_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_CODEBUDDY_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
@@ -53,6 +55,8 @@ describe('agentResumeHostAuthorityCapability', () => {
       codex: undefined,
       cursor: AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY,
       qoder: AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY,
+      'qoder-cn': AGENT_SESSION_QODER_CN_RESUME_RUNTIME_CAPABILITY,
+      'qwen-code': AGENT_SESSION_QWEN_CODE_RESUME_RUNTIME_CAPABILITY,
       gemini: undefined,
       antigravity: undefined,
       opencode: undefined,

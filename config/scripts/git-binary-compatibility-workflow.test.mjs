@@ -22,6 +22,8 @@ describe('Git binary compatibility PR gate', () => {
     expect(run).toContain('ORCA_GIT_COMPAT_IMAGE="$image"')
     expect(run).toContain('src/shared/git-binary-compatibility.test.ts')
     expect(run).toContain('src/main/git/worktree-safety-real-git.test.ts')
+    expect(run).toContain('src/main/git/worktree-rebase-update-refs-real-git.test.ts')
+    expect(run).toContain('src/relay/git-review-draft-binary-compatibility.test.ts')
     expect(run).toContain('pids+=("$!")')
     expect(run).toContain('wait "$pid" || status=1')
   })

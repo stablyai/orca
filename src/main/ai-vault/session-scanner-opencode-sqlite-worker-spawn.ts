@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { Worker } from 'node:worker_threads'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
+import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
 import type { SessionFileCandidate } from './session-scanner-types'
 import type { OpenCodeSqliteCaptureValue } from './session-scanner-opencode-sqlite-worker-protocol'
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
@@ -237,4 +238,49 @@ async function captureForHost(
   const client = await openCodeWslClient(wsl.distro, args.dbPath, args.signal)
   const capture = await client.capture({ ...args, dbPath: wsl.linuxPath, platform: 'linux' })
   return { ...capture, session: mapOpenCodeWslSession(capture.session, args.dbPath) }
+}
+
+export async function readOpenCodeTranscriptPageViaWorker(
+  args: {
+    dbPath: string
+    sessionId: string
+    limit: number
+    beforeMessageRowId?: number
+  },
+  signal?: AbortSignal
+) {
+  const wsl = openCodeWslPath(args.dbPath)
+  const client = wsl ? await openCodeWslClient(wsl.distro, args.dbPath, signal) : getSharedClient()
+  const value = await client.readNativeChat(
+    {
+      ...args,
+      limit: openCodeTranscriptPageLimit(args.limit),
+      dbPath: wsl?.linuxPath ?? args.dbPath,
+      kind: 'native-page'
+    },
+    signal
+  )
+  if (value !== null && !('items' in value)) {
+    throw new Error('Invalid OpenCode transcript page')
+  }
+  return value
+}
+
+export async function readOpenCodeTranscriptSignalViaWorker(
+  args: {
+    dbPath: string
+    sessionId: string
+  },
+  signal?: AbortSignal
+) {
+  const wsl = openCodeWslPath(args.dbPath)
+  const client = wsl ? await openCodeWslClient(wsl.distro, args.dbPath, signal) : getSharedClient()
+  const value = await client.readNativeChat(
+    { ...args, dbPath: wsl?.linuxPath ?? args.dbPath, kind: 'native-signal' },
+    signal
+  )
+  if (value !== null && !('messageCount' in value)) {
+    throw new Error('Invalid OpenCode transcript signal')
+  }
+  return value
 }

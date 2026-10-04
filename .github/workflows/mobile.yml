@@ -114,11 +114,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # pnpm entrypoints can auto-install; finish each before the next mutates node_modules.
+      # Call installed tools so pnpm's dependency refresh cannot race between checks.
       - name: Typecheck
         id: production-types
         background: true
-        run: pnpm typecheck
+        run: node node_modules/typescript/bin/tsc --noEmit
 
       - wait: production-types
 
@@ -127,7 +127,7 @@ jobs:
       # drifted. This fails when a test file that checks today stops checking, when a test leaves
       # the program, and on @ts-nocheck; the baseline may only shrink.
       - name: Typecheck tests (ratchet)
-        run: pnpm run check:tests-typecheck
+        run: node scripts/check-tests-typecheck-ratchet.mjs
 
       # This includes the bridged replay of the whole recording corpus, which used to be a second
       # step of its own behind RPC_FOUNDATION_BRIDGE=1. A gate nobody can forget to set is the point:

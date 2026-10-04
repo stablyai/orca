@@ -64,7 +64,6 @@ export type StructuredMailboxPointerHost = {
     sessionId: string
     dispatchId: string | null
     operationId: string
-    payloadFingerprint: string
     expectedRuntimeFence: number
     body: AgentJournalMessageItem
   }) => Promise<StructuredPointerSendOutcome>
@@ -225,7 +224,6 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       db,
       mailboxHandle,
       sessionId,
-      body,
       messageIds: staged,
       submissions: session?.submissions ?? [],
       sentByThisProcess: this.sentOperationIds.get(mailboxHandle)
@@ -246,7 +244,6 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       sessionId,
       dispatchId: target.dispatchId,
       operationId: operation.operationId,
-      payloadFingerprint: operation.payloadFingerprint,
       expectedRuntimeFence: fence,
       body
     })

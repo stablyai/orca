@@ -23,14 +23,26 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { describeCensusDiff, runLengthDecode, runLengthEncode } from './readiness-census-baseline'
 import { CENSUS_AGENTS } from './readiness-census-synthetic-matrix'
+import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import {
   CENSUS_PANES,
+  CENSUS_TRANSCRIPTS,
   CENSUS_SHARD_COUNT,
   censusPaneSubject,
   censusShard
 } from './readiness-census-transcript-catalog'
 
 describe('readiness census coverage', () => {
+  it('assigns every cited composer recording to its launch agent', () => {
+    for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG)) {
+      for (const name of config.composerReadyCaptures ?? []) {
+        const transcript = CENSUS_TRANSCRIPTS.find((recording) => recording.name === name)
+        expect(transcript, name).toBeDefined()
+        expect(transcript?.agent, name).toBe(agent)
+      }
+    }
+  })
+
   it('replays every pane in exactly one shard', () => {
     const sharded = Array.from({ length: CENSUS_SHARD_COUNT }, (_, index) =>
       censusShard(index + 1)
@@ -38,6 +50,21 @@ describe('readiness census coverage', () => {
     expect(sharded.map(censusPaneSubject).toSorted()).toEqual(
       CENSUS_PANES.map(censusPaneSubject).toSorted()
     )
+  })
+
+  it('replays observation-only Build captures only on agent-unknown panes', () => {
+    const buildCaptures = readdirSync(join(__dirname, '__fixtures__'))
+      .filter((file) => file.startsWith('dsb-') && file.endsWith('.txt'))
+      .map((file) => file.slice(0, -'.txt'.length))
+    const buildPanes = CENSUS_PANES.filter(({ transcript }) =>
+      buildCaptures.includes(transcript.name)
+    )
+    expect(buildPanes.map(censusPaneSubject).toSorted()).toEqual(
+      buildCaptures.map((name) => `transcript/${name}@unknown`).toSorted()
+    )
+    for (const { transcript } of buildPanes) {
+      expect(transcript.agent).toBeNull()
+    }
   })
 
   it('keeps exactly one baseline per replayed pane and synthetic agent', () => {

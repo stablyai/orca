@@ -611,7 +611,13 @@ for (const engine of ['chromium', 'webkit']) {
           await frame?.click('#fraglink', { timeout: 2000 })
         }
 
-        const shown = await open(browser(), { signal: ctx.signal, extra: tall, act: tapFragment })
+        const shown = await open(browser(), {
+          signal: ctx.signal,
+          extra: tall,
+          act: tapFragment,
+          reportAfterAct: 'frame-src'
+        })
+        expect(shown.actError).toBeNull()
         // The precondition the whole case rests on: the base URL is the embedder's, which is what
         // makes a fragment resolve off-document here.
         expect(shown.inside?.baseUri ?? shown.mountedSrcDoc).toBeTruthy()

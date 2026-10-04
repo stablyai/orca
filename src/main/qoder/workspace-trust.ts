@@ -24,14 +24,18 @@ export function withQoderTrustedWorkspace(
   }
 }
 
-export function markQoderWorkspaceTrusted(workspacePath: string, home: string): void {
+export function markQoderWorkspaceTrusted(
+  workspacePath: string,
+  home: string,
+  configDirName: '.qoder' | '.qoder-cn' = '.qoder'
+): void {
   let canonicalPath = workspacePath
   try {
     canonicalPath = realpathSync.native(workspacePath)
   } catch {
     /* Keep the supplied path when absent. */
   }
-  const configPath = join(home, '.qoder', 'settings.json')
+  const configPath = join(home, configDirName, 'settings.json')
   const config = readHooksJson(configPath)
   if (!config) {
     return

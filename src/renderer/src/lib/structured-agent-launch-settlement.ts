@@ -1,4 +1,5 @@
 import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import {
   cancelStructuredAgentLaunch,
@@ -15,10 +16,14 @@ export type StructuredAgentLaunchSettlement =
     }
   | {
       kind: 'cancelled'
-      sessionId: string
+      /** Null when the launch was abandoned before its host admitted a chat. */
+      sessionId: string | null
     }
   | { kind: 'visibility-unknown'; sessionId: string }
-  | { kind: 'failed'; error: unknown }
+  /** `notified`: the launch already told the user, so a caller adds no message of its own. */
+  | { kind: 'failed'; error: unknown; notified?: true }
+  /** The owning host declined the chat before anything was created; its terminal opened instead. */
+  | { kind: 'terminal' }
 
 export type StructuredAgentLaunchHooks = {
   onStructuredReady?: (sessionId: string) => void
@@ -29,6 +34,8 @@ export type StructuredAgentLaunchHooks = {
 
 export type StructuredAgentLaunchHandle = {
   sessionId: string
+  /** The host the chat is created on. */
+  executionHostId: ExecutionHostId
   settlement: Promise<StructuredAgentLaunchSettlement>
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
   cancel: () => void
@@ -97,6 +104,7 @@ export function beginStructuredAgentLaunchSettlement(
   const launch = startStructuredAgentLaunch(worktreeId, agent, options)
   return {
     sessionId: launch.sessionId,
+    executionHostId: launch.executionHostId,
     settlement: settleStartedStructuredAgentLaunch(worktreeId, launch, hooks),
     cancel: () => cancelStructuredAgentLaunch(worktreeId, launch.sessionId),
     ...(launch.promptDeliveryResult ? { promptDeliveryResult: launch.promptDeliveryResult } : {})

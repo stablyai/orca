@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { BRIDGE_MAX_MESSAGE_BYTES } from '../mobile-web-shell/bridge/bridge-caps'
 import { BRIDGE_PROTOCOL_VERSION } from '../mobile-web-shell/bridge/bridge-envelope'
 import { METADATA_KEYS } from '../transport/browser-screencast-protocol'
@@ -205,4 +205,43 @@ describe('the envelope bound', () => {
       JSON.stringify(WIDEST_JSON_DOUBLE).length
     )
   })
+})
+
+describe('web-mode request work', () => {
+  for (const mode of [undefined, 'web'] as const) {
+    it(`skips discarded mobile density work in ${mode ?? 'default'} view`, () => {
+      const layouts = [
+        { width: 360, height: 640 },
+        { width: 390, height: 712 },
+        { width: 402, height: 593 },
+        { width: 319.49, height: 239.51 },
+        { width: 1200, height: 1200 },
+        { width: 2000, height: 1400 }
+      ]
+      const expected = layouts.map((layout) => buildMobileBrowserScreencastRequest(layout, 2, mode))
+      const stringify = vi.spyOn(JSON, 'stringify')
+      const sqrt = vi.spyOn(Math, 'sqrt')
+      let actual: ReturnType<typeof buildOnWeb>[] = []
+      let envelopeCalls = 0
+      let sqrtCalls = 0
+      try {
+        actual = layouts.map((layout) => buildOnWeb(layout, 2, mode))
+        envelopeCalls = stringify.mock.calls.length
+        sqrtCalls = sqrt.mock.calls.length
+      } finally {
+        stringify.mockRestore()
+        sqrt.mockRestore()
+      }
+
+      expect(actual).toEqual(expected)
+      expect(actual.map((request) => Object.keys(request ?? {}))).toEqual(
+        expected.map((request) => Object.keys(request ?? {}))
+      )
+      expect(actual.map((request) => JSON.stringify(request))).toEqual(
+        expected.map((request) => JSON.stringify(request))
+      )
+      expect(envelopeCalls).toBe(0)
+      expect(sqrtCalls).toBe(0)
+    })
+  }
 })

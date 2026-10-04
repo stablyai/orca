@@ -71,4 +71,42 @@ describe('getDefaultRemote', () => {
       'Failed to resolve default remote for repo.'
     )
   })
+
+  it('keeps configured branch precedence when a remote list is already available', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (argv: string[]) => {
+      if (argv[0] === 'for-each-ref') {
+        return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n' }
+      }
+      if (argv[0] === 'config') {
+        return { stdout: 'upstream\n' }
+      }
+      throw new Error('unexpected command')
+    })
+
+    await expect(getDefaultRemote('/repo', {}, ['origin', 'upstream'])).resolves.toBe('upstream')
+    expect(gitExecFileAsyncMock.mock.calls.some(([args]) => args[0] === 'remote')).toBe(false)
+  })
+
+  it.each([
+    [['origin', 'upstream'], 'origin'],
+    [['company'], 'company']
+  ])('reuses known remotes %j when no default ref resolves', async (remotes, expected) => {
+    gitExecFileAsyncMock.mockRejectedValue(new Error('missing ref'))
+
+    await expect(getDefaultRemote('/repo', {}, remotes)).resolves.toBe(expected)
+    expect(gitExecFileAsyncMock.mock.calls.some(([args]) => args[0] === 'remote')).toBe(false)
+  })
+
+  it.each([
+    [[], 'Repo has no configured git remotes.'],
+    [
+      ['upstream', 'fork'],
+      'Repo has multiple remotes (upstream, fork) and no default is configured. Set branch.<default>.remote.'
+    ]
+  ])('preserves errors for known remotes %j', async (remotes, message) => {
+    gitExecFileAsyncMock.mockRejectedValue(new Error('missing ref'))
+
+    await expect(getDefaultRemote('/repo', {}, remotes)).rejects.toThrow(message)
+    expect(gitExecFileAsyncMock.mock.calls.some(([args]) => args[0] === 'remote')).toBe(false)
+  })
 })

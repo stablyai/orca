@@ -1,3 +1,4 @@
+import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
 // Whether an Agent Session History row can be resumed into a structured native chat, and where.
 //
 // Separate from `ai-vault-session-resume.ts` because the answer is not the same question: the
@@ -70,7 +71,7 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
   structuredRouteAvailable: boolean
 }): AiVaultResumeInChatEligibility {
   const { session } = args
-  if (!isAgentSessionHandleProvider(session.agent)) {
+  if (isAntigravityReferenceSession(session) || !isAgentSessionHandleProvider(session.agent)) {
     return { available: false, reason: 'agent' }
   }
   // An already-adopted row reopens its own chat instead; offering a second resume of it would ask

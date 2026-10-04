@@ -19,7 +19,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'account',
-    keys: ['account add', 'account list'],
+    keys: ['account add', 'account list', 'account select', 'account rm'],
     load: async () => (await import('./handlers/account.js')).ACCOUNT_HANDLERS
   },
   {
@@ -61,7 +61,14 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'repo',
-    keys: ['repo list', 'repo add', 'repo show', 'repo set-base-ref', 'repo search-refs'],
+    keys: [
+      'repo list',
+      'repo add',
+      'repo show',
+      'repo set',
+      'repo set-base-ref',
+      'repo search-refs'
+    ],
     load: async () => (await import('./handlers/repo.js')).REPO_HANDLERS
   },
   {

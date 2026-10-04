@@ -23,6 +23,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import type { AppState } from '@/store/types'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
+import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 
 type TestStore = {
   getState: () => AppState
@@ -51,7 +52,9 @@ vi.mock('@/store', async () => {
   return { useAppStore }
 })
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+// Partial: the status projection also resolves each chat's owner from the worktree.
+vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeRuntimeOwnerModule>()),
   getRuntimeEnvironmentIdForWorktree: () => null
 }))
 

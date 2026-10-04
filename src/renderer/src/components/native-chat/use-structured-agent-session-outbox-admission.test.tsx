@@ -199,6 +199,7 @@ describe('structured agent session outbox admission', () => {
       )
       const delivery = settleStructuredAgentLaunchPrompt({
         launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+        target: { kind: 'local' },
         options: { prompt: 'review this' },
         stagedEntry
       })

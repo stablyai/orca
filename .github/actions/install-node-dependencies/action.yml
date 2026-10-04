@@ -7,9 +7,9 @@ inputs:
     required: false
     default: 'true'
   cache-pnpm-store-lookup-only:
-    description: On non-PR producers, refresh existing stores without downloading and save stores on a miss.
+    description: Auto uses measured hosted Node 24 root installs; true forces lookup, false retains archive restoration.
     required: false
-    default: 'false'
+    default: auto
   cache-pnpm-verification:
     description: Restore pnpm's policy-checked lockfile verification record.
     required: false
@@ -67,6 +67,30 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Resolve pnpm store mode
+      id: pnpm-store-mode
+      if: >-
+        github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' &&
+        (inputs.cache-pnpm-store-lookup-only == 'true' ||
+        (inputs.cache-pnpm-store-lookup-only == 'auto' &&
+        inputs.cache-dependency-path == 'pnpm-lock.yaml' &&
+        runner.environment == 'github-hosted' && job.container.id == '' &&
+        (runner.os == 'Linux' || runner.os == 'macOS' || runner.os == 'Windows') &&
+        (runner.arch == 'X64' || runner.arch == 'ARM64') &&
+        (inputs.node-version == '' || inputs.node-version == '24')))
+      shell: bash
+      env:
+        LOOKUP_REQUEST: ${{ inputs.cache-pnpm-store-lookup-only }}
+      run: |
+        lookup_only=true
+        case "$LOOKUP_REQUEST" in
+          [aA][uU][tT][oO])
+            # Hosted runners have Node for this manifest-only check before toolchain setup.
+            lookup_only="$(node -p 'const p = require("./package.json"); p.engines?.node === "24" && typeof p.packageManager === "string" && p.packageManager.split("+")[0] === "pnpm@12.8.1"')"
+            ;;
+        esac
+        printf 'lookup-only=%s\n' "$lookup_only" >> "$GITHUB_OUTPUT"
+
     # setup-node needs pnpm on PATH to locate and restore its store.
     - name: Setup pnpm
       uses: pnpm/setup@v2
@@ -80,7 +104,7 @@ runs:
       uses: actions/setup-node@v6
       with:
         node-version-file: package.json
-        cache: ${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && inputs.cache-pnpm-store-lookup-only != 'true' && 'pnpm' || '' }}
+        cache: ${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && 'pnpm' || '' }}
         cache-dependency-path: ${{ inputs.cache-dependency-path }}
         package-manager-cache: false
 
@@ -90,7 +114,7 @@ runs:
       uses: actions/setup-node@v6
       with:
         node-version: ${{ inputs.node-version }}
-        cache: ${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && inputs.cache-pnpm-store-lookup-only != 'true' && 'pnpm' || '' }}
+        cache: ${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && 'pnpm' || '' }}
         cache-dependency-path: ${{ inputs.cache-dependency-path }}
         package-manager-cache: false
 
@@ -104,11 +128,11 @@ runs:
         !(runner.arch == 'X64' && contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml')) &&
         !((runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml')) ||
         (github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' &&
-        inputs.cache-pnpm-store-lookup-only == 'true')
+        steps.pnpm-store-mode.outputs.lookup-only == 'true')
       shell: bash
       env:
         LOCKFILE_HASH: ${{ hashFiles(inputs.cache-dependency-path) }}
-        STORE_LOOKUP_ONLY: ${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store-lookup-only == 'true' }}
+        STORE_LOOKUP_ONLY: ${{ steps.pnpm-store-mode.outputs.lookup-only == 'true' }}
       run: |
         test -n "$LOCKFILE_HASH"
         cache_path="$(pnpm store path --silent)"
@@ -137,12 +161,10 @@ runs:
     # Producers can refresh access and publish misses without downloading existing archives.
     - name: Keep pnpm download store without restoring
       id: pnpm-store-lookup
-      if: >-
-        github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' &&
-        inputs.cache-pnpm-store-lookup-only == 'true'
+      if: steps.pnpm-store-mode.outputs.lookup-only == 'true'
       uses: actions/cache@v5
       with:
-        # Post-job saves cannot resolve the composite's internal step outputs.
+        # Twice-nested composite cleanup loses internal step outputs.
         path: ${{ env.ORCA_PNPM_STORE_CACHE_PATH }}
         key: node-cache-${{ runner.os }}-${{ steps.pnpm-store.outputs.arch }}-pnpm-${{ hashFiles(inputs.cache-dependency-path) }}
         lookup-only: true

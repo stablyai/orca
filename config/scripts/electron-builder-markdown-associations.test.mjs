@@ -8,6 +8,8 @@ const require = createRequire(import.meta.url)
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 
 const MARKDOWN_EXTENSIONS = ['md', 'markdown', 'mdx']
+const TABULAR_EXTENSIONS = ['csv', 'tsv']
+const DOCUMENT_EXTENSIONS = [...MARKDOWN_EXTENSIONS, ...TABULAR_EXTENSIONS]
 
 // The exact shape app-builder-lib's APP_ASSOCIATE emits: a write to the DEFAULT ("")
 // value of Software\Classes\.<ext>. Additive `WriteRegNone ...\OpenWithProgids` must not
@@ -23,23 +25,23 @@ const stripNsisCommentLines = (source) =>
 
 const readInstallerHooks = () => readFile(electronBuilderConfig.nsis.include, 'utf8')
 
-describe('electron-builder markdown file associations', () => {
+describe('electron-builder document file associations', () => {
   // Why: any top-level (or `win.`) fileAssociations entry makes app-builder-lib's NSIS
   // packager emit `!insertmacro APP_ASSOCIATE`, whose first line writes that DEFAULT value
   // — silently taking .md from whichever editor owns it, for every existing user on their
   // next UPDATE, with APP_UNASSOCIATE never restoring it. `rank: 'Alternate'` cannot
   // prevent this; it is LSHandlerRank and applies to macOS only. So the mac block must
   // stay under `mac.` — hoisting it up "to share it with Windows" is what this test blocks.
-  it('never claims the Windows default markdown handler', () => {
+  it('never claims the Windows default document handler', () => {
     expect(electronBuilderConfig.fileAssociations).toBeUndefined()
     expect(electronBuilderConfig.win?.fileAssociations).toBeUndefined()
   })
 
-  it('joins the macOS Open With list for every markdown extension without owning it', () => {
+  it('joins the macOS Open With list for every supported extension without owning it', () => {
     const associations = electronBuilderConfig.mac.fileAssociations
     // One entry per extension: an array `ext` would break the Linux packager's `*.${ext}` glob.
     expect([...associations].map((association) => association.ext).sort()).toEqual(
-      [...MARKDOWN_EXTENSIONS].sort()
+      [...DOCUMENT_EXTENSIONS].sort()
     )
     for (const association of associations) {
       expect(association).toMatchObject({ role: 'Editor', rank: 'Alternate' })
@@ -52,6 +54,14 @@ describe('electron-builder markdown file associations', () => {
   it('reuses the existing shared-mime-info markdown type on Linux', () => {
     expect(electronBuilderConfig.linux.mimeTypes).toContain('text/markdown')
     expect(electronBuilderConfig.linux.fileAssociations).toBeUndefined()
+  })
+
+  it('adds CSV and TSV handlers to the Linux desktop entry', () => {
+    expect(electronBuilderConfig.linux.mimeTypes).toEqual([
+      'text/markdown',
+      'text/csv',
+      'text/tab-separated-values'
+    ])
   })
 
   it('points the single NSIS include at the installer hooks file on disk', () => {
@@ -84,7 +94,7 @@ describe('electron-builder markdown file associations', () => {
     expect(stripped).toMatch(DEFAULT_HANDLER_WRITE)
   })
 
-  it('registers Windows markdown Open With additively, never as the default', async () => {
+  it('registers Windows document Open With additively, never as the default', async () => {
     const hooks = await readInstallerHooks()
 
     expect(stripNsisCommentLines(hooks)).not.toMatch(DEFAULT_HANDLER_WRITE)
@@ -92,11 +102,18 @@ describe('electron-builder markdown file associations', () => {
     expect(hooks).toMatch(
       /WriteRegNone\s+SHELL_CONTEXT\s+"Software\\Classes\\\$\{EXT\}\\OpenWithProgids"/
     )
-    expect(hooks).toMatch(/!macro\s+ORCA_REGISTER_MARKDOWN_OPEN_WITH\s+EXT/)
+    expect(hooks).toMatch(/!macro\s+ORCA_REGISTER_DOCUMENT_OPEN_WITH\s+EXT\s+PROGID/)
     for (const ext of MARKDOWN_EXTENSIONS) {
-      expect(hooks).toContain(`ORCA_REGISTER_MARKDOWN_OPEN_WITH ".${ext}"`)
-      expect(hooks).toContain(`ORCA_UNREGISTER_MARKDOWN_OPEN_WITH ".${ext}"`)
+      expect(hooks).toContain(`ORCA_REGISTER_DOCUMENT_OPEN_WITH ".${ext}" "\${MARKDOWN_PROGID}"`)
+      expect(hooks).toContain(`ORCA_UNREGISTER_DOCUMENT_OPEN_WITH ".${ext}" "\${MARKDOWN_PROGID}"`)
     }
+    for (const ext of TABULAR_EXTENSIONS) {
+      expect(hooks).toContain(`ORCA_REGISTER_DOCUMENT_OPEN_WITH ".${ext}" "\${TABULAR_PROGID}"`)
+      expect(hooks).toContain(`ORCA_UNREGISTER_DOCUMENT_OPEN_WITH ".${ext}" "\${TABULAR_PROGID}"`)
+    }
+    expect(hooks).toContain('!define TABULAR_PROGID "Orca.Tabular"')
+    expect(hooks).toContain('ORCA_REGISTER_DOCUMENT_PROGID "${TABULAR_PROGID}" "Tabular Document"')
+    expect(hooks).toContain('DeleteRegKey SHELL_CONTEXT "Software\\Classes\\${TABULAR_PROGID}"')
     expect(hooks).toMatch(/!macro\s+customInstall\b/)
     expect(hooks).toMatch(/!macro\s+customUnInstall\b/)
   })

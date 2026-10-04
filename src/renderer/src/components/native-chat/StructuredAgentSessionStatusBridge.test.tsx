@@ -47,7 +47,9 @@ vi.mock('@/store', async () => {
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
-    state.testRuntimeOwner ?? null
+    state.testRuntimeOwner ?? null,
+  getExecutionHostIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
+    state.testRuntimeOwner ? `runtime:${state.testRuntimeOwner}` : 'local'
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
@@ -683,6 +685,20 @@ describe('StructuredAgentSessionStatusBridge', () => {
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
 
     expect(feed().target).toEqual({ kind: 'environment', environmentId: 'env-1' })
+  })
+
+  // Two hosts can publish the same workspace id; the tab records which one holds this chat.
+  it("reads a chat's status from the host recorded on its tab, not its workspace", async () => {
+    mocks.store?.setState({
+      testRuntimeOwner: null,
+      unifiedTabsByWorktree: {
+        'wt-1': [{ ...structuredTab, executionHostId: 'runtime:server-1' }]
+      }
+    })
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    expect(feed().target).toEqual({ kind: 'environment', environmentId: 'server-1' })
   })
 
   it('does not project an unknown provider as Codex', async () => {

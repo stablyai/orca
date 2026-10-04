@@ -256,8 +256,13 @@ export function splitNativeChatSlotsWaitingBehindLiveTurn(
     slot.kind === 'message' &&
     (waiting.has(slot.message.id) ||
       (slot.message.unsent === true && slot.message.journalPosition === undefined))
-  return {
-    slots: slots.filter((slot) => !isWaiting(slot)),
-    waitingSlots: slots.filter(isWaiting)
-  }
+  const waitingSlots: NativeChatTranscriptSlot[] = []
+  const transcriptSlots = slots.filter((slot) => {
+    if (isWaiting(slot)) {
+      waitingSlots.push(slot)
+      return false
+    }
+    return true
+  })
+  return { slots: transcriptSlots, waitingSlots }
 }

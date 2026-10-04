@@ -288,7 +288,10 @@ Every lane, Codex included, combines through the fold. A child waiting on a
 human is a fold input (`childWorkLiveness: 'waiting'`, derived from the child's
 own `waiting` state; a child's `blocked` means it failed and stays live work)
 and makes the row wait whatever the main agent is doing, unless the main agent
-is itself asking. Only the Codex hook lane feeds that input today. Known
+is itself asking. The Codex hook lane feeds it from its child transcripts, and
+the structured lanes from child records, which read `waiting` for a Codex child
+thread's approval or input flag and for a Claude subagent's open permission
+request. Known
 divergences, pinned by name in the parity table
 (`src/shared/main-agent-status-parity.test.ts`) where they are reachable, so a
 reader does not mistake them for drift:
@@ -299,8 +302,13 @@ reader does not mistake them for drift:
   main agent event overwrites the slot, so the row stops reading `waiting`
   while the child is still asking, and a second asking child replaces the
   first.
-- The structured lane has no per-child wait: a child's pending prompt makes
-  the session `attention`, which reads as the main agent's own `blocked`.
+- In the structured lane a child's pending prompt also makes the session
+  `attention`, which reads as the main agent's own `blocked`: one needs-input
+  state whoever asked. A Claude subagent reads `waiting` only while the
+  journal holds its card pending: from after the card's row is written until
+  just before anyone closes it, so every publish that shows the child waiting
+  also shows the session's `attention`, and the row never reads `waiting` for
+  a Claude subagent's request.
 - The Codex hook lane drops its roster on a root `Stop` when it tracks no
   child transcripts, so a still-running or still-asking child stops holding
   the row.

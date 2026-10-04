@@ -34,7 +34,7 @@ afterEach(() => {
   cleanup()
 })
 
-function renderSession(session: AiVaultSession) {
+function renderSession(session: AiVaultSession, blocked = false) {
   const buildResumeStartup = vi.fn(() => ({ command: session.resumeCommand }))
   const onCopyResume = vi.fn()
   render(
@@ -54,13 +54,13 @@ function renderSession(session: AiVaultSession) {
         getSessionLiveState={() => null}
         getWorktreeInfo={() => null}
         getSessionResumeState={() => ({
-          blocked: false,
-          worktreeId: 'worktree-1',
+          blocked,
+          worktreeId: blocked ? null : 'worktree-1',
           usesSessionWorktree: false
         })}
         getSessionResumeActions={() => ({
           worktree: { worktreeId: null, disabled: true },
-          newTab: { worktreeId: 'worktree-1', disabled: false }
+          newTab: { worktreeId: 'worktree-1', disabled: blocked }
         })}
         getSessionResumeInChat={() => ({ available: false, reason: 'already-structured' })}
         onToggleGroup={vi.fn()}
@@ -84,6 +84,21 @@ function renderSession(session: AiVaultSession) {
 }
 
 describe('AiVaultVirtualRow resume command actions', () => {
+  it('renders blocked IDE references without preparing an unsafe startup command', () => {
+    const { buildResumeStartup } = renderSession(
+      {
+        ...cliSession,
+        agent: 'antigravity',
+        title: 'IDE reference on another host',
+        filePath:
+          '//wsl.localhost/Debian/home/example/.gemini/antigravity-ide/brain/id/transcript_full.jsonl'
+      },
+      true
+    )
+    expect(screen.getByText('IDE reference on another host')).toBeTruthy()
+    expect(buildResumeStartup).not.toHaveBeenCalled()
+  })
+
   it('keeps Copy Resume Command in overflow and context actions for CLI sessions', async () => {
     const { buildResumeStartup, onCopyResume } = renderSession(cliSession)
     const user = userEvent.setup()

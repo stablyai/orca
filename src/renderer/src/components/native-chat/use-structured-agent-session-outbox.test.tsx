@@ -161,6 +161,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     await expect(
       settleStructuredAgentLaunchPrompt({
         launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+        target: { kind: 'local' },
         options: { prompt: 'review this' },
         stagedEntry
       })
@@ -181,6 +182,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     mocks.call.mockReturnValueOnce(admission.promise)
     const delivery = settleStructuredAgentLaunchPrompt({
       launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+      target: { kind: 'local' },
       options: { prompt: 'review this' },
       stagedEntry
     })

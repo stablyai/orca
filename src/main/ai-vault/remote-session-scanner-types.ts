@@ -27,7 +27,11 @@ export type RemoteSessionFilesystemProvider = Pick<
   'readDir' | 'readFile' | 'stat'
 > & {
   /** Available only beside the execution host's disk; never opens a client path. */
-  readTranscriptBytes?: (path: string, signal?: AbortSignal) => AsyncIterable<Buffer>
+  readTranscriptBytes?: (
+    path: string,
+    signal?: AbortSignal,
+    options?: { regularFileOnly: true; maxBytes: number }
+  ) => AsyncIterable<Buffer>
   /** Execution-host database access; absent from remote filesystem RPC providers. */
   openCode?: RemoteOpenCodeSessionReader
 }
@@ -55,6 +59,7 @@ export type RemoteSessionSource = {
   directoryPredicate?: (name: string, depth: number) => boolean
   // A canonical file directly beneath every top-level session directory.
   fixedChildFileSegments?: readonly string[]
+  additionalFixedChildFileSegments?: readonly (readonly string[])[]
   // Sibling-subagent layouts (Claude `<session>/subagents/`, OMP's same-named
   // artifact dir): count subagent transcripts from the walked listing and drop
   // them from candidates instead of indexing them as sessions.

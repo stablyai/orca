@@ -2618,6 +2618,21 @@
       }
     },
     "hooks": {
+      "ipc": {
+        "events": {
+          "os": {
+            "markdown": {
+              "file": {
+                "open": {
+                  "bridge": {
+                    "1e9a1a63c4": "Failed to open the Markdown file."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       "useComposerState": {
         "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
         "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached."

@@ -299,6 +299,22 @@ describe('aiVault.listSessions handler + shared cache', () => {
     resetAiVaultSessionListCacheForTests()
   })
 
+  it('isolates IDE opt-in scans from legacy clients sharing the host cache', async () => {
+    const dispatcher = makeDispatcher()
+    await dispatcher.dispatch(
+      makeRequest('aiVault.listSessions', { includeAntigravityIdeSessions: true })
+    )
+    await dispatcher.dispatch(makeRequest('aiVault.listSessions', {}))
+    await dispatcher.dispatch(makeRequest('aiVault.listSessions', {}))
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(2)
+    expect(scanAiVaultSessionsInService.mock.calls[0]?.[0]).toMatchObject({
+      includeAntigravityIdeSessions: true
+    })
+    expect(scanAiVaultSessionsInService.mock.calls[1]?.[0]?.includeAntigravityIdeSessions).not.toBe(
+      true
+    )
+  })
+
   it('returns the AiVaultListResult unchanged', async () => {
     const dispatcher = makeDispatcher()
     const response = await dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 500 }))

@@ -25,6 +25,8 @@ export type AiVaultScanOptions = {
   wslOpenCodeReaders?: readonly OpenCodeWslRuntime[]
   geminiSessionsDir?: string
   antigravityBrainDir?: string
+  antigravityAppHome?: string
+  includeAntigravityIdeSessions?: boolean
   copilotSessionsDir?: string
   cursorProjectsDir?: string
   opencodeStorageDir?: string
@@ -47,6 +49,7 @@ export type AiVaultScanOptions = {
   clineSessionsDir?: string
   kimiSessionsDir?: string
   museSessionsDir?: string
+  jcodeSessionsDir?: string
   limit?: number
   unlimited?: boolean
   limitPerAgent?: number
@@ -61,6 +64,8 @@ export type AiVaultScanOptions = {
 }
 
 export type FileWithMtime = {
+  /** Antigravity alias observation, separate from the actual file stat/cache key. */
+  aliasMtimeMs?: number
   path: string
   mtimeMs: number
   modifiedAt: string
@@ -146,6 +151,7 @@ export type SessionAccumulator = {
   // True once an older message fell out of the newest-N preview window, so the
   // earliest preview turn is no longer the session's opening ask.
   previewMessagesTruncated: boolean
+  antigravityOpeningPrompt?: AiVaultSession['antigravityOpeningPrompt'] | null
   firstUserPrompt: string | null
   lastUserPrompt: string | null
   // Recoverable signal for a zero-turn transcript (see AiVaultSession).

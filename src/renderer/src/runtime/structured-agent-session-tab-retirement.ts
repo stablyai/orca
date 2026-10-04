@@ -1,11 +1,17 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
+  markStructuredAgentSessionLaunchesPublished,
+  publishedStructuredSessions
+} from '@/lib/structured-agent-session-launch-publication'
+import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   markStructuredAgentSessionLaunchCancelled
 } from '@/lib/structured-agent-session-launch-registry'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { discardStructuredAgentSessionLaunchOutbox } from '@/components/native-chat/structured-agent-session-outbox-storage'
 import { closeStructuredAgentSession } from './structured-agent-session-close'
 import { withLocalSessionTabCloseOwner } from './local-session-tab-close-owner'
+import { executionHostIdForStructuredTarget } from './structured-agent-session-owner'
 import { callRuntimeRpc, type RuntimeClientTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
@@ -64,10 +70,33 @@ export function beginStructuredAgentSessionTabClose(args: {
   onError?: (error: unknown) => void
 }): void {
   if (args.provisional) {
-    markStructuredAgentSessionLaunchCancelled(args.worktreeId, args.sessionId)
+    markStructuredAgentSessionLaunchCancelled(
+      args.worktreeId,
+      args.sessionId,
+      executionHostIdForStructuredTarget(args.target)
+    )
   }
   discardStructuredAgentSessionLaunchOutbox(args.sessionId)
   retireStructuredAgentSessionTab(args)
+}
+
+/**
+ * A paired host's frame, as this client may apply it: chats cancelled before their create landed
+ * are retired on that host, and the rest settle any launch still waiting to learn they exist.
+ */
+export function acceptPairedHostStructuredSessions(
+  frame: RuntimeMobileSessionTabsResult,
+  environmentId: string
+): RuntimeMobileSessionTabsResult {
+  const snapshot = suppressCancelledStructuredSessionTabs(frame, {
+    kind: 'environment',
+    environmentId
+  })
+  markStructuredAgentSessionLaunchesPublished(
+    toRuntimeExecutionHostId(environmentId),
+    publishedStructuredSessions([snapshot])
+  )
+  return snapshot
 }
 
 /** A host snapshot containing a cancelled session is suppressed and retired again idempotently. */

@@ -445,6 +445,7 @@ describe('connectPanePty', () => {
         source: 'agent-task-complete',
         terminalTitle: 'codex',
         paneKey,
+        ptyId: 'tab-pty',
         agentCompletionSource: 'process-exit'
       }
       if (hookUpdateBeforeDispatch === 'new-turn') {

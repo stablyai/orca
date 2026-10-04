@@ -1,8 +1,8 @@
-import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
+import { getTuiAgentDetectCommands, isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
 import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identities'
 import { NODE_PACKAGE_SCRIPT_ENTRYPOINTS } from './agent-node-package-entrypoints'
 import type { AgentType } from './agent-status-types'
-import type { TuiAgent } from './tui-agent'
+import type { TerminalAgent } from './terminal-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
 import { getFirstCommandToken } from './command-token-scanner'
 import {
@@ -13,7 +13,7 @@ import {
 } from './agent-command-line-entrypoint'
 import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
 
-export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
+export type RecognizedAgentProcess = { agent: TerminalAgent; processName: string }
 
 const PROCESS_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const INTERPRETER_SCRIPT_EXTENSION_RE = /\.(?:js|mjs|cjs)$/i
@@ -38,13 +38,17 @@ function normalizeProcessName(
 const FOREGROUND_AGENT_WRAPPER_PROCESS_NAMES = new Set(['node', 'python', 'python3'])
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
-const PROCESS_TO_AGENT = new Map<string, TuiAgent>()
-const AGENT_TYPE_IDS = new Set<TuiAgent>()
+const PROCESS_TO_AGENT = new Map<string, TerminalAgent>([
+  ['dsb', 'dsb'],
+  ['deepseek-build', 'dsb'],
+  ['deepseek-build-agent', 'dsb']
+])
+const AGENT_TYPE_IDS = new Set<string>(['dsb'])
 
-for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
-  TuiAgent,
-  (typeof TUI_AGENT_CONFIG)[TuiAgent]
-][]) {
+for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG)) {
+  if (!isTuiAgent(agent)) {
+    continue
+  }
   AGENT_TYPE_IDS.add(agent)
   for (const candidate of [
     config.expectedProcess,
@@ -63,7 +67,7 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
   }
 }
 
-function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
+function agentForNormalizedProcess(normalized: string): TerminalAgent | undefined {
   const exact = PROCESS_TO_AGENT.get(normalized)
   if (exact) {
     return exact
@@ -74,6 +78,9 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
     return PROCESS_TO_AGENT.get('codex')
   }
   // Qoder's launcher resolves to a versioned native binary.
+  if (/^(?:qoderclicn|qodercn)-\d/.test(normalized)) {
+    return PROCESS_TO_AGENT.get('qoderclicn')
+  }
   if (/^qodercli-\d/.test(normalized)) {
     return PROCESS_TO_AGENT.get('qodercli')
   }
@@ -162,6 +169,8 @@ export function isExpectedAgentProcess(
   return (
     normalizedProcess === normalizedExpected ||
     normalizedProcess.startsWith(`${normalizedExpected}.`) ||
+    (['qoderclicn', 'qodercn'].includes(normalizedExpected) &&
+      /^(?:qoderclicn|qodercn)(?:-\d.*)?$/.test(normalizedProcess)) ||
     (normalizedExpected === 'qodercli' && /^qodercli-\d/.test(normalizedProcess)) ||
     (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-'))
   )
@@ -226,7 +235,7 @@ export function isRecognizedAgentType(agentType: AgentType | null | undefined): 
     return false
   }
   return (
-    AGENT_TYPE_IDS.has(agentType as TuiAgent) ||
+    AGENT_TYPE_IDS.has(agentType) ||
     agentForNormalizedProcess(normalizeProcessName(agentType)) !== undefined
   )
 }

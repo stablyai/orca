@@ -27,6 +27,7 @@ import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-process-en
 import { acquireGitAdmission } from './git-subprocess-admission'
 import { GitCommandTimeoutError, gitCommandTimeoutMs } from './git-command-timeout'
 import { classifyGitCommand } from '../../../shared/git-command-classification'
+import { createAbortError } from './abort-error'
 
 /**
  * Async git command execution. Drop-in replacement for
@@ -74,7 +75,7 @@ async function gitExecFileAsyncUnlocked(
             cwd: options.cwd,
             wslDistro: options.wslDistro,
             tier: options.admissionTier,
-            signal: options.signal
+            signal: options.admissionSignal ?? options.signal
           })
       span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
       const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
@@ -153,6 +154,10 @@ async function gitExecFileAsyncUnlocked(
         }
       }
       try {
+        options.admissionSignal?.throwIfAborted()
+        if (options.canStart?.() === false) {
+          throw createAbortError()
+        }
         return await runCapturedCommand()
       } finally {
         const termination = terminationState.current

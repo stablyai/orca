@@ -96,3 +96,26 @@ export function resolveMobileNativeChatFileSessionId(
   }
   return null
 }
+
+export function isMobileFolderNativeChatReadable(value: unknown, worktreeId: string): boolean {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('folderWorkspaces' in value) ||
+    !Array.isArray(value.folderWorkspaces)
+  ) {
+    return false
+  }
+  const id = worktreeId.slice('folder:'.length)
+  const workspace = value.folderWorkspaces.find(
+    (row: unknown) => row !== null && typeof row === 'object' && 'id' in row && row.id === id
+  )
+  if (!workspace || typeof workspace !== 'object') {
+    return false
+  }
+  const connectionId = 'connectionId' in workspace ? workspace.connectionId : null
+  return (
+    connectionId === null ||
+    (typeof connectionId === 'string' && isMobileNativeChatTranscriptReadable(connectionId))
+  )
+}

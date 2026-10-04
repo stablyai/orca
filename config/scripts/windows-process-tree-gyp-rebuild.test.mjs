@@ -16,6 +16,7 @@ import {
   assertWindowsProcessTreeRuntimeCreationTime,
   inspectWindowsProcessTreeAddon,
   nodeGypRebuildInvocation,
+  nodeGypRebuildTimeoutMs,
   stageWindowsProcessTreeNodeAddonApiHeaders,
   WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS,
   WINDOWS_PROCESS_TREE_PACKAGE_DIR
@@ -52,6 +53,33 @@ describe('windows-process-tree node-gyp rebuild', () => {
       args: [entry, 'rebuild', '--arch=arm64'],
       cwd: realpathSync(import.meta.dirname)
     })
+  })
+
+  it('allows cold setup and compilation only for node-pty on a Windows ARM CI host', () => {
+    expect(
+      nodeGypRebuildTimeoutMs('node-pty', { platform: 'win32', arch: 'arm64', ci: 'true' })
+    ).toBe(600_000)
+  })
+
+  it.each([
+    { moduleName: 'node-pty', platform: 'win32', arch: 'x64', ci: 'true' },
+    { moduleName: 'node-pty', platform: 'linux', arch: 'arm64', ci: 'true' },
+    { moduleName: 'node-pty', platform: 'darwin', arch: 'arm64', ci: 'true' },
+    { moduleName: 'node-pty', platform: 'win32', arch: 'arm64', ci: '' },
+    { moduleName: 'node-pty', platform: 'win32', arch: 'arm64', ci: 'false' },
+    { moduleName: 'node-pty', platform: 'win32', arch: 'arm64', ci: '1' },
+    { moduleName: '@orca/windows-registry', platform: 'win32', arch: 'arm64', ci: 'true' },
+    { moduleName: '@vscode/windows-process-tree', platform: 'win32', arch: 'arm64', ci: 'true' }
+  ])('keeps the five-minute bound for $moduleName on $platform/$arch with CI=$ci', (host) => {
+    expect(nodeGypRebuildTimeoutMs(host.moduleName, host)).toBe(300_000)
+  })
+
+  it('uses the execution host rather than an ARM cross-compilation target', () => {
+    const { args } = nodeGypRebuildInvocation('arm64', import.meta.dirname)
+    expect(args).toContain('--arch=arm64')
+    expect(
+      nodeGypRebuildTimeoutMs('node-pty', { platform: 'win32', arch: 'x64', ci: 'true' })
+    ).toBe(300_000)
   })
 
   it('copies node-addon-api headers into the patched include dir', () => {

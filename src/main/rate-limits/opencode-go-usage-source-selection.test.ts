@@ -76,6 +76,44 @@ describe('fetchOpenCodeGoUsage', () => {
     expect(resolveApiKeyMock).toHaveBeenCalledWith({ settingsOverride: API_KEY })
   })
 
+  it('passes trusted execution context and selected roots through to credential lookup', async () => {
+    resolveApiKeyMock.mockResolvedValue({ status: 'missing' })
+    const environment = { XDG_DATA_HOME: '/task/selected', OPENCODE_DB: ':memory:' }
+
+    await fetchOpenCodeGoUsage({ cookie: '', backend: 'v1', environment, cwd: '/task/workspace' })
+
+    expect(resolveApiKeyMock).toHaveBeenCalledExactlyOnceWith({
+      settingsOverride: undefined,
+      backend: 'v1',
+      environment,
+      cwd: '/task/workspace'
+    })
+  })
+
+  it('passes a manual override without evaluating selected execution context', async () => {
+    resolveApiKeyMock.mockResolvedValue({ status: 'found', key: API_KEY, tier: 'settings' })
+    fetchWithApiKeyMock.mockResolvedValue({ kind: 'ok', windows: WINDOWS })
+    const input = { cookie: '', settingsApiKey: API_KEY }
+    Object.defineProperty(input, 'environment', {
+      get: () => {
+        throw new Error('Selected profile metadata is unreadable')
+      }
+    })
+
+    expect((await fetchOpenCodeGoUsage(input)).status).toBe('ok')
+    expect(resolveApiKeyMock).toHaveBeenCalledExactlyOnceWith({ settingsOverride: API_KEY })
+  })
+
+  it('propagates a rejected selected-account lookup without trying host or cookie credentials', async () => {
+    resolveApiKeyMock.mockRejectedValue(new Error('Selected profile metadata is unreadable'))
+
+    await expect(fetchOpenCodeGoUsage({ cookie: COOKIE })).rejects.toThrow(
+      'Selected profile metadata is unreadable'
+    )
+    expect(fetchWithApiKeyMock).not.toHaveBeenCalled()
+    expect(fetchWithCookieMock).not.toHaveBeenCalled()
+  })
+
   it('names the missing subscription instead of a generic refresh failure', async () => {
     resolveApiKeyMock.mockResolvedValue({
       status: 'found',

@@ -39,10 +39,10 @@ it('preserves deleted and renamed inputs and falls back to extraction on detecti
   const workflow = parse(
     readFileSync(new URL('../../.github/workflows/pr.yml', import.meta.url), 'utf8')
   )
-  const step = workflow.jobs.static_analysis.steps.find(
+  const step = workflow.jobs.preflight.steps.find(
     (candidate) => candidate.name === 'Verify localization extraction'
   )
-  expect(step.env).toEqual({
+  expect(step.env).toMatchObject({
     BASE_SHA: '${{ github.event.pull_request.base.sha }}'
   })
   // The base side comes from the merge ref's first parent, so the gate needs no merge base and

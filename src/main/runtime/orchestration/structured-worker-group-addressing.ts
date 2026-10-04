@@ -16,6 +16,7 @@
  */
 
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { structuredWorkerAgent } from '../structured-worker-authority'
 import { structuredWorkerAddressable } from '../structured-worker-custody'
 import {
@@ -30,7 +31,7 @@ export type OrchestrationAddressableAgent = {
   handle: string
   worktreeId: string
   /** Absent means "unknown", and `@claude`/`@codex` fail closed on it, exactly as for a pane. */
-  agentIdentity?: TuiAgent
+  agentIdentity?: TerminalAgent
 }
 
 /**

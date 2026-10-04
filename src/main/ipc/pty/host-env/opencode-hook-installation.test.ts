@@ -12,7 +12,7 @@ import type { BuildPtyHostEnvOptions } from './types'
 
 const fixture = vi.hoisted(() => ({ userData: '', guestOverlay: '' }))
 vi.mock('../../../../shared/app-environment', () => ({
-  getAppEnvironment: () => ({ getPath: () => fixture.userData })
+  getAppEnvironment: () => ({ getPath: () => fixture.userData, onWillQuit: vi.fn() })
 }))
 vi.mock('../../../agent-hooks/server', () => ({
   agentHookServer: { buildPtyEnv: () => ({ ORCA_AGENT_HOOK_PORT: '12345' }) }
@@ -77,6 +77,28 @@ afterEach(() => {
 })
 
 describe('OpenCode installation uses the current enabled agents', () => {
+  it('refuses spawn if a prepared startup intent loses its owned installer', () => {
+    mkdirSync(fixture.userData, { recursive: true })
+    writeFileSync(
+      join(fixture.userData, 'opencode-startup-prompt-overlays'),
+      'blocked fixture root'
+    )
+    expect(() =>
+      buildPtyHostEnv(
+        'owned-launch',
+        {
+          OPENCODE_CONFIG_DIR: custom,
+          ORCA_OPENCODE_PLUGIN_API: 'v2',
+          ORCA_OPENCODE_STARTUP_PROMPT_NONCE: 'fixture-nonce',
+          ORCA_OPENCODE_STARTUP_PROMPT_BODY: 'original caller brief'
+        },
+        { ...options, agentStatusHooksEnabled: false }
+      )
+    ).toThrow('launch was canceled')
+    expect(readFileSync(join(custom, 'opencode.json'), 'utf8')).toBe('{"model":"fixture"}')
+    expect(readFileSync(join(custom, 'plugins', 'user.js'), 'utf8')).toBe('// user plugin')
+  })
+
   const combinations = [
     { disabled: [], fallback: 'opencode' },
     { disabled: ['opencode'], fallback: 'opencode2' },

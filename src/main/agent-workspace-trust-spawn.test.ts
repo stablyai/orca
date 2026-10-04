@@ -47,6 +47,7 @@ describe('applyAgentWorkspaceTrustToSpawn', () => {
         'cursor',
         'copilot',
         'qoder',
+        'qoder-cn',
         'antigravity'
       ])
     )

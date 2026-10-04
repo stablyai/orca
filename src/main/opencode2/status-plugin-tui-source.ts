@@ -1,3 +1,5 @@
+import { getTuiStatusDeliverySource } from '../opencode/status-plugin-delivery-source'
+
 /**
  * TUI reporter for the OpenCode 2 status plugin. The module Orca writes as a server plugin is
  * also installed as a TUI plugin; in a TUI process setup() lands here. The TUI runs in its
@@ -37,9 +39,8 @@ async function setupOpenCode2Tui(ctx) {
   // Why: post() needs this pane's key, so a TUI outside an Orca pane has nothing to report.
   if (!process.env.ORCA_PANE_KEY) return noop;
   if (process.env.ORCA_OPENCODE_AGENT && process.env.ORCA_OPENCODE_AGENT !== ORCA_STATUS_AGENT) return noop;
-  // Why: OpenCode 1 loads no plugin directories, but refusing it here keeps a future 1.x
-  // loader from running a second producer beside the 1.x server plugin.
-  if (/^1\./.test(String(ctx.app?.version || ""))) return noop;
+  // Legacy attach contexts enter only through the checked API adapter.
+  if (/^1\./.test(String(ctx.app?.version || "")) && !ctx.legacyOpenCodeTui) return noop;
   const data = ctx.data.session;
   if (typeof data?.status !== "function" || typeof data.root !== "function") return noop;
   let factoryID;
@@ -134,6 +135,7 @@ async function setupOpenCode2Tui(ctx) {
 
     function publish() {
       if (disposed) return;
+      if (ctx.legacyOpenCodeTui && resolveHookCoords().openCodeTui !== "1") return;
       let level;
       try {
         level = derive();
@@ -158,7 +160,7 @@ async function setupOpenCode2Tui(ctx) {
       const properties = level.root ? { sessionID: level.root, ...level.rootFields } : {};
       if (level.kind === "waiting") {
         const { request, isPermission } = level.blocker;
-        const translated = isPermission
+        const translated = ctx.legacyOpenCodeTui ? { properties: request } : isPermission
           ? translateOpenCode2Event("permission.asked", request)
           : translateOpenCode2Event("form.created", { form: request });
         if (!translated) return;
@@ -217,6 +219,18 @@ async function setupOpenCode2Tui(ctx) {
       }
       const root = rootOf(sessionID);
       const isOwned = memory.owned.includes(root);
+      if (ctx.legacyOpenCodeTui && event.type === "message.part.updated") {
+        const part = properties.part;
+        const role = messageRoleById.get(part?.messageID);
+        if (sessionID !== root || part?.type !== "text" || part.synthetic === true || typeof part.text !== "string" || !part.text || memory.last.startsWith("waiting:")) return;
+        if (role === "user") {
+          const prompt = { text: part.text, messageID: part.messageID };
+          if (isOwned) postPrompt(root, prompt); else remember(root, { prompt });
+        } else if (role === "assistant" && isOwned) {
+          void enqueueLifecycle(() => queueAssistantPart({ role, text: part.text, messageID: part.messageID, sessionID: root, factoryID, authorityRevision: stateArrivalRevision }));
+        }
+        return;
+      }
       if (sessionID === root && (isOwned || currentRoute() === root)) {
         if (event.type === "session.execution.started" || event.type === "session.execution.succeeded" || event.type === "session.execution.failed" || event.type === "session.execution.interrupted") {
           const errorName = event.type === "session.execution.failed"
@@ -299,24 +313,7 @@ async function setupOpenCode2Tui(ctx) {
   }
 }
 
-// Why queued: levels derived before disposal still post, in order, before the identity retires.
-function releaseTuiStatusDelivery(factoryID, forgetUndelivered) {
-  return enqueueLifecycle(async () => {
-    disposingFactoryIDs.add(factoryID);
-    while (messagePartPostInFlight) await messagePartPostInFlight;
-    if (pendingAssistantPart?.factoryID === factoryID) {
-      if (assistantPartFlushTimer) clearTimeout(assistantPartFlushTimer);
-      assistantPartFlushTimer = null;
-      pendingAssistantPart = null;
-    }
-    if (desiredFactoryID === factoryID) {
-      if (statusDeliveryDirty) forgetUndelivered();
-      clearStatusRetry();
-      statusRevision += 1;
-    }
-    activeFactoryIDs.delete(factoryID);
-    disposingFactoryIDs.delete(factoryID);
-  });
-}
-`.split('\n')
+`
+    .split('\n')
+    .concat(getTuiStatusDeliverySource())
 }

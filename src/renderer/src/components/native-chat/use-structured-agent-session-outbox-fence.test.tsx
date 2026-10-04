@@ -138,6 +138,7 @@ describe('an outbox on a host that accepts a send before any agent has it', () =
     const delivery = await act(async () =>
       settleStructuredAgentLaunchPrompt({
         launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+        target: { kind: 'local' },
         options: { prompt: 'launch notes' },
         stagedEntry: staged
       })

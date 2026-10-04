@@ -1,6 +1,7 @@
 import type { PullRequestDraftContext } from '../../shared/pull-request-generation'
 import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
 import { isSafeReviewHeadFetchRemote } from '../../shared/review-head-tracking-ref'
+import { ReviewDraftContextError } from '../../shared/review-draft-context-error'
 import {
   canQueryRemoteBaseRefs,
   getPullRequestRemoteRefState,
@@ -25,7 +26,10 @@ async function safeExec(execGit: GitExec, args: string[]): Promise<string> {
   try {
     const { stdout } = await execGit(args, { maxBuffer: MAX_PULL_REQUEST_CONTEXT_BYTES })
     return stdout.trim()
-  } catch {
+  } catch (error) {
+    if (error instanceof ReviewDraftContextError) {
+      throw error
+    }
     return ''
   }
 }

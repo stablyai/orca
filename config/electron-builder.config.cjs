@@ -164,9 +164,10 @@ const rpmElectronRuntimeDependencies = [
 ]
 
 // Why mirrored, not imported: this config is CJS loaded by electron-builder outside the TS build.
-// Keep in sync with isMarkdownDocumentName() in src/main/ipc/markdown-documents.ts and with
+// Keep in sync with isOsOpenedDocumentName() in src/main/startup/os-opened-documents.ts and with
 // config/nsis/orca-installer-hooks.nsh, which registers the same set on Windows.
 const MARKDOWN_FILE_EXTENSIONS = ['md', 'markdown', 'mdx']
+const TABULAR_FILE_EXTENSIONS = ['csv', 'tsv']
 
 // Why: the config must load on a host-only install without resolving unused Windows addons.
 // This is load-time tolerance only; beforePack enforces that the target's natives are installed.
@@ -302,6 +303,7 @@ module.exports = {
     'out/main/cursor/**',
     'out/main/droid/**',
     'out/main/gemini/**',
+    'out/main/gitlab/project-ref-parser.js',
     'out/main/grok/**',
     'out/main/hermes/**',
     'out/main/orca-profiles/profile-index-store.js',
@@ -509,16 +511,25 @@ module.exports = {
     include: resolve(__dirname, 'nsis', 'orca-installer-hooks.nsh')
   },
   mac: {
-    // Why rank Alternate: Orca joins Finder's "Open With" list for Markdown without claiming
+    // Why rank Alternate: Orca joins Finder's "Open With" list without claiming
     // LSHandlerRank ownership, so whichever editor the user already prefers stays the default.
     // Why one entry per extension: app-builder-lib globs `*.${ext}`, which an array would break.
-    fileAssociations: MARKDOWN_FILE_EXTENSIONS.map((ext) => ({
-      ext,
-      name: 'Markdown Document',
-      description: 'Markdown Document',
-      role: 'Editor',
-      rank: 'Alternate'
-    })),
+    fileAssociations: [
+      ...MARKDOWN_FILE_EXTENSIONS.map((ext) => ({
+        ext,
+        name: 'Markdown Document',
+        description: 'Markdown Document',
+        role: 'Editor',
+        rank: 'Alternate'
+      })),
+      ...TABULAR_FILE_EXTENSIONS.map((ext) => ({
+        ext,
+        name: `${ext.toUpperCase()} Document`,
+        description: `${ext.toUpperCase()} Document`,
+        role: 'Editor',
+        rank: 'Alternate'
+      }))
+    ],
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
@@ -611,7 +622,7 @@ module.exports = {
     // override. A desktop entry's MimeType only adds a handler - mimeapps.list still owns the
     // default. .mdx is deliberately absent: Ubuntu 24.04's mime database maps it to
     // application/x-genesis-32x-rom, so claiming it here would need a glob override.
-    mimeTypes: ['text/markdown'],
+    mimeTypes: ['text/markdown', 'text/csv', 'text/tab-separated-values'],
     // Why: Ubuntu desktop ships GNOME Orca as the `orca` package and /usr/bin/orca.
     // The Linux installer should not claim those system package/file names.
     executableName: 'orca-ide',

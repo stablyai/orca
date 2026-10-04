@@ -20,7 +20,9 @@ import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
 import { hasExplicitUserPrompt } from './agent-hook-listener/provider-event-routing'
 import { hasExplicitAmpPrompt } from './agent-hook-listener/providers/amp-events'
 import {
+  isOpenCodeSharedServerPost,
   resolveOpenCodeSharedServerEnvelope,
+  suppressOpenCodeSharedServerPost,
   trackOpenCodePaneLaunchToken
 } from './agent-hook-listener/opencode-session-registry'
 import { readString } from './agent-hook-listener/tool-input-preview'
@@ -40,6 +42,12 @@ export function normalizeHookPayload(
   options: {
     deferCompactOwnershipToClient?: boolean
     previousOpenCodeMainAgent?: AgentMainAgentStatus
+    admitOpenCodeTui?: (
+      identity: Pick<
+        AgentHookEventPayload,
+        'paneKey' | 'launchToken' | 'hookEventName' | 'hasExplicitPrompt'
+      >
+    ) => boolean | 'preserve-poster'
   } = {}
 ): AgentHookEventPayload | null {
   const envelope = parseHookEnvelope(state, source, body, expectedEnv)
@@ -60,32 +68,67 @@ export function normalizeHookPayload(
   const eventName =
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
     hookPayloadRecord.hook_event_name ??
-    hookPayloadRecord.hookEventName
+    hookPayloadRecord.hookEventName ??
+    // Why jcode only: its payload names the lifecycle point `event`, and it is posted
+    // verbatim through the shared transport rather than re-stated as a form field.
+    // Scoped so another provider's unrelated `event` key cannot become an event name.
+    (source === 'jcode' ? hookPayloadRecord.event : undefined)
   // Codex child hooks expose the child's session_id on the parent's pane.
   const providerSession =
     source === 'codex' && readString(hookPayloadRecord, 'agent_id')
       ? null
       : extractAgentProviderSession(source, hookPayloadRecord)
+  if (source === 'opencode' && record.opencodeTui === 1 && !providerSession) {
+    return null
+  }
+  if (suppressOpenCodeSharedServerPost(state, source, record, providerSession?.id)) {
+    return null
+  }
+  const extractedPrompt = extractPromptText(hookPayloadRecord)
+  // A TUI's physical launch must pass the host fence before borrowing its creator's identity.
+  const tuiAdmission =
+    source === 'opencode' && record.opencodeTui === 1 && isOpenCodeSharedServerPost(source, record)
+      ? options.admitOpenCodeTui?.({
+          paneKey: stampedPaneKey,
+          launchToken: stampedLaunchToken,
+          hookEventName: typeof eventName === 'string' ? eventName : undefined,
+          hasExplicitPrompt: hasExplicitUserPrompt(
+            source,
+            eventName,
+            extractedPrompt,
+            extractedPrompt.text
+          )
+        })
+      : undefined
+  if (tuiAdmission === false) {
+    return null
+  }
   // Why (#21359): an OpenCode 1 `serve` process stamps every post with its own
   // frozen pane. When the binder has mapped this session to its real pane,
   // the stamp is replaced before anything downstream (status lookup, dispatch,
   // fences) can act on the wrong owner. Unbound sessions keep the stamp.
-  const { paneKey, tabId, worktreeId, launchToken } = resolveOpenCodeSharedServerEnvelope({
-    state,
-    source,
-    stamped: {
-      paneKey: stampedPaneKey,
-      tabId: stampedTabId,
-      worktreeId: stampedWorktreeId,
-      launchToken: stampedLaunchToken
-    },
-    sessionId: providerSession?.id,
-    body: record
-  })
+  const stamped = {
+    paneKey: stampedPaneKey,
+    tabId: stampedTabId,
+    worktreeId: stampedWorktreeId,
+    launchToken: stampedLaunchToken
+  }
+  const { paneKey, tabId, worktreeId, launchToken } =
+    tuiAdmission === 'preserve-poster'
+      ? stamped
+      : resolveOpenCodeSharedServerEnvelope({
+          state,
+          source,
+          stamped,
+          sessionId: providerSession?.id,
+          body: record
+        })
   // Why after the resolve: tracking the stamped token first would let a stale
   // shared-server stamp overwrite the pane's live token; the resolved envelope
   // carries the stored token (or nothing) for bound sessions instead.
-  trackOpenCodePaneLaunchToken(state, paneKey, launchToken)
+  if (tuiAdmission !== 'preserve-poster') {
+    trackOpenCodePaneLaunchToken(state, paneKey, launchToken)
+  }
   const providerPromptId =
     source === 'claude'
       ? normalizeClaudePromptId(hookPayloadRecord.prompt_id)
@@ -182,7 +225,6 @@ export function normalizeHookPayload(
     }
   }
 
-  const extractedPrompt = extractPromptText(hookPayloadRecord)
   const promptText = extractedPrompt.text
   const dispatched = normalizeProviderEvent({
     state,
@@ -196,7 +238,7 @@ export function normalizeHookPayload(
     previousOpenCodeMainAgent: options.previousOpenCodeMainAgent
   })
   const providerSessionOnly =
-    (source === 'pi' || source === 'prime-agent') &&
+    (source === 'pi' || source === 'prime-agent' || source === 'jcode') &&
     eventName === 'session_start' &&
     providerSession !== null
   // A transcript session_start carries resume identity while idle; receivers discard the placeholder row.

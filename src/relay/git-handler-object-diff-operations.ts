@@ -10,6 +10,29 @@ import { commitDiffEntry } from './git-handler-commit-diff-ops'
 import { stableInFlightKey } from '../shared/in-flight-promise-dedupe'
 
 export class GitHandlerObjectDiffOperations extends GitHandlerOperationContext {
+  async reviewDiff(params: Record<string, unknown>, context?: RequestContext) {
+    const { worktreePath, mergeBase, format } = params
+    if (
+      typeof worktreePath !== 'string' ||
+      !worktreePath ||
+      worktreePath.includes('\0') ||
+      !isFullGitObjectId(mergeBase) ||
+      (format !== 'name-status' && format !== 'patch')
+    ) {
+      throw new Error('Invalid review diff request.')
+    }
+    const flags =
+      format === 'name-status'
+        ? ['--name-status']
+        : ['--patch', '--minimal', '--no-color', '--no-ext-diff']
+    const result = await this.git(['diff', ...flags, `${mergeBase}..HEAD`, '--'], worktreePath, {
+      signal: context?.signal,
+      disableOptionalLocks: true
+    })
+    context?.signal?.throwIfAborted()
+    return this.maybeStreamResponse(result, params, context)
+  }
+
   async branchDiff(params: Record<string, unknown>, context?: RequestContext) {
     const worktreePath = params.worktreePath as string
     const baseRef = params.baseRef as string

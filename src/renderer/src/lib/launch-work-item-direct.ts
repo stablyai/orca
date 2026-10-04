@@ -252,7 +252,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     const structuredResult = beginDirectWorkItemStructuredLaunch({
       plan,
       primaryTabId: null,
-      beforeOpen: revealWorkspace
+      beforeOpen: revealWorkspace,
+      declinedTerminal: {
+        ...(agentArgs !== undefined ? { agentArgs } : {}),
+        ...(args.launchPlatform ? { launchPlatform: args.launchPlatform } : {}),
+        ...(launchSource ? { launchSource } : {})
+      }
     })
     if (!structuredResult.structuredLaunch) {
       revealWorkspace()

@@ -95,6 +95,7 @@ const READY_SCREEN_FIXTURES: Partial<
   codex: { name: 'codex-0157-plain-ready', cols: 120, rows: 40 },
   muse: { name: 'muse-empty-folder-ready', cols: 120, rows: 32 },
   qoder: { name: 'qoder-ready', cols: 100, rows: 32 },
+  'qoder-cn': { name: 'qoder-cn-signin', cols: 120, rows: 40 },
   cursor: { name: 'cursor-agent-idle-after-approval', cols: 80, rows: 24 }
 }
 

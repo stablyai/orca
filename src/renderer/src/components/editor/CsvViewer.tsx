@@ -1,6 +1,7 @@
-import React, { useMemo, useRef } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { detectCsvDelimiter, parseCsv } from './csv-parse'
+import { CsvDelimiterPicker, type CsvDelimiterChoice } from './csv-delimiter-picker'
 import { translate } from '@/i18n/i18n'
 
 type CsvViewerProps = {
@@ -23,11 +24,21 @@ const CHAR_PX = 7
 // independently of the body, leaving values squashed together.
 export default function CsvViewer({ content, filePath }: CsvViewerProps): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [delimiterChoice, setDelimiterChoice] = useState<CsvDelimiterChoice>('auto')
+  const detectedDelimiter = useMemo(
+    () => detectCsvDelimiter(filePath, content),
+    [filePath, content]
+  )
+  const delimiter =
+    delimiterChoice === 'auto'
+      ? detectedDelimiter
+      : delimiterChoice === 'comma'
+        ? ','
+        : delimiterChoice === 'semicolon'
+          ? ';'
+          : '\t'
 
-  const parsed = useMemo(() => {
-    const delimiter = detectCsvDelimiter(filePath, content)
-    return parseCsv(content, delimiter)
-  }, [content, filePath])
+  const parsed = useMemo(() => parseCsv(content, delimiter), [content, delimiter])
 
   // Why: memoize header/body split so their references stay stable across
   // renders that don't change content. A top-level rest-destructure would
@@ -178,7 +189,7 @@ export default function CsvViewer({ content, filePath }: CsvViewerProps): React.
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-4 border-t border-border/60 px-3 py-1 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-4 border-t border-border/60 px-3 py-1 text-xs text-muted-foreground">
         <span>
           {bodyRows.length.toLocaleString()}{' '}
           {translate('auto.components.editor.CsvViewer.ac31d2cd60', 'rows')}
@@ -186,6 +197,11 @@ export default function CsvViewer({ content, filePath }: CsvViewerProps): React.
         <span>
           {columnCount} {translate('auto.components.editor.CsvViewer.eedd0d37a7', 'columns')}
         </span>
+        <CsvDelimiterPicker
+          value={delimiterChoice}
+          detectedDelimiter={detectedDelimiter}
+          onChange={setDelimiterChoice}
+        />
       </div>
     </div>
   )

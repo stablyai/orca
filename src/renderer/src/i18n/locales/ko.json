@@ -503,7 +503,8 @@
           "muse_label": "Muse",
           "opencode2_label": "OpenCode 2",
           "codebuddy_label": "CodeBuddy",
-          "zcode_label": "ZCode"
+          "zcode_label": "ZCode",
+          "jcode_label": "Jcode"
         },
         "skill": {
           "cli": {
@@ -2001,7 +2002,8 @@
         "c679af7ad9": "내 할 일 새로 고침",
         "dfd72673e7": "프로젝트 선택을 저장하지 못했습니다.",
         "b797bdd7c3": "검색 지우기",
-        "99c2755218": "Jira JQL, 예: project = ABC AND statusCategory != Done",
+        "jiraTextMatchesNotice": "텍스트 일치 결과를 표시합니다. Jira에서 이 검색을 JQL로 실행할 수 없습니다.",
+        "99c2755218": "이슈 검색 또는 JQL 입력, 예: project = ABC",
         "2ff9fd71fd": "Jira 이슈 새로 고침",
         "0b65d3fb2c": "Linear 프로젝트 검색...",
         "eec0c5c079": "Linear 이슈 검색...",
@@ -2120,7 +2122,7 @@
         "6edf402e11": "개요",
         "9ae151b26b": "Linear",
         "94d900518d": "선택한 프리셋과 일치하는 이슈가 없습니다.",
-        "f51e254d35": "다른 JQL 쿼리를 시도해 보세요.",
+        "f51e254d35": "다른 검색어나 JQL을 사용해 보세요.",
         "4645a7814f": "Jira",
         "e224d76876": "MR",
         "bbec4717ee": "MR",
@@ -5099,7 +5101,12 @@
           "86f0ae1257": "워크스페이스 삭제"
         },
         "DeleteWorktreeDirtyChangeHint": {
-          "8e2994ce28": "이 워크스페이스를 삭제하면 이러한 변경 사항이 디스크에서 영구적으로 제거됩니다."
+          "8e2994ce28": "이 워크스페이스를 삭제하면 이러한 변경 사항이 디스크에서 영구적으로 제거됩니다.",
+          "showLoadedPaths": "불러온 경로 표시",
+          "loadedPathsNotice": "불러온 경로가 일부 누락되었거나 오래되었을 수 있습니다.",
+          "loadedChangedPaths": "불러온 변경된 경로",
+          "unresolvedConflict": "해결되지 않은 충돌",
+          "moreLoadedPaths": "불러온 경로 {{value0}}개 더"
         },
         "DeleteWorktreeLineageNotice": {
           "ad407c2d55": "더",
@@ -7094,7 +7101,7 @@
             "shellEnvToggleLabel": "셸 환경 사용 전환",
             "structuredTitle": "업데이트된 구조화된 기본 채팅 사용",
             "structuredCopy": "새 Codex 및 Claude 에이전트를 구조화된 채팅으로 엽니다. 끄면 터미널 지원 채팅으로 엽니다. 이미 있는 채팅은 그대로 유지됩니다.",
-            "structuredScope": "현재는 로컬 세션만 가능합니다. WSL 및 원격 실행 호스트(SSH 포함)는 계속해서 터미널 채팅을 사용하며 Orca가 프로세스 시작 시간을 읽을 수 없으면 Windows는 이 채팅을 사용합니다.",
+            "structuredScope": "이 컴퓨터와 이를 지원하는 버전을 실행하는 페어링된 Orca 서버에서 실행됩니다. 이전 서버는 터미널 채팅을 유지합니다. WSL 및 SSH 호스트는 계속해서 터미널 채팅을 사용하며 Orca가 프로세스 시작 시간을 읽을 수 없으면 Windows는 이 채팅을 사용합니다.",
             "structuredToggleLabel": "업데이트된 구조화된 기본 채팅 전환",
             "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
             "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",
@@ -7879,6 +7886,8 @@
           "c7ef4415de": "표시 이름",
           "b0a0c14a1c": "사이드바 및 탭에 대한 프로젝트별 표시 세부 정보입니다.",
           "removeProjectAllHosts": "구성된 모든 호스트의 Orca에서 이 프로젝트를 제거합니다.",
+          "removeProjectCheckout": "Orca에서 이 체크아웃을 제거합니다. 이 프로젝트의 다른 체크아웃은 유지됩니다.",
+          "removeProjectKeepCheckouts": "Orca에서 이 프로젝트를 제거합니다. 자체 설정이 있는 체크아웃은 유지됩니다.",
           "0909e5d650": "프로젝트 제거",
           "ee5a290616": "폴더로 열렸습니다. 이 워크스페이스에서는 Git 기능을 사용할 수 없습니다.",
           "323debba71": "유형:",
@@ -10028,7 +10037,13 @@
             "72539aede4": "시스템",
             "51ae2183e1": "데스크탑",
             "0534c76311": "Orca 데스크톱 알림용 마스터 스위치입니다.",
-            "4a210b2f72": "알림 활성화"
+            "4a210b2f72": "알림 활성화",
+            "machines": "머신",
+            "machinesDescription": "이 컴퓨터에 알림을 표시할 수 있는 컴퓨터를 선택합니다. SSH 컴퓨터나 페어링된 서버 등이 해당됩니다.",
+            "host": "호스트",
+            "remote": "원격",
+            "ssh": "ssh",
+            "mute": "음소거"
           }
         },
         "orchestration": {
@@ -12059,6 +12074,11 @@
           "usageDescription": "Cursor는 요금 주기에 따라 초기화되는 두 가지 풀과, 소진 후에 발생하는 주문형 지출로 과금합니다.",
           "usageLabel": "사용량",
           "usageTitle": "월간 플랜 사용량"
+        },
+        "NotificationHostToggles": {
+          "offCount": "{{count}}대 꺼짐",
+          "machines": "머신",
+          "machinesDescription": "이 컴퓨터에 알림을 표시할 수 있는 컴퓨터를 선택합니다. 페어링된 서버의 스위치는 해당 서버를 통해 수행하는 작업에도 적용됩니다."
         }
       },
       "right": {
@@ -17827,7 +17847,11 @@
         "queuePausedCleared": "대화를 지워서 대기열이 일시 중지되었습니다",
         "queuePaused": "대기열이 일시 중지되었습니다",
         "resume": "재개"
-      }
+      },
+      "structuredSessionHostDeclined": "{{value0}}을(를) 터미널에서 열었습니다",
+      "structuredSessionHostDeclinedDescription": "이 서버는 이 워크스페이스에서 {{value0}} 채팅을 실행할 수 없습니다.",
+      "structuredSessionHostUnreachable": "{{value0}}에 연결할 수 없습니다",
+      "structuredSessionHostUnreachableDescription": "Orca가 {{value0}} 채팅을 열지 않았습니다. 서버 연결을 확인하고 다시 시도하세요."
     },
     "tab": {
       "bar": {
@@ -18661,5 +18685,21 @@
     "addTypedPath": "Add",
     "noDirectories": "No folders added yet.",
     "removePath": "Remove {{name}}"
+  },
+  "accounts": {
+    "managedData": {
+      "description": "Orca 호스트의 터미널에서 이 명령을 실행하여 계정을 추가하세요. 선택은 해당 호스트에서 새로 시작하는 에이전트에 적용됩니다. 직접 SSH 연결과 Windows에서 호스팅하는 WSL은 자체 자격 증명을 사용합니다.",
+      "copied": "복사됨",
+      "add": "계정 추가 명령 복사",
+      "refresh": "계정 새로 고침",
+      "upgrade": "계정이 나타나지 않으면 Orca 호스트를 업데이트하거나 다시 시작하세요.",
+      "system": "시스템 기본값",
+      "active": "활성",
+      "select": "선택",
+      "remove": "삭제",
+      "removeTitle": "관리 계정을 삭제할까요?",
+      "removeDescription": "먼저 이 프로필을 사용하는 에이전트를 중지하세요. 삭제하면 저장된 자격 증명과 대화 데이터가 지워집니다. 시스템 로그인은 변경되지 않습니다.",
+      "cancel": "취소"
+    }
   }
 }

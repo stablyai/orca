@@ -1,4 +1,4 @@
-import { app, type BrowserWindow } from 'electron'
+import { app, type BrowserWindow, type Event } from 'electron'
 import type { Store } from '../persistence'
 import { uiZoomFactorFromLevel } from '../../shared/ui-zoom-level'
 import { isWindowlessLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
@@ -7,7 +7,7 @@ import { MIN_HEIGHT, MIN_WIDTH, syncTrafficLightPosition } from './main-window-v
 export type MainWindowStateLifecycle = {
   clearInitialRevealFallbackTimer: () => void
   dispose: () => void
-  freezeBoundsOnQuit: () => void
+  freezeBoundsOnQuit: (event?: Event) => void
   isWindowClosing: () => boolean
   resumeBoundsPersistence: () => void
 }
@@ -105,7 +105,10 @@ export function installMainWindowStateLifecycle(args: {
   mainWindow.on('move', saveBounds)
 
   // Why: the auto-updater calls removeAllListeners('close') before quitting, so latch on app 'before-quit' too to freeze bounds during teardown.
-  const freezeBoundsOnQuit = (): void => {
+  const freezeBoundsOnQuit = (event?: Event): void => {
+    if (event?.defaultPrevented) {
+      return
+    }
     windowClosing = true
     if (boundsTimer) {
       clearTimeout(boundsTimer)

@@ -52,7 +52,7 @@ export async function resumeAiVaultSessionInNewChat(
     })
     if (launch) {
       void launch.settlement.then((settlement) => {
-        if (settlement.kind === 'failed') {
+        if (settlement.kind === 'failed' && !settlement.notified) {
           notifyAiVaultSessionResumeInChatFailure(settlement.error)
         }
       })

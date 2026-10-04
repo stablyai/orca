@@ -4,6 +4,7 @@ import { test, expect } from './helpers/orca-app'
 import {
   cleanupMarkdownFixture,
   createMarkdownFixture,
+  expectSettledInViewport,
   getActiveWorktreeContext
 } from './helpers/markdown-editor-fixture'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -212,6 +213,7 @@ for (const width of [1920, 1280]) {
     )
     registerPostElectronShutdownCleanup(() => cleanupMarkdownFixture(smallPath))
     const restoredHeading = preview.getByRole('heading', { name: 'Section 1999', exact: true })
+    await expectSettledInViewport(restoredHeading)
     const originalTop = await restoredHeading.evaluate(
       (element) => element.getBoundingClientRect().top
     )

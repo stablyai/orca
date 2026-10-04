@@ -24,7 +24,7 @@ import type { LaunchSource } from '../../../shared/telemetry-events'
 import { resolveAgentLaunchExecutionContext } from '@/lib/launch-agent-execution-context'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
-import { launchAgentInStructuredNewTab } from '@/lib/launch-agent-in-new-tab-structured'
+import { launchStructuredAgentFromNewTab } from '@/lib/launch-agent-in-new-tab-structured-route'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import {
@@ -168,6 +168,36 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     return null
   }
 
+  // Why first: a structured chat is created on whichever runtime owns the workspace, a paired
+  // server included, so only a non-structured route falls through to the host-published terminal.
+  const plan =
+    agentSessionLaunchPlan ??
+    planAgentSessionLaunch(store, {
+      agent,
+      workspace: { kind: workspaceKind, worktreeId },
+      prompt: trimmedPrompt,
+      promptDelivery: viewModePromptDelivery,
+      tuiCustomization: { cwd: initialCwd },
+      initialSessionOptions: startupPlan.sessionOptions,
+      onPromptDelivered
+    })
+  if (plan?.route === 'structured-native-chat') {
+    const structured = launchStructuredAgentFromNewTab({
+      plan,
+      worktreeId,
+      ...(groupId ? { groupId } : {}),
+      ...(beforeSurfaceOpen ? { beforeSurfaceOpen } : {}),
+      // A paired server's "no" opens this same launch as a terminal, with the caller's arguments.
+      openTerminal: (terminalPlan) =>
+        launchAgentInNewTabInternal({
+          ...args,
+          beforeSurfaceOpen: undefined,
+          agentSessionLaunchPlan: terminalPlan
+        })
+    })
+    return structured && { ...structured, startupPlan }
+  }
+
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
@@ -196,46 +226,6 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
       ...(pasteDraftAfterLaunch !== null && promptDelivery === 'submit-after-ready'
         ? { promptDeliveryResult: webHostDelivery }
-        : {})
-    }
-  }
-
-  const plan =
-    agentSessionLaunchPlan ??
-    planAgentSessionLaunch(store, {
-      agent,
-      workspace: { kind: workspaceKind, worktreeId },
-      prompt: trimmedPrompt,
-      promptDelivery: viewModePromptDelivery,
-      tuiCustomization: { cwd: initialCwd },
-      initialSessionOptions: startupPlan.sessionOptions,
-      onPromptDelivered
-    })
-  if (plan?.route === 'structured-native-chat') {
-    const structured = launchAgentInStructuredNewTab({
-      plan,
-      ...(beforeSurfaceOpen
-        ? {
-            beforeOpen: (sessionId: string) =>
-              beforeSurfaceOpen({ kind: 'local-agent-session', sessionId })
-          }
-        : {}),
-      ...(groupId ? { targetGroupId: groupId } : {})
-    })
-    if (!structured) {
-      return null
-    }
-    return {
-      surface: {
-        kind: 'local-agent-session',
-        tabId: structured.tabId,
-        sessionId: structured.sessionId
-      },
-      startupPlan,
-      pasteDraftAfterLaunch: false,
-      structuredSettlement: structured.structuredSettlement,
-      ...(structured.promptDeliveryResult
-        ? { promptDeliveryResult: structured.promptDeliveryResult }
         : {})
     }
   }

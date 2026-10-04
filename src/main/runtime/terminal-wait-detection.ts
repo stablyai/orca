@@ -73,7 +73,7 @@ export function isKnownReadyPromptBody(
   readScreenLines: () => readonly string[] | null,
   hasOutputClock: boolean
 ): boolean {
-  if (agent === 'qoder') {
+  if (agent === 'qoder' || agent === 'qoder-cn') {
     return isQoderComposerReady(readScreenLines())
   }
   // Why before the rules: such an agent settles only on the quiet lane while it has a clock.

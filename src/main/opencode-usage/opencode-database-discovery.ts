@@ -10,8 +10,11 @@ type OpenCodeDatabaseOverride = {
   path: string | null
 }
 
-function getOpenCodeDatabaseOverride(dataDirectory: string): OpenCodeDatabaseOverride {
-  const raw = process.env.OPENCODE_DB?.trim()
+function getOpenCodeDatabaseOverride(
+  dataDirectory: string,
+  environment: NodeJS.ProcessEnv
+): OpenCodeDatabaseOverride {
+  const raw = environment.OPENCODE_DB?.trim()
   if (!raw) {
     return { isConfigured: false, path: null }
   }
@@ -32,31 +35,44 @@ export async function listOpenCodeDatabases(
    *  "OpenCode not used" rather than "we could not look". */
   onRefusal?: (path: string, error: WslTranscriptFsError) => void,
   /** Every other stat/readdir failure, including ENOENT; also read as an empty list. */
-  onFsError?: (path: string, error: unknown) => void
+  onFsError?: (path: string, error: unknown) => void,
+  signal?: AbortSignal,
+  environment: NodeJS.ProcessEnv = process.env
 ): Promise<string[]> {
-  const dataDirectory = resolveOpenCodeDataDirectory()
-  const databaseOverride = getOpenCodeDatabaseOverride(dataDirectory)
+  const dataDirectory = resolveOpenCodeDataDirectory(environment)
+  const databaseOverride = getOpenCodeDatabaseOverride(dataDirectory, environment)
   if (databaseOverride.isConfigured) {
     if (!databaseOverride.path) {
       return []
     }
     try {
-      return (await wslGatedStat(databaseOverride.path, 'scan')).isFile()
+      return (await wslGatedStat(databaseOverride.path, 'scan', signal)).isFile()
         ? [databaseOverride.path]
         : []
     } catch (error) {
+      signal?.throwIfAborted()
       reportFailure(databaseOverride.path, error, onRefusal, onFsError)
       return []
     }
   }
 
+  return listOpenCodeDatabasesInDirectory(dataDirectory, onRefusal, signal, onFsError)
+}
+
+export async function listOpenCodeDatabasesInDirectory(
+  dataDirectory: string,
+  onRefusal?: (path: string, error: WslTranscriptFsError) => void,
+  signal?: AbortSignal,
+  onFsError?: (path: string, error: unknown) => void
+): Promise<string[]> {
   try {
-    const entries = await wslGatedReaddir(dataDirectory, 'scan')
+    const entries = await wslGatedReaddir(dataDirectory, 'scan', signal)
     return entries
       .filter((entry) => entry.isFile() && /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/.test(entry.name))
       .map((entry) => join(dataDirectory, entry.name))
       .sort()
   } catch (error) {
+    signal?.throwIfAborted()
     reportFailure(dataDirectory, error, onRefusal, onFsError)
     return []
   }

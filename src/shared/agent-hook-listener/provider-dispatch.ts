@@ -9,6 +9,7 @@ import type { HookListenerState } from './listener-state'
 import type { ExtractedPromptText } from './prompt-fields'
 import { isNewTurnEvent } from './provider-event-routing'
 import { readLastUserPromptFromTranscript } from './transcript-lines'
+import { readJcodeTurnPrompt } from './providers/jcode-turn-prompt'
 import { normalizeAntigravityEvent } from './providers/antigravity-events'
 import { normalizeAmpEvent } from './providers/amp-events'
 import { normalizeClaudeEvent } from './providers/claude-events'
@@ -27,6 +28,7 @@ import { normalizeKimiEvent } from './providers/kimi-events'
 import { normalizeMuseEvent } from './providers/muse-events'
 import { normalizeDshEvent } from './providers/dsh-events'
 import { normalizeZCodeEvent } from './providers/zcode-events'
+import { normalizeJcodeEvent } from './providers/jcode-events'
 
 export type ProviderDispatchResult = {
   payload: ParsedAgentStatusPayload | null
@@ -163,6 +165,21 @@ export function normalizeProviderEvent(input: {
     case 'devin':
       payload = normalizeDevinEvent(state, eventName, promptText, paneKey, hookPayload)
       break
+    case 'qoder-cn':
+      payload = normalizeCompatibleLifecycleEvent(
+        source,
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayload
+      )
+      break
+    case 'qwen-code': {
+      const normalized = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayload)
+      payload = normalized ? { ...normalized, agentType: 'qwen-code' } : null
+      break
+    }
     case 'qoder':
       payload = normalizeQoderEvent(state, eventName, promptText, paneKey, hookPayload)
       break
@@ -178,6 +195,18 @@ export function normalizeProviderEvent(input: {
     case 'zcode':
       payload = normalizeZCodeEvent(state, eventName, promptText, paneKey, hookPayload)
       break
+    case 'jcode': {
+      const transcriptPrompt = readJcodeTurnPrompt(state, eventName, paneKey, hookPayload)
+      // Why: the reader returns null (not undefined) when no journal prompt is
+      // recoverable; only a real transcript hit counts as prompt evidence.
+      hasTranscriptPromptEvidence = transcriptPrompt !== null
+      promptInteractionKey = transcriptPrompt?.interactionKey
+      resolvedPromptText = transcriptPrompt?.text ?? ''
+      if (promptText && extractedPrompt.source !== 'message') {
+        resolvedPromptText = promptText
+      }
+      payload = normalizeJcodeEvent(state, eventName, resolvedPromptText, paneKey, hookPayload)
+    }
   }
 
   return { payload, resolvedPromptText, promptInteractionKey, hasTranscriptPromptEvidence }
