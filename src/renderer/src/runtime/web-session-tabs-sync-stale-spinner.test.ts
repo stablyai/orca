@@ -30,7 +30,10 @@ vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
 const TAB_ID = toWebTerminalSurfaceTabId('host-tab-1')
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
 
-function hostPane(state: 'done' | 'working' = 'done'): RuntimeMobileSessionTerminalClientTab {
+function hostPane(state: 'done' | 'working' = 'done'): RuntimeMobileSessionTerminalClientTab & {
+  status: 'ready'
+  terminal: string
+} {
   return {
     type: 'terminal',
     id: HOST_SURFACE_ID,
@@ -120,7 +123,8 @@ describe('remote completion repairs saved spinner titles', () => {
 
   it('drops orphan UUIDs and out-of-range slots without retaining their activity', () => {
     const state = restoredState()
-    state.runtimePaneTitlesByTabId[TAB_ID] = { 2: '⠋ Pi', [SECOND_LEAF_ID]: '⠋ Pi' }
+    const orphanTitles = { 2: '⠋ Pi', [SECOND_LEAF_ID]: '⠋ Pi' }
+    state.runtimePaneTitlesByTabId[TAB_ID] = orphanTitles
     const patch = applyWebSessionTabsSnapshot(
       state,
       makeSnapshot([hostPane()], { snapshotVersion: 2 }),
@@ -225,6 +229,7 @@ describe('remote completion repairs saved spinner titles', () => {
       ...hostPane(),
       title: 'Terminal',
       status: 'pending-handle' as const,
+      terminal: null,
       agentStatus: undefined
     }
     const patch = applyWebSessionTabsSnapshot(
@@ -254,10 +259,11 @@ describe('remote completion repairs saved spinner titles', () => {
     if (!tab) {
       throw new Error('Missing mirrored tab')
     }
+    const orphanTitles = { 2: '⠋ Pi', [SECOND_LEAF_ID]: '⠋ Pi' }
     expect(
       resolveTerminalTabActivityStatus({
         tab: { ...tab, title: 'Pi ready' },
-        runtimePaneTitlesByTabId: { [TAB_ID]: { 2: '⠋ Pi', [SECOND_LEAF_ID]: '⠋ Pi' } },
+        runtimePaneTitlesByTabId: { [TAB_ID]: orphanTitles },
         ptyIdsByTabId: state.ptyIdsByTabId,
         terminalLayout: state.terminalLayoutsByTabId[TAB_ID]
       })
