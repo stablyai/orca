@@ -2,6 +2,7 @@ import { BrowserWindow, ipcMain, shell } from 'electron'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../../shared/keybindings'
 import type { KeybindingService } from '../keybindings/keybinding-service'
 import { rebuildAppMenu } from '../menu/register-app-menu'
+import { openPathWithSystemDefault } from '../system-default-open-path'
 import { authorizeExternalPath } from './filesystem-auth'
 
 function broadcastKeybindingsChanged(snapshot: KeybindingFileSnapshot): void {
@@ -49,7 +50,7 @@ export function registerKeybindingHandlers(
   ipcMain.handle('keybindings:openFile', async () => {
     const snapshot = service.ensureFile()
     authorizeExternalPath(snapshot.path)
-    const error = await shell.openPath(snapshot.path)
+    const error = await openPathWithSystemDefault(snapshot.path)
     if (error) {
       throw new Error(error)
     }

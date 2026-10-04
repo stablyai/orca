@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 import type { CollectedBundle } from '../observability/bundle'
 import type * as NodeFs from 'node:fs'
 
@@ -12,6 +13,7 @@ const {
   writeFileSyncMock,
   showMessageBoxMock,
   openPathMock,
+  spawnProcessMock,
   collectDiagnosticBundleMock,
   deleteDiagnosticBundleMock,
   getDiagnosticsStatusMock,
@@ -23,6 +25,7 @@ const {
   writeFileSyncMock: vi.fn(),
   showMessageBoxMock: vi.fn(),
   openPathMock: vi.fn(),
+  spawnProcessMock: vi.fn(),
   collectDiagnosticBundleMock: vi.fn(),
   deleteDiagnosticBundleMock: vi.fn(),
   getDiagnosticsStatusMock: vi.fn(),
@@ -38,6 +41,8 @@ vi.mock('node:fs', async () => {
     writeFileSync: writeFileSyncMock
   }
 })
+
+vi.mock('../../shared/child-process/run-process', () => ({ spawnProcess: spawnProcessMock }))
 
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp', getVersion: () => '1.2.3-test' },
@@ -77,7 +82,19 @@ function makeBundle(overrides: Partial<CollectedBundle> = {}): CollectedBundle {
 }
 
 describe('diagnostics IPC handlers', () => {
+  let hostPlatform: PropertyDescriptor | undefined
+
+  afterEach(() => {
+    vi.useRealTimers()
+    if (hostPlatform) {
+      Object.defineProperty(process, 'platform', hostPlatform)
+    }
+  })
+
   beforeEach(() => {
+    hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    spawnProcessMock.mockReset()
     handleMock.mockReset()
     mkdirSyncMock.mockReset()
     readFileSyncMock.mockReset()
@@ -231,6 +248,140 @@ describe('diagnostics IPC handlers', () => {
     expect(openPathMock).toHaveBeenCalledWith(
       expect.stringContaining(`${bundle.bundleSubmissionId}.ndjson`)
     )
+  })
+
+  it.each(['success', 'nonzero', 'missing', 'pending'] as const)(
+    'keeps the Linux preview gate accurate for a %s launcher',
+    async (outcome) => {
+      vi.useFakeTimers()
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+      spawnProcessMock.mockImplementationOnce(() => {
+        const child = Object.assign(new EventEmitter(), { unref: vi.fn() })
+        queueMicrotask(() => {
+          if (outcome === 'missing') {
+            child.emit('error', new Error('spawn xdg-open ENOENT'))
+          } else if (outcome !== 'pending') {
+            child.emit('exit', outcome === 'success' ? 0 : 1, null)
+          }
+        })
+        return child
+      })
+      const bundle = makeBundle({ bundleSubmissionId: 'linuxbundleabcdefghijklmnop' })
+      collectDiagnosticBundleMock.mockReturnValue(bundle)
+      await handlers.get('diagnostics:collectBundle')!({}, 30)
+      const preview = handlers.get('diagnostics:openBundlePreview')!({}, bundle.bundleSubmissionId)
+      const assertion =
+        outcome === 'success'
+          ? expect(preview).resolves.toBeUndefined()
+          : expect(preview).rejects.toThrow()
+      await vi.advanceTimersByTimeAsync(1_500)
+      await assertion
+      expect(spawnProcessMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: [expect.stringContaining(`${bundle.bundleSubmissionId}.ndjson`)]
+        })
+      )
+      expect(openPathMock).not.toHaveBeenCalled()
+      if (outcome !== 'success') {
+        await expect(
+          handlers.get('diagnostics:uploadBundle')!({}, bundle.bundleSubmissionId)
+        ).rejects.toThrow(/open.*review file/)
+        expect(showMessageBoxMock).not.toHaveBeenCalled()
+        expect(uploadDiagnosticBundleMock).not.toHaveBeenCalled()
+      }
+    }
+  )
+
+  it('recovers a late successful Linux open without launching another copy', async () => {
+    vi.useFakeTimers()
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    const child = Object.assign(new EventEmitter(), { unref: vi.fn() })
+    spawnProcessMock.mockReturnValue(child)
+    const bundle = makeBundle({ bundleSubmissionId: 'latebundleabcdefghijklmnop' })
+    collectDiagnosticBundleMock.mockReturnValue(bundle)
+    await handlers.get('diagnostics:collectBundle')!({}, 30)
+    const open = handlers.get('diagnostics:openBundlePreview')!
+    const rejected = expect(open({}, bundle.bundleSubmissionId)).rejects.toThrow()
+    await vi.advanceTimersByTimeAsync(1_500)
+    await rejected
+    await expect(
+      handlers.get('diagnostics:uploadBundle')!({}, bundle.bundleSubmissionId)
+    ).rejects.toThrow(/open.*review file/)
+    child.emit('exit', 0, null)
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(open({}, bundle.bundleSubmissionId)).resolves.toBeUndefined()
+    expect(spawnProcessMock).toHaveBeenCalledOnce()
+    await handlers.get('diagnostics:uploadBundle')!({}, bundle.bundleSubmissionId)
+    expect(showMessageBoxMock).toHaveBeenCalledOnce()
+    expect(uploadDiagnosticBundleMock).toHaveBeenCalledOnce()
+  })
+
+  it('continues to reopen a preview after an acknowledged successful launch', async () => {
+    const bundle = makeBundle({ bundleSubmissionId: 'reopenbundleabcdefghijklmnop' })
+    collectDiagnosticBundleMock.mockReturnValue(bundle)
+    await handlers.get('diagnostics:collectBundle')!({}, 30)
+    const open = handlers.get('diagnostics:openBundlePreview')!
+    await open({}, bundle.bundleSubmissionId)
+    await open({}, bundle.bundleSubmissionId)
+    expect(openPathMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('releases a discarded preview while its detached opener is still running', async () => {
+    vi.useFakeTimers()
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    const child = Object.assign(new EventEmitter(), { unref: vi.fn() })
+    spawnProcessMock.mockReturnValue(child)
+    let bundle: CollectedBundle | null = makeBundle({
+      bundleSubmissionId: 'gcpreviewabcdefghijklmnop'
+    })
+    const bundleId = bundle.bundleSubmissionId
+    const reference = new WeakRef(bundle)
+    collectDiagnosticBundleMock.mockReturnValue(bundle)
+    await handlers.get('diagnostics:collectBundle')!({}, 30)
+    const rejected = expect(
+      handlers.get('diagnostics:openBundlePreview')!({}, bundleId)
+    ).rejects.toThrow()
+    await vi.advanceTimersByTimeAsync(1_500)
+    await rejected
+    await handlers.get('diagnostics:discardBundlePreview')!({}, bundleId)
+    collectDiagnosticBundleMock.mockReset()
+    bundle = null
+    if (!global.gc) {
+      throw new Error('Run this retention test with --expose-gc')
+    }
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await vi.advanceTimersByTimeAsync(0)
+      global.gc()
+    }
+    expect(reference.deref()).toBeUndefined()
+    expect(child.listenerCount('exit')).toBe(1)
+    child.emit('exit', 0, null)
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(handlers.get('diagnostics:uploadBundle')!({}, bundleId)).rejects.toThrow(/expired/)
+  })
+
+  it('does not credit a replacement bundle for an old launcher success', async () => {
+    vi.useFakeTimers()
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    const child = Object.assign(new EventEmitter(), { unref: vi.fn() })
+    spawnProcessMock.mockReturnValue(child)
+    const bundle = makeBundle({ bundleSubmissionId: 'replacebundleabcdefghijklmnop' })
+    collectDiagnosticBundleMock.mockReturnValue(bundle)
+    const collect = handlers.get('diagnostics:collectBundle')!
+    await collect({}, 30)
+    const rejected = expect(
+      handlers.get('diagnostics:openBundlePreview')!({}, bundle.bundleSubmissionId)
+    ).rejects.toThrow()
+    await vi.advanceTimersByTimeAsync(1_500)
+    await rejected
+    await collect({}, 30)
+    child.emit('exit', 0, null)
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(
+      handlers.get('diagnostics:uploadBundle')!({}, bundle.bundleSubmissionId)
+    ).rejects.toThrow(/open.*review file/)
+    expect(showMessageBoxMock).not.toHaveBeenCalled()
+    expect(uploadDiagnosticBundleMock).not.toHaveBeenCalled()
   })
 
   it('requires opening the retained review file before sending', async () => {

@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 import { normalize, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -699,6 +700,18 @@ describe('registerShellHandlers', () => {
   })
 
   describe('legacy file open handlers', () => {
+    let hostPlatform: PropertyDescriptor | undefined
+
+    beforeEach(() => {
+      hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    })
+
+    afterEach(() => {
+      if (hostPlatform) {
+        Object.defineProperty(process, 'platform', hostPlatform)
+      }
+    })
     it('does not open relative file paths', async () => {
       const handler = getHandler('shell:openFilePath')
 
@@ -738,6 +751,83 @@ describe('registerShellHandlers', () => {
 
       await expect(handler({}, filePath)).resolves.toBe(false)
       expect(openPathMock).toHaveBeenCalledWith(normalize(filePath))
+    })
+
+    describe('on Linux, where Electron never settles shell.openPath', () => {
+      let platformDescriptor: PropertyDescriptor | undefined
+
+      beforeEach(() => {
+        vi.useFakeTimers()
+        platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+        Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+        openPathMock.mockReturnValue(new Promise<string>(() => {}))
+        spawnMock.mockImplementation(() => {
+          const child = Object.assign(new EventEmitter(), { unref: vi.fn() })
+          queueMicrotask(() => child.emit('exit', 0, null))
+          return child
+        })
+      })
+
+      afterEach(() => {
+        vi.useRealTimers()
+        if (platformDescriptor) {
+          Object.defineProperty(process, 'platform', platformDescriptor)
+        }
+      })
+
+      it('resolves file-path opens after the Linux opener exits successfully', async () => {
+        const filePath = resolve('note.md')
+        const handler = getHandler('shell:openFilePath')
+
+        const result = handler({}, filePath)
+        await vi.advanceTimersByTimeAsync(5_000)
+
+        await expect(result).resolves.toBe(true)
+        expect(spawnMock).toHaveBeenCalledWith(
+          'xdg-open',
+          [normalize(filePath)],
+          expect.objectContaining({ shell: false, stdio: 'ignore' })
+        )
+      })
+
+      it('resolves file-URI opens after the Linux opener exits successfully', async () => {
+        const filePath = resolve('note.md')
+        const handler = getHandler('shell:openFileUri')
+
+        const result = handler({}, pathToFileURL(filePath).toString())
+        await vi.advanceTimersByTimeAsync(5_000)
+
+        await expect(result).resolves.toBeUndefined()
+        expect(spawnMock).toHaveBeenCalledWith(
+          'xdg-open',
+          [normalize(filePath)],
+          expect.objectContaining({ shell: false, stdio: 'ignore' })
+        )
+      })
+
+      it('still reports launcher failures before the bound', async () => {
+        spawnMock.mockReturnValueOnce(createSpawnedProcess('error'))
+        const handler = getHandler('shell:openFilePath')
+
+        await expect(handler({}, resolve('note.md'))).resolves.toBe(false)
+      })
+
+      it('returns false for a nonzero Linux opener exit', async () => {
+        spawnMock.mockImplementationOnce(() => {
+          const child = Object.assign(new EventEmitter(), { unref: vi.fn() })
+          queueMicrotask(() => child.emit('exit', 1, null))
+          return child
+        })
+        const handler = getHandler('shell:openFilePath')
+        await expect(handler({}, resolve('note.md'))).resolves.toBe(false)
+      })
+
+      it('returns false when the Linux opener outcome remains unknown', async () => {
+        spawnMock.mockReturnValueOnce(Object.assign(new EventEmitter(), { unref: vi.fn() }))
+        const result = getHandler('shell:openFilePath')({}, resolve('note.md'))
+        await vi.advanceTimersByTimeAsync(5_000)
+        await expect(result).resolves.toBe(false)
+      })
     })
 
     it('does not open non-file URIs', async () => {

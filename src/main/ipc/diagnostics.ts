@@ -18,7 +18,8 @@
 // renderer triggers the flow; main reads the URL from a build-time
 // constant or env var and does the POST itself.
 
-import { app, dialog, ipcMain, shell } from 'electron'
+import { app, dialog, ipcMain } from 'electron'
+import { openPathWithSystemDefault } from '../system-default-open-path'
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { arch as osArch, platform as osPlatform, release as osRelease, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -48,6 +49,7 @@ type PendingBundle = {
   readonly previewFilePath: string
   ttlTimer: ReturnType<typeof setTimeout>
   previewOpened: boolean
+  previewOpenAwaitingRetry?: boolean
 }
 
 const pendingBundles = new Map<string, PendingBundle>()
@@ -123,7 +125,7 @@ function getPendingBundleForUpload(bundleSubmissionId: unknown): {
   return { bundle: pending.bundle, payload: pending.bundle.payload }
 }
 
-function getPendingPreviewFilePath(bundleSubmissionId: unknown): string {
+function getPendingPreviewBundle(bundleSubmissionId: unknown): PendingBundle {
   if (
     typeof bundleSubmissionId !== 'string' ||
     !/^[A-Za-z0-9_-]{16,64}$/.test(bundleSubmissionId)
@@ -135,7 +137,7 @@ function getPendingPreviewFilePath(bundleSubmissionId: unknown): string {
   if (!pending) {
     throw new Error('review file has expired; create a new one before opening')
   }
-  return pending.previewFilePath
+  return pending
 }
 
 function discardPendingBundle(bundleSubmissionId: unknown): void {
@@ -280,14 +282,28 @@ export function registerDiagnosticsHandlers(): void {
   )
 
   ipcMain.handle('diagnostics:openBundlePreview', async (_event, bundleSubmissionId: unknown) => {
-    const previewFilePath = getPendingPreviewFilePath(bundleSubmissionId)
-    const errorMessage = await shell.openPath(previewFilePath)
+    const pending = getPendingPreviewBundle(bundleSubmissionId)
+    if (pending.previewOpenAwaitingRetry) {
+      pending.previewOpenAwaitingRetry = false
+      return
+    }
+    let replyPending = true
+    const pendingReference = new WeakRef(pending)
+    const pendingId = pending.bundle.bundleSubmissionId
+    const markOpened = (): void => {
+      // A detached opener must not retain or credit a discarded preview.
+      const current = pendingReference.deref()
+      if (current && pendingBundles.get(pendingId) === current) {
+        current.previewOpened = true
+        if (!replyPending) {
+          current.previewOpenAwaitingRetry = true
+        }
+      }
+    }
+    const errorMessage = await openPathWithSystemDefault(pending.previewFilePath, markOpened)
+    replyPending = false
     if (errorMessage) {
       throw new Error('could not open review file')
-    }
-    const pending = pendingBundles.get(bundleSubmissionId as string)
-    if (pending) {
-      pending.previewOpened = true
     }
   })
 
