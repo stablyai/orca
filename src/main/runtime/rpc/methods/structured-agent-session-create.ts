@@ -36,7 +36,7 @@ export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
   attachParams: AgentSessionAttachParams
   /** Null when the caller supplied its own location; only a resolved worktree publishes a tab. */
-  tab: { workspaceId: string; agent: 'claude' | 'codex' } | null
+  tab: { workspaceId: string; agent: 'claude' | 'codex' | 'dsh-acp' } | null
 }
 
 /**
@@ -73,7 +73,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   ensureHost: () => Promise<StructuredAgentSessionHost>
   envelope: AgentSessionMutationEnvelope
   worktree: string
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'dsh-acp'
   caller: StructuredAgentSessionCaller
   resumeFrom?: StructuredAgentSessionResumeSource
   /** Replaces the seed options the host resolves from settings. Orchestration passes the
@@ -93,6 +93,9 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     callerKey: args.caller.callerKey,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
   })
+  if (resolved.provider !== args.agent || resolved.agent !== args.agent) {
+    throw new Error('Structured create intent resolved a different agent')
+  }
   const hostFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',
     sessionId: args.envelope.sessionId,
@@ -109,13 +112,13 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
       // must replay rather than conflict.
       ...(args.options ? { options: args.options } : {}),
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
-      provider: resolved.provider as 'claude' | 'codex',
-      agent: resolved.agent as 'claude' | 'codex',
+      provider: args.agent,
+      agent: args.agent,
       envelope: { ...args.envelope, payloadFingerprint: hostFingerprint }
     },
     tab: {
       workspaceId: resolved.location.workspaceId,
-      agent: resolved.agent as 'claude' | 'codex'
+      agent: args.agent
     }
   }
 }
@@ -167,7 +170,7 @@ export async function createStructuredAgentSessionForWorktree(args: {
   caller: StructuredAgentSessionCaller
   envelope: AgentSessionMutationEnvelope
   worktree: string
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'dsh-acp'
   activate: boolean
   options?: Readonly<Record<string, string>>
   tabId?: string

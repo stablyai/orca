@@ -78,7 +78,8 @@ export type AgentLaunchSurface =
 
 export type LaunchAgentInNewTabResult = {
   surface: AgentLaunchSurface
-  startupPlan: AgentStartupPlan
+  /** Null for a structured-only launch with no terminal command. */
+  startupPlan: AgentStartupPlan | null
   pasteDraftAfterLaunch: boolean
   promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
   /** Structured route only: what the launch did once it settled. The call stays synchronous. */
@@ -164,7 +165,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   })
   let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
 
-  if (!startupPlan) {
+  // Structured-only transports have no terminal plan; other agents still validate CLI arguments.
+  if (!startupPlan && TUI_AGENT_CONFIG[agent].launchTransport !== 'structured') {
     return null
   }
 
@@ -178,7 +180,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       prompt: trimmedPrompt,
       promptDelivery: viewModePromptDelivery,
       tuiCustomization: { cwd: initialCwd },
-      initialSessionOptions: startupPlan.sessionOptions,
+      initialSessionOptions: startupPlan?.sessionOptions ?? startupPlanBase.sessionOptions,
       onPromptDelivered
     })
   if (plan?.route === 'structured-native-chat') {
@@ -196,6 +198,10 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
         })
     })
     return structured && { ...structured, startupPlan }
+  }
+
+  if (!startupPlan) {
+    return null
   }
 
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)

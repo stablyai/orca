@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { defaultAgentChatLabel } from '../../shared/agent-session-chat-label'
+import { isAgentSessionHandleProvider } from '../../shared/agent-session-provider-handle'
 import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './orca-runtime-get-structured-agent-session-create-support'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
@@ -74,7 +75,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
     const restored = (host?.listSessionTabs() ?? []).flatMap((session) => {
-      if (session.agent !== 'codex' && session.agent !== 'claude') {
+      if (!isAgentSessionHandleProvider(session.agent)) {
         return []
       }
       let sessionId = session.sessionId
@@ -111,7 +112,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
   async publishStructuredAgentSessionTab(input: {
     workspaceId: string
     sessionId: string
-    agent: 'claude' | 'codex'
+    agent: 'claude' | 'codex' | 'dsh-acp'
     activate: boolean
     notify?: boolean
     replacesSessionId?: string
@@ -139,7 +140,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
   projectStructuredAgentSessionTab(input: {
     workspaceId: string
     sessionId: string
-    agent: 'claude' | 'codex'
+    agent: 'claude' | 'codex' | 'dsh-acp'
     activate: boolean
     notify?: boolean
     replacesSessionId?: string

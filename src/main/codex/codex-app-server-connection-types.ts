@@ -31,3 +31,13 @@ export type CodexAppServerConnection = {
   /** Resolves true only after the child emitted `exit` or `close`; false is unproven. */
   close: () => Promise<boolean>
 }
+
+export type ProviderStdioProtocol = {
+  name: string
+  jsonrpc?: '2.0'
+  maxLineBytes?: number
+  validateRecord?: (record: Record<string, unknown>) => boolean
+  initialize: (connection: CodexAppServerConnection) => Promise<void>
+  requestError: (method: string, error: Record<string, unknown>) => Error
+  exitError: (stderr: string, cause?: Error) => Error
+}

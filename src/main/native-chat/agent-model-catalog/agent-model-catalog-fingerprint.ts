@@ -37,6 +37,9 @@ export function agentModelCatalogFingerprint(identity: AgentModelCatalogIdentity
 export function agentModelCatalogIdentityForRecord(
   record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>
 ): AgentModelCatalogIdentity {
+  if (record.provider === 'dsh-acp') {
+    throw new Error('DSH models are advertised by its live ACP session')
+  }
   return {
     agent: record.provider,
     accountHomeVariable: record.accountHome.variable,

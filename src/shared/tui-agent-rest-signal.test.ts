@@ -7,6 +7,7 @@ import { getTuiAgentRestSignal, type TuiAgentRestSignal } from './tui-agent-rest
 // rest signal is, and a title-table change that moves an agent shows up in review.
 const EXPECTED_REST_SIGNALS: Record<TuiAgent, TuiAgentRestSignal> = {
   dsh: 'hook-done',
+  'dsh-acp': 'none',
   codex: 'synthetic-title',
   cursor: 'synthetic-title',
   pi: 'synthetic-title',

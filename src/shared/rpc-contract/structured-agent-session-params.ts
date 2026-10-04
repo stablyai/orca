@@ -92,7 +92,7 @@ export const ExecutionLocation = z
 
 export const AccountHome = z
   .object({
-    variable: z.enum(['CLAUDE_CONFIG_DIR', 'CODEX_HOME']),
+    variable: z.enum(['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'DSH_HOME']),
     path: z.string().min(1).max(4096)
   })
   .strict()
@@ -101,7 +101,7 @@ export const AttachParams = z
   .object({
     envelope: MutationEnvelope,
     location: ExecutionLocation,
-    provider: z.enum(['codex', 'claude']),
+    provider: z.enum(['codex', 'claude', 'dsh-acp']),
     agent: Identifier('Invalid agent'),
     accountHome: AccountHome,
     runtimeKind: z.literal('native'),
@@ -122,7 +122,7 @@ export const CreateIntentParams = z
   .object({
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.enum(['claude', 'codex']),
+    agent: z.enum(['claude', 'codex', 'dsh-acp']),
     resumeFrom: ResumeSource.optional(),
     /**
      * The tab id the client reserved for this chat, so it can place the tab before the reply. The
@@ -141,7 +141,7 @@ export const CreateParams = z.union([AttachParams, CreateIntentParams])
 export const CreateSupportParams = z
   .object({
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.enum(['claude', 'codex'])
+    agent: z.enum(['claude', 'codex', 'dsh-acp'])
   })
   .strict()
 
@@ -295,7 +295,7 @@ export const OptionsParams = z.object({ sessionId: SessionId }).strict()
  *  session record the host keys it by the account a new launch would pin.
  *  `worktree` names where a new chat runs, whose own config may replace the default. */
 export const ModelCatalogParams = z.strictObject({
-  agent: z.enum(['claude', 'codex']),
+  agent: z.enum(['claude', 'codex', 'dsh-acp']),
   sessionId: SessionId.optional(),
   worktree: Identifier('Invalid worktree selector').optional()
 })

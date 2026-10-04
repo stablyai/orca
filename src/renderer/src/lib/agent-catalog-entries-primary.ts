@@ -92,6 +92,13 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       homepageUrl: 'https://dev.meta.ai/docs/muse-code'
     },
     {
+      id: 'dsh-acp',
+      label: translate('auto.lib.agent.catalog.dsh_acp_label', 'DeepSeek Harness (Official ACP)'),
+      cmd: 'dsh',
+      searchAliases: ['deepseek', 'dsh', 'official', 'acp'],
+      homepageUrl: 'https://github.com/deepseek-ai/deepseek-harness'
+    },
+    {
       id: 'dsh',
       label: translate('auto.lib.agent.catalog.dsh_label', 'DeepSeek Harness'),
       cmd: 'dsh-tui',

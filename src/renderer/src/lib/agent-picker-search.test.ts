@@ -74,6 +74,10 @@ describe('agent picker search', () => {
   })
 
   it.each([
+    ['dsh', 'dsh-acp'],
+    ['dsh-acp', 'dsh-acp'],
+    ['dsh-tui', 'dsh'],
+    ['dst', 'dsh'],
     ['qoder', 'qoder'],
     ['qodercli', 'qoder'],
     ['qoder-cn', 'qoder-cn'],

@@ -1,4 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { resolveDshHome } from '../dsh/dsh-structured-launch-resolution'
+import { supportsDshStructuredLocation } from '../dsh/dsh-structured-location-support'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { OrcaRuntimeWithGetWorktreePs } from './orca-runtime-get-worktree-ps'
 import { supportsCodexStructuredLocation } from '../codex/codex-structured-location-support'
@@ -28,16 +30,18 @@ import { applyStructuredCodexWorkspaceTrust } from '../agent-workspace-trust-spa
 export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaRuntimeWithGetWorktreePs {
   async getStructuredAgentSessionCreateSupport(
     worktreeSelector: string,
-    agent: 'claude' | 'codex'
+    agent: 'claude' | 'codex' | 'dsh-acp'
   ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }> {
     const location = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
     return resolveStructuredAgentSessionCreateSupport({
       agent,
       location,
       adapterSupportsCreate:
-        agent === 'claude'
-          ? supportsClaudeStructuredLocation(location)
-          : supportsCodexStructuredLocation(location),
+        agent === 'dsh-acp'
+          ? supportsDshStructuredLocation(location)
+          : agent === 'claude'
+            ? supportsClaudeStructuredLocation(location)
+            : supportsCodexStructuredLocation(location),
       getSettings: () => this.requireStore().getSettings()
     })
   }
@@ -45,7 +49,7 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
   /** The saved selection a new chat here starts with. createSupport reports it too, so a client's
    *  picker shows what create will run; one resolver keeps the two from drifting. */
   structuredAgentSessionLaunchSeedOptions(
-    agent: 'claude' | 'codex'
+    agent: 'claude' | 'codex' | 'dsh-acp'
   ): Record<string, string> | undefined {
     return resolveStructuredLaunchSeedOptions(
       this.requireStore().getSettings().nativeChatSessionOptions,
@@ -93,10 +97,18 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
   async resolveStructuredAgentSessionCreateIntent(input: {
     envelope: { sessionId: string; clientOperationId: string }
     worktree: string
-    agent: 'claude' | 'codex'
+    agent: 'claude' | 'codex' | 'dsh-acp'
     callerKey?: string
     resumeFrom?: { providerSessionId: string }
   }): Promise<AgentSessionAttachParams> {
+    if (input.agent === 'dsh-acp') {
+      if (input.resumeFrom) {
+        throw new Error('Official DSH transcript import and replay are unsupported')
+      }
+      return this.resolveStructuredAgentSessionIntent(input, async ({ launchEnv }) =>
+        resolveDshHome({ ...process.env, ...launchEnv })
+      )
+    }
     if (input.agent === 'claude') {
       return this.resolveStructuredAgentSessionIntent(input, async ({ launchEnv, location }) =>
         resolveStructuredClaudeAccountHomePath({
@@ -125,12 +137,15 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
    * Same resolver as the create intent above — never a second copy.
    */
   async resolveStructuredAgentAccountHome(
-    agent: 'claude' | 'codex'
-  ): Promise<{ variable: 'CLAUDE_CONFIG_DIR' | 'CODEX_HOME'; path: string }> {
+    agent: 'claude' | 'codex' | 'dsh-acp'
+  ): Promise<{ variable: 'CLAUDE_CONFIG_DIR' | 'CODEX_HOME' | 'DSH_HOME'; path: string }> {
     const launchEnv = resolveTuiAgentLaunchEnv(
       agent,
       this.requireStore().getSettings().agentDefaultEnv
     )
+    if (agent === 'dsh-acp') {
+      return { variable: 'DSH_HOME', path: resolveDshHome({ ...process.env, ...launchEnv }) }
+    }
     if (agent === 'claude') {
       return {
         variable: 'CLAUDE_CONFIG_DIR',
@@ -156,7 +171,7 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
     input: {
       envelope: { sessionId: string; clientOperationId: string }
       worktree: string
-      agent: 'claude' | 'codex'
+      agent: 'claude' | 'codex' | 'dsh-acp'
       callerKey?: string
       resumeFrom?: { providerSessionId: string }
     },
@@ -181,12 +196,15 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
     const options = this.structuredAgentSessionLaunchSeedOptions(input.agent)
     const location = await this.resolveStructuredAgentSessionLocation(input.worktree)
     const host = getStructuredAgentSessionHost()
-    const committedReplay = resolveCommittedStructuredAgentSessionAdoptionIntent({
-      host,
-      ...input,
-      location,
-      ...(options ? { options } : {})
-    })
+    const committedReplay =
+      input.agent === 'dsh-acp'
+        ? null
+        : resolveCommittedStructuredAgentSessionAdoptionIntent({
+            host,
+            ...input,
+            location,
+            ...(options ? { options } : {})
+          })
     if (committedReplay) {
       return committedReplay
     }
@@ -195,16 +213,17 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
     // necessarily the one a fresh create would pick: Codex resolves its rollout under
     // `accountHome.path`, and Claude reads its transcript under `<home>/projects`. Resuming under
     // the wrong home finds nothing and lands the user in a blank chat wearing the old chat's name.
-    const adoption = input.resumeFrom
-      ? await resolveStructuredAgentSessionAdoptionForCreate({
-          host,
-          settings,
-          agent: input.agent,
-          providerSessionId: input.resumeFrom.providerSessionId,
-          selfSessionId: input.envelope.sessionId,
-          selectedAccountHomePath
-        })
-      : null
+    const adoption =
+      input.resumeFrom && input.agent !== 'dsh-acp'
+        ? await resolveStructuredAgentSessionAdoptionForCreate({
+            host,
+            settings,
+            agent: input.agent,
+            providerSessionId: input.resumeFrom.providerSessionId,
+            selfSessionId: input.envelope.sessionId,
+            selectedAccountHomePath
+          })
+        : null
     return {
       envelope: {
         sessionId: input.envelope.sessionId,
@@ -216,7 +235,12 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
       provider: input.agent,
       agent: input.agent,
       accountHome: {
-        variable: input.agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
+        variable:
+          input.agent === 'dsh-acp'
+            ? 'DSH_HOME'
+            : input.agent === 'claude'
+              ? 'CLAUDE_CONFIG_DIR'
+              : 'CODEX_HOME',
         path: adoption ? adoption.accountHomePath : selectedAccountHomePath
       },
       ...(options ? { options } : {}),

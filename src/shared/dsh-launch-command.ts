@@ -62,12 +62,15 @@ function isLauncherToken(token: string): boolean {
  * does not recognize belongs to the booted app (`dsh --profile dsh-tui --resume <id>`),
  * and a prompt or session id is free text that must never be read as a launcher flag.
  */
-export function isDshNonInteractiveCommand(tokens: readonly string[]): boolean {
+function dshLaunchInvocation(tokens: readonly string[]): {
+  profile: string | null
+  nonInteractive: boolean
+} {
   const firstProgram = programBasename(tokens[0])
   const entrypoint = findInterpreterEntrypointToken([...tokens], firstProgram)
   const programIndex = entrypoint === null ? 0 : tokens.indexOf(entrypoint)
   if (TUI_LAUNCHER_NAMES.has(programBasename(tokens[programIndex]))) {
-    return false
+    return { profile: 'dsh-tui', nonInteractive: false }
   }
   const indexOfArgs = programIndex + 1
   let index = indexOfArgs
@@ -75,7 +78,7 @@ export function isDshNonInteractiveCommand(tokens: readonly string[]): boolean {
   const first = tokens[index]
   if (first !== undefined && !first.startsWith('-')) {
     if (SUBCOMMANDS.has(first)) {
-      return true
+      return { profile: null, nonInteractive: true }
     }
     profile = first
     index += 1
@@ -83,7 +86,7 @@ export function isDshNonInteractiveCommand(tokens: readonly string[]): boolean {
   for (; index < tokens.length; index += 1) {
     const token = tokens[index]
     if (DUMP_FLAGS.has(token)) {
-      return true
+      return { profile: null, nonInteractive: true }
     }
     if (!isLauncherToken(token)) {
       break
@@ -96,5 +99,13 @@ export function isDshNonInteractiveCommand(tokens: readonly string[]): boolean {
       index += 1
     }
   }
-  return profile !== null && NON_INTERACTIVE_PROFILES.has(profile)
+  return { profile, nonInteractive: profile !== null && NON_INTERACTIVE_PROFILES.has(profile) }
+}
+
+export function isDshNonInteractiveCommand(tokens: readonly string[]): boolean {
+  return dshLaunchInvocation(tokens).nonInteractive
+}
+
+export function isOfficialDshAcpCommand(tokens: readonly string[]): boolean {
+  return dshLaunchInvocation(tokens).profile === 'acp'
 }

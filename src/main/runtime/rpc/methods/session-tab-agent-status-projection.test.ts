@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  DSH_ACP_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-types'
@@ -42,6 +43,57 @@ function makeSnapshot(sessionBoundary: boolean): RuntimeMobileSessionTabsSnapsho
 }
 
 describe('projectSessionTabAgentStatus', () => {
+  it('keeps the new official provider out of old client enums and repairs active group layout', () => {
+    const snapshot: RuntimeMobileSessionTabsSnapshot = {
+      ...makeSnapshot(false),
+      activeGroupId: 'official-group',
+      activeTabId: 'agent-session:official',
+      activeTabType: 'agent-session',
+      tabs: [
+        { ...makeSnapshot(false).tabs[0]!, isActive: false },
+        {
+          type: 'agent-session',
+          id: 'agent-session:official',
+          title: 'Official DeepSeek',
+          sessionId: 'official',
+          agent: 'dsh-acp',
+          isActive: true
+        }
+      ],
+      tabGroups: [
+        { id: 'terminal-group', activeTabId: 'tab-1::leaf-1', tabOrder: ['tab-1::leaf-1'] },
+        {
+          id: 'official-group',
+          activeTabId: 'agent-session:official',
+          tabOrder: ['agent-session:official']
+        }
+      ],
+      tabGroupLayout: {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', groupId: 'terminal-group' },
+        second: { type: 'leaf', groupId: 'official-group' }
+      }
+    }
+    for (const clientKind of ['mobile', 'runtime'] as const) {
+      const old = projectSessionTabAgentStatus(snapshot, clientKind, [
+        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+        CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+      ])
+      expect(old.tabs.map((tab) => tab.type)).toEqual(['terminal'])
+      expect(old.activeTabId).toBe('tab-1::leaf-1')
+      expect(old.activeGroupId).toBe('terminal-group')
+      expect(old.tabGroupLayout).toEqual({ type: 'leaf', groupId: 'terminal-group' })
+      expect(
+        projectSessionTabAgentStatus(snapshot, clientKind, [
+          STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+          DSH_ACP_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+        ])
+      ).toBe(snapshot)
+    }
+    expect(projectSessionTabAgentStatus(snapshot, undefined, undefined)).toBe(snapshot)
+  })
+
   it('projects structured tabs and dangling group focus out of old clients', () => {
     const snapshot: RuntimeMobileSessionTabsSnapshot = {
       ...makeSnapshot(false),

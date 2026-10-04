@@ -28,6 +28,7 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   muse: isMuseHeadlessOneShotCommand,
   zcode: isZCodeHeadlessOneShotCommand,
   dsh: isDshNonInteractiveCommand,
+  'dsh-acp': isDshNonInteractiveCommand,
   dsb: isDsbHeadlessOneShotCommand
 }
 

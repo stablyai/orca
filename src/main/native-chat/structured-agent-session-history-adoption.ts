@@ -13,7 +13,7 @@ import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-
 
 export type StructuredAgentSessionAdoptionOwnership = {
   sessionId: string
-  provider: 'claude' | 'codex'
+  provider: 'claude' | 'codex' | 'dsh-acp'
   providerSessionId: string
   lease: AgentSessionLease
 }
@@ -52,6 +52,7 @@ export function findCommittedStructuredAgentSessionAdoptionReplay(input: {
   const adopted = record?.providerHandleChain[0]
   if (
     !record ||
+    adopted?.handle.provider === 'dsh-acp' ||
     record.sessionId !== input.selfSessionId ||
     record.provider !== input.agent ||
     adopted?.origin !== 'adopted'

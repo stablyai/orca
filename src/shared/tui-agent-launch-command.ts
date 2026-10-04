@@ -31,6 +31,12 @@ export function resolveAgentLaunchCommand(args: {
   sessionOptionsOverrideAgentArgs?: boolean
   isRemote?: boolean
 }): ResolvedAgentLaunchCommand {
+  if (TUI_AGENT_CONFIG[args.agent].launchTransport === 'structured') {
+    return {
+      ok: false,
+      error: 'Official DeepSeek Harness requires an ACP chat on a supported host.'
+    }
+  }
   const override = args.cmdOverrides[args.agent]
   const command =
     override ||

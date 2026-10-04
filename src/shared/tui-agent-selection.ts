@@ -16,6 +16,7 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'ante',
   'trae',
   'muse',
+  'dsh-acp',
   'dsh',
   'qoder',
   'qoder-cn',

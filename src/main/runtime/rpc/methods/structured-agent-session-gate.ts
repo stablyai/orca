@@ -8,6 +8,7 @@
 // old mobile clients so they receive a fallback row, and that path constructs the host.
 // `agentSession.*` stays refused either way, which is what this gate is for.
 
+import { DSH_ACP_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
@@ -26,6 +27,21 @@ import {
  */
 export function supportsStructuredSessions(ctx: RpcContext): boolean {
   return supportsStructuredAgentSessions(ctx)
+}
+
+export function supportsDshStructuredSessions(ctx: RpcContext): boolean {
+  return (
+    ctx.clientKind === undefined ||
+    ctx.clientCapabilities?.includes(DSH_ACP_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) === true
+  )
+}
+
+export function requireDshStructuredCapability(ctx: RpcContext, agent: string | null): void {
+  if (agent === 'dsh-acp' && !supportsDshStructuredSessions(ctx)) {
+    throw agentSessionRefusalError('structured_agent_session_unsupported', {
+      reason: 'clientCapabilityMissing'
+    })
+  }
 }
 
 export function requireStructuredCapability(ctx: RpcContext): void {
@@ -49,9 +65,16 @@ export function requireStructuredCreateSupportAdmission(ctx: RpcContext): void {
   }
 }
 
-export function requireStructuredHost(ctx: RpcContext): StructuredAgentSessionHost {
+export function requireStructuredHost(
+  ctx: RpcContext,
+  sessionId?: string
+): StructuredAgentSessionHost {
   requireStructuredCapability(ctx)
-  return requireHostOrRefusal()
+  const host = requireHostOrRefusal()
+  if (sessionId) {
+    requireDshStructuredCapability(ctx, host.sessionAgent(sessionId))
+  }
+  return host
 }
 
 /**
@@ -98,10 +121,11 @@ export async function ensureStructuredHostInstalled(ctx: RpcContext): Promise<vo
 
 /** The host for a read, built first when this process has none: the read RPCs share this one. */
 export async function requireInstalledStructuredHost(
-  ctx: RpcContext
+  ctx: RpcContext,
+  sessionId?: string
 ): Promise<StructuredAgentSessionHost> {
   await ensureStructuredHostInstalled(ctx)
-  return requireStructuredHost(ctx)
+  return requireStructuredHost(ctx, sessionId)
 }
 
 /** Mirrors the existing agent-session host-authority derivation so one client

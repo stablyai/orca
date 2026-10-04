@@ -23,7 +23,10 @@ import { structuredAgentSessionOptionModels } from './structured-agent-session-o
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 
-type RestingOptions = Pick<AgentSessionOptionsResult, 'models' | 'fastModeSupport' | 'current'>
+type RestingOptions = Pick<
+  AgentSessionOptionsResult,
+  'models' | 'fastModeSupport' | 'current' | 'conversationCommands'
+>
 
 /** With no catalog for the account, the list a running child falls back to: Claude's built-in
  *  models. A Codex child has no such list, so none: the client fills the current model from its
@@ -42,9 +45,11 @@ async function readStructuredAgentSessionOptionsAtRest(
   if (!record) {
     throw new Error('agent_session_identity_required')
   }
-  const catalog = (await deps.modelCatalog
-    ?.read({ agent: record.provider, sessionId })
-    .catch(() => null)) ?? { origin: 'unknown' as const }
+  const catalog = (record.provider === 'dsh-acp'
+    ? undefined
+    : await deps.modelCatalog?.read({ agent: record.provider, sessionId }).catch(() => null)) ?? {
+    origin: 'unknown' as const
+  }
   const listed =
     catalog.origin === 'unknown' ? restingFallbackModels(record.provider) : catalog.models
   const models = listed ?? []
@@ -67,6 +72,7 @@ async function readStructuredAgentSessionOptionsAtRest(
       ? models.find((entry) => entry.id === model)?.defaultEffort
       : undefined)
   return {
+    ...(record.provider === 'dsh-acp' ? { conversationCommands: ['clear'] as const } : {}),
     models: listed ? structuredAgentSessionOptionModels(listed, model, (row) => row) : [],
     ...(catalog.origin !== 'unknown' && catalog.fastModeSupport
       ? { fastModeSupport: catalog.fastModeSupport }
@@ -142,7 +148,8 @@ export async function readStructuredAgentSessionOptions(
             supported: false,
             reason: 'unsupported'
           }),
-    conversationCommands: adapter.compact ? ['clear', 'compact'] : ['clear'],
+    conversationCommands:
+      options.conversationCommands ?? (adapter.compact ? ['clear', 'compact'] : ['clear']),
     ...(adapter.supportsThreadGoal?.(sessionId, agent)
       ? { threadGoal: { current: session.journal.threadGoal() } }
       : {}),

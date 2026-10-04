@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { isDshNonInteractiveCommand } from './dsh-launch-command'
-import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
+import {
+  isRecognizedAgentType,
+  recognizeAgentProcess,
+  recognizeAgentProcessFromCommandLine
+} from './agent-process-recognition'
 
 function tokens(commandLine: string): string[] {
   return commandLine.split(' ')
@@ -96,7 +100,7 @@ describe('dsh foreground process recognition', () => {
     expect(recognizeAgentProcessFromCommandLine(commandLine)).toBeNull()
   })
 
-  it.each(['dsh-tui web', 'dst plugin'])(
+  it.each(['dsh-tui web', 'dst plugin', 'dsh-tui acp', 'dst acp', 'dsh tui --resume acp'])(
     'still recognizes %s as the dsh agent pane',
     (commandLine) => {
       expect(recognizeAgentProcessFromCommandLine(commandLine)?.agent).toBe('dsh')
@@ -111,5 +115,25 @@ describe('dsh foreground process recognition', () => {
         includeHeadlessOneShot: true
       })?.agent
     ).toBe('dsh')
+  })
+})
+
+describe('official ACP process ownership', () => {
+  it.each([
+    'dsh acp',
+    'dsh --profile=acp',
+    'node --no-warnings /usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js --profile acp',
+    'C:\\Tools\\dsh.cmd acp'
+  ])('identifies %s only for guards including noninteractive providers', (commandLine) => {
+    expect(recognizeAgentProcessFromCommandLine(commandLine)).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(commandLine, { includeHeadlessOneShot: true })?.agent
+    ).toBe('dsh-acp')
+  })
+
+  it('keeps bare foreground identity community-owned rather than creating an ACP status producer', () => {
+    expect(recognizeAgentProcess('dsh')?.agent).toBe('dsh')
+    expect(recognizeAgentProcess('dsh-acp')).toBeNull()
+    expect(isRecognizedAgentType('dsh-acp')).toBe(true)
   })
 })

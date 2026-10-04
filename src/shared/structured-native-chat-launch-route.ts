@@ -13,6 +13,7 @@ import { parseExecutionHostId } from './execution-host'
 import type { GlobalSettings } from './global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
 import {
+  DSH_ACP_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from './protocol-version'
@@ -73,10 +74,12 @@ export function agentTabsDefaultToNativeChat(
 
 /** ...and specifically a structured native chat session rather than a terminal rendered as chat. */
 export function prefersStructuredNativeChatByDefault(
-  settings: Partial<NativeChatDefaultSettings> | null | undefined
+  settings: Partial<NativeChatDefaultSettings> | null | undefined,
+  agent?: string
 ): boolean {
   return (
-    agentTabsDefaultToNativeChat(settings) && settings?.experimentalStructuredNativeChat === true
+    agent === 'dsh-acp' ||
+    (agentTabsDefaultToNativeChat(settings) && settings?.experimentalStructuredNativeChat === true)
   )
 }
 
@@ -116,6 +119,12 @@ export function resolveStructuredNativeChatSupport(
     return { supported: false, blocker: 'runtime-capability-unknown' }
   }
   if (!input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)) {
+    return { supported: false, blocker: 'runtime-capability' }
+  }
+  if (
+    input.agent === 'dsh-acp' &&
+    !input.hostCapabilities.includes(DSH_ACP_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
+  ) {
     return { supported: false, blocker: 'runtime-capability' }
   }
   if (host.kind === 'runtime') {

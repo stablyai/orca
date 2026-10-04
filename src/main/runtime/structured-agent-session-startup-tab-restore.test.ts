@@ -61,6 +61,7 @@ const CHAT_A = 'chat-a-0001'
 const CHAT_B = 'chat-b-0002'
 const CLEARED = 'chat-s-0003'
 const OWED = 'chat-o-0004'
+const DSH_CHAT = 'chat-dsh-0005'
 
 let root: string
 
@@ -79,7 +80,7 @@ afterEach(async () => {
 /** A released chat, so no startup probe looks for a live owner. */
 function chatRecord(
   sessionId: string,
-  options: { codex?: boolean; clearedInto?: string } = {}
+  options: { codex?: boolean; dsh?: boolean; clearedInto?: string } = {}
 ): AgentSessionRecord {
   const record = agentSessionRecordFixture(
     agentSessionLeaseFixture({
@@ -89,16 +90,21 @@ function chatRecord(
       claimStatus: 'released'
     })
   )
-  const codex = options.codex
-    ? {
-        provider: 'codex' as const,
-        providerHandleChain: record.providerHandleChain.map((link) => ({
-          ...link,
-          handle: { provider: 'codex' as const, threadId: `thread-${sessionId}` }
-        })),
-        accountHome: { variable: 'CODEX_HOME' as const, path: join(root, 'codex-home') }
-      }
-    : {}
+  const alternate =
+    options.codex || options.dsh
+      ? {
+          provider: options.dsh ? ('dsh-acp' as const) : ('codex' as const),
+          providerHandleChain: record.providerHandleChain.map((link) => ({
+            ...link,
+            handle: options.dsh
+              ? { provider: 'dsh-acp' as const, sessionId: `dsh-${sessionId}` }
+              : { provider: 'codex' as const, threadId: `thread-${sessionId}` }
+          })),
+          accountHome: options.dsh
+            ? { variable: 'DSH_HOME' as const, path: join(root, 'dsh-home') }
+            : { variable: 'CODEX_HOME' as const, path: join(root, 'codex-home') }
+        }
+      : {}
   const clear = options.clearedInto
     ? {
         conversationCommand: {
@@ -111,7 +117,7 @@ function chatRecord(
         }
       }
     : {}
-  return { ...record, ...codex, ...clear }
+  return { ...record, ...alternate, ...clear }
 }
 
 /** The records file a profile from before the chat database carries, which the install imports;
@@ -265,6 +271,34 @@ async function tabIndexOnDisk(): Promise<string[] | undefined> {
 }
 
 describe('restoring the chat tabs open at quit', () => {
+  it.each([
+    { name: 'the durable visible index', visible: [DSH_CHAT] },
+    { name: 'a legacy profile without an index', visible: undefined }
+  ])('restores an official DSH chat from $name with its journal intact', async ({ visible }) => {
+    const record = chatRecord(DSH_CHAT, { dsh: true })
+    await seedProfile([record], { visible })
+    const tabWrites = spyOnTabWrites()
+    const { runtime, published } = startupRuntime({ profileChats: visible ? [] : [DSH_CHAT] })
+
+    await runtime.restoreStructuredAgentSessionTabs()
+
+    expect(getStructuredAgentSessionHost()?.listSessionTabs()).toEqual([
+      { sessionId: DSH_CHAT, workspaceId: 'workspace-1', agent: 'dsh-acp' }
+    ])
+    expect(published()).toEqual([
+      expect.objectContaining({
+        id: `agent-session:${DSH_CHAT}`,
+        sessionId: DSH_CHAT,
+        agent: 'dsh-acp',
+        title: 'DeepSeek Harness (Official ACP) Chat'
+      })
+    ])
+    expect(await tabIndexOnDisk()).toEqual([DSH_CHAT])
+    expect(tabWrites.seed).toHaveBeenCalledTimes(visible ? 0 : 1)
+    expect(tabWrites.visibility).not.toHaveBeenCalled()
+    await expectHistory(DSH_CHAT)
+  })
+
   it.each([
     { store: 'records a newer Orca wrote', newer: true, writesFail: false },
     { store: 'a store whose writes keep failing', newer: false, writesFail: true }

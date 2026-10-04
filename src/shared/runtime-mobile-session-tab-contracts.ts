@@ -97,7 +97,7 @@ export type RuntimeMobileSessionAgentTab = {
   title: string
   sessionId: string
   replacesSessionId?: string
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'dsh-acp'
   color?: string | null
   isPinned?: boolean
   isActive: boolean

@@ -24,6 +24,8 @@ export type TuiAgentConfig = {
   detectRequiredCommands?: readonly string[]
   /** Detection runtimes where this launch mode is not available as a detected agent. */
   detectUnsupportedRuntimes?: readonly TuiAgentDetectionRuntime[]
+  /** Structured-only agents must never receive terminal prompt injection. */
+  launchTransport?: 'structured'
   launchCmd: string
   /** Platform-specific launch command when the public binary name differs. */
   launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>

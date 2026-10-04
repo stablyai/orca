@@ -41,7 +41,7 @@ export function structuredAgentSessionDomainFingerprint(input: {
 export function structuredAgentSessionCreateFingerprint(input: {
   sessionId: string
   worktree: string
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'dsh-acp'
   resumeFrom?: { providerSessionId: string }
   tabId?: string
 }): string {
@@ -69,7 +69,7 @@ export function showStructuredAgentSessionChoice(input: {
   return (
     input.hostCapability &&
     input.workspaceSupport &&
-    (input.agent === 'claude' || input.agent === 'codex')
+    (input.agent === 'claude' || input.agent === 'codex' || input.agent === 'dsh-acp')
   )
 }
 

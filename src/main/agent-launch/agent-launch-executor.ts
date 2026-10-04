@@ -94,6 +94,9 @@ export async function executeAgentLaunch(
 
   // A reused terminal already downgraded in the pre-flight; there is nothing to create. Its agent
   // was running before this launch existed, so argv is unreachable and the PTY is the only way in.
+  if (intent.agent === 'dsh-acp' && preflight.mode !== 'structured') {
+    throw new Error('Official DeepSeek Harness requires a supported ACP chat on its execution host')
+  }
   if (intent.reuseTerminal) {
     return {
       outcome: { kind: 'terminal', handle: intent.reuseTerminal.handle },
@@ -136,6 +139,9 @@ export async function executeAgentLaunch(
     vocabulary
   )
 
+  if (intent.agent === 'dsh-acp' && settled.mode !== 'structured') {
+    throw new Error('This execution host cannot create an official DeepSeek Harness ACP chat')
+  }
   execution.onStage?.('surface_create')
   let created: CreatedSurface
   try {
@@ -145,6 +151,7 @@ export async function executeAgentLaunch(
     // outcome. Only the former is safe to replace with a terminal in the same workspace; retrying
     // after an unknown attach outcome could create two agents.
     if (
+      intent.agent === 'dsh-acp' ||
       settled.mode !== 'structured' ||
       !(error instanceof AgentLaunchStructuredSessionRefusedError) ||
       !isDefinitiveAgentSessionCreateRefusal(error.code)
@@ -344,8 +351,8 @@ function combineLaunchWarnings(
   return `${create} Also ${surface[0].toLowerCase()}${surface.slice(1)}`
 }
 
-function isStructuredProvider(agent: TuiAgent): agent is 'claude' | 'codex' {
-  return agent === 'claude' || agent === 'codex'
+function isStructuredProvider(agent: TuiAgent): agent is 'claude' | 'codex' | 'dsh-acp' {
+  return agent === 'claude' || agent === 'codex' || agent === 'dsh-acp'
 }
 
 function existingWorktreeId(target: AgentLaunchTarget): string {

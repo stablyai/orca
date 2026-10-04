@@ -1,17 +1,16 @@
 /**
- * The two answers to "how does this agent take its prompt" must stay one answer.
- *
- * `buildAgentStartupPlan` decides by building a command and leaving `followupPrompt` null when the
- * text went into it. `agentPromptRidesLaunchCommand` has to give the same verdict BEFORE a command
- * exists, because `agent.launch` picks a delivery while it is still choosing what to create. Two
- * readings of one table is exactly the shape that drifts, so this pins them together across every
- * agent: add an agent, or change its injection mode, and the disagreement fails here rather than
- * silently dropping that agent's launch prompt.
+ * Terminal agents must agree on argv versus follow-up prompt delivery. Structured-only
+ * agents must have a capability-gated provider route and refuse terminal injection;
+ * their non-null launch is exercised by dsh-structured-launch-resolution.test.ts.
  */
 
 import { describe, expect, it } from 'vitest'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import { agentPromptRidesLaunchCommand, buildAgentStartupPlan } from './tui-agent-startup'
+import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
+import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
+import { resolveStructuredNativeChatSupport } from './structured-native-chat-launch-route'
+import { RUNTIME_CAPABILITIES } from './protocol-version'
 import type { TuiAgent } from './tui-agent'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the config is declared as a total record over TuiAgent, so its own keys are that union.
@@ -28,15 +27,31 @@ function planFor(agent: TuiAgent) {
   })
 }
 
-describe('the prompt-transport predicate against the plan it predicts', () => {
+describe('prompt transport across terminal and structured launch routes', () => {
   // A positive control: an empty list would make every assertion below vacuously true.
   it('covers every configured agent', () => {
     expect(ALL_AGENTS.length).toBeGreaterThan(30)
     expect(ALL_AGENTS).toContain('claude')
     expect(ALL_AGENTS).toContain('aider')
+    expect(ALL_AGENTS).toContain('dsh-acp')
   })
 
-  it.each(ALL_AGENTS)('agrees with the built plan for %s', (agent) => {
+  it.each(ALL_AGENTS)('accounts for the supported launch transport of %s', (agent) => {
+    if (TUI_AGENT_CONFIG[agent].launchTransport === 'structured') {
+      expect(isAgentSessionHandleProvider(agent)).toBe(true)
+      expect(
+        resolveStructuredNativeChatSupport({
+          agent,
+          executionHostId: 'local',
+          workspaceKind: 'folder',
+          hostCapabilities: RUNTIME_CAPABILITIES
+        })
+      ).toEqual({ supported: true })
+      expect(
+        resolveAgentLaunchCommand({ agent, cmdOverrides: {}, platform: 'darwin', shell: 'posix' })
+      ).toMatchObject({ ok: false })
+      return
+    }
     const plan = planFor(agent)
     expect(plan).not.toBeNull()
     // `followupPrompt` is the plan saying "the command does NOT carry this"; the predicate must
@@ -46,6 +61,10 @@ describe('the prompt-transport predicate against the plan it predicts', () => {
 
   it('puts the prompt in the launch command exactly when it says it does', () => {
     for (const agent of ALL_AGENTS) {
+      if (TUI_AGENT_CONFIG[agent].launchTransport === 'structured') {
+        expect(agentPromptRidesLaunchCommand(agent)).toBe(false)
+        continue
+      }
       const plan = planFor(agent)
       if (!agentPromptRidesLaunchCommand(agent)) {
         // The command must not smuggle the text in some other way.

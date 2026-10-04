@@ -3,7 +3,9 @@
 // lives in agent-launch-caller-profiles-test-harness.ts.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
 import {
+  RUNTIME_CAPABILITIES,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
@@ -108,6 +110,198 @@ describe('agent launch caller routing', () => {
     })
     mockLaunchAgentInWebHostTab.mockResolvedValue({ delivered: true, failureNotified: false })
   })
+
+  it.each([
+    ['git-worktree', 'wt-1'],
+    ['folder', 'folder:official-folder']
+  ] as const)(
+    'official ACP reaches the supported structured executor for %s',
+    async (kind, worktreeId) => {
+      mockHostCapabilities.mockReturnValue(RUNTIME_CAPABILITIES)
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+      const { planAgentSessionLaunch } = await import('./agent-session-launch-plan')
+      const plannerStore = {
+        ...store,
+        repos: [],
+        projects: [],
+        activeRepoId: null,
+        activeWorktreeId: null,
+        worktreesByRepo: {},
+        settings: createGlobalSettingsFixture(store.settings),
+        projectGroups: [],
+        folderWorkspaces: [
+          {
+            id: 'official-folder',
+            folderPath: '/tmp/official-folder',
+            executionHostId: 'local' as const,
+            projectGroupId: 'group-1',
+            name: 'Official folder',
+            linkedTask: null,
+            comment: '',
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 0,
+            lastActivityAt: 0,
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ]
+      }
+      Object.assign(store, plannerStore)
+      const plan = planAgentSessionLaunch(plannerStore, {
+        agent: 'dsh-acp',
+        workspace: { kind, worktreeId }
+      })
+      expect(plan.route).toBe('structured-native-chat')
+      const result = launchAgentInNewTab({ agent: 'dsh-acp', worktreeId })
+      expect(result?.surface.kind).toBe('local-agent-session')
+      expect(result?.startupPlan).toBeNull()
+      expect(mockLaunchAgentInStructuredNewTab).toHaveBeenCalledTimes(1)
+      expect(store.createTab).not.toHaveBeenCalled()
+      expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['auto-submit', 'draft', 'submit-after-ready'] as const)(
+    'carries official ACP %s prompts through the structured plan',
+    async (promptDelivery) => {
+      mockHostCapabilities.mockReturnValue(RUNTIME_CAPABILITIES)
+      const onPromptDelivered = vi.fn()
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+      const result = launchAgentInNewTab({
+        agent: 'dsh-acp',
+        worktreeId: 'wt-1',
+        groupId: 'group-1',
+        prompt: '  Explain this change.  ',
+        promptDelivery,
+        onPromptDelivered
+      })
+      expect(result?.surface.kind).toBe('local-agent-session')
+      expect(mockLaunchAgentInStructuredNewTab).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          targetGroupId: 'group-1',
+          plan: expect.objectContaining({
+            agent: 'dsh-acp',
+            prompt: 'Explain this change.',
+            promptDelivery: promptDelivery === 'auto-submit' ? 'draft' : promptDelivery,
+            onPromptDelivered
+          })
+        })
+      )
+      expect(onPromptDelivered).not.toHaveBeenCalled()
+      expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
+      expect(store.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([null, [], [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]])(
+    'refuses official ACP with unestablished or missing host capabilities %j',
+    async (capabilities) => {
+      mockHostCapabilities.mockReturnValue(capabilities)
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+      expect(launchAgentInNewTab({ agent: 'dsh-acp', worktreeId: 'wt-1' })).toBeNull()
+      expect(mockLaunchAgentInStructuredNewTab).not.toHaveBeenCalled()
+      expect(store.createTab).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([null, [], [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]])(
+    'refuses official ACP on a paired host without negotiated capabilities %j',
+    async (capabilities) => {
+      mockHostCapabilities.mockReturnValue(RUNTIME_CAPABILITIES)
+      mockExecutionHostId.mockReturnValue('runtime:web-runtime')
+      mockIsWebRuntimeSessionActive.mockReturnValue(true)
+      serverReports(capabilities)
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+      expect(launchAgentInNewTab({ agent: 'dsh-acp', worktreeId: 'wt-1' })).toBeNull()
+      expect(mockBeginPairedStructuredLaunch).not.toHaveBeenCalled()
+      expect(mockLaunchAgentInStructuredNewTab).not.toHaveBeenCalled()
+      expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
+      expect(store.createTab).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['override', 'cwd', 'ssh'] as const)(
+    'refuses official ACP terminal customization %s',
+    async (reason) => {
+      mockHostCapabilities.mockReturnValue(RUNTIME_CAPABILITIES)
+      if (reason === 'override') {
+        store.settings.agentCmdOverrides = { 'dsh-acp': 'dsh --profile acp' }
+      }
+      if (reason === 'ssh') {
+        mockExecutionHostId.mockReturnValue('ssh:connection-1')
+      }
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+      expect(
+        launchAgentInNewTab({
+          agent: 'dsh-acp',
+          worktreeId: 'wt-1',
+          ...(reason === 'cwd' ? { initialCwd: '/outside-workspace' } : {})
+        })
+      ).toBeNull()
+      expect(mockLaunchAgentInStructuredNewTab).not.toHaveBeenCalled()
+      expect(store.createTab).not.toHaveBeenCalled()
+    }
+  )
+
+  it('asks the owning paired host to admit official ACP before opening a session', async () => {
+    mockExecutionHostId.mockReturnValue('runtime:web-runtime')
+    mockIsWebRuntimeSessionActive.mockReturnValue(true)
+    mockHostCapabilities.mockReturnValue([])
+    serverReports(RUNTIME_CAPABILITIES)
+    mockBeginPairedStructuredLaunch.mockReturnValueOnce({
+      sessionId: null,
+      tab: null,
+      settlement: new Promise(() => undefined),
+      cancel: vi.fn()
+    })
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    expect(launchAgentInNewTab({ agent: 'dsh-acp', worktreeId: 'wt-1' })?.surface).toEqual({
+      kind: 'host-published'
+    })
+    expect(mockBeginPairedStructuredLaunch).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        executionHostId: 'runtime:web-runtime',
+        plan: expect.objectContaining({ agent: 'dsh-acp' })
+      })
+    )
+    expect(mockLaunchAgentInStructuredNewTab).not.toHaveBeenCalled()
+    expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
+  })
+
+  it.each(['declined', 'unreachable'] as const)(
+    'opens no ACP terminal or local session when a paired host is %s',
+    async (answer) => {
+      mockExecutionHostId.mockReturnValue('runtime:web-runtime')
+      mockIsWebRuntimeSessionActive.mockReturnValue(true)
+      serverReports(RUNTIME_CAPABILITIES)
+      const actual = await vi.importActual<typeof PairedAdmissionModule>(
+        './structured-agent-session-paired-admission'
+      )
+      mockBeginPairedStructuredLaunch.mockImplementationOnce(actual.beginPairedStructuredLaunch)
+      if (answer === 'declined') {
+        mockCreateSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
+      } else {
+        mockCreateSupport.mockRejectedValue(new Error('disconnected'))
+      }
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+      const result = launchAgentInNewTab({
+        agent: 'dsh-acp',
+        worktreeId: 'wt-1',
+        prompt: 'Explain this change.',
+        promptDelivery: 'submit-after-ready'
+      })
+      expect(result?.surface.kind).toBe('host-published')
+      await expect(result?.structuredSettlement).resolves.toMatchObject({
+        kind: answer === 'declined' ? 'cancelled' : 'failed'
+      })
+      await expect(result?.promptDeliveryResult).resolves.toMatchObject({ delivered: false })
+      expect(mockLaunchAgentInStructuredNewTab).not.toHaveBeenCalled()
+      expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
+      expect(store.createTab).not.toHaveBeenCalled()
+    }
+  )
 
   it.each(cases)('routes %s to a local terminal under default settings', async (_id, profile) => {
     const result = await launch(profile)
@@ -320,19 +514,26 @@ describe('agent launch caller routing', () => {
     expect(store.createTab).toHaveBeenCalledTimes(1)
   })
 
-  it('returns null without opening any surface when no startup plan can be built', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+  it.each([false, true])(
+    'returns null without opening any surface for malformed CLI arguments with structured default %s',
+    async (structuredDefault) => {
+      if (structuredDefault) {
+        store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
+      }
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    // Why: unbalanced quoting is the real shape behind every caller's "could not build the launch
-    // command" toast — the arguments cannot be tokenized, so no surface should be opened at all.
-    const result = launchAgentInNewTab({
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      agentArgs: "--model 'gpt-5.5"
-    })
+      // Why: unbalanced quoting is the real shape behind every caller's "could not build the launch
+      // command" toast — the arguments cannot be tokenized, so no surface should be opened at all.
+      const result = launchAgentInNewTab({
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        agentArgs: "--model 'gpt-5.5"
+      })
 
-    expect(result).toBeNull()
-    expect(store.createTab).not.toHaveBeenCalled()
-    expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
-  })
+      expect(result).toBeNull()
+      expect(store.createTab).not.toHaveBeenCalled()
+      expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
+      expect(mockLaunchAgentInStructuredNewTab).not.toHaveBeenCalled()
+    }
+  )
 })

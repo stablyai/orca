@@ -37,7 +37,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   /** The host the chat is created on; every later operation on the tab reads it. */
   executionHostId: ExecutionHostId
   sessionId: string
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'dsh-acp'
   targetGroupId?: string
   activate?: boolean
 }): Tab {
@@ -157,7 +157,10 @@ function beginLocalProvisionalLaunch(args: ProvisionalLaunchArgs): LocalProvisio
     return null
   }
   const worktreeId = args.target?.worktreeId ?? args.plan.worktreeId
-  if (!worktreeId || (args.plan.agent !== 'claude' && args.plan.agent !== 'codex')) {
+  if (
+    !worktreeId ||
+    (args.plan.agent !== 'claude' && args.plan.agent !== 'codex' && args.plan.agent !== 'dsh-acp')
+  ) {
     throw new Error('A provisional structured launch needs its workspace and provider.')
   }
   try {

@@ -11,7 +11,8 @@
 import { defineMethod } from '../core'
 import {
   requireInstalledStructuredHost,
-  requireStructuredHost as requireHost
+  requireStructuredHost as requireHost,
+  requireDshStructuredCapability
 } from './structured-agent-session-gate'
 import { ModelCatalogParams, OptionsParams } from './structured-agent-session-schemas'
 
@@ -20,23 +21,27 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
     name: 'agentSession.options',
     params: OptionsParams,
     handler: async (params, ctx) =>
-      (await requireInstalledStructuredHost(ctx)).readOptions(params.sessionId)
+      (await requireInstalledStructuredHost(ctx, params.sessionId)).readOptions(params.sessionId)
   }),
   defineMethod({
     name: 'agentSession.modelCatalog',
     params: ModelCatalogParams,
     handler: async ({ worktree, ...params }, ctx) => {
+      requireDshStructuredCapability(ctx, params.agent)
+      if (params.agent === 'dsh-acp') {
+        return { origin: 'unknown' as const }
+      }
       const catalog = requireHost(ctx).deps.modelCatalog
       if (!catalog) {
         return { origin: 'unknown' as const }
       }
       if (worktree === undefined) {
-        return catalog.read(params)
+        return catalog.read({ ...params, agent: params.agent })
       }
       const workspacePath = await ctx.runtime
         .resolveStructuredAgentSessionLocalWorkspacePath(worktree)
         .catch(() => null)
-      return catalog.read({ ...params, workspacePath })
+      return catalog.read({ ...params, agent: params.agent, workspacePath })
     }
   })
 ]

@@ -69,6 +69,7 @@ export type AgentSessionJournalIdentity = {
 export type AgentJournalItemIdentity =
   | { provider: 'codex'; threadId: string; turnId: string; ordinal: number }
   | { provider: 'claude'; sessionId: string; uuid: string }
+  | { provider: 'dsh-acp'; sessionId: string; recordId: string }
   /** A submission Orca minted before any provider echo existed. */
   | { provider: 'orca'; clientMessageId: string }
   /** Bridge-era transcript record with no provider-stable identity. */

@@ -143,6 +143,7 @@ const ICONABLE_AGENT_TYPES: Record<TerminalAgent, true> = {
   muse: true,
   zcode: true,
   dsh: true,
+  'dsh-acp': true,
   dsb: true,
   jcode: true
 }

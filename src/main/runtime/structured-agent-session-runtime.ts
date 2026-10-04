@@ -1,3 +1,8 @@
+import {
+  DshStructuredSessionAdapter,
+  type DshStructuredSessionAdapterDeps
+} from '../dsh/dsh-structured-session-adapter'
+import { createDshStructuredLaunchResolver } from '../dsh/dsh-structured-launch-resolution'
 // Where the structured agent-session wire becomes a live host on this runtime.
 //
 // Built on the first `agentSession.*` call rather than at startup: the record
@@ -96,6 +101,9 @@ export type StructuredAgentSessionRuntimeDeps = {
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveCodexCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
   resolveClaudeCommand?: () => string
+  resolveDshCommand?: (env: NodeJS.ProcessEnv) => string
+  openDshConnection?: DshStructuredSessionAdapterDeps['openConnection']
+  resolveDshLaunchEnv?: () => Promise<Record<string, string>> | Record<string, string>
   /** Provider transports are overridden only to drive the runtime against scripted children. */
   openCodexConnection?: CodexStructuredSessionAdapterDeps['openConnection']
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
@@ -301,9 +309,27 @@ async function installOnJournal(
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
     modelCatalog: agentModelCatalogStore
   })
-  const adapter = new StructuredAgentSessionAdapterRouter({ codex, claude }, async () => {
-    await Promise.all([codex.closeAll(), claude.closeAll()])
+  const dsh = new DshStructuredSessionAdapter({
+    resolveLaunch: createDshStructuredLaunchResolver({
+      store,
+      resolveWorkspacePath: deps.resolveWorkspacePath,
+      resolveEnvironment: async () => ({
+        ...(await resolveClaudeInheritedEnv()),
+        ...(await deps.resolveDshLaunchEnv?.())
+      }),
+      ...(deps.resolveDshCommand ? { resolveCommand: deps.resolveDshCommand } : {})
+    }),
+    ...(deps.openDshConnection ? { openConnection: deps.openDshConnection } : {}),
+    ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
+    onLifecycleEvent: (event) => lifecycle.deliver(event),
+    onDispatchSettledLate
   })
+  const adapter = new StructuredAgentSessionAdapterRouter(
+    { codex, claude, 'dsh-acp': dsh },
+    async () => {
+      await Promise.all([codex.closeAll(), claude.closeAll(), dsh.closeAll()])
+    }
+  )
   host = new StructuredAgentSessionHost({
     store,
     adapter,

@@ -123,7 +123,9 @@ export function NativeChatStructuredSession(
   const retryDelivery = useCallback((clientMessageId: string) => {
     retryRef.current(clientMessageId)
   }, [])
-  const agentLabel = structuredAgentLabel(props.agent === 'codex' ? 'codex' : 'claude')
+  const agentLabel = structuredAgentLabel(
+    props.agent === 'dsh-acp' ? 'dsh-acp' : props.agent === 'codex' ? 'codex' : 'claude'
+  )
   // Only a rejected message reads the journal's rows, so a new batch of them re-renders no row else.
   const hasRejected = controller.outbox.some((entry) => entry.state === 'rejected')
   const rejectionRows = hasRejected ? controller.submissions : NO_SUBMISSIONS

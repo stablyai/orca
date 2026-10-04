@@ -31,9 +31,10 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
     handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
       await ensureStructuredHostInstalled(ctx)
+      const host = requireStructuredHost(ctx, params.sessionId)
       let revealed: StructuredAgentSessionReveal
       try {
-        revealed = await requireStructuredHost(ctx).revealSession(params.sessionId)
+        revealed = await host.revealSession(params.sessionId)
       } catch (error) {
         // The host raises its refusal as the code itself; anything else is a genuine fault and
         // must not be laundered into a tidy "no such chat".

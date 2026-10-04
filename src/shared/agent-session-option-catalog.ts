@@ -41,7 +41,9 @@ const CATALOGS: AgentSessionOptionCatalogMap = {
   cursor: CURSOR_SESSION_OPTION_CATALOG,
   grok: GROK_SESSION_OPTION_CATALOG,
   muse: MUSE_SESSION_OPTION_CATALOG,
-  omp: OMP_SESSION_OPTION_CATALOG
+  omp: OMP_SESSION_OPTION_CATALOG,
+  // ACP advertises the choices after session acquisition.
+  'dsh-acp': { models: [], modelApply: {}, supportsWorkerLaunchPreferences: true }
 }
 
 export function getAgentSessionOptionCatalog(agent: AgentType): AgentSessionOptionCatalog | null {

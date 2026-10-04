@@ -11,6 +11,7 @@ import {
   PYTHON_PROCESS_RE,
   tokenizeCommandLine
 } from './agent-command-line-entrypoint'
+import { isOfficialDshAcpCommand } from './dsh-launch-command'
 import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
 
 export type RecognizedAgentProcess = { agent: TerminalAgent; processName: string }
@@ -50,6 +51,9 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG)) {
     continue
   }
   AGENT_TYPE_IDS.add(agent)
+  if (config.launchTransport === 'structured') {
+    continue
+  }
   for (const candidate of [
     config.expectedProcess,
     ...getTuiAgentDetectCommands(config),
@@ -204,6 +208,9 @@ export function recognizeAgentProcessFromCommandLine(
   if (direct?.agent === 'claude-agent-teams' && tokens[1]?.toLowerCase() !== 'claude-teams') {
     direct = null
   }
+  if (direct?.agent === 'dsh' && isOfficialDshAcpCommand(tokens)) {
+    direct = { ...direct, agent: 'dsh-acp' }
+  }
   const directRecognition = keep ? direct : filterHeadlessOneShotAgentCommand(direct, tokens)
   if (directRecognition) {
     return directRecognition
@@ -212,9 +219,12 @@ export function recognizeAgentProcessFromCommandLine(
   if (!entrypoint) {
     return null
   }
-  const viaEntrypoint = PYTHON_PROCESS_RE.test(firstNormalized)
+  let viaEntrypoint = PYTHON_PROCESS_RE.test(firstNormalized)
     ? recognizePythonEntrypoint(tokens, entrypoint)
     : (recognizeAgentProcess(entrypoint) ?? recognizeNodeScriptEntrypoint(entrypoint))
+  if (viaEntrypoint?.agent === 'dsh' && isOfficialDshAcpCommand(tokens)) {
+    viaEntrypoint = { ...viaEntrypoint, agent: 'dsh-acp' }
+  }
   if (
     viaEntrypoint?.agent === 'claude-agent-teams' &&
     tokens[tokens.indexOf(entrypoint, 1) + 1]?.toLowerCase() !== 'claude-teams'

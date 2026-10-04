@@ -26,6 +26,7 @@ const EXPECTED_LANES: Record<TuiAgent, LaunchedAgentReadinessLane> = {
   // Grok's inline mode never fires its marker; its marker is not proven at the box for every mode.
   grok: 'tui-idle',
   dsh: 'tui-idle',
+  'dsh-acp': 'tui-idle',
   codex: 'tui-idle',
   cursor: 'tui-idle',
   pi: 'tui-idle',

@@ -43,7 +43,7 @@ export type ConversationReplacement = {
   sourceSessionId: string
   sessionId: string
   workspaceId: string
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'dsh-acp'
 }
 
 const clearFingerprintOf = (sessionId: string) =>

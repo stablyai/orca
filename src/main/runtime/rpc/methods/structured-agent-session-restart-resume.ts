@@ -9,7 +9,9 @@ import { defineMethod } from '../core'
 import {
   ensureStructuredHostInstalled,
   requireStructuredHost,
-  structuredCallerFor
+  structuredCallerFor,
+  supportsDshStructuredSessions,
+  requireDshStructuredCapability
 } from './structured-agent-session-gate'
 import { RestartResumableParams, RestartResumeParams } from './structured-agent-session-schemas'
 
@@ -21,9 +23,13 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
       await ensureStructuredHostInstalled(ctx)
       const host = requireStructuredHost(ctx)
       return {
-        sessions: await host.restartResume.list(),
+        sessions: (await host.restartResume.list()).filter(
+          (session) => session.agent !== 'dsh-acp' || supportsDshStructuredSessions(ctx)
+        ),
         // Acted-on offers whose agent did not carry on. Optional on the wire; older clients ignore it.
-        failed: await host.restartResume.listFailures()
+        failed: (await host.restartResume.listFailures()).filter(
+          (session) => session.agent !== 'dsh-acp' || supportsDshStructuredSessions(ctx)
+        )
       }
     }
   }),
@@ -43,8 +49,12 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
       }
       return {
         dismissed,
-        sessions: await host.restartResume.list(),
-        failed: await host.restartResume.listFailures()
+        sessions: (await host.restartResume.list()).filter(
+          (session) => session.agent !== 'dsh-acp' || supportsDshStructuredSessions(ctx)
+        ),
+        failed: (await host.restartResume.listFailures()).filter(
+          (session) => session.agent !== 'dsh-acp' || supportsDshStructuredSessions(ctx)
+        )
       }
     }
   }),
@@ -57,10 +67,17 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     handler: async (params, ctx) => {
       await ensureStructuredHostInstalled(ctx)
       const host = requireStructuredHost(ctx)
-      return host.restartResume.continueAfterRestart(
-        params.sessionIds,
-        structuredCallerFor(ctx).callerKey
-      )
+      for (const sessionId of params.sessionIds ?? []) {
+        requireDshStructuredCapability(ctx, host.sessionAgent(sessionId))
+      }
+      const sessionIds =
+        params.sessionIds ??
+        (supportsDshStructuredSessions(ctx)
+          ? undefined
+          : (await host.restartResume.list())
+              .filter((session) => session.agent !== 'dsh-acp')
+              .map((session) => session.sessionId))
+      return host.restartResume.continueAfterRestart(sessionIds, structuredCallerFor(ctx).callerKey)
     }
   }),
   defineMethod({

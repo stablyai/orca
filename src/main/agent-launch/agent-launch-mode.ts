@@ -131,7 +131,7 @@ export function decideAgentLaunchMode(args: {
 }): AgentLaunchModeReceipt {
   const { placement, settings } = args
   const vocabulary = args.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
-  if (!prefersStructuredNativeChatByDefault(settings)) {
+  if (!prefersStructuredNativeChatByDefault(settings, placement.agent)) {
     return {
       mode: 'terminal',
       preferred: 'terminal',
@@ -201,7 +201,7 @@ async function readStructuredCreateSupport(
   worktreeId: string,
   agent: TuiAgent | undefined
 ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' } | null> {
-  if (agent !== 'claude' && agent !== 'codex') {
+  if (agent !== 'claude' && agent !== 'codex' && agent !== 'dsh-acp') {
     return { supported: false, reason: 'agent' }
   }
   try {

@@ -16,11 +16,12 @@ export function createCodexAppServerRecordReader(input: {
   onRecord: (record: unknown, line: string) => void
   onRejected: (rejected: NdjsonRejectedRecord) => void
   onFatal: (error: Error) => void
+  maxLineBytes?: number
 }): CodexAppServerRecordReader {
   let paused = false
   const framer = createIncrementalNdjsonFramer(input.onRecord, input.onRejected, {
     // The provider owns this local stdio stream, so valid agent payloads keep full fidelity.
-    maxLineBytes: Number.POSITIVE_INFINITY,
+    maxLineBytes: input.maxLineBytes ?? Number.POSITIVE_INFINITY,
     shouldPause: () => paused
   })
 

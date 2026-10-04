@@ -13,7 +13,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 export type AgentLaunchSurfaceFactory = {
   createStructuredSession(args: {
     worktreeId: string
-    agent: 'claude' | 'codex'
+    agent: 'claude' | 'codex' | 'dsh-acp'
     options?: Readonly<Record<string, unknown>>
     /** The caller-minted session id; refused with `AgentLaunchSessionAlreadyExistsError` if taken. */
     sessionId?: string
