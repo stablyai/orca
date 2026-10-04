@@ -26,6 +26,7 @@ vi.mock('./github-api-repository', async (importOriginal) =>
 )
 
 import { getPRForBranch } from './client/lookup/get-pr-for-branch'
+import { lookupPRByBranchName } from './client/lookup/pr-branch-lookup'
 import { resetPRForBranchMocks } from './client-test-harness'
 import { canShowGitHubPRAutoMergeControl } from '../../shared/github/pull-request-auto-merge-availability'
 
@@ -474,7 +475,7 @@ describe('getPRForBranch', () => {
         '--repo',
         'stablyai/orca',
         '--head',
-        'fix/pr-branch-fork-lookup'
+        'innocarpe:fix/pr-branch-fork-lookup'
       ]),
       { cwd: '/repo-root' }
     )
@@ -484,6 +485,29 @@ describe('getPRForBranch', () => {
       prRepo: { owner: 'stablyai', repo: 'orca' },
       headRepo: { owner: 'innocarpe', repo: 'orca' }
     })
+  })
+
+  it('does not run a broad fallback for a known head repository', async () => {
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+    const result = await lookupPRByBranchName({
+      candidates: [{ owner: 'stablyai', repo: 'orca' }],
+      headRepo: { owner: 'innocarpe', repo: 'orca' },
+      headRepoInferred: false,
+      branchName: 'fix/pr-branch-fork-lookup',
+      ghOptions: { cwd: '/repo-root' },
+      executionScope: 'test'
+    })
+
+    expect(result).toMatchObject({ data: null, dataRepo: null })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'api',
+        'repos/stablyai/orca/pulls?head=innocarpe%3Afix%2Fpr-branch-fork-lookup&state=all&per_page=1'
+      ],
+      { cwd: '/repo-root' }
+    )
   })
 
   it('returns null for empty branch (e.g. during rebase with detached HEAD)', async () => {

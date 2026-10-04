@@ -48,6 +48,7 @@ export async function getRestPRForBranch(
 
 export async function getFallbackPRListForBranch(
   prRepo: GitHubApiRepository,
+  headOwner: string,
   branchName: string,
   ghOptions: ReturnType<typeof ghRepoExecOptions>
 ): Promise<PullRequestLookupData | null> {
@@ -59,7 +60,7 @@ export async function getFallbackPRListForBranch(
       '--repo',
       `${prRepo.owner}/${prRepo.repo}`,
       '--head',
-      branchName,
+      `${headOwner}:${branchName}`,
       '--state',
       'all',
       '--limit',
@@ -95,6 +96,7 @@ export async function hydrateBranchLookupWithExactPR(
 export async function lookupPRByBranchName(args: {
   candidates: OwnerRepo[]
   headRepo: OwnerRepo | null
+  headRepoInferred: boolean
   branchName: string
   ghOptions: GhExecOptions
   executionScope: string
@@ -123,10 +125,20 @@ export async function lookupPRByBranchName(args: {
               args.branchName,
               args.ghOptions
             )
-          : await getFallbackPRListForBranch(candidate, args.branchName, args.ghOptions)
-        if (!branchData && args.headRepo) {
+          : await getFallbackPRListForBranch(
+              candidate,
+              candidate.owner,
+              args.branchName,
+              args.ghOptions
+            )
+        if (!branchData && args.headRepo && args.headRepoInferred) {
           // Why: an inferred fork owner can return no REST match even when the branch already has a PR.
-          branchData = await getFallbackPRListForBranch(candidate, args.branchName, args.ghOptions)
+          branchData = await getFallbackPRListForBranch(
+            candidate,
+            args.headRepo.owner,
+            args.branchName,
+            args.ghOptions
+          )
         }
         // Cheap branch discovery needs exact hydration for review, queue and auto-merge metadata.
         const data = await hydrateBranchLookupWithExactPR(
