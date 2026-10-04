@@ -73,17 +73,29 @@ describe('worker-start agent resolution', () => {
         )
       ).toMatchObject({
         code: 'agent_unconfigured',
-        message: `Unknown --agent "${agent}".`
+        message: `--agent "${agent}" is not an agent id or a configured command alias.`
       })
     }
   })
 
-  it('names the unknown --agent on the remote path too', () => {
-    expect(
-      captureError(() =>
-        validateFederatedWorkerStartPlacement({ ...baseParams, agent: 'codx' }, false)
-      )
-    ).toMatchObject({ code: 'agent_unconfigured', message: 'Unknown --agent "codx".' })
+  // Why: only the worker host knows its configured command aliases, so it validates the name.
+  it('leaves a non-id remote --agent for the worker host to resolve', () => {
+    expect(() =>
+      validateFederatedWorkerStartPlacement({ ...baseParams, agent: 'codex-fugu' }, false)
+    ).not.toThrow()
+  })
+
+  it('resolves a configured command alias instead of the Settings default', () => {
+    const { runtime, resolveDefault } = fakeRuntime('gemini')
+    const resolveAlias = vi.fn((name: string) => (name === 'codex-fugu' ? 'codex' : undefined))
+    Object.assign(runtime, { resolveOrchestrationAgentLauncher: resolveAlias })
+    const started = prepareLocalWorkerStart({
+      params: { ...baseParams, agent: 'codex-fugu' },
+      createsWorktree: false,
+      runtime
+    })
+    expect(started.agent).toBe('codex')
+    expect(resolveDefault).not.toHaveBeenCalled()
   })
 
   it('still fails when --agent is omitted and no usable default exists', () => {

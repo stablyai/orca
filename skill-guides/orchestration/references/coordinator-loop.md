@@ -24,8 +24,9 @@ when an older CLI rejects the flag. A nested worker must respect
 Omit `--agent` to launch the worker host's Settings default agent; that is the
 normal choice, and the first example in the kernel shows it. Name an agent only
 when the task or the user calls for a specific one. Workers never inherit the
-coordinator's own agent. An omitted `--agent` with no enabled default, a named
-agent that is unknown or disabled, and a host too old to resolve a default all
+coordinator's own agent. A named agent may be an agent id or a command alias
+configured on the worker host. An omitted `--agent` with no enabled default, a
+name that is neither or is disabled, and a host too old to resolve a default all
 fail with `agent_unconfigured` rather than silently substituting another agent;
 the CLI rejects an empty `--agent` earlier with `invalid_argument`.
 
