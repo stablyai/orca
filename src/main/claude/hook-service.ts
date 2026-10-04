@@ -31,11 +31,11 @@ import {
   getManagedScriptFileName,
   getConfigPath,
   getManagedCommand,
-  getManagedLifecycleHook,
+  getManagedEventHook,
   getManagedScriptPath,
   getPosixManagedScriptFileName,
   getRemoteConfigPath,
-  getRemoteManagedCommand,
+  getRemoteManagedEventCommand,
   getStatusLineInstallMarkerPath,
   getStatusLineScriptFileName,
   getStatusLineScriptPath,
@@ -112,10 +112,10 @@ export class ClaudeHookService {
     }
 
     // Why: report partial registration instead of a false installed state.
-    const expectedHook = getManagedLifecycleHook(scriptPath, this.options.settings)
     const missing: string[] = []
     let presentCount = 0
     for (const event of this.managedHookPlan(options).install) {
+      const expectedHook = getManagedEventHook(event.eventName, scriptPath, this.options.settings)
       const definitions = Array.isArray(config.hooks?.[event.eventName])
         ? config.hooks![event.eventName]!
         : []
@@ -172,11 +172,10 @@ export class ClaudeHookService {
       }
     }
 
-    const hook = getManagedLifecycleHook(scriptPath, this.options.settings)
     const plan = this.managedHookPlan(options)
     let nextConfig = applyManagedHooks(
       config,
-      hook,
+      (eventName) => getManagedEventHook(eventName, scriptPath, this.options.settings),
       getManagedScriptFileName(this.options.settings),
       plan
     )
@@ -260,10 +259,10 @@ export class ClaudeHookService {
       }
 
       // Why: settings resolve HOME at runtime while SFTP still targets the discovered remote home.
-      const hook = buildManagedCommandHook(getRemoteManagedCommand(remoteScriptPath))
       const nextConfig = applyManagedHooks(
         config,
-        hook,
+        (eventName) =>
+          buildManagedCommandHook(getRemoteManagedEventCommand(eventName, remoteScriptPath)),
         remoteScriptFileName,
         this.managedHookPlan(options)
       )
