@@ -185,3 +185,42 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
     )
   })
 })
+
+// Quick Command stamps share this harness: the resume launch is the same path.
+describe('launchSleepingAgentSession Quick Command stamp fallback', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: null,
+      terminalWindowsShell: 'powershell.exe'
+    }
+    mockCreateTab.mockReturnValue({ id: 'tab-1' })
+  })
+
+  type PendingStartup = { command: string; agentArgsOverride?: string | null }
+  function lastPendingStartup(): PendingStartup | undefined {
+    const options: { pendingStartup?: PendingStartup } | undefined =
+      mockCreateTab.mock.calls.at(-1)?.[3]
+    return options?.pendingStartup
+  }
+
+  it('resumes a stamp-only record with default args and sends no args override', async () => {
+    const stockCommand = await launch()
+    await launch({
+      ...record,
+      launchConfig: { agentArgs: '', agentEnv: {}, quickCommandId: 'quick-command-deleted' }
+    })
+    const startup = lastPendingStartup()
+    expect(startup?.command).toBe(stockCommand)
+    // Why: an override of '' would make a runtime host drop its own defaults.
+    expect(startup).not.toHaveProperty('agentArgsOverride')
+  })
+
+  it('keeps the args override for a real launch config', async () => {
+    await launch({ ...record, launchConfig: { agentArgs: '--model x', agentEnv: {} } })
+    expect(lastPendingStartup()?.agentArgsOverride).toBe('--model x')
+  })
+})

@@ -28,6 +28,7 @@ import {
   type ParkRevealNoHostImageReason,
   type ParkRevealRetryLedger
 } from './park-reveal-snapshot-verdict'
+import { isQuickCommandStampOnlyLaunchConfig } from '../../../../../shared/quick-command-resume'
 
 type ReattachResultSession = ReattachPayloadSession &
   Pick<
@@ -143,7 +144,13 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       })
       return false
     }
-    session.registerEffectiveLaunchConfig(connectResult?.launchConfig, {
+    // Why: a stamp-only Quick Command config can't be retirement-tracked across
+    // a reattach (replayed bytes never reach the command lifecycle), and an
+    // agent that already bound it keeps the ref on its sleeping record.
+    const reattachLaunchConfig = isQuickCommandStampOnlyLaunchConfig(connectResult?.launchConfig)
+      ? undefined
+      : connectResult?.launchConfig
+    session.registerEffectiveLaunchConfig(reattachLaunchConfig, {
       ...(coldRestoreStartup ? { launchToken: coldRestoreStartup.launchToken } : {}),
       ...(connectResult?.launchAgent
         ? { launchAgent: connectResult.launchAgent }

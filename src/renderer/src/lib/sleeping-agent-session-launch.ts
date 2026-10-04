@@ -1,5 +1,11 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import {
+  isPersistableQuickCommandRef,
+  isQuickCommandStampOnlyLaunchConfig,
+  resolveQuickCommandResumeText
+} from '../../../shared/quick-command-resume'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
@@ -28,7 +34,7 @@ export type ResumeSleepingAgentSessionsOptions = {
   onSessionLaunched?: (tabId: string) => void
 }
 
-function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
+export function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(worktreeId)
   const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
@@ -69,6 +75,29 @@ export function launchSleepingAgentSession(
   const state = useAppStore.getState()
   const launchConfig = record.launchConfig
   const resumeTarget = getResumeLaunchTarget(record.worktreeId)
+  // Why: same Quick Command passthrough as the cold-restore path — a
+  // terminal-command wrapper (`ccr muse --resume`) that spawned the tab must
+  // be the resume base, resolved live from settings. launchConfig wins when
+  // present, otherwise the record-level ref (older tabs whose config predates
+  // the stamp, or configs without one).
+  const quickCommandRef = {
+    quickCommandId: launchConfig?.quickCommandId ?? record.quickCommandId,
+    quickCommandLabel: launchConfig?.quickCommandLabel ?? record.quickCommandLabel
+  }
+  const quickCommandText = resolveQuickCommandResumeText(
+    state.settings?.terminalQuickCommands,
+    quickCommandRef,
+    getRepoIdFromWorktreeId(record.worktreeId)
+  )
+  const restampedQuickCommandId =
+    quickCommandRef.quickCommandId && isPersistableQuickCommandRef(quickCommandRef.quickCommandId)
+      ? quickCommandRef.quickCommandId.trim()
+      : undefined
+  const restampedQuickCommandLabel =
+    quickCommandRef.quickCommandLabel &&
+    isPersistableQuickCommandRef(quickCommandRef.quickCommandLabel)
+      ? quickCommandRef.quickCommandLabel.trim()
+      : undefined
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
     providerSession: record.providerSession,
@@ -81,10 +110,25 @@ export function launchSleepingAgentSession(
       launchConfig !== undefined
         ? launchConfig.agentEnv
         : resolveTuiAgentLaunchEnv(record.agent, state.settings?.agentDefaultEnv),
+    ...(isQuickCommandStampOnlyLaunchConfig(launchConfig)
+      ? {
+          quickCommandFallbackAgentArgs: resolveTuiAgentLaunchArgs(
+            record.agent,
+            state.settings?.agentDefaultArgs
+          ),
+          quickCommandFallbackAgentEnv: resolveTuiAgentLaunchEnv(
+            record.agent,
+            state.settings?.agentDefaultEnv
+          )
+        }
+      : {}),
     ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
     ...(launchConfig?.ompResumeFilePath
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
       : {}),
+    ...(quickCommandText ? { quickCommandText } : {}),
+    ...(restampedQuickCommandId ? { quickCommandId: restampedQuickCommandId } : {}),
+    ...(restampedQuickCommandLabel ? { quickCommandLabel: restampedQuickCommandLabel } : {}),
     platform: resumeTarget.platform,
     shell: resumeTarget.shell
   })
@@ -100,13 +144,21 @@ export function launchSleepingAgentSession(
 
   const tab = state.createTab(record.worktreeId, undefined, undefined, {
     launchAgent: record.agent,
+    // Why: keep the validated Quick Command label on the resumed tab so the
+    // NEXT capture still knows this tab belongs to the wrapper.
+    ...(restampedQuickCommandLabel ? { quickCommandLabel: restampedQuickCommandLabel } : {}),
     pendingStartup: {
       command: startupPlan.launchCommand,
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
       launchConfig: startupPlan.launchConfig,
       resumeProviderSession: record.providerSession,
       launchAgent: record.agent,
-      ...(launchConfig ? { agentArgsOverride: launchConfig.agentArgs } : {}),
+      // Why: a stamp-only config's empty args are placeholders; omitting the
+      // override lets a runtime host (which rebuilds stock, not the wrapper)
+      // apply its own default args.
+      ...(launchConfig && !isQuickCommandStampOnlyLaunchConfig(launchConfig)
+        ? { agentArgsOverride: launchConfig.agentArgs }
+        : {}),
       ...(startupPlan.startupCommandDelivery
         ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
         : {}),

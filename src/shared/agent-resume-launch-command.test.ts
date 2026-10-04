@@ -577,4 +577,185 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
     })
     expect(restored?.launchConfig.agentCommand).toBe("claude '--resume'")
   })
+
+  it('resumes through the Quick Command wrapper text when provided', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession,
+      cmdOverrides: {},
+      agentArgs: '--dangerously-skip-permissions',
+      quickCommandText: 'ccr muse --dangerously-skip-permissions --resume',
+      quickCommandId: 'quick-command-muse',
+      quickCommandLabel: 'muse',
+      platform: 'linux'
+    })
+    expect(restored?.launchCommand).toBe(
+      `ccr muse --dangerously-skip-permissions '--resume' '${SESSION_ID}'`
+    )
+    expect(restored?.launchConfig.quickCommandLabel).toBe('muse')
+  })
+
+  it('strips a stale wrapper selector instead of emitting two', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession,
+      cmdOverrides: {},
+      agentArgs: '--dangerously-skip-permissions',
+      quickCommandText: 'ccr muse --resume stale-session-id',
+      platform: 'linux'
+    })
+    expect(restored?.launchCommand).toBe(`ccr muse '--resume' '${SESSION_ID}'`)
+  })
+
+  it('never persists wrapper text as the fallback agent command', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession,
+      cmdOverrides: {},
+      agentArgs: '--dangerously-skip-permissions',
+      quickCommandText: 'ccr muse --dangerously-skip-permissions',
+      platform: 'linux'
+    })
+    expect(restored?.launchConfig.agentCommand).toBeUndefined()
+  })
+
+  it('strips a stale codex resume subcommand from its wrapper', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'codex',
+      providerSession,
+      cmdOverrides: {},
+      quickCommandText: 'wrap -c k=v resume stale',
+      platform: 'linux'
+    })
+    expect(restored?.launchCommand).not.toContain('stale')
+    expect(restored?.launchCommand).toContain('wrap -c k=v')
+  })
+
+  it('refuses a Quick Command that launches a different agent', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'codex',
+      providerSession,
+      cmdOverrides: {},
+      quickCommandText: 'claude --model opus',
+      platform: 'linux'
+    })
+    expect(restored?.launchCommand).toBe(`codex 'resume' '${SESSION_ID}'`)
+  })
+
+  it('refuses an env-prefixed Quick Command that launches a different agent', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession,
+      cmdOverrides: {},
+      quickCommandText: 'CLAUDE_CONFIG_DIR=~/.cw codex --resume',
+      platform: 'linux'
+    })
+    expect(restored?.launchCommand).toBe(`claude '--resume' '${SESSION_ID}'`)
+  })
+
+  it('drops codex resume subcommand options instead of hoisting them', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'codex',
+      providerSession,
+      cmdOverrides: {},
+      quickCommandText: 'codex resume --last',
+      platform: 'linux'
+    })
+    expect(restored?.launchCommand).not.toContain('--last')
+    expect(restored?.launchCommand).toContain(SESSION_ID)
+  })
+
+  it("keeps a wrapper's own -c ahead of claude", () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession,
+      cmdOverrides: {},
+      quickCommandText: 'nix develop -c claude --resume stale',
+      platform: 'linux'
+    })
+    expect(restored?.launchCommand).toBe(`nix develop -c claude '--resume' '${SESSION_ID}'`)
+  })
+
+  it('keeps -c/-r in non-claude wrapper text (codex -c is a config override)', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'codex',
+      providerSession,
+      cmdOverrides: {},
+      quickCommandText: 'codex -c model_reasoning_effort=high',
+      platform: 'linux'
+    })
+    expect(restored?.launchCommand).toContain('codex -c model_reasoning_effort=high')
+  })
+
+  it("strips a non-claude wrapper's own stale resume flag but keeps -c", () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'codebuddy',
+      providerSession,
+      cmdOverrides: {},
+      quickCommandText: 'wrap -c k=v --resume stale',
+      platform: 'linux'
+    })
+    expect(restored?.launchCommand).toBe(`wrap -c k=v '--resume' '${SESSION_ID}'`)
+  })
+
+  it("strips copilot's joined --resume= form from its wrapper", () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'copilot',
+      providerSession,
+      cmdOverrides: {},
+      quickCommandText: 'wrap --resume=stale -c k=v',
+      platform: 'linux'
+    })
+    expect(restored?.launchCommand).not.toContain('stale')
+    expect(restored?.launchCommand).toContain('wrap -c k=v')
+  })
+
+  it('applies the stamp fallback defaults when the wrapper cannot be used', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession,
+      cmdOverrides: {},
+      agentArgs: '',
+      agentEnv: {},
+      quickCommandText: 'ccr muse --resume && echo hi',
+      quickCommandFallbackAgentArgs: '--dangerously-skip-permissions',
+      quickCommandFallbackAgentEnv: { API_KEY: 'x' },
+      platform: 'linux'
+    })
+    expect(restored?.launchCommand).toBe(
+      `claude '--dangerously-skip-permissions' '--resume' '${SESSION_ID}'`
+    )
+    expect(restored?.env).toEqual({ API_KEY: 'x' })
+    expect(restored?.launchConfig.agentArgs).toBe('--dangerously-skip-permissions')
+  })
+
+  it('ignores the stamp fallback defaults when the wrapper resolves', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession,
+      cmdOverrides: {},
+      agentArgs: '',
+      agentEnv: {},
+      quickCommandText: 'ccr muse',
+      quickCommandFallbackAgentArgs: '--dangerously-skip-permissions',
+      quickCommandFallbackAgentEnv: { API_KEY: 'x' },
+      platform: 'linux'
+    })
+    expect(restored?.launchCommand).toBe(`ccr muse '--resume' '${SESSION_ID}'`)
+    expect(restored?.env).toEqual({})
+  })
+
+  it('ignores a blank Quick Command wrapper and uses the stock command', () => {
+    const restored = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession,
+      cmdOverrides: {},
+      agentArgs: '--dangerously-skip-permissions',
+      quickCommandText: '   ',
+      platform: 'linux'
+    })
+    expect(restored?.launchCommand).toBe(
+      `claude '--dangerously-skip-permissions' '--resume' '${SESSION_ID}'`
+    )
+  })
 })

@@ -51,6 +51,14 @@ export type SleepingAgentLaunchConfig = {
   agentArgs: string
   agentEnv: Record<string, string>
   ompResumeFilePath?: string
+  /** Why: a terminal-command Quick Command that launched an agent CLI (e.g.
+   *  `ccr muse --resume`) must resume through that same text, not through the
+   *  agent's stock launch command — otherwise the restored tab silently lands
+   *  on the wrong account/route. Carries the Quick Command id + label so the
+   *  restore path can look up the CURRENT command text (user-editable) at
+   *  resume time; absent for picker-launched tabs, which keep today's path. */
+  quickCommandId?: string
+  quickCommandLabel?: string
 }
 
 export type SleepingAgentSessionRecord = {
@@ -59,6 +67,11 @@ export type SleepingAgentSessionRecord = {
   worktreeId: string
   agent: ResumableTuiAgent
   providerSession: AgentProviderSessionMetadata
+  /** Why: preserves the terminal-command Quick Command (id + label) that
+   *  spawned the tab, so worktree-activation resume can re-run the same user
+   *  command (e.g. a `ccr <preset>` wrapper) instead of the stock agent CLI. */
+  quickCommandId?: string
+  quickCommandLabel?: string
   prompt: string
   state: AgentStatusState
   capturedAt: number

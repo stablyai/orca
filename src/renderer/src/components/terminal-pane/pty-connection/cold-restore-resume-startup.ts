@@ -1,4 +1,10 @@
 import { useAppStore } from '@/store'
+import {
+  isPersistableQuickCommandRef,
+  isQuickCommandStampOnlyLaunchConfig,
+  resolveQuickCommandResumeText
+} from '../../../../../shared/quick-command-resume'
+import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { resolveAgentResumeLaunchTarget } from '@/lib/agent-resume-launch-target'
@@ -60,13 +66,17 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     ) {
       return null
     }
-    const matchingSleepingLaunchConfig =
-      sleepingRecord?.launchConfig &&
+    const sleepingRecordMatchesSession =
+      sleepingRecord !== undefined &&
       (!useLiveEntry ||
         (sleepingRecord.agent === agent &&
           agentProviderSessionsEqual(agent, sleepingRecord.providerSession, providerSession)))
-        ? sleepingRecord.launchConfig
-        : undefined
+    const matchingSleepingLaunchConfig = sleepingRecordMatchesSession
+      ? sleepingRecord?.launchConfig
+      : undefined
+    // Why: the record-level Quick Command ref obeys the same session match as
+    // its launch config — an older session's wrapper must not route this one.
+    const matchingSleepingRecord = sleepingRecordMatchesSession ? sleepingRecord : undefined
     const launchConfig =
       (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
       matchingSleepingLaunchConfig
@@ -80,6 +90,34 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       terminalWindowsShell: state.settings?.terminalWindowsShell,
       tabShellOverride: session.shellOverride
     })
+    // Why: a terminal-command Quick Command that spawned this tab
+    // (`ccr muse --resume`) must resume through the same user command text,
+    // resolved live so later Quick Command edits apply; absent/stale refs
+    // fall back to the stock agent command below. launchConfig wins when
+    // present, otherwise the record-level ref (older tabs whose config
+    // predates the stamp, or configs without one).
+    const quickCommandRef = {
+      quickCommandId: launchConfig?.quickCommandId ?? matchingSleepingRecord?.quickCommandId,
+      quickCommandLabel:
+        launchConfig?.quickCommandLabel ?? matchingSleepingRecord?.quickCommandLabel
+    }
+    const restampedQuickCommandId =
+      quickCommandRef.quickCommandId && isPersistableQuickCommandRef(quickCommandRef.quickCommandId)
+        ? quickCommandRef.quickCommandId.trim()
+        : undefined
+    const restampedQuickCommandLabel =
+      quickCommandRef.quickCommandLabel &&
+      isPersistableQuickCommandRef(quickCommandRef.quickCommandLabel)
+        ? quickCommandRef.quickCommandLabel.trim()
+        : undefined
+    const quickCommandText = resolveQuickCommandResumeText(
+      state.settings?.terminalQuickCommands,
+      quickCommandRef,
+      // Why: a repo-scoped Quick Command belongs to one repo; without the
+      // scope filter a label-only ref could resolve a same-label command
+      // from another repo and resume through the wrong wrapper.
+      getRepoIdFromWorktreeId(session.deps.worktreeId)
+    )
     const startupPlan = buildAgentResumeStartupPlan({
       agent,
       providerSession,
@@ -92,10 +130,27 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
         launchConfig !== undefined
           ? launchConfig.agentEnv
           : resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
+      ...(isQuickCommandStampOnlyLaunchConfig(launchConfig)
+        ? {
+            quickCommandFallbackAgentArgs: resolveTuiAgentLaunchArgs(
+              agent,
+              state.settings?.agentDefaultArgs
+            ),
+            quickCommandFallbackAgentEnv: resolveTuiAgentLaunchEnv(
+              agent,
+              state.settings?.agentDefaultEnv
+            )
+          }
+        : {}),
       ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
       ...(launchConfig?.ompResumeFilePath
         ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
         : {}),
+      ...(quickCommandText ? { quickCommandText } : {}),
+      // Why: only re-stamp validated refs — an unvalidated pass-through
+      // would re-persist a ref the capture gate rejects.
+      ...(restampedQuickCommandId ? { quickCommandId: restampedQuickCommandId } : {}),
+      ...(restampedQuickCommandLabel ? { quickCommandLabel: restampedQuickCommandLabel } : {}),
       platform: resumeTarget.platform,
       shell: resumeTarget.shell
     })

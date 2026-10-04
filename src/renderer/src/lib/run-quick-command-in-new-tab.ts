@@ -1,11 +1,16 @@
 import { useAppStore } from '@/store'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { getResumeLaunchTarget } from '@/lib/sleeping-agent-session-launch'
 import {
   flattenTerminalQuickCommand,
   isTerminalAgentQuickCommand,
   supportsTerminalAgentQuickCommand
 } from '../../../shared/terminal-quick-commands'
+import {
+  isAgentLikeQuickCommandText,
+  isPersistableQuickCommandRef
+} from '../../../shared/quick-command-resume'
 import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
 
 export type RunQuickCommandInNewTabArgs = {
@@ -107,8 +112,31 @@ export function runQuickCommandInNewTab({
     quickCommandLabel: command.label
   })
 
+  const flattenedCommand = flattenTerminalQuickCommand(command).command
+  // Why: only stamp the resume ref when the Quick Command actually wraps an
+  // agent CLI (`ccr muse --resume`) — a plain `git status` tab sets the same
+  // tab label, and if the user later starts an agent by hand in that pane
+  // the stale label would rebuild `git status --resume <sid>`. Persisted
+  // refs are also capture-validated so a weird label can never poison
+  // sleeping-record hydration (which drops the whole record, not the ref).
+  // The new tab gets the same shell a resume tab would (no per-tab override).
+  const tabShell = getResumeLaunchTarget(worktreeId).shell
+  const resumeRefStamp =
+    isAgentLikeQuickCommandText(flattenedCommand, { requireAgentBinary: tabShell === 'cmd' }) &&
+    isPersistableQuickCommandRef(command.id) &&
+    isPersistableQuickCommandRef(command.label)
+      ? {
+          launchConfig: {
+            agentArgs: '',
+            agentEnv: {},
+            quickCommandId: command.id.trim(),
+            quickCommandLabel: command.label.trim()
+          }
+        }
+      : {}
   store.queueTabStartupCommand(tab.id, {
-    command: flattenTerminalQuickCommand(command).command
+    command: flattenedCommand,
+    ...resumeRefStamp
   })
 
   // Why: match `+` button's createNewTerminalTab — without this, a worktree

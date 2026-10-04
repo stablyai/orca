@@ -18,9 +18,13 @@ type MockStoreState = {
   tabBarOrderByWorktree: Record<string, string[]>
 }
 
-const mocks = vi.hoisted(() => ({
-  launchAgentInNewTab: vi.fn()
-}))
+const mocks = vi.hoisted(() => {
+  const state: {
+    launchAgentInNewTab: ReturnType<typeof vi.fn>
+    tabShell: 'cmd' | 'powershell' | 'posix' | undefined
+  } = { launchAgentInNewTab: vi.fn(), tabShell: undefined }
+  return state
+})
 
 let mockState: MockStoreState
 
@@ -32,6 +36,10 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({
   launchAgentInNewTab: mocks.launchAgentInNewTab
+}))
+
+vi.mock('@/lib/sleeping-agent-session-launch', () => ({
+  getResumeLaunchTarget: () => ({ platform: 'win32', shell: mocks.tabShell })
 }))
 
 function createStoreState(): MockStoreState {
@@ -56,6 +64,7 @@ describe('runQuickCommandInNewTab', () => {
   beforeEach(() => {
     mockState = createStoreState()
     mocks.launchAgentInNewTab.mockReset()
+    mocks.tabShell = undefined
   })
 
   it('flattens multiline quick commands before queuing', () => {
@@ -114,8 +123,54 @@ describe('runQuickCommandInNewTab', () => {
       groupId: 'group-1'
     })
 
+    // Why: `git status` is not agent-like, so no resume ref is stamped —
+    // a later hand-started agent in this pane must not rebuild
+    // `git status --resume <sid>`.
     expect(mockState.queueTabStartupCommand).toHaveBeenCalledWith('tab-new', {
       command: 'git status'
+    })
+  })
+
+  it('does not stamp a --resume wrapper on cmd.exe, which reports no command exit', () => {
+    mocks.tabShell = 'cmd'
+    runQuickCommandInNewTab({
+      command: {
+        id: 'muse',
+        label: 'muse',
+        action: 'terminal-command',
+        command: 'ccr muse --resume',
+        appendEnter: true
+      },
+      worktreeId: 'wt-1',
+      groupId: 'group-1'
+    })
+
+    expect(mockState.queueTabStartupCommand).toHaveBeenCalledWith('tab-new', {
+      command: 'ccr muse --resume'
+    })
+  })
+
+  it('stamps the resume ref for agent-wrapping quick commands', () => {
+    runQuickCommandInNewTab({
+      command: {
+        id: 'muse',
+        label: 'muse',
+        action: 'terminal-command',
+        command: 'ccr muse --dangerously-skip-permissions --resume',
+        appendEnter: true
+      },
+      worktreeId: 'wt-1',
+      groupId: 'group-1'
+    })
+
+    expect(mockState.queueTabStartupCommand).toHaveBeenCalledWith('tab-new', {
+      command: 'ccr muse --dangerously-skip-permissions --resume',
+      launchConfig: {
+        agentArgs: '',
+        agentEnv: {},
+        quickCommandId: 'muse',
+        quickCommandLabel: 'muse'
+      }
     })
   })
 
