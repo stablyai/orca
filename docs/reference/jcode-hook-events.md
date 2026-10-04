@@ -13,14 +13,14 @@ points. Five are **observers** — detached, fire-and-forget, they can never slo
 the agent. One, `pre_tool`, is a **gate**: jcode spawns it, writes the tool input
 to its stdin, and waits for it to exit before the tool runs.
 
-| Event           | When                                         | Orca state | Notable payload fields                                    |
-| --------------- | -------------------------------------------- | ---------- | --------------------------------------------------------- |
-| `session_start` | TUI open, attach, or `--resume`               | none       | `source` = `create`/`attach`/`resume`, `model`             |
-| `turn_start`    | prompt submitted, before the model generates  | `working`  | `source`, `model`                                          |
-| `pre_tool`      | before each tool call (gate)                  | `working`  | `tool_name`, `tool_input` (argument JSON as a string)      |
-| `post_tool`     | after each tool call                          | `working`  | `tool_name`, `status`, `duration_ms`, `output_bytes`/`error` |
-| `turn_end`      | turn finished                                 | `done`     | `status`, `duration_ms`, `model`, `last_assistant_text`, `error` |
-| `session_end`   | session closed                                | `done`     | `source` = `close`                                         |
+| Event           | When                                         | Orca state | Notable payload fields                                           |
+| --------------- | -------------------------------------------- | ---------- | ---------------------------------------------------------------- |
+| `session_start` | TUI open, attach, or `--resume`              | none       | `source` = `create`/`attach`/`resume`, `model`                   |
+| `turn_start`    | prompt submitted, before the model generates | `working`  | `source`, `model`                                                |
+| `pre_tool`      | before each tool call (gate)                 | `working`  | `tool_name`, `tool_input` (argument JSON as a string)            |
+| `post_tool`     | after each tool call                         | `working`  | `tool_name`, `status`, `duration_ms`, `output_bytes`/`error`     |
+| `turn_end`      | turn finished                                | `done`     | `status`, `duration_ms`, `model`, `last_assistant_text`, `error` |
+| `session_end`   | session closed                               | `done`     | `source` = `close`                                               |
 
 `session_start` is identity-only. jcode fires it on an idle TUI open, so mapping
 it to `working` would spin before the user has typed anything (same reason Devin
@@ -59,12 +59,12 @@ Three consequences the mapping depends on:
 
 ## Why Orca subscribes to the gate
 
-`pre_tool` is the only event that can report a tool *while it runs*. Without it a
+`pre_tool` is the only event that can report a tool _while it runs_. Without it a
 three-minute `bash` shows no tool at all until it finishes. Two rules keep the
 gate from ever costing the agent anything:
 
 1. **The POST is detached.** jcode calls `child.wait_with_output()`, which waits
-   for the process *and* reads its stderr to EOF — a backgrounded child that
+   for the process _and_ reads its stderr to EOF — a backgrounded child that
    inherited stderr would hold the gate open for as long as it ran. The managed
    script runs the POST as `orca_post_jcode_event >/dev/null 2>&1 &`, so the
    inherited pipes are closed and the script exits immediately.
@@ -83,10 +83,10 @@ command outright or asks the model to justify it — both inside the tool, with 
 human in the loop. There is therefore no hook, and no terminal-title state, for
 "jcode is waiting on you" during ordinary tool use.
 
-The one tool a *human* answers is ambient mode's `request_permission`
+The one tool a _human_ answers is ambient mode's `request_permission`
 (`crates/jcode-app-core/src/tool/ambient.rs`), resolved out of band with
 `jcode permissions`. Orca maps a `pre_tool` for it to `waiting` and publishes the
-tool input as the question card. `post_tool` for the same tool is *not* mapped —
+tool input as the question card. `post_tool` for the same tool is _not_ mapped —
 by then the human has already answered.
 
 Matching is by exact tool name. jcode's live tool set is `agentgrep, apply_patch,
@@ -114,7 +114,7 @@ the parser.
 ## Per-pane daemons
 
 jcode runs one server/client daemon per runtime dir, and lifecycle hooks fire
-*inside the daemon*. Every TUI client connects the daemon the first pane started,
+_inside the daemon_. Every TUI client connects the daemon the first pane started,
 so without isolation a second jcode pane's events carry the first pane's
 `ORCA_PANE_KEY` and its status lands on the wrong tab.
 
@@ -141,6 +141,16 @@ are refreshed on Orca startup without changing the user's hook configuration.
 
 Report: https://github.com/stablyai/orca/pull/22539#issuecomment-5809618574
 Launcher fix: https://github.com/1jehuang/jcode/pull/1490
+
+## Hook installation health
+
+Orca reports hooks as installed only when all six events use the current
+shell-quoted managed command and the managed script exists. Missing scripts,
+old home paths, platform-switched commands, and legacy unquoted commands report
+`partial` with a repair reason, not a user-owned hook warning. Reinstalling hooks
+recreates the script and updates only Orca-owned commands. User-owned commands
+remain untouched. Removing the managed entries still reports `not_installed`,
+even if the shared script remains on disk.
 
 ## Config shape
 

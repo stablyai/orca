@@ -4,6 +4,7 @@ import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   buildWindowsAgentHookPostCommand,
+  createManagedCommandMatcher,
   writeManagedScript
 } from '../agent-hooks/installer-utils'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
@@ -128,33 +129,42 @@ export class JcodeHookService {
     }
     const scriptPresent = existsSync(scriptPath)
     const managedCommand = getJcodeManagedCommand(scriptPath)
+    const isManaged = createManagedCommandMatcher(getJcodeManagedScriptFileName())
     const missing: string[] = []
+    const outdated: string[] = []
     const userOwned: string[] = []
     let managedCount = 0
     for (const event of JCODE_HOOK_EVENTS) {
       const value = table[event]
-      // Why both forms: installs before the quoting fix stored the bare path, and
-      // install() repoints those — reporting them user-owned would hide the repair.
-      if (value === managedCommand || value === scriptPath) {
+      if (value === managedCommand) {
         managedCount += 1
+      } else if (isManaged(value)) {
+        outdated.push(event)
       } else if (value === undefined) {
         missing.push(event)
       } else {
         userOwned.push(event)
       }
     }
-    const managedHooksPresent = managedCount > 0 || scriptPresent
+    const hasManagedEntries = managedCount > 0 || outdated.length > 0
+    const managedHooksPresent = hasManagedEntries || scriptPresent
     let state: AgentHookInstallState
     let detail: string | null
-    if (missing.length === 0 && userOwned.length === 0) {
+    if (managedCount === JCODE_HOOK_EVENTS.length && scriptPresent) {
       state = 'installed'
       detail = null
-    } else if (managedCount === 0 && missing.length === JCODE_HOOK_EVENTS.length) {
+    } else if (!hasManagedEntries && missing.length === JCODE_HOOK_EVENTS.length) {
       state = 'not_installed'
       detail = null
     } else {
       state = 'partial'
       const parts: string[] = []
+      if (hasManagedEntries && !scriptPresent) {
+        parts.push('Managed hook script missing')
+      }
+      if (outdated.length > 0) {
+        parts.push(`Managed hook command outdated for events: ${outdated.join(', ')}`)
+      }
       if (missing.length > 0) {
         parts.push(`Managed hook missing for events: ${missing.join(', ')}`)
       }
