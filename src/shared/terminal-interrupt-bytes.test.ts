@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   TERMINAL_INTERRUPT_ETX,
   TERMINAL_INTERRUPT_KITTY_CTRL_C,
+  isTerminalInterruptInput,
   terminalInterruptBytes
 } from './terminal-interrupt-bytes'
 
@@ -19,5 +20,18 @@ describe('terminalInterruptBytes', () => {
   it('keeps a bare ETX when only alternate-key reporting is on', () => {
     expect(terminalInterruptBytes(4)).toBe(TERMINAL_INTERRUPT_ETX)
     expect(terminalInterruptBytes(2 | 4 | 16)).toBe(TERMINAL_INTERRUPT_ETX)
+  })
+})
+
+describe('isTerminalInterruptInput', () => {
+  it('recognizes both ETX and Kitty CSI-u as Ctrl+C', () => {
+    expect(isTerminalInterruptInput(TERMINAL_INTERRUPT_ETX)).toBe(true)
+    expect(isTerminalInterruptInput(TERMINAL_INTERRUPT_KITTY_CTRL_C)).toBe(true)
+  })
+
+  it('does not classify other terminal input as Ctrl+C', () => {
+    expect(isTerminalInterruptInput('\x1b')).toBe(false)
+    expect(isTerminalInterruptInput('\x1b[99;1u')).toBe(false)
+    expect(isTerminalInterruptInput('c')).toBe(false)
   })
 })

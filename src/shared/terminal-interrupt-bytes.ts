@@ -7,6 +7,11 @@ export const TERMINAL_INTERRUPT_ETX = '\x03'
  */
 export const TERMINAL_INTERRUPT_KITTY_CTRL_C = '\x1b[99;5u'
 
+/** Both wire encodings carry the same Ctrl+C intent back through the renderer input path. */
+export function isTerminalInterruptInput(data: string): boolean {
+  return data === TERMINAL_INTERRUPT_ETX || data === TERMINAL_INTERRUPT_KITTY_CTRL_C
+}
+
 /**
  * Progressive-enhancement bits that change Ctrl+C from a legacy ETX into CSI u.
  * Alternate-key reporting (4) only annotates sequences that are already encoded,
