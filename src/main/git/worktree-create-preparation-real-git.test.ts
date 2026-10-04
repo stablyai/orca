@@ -133,6 +133,7 @@ describe('prepared worktree creation with real Git', () => {
     const barrier = new Promise<void>((resolve) => {
       release = resolve
     })
+    const barrierSubscribed = vi.spyOn(barrier, 'then')
     const spy = vi.spyOn(gitRunner, 'gitExecFileAsync')
     const preparing = prepareWorktreeCreateCheckout(
       repoPath,
@@ -147,6 +148,11 @@ describe('prepared worktree creation with real Git', () => {
       await vi.waitFor(() => expect(existsSync(join(preparedPath, '.git'))).toBe(true))
       const lock = git(preparedPath, ['rev-parse', '--git-path', 'locked'])
       await vi.waitFor(async () => expect(await readFile(lock, 'utf8')).toBe(`${reason}\n`))
+      await vi.waitFor(() =>
+        expect(
+          barrierSubscribed.mock.calls.some(([onFulfilled]) => typeof onFulfilled === 'function')
+        ).toBe(true)
+      )
       controller.abort(new Error('expired while fetching'))
       await assertion
       expect(existsSync(preparedPath)).toBe(false)
@@ -156,6 +162,7 @@ describe('prepared worktree creation with real Git', () => {
       expect(spy.mock.calls.some(([args]) => args.includes('reset'))).toBe(false)
     } finally {
       release()
+      barrierSubscribed.mockRestore()
       spy.mockRestore()
     }
   })

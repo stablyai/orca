@@ -280,7 +280,7 @@ it('holds the message with its reason while the exit stays unverifiable, and sen
     {
       kind: 'status',
       tone: 'warning',
-      text: "Orca couldn't confirm Claude's previous process ended. Messages wait to be sent until Orca confirms it has ended.",
+      text: 'Claude from before may still be running. Your messages will send once it stops.',
       failure: { kind: 'previousExitUnverifiable' }
     }
   ])
@@ -545,11 +545,11 @@ it('notes why a message waits when another operation failed its retry before the
 it('keeps an option change at rest when the Stop proved the exit and only its bookkeeping keeps failing', async () => {
   const connection = claude.connections[0]!
   await openTurn(connection)
-  // The close proves the exit; draining what the old agent wrote fails for the Stop.
+  // The close proves the exit; draining what the old agent wrote fails for the Stop. The Stop reads
+  // the journal without a drain, so its close is the first and only drain to fail here.
   const barrierLost = { ok: false as const, error: new Error('drain barrier lost') }
   const drained = vi
     .spyOn(host['runtimeState'].eventSinkFor(SESSION), 'drained')
-    .mockResolvedValueOnce(barrierLost)
     .mockResolvedValueOnce(barrierLost)
   await expect(stop()).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
   frame(connection, INTERRUPTED_RESULT)

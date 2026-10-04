@@ -68,13 +68,14 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       const existing = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
         | EnrichedAgentHookEventPayload
         | undefined
+      const canonical = existing ?? this.getTmuxSelectedStatus(resolvedPaneKey)
       // Why: stateStartedAt pins the turn; the renderer's updatedAt is stamped at or after this
       // receivedAt (runtime-sync and recovery paths use Date.now()/capturedAt), so a strictly
       // newer cached event is the only replacement worth protecting.
       if (
-        !existing ||
-        existing.stateStartedAt !== identity.stateStartedAt ||
-        existing.receivedAt > identity.receivedAt
+        !canonical ||
+        canonical.stateStartedAt !== identity.stateStartedAt ||
+        canonical.receivedAt > identity.receivedAt
       ) {
         continue
       }
@@ -167,7 +168,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
    *  itself lives beside `clearPaneCacheState`, so adding a latch cannot leave this behind in a
    *  different file. */
   protected hasLiveClaimsForPaneKey(paneKey: string): boolean {
-    return paneHasStateClaims(this.state, paneKey)
+    return Boolean(this.getTmuxSelectedStatus(paneKey)) || paneHasStateClaims(this.state, paneKey)
   }
 
   /** Clear statuses proven to belong to one lost SSH transport. */
@@ -232,7 +233,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       | EnrichedAgentHookEventPayload
       | undefined
     if (!existing) {
-      return null
+      return this.deleteTmuxSelectedStatus(resolvedPaneKey) ?? null
     }
     deleteLegacyAgentStatus(this.state, resolvedPaneKey)
     this.activeHookTurnCompletedAtByPaneKey.delete(resolvedPaneKey)

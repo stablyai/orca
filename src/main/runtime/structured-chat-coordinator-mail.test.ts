@@ -34,6 +34,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createCoordinatorMailObservationClock } from './structured-chat-coordinator-observation-clock.test-fixture'
 import {
   attachParams,
   fakeCodex,
@@ -56,6 +57,7 @@ let db: OrchestrationDb
 let host: StructuredAgentSessionHost
 let dispatcher: RpcDispatcher
 let requests = 0
+const observationClock = createCoordinatorMailObservationClock(() => host, COORDINATOR)
 
 function request(
   method: string,
@@ -284,10 +286,15 @@ function startRuntime(): OrcaRuntimeService {
 }
 
 afterEach(async () => {
-  await stopStructuredAgentSessionRuntime()
-  db.close()
-  vi.restoreAllMocks()
-  await rm(root, { recursive: true, force: true })
+  try {
+    await stopStructuredAgentSessionRuntime()
+    db.close()
+    await observationClock.drainClosedDatabaseRepair()
+    vi.restoreAllMocks()
+    await rm(root, { recursive: true, force: true })
+  } finally {
+    observationClock.restore()
+  }
 })
 
 // Pointers are sent on asynchronous edges; the default 1s wait is too tight under a loaded parallel run.
@@ -350,15 +357,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
   })
 
   /** Fires both edges and waits until every gate read they started has answered. */
-  async function edgesAnswered(): Promise<void> {
-    const reads = vi.spyOn(host, 'journalSnapshot')
-    runtime.onStructuredSessionStatusForMail({ sessionId: COORDINATOR, status: null })
-    runtime.onStructuredSessionStatusForMail({ sessionId: COORDINATOR, status: 'idle' })
-    await vi.waitFor(() => expect(reads).toHaveBeenCalled(), WAIT)
-    await Promise.all(reads.mock.results.map((read) => read.value))
-    await new Promise((resolve) => setImmediate(resolve))
-    reads.mockRestore()
-  }
+  const edgesAnswered = (): Promise<void> => observationClock.edgesAnswered(runtime, WAIT)
 
   /** The operation ids the coordinator's journal recorded for its pointer turns. */
   async function pointerSends(): Promise<string[]> {
@@ -407,6 +406,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
   })
 
   it('does not restart a provider that dies before every echo, however many edges follow', async () => {
+    observationClock.start()
     // What this pins: each death's own status edge used to re-point the mail, and that send started
     // the provider again, about once a second for as long as the mail was unread.
     await openChat(COORDINATOR)
@@ -416,7 +416,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await finishWorker(taskId)
     await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(1), WAIT)
     // A fixed window, not a poll: a respawn loop would restart it several times in it.
-    await new Promise((resolve) => setTimeout(resolve, 1_500))
+    await observationClock.observe(1_500)
     await edgesAnswered()
     expect(codex.connections.length - before).toBe(0)
     expect(providerFaults.turnStarts).toBe(1)
@@ -426,6 +426,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
   it.each(['exit-then-throw', 'throw-then-exit'] as const)(
     'does not restart a provider that crashed while taking the pointer turn (%s)',
     async (crash) => {
+      observationClock.start()
       // The crash settles the send `unknown` with the connection's own error, not as a provider
       // exit; every status edge after it re-pointed the mail and started the provider again.
       await openChat(COORDINATOR)
@@ -434,7 +435,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
       const before = providerFaults.starts
       await finishWorker(taskId)
       await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(1), WAIT)
-      await new Promise((resolve) => setTimeout(resolve, 1_500))
+      await observationClock.observe(1_500)
       await edgesAnswered()
       expect(providerFaults.starts - before).toBe(0)
       expect(providerFaults.turnStarts).toBe(1)
@@ -501,7 +502,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     expect(cancelled).toMatchObject({ ok: true })
     providerFaults.startDelayMs = 0
     // A fixed window, not a poll: a re-point would start the agent again in it.
-    await new Promise((resolve) => setTimeout(resolve, 1_500))
+    await observationClock.observe(1_500)
     expect(providerFaults.starts - before).toBe(1)
     expect(await pointerSends()).toHaveLength(1)
     await edgesAnswered()
@@ -511,6 +512,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
   })
 
   it('points a held pointer once more after Orca restarts, under a new id', async () => {
+    observationClock.start()
     await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     providerFaults.dieBeforeEveryEcho = true
@@ -525,7 +527,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
     const before = providerFaults.starts
     await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(2), WAIT)
-    await new Promise((resolve) => setTimeout(resolve, 1_500))
+    await observationClock.observe(1_500)
     await edgesAnswered()
     expect(providerFaults.starts - before).toBe(1)
     expect(providerFaults.turnStarts).toBe(2)
@@ -539,6 +541,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
   async function refusedStartsFor(
     refusal: () => Error
   ): Promise<{ runId: string; starts: number }> {
+    observationClock.start()
     await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     await host.close(COORDINATOR, 'evict')
@@ -551,7 +554,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
       WAIT
     )
     // A fixed window, not a poll: a retry loop would start it several times in it.
-    await new Promise((resolve) => setTimeout(resolve, 1_500))
+    await observationClock.observe(1_500)
     return { runId, starts: providerFaults.starts - before }
   }
 
@@ -576,7 +579,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
       const before = providerFaults.starts
       for (let edge = 0; edge < 5; edge += 1) {
         runtime.onStructuredSessionStatusForMail({ sessionId: COORDINATOR, status: 'idle' })
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await observationClock.observe(100)
       }
       await edgesAnswered()
       expect(providerFaults.starts).toBe(before)

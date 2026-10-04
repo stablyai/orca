@@ -150,6 +150,16 @@ export function startJournalRowFold(input: JournalRowFoldInput): {
   return { add, finish }
 }
 
+/** `readJournalRowsAfterCursor` over one epoch, for a reader that supplies only the sequence. */
+export function journalRowsAfterReader(
+  db: Database.Database,
+  sessionId: string,
+  epoch: string,
+  limit?: number
+): (afterSequence: number) => JournalRow[] {
+  return (afterSequence) => readJournalRowsAfterCursor(db, sessionId, epoch, afterSequence, limit)
+}
+
 /** Rows after a cursor, in sequence order. Stops at the first row this build
  *  cannot parse, exactly as replay does. */
 export function readJournalRowsAfterCursor(

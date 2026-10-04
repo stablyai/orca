@@ -72,6 +72,22 @@ describe('Codex state DB backfill recovery', () => {
     expect(run).toHaveBeenCalledTimes(1)
   })
 
+  it('does not start a supervisor for an unreadable index', async () => {
+    const home = await createTemporaryRoot()
+    await writeFile(join(home, 'state_5.sqlite'), 'not a sqlite database')
+    const run = vi.fn()
+    const withLock = vi.fn()
+
+    await expect(
+      startCodexStateDbBackfillRecoveryInBackground(home, {
+        run,
+        withLock: withLock as never
+      })
+    ).resolves.toBeNull()
+    expect(withLock).not.toHaveBeenCalled()
+    expect(run).not.toHaveBeenCalled()
+  })
+
   it('releases a completed supervisor entry', async () => {
     vi.spyOn(console, 'info').mockImplementation(() => {})
     const run = vi.fn(async () => ({ outcome: 'completed' as const, spawnCount: 1 }))

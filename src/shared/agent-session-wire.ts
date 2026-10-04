@@ -227,9 +227,6 @@ export type AgentSessionStatusSummary = {
   /** With `hostExecutionOwned`: whether that child has proven its start. `starting` is a
    *  published session whose provider has not yet answered startup; absent on older hosts. */
   hostExecutionPhase?: 'starting' | 'ready'
-  /** The current provider child, distinct from the conversation and from replacement children.
-   *  Absent on older hosts and whenever this host has no live child. */
-  hostExecutionChild?: { generation: string | null; fence: number }
   latestPrompt: string
   /** Provider model in force for the next turn; absent until the host has read the options. */
   model?: string

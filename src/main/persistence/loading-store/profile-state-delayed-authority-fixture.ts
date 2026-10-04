@@ -113,12 +113,21 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-export async function fixture() {
+export async function fixture(legacyOpenCodeGoApiKey?: string) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-worker-coordination-'))
   const path = join(directory, 'profile-state.db')
   const inner = new ProfileStateSqliteAuthority(path, 'coordination-test')
+  const initial = buildProfileStateCutoverFixture(directory)
   inner.writeSerializedState(
-    Buffer.from(JSON.stringify(buildProfileStateCutoverFixture(directory)))
+    Buffer.from(
+      JSON.stringify({
+        ...initial,
+        settings: {
+          ...initial.settings,
+          ...(legacyOpenCodeGoApiKey ? { opencodeGoApiKey: legacyOpenCodeGoApiKey } : {})
+        }
+      })
+    )
   )
   const authority = new DelayedAuthority(inner)
   const store = new Store({

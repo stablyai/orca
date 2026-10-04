@@ -8,19 +8,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
-  AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
-  AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
-  AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
-  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
   SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  SKILL_INSTALL_RESULT_V2_CAPABILITY,
   WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
@@ -28,10 +24,15 @@ import {
   type RuntimeCapability
 } from '../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
-import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../shared/agent-session-background-task-child-views-capability'
+import { remoteRuntimeClientCapabilities } from '../../shared/remote-runtime-client-capabilities'
 import { supportsAgentLaunch } from '../runtime/rpc/methods/agent-launch'
 import { createSupportFollowsHostSetting } from '../runtime/rpc/methods/structured-agent-session-policy'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
+
+// Every paired transport sends the shared base plus the Electron list, so compare the union.
+const PAIRED_HOST_RECEIVES = remoteRuntimeClientCapabilities(
+  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+)
 
 /** Advertised to a remote host and deliberately NOT to main: each would change local behaviour or
  *  has no local meaning. Adding to this set is a decision; leaving it out of both lists is not. */
@@ -54,21 +55,12 @@ const REMOTE_ONLY_BY_DECISION: readonly RuntimeCapability[] = [
   SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
   // Main marks `removing` on its own worktree IPC listings unconditionally; the renderer never
   // lists its own host's worktrees over runtime RPC, where this capability decides mark vs omit.
-  WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
-]
-
-/** Gates the renderer must pass against its own main process. The Electron remote list omits all
- *  seven; mobile advertises the structured ones, so this is an Electron-remote gap rather than a
- *  statement that no remote client wants them. Why it is one is not recorded here. */
-const LOCAL_ONLY_BY_DECISION: readonly RuntimeCapability[] = [
-  AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
-  AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
-  AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
-  AGENT_SESSION_TURN_ITEM_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  // The desktop picks each launch mode itself; only its own host is told so far.
-  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
+  WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY,
+  // `skills.install` reaches a host only from main's remote install service, never over runtime:call.
+  SKILL_INSTALL_RESULT_V2_CAPABILITY,
+  // Unsettled, not a decision: the local tabs sync reads the census's `authoritative` label
+  // (local-structured-session-tabs-sync/inventory-refresh.ts), which main drops without this.
+  SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY
 ]
 
 function missingFrom(
@@ -96,29 +88,25 @@ describe('desktop renderer runtime client capabilities', () => {
     ).toBe(false)
   })
 
-  // The desktop routes a launch on its own settings; a host that answered createSupport with its
-  // own setting would turn a chat the user asked for into a failed launch.
-  it.each([['its own main process', DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES]] as const)(
-    'tells %s that it picks each launch mode itself',
-    (_host, clientCapabilities) => {
-      expect(createSupportFollowsHostSetting({ clientKind: 'runtime', clientCapabilities })).toBe(
-        false
-      )
-    }
-  )
+  // The desktop routes a launch on its own settings. A paired host answering createSupport from its
+  // own setting would fail a chat the user asked for; main shares the desktop's setting, so locally
+  // this only lets Retry on an existing chat relaunch after the setting is turned off.
+  it.each([
+    ['a paired host', PAIRED_HOST_RECEIVES],
+    ['its own main process', DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES]
+  ] as const)('tells %s that it picks each launch mode itself', (_host, clientCapabilities) => {
+    expect(createSupportFollowsHostSetting({ clientKind: 'runtime', clientCapabilities })).toBe(
+      false
+    )
+  })
 
-  it('diverges from the remote Electron list only where a decision was recorded', () => {
-    expect(
-      missingFrom(
-        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-        DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
-      )
-    ).toEqual([...REMOTE_ONLY_BY_DECISION].sort())
-    expect(
-      missingFrom(
-        DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES,
-        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
-      )
-    ).toEqual([...LOCAL_ONLY_BY_DECISION].sort())
+  it('diverges from what a paired host receives only where a decision was recorded', () => {
+    expect(missingFrom(PAIRED_HOST_RECEIVES, DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES)).toEqual(
+      [...REMOTE_ONLY_BY_DECISION].sort()
+    )
+    // The same renderer reads structured chats on either host, so it claims nothing only locally.
+    expect(missingFrom(DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES, PAIRED_HOST_RECEIVES)).toEqual(
+      []
+    )
   })
 })

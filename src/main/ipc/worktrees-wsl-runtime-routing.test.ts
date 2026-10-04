@@ -462,7 +462,11 @@ describe('registerWorktreeHandlers', () => {
       ['rev-parse', '--verify', 'origin/feature/add-feature'],
       { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
     )
-    expect(getDefaultRemoteMock).toHaveBeenCalledWith('/workspace/repo', { wslDistro: 'Ubuntu' })
+    expect(getDefaultRemoteMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      { wslDistro: 'Ubuntu' },
+      []
+    )
     expect(result).toMatchObject({
       baseBranch: 'def456',
       headSha: 'def456',

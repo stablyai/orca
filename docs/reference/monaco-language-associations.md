@@ -5,7 +5,11 @@ languages and loads their grammars on demand. Filename detection must not load t
 editor itself: it also runs during session restoration and before the editor mounts.
 
 `monaco-language-associations.json` contains the registration metadata from the
-installed package's entry point. Regenerate it after upgrading Monaco:
+installed package's entry point, plus curated Ruby associations in the generator.
+Those add `.rake`, `.ru`, `.jbuilder`, `.thor`, `Guardfile`, `Capfile`, `Podfile`,
+`Brewfile` and `Vagrantfile` to the existing Ruby grammar. Change these in
+`config/scripts/generate-monaco-associations.mjs`, not the generated JSON.
+Regenerate after changing the curated associations or upgrading Monaco:
 
 ```sh
 node config/scripts/generate-monaco-associations.mjs
@@ -13,7 +17,7 @@ pnpm exec oxfmt --write src/renderer/src/lib/monaco-language-associations.json
 ```
 
 The generator reads syntax trees without executing contributions or grammar loaders.
-Its test compares the checked-in metadata to the installed package. The original
+Its test compares the checked-in metadata to the installed package and curated associations. The original
 list was verified against a clone of `microsoft/monaco-editor`, tag `v0.55.1`, commit
 `516f350bdaf7a82f6731bd128a9ec86a6e5fa47d` (`src/basic-languages` and `src/language`).
 

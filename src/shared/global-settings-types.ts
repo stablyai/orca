@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from './execution-host'
+import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
 import type { GitHubProjectSettings } from './github/project-types'
 import type { VoiceSettings } from './speech-types'
 import type { AiVaultSearchSettings } from './ai-vault-search-settings'
@@ -26,6 +27,7 @@ import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
 import type { TuiAgent } from './tui-agent'
+import type { ZcodePlanSite } from './zcode-plan-sites'
 import type {
   AgentDashboardMode,
   BranchPrefixStrategy,
@@ -392,14 +394,14 @@ export type GlobalSettings = {
   opencodeSessionCookie: string
   /** Optional OpenCode Go workspace ID override; when set, skips the workspaces lookup and fetches usage directly. */
   opencodeWorkspaceId: string
-  /** Optional OpenCode Go API key override. Takes precedence over OpenCode's own stored key and OPENCODE_API_KEY. Stored encrypted. */
-  opencodeGoApiKey: string
   /** Optional MiniMax group id. When empty, the usage fetcher extracts minimax_group_id_v2 from the cookie. */
   minimaxGroupId: string
   /** Comma-separated MiniMax model names to show in the status bar usage window. */
   minimaxUsageModels: string
   /** MiniMax account region; defaults to overseas for existing users. */
   minimaxEndpoint: MiniMaxEndpoint
+  /** GLM Coding Plan site whose API key is saved in AI Provider Accounts; defaults to the international Z.AI console. */
+  zcodePlanSite?: ZcodePlanSite
   /** Extract OAuth credentials from the local Gemini CLI for rate-limit fetching. Off by default (explicit opt-in). */
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
@@ -420,6 +422,12 @@ export type GlobalSettings = {
   agentYoloDefaultsMigrated?: boolean
   /** Why: disabling must persist so startup doesn't reinstall global agent hook entries the user just removed. */
   agentStatusHooksEnabled: boolean
+  /** A local agent-state-rules.json that replaces downloaded and bundled rules, for testing a rule
+   *  change. */
+  agentStateRulesPath?: string | null
+  /** Off: rules are never downloaded and a cached download is ignored, so the bundled rules (or a
+   *  local override) apply. Absent reads as on. */
+  agentStateRulesLiveUpdates?: boolean
   /** Pre-trust the worktree or folder Orca starts an agent in, so its "trust this folder?" prompt is skipped. Defaults on. */
   agentWorkspaceTrustEnabled: boolean
   /** Why: Codex's shared server runs every tab's hooks with the first tab's env; off opts new terminals back into it. Absent reads as on. */
@@ -531,11 +539,7 @@ export type GlobalSettings = {
   aiVaultSearch?: AiVaultSearchSettings
 }
 
-export type OrcaWorkspaceLayout = {
-  path: string
-  nestWorkspaces: boolean
-}
-
 // Re-exported so existing importers keep one entry point; the shape lives in its
 // own file because this one is at the max-lines ceiling.
 export type { GhosttyImportPreview } from './ghostty-import-preview'
+export type { OrcaWorkspaceLayout } from './orca-workspace-layout'

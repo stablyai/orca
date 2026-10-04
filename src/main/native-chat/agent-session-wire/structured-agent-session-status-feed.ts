@@ -177,7 +177,6 @@ export class StructuredAgentSessionStatusFeed {
     const {
       hostExecutionOwned: _hostExecutionOwned,
       hostExecutionPhase: _hostExecutionPhase,
-      hostExecutionChild: _hostExecutionChild,
       ...retained
     } = previous
     this.published.set(sessionId, retained)
@@ -276,8 +275,7 @@ export class StructuredAgentSessionStatusFeed {
       ...(session.child
         ? {
             hostExecutionOwned: true as const,
-            hostExecutionPhase: session.child.phase,
-            hostExecutionChild: { generation: session.child.generation, fence: session.child.fence }
+            hostExecutionPhase: session.child.phase
           }
         : {}),
       ...projected,

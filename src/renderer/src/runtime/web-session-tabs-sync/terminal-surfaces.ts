@@ -21,6 +21,7 @@ import type {
   MirroredAgentTab
 } from './state'
 import type { Tab } from '../../../../shared/tab-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/structured-agent-session-launch-registry'
 
@@ -56,6 +57,8 @@ export function isAgentSessionTab(
 
 export function buildMirroredAgentTabs(
   snapshot: RuntimeMobileSessionTabsResult,
+  /** The host that published the snapshot; stamped so later operations reach the chat there. */
+  executionHostId: ExecutionHostId,
   hostGroupIdByTabId: ReadonlyMap<string, string>,
   fallbackGroupId: string,
   sortOffset: number,
@@ -120,6 +123,7 @@ export function buildMirroredAgentTabs(
         // user's split choice and must not move the mounted pane during adoption.
         groupId: existing?.groupId ?? hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId,
         worktreeId: snapshot.worktree,
+        executionHostId,
         contentType: 'agent-session',
         agentSessionAgent: tab.agent,
         // Why: `title` is wire data typed `string`; a host that violates that must

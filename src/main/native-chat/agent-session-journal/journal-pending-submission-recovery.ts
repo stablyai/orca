@@ -73,14 +73,18 @@ export async function rejectJournalQueuedSubmissions(
   const queued = journal
     .submissions()
     .filter((entry) => isQueuedAgentJournalSubmission(entry) && which(entry))
-  for (const entry of queued) {
-    await journal.resolveDispatch({
-      clientMessageId: entry.clientMessageId,
-      state: 'rejected',
-      ...rejection,
-      fence,
-      recovered: true
-    })
-  }
+  // Issued together, so the fold shows none of them queued once this call returns: a Stop decides
+  // whether anything is working from it without awaiting the withdrawal.
+  await Promise.all(
+    queued.map((entry) =>
+      journal.resolveDispatch({
+        clientMessageId: entry.clientMessageId,
+        state: 'rejected',
+        ...rejection,
+        fence,
+        recovered: true
+      })
+    )
+  )
   return queued.map((entry) => entry.clientMessageId)
 }

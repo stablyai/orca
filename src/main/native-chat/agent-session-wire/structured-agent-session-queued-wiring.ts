@@ -30,7 +30,6 @@ export function wireStructuredAgentSessionQueuedMessages(
     sessions,
     getRecord: (sessionId) => context().deps.store.getRecord(sessionId),
     serialize: (sessionId, task) => context().serialize(sessionId, task),
-    flushStreamedEvents: (sessionId) => context().flushStreamedEvents(sessionId),
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(context().deps.store, sessionId),
     wakeDelivery: (sessionId) => context().wakeDelivery(sessionId),

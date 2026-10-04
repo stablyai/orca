@@ -132,14 +132,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 // A process-lifetime producer (OpenCode 2 `opencode run`) posts the run's Done after the
 // command-finished fact; the exited-agent drop must keep it, as it keeps a late hook Done.
 describe('command-finished drop and a Done that lands after it', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {

@@ -64,6 +64,8 @@ describe('structured launch cancellation retirement', () => {
       identity: `codex:${WORKTREE_ID}`,
       intent: {
         worktreeId: WORKTREE_ID,
+        executionHostId: 'local',
+        target: { kind: 'local' },
         sessionId: SESSION_ID,
         agent: 'codex',
         params: {
@@ -92,12 +94,20 @@ describe('structured launch cancellation retirement', () => {
 
     const beforeCancel = beginStructuredAgentSessionAuthoritativeInventory()
     expect(
-      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(new Set(), beforeCancel)
+      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
+        new Set(),
+        beforeCancel,
+        'local'
+      )
     ).toBe(false)
-    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID)
+    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local')
     const afterCancel = beginStructuredAgentSessionAuthoritativeInventory()
     expect(
-      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(new Set(), afterCancel)
+      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
+        new Set(),
+        afterCancel,
+        'local'
+      )
     ).toBe(false)
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE_ID, SESSION_ID)).toBe(true)
 
@@ -107,12 +117,20 @@ describe('structured launch cancellation retirement', () => {
     expect(suppressed.tabs).toEqual([])
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE_ID, SESSION_ID)).toBe(true)
     expect(
-      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(new Set(), beforeCancel)
+      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
+        new Set(),
+        beforeCancel,
+        'local'
+      )
     ).toBe(false)
 
     const afterSettlement = beginStructuredAgentSessionAuthoritativeInventory()
     expect(
-      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(new Set(), afterSettlement)
+      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
+        new Set(),
+        afterSettlement,
+        'local'
+      )
     ).toBe(true)
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE_ID, SESSION_ID)).toBe(
       false
@@ -125,6 +143,8 @@ describe('structured launch cancellation retirement', () => {
       identity: `codex:${WORKTREE_ID}`,
       intent: {
         worktreeId: WORKTREE_ID,
+        executionHostId: 'local',
+        target: { kind: 'local' },
         sessionId: SESSION_ID,
         agent: 'codex',
         params: {
@@ -150,7 +170,7 @@ describe('structured launch cancellation retirement', () => {
       cancelled: false,
       selection: { held: {} }
     } satisfies StructuredLaunchState)
-    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID)
+    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local')
     await new Promise((resolve) => setTimeout(resolve, 0))
     const frame = (unverifiable: boolean): RuntimeMobileSessionTabsResult => ({
       ...latePublication(),
@@ -174,7 +194,7 @@ describe('structured launch cancellation retirement', () => {
   })
 
   it('drains a restored cancellation before a newer inventory retires it', async () => {
-    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID)
+    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local')
     resetStructuredAgentLaunchRegistryForTests()
     resetStructuredAgentLaunchPersistenceForTests()
 

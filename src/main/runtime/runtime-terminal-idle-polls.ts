@@ -11,14 +11,12 @@ import {
   buildTerminalWaitResult
 } from './terminal-wait-results'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { evaluateTuiIdle, type QuietForegroundLane, type TuiIdleVerdict } from './tui-idle-evidence'
 import {
-  evaluateTuiIdle,
   leafTuiIdleEvidence,
   ptyTuiIdleEvidence,
-  type QuietForegroundLane,
-  type TuiIdleEvidenceSource,
-  type TuiIdleVerdict
-} from './tui-idle-evidence'
+  type TuiIdleEvidenceSource
+} from './tui-idle-evidence-source'
 
 /**
  * Why null counts as quiet on an `open` lane: a record with no output timestamp has produced

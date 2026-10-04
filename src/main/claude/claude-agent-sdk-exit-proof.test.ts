@@ -11,6 +11,7 @@ import {
   proveClaudeChildExit,
   type ClaudeChildTreeReaper
 } from './claude-agent-sdk-exit-proof'
+import { GRACEFUL_EXIT_MS } from './claude-child-exit-proof-ladder'
 
 // The descendant models an MCP server: it either cooperates or, when it traps
 // SIGTERM, only a forced, verified sweep can reach it. The root either traps
@@ -304,33 +305,49 @@ describe('claude child exit proof', () => {
   }, 20_000)
 
   it('reports an unprovable exit as false rather than assuming the child died', async () => {
-    const child = mockChild()
-    const tree = mockTree(['exited'])
-
-    await expect(
-      proveClaudeChildExit({
-        child,
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const tree = mockTree(['exited'])
+      const proof = proveClaudeChildExit({
+        child: mockChild(),
         exitPromise: new Promise<void>(() => {}),
         exited: () => false,
         tree
       })
-    ).resolves.toBe(false)
-    expect(tree.reap).toHaveBeenCalledTimes(1)
+      await new Promise((resolve) => setImmediate(resolve))
+      await vi.advanceTimersByTimeAsync(GRACEFUL_EXIT_MS)
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      await expect(proof).resolves.toBe(false)
+      expect(tree.reap).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   }, 20_000)
 
   it('reports false when the root exit was observed but a descendant was seen alive', async () => {
-    const child = mockChild()
-    const exit = observeExit(child)
-    const tree = mockTree(['live'])
-    tree.reap.mockImplementation(async () => {
-      child.emit('exit', null, 'SIGKILL')
-      return 'live'
-    })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const child = mockChild()
+      const exit = observeExit(child)
+      const tree = mockTree(['live'])
+      tree.reap.mockImplementation(async () => {
+        child.emit('exit', null, 'SIGKILL')
+        return 'live'
+      })
+      const proof = proveClaudeChildExit({ child, ...exit, tree })
+      await new Promise((resolve) => setImmediate(resolve))
+      await vi.advanceTimersByTimeAsync(GRACEFUL_EXIT_MS)
 
-    await expect(proveClaudeChildExit({ child, ...exit, tree })).resolves.toBe(false)
-    expect(exit.exited()).toBe(true)
-    // One verification per attempt: the retried close re-verifies, this one does not.
-    expect(tree.reap).toHaveBeenCalledTimes(1)
+      await expect(proof).resolves.toBe(false)
+      expect(exit.exited()).toBe(true)
+      // One verification per attempt: the retried close re-verifies, this one does not.
+      expect(tree.reap).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   }, 20_000)
 
   it('re-verifies an unproven tree on a retried close instead of trusting the dead root', async () => {

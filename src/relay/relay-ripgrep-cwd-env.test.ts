@@ -16,7 +16,7 @@ describe.runIf(process.platform !== 'win32')(
       writeFileSync(join(dir, 'found.txt'), 'needle')
       const cargo = join(dir, 'cargo')
       mkdirSync(join(cargo, 'bin'), { recursive: true })
-      writeFileSync(join(cargo, 'bin', 'rg'), '#!/bin/sh\necho found.txt\n', { mode: 0o755 })
+      writeFileSync(join(cargo, 'bin', 'rg'), "#!/bin/sh\nprintf 'found.txt\\0'\n", { mode: 0o755 })
       vi.stubEnv('PATH', join(dir, 'empty-path'))
       vi.stubEnv('CARGO_HOME', cargo)
       configureRelayBundledRipgrep(undefined)

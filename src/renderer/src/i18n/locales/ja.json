@@ -503,7 +503,8 @@
           "muse_label": "Muse",
           "opencode2_label": "OpenCode 2",
           "codebuddy_label": "CodeBuddy",
-          "zcode_label": "ZCode"
+          "zcode_label": "ZCode",
+          "jcode_label": "Jcode"
         },
         "skill": {
           "cli": {
@@ -2001,7 +2002,8 @@
         "c679af7ad9": "Todo を更新する",
         "dfd72673e7": "プロジェクトの選択を保存できませんでした。",
         "b797bdd7c3": "検索をクリア",
-        "99c2755218": "Jira JQL、例:プロジェクト = ABC AND statusCategory != 完了",
+        "jiraTextMatchesNotice": "テキスト一致を表示しています。Jira はこの検索を JQL として実行できませんでした。",
+        "99c2755218": "Issue を検索するか JQL を入力、例: project = ABC",
         "2ff9fd71fd": "Jira Issue を更新する",
         "0b65d3fb2c": "Linear プロジェクトを検索…",
         "eec0c5c079": "Linear Issue を検索…",
@@ -2120,7 +2122,7 @@
         "6edf402e11": "概要",
         "9ae151b26b": "Linear",
         "94d900518d": "選択したプリセットに一致する Issue はありません。",
-        "f51e254d35": "別の JQL クエリを試す。",
+        "f51e254d35": "別の検索語句または JQL をお試しください。",
         "4645a7814f": "Jira",
         "e224d76876": "MR",
         "bbec4717ee": "MR",
@@ -3909,7 +3911,7 @@
             "compact": "コンパクト",
             "footerDetailAria": "使用量フッターの詳細",
             "detailedTooltip": "バー・ラベル・パーセントを含む完全な使用状況",
-            "compactTooltip": "凝縮された使用状況: 最も狭いウィンドウのみ"
+            "compactTooltip": "簡潔な使用状況：プロバイダーごとに1つの概要"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}}を更新中",
@@ -5099,7 +5101,12 @@
           "86f0ae1257": "ワークスペースの削除"
         },
         "DeleteWorktreeDirtyChangeHint": {
-          "8e2994ce28": "このワークスペースを削除すると、これらの変更がディスクから完全に削除されます。"
+          "8e2994ce28": "このワークスペースを削除すると、これらの変更がディスクから完全に削除されます。",
+          "showLoadedPaths": "読み込まれたパスを表示",
+          "loadedPathsNotice": "読み込まれたパスは不完全な場合や古い場合があります。",
+          "loadedChangedPaths": "読み込まれた変更済みパス",
+          "unresolvedConflict": "未解決の競合",
+          "moreLoadedPaths": "ほかに読み込まれたパスが{{value0}}件"
         },
         "DeleteWorktreeLineageNotice": {
           "ad407c2d55": "件以上",
@@ -5459,6 +5466,7 @@
           "74522ee457": "名前の変更に失敗しました",
           "02e19349f4": "名前の自動変更に失敗しました: 表示エラー",
           "691ccfd622": "削除中…",
+          "deleteFailed": "削除に失敗しました",
           "35ccfe2475": "プロジェクト{{value0}}",
           "1d66d84f0b": "文字列",
           "57eaa61b55": "子ワークスペースを非表示にする",
@@ -7093,7 +7101,7 @@
             "shellEnvToggleLabel": "シェル環境の使用の切り替え",
             "structuredTitle": "更新された構造化ネイティブチャットを使用する",
             "structuredCopy": "新規の Codex および Claude の Agent を構造化チャットとして開きます。オフにすると、ターミナルを使用したチャットで開きます。既存のチャットはそのまま残ります。",
-            "structuredScope": "今のところローカルセッションのみ。 WSL およびリモート実行ホスト (SSH を含む) は引き続きターミナルチャットを使用し、Orca がプロセスの開始時間を読み取ることができない限り、Windows はターミナルチャットにフォールバックします。",
+            "structuredScope": "このマシンと、対応するバージョンを実行しているペアリング済みの Orca サーバーで動作します。古いサーバーはターミナルチャットのままです。WSL および SSH ホストは引き続きターミナルチャットを使用し、Orca がプロセスの開始時間を読み取ることができない限り、Windows はターミナルチャットにフォールバックします。",
             "structuredToggleLabel": "更新された構造化ネイティブチャットの切り替え",
             "resumeTitle": "再起動後に作業中のチャットを自動的に再開する",
             "resumeCopy": "Orca が終了するかアップデートをインストールすると、Orca が再度開かれたときに作業中だったチャットが自動的に再開されます。",
@@ -7915,6 +7923,8 @@
           "c7ef4415de": "表示名",
           "b0a0c14a1c": "サイドバーとタブのプロジェクト固有の表示詳細。",
           "removeProjectAllHosts": "このプロジェクトを、設定済みのすべてのホストの Orca から削除します。",
+          "removeProjectCheckout": "このチェックアウトを Orca から削除します。このプロジェクトの他のチェックアウトは残ります。",
+          "removeProjectKeepCheckouts": "このプロジェクトを Orca から削除します。独自の設定を持つチェックアウトは残ります。",
           "0909e5d650": "プロジェクトの削除",
           "ee5a290616": "フォルダーとして開きます。このワークスペースでは Git 機能を使用できません。",
           "323debba71": "タイプ：",
@@ -10064,7 +10074,13 @@
             "72539aede4": "システム",
             "51ae2183e1": "デスクトップ",
             "0534c76311": "Orca デスクトップ通知のマスタースイッチ。",
-            "4a210b2f72": "通知を有効にする"
+            "4a210b2f72": "通知を有効にする",
+            "machines": "マシン",
+            "machinesDescription": "このコンピューターに通知を表示できるマシン（SSH マシンやペアリングしたサーバーなど）を選択します。",
+            "host": "ホスト",
+            "remote": "リモート",
+            "ssh": "ssh",
+            "mute": "ミュート"
           }
         },
         "orchestration": {
@@ -12058,6 +12074,11 @@
           "usageDescription": "Cursor は請求サイクルとともにリセットされる 2 つのプールの利用に課金し、使い切るとオンデマンドの追加料金が発生します。",
           "usageLabel": "使用量",
           "usageTitle": "月間プラン使用状況"
+        },
+        "NotificationHostToggles": {
+          "offCount": "{{count}} 台オフ",
+          "machines": "マシン",
+          "machinesDescription": "このコンピューターに通知を表示できるマシンを選択します。ペアリングしたサーバーのスイッチは、そのサーバー経由の作業にも適用されます。"
         }
       },
       "right": {
@@ -17177,9 +17198,6 @@
             "failed": "チャットを開始できませんでした。",
             "unknown": "チャット接続が確認できませんでした。",
             "retry": "再試行"
-          },
-          "NativeChatStructuredSessionStatus": {
-            "starting": "{{value0}} はまだ起動中です。準備ができるまでメッセージは待機します。中止するには、このチャットを閉じてください。"
           }
         }
       },
@@ -17401,12 +17419,13 @@
         "providerRateLimited": "{{agent}} はレート制限を受けているため、再試行しています。",
         "providerRetrying": "{{agent}} で一時的な問題が発生したため、再試行しています。",
         "providerRetryingQuoted": "{{agent}} は再試行しています: {{detail}}。",
-        "previousExitUnverifiable": "Orca は {{agent}} の前のプロセスが終了したことを確認できませんでした。Orca が終了を確認するまで、メッセージは送信を待機します。"
+        "previousExitUnverifiable": "以前の {{agent}} がまだ実行中の可能性があります。停止するとメッセージが送信されます。"
       },
       "writeNotice": {
         "notDoneReadHistory": "このチャットの履歴を読み込めませんでした。",
         "notDoneSend": "メッセージは送信されませんでした。",
         "tryAgainComposerSend": "もう一度送信してください。",
+        "messageNotSaved": "メッセージを保存できませんでした。",
         "notDoneStop": "Agent は停止されませんでした。",
         "notDoneStopTask": "バックグラウンドタスクは停止されませんでした。",
         "notDoneStopTasks": "バックグラウンドタスクは停止されませんでした。",
@@ -17417,15 +17436,17 @@
         "restartFailed": "Agent を再起動できませんでした。",
         "capacity": "Orca が過去 1 日に受け取ったリクエストが多すぎます。",
         "outcomeUnknown": "Orca は何が起きたかを確認できませんでした。チャットを確認してください。",
+        "sendOutcomeLost": "Orca はメッセージが Agent に届いたことを確認できませんでした。チャットを確認し、必要であればもう一度送信してください。",
         "questionChanged": "この質問はすでに回答済みか、変更されています。",
         "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
         "historyUnusable": "このチャットを読み込めません。",
         "historyUnavailable": "Orca は現在このチャットの履歴を開けませんでした。",
         "savedByNewerOrca": "チャットは新しいバージョンの Orca で保存されました。",
         "updateOrcaToKeepUsing": "引き続き使用するには、Orca を更新してください。",
-        "unsupported": "このチャットを実行している Orca はこの操作に対応していません。Orca を更新してから、もう一度お試しください。",
+        "unsupported": "このチャットを実行しているコンピューターに新しいバージョンの Orca が必要です。そのコンピューターで Orca を更新してから、もう一度お試しください。",
+        "notAvailable": "このチャットでは利用できません。",
         "unreachable": "Orca は Agent に接続できませんでした。",
-        "recordFailed": "Orca はこのチャットの履歴に記録できませんでした。",
+        "recordFailed": "Orca はこれをチャットの履歴に保存できませんでした。",
         "conversationCleared": "この会話はクリアされました。",
         "openCurrentConversation": "続けるには、現在の会話を開いてください。",
         "clearUnfinished": "前回の /clear は完了しませんでした。",
@@ -17439,19 +17460,19 @@
         "answerFirst": "先に質問または承認に回答してください。",
         "backgroundTasksRunning": "バックグラウンドタスクがまだ実行中です。",
         "waitForBackgroundTasks": "バックグラウンドタスクが終わるまでお待ちください。",
-        "messagesUnsettled": "以前に送信したメッセージがまだ確認されていません。",
+        "messagesUnsettled": "以前に送信したメッセージはまだ確認されていません。",
         "settleEarlierMessage": "以前のメッセージが届くまで待つか、再試行してください。",
         "optionRejected": "Agent はこの設定を受け入れませんでした。",
         "goalsUnsupported": "この Agent は目標に対応していません。",
         "agentRefused": "Agent がこれを拒否しました。",
-        "ownerUnproven": "Orca は、このチャットの以前の Agent が停止したことをまだ確認できていません。",
+        "ownerUnproven": "このチャットの以前の Agent がまだ実行中の可能性があります。",
         "reopenChat": "もう一度確認するには、チャットを開き直してください。",
         "terminalAgentHoldsChat": "このチャットはまだターミナルの Agent で開かれています。",
         "quitTerminalAgent": "ここでチャットを続けるには、その Agent を終了してください。",
         "hostReconciling": "Orca は再起動後、このチャットをまだ確認しています。",
         "waitMoment": "しばらくお待ちください。",
         "recordUnreadable": "Orca はこのチャットの保存済みの状態を読み取れませんでした。",
-        "chatNotFound": "このチャットを実行している Orca には、このチャットの記録がありません。",
+        "chatNotFound": "Orca はこのチャットを見つけられません。",
         "startNewChat": "続けるには、新しいチャットを開始してください。",
         "tryAgain": "もう一度お試しください。"
       },
@@ -17482,8 +17503,6 @@
         "chooseInAgentPicker": "Agent の選択画面で選ぶ…",
         "toggleOption": "{{value0}}を切り替える",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueIsDefault": "既定",
-        "valueNotReported": "未報告",
         "sentNotConfirmed": "Agent に送信済み — 未確認",
         "setWhenSessionStarts": "セッション開始時に設定してください。",
         "availableAfterSessionStarts": "セッション開始後に利用できます。",
@@ -17502,8 +17521,8 @@
         "commands": "コマンド",
         "skills": "スキル",
         "loadingSkills": "スキルを読み込み中…",
-        "skillsUnavailableHost": "このホストではスキルが利用できません",
-        "skillsLoadFailed": "このホストからスキルを読み込めませんでした",
+        "skillsUnavailableHost": "SSH チャットではスキルを利用できません",
+        "skillsLoadFailed": "スキルを読み込めませんでした",
         "retrySkills": "再試行",
         "skillCommandCollision": "スキル名でもあります - Agent が判断します",
         "skillMultipleSources": "{{sourceCount}} 個のソース - Agent が解決します",
@@ -17609,14 +17628,13 @@
       },
       "state": {
         "loading": {
+          "label": "チャットを読み込んでいます",
           "title": "会話を読み込んでいます…",
           "subtitle": "Agent の記録を読んでいます。"
         },
         "error": {
           "title": "会話を読み込めませんでした",
-          "subtitle": "トランスクリプトを読み取ることができませんでした。作業を続けるには、ターミナルに切り替えてください。",
-          "retryingSubtitle": "トランスクリプトを読み取ることができませんでした。Orca は読み込みを再試行し続けます。",
-          "keepsTrying": "Orca は読み込みを再試行し続けます。"
+          "subtitle": "トランスクリプトを読み取ることができませんでした。作業を続けるには、ターミナルに切り替えてください。"
         },
         "reconnecting": "このチャットに再接続しています…",
         "pairHost": "ホストをペアリングして、Agent のチャット履歴を表示します。",
@@ -17693,7 +17711,9 @@
       "notices": {
         "compaction": "圧縮されたコンテキスト",
         "details": "詳細",
-        "plan": "プラン"
+        "plan": "プラン",
+        "historyRepaired": "このチャットの履歴の一部を読み込めませんでした。",
+        "historyItemTooLarge": "チャットのこの部分は大きすぎるため表示できません。"
       },
       "providerFrame": {
         "byteLength": "{{value0}}バイト"
@@ -17728,9 +17748,9 @@
         "stateBlocked": "ブロックされました",
         "stateDone": "終わり",
         "stateIdle": "止まった",
-        "stateUnverifiable": "検証不能",
+        "stateUnverifiable": "最近の更新なし",
+        "stateUnverifiableCount": "{{value0}} は最近の更新なし",
         "reasonWaiting": "承認が必要です",
-        "reasonUnverifiable": "連絡がありません",
         "reasonBlocked": "失敗した",
         "groupAgents": "Agent",
         "groupShell": "シェル",
@@ -17747,8 +17767,6 @@
         "asked": "質問:",
         "questionCount": "{{value0}} の質問"
       },
-      "structuredSessionLaunchFailed": "{{value0}} チャットを開けませんでした",
-      "structuredSessionLaunchFailedDescription": "Orca は構造化された {{value0}} チャットを開けませんでした。詳細についてはログを参照してください。",
       "subagents": {
         "state": {
           "completed": "完成した",
@@ -17756,12 +17774,12 @@
           "idle": "idle",
           "failed": "失敗した",
           "stopped": "止まった",
-          "unverifiable": "検証不能",
+          "unverifiable": "最近の更新なし",
           "workingCount": "{{value0}} は動作しています",
           "idleCount": "{{value0}} アイドル状態",
           "failedCount": "{{value0}} 件失敗",
           "stoppedCount": "{{value0}} が停止しました",
-          "unverifiableCount": "{{value0}} 検証不能"
+          "unverifiableCount": "{{value0}} は最近の更新なし"
         },
         "startedOne": "1 人のサブ Agent を解雇しました",
         "startedN": "{{value0}} サブ Agent をキックオフしました",
@@ -17829,7 +17847,11 @@
         "queuePausedCleared": "会話を消去したため、キューを一時停止しました",
         "queuePaused": "キューは一時停止中です",
         "resume": "再開"
-      }
+      },
+      "structuredSessionHostDeclined": "{{value0}} をターミナルで開きました",
+      "structuredSessionHostDeclinedDescription": "このサーバーはこのワークスペースで {{value0}} チャットを実行できません。",
+      "structuredSessionHostUnreachable": "{{value0}} に接続できませんでした",
+      "structuredSessionHostUnreachableDescription": "Orca は {{value0}} チャットを開きませんでした。サーバーへの接続を確認して、もう一度お試しください。"
     },
     "tab": {
       "bar": {
@@ -18420,7 +18442,13 @@
     "markdownPreview": {
       "tooLarge": "ファイルがプレビュー上限の {{limit}} を超えています。ソースを表示するにはファイルを開いてください。",
       "tooLargeInDiff": "ファイルがプレビュー上限の {{limit}} を超えています。差分を表示するにはソースモードに切り替えてください。",
-      "renderAnyway": "それでも表示"
+      "blockTooLarge": "このブロックは大きすぎるため表示できません。ソース表示で確認してください。",
+      "largeNotice": "大きなプレビューです。文書全体をコピーするにはソース表示を使用してください。PDF エクスポートは利用できません。",
+      "processingFailed": "この文書はプレビューの制限を超えています。ファイル全体を読むにはソース表示を開いてください。",
+      "preparing": "プレビューを準備中…",
+      "searching": "検索中…",
+      "searchFailed": "検索を完了できませんでした。もう一度お試しください。",
+      "refreshFailed": "プレビューの更新に失敗しました。以前のバージョンを表示しています。現在の内容はソース表示で確認してください。"
     }
   },
   "featureTips": {
@@ -18657,5 +18685,21 @@
     "addTypedPath": "Add",
     "noDirectories": "No folders added yet.",
     "removePath": "Remove {{name}}"
+  },
+  "accounts": {
+    "managedData": {
+      "description": "Orca ホストのターミナルでこのコマンドを実行してアカウントを追加します。選択はそのホストでの新規 Agent 起動に適用されます。直接 SSH 接続とWindows上の WSL は独自の認証情報を使用します。",
+      "copied": "コピーしました",
+      "add": "アカウント追加コマンドをコピー",
+      "refresh": "アカウントを更新",
+      "upgrade": "アカウントが表示されない場合はOrcaホストを更新または再起動してください。",
+      "system": "システムの既定",
+      "active": "使用中",
+      "select": "選択",
+      "remove": "削除",
+      "removeTitle": "管理アカウントを削除しますか？",
+      "removeDescription": "まずこのプロファイルを使う Agent を停止してください。削除すると保存済みの認証情報と会話データが消去されます。システムのログインには影響しません。",
+      "cancel": "キャンセル"
+    }
   }
 }

@@ -85,7 +85,10 @@ export async function listAiVaultSessions(
   options: { signal?: AbortSignal } = {}
 ): Promise<AiVaultListResult> {
   // Scope paths change the result set, so they must be part of the cache key.
-  const key = JSON.stringify({ scopePaths: [...new Set(args?.scopePaths ?? [])].sort() })
+  const key = JSON.stringify({
+    scopePaths: [...new Set(args?.scopePaths ?? [])].sort(),
+    includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions === true
+  })
   const depth = requestedAiVaultSessionDepth(args)
   const scanKey = JSON.stringify({ key, depth })
   const now = Date.now()
@@ -113,6 +116,7 @@ export async function listAiVaultSessions(
     start: async (scanSignal) => {
       const result = await scanAiVaultSessionsInBackground(
         {
+          includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions,
           limit: args?.limit,
           unlimited: args?.unlimited,
           scopePaths: args?.scopePaths,

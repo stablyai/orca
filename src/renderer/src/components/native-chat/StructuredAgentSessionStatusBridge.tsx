@@ -28,9 +28,12 @@ import {
   structuredAgentSessionDatedMainAgent,
   structuredAgentSessionRowStateStartedAt
 } from '../../../../shared/structured-agent-session-status-started-at'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
-import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import {
+  structuredAgentSessionOwnerForTab,
+  structuredAgentSessionTargetForHost
+} from '@/runtime/structured-agent-session-owner'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import { getStructuredAgentSessionTabs, type StructuredTab } from './structured-agent-session-tabs'
 
@@ -57,30 +60,18 @@ export function useStructuredAgentSessionStatusSummary(
   return { summary, observation }
 }
 
-/** The host's child state, projected to stable primitives so journal updates do not re-render chat. */
-export function useStructuredAgentSessionHostExecution(
+/** Only the host's startup phase, so a chat re-renders when that changes, not on every status. */
+export function useStructuredAgentSessionHostExecutionPhase(
   sessionId: string,
   target: RuntimeClientTarget
-): {
-  phase: NonNullable<AgentSessionStatusSummary['hostExecutionPhase']> | null
-  childKey: string | number | null
-} {
+): NonNullable<AgentSessionStatusSummary['hostExecutionPhase']> | null {
   const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
   useEffect(() => feed.activate(), [feed])
-  const phase = useSyncExternalStore(
+  return useSyncExternalStore(
     feed.subscribe,
     () => feed.getSnapshot().get(sessionId)?.hostExecutionPhase ?? null,
     () => null
   )
-  const childKey = useSyncExternalStore(
-    feed.subscribe,
-    () => {
-      const child = feed.getSnapshot().get(sessionId)?.hostExecutionChild
-      return child?.generation ?? child?.fence ?? null
-    },
-    () => null
-  )
-  return { phase, childKey }
 }
 
 /** The host's child records for the row, and the legacy roster readers of `subagents` keep. A host
@@ -208,14 +199,25 @@ function projectStatus(
   )
 }
 
-function StructuredAgentSessionStatusProjection({ tab }: { tab: StructuredTab }): null {
-  const environmentId = useAppStore((state) =>
-    getRuntimeEnvironmentIdForWorktree(state, tab.worktreeId)
-  )
-  const target = useMemo(
-    () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId }),
-    [environmentId]
-  )
+/** Reads the chat's status from the host recorded on its tab; a chat no host can be named for has
+ *  none to read. */
+function StructuredAgentSessionStatusProjection({
+  tab
+}: {
+  tab: StructuredTab
+}): React.JSX.Element | null {
+  const owner = useAppStore((state) => structuredAgentSessionOwnerForTab(state, tab))
+  const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
+  return target ? <StructuredAgentSessionOwnedStatusProjection tab={tab} target={target} /> : null
+}
+
+function StructuredAgentSessionOwnedStatusProjection({
+  tab,
+  target
+}: {
+  tab: StructuredTab
+  target: RuntimeClientTarget
+}): null {
   const { summary, observation } = useStructuredAgentSessionStatusSummary(tab.entityId, target)
   useEffect(() => {
     projectStatus(tab, summary, observation)

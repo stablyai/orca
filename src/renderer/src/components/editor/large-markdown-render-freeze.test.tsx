@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
@@ -25,13 +25,19 @@ vi.mock('@/store', () => ({
   })
 }))
 
-vi.mock('./editor-lazy-views', () => {
+vi.mock('./editor-lazy-views', async () => {
+  const { useState } = await import('react')
+  let nextPreviewInstance = 0
+  const Preview = () => {
+    const [instance] = useState(() => ++nextPreviewInstance)
+    return <div data-editor-view="preview" data-preview-instance={instance} />
+  }
   const view = (name: string) => () => <div data-editor-view={name} />
   return {
     MonacoEditor: view('source'),
     CombinedDiffViewer: view('combined-diff'),
     RichMarkdownEditor: view('rich-editor'),
-    MarkdownPreview: view('preview'),
+    MarkdownPreview: Preview,
     DiffViewer: view('diff'),
     ImageDiffViewer: view('image-diff')
   }
@@ -98,7 +104,7 @@ function renderPreviewTab(content: string) {
   const fileContents = { [previewTab.id]: { content, isBinary: false } }
   const props = {
     activeFile: previewTab,
-    viewStateScopeId: previewTab.id,
+    viewStateScopeId: 'stable-preview-tab',
     fileContents,
     diffContents: {},
     editBuffers: {},
@@ -124,7 +130,8 @@ function renderPreviewTab(content: string) {
   const view = render(<EditorContent {...props} />)
   return {
     view,
-    rerender: () => view.rerender(<EditorContent {...props} />),
+    rerender: (overrides: Partial<typeof props> = {}) =>
+      view.rerender(<EditorContent {...props} {...overrides} />),
     isPreviewRendered: () => view.container.querySelector('[data-editor-view="preview"]') !== null
   }
 }
@@ -193,38 +200,56 @@ describe('large markdown render guard', () => {
     expect(richRenderMode(hugeCjkDoc, true)).toBe('source')
   })
 
+  it('keeps a preview for content updates but remounts when a stable tab changes file path', () => {
+    const preview = renderPreviewTab('# Original')
+    const instance = () =>
+      preview.view.container
+        .querySelector('[data-preview-instance]')
+        ?.getAttribute('data-preview-instance')
+    const originalInstance = instance()
+    preview.rerender({
+      fileContents: { [previewTab.id]: { content: '# Updated', isBinary: false } }
+    })
+    expect(instance()).toBe(originalInstance)
+    const movedTab = {
+      ...previewTab,
+      id: 'markdown-preview::/repo/MOVED.md',
+      filePath: '/repo/MOVED.md'
+    }
+    preview.rerender({
+      activeFile: movedTab,
+      fileContents: { [movedTab.id]: { content: '# Updated', isBinary: false } }
+    })
+    expect(instance()).not.toBe(originalInstance)
+  })
+
   it('preview tab renders small documents directly', () => {
     expect(renderPreviewTab('# Small').isPreviewRendered()).toBe(true)
   })
 
-  it('preview tab gates documents over the preview limit behind "Render anyway"', () => {
-    const tab = renderPreviewTab(mediumDoc)
-    expect(tab.isPreviewRendered()).toBe(false)
-    fireEvent.click(screen.getByRole('button', { name: 'Render anyway' }))
-    tab.rerender()
-    expect(tab.isPreviewRendered()).toBe(true)
+  it('preview tab sends documents above the former cap to the large preview', () => {
+    expect(renderPreviewTab(mediumDoc).isPreviewRendered()).toBe(true)
+    cleanup()
+    expect(renderPreviewTab(hugeDoc).isPreviewRendered()).toBe(true)
   })
 
-  it('preview tab never renders documents over the hard cap', () => {
+  it('preview tab never passes input above the worker limit to the renderer', () => {
     store.markdownRichModeSizeOverride = { [previewTab.id]: true }
-    const tab = renderPreviewTab(hugeDoc)
-    expect(tab.isPreviewRendered()).toBe(false)
+    expect(renderPreviewTab('x'.repeat(8 * 1024 * 1024 + 1)).isPreviewRendered()).toBe(false)
     expect(screen.queryByRole('button', { name: 'Render anyway' })).toBeNull()
   })
 
-  it('diff preview toggle gates the modified side over the preview limit', () => {
+  it('diff preview routes larger documents through the same preview surface', () => {
     expect(renderDiffPreview('# Small').isPreviewRendered()).toBe(true)
     cleanup()
-    const diff = renderDiffPreview(mediumDoc)
-    expect(diff.isPreviewRendered()).toBe(false)
-    fireEvent.click(screen.getByRole('button', { name: 'Render anyway' }))
-    diff.rerender()
-    expect(diff.isPreviewRendered()).toBe(true)
+    expect(renderDiffPreview(mediumDoc).isPreviewRendered()).toBe(true)
+    cleanup()
+    expect(renderDiffPreview(hugeDoc).isPreviewRendered()).toBe(true)
   })
 
-  it('diff preview toggle never renders a modified side over the hard cap', () => {
+  it('diff preview keeps its input cap despite a rich-mode override', () => {
     store.markdownRichModeSizeOverride = { [diffTab.id]: true }
-    expect(renderDiffPreview(hugeDoc).isPreviewRendered()).toBe(false)
+    expect(renderDiffPreview('x'.repeat(8 * 1024 * 1024 + 1)).isPreviewRendered()).toBe(false)
     expect(screen.queryByRole('button', { name: 'Render anyway' })).toBeNull()
   })
 })

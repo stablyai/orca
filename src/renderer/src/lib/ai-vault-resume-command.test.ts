@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import {
+  getAiVaultAgentProviderSession,
   buildAiVaultResumeCopyCommandForWorktree,
   buildAiVaultResumeStartupForWorktree
 } from './ai-vault-resume-command'
@@ -68,6 +69,47 @@ function buildQueuedAiVaultResumeCommand(
 }
 
 describe('ai vault resume command runtime', () => {
+  it.each(['local', 'ssh:reference-host'] as const)(
+    'starts a fresh IDE reference on %s with model and environment preserved',
+    (executionHostId) => {
+      const state = makeState({
+        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\example\\project',
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      })
+      if (executionHostId !== 'local') {
+        state.repos = state.repos.map((repo) => ({ ...repo, executionHostId }))
+      }
+      const session = {
+        agent: 'antigravity' as const,
+        sessionId: 'ide-id',
+        cwd: '/home/example/project',
+        codexHome: null,
+        executionHostId,
+        executionHostPlatform: 'linux' as const,
+        resumeCommand: 'agy --conversation ide-id',
+        filePath:
+          executionHostId === 'local'
+            ? '\\\\wsl.localhost\\Ubuntu\\home\\example\\.gemini\\antigravity-ide\\brain\\ide-id\\.system_generated\\logs\\transcript_full.jsonl'
+            : '/home/example/.gemini/antigravity-ide/brain/ide-id/.system_generated/logs/transcript_full.jsonl'
+      }
+      if (!state.settings) {
+        throw new Error('Missing fixture settings')
+      }
+      state.settings.agentDefaultArgs = { antigravity: '--model claude-sonnet-4-6' }
+      state.settings.agentDefaultEnv = { antigravity: { AGY_CLI_HIDE_ACCOUNT_INFO: '1' } }
+      const startup = buildAiVaultResumeStartupForWorktree({ state, session })
+      expect(startup.command).toContain('--prompt-interactive')
+      expect(startup.command).not.toContain('--conversation')
+      expect(startup.command).not.toContain('wsl.localhost')
+      expect(startup.command).toContain('--model')
+      expect(startup.command).toContain('claude-sonnet-4-6')
+      expect(startup.env).toMatchObject({ AGY_CLI_HIDE_ACCOUNT_INFO: '1' })
+      expect(startup.providerSession).toBeUndefined()
+      expect(getAiVaultAgentProviderSession(session)).toBeNull()
+      expect(startup.cwd).toBe('/home/example/project')
+    }
+  )
+
   it('repro: queues a host-runtime resume without configured-WSL shell syntax', () => {
     const state = makeState({
       worktreePath: 'C:\\Users\\alice\\repo',
@@ -151,9 +193,7 @@ describe('ai vault resume command runtime', () => {
     ).toBe("claude '--resume' 'session one'")
   })
 
-  it('follows the live Windows shell for non-resumable agents in the fallback path', () => {
-    // Why: agents without a TUI startup plan (e.g. cursor) queue through the
-    // shared-builder fallback, which must quote for the live shell too (#6152).
+  it('follows the live Windows shell for Cursor resume', () => {
     const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
 
     expect(
@@ -167,7 +207,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe("cursor-agent --resume 'session one'")
+    ).toBe("cursor-agent '--yolo' '--resume' 'session one'")
   })
 
   it('queues a PowerShell-valid local OMP resume by absolute transcript path', () => {

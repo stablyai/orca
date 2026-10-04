@@ -1,3 +1,16 @@
+import { AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES } from './agent-session-resume-runtime-capabilities'
+export {
+  AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CODEBUDDY_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QODER_CN_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QWEN_CODE_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_ZCODE_RESUME_RUNTIME_CAPABILITY
+} from './agent-session-resume-runtime-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
 import { AGENT_SESSION_STOP_RUNTIME_CAPABILITIES } from './agent-session-stop-capabilities'
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
@@ -130,6 +143,8 @@ export const WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY =
   'worktree.archive-failure-blocking.v1' as const
 export const CODEX_RESET_CREDIT_RUNTIME_CAPABILITY = 'accounts.codex-reset-credit.v1' as const
 export const ACCOUNT_IMPORT_RUNTIME_CAPABILITY = 'accounts.import-host-credentials.v1' as const
+export const ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY = 'accounts.antigravity-native.v1' as const
+export const DATA_ACCOUNT_RUNTIME_CAPABILITY = 'accounts.managed-data-profiles.v1' as const
 // Why: older hosts cannot reconcile terminal.create's mutation after losing the reply, so clients may only retry unknown outcomes when advertised.
 export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'terminal.create-idempotency.v2' as const
@@ -245,20 +260,6 @@ export const AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY =
 // stop capability above, which a client can advertise while predating this.
 export const AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY =
   'agent-session.background-task-row-stop.v1' as const
-// Why: adding kimi to RESUMABLE_TUI_AGENTS grows terminal.ensureAgentSession's enum, and an
-// older host answers the unknown member with invalid_argument — a code the launch fallback does
-// not retry on — so clients must probe before taking the host-authority path.
-export const AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY = 'agent-session.kimi-resume.v1' as const
-export const AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY =
-  'agent-session.opencode2-resume.v1' as const
-export const AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY = 'agent-session.muse-resume.v1' as const
-export const AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY = 'agent-session.dsh-resume.v1' as const
-export const AGENT_SESSION_CODEBUDDY_RESUME_RUNTIME_CAPABILITY =
-  'agent-session.codebuddy-resume.v1' as const
-export const AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY =
-  'agent-session.qoder-resume.v1' as const
-export const AGENT_SESSION_ZCODE_RESUME_RUNTIME_CAPABILITY =
-  'agent-session.zcode-resume.v1' as const
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
@@ -411,19 +412,15 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
-  AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
-  AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
-  AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,
-  AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY,
-  AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY,
-  AGENT_SESSION_CODEBUDDY_RESUME_RUNTIME_CAPABILITY,
-  AGENT_SESSION_ZCODE_RESUME_RUNTIME_CAPABILITY,
+  ...AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
+  ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
+  DATA_ACCOUNT_RUNTIME_CAPABILITY,
   CODEX_RESET_CREDIT_RUNTIME_CAPABILITY,
   SKILL_INSTALL_CAPABILITY,
   SKILL_BUNDLE_INSTALL_CAPABILITY,

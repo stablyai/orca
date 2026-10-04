@@ -263,6 +263,26 @@ describe('host rewind', () => {
     expect(await host.rewind(caller, request)).toMatchObject({ ok: true, replayed: true })
     expect(rewind).toHaveBeenCalledTimes(1)
   })
+  // The stream's failure is the stream's to recover from; its stale error is not the rewind's.
+  it("rewinds after the chat's event sink failed, its error never failing the rewind", async () => {
+    const target = await seed()
+    const request = await params(target)
+    const refused = vi
+      .spyOn(AgentSessionJournal.prototype, 'appendItem')
+      .mockRejectedValueOnce(new Error('disk full'))
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    sink.appendItem(
+      { provider: 'codex', threadId: HOST_TEST_THREAD, turnId: 'tip', ordinal: 1 },
+      hostTestMessage('refused'),
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    await vi.waitFor(() => expect(refused).toHaveBeenCalled())
+    refused.mockRestore()
+
+    expect(await host.rewind(caller, request)).toMatchObject({ ok: true })
+    expect((await host.journalSnapshot(HOST_TEST_SESSION)).items).toHaveLength(1)
+  })
+
   it('refuses a rewind racing an active turn before provider execution', async () => {
     const target = await seed()
     sink.appendItem(

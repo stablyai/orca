@@ -2,46 +2,34 @@
 # -HiddenTools: the private accounts are denied every machine PATH directory holding one of these
 # executables, and their own PATH carries logging shims for them, so SSH sessions have no host toolchain.
 # -HostCellProbe receives a context hashtable (accounts, port, keys, shim log) once provisioning passes.
-param([Parameter(Mandatory=$true)][string]$Receipt,[string]$Archive,[Parameter(Mandatory=$true)][ValidateSet('arm64','x64')][string]$Arch,[ValidateSet('preview','inbox')][string]$Server='preview',[scriptblock]$ProductionRouteProbe,[ValidateRange(1,4)][int]$Accounts=1,[string[]]$HiddenTools=@(),[scriptblock]$HostCellProbe)
+param([Parameter(Mandatory=$true)][string]$Receipt,[string]$Archive,[Parameter(Mandatory=$true)][ValidateSet('arm64','x64')][string]$Arch,[ValidateSet('preview','inbox')][string]$Server='preview',[scriptblock]$ProductionRouteProbe,[ValidateRange(1,4)][int]$Accounts=1,[string[]]$HiddenTools=@(),[scriptblock]$HostCellProbe,[string]$InboxPreparationReceipt)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'windows-ssh-capability.ps1')
 $target=@{arm64=@{os='Arm64';folder='OpenSSH-ARM64';machine='0xAA64';archive='698c6aec31c1dd0fb996206e8741f4531a97355686b5431ef347d531b07fcd42'};x64=@{os='X64';folder='OpenSSH-Win64';machine='0x8664';archive='23f50f3458c4c5d0b12217c6a5ddfde0137210a30fa870e98b29827f7b43aba5'}}[$Arch]
 $scopeServer=if($Server -eq 'inbox'){'Windows inbox OpenSSH.Server capability binaries'}else{'Microsoft Win32-OpenSSH 10.0.0.0p2-Preview'}
 $report = @{scope="$scopeServer $Arch private loopback authentication and stock cmd.exe dispatch"; server=$Server; status='running'; imageVersion=$env:ImageVersion; cleanup=@('not-confirmed'); globalBootstrapCleanup='Not qualified: service bootstrap may create ProgramData SSH and OpenSSH registry entries; disposable CI VM destruction is the boundary'; observations=@(); stages=@(); diagnosticCaptureFailures=@()}
 $script:receiptWritten=$false
 function Write-Stage([string]$Stage) {
-  $timestamp=[DateTime]::UtcNow.ToString('o')
-  $report.stages += @{stage=$Stage; utc=$timestamp}
-  try {
-    $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($report | ConvertTo-Json -Depth 6))
-    $temporary="$Receipt.pending"
-    $stream=[IO.FileStream]::new($temporary,[IO.FileMode]::Create,[IO.FileAccess]::Write,[IO.FileShare]::Read)
-    try {$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)} finally {$stream.Dispose()}
-    [IO.File]::Move($temporary,$Receipt,$true)
-    $script:receiptWritten=$true
-  } catch {Write-Warning 'Progress receipt could not be updated; cleanup must still run'}
-  Write-Host "Native SSH stage: $Stage ($timestamp)"
+  if(Write-WindowsSshReceiptStage $report $Receipt $Stage){$script:receiptWritten=$true}
 }
 Write-Stage 'preflight-start'
 if(-not $script:receiptWritten){throw 'Initial progress receipt unavailable; refuse provisioning'}
-if ($env:GITHUB_ACTIONS -ne 'true' -or $env:ORCA_ISOLATED_SSH_CI -ne '1' -or [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ne $target.os) { throw "Requires isolated native $Arch GitHub runner" }
-$admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $admin) { throw 'Administrative private service/account setup required' }
+Assert-IsolatedWindowsSshCi $Arch
 Write-Stage 'existing-server-query-start'
 $inboxDir=Join-Path $env:WINDIR 'System32\OpenSSH'
-function Assert-GlobalServerDormant {
-  $global=Get-CimInstance Win32_Service -Filter "Name='sshd'"
-  if(-not $global){return}
-  # Inbox mode may register the global service; it must stay stopped and never be started here.
-  if($Server -ne 'inbox' -or $global.State -ne 'Stopped' -or $global.PathName.Trim('"') -ne (Join-Path $inboxDir 'sshd.exe')){throw 'Refuse an existing global SSH server'}
-}
-Assert-GlobalServerDormant
+Assert-WindowsSshGlobalServerDormant $Server
 Write-Stage 'existing-server-query-complete'
 Write-Stage 'default-shell-query-start'
 $openSshKey = 'HKLM:\SOFTWARE\OpenSSH'
-$registry = Get-ItemProperty -LiteralPath $openSshKey -ErrorAction SilentlyContinue
 # Host-cell probes may set DefaultShell per cell; cleanup restores this stock state.
-if ($registry.DefaultShell -or $registry.DefaultShellCommandOption) { throw 'Requires stock cmd.exe OpenSSH shell at start' }
+Assert-WindowsSshStockShell
 Write-Stage 'default-shell-query-complete'
+if($InboxPreparationReceipt){
+  if($Server -ne 'inbox'){throw 'Inbox preparation receipt cannot qualify a preview server'}
+  $preparation=Get-Content -LiteralPath $InboxPreparationReceipt -Raw | ConvertFrom-Json
+  if($preparation.status -ne 'passed' -or $preparation.arch -ne $Arch -or $preparation.sourceSha -ne $env:GITHUB_SHA -or $preparation.runId -ne $env:GITHUB_RUN_ID -or $preparation.runAttempt -ne $env:GITHUB_RUN_ATTEMPT -or $preparation.runnerName -ne $env:RUNNER_NAME -or $preparation.imageVersion -ne $env:ImageVersion){throw 'Inbox preparation receipt identity or verdict mismatch'}
+  $report.inboxCapabilityPreparation=$preparation
+}
 $id = [Guid]::NewGuid().ToString('N').Substring(0,10)
 $name = "orca$id"
 $accountNames = @($name) + @(if($Accounts -gt 1){2..$Accounts | ForEach-Object {"$name$_"}})
@@ -180,12 +168,7 @@ try {
     $report.nativeInputs=$verified
     Write-Stage 'preview-native-input-verification-complete'
   } else {
-    Write-Stage 'inbox-capability-start'
-    $capability=Get-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
-    $report.inboxCapabilityInitialState=[string]$capability.State
-    if($capability.State -ne 'Installed'){Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' | Out-Null}
-    Assert-GlobalServerDormant
-    Write-Stage 'inbox-capability-complete'
+    Install-WindowsInboxSshCapability $Arch $report {param($stage) Write-Stage $stage}
     $verified=@()
     foreach($binary in @('sshd.exe','ssh.exe','ssh-keygen.exe','sftp.exe','sftp-server.exe')){
       $path=Join-Path $sshDir $binary
@@ -431,21 +414,38 @@ LogLevel DEBUG1
     foreach($directory in $deniedToolDirs){Invoke-Bounded icacls.exe (@($directory.TrimEnd('\'),'/remove:d')+@($ownedAccounts | ForEach-Object {"*$($_.sid)"})) 120 | Out-Null}
     Write-Stage 'cleanup-toolchain-acl-complete'
     Write-Stage 'cleanup-user-profile-start' 
+    $profileTargets=@(foreach($account in $ownedAccounts){
+      if($account.sid){@{sid=$account.sid;watch=$null;done=$false;profiles=@();waitMs=0;disposition=$null}}
+    })
     $report.profileCleanup=@()
-    foreach($account in $ownedAccounts){
-      if(-not $account.sid){continue}
-      $profileWait=[Diagnostics.Stopwatch]::StartNew()
-      do {
-        $profiles=@(Get-CimInstance Win32_UserProfile | Where-Object SID -eq $account.sid)
-        if(-not @($profiles | Where-Object Loaded).Count){break}
-        Start-Sleep -Milliseconds 500
-      } while($profileWait.Elapsed.TotalSeconds -lt 30)
-      $report.profileUnloadWaitMs=$profileWait.ElapsedMilliseconds
-      $report.privateProfile=@($profiles | ForEach-Object {@{loaded=$_.Loaded;status=$_.Status}})
-      Write-Stage 'cleanup-user-profile-observed'
-      $loadedProfiles=@($profiles | Where-Object Loaded)
-      $report.profileCleanup+=if($loadedProfiles.Count){'Loaded profile retained for disposable CI VM destruction'}else{'Unloaded profile removed'}
-      $profiles | Where-Object {-not $_.Loaded} | Remove-CimInstance
+    $report.privateProfiles=@()
+    do {
+      foreach($entry in @($profileTargets | Where-Object {-not $_.done})){
+        if(-not $entry.watch){$entry.watch=[Diagnostics.Stopwatch]::StartNew()}
+        $profiles=@(Get-CimInstance Win32_UserProfile -Filter "SID='$($entry.sid)'")
+        if(@($profiles | Where-Object SID -ne $entry.sid).Count){throw 'Private profile query returned an unrelated SID'}
+        if(@($profiles | Where-Object Loaded).Count -and $entry.watch.ElapsedMilliseconds -lt 30000){continue}
+        # A profile may reload after the polling snapshot.
+        $profiles=@(Get-CimInstance Win32_UserProfile -Filter "SID='$($entry.sid)'")
+        if(@($profiles | Where-Object SID -ne $entry.sid).Count){throw 'Private profile query returned an unrelated SID'}
+        $loadedProfiles=@($profiles | Where-Object Loaded)
+        if($loadedProfiles.Count -and $entry.watch.ElapsedMilliseconds -lt 30000){continue}
+        $profiles | Where-Object {-not $_.Loaded} | Remove-CimInstance
+        $entry.profiles=@($profiles | ForEach-Object {@{loaded=$_.Loaded;status=$_.Status}})
+        $entry.waitMs=$entry.watch.ElapsedMilliseconds
+        $entry.disposition=if($loadedProfiles.Count){'Loaded profile retained for disposable CI VM destruction'}else{'Unloaded profile removed'}
+        $entry.done=$true
+        $report.profileCleanup=@($profileTargets | Where-Object done | ForEach-Object disposition)
+        $report.privateProfiles=@($profileTargets | Where-Object done | ForEach-Object {@{sid=$_.sid;waitMs=$_.waitMs;profiles=$_.profiles;disposition=$_.disposition}})
+        $report.profileUnloadWaitMs=$entry.waitMs
+        $report.privateProfile=$entry.profiles
+        Write-Stage 'cleanup-user-profile-observed'
+      }
+      if(@($profileTargets | Where-Object {-not $_.done}).Count){Start-Sleep -Milliseconds 500}
+    } while(@($profileTargets | Where-Object {-not $_.done}).Count)
+    if($profileTargets.Count){
+      $report.profileUnloadWaitMs=$profileTargets[-1].waitMs
+      $report.privateProfile=$profileTargets[-1].profiles
     }
     Write-Stage 'cleanup-user-profile-complete'
     Write-Stage 'cleanup-user-start'

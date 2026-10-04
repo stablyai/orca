@@ -4,6 +4,7 @@
  * that dir's fish/vendor_conf.d, and the snippet's first act is to undo it.
  */
 import { getFishCodexShellLaunchPreflight } from '../shared/codex-shell-function'
+import { MANAGED_DATA_ACCOUNT_FISH_RESTORE } from '../shared/managed-data-account-shell'
 import type { ShellWrapperFile } from './shell-wrapper-file-writer'
 
 /** Exactly what Orca prepended, so the snippet can remove that and nothing else. */
@@ -22,7 +23,7 @@ export function getFishVendorConfSnippetPath(wrapperRoot: string): string {
 
 // Why: -N/--no-config (also abbreviated or in a flag cluster) skips vendor_conf.d,
 // so the snippet could never undo the env. Over-matching only costs the codex hook.
-function fishArgsSkipConfig(fishArgs: readonly string[]): boolean {
+export function fishArgsSkipConfig(fishArgs: readonly string[]): boolean {
   return fishArgs.some(
     (arg) => /^-[^-]*N/.test(arg) || (arg.length > 5 && '--no-config'.startsWith(arg))
   )
@@ -69,6 +70,7 @@ function __orca_fish_xdg_handoff
     status is-interactive; or return 0
     function __orca_define_codex --on-event fish_prompt
         functions -e __orca_define_codex
+${MANAGED_DATA_ACCOUNT_FISH_RESTORE}
 ${getFishCodexShellLaunchPreflight()}
     end
 end

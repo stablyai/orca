@@ -46,6 +46,16 @@ describe('isGroupAddress', () => {
 })
 
 describe('resolveGroupAddress', () => {
+  it('keeps observed DSB recipients out of existing agent-name groups', () => {
+    const terminals = [
+      makeSummary('term_dsb', { agentIdentity: 'dsb', title: 'Review Claude - DeepSeek Build' })
+    ]
+    expect(resolveGroupAddress('@claude', 'sender', terminals, noStatus)).toEqual([])
+    expect(resolveGroupAddress('@codex', 'sender', terminals, noStatus)).toEqual([])
+    expect(resolveGroupAddress('@dsb', 'sender', terminals, noStatus)).toEqual([])
+    expect(resolveGroupAddress('@all', 'sender', terminals, noStatus)).toEqual(['term_dsb'])
+  })
+
   it('returns the address as-is for non-group addresses', () => {
     const result = resolveGroupAddress('term_b', 'term_a', [], noStatus)
     expect(result).toEqual(['term_b'])

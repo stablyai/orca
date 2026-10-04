@@ -15,11 +15,11 @@ export type UISliceContextual = {
   settingsNavigationTarget: SettingsNavigationTarget | null
   openSettingsTarget: (target: NonNullable<UISliceContextual['settingsNavigationTarget']>) => void
   clearSettingsTarget: () => void
-  /** Which host the Projects Settings pane shows per project (keyed by projectId). Ephemeral on purpose — never persisted, so reload reopens on the effective host. */
+  /** Entry keys retain last-pick order so regrouping resolves aliases. Renderer-only; never persisted. */
   settingsProjectHostSelection: Record<string, ExecutionHostId>
   settingsProjectSetupSelection: Record<string, string>
   setSettingsProjectHostSelection: (
-    projectId: string,
+    selectionKey: string,
     hostId: ExecutionHostId,
     setupId?: string
   ) => void

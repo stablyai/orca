@@ -1026,6 +1026,10 @@
                 }
               },
               "discard": {
+                "confirmation": {
+                  "1426c2efff": "This will revert all changes to this file. This cannot be undone.",
+                  "40e9357b2a": "This will restore the file from HEAD and discard the deletion. This cannot be undone."
+                },
                 "dialog": {
                   "48c5ef95d9": "area",
                   "6de99d162b": "entry"
@@ -1562,6 +1566,9 @@
           "41a1480d3e": "install",
           "7c3bb36706": "remove",
           "e2b0ee267f": "stale"
+        },
+        "ZcodePlanAccountsSection": {
+          "keyRequired": "GLM Coding Plan API key is required."
         },
         "accounts": {
           "search": {
@@ -2611,6 +2618,21 @@
       }
     },
     "hooks": {
+      "ipc": {
+        "events": {
+          "os": {
+            "markdown": {
+              "file": {
+                "open": {
+                  "bridge": {
+                    "1e9a1a63c4": "Failed to open the Markdown file."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       "useComposerState": {
         "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
         "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached."
@@ -2759,7 +2781,7 @@
         "notDelivered": "This message was not delivered.",
         "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
         "notSignedIn": "{{agent}} is not signed in for the selected account.",
-        "previousExitUnverifiable": "Orca couldn't confirm {{agent}}'s previous process ended. Messages wait to be sent until Orca confirms it has ended.",
+        "previousExitUnverifiable": "{{agent}} from before may still be running. Your messages will send once it stops.",
         "providerExitedRejection": "{{agent}} stopped before this message was sent.",
         "providerExitedRow": "{{agent}} stopped while this response was in progress. You can continue in this conversation.",
         "providerRateLimited": "{{agent}} is rate-limited and retrying.",
@@ -2779,6 +2801,10 @@
         "theAgent": "The agent",
         "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
       },
+      "notices": {
+        "historyItemTooLarge": "This part of the chat was too large to show.",
+        "historyRepaired": "Part of this chat's history couldn't be loaded."
+      },
       "question": {
         "other": "Other…"
       },
@@ -2788,8 +2814,6 @@
           "title": "Start a chat with {{value0}}"
         },
         "error": {
-          "keepsTrying": "Orca keeps trying to load it.",
-          "retryingSubtitle": "The transcript could not be read. Orca keeps trying to load it.",
           "subtitle": "The transcript could not be read. Toggle back to the terminal to keep working.",
           "title": "Could not load conversation"
         },
@@ -2803,15 +2827,12 @@
         }
       },
       "status": {
+        "failedAfter": "Failed after {{value0}}",
+        "interruptedAfter": "Interrupted after {{value0}}",
         "responding": "Agent is responding",
         "toggleDetails": "Toggle turn details",
         "workedFor": "Worked for {{value0}}",
-        "interruptedAfter": "Interrupted after {{value0}}",
-        "failedAfter": "Failed after {{value0}}",
         "workingFor": "Working for {{value0}}"
-      },
-      "subagents": {
-        "unnamed": "Subagent"
       },
       "tool": {
         "countN": "{{value0}} tool calls",
@@ -2837,7 +2858,7 @@
         "answerFirst": "Answer the question or approval first.",
         "backgroundTasksRunning": "Background tasks are still running.",
         "capacity": "Orca has received too many requests in the last day.",
-        "chatNotFound": "The Orca running this chat has no record of it.",
+        "chatNotFound": "Orca can't find this chat.",
         "clearUnfinished": "The last /clear didn't finish.",
         "commandRunning": "A /compact or /clear is still running.",
         "conversationCleared": "This conversation has been cleared.",
@@ -2846,7 +2867,9 @@
         "historyUnreadable": "Orca couldn't read this chat's saved history.",
         "historyUnusable": "Unable to load this chat.",
         "hostReconciling": "Orca is still checking on this chat after restarting.",
-        "messagesUnsettled": "A message you sent earlier hasn't been confirmed yet.",
+        "messageNotSaved": "Couldn't save your message.",
+        "messagesUnsettled": "A message you sent earlier isn't confirmed yet.",
+        "notAvailable": "This isn't available in this chat.",
         "notDoneAnswer": "Your answer was not sent.",
         "notDoneCommand": "The command didn't run.",
         "notDoneGoal": "The goal wasn't changed.",
@@ -2859,11 +2882,12 @@
         "openCurrentConversation": "Open the current conversation to continue.",
         "optionRejected": "The agent didn't accept this setting.",
         "outcomeUnknown": "Orca couldn't confirm what happened. Check the chat.",
-        "ownerUnproven": "Orca hasn't confirmed that this chat's previous agent stopped.",
+        "sendOutcomeLost": "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
+        "ownerUnproven": "The previous agent in this chat may still be running.",
         "promptPending": "The agent is waiting for an answer to a question or approval.",
         "questionChanged": "This question was already answered or has changed.",
         "quitTerminalAgent": "Quit that agent to continue the chat here.",
-        "recordFailed": "Orca couldn't record it in this chat's history.",
+        "recordFailed": "Orca couldn't save this to the chat's history.",
         "recordUnreadable": "Orca couldn't read this chat's saved state.",
         "reopenChat": "Reopen the chat to check again.",
         "restartFailed": "The agent couldn't restart.",
@@ -2875,7 +2899,7 @@
         "tryAgainComposerSend": "Send it again.",
         "turnActive": "The agent is still responding.",
         "unreachable": "Orca couldn't reach the agent.",
-        "unsupported": "The Orca running this chat doesn't support this. Update Orca, then try again.",
+        "unsupported": "This needs a newer Orca on the computer running this chat. Update Orca there, then try again.",
         "updateOrcaToKeepUsing": "Update Orca to keep using them.",
         "waitForBackgroundTasks": "Wait for the background tasks to finish.",
         "waitForCommand": "Wait for the /compact or /clear to finish.",

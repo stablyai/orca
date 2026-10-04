@@ -18,8 +18,8 @@ export const PROMOTED_CODEX_SETTING_KEYS = [
 ] as const
 
 // Why: table keys Codex persists from inside a pane — the TUI pickers' [tui]
-// keys and the shared-server fix's [features] switch. Like the top-level list,
-// every key here gets written into the user's real ~/.codex/config.toml.
+// keys and the [features] switch `codex features enable|disable` writes. Like
+// the top-level list, every key here gets written into the user's real ~/.codex/config.toml.
 export const PROMOTED_CODEX_TABLE_SETTING_KEYS = {
   tui: ['status_line', 'status_line_use_colors', 'terminal_title', 'theme'],
   features: ['daemon_auto_start']

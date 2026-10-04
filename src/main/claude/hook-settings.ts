@@ -18,8 +18,14 @@ import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-c
 import type { ClaudeManagedHookPlan } from './claude-managed-hook-events'
 
 export type ClaudeCompatibleHookSettings = {
-  configDirName: '.claude' | '.openclaude' | '.qoder' | '.codebuddy'
-  scriptBaseName: 'claude-hook' | 'openclaude-hook' | 'qoder-hook' | 'codebuddy-hook'
+  configDirName: '.claude' | '.openclaude' | '.qoder' | '.qoder-cn' | '.qwen' | '.codebuddy'
+  scriptBaseName:
+    | 'claude-hook'
+    | 'openclaude-hook'
+    | 'qoder-hook'
+    | 'qoder-cn-hook'
+    | 'qwen-code-hook'
+    | 'codebuddy-hook'
   usesWindowsCompatLauncher: boolean
   windowsHookShell?: 'powershell'
 }

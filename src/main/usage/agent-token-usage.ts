@@ -40,8 +40,18 @@ export function codexOpenCodeTokenSessions(
           0
         ),
         output_tokens: locations.reduce((sum, entry) => sum + entry.outputTokens, 0),
-        cached_input_tokens: locations.reduce((sum, entry) => sum + entry.cachedInputTokens, 0),
-        cache_write_input_tokens: 0
+        cached_input_tokens: locations.reduce(
+          (sum, entry) =>
+            sum +
+            entry.cachedInputTokens -
+            ('cacheWriteInputTokens' in entry ? (entry.cacheWriteInputTokens ?? 0) : 0),
+          0
+        ),
+        cache_write_input_tokens: locations.reduce(
+          (sum, entry) =>
+            sum + ('cacheWriteInputTokens' in entry ? (entry.cacheWriteInputTokens ?? 0) : 0),
+          0
+        )
       }
     ]
   })

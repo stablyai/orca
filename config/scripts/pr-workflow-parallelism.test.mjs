@@ -1,4 +1,5 @@
 import { existsSync, globSync, readFileSync } from 'node:fs'
+import { runInNewContext } from 'node:vm'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 import { UNIT_EXCLUDE } from './ci-unit-files.mjs'
@@ -26,6 +27,7 @@ const shellContractFiles = [
   'src/main/pty/omp-shell-wrapper-alias-safety.test.ts',
   'src/main/pty/omp-shell-wrapper.node-pty.test.ts',
   'src/main/shell-startup-feature-channel.test.ts',
+  'src/main/zsh-deferred-startup-line-init.live-shell.test.ts',
   'src/main/zsh-scoped-histfile.live-shell.test.ts',
   'src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts',
   'src/main/zsh-wrapper-version-mismatch.live-shell.test.ts',
@@ -53,7 +55,7 @@ const realZshUsage =
 describe('PR workflow parallelism', () => {
   it('keeps lightweight orchestration jobs on the free slim runner', () => {
     expect(workflow.jobs.code_paths['runs-on']).toBe('ubuntu-slim')
-    expect(workflow.jobs.typecheck['runs-on']).toBe('ubuntu-24.04-arm')
+    expect(workflow.jobs.preflight['runs-on']).toBe('ubuntu-24.04-arm')
     expect(workflow.jobs.verify['runs-on']).toBe('ubuntu-slim')
     expect(prTestLocWorkflow.jobs.loc['runs-on']).toBe('ubuntu-slim')
     expect(releasePolicyWorkflow.jobs.enforce['runs-on']).toBe('ubuntu-slim')
@@ -78,7 +80,7 @@ describe('PR workflow parallelism', () => {
     const installStep = sharedTest.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
-    const staticInstall = workflow.jobs.static_analysis.steps.find(
+    const staticInstall = workflow.jobs.preflight.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
     const nodeNextPrimerInstall = nodeNextWorkflow.jobs.test_native_cache.steps.find(
@@ -90,7 +92,7 @@ describe('PR workflow parallelism', () => {
     expect(nodeNextWorkflow.jobs.test.uses).toBe('./.github/workflows/unit-tests.yml')
     expect(JSON.parse(nodeNextWorkflow.jobs.test.with.node_versions)).toEqual(['24', '26'])
     expect(workflow.jobs.test.with.runner).toBe('ubuntu-24.04-arm')
-    expect(workflow.jobs.static_analysis['runs-on']).toBe('ubuntu-24.04-arm')
+    expect(workflow.jobs.preflight['runs-on']).toBe('ubuntu-24.04-arm')
     expect(sharedTest['runs-on']).toBe('${{ inputs.runner }}')
     expect(unitTestWorkflow.on.workflow_call.inputs.runner.default).toBe('ubuntu-latest')
     expect(nodeNextWorkflow.jobs.test.with.runner).toBeUndefined()
@@ -120,7 +122,7 @@ describe('PR workflow parallelism', () => {
     }
     expect(staticInstall.with['native-runtime']).toBe('node')
     expect(staticInstall.with['node-version']).toBe('24')
-    expect(workflow.jobs.test.needs).toContain('static_analysis')
+    expect(workflow.jobs.test.needs).toContain('preflight')
     expect(workflow.jobs.test_native_cache).toBeUndefined()
     expect(nodeNextPrimerInstall.with['native-runtime']).toBe('node')
     expect(nodeNextPrimerInstall.with['node-version']).toBe('${{ matrix.node }}')
@@ -285,11 +287,12 @@ describe('PR workflow parallelism', () => {
     expect(pnpmIndex).toBeLessThan(nodeIndex)
     expect(pnpmIndex).toBeLessThan(requestedNodeIndex)
     const packageManagerVersion = /^pnpm@([^+]+)/.exec(packageJson.packageManager)?.[1]
-    expect(packageManagerVersion).toBe('12.0.0')
+    expect(packageManagerVersion).toBe('12.8.1')
     expect(steps[pnpmIndex].uses).toBe('pnpm/setup@v2')
     expect(steps[pnpmIndex].with.version).toBeUndefined()
     expect(steps[pnpmIndex].with.install).toBe(false)
-    const saveOutsidePrs = "${{ github.event_name != 'pull_request' && 'pnpm' || '' }}"
+    const saveOutsidePrs =
+      "${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && 'pnpm' || '' }}"
     expect(steps[nodeIndex].with.cache).toBe(saveOutsidePrs)
     expect(steps[nodeIndex].if).toBe("inputs.node-version == ''")
     expect(steps[requestedNodeIndex].if).toBe("inputs.node-version != ''")
@@ -304,7 +307,7 @@ describe('PR workflow parallelism', () => {
     )
     expect(steps[restoreIndex].uses).toBe('actions/cache/restore@v5')
     expect(steps[restoreIndex].if).toBe(
-      "github.event_name == 'pull_request' && (runner.os != 'Windows' || runner.arch != 'X64' || !contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml'))"
+      "github.event_name == 'pull_request' && inputs.cache-pnpm-store != 'false' && !((runner.os == 'Linux' || runner.os == 'macOS') && (runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml') && (runner.os != 'Windows' || !(runner.arch == 'X64' && contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml')) && !((runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml'))"
     )
   })
 
@@ -346,11 +349,11 @@ describe('PR workflow parallelism', () => {
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
 
-    for (const jobName of ['typecheck', 'git_compatibility']) {
+    for (const jobName of ['git_compatibility']) {
       expect(installFor(jobName).with, jobName).toBeUndefined()
     }
     expect(installFor('xterm_patch_sync')).toBeUndefined()
-    expect(installFor('static_analysis').with['native-runtime']).toBe('node')
+    expect(installFor('preflight').with['native-runtime']).toBe('node')
     expect(installFor('shell_contracts').with['native-runtime']).toBe('node')
     expect(sharedTestInstall.with['native-runtime']).toBe('node')
     expect(installFor('package').with['native-runtime']).toBe('electron')
@@ -476,7 +479,7 @@ describe('PR workflow parallelism', () => {
   })
 
   it('reuses TypeScript incremental state across typecheck runs', () => {
-    const steps = workflow.jobs.typecheck.steps
+    const steps = workflow.jobs.preflight.steps
     const cacheIndex = steps.findIndex((step) => step.name === 'Cache TypeScript incremental state')
     const checkIndex = steps.findIndex((step) => step.run === 'pnpm run typecheck')
 
@@ -514,6 +517,21 @@ describe('PR workflow parallelism', () => {
     const evidence = workflow.jobs.unit_selection_evidence
     expect(evidence.uses).toBe('./.github/workflows/unit-selection-evidence.yml')
     expect(evidence.needs).toEqual(['test'])
+    for (const [result, cancelled, expected] of [
+      ['success', false, true],
+      ['failure', false, true],
+      ['skipped', false, false],
+      ['cancelled', false, false],
+      ['success', true, false],
+      ['failure', true, false]
+    ]) {
+      expect(
+        runInNewContext(evidence.if.slice(3, -2), {
+          cancelled: () => cancelled,
+          needs: { test: { result } }
+        })
+      ).toBe(expected)
+    }
     expect(workflow.jobs.verify.needs).not.toContain('unit_selection_evidence')
     expect(unitTestWorkflow.jobs.selection_evidence).toBeUndefined()
     const evidenceWorkflow = parse(
@@ -526,8 +544,7 @@ describe('PR workflow parallelism', () => {
   it('keeps verify as the aggregate required check', () => {
     expect(workflow.jobs.verify.needs).toEqual([
       'code_paths',
-      'static_analysis',
-      'typecheck',
+      'preflight',
       'git_compatibility',
       'codex_index_heal_contract',
       'xterm_patch_sync',

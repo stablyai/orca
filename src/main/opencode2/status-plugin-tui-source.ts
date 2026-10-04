@@ -1,3 +1,5 @@
+import { getTuiStatusDeliverySource } from '../opencode/status-plugin-delivery-source'
+
 /**
  * TUI reporter for the OpenCode 2 status plugin. The module Orca writes as a server plugin is
  * also installed as a TUI plugin; in a TUI process setup() lands here. The TUI runs in its
@@ -8,6 +10,7 @@
 export function getOpenCode2TuiSource(): string[] {
   return String.raw`
 const TUI_TICK_MS = 100;
+const TUI_PERMISSION_SETTLE_MS = 500;
 const TUI_EARLY_ROOTS_MAX = 32;
 const TUI_RESOLVED_REQUESTS_MAX = 256;
 const TUI_ENDPOINT_CHECK_TICKS = 50;
@@ -22,10 +25,9 @@ function boundedSet(set, value, max) {
   if (set.size > max) set.delete(set.values().next().value);
 }
 
-// Why storage.memory: OpenCode keeps it across plugin hot reloads and drops it when the TUI
-// exits, so a reload mid-turn keeps this pane's sessions and what it last reported.
+// Memory survives hot reloads and ends with the TUI.
 function paneStatusMemory(ctx) {
-  const initial = { owned: [], last: "idle:", lastRoot: "", started: false };
+  const initial = { owned: [], last: "idle:", lastRoot: "", started: false, endings: [] };
   if (typeof ctx.storage?.memory === "function") return ctx.storage.memory("pane-status", { initial });
   // Why started: without memory a reload looks like a TUI start, and must not reset the pane.
   const local = { ...initial, started: true };
@@ -37,9 +39,8 @@ async function setupOpenCode2Tui(ctx) {
   // Why: post() needs this pane's key, so a TUI outside an Orca pane has nothing to report.
   if (!process.env.ORCA_PANE_KEY) return noop;
   if (process.env.ORCA_OPENCODE_AGENT && process.env.ORCA_OPENCODE_AGENT !== ORCA_STATUS_AGENT) return noop;
-  // Why: OpenCode 1 loads no plugin directories, but refusing it here keeps a future 1.x
-  // loader from running a second producer beside the 1.x server plugin.
-  if (/^1\./.test(String(ctx.app?.version || ""))) return noop;
+  // Legacy attach contexts enter only through the checked API adapter.
+  if (/^1\./.test(String(ctx.app?.version || "")) && !ctx.legacyOpenCodeTui) return noop;
   const data = ctx.data.session;
   if (typeof data?.status !== "function" || typeof data.root !== "function") return noop;
   let factoryID;
@@ -50,10 +51,10 @@ async function setupOpenCode2Tui(ctx) {
     let disposed = false;
     let lastLevel = null;
     let ticks = 0;
-    // Root sessions this TUI saw start before it owned them: their SessionStart and prompt.
     const early = new Map();
     // Why: a permission/form list fetched on reconnect can land after the reply event and restore it.
     const resolved = new Set();
+    const permissionSeenAt = new Map();
 
     const rootOf = (sessionID) => data.root(sessionID) || sessionID;
     const family = (root) => new Set([root, ...(typeof data.family === "function" ? data.family(root) || [] : [])]);
@@ -62,18 +63,41 @@ async function setupOpenCode2Tui(ctx) {
       const route = ctx.ui.router.current();
       return route?.type === "session" && typeof route.sessionID === "string" ? rootOf(route.sessionID) : undefined;
     };
-    // First open permission, else first form, across the root's family.
-    const blocker = (root) => {
+    const blocker = (root, seenPermissions) => {
       let form;
       for (const member of family(root)) {
-        const permission = (data.permission?.list?.(member) || []).find((request) => !resolved.has(request.id));
+        const permission = (data.permission?.list?.(member) || []).find((request) => {
+          if (resolved.has(request.id)) return false;
+          seenPermissions.add(request.id);
+          if (!permissionSeenAt.has(request.id)) permissionSeenAt.set(request.id, Date.now());
+          // Auto replies arrive after the request; only an unanswered request needs attention.
+          return Date.now() - permissionSeenAt.get(request.id) >= TUI_PERMISSION_SETTLE_MS;
+        });
         if (permission) return { request: permission, isPermission: true };
         form ??= (data.form?.list?.(member) || []).find((request) => !resolved.has(request.id));
       }
       return form ? { request: form, isPermission: false } : null;
     };
     const levelKey = (level) =>
-      level.kind === "waiting" ? "waiting:" + level.blocker.request.id + ":" + level.root : level.kind + ":" + level.root;
+      (level.kind === "waiting" ? "waiting:" + level.blocker.request.id + ":" + level.root : level.kind + ":" + level.root) +
+      (level.rootFields.root_state ? ":" + JSON.stringify(level.rootFields) : "");
+
+    function rootFields(level) {
+      if (!level.root) return {};
+      const rootRunning = data.status(level.root) === "running";
+      const rootState = rootRunning
+        ? level.kind === "waiting" && level.blocker.request.sessionID === level.root ? "waiting" : "working"
+        : "done";
+      const session = data.get?.(level.root);
+      const ending = (memory.endings || []).find(([id]) => id === level.root);
+      const idleAt = session?.time?.idle;
+      const sameTurn = Number.isFinite(idleAt) && ending?.[2] === idleAt;
+      // Current session data repairs a whole turn missed while the plugin was unloaded.
+      const errorName = !rootRunning && (session?.outcome === "failed"
+        ? (sameTurn && ending[1]) || "UnknownError"
+        : session?.outcome === "interrupted" && sameTurn ? ending[1] : "");
+      return { root_state: rootState, ...(errorName ? { root_turn_error_name: errorName } : {}) };
+    }
 
     function own(root, owned) {
       const seen = early.get(root);
@@ -94,20 +118,28 @@ async function setupOpenCode2Tui(ctx) {
       owned = owned.filter((root) => root === route || running(root));
       if (owned.join("\n") !== memory.owned.join("\n")) setMemory((draft) => { draft.owned = owned; });
       const active = owned.filter(running);
+      const seenPermissions = new Set();
+      let waiting;
       for (const root of active) {
         // Why only while running: a blocker the session data kept after its turn ended is stale.
-        const found = blocker(root);
-        if (found) return { kind: "waiting", root, blocker: found };
+        const found = blocker(root, seenPermissions);
+        if (found && !waiting) waiting = { kind: "waiting", root, blocker: found };
       }
+      for (const id of permissionSeenAt.keys()) {
+        if (!seenPermissions.has(id)) permissionSeenAt.delete(id);
+      }
+      if (waiting) return waiting;
       const busy = active.at(-1);
       return busy ? { kind: "busy", root: busy } : { kind: "idle", root: memory.lastRoot };
     }
 
     function publish() {
       if (disposed) return;
+      if (ctx.legacyOpenCodeTui && resolveHookCoords().openCodeTui !== "1") return;
       let level;
       try {
         level = derive();
+        level.rootFields = rootFields(level);
       } catch {
         // Why: a data read that throws must not kill the listener or the tick.
         return;
@@ -119,27 +151,26 @@ async function setupOpenCode2Tui(ctx) {
         if (level.kind !== "idle") draft.lastRoot = level.root;
       });
       lastLevel = level;
-      // Why the lifecycle queue: posts keep the order the levels were derived in.
       void enqueueLifecycle(() => deliver(level, true));
     }
 
     async function deliver(level, changed) {
       // Retires assistant text queued under the previous level (see flushPendingAssistantPart).
       if (changed) stateArrivalRevision += 1;
-      const properties = level.root ? { sessionID: level.root } : {};
+      const properties = level.root ? { sessionID: level.root, ...level.rootFields } : {};
       if (level.kind === "waiting") {
         const { request, isPermission } = level.blocker;
-        const translated = isPermission
+        const translated = ctx.legacyOpenCodeTui ? { properties: request } : isPermission
           ? translateOpenCode2Event("permission.asked", request)
           : translateOpenCode2Event("form.created", { form: request });
         if (!translated) return;
         const hookEventName = isPermission ? "PermissionRequest" : "AskUserQuestion";
-        await setAttention(hookEventName, { ...translated.properties, ...properties }, factoryID, request.sessionID);
+        await flushPendingAssistantPart(true);
+        await setDeliveryTarget("waiting", levelKey(level), hookEventName, { ...translated.properties, ...properties }, factoryID);
         return;
       }
-      // Why flush first: the done-state preview must show the completed reply.
       if (level.kind === "idle") await flushPendingAssistantPart(true);
-      await setStatus(level.kind, properties, factoryID);
+      await setDeliveryTarget(level.kind, levelKey(level), level.kind === "busy" ? "SessionBusy" : "SessionIdle", properties, factoryID);
     }
 
     function postPrompt(root, prompt) {
@@ -188,6 +219,30 @@ async function setupOpenCode2Tui(ctx) {
       }
       const root = rootOf(sessionID);
       const isOwned = memory.owned.includes(root);
+      if (ctx.legacyOpenCodeTui && event.type === "message.part.updated") {
+        const part = properties.part;
+        const role = messageRoleById.get(part?.messageID);
+        if (sessionID !== root || part?.type !== "text" || part.synthetic === true || typeof part.text !== "string" || !part.text || memory.last.startsWith("waiting:")) return;
+        if (role === "user") {
+          const prompt = { text: part.text, messageID: part.messageID };
+          if (isOwned) postPrompt(root, prompt); else remember(root, { prompt });
+        } else if (role === "assistant" && isOwned) {
+          void enqueueLifecycle(() => queueAssistantPart({ role, text: part.text, messageID: part.messageID, sessionID: root, factoryID, authorityRevision: stateArrivalRevision }));
+        }
+        return;
+      }
+      if (sessionID === root && (isOwned || currentRoute() === root)) {
+        if (event.type === "session.execution.started" || event.type === "session.execution.succeeded" || event.type === "session.execution.failed" || event.type === "session.execution.interrupted") {
+          const errorName = event.type === "session.execution.failed"
+            ? (typeof properties.error?.type === "string" && properties.error.type) || "UnknownError"
+            : event.type === "session.execution.interrupted" && properties.reason === "user" ? "MessageAbortedError" : "";
+          // A hot reload keeps the terminal verdict; only this root's next turn replaces it.
+          setMemory((draft) => {
+            draft.endings = (draft.endings || []).filter(([id]) => id !== root);
+            if (errorName) draft.endings = [...draft.endings, [root, errorName, event.created ?? data.get?.(root)?.time?.idle]].slice(-TUI_EARLY_ROOTS_MAX);
+          });
+        }
+      }
       if (event.type === "session.inbox.enqueued") {
         // Why TUI-only: the server takes the prompt from session.hook("prompt"), which a TUI lacks.
         const item = properties.item;
@@ -258,24 +313,7 @@ async function setupOpenCode2Tui(ctx) {
   }
 }
 
-// Why queued: levels derived before disposal still post, in order, before the identity retires.
-function releaseTuiStatusDelivery(factoryID, forgetUndelivered) {
-  return enqueueLifecycle(async () => {
-    disposingFactoryIDs.add(factoryID);
-    while (messagePartPostInFlight) await messagePartPostInFlight;
-    if (pendingAssistantPart?.factoryID === factoryID) {
-      if (assistantPartFlushTimer) clearTimeout(assistantPartFlushTimer);
-      assistantPartFlushTimer = null;
-      pendingAssistantPart = null;
-    }
-    if (desiredFactoryID === factoryID) {
-      if (statusDeliveryDirty) forgetUndelivered();
-      clearStatusRetry();
-      statusRevision += 1;
-    }
-    activeFactoryIDs.delete(factoryID);
-    disposingFactoryIDs.delete(factoryID);
-  });
-}
-`.split('\n')
+`
+    .split('\n')
+    .concat(getTuiStatusDeliverySource())
 }

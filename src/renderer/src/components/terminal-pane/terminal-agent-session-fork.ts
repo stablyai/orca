@@ -247,10 +247,12 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     promptDelivery: 'draft',
     launchSource: 'terminal_context_menu',
     agentSessionLaunchPlan,
-    beforeSurfaceOpen: (surface) =>
+    // Why: the launcher opens the fork's surface itself (chat, host terminal or local terminal), so
+    // revealing must not seed a sibling shell beside it.
+    beforeSurfaceOpen: () =>
       activateAndRevealWorktree(forkWorktreeId, {
         sidebarRevealBehavior: 'auto',
-        ...(surface.kind === 'local-agent-session' ? { providesInitialSurface: true } : {})
+        providesInitialSurface: true
       }) !== false,
     ...(launchPlatform ? { launchPlatform } : {})
   })

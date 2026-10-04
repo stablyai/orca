@@ -93,9 +93,16 @@ describe('terminal RPC manifest characterization', () => {
       schemaFor('terminal.updateViewport').parse({
         terminal: 'term',
         client: { id: 'client' },
-        viewport: { cols: 241, rows: 120 }
+        viewport: { cols: 1025, rows: 120 }
       })
     ).toThrow()
+    expect(() =>
+      schemaFor('terminal.updateViewport').parse({
+        terminal: 'term',
+        client: { id: 'client' },
+        viewport: { cols: 1024, rows: 120 }
+      })
+    ).not.toThrow()
     expect(() =>
       schemaFor('terminal.subscribe').parse({
         terminal: 'term',

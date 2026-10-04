@@ -23,7 +23,6 @@ export type StructuredAgentSessionMutationContext = {
   deps: StructuredAgentSessionHostDeps
   sessions: Map<string, StructuredAgentSessionHostSession>
   publish: (sessionId: string, journal: StructuredAgentSessionHostSession['journal']) => void
-  flushStreamedEvents: (sessionId: string) => Promise<void>
   /** The host's accessor, for a caller outside the session's serialize. */
   conversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession>
   /** The session's child records, as the strip reads them; what command admission decides on. */
@@ -67,7 +66,6 @@ export function mutateStructuredAgentSession<TValue>(
       journal: () => context.sessions.get(envelope.sessionId)?.journal,
       prepareSession,
       publish: (journal) => context.publish(envelope.sessionId, journal),
-      flushStreamedEvents: context.flushStreamedEvents,
       providerChildPhase: () => context.sessions.get(envelope.sessionId)?.child?.phase,
       now: () => context.now()
     })

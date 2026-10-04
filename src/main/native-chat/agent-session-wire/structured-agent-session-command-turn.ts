@@ -159,7 +159,6 @@ export type StructuredAgentSessionCommandHandoverContext = {
   record: () => AgentSessionRecord | null
   /** The session's child records, the same read the strip and conversation-command admission use. */
   childWork: () => readonly AgentChildWorkView[] | undefined
-  flushStreamedEvents: () => Promise<void>
   now: () => number
 }
 
@@ -170,8 +169,7 @@ export async function handOverStructuredAgentSessionCommand(
   body: AgentJournalMessageItem
 ): Promise<void> {
   const { clientMessageId } = submission
-  // Provider frames already received decide whether a turn is running.
-  await ctx.flushStreamedEvents()
+  // Provider frames already received decide whether a turn is running: each landed at its call.
   const blocked = commandBlocked(ctx, body)
   if (blocked) {
     await ctx.journal.resolveDispatch({

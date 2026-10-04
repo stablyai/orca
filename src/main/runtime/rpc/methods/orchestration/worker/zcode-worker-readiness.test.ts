@@ -1,28 +1,38 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { RuntimeTerminalWait } from '../../../../../../shared/runtime-terminal-contracts'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 
 describe('ZCode first dispatch readiness', () => {
   const h = createOrchestrationWorkerReleaseHarness()
   afterEach(() => h.cleanup())
 
-  it('waits for the new composer before delivering exactly one dispatch', async () => {
-    h.setup()
-    const gate = h.deferred<void>()
-    vi.spyOn(h.runtime, 'waitForFreshWorkerComposer').mockReturnValue(gate.promise)
-    const pending = h.startWorker({ agent: 'zcode' })
-    await vi.waitFor(() =>
-      expect(h.runtime.waitForFreshWorkerComposer).toHaveBeenCalledWith(
-        'term_worker',
-        'zcode',
-        60_000
+  it.each(['zcode', 'opencode', 'opencode2'] as const)(
+    '%s waits for the new composer before dispatch',
+    async (agent) => {
+      h.setup()
+      const gate = h.deferred<RuntimeTerminalWait>()
+      vi.spyOn(h.runtime, 'waitForFreshWorkerComposer').mockReturnValue(gate.promise)
+      const pending = h.startWorker({ agent })
+      await vi.waitFor(() =>
+        expect(h.runtime.waitForFreshWorkerComposer).toHaveBeenCalledWith(
+          'term_worker',
+          agent,
+          60_000
+        )
       )
-    )
-    expect(h.runtime.waitForTerminal).not.toHaveBeenCalled()
-    expect(h.runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
-    gate.resolve()
-    await pending
-    expect(h.runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
-  })
+      expect(h.runtime.waitForTerminal).not.toHaveBeenCalled()
+      expect(h.runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+      gate.resolve({
+        handle: 'term_worker',
+        condition: 'tui-idle',
+        satisfied: true,
+        status: 'running',
+        exitCode: null
+      })
+      await pending
+      expect(h.runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
+    }
+  )
 
   it('keeps reused terminals on the normal idle wait', async () => {
     h.setup()

@@ -236,25 +236,25 @@ describe('importing a per-chat journal', () => {
     await writeLegacyJournal(epoch, rows)
     const database = openTestJournalHostDatabase(root)
     const turns: { published: boolean; copied: number }[] = []
-    let ticking = true
     const tick = (): void => {
       turns.push({
         published: readJournalSessionEpoch(database.db, IDENTITY.sessionId) !== null,
         copied: rowCount(database.db)
       })
-      if (ticking) {
-        setImmediate(tick)
-      }
+      pending = setImmediate(tick)
     }
-    setImmediate(tick)
+    let pending = setImmediate(tick)
 
-    await importPerSessionJournal({
-      database,
-      identity: IDENTITY,
-      legacyDirectory: legacyDir(),
-      batchRows: 1
-    })
-    ticking = false
+    try {
+      await importPerSessionJournal({
+        database,
+        identity: IDENTITY,
+        legacyDirectory: legacyDir(),
+        batchRows: 1
+      })
+    } finally {
+      clearImmediate(pending)
+    }
 
     // Other work ran while rows were copied, and none of it could see a partly copied chat.
     expect(turns.filter((turn) => !turn.published && turn.copied > 0).length).toBeGreaterThan(0)

@@ -5,7 +5,7 @@ import {
   projectWorktreeListRemovals,
   projectWorktreePsRemovals
 } from '../worktree-removal-marker-projection'
-import { snapshotPendingWorktreeRemovals } from '../../../worktree-background-removal'
+import { snapshotPendingWorktreeRemovals } from '../../../worktree-removal-listing'
 import {
   WorktreeDetectedListParams,
   WorktreeListParams,

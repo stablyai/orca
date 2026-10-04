@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Terminal } from '@xterm/headless'
-import { bufferRows, cellDescriptor } from './serialize-grid-cell-descriptors'
+import { cellDescriptor, compareBufferRows } from './serialize-grid-cell-descriptors'
 import { createFuzzTerminal, writeTerminal } from './serialize-grid-roundtrip'
 
 // Frozen allocating oracle from f69052e; a reused cell must preserve every descriptor.
@@ -78,48 +78,6 @@ function allocatingBufferRows(
 }
 
 describe('serialize oracle cell reuse', () => {
-  it.each([false, true])(
-    'matches allocating cells across SGR, wide text, buffers and resize (ConPTY=%s)',
-    (conpty) => {
-      const terminal = createFuzzTerminal({ cols: 14, rows: 4, scrollback: 30, conpty })
-      try {
-        const writes = [
-          'plain \x1b[1;2;3;4;7;8;9mstyled\x1b[0m\r\n',
-          '\x1b[38;5;2;48;5;10m palette \x1b[38;2;11;22;33;48;2;44;55;66m RGB \x1b[0m\r\n',
-          '\x1b[4:3;9;53m \x1b[0m\x1b[7m \x1b[0m界👩‍💻é\r\n',
-          'scroll1\r\nscroll2\r\nscroll3\r\n',
-          '\x1b[?1049h\x1b[1;2;3;4;7;8;9malt界\x1b[0m',
-          '\x1b[?1049l\x1b[2J\x1b[Hclear'
-        ]
-        for (const data of writes) {
-          writeTerminal(terminal, data)
-          for (const buffer of [
-            terminal.buffer.normal,
-            terminal.buffer.alternate,
-            terminal.buffer.active
-          ]) {
-            expect(bufferRows(buffer, -1, buffer.length + 1, terminal.cols + 2)).toEqual(
-              allocatingBufferRows(buffer, -1, buffer.length + 1, terminal.cols + 2)
-            )
-          }
-          terminal.resize(terminal.cols === 14 ? 9 : 14, 4)
-          expect(
-            bufferRows(terminal.buffer.active, 0, terminal.buffer.active.length, terminal.cols)
-          ).toEqual(
-            allocatingBufferRows(
-              terminal.buffer.active,
-              0,
-              terminal.buffer.active.length,
-              terminal.cols
-            )
-          )
-        }
-      } finally {
-        terminal.dispose()
-      }
-    }
-  )
-
   it('preserves the order of every text flag combination while reloading a plain cell', () => {
     const terminal = createFuzzTerminal({ cols: 4, rows: 1, scrollback: 0 })
     try {
@@ -167,47 +125,8 @@ describe('serialize oracle cell reuse', () => {
       const scratch = terminal.buffer.active.getNullCell()
       expect(cellDescriptor(line, 3, 4, scratch)).toBe('CLIPPED')
       expect(cellDescriptor(line, 3, 4, scratch)).toBe(allocatingCellDescriptor(line, 3, 4))
-      expect(bufferRows(terminal.buffer.active, 0, 1, 4)).toEqual(
-        allocatingBufferRows(terminal.buffer.active, 0, 1, 4)
-      )
     } finally {
       terminal.dispose()
-    }
-  })
-
-  it('loads every cell into one traversal-local scratch object and retains immutable descriptors', () => {
-    const terminal = createFuzzTerminal({ cols: 4, rows: 2, scrollback: 0 })
-    try {
-      writeTerminal(terminal, '\x1b[1mA\x1b[0m B界')
-      const buffer = terminal.buffer.active
-      const scratch = buffer.getNullCell()
-      const allocate = vi.spyOn(buffer, 'getNullCell').mockReturnValue(scratch)
-      const getLine = buffer.getLine.bind(buffer)
-      const loaded: unknown[] = []
-      vi.spyOn(buffer, 'getLine').mockImplementation((y) => {
-        const line = getLine(y)
-        if (line) {
-          const getCell = line.getCell.bind(line)
-          vi.spyOn(line, 'getCell').mockImplementation((x, cell) => {
-            loaded.push(cell)
-            return getCell(x, cell)
-          })
-        }
-        return line
-      })
-      const expected = allocatingBufferRows(buffer, 0, 2, 4)
-      loaded.length = 0
-      const actual = bufferRows(buffer, 0, 2, 4)
-      expect(actual).toEqual(expected)
-      expect(allocate).toHaveBeenCalledTimes(1)
-      expect(loaded).toHaveLength(8)
-      expect(loaded.every((cell) => cell === scratch)).toBe(true)
-      writeTerminal(terminal, '\x1b[2J\x1b[Hnew')
-      bufferRows(buffer, 0, 2, 4)
-      expect(actual).toEqual(expected)
-    } finally {
-      terminal.dispose()
-      vi.restoreAllMocks()
     }
   })
 
@@ -229,4 +148,203 @@ describe('serialize oracle cell reuse', () => {
       terminal.dispose()
     }
   })
+})
+
+function allocatingRowDiff(stage: string, expected: string[][], actual: string[][]) {
+  for (let y = 0; y < Math.max(expected.length, actual.length); y++) {
+    const expectedRow = expected[y]
+    const actualRow = actual[y]
+    if (
+      !expectedRow ||
+      !actualRow ||
+      expectedRow.length !== actualRow.length ||
+      !expectedRow.every(
+        (cell, x) => cell === actualRow[x] || (cell === CLIPPED && actualRow[x]?.startsWith('▯'))
+      )
+    ) {
+      return { stage, row: y, expected: expectedRow?.join('|'), actual: actualRow?.join('|') }
+    }
+  }
+  return null
+}
+
+function expectComparisonParity(
+  expected: Buffer,
+  actual: Buffer,
+  cols: number,
+  expectedStart = 0,
+  expectedEnd = expected.length,
+  actualStart = 0,
+  actualEnd = actual.length
+): ReturnType<typeof compareBufferRows> {
+  const frozen = allocatingRowDiff(
+    'parity',
+    allocatingBufferRows(expected, expectedStart, expectedEnd, cols),
+    allocatingBufferRows(actual, actualStart, actualEnd, cols)
+  )
+  expect(
+    compareBufferRows(
+      'parity',
+      expected,
+      expectedStart,
+      expectedEnd,
+      actual,
+      actualStart,
+      actualEnd,
+      cols
+    )
+  ).toEqual(frozen)
+  return frozen
+}
+
+describe('serialize oracle streaming comparison', () => {
+  it('reuses one cell per buffer and stops before rows after the first difference', () => {
+    const source = createFuzzTerminal({ cols: 8, rows: 4, scrollback: 0 })
+    const replay = createFuzzTerminal({ cols: 8, rows: 4, scrollback: 0 })
+    try {
+      writeTerminal(source, 'first\r\nsecond\r\nthird\r\nlast')
+      writeTerminal(replay, 'wrong\r\nsecond\r\nthird\r\nlast')
+      for (const buffer of [source.buffer.active, replay.buffer.active]) {
+        const scratch = buffer.getNullCell()
+        vi.spyOn(buffer, 'getNullCell').mockReturnValue(scratch)
+        const getLine = buffer.getLine.bind(buffer)
+        vi.spyOn(buffer, 'getLine').mockImplementation((y) => {
+          const line = getLine(y)
+          if (line) {
+            const getCell = line.getCell.bind(line)
+            vi.spyOn(line, 'getCell').mockImplementation((x, cell) => {
+              expect(cell).toBe(scratch)
+              return getCell(x, cell)
+            })
+          }
+          return line
+        })
+      }
+      const diff = compareBufferRows(
+        'visible-grid',
+        source.buffer.active,
+        0,
+        4,
+        replay.buffer.active,
+        0,
+        4,
+        8
+      )
+      expect(diff?.row).toBe(0)
+      for (const buffer of [source.buffer.active, replay.buffer.active]) {
+        expect(buffer.getNullCell).toHaveBeenCalledTimes(1)
+        expect(buffer.getLine).toHaveBeenCalledTimes(2)
+        expect(buffer.getLine).toHaveBeenCalledWith(0)
+        expect(buffer.getLine).toHaveBeenCalledWith(3)
+      }
+      writeTerminal(source, '\x1b[2J\x1b[Hchanged')
+      expect(diff?.expected).toContain('f·w1·f0:-1·b0:-1·0000000')
+    } finally {
+      source.dispose()
+      replay.dispose()
+      vi.restoreAllMocks()
+    }
+  })
+
+  it.each([false, true])(
+    'preserves first-row diagnostics through buffer changes (ConPTY=%s)',
+    (conpty) => {
+      const source = createFuzzTerminal({ cols: 14, rows: 4, scrollback: 30, conpty })
+      const replay = createFuzzTerminal({ cols: 14, rows: 4, scrollback: 30, conpty })
+      try {
+        for (const [index, data] of [
+          'plain \x1b[1;2;3;4;7;8;9mstyled\x1b[0m\r\n',
+          '\x1b[38;5;2;48;5;10m palette \x1b[38;2;11;22;33;48;2;44;55;66m RGB \x1b[0m\r\n',
+          '\x1b[4:3;9;53m \x1b[0m\x1b[7m \x1b[0m界👩‍💻é\r\n',
+          'scroll1\r\nscroll2\r\nscroll3\r\n',
+          '\x1b[?1049h\x1b[1;2;3;4;7;8;9malt界\x1b[0m',
+          '\x1b[?1049l\x1b[2J\x1b[Hclear'
+        ].entries()) {
+          writeTerminal(source, data)
+          writeTerminal(replay, data)
+          for (const [expected, actual] of [
+            [source.buffer.active, replay.buffer.active],
+            [source.buffer.normal, replay.buffer.normal],
+            [source.buffer.alternate, replay.buffer.alternate]
+          ]) {
+            expect(expectComparisonParity(expected!, actual!, source.cols)).toBeNull()
+            expectComparisonParity(expected!, actual!, source.cols + 2, -1, expected!.length + 1)
+          }
+          const corruption = `\x1b[H\x1b[0mFAULT${index}`
+          writeTerminal(replay, corruption)
+          expect(
+            expectComparisonParity(source.buffer.active, replay.buffer.active, source.cols)
+          ).not.toBeNull()
+          writeTerminal(source, corruption)
+          source.resize(source.cols === 14 ? 9 : 14, 4)
+          replay.resize(source.cols, 4)
+          expectComparisonParity(source.buffer.active, replay.buffer.active, source.cols)
+        }
+      } finally {
+        source.dispose()
+        replay.dispose()
+      }
+    }
+  )
+
+  it('detects every text-flag loss and compares all combinations against the allocating oracle', () => {
+    const source = createFuzzTerminal({ cols: 4, rows: 1, scrollback: 0 })
+    const replay = createFuzzTerminal({ cols: 4, rows: 1, scrollback: 0 })
+    try {
+      const sgr = [1, 2, 3, 4, 7, 8, 9]
+      const writeFlags = (terminal: Terminal, mask: number): void => {
+        const codes = sgr.filter((_code, bit) => (mask & (1 << bit)) !== 0)
+        writeTerminal(terminal, `\x1b[H\x1b[0m\x1b[${codes.length ? codes.join(';') : 0}mA\x1b[0mB`)
+      }
+      for (let mask = 0; mask < 128; mask++) {
+        writeFlags(source, mask)
+        writeFlags(replay, mask)
+        expect(expectComparisonParity(source.buffer.active, replay.buffer.active, 4)).toBeNull()
+        for (let bit = 0; bit < sgr.length; bit++) {
+          if ((mask & (1 << bit)) !== 0) {
+            writeFlags(replay, mask & ~(1 << bit))
+            expect(
+              expectComparisonParity(source.buffer.active, replay.buffer.active, 4)
+            ).not.toBeNull()
+          }
+        }
+      }
+    } finally {
+      source.dispose()
+      replay.dispose()
+    }
+  })
+
+  it.each([
+    ['abc界', 'abc ', 4, false],
+    ['abc界', 'abc\x1b[48;2;1;2;3m ', 4, false],
+    ['abc ', 'abc界', 4, true],
+    ['é', 'è', 8, true],
+    ['\x1b[32mA', '\x1b[38;5;2mA', 8, false],
+    ['\x1b[42m ', '\x1b[48;5;2m ', 8, false],
+    ['\x1b[7;31m ', '\x1b[7;32m ', 8, true],
+    ['\x1b[4m\x1b[2J', '\x1b[2J', 8, false],
+    ['\x1b[4m ', ' ', 8, true],
+    ['\x1b[4m \x1b[0mB', ' B', 8, true],
+    ['text\r\n', 'text', 8, false],
+    ['text\r\n\x1b[48;2;1;2;3m\x1b[2K', 'text', 8, true]
+  ] as const)(
+    'preserves blank, clipped and color policy for %j / %j',
+    (expected, actual, cols, differs) => {
+      const source = createFuzzTerminal({ cols: 8, rows: 4, scrollback: 10 })
+      const replay = createFuzzTerminal({ cols: 8, rows: 4, scrollback: 10 })
+      try {
+        writeTerminal(source, expected)
+        writeTerminal(replay, actual)
+        expect(
+          Boolean(expectComparisonParity(source.buffer.active, replay.buffer.active, cols))
+        ).toBe(differs)
+        expectComparisonParity(source.buffer.active, replay.buffer.active, cols, -1, 6, -1, 5)
+        expectComparisonParity(source.buffer.active, replay.buffer.active, cols, 1, 5, 0, 4)
+      } finally {
+        source.dispose()
+        replay.dispose()
+      }
+    }
+  )
 })

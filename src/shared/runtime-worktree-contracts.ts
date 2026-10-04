@@ -78,6 +78,8 @@ export type RuntimeWorktreePsSummary = {
   agents: RuntimeWorktreeAgentRow[]
   /** See `Worktree.removing`; sent only to clients that advertise background removal. */
   removing?: true
+  /** See `GitWorktreeInfo.removalError`. */
+  removalError?: string
 }
 
 export type RuntimeGitLocalBranches = {

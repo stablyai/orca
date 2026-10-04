@@ -76,7 +76,9 @@ describe('idle pack index maintenance', () => {
     expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(['multi-pack-index', 'write'], {
       cwd: '/repo',
       admissionTier: 'background',
-      timeout: PACK_INDEX_TIMEOUT_MS
+      timeout: PACK_INDEX_TIMEOUT_MS,
+      admissionSignal: options.signal,
+      canStart: options.canWrite
     })
     expect(options.attributes['git.pack_index_outcome']).toBe('written')
   })

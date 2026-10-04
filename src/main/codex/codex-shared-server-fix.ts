@@ -7,7 +7,6 @@ import {
   CODEX_STOP_SHARED_SERVER_ARGS
 } from '../../shared/codex-shared-server-command'
 import { probeCodexSharedServer } from './codex-shared-server-probe'
-import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
 
 const COMMAND_TIMEOUT_MS = 15_000
 // Why longer: Codex lets running turns drain for up to 60 s by default, then forces after 10 s.
@@ -76,7 +75,7 @@ export function readFeatureEnabled(stdout: string, key: string): boolean | null 
 
 /**
  * Turns off server sharing in the pane's own home; true only once Codex reads
- * it back as off. Orca promotes the change from its mirror home to ~/.codex.
+ * it back as off.
  */
 export async function disableCodexSharedServerAutoStart(codexHome: string): Promise<boolean> {
   if ((await runCodex(codexHome, CODEX_DISABLE_SHARED_SERVER_ARGS, COMMAND_TIMEOUT_MS)) === null) {
@@ -85,30 +84,6 @@ export async function disableCodexSharedServerAutoStart(codexHome: string): Prom
   // Why read back: managed config can pin the feature on even when the write exits 0.
   const list = await runCodex(codexHome, ['features', 'list'], COMMAND_TIMEOUT_MS)
   return list !== null && readFeatureEnabled(list, CODEX_SHARED_SERVER_FEATURE_KEY) === false
-}
-
-/**
- * Turn off for a pane on Orca's mirror home. The pass before records the key in
- * the promotion baseline (an older Orca's baseline lacks it, which would keep
- * the write as a conflict); the pass after promotes the write to ~/.codex.
- */
-export async function disableCodexSharedServerAutoStartOnOrcaMirror(
-  mirrorHome: string
-): Promise<boolean> {
-  syncOrcaMirrorBestEffort()
-  const off = await disableCodexSharedServerAutoStart(mirrorHome)
-  syncOrcaMirrorBestEffort()
-  return off
-}
-
-/** The mirror pass a terminal launch runs; its outcome is reported by the sync itself. */
-function syncOrcaMirrorBestEffort(): void {
-  try {
-    syncSystemConfigIntoManagedCodexHome()
-  } catch (error) {
-    // Why: the write alone still fixes Orca's tabs; ~/.codex then catches up at the next launch.
-    console.warn('[codex-shared-server] mirror sync around Turn off failed:', error)
-  }
 }
 
 /** Stops this home's shared server; true only once it is proven gone. */

@@ -74,10 +74,10 @@ import {
 } from './structured-agent-session-launch-options'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
 import {
-  markStructuredAgentSessionLaunchPublished,
   resetStructuredAgentLaunchRegistryForTests,
   subscribeStructuredAgentLaunchStatus
 } from './structured-agent-session-launch-registry'
+import { markStructuredAgentSessionLaunchPublished } from './structured-agent-session-launch-publication'
 
 const WORKTREE_ID = 'wt-1'
 const SESSION_ID = 'session-1'
@@ -85,6 +85,8 @@ const SESSION_ID = 'session-1'
 function launchIntent(seedOptions?: Record<string, string>): StructuredAgentSessionLaunchIntent {
   return {
     worktreeId: WORKTREE_ID,
+    executionHostId: 'local',
+    target: { kind: 'local' },
     sessionId: SESSION_ID,
     agent: 'codex',
     params: {
@@ -194,7 +196,7 @@ describe('picks made while a chat launches', () => {
     await settle()
 
     // The host published the tab, but the launch is not published until its picks land.
-    markStructuredAgentSessionLaunchPublished(WORKTREE_ID, SESSION_ID)
+    markStructuredAgentSessionLaunchPublished(WORKTREE_ID, SESSION_ID, 'local')
     expect(lifecycle()).toBe('pending')
     expect(mutations()).toEqual([
       { method: 'agentSession.setOption', fence: 7, key: 'model', value: 'gpt-picked' }

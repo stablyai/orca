@@ -120,9 +120,10 @@ const BUNDLER_CACHE_PATHS = ['metro-cache', '.expo', 'node_modules/.cache']
 const REVIEWED_COMPUTED_PATHS = [
   '${{ steps.electron-package-cache.outputs.cache-root }}',
   '${{ steps.pnpm-store.outputs.path }}',
+  '${{ env.ORCA_PNPM_STORE_CACHE_PATH }}',
   // Only pnpm's lockfile-verified.jsonl record, never Metro transforms.
   '${{ steps.verification-cache.outputs.path }}',
-  "${{ github.event_name != 'pull_request' && 'pnpm' || '' }} store"
+  "${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && 'pnpm' || '' }} store"
 ]
 
 /** Every step a workflow runs, descending into the repository's own composite actions. */

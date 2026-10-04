@@ -21,6 +21,24 @@ import {
   getAccountsPaneSearchEntries
 } from './accounts-search'
 
+describe('getAccountsPaneSearchEntries', () => {
+  it('keeps Antigravity and GLM plan settings discoverable in pane order', () => {
+    const entries = getAccountsPaneSearchEntries()
+    const titles = entries.map((entry) => entry.title)
+    expect(
+      titles.filter((title) =>
+        ['Antigravity Accounts', 'Cursor Usage', 'GLM Coding Plan'].includes(title)
+      )
+    ).toEqual(['Antigravity Accounts', 'Cursor Usage', 'GLM Coding Plan'])
+    expect(entries.find((entry) => entry.title === 'Antigravity Accounts')?.keywords).toEqual(
+      expect.arrayContaining(['antigravity', 'agy', 'google', 'accounts'])
+    )
+    expect(entries.find((entry) => entry.title === 'GLM Coding Plan')?.keywords).toEqual(
+      expect.arrayContaining(['glm', 'zai', 'zhipu', 'bigmodel', 'coding plan'])
+    )
+  })
+})
+
 describe('getAccountsMiniMaxSearchEntries', () => {
   it('returns a single entry that targets the MiniMax session cookie flow', () => {
     const entries = getAccountsMiniMaxSearchEntries()

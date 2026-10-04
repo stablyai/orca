@@ -198,6 +198,8 @@ describe('Codex composer ready screen, frame by frame', () => {
         isQuietReadyScreenBody(waitText, 'codex', () => screenLines),
       agent: 'codex',
       readAgentRuleVerdict: () => null,
+      readScreenInputVeto: () => null,
+      titleObservedAtEpochMs: null,
       firstPartyStatus: null,
       quiescenceMs: QUIESCENCE_MS
     })
@@ -295,6 +297,8 @@ describe('a busy 0.150-0.157 pane whose header stays in the tail', () => {
             isQuietReadyScreenBody(waitText, 'codex', () => screenLines),
           agent: 'codex',
           readAgentRuleVerdict: () => null,
+          readScreenInputVeto: () => null,
+          titleObservedAtEpochMs: null,
           firstPartyStatus: null,
           quiescenceMs: QUIESCENCE_MS
         })
@@ -352,6 +356,8 @@ describe('a busy 0.150-0.157 pane whose header stays in the tail', () => {
         readQuietReadyBodyEvidence: () => isQuietReadyScreenBody(waitText, 'codex', () => header),
         agent: 'codex',
         readAgentRuleVerdict: () => null,
+        readScreenInputVeto: () => null,
+        titleObservedAtEpochMs: null,
         firstPartyStatus: null,
         quiescenceMs: QUIESCENCE_MS
       })
@@ -381,6 +387,8 @@ describe('reading the live screen never removes quiet-lane readiness', () => {
                 isKnownReadyPromptBody(frame.waitText, agent, () => frame.screenLines, true),
               agent,
               readAgentRuleVerdict: () => null,
+              readScreenInputVeto: () => null,
+              titleObservedAtEpochMs: null,
               firstPartyStatus: null,
               quiescenceMs: QUIESCENCE_MS
             } satisfies Omit<TuiIdleEvaluationInput, 'record' | 'readQuietReadyBodyEvidence'>

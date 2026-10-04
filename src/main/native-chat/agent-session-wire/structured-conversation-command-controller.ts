@@ -15,10 +15,7 @@ export class StructuredConversationCommandController {
   readonly pending = new Map<string, { key: string; count: number }>()
   constructor(
     private readonly context: () => StructuredAgentSessionMutationContext,
-    private readonly host: Pick<
-      StructuredAgentSessionHost,
-      'flushStreamedEvents' | 'waitForSendSettlement'
-    >
+    private readonly host: Pick<StructuredAgentSessionHost, 'waitForSendSettlement'>
   ) {}
   send = (
     caller: StructuredAgentSessionCaller,
@@ -40,16 +37,14 @@ export class StructuredConversationCommandController {
     const entry = pending ?? { key, count: 0 }
     entry.count++
     this.pending.set(params.envelope.sessionId, entry)
-    return runStructuredConversationCommand(this.context(), this.host, caller, params).finally(
-      () => {
-        if (--entry.count === 0 && this.pending.get(params.envelope.sessionId) === entry) {
-          this.pending.delete(params.envelope.sessionId)
-        }
-        // A clear can settle with no journal commit (a refusal), and drafts held behind it
-        // would otherwise wait for an unrelated commit.
-        this.context().wakeQueuedDrain?.(params.envelope.sessionId)
+    return runStructuredConversationCommand(this.context(), caller, params).finally(() => {
+      if (--entry.count === 0 && this.pending.get(params.envelope.sessionId) === entry) {
+        this.pending.delete(params.envelope.sessionId)
       }
-    )
+      // A clear can settle with no journal commit (a refusal), and drafts held behind it
+      // would otherwise wait for an unrelated commit.
+      this.context().wakeQueuedDrain?.(params.envelope.sessionId)
+    })
   }
 
   replacements = () => {

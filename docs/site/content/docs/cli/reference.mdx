@@ -97,10 +97,13 @@ orca worktree show --worktree active --json
 orca worktree create --repo id:<repoId> --name fix-login --json
 orca worktree create --name child-task --agent codex --prompt "Investigate the flaky login test" --json
 orca worktree set --worktree active --comment "reproduced failure; testing token refresh fix" --json
+orca worktree set --worktree active --workspace-status in-review --unread --json
 orca worktree rm --worktree id:<worktreeId> --force --json
 ```
 
 When `worktree create` runs from inside an Orca-managed worktree, Orca records the new worktree as a child when it can infer the relationship. Pass `--parent-worktree active` to be explicit, or `--no-parent` when the new work is independent.
+
+`worktree set --unread` puts the unread dot on the workspace in the sidebar, the same one Orca shows when an agent finishes; `--read` clears it.
 
 Agent startup flags:
 
@@ -111,6 +114,22 @@ orca worktree create --name hidden-setup --setup inherit --json
 ```
 
 `--agent` launches the selected agent in the first terminal. `--prompt` sends initial work to that agent. `--setup run|skip|inherit` controls repo setup hooks; `inherit` follows the repo policy.
+
+Link issues and reviews using the existing workspace metadata:
+
+```bash
+orca worktree create --repo id:<repoId> --name review-task --pr 123 --json
+orca worktree create --repo id:<repoId> --name gitlab-task --gitlab-issue 42 --gitlab-mr 77 --json
+orca worktree set --worktree active --gitlab-issue '#42' --gitlab-mr '!77' --json
+orca worktree set --worktree active --gitlab-issue https://gitlab.example.com/group/project/-/work_items/42 --json
+orca worktree set --worktree active --pr null --gitlab-mr null --json
+```
+
+`--pr` is a GitHub pull request number. `--gitlab-issue` accepts an issue number or `#42`; `--gitlab-mr` accepts a merge request number or `!77`. Numbers must be positive safe integers. The GitLab flags also accept HTTP(S) issue or merge request URLs, including self-hosted instances and nested groups. The URL's host and project must match the workspace's stored GitLab source context or the repository's stored remote. If that identity is missing or different, the command fails before updating metadata. A URL cannot choose another project, change the checkout, or fetch a review branch.
+
+Omitting a flag leaves its link unchanged. On `set`, literal `null` clears only the named link; `create` refuses `null`. Each provider has separate fields, so setting a GitLab issue or merge request preserves GitHub and Linear links.
+
+Folder-based repositories can store numeric links through these commands, but a number does not supply a provider host or project. Without existing source context or a stored remote, pasted GitLab URLs are refused and provider details or clickable links may be unavailable. These flags use fields already supported by the runtime; an older runtime that predates a field may ignore it, so check `worktree show --json` after writing to an older host.
 
 ## Terminals
 

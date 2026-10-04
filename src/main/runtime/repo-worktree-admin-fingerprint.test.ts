@@ -88,6 +88,17 @@ describe('readRepoWorktreeAdminFingerprint', () => {
     expect(await fingerprint()).not.toBe(before)
   })
 
+  it('changes when an existing worktree lock is replaced', async () => {
+    await git(
+      ['worktree', 'lock', '--reason', 'orca-create-preparation:v1:12345:lease', worktreePath],
+      repoPath
+    )
+    const before = await fingerprint()
+    const gitDir = (await git(['rev-parse', '--absolute-git-dir'], worktreePath)).trim()
+    await writeFile(join(gitDir, 'locked'), 'different user-owned lock\n')
+    expect(await fingerprint()).not.toBe(before)
+  })
+
   it('changes when a linked worktree switches branch', async () => {
     const before = await fingerprint()
     // A longer ref name keeps the difference visible even on a coarse mtime clock.

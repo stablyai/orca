@@ -66,7 +66,6 @@ describe('structured send idempotency', () => {
         persistOptions: async () => undefined,
         resolvedBy: 'caller',
         publish: vi.fn(),
-        flushStreamedEvents: async () => undefined,
         now: () => 1
       },
       input
@@ -108,7 +107,6 @@ describe('structured send idempotency', () => {
       persistOptions: async () => undefined,
       resolvedBy: 'caller',
       publish: vi.fn(),
-      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
     const input = {

@@ -20905,18 +20905,6 @@
           "checkpoint": "unsubscribing"
         },
         {
-          "complete": "notifications.unsubscribe#1",
-          "params": {
-            "subscriptionId": "sub-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "unsubscribed": true
-            }
-          }
-        },
-        {
           "checkpoint": "stopped"
         }
       ]
@@ -21065,18 +21053,6 @@
         {
           "action": "stop",
           "id": "stop"
-        },
-        {
-          "complete": "notifications.unsubscribe#1",
-          "params": {
-            "subscriptionId": "sub-2"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "unsubscribed": true
-            }
-          }
         },
         {
           "checkpoint": "stopped"
@@ -22710,18 +22686,6 @@
         {
           "action": "stop",
           "id": "stop"
-        },
-        {
-          "complete": "notifications.unsubscribe#1",
-          "params": {
-            "subscriptionId": "sub-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "unsubscribed": true
-            }
-          }
         },
         {
           "checkpoint": "stopped"

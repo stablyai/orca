@@ -1,7 +1,7 @@
 import type { RuntimeTerminalWaitBlockedReason } from '../../../shared/runtime-types'
 import { startOfLastLines } from '../terminal-wait-tail-window'
 import { compileTextTest, type TextMatcher } from './agent-state-rule-matchers'
-import { BUNDLED_AGENT_STATE_RULE_FILES } from './agent-state-rules-catalog'
+import { compiledFromActiveAgentStateRules } from './active-agent-state-rules'
 import type {
   Anchor,
   AgentStateRulesFile,
@@ -96,14 +96,16 @@ export function compileTextAnchors(files: readonly AgentStateRulesFile[]): {
   }
 }
 
-const TEXT_ANCHORS = compileTextAnchors(BUNDLED_AGENT_STATE_RULE_FILES)
+const textAnchors = compiledFromActiveAgentStateRules(compileTextAnchors)
 
 /** The literal every blocked anchor needs, for the blocked layer's one-pass prefilter. */
-export const BLOCKED_ANCHOR_LITERALS: readonly string[] = TEXT_ANCHORS.blockedLiterals
+export function blockedAnchorLiterals(): readonly string[] {
+  return textAnchors().blockedLiterals
+}
 
 /** Every rule file's blocked anchor found in the blocked layer's live window. */
 export function findBlockedAnchorSignals(window: string): BlockedTextSignal[] {
-  return TEXT_ANCHORS.blocked.flatMap((find) => {
+  return textAnchors().blocked.flatMap((find) => {
     const hit = find(window)
     return hit?.answer.state === 'blocked' ? [{ reason: hit.answer.reason, index: hit.index }] : []
   })
@@ -119,7 +121,7 @@ export function findPromptAnchorIndexes(normalized: string): {
 } {
   let live: number | null = null
   let ready: number | null = null
-  for (const find of TEXT_ANCHORS.prompts) {
+  for (const find of textAnchors().prompts) {
     const hit = find(normalized)
     if (hit === null) {
       continue
@@ -134,10 +136,10 @@ export function findPromptAnchorIndexes(normalized: string): {
 
 /** Whether any rule file's hold anchor shows: an agent is up but not yet taking input. */
 export function showsHoldAnchor(normalized: string): boolean {
-  return TEXT_ANCHORS.holds.some((find) => find(normalized) !== null)
+  return textAnchors().holds.some((find) => find(normalized) !== null)
 }
 
 export function showsScreenProbeBanner(text: string): boolean {
   const normalized = text.toLowerCase()
-  return TEXT_ANCHORS.screenProbeBanners.some((banner) => normalized.includes(banner))
+  return textAnchors().screenProbeBanners.some((banner) => normalized.includes(banner))
 }

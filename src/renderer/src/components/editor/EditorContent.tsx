@@ -212,9 +212,9 @@ export function EditorContent({
     const previewContent = editBuffers[previewSourceFileId] ?? fileContent.content
     return (
       <div className="min-h-0 flex-1">
-        <MarkdownPreviewSizeGate previewTabId={activeFile.id} content={previewContent}>
+        <MarkdownPreviewSizeGate content={previewContent}>
           <MarkdownPreview
-            key={viewStateScopeId}
+            key={`${viewStateScopeId}:${markdownPreviewViewStateKey}`}
             content={previewContent}
             filePath={activeFile.filePath}
             sourceFileId={previewSourceFileId}

@@ -66,7 +66,7 @@ export async function openJournalStoreState(input: {
     input.setMalformedRows(loaded.malformedRows)
   }
   if (input.malformedRows() > 0 && !input.readOnly()) {
-    const disclosure = journalRepairDisclosure({ malformedRows: input.malformedRows() })
+    const disclosure = journalRepairDisclosure()
     await input.appendItem(disclosure.identity, disclosure.body, input.highestFence())
   }
   await settleStaleSubagentRosters(input, loaded)

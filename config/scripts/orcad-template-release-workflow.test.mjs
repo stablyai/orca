@@ -123,6 +123,65 @@ describe('orcad template release wiring (design D2)', () => {
     expect(releaseMac.permissions.actions).toBe('read')
   })
 
+  it('skips the template only for a tag that predates it', () => {
+    const cutSteps = releaseCut.jobs.cut.steps
+    const push = stepIndex(cutSteps, (step) => step.name === 'Push tag')
+    const detect = stepIndex(cutSteps, (step) => step.id === 'orcad-template-support')
+    expect(detect).toBeGreaterThan(push)
+    expect(cutSteps[detect].run).toContain(':config/scripts/packaged-orcad-template.cjs"')
+    expect(releaseCut.jobs.cut.outputs.ships_orcad_template).toBe(
+      '${{ steps.orcad-template-support.outputs.ships }}'
+    )
+    expect(releaseCut.jobs['orcad-template'].if).toContain(
+      "needs.cut.outputs.ships_orcad_template == 'true'"
+    )
+
+    for (const name of ['build', 'build-mac']) {
+      const condition = releaseCut.jobs[name].if
+      // Every other dependency still has to succeed, as under the implicit success().
+      for (const need of releaseCut.jobs[name].needs.filter((need) => need !== 'orcad-template')) {
+        expect(condition).toContain(`needs.${need}.result == 'success'`)
+      }
+      expect(condition).toContain("needs.orcad-template.result == 'success'")
+      expect(condition).toContain(
+        "(needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false')"
+      )
+    }
+
+    const buildSteps = releaseCut.jobs.build.steps
+    for (const step of [
+      buildSteps.find((step) => step.name === 'Download the orcad deployment template'),
+      buildSteps.find((step) => step.id === 'reseal-orcad-template')
+    ]) {
+      expect(step.if).toContain("needs.cut.outputs.ships_orcad_template == 'true'")
+    }
+    const macDownload = releaseMac.jobs['build-mac'].steps.find(
+      (step) => step.with?.name === 'orcad-template'
+    )
+    expect(macDownload.if).toBe("hashFiles('config/scripts/packaged-orcad-template.cjs') != ''")
+  })
+
+  it('keeps every job downstream of the template from inheriting its skip', () => {
+    const needsOf = (name) => [releaseCut.jobs[name].needs ?? []].flat()
+    const dependsOnTemplate = (name) =>
+      needsOf(name).some((need) => need === 'orcad-template' || dependsOnTemplate(need))
+    const downstream = Object.keys(releaseCut.jobs).filter(dependsOnTemplate)
+    expect(downstream).toEqual(
+      expect.arrayContaining(['build', 'build-mac', 'publish-release', 'homebrew-bump'])
+    )
+    for (const name of downstream) {
+      // A skipped ancestor skips the job under the implicit success() that any `if` without a
+      // status function gets, so each one must override it and check its own needs instead.
+      const condition = releaseCut.jobs[name].if
+      expect(condition, name).toContain('!cancelled()')
+      for (const need of needsOf(name).filter(
+        (need) => need !== 'orcad-template' && need !== 'cut'
+      )) {
+        expect(condition, `${name} -> ${need}`).toContain(`needs.${need}.result == 'success'`)
+      }
+    }
+  })
+
   it('signs only Windows template binaries and reseals the manifest before the installer rebuild', () => {
     const steps = releaseCut.jobs.build.steps
     const stage = steps.find((step) => step.id === 'stage-inner')

@@ -170,6 +170,12 @@ export type RateLimitState = {
    * stored login. The token itself never leaves main.
    */
   cursorAuthConfigured: boolean
+  /**
+   * True when a GLM Coding Plan API key is saved in Orca's AI Provider
+   * Accounts. The key itself never leaves main; the status bar uses this to
+   * keep the ZCode bar visible across reloads between snapshot refreshes.
+   */
+  zcodePlanApiKeyConfigured?: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]

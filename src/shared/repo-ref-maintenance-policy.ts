@@ -126,12 +126,16 @@ export type RepoRefMaintenanceTarget = {
     canWrite: () => boolean
   ): Promise<PackIndexMaintenanceOutcome | void>
   /**
-   * Runs `pack-refs` to completion. Deliberately takes no abort signal: killing
+   * Runs `pack-refs` to completion. Its signal cancels admission only: killing
    * a pack is measurably worse than waiting for it (see `PACKED_REFS_LOCK_*`).
    * It must report `packed-refs.lock` transitions through `lock` so callers can
    * wait for the short window that actually blocks them.
    */
-  packRefs(lock: PackedRefsLockReporter): Promise<void>
+  packRefs(
+    lock: PackedRefsLockReporter,
+    admissionSignal?: AbortSignal,
+    canStart?: () => boolean
+  ): Promise<void>
 }
 
 /** How `packRefs` tells the scheduler whether the exclusive write window is open. */

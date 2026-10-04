@@ -137,9 +137,9 @@ describe('PluginOverlayManager', () => {
 
       manager.setSources({ opencode2PluginSource: 'v2 plugin, next release' })
       expect(manager.installOpenCodePlugin('opencode2', env)).toBe(true)
-      expect(lstatSync(pluginPath).isFile()).toBe(true)
+      expect(lstatSync(pluginPath).isSymbolicLink()).toBe(true)
       expect(readFileSync(pluginPath, 'utf8')).toBe('v2 plugin, next release')
-      expect(readFileSync(targetPath, 'utf8')).toBe('v2 plugin')
+      expect(readFileSync(targetPath, 'utf8')).toBe('v2 plugin, next release')
     }
   )
 

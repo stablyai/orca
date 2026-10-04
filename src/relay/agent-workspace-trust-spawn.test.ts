@@ -35,10 +35,11 @@ const AGENTS_WITH_A_RELAY_WRITER: [TuiAgent, AgentTrustPreset][] = [
   ['codex', 'codex'],
   ['cursor', 'cursor'],
   ['copilot', 'copilot'],
-  ['qoder', 'qoder']
+  ['qoder', 'qoder'],
+  ['qoder-cn', 'qoder-cn']
 ]
 const AGENTS_THAT_INHERIT_TRUST = AGENTS_WITH_A_RELAY_WRITER.filter(([, preset]) =>
-  ['claude', 'copilot', 'qoder'].includes(preset)
+  ['claude', 'copilot', 'qoder', 'qoder-cn'].includes(preset)
 )
 const ALL_PRESETS: AgentTrustPreset[] = [
   'claude',
@@ -46,6 +47,7 @@ const ALL_PRESETS: AgentTrustPreset[] = [
   'cursor',
   'copilot',
   'qoder',
+  'qoder-cn',
   'antigravity'
 ]
 

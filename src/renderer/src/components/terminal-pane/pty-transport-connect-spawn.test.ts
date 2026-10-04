@@ -26,6 +26,16 @@ describe('createIpcPtyTransport', () => {
     restorePtySpecWindow(originalWindow)
   })
 
+  it('exposes explicit local or direct SSH ownership without inferring it from the workspace', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    for (const connectionId of [undefined, 'qa']) {
+      const transport = createIpcPtyTransport({ connectionId })
+      expect(transport.getExecutionHostId?.()).toBe(connectionId ? 'ssh:qa' : 'local')
+      expect(transport.getRuntimeEnvironmentId?.()).toBeNull()
+      transport.destroy?.()
+    }
+  })
+
   it.each([0, 1, 420])(
     'preserves snapshot sequence and keyboard proof %s across IPC reattach',
     async (seq) => {

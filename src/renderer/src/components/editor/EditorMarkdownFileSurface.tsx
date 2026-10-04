@@ -149,7 +149,7 @@ export function EditorMarkdownFileSurface({
         {/* Why: fall back to the stable preview renderer when Tiptap can't safely own the document. */}
         <div className="min-h-0 flex-1">
           <MarkdownPreview
-            key={viewStateScopeId}
+            key={`${viewStateScopeId}:${editorViewStateKey}`}
             content={currentContent}
             filePath={activeFile.filePath}
             sourceFileId={activeFile.id}

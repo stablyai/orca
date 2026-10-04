@@ -612,6 +612,9 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   expect(agent).toBeTruthy()
   expect(setup).toBeTruthy()
   expect(canary).toBeTruthy()
+  if (!agent?.ptyId || !setup?.ptyId || !canary?.ptyId) {
+    throw new Error('Agent, Setup, and canary terminals must have live PTY identities')
+  }
   await expect.poll(readSpawnLedger).toHaveLength(1)
   await expect.poll(() => readJsonLines<{ pid: number }>(setupLedgerPath)).toHaveLength(1)
   await expect.poll(() => readJsonLines<{ pid: number }>(canaryLedgerPath)).toHaveLength(1)
@@ -771,7 +774,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   const remountAgentAcceptedMarker = `AGENT_ACCEPTED_${randomUUID()}`
   expect(
     await orcaPage.evaluate(
-      ({ marker, ptyId }) => window.api.pty.writeAccepted(ptyId, `${marker}\r`),
+      ({ marker, ptyId }) => window.api.pty.writeAccepted(ptyId, `${marker}\r`, 'driving'),
       { marker: remountAgentAcceptedMarker, ptyId: agent!.ptyId }
     )
   ).toBe(true)

@@ -27,7 +27,7 @@ import {
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import { readJournalSince } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
-import { readJournalRowsAfterCursor, type JournalLoad } from './journal-open'
+import { journalRowsAfterReader, type JournalLoad } from './journal-open'
 import {
   markJournalPendingSubmissionsUnknown,
   rejectJournalPendingSubmissions,
@@ -68,7 +68,7 @@ import type { JournalEpochController } from './journal-epoch-controller'
 import { JournalWriteQueue } from './journal-write-queue'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
 import { journalStoreLoadedFields } from './journal-store-open'
-import type { JournalItemAppender } from './journal-item-appender'
+import type { JournalItemAppender, JournalResolvedItem } from './journal-item-appender'
 import type { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
 import type { JournalStopMarks } from './journal-stop-marks'
 
@@ -195,11 +195,12 @@ export class AgentSessionJournal {
 
   /**
    * Resolves once the chat's rows are in the host's database. A restore's open serves a chat still
-   * in its per-chat file from a read-only fold of it; the copy runs before the chat's first write,
-   * and a reader that needs rows (forward pages, catch-up) awaits it here.
+   * in its per-chat file from a read-only fold of it; the copy runs before the chat's first write.
+   * A reader that needs rows (forward pages, catch-up) and every mutation's open await it here, so
+   * each reads the fold after every earlier write.
    */
   whenImported(): Promise<void> {
-    return this.queue.serialize(async () => undefined)
+    return this.queue.serialize(() => undefined)
   }
 
   get importPending(): boolean {
@@ -275,23 +276,17 @@ export class AgentSessionJournal {
 
   canonicalItemId = (itemId: string): string => resolveJournalItemId(this.state, itemId)
 
+  /** Reads the fold with every write issued before this call committed, and none issued after: at
+   *  once unless writes still wait behind an owed import or a running write. */
+  readInOrder<T>(read: () => T): Promise<T> {
+    return this.queue.readInOrder(read)
+  }
+
   readSince(cursor: AgentJournalCursor, limit?: number): JournalReadSince {
-    return readJournalSince(
-      {
-        state: this.state,
-        rowsAfter: (afterSequence) =>
-          readJournalRowsAfterCursor(
-            this.database.db,
-            this.identity.sessionId,
-            this.state.epoch,
-            afterSequence,
-            limit
-          ),
-        readOnly: this.readOnly
-      },
-      cursor,
-      () => this.cursor()
-    )
+    const { sessionId } = this.identity
+    const rowsAfter = journalRowsAfterReader(this.database.db, sessionId, this.state.epoch, limit)
+    const source = { state: this.state, rowsAfter, readOnly: this.readOnly }
+    return readJournalSince(source, cursor, () => this.cursor())
   }
 
   /** Upsert by stable identity. The revision is assigned here so a caller
@@ -302,6 +297,14 @@ export class AgentSessionJournal {
     options: JournalItemAppendOptions
   ): Promise<JournalAppendResult> {
     return this.itemAppender.append(identity, body, options)
+  }
+
+  /** An upsert whose row is chosen from the fold at its own turn in the queue; null writes nothing. */
+  appendResolvedItem(
+    resolve: () => JournalResolvedItem | null,
+    options: JournalItemAppendOptions
+  ): Promise<JournalAppendResult | null> {
+    return this.itemAppender.appendResolved(resolve, options)
   }
 
   appendTombstone(

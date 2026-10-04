@@ -248,7 +248,7 @@ function readForward(
   if (contentBytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES) {
     items = items.map((item) => {
       const bytes = historyEntryBytes(item, submissionBytes)
-      return bytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES ? oversizedHistoryItem(item, bytes) : item
+      return bytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES ? oversizedHistoryItem(item) : item
     })
     contentBytes = pageContentBytes(items, projected.batch.removedItemIds)
   }

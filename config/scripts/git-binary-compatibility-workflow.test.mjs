@@ -16,10 +16,14 @@ describe('Git binary compatibility PR gate', () => {
     const run = stepNamed('Verify Git binary compatibility matrix')?.run
 
     expect(run).toContain('ORCA_GIT_COMPAT_BINARY="$HOME/.cache/orca-git-compat/git-2.25.5/git"')
+    expect(run).toContain('GIT_EXEC_PATH="$HOME/.cache/orca-git-compat/git-2.25.5"')
     expect(run).toContain('alpine/git:edge-2.38.1|2.38.1')
     expect(run).toContain('alpine/git:v2.49.1|2.49.1')
     expect(run).toContain('ORCA_GIT_COMPAT_IMAGE="$image"')
     expect(run).toContain('src/shared/git-binary-compatibility.test.ts')
+    expect(run).toContain('src/main/git/worktree-safety-real-git.test.ts')
+    expect(run).toContain('src/main/git/worktree-rebase-update-refs-real-git.test.ts')
+    expect(run).toContain('src/relay/git-review-draft-binary-compatibility.test.ts')
     expect(run).toContain('pids+=("$!")')
     expect(run).toContain('wait "$pid" || status=1')
   })
@@ -30,10 +34,17 @@ describe('Git binary compatibility PR gate', () => {
     expect(run).toContain('git-2.25.5.tar.gz')
     // Why asserted: the sha256 check only runs on the build path, so a cached binary
     // must come from a key that pins the same version the tarball line declares.
-    expect(run).toContain('if [ -x "$source/git" ]; then')
+    expect(run).toContain('[ -x "$source/git" ] && [ -x "$source/git-submodule" ]')
+    expect(run).toContain('[ -f "$source/git-sh-setup" ] && [ -f "$source/git-sh-i18n" ]')
+    expect(run).toContain(
+      '[ -f "$source/git-parse-remote" ] && [ -x "$source/git-sh-i18n--envsubst" ]'
+    )
     expect(run).toContain('41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf')
     expect(run).toContain('-j"$(nproc)"')
-    expect(run).toContain('NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git')
+    expect(run).toContain('NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease')
+    expect(run).toContain(
+      'git git-submodule git-sh-setup git-sh-i18n git-parse-remote git-sh-i18n--envsubst'
+    )
     expect(run).toContain('sha256sum --check')
     expect(run).toContain('find "$source" -name \'*.o\' -delete')
     // The cached path and the build path must be the same directory or the guard
@@ -61,7 +72,7 @@ describe('Git binary compatibility PR gate', () => {
     expect(steps[matrixIndex].run).not.toContain('make -C')
     expect(baselineSteps[cacheIndex].with.path).toBe(BASELINE_DIR)
     expect(baselineSteps[cacheIndex].with.key).toBe(
-      'git-compat-baseline-${{ runner.os }}-${{ runner.arch }}-2.25.5'
+      'git-compat-baseline-${{ runner.os }}-${{ runner.arch }}-2.25.5-submodule'
     )
   })
 

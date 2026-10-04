@@ -133,8 +133,7 @@ export class StructuredAgentSessionHost {
           reset,
           structuredAgentSessionConversationFence(deps.store, sessionId)
         ),
-      clientDelivery: this.clientDelivery,
-      flushStreamedEvents: (sessionId) => this.flushStreamedEvents(sessionId)
+      clientDelivery: this.clientDelivery
     })
     this.restore = createStructuredAgentSessionHostRestore(deps, {
       reconcileLeases: this.reconcileLeases,
@@ -250,6 +249,7 @@ export class StructuredAgentSessionHost {
     return attachStructuredAgentSession(this.attachContext(), caller.callerKey, params)
   }
 
+  /** Test barrier: every write has landed by its call's return, so no production path needs it. */
   flushStreamedEvents = (sessionId: string): Promise<void> =>
     this.runtimeState.flushEventSink(sessionId)
 
@@ -272,7 +272,6 @@ export class StructuredAgentSessionHost {
       deps: this.deps,
       sessions: this.sessions,
       publish: (sessionId, journal) => this.subscribers.publish(sessionId, journal),
-      flushStreamedEvents: this.flushStreamedEvents,
       conversation: this.lifetime.conversation,
       readChildWork: this.clientDelivery.readChildWork,
       serialize: (sessionId, task) => this.serialize(sessionId, task),

@@ -99,7 +99,9 @@ it('Stop, then a user send: the withdrawn draft and the paused cards behind it d
   expect(await rig.drafts()).toEqual([])
 })
 
-it('a Stop that fails after withdrawing a consumed draft releases it, and it sends again under a fresh id', async () => {
+// Bookkeeping never fails a Stop: a withdrawal that throws is reported and counts as nothing
+// withdrawn, so no pause holds the card it did send back, and that card sends again.
+it('a Stop whose withdrawal throws after landing still answers; the draft it released sends again under a fresh id', async () => {
   const working = await rig.workingSend()
   const a = await queuedDraft('A')
   let release: () => void = () => undefined
@@ -120,10 +122,16 @@ it('a Stop that fails after withdrawing a consumed draft releases it, and it sen
       }
       return withdrawn
     })
+  const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   try {
-    await expect(rig.stop()).rejects.toThrow('disk full')
+    expect(await rig.stop()).toMatchObject({ ok: true })
+    expect(warned).toHaveBeenCalledWith(
+      "[agent-session] stop-queued-bookkeeping: Stop's withdrawal failed",
+      expect.objectContaining({ step: 'withdrawal', error: new Error('disk full') })
+    )
   } finally {
     failing.mockRestore()
+    warned.mockRestore()
     release()
   }
   expect((await rig.submission(firstA))?.dispatchState).toBe('rejected')

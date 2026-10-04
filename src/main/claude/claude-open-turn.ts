@@ -209,7 +209,7 @@ export class ClaudeOpenTurn {
       { lifecycle: item.body, ...(contextUsage ? { contextUsage } : {}) },
       { publish: false, options: item.options }
     )
-    // Preserve first-work evidence when completion arrives before the journal drains.
+    // Keyed apart, so this never replaces the start's publication while it still waits to run.
     this.deps.sink.publish({ coalescingKey: item.publishCoalescingKey })
   }
 }

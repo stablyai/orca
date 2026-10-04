@@ -22,6 +22,8 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   notDoneSend: () => translate('components.native-chat.writeNotice.notDoneSend', COPY.notDoneSend),
   tryAgainComposerSend: () =>
     translate('components.native-chat.writeNotice.tryAgainComposerSend', COPY.tryAgainComposerSend),
+  messageNotSaved: () =>
+    translate('components.native-chat.writeNotice.messageNotSaved', COPY.messageNotSaved),
   notDoneStop: () => translate('components.native-chat.writeNotice.notDoneStop', COPY.notDoneStop),
   notDoneStopTask: () =>
     translate('components.native-chat.writeNotice.notDoneStopTask', COPY.notDoneStopTask),
@@ -39,6 +41,8 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   capacity: () => translate('components.native-chat.writeNotice.capacity', COPY.capacity),
   outcomeUnknown: () =>
     translate('components.native-chat.writeNotice.outcomeUnknown', COPY.outcomeUnknown),
+  sendOutcomeLost: () =>
+    translate('components.native-chat.writeNotice.sendOutcomeLost', COPY.sendOutcomeLost),
   questionChanged: () =>
     translate('components.native-chat.writeNotice.questionChanged', COPY.questionChanged),
   historyUnreadable: () =>
@@ -55,6 +59,8 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
       COPY.updateOrcaToKeepUsing
     ),
   unsupported: () => translate('components.native-chat.writeNotice.unsupported', COPY.unsupported),
+  notAvailable: () =>
+    translate('components.native-chat.writeNotice.notAvailable', COPY.notAvailable),
   unreachable: () => translate('components.native-chat.writeNotice.unreachable', COPY.unreachable),
   recordFailed: () =>
     translate('components.native-chat.writeNotice.recordFailed', COPY.recordFailed),

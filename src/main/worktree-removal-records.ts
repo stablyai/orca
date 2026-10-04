@@ -24,6 +24,13 @@ export type WorktreeRemovalRecord = {
   deleteBranch: boolean
   force: boolean
   requestedAt: number
+  /** The delete failed after Git dropped the registration with the checkout still on disk. */
+  failure?: WorktreeRemovalFailure
+}
+
+export type WorktreeRemovalFailure = {
+  message: string
+  failedAt: number
 }
 
 type PersistedWorktreeRemovalRecords = {
@@ -35,8 +42,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function parseFailure(value: unknown): WorktreeRemovalFailure | null | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  return isRecord(value) && typeof value.message === 'string' && typeof value.failedAt === 'number'
+    ? { message: value.message, failedAt: value.failedAt }
+    : null
+}
+
 function parseRecord(value: unknown): WorktreeRemovalRecord | null {
+  const failure = isRecord(value) ? parseFailure(value.failure) : null
   if (
+    failure === null ||
     !isRecord(value) ||
     typeof value.worktreeId !== 'string' ||
     typeof value.repoId !== 'string' ||
@@ -59,7 +77,8 @@ function parseRecord(value: unknown): WorktreeRemovalRecord | null {
     head: value.head,
     deleteBranch: value.deleteBranch,
     force: value.force,
-    requestedAt: value.requestedAt
+    requestedAt: value.requestedAt,
+    ...(failure ? { failure } : {})
   }
 }
 

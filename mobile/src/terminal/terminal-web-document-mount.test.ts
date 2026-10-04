@@ -338,23 +338,24 @@ async function mountedOverGrid({ laidOutFirst = true } = {}) {
   let box = { width: 390, height: 600 }
   host.getBoundingClientRect = () => new DOMRect(0, 134, box.width, box.height)
   const mounted = mountTerminalWebDocument(host, () => {})
-  // Every surface transform the document writes; a refit writes one even when nothing moved. Read
-  // off the style prototype because an init swaps the surface element for a fresh one.
+  // Trace the public writer because init replaces the surface and Happy DOM proxies CSS properties.
   const scales: number[] = []
-  const proto: object = Object.getPrototypeOf(host.style)
-  const own = Object.getOwnPropertyDescriptor(proto, 'transform')!
-  const write = own.set!
-  Object.defineProperty(proto, 'transform', {
-    ...own,
-    set(this: CSSStyleDeclaration, value: string) {
+  const write = CSSStyleDeclaration.prototype.setProperty
+  const trace = vi.spyOn(CSSStyleDeclaration.prototype, 'setProperty').mockImplementation(function (
+    this: CSSStyleDeclaration,
+    name,
+    value,
+    priority
+  ) {
+    if (name === 'transform') {
       const scale = /scale\(([^)]*)\)/.exec(String(value))
       if (scale) {
         scales.push(Number(scale[1]))
       }
-      write.call(this, value)
     }
+    write.call(this, name, value, priority)
   })
-  restoreTransform = () => Object.defineProperty(proto, 'transform', own)
+  restoreTransform = () => trace.mockRestore()
   let id = 0
   const send = (command: TerminalWebViewCommand) => mounted.send({ ...command, id: ++id })
   const layOut = (width: number, height: number) => {

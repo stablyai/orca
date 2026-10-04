@@ -303,27 +303,6 @@ describe('cancel', () => {
     expect(cancelTurn).not.toHaveBeenCalled()
   })
 
-  it('records an unknown outcome when lifecycle draining fails and never interrupts on replay', async () => {
-    await attach()
-    const prompt = await seedApproval()
-    vi.spyOn(host, 'flushStreamedEvents').mockRejectedValueOnce(new Error('journal drain failed'))
-    const fields = {
-      turnId: 'turn-1',
-      prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision }
-    }
-    const params = {
-      envelope: envelope('agentSession.cancel', fields),
-      ...fields
-    }
-
-    await expect(host.cancel(CALLER, params)).rejects.toThrow('journal drain failed')
-    expect(await host.cancel(CALLER, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
-    })
-    expect(cancelTurn).toHaveBeenCalledTimes(1)
-  })
-
   it('records an unknown outcome when strict prompt interruption throws and never retries it', async () => {
     await attach()
     const prompt = await seedApproval()

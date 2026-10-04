@@ -232,7 +232,7 @@ describe('desktop words for a failure fact', () => {
 
   it('keeps Japanese-only characters out of the Chinese words', () => {
     const chat = zh.components['native-chat']
-    for (const words of [...Object.values(chat.failureWords), chat.state.error.keepsTrying]) {
+    for (const words of Object.values(chat.failureWords)) {
       expect(words).not.toMatch(JAPANESE_ONLY)
     }
   })

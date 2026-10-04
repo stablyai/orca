@@ -158,3 +158,46 @@ it('settles manual compaction without interrupting automatic compaction', () => 
     agentType: 'qoder'
   })
 })
+
+it.each(['qoder-cn', 'qwen-code'] as const)('keeps %s lifecycle and resume attributed', (agent) => {
+  const state = createHookListenerState()
+  const send = (hook_event_name: string, extra = {}) =>
+    normalizeAndAccept(state, agent, {
+      hook_event_name,
+      session_id: 'provider-proof',
+      ...extra
+    })
+  expect(send('SessionStart', { source: 'startup' })?.payload).toMatchObject({
+    agentType: agent,
+    state: 'done',
+    sessionBoundary: true
+  })
+  expect(send('UserPromptSubmit', { prompt: 'Create proof.txt' })?.payload).toMatchObject({
+    agentType: agent,
+    state: 'working'
+  })
+  expect(send('PermissionRequest', { tool_name: 'Write' })?.payload).toMatchObject({
+    agentType: agent,
+    state: 'waiting'
+  })
+  expect(send('Stop', { last_assistant_message: 'Done' })?.payload).toMatchObject({
+    agentType: agent,
+    state: 'done'
+  })
+  expect(send('SessionStart', { source: 'resume' })?.providerSession?.id).toBe('provider-proof')
+  expect(getAgentResumeArgv(agent, { key: 'session_id', id: 'provider-proof' })).toEqual([
+    agent === 'qoder-cn' ? 'qoderclicn' : 'qwen',
+    '--resume',
+    'provider-proof'
+  ])
+})
+
+it.each([
+  'qoderclicn',
+  'qodercn',
+  '/home/test/.qoder-cn/bin/qoderclicn-1.1.65',
+  'C:\\Qoder\\qoderclicn.exe'
+])('recognizes the China executable %s', (command) => {
+  expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe('qoder-cn')
+  expect(recognizeAgentProcessFromCommandLine(`${command} --print hello`)).toBeNull()
+})

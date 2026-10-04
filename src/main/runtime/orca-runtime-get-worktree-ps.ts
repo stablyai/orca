@@ -78,6 +78,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
       tabs: this.tabs,
       session,
       getPaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
+      getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId),
       getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
         this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
     })

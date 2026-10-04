@@ -54,17 +54,16 @@ export function structuredAgentSessionSendBlock(
   return null
 }
 
-/** The conversation a send or a Stop writes to, opened when this host holds it closed. */
+/** The conversation a send or a Stop writes to, opened when this host holds it closed. Once it
+ *  answers, every write issued before it has settled, so a mutation reads a whole fold. */
 export async function openConversationForWrite(
   openConversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>,
   envelope: AgentSessionMutationEnvelope,
   logger: StructuredAgentSessionLogger
 ): Promise<AgentSessionMutationSessionPreparation> {
+  let session: StructuredAgentSessionHostSession | null
   try {
-    if (await openConversation(envelope.sessionId)) {
-      return { ok: true }
-    }
-    return { ok: false, refusal: AGENT_SESSION_NOT_ATTACHED }
+    session = await openConversation(envelope.sessionId)
   } catch (error) {
     logger.warn('opening the conversation for a write failed', {
       scope: 'open-for-write',
@@ -73,6 +72,21 @@ export async function openConversationForWrite(
     })
     return { ok: false, refusal: journalOpenRefusal(error) }
   }
+  if (!session) {
+    return { ok: false, refusal: AGENT_SESSION_NOT_ATTACHED }
+  }
+  // Writes wait behind a restore's owed import. A failed import settled them too (they failed
+  // with it), so it is reported and never refuses the mutation: its own writes fail as they would.
+  if (session.journal.importPending) {
+    await session.journal.whenImported().catch((error: unknown) => {
+      logger.warn('the import owed before a write failed', {
+        scope: 'open-for-write',
+        sessionId: envelope.sessionId,
+        error
+      })
+    })
+  }
+  return { ok: true }
 }
 
 /** The conversation a write lands in, opened when this host holds it closed. */

@@ -734,7 +734,6 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
     expect(published.at(-1)).toMatchObject({ sessionId: SESSION, status: 'idle' })
     expect(published.at(-1)?.hostExecutionOwned).toBeUndefined()
     expect(published.at(-1)?.hostExecutionPhase).toBeUndefined()
-    expect(published.at(-1)?.hostExecutionChild).toBeUndefined()
 
     // Exactly what `close` does after eviction: the cache keeps the projection, the sink does not.
     sessions.delete(SESSION)

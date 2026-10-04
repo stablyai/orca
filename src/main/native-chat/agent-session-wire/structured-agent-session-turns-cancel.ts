@@ -24,16 +24,11 @@ import {
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
-/** Claude's echo accepts a send one sink write before its turn row lands, so read after the drain.
- *  A failed drain reads working: bookkeeping never talks a Stop out of stopping. */
-export async function isMainAgentWorkingOnceFlushed(
-  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'flushStreamedEvents'>
-): Promise<boolean> {
-  try {
-    await ctx.flushStreamedEvents()
-  } catch {
-    return true
-  }
+/** Whether the fold reads working. Every write has landed by its call's return, and the open paid
+ *  any owed import, so a Stop reads it without waiting on the write queue. */
+export function isMainAgentWorking(
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence'>
+): boolean {
   return isStructuredAgentSessionMainAgentWorking(
     ctx.journal.activeTurnId(),
     ctx.journal.submissions(),
@@ -46,11 +41,11 @@ export async function isMainAgentWorkingOnceFlushed(
  * rest, or running a different turn, is not the Stop's to end. A child that exited reads at rest:
  * its exit ends its turn, and the host's own exit handling waits behind this step.
  */
-async function stillRunsStoppedTurn(
-  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'flushStreamedEvents'>,
+function stillRunsStoppedTurn(
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence'>,
   stoppedTurnId: string | null
-): Promise<boolean> {
-  if (!(await isMainAgentWorkingOnceFlushed(ctx))) {
+): boolean {
+  if (!isMainAgentWorking(ctx)) {
     return false
   }
   // Working with no turn open after the Stop's turn is a later send whose turn has not opened.
@@ -119,8 +114,9 @@ export async function performCancel(
     /** Hands the child's end to the Stop's next serialized step, for a provider whose Stop ends
      *  its session. */
     endSession?: (windDown: StructuredAgentSessionStopWindDown) => void
-    /** The host already withdrew queued messages for this Stop. */
-    withdrewQueued?: boolean
+    /** Whether the host's withdrawal of queued messages for this Stop withdrew any; awaited only
+     *  after the interrupt. */
+    withdrewQueued?: Promise<boolean>
     /** The session's child records: a background Stop reaches the tasks they offer a stop. */
     childWork?: () => readonly AgentChildWorkView[] | undefined
   }
@@ -192,7 +188,9 @@ export async function performCancel(
     cancelled = outcome.cancelled
     refusal = outcome.refusal
     interruptFailed = refusal !== undefined && refusal.turnNotRunning !== true
-    if (!cancelled && input.withdrewQueued && !(await isMainAgentWorkingOnceFlushed(ctx))) {
+    // Working is read first: a working session never takes this branch, so a child end below never
+    // waits on the withdrawal. On an idle queue the withdrawal has already landed in the fold.
+    if (!cancelled && !isMainAgentWorking(ctx) && (await input.withdrewQueued) === true) {
       // A Stop that withdrew what was queued and left nothing working ended what it was sent for,
       // named or not. The journal judges it: providers differ on refusing a turn that has ended.
       cancelled = true
@@ -234,7 +232,7 @@ export async function performCancel(
     interruptFailed &&
     input.stopChild &&
     // An unnamed Stop meant the turn the journal showed when it was sent.
-    (await stillRunsStoppedTurn(ctx, stoppedTurnId))
+    stillRunsStoppedTurn(ctx, stoppedTurnId)
   ) {
     // The interrupt failed and the turn runs on: only the child's end stops it.
     let ended: boolean
@@ -256,9 +254,6 @@ export async function performCancel(
   } else if (!cancelled && taken === false && input.turnId !== undefined) {
     // Nothing was left of the turn it named and nothing else ended: a Stop that ends nothing writes no row.
     note = null
-  }
-  if (cancelled && input.prompt) {
-    await ctx.flushStreamedEvents()
   }
   const value = { ...(input.turnId !== undefined ? { turnId: input.turnId } : {}), cancelled }
   if (input.scope || note === null) {

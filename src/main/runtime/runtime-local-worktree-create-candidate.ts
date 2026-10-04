@@ -32,7 +32,7 @@ import {
   resolveCreateBranchName
 } from './runtime-worktree-create-git'
 import { runtimePathExists } from './runtime-worktree-filesystem'
-import { findPendingWorktreeRemovalConflict } from '../worktree-background-removal'
+import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 

@@ -1,3 +1,5 @@
+import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
+import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import type { OrchestrationDb } from '../../../../orchestration/db'
@@ -54,7 +56,26 @@ export async function startLocalWorker(args: {
   const coordinatorPane = coordinator?.paneKey ?? null
   const requestedWorktree = params.worktree ?? 'current'
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
-  const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
+  const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () => {
+    const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
+      runtime,
+      params.from,
+      callerSession
+    )
+    const parent = createsWorktree
+      ? await runtime.showManagedWorktree(`id:${callerWorkspaceId}`)
+      : undefined
+    return createsWorktree
+      ? { repo: params.repo ?? parent?.repoId }
+      : {
+          worktree: requestedWorktree === 'current' ? `id:${callerWorkspaceId}` : requestedWorktree
+        }
+  })
+  const { agent, launch } = prepareLocalWorkerStart({
+    params: launchParams,
+    createsWorktree,
+    runtime
+  })
 
   const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
     runtime,
@@ -188,17 +209,11 @@ export async function startLocalWorker(args: {
           effects,
           timeoutMs: params.timeoutMs ?? 60_000
         })
-      : // ZCode emits SessionStart only after input; its first dispatch must wait for the composer.
-        agent === 'zcode' && !params.terminal
-        ? await runtime.waitForFreshWorkerComposer(
-            terminalHandle,
-            agent,
-            params.timeoutMs ?? 60_000
-          )
-        : await runtime.waitForTerminal(terminalHandle, {
-            condition: 'tui-idle',
-            timeoutMs: params.timeoutMs ?? 60_000
-          })
+      : await waitForWorkerAgentReady(runtime, terminalHandle, {
+          agent,
+          reusesTerminal: Boolean(params.terminal),
+          timeoutMs: params.timeoutMs ?? 60_000
+        })
     if (wait) {
       persistWorkerSetupWaitOutcome({ ...setupStage, wait })
       if (!wait.satisfied) {

@@ -13,7 +13,7 @@ import {
   type QueuedMessageRow
 } from '../agent-session-journal/queued-message-table'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
-import { isMainAgentWorkingOnceFlushed } from './structured-agent-session-turns-cancel'
+import { isMainAgentWorking } from './structured-agent-session-turns-cancel'
 import {
   structuredAgentSessionStopNamesTurnNotLive,
   structuredAgentSessionStoppedTurnId
@@ -26,14 +26,15 @@ export function unsettledQueuedMessages(journal: AgentSessionJournal): QueuedMes
 }
 
 /**
- * Runs a Stop, which calls `tookEffect` where it takes effect: after it withdrew the queued
- * sends, and BEFORE the interrupt or anything that ends the child (the at-start stop, a running
- * command's stop, a kill after the interrupt), or, reaching no agent, once it withdrew something.
- * That writes the Stop's event, whatever the queue holds, so a card its interrupt later withdraws
- * comes back to waiting under the pause, and whatever ends the child finds the event already
- * written. A Stop that throws before then, or stops nothing (`stopReachesUnrecordedWork`), changed
- * nothing and writes nothing.
- * The drain cannot slip a card in between: the Stop runs on the drain's serialized lane.
+ * Runs a Stop, which calls `tookEffect` where it takes effect: after it issued the withdrawal of
+ * the queued sends, and BEFORE the interrupt or anything that ends the child (the at-start stop, a
+ * running command's stop, a kill after the interrupt), or, reaching no agent, once it withdrew
+ * something. That issues the Stop's event, whatever the queue holds, so a card its interrupt later
+ * withdraws comes back to waiting under the pause, and whatever ends the child finds the event
+ * ahead of it in the journal. A Stop that throws before then, or stops nothing
+ * (`stopReachesUnrecordedWork`), changed nothing and writes nothing.
+ * The drain cannot slip a card in between: the Stop runs on the drain's serialized lane and holds
+ * it until the event lands, even when it fails.
  */
 export async function runRecordedStop<TValue>(
   ctx: AgentSessionTurnContext,
@@ -62,15 +63,15 @@ export async function runRecordedStop<TValue>(
  * with nothing sent since, on the same turn or one that opened after a Stop pressed before any
  * turn showed: a card queued between the presses then sends normally, as after one Stop.
  */
-export async function stopReachesUnrecordedWork(
-  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'flushStreamedEvents'>,
+export function stopReachesUnrecordedWork(
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence'>,
   namedTurnId: string | undefined
-): Promise<boolean> {
+): boolean {
   const live = ctx.journal.activeTurnId()
   // No turn published yet while the agent works: the named one may still be opening.
   if (
     structuredAgentSessionStopNamesTurnNotLive(namedTurnId, live) &&
-    (live !== null || !(await isMainAgentWorkingOnceFlushed(ctx)))
+    (live !== null || !isMainAgentWorking(ctx))
   ) {
     return false
   }
@@ -89,6 +90,23 @@ export async function stopReachesUnrecordedWork(
         entry.acceptedSequence > inForce.sequence
     )
   return sentSince || structuredAgentSessionStopNamesTurnNotLive(inForce.event.turnId, live)
+}
+
+/** The Stop's withdrawal of every queued send, issued at once and never awaited ahead of the
+ *  interrupt. Bookkeeping: one that fails is reported and withdrew nothing. */
+export function withdrawQueuedForStop(
+  ctx: AgentSessionTurnContext,
+  withdraw: () => Promise<readonly string[]>
+): Promise<boolean> {
+  const failed = (error: unknown): boolean => {
+    report(ctx, 'withdrawal', error)
+    return false
+  }
+  try {
+    return withdraw().then((withdrawn) => withdrawn.length > 0, failed)
+  } catch (error) {
+    return Promise.resolve(failed(error))
+  }
 }
 
 function report(ctx: AgentSessionTurnContext, step: string, error: unknown): void {

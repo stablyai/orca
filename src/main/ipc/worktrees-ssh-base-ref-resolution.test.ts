@@ -107,6 +107,9 @@ describe('registerWorktreeHandlers', () => {
     const setupError = new Error('sparse init failed')
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
@@ -168,6 +171,9 @@ describe('registerWorktreeHandlers', () => {
     }
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
@@ -226,6 +232,9 @@ describe('registerWorktreeHandlers', () => {
     }
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
@@ -301,6 +310,9 @@ describe('registerWorktreeHandlers', () => {
     let repoRootRegistered = false
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'config') {
           return { stdout: '', stderr: '' }
         }
@@ -376,6 +388,9 @@ describe('registerWorktreeHandlers', () => {
     let repoRootRegistered = false
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'config') {
           return { stdout: '', stderr: '' }
         }

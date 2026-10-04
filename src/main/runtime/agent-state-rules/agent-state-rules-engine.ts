@@ -1,7 +1,7 @@
 import type { AgentStatus } from '../../../shared/agent-detection'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { compileScreenCondition } from './agent-state-rule-matchers'
-import { BUNDLED_AGENT_STATE_RULE_FILES } from './agent-state-rules-catalog'
+import { compiledFromActiveAgentStateRules } from './active-agent-state-rules'
 import {
   UNKNOWN_PANE_RULES_ID,
   type AgentStateRuleAnswer,
@@ -105,20 +105,23 @@ type RulesKey = TuiAgent | typeof UNKNOWN_PANE_RULES_ID
 
 type CompiledFile = { rules: CompiledRule[]; readsTrustedScreen: boolean; hooks: HookAuthority }
 
-const FILES_BY_KEY: ReadonlyMap<RulesKey, CompiledFile> = new Map(
-  BUNDLED_AGENT_STATE_RULE_FILES.map((file) => [
-    file.id,
-    {
-      rules: compileAgentRules(file),
-      readsTrustedScreen: file.profile?.screenSource === 'trusted',
-      hooks: file.profile?.hooks ?? 'identity-only'
-    }
-  ])
+const filesByKey = compiledFromActiveAgentStateRules(
+  (files): ReadonlyMap<RulesKey, CompiledFile> =>
+    new Map(
+      files.map((file) => [
+        file.id,
+        {
+          rules: compileAgentRules(file),
+          readsTrustedScreen: file.profile?.screenSource === 'trusted',
+          hooks: file.profile?.hooks ?? 'identity-only'
+        }
+      ])
+    )
 )
 
 // Why the unknown-pane file for a null agent: an adopted pane can still run a known agent.
 function compiledFileFor(agent: TuiAgent | null | undefined): CompiledFile | undefined {
-  return FILES_BY_KEY.get(agent ?? UNKNOWN_PANE_RULES_ID)
+  return filesByKey().get(agent ?? UNKNOWN_PANE_RULES_ID)
 }
 
 /**
@@ -130,9 +133,9 @@ export function readsTrustedScreen(agent: TuiAgent | null | undefined): boolean 
   return compiledFileFor(agent)?.readsTrustedScreen ?? false
 }
 
-/** Whether a fresh hook row for the agent's main turn decides readiness ahead of its rules. */
-export function hooksAreAuthoritative(agent: TuiAgent | null | undefined): boolean {
-  return compiledFileFor(agent)?.hooks === 'authoritative'
+/** Which fresh hook rows for the agent's main turn decide readiness ahead of its rules. */
+export function hookAuthority(agent: TuiAgent | null | undefined): HookAuthority {
+  return compiledFileFor(agent)?.hooks ?? 'identity-only'
 }
 
 function someRule(

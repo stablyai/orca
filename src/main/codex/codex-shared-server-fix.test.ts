@@ -6,11 +6,7 @@ import type { ProcessResult, ProcessSpec } from '../../shared/child-process/run-
 
 const mocks = vi.hoisted(() => ({
   runProcess: vi.fn<(spec: ProcessSpec) => Promise<ProcessResult>>(),
-  probeCodexSharedServer: vi.fn<(home: string) => Promise<'live' | 'absent' | 'unknown'>>(),
-  syncMirror: vi.fn<() => void>()
-}))
-vi.mock('./codex-config-mirror', () => ({
-  syncSystemConfigIntoManagedCodexHome: mocks.syncMirror
+  probeCodexSharedServer: vi.fn<(home: string) => Promise<'live' | 'absent' | 'unknown'>>()
 }))
 vi.mock('../../shared/child-process/run-process', () => ({ runProcess: mocks.runProcess }))
 vi.mock('./codex-shared-server-probe', () => ({
@@ -19,7 +15,6 @@ vi.mock('./codex-shared-server-probe', () => ({
 
 import {
   disableCodexSharedServerAutoStart,
-  disableCodexSharedServerAutoStartOnOrcaMirror,
   readFeatureEnabled,
   resolveCodexSharedServerBinary,
   stopCodexSharedServer
@@ -133,44 +128,6 @@ describe('disableCodexSharedServerAutoStart', () => {
     installPackage('app-server-daemon', 'current', 'bin')
     mocks.runProcess.mockRejectedValueOnce(new Error('ENOENT'))
     expect(await disableCodexSharedServerAutoStart(home)).toBe(false)
-  })
-})
-
-describe('disableCodexSharedServerAutoStartOnOrcaMirror', () => {
-  it('runs the launch mirror pass before and after the write', async () => {
-    installPackage('app-server-daemon', 'current', 'bin')
-    const order: string[] = []
-    mocks.syncMirror.mockImplementation(() => order.push('sync'))
-    mocks.runProcess.mockImplementation(async (spec) => {
-      order.push((spec.args ?? []).join(' '))
-      return result({ stdout: LIST_OFF })
-    })
-
-    expect(await disableCodexSharedServerAutoStartOnOrcaMirror(home)).toBe(true)
-    expect(order).toEqual(['sync', 'features disable daemon_auto_start', 'features list', 'sync'])
-    expect(mocks.syncMirror).toHaveBeenCalledWith()
-  })
-
-  it('still reports the pane fixed when a mirror pass throws', async () => {
-    installPackage('app-server-daemon', 'current', 'bin')
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    mocks.syncMirror.mockImplementation(() => {
-      throw new Error('EACCES')
-    })
-    mocks.runProcess
-      .mockResolvedValueOnce(result())
-      .mockResolvedValueOnce(result({ stdout: LIST_OFF }))
-
-    expect(await disableCodexSharedServerAutoStartOnOrcaMirror(home)).toBe(true)
-    expect(mocks.syncMirror).toHaveBeenCalledTimes(2)
-  })
-
-  it('reports the write failure even though both passes ran', async () => {
-    installPackage('app-server-daemon', 'current', 'bin')
-    mocks.runProcess.mockResolvedValueOnce(result({ code: 1 }))
-
-    expect(await disableCodexSharedServerAutoStartOnOrcaMirror(home)).toBe(false)
-    expect(mocks.syncMirror).toHaveBeenCalledTimes(2)
   })
 })
 

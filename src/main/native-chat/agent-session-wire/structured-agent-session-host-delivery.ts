@@ -56,7 +56,6 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   ) => Promise<StructuredAgentSessionResumeOutcome>
   reset: (sessionId: string, journal: AgentSessionJournal, reset: AgentJournalResetReason) => void
   clientDelivery: Pick<StructuredAgentSessionClientDelivery, 'publishRestored' | 'readChildWork'>
-  flushStreamedEvents: (sessionId: string) => Promise<void>
 }): StructuredAgentSessionConversationDelivery {
   const { deps, sessions } = input
   const loop = new StructuredAgentSessionDeliveryLoop({
@@ -81,7 +80,6 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     logger: deps.logger,
     record: (sessionId) => deps.store.getRecord(sessionId),
     readChildWork: input.clientDelivery.readChildWork,
-    flushStreamedEvents: input.flushStreamedEvents,
     now: () => deps.now?.() ?? Date.now()
   })
   const adoptOpened = async (

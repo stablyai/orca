@@ -1,35 +1,24 @@
+import { findOptionOccurrence } from './command-option-occurrence'
+
 export function agentArgOptionTokens(tokens: readonly string[]): readonly string[] {
   const terminator = tokens.indexOf('--')
   return terminator === -1 ? tokens : tokens.slice(0, terminator)
 }
 
+/** Removes each occurrence before `--`, or only those whose value `matchesValue` accepts. */
 export function removeAgentArgOption(
   tokens: readonly string[],
-  aliases: readonly string[]
+  aliases: readonly string[],
+  matchesValue: (value: string | undefined) => boolean = () => true
 ): string[] {
-  const result: string[] = []
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index]
-    if (token === '--') {
-      result.push(...tokens.slice(index))
-      break
-    }
-    const exact = aliases.includes(token)
-    const matched = aliases.some(
-      (alias) =>
-        token.startsWith(`${alias}=`) ||
-        (alias.startsWith('-') &&
-          !alias.startsWith('--') &&
-          token.startsWith(alias) &&
-          token.length > alias.length)
-    )
-    if (!exact && !matched) {
-      result.push(token)
-      continue
-    }
-    if (exact && tokens[index + 1] && !tokens[index + 1].startsWith('-')) {
-      index += 1
-    }
+  const kept: string[] = []
+  let rest = tokens
+  let found = findOptionOccurrence(rest, aliases, true)
+  while (found) {
+    const end = found.index + found.consumed
+    kept.push(...rest.slice(0, matchesValue(found.value) ? found.index : end))
+    rest = rest.slice(end)
+    found = findOptionOccurrence(rest, aliases, true)
   }
-  return result
+  return [...kept, ...rest]
 }

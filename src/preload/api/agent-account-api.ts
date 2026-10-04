@@ -5,6 +5,7 @@ import type {
 } from '../../shared/managed-account-types'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
 import type { CursorAccountStatus, GrokAccountStatus } from '../../shared/rate-limit-types'
+import type { ZcodePlanCredentialsStatus } from '../../shared/zcode-plan-sites'
 
 export type CodexAccountsApi = {
   list: () => Promise<CodexRateLimitAccountsState>
@@ -94,6 +95,15 @@ export type MinimaxCredentialsApi = {
     apiKeyConfigured: boolean
     apiKeyProtection: SecretAtRestProtection | null
   }>
+}
+
+export type ZcodePlanCredentialsApi = {
+  // Why: the GLM Coding Plan key lives in its own safeStorage file and the
+  // ZCode CLI's config is read-only, so the status reports both sources'
+  // presence; neither credential value ever crosses the IPC boundary.
+  getStatus: () => Promise<ZcodePlanCredentialsStatus>
+  saveApiKey: (key: string) => Promise<ZcodePlanCredentialsStatus>
+  clearApiKey: () => Promise<ZcodePlanCredentialsStatus>
 }
 
 export type CodexConfigSyncApi = {

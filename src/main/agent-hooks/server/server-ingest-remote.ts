@@ -54,6 +54,8 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       claudeRunningNonAgentTask?: unknown
       /** The producing peer's advertised run-capability set — a property of the peer/connection that built this envelope, not an orthogonal call parameter. Absent (older relay/HTTP paths) defaults to the unadvertised-legacy-peer set. */
       advertisedAgentStatusCapabilities?: readonly string[]
+      statusUnavailable?: unknown
+      evidenceAgeMs?: unknown
       payload: unknown
     },
     connectionId: string | null
@@ -138,6 +140,25 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       toolAgentType,
       providerSession
     } = normalizeRemoteEnvelopeFields(envelope)
+    if (envelope.statusUnavailable === true && envelope.payload === null) {
+      const previous = this.state.lastStatusByPaneKey.get(paneKey)
+      if (
+        (source === 'opencode' || source === 'opencode2') &&
+        previous?.connectionId === trimmedConnectionId &&
+        trimmedConnectionId !== null &&
+        previous.worktreeId === worktreeId &&
+        previous.source === source &&
+        previous.launchToken === envelope.launchToken &&
+        this.getAgentStatusDisposition(paneKey) !== 'suppress'
+      ) {
+        this.clearPaneState(paneKey, { statusUnavailable: true })
+      }
+      return
+    }
+    const age = envelope.evidenceAgeMs
+    if (age !== undefined && (typeof age !== 'number' || !Number.isSafeInteger(age) || age < 0)) {
+      return
+    }
     // Why: relay crosses a trust boundary — re-run the canonical normalizer to enforce caps/invariants (returns null on malformed).
     const validatedPayload = normalizeAgentStatusPayload(envelope.payload)
     if (!validatedPayload) {
@@ -200,10 +221,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       if (hookEventName === 'PreCompact' || source !== 'claude') {
         return
       }
-      // Why: a relay predating this change strips `compactTrigger` from its cached PostCompact
-      // before replaying it, so the replay has no manual/auto discriminator. That relay's mapping is
-      // fixed and known — manual produced `done`, auto produced `working` — so the payload state
-      // stands in for the missing trigger. Trigger substitution only; ownership is still checked.
+      // Older relays omit the trigger; their state supplies it without bypassing ownership.
       const effectiveTrigger = resolveLegacyCompactTrigger(compactTrigger, normalizedPayload.state)
       // Why: an auto compact happens inside a turn that resumes and emits its own Stop. An older
       // relay maps it to `working`, and this ingest applies the relay's payload verbatim — so
@@ -298,7 +316,9 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
               this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
             }
           }
-        : undefined
+        : undefined,
+      'hook',
+      typeof age === 'number' ? Math.max(0, Date.now() - age) : undefined
     )
   }
 }

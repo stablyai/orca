@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
@@ -11,6 +11,8 @@ import {
 import { nodeServerTestPaths } from './node-server-test-paths.mjs'
 import { ORCAD_CHILD_ENTRY_POINTS } from './orcad-entry-build.mjs'
 import { NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
+import { runProcessSync } from './script-child-process.mjs'
+import { NODE_SERVER_RUNNERS } from './node-server-qualification.mjs'
 
 const temporaryDirs = []
 afterEach(() => {
@@ -83,6 +85,9 @@ it.each([
   'config/patches/node-pty@1.1.0.patch',
   'native/windows-registry/src/addon.cc',
   '.github/actions/install-node-dependencies/action.yml',
+  '.github/actions/restore-pnpm-verification/action.yml',
+  '.github/actions/prepare-headless-compiler/action.yml',
+  'config/scripts/headless-detector-compiler-cache.mjs',
   '.github/actions/prepare-native-runtime/action.yml',
   '.github/actions/prepare-orcad-prebuilds/action.yml',
   '.github/workflows/node-server-tests.yml',
@@ -91,15 +96,99 @@ it.each([
   expect((await classifyNodeServerChanges([file], async () => new Set())).shouldRun).toBe(true)
 })
 
+it('defers uncertain paths without issuing a qualification verdict', async () => {
+  const result = await classifyNodeServerChanges(
+    ['src/renderer/src/example.ts'],
+    async () => {
+      throw new Error('graph must not run before installation')
+    },
+    { deferGraph: true }
+  )
+  expect(result.graphRequired).toBe(true)
+  expect(result.shouldRun).toBeUndefined()
+})
+
+it.each([
+  { files: [], deferred: true, expected: 'should_run=true' },
+  { files: ['package.json'], deferred: true, expected: 'should_run=true' },
+  {
+    files: ['src/main/persistence/profile-state/profile-state-windows.ts'],
+    deferred: true,
+    fullQualification: false,
+    qualification: false,
+    runners: ['ubuntu-22.04', 'windows-2022', 'windows-11-arm'],
+    expected: 'should_run=true'
+  },
+  {
+    files: ['src/main/persistence/profile-state/profile-state-windows.ts'],
+    deferred: true,
+    expected: 'should_run=true'
+  },
+  {
+    files: ['src/main/providers/provider-windows.ts'],
+    deferred: true,
+    fullQualification: false,
+    expected: 'should_run=true'
+  },
+  { files: ['src/renderer/src/example.ts'], deferred: true, expected: 'graph_required=true' },
+  { files: ['src/renderer/src/example.ts'], deferred: false, expected: 'should_run=true' }
+])('fails closed or requests dependencies in an uninstalled checkout: %j', (scenario) => {
+  const root = moduleTree(
+    Object.fromEntries(
+      ['node-server-change-scope', 'node-server-test-paths', 'node-server-qualification'].map(
+        (name) => [
+          `config/scripts/${name}.mjs`,
+          readFileSync(new URL(`./${name}.mjs`, import.meta.url), 'utf8')
+        ]
+      )
+    )
+  )
+  const changes = join(root, 'changes')
+  const stepOutput = join(root, 'step-output')
+  writeFileSync(changes, scenario.files.map((file) => `${file}\0`).join(''))
+  const result = runProcessSync({
+    program: process.execPath,
+    args: [
+      realpathSync(join(root, 'config/scripts/node-server-change-scope.mjs')),
+      changes,
+      ...(scenario.fullQualification === false ? [] : ['--full-qualification']),
+      ...(scenario.deferred ? ['--defer-graph'] : [])
+    ],
+    cwd: root,
+    env: { ...process.env, GITHUB_OUTPUT: stepOutput },
+    timeoutMs: 5_000
+  })
+  expect(result.code).toBe(0)
+  const output = readFileSync(stepOutput, 'utf8')
+  expect(output).toContain(scenario.expected)
+  if (scenario.expected === 'graph_required=true') {
+    expect(output).not.toContain('should_run=')
+    expect(output).not.toContain('runners=')
+  } else {
+    expect(output).toContain(`qualification=${scenario.qualification !== false}`)
+    expect(output).toContain(`runners=${JSON.stringify(scenario.runners ?? NODE_SERVER_RUNNERS)}`)
+  }
+})
+
 describe('the actual Bun build and profile-test dependency graph', () => {
   let inputs
   beforeAll(async () => {
     inputs = await collectNodeServerInputs()
   }, 60_000)
 
+  it('tracks the shared close probe without pulling in its mocked renderer adapter', () => {
+    expect(inputs.has('src/shared/pty-running-work-probe.ts')).toBe(true)
+    expect(inputs.has('src/shared/pty-running-work-probe.test.ts')).toBe(true)
+    expect(inputs.has('src/renderer/src/components/terminal/pty-running-work-probe.ts')).toBe(false)
+    expect(inputs.has('src/renderer/src/runtime/runtime-terminal-inspection.ts')).toBe(false)
+    expect([...inputs].some((file) => file.startsWith('src/renderer/'))).toBe(false)
+  })
+
   it.each([
     'config/scripts/ci-shard-timings.json',
     'config/scripts/mobile-web-app-terminal-render.test.mjs',
+    'src/renderer/src/components/terminal/pty-running-work-probe.ts',
+    'src/renderer/src/runtime/runtime-terminal-inspection.ts',
     'src/main/ssh/ssh-relay-upload-stage-commands.test.ts',
     'src/main/menu/register-app-menu.ts'
   ])('skips unrelated work: %s', async (file) => {
@@ -109,6 +198,8 @@ describe('the actual Bun build and profile-test dependency graph', () => {
   it.each([
     ...Object.values(ORCAD_CHILD_ENTRY_POINTS),
     'src/shared/keybindings/definitions-core-1.ts',
+    'src/shared/pty-running-work-probe.ts',
+    'src/shared/pty-running-work-probe.test.ts',
     'src/main/runtime/orca-runtime.ts',
     'src/main/windows/windows-process-table.ts',
     'src/main/worker-thread-entry-path.ts',
@@ -149,7 +240,7 @@ it('keeps every platform job and runs them when detection is skipped or fails', 
   expect(detect.env.PUSH_BASE).toBe('${{ github.event.before }}')
   expect(detect.run).toContain('git fetch --no-tags --depth=1 origin "$PUSH_BASE"')
   expect(detect.run).toContain('git diff --name-only --no-renames -z "$PUSH_BASE" HEAD')
-  expect(detect.run).toContain('node-server-changes" --full-qualification')
+  expect(detect.run).toContain('node-server-changes" --defer-graph --full-qualification')
   expect(workflow.on.pull_request.types).toContain('ready_for_review')
   expect(workflow.on.schedule).toHaveLength(1)
   // A pull request may qualify one platform, so the merged commit must re-qualify all six.
@@ -213,14 +304,29 @@ it('runs the Bun and Node cross-runtime tests on Linux against pinned inputs', (
   expect(setupBun.with['bun-version']).toBe('1.4.2')
   const build = steps.find((step) => String(step.run).includes('build-orcad-bun.mjs'))
   expect(build.env.BUN_ORCAD_COMMIT).toMatch(/^[0-9a-f]{40}$/)
-  expect(build.run).toContain('ORCA_BUN_ORCAD_SLOT=')
-  expect(build.run).toContain('BUN_EXECUTABLE=')
-  for (const step of [setupBun, build]) {
-    expect(step.if).toBe("runner.os == 'Linux'")
-  }
-  expect(steps.map((step) => step.run).join('\n')).toContain(
+  expect(setupBun.if).toBe("runner.os == 'Linux'")
+  expect(build.id).toBe('bun-orcad')
+  expect(build.background).toBe(true)
+  expect(build.if).toBeUndefined()
+  expect(build['continue-on-error']).toBeUndefined()
+  expect(build.run).toMatch(/^if \[ "\$RUNNER_OS" != Linux \]; then exit 0; fi\n/)
+  expect(build.run).toContain('echo "slot=$RUNNER_TEMP/bun-orcad" >> "$GITHUB_OUTPUT"')
+  expect(build.run).toContain('echo "executable=$(command -v bun)" >> "$GITHUB_OUTPUT"')
+  expect(build.run).not.toContain('GITHUB_ENV')
+  const join = steps.findIndex((step) => step.wait === build.id)
+  expect(join).toBeGreaterThan(steps.indexOf(build))
+  expect(steps[join].if).toBeUndefined()
+  expect(steps[join]['continue-on-error']).toBeUndefined()
+  const consumer = steps.find((step) => step.run?.startsWith('pnpm test:node-server --artifact '))
+  expect(steps.indexOf(consumer)).toBeGreaterThan(join)
+  expect(consumer.run).toBe(
     "pnpm test:node-server --artifact ${{ runner.os == 'Linux' && '--cross-runtime' || '' }}"
   )
+  expect(consumer.if).toBeUndefined()
+  expect(consumer.env).toEqual({
+    ORCA_BUN_ORCAD_SLOT: '${{ steps.bun-orcad.outputs.slot }}',
+    BUN_EXECUTABLE: '${{ steps.bun-orcad.outputs.executable }}'
+  })
   const alpine = workflow.jobs.linux_musl.steps.find((step) =>
     String(step.run).includes('docker run')
   )

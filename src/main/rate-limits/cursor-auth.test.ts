@@ -35,8 +35,8 @@ vi.mock('node:fs', () => ({
   }
 }))
 
-vi.mock('./cursor-desktop-profile-worker', () => ({
-  readCursorDesktopProfileViaWorker: () => desktopState.result
+vi.mock('../foreign-sqlite-readers/foreign-sqlite-reader-spawn', () => ({
+  readCursorDesktopProfile: async () => desktopState.result
 }))
 
 import { readCursorAuthSession, readCursorCliIdentity } from './cursor-auth'

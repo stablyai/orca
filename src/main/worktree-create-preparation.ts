@@ -5,23 +5,28 @@ import type { Store } from './persistence'
 import type { Repo } from '../shared/repo-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
-import type { PreparedCheckoutMissReason } from '../shared/worktree/create-types'
+import type {
+  PreparedCheckoutMissReason,
+  PreparedCheckoutOrigin,
+  PreparedCheckoutReset
+} from '../shared/worktree/create-types'
+import type { WorktreeCreatePhase } from '../shared/worktree/create-timing-vocabulary'
 import type { AddWorktreeOptions, AddWorktreeResult } from './git/worktree'
-import { measureRetargetDivergence } from './git/worktree-base-divergence'
-import { resolveLocalWorktreeBaseRef } from './git/worktree-base-ref-probe'
 import { WorktreePreparationLockOwnershipError } from './git/worktree-preparation-lock'
-import { preparationPathKey, selectPreparationForCreate } from './worktree-create-preparation-claim'
 import {
   _resetPreparationPoolForTests,
   hasPendingPreparations,
-  listPreparations,
   releasePreparationClaim,
   startPreparation,
-  takePreparation,
   type DeferredPreparation,
   type PreparationClaim,
   type PreparationEntry
 } from './worktree-create-preparation-pool'
+import {
+  canonicalBaseRef,
+  reservePreparation,
+  type ReservedPreparation
+} from './worktree-create-preparation-reservation'
 import {
   discardPreparedWorktree,
   finalizePreparedWorktree
@@ -56,6 +61,10 @@ export type PreparedWorktreeCreateAttempt =
   | {
       status: 'hit'
       retargeted: boolean
+      reset: PreparedCheckoutReset
+      origin: PreparedCheckoutOrigin
+      buildMs: number
+      idleMs: number
       result: AddWorktreeResult
       /** Run after materialization/startup completes, before returning the create result. */
       rearm: () => void
@@ -70,18 +79,18 @@ type ConsumePreparedWorktreeArgs = {
   baseBranch: string
   refreshLocalBaseRef?: boolean
   options?: AddWorktreeOptions
-  timing?: Pick<WorktreeCreateTimingRecorder, 'time'>
+  timing?: Pick<
+    WorktreeCreateTimingRecorder,
+    'time' | 'recordPreparedCheckout' | 'recordAdoptedPreparation'
+  >
 }
 
-function canonicalBaseRef(
-  repoPath: string,
-  baseBranch: string,
-  options: AddWorktreeOptions
-): Promise<string> {
-  return resolveLocalWorktreeBaseRef(repoPath, baseBranch, {
-    ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
-    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
-  })
+function timePhase<T>(
+  args: ConsumePreparedWorktreeArgs,
+  phase: WorktreeCreatePhase,
+  operation: () => Promise<T>
+): Promise<T> {
+  return args.timing ? args.timing.time(phase, operation) : operation()
 }
 
 export function prepareWorktreeCreateForRepo(
@@ -125,84 +134,26 @@ async function prepareWorktreeCreateInBackground(
 }
 
 type ClaimedPreparation =
-  | {
-      status: 'claimed'
-      entry: PreparationEntry
-      reservation: PreparationClaim
-      retargeted: boolean
-      canonicalBase: string
-    }
+  | ({ status: 'claimed'; claimedAt: number } & ReservedPreparation)
   | { status: 'miss'; reason: PreparedCheckoutMissReason; rearm?: () => void }
 
 async function claimPreparedWorktree(
   args: ConsumePreparedWorktreeArgs,
   options: AddWorktreeOptions
 ): Promise<ClaimedPreparation> {
-  const request = {
-    repoPathKey: preparationPathKey(args.repoPath),
-    workspaceRootKey: preparationPathKey(args.workspaceRoot),
-    wslDistro: options.wslDistro ?? '',
-    baseBranch: args.baseBranch
+  // Timed on its own so a miss's probes and drift check are not read as the plain add's cost.
+  const reserved = await timePhase(args, 'prepared_checkout_claim', () =>
+    reservePreparation(args, options)
+  )
+  if (reserved.status === 'miss') {
+    return reserved
   }
-  let selection = selectPreparationForCreate(listPreparations(), {
-    ...request,
-    canonicalBase: null
-  })
-  if (selection.kind === 'needs-canonical-base') {
-    // The probe is the only await here, and the pool is re-read after it, so the select-and-take
-    // below stays one synchronous run and no other create can hold the same entry.
-    const canonicalBase = await canonicalBaseRef(args.repoPath, args.baseBranch, options)
-    selection = selectPreparationForCreate(listPreparations(), { ...request, canonicalBase })
-  }
-  if (selection.kind !== 'exact' && selection.kind !== 'retarget') {
-    return {
-      status: 'miss',
-      reason: selection.kind === 'miss' ? selection.reason : 'base_mismatch'
-    }
-  }
-  if (selection.kind === 'retarget') {
-    const candidate = selection.candidate
-    const { canonicalBase } = selection
-    const divergence = await measureRetargetDivergence(
-      args.repoPath,
-      candidate.canonicalBase,
-      canonicalBase,
-      {
-        ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
-        ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
-        // Why forward it: a cancelled create must stop these probes now, not at the deadline.
-        ...(options.signal ? { signal: options.signal } : {})
-      }
-    )
-    if (divergence !== 'within') {
-      return {
-        status: 'miss',
-        reason: divergence === 'exceeded' ? 'retarget_too_divergent' : 'retarget_unverifiable'
-      }
-    }
-    // Re-select after the walk: the pool may have gained an exact match or lost this entry. A
-    // different retarget candidate is left for the next create rather than claimed unverified.
-    selection = selectPreparationForCreate(listPreparations(), { ...request, canonicalBase })
-    if (selection.kind === 'miss' || selection.kind === 'needs-canonical-base') {
-      return { status: 'miss', reason: 'base_mismatch' }
-    }
-    if (selection.kind === 'retarget' && selection.candidate !== candidate) {
-      return { status: 'miss', reason: 'base_mismatch' }
-    }
-  }
-  const entry = selection.candidate
-  const reservation = takePreparation(entry, selection.canonicalBase)
+  const { entry, reservation } = reserved
+  args.timing?.recordAdoptedPreparation(entry.activity.work)
+  const claimedAt = performance.now()
   try {
-    await (args.timing
-      ? args.timing.time('prepared_checkout_wait', () => entry.ready)
-      : entry.ready)
-    return {
-      status: 'claimed',
-      entry,
-      reservation,
-      retargeted: selection.kind === 'retarget',
-      canonicalBase: selection.canonicalBase
-    }
+    await timePhase(args, 'prepared_checkout_wait', () => entry.ready)
+    return { ...reserved, status: 'claimed', claimedAt }
   } catch {
     return { status: 'miss', reason: 'prepare_failed', rearm: releaseClaimAfterCreate(reservation) }
   }
@@ -268,6 +219,31 @@ function deferRearmPreparation(
 export async function consumePreparedWorktreeCreate(
   args: ConsumePreparedWorktreeArgs
 ): Promise<PreparedWorktreeCreateAttempt> {
+  const attempt = await attemptPreparedWorktreeCreate(args)
+  args.timing?.recordPreparedCheckout(
+    attempt.status === 'hit'
+      ? {
+          status: 'hit',
+          reset: attempt.reset,
+          origin: attempt.origin,
+          buildMs: attempt.buildMs,
+          idleMs: attempt.idleMs
+        }
+      : { status: 'miss', reason: attempt.reason }
+  )
+  return attempt
+}
+
+function preparedCheckoutReset(retargeted: boolean, headReset: boolean): PreparedCheckoutReset {
+  if (!headReset) {
+    return 'none'
+  }
+  return retargeted ? 'retargeted' : 'base_moved'
+}
+
+async function attemptPreparedWorktreeCreate(
+  args: ConsumePreparedWorktreeArgs
+): Promise<PreparedWorktreeCreateAttempt> {
   const options = args.options ?? {}
   const claim = await claimPreparedWorktree(args, options)
   if (claim.status === 'miss') {
@@ -275,37 +251,45 @@ export async function consumePreparedWorktreeCreate(
   }
   const { entry, reservation } = claim
   try {
-    const parentDir = isWindowsAbsolutePathLike(args.worktreePath)
-      ? win32.dirname(args.worktreePath)
-      : posix.dirname(args.worktreePath)
-    await mkdir(toHostFilesystemPath(parentDir), { recursive: true })
     // Finalize resolves the requested base itself and resets the prepared checkout onto that
     // commit, so a retargeted claim is handed over at the requested commit or not at all.
-    const finalize = (): Promise<AddWorktreeResult> =>
-      finalizePreparedWorktree(
-        args.repoPath,
-        entry.preparedPath,
-        args.worktreePath,
-        args.branch,
-        args.baseBranch,
-        args.refreshLocalBaseRef,
-        options,
-        entry.lockReason
-      )
-    const result = args.timing
-      ? await args.timing.time('prepared_checkout_finalize', finalize)
-      : await finalize()
+    const { preparedHeadReset, ...result } = await timePhase(
+      args,
+      'prepared_checkout_finalize',
+      async () => {
+        const parentDir = isWindowsAbsolutePathLike(args.worktreePath)
+          ? win32.dirname(args.worktreePath)
+          : posix.dirname(args.worktreePath)
+        await mkdir(toHostFilesystemPath(parentDir), { recursive: true })
+        return finalizePreparedWorktree(
+          args.repoPath,
+          entry.preparedPath,
+          args.worktreePath,
+          args.branch,
+          args.baseBranch,
+          args.refreshLocalBaseRef,
+          options,
+          entry.lockReason
+        )
+      }
+    )
     // Consuming the only prepared checkout leaves the next create cold. Re-arm for a user who is
     // creating in a burst; the TTL and the preparation limit still bound an unused replacement.
     const rearm = deferRearmPreparation(entry, reservation, args.baseBranch, claim.canonicalBase)
-    return { status: 'hit', retargeted: claim.retargeted, result, rearm }
+    return {
+      status: 'hit',
+      retargeted: claim.retargeted,
+      reset: preparedCheckoutReset(claim.retargeted, preparedHeadReset),
+      origin: entry.activity.origin(),
+      ...entry.activity.timesAt(claim.claimedAt),
+      result,
+      rearm
+    }
   } catch (error) {
+    // Another owner holds the preparation's lock, so it is not ours to remove.
     if (!(error instanceof WorktreePreparationLockOwnershipError)) {
-      await discardPreparedWorktree(
-        args.repoPath,
-        entry.preparedPath,
-        options,
-        entry.lockReason
+      await timePhase(args, 'prepared_checkout_discard', () =>
+        discardPreparedWorktree(args.repoPath, entry.preparedPath, options, entry.lockReason)
       ).catch(() => {})
     }
     console.warn(

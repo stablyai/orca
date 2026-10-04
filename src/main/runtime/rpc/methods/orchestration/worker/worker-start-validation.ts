@@ -40,7 +40,7 @@ export function validateFederatedWorkerStartPlacement(
       '--terminal reuses an existing agent and cannot combine with --agent.'
     )
   }
-  if (!params.terminal && (!params.agent || !isTuiAgent(params.agent))) {
+  if (!params.terminal && !params.agent) {
     throw new OrchestrationError(
       'agent_unconfigured',
       'A configured --agent is required when remote worker-start creates a terminal.'
@@ -139,10 +139,14 @@ function resolveWorkerStartAgent(args: {
   effort?: string
   missingAgentMessage: string
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
-  if (!args.terminal && (!args.agent || !isTuiAgent(args.agent))) {
+  const agent = args.agent
+    ? isTuiAgent(args.agent)
+      ? args.agent
+      : args.runtime.resolveOrchestrationAgentLauncher?.(args.agent)
+    : undefined
+  if (!args.terminal && !agent) {
     throw new OrchestrationError('agent_unconfigured', args.missingAgentMessage)
   }
-  const agent = args.agent as TuiAgent | undefined
   if (agent) {
     args.runtime.validateOrchestrationAgentLauncher(agent)
     return {

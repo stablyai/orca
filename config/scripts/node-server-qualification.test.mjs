@@ -27,6 +27,7 @@ it.each([
   'native/windows-registry/src/addon.cc',
   'config/patches/node-pty.patch',
   '.github/actions/install-node-dependencies/action.yml',
+  '.github/actions/restore-pnpm-verification/action.yml',
   '.github/actions/prepare-native-runtime/action.yml',
   '.github/actions/prepare-orcad-prebuilds/action.yml',
   'src/main/ssh/ssh-provider.ts',
@@ -74,11 +75,11 @@ it.each([
     ['ubuntu-22.04', 'windows-2022', 'windows-11-arm'],
     false
   ],
-  ['src/main/daemon/darwin-process.ts', ['ubuntu-22.04', 'macos-14', 'macos-15-intel'], false],
+  ['src/main/daemon/darwin-process.ts', ['ubuntu-22.04', 'macos-15', 'macos-15-intel'], false],
   ['src/shared/linux-glibc.ts', ['ubuntu-22.04', 'ubuntu-24.04-arm'], true],
   [
     'src/main/daemon/posix-process.ts',
-    ['ubuntu-22.04', 'ubuntu-24.04-arm', 'macos-14', 'macos-15-intel'],
+    ['ubuntu-22.04', 'ubuntu-24.04-arm', 'macos-15', 'macos-15-intel'],
     true
   ]
 ])('selects both architectures and a Linux smoke for %s', (file, runners, qualification) => {
@@ -92,7 +93,7 @@ it('combines platform families without adding Linux compatibility work', () => {
       scope
     )
   ).toEqual({
-    runners: ['ubuntu-22.04', 'macos-14', 'macos-15-intel', 'windows-2022', 'windows-11-arm'],
+    runners: ['ubuntu-22.04', 'macos-15', 'macos-15-intel', 'windows-2022', 'windows-11-arm'],
     qualification: false
   })
 })

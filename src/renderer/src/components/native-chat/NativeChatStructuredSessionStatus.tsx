@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { translate } from '@/i18n/i18n'
-import { useDelayedStatus } from '@/hooks/use-delayed-status'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import type { StructuredSessionBackgroundTasksView } from './structured-session-background-tasks-view'
 import { useStructuredSessionChildRowContext } from './use-structured-session-child-row-context'
@@ -13,16 +12,8 @@ type StoppingBackgroundTasks = {
 
 const NO_STOPPING_TASKS: ReadonlySet<string> = new Set()
 
-// Why: every launch passes through `starting`; only a slow start deserves the notice.
-export const SLOW_STARTUP_NOTICE_DELAY_MS = 5_000
-
 export function NativeChatStructuredSessionStatus(props: {
   sessionId: string
-  /** What to call the agent in copy about its process. */
-  agentLabel: string
-  /** The host's word on the provider child; `starting` is published but not yet answering. */
-  startupPhase: 'starting' | 'ready' | null
-  startupChildKey: string | number | null
   /** The session's own status row, whose verdict the strip's children read. */
   paneKey: string
   error: string | null
@@ -36,11 +27,6 @@ export function NativeChatStructuredSessionStatus(props: {
   const [stopping, setStopping] = useState<StoppingBackgroundTasks | null>(null)
   const [expanded, setExpanded] = useState<{ sessionId: string; expanded: boolean } | null>(null)
   const activeStopping = stopping?.sessionId === props.sessionId ? stopping : null
-  const shownStartupPhase = useDelayedStatus(
-    JSON.stringify([props.sessionId, typeof props.startupChildKey, props.startupChildKey]),
-    props.startupPhase === 'starting' ? 'starting' : null,
-    SLOW_STARTUP_NOTICE_DELAY_MS
-  )
   const childRowContext = useStructuredSessionChildRowContext(props.paneKey)
 
   const onStop = (taskId?: string) => {
@@ -75,15 +61,6 @@ export function NativeChatStructuredSessionStatus(props: {
 
   return (
     <>
-      {shownStartupPhase === 'starting' ? (
-        <p className="mx-auto w-full max-w-4xl px-4 py-1 text-xs text-muted-foreground">
-          {translate(
-            'auto.components.native.chat.NativeChatStructuredSessionStatus.starting',
-            '{{value0}} is still starting. Messages wait until it is ready; close this chat to give up on it.',
-            { value0: props.agentLabel }
-          )}
-        </p>
-      ) : null}
       {props.reconnecting && !props.error ? (
         <p className="mx-auto w-full max-w-4xl px-4 py-1 text-xs text-muted-foreground">
           {translate('components.native-chat.state.reconnecting', 'Reconnecting to this chat…')}

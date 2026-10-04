@@ -26,6 +26,7 @@ on:
       # it or to the release workflow it guards must re-run them.
       - '.github/workflows/mobile.yml'
       - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/restore-pnpm-verification/**'
       - '.github/workflows/mobile-ios-release.yml'
       - 'config/scripts/mobile-release-check-scope*'
       - 'config/scripts/mobile-test-change-scope*'
@@ -113,20 +114,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Both compilers are read-only; finish them before starting the test workers.
+      # Call installed tools so pnpm's dependency refresh cannot race between checks.
       - name: Typecheck
         id: production-types
         background: true
-        run: pnpm typecheck
+        run: node node_modules/typescript/bin/tsc --noEmit
+
+      - wait: production-types
 
       # Why a ratchet and not the raw typecheck: mobile/tsconfig.json excludes test files, so until
       # tsconfig.test.json existed nothing checked them, and at introduction 127 of the 632 had
       # drifted. This fails when a test file that checks today stops checking, when a test leaves
       # the program, and on @ts-nocheck; the baseline may only shrink.
       - name: Typecheck tests (ratchet)
-        run: pnpm run check:tests-typecheck
-
-      - wait: production-types
+        run: node scripts/check-tests-typecheck-ratchet.mjs
 
       # This includes the bridged replay of the whole recording corpus, which used to be a second
       # step of its own behind RPC_FOUNDATION_BRIDGE=1. A gate nobody can forget to set is the point:

@@ -2,7 +2,6 @@ import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
-import type { GitFileStatus } from '../../../../shared/git-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OpenFile } from '../../store/slices/editor'
@@ -361,7 +360,7 @@ describe('tab title tooltips', () => {
         hasTabsToRight={false}
         hasTabsToLeft={false}
         tabCount={1}
-        statusByRelativePath={new Map<string, GitFileStatus>()}
+        gitStatus={null}
         onActivate={vi.fn()}
         onClose={vi.fn()}
         onCloseOthers={vi.fn()}

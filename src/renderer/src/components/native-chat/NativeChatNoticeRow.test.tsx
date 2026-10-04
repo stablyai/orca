@@ -70,6 +70,15 @@ describe('notice rows', () => {
     expect(disclosure?.querySelector('summary')).not.toHaveTextContent('Check the configuration')
     expect(disclosure?.querySelector('pre')).toHaveTextContent('Check the configuration')
   })
+  // The host's text is only for a client that can't word the row itself.
+  it.each([
+    ['history-repaired', "Part of this chat's history couldn't be loaded."],
+    ['history-item-too-large', 'This part of the chat was too large to show.']
+  ])('words a %s row itself, as a muted status line', (presentation, words) => {
+    renderStatus({ kind: 'status', text: 'Words an older host wrote', presentation })
+    expect(screen.getByText(words)).toHaveClass('text-muted-foreground', 'text-sm')
+    expect(screen.queryByText('Words an older host wrote')).toBeNull()
+  })
   it('renders future presentation and tone values as untinted text', () => {
     renderStatus({
       kind: 'status',

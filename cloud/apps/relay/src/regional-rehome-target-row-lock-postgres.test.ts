@@ -32,7 +32,7 @@ const CELL_TABLES = [
 // The target-row statement locks exactly these, held from it to COMMIT.
 const TARGET_LOCKED = ['target:relay_cells', 'target:relay_cell_admission']
 
-type Trip = { sql: string; lockable: Record<string, boolean> }
+type Trip = { sql: string; lockable: Record<string, boolean>; probeMs: number }
 
 type DelayControl = StatementDelay & { beforeTrip: (sql: string) => Promise<void> }
 
@@ -159,11 +159,12 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
       bystander: context.bystander.id
     }
     control.beforeTrip = async (sql) => {
+      const probeStartedAt = performance.now()
       const state: Record<string, boolean> = {}
       for (const [role, cellId] of Object.entries(probed)) {
         for (const table of CELL_TABLES) state[`${role}:${table}`] = await lockable(table, cellId)
       }
-      trips.push({ sql, lockable: state })
+      trips.push({ sql, lockable: state, probeMs: performance.now() - probeStartedAt })
     }
     consumeRelayCellInventoryHold(delayed)
     control.enabled = true
@@ -188,13 +189,22 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
       ])
     }
     const counts = consumeRelayCellInventoryHold(delayed)
+    const commitProbeMs = trips.at(-1)!.probeMs
     console.info(
-      JSON.stringify({ event: 'rehome_target_row_hold', trips: trips.length, ...counts })
+      JSON.stringify({
+        event: 'rehome_target_row_hold',
+        trips: trips.length,
+        commitProbeMs,
+        ...counts
+      })
     )
     expect(counts.rehomeTargetRowHolds).toBe(1)
     expect(counts.cellInventoryHoldMaxSite).toBe('rehome-target-row')
     expect(counts.rehomeTargetRowHoldMsMax).toBeGreaterThanOrEqual(STATEMENT_DELAY_MS)
-    expect(counts.rehomeTargetRowHoldMsMax).toBeLessThanOrEqual(2 * STATEMENT_DELAY_MS)
+    // The COMMIT observer probes run under the lock, but are absent in production.
+    expect(counts.rehomeTargetRowHoldMsMax - commitProbeMs).toBeLessThanOrEqual(
+      2 * STATEMENT_DELAY_MS
+    )
     expect(await reservedRequests(context.target.id)).toBe(context.targetReservedBefore + 2)
   })
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { flushBackgroundWork, mocks, repo, store } from './__mocks__/worktree-create-preparation'
 import { WorktreePreparationLockOwnershipError } from './git/worktree-preparation-lock'
 import {
@@ -7,6 +7,7 @@ import {
 } from './worktree-create-preparation'
 import {
   listPreparations,
+  startPreparation,
   WORKTREE_CREATE_PREPARATION_TTL_MS
 } from './worktree-create-preparation-pool'
 
@@ -221,5 +222,46 @@ describe('prepared checkout tip refresh', () => {
       }
       await flushBackgroundWork()
     }
+  })
+})
+
+describe('prepared checkout timing across a tip refresh', () => {
+  it('keeps the re-arm build time and measures idle time from the refreshed ready', async () => {
+    let now = 0
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => now)
+    onTestFinished(() => clock.mockRestore())
+    const build = Promise.withResolvers<void>()
+    mocks.prepareCheckout.mockReturnValueOnce(build.promise)
+    const armed = startPreparation(
+      {
+        repoPath: repo.path,
+        workspaceRoot: '/workspace',
+        baseBranch: 'origin/main',
+        canonicalBase: 'refs/remotes/origin/main',
+        options: {}
+      },
+      'automatic'
+    )
+    await vi.waitFor(() => expect(mocks.prepareCheckout).toHaveBeenCalled())
+    now = 40_000
+    build.resolve()
+    await armed
+
+    // The dialog opens a minute later and refreshes the spare once a 2 s fetch settles.
+    now = 100_000
+    const fetch = Promise.withResolvers<void>()
+    const refreshed = prepareWorktreeCreateForRepo(store, repo, 'origin/main', fetch.promise)
+    await flushBackgroundWork()
+    now = 102_000
+    fetch.resolve()
+    await refreshed
+    now = 112_000
+
+    await expect(consume()).resolves.toMatchObject({
+      status: 'hit',
+      origin: 'rearm_then_prefetch',
+      buildMs: 40_000,
+      idleMs: 10_000
+    })
   })
 })

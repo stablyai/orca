@@ -71,7 +71,7 @@ describe('SSH hostile-host workflow', () => {
     const job = workflow.jobs.macos_hosts
     expect(job.if).toContain('github.event.pull_request.draft != true')
     expect(job.needs).toBeUndefined()
-    const runners = { 'darwin-arm64': 'macos-14', 'darwin-x64': 'macos-15-intel' }
+    const runners = { 'darwin-arm64': 'macos-15', 'darwin-x64': 'macos-15-intel' }
     const macCells = HOSTILE_HOST_CELLS.filter((cell) => cell.host === 'local-sshd')
     expect(
       job.strategy.matrix.include.map(({ os, target, cell }) => ({ os, target, cell }))

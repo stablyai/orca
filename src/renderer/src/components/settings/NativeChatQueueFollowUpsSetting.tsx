@@ -5,8 +5,8 @@ import { useStructuredAgentSessionHostQueuesMessages } from '@/runtime/structure
 import { Label } from '../ui/label'
 import { SettingsSwitch } from './SettingsFormControls'
 
-// Structured chat launches only on the local host (`resolveStructuredNativeChatSupport`), so its
-// capability is the only one this setting can take effect on.
+// This screen edits this machine's settings, so it asks this machine's runtime; a paired host that
+// predates queueing sends a follow-up right away whatever the switch says.
 const STRUCTURED_CHAT_HOST: RuntimeClientTarget = { kind: 'local' }
 
 type NativeChatQueueFollowUpsSettingProps = {

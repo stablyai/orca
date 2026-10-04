@@ -88,6 +88,33 @@ describe('filesystem-list-files', () => {
     )
   })
 
+  it.each(['invalid', 'incomplete'] as const)('rejects %s UTF-8 filename bytes', async (kind) => {
+    const child = createMockProcess()
+    spawnMock.mockReturnValue(child)
+    const store: Store = Object.create(null)
+    const promise = listQuickOpenFiles('/repo', store)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    child.stdout?.emit('data', Buffer.from(kind === 'invalid' ? [0xff] : [0xe2, 0x82]))
+    if (kind === 'incomplete') {
+      child.emit('close', 0, null)
+    }
+    await expect(promise).rejects.toThrow('not valid UTF-8')
+    if (kind === 'invalid') {
+      expect(child.kill).toHaveBeenCalled()
+    }
+  })
+
+  it('counts NUL-delimited filenames containing newlines as one result each', async () => {
+    const child = createMockProcess()
+    spawnMock.mockReturnValue(child)
+    const store: Store = Object.create(null)
+    const promise = listQuickOpenFiles('/repo', store, undefined, undefined, 2)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    child.stdout?.emit('data', 'first\nsecond.ts\0trailing\r\0third.ts\0')
+    await expect(promise).resolves.toEqual(['first\nsecond.ts', 'trailing\r'])
+    expect(child.kill).toHaveBeenCalled()
+  })
+
   it('rejects a synchronous launch failure before cleanup has been initialized', async () => {
     spawnMock.mockImplementationOnce(() => {
       throw Object.assign(new Error('spawn EMFILE'), { code: 'EMFILE' })
@@ -122,7 +149,7 @@ describe('filesystem-list-files', () => {
     )
 
     setTimeout(() => {
-      ;(p1.stdout as unknown as EventEmitter).emit('data', 'one.ts\ntwo.ts')
+      p1.stdout?.emit('data', 'one.ts\0two.ts')
       p1.emit('close', 0, null)
     }, 0)
     const result = await promise
@@ -136,38 +163,60 @@ describe('filesystem-list-files', () => {
     expect(spawnMock.mock.calls[0]?.[1]).not.toContain('--version')
   })
 
-  it('merges normal files and ignored files and filters correctly', async () => {
-    const p1 = createMockProcess()
-    const p2 = createMockProcess()
+  it('keeps source files first when only a serialized byte budget is provided', async () => {
+    const source = createMockProcess()
+    const broad = createMockProcess()
+    spawnMock.mockImplementation((_command, args: string[]) =>
+      isIgnoredRgPass(args) ? broad : source
+    )
+    const listing = listQuickOpenFiles(
+      '/mock/root',
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: authorization and workspace lookup are mocked above.
+      {} as Store,
+      undefined,
+      undefined,
+      undefined,
+      20
+    )
+    await flushMicrotasks()
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(spawnMock.mock.calls[0]?.[1]).not.toContain('--no-ignore-vcs')
+    source.stdout?.emit('data', 'source.ts\0')
+    source.emit('close', 0, null)
+    await flushMicrotasks()
+    expect(spawnMock).toHaveBeenCalledTimes(2)
+    expect(spawnMock.mock.calls[1]?.[1]).toContain('--no-ignore-vcs')
+    broad.stdout?.emit('data', 'ignored-file.ts\0')
+    await expect(listing).resolves.toEqual(['source.ts'])
+    expect(broad.kill).toHaveBeenCalledOnce()
+  })
 
-    spawnMock.mockImplementation((_cmd, args: string[]) => {
-      if (isIgnoredRgPass(args)) {
-        return p2
-      }
-      return p1
-    })
+  it('lists normal and ignored files with one broad scan and filters correctly', async () => {
+    const p1 = createMockProcess()
+
+    spawnMock.mockReturnValue(p1)
 
     const storeMock = {} as unknown as Store
     const promise = listQuickOpenFiles('/mock/root', storeMock)
     await flushMicrotasks()
-    expect(spawnMock).toHaveBeenCalledTimes(2)
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(spawnMock.mock.calls[0]?.[1]).toContain('--no-ignore-vcs')
 
     // Simulate stdout output for normal files
     setTimeout(() => {
-      ;(p1.stdout as unknown as EventEmitter).emit('data', 'file1.ts\n')
-      ;(p1.stdout as unknown as EventEmitter).emit('data', 'node_modules/bad.js\n')
-      ;(p1.stdout as unknown as EventEmitter).emit('data', '.git/config\n')
-      ;(p1.stdout as unknown as EventEmitter).emit('data', '.github/workflows/ci.yml\n')
-      ;(p1.stdout as unknown as EventEmitter).emit('data', 'dir1/') // incomplete line
-      ;(p1.stdout as unknown as EventEmitter).emit('data', 'file2.js\n')
-      p1.emit('close', 0, null)
+      p1.stdout?.emit('data', 'file1.ts\0')
+      p1.stdout?.emit('data', 'node_modules/bad.js\0')
+      p1.stdout?.emit('data', '.git/config\0')
+      p1.stdout?.emit('data', '.github/workflows/ci.yml\0')
+      p1.stdout?.emit('data', 'dir1/') // incomplete line
+      p1.stdout?.emit('data', 'file2.js\0')
 
-      // Simulate stdout output for ignored files
-      ;(p2.stdout as unknown as EventEmitter).emit('data', '.env.local\n')
-      ;(p2.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\n')
-      ;(p2.stdout as unknown as EventEmitter).emit('data', 'file1.ts\n') // Duplicate
-      ;(p2.stdout as unknown as EventEmitter).emit('data', 'node_modules/ignored.js\n')
-      p2.emit('close', 0, null)
+      // The broad pass includes ignored files too.
+      p1.stdout?.emit('data', '.env.local\0')
+      p1.stdout?.emit('data', 'dist/generated.js\0')
+      p1.stdout?.emit('data', 'file1.ts\0') // Duplicate
+      p1.stdout?.emit('data', 'node_modules/ignored.js\0')
+      p1.emit('close', 0, null)
     }, 10)
 
     const result = await promise
@@ -183,23 +232,16 @@ describe('filesystem-list-files', () => {
 
   it('spawns the bundled Linux rg inside the registered WSL runtime for Windows-path worktrees', async () => {
     const p1 = createMockProcess()
-    const p2 = createMockProcess()
     getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
 
-    spawnMock.mockImplementation((_cmd, args: string[]) => {
-      if (isIgnoredRgPass(args)) {
-        return p2
-      }
-      return p1
-    })
+    spawnMock.mockReturnValue(p1)
 
     const storeMock = {} as unknown as Store
     const promise = listQuickOpenFiles('C:\\repo', storeMock)
 
     setTimeout(() => {
-      ;(p1.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\n')
+      p1.stdout?.emit('data', 'src/index.ts\0')
       p1.emit('close', 0, null)
-      p2.emit('close', 0, null)
     }, 10)
 
     await expect(promise).resolves.toEqual(['src/index.ts'])
@@ -214,23 +256,16 @@ describe('filesystem-list-files', () => {
 
   it('normalizes absolute WSL rg output for Windows-path worktrees', async () => {
     const p1 = createMockProcess()
-    const p2 = createMockProcess()
     getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
 
-    spawnMock.mockImplementation((_cmd, args: string[]) => {
-      if (isIgnoredRgPass(args)) {
-        return p2
-      }
-      return p1
-    })
+    spawnMock.mockReturnValue(p1)
 
     const storeMock = {} as unknown as Store
     const promise = listQuickOpenFiles('C:\\repo', storeMock)
 
     setTimeout(() => {
-      ;(p1.stdout as unknown as EventEmitter).emit('data', '/mnt/c/repo/src/index.ts\n')
+      p1.stdout?.emit('data', '/mnt/c/repo/src/index.ts\0')
       p1.emit('close', 0, null)
-      p2.emit('close', 0, null)
     }, 10)
 
     await expect(promise).resolves.toEqual(['src/index.ts'])
@@ -238,16 +273,13 @@ describe('filesystem-list-files', () => {
 
   it('treats a WSL launcher exit 127 as the bundled rg failing to start', async () => {
     const p1 = createMockProcess()
-    const p2 = createMockProcess()
     Object.defineProperty(p1, 'pid', { value: 1 })
-    Object.defineProperty(p2, 'pid', { value: 2 })
     getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
-    spawnMock.mockImplementation((_cmd, args: string[]) => (isIgnoredRgPass(args) ? p2 : p1))
+    spawnMock.mockReturnValue(p1)
 
     const promise = listQuickOpenFiles('C:\\repo', {} as unknown as Store)
     setTimeout(() => {
       p1.emit('close', 127, null)
-      p2.emit('close', 0, null)
     }, 0)
 
     await expect(promise).rejects.toThrow(BUNDLED_ERROR)
@@ -256,48 +288,33 @@ describe('filesystem-list-files', () => {
 
   it("rejects with the bundled-ripgrep error when a native launcher exits outside ripgrep's contract", async () => {
     const p1 = createMockProcess()
-    const p2 = createMockProcess()
-    spawnMock.mockImplementation((_cmd, args: string[]) => (isIgnoredRgPass(args) ? p2 : p1))
+    spawnMock.mockReturnValue(p1)
 
     const promise = listQuickOpenFiles('/mock/root', {} as unknown as Store)
     setTimeout(() => p1.emit('close', 127, null), 0)
 
     await expect(promise).rejects.toThrow(BUNDLED_ERROR)
-    expect(p2.kill).toHaveBeenCalled()
   })
 
   it('rejects rg failures instead of resolving a false-empty list', async () => {
     const p1 = createMockProcess()
-    const p2 = createMockProcess()
 
-    spawnMock.mockImplementation((_cmd, args: string[]) => {
-      if (isIgnoredRgPass(args)) {
-        return p2
-      }
-      return p1
-    })
+    spawnMock.mockReturnValue(p1)
 
     const storeMock = {} as unknown as Store
     const promise = listQuickOpenFiles('/mock/root', storeMock)
 
     setTimeout(() => {
       p1.emit('close', 2, null)
-      p2.emit('close', 0, null)
     }, 10)
 
     await expect(promise).rejects.toThrow('rg exited with code 2')
   })
 
-  it('kills the sibling rg pass after one pass fails', async () => {
+  it('does not start another scan after the admitted pass fails', async () => {
     const p1 = createMockProcess()
-    const p2 = createMockProcess()
 
-    spawnMock.mockImplementation((_cmd, args: string[]) => {
-      if (isIgnoredRgPass(args)) {
-        return p2
-      }
-      return p1
-    })
+    spawnMock.mockReturnValue(p1)
 
     const storeMock = {} as unknown as Store
     const promise = listQuickOpenFiles('/mock/root', storeMock)
@@ -308,27 +325,20 @@ describe('filesystem-list-files', () => {
     }, 10)
 
     await expect(promise).rejects.toThrow('rg exited with code 2')
-    expect(p2.kill).toHaveBeenCalled()
+    expect(spawnMock).toHaveBeenCalledTimes(1)
   })
 
   it('accepts rg code 2 when rg emitted parseable paths first', async () => {
     const p1 = createMockProcess()
-    const p2 = createMockProcess()
 
-    spawnMock.mockImplementation((_cmd, args: string[]) => {
-      if (isIgnoredRgPass(args)) {
-        return p2
-      }
-      return p1
-    })
+    spawnMock.mockReturnValue(p1)
 
     const storeMock = {} as unknown as Store
     const promise = listQuickOpenFiles('/mock/root', storeMock)
 
     setTimeout(() => {
-      ;(p1.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\n')
+      p1.stdout?.emit('data', 'src/index.ts\0')
       p1.emit('close', 2, null)
-      p2.emit('close', 0, null)
     }, 10)
 
     await expect(promise).resolves.toEqual(['src/index.ts'])
@@ -339,14 +349,8 @@ describe('filesystem-list-files', () => {
 
     try {
       const p1 = createMockProcess()
-      const p2 = createMockProcess()
 
-      spawnMock.mockImplementation((_cmd, args: string[]) => {
-        if (isIgnoredRgPass(args)) {
-          return p2
-        }
-        return p1
-      })
+      spawnMock.mockReturnValue(p1)
 
       const storeMock = {} as unknown as Store
       const promise = listQuickOpenFiles('/mock/root', storeMock)
@@ -355,14 +359,13 @@ describe('filesystem-list-files', () => {
       await Promise.resolve()
       await Promise.resolve()
 
-      ;(p1.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\npartial')
+      p1.stdout?.emit('data', 'src/index.ts\0partial')
       const rejection = expect(promise).rejects.toThrow('rg list timed out')
 
       await vi.advanceTimersByTimeAsync(10000)
 
       await rejection
       expect(p1.kill).toHaveBeenCalled()
-      expect(p2.kill).toHaveBeenCalled()
       expect((p1.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
       expect((p1.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
       expect(p1.listenerCount('error')).toBe(0)
@@ -374,8 +377,7 @@ describe('filesystem-list-files', () => {
 
   it('kills local rg scans when a paired listing is cancelled', async () => {
     const p1 = createMockProcess()
-    const p2 = createMockProcess()
-    spawnMock.mockImplementation((_cmd, args: string[]) => (isIgnoredRgPass(args) ? p2 : p1))
+    spawnMock.mockReturnValue(p1)
     const controller = new AbortController()
     const cancellation = new FileListingCancelledError('superseded')
     const promise = listQuickOpenFiles(
@@ -390,34 +392,24 @@ describe('filesystem-list-files', () => {
 
     await expect(promise).rejects.toBe(cancellation)
     expect(p1.kill).toHaveBeenCalledOnce()
-    expect(p2.kill).toHaveBeenCalledOnce()
   })
 
   it('filters out .next, .cache, .stably, .vscode, .idea', async () => {
     const p1 = createMockProcess()
-    const p2 = createMockProcess()
 
-    spawnMock.mockImplementation((_cmd, args: string[]) => {
-      if (isIgnoredRgPass(args)) {
-        return p2
-      }
-      return p1
-    })
+    spawnMock.mockReturnValue(p1)
 
     const storeMock = {} as unknown as Store
     const promise = listQuickOpenFiles('/mock/root', storeMock)
 
     setTimeout(() => {
-      ;(p1.stdout as unknown as EventEmitter).emit('data', '.next/cache/1.js\n')
-      ;(p1.stdout as unknown as EventEmitter).emit('data', '.cache/data.json\n')
-      ;(p1.stdout as unknown as EventEmitter).emit('data', '.stably/config.json\n')
-      ;(p1.stdout as unknown as EventEmitter).emit('data', '.vscode/settings.json\n')
-      ;(p1.stdout as unknown as EventEmitter).emit('data', '.idea/workspace.xml\n')
-      ;(p1.stdout as unknown as EventEmitter).emit('data', 'valid.ts\n')
+      p1.stdout?.emit('data', '.next/cache/1.js\0')
+      p1.stdout?.emit('data', '.cache/data.json\0')
+      p1.stdout?.emit('data', '.stably/config.json\0')
+      p1.stdout?.emit('data', '.vscode/settings.json\0')
+      p1.stdout?.emit('data', '.idea/workspace.xml\0')
+      p1.stdout?.emit('data', 'valid.ts\0')
       p1.emit('close', 0, null)
-
-      // Empty ignored result
-      p2.emit('close', 0, null)
     }, 10)
 
     const result = await promise
@@ -451,7 +443,7 @@ describe('filesystem-list-files', () => {
   })
 
   describe('when the bundled rg cannot start', () => {
-    it('kills only the admitted pass when ignored rg fails before spawn', async () => {
+    it('does not kill a process that failed before receiving a pid', async () => {
       const primary = createMockProcess()
       const missingIgnored = createMockProcess()
       Object.defineProperty(missingIgnored, 'pid', { value: undefined })
@@ -461,11 +453,11 @@ describe('filesystem-list-files', () => {
 
       const promise = listQuickOpenFiles('/mock/root', {} as unknown as Store)
       await flushMicrotasks()
-      expect(spawnMock).toHaveBeenCalledTimes(2)
+      expect(spawnMock).toHaveBeenCalledTimes(1)
       missingIgnored.emit('close', -2, null)
 
       await expect(promise).rejects.toThrow(BUNDLED_ERROR)
-      expect(primary.kill).toHaveBeenCalled()
+      expect(primary.kill).not.toHaveBeenCalled()
       expect(missingIgnored.kill).not.toHaveBeenCalled()
       const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
       expect(() => missingIgnored.emit('error', error)).not.toThrow()

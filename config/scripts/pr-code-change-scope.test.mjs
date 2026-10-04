@@ -587,14 +587,16 @@ describe('PR Checks skip wiring', () => {
     expect(prWorkflow.jobs.code_paths.outputs.mobile_dependencies).toBe(
       '${{ steps.filter.outputs.mobile_dependencies }}'
     )
-    const steps = prWorkflow.jobs.static_analysis.steps
+    const steps = prWorkflow.jobs.preflight.steps
     const install = steps.findIndex(
       (step) => step.uses === './.github/actions/install-mobile-dependencies'
     )
     const gate = steps.findIndex((step) => step.name === 'Enforce changed-code quality')
     expect(install).toBeGreaterThan(-1)
     expect(install).toBeLessThan(gate)
-    expect(steps[install].if).toBe("needs.code_paths.outputs.mobile_dependencies == 'true'")
+    expect(steps[install].if).toBe(
+      "needs.code_paths.outputs.static_analysis == 'true' && needs.code_paths.outputs.mobile_dependencies == 'true'"
+    )
     // The install itself moved into the action the packaging jobs share; assert it there so
     // this job cannot keep the step while the action stops installing anything.
     const action = parse(
@@ -621,21 +623,21 @@ describe('PR Checks skip wiring', () => {
   })
 
   it('gates each expensive job on its classifier and cache prerequisite', () => {
-    for (const jobName of expensiveJobs.filter((jobName) => jobName !== 'test')) {
+    for (const jobName of expensiveJobs.filter(
+      (jobName) => !['test', 'static_analysis', 'typecheck'].includes(jobName)
+    )) {
       expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(
         ['package', 'package_windows'].includes(jobName)
-          ? ['code_paths', 'static_analysis', 'typecheck']
+          ? ['code_paths', 'preflight']
           : ['code_paths']
       )
       expect(prWorkflow.jobs[jobName].if, jobName).toBe(
         `needs.code_paths.outputs.${jobName} == 'true'`
       )
     }
-    expect(prWorkflow.jobs.test.needs).toEqual(['code_paths', 'static_analysis', 'typecheck'])
-    expect(prWorkflow.jobs.test.if).toContain("needs.static_analysis.result == 'success'")
-    expect(prWorkflow.jobs.test.if).toContain("needs.typecheck.result == 'success'")
+    expect(prWorkflow.jobs.test.if).toContain("needs.preflight.result == 'success'")
     expect(prWorkflow.jobs.test.if).toContain("needs.code_paths.outputs.test == 'true'")
-    expect(prWorkflow.jobs.test.with.shards).toBe('${{ needs.typecheck.outputs.shards }}')
+    expect(prWorkflow.jobs.test.with.shards).toBe('${{ needs.preflight.outputs.shards }}')
     expect(prWorkflow.jobs.unit_plan).toBeUndefined()
     expect(prWorkflow.jobs.test_native_cache).toBeUndefined()
   })
@@ -659,7 +661,7 @@ describe('PR Checks skip wiring', () => {
     expect(verifyStep.run).toContain('expected skipped')
     expect(verifyStep.run).toContain('expected success')
     for (const job of prWorkflow.jobs.verify.needs) {
-      if (job === 'code_paths') {
+      if (job === 'code_paths' || job === 'preflight') {
         continue
       }
       const envVar = `${job.replaceAll('-', '_').toUpperCase()}_SHOULD_RUN`

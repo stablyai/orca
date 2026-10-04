@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseAgentStateRuleFiles } from './agent-state-rules-catalog'
 import { compileTextAnchors, findPromptAnchorIndexes } from './agent-state-text-anchors'
-import { TERMINAL_WAIT_BLOCKED_SENTINEL_RE } from './blocked-text-layer'
+import { terminalWaitBlockedSentinelRe } from './blocked-text-layer'
 import { detectTerminalWaitBlockedReason } from '../terminal-wait-detection'
 
 function anchorsOf(anchors: unknown[]) {
@@ -79,6 +79,6 @@ describe('the bundled Cursor approval menu', () => {
 
 describe('the blocked layer prefilter', () => {
   it('includes every bundled blocked anchor', () => {
-    expect(TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test('Run this command?')).toBe(true)
+    expect(terminalWaitBlockedSentinelRe().test('Run this command?')).toBe(true)
   })
 })

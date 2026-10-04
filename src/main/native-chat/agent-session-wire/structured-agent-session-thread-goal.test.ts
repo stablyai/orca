@@ -65,8 +65,7 @@ function appendGoalRow(
 
 function context(
   journal: AgentSessionJournal,
-  adapter: Partial<StructuredAgentSessionAdapter>,
-  flushStreamedEvents: () => Promise<void> = async () => undefined
+  adapter: Partial<StructuredAgentSessionAdapter>
 ): AgentSessionTurnContext {
   return {
     logger: createStructuredAgentSessionLogger(),
@@ -78,7 +77,6 @@ function context(
     persistOptions: async () => undefined,
     resolvedBy: 'client-1',
     publish: vi.fn(),
-    flushStreamedEvents,
     now: () => 1
   }
 }
@@ -260,19 +258,19 @@ describe('performThreadGoalChange', () => {
     ])
   })
 
-  it('drains accepted provider events before deciding whether a set replaces a goal', async () => {
+  it('reads a goal the provider reported, still landing when the set arrives, as the one it replaces', async () => {
     const journal = await openJournal()
     const changeThreadGoal = vi.fn(async () => ({ ok: true as const }))
-    // The goal the provider reported is still in the deferred sink when the set arrives.
-    const ctx = context(journal, { changeThreadGoal, supportsThreadGoal: () => true }, async () => {
-      await appendGoalRow(journal, { status: 'active' })
-    })
+    const ctx = context(journal, { changeThreadGoal, supportsThreadGoal: () => true })
 
+    // Issued, not yet landed: the set's read takes its place behind it in the journal's queue.
+    const landing = appendGoalRow(journal, { status: 'active' })
     await performThreadGoalChange(ctx, {
       clientOperationId: 'op-10',
       change: { kind: 'set', objective: 'Ship the tests' }
     })
 
+    await landing
     expect(changeThreadGoal).toHaveBeenCalledWith(expect.objectContaining({ replacesGoal: true }))
   })
 })

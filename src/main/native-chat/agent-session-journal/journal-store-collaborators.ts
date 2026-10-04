@@ -20,6 +20,7 @@ import { JournalRowWriter } from './journal-row-writer'
 import { restoreJournalStore } from './journal-store-restore'
 import type { JournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
+import type { JournalWriteBody } from './journal-write-queue'
 
 export type JournalStoreHost = {
   /** Fires the journal's commit listener for a durable change that appended no
@@ -31,7 +32,7 @@ export type JournalStoreHost = {
   legacyDirectory: string
   now: () => number
   mintEpoch: () => string
-  serialize: <T>(run: () => Promise<T>) => Promise<T>
+  serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
   /** Leave a chat still in its per-chat file uncopied until its first use. */
   deferPerSessionImport: boolean
   /** Work the chat's next write waits for. */

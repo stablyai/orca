@@ -161,6 +161,9 @@ export function finalizeSession(
     totalTokens: accumulator.totalTokens,
     previewMessages: accumulator.previewMessages,
     ...(accumulator.previewMessagesTruncated ? { previewMessagesTruncated: true } : {}),
+    ...(accumulator.antigravityOpeningPrompt
+      ? { antigravityOpeningPrompt: accumulator.antigravityOpeningPrompt }
+      : {}),
     ...(accumulator.firstUserPrompt ? { firstUserPrompt: accumulator.firstUserPrompt } : {}),
     ...(accumulator.lastUserPrompt ? { lastUserPrompt: accumulator.lastUserPrompt } : {}),
     queuedMessageCount: accumulator.queuedMessageCount,

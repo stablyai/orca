@@ -1,11 +1,14 @@
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
-import { isOpenCodeSharedServerPost } from '../../../shared/agent-hook-listener/opencode-session-registry'
+import {
+  bindOpenCodeTuiSession,
+  isOpenCodeSharedServerPost
+} from '../../../shared/agent-hook-listener/opencode-session-registry'
 import type { NormalizedLocalHook } from './server-types'
-import { AgentHookServerOpenCodeBinder } from './server-opencode-binder'
+import { AgentHookServerTmuxStatus } from './server-tmux-status'
 
-export abstract class AgentHookServerIngestNormalization extends AgentHookServerOpenCodeBinder {
+export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
   protected setClaudeBackgroundEvidence(
     paneKey: string,
     hasRunningTask: boolean,
@@ -23,9 +26,25 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
   }
 
-  protected normalizeLocalHookPayload(source: AgentHookSource, body: unknown): NormalizedLocalHook {
+  protected normalizeLocalHookPayload(
+    source: AgentHookSource,
+    body: unknown,
+    isReplay = false
+  ): NormalizedLocalHook {
     if (source !== 'claude' || typeof body !== 'object' || body === null) {
-      const event = normalizeHookPayload(this.state, source, body, this.env)
+      const event = normalizeHookPayload(this.state, source, body, this.env, {
+        admitOpenCodeTui: (identity) => {
+          const disposition = this.getAgentStatusDisposition(identity.paneKey, {
+            ...identity,
+            source,
+            isReplay
+          })
+          if (disposition === 'restart') {
+            this.observations.rebind(identity.paneKey)
+          }
+          return disposition !== 'suppress'
+        }
+      })
       if (
         event &&
         event.hookEventName === 'SessionStart' &&
@@ -34,7 +53,11 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
         // Why: a birth just arrived; bind it now instead of waiting out the poll interval.
         this.kickOpenCodeBinder()
       }
-      return { event }
+      return {
+        event,
+        onAccepted: () =>
+          bindOpenCodeTuiSession(this.state, source, body, event?.providerSession?.id)
+      }
     }
     const rawPaneKey = (body as Record<string, unknown>).paneKey
     const paneKey = typeof rawPaneKey === 'string' ? rawPaneKey.trim() : ''
@@ -63,7 +86,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       return
     }
     const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
-    const normalized = this.normalizeLocalHookPayload(record.source, body)
+    const normalized = this.normalizeLocalHookPayload(record.source, body, true)
     if (!normalized.event) {
       return
     }

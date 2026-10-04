@@ -14,8 +14,6 @@ import {
 } from '../omitted-host-scope-selectors'
 import { RuntimeClientError } from '../runtime-client'
 import {
-  getOptionalNullableNumberFlag,
-  getOptionalNumberFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
@@ -34,26 +32,13 @@ import {
   resolveProjectCreateRepoSelector
 } from '../worktree-project-target'
 import {
-  assertCreateParentFlagsCompatible,
+  assertWorktreeParentFlagsCompatible,
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
-
-function assertParentWorktreeFlagsCompatible(flags: Map<string, string | boolean>): void {
-  if (flags.has('parent-worktree') && flags.get('no-parent') === true) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Choose either --parent-worktree or --no-parent, not both.'
-    )
-  }
-  const parentWorktree = flags.get('parent-worktree')
-  if (
-    flags.has('parent-worktree') &&
-    (typeof parentWorktree !== 'string' || parentWorktree === '')
-  ) {
-    throw new RuntimeClientError('invalid_argument', 'Missing required --parent-worktree')
-  }
-}
+import { getOptionalWorktreeUnreadFlag } from './worktree-unread-flag'
+import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
+import { assertGitLabLinkFlagProjectsMatch } from './worktree-gitlab-link-context'
 
 function getEnvParentWorkspace(): string | undefined {
   const workspaceId = process.env.ORCA_WORKSPACE_ID
@@ -183,8 +168,9 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree create': async ({ flags, client, cwd, json }) => {
-    assertCreateParentFlagsCompatible(flags)
+    assertWorktreeParentFlagsCompatible(flags)
     assertWorkspaceTargetFlagsCompatible(flags)
+    const reviewLinks = getReviewTargetLinkFlags(flags)
     const callerTerminalHandle =
       typeof process.env.ORCA_TERMINAL_HANDLE === 'string' &&
       process.env.ORCA_TERMINAL_HANDLE.length > 0
@@ -218,13 +204,15 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
     const activate = flags.get('activate') === true || flags.get('run-hooks') === true
     const name = getRequiredStringFlag(flags, 'name')
+    const repo = await getCreateRepoSelector(flags, cwdParentWorktree, client)
+    await assertGitLabLinkFlagProjectsMatch(flags, client, { repo })
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
-      repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
+      repo,
       name,
       displayName: name,
       displayNameKind: 'user',
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
-      linkedIssue: getOptionalNumberFlag(flags, 'issue'),
+      ...reviewLinks,
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
@@ -255,17 +243,25 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree set': async ({ flags, client, cwd, json }) => {
-    assertParentWorktreeFlagsCompatible(flags)
+    assertWorktreeParentFlagsCompatible(
+      flags,
+      'Choose either --parent-worktree or --no-parent, not both.'
+    )
+    const isUnread = getOptionalWorktreeUnreadFlag(flags)
+    const reviewLinks = getReviewTargetLinkFlags(flags, { nullable: true })
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
       allowNull: true
     })
+    const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
+    await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.set', {
-      worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
+      worktree,
       displayName: getOptionalStringFlag(flags, 'display-name'),
-      linkedIssue: getOptionalNullableNumberFlag(flags, 'issue'),
+      ...reviewLinks,
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
+      isUnread,
       parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
       noParent: flags.get('no-parent') === true
     })

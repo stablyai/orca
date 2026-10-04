@@ -1,7 +1,8 @@
 import {
   projectPendingWorktreeRemovals,
-  snapshotPendingWorktreeRemovals
-} from '../../../worktree-background-removal'
+  snapshotPendingWorktreeRemovals,
+  withUnregisteredRemovalCheckouts
+} from '../../../worktree-removal-listing'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost
@@ -149,6 +150,9 @@ export async function listDetectedWorktreesForCapturedRepo(
       return abortedResult() ?? null
     }
     const { gitWorktrees, fresh: freshScan, sideEffectToken, metadataPrune, hygieneDue } = scan
+    const localRows = connectionId
+      ? gitWorktrees
+      : await withUnregisteredRemovalCheckouts(repo.id, gitWorktrees)
     const aborted = abortedResult()
     if (aborted) {
       return aborted
@@ -193,7 +197,7 @@ export async function listDetectedWorktreesForCapturedRepo(
         ? buildDetectedGitWorktrees(store, repo, gitWorktrees, allMeta)
         : // Why always marked: the desktop renderer ships with this main process.
           projectPendingWorktreeRemovals(
-            buildDetectedGitWorktrees(store, repo, gitWorktrees, allMeta),
+            buildDetectedGitWorktrees(store, repo, localRows, allMeta),
             (worktree) => worktree.id,
             true,
             pendingAtScan

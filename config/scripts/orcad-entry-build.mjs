@@ -8,7 +8,8 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   watcher: 'src/main/ipc/parcel-watcher-process-entry.ts',
   daemon: 'src/main/daemon/daemon-entry.ts',
   writer: 'src/main/persistence/profile-state/profile-state-writer-worker-entry.ts',
-  backup: 'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts'
+  backup: 'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts',
+  foreignSqliteReader: 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts'
 }
 
 export const ORCAD_EXTERNAL_MODULES = ['electron', 'node-pty', '@parcel/watcher', 'fsevents']

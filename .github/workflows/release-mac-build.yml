@@ -158,6 +158,8 @@ jobs:
 
       # Design D2: the parent release-cut run merged it from every node-server lane at this tag.
       - name: Download the orcad deployment template from the release run
+        # Why: release-cut skips the template for a tag that predates it.
+        if: hashFiles('config/scripts/packaged-orcad-template.cjs') != ''
         uses: actions/download-artifact@v8
         with:
           name: orcad-template

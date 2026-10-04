@@ -1,6 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
+import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
 import { RateLimitServiceAccountRefresh } from './service-account-refresh'
 import {
   type CodexAccountSelectionTarget,
@@ -10,6 +11,8 @@ import {
   type ClaudeAuthPreparationResolver,
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
+  type AntigravityUsageEnabledResolver,
+  type ZcodePlanRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
   type InactiveCodexAccountInfo,
   type InactiveClaudeAccountInfo,
@@ -40,16 +43,28 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.claudeFetchTarget = normalizeClaudeAccountSelectionTarget(target)
   }
 
-  setOpenCodeGoConfigResolver(resolver: () => OpenCodeGoRateLimitConfig): void {
+  setOpenCodeGoConfigResolver(
+    resolver: () => OpenCodeGoRateLimitConfig,
+    apiKeyResolver?: () => string | null
+  ): void {
     this.openCodeGoConfigResolver = resolver
+    this.openCodeGoApiKeyResolver = apiKeyResolver ?? null
   }
 
   setMiniMaxConfigResolver(resolver: () => MiniMaxRateLimitConfig): void {
     this.miniMaxConfigResolver = resolver
   }
 
+  setZcodePlanConfigResolver(resolver: () => ZcodePlanRateLimitConfig): void {
+    this.zcodePlanConfigResolver = resolver
+  }
+
   setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {
     this.geminiCliOAuthEnabledResolver = resolver
+  }
+
+  setAntigravityUsageEnabledResolver(resolver: AntigravityUsageEnabledResolver): void {
+    this.antigravityUsageEnabledResolver = resolver
   }
 
   setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {
@@ -125,6 +140,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
       // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
       minimaxApiKeyConfigured: hasMiniMaxApiKey(),
+      zcodePlanApiKeyConfigured: hasZcodePlanApiKey(),
       opencodeGoApiKeyConfigured: this.openCodeGoApiKeyConfigured,
       grokAuthConfigured: this.grokAuthConfigured,
       cursorAuthConfigured: this.cursorAuthConfigured,

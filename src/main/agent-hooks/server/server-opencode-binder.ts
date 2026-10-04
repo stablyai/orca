@@ -3,13 +3,15 @@ import {
   applyBinderOwnerships,
   defaultOpenCodeDbPath,
   listBinderPaneSnapshots,
-  listOpenCodeDbSessions,
   OPENCODE_SESSION_CURSOR_START,
   runOpenCodeBinderRound,
-  type BinderPaneSnapshot,
-  type BinderSessionRow,
-  type OpenCodeSessionCursor
+  type BinderPaneSnapshot
 } from '../../opencode/opencode-session-binder'
+import type {
+  BinderSessionRow,
+  OpenCodeSessionCursor
+} from '../../foreign-sqlite-readers/opencode-binder-sessions-result'
+import { readOpenCodeBinderSessions } from '../../foreign-sqlite-readers/foreign-sqlite-reader-spawn'
 import {
   sweepProcessIdentities,
   type ProcessIdentityRow
@@ -29,7 +31,8 @@ const OPENCODE_BINDER_UNBOUND_MAX = 500
 export type OpenCodeBinderLoopDeps = {
   now: () => number
   dbPath: () => string
-  listSessions: (dbPath: string, cursor: OpenCodeSessionCursor) => BinderSessionRow[]
+  /** Resolves `[]` when the store or its worker cannot answer; never rejects. */
+  listSessions: (dbPath: string, cursor: OpenCodeSessionCursor) => Promise<BinderSessionRow[]>
   listPanes: () => BinderPaneSnapshot[]
   sweep: () => Promise<ProcessIdentityRow[]>
 }
@@ -54,7 +57,7 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
   private openCodeBinderDeps: OpenCodeBinderLoopDeps = {
     now: () => Date.now(),
     dbPath: () => defaultOpenCodeDbPath(),
-    listSessions: (dbPath, sinceMs) => listOpenCodeDbSessions(dbPath, sinceMs),
+    listSessions: (dbPath, cursor) => readOpenCodeBinderSessions(dbPath, cursor),
     listPanes: () => listBinderPaneSnapshots(),
     sweep: () => sweepProcessIdentities()
   }
@@ -131,7 +134,11 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
     try {
       const deps = this.openCodeBinderDeps
       const nowMs = deps.now()
-      const fresh = deps.listSessions(deps.dbPath(), this.openCodeBinderWatermark)
+      const fresh = await deps.listSessions(deps.dbPath(), this.openCodeBinderWatermark)
+      // Why: stop() may land while the worker reads; its state and watermark were reset.
+      if (generation !== this.openCodeBinderGeneration) {
+        return 0
+      }
       const sessions = [...fresh]
       for (const [id, entry] of this.openCodeBinderUnbound) {
         if (nowMs - entry.firstSeenMs > OPENCODE_BINDER_UNBOUND_RETRY_MS) {

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { runProcess } from '../../shared/child-process/run-process'
+import { stdoutShowsModelTurn } from './antigravity-usage-response'
 import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 
 /**
@@ -14,7 +16,23 @@ const enabled = process.env.ORCA_REAL_AGY_CLI_TEST === '1'
 
 describe.skipIf(!enabled)('Antigravity usage against the real agy CLI', () => {
   it('reports quota with at least one named pool', async () => {
-    const result = await fetchAntigravityRateLimits()
+    const calls: string[] = []
+    const result = await fetchAntigravityRateLimits({
+      runCommand: async (spec) => {
+        const output = await runProcess(spec)
+        calls.push(spec.args?.[0] ?? '')
+        if (spec.args?.[0] === '-p') {
+          expect(stdoutShowsModelTurn(output.stdout)).toBe(false)
+          const envelope: unknown = JSON.parse(output.stdout)
+          expect(envelope).toMatchObject({
+            conversation_id: '',
+            num_turns: 0
+          })
+        }
+        return output
+      }
+    })
+    expect(calls[0]).toBe('--version')
 
     if (result.status !== 'ok') {
       // A machine with no agy or no sign-in still proves the classification, not a crash.
@@ -23,6 +41,7 @@ describe.skipIf(!enabled)('Antigravity usage against the real agy CLI', () => {
       return
     }
 
+    expect(calls).toEqual(['--version', '-p'])
     expect(result.provider).toBe('antigravity')
     expect(result.error).toBeNull()
     expect(result.buckets?.length).toBeGreaterThan(0)

@@ -112,10 +112,10 @@ function connectRestoredSshPane(): {
 }
 
 describe('restored SSH pane input typed while its reattach is in flight', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
     seedRestoredSshTab()
   })
 

@@ -89,8 +89,8 @@ export async function settleUnexpectedStructuredAgentSessionExit<
     }
 
     const stableSettlementId = providerExitSettlementId(unexpectedEvent)
-    const unfinishedWork = captureUnfinishedStructuredAgentSessionWork(session.journal)
     try {
+      // The exited child's own writes land first: its dead generation is settled from all of them.
       try {
         const barrier = await context.flushLifecycle(unexpectedEvent.sessionId)
         if (!barrier.ok) {
@@ -99,6 +99,7 @@ export async function settleUnexpectedStructuredAgentSessionExit<
       } catch (error) {
         logExitFailure(context, unexpectedEvent, 'exit-lifecycle-barrier', error)
       }
+      const unfinishedWork = captureUnfinishedStructuredAgentSessionWork(session.journal)
       await retryUnexpectedExitSettlement({
         context,
         event: unexpectedEvent,

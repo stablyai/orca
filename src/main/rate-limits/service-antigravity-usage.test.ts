@@ -133,3 +133,66 @@ describe('RateLimitService Antigravity usage', () => {
     expect(state.gemini?.status).toBe('ok')
   })
 })
+
+describe('Antigravity usage gating', () => {
+  beforeEach(() => {
+    resetRateLimitProviderMocks()
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 0, Date.now()))
+  })
+
+  it('never spawns agy when the usage meter is hidden', async () => {
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 30))
+    const service = new RateLimitService()
+    service.setAntigravityUsageEnabledResolver(() => false)
+
+    await service.refresh()
+
+    // Why: the probe starts the agy language server for ~2.5 s. A user not showing the meter
+    // should not pay that every cycle.
+    expect(fetchAntigravityRateLimits).not.toHaveBeenCalled()
+    expect(service.getState().antigravity?.status).toBe('idle')
+    // Why the rest must be untouched: gating one provider cannot gate the cycle.
+    expect(service.getState().gemini?.status).toBe('ok')
+  })
+
+  it('spawns agy when the meter is shown', async () => {
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 30))
+    const service = new RateLimitService()
+    service.setAntigravityUsageEnabledResolver(() => true)
+
+    await service.refresh()
+
+    expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(1)
+    expect(service.getState().antigravity?.status).toBe('ok')
+  })
+
+  it('fetches when no resolver is configured', async () => {
+    // Why default-on: the status bar shows Antigravity by default, so an unconfigured service
+    // must still fill the meter rather than silently reporting nothing.
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 30))
+    const service = new RateLimitService()
+
+    await service.refresh()
+
+    expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the last reading when the meter is hidden mid-session', async () => {
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 44))
+    const service = new RateLimitService()
+    let enabled = true
+    service.setAntigravityUsageEnabledResolver(() => enabled)
+    await service.refresh()
+    expect(service.getState().antigravity?.session?.usedPercent).toBe(44)
+
+    enabled = false
+    await service.refresh()
+
+    // Why kept: hiding the meter is not evidence the quota changed, and re-showing it should not
+    // flash an empty segment while the next poll runs.
+    expect(service.getState().antigravity?.session?.usedPercent).toBe(44)
+    expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(1)
+  })
+})

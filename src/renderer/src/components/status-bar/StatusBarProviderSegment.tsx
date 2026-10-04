@@ -14,7 +14,7 @@ import {
   getProviderDisplayName,
   getProviderUsageStatusLabel
 } from './tooltip'
-import { getTightestUsageSection } from './UsageRosterPanel'
+import { getTightestUsageSection, getUsageHeadlineSection } from './UsageRosterPanel'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
@@ -286,7 +286,7 @@ export function ProviderSegment({
     )
   }
 
-  const tightest = getTightestUsageSection(p)
+  const tightest = mode === 'compact' ? getUsageHeadlineSection(p) : getTightestUsageSection(p)
 
   // Fetching with no prior data
   if (p.status === 'fetching' && !tightest) {

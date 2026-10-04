@@ -1,3 +1,4 @@
+import { tokenizeCommandLine } from '../../shared/agent-command-line-entrypoint'
 import { qoderHookService } from '../qoder/hook-service'
 import { describe, expect, it, vi } from 'vitest'
 import { parse as parseJsonc } from 'jsonc-parser'
@@ -18,12 +19,13 @@ import { GeminiHookService } from '../gemini/hook-service'
 import { AntigravityHookService } from '../antigravity/hook-service'
 import { AmpHookService } from '../amp/hook-service'
 import { ClaudeHookService, claudeHookService } from '../claude/hook-service'
-import { openClaudeHookService } from '../openclaude/hook-service'
 import { GrokHookService } from '../grok/hook-service'
 import { CopilotHookService } from '../copilot/hook-service'
 import { HermesHookService } from '../hermes/hook-service'
 import { DevinHookService } from '../devin/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
+import { JcodeHookService } from '../jcode/hook-service'
+import { openClaudeHookService } from '../openclaude/hook-service'
 import {
   installRemoteManagedAgentHooks,
   REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
@@ -182,6 +184,10 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/devin-hook.sh',
           install: (sftp: SFTPWrapper) => new DevinHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.orca/agent-hooks/jcode-hook.sh',
+          install: (sftp: SFTPWrapper) => new JcodeHookService().installRemote(sftp, '/home/dev')
         },
         {
           path: '/home/dev/.orca/agent-hooks/droid-hook.sh',
@@ -347,23 +353,36 @@ describe('remote hook service installers', () => {
     }
     for (const eventName of ['PreInvocation', 'PostInvocation', 'Stop']) {
       const command = antigravityConfig['orca-status'][eventName]?.[0]?.command
-      expect(command).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
-      expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT='${eventName}'`)
+      expect(tokenizeCommandLine(command ?? '').slice(0, 2)).toEqual(['/bin/sh', '-c'])
+      expect(tokenizeCommandLine(command ?? '')[2]).toContain(
+        '/home/dev/.orca/agent-hooks/antigravity-hook.sh'
+      )
+      expect(tokenizeCommandLine(command ?? '')[2]).toContain(
+        `ORCA_ANTIGRAVITY_EVENT='${eventName}'`
+      )
     }
     for (const eventName of ['PreToolUse', 'PostToolUse']) {
       const definition = antigravityConfig['orca-status'][eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(definition?.matcher).toBe('*')
-      expect(command).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
-      expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT='${eventName}'`)
+      expect(tokenizeCommandLine(command ?? '')[2]).toContain(
+        '/home/dev/.orca/agent-hooks/antigravity-hook.sh'
+      )
+      expect(tokenizeCommandLine(command ?? '')[2]).toContain(
+        `ORCA_ANTIGRAVITY_EVENT='${eventName}'`
+      )
     }
     // Why: #2426 was an SSH report — a remote host missing the script must still answer the gate, not deny every tool.
-    expect(antigravityConfig['orca-status'].PreToolUse[0].hooks?.[0]?.command).toContain(
-      `printf '%s\\n' '{"decision":"ask"}'`
-    )
-    expect(antigravityConfig['orca-status'].PostToolUse[0].hooks?.[0]?.command).not.toContain(
-      '{"decision"'
-    )
+    expect(
+      tokenizeCommandLine(
+        antigravityConfig['orca-status'].PreToolUse[0].hooks?.[0]?.command ?? ''
+      )[2]
+    ).toContain(`printf '%s\\n' '{"decision":"ask"}'`)
+    expect(
+      tokenizeCommandLine(
+        antigravityConfig['orca-status'].PostToolUse[0].hooks?.[0]?.command ?? ''
+      )[2]
+    ).not.toContain('{"decision"')
 
     const ampPlugin = amp.fs.files.get('/home/dev/.config/amp/plugins/orca-agent-status.ts')
     expect(ampPlugin).toContain('/hook/amp')
@@ -697,7 +716,6 @@ describe('remote hook service installers', () => {
     expect(settings.hooks.TeammateIdle).toBeUndefined()
     expect(fs.files.get('/home/dev/.orca/agent-hooks/qoder-hook.sh')).toContain('/hook/qoder')
   })
-
   it('installs Droid and Copilot when running the aggregate remote installer (issue #7253)', async () => {
     const { sftp } = createFakeSftp()
     const results = await installRemoteManagedAgentHooks(sftp, '/home/dev', {

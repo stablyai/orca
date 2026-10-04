@@ -1,3 +1,5 @@
+import { antigravityHookService } from '../antigravity/hook-service'
+import { getRelocatedDaemonHost } from '../daemon/daemon-host-relocation'
 import { app, ipcMain, powerMonitor, session } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import os from 'node:os'
@@ -209,6 +211,10 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Why captured now: after the dev/E2E override above, and before app.setName('Orca') (whenReady)
   // changes how userData resolves on a case-sensitive filesystem. See persistence.ts:20-28.
   initDataPath()
+  antigravityHookService.setWindowsRuntimePathProvider(
+    () => getRelocatedDaemonHost()?.execPath ?? process.execPath
+  )
+
   // Why: Electron resolves the macOS safeStorage Keychain service name from the app name before
   // ready. Dev pins userData above, so applying its name here cannot shift the captured path.
   if (state.devInstanceIdentity && shouldApplyPreReadyAppName(state.devInstanceIdentity)) {

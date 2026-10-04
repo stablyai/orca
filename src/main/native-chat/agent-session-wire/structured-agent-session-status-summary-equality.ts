@@ -20,8 +20,6 @@ export function structuredStatusSummariesEqual(
     a.status === b.status &&
     a.hostExecutionOwned === b.hostExecutionOwned &&
     a.hostExecutionPhase === b.hostExecutionPhase &&
-    a.hostExecutionChild?.generation === b.hostExecutionChild?.generation &&
-    a.hostExecutionChild?.fence === b.hostExecutionChild?.fence &&
     a.rewindBlockedReason === b.rewindBlockedReason &&
     // A moved state clock changes ranking; row activity alone, including a subagent's, does not.
     // An idle state the journal cannot date still republishes, since readers date it by `updatedAt`,

@@ -1,8 +1,9 @@
 import { escapeRegex } from '../../../shared/string-utils'
 import { findStartupDialogBlockedSignals } from '../startup-dialog-blocked-signals'
 import { startOfLastNonBlankLines } from '../terminal-wait-tail-window'
+import { compiledFromActiveAgentStateRules } from './active-agent-state-rules'
 import {
-  BLOCKED_ANCHOR_LITERALS,
+  blockedAnchorLiterals,
   findBlockedAnchorSignals,
   showsHoldAnchor,
   type BlockedTextSignal
@@ -17,10 +18,16 @@ import {
 const BUILT_IN_SENTINEL_RE =
   /update available|choose working directory to|codex just got an upgrade|available\s*·|esc\s*skip|enter\s*confirm\s*·|enter\/esc\s*(?:continue|confirm)|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always/
 
-/** Matches any line that may carry a blocker; a cheap negative test before the full scan. */
-export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE = new RegExp(
-  [BUILT_IN_SENTINEL_RE.source, ...BLOCKED_ANCHOR_LITERALS.map(escapeRegex)].join('|'),
-  'i'
+/**
+ * Matches any line that may carry a blocker; a cheap negative test before the full scan. The same
+ * object until the active rules change, so a caller may key cached matches on it.
+ */
+export const terminalWaitBlockedSentinelRe = compiledFromActiveAgentStateRules(
+  () =>
+    new RegExp(
+      [BUILT_IN_SENTINEL_RE.source, ...blockedAnchorLiterals().map(escapeRegex)].join('|'),
+      'i'
+    )
 )
 
 // Why bounded: answered dialogs and quoted prompt wording (agents grep this file and its specs) stay in the
@@ -32,7 +39,7 @@ export function findTerminalWaitBlockedSignal(fullTail: string): BlockedTextSign
   const windowStart = startOfLastNonBlankLines(fullTail, LIVE_PROMPT_TAIL_LINES)
   const normalized = windowStart === 0 ? fullTail : fullTail.slice(windowStart)
   // Why: one combined negative scan avoids a dozen searches when no prompt can match.
-  if (!TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(normalized)) {
+  if (!terminalWaitBlockedSentinelRe().test(normalized)) {
     return null
   }
   const signal = findBlockedSignalInLiveWindow(normalized)

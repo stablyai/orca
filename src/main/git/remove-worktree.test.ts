@@ -432,7 +432,7 @@ branch refs/heads/main
     expect(getGitCalls()).toContain('git worktree remove --force /repo-feature')
   })
 
-  it('force-retries removal when git refuses a clean worktree containing an initialised submodule', async () => {
+  it('preserves Git refusal even when parent status cannot reveal unpublished submodule commits', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {
         stdout: `worktree /repo
@@ -457,25 +457,14 @@ branch refs/heads/main
       'git status --porcelain --untracked-files=all': { stdout: '' }
     })
 
-    await removeWorktree('/repo', '/repo-feature')
-
-    const calls = getGitCalls()
-    expectGitCallOrder(
-      calls,
-      'git worktree remove /repo-feature',
-      'git worktree remove --force /repo-feature'
+    await expect(removeWorktree('/repo', '/repo-feature')).rejects.toThrow(
+      'git worktree remove failed'
     )
-    // The re-proof of cleanliness between the refusal and the forced retry.
-    expect(calls.lastIndexOf('git status --porcelain --untracked-files=all')).toBeGreaterThan(
-      calls.indexOf('git worktree remove /repo-feature')
-    )
-    expect(calls.lastIndexOf('git status --porcelain --untracked-files=all')).toBeLessThan(
-      calls.indexOf('git worktree remove --force /repo-feature')
-    )
-    expect(calls).toContain('git branch -d -- feature/test')
+    expect(getGitCalls()).not.toContain('git worktree remove --force /repo-feature')
+    expect(getGitCalls()).not.toContain('git branch -d -- feature/test')
   })
 
-  it('surfaces uncommitted changes instead of force-removing a dirty submodule worktree', async () => {
+  it('preserves Git refusal for a dirty submodule worktree', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {
         stdout: `worktree /repo
@@ -495,7 +484,7 @@ branch refs/heads/feature/test
     })
 
     await expect(removeWorktree('/repo', '/repo-feature')).rejects.toThrow(
-      'Worktree has uncommitted or untracked changes.'
+      'git worktree remove failed'
     )
     expect(getGitCalls()).not.toContain('git worktree remove --force /repo-feature')
   })

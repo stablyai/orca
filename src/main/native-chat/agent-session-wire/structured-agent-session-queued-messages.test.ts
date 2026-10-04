@@ -157,18 +157,19 @@ describe('drain', () => {
 
   it('takes no serialized drain step while the session is working, then drains when the work settles', async () => {
     const working = await workingSend()
-    const flush = vi.spyOn(host, 'flushStreamedEvents')
+    // Read only by a drain step, so it marks one.
+    const step = vi.spyOn(JournalQueuedMessages.prototype, 'deliveredByEchoOwed')
     const queued = await send('waits for the turn', 'queue-if-active').result
     await send('and another', 'queue-if-active').result
     if (!queued.ok || !('queued' in queued.value)) {
       throw new Error('expected a queued receipt')
     }
     // Every wake during the turn is answered by the pre-check, not a step.
-    expect(flush).not.toHaveBeenCalled()
+    expect(step).not.toHaveBeenCalled()
     await settleAccepted(working, 'a')
     const draftId = queued.value.queued.messageId
     await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
-    expect(flush).toHaveBeenCalled()
+    expect(step).toHaveBeenCalled()
   })
 
   it('a refused conversion returns the card with its stored reason, and an idle send overtakes a lone returned card (N1)', async () => {

@@ -123,8 +123,8 @@ describe('CI native cache ownership', () => {
         installerPath,
         Buffer.from(
           readFileSync(installerPath, 'utf8').replace(
-            "inputs.cache-pnpm-verification == 'true'",
-            "inputs.cache-pnpm-verification == 'false'"
+            'enabled: ${{ inputs.cache-pnpm-verification }}',
+            "enabled: 'false'"
           )
         )
       )

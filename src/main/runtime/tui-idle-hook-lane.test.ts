@@ -3,7 +3,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusIpcPayload
 } from '../../shared/agent-status-types'
-import { hooksAreAuthoritative } from './agent-state-rules/agent-state-rules-engine'
+import { hookAuthority } from './agent-state-rules/agent-state-rules-engine'
 import { parseAgentStateRuleFiles } from './agent-state-rules/agent-state-rules-catalog'
 import { hookLeadTurnState, readTuiIdleHookTurn, type TuiIdleHookTurn } from './tui-idle-hook-lane'
 import {
@@ -160,6 +160,24 @@ describe('readTuiIdleHookTurn', () => {
     ).toEqual(WORKING)
   })
 
+  it('blocks on a wait the hook reports with no dialog text the arbiter knows (a question)', () => {
+    const receivedAt = Date.now() - 1000
+    for (const state of ['waiting', 'blocked'] as const) {
+      expect(readTuiIdleHookTurn({ ...base, hookRows: [row({ receivedAt, state })] })).toEqual({
+        state: 'permission',
+        blockedReason: 'agent-interactive-prompt'
+      })
+    }
+    // Input since the wait opened may have answered it before the next hook arrived.
+    expect(
+      readTuiIdleHookTurn({
+        ...base,
+        hookRows: [row({ receivedAt, state: 'waiting' })],
+        lastInputAt: receivedAt + 1
+      })
+    ).toEqual({ state: 'permission', blockedReason: null })
+  })
+
   it('takes the newest joined row', () => {
     const now = Date.now()
     expect(
@@ -190,10 +208,12 @@ describe('readTuiIdleHookTurn', () => {
 describe('profile.hooks', () => {
   it('marks the agents whose hooks report every turn end as authoritative', () => {
     for (const agent of ['opencode', 'opencode2', 'pi', 'omp'] as const) {
-      expect(hooksAreAuthoritative(agent)).toBe(true)
+      expect(hookAuthority(agent)).toBe('authoritative')
     }
-    for (const agent of ['codex', 'claude', 'cursor', 'gemini', 'grok', null] as const) {
-      expect(hooksAreAuthoritative(agent)).toBe(false)
+    // Codex before its Interrupt hook posts nothing for an Esc, so only its done is trusted.
+    expect(hookAuthority('codex')).toBe('turn-end')
+    for (const agent of ['claude', 'cursor', 'gemini', 'grok', null] as const) {
+      expect(hookAuthority(agent)).toBe('identity-only')
     }
   })
 
@@ -217,6 +237,8 @@ function input(overrides: Partial<TuiIdleEvaluationInput> = {}): TuiIdleEvaluati
     readPositiveBodyEvidence: () => false,
     readQuietReadyBodyEvidence: () => false,
     readAgentRuleVerdict: () => null,
+    readScreenInputVeto: () => null,
+    titleObservedAtEpochMs: null,
     agent: 'pi',
     firstPartyStatus: null,
     quiescenceMs: QUIESCENCE_MS,
@@ -293,12 +315,65 @@ describe('evaluateTuiIdle hook lane', () => {
     ).toEqual({ kind: 'pending', quietForeground: 'closed' })
   })
 
-  it.each(['claude', 'codex'] as const)('never reads hooks for identity-only %s', (agent) => {
-    const readHookTurn = vi.fn(() => ({ state: 'done' as const, blockedReason: null }))
-    expect(evaluateTuiIdle(input({ agent, readHookTurn }))).toEqual({
+  it('never reads hooks for identity-only claude', () => {
+    const readHookTurn = vi.fn(() => DONE)
+    expect(evaluateTuiIdle(input({ agent: 'claude', readHookTurn }))).toEqual({
       kind: 'pending',
       quietForeground: 'closed'
     })
     expect(readHookTurn).not.toHaveBeenCalled()
+  })
+})
+
+describe('evaluateTuiIdle turn-end hook lane (codex)', () => {
+  it('settles at once on a done turn, with no title and a streaming pane (headless)', () => {
+    expect(evaluateTuiIdle(input({ agent: 'codex', readHookTurn: () => DONE }))).toEqual({
+      kind: 'ready-strong'
+    })
+  })
+
+  it('still blocks on a done turn whose arbiter confirms the blocked text', () => {
+    expect(
+      evaluateTuiIdle(
+        input({
+          agent: 'codex',
+          readHookTurn: () => ({ state: 'done', blockedReason: 'agent-approval-prompt' })
+        })
+      )
+    ).toEqual({ kind: 'blocked', reason: 'agent-approval-prompt' })
+  })
+
+  it('lets the rules settle over a working row an Esc left behind (Codex before Interrupt)', () => {
+    expect(
+      evaluateTuiIdle(
+        input({
+          agent: 'codex',
+          readQuietReadyBodyEvidence: () => true,
+          record: record({ lastOutputAt: Date.now() - QUIESCENCE_MS }),
+          readHookTurn: () => WORKING
+        })
+      )
+    ).toEqual({ kind: 'ready-strong' })
+  })
+
+  it('leaves a working or permission row to the rules, which hold a busy pane', () => {
+    for (const turn of [
+      WORKING,
+      { state: 'permission', blockedReason: 'agent-approval-prompt' } as const
+    ]) {
+      expect(evaluateTuiIdle(input({ agent: 'codex', readHookTurn: () => turn }))).toEqual({
+        kind: 'pending',
+        quietForeground: 'closed'
+      })
+      expect(
+        evaluateTuiIdle(
+          input({
+            agent: 'codex',
+            readTailBlockedReason: () => 'agent-trust-workspace',
+            readHookTurn: () => turn
+          })
+        )
+      ).toEqual({ kind: 'blocked', reason: 'agent-trust-workspace' })
+    }
   })
 })

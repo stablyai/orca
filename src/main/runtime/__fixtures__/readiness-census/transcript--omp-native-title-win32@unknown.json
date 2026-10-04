@@ -3,9 +3,13 @@
   "observations": {
     "clocked": [
       "0: now=working edge=working quiet=working wait=pending",
-      "1: now=pending:closed edge=pending:closed quiet=ready-weak wait=ready@start",
+      "1: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
       "2-3: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending"
     ],
-    "clockless": ["0: verdict=working wait=pending", "1-3: verdict=pending:closed wait=pending"]
+    "clockless": [
+      "0: verdict=working wait=pending",
+      "1: verdict=ready-strong wait=ready@start",
+      "2-3: verdict=pending:closed wait=pending"
+    ]
   }
 }

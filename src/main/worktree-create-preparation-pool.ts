@@ -12,6 +12,17 @@ import { prepareWorktreeCreateCheckout } from './git/worktree-create-preparation
 import { WorktreePreparationLockOwnershipError } from './git/worktree-preparation-lock'
 import { queuePreparedWorktreeTipRefresh } from './worktree-preparation-refresh-queue'
 import { toHostFilesystemPath } from './host-tree-removal'
+import { createPreparationActivity } from './worktree-create-preparation-activity'
+import type { PreparationActivity } from './worktree-create-preparation-activity'
+import {
+  deferPreparationForClaim,
+  hasClaims,
+  isClaimed,
+  registerClaim,
+  resetClaimsForTests,
+  type DeferredPreparation,
+  type PreparationClaim
+} from './worktree-create-preparation-claim-registry'
 import { preparationEntryKey, preparationPathKey } from './worktree-create-preparation-claim'
 import {
   startStalePreparationCleanup,
@@ -24,6 +35,12 @@ import {
   resetPendingPreparationDiscardsForTests,
   trackPreparationDiscard
 } from './worktree-preparation-discard-retry'
+
+export {
+  releasePreparationClaim,
+  type DeferredPreparation,
+  type PreparationClaim
+} from './worktree-create-preparation-claim-registry'
 
 export const WORKTREE_CREATE_PREPARATION_TTL_MS = 5 * 60_000
 export const WORKTREE_CREATE_PREPARATION_LIMIT = 3
@@ -45,6 +62,8 @@ export type PreparationEntry = {
   expiration: NodeJS.Timeout
   controller: AbortController
   checkoutStarted: boolean
+  /** Origin, disk work and timing reported by the create that uses it. */
+  activity: PreparationActivity
 }
 
 export type StartPreparationArgs = {
@@ -56,22 +75,11 @@ export type StartPreparationArgs = {
   beforeMaterialization?: Promise<void>
 }
 
-export type DeferredPreparation = {
-  args: StartPreparationArgs
-  kind: 'explicit' | 'automatic'
-}
-
 const preparations = new Map<string, PreparationEntry>()
-export type PreparationClaim = {
-  entry: PreparationEntry
-  requestedKey: string
-  pendingPreparations: Map<string, DeferredPreparation>
-}
-const claims = new Set<PreparationClaim>()
 
 /** A prepared checkout is a create that is either in flight or imminent. */
 export function hasPendingPreparations(): boolean {
-  return preparations.size > 0 || claims.size > 0 || hasPendingStalePreparationCleanup()
+  return preparations.size > 0 || hasClaims() || hasPendingStalePreparationCleanup()
 }
 
 function discardEntryInBackground(entry: PreparationEntry): void {
@@ -142,53 +150,7 @@ export function takePreparation(
     requestedCanonicalBase,
     entry.wslDistro
   )
-  const claim = { entry, requestedKey, pendingPreparations: new Map<string, DeferredPreparation>() }
-  claims.add(claim)
-  return claim
-}
-
-function matchingClaim(args: StartPreparationArgs): PreparationClaim | undefined {
-  const key = preparationEntryKey(
-    preparationPathKey(args.repoPath),
-    preparationPathKey(args.workspaceRoot),
-    args.canonicalBase,
-    args.options.wslDistro ?? ''
-  )
-  return [...claims]
-    .toReversed()
-    .find((claim) => claim.entry.key === key || claim.requestedKey === key)
-}
-
-/** Preserve one request per canonical key, with explicit prefetch taking precedence. */
-function deferPreparationForClaim(
-  args: StartPreparationArgs,
-  kind: DeferredPreparation['kind']
-): boolean {
-  const matching = matchingClaim(args)
-  if (!matching) {
-    return false
-  }
-  const key = preparationEntryKey(
-    preparationPathKey(args.repoPath),
-    preparationPathKey(args.workspaceRoot),
-    args.canonicalBase,
-    args.options.wslDistro ?? ''
-  )
-  if (kind === 'explicit' || !matching.pendingPreparations.has(key)) {
-    matching.pendingPreparations.set(key, { args, kind })
-  }
-  return true
-}
-
-/** A second release is inert, including after a test reset. */
-export function releasePreparationClaim(claim: PreparationClaim): {
-  released: boolean
-  pendingPreparations: DeferredPreparation[]
-} {
-  if (!claims.delete(claim)) {
-    return { released: false, pendingPreparations: [] }
-  }
-  return { released: true, pendingPreparations: [...claim.pendingPreparations.values()] }
+  return registerClaim(entry, requestedKey)
 }
 
 export function startPreparation(
@@ -202,6 +164,9 @@ export function startPreparation(
     args.options.wslDistro ?? ''
   )
   if (existing) {
+    if (kind === 'explicit') {
+      existing.activity.requestedByPrefetch()
+    }
     return args.beforeMaterialization
       ? refreshPreparationTip(existing, args.beforeMaterialization)
       : existing.ready
@@ -209,18 +174,18 @@ export function startPreparation(
   if (deferPreparationForClaim(args, kind)) {
     return Promise.resolve()
   }
-  return worktreePreparationGit.run(() => startBackgroundPreparation(args))
+  return worktreePreparationGit.run(() => startBackgroundPreparation({ ...args, kind }))
 }
 
 function refreshPreparationTip(
   entry: PreparationEntry,
   beforeMaterialization: Promise<void>
 ): Promise<void> {
-  return queuePreparedWorktreeTipRefresh(
+  const ready = queuePreparedWorktreeTipRefresh(
     entry,
     () => {
       const available = preparations.get(entry.key) === entry
-      if (!available && ![...claims].some((claim) => claim.entry === entry)) {
+      if (!available && !isClaimed(entry)) {
         return
       }
       if (available) {
@@ -231,6 +196,8 @@ function refreshPreparationTip(
     },
     beforeMaterialization
   )
+  entry.activity.track(ready)
+  return ready
 }
 
 function startBackgroundPreparation({
@@ -239,8 +206,9 @@ function startBackgroundPreparation({
   baseBranch,
   canonicalBase,
   options,
-  beforeMaterialization
-}: StartPreparationArgs): Promise<void> {
+  beforeMaterialization,
+  kind
+}: StartPreparationArgs & { kind: DeferredPreparation['kind'] }): Promise<void> {
   const repoPathKey = preparationPathKey(repoPath)
   const workspaceRootKey = preparationPathKey(workspaceRoot)
   const wslDistro = options.wslDistro ?? ''
@@ -273,6 +241,7 @@ function startBackgroundPreparation({
     expiration,
     controller,
     checkoutStarted: false,
+    activity: createPreparationActivity(kind),
     ready: Promise.resolve()
   }
   entry.ready = (async () => {
@@ -303,6 +272,7 @@ function startBackgroundPreparation({
     }
   })()
   preparations.set(key, entry)
+  entry.activity.track(entry.ready)
   void entry.ready.catch(() => {
     if (preparations.get(key) === entry) {
       preparations.delete(key)
@@ -315,7 +285,7 @@ function startBackgroundPreparation({
 export async function _resetPreparationPoolForTests(): Promise<void> {
   const entries = [...preparations.values()]
   preparations.clear()
-  claims.clear()
+  resetClaimsForTests()
   await resetStalePreparationCleanupForTests()
   await Promise.all(
     entries.map(async (entry) => {

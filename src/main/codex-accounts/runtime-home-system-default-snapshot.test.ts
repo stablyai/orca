@@ -19,7 +19,7 @@ import {
   getRuntimeCodexHomePath,
   getSharedRuntimeAuthProvenancePath,
   getSystemCodexAuthPath,
-  setShellStartupEnvProbeSupportedForTest,
+  setRealHomeRoutableForTest,
   setupRuntimeHomeTest,
   teardownRuntimeHomeTest,
   testState
@@ -494,7 +494,7 @@ describe('CodexRuntimeHomeService', () => {
     service.syncForCurrentSelection()
     expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
 
-    setShellStartupEnvProbeSupportedForTest(true)
+    setRealHomeRoutableForTest(true)
     service.setRealHomeLaneGate(() => true)
     writeFileSync(getSystemCodexAuthPath(), reloginAuth, 'utf-8')
     service.reconcileLegacySharedHomeForRetainedPanes()

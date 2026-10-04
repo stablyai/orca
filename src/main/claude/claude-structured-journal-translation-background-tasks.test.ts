@@ -15,6 +15,7 @@ import {
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { blockOf } from './claude-background-task-row-test-support'
+import { withJournalQueueMembers } from '../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 // The frames below are the ones the reported session actually carried: two real
@@ -144,7 +145,7 @@ function persistedTarget(
 ): StructuredAgentSessionEventTarget {
   const journal =
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test double implements the journal methods exercised by the deferred sink.
-    {
+    withJournalQueueMembers({
       appendItem: async (identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
         persisted.set(agentJournalItemKey(identity), body)
         return { cursor: { epoch: 'test', sequence: persisted.size }, itemId: '', revision: 1 }
@@ -163,7 +164,7 @@ function persistedTarget(
       }) satisfies StructuredAgentSessionLinkageJournal['visitItemsWithLinkage'],
       itemBody: (itemId: string) => persisted.get(itemId) ?? null,
       epoch: 'test'
-    } as unknown as AgentSessionJournal
+    }) as unknown as AgentSessionJournal
   return { journal, fence: 1, publish: vi.fn() }
 }
 

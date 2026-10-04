@@ -17,6 +17,7 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   notDoneReadHistory: "This chat's history couldn't be loaded.",
   notDoneSend: 'Your message was not sent.',
   tryAgainComposerSend: 'Send it again.',
+  messageNotSaved: "Couldn't save your message.",
   notDoneStop: "The agent wasn't stopped.",
   notDoneStopTask: "The background task wasn't stopped.",
   notDoneStopTasks: "The background tasks weren't stopped.",
@@ -27,15 +28,19 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   restartFailed: "The agent couldn't restart.",
   capacity: 'Orca has received too many requests in the last day.',
   outcomeUnknown: "Orca couldn't confirm what happened. Check the chat.",
+  sendOutcomeLost:
+    "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
   questionChanged: 'This question was already answered or has changed.',
   historyUnreadable: "Orca couldn't read this chat's saved history.",
   historyUnusable: 'Unable to load this chat.',
   historyUnavailable: "Orca couldn't open this chat's history right now.",
   savedByNewerOrca: 'Chats were saved by a newer Orca.',
   updateOrcaToKeepUsing: 'Update Orca to keep using them.',
-  unsupported: "The Orca running this chat doesn't support this. Update Orca, then try again.",
+  unsupported:
+    'This needs a newer Orca on the computer running this chat. Update Orca there, then try again.',
+  notAvailable: "This isn't available in this chat.",
   unreachable: "Orca couldn't reach the agent.",
-  recordFailed: "Orca couldn't record it in this chat's history.",
+  recordFailed: "Orca couldn't save this to the chat's history.",
   conversationCleared: 'This conversation has been cleared.',
   openCurrentConversation: 'Open the current conversation to continue.',
   clearUnfinished: "The last /clear didn't finish.",
@@ -49,19 +54,19 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   answerFirst: 'Answer the question or approval first.',
   backgroundTasksRunning: 'Background tasks are still running.',
   waitForBackgroundTasks: 'Wait for the background tasks to finish.',
-  messagesUnsettled: "A message you sent earlier hasn't been confirmed yet.",
+  messagesUnsettled: "A message you sent earlier isn't confirmed yet.",
   settleEarlierMessage: 'Wait for your earlier message to go through, or retry it.',
   optionRejected: "The agent didn't accept this setting.",
   goalsUnsupported: "This agent doesn't support goals.",
   agentRefused: 'The agent turned this down.',
-  ownerUnproven: "Orca hasn't confirmed that this chat's previous agent stopped.",
+  ownerUnproven: 'The previous agent in this chat may still be running.',
   reopenChat: 'Reopen the chat to check again.',
   terminalAgentHoldsChat: TERMINAL_AGENT_HOLDS_CHAT,
   quitTerminalAgent: QUIT_TERMINAL_AGENT,
   hostReconciling: 'Orca is still checking on this chat after restarting.',
   waitMoment: 'Wait a moment.',
   recordUnreadable: "Orca couldn't read this chat's saved state.",
-  chatNotFound: 'The Orca running this chat has no record of it.',
+  chatNotFound: "Orca can't find this chat.",
   startNewChat: START_NEW_CHAT,
   tryAgain: 'Try again.'
 } as const
@@ -84,16 +89,3 @@ export type AgentSessionWriteNoticePart =
  *  again. */
 export const AGENT_SESSION_HISTORY_UNREAD_CAUSES: ReadonlySet<AgentSessionWriteNoticeSentence> =
   new Set(['historyUnusable', 'historyUnavailable', 'historyUnreadable', 'savedByNewerOrca'])
-
-/** Whether these words already say this chat's history didn't load, so a pane headed by them need
- *  only add that it keeps trying. "Chats were saved by a newer Orca" names no one chat for "it". */
-export function agentSessionNoticeSaysThisChatUnread(
-  parts: readonly AgentSessionWriteNoticePart[]
-): boolean {
-  return parts.some(
-    (part) =>
-      typeof part === 'string' &&
-      part !== 'savedByNewerOrca' &&
-      (part === 'notDoneReadHistory' || AGENT_SESSION_HISTORY_UNREAD_CAUSES.has(part))
-  )
-}

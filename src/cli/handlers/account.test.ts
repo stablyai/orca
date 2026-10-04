@@ -715,7 +715,9 @@ describe('account CLI handlers', () => {
     // default would run a full OAuth login for the wrong provider.
     await expect(
       ACCOUNT_HANDLERS['account add']({ ...context('claude'), flags: new Map([['agent', true]]) })
-    ).rejects.toThrow('Missing a value for --agent')
+    ).rejects.toThrow(
+      'Missing a value for --agent. Use `--agent claude`, `--agent codex`, `--agent opencode`, or `--agent devin`.'
+    )
     expect(spawnMock).not.toHaveBeenCalled()
   })
 

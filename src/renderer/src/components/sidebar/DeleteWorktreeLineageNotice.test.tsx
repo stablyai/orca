@@ -38,13 +38,14 @@ describe('DeleteWorktreeLineageNotice', () => {
       <DeleteWorktreeLineageNotice
         descendants={[child('same-child', 'repo-a'), child('cross-child', 'repo-b')]}
         dirtyChangeCountsByWorktreeId={new Map()}
-        parentRepoId="repo-a"
-        repoMap={
-          new Map([
+        dirtyChangePreviewsByWorktreeId={new Map()}
+        repoScope={{
+          parentRepoId: 'repo-a',
+          repoMap: new Map([
             ['repo-a', { displayName: 'alpha-repo', badgeColor: '#111111' }],
             ['repo-b', { displayName: 'beta-repo', badgeColor: '#222222' }]
           ])
-        }
+        }}
       />
     )
 

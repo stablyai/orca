@@ -10,6 +10,8 @@ import {
   commitStructuredAgentSessionOutbox,
   getStructuredAgentSessionOutbox
 } from './structured-agent-session-outbox-storage'
+import { STRUCTURED_AGENT_SESSION_OUTBOX_NOT_SAVED } from '../../../../shared/structured-agent-session-send-disposition'
+import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 
 export function retryStructuredAgentSessionOutboxEntry(args: {
   clientMessageId: string
@@ -47,7 +49,7 @@ export function retryStructuredAgentSessionOutboxEntry(args: {
         : entry
     )
     if (!commitStructuredAgentSessionOutbox(sessionId, rotated, { onlyIfSaved: true })) {
-      setError('Message could not be saved to the outbox')
+      setError(agentSessionWriteNoticeText(STRUCTURED_AGENT_SESSION_OUTBOX_NOT_SAVED))
     }
     return
   }
@@ -67,7 +69,7 @@ export function retryStructuredAgentSessionOutboxEntry(args: {
       : entry
   )
   if (!commitStructuredAgentSessionOutbox(sessionId, next, { onlyIfSaved: true })) {
-    setError('Message could not be saved to the outbox')
+    setError(agentSessionWriteNoticeText(STRUCTURED_AGENT_SESSION_OUTBOX_NOT_SAVED))
   }
 }
 

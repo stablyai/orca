@@ -333,8 +333,8 @@ describe('OrcaRuntimeService', () => {
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
     vi.mocked(describeCreatedWorktree).mockResolvedValue(createdWorktree)
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+      if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+        return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('refs/heads/runtime-wsl^{commit}')) {
         throw new Error('missing local branch')
@@ -370,11 +370,18 @@ describe('OrcaRuntimeService', () => {
         path: createdWorktree.path,
         branch: 'refs/heads/runtime-wsl'
       })
-      expect(gitSpy).toHaveBeenCalledWith(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
-        cwd: TEST_REPO_PATH,
-        timeout: 15_000,
-        wslDistro: 'Ubuntu'
-      })
+      expect(gitSpy).toHaveBeenCalledWith(
+        [
+          'for-each-ref',
+          '--format=%(refname)%00%(symref)',
+          'refs/remotes/origin/HEA[D]',
+          'refs/remotes/origin/mai[n]',
+          'refs/remotes/origin/maste[r]',
+          'refs/heads/mai[n]',
+          'refs/heads/maste[r]'
+        ],
+        { cwd: TEST_REPO_PATH, timeout: 15_000, wslDistro: 'Ubuntu' }
+      )
       expect(getBranchConflictKind).toHaveBeenCalledWith(
         TEST_REPO_PATH,
         'runtime-wsl',

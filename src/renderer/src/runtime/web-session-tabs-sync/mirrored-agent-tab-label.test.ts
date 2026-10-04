@@ -33,6 +33,7 @@ function build(
 ): Tab {
   const [mirrored] = buildMirroredAgentTabs(
     snapshot,
+    'runtime:env-1',
     new Map(),
     GROUP,
     0,
@@ -73,6 +74,7 @@ describe('buildMirroredAgentTabs', () => {
     const existing: Tab = { ...provisional, groupId: 'local-group' }
     const [mirrored] = buildMirroredAgentTabs(
       snapshot,
+      'runtime:env-1',
       new Map([['host-tab-1', 'host-group']]),
       GROUP,
       0,

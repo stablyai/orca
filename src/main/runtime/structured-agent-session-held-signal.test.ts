@@ -22,10 +22,10 @@ import {
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
-vi.mock('../ai-vault/session-scanner-worker-spawn', () => ({
-  scanAiVaultSessionsInWorker: vi.fn(),
-  resolveAiVaultSessionTitlesInWorker: vi.fn(),
-  resetAiVaultScannerWorkerForTests: vi.fn()
+vi.mock('../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  scanAiVaultSessionsInService: vi.fn(),
+  resolveAiVaultSessionTitlesInService: vi.fn()
 }))
 
 const { AI_VAULT_METHODS } = await import('./rpc/methods/ai-vault')

@@ -15,16 +15,23 @@ vi.mock('electron', () => ({
 }))
 
 import { _internals } from './hook-service'
+import { fakeTui, type BusEvent } from './opencode-tui-session-fixture'
 
 type Post = {
   paneKey?: string
   opencodeMajor?: number
-  payload?: { hook_event_name?: string; sessionID?: string }
+  payload?: {
+    hook_event_name?: string
+    sessionID?: string
+    root_state?: string
+    root_turn_error_name?: string
+  }
 }
-type BusEvent = { type: string; data: Record<string, unknown> }
 type PluginModule = {
   default?: { setup?: (ctx: unknown) => Promise<(() => Promise<void>) | undefined> }
 }
+
+const { setTimeout: realSetTimeout, clearTimeout: realClearTimeout } = globalThis
 
 const PANE_A = 'tabA:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const PANE_B = 'tabB:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -70,130 +77,6 @@ function turn(sessionID: string, text: string): { start: BusEvent[]; finish: Bus
   }
 }
 
-type Blocker = { id: string; sessionID: string; [key: string]: unknown }
-
-function toBlocker(value: unknown): Blocker {
-  const record = typeof value === 'object' && value !== null ? { ...value } : {}
-  const id = 'id' in record ? String(record.id) : ''
-  const sessionID = 'sessionID' in record ? String(record.sessionID) : ''
-  return { ...record, id, sessionID }
-}
-
-/** One pane's TUI: its route, its view of the shared session store, and the shared event bus. */
-function fakeTui(version = '2.0.14') {
-  const listeners = new Set<(event: { details: BusEvent }) => void>()
-  const sessions = new Map<string, { id: string; parentID?: string }>()
-  const running = new Set<string>()
-  const permissions = new Map<string, Blocker[]>()
-  const forms = new Map<string, Blocker[]>()
-  // What the server answers when the TUI re-fetches a permission list (reconnect).
-  const serverPermissions = new Map<string, Blocker[]>()
-  let permissionFetch: Promise<void> = Promise.resolve()
-  // Why: OpenCode keeps storage.memory across plugin hot reloads within one TUI process.
-  const memories = new Map<string, unknown>()
-  let route: { type: string; sessionID?: string } = { type: 'home' }
-  const rootOf = (id: string): string => {
-    let current = sessions.get(id)
-    while (current?.parentID && sessions.has(current.parentID)) {
-      current = sessions.get(current.parentID)
-    }
-    return current?.id ?? id
-  }
-  const without = (map: Map<string, Blocker[]>, sessionID: string, id: unknown): void => {
-    map.set(
-      sessionID,
-      (map.get(sessionID) ?? []).filter((item) => item.id !== id)
-    )
-  }
-  const listen = vi.fn((handler: (event: { details: BusEvent }) => void) => {
-    listeners.add(handler)
-    return () => listeners.delete(handler)
-  })
-  const ctx = {
-    app: { version, channel: 'latest' },
-    ui: { router: { current: () => route } },
-    storage: {
-      memory: (key: string, options: { initial: Record<string, unknown> }) => {
-        if (!memories.has(key)) {
-          const value = structuredClone(options.initial)
-          memories.set(key, [value, (mutate: (draft: typeof value) => void) => mutate(value)])
-        }
-        return memories.get(key)
-      }
-    },
-    client: {
-      session: { get: async ({ sessionID }: { sessionID: string }) => sessions.get(sessionID) }
-    },
-    data: {
-      listen,
-      session: {
-        get: (id: string) => sessions.get(id),
-        root: rootOf,
-        family: (id: string) =>
-          [...sessions.keys()].filter((member) => rootOf(member) === rootOf(id)),
-        status: (id: string) => (running.has(id) ? 'running' : 'idle'),
-        permission: {
-          list: (id: string) => permissions.get(id),
-          sync: async (id: string) => {
-            await permissionFetch
-            permissions.set(id, [...(serverPermissions.get(id) ?? [])])
-          }
-        },
-        form: { list: (id: string) => forms.get(id), sync: async () => {} }
-      }
-    }
-  }
-  return {
-    ctx,
-    listen,
-    serverPermissions,
-    permissions,
-    navigate(sessionID: string) {
-      route = { type: 'session', sessionID }
-    },
-    // The session data stops reporting a run without this TUI seeing its end event.
-    loseEnd(sessionID: string) {
-      running.delete(sessionID)
-    },
-    // The session data reports a run whose start this TUI never saw.
-    loseStart(sessionID: string) {
-      running.add(sessionID)
-    },
-    // Holds the next permission list fetch until the returned release is called.
-    holdPermissionFetch(): () => void {
-      let release = (): void => {}
-      permissionFetch = new Promise((resolve) => {
-        release = resolve
-      })
-      return release
-    },
-    // Applies an event to the session data first, then to plugin listeners, as OpenCode does.
-    emit(event: BusEvent) {
-      const sessionID = String(event.data.sessionID)
-      if (event.type === 'session.created') {
-        const parentID = typeof event.data.parentID === 'string' ? event.data.parentID : undefined
-        sessions.set(sessionID, { id: sessionID, parentID })
-      } else if (event.type === 'session.execution.started') {
-        running.add(sessionID)
-      } else if (event.type === 'session.execution.succeeded') {
-        running.delete(sessionID)
-      } else if (event.type === 'permission.asked') {
-        permissions.set(sessionID, [...(permissions.get(sessionID) ?? []), toBlocker(event.data)])
-      } else if (event.type === 'permission.replied') {
-        without(permissions, sessionID, event.data.requestID)
-      } else if (event.type === 'form.created') {
-        const form = toBlocker(event.data.form)
-        forms.set(form.sessionID, [...(forms.get(form.sessionID) ?? []), form])
-      } else if (event.type === 'form.replied' || event.type === 'form.cancelled') {
-        without(forms, sessionID, event.data.id)
-      }
-      for (const handler of listeners) {
-        handler({ details: event })
-      }
-    }
-  }
-}
-
 describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
   let tempDir: string
   let savedFetch: typeof globalThis.fetch
@@ -204,6 +87,8 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
   let allPosts: Post[]
   let failPosts: boolean
   let postDelayMs: number
+  const cleanups = new Set<() => Promise<void>>()
+  const delayedPosts = new Set<() => void>()
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-opencode-tui-adapter-'))
@@ -224,7 +109,15 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     globalThis.fetch = vi.fn(async (_input, init) => {
       const body = JSON.parse(String(init?.body))
       if (postDelayMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, postDelayMs))
+        await new Promise<void>((resolve) => {
+          const finish = (): void => {
+            clearTimeout(timer)
+            delayedPosts.delete(finish)
+            resolve()
+          }
+          const timer = setTimeout(finish, postDelayMs)
+          delayedPosts.add(finish)
+        })
       }
       if (failPosts) {
         return new Response('{}', { status: 500 })
@@ -241,17 +134,47 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     })
   })
 
-  afterEach(() => {
-    globalThis.fetch = savedFetch
-    process.argv = savedArgv
-    for (const key of ENV_KEYS) {
-      if (savedEnv[key] === undefined) {
-        delete process.env[key]
-      } else {
-        process.env[key] = savedEnv[key]
+  afterEach(async () => {
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    try {
+      postDelayMs = 0
+      for (const finish of delayedPosts) {
+        finish()
+      }
+      const closing = Promise.allSettled([...cleanups].map((cleanup) => cleanup()))
+      expect(
+        await Promise.race([
+          closing.then((results) => results.every((result) => result.status === 'fulfilled')),
+          new Promise<boolean>((resolve) => {
+            deadline = realSetTimeout(() => resolve(false), 2000)
+          })
+        ])
+      ).toBe(true)
+    } finally {
+      realClearTimeout(deadline)
+      try {
+        if (vi.isFakeTimers()) {
+          expect(vi.getTimerCount()).toBe(0)
+        }
+      } finally {
+        if (vi.isFakeTimers()) {
+          vi.clearAllTimers()
+        }
+        vi.useRealTimers()
+        cleanups.clear()
+        delayedPosts.clear()
+        globalThis.fetch = savedFetch
+        process.argv = savedArgv
+        for (const key of ENV_KEYS) {
+          if (savedEnv[key] === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = savedEnv[key]
+          }
+        }
+        rmSync(tempDir, { recursive: true, force: true })
       }
     }
-    rmSync(tempDir, { recursive: true, force: true })
   })
 
   async function loadPlugin(dir = tempDir): Promise<PluginModule> {
@@ -259,7 +182,35 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     const pluginPath = join(dir, `orca-opencode-status-${Math.random().toString(36).slice(2)}.mjs`)
     writeFileSync(pluginPath, _internals.getOpenCodePluginSource())
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the generated module's default export is exercised below and fails the test if absent.
-    return (await import(pathToFileURL(pluginPath).href)) as PluginModule
+    const plugin = (await import(pathToFileURL(pluginPath).href)) as PluginModule
+    if (!vi.isFakeTimers()) {
+      vi.useFakeTimers({
+        toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+      })
+    }
+    const setup = plugin.default?.setup
+    return {
+      default: {
+        setup: async (ctx) => {
+          const cleanup = await setup?.(ctx)
+          if (!cleanup) {
+            return
+          }
+          const close = async (): Promise<void> => {
+            try {
+              await cleanup()
+              if (vi.isFakeTimers()) {
+                expect(vi.getTimerCount()).toBe(0)
+              }
+            } finally {
+              cleanups.delete(close)
+            }
+          }
+          cleanups.add(close)
+          return close
+        }
+      }
+    }
   }
 
   const summary = (list: Post[]): string[] =>
@@ -275,20 +226,73 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     const tui = fakeTui()
     const cleanup = await (await loadPlugin()).default?.setup?.(tui.ctx)
     await script(tui)
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(summary(posts.slice(start)).at(-1)).toBe(`SessionIdle:${ownSession}`)
     })
     await cleanup?.()
     return posts.slice(start)
   }
 
-  const tick = (ms = 20): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+  const tick = async (ms = 20): Promise<void> => {
+    await (vi.isFakeTimers()
+      ? vi.advanceTimersByTimeAsync(ms)
+      : new Promise<void>((resolve) => setTimeout(resolve, ms)))
+  }
+  const waitFor = async (
+    check: () => void,
+    { timeout = 1000 }: { timeout?: number } = {}
+  ): Promise<void> => {
+    if (!vi.isFakeTimers()) {
+      await vi.waitFor(check, { timeout })
+      return
+    }
+    const deadline = Date.now() + timeout
+    await tick(0)
+    for (;;) {
+      try {
+        check()
+        return
+      } catch (error) {
+        if (Date.now() >= deadline) {
+          throw error
+        }
+        await tick(Math.min(50, deadline - Date.now()))
+      }
+    }
+  }
   const pump = async (tui: ReturnType<typeof fakeTui>, events: BusEvent[]): Promise<void> => {
     for (const event of events) {
       tui.emit(event)
       await tick()
     }
   }
+
+  it.each([
+    ['session.execution.failed', { error: { type: 'api' } }, 'api'],
+    ['session.execution.failed', {}, 'UnknownError'],
+    ['session.execution.interrupted', { reason: 'user' }, 'MessageAbortedError'],
+    ['session.execution.interrupted', { reason: 'pause' }, undefined],
+    ['session.execution.succeeded', {}, undefined]
+  ])('carries the root verdict for %s', async (type, fields, errorName) => {
+    const reported = await runPane(PANE_A, SES_A, async (tui) => {
+      tui.navigate(SES_A)
+      await pump(tui, turn(SES_A, 'root').start)
+      await pump(tui, [{ type, data: { sessionID: SES_A, ...fields } }])
+    })
+    expect(reported.at(-1)?.payload).toMatchObject({ root_state: 'done' })
+    expect(reported.at(-1)?.payload?.root_turn_error_name).toBe(errorName)
+  })
+
+  it('clears a failed root verdict on its next turn', async () => {
+    const reported = await runPane(PANE_A, SES_A, async (tui) => {
+      tui.navigate(SES_A)
+      await pump(tui, turn(SES_A, 'first').start)
+      await pump(tui, [{ type: 'session.execution.failed', data: { sessionID: SES_A } }])
+      await pump(tui, [{ type: 'session.execution.started', data: { sessionID: SES_A } }])
+      await pump(tui, turn(SES_A, 'next').finish)
+    })
+    expect(reported.at(-1)?.payload?.root_turn_error_name).toBeUndefined()
+  })
 
   // Captured s2 shape: pane A's long turn overlapped by pane B's short one on one server.
   it('gives each overlapping pane only its own session and its own Idle', async () => {
@@ -329,7 +333,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       await pump(tui, b.start)
       expect(posts).toHaveLength(0)
       tui.navigate(SES_B)
-      await vi.waitFor(() => {
+      await waitFor(() => {
         expect(summary(posts)).toContain(`SessionBusy:${SES_B}`)
       })
       await pump(tui, b.finish)
@@ -376,9 +380,10 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     tui.navigate(SES_A)
     await pump(tui, turn(SES_A, 'A').start)
     tui.loseEnd(SES_A)
-    await vi.waitFor(() => {
-      expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`)
-    })
+    await tick(99)
+    expect(summary(posts).at(-1)).toBe(`SessionBusy:${SES_A}`)
+    await tick(1)
+    expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`)
     await cleanup?.()
   })
 
@@ -393,7 +398,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     for (const event of [...a.start, ...a.finish]) {
       tui.emit(event)
     }
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`)
     })
     await tick(250)
@@ -411,15 +416,15 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     tui.navigate(SES_A)
     const first = turn(SES_A, 'A')
     await pump(tui, [...first.start, ...first.finish])
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`)
     })
     tui.loseStart(SES_A)
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(summary(posts).at(-1)).toBe(`SessionBusy:${SES_A}`)
     })
     tui.loseEnd(SES_A)
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`)
     })
     await cleanup?.()
@@ -446,6 +451,73 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       data: { id: 'per_1', sessionID, action: 'bash', resources: ['rm -rf build'] }
     })
 
+    it('publishes a root failure while its child keeps the aggregate Working', async () => {
+      const tui = fakeTui()
+      const cleanup = await start(tui)
+      tui.navigate(SES_A)
+      await pump(tui, [...turn(SES_A, 'root').start, ...childStart(SES_A)])
+      await pump(tui, [{ type: 'session.execution.failed', data: { sessionID: SES_A } }])
+      await waitFor(() => {
+        expect(posts.at(-1)?.payload).toMatchObject({
+          hook_event_name: 'SessionBusy',
+          root_state: 'done',
+          root_turn_error_name: 'UnknownError'
+        })
+      })
+      await pump(tui, [{ type: 'session.execution.succeeded', data: { sessionID: SES_CHILD } }])
+      expect(posts.at(-1)?.payload?.root_turn_error_name).toBe('UnknownError')
+      await cleanup?.()
+    })
+
+    it('does not turn a child failure into a root failure', async () => {
+      const reported = await runPane(PANE_A, SES_A, async (tui) => {
+        tui.navigate(SES_A)
+        await pump(tui, [...turn(SES_A, 'root').start, ...childStart(SES_A)])
+        await pump(tui, [{ type: 'session.execution.failed', data: { sessionID: SES_CHILD } }])
+        await pump(tui, turn(SES_A, 'root').finish)
+      })
+      expect(reported.at(-1)?.payload?.root_turn_error_name).toBeUndefined()
+    })
+
+    it('keeps a failed terminal verdict through plugin hot reload', async () => {
+      const tui = fakeTui()
+      const first = await start(tui)
+      tui.navigate(SES_A)
+      await pump(tui, turn(SES_A, 'root').start)
+      await pump(tui, [{ type: 'session.execution.failed', data: { sessionID: SES_A } }])
+      await waitFor(() => expect(posts.at(-1)?.payload?.root_turn_error_name).toBe('UnknownError'))
+      await first?.()
+      const before = posts.length
+      const second = await start(tui)
+      await tick(150)
+      expect(posts).toHaveLength(before)
+      expect(posts.at(-1)?.payload?.root_turn_error_name).toBe('UnknownError')
+      await second?.()
+    })
+
+    it.each(['session.execution.succeeded', 'session.execution.interrupted'])(
+      'repairs a failed verdict when %s follows a missed turn start during unload',
+      async (finishType) => {
+        const tui = fakeTui()
+        const first = await start(tui)
+        tui.navigate(SES_A)
+        await pump(tui, turn(SES_A, 'first').start)
+        await pump(tui, [{ type: 'session.execution.failed', data: { sessionID: SES_A } }])
+        await first?.()
+        await pump(tui, [
+          { type: 'session.execution.started', data: { sessionID: SES_A } },
+          { type: finishType, data: { sessionID: SES_A, reason: 'user' } }
+        ])
+        const second = await start(tui)
+        await waitFor(() => expect(posts.at(-1)?.payload?.root_turn_error_name).toBeUndefined())
+        expect(posts.at(-1)?.payload).toMatchObject({
+          hook_event_name: 'SessionIdle',
+          root_state: 'done'
+        })
+        await second?.()
+      }
+    )
+
     // Why: #23700 left this for TUI panes; a reload that misses the end must still reach Done.
     it('shows Done for a turn that ended while the plugin was reloading', async () => {
       const tui = fakeTui()
@@ -453,13 +525,13 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       tui.navigate(SES_A)
       const a = turn(SES_A, 'A')
       await pump(tui, a.start)
-      await vi.waitFor(() => expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`]))
+      await waitFor(() => expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`]))
       const beforeReload = posts.length
       await firstGeneration?.()
       expect(posts).toHaveLength(beforeReload)
       await pump(tui, a.finish)
       const secondGeneration = await start(tui)
-      await vi.waitFor(() => expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`))
+      await waitFor(() => expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`))
       await secondGeneration?.()
       expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`, `SessionIdle:${SES_A}`])
     })
@@ -477,7 +549,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       await tick(150)
       expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`])
       await pump(tui, a.finish)
-      await vi.waitFor(() => expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`))
+      await waitFor(() => expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`))
       await secondGeneration?.()
     })
 
@@ -491,7 +563,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       await firstGeneration?.()
       failPosts = false
       const secondGeneration = await start(tui)
-      await vi.waitFor(() => expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`]))
+      await waitFor(() => expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`]))
       await secondGeneration?.()
     })
 
@@ -506,7 +578,11 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       for (const event of [...a.start, ...b.start, ...b.finish, ...a.finish]) {
         tui.emit(event)
       }
-      await vi.waitFor(() => expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`), {
+      await tick(119)
+      expect(allPosts).toEqual([])
+      await tick(1)
+      expect(summary(allPosts)).toEqual(['SessionStart:undefined'])
+      await waitFor(() => expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`), {
         timeout: 3000
       })
       await tick(300)
@@ -528,11 +604,11 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     it('lands one start boundary in a freshly started TUI, and none on a reload after Done', async () => {
       const tui = fakeTui()
       const firstGeneration = await start(tui)
-      await vi.waitFor(() => expect(summary(allPosts)).toEqual(['SessionStart:undefined']))
+      await waitFor(() => expect(summary(allPosts)).toEqual(['SessionStart:undefined']))
       tui.navigate(SES_A)
       const a = turn(SES_A, 'A')
       await pump(tui, [...a.start, ...a.finish])
-      await vi.waitFor(() => expect(summary(allPosts).at(-1)).toBe(`SessionIdle:${SES_A}`))
+      await waitFor(() => expect(summary(allPosts).at(-1)).toBe(`SessionIdle:${SES_A}`))
       await firstGeneration?.()
       const secondGeneration = await start(tui)
       await tick(250)
@@ -547,7 +623,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     it('lands the start boundary only once across reloads of an idle pane', async () => {
       const tui = fakeTui()
       const firstGeneration = await start(tui)
-      await vi.waitFor(() => expect(summary(allPosts)).toEqual(['SessionStart:undefined']))
+      await waitFor(() => expect(summary(allPosts)).toEqual(['SessionStart:undefined']))
       await firstGeneration?.()
       const secondGeneration = await start(tui)
       await tick(150)
@@ -559,7 +635,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       const tui = fakeTui()
       tui.navigate(SES_B)
       const cleanup = await start(tui)
-      await vi.waitFor(() => expect(summary(allPosts)).toEqual([`SessionStart:${SES_B}`]))
+      await waitFor(() => expect(summary(allPosts)).toEqual([`SessionStart:${SES_B}`]))
       await cleanup?.()
     })
 
@@ -568,7 +644,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       tui.navigate(SES_A)
       tui.loseStart(SES_A)
       const cleanup = await start(tui)
-      await vi.waitFor(() => expect(summary(allPosts)).toEqual([`SessionBusy:${SES_A}`]))
+      await waitFor(() => expect(summary(allPosts)).toEqual([`SessionBusy:${SES_A}`]))
       await tick(150)
       await cleanup?.()
       expect(summary(allPosts)).toEqual([`SessionBusy:${SES_A}`])
@@ -591,11 +667,34 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       const a = turn(SES_A, 'A spawns a background task')
       await pump(tui, [...a.start, ...childStart(SES_A), ...a.finish])
       await tick(250)
-      expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`])
+      expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`, `SessionBusy:${SES_A}`])
+      expect(posts.at(-1)?.payload).toMatchObject({ root_state: 'done' })
       tui.loseEnd(SES_CHILD)
-      await vi.waitFor(() => expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`))
+      await waitFor(() => expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`))
       await cleanup?.()
       expect(posts.every((post) => post.payload?.sessionID === SES_A)).toBe(true)
+    })
+
+    it('keeps automatically answered permissions Working without an attention post', async () => {
+      const tui = fakeTui()
+      const cleanup = await start(tui)
+      tui.navigate(SES_A)
+      await pump(tui, turn(SES_A, 'auto').start)
+      for (let index = 0; index < 3; index += 1) {
+        tui.emit({
+          type: 'permission.asked',
+          data: { ...permission(SES_A).data, id: `auto_${index}` }
+        })
+        await tick(20)
+        tui.emit({
+          type: 'permission.replied',
+          data: { sessionID: SES_A, requestID: `auto_${index}` }
+        })
+      }
+      await tick(650)
+      expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`])
+      await pump(tui, turn(SES_A, 'auto').finish)
+      await cleanup?.()
     })
 
     it("shows a child's permission as Needs input on the root, then Working after the reply", async () => {
@@ -603,14 +702,19 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       const cleanup = await start(tui)
       tui.navigate(SES_A)
       const a = turn(SES_A, 'A')
-      await pump(tui, [...a.start, ...childStart(SES_A), permission(SES_CHILD)])
-      await vi.waitFor(() => expect(summary(posts).at(-1)).toBe(`PermissionRequest:${SES_A}`))
+      await pump(tui, [...a.start, ...childStart(SES_A)])
+      await tick(60)
+      await pump(tui, [permission(SES_CHILD)])
+      await tick(479)
+      expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`])
+      await tick(1)
+      expect(summary(posts).at(-1)).toBe(`PermissionRequest:${SES_A}`)
       await pump(tui, [
         { type: 'permission.replied', data: { sessionID: SES_CHILD, requestID: 'per_1' } },
         { type: 'session.execution.succeeded', data: { sessionID: SES_CHILD } },
         ...a.finish
       ])
-      await vi.waitFor(() => expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`))
+      await waitFor(() => expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`))
       await cleanup?.()
       expect(statuses(posts)).toEqual([
         `SessionBusy:${SES_A}`,
@@ -627,7 +731,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       tui.navigate(SES_A)
       const a = turn(SES_A, 'A spawns a background task')
       await pump(tui, [...a.start, ...childStart(SES_A), permission(SES_CHILD)])
-      await vi.waitFor(() => expect(summary(posts).at(-1)).toBe(`PermissionRequest:${SES_A}`))
+      await waitFor(() => expect(summary(posts).at(-1)).toBe(`PermissionRequest:${SES_A}`))
       await pump(tui, a.finish)
       await tick(300)
       expect(summary(posts).at(-1)).toBe(`PermissionRequest:${SES_A}`)
@@ -639,11 +743,11 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       const cleanup = await start(tui)
       tui.navigate(SES_A)
       await pump(tui, [...turn(SES_A, 'A').start, permission(SES_A)])
-      await vi.waitFor(() => expect(summary(posts).at(-1)).toBe(`PermissionRequest:${SES_A}`))
+      await waitFor(() => expect(summary(posts).at(-1)).toBe(`PermissionRequest:${SES_A}`))
       // The user browses away; the reply lands while this TUI is disconnected.
       tui.navigate(SES_B)
       await pump(tui, [{ type: 'server.connected', data: {} }])
-      await vi.waitFor(() => expect(summary(posts).at(-1)).toBe(`SessionBusy:${SES_A}`))
+      await waitFor(() => expect(summary(posts).at(-1)).toBe(`SessionBusy:${SES_A}`))
       await cleanup?.()
     })
 
@@ -652,7 +756,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       const cleanup = await start(tui)
       tui.navigate(SES_A)
       await pump(tui, [...turn(SES_A, 'A').start, permission(SES_A)])
-      await vi.waitFor(() => expect(summary(posts).at(-1)).toBe(`PermissionRequest:${SES_A}`))
+      await waitFor(() => expect(summary(posts).at(-1)).toBe(`PermissionRequest:${SES_A}`))
       const release = tui.holdPermissionFetch()
       tui.serverPermissions.set(SES_A, [...(tui.permissions.get(SES_A) ?? [])])
       await pump(tui, [
@@ -668,26 +772,22 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
 
     // Why: an Orca restart moves the hook endpoint while the pane's level stays the same.
     it('re-posts the current level once the hook endpoint moves', async () => {
-      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
-      try {
-        const tui = fakeTui()
-        const cleanup = await start(tui)
-        tui.navigate(SES_A)
-        await pump(tui, turn(SES_A, 'A').start)
-        vi.advanceTimersByTime(200)
-        await vi.waitFor(() => expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`]))
-        process.env.ORCA_AGENT_HOOK_PORT = '59998'
-        vi.advanceTimersByTime(5000)
-        await vi.waitFor(() =>
-          expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`, `SessionBusy:${SES_A}`])
-        )
-        vi.advanceTimersByTime(5000)
-        await tick(50)
-        expect(statuses(posts)).toHaveLength(2)
-        await cleanup?.()
-      } finally {
-        vi.useRealTimers()
-      }
+      const tui = fakeTui()
+      const cleanup = await start(tui)
+      tui.navigate(SES_A)
+      await pump(tui, turn(SES_A, 'A').start)
+      await tick(200)
+      await waitFor(() => expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`]))
+      process.env.ORCA_AGENT_HOOK_PORT = '59998'
+      await tick(4699)
+      expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`])
+      await tick(1)
+      expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`, `SessionBusy:${SES_A}`])
+      await tick(300)
+      await tick(5000)
+      await tick(50)
+      expect(statuses(posts)).toHaveLength(2)
+      await cleanup?.()
     })
 
     it('does not pin Needs input on a request the data kept after its turn ended', async () => {
@@ -696,9 +796,9 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       tui.navigate(SES_A)
       const a = turn(SES_A, 'A')
       await pump(tui, [...a.start, permission(SES_A)])
-      await vi.waitFor(() => expect(summary(posts).at(-1)).toBe(`PermissionRequest:${SES_A}`))
+      await waitFor(() => expect(summary(posts).at(-1)).toBe(`PermissionRequest:${SES_A}`))
       await pump(tui, a.finish)
-      await vi.waitFor(() => expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`))
+      await waitFor(() => expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`))
       await tick(250)
       expect(summary(posts).at(-1)).toBe(`SessionIdle:${SES_A}`)
       await cleanup?.()

@@ -211,6 +211,8 @@ describe('strength and quiet through the tui-idle ranking', () => {
       readPositiveBodyEvidence: () => false,
       readQuietReadyBodyEvidence: () => false,
       readAgentRuleVerdict: () => ruled,
+      readScreenInputVeto: () => null,
+      titleObservedAtEpochMs: null,
       agent: 'cline',
       firstPartyStatus: null,
       quiescenceMs: QUIESCENCE_MS

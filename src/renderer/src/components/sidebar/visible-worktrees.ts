@@ -248,6 +248,7 @@ let _publishedVisibleIds: string[] | null = null
 export type VisibleWorktreeShortcutTarget = {
   id: string
   executionHostId?: Worktree['hostId']
+  lineageGroupKey?: string
 }
 let _publishedVisibleShortcutTargets: VisibleWorktreeShortcutTarget[] | null = null
 
@@ -259,6 +260,12 @@ export function setVisibleWorktreeShortcutTargets(
   targets: VisibleWorktreeShortcutTarget[] | null
 ): void {
   _publishedVisibleShortcutTargets = targets
+}
+
+export function getPublishedVisibleWorktreeShortcutTargets():
+  | readonly VisibleWorktreeShortcutTarget[]
+  | null {
+  return _publishedVisibleShortcutTargets
 }
 
 export function getVisibleWorktreeIds(): string[] {

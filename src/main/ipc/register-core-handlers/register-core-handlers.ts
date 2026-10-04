@@ -61,7 +61,9 @@ import { registerAgentHookHandlers } from '../agent-hooks'
 import { registerCodexConfigSyncHandlers } from '../codex-config-sync'
 import { getPtyIdForPaneKey } from '../pty'
 import { registerClaudeAccountHandlers } from '../claude-accounts'
+import { registerOpenCodeGoCredentialsHandlers } from '../opencode-go-credentials'
 import { registerMiniMaxCredentialsHandlers } from '../minimax-credentials'
+import { registerZcodePlanCredentialsHandlers } from '../zcode-plan-credentials'
 import { registerGrokAccountHandlers } from '../grok-accounts'
 import { registerCursorAccountHandlers } from '../cursor-accounts'
 import { registerUpdaterHandlers } from '../../window/attach-main-window-services'
@@ -150,7 +152,9 @@ export function registerCoreHandlers(
   registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
   registerClaudeAccountHandlers(claudeAccounts)
+  registerOpenCodeGoCredentialsHandlers(rateLimits)
   registerMiniMaxCredentialsHandlers(rateLimits)
+  registerZcodePlanCredentialsHandlers(rateLimits)
   registerGrokAccountHandlers()
   registerCursorAccountHandlers()
   registerRateLimitHandlers(rateLimits, codexAccounts)

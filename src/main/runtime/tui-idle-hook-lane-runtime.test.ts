@@ -27,6 +27,15 @@ const OPENCODE_PERMISSION_DIALOG = [
   ' Allow once   Allow always   Reject     ctrl+f fullscreen  ⇆ select  enter confirm',
   ''
 ].join('\r\n')
+// OpenCode 1.18's question tool, which paints no dialog wording the blocked layer knows.
+const OPENCODE_QUESTION = [
+  '  ┃  Which color do you prefer?',
+  '  ┃  1. Red',
+  '  ┃  2. Blue',
+  '  ┃  3. Type your own answer',
+  '  ┃  ↑↓ select  enter submit  esc dismiss',
+  ''
+].join('\r\n')
 // Shorter than the 2 s poll, so only the synchronous verdict can settle a wait.
 const WAIT_MS = 150
 
@@ -167,13 +176,14 @@ describe('tui-idle hook lane through the runtime', () => {
     ).toBe('ready')
   })
 
-  // Why: Codex before its Interrupt hook sends nothing for an Esc mid-turn, so its row can stay
-  // working; its title and screen rules decide instead.
-  it('leaves Codex to its screen rules, whatever its hook row says', async () => {
+  // Why: Codex before its Interrupt hook sends nothing for an Esc mid-turn, so only its done
+  // decides; a working row leaves its title and screen rules to decide.
+  it('settles Codex on its done, and leaves a working row to its screen rules', async () => {
     const codex = { launchAgent: 'codex' as const, data: CODEX_BUSY_SCREEN }
-    expect(await waitOutcome({ ...codex, rows: () => [row({ agentType: 'codex' })] })).toBe(
-      'timeout'
-    )
+    expect(await waitOutcome({ ...codex, rows: () => [row({ agentType: 'codex' })] })).toBe('ready')
+    expect(
+      await waitOutcome({ ...codex, rows: () => [row({ agentType: 'codex', state: 'working' })] })
+    ).toBe('timeout')
   })
 
   it("settles past a denied prompt's dialog text once the hook says the turn ended", async () => {
@@ -181,6 +191,23 @@ describe('tui-idle hook lane through the runtime', () => {
     expect(await waitOutcome({ ...options, rows: () => [] })).toBe(
       'blocked:agent-interactive-prompt'
     )
+    expect(
+      await waitOutcome({
+        ...options,
+        rows: () => [row({ agentType: 'opencode', state: 'waiting', receivedAt: Date.now() + 1 })]
+      })
+    ).toBe('blocked:agent-interactive-prompt')
+    expect(
+      await waitOutcome({
+        ...options,
+        rows: () => [row({ agentType: 'opencode', receivedAt: Date.now() + 1 })]
+      })
+    ).toBe('ready')
+  })
+
+  it('blocks on an open question the hook reports, and settles once it is answered', async () => {
+    const options = { launchAgent: 'opencode' as const, data: OPENCODE_QUESTION }
+    expect(await waitOutcome({ ...options, rows: () => [] })).toBe('timeout')
     expect(
       await waitOutcome({
         ...options,

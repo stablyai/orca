@@ -3,6 +3,7 @@ import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { PreloadApi } from '../api-types'
 import type { TerminalProcessInspection } from '../../shared/terminal-process-inspection'
+import type { CodexSharedServerStatus } from '../../shared/codex-shared-server-command'
 
 export const ptyStreamAndSerializationApi = {
   inspectProcess: (
@@ -16,7 +17,7 @@ export const ptyStreamAndSerializationApi = {
     ipcRenderer.invoke('pty:inspectProcess', { id, ...options }),
   confirmForegroundProcess: (id: string): Promise<string | null> =>
     ipcRenderer.invoke('pty:confirmForegroundProcess', { id }),
-  isCodexOnSharedServer: (id: string): Promise<boolean> =>
+  isCodexOnSharedServer: (id: string): Promise<CodexSharedServerStatus> =>
     ipcRenderer.invoke('pty:isCodexOnSharedServer', { id }),
   disableCodexSharedServerAutoStart: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('pty:disableCodexSharedServerAutoStart', { id }),

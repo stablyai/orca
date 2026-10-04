@@ -150,7 +150,12 @@ function handDownNestedDelegations(
     const [spawner] = spawners
     if (spawners.size === 1 && spawner !== undefined && spawner !== null) {
       rowIds.add(message.id)
-      byScope.set(spawner, [...(byScope.get(spawner) ?? []), message])
+      const rows = byScope.get(spawner)
+      if (rows) {
+        rows.push(message)
+      } else {
+        byScope.set(spawner, [message])
+      }
     }
   }
   return { rowIds, byScope }

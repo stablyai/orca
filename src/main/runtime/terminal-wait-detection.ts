@@ -11,6 +11,7 @@ import {
 } from './agent-state-rules/agent-state-rules-engine'
 import { findPromptAnchorIndexes } from './agent-state-rules/agent-state-text-anchors'
 import { showsIdleTitleAnchor } from './agent-state-rules/agent-state-title-anchors'
+import { compiledFromActiveAgentStateRules } from './agent-state-rules/active-agent-state-rules'
 import {
   findTerminalWaitBlockedSignal,
   isSettledAfter,
@@ -29,12 +30,18 @@ function computeExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
 }
 
 /**
- * Pure in `title`, so it is memoized on the title string like the status classifier it
- * wraps: the wait path re-asks for the same unchanged title on every poll tick and every
- * repaint frame, and the marker scan below is a regex sweep each time (~72ns vs ~7ns).
+ * Pure in `title` for one rule set, so it is memoized on the title string like the status
+ * classifier it wraps: the wait path re-asks for the same unchanged title on every poll tick and
+ * every repaint frame, and the marker scan below is a regex sweep each time (~72ns vs ~7ns). Why a
+ * fresh memo per rule set: a rules reload can change which titles read as idle.
  */
-export const detectExplicitIdleStatusFromTitle: (title: string) => AgentStatus | null =
+const explicitIdleTitleMemo = compiledFromActiveAgentStateRules(() =>
   memoizeTitleClassification(computeExplicitIdleStatusFromTitle)
+)
+
+export function detectExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
+  return explicitIdleTitleMemo()(title)
+}
 
 export function isKnownReadyPromptPreview(preview: string): boolean {
   const normalized = preview.toLowerCase()
@@ -66,7 +73,7 @@ export function isKnownReadyPromptBody(
   readScreenLines: () => readonly string[] | null,
   hasOutputClock: boolean
 ): boolean {
-  if (agent === 'qoder') {
+  if (agent === 'qoder' || agent === 'qoder-cn') {
     return isQoderComposerReady(readScreenLines())
   }
   // Why before the rules: such an agent settles only on the quiet lane while it has a clock.
