@@ -5,7 +5,7 @@ import {
   blockingAiVaultScanIssue,
   skippedAiVaultTranscriptCount,
   skippedAiVaultTranscriptReasons
-} from './ai-vault-scan-issue-state'
+} from '../../../../shared/ai-vault-scan-issue-state'
 import { translate } from '@/i18n/i18n'
 
 // Messages are scanner-authored (host name, remote path, cap), so they render raw

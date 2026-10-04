@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AiVaultListResult } from '../../../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from './ai-vault-types'
 import {
   aiVaultScanNoticeIssues,
   blockingAiVaultScanIssue,
@@ -108,6 +108,21 @@ describe('aiVaultScanNoticeIssues', () => {
     expect(aiVaultScanNoticeIssues(result([], [hostIssue]))).toEqual([])
   })
 
+  it('keeps scanner commentary separate from skipped transcripts and their reasons', () => {
+    const notice: AiVaultScanIssue = {
+      agent: 'opencode',
+      kind: 'notice',
+      path: '',
+      message: 'Additional scan issues omitted.'
+    }
+    const scan = result([], [notice])
+
+    expect(blockingAiVaultScanIssue(scan)).toBeNull()
+    expect(aiVaultScanNoticeIssues(scan)).toEqual([notice])
+    expect(skippedAiVaultTranscriptCount(scan)).toBe(0)
+    expect(skippedAiVaultTranscriptReasons(scan)).toEqual([])
+  })
+
   it('reports nothing before the first scan', () => {
     expect(aiVaultScanNoticeIssues(null)).toEqual([])
     expect(skippedAiVaultTranscriptCount(null)).toBe(0)
@@ -170,13 +185,6 @@ describe('skippedAiVaultTranscriptReasons', () => {
   })
 })
 
-function result(
-  sessions: { id: string }[],
-  issues: AiVaultListResult['issues']
-): AiVaultListResult {
-  return {
-    sessions: sessions as AiVaultListResult['sessions'],
-    issues,
-    scannedAt: '2026-07-26T00:00:00.000Z'
-  }
+function result(sessions: { id: string }[], issues: AiVaultScanIssue[]) {
+  return { sessions, issues }
 }

@@ -38,6 +38,29 @@ describe('agent history reply schemas', () => {
     expect(parsed.sessions).toEqual([{ id: 's1', agent: 'some-new-agent' }])
   })
 
+  it('preserves newer host notice kinds and optional metadata while checking banner fields', () => {
+    const issue = {
+      agent: 'new-agent',
+      kind: 'new-source-notice',
+      path: '/remote/source.db',
+      message: 'Remote source unavailable. Refresh to try again.',
+      executionHostId: 'new-host:box',
+      futureMetadata: true
+    }
+    expect(agentHistorySessionScanSchema.parse({ sessions: [], issues: [issue] }).issues).toEqual([
+      issue
+    ])
+  })
+
+  it.each([null, {}, { agent: 'opencode', path: '/source.db', message: 12 }])(
+    'refuses unreadable banner rows instead of publishing them into ready state: %j',
+    (issue) => {
+      expect(
+        agentHistorySessionScanSchema.safeParse({ sessions: [], issues: [issue] }).success
+      ).toBe(false)
+    }
+  )
+
   it('requires the resume repo list to be an array', () => {
     expect(resumeRepoListSchema.safeParse({}).success).toBe(false)
     expect(resumeRepoListSchema.safeParse({ repos: 'none' }).success).toBe(false)
