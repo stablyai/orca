@@ -4,6 +4,7 @@
  * implements, not part of the sequencing it runs.
  */
 
+import type { AgentSessionHandleProvider } from '../../shared/agent-session-provider-handle'
 import type { AgentLaunchPrompt } from '../../shared/agent-launch-intent'
 import type { TuiAgent } from '../../shared/tui-agent'
 
@@ -13,7 +14,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 export type AgentLaunchSurfaceFactory = {
   createStructuredSession(args: {
     worktreeId: string
-    agent: 'claude' | 'codex'
+    agent: AgentSessionHandleProvider
     options?: Readonly<Record<string, unknown>>
     /** The caller-minted session id; refused with `AgentLaunchSessionAlreadyExistsError` if taken. */
     sessionId?: string

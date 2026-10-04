@@ -45,6 +45,7 @@ export type AgentJournalCursor = {
 export type AgentSessionProviderHandle =
   | { kind: 'codex'; threadId: string }
   | { kind: 'claude'; sessionId: string; leafUuid: string | null }
+  | { kind: 'cursor'; sessionId: string }
   | { kind: 'opaque'; agent: AgentType; value: string }
 
 /** The narrow slice of the durable session record the journal needs. The full
@@ -69,6 +70,8 @@ export type AgentSessionJournalIdentity = {
 export type AgentJournalItemIdentity =
   | { provider: 'codex'; threadId: string; turnId: string; ordinal: number }
   | { provider: 'claude'; sessionId: string; uuid: string }
+  /** ACP events are scoped to their acquisition; replay is imported only into an empty journal. */
+  | { provider: 'cursor'; sessionId: string; recordId: string }
   /** A submission Orca minted before any provider echo existed. */
   | { provider: 'orca'; clientMessageId: string }
   /** Bridge-era transcript record with no provider-stable identity. */

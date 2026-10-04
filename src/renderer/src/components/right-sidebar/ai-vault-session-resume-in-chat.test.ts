@@ -62,6 +62,21 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
     ).toEqual({ available: false, reason: 'already-structured' })
   })
 
+  it('keeps Cursor terminal history in Terminal while native-owned Cursor reopens its chat', () => {
+    expect(eligibility({ session: session({ agent: 'cursor' }) })).toEqual({
+      available: false,
+      reason: 'agent'
+    })
+    expect(
+      eligibility({
+        session: session({
+          agent: 'cursor',
+          structuredSession: { sessionId: 'cursor-native', workspaceId: 'folder' }
+        })
+      })
+    ).toEqual({ available: false, reason: 'already-structured' })
+  })
+
   it('refuses a row recorded on a remote host', () => {
     expect(eligibility({ session: session({ executionHostId: 'ssh:build-box' }) })).toEqual({
       available: false,

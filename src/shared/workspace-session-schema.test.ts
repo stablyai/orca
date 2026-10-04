@@ -551,62 +551,65 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
-  it('preserves a structured agent session tab and drops the retired adoption key', () => {
-    const result = parseWorkspaceSession({
-      activeRepoId: null,
-      activeWorktreeId: 'wt',
-      activeTabId: 'session-1',
-      tabsByWorktree: {},
-      terminalLayoutsByTabId: {},
-      unifiedTabs: {
-        wt: [
-          {
-            id: 'session-1',
-            entityId: 'session-1',
-            groupId: 'group1',
-            worktreeId: 'wt',
-            contentType: 'agent-session',
-            agentSessionAgent: 'codex',
-            label: 'Codex Chat',
-            customLabel: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 0
-          },
-          {
-            id: 'terminal-1',
-            entityId: 'terminal-1',
-            groupId: 'group1',
-            worktreeId: 'wt',
-            contentType: 'terminal',
-            viewMode: 'chat',
-            // Why: older builds could save this key on a chat-mode terminal; it must keep loading.
-            structuredSessionId: 'codex-session-1',
-            label: 'Terminal 1',
-            customLabel: null,
-            color: null,
-            sortOrder: 1,
-            createdAt: 0
-          }
-        ]
-      },
-      activeTabTypeByWorktree: { wt: 'agent-session' }
-    })
+  it.each(['codex', 'claude', 'cursor'] as const)(
+    'preserves a %s session tab and drops the retired adoption key',
+    (agent) => {
+      const result = parseWorkspaceSession({
+        activeRepoId: null,
+        activeWorktreeId: 'wt',
+        activeTabId: 'session-1',
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        unifiedTabs: {
+          wt: [
+            {
+              id: 'session-1',
+              entityId: 'session-1',
+              groupId: 'group1',
+              worktreeId: 'wt',
+              contentType: 'agent-session',
+              agentSessionAgent: agent,
+              label: 'Codex Chat',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 0
+            },
+            {
+              id: 'terminal-1',
+              entityId: 'terminal-1',
+              groupId: 'group1',
+              worktreeId: 'wt',
+              contentType: 'terminal',
+              viewMode: 'chat',
+              // Why: older builds could save this key on a chat-mode terminal; it must keep loading.
+              structuredSessionId: 'codex-session-1',
+              label: 'Terminal 1',
+              customLabel: null,
+              color: null,
+              sortOrder: 1,
+              createdAt: 0
+            }
+          ]
+        },
+        activeTabTypeByWorktree: { wt: 'agent-session' }
+      })
 
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.value.unifiedTabs?.wt[0]).toMatchObject({
-        contentType: 'agent-session',
-        agentSessionAgent: 'codex'
-      })
-      expect(result.value.unifiedTabs?.wt[1]).toMatchObject({
-        contentType: 'terminal',
-        viewMode: 'chat'
-      })
-      expect(result.value.unifiedTabs?.wt[1]).not.toHaveProperty('structuredSessionId')
-      expect(result.value.activeTabTypeByWorktree?.wt).toBe('agent-session')
+      expect(result.ok).toBe(true)
+      if (result.ok) {
+        expect(result.value.unifiedTabs?.wt[0]).toMatchObject({
+          contentType: 'agent-session',
+          agentSessionAgent: agent
+        })
+        expect(result.value.unifiedTabs?.wt[1]).toMatchObject({
+          contentType: 'terminal',
+          viewMode: 'chat'
+        })
+        expect(result.value.unifiedTabs?.wt[1]).not.toHaveProperty('structuredSessionId')
+        expect(result.value.activeTabTypeByWorktree?.wt).toBe('agent-session')
+      }
     }
-  })
+  )
 
   it('degrades an unknown viewMode to the safe default instead of failing parse', () => {
     const result = parseWorkspaceSession({

@@ -13,6 +13,7 @@ import { parseExecutionHostId } from './execution-host'
 import type { GlobalSettings } from './global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
 import {
+  CURSOR_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from './protocol-version'
@@ -73,10 +74,12 @@ export function agentTabsDefaultToNativeChat(
 
 /** ...and specifically a structured native chat session rather than a terminal rendered as chat. */
 export function prefersStructuredNativeChatByDefault(
-  settings: Partial<NativeChatDefaultSettings> | null | undefined
+  settings: Partial<NativeChatDefaultSettings> | null | undefined,
+  agent?: string
 ): boolean {
   return (
-    agentTabsDefaultToNativeChat(settings) && settings?.experimentalStructuredNativeChat === true
+    agentTabsDefaultToNativeChat(settings) &&
+    (settings?.experimentalStructuredNativeChat === true || agent === 'cursor')
   )
 }
 
@@ -118,6 +121,12 @@ export function resolveStructuredNativeChatSupport(
   if (!input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)) {
     return { supported: false, blocker: 'runtime-capability' }
   }
+  if (
+    input.agent === 'cursor' &&
+    !input.hostCapabilities.includes(CURSOR_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
+  ) {
+    return { supported: false, blocker: 'runtime-capability' }
+  }
   if (host.kind === 'runtime') {
     // An older paired host advertises structured sessions but admits them only with its own chat
     // setting on, so a chat opened there could never start; it keeps the terminal it always got.
@@ -126,7 +135,11 @@ export function resolveStructuredNativeChatSupport(
     }
     // The host refuses a client that did not say it reads structured sessions, as the browser
     // client does not; that client keeps the host terminal.
-    if (!clientChoosesStructuredLaunches(input.clientCapabilities)) {
+    if (
+      !clientChoosesStructuredLaunches(input.clientCapabilities) ||
+      (input.agent === 'cursor' &&
+        !input.clientCapabilities?.includes(CURSOR_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY))
+    ) {
       return { supported: false, blocker: 'client-capability' }
     }
   }

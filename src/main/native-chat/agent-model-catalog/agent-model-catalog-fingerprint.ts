@@ -37,6 +37,9 @@ export function agentModelCatalogFingerprint(identity: AgentModelCatalogIdentity
 export function agentModelCatalogIdentityForRecord(
   record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>
 ): AgentModelCatalogIdentity {
+  if (record.provider === 'cursor') {
+    throw new Error('Cursor model catalog is supplied by its ACP session')
+  }
   return {
     agent: record.provider,
     accountHomeVariable: record.accountHome.variable,

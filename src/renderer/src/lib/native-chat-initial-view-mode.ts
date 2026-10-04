@@ -31,7 +31,7 @@ export function decideInitialAgentTabViewMode(args: {
   if (!agentTabsDefaultToNativeChat(args)) {
     return undefined
   }
-  if (!isNativeChatSupportedAgent(args.agent)) {
+  if (args.agent === 'cursor' || !isNativeChatSupportedAgent(args.agent)) {
     return undefined
   }
   if (

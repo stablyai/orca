@@ -32,13 +32,16 @@ function decide(
 }
 
 describe('worker start mode from the user default', () => {
-  it.each(['claude', 'codex'] as const)('starts a local %s worker structured', (agent) => {
-    expect(decide({ params: { agent } })).toMatchObject({
-      mode: 'structured',
-      preferred: 'structured',
-      reason: 'user_default'
-    })
-  })
+  it.each(['claude', 'codex', 'cursor'] as const)(
+    'starts a local %s worker structured',
+    (agent) => {
+      expect(decide({ params: { agent } })).toMatchObject({
+        mode: 'structured',
+        preferred: 'structured',
+        reason: 'user_default'
+      })
+    }
+  )
 
   it.each([
     ['native chat off', { ...STRUCTURED_DEFAULT, experimentalNativeChat: false }],
@@ -58,7 +61,7 @@ describe('a structured default this dispatch cannot honour', () => {
   it.each([
     ['a remote --on', { on: 'server-1' }, 'remote_execution_host'],
     ['an existing --terminal', { terminal: 'term_1' }, 'reused_terminal'],
-    ['a non-structured agent', { agent: 'cursor' }, 'agent_without_structured_session'],
+    ['a non-structured agent', { agent: 'opencode' }, 'agent_without_structured_session'],
     ['no agent at all', { agent: undefined }, 'agent_without_structured_session']
   ])('falls back to a terminal worker for %s', (_name, params, reason) => {
     const receipt = decide({ params: { agent: 'claude', ...params } })

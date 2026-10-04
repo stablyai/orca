@@ -23,6 +23,7 @@ export function createCodexAppServerRecordDispatcher(input: {
   handlers: CodexAppServerConnectionHandlers
   writeResponse: (payload: Record<string, unknown>) => void
   onProtocolFailure: (error: Error) => void
+  requestError?: (method: string, error: Record<string, unknown>) => Error
 }): {
   addPending: (id: number, waiter: CodexPendingRequest) => void
   deletePending: (id: number) => void
@@ -107,16 +108,18 @@ export function createCodexAppServerRecordDispatcher(input: {
     if (isAppServerRecord(error)) {
       const detail = typeof error.message === 'string' ? error.message : 'unknown error'
       waiter.reject(
-        isCodexMethodNotFoundError(error)
-          ? new CodexAppServerUnsupportedError(
-              `codex app-server does not support ${waiter.method}: ${detail}`
-            )
-          : new CodexAppServerRequestError(
-              waiter.method,
-              typeof error.code === 'number' ? error.code : null,
-              `codex app-server ${waiter.method} failed: ${detail}`,
-              typeof error.message === 'string' ? error.message : undefined
-            )
+        input.requestError
+          ? input.requestError(waiter.method, error)
+          : isCodexMethodNotFoundError(error)
+            ? new CodexAppServerUnsupportedError(
+                `codex app-server does not support ${waiter.method}: ${detail}`
+              )
+            : new CodexAppServerRequestError(
+                waiter.method,
+                typeof error.code === 'number' ? error.code : null,
+                `codex app-server ${waiter.method} failed: ${detail}`,
+                typeof error.message === 'string' ? error.message : undefined
+              )
       )
       return
     }

@@ -1,5 +1,5 @@
 import { DEDICATED_E2E_SPECS } from './ci-e2e-job-selection.mjs'
-import { linuxInstallPackageList } from './pr-e2e-linux-packages.test-fixture.mjs'
+import { linuxInstallPackageList as linuxPackages } from './pr-e2e-linux-packages.test-fixture.mjs'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parse as parseJsonc } from 'jsonc-parser'
@@ -220,7 +220,7 @@ describe('PR E2E gate contract', () => {
       const installStep = e2eWorkflow.jobs[jobName].steps.find((step) =>
         step.name.startsWith('Install native build')
       )
-      expect(linuxInstallPackageList(installStep, jobName), jobName).toMatch(/(^|\s)zsh(\s|$)/)
+      expect(linuxPackages(installStep, jobName).split(/\s+/), jobName).toContain('zsh')
     }
   })
 
@@ -310,7 +310,7 @@ describe('PR E2E gate contract', () => {
     const install = e2eWorkflow.jobs['changed-e2e'].steps.find((step) =>
       step.name.startsWith('Install native build')
     )
-    expect(linuxInstallPackageList(install, 'changed-e2e')).toMatch(/(^|\s)openssh-client(\s|$)/)
+    expect(linuxPackages(install, 'changed-e2e').split(/\s+/)).toContain('openssh-client')
   })
 
   it('routes direct-SSH workspace and tab restore from its unnamed source seams', () => {

@@ -1,3 +1,4 @@
+import { isAgentSessionHandleProvider } from '../../../../../../shared/agent-session-provider-handle'
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
@@ -102,10 +103,10 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
-  if (args.agent !== 'claude' && args.agent !== 'codex') {
+  if (!isAgentSessionHandleProvider(args.agent)) {
     throw new OrchestrationError(
       'agent_unconfigured',
-      `Structured workers support claude and codex; ${args.agent} has no structured session.`
+      `Structured workers support claude, codex and cursor; ${args.agent} has no structured session.`
     )
   }
   const options = narrowStructuredLaunchSeedOptions(args.launchPreferences)

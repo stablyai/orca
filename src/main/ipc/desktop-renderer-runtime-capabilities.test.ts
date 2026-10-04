@@ -104,7 +104,6 @@ describe('desktop renderer runtime client capabilities', () => {
     expect(missingFrom(PAIRED_HOST_RECEIVES, DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES)).toEqual(
       [...REMOTE_ONLY_BY_DECISION].sort()
     )
-    // The same renderer reads structured chats on either host, so it claims nothing only locally.
     expect(missingFrom(DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES, PAIRED_HOST_RECEIVES)).toEqual(
       []
     )

@@ -17,6 +17,7 @@
  * records; every other surface says "chat session" / "terminal agent".
  */
 
+import { isAgentSessionHandleProvider } from '../../shared/agent-session-provider-handle'
 import { requestsCwdOutsideWorkspaceRoot } from '../../shared/terminal-startup-cwd'
 import type {
   AgentLaunchMode,
@@ -131,7 +132,7 @@ export function decideAgentLaunchMode(args: {
 }): AgentLaunchModeReceipt {
   const { placement, settings } = args
   const vocabulary = args.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
-  if (!prefersStructuredNativeChatByDefault(settings)) {
+  if (!prefersStructuredNativeChatByDefault(settings, placement.agent)) {
     return {
       mode: 'terminal',
       preferred: 'terminal',
@@ -201,7 +202,7 @@ async function readStructuredCreateSupport(
   worktreeId: string,
   agent: TuiAgent | undefined
 ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' } | null> {
-  if (agent !== 'claude' && agent !== 'codex') {
+  if (!isAgentSessionHandleProvider(agent)) {
     return { supported: false, reason: 'agent' }
   }
   try {

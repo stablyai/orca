@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 // Attach: reserve the session record, then open its journal.
 //
 // `create` and `ensure` are the same transition with a different starting
@@ -144,15 +145,17 @@ export function journalIdentityFor(
 ): AgentSessionJournalIdentity {
   const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
   const providerHandle: AgentSessionProviderHandle =
-    head?.handle.provider === 'codex'
-      ? { kind: 'codex', threadId: head.handle.threadId }
-      : head?.handle.provider === 'claude'
-        ? {
-            kind: 'claude',
-            sessionId: head.handle.sessionId,
-            leafUuid: head.handle.leafUuid
-          }
-        : (params.providerHandle ?? { kind: 'opaque', agent: params.agent, value: 'pending' })
+    head?.handle.provider === 'cursor'
+      ? { kind: 'cursor', sessionId: head.handle.sessionId }
+      : head?.handle.provider === 'codex'
+        ? { kind: 'codex', threadId: head.handle.threadId }
+        : head?.handle.provider === 'claude'
+          ? {
+              kind: 'claude',
+              sessionId: head.handle.sessionId,
+              leafUuid: head.handle.leafUuid
+            }
+          : (params.providerHandle ?? { kind: 'opaque', agent: params.agent, value: 'pending' })
   return {
     sessionId: record.sessionId,
     workspaceId: params.location.workspaceId,
@@ -268,6 +271,15 @@ function adoptedProviderHandleLink(
   handle: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>,
   observedAt: number
 ): AgentSessionProviderHandleLink {
+  if (handle.kind === 'cursor') {
+    return {
+      linkId: randomUUID(),
+      handle: { provider: 'cursor', sessionId: handle.sessionId },
+      origin: 'adopted',
+      mintedAtFence: ADOPTED_HANDLE_FENCE,
+      observedAt
+    }
+  }
   return handle.kind === 'claude'
     ? claudeProviderHandleLink({
         sessionId: handle.sessionId,

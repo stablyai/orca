@@ -20,7 +20,7 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
     name: 'agentSession.options',
     params: OptionsParams,
     handler: async (params, ctx) =>
-      (await requireInstalledStructuredHost(ctx)).readOptions(params.sessionId)
+      (await requireInstalledStructuredHost(ctx, params.sessionId)).readOptions(params.sessionId)
   }),
   defineMethod({
     name: 'agentSession.modelCatalog',

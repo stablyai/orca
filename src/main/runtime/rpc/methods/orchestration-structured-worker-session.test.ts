@@ -1,3 +1,9 @@
+import { OrcaRuntimeService } from '../../orca-runtime'
+import {
+  decideWorkerStartMode,
+  resolveWorkerStartModeOnHost
+} from './orchestration-worker-start-mode'
+import type { WorkerEffect } from './orchestration/worker/worker-topology'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
@@ -19,7 +25,8 @@ const {
   releaseStructuredWorkerSession,
   sendStructuredWorkerPreamble
 } = await import('./orchestration-structured-worker-session')
-const { isUnknownWorkerStartOutcome } = await import('./orchestration/worker/worker-topology')
+const { isUnknownWorkerStartOutcome, createStructuredWorkerSessionForWorktree } =
+  await import('./orchestration/worker/worker-topology')
 const { structuredWorkerIdentities } = await import('../../structured-worker-identity')
 const { structuredSessionChildIdentityEnv } =
   await import('../../structured-session-child-identity-env')
@@ -52,6 +59,55 @@ describe('structured worker session', () => {
       ok: true,
       value: { sessionId: args.envelope.sessionId }
     }))
+  })
+
+  it('routes a Cursor folder worker through host settlement and the existing creation topology', async () => {
+    const { subscribe, dispose } = installHost()
+    const runtime = new OrcaRuntimeService(null)
+    vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
+    const support = vi
+      .spyOn(runtime, 'getStructuredAgentSessionCreateSupport')
+      .mockResolvedValue({ supported: true })
+    const mode = await resolveWorkerStartModeOnHost(
+      runtime,
+      decideWorkerStartMode({
+        params: { agent: 'cursor' },
+        settings: { experimentalNativeChat: true, openAgentTabsInChatByDefault: true }
+      }),
+      'folder:cursor-worker',
+      'cursor'
+    )
+    expect(mode.mode).toBe('structured')
+    expect(support).toHaveBeenCalledWith('id:folder:cursor-worker', 'cursor')
+    const effects: WorkerEffect[] = []
+    const created = await createStructuredWorkerSessionForWorktree({
+      runtime,
+      worktreeId: 'folder:cursor-worker',
+      agent: 'cursor',
+      dispatchId: 'cursor-topology',
+      launchPreferences: { model: 'cursor-model', effort: 'high' },
+      effects
+    })
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktree: 'id:folder:cursor-worker',
+        agent: 'cursor',
+        activate: false,
+        options: { model: 'cursor-model', effort: 'high' }
+      })
+    )
+    expect(structuredWorkerIdentities.get(created.identity.handle)?.agent).toBe('cursor')
+    expect(effects).toEqual([
+      expect.objectContaining({
+        id: created.identity.handle,
+        surface: 'background',
+        action: 'created'
+      })
+    ])
+    expect(subscribe).toHaveBeenCalledTimes(1)
+    releaseStructuredWorkerSession('cursor-topology')
+    expect(dispose).toHaveBeenCalledTimes(1)
+    expect(structuredWorkerIdentities.get(created.identity.handle)).toBeNull()
   })
 
   it('binds only a redrive subscription at start, and settlement drops it', async () => {

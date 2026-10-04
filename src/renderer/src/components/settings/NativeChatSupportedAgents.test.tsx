@@ -16,6 +16,7 @@ const EXPECTED_SUPPORTED_AGENTS = [
   'claude',
   'openclaude',
   'codex',
+  'cursor',
   'grok',
   'omp',
   'opencode',
@@ -52,6 +53,10 @@ describe('NativeChatSupportedAgents', () => {
     expect(getRenderedChips().map((chip) => chip.agent)).toEqual(EXPECTED_SUPPORTED_AGENTS)
   })
 
+  it('renders exactly one chip for Cursor ACP', () => {
+    expect(getRenderedChips().filter((chip) => chip.agent === 'cursor')).toHaveLength(1)
+  })
+
   it('gives each icon an accessible catalog agent name', () => {
     for (const chip of getRenderedChips()) {
       const entry = getAgentCatalog().find((candidate) => candidate.id === chip.agent)
@@ -68,7 +73,10 @@ describe('NativeChatSupportedAgents', () => {
         expect(rendered).not.toContain(entry.id)
       }
     }
-    expect(rendered).not.toContain('cursor')
+    expect(rendered).toEqual(EXPECTED_SUPPORTED_AGENTS)
+    for (const agent of ['qoder-cn', 'qwen-code', 'jcode']) {
+      expect(rendered).not.toContain(agent)
+    }
   })
 
   it('keeps the label in the English catalog', () => {

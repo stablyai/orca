@@ -1,3 +1,4 @@
+import { appendStructuredCursorHistory } from '../../../ai-vault/structured-cursor-history'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
@@ -12,7 +13,10 @@ import { restampAiVaultListResult } from '../../../ai-vault/session-list-results
 import type { AiVaultPrepareSessionResumeArgs } from '../../../../shared/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { describeAiVaultScanError } from '../../../../shared/ai-vault-scan-error-message'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  CURSOR_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import {
   assertLegacyAiVaultResumeAllowed,
   projectStructuredAiVaultSessions
@@ -86,16 +90,22 @@ export const AI_VAULT_METHODS = [
         }
         throw new Error(describeAiVaultScanError(String(error)))
       }
-      // Why: web clients consume this response directly (no parent-side retag),
-      // so sessions must come back stamped as the runtime host they addressed.
-      const stamped = params.executionHostId
-        ? restampAiVaultListResult(result, params.executionHostId)
-        : result
-      return projectStructuredAiVaultSessions(
-        stamped,
+      const cursorSupported =
         clientKind === undefined ||
-          (clientCapabilities?.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) ?? false)
+        (clientCapabilities?.includes(CURSOR_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) ?? false)
+      const projected = await appendStructuredCursorHistory(
+        projectStructuredAiVaultSessions(
+          result,
+          clientKind === undefined ||
+            (clientCapabilities?.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) ?? false),
+          cursorSupported
+        ),
+        cursorSupported,
+        params
       )
+      return params.executionHostId
+        ? restampAiVaultListResult(projected, params.executionHostId)
+        : projected
     }
   }),
   defineMethod({

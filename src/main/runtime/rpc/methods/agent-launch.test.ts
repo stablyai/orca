@@ -633,3 +633,32 @@ describe('launch inputs that cross the wire', () => {
     expect(result.receipt).toMatchObject({ mode: 'terminal', reason: 'tui_launch_command' })
   })
 })
+
+it('creates Cursor through the actual launch surface factory in a folder workspace', async () => {
+  const runtime = runtimeStub({
+    settings: { experimentalNativeChat: true, openAgentTabsInChatByDefault: true }
+  })
+  const result = await launch(
+    {
+      agent: 'cursor',
+      target: { kind: 'existing', worktree: 'folder:cursor' },
+      sessionOptions: { model: 'cursor-model' }
+    },
+    runtime,
+    {}
+  )
+  expect(result.outcome.kind).toBe('structured')
+  expect(runtime.getStructuredAgentSessionCreateSupport).toHaveBeenCalledWith(
+    'id:folder:cursor',
+    'cursor'
+  )
+  expect(createStructuredSession).toHaveBeenCalledWith(
+    expect.objectContaining({
+      worktree: 'id:folder:cursor',
+      agent: 'cursor',
+      options: { model: 'cursor-model' },
+      activate: true
+    })
+  )
+  expect(runtime.createTerminal).not.toHaveBeenCalled()
+})

@@ -15,9 +15,11 @@ import {
 } from './codex-app-server-session'
 import { createCodexAppServerRecordDispatcher } from './codex-app-server-record-dispatch'
 import { createCodexAppServerRecordReader } from './codex-app-server-record-reader'
+import { isAppServerRecord } from './codex-app-server-jsonl'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers
+  CodexAppServerConnectionHandlers,
+  ProviderStdioProtocol
 } from './codex-app-server-connection-types'
 
 export type {
@@ -60,6 +62,16 @@ export async function openCodexAppServerConnection(
   handlers: CodexAppServerConnectionHandlers = {},
   spawnImpl: typeof spawnProcess = spawnProcess
 ): Promise<CodexAppServerConnection> {
+  return openProviderStdioConnection(launch, handlers, spawnImpl)
+}
+
+export async function openProviderStdioConnection(
+  launch: CodexAppServerLaunch,
+  handlers: CodexAppServerConnectionHandlers = {},
+  spawnImpl: typeof spawnProcess = spawnProcess,
+  protocol?: ProviderStdioProtocol
+): Promise<CodexAppServerConnection> {
+  const providerName = protocol?.name ?? 'codex app-server'
   const childEnv: NodeJS.ProcessEnv = { ...process.env, ...launch.env }
   for (const key of launch.envToDelete ?? []) {
     delete childEnv[key]
@@ -102,11 +114,14 @@ export async function openCodexAppServerConnection(
   })
 
   function buildExitError(cause?: Error): Error {
-    return buildCodexAppServerExitError(stderrTail, cause)
+    return protocol
+      ? protocol.exitError(stderrTail, cause)
+      : buildCodexAppServerExitError(stderrTail, cause)
   }
 
   const dispatcher = createCodexAppServerRecordDispatcher({
     handlers,
+    requestError: protocol?.requestError,
     writeResponse,
     onProtocolFailure: (error) => {
       handleUnexpectedEnd(error)
@@ -158,14 +173,29 @@ export async function openCodexAppServerConnection(
 
   const recordReader = createCodexAppServerRecordReader({
     stdout: child.stdout,
+    maxLineBytes: protocol?.maxLineBytes,
     onRecord: (parsed, line) => {
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      if (
+        !isAppServerRecord(parsed) ||
+        (protocol?.jsonrpc && parsed.jsonrpc !== protocol.jsonrpc) ||
+        (protocol?.validateRecord && !protocol.validateRecord(parsed))
+      ) {
+        if (protocol) {
+          handleUnexpectedEnd(new Error(`${providerName} emitted an invalid JSON-RPC record`))
+          void terminateProcessTree()
+          return
+        }
         handlers.onUnhandledFrame?.('frame:invalid-json', line)
         return
       }
-      dispatcher.dispatch(parsed as Record<string, unknown>)
+      dispatcher.dispatch(parsed)
     },
     onRejected: (rejected) => {
+      if (protocol) {
+        handleUnexpectedEnd(new Error(`${providerName} emitted ${rejected.kind}`))
+        void terminateProcessTree()
+        return
+      }
       if (rejected.kind === 'invalid-json') {
         handlers.onUnhandledFrame?.('frame:invalid-json', rejected.line)
       } else {
@@ -179,7 +209,9 @@ export async function openCodexAppServerConnection(
   })
 
   function sendLine(payload: Record<string, unknown>): void {
-    child.stdin.write(`${JSON.stringify(payload)}\n`)
+    child.stdin.write(
+      `${JSON.stringify(protocol?.jsonrpc ? { ...payload, jsonrpc: protocol.jsonrpc } : payload)}\n`
+    )
   }
 
   function notify(method: string, params?: Record<string, unknown>): void {
@@ -199,7 +231,7 @@ export async function openCodexAppServerConnection(
     options: { timeoutMs?: number } = {}
   ): Promise<unknown> {
     if (closing) {
-      return Promise.reject(new Error(`codex app-server connection is closed (${method})`))
+      return Promise.reject(new Error(`${providerName} connection is closed (${method})`))
     }
     if (terminalError) {
       return Promise.reject(terminalError)
@@ -214,7 +246,7 @@ export async function openCodexAppServerConnection(
       // so only the individual call can carry a deadline.
       const timer = setTimeout(() => {
         dispatcher.timeOutPending(id)
-        reject(new CodexAppServerTimeoutError(`codex app-server ${method} exceeded ${timeoutMs}ms`))
+        reject(new CodexAppServerTimeoutError(`${providerName} ${method} exceeded ${timeoutMs}ms`))
       }, timeoutMs)
       dispatcher.addPending(id, { method, resolve, reject, timer })
       try {
@@ -292,12 +324,15 @@ export async function openCodexAppServerConnection(
       await handlers.onSpawned?.(child.pid)
     }
     handshaking = true
-    await initializeCodexAppServerConnection(connection)
+    await (protocol
+      ? protocol.initialize(connection)
+      : initializeCodexAppServerConnection(connection))
   } catch (error) {
     if ((await close()) !== true) {
       throw new CodexAppServerHandshakeExitUnprovenError(connection, error)
     }
-    throw !handshaking ||
+    throw protocol ||
+      !handshaking ||
       error instanceof CodexAppServerUnsupportedError ||
       error instanceof CodexAppServerTimeoutError
       ? error

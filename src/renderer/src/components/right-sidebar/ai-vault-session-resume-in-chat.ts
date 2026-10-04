@@ -79,6 +79,10 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
   if (session.structuredSession) {
     return { available: false, reason: 'already-structured' }
   }
+  // Cursor's terminal stores cannot be loaded through its separate ACP session store.
+  if (session.agent === 'cursor') {
+    return { available: false, reason: 'agent' }
+  }
   if (
     session.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
     isWslStoredAiVaultSessionFile(session.filePath)

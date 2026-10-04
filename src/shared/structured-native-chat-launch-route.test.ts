@@ -4,7 +4,11 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from './protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+  CURSOR_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from './protocol-version'
 import {
   agentTabsDefaultToNativeChat,
   prefersStructuredNativeChatByDefault,
@@ -107,3 +111,115 @@ describe('per-launch structured feasibility', () => {
     expect(support({ workspaceKind: 'folder' })).toEqual({ supported: true })
   })
 })
+
+describe('Cursor native Chat launch', () => {
+  it('uses the native Chat preference independently of the separate structured experiment', () => {
+    expect(
+      prefersStructuredNativeChatByDefault(
+        { ...ON, experimentalStructuredNativeChat: false },
+        'cursor'
+      )
+    ).toBe(true)
+    expect(
+      prefersStructuredNativeChatByDefault({ ...ON, openAgentTabsInChatByDefault: false }, 'cursor')
+    ).toBe(false)
+    expect(
+      prefersStructuredNativeChatByDefault({ ...ON, experimentalNativeChat: false }, 'cursor')
+    ).toBe(false)
+  })
+  it('requires both negotiated capabilities and retains Terminal fallbacks', () => {
+    const hostCapabilities = [
+      STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+      CURSOR_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+    ]
+    expect(support({ agent: 'cursor' })).toEqual({
+      supported: false,
+      blocker: 'runtime-capability'
+    })
+    expect(support({ agent: 'cursor', hostCapabilities, workspaceKind: 'folder' })).toEqual({
+      supported: true
+    })
+    expect(support({ agent: 'cursor', hostCapabilities, executionHostId: 'ssh:host' })).toEqual({
+      supported: false,
+      blocker: 'remote-execution-host'
+    })
+    expect(support({ agent: 'cursor', hostCapabilities, reusesTerminal: true })).toEqual({
+      supported: false,
+      blocker: 'reused-terminal'
+    })
+    expect(support({ agent: 'cursor', hostCapabilities, requiresTuiLaunchCommand: true })).toEqual({
+      supported: false,
+      blocker: 'tui-launch-command'
+    })
+  })
+})
+
+describe('Cursor and paired-host launch capability composition', () => {
+  const hostCapabilities = [
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    CURSOR_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
+  ]
+  const clientCapabilities = [
+    CURSOR_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
+  ]
+  const pairedCursor = {
+    agent: 'cursor',
+    executionHostId: 'runtime:host',
+    hostCapabilities,
+    clientCapabilities
+  } as const
+
+  it.each(['git-worktree', 'folder'] as const)(
+    'supports Cursor on a capable paired %s workspace',
+    (workspaceKind) => {
+      expect(support({ ...pairedCursor, workspaceKind })).toEqual({ supported: true })
+    }
+  )
+
+  it.each(hostCapabilities)('refuses a paired Cursor host without %s', (missingCapability) => {
+    expect(
+      support({
+        ...pairedCursor,
+        hostCapabilities: hostCapabilities.filter((value) => value !== missingCapability)
+      })
+    ).toEqual({ supported: false, blocker: 'runtime-capability' })
+  })
+
+  it.each(clientCapabilities)('refuses a paired Cursor client without %s', (missingCapability) => {
+    expect(
+      support({
+        ...pairedCursor,
+        clientCapabilities: clientCapabilities.filter((value) => value !== missingCapability)
+      })
+    ).toEqual({ supported: false, blocker: 'client-capability' })
+  })
+
+  it('keeps an unanswered paired Cursor host distinct from a capability refusal', () => {
+    expect(support({ ...pairedCursor, hostCapabilities: null })).toEqual({
+      supported: false,
+      blocker: 'runtime-capability-unknown'
+    })
+  })
+})
+
+it.each(['claude', 'codex'] as const)(
+  'keeps paired %s launch support without Cursor capability',
+  (agent) => {
+    const capabilities = [
+      STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+      STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
+    ]
+    expect(
+      support({
+        agent,
+        executionHostId: 'runtime:host',
+        hostCapabilities: capabilities,
+        clientCapabilities: capabilities,
+        workspaceKind: 'folder'
+      })
+    ).toEqual({ supported: true })
+  }
+)

@@ -63,6 +63,9 @@ export const MutationEnvelope = z
   .strict()
 
 export const ProviderHandle = z.discriminatedUnion('kind', [
+  z
+    .object({ kind: z.literal('cursor'), sessionId: Identifier('Invalid Cursor session id') })
+    .strict(),
   z.object({ kind: z.literal('codex'), threadId: Identifier('Invalid thread id') }).strict(),
   z
     .object({
@@ -92,7 +95,7 @@ export const ExecutionLocation = z
 
 export const AccountHome = z
   .object({
-    variable: z.enum(['CLAUDE_CONFIG_DIR', 'CODEX_HOME']),
+    variable: z.enum(['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'CURSOR_CONFIG_DIR']),
     path: z.string().min(1).max(4096)
   })
   .strict()
@@ -101,7 +104,7 @@ export const AttachParams = z
   .object({
     envelope: MutationEnvelope,
     location: ExecutionLocation,
-    provider: z.enum(['codex', 'claude']),
+    provider: z.enum(['codex', 'claude', 'cursor']),
     agent: Identifier('Invalid agent'),
     accountHome: AccountHome,
     runtimeKind: z.literal('native'),
@@ -122,7 +125,7 @@ export const CreateIntentParams = z
   .object({
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.enum(['claude', 'codex']),
+    agent: z.enum(['claude', 'codex', 'cursor']),
     resumeFrom: ResumeSource.optional(),
     /**
      * The tab id the client reserved for this chat, so it can place the tab before the reply. The
@@ -141,7 +144,7 @@ export const CreateParams = z.union([AttachParams, CreateIntentParams])
 export const CreateSupportParams = z
   .object({
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.enum(['claude', 'codex'])
+    agent: z.enum(['claude', 'codex', 'cursor'])
   })
   .strict()
 

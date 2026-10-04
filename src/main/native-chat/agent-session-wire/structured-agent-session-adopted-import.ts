@@ -42,6 +42,9 @@ async function readAdoptedTranscript(
   if (!adopt) {
     return null
   }
+  if (adopt.providerHandle.kind === 'cursor') {
+    return null
+  }
   if (!adopt.transcriptPath) {
     throw agentSessionRefusalError('agent_session_identity_required', {
       reason: 'transcriptNotFound'
@@ -50,9 +53,9 @@ async function readAdoptedTranscript(
   const prepared = await prepareLegacyTranscriptImport({
     agent: params.agent,
     sessionId:
-      adopt.providerHandle.kind === 'claude'
-        ? adopt.providerHandle.sessionId
-        : adopt.providerHandle.threadId,
+      adopt.providerHandle.kind === 'codex'
+        ? adopt.providerHandle.threadId
+        : adopt.providerHandle.sessionId,
     options: { filePath: adopt.transcriptPath }
   })
   if (!prepared.ok) {
@@ -92,6 +95,9 @@ async function applyAdoptedTranscript(
     await attached.journal.replaceEpochItems('legacy_import', record.lease.runtimeFence, prepared)
     return
   }
+  if (adopt.providerHandle.kind === 'cursor') {
+    return
+  }
   if (!adopt.transcriptPath) {
     throw agentSessionRefusalError('agent_session_identity_required', {
       reason: 'transcriptNotFound'
@@ -101,9 +107,9 @@ async function applyAdoptedTranscript(
     journal: attached.journal,
     agent: params.agent,
     sessionId:
-      adopt.providerHandle.kind === 'claude'
-        ? adopt.providerHandle.sessionId
-        : adopt.providerHandle.threadId,
+      adopt.providerHandle.kind === 'codex'
+        ? adopt.providerHandle.threadId
+        : adopt.providerHandle.sessionId,
     fence: record.lease.runtimeFence,
     options: { filePath: adopt.transcriptPath }
   })

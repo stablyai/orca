@@ -551,3 +551,37 @@ describe('caller-supplied launch inputs', () => {
     expect(result.warning).toBeUndefined()
   })
 })
+
+describe('Cursor surface creation', () => {
+  it('settles a folder launch on its host and creates and delivers into the structured surface', async () => {
+    const h = harness({
+      settings: { ...STRUCTURED_PREFERENCE, experimentalStructuredNativeChat: false }
+    })
+    const result = await h.run({
+      agent: 'cursor',
+      target: { kind: 'existing', worktree: 'folder:cursor' },
+      prompt: { text: 'inspect folder', delivery: 'submit' }
+    })
+    expect(h.calls).toEqual(['createSupport', 'createStructuredSession', 'deliverStructuredPrompt'])
+    expect(h.createStructuredSession).toHaveBeenCalledWith({
+      worktreeId: 'folder:cursor',
+      agent: 'cursor'
+    })
+    expect(result.outcome.kind).toBe('structured')
+    expect(result.prompt).toMatchObject({ outcome: 'journaled', messageId: 'msg-1' })
+    expect(h.createTerminalAgent).not.toHaveBeenCalled()
+  })
+  it.each(['wsl', 'remote', undefined] as const)(
+    'preserves host refusal %s and creates only a terminal',
+    async (reason) => {
+      const h = harness({ createSupport: { supported: false, ...(reason ? { reason } : {}) } })
+      const result = await h.run({
+        agent: 'cursor',
+        target: { kind: 'existing', worktree: 'folder:cursor' }
+      })
+      expect(h.calls).toEqual(['createSupport', 'createTerminalAgent'])
+      expect(result.receipt.mode).toBe('terminal')
+      expect(h.createStructuredSession).not.toHaveBeenCalled()
+    }
+  )
+})

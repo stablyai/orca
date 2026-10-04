@@ -24,7 +24,10 @@ import {
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { RpcContext } from '../core'
-import { structuredCallerFor } from './structured-agent-session-gate'
+import {
+  structuredCallerFor,
+  supportsCursorStructuredSessions
+} from './structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 import { commitStructuredAgentSessionLaunchPrompt } from './agent-launch-structured-prompt'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
@@ -54,6 +57,12 @@ export function agentLaunchSurfaceFactory(
       sessionId: requested,
       tabId
     }) => {
+      if (agent === 'cursor' && !supportsCursorStructuredSessions(context)) {
+        throw new AgentLaunchStructuredSessionRefusedError(
+          'structured_agent_session_unsupported',
+          'The requesting client cannot read Cursor structured sessions.'
+        )
+      }
       const sessionId = requested ?? createStructuredAgentSessionId(agent, randomUUID)
       const seeded = narrowStructuredLaunchSeedOptions(options)
       const created = await createStructuredAgentSessionForWorktree({

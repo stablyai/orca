@@ -90,7 +90,7 @@ function validRecord(value: unknown): value is Omit<
       (typeof executionHostId === 'string' && parseExecutionHostId(executionHostId) !== null)) &&
     typeof sessionId === 'string' &&
     sessionId.length > 0 &&
-    (agent === 'claude' || agent === 'codex') &&
+    (agent === 'claude' || agent === 'codex' || agent === 'cursor') &&
     (lifecycle === 'pending' || lifecycle === 'visibility-unknown' || lifecycle === 'failed') &&
     typeof clientOperationId === 'string' &&
     typeof payloadFingerprint === 'string' &&

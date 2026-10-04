@@ -19,7 +19,7 @@ export type StructuredAgentSessionCreateSupport = {
  * however wrong it was. The runtime hands over the two facts it owns and this decides.
  */
 export function resolveStructuredAgentSessionCreateSupport(input: {
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'cursor'
   location: AgentSessionExecutionLocation
   adapterSupportsCreate: boolean
   getSettings: () => ClaudeManagedAccountGateSettings &

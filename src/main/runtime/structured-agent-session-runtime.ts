@@ -11,6 +11,14 @@
 // structured request with the refusal that says why.
 
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
+import {
+  CursorStructuredSessionAdapter,
+  type CursorStructuredSessionAdapterDeps
+} from '../cursor/cursor-structured-session-adapter'
+import {
+  createCursorStructuredLaunchResolver,
+  type CursorStructuredLaunchRecipe
+} from '../cursor/cursor-structured-launch-resolution'
 import { existsSync } from 'node:fs'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionResumeTrigger } from '../../shared/agent-session-resume-marker'
@@ -99,6 +107,8 @@ export type StructuredAgentSessionRuntimeDeps = {
   /** Provider transports are overridden only to drive the runtime against scripted children. */
   openCodexConnection?: CodexStructuredSessionAdapterDeps['openConnection']
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
+  openCursorConnection?: CursorStructuredSessionAdapterDeps['openConnection']
+  resolveCursorRecipe?: () => CursorStructuredLaunchRecipe
   /** Scripted app-servers carry fake pids the real start-time read cannot answer for. */
   readProcessStartTime?: CodexStructuredSessionAdapterDeps['readProcessStartTime']
   resolveLaunchArgs?: (provider: AgentSessionRecord['provider']) => Promise<string[]> | string[]
@@ -301,10 +311,23 @@ async function installOnJournal(
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
     modelCatalog: agentModelCatalogStore
   })
-  const adapter = new StructuredAgentSessionAdapterRouter({ codex, claude }, async () => {
-    await Promise.all([codex.closeAll(), claude.closeAll()])
+  const cursor = new CursorStructuredSessionAdapter({
+    resolveLaunch: createCursorStructuredLaunchResolver({
+      store,
+      resolveWorkspacePath: deps.resolveWorkspacePath,
+      resolveEnvironment: resolveClaudeInheritedEnv,
+      ...(deps.resolveCursorRecipe ? { resolveRecipe: deps.resolveCursorRecipe } : {})
+    }),
+    onLifecycleEvent: (event) => lifecycle.deliver(event),
+    onDispatchSettledLate,
+    ...(deps.openCursorConnection ? { openConnection: deps.openCursorConnection } : {}),
+    ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
+  })
+  const adapter = new StructuredAgentSessionAdapterRouter({ codex, claude, cursor }, async () => {
+    await Promise.all([codex.closeAll(), claude.closeAll(), cursor.closeAll()])
   })
   host = new StructuredAgentSessionHost({
+    resolveWorkspacePath: deps.resolveWorkspacePath,
     store,
     adapter,
     recoveryCapsule: new AgentSessionRecoveryCapsule(deps.stateDirectory),
