@@ -61,6 +61,13 @@ export class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWi
     const priorPartialState = existingSleepState?.phase === 'partial' ? existingSleepState : null
     const committedPtyIds = new Set(priorPartialState?.ptyIds ?? [])
     const terminalHandlesByPtyId = { ...priorPartialState?.terminalHandlesByPtyId }
+    const paneKeysByPtyId = { ...priorPartialState?.paneKeysByPtyId }
+    const sleepStateBase = {
+      worktreeId: worktree.id,
+      generation: 0,
+      terminalHandlesByPtyId,
+      paneKeysByPtyId
+    }
     const pendingPtyIds = new Set<string>()
     let generation = 0
     let fullyCommitted = false
@@ -80,6 +87,8 @@ export class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWi
       }
       const livePtyIds = this.getLivePtyIdsForWorktree(worktree.id, refreshedPtyLiveness)
       generation = ++this.terminalSleepGeneration
+      sleepStateBase.generation = generation
+      Object.assign(paneKeysByPtyId, this.captureTerminalSleepPanes(worktree.id, livePtyIds))
       for (const ptyId of livePtyIds) {
         pendingPtyIds.add(ptyId)
         terminalHandlesByPtyId[ptyId] = this.getTerminalHandlesForPtyId(ptyId)
@@ -89,15 +98,13 @@ export class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWi
         terminalHandlesByPtyId
       )
       this.terminalSleepStateByWorktreeId.set(key, {
-        worktreeId: worktree.id,
-        generation,
+        ...sleepStateBase,
         phase: 'stopping',
         ptyIds: [...committedPtyIds].sort(),
         terminalHandles: this.getRecordedTerminalSleepHandles(
           committedPtyIds,
           terminalHandlesByPtyId
-        ),
-        terminalHandlesByPtyId
+        )
       })
       this.emitClientEvent({
         type: 'worktreeTerminalSleepState',
@@ -126,12 +133,10 @@ export class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWi
           terminalHandlesByPtyId
         )
         this.terminalSleepStateByWorktreeId.set(key, {
-          worktreeId: worktree.id,
-          generation,
+          ...sleepStateBase,
           phase: 'sleeping',
           ptyIds: [...committedPtyIds].sort(),
-          terminalHandles,
-          terminalHandlesByPtyId
+          terminalHandles
         })
         fullyCommitted = true
         return {
@@ -245,12 +250,10 @@ export class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWi
         terminalHandlesByPtyId
       )
       this.terminalSleepStateByWorktreeId.set(key, {
-        worktreeId: worktree.id,
-        generation,
+        ...sleepStateBase,
         phase: 'sleeping',
         ptyIds: [...committedPtyIds].sort(),
-        terminalHandles,
-        terminalHandlesByPtyId
+        terminalHandles
       })
       fullyCommitted = true
       return {
@@ -284,12 +287,10 @@ export class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWi
             terminalHandlesByPtyId
           )
           this.terminalSleepStateByWorktreeId.set(key, {
-            worktreeId: worktree.id,
-            generation,
+            ...sleepStateBase,
             phase: 'partial',
             ptyIds: [...committedPtyIds].sort(),
-            terminalHandles,
-            terminalHandlesByPtyId
+            terminalHandles
           })
         } else {
           this.terminalSleepStateByWorktreeId.delete(key)

@@ -24,7 +24,10 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
   const runtime = ctx.deps.runtime
   const acquireWorktreeSpawn = runtime?.acquireWorktreeTerminalSpawn
   ctx.releaseWorktreeSpawn = acquireWorktreeSpawn
-    ? await acquireWorktreeSpawn.call(runtime, args.worktreeId)
+    ? await acquireWorktreeSpawn.call(runtime, args.worktreeId, args.activationIntent, {
+        ptyId: ctx.effectiveSessionAppId ?? ctx.sessionId,
+        paneKey: ctx.spawnIdentityPaneKey ?? undefined
+      })
     : undefined
   try {
     if (args.preAllocatedHandle) {

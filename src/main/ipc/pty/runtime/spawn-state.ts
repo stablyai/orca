@@ -10,6 +10,7 @@ import type { PtyRuntimeControllerDeps } from './controller-deps'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import type { TabActivationIntent } from '../../../../shared/tab-activation-intent'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
@@ -99,6 +100,7 @@ export type RuntimePtySpawnArgs = {
   resumeProviderSession?: AgentProviderSessionMetadata
   connectionId?: string | null
   worktreeId?: string
+  activationIntent?: TabActivationIntent
   preAllocatedHandle?: string
   tabId?: string
   leafId?: string

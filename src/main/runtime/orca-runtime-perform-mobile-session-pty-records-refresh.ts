@@ -14,6 +14,7 @@ import { parseExecutionHostId } from '../../shared/execution-host'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { navigationTargetsHost } from '../../shared/runtime-navigation'
 import { isAutomaticTabActivation } from '../../shared/tab-activation-intent'
+import { WORKTREE_TERMINAL_SLEEP_BLOCKED_ERROR } from './worktree-terminal-mutation-lock'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 
 export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
@@ -131,6 +132,9 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
     }
 
     if (tab.type === 'terminal') {
+      if (isAutomaticTabActivation(opts.intent) && this.isDeliberatelyParkedPane(worktreeId, tab)) {
+        return this.getMobileSessionTabsForWorktree(worktreeId, opts.clientNavigationId)
+      }
       const publicTab = this.toMobileSessionTabsResult(snapshot!).tabs.find(
         (candidate) => candidate.type === 'terminal' && candidate.id === tab.id
       )
@@ -141,10 +145,6 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
       const shouldMaterializePendingTerminal =
         publicTab?.type === 'terminal' &&
         publicTab.status !== 'ready' &&
-        // Why: opening a tab is the documented wake gesture for a slept pane
-        // (#11598), so only a background probe may be refused for one.
-        (!isAutomaticTabActivation(opts.intent) ||
-          !this.isDeliberatelyParkedPane(worktreeId, tab)) &&
         (!targetsHost ||
           !this.notifier?.focusTerminal ||
           this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
@@ -185,9 +185,13 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
             startupCommandDelivery: agentStartup.startupCommandDelivery,
             launchConfig: agentStartup.launchConfig,
             launchAgent: tab.launchAgent,
+            ...(isAutomaticTabActivation(opts.intent) ? { activationIntent: opts.intent } : {}),
             targetGroupId
           })
         } catch (err) {
+          if (err instanceof Error && err.message === WORKTREE_TERMINAL_SLEEP_BLOCKED_ERROR) {
+            return this.getMobileSessionTabsForWorktree(worktreeId, opts.clientNavigationId)
+          }
           if (sessionId && parseAppSshPtyId(sessionId)) {
             // Why: an expired SSH reattach clears durable bindings in the store,
             // but this in-memory headless snapshot can still carry the old id.

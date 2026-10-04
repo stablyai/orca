@@ -33,16 +33,13 @@ export function indexPersistedPtyWorktreeBindings(
   return worktreeIdByPtyId
 }
 
-export function indexPersistedPtySurfaceBindings(
-  session: WorkspaceSessionState | null | undefined
-): ReadonlyMap<
-  string,
-  { worktreeId: string; tabId: string; paneKey: string; incarnationId: string }
-> {
-  const bindingByPtyId = new Map<
-    string,
-    { worktreeId: string; tabId: string; paneKey: string; incarnationId: string }
-  >()
+type PersistedPtyPaneBinding = { worktreeId: string; tabId: string; paneKey: string }
+
+function indexPersistedPtyPanes(
+  session: WorkspaceSessionState | null | undefined,
+  includePane: (paneKey: string) => boolean
+): ReadonlyMap<string, PersistedPtyPaneBinding> {
+  const bindingByPtyId = new Map<string, PersistedPtyPaneBinding>()
   const ambiguousPtyIds = new Set<string>()
   for (const [worktreeId, tabs] of Object.entries(session?.tabsByWorktree ?? {})) {
     for (const tab of tabs) {
@@ -53,18 +50,12 @@ export function indexPersistedPtySurfaceBindings(
           continue
         }
         const paneKey = makePaneKey(tab.id, leafId)
-        const incarnationId = session?.terminalPtyIncarnationsByPaneKey?.[paneKey]
-        if (!incarnationId) {
+        if (!includePane(paneKey)) {
           continue
         }
-        const binding = { worktreeId, tabId: tab.id, paneKey, incarnationId }
+        const binding = { worktreeId, tabId: tab.id, paneKey }
         const existing = bindingByPtyId.get(ptyId)
-        if (
-          existing &&
-          (existing.worktreeId !== worktreeId ||
-            existing.paneKey !== paneKey ||
-            existing.incarnationId !== incarnationId)
-        ) {
+        if (existing && (existing.worktreeId !== worktreeId || existing.paneKey !== paneKey)) {
           bindingByPtyId.delete(ptyId)
           ambiguousPtyIds.add(ptyId)
           continue
@@ -74,6 +65,29 @@ export function indexPersistedPtySurfaceBindings(
     }
   }
   return bindingByPtyId
+}
+
+/** Saved pane addresses only; not proof that a process incarnation still owns them. */
+export function indexPersistedPtyPaneBindings(
+  session: WorkspaceSessionState | null | undefined
+): ReadonlyMap<string, PersistedPtyPaneBinding> {
+  return indexPersistedPtyPanes(session, () => true)
+}
+
+export function indexPersistedPtySurfaceBindings(
+  session: WorkspaceSessionState | null | undefined
+): ReadonlyMap<string, PersistedPtyPaneBinding & { incarnationId: string }> {
+  const result = new Map<string, PersistedPtyPaneBinding & { incarnationId: string }>()
+  const panes = indexPersistedPtyPanes(session, (paneKey) =>
+    Boolean(session?.terminalPtyIncarnationsByPaneKey?.[paneKey])
+  )
+  for (const [ptyId, binding] of panes) {
+    const incarnationId = session?.terminalPtyIncarnationsByPaneKey?.[binding.paneKey]
+    if (incarnationId) {
+      result.set(ptyId, { ...binding, incarnationId })
+    }
+  }
+  return result
 }
 
 export function setsEqual<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {

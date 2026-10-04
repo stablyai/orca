@@ -13,6 +13,7 @@ import type { PtyProviderBufferSnapshot, PtyProcessInfo, PtySpawnResult } from '
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { TabActivationIntent } from '../../shared/tab-activation-intent'
 
 export type RuntimePtyController = {
   claimStablePaneCreate?(args: {
@@ -55,6 +56,7 @@ export type RuntimePtyController = {
     telemetry?: WorktreeStartupLaunch['telemetry']
     connectionId?: string | null
     worktreeId?: string
+    activationIntent?: TabActivationIntent
     preAllocatedHandle?: string
     tabId?: string
     leafId?: string

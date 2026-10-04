@@ -28,6 +28,7 @@ import {
 import { ClientHostedPageReconciliationWindow } from './client-hosted-page-reconciliation-window'
 import { ClientSessionTabSelectionStore } from './client-session-tab-selection'
 import { WorktreeTerminalMutationLock } from './worktree-terminal-mutation-lock'
+import type { WorktreeTerminalSleepState } from './worktree-terminal-spawn-sleep-guard'
 import { RemoteRuntimeTerminalCreateIdempotency } from './remote-runtime-terminal-create-idempotency'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { MobileSessionTabsNotifyCoalescer } from './mobile-session-tabs-notify-coalescer'
@@ -182,17 +183,7 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected readonly terminalMutationLock = new WorktreeTerminalMutationLock()
 
-  protected terminalSleepStateByWorktreeId = new Map<
-    string,
-    {
-      worktreeId: string
-      generation: number
-      phase: 'stopping' | 'partial' | 'sleeping'
-      ptyIds: string[]
-      terminalHandles: string[]
-      terminalHandlesByPtyId: Record<string, string[]>
-    }
-  >()
+  protected terminalSleepStateByWorktreeId = new Map<string, WorktreeTerminalSleepState>()
 
   protected terminalSleepGeneration = 0
 

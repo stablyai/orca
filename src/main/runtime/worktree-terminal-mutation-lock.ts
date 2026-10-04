@@ -31,6 +31,7 @@ type LockEntry = {
 }
 
 export const WORKTREE_TERMINAL_SLEEP_TIMEOUT_ERROR = 'terminal_worktree_sleep_timeout'
+export const WORKTREE_TERMINAL_SLEEP_BLOCKED_ERROR = 'terminal_worktree_sleep_blocked'
 
 export class WorktreeTerminalMutationLock {
   private readonly entries = new Map<string, LockEntry>()
