@@ -671,7 +671,8 @@
           "dsh_label": "DeepSeek Harness",
           "qoder_label": "Qoder CLI",
           "qoder_cn_label": "Qoder CLI China",
-          "jcode_label": "Jcode"
+          "jcode_label": "Jcode",
+          "ibm_bob_label": "IBM Bob"
         },
         "skill": {
           "cli": {
