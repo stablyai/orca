@@ -36,6 +36,8 @@ export type MobileSessionTab =
       id: string
       title: string
       sessionId: string
+      /** The pane this chat runs in; absent on hosts that predate the field. */
+      paneKey?: string
       agent: AgentSessionHandleProvider
       isActive: boolean
     }

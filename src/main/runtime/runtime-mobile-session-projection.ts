@@ -11,7 +11,10 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
-import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
+import {
+  indexAgentStatusRowsByPaneKey,
+  indexPaneKeysByProviderSessionId
+} from '../agent-hooks/agent-status-pane-index'
 import {
   renewRuntimeMobileAgentStatusFromPtyTitle,
   selectRuntimeHookAgentRowForPane
@@ -86,6 +89,18 @@ export function projectRuntimeMobileSessionTabs(
   }
   // Why: a live PTY backs one surface; claim each once so two leaves resolving to it can't emit duplicate React keys and crash the client.
   const claimedLivePtyIds = new Set<string>()
+  // Why: a chat tab's id (`agent-session:<sessionId>`) is not a pane key, so a tap carrying only a
+  // pane key — the agents roster, a notification — has nothing on the tab to match. The agent's
+  // hook row is the one record naming both that pane and the provider's session (never Orca's, so
+  // the record store translates), so invert that snapshot, once, on first need.
+  let paneKeyByProviderSessionId: Map<string, string> | null = null
+  const paneKeyForStructuredSession = (sessionId: string): string | undefined => {
+    paneKeyByProviderSessionId ??= indexPaneKeysByProviderSessionId(
+      host.getProviderSessionSnapshot()
+    )
+    const providerSessionId = host.resolveProviderSessionId(sessionId)
+    return providerSessionId ? paneKeyByProviderSessionId.get(providerSessionId) : undefined
+  }
   for (const tab of snapshot.tabs) {
     if (tab.type === 'browser') {
       const liveTab = tab.browserPageId ? liveBrowserTabsByPageId.get(tab.browserPageId) : undefined
@@ -107,7 +122,8 @@ export function projectRuntimeMobileSessionTabs(
       continue
     }
     if (tab.type === 'agent-session') {
-      tabs.push(tab)
+      const paneKey = paneKeyForStructuredSession(tab.sessionId)
+      tabs.push(paneKey ? { ...tab, paneKey } : tab)
       continue
     }
     const syncedTab = host.tabs.get(tab.parentTabId)
