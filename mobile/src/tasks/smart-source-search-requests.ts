@@ -4,7 +4,11 @@ import type { LinearIssue } from '../../../src/shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../src/shared/repo-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { JiraIssue, JiraSiteSelection } from '../../../src/shared/jira-types'
-import { buildJiraIssueSearchJql } from '../../../src/shared/new-workspace/smart-workspace-source-results'
+import { getJiraIssueSearchQuery } from '../../../src/shared/new-workspace/smart-workspace-source-results'
+import {
+  buildJiraIssueKeyJql,
+  buildJiraTextMatchJql
+} from '../../../src/shared/jira-search-input-jql'
 import { jiraIssueSearchRead } from './mobile-jira-operations'
 import { repoBaseRefSearchRead } from './mobile-workspace-source-operations'
 import {
@@ -97,18 +101,20 @@ export async function searchLinearIssues(
   return issues as LinearIssue[]
 }
 
-// Unlike the Tasks search box (raw JQL), the composer field is free text that
-// buildJiraIssueSearchJql turns into a key or text-match query — same as desktop.
-// A null JQL means "nothing to search yet", so the tab stays empty until typed in.
+// Unlike the Tasks search box (raw JQL), the composer field is free text turned into a key or
+// text-match query — same as desktop. The gate rejects an empty, over-long, or wordless query,
+// so the tab stays empty until something searchable is typed.
 export async function searchJiraIssues(
   client: RpcClient,
   query: string,
   siteId: JiraSiteSelection | null | undefined
 ): Promise<JiraIssue[]> {
-  const jql = buildJiraIssueSearchJql(query)
-  if (!jql) {
+  const searchable = getJiraIssueSearchQuery(query)
+  if (!searchable) {
     return []
   }
+  // Key first, as the desktop does: an issue key is an exact lookup, not a text match.
+  const jql = buildJiraIssueKeyJql(searchable) ?? buildJiraTextMatchJql(searchable)
   return jiraIssueSearchRead.interpret(
     await jiraIssueSearchRead.request(client, {
       jql,
