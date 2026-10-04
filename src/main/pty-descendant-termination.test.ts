@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const execFileMock = vi.hoisted(() => vi.fn())
-vi.mock('node:child_process', () => ({ execFile: execFileMock }))
+const runProcessMock = vi.hoisted(() => vi.fn())
+vi.mock('../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
 
 import {
   captureDescendantSnapshot,
@@ -23,11 +23,8 @@ import {
 const CAPTURED_AT_MS = Date.parse('Tue Jul 14 12:00:00 2026')
 
 beforeEach(() => {
-  execFileMock.mockReset()
-  execFileMock.mockImplementation((...args: unknown[]) => {
-    const callback = args.at(-1) as (error: Error | null, stdout: string) => void
-    callback(null, '10 1 10 Mon Jul 13 12:54:47 2026')
-  })
+  runProcessMock.mockReset()
+  runProcessMock.mockResolvedValue({ code: 0, stdout: '10 1 10 Mon Jul 13 12:54:47 2026' })
 })
 
 function row(
@@ -185,33 +182,30 @@ describe('captureDescendantSnapshot', () => {
     expect(await pending).toBeNull()
   })
 
-  it('gives the production ps subprocess a hard SIGKILL timeout', async () => {
+  it('gives the production ps subprocess a bounded timeout', async () => {
     const result = await captureDescendantSnapshot(10, {
       platform: 'darwin',
       timeoutMs: 321
     })
     expect(result).not.toBeNull()
-    expect(execFileMock).toHaveBeenCalledWith(
-      'ps',
-      ['-axo', 'pid=,ppid=,pgid=,lstart='],
+    expect(runProcessMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        timeout: 321,
-        killSignal: 'SIGKILL',
+        program: 'ps',
+        args: ['-axww', '-o', 'pid=,ppid=,pgid=,lstart=,comm='],
+        timeoutMs: 321,
         env: expect.objectContaining({ LANG: 'C', LC_ALL: 'C' })
-      }),
-      expect.any(Function)
+      })
     )
   })
 
   it('records the identity boundary before ps starts even when it crosses a second', async () => {
     vi.setSystemTime(CAPTURED_AT_MS + 900)
-    execFileMock.mockImplementation((...args: unknown[]) => {
-      const callback = args.at(-1) as (error: Error | null, stdout: string) => void
+    runProcessMock.mockImplementation(async () => {
       vi.setSystemTime(CAPTURED_AT_MS + 1_100)
-      callback(
-        null,
-        ['10 1 10 Tue Jul 14 12:00:00 2026', '20 10 20 Tue Jul 14 12:00:00 2026'].join('\n')
-      )
+      return {
+        code: 0,
+        stdout: ['10 1 10 Tue Jul 14 12:00:00 2026', '20 10 20 Tue Jul 14 12:00:00 2026'].join('\n')
+      }
     })
 
     const result = await captureDescendantSnapshot(10, { platform: 'darwin' })

@@ -1,3 +1,5 @@
+import { parseProcessRows } from './posix-pty-process-table-rows'
+import { isCodexManagedDaemon } from '../pty-codex-managed-daemon'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
@@ -23,13 +25,6 @@ class UnsupportedPsSelectionError extends Error {}
 export function resetPosixPtyProcessTableDialectForTests(): void {
   psDialect = undefined
   dialectProbe = undefined
-}
-
-type ProcessRow = {
-  pid: number
-  pgid: number
-  tty: string
-  state?: string
 }
 
 export type PosixPtyProcessGroupTerminationDeps = {
@@ -103,13 +98,48 @@ function processTableSpec(args: string[]) {
   }
 }
 
-function readPtyProcessTable(rootPid: number): string {
+function readPtyProcessTable(rootPid: number, forTermination = false): string {
+  const deadline = Date.now() + PROCESS_TABLE_TIMEOUT_MS
   const queries = processTableQueries(rootPid)
   let next = queries.next()
   while (!next.done) {
     next = queries.next(runProcessSync(processTableSpec(next.value)))
   }
-  return next.value
+  if (!forTermination) {
+    return next.value
+  }
+  const rows = parseProcessRows(next.value)
+  const root = rows.find((row) => row.pid === rootPid)
+  const leaders = rows.filter((row) => root && row.tty === root.tty && row.pid === row.pgid)
+  if (!root || !hasControllingTty(root.tty) || leaders.length === 0) {
+    return next.value
+  }
+  const remainingMs = deadline - Date.now()
+  if (remainingMs <= 0) {
+    throw new Error('PTY command capture deadline exceeded')
+  }
+  const commands = readProcessTableResult(
+    runProcessSync({
+      ...processTableSpec([
+        '-ww',
+        '-p',
+        [...new Set(leaders.map((row) => row.pid))].join(','),
+        '-o',
+        `${SELECTED_COLUMNS},command=`
+      ]),
+      timeoutMs: remainingMs
+    })
+  )
+  const observed = new Map(parseProcessRows(commands).map((row) => [row.pid, row]))
+  if (
+    leaders.some((row) => {
+      const live = observed.get(row.pid)
+      return !live?.command || live.pgid !== row.pgid || live.tty !== row.tty
+    })
+  ) {
+    throw new Error('PTY command capture is incomplete')
+  }
+  return `${next.value}\n${commands}`
 }
 
 export async function readPosixPtyProcessTable(
@@ -144,22 +174,6 @@ export async function readPosixPtyProcessTable(
   }
 }
 
-function parseProcessRows(output: string): ProcessRow[] {
-  const rows: ProcessRow[] = []
-  for (const line of output.split(/\r?\n/)) {
-    const match = /^\s*(\d+)\s+(\d+)\s+(\S+)(?:\s+(\S+))?/.exec(line)
-    if (!match) {
-      continue
-    }
-    const pid = Number(match[1])
-    const pgid = Number(match[2])
-    if (pid > 0 && pgid > 1) {
-      rows.push({ pid, pgid, tty: match[3], state: match[4] })
-    }
-  }
-  return rows
-}
-
 export function isPosixPtyRootStopped(output: string, rootPid: number): boolean {
   return (
     parseProcessRows(output)
@@ -185,16 +199,23 @@ export function getPosixPtyStoppedJobGroups(output: string, rootPid: number): Se
 export function getPosixPtyProcessGroups(
   output: string,
   rootPid: number,
-  currentPid = process.pid
+  currentPid = process.pid,
+  forTermination = false
 ): number[] | null {
   const rows = parseProcessRows(output)
   const root = rows.find((row) => row.pid === rootPid)
   if (!root || !hasControllingTty(root.tty)) {
     return null
   }
-  // Why: a development daemon can inherit its launch TTY. Never group-signal
-  // when Orca itself shares the PTY; fall back to the already-scoped root kill.
-  if (rows.some((row) => row.pid === currentPid && row.tty === root.tty)) {
+  // A shared TTY proves neither Orca nor a managed service's tools belong to this terminal.
+  if (
+    rows.some(
+      (row) =>
+        row.tty === root.tty &&
+        (row.pid === currentPid ||
+          (forTermination && row.pid === row.pgid && isCodexManagedDaemon(row.command)))
+    )
+  ) {
     return null
   }
   const groups = new Set(rows.filter((row) => row.tty === root.tty).map((row) => row.pgid))
@@ -239,9 +260,10 @@ export function signalPosixPtyProcessGroups(
   let groups: number[] | null
   try {
     groups = getPosixPtyProcessGroups(
-      (deps.readProcessTable ?? (() => readPtyProcessTable(rootPid)))(),
+      (deps.readProcessTable ?? (() => readPtyProcessTable(rootPid, signal === 'SIGKILL')))(),
       rootPid,
-      deps.currentPid ?? process.pid
+      deps.currentPid ?? process.pid,
+      signal === 'SIGKILL'
     )
   } catch {
     groups = null

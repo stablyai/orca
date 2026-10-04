@@ -1,20 +1,17 @@
-import { execFile } from 'node:child_process'
+import { readFreshProcessTable, readProcessIdentities } from './pty-process-table-reader'
+import { isCodexManagedDaemon } from './pty-codex-managed-daemon'
 import type { JobTerminationOutcome } from './windows/windows-pty-job'
 import { terminateWindowsProcessTree, type WindowsTreeKiller } from './windows-process-tree-kill'
 import {
   verifyWindowsTreeKillTarget,
   type WindowsTreeKillTarget
 } from './windows-pty-root-identity'
-import { parseProcessTable, type ProcessTableRow } from './pty-process-table-parser'
+import type { ProcessTableRow } from './pty-process-table-parser'
 
 export { parseProcessTable, type ProcessTableRow } from './pty-process-table-parser'
 
 export const DESCENDANT_KILL_GRACE_MS = 2_000
 export const DESCENDANT_SNAPSHOT_TIMEOUT_MS = 1_000
-// Why: a full process table on a busy host can exceed execFile's 1MB default;
-// truncation would silently drop descendants from the snapshot.
-const PS_MAX_BUFFER_BYTES = 32 * 1024 * 1024
-
 export type PosixProcessIdentity = Pick<ProcessTableRow, 'pid' | 'startedAt'>
 
 export type DescendantSnapshot = {
@@ -44,35 +41,6 @@ export type ProcessTableCapture = {
 
 export type ProcessTableReader = (timeoutMs?: number) => Promise<ProcessTableCapture>
 export type SignalSender = (pid: number, signal: NodeJS.Signals) => void
-
-function readFreshProcessTable(
-  timeoutMs = DESCENDANT_SNAPSHOT_TIMEOUT_MS
-): Promise<ProcessTableCapture> {
-  // Why: identity safety must use the boundary before ps starts. Stamping the
-  // result later could make a capture-second PID look safe after a rollover.
-  const capturedAtMs = Date.now()
-  return new Promise((resolve, reject) => {
-    execFile(
-      'ps',
-      ['-axo', 'pid=,ppid=,pgid=,lstart='],
-      {
-        maxBuffer: PS_MAX_BUFFER_BYTES,
-        timeout: timeoutMs,
-        killSignal: 'SIGKILL',
-        // Why: ps localizes lstart, but delayed identity checks must parse it
-        // identically for every user locale.
-        env: { ...process.env, LANG: 'C', LC_ALL: 'C' }
-      },
-      (error, stdout) => {
-        if (error) {
-          reject(error)
-          return
-        }
-        resolve({ rows: parseProcessTable(stdout), capturedAtMs })
-      }
-    )
-  })
-}
 
 /** Coalesces same-turn teardown bursts but never serves a completed or already
  * started scan to a later request, because stale PIDs are unsafe to signal. */
@@ -179,6 +147,10 @@ export function collectDescendantRows(
         continue
       }
       visited.add(child.pid)
+      // Shared daemons own their entire subtree, including detached tools.
+      if (child.pgid === child.pid && isCodexManagedDaemon(child.command)) {
+        continue
+      }
       descendants.push(child)
       queue.push(child.pid)
     }
@@ -359,7 +331,13 @@ export function terminateDescendantSnapshot(
   deps: TerminateDeps = {}
 ): void {
   const sendSignal = deps.sendSignal ?? sendDescendantSignal
-  const readTable = deps.readTable ?? readProcessTable
+  const readTable: ProcessTableReader =
+    deps.readTable ??
+    ((timeoutMs) =>
+      readProcessIdentities(
+        snapshot.descendants.map((row) => row.pid),
+        timeoutMs
+      ))
   for (const row of snapshot.descendants) {
     sendSignal(row.pid, 'SIGTERM')
   }

@@ -127,7 +127,7 @@ describe('ps selection compatibility', () => {
     ])
   })
 
-  it('uses the cached async dialect for synchronous teardown with fresh membership', async () => {
+  it('uses the cached async dialect for synchronous signalling with fresh membership', async () => {
     runProcessMock
       .mockResolvedValueOnce(unsupportedSelection())
       .mockResolvedValueOnce({ code: 0, stdout: BUSYBOX_TABLE })
@@ -138,7 +138,7 @@ describe('ps selection compatibility', () => {
     })
     const signalProcessGroup = vi.fn()
     const fallback = vi.fn()
-    forceKillPosixPtyProcessGroups(100, fallback, {
+    signalPosixPtyProcessGroups(100, 'SIGCONT', fallback, {
       platform: 'linux',
       currentPid: 999,
       signalProcessGroup
@@ -148,13 +148,13 @@ describe('ps selection compatibility', () => {
     expect(fallback).not.toHaveBeenCalled()
   })
 
-  it('discovers unsupported selection during teardown and shares it with async readers', async () => {
+  it('discovers unsupported selection during signalling and shares it with async readers', async () => {
     runProcessSyncMock
       .mockReturnValueOnce(unsupportedSelection())
       .mockReturnValueOnce({ code: 0, stdout: BUSYBOX_TABLE })
     const signalProcessGroup = vi.fn()
     const fallback = vi.fn()
-    forceKillPosixPtyProcessGroups(100, fallback, {
+    signalPosixPtyProcessGroups(100, 'SIGCONT', fallback, {
       platform: 'linux',
       currentPid: 999,
       signalProcessGroup
