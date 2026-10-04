@@ -126,7 +126,9 @@ export function buildMirroredAgentStatusPatch(
       isFencedClientAgentStatus(entry.paneKey, existing, now) &&
       !hostAgentStatusPiercesClientAuthority(entry)
     const nextEntry =
-      existing && (clientOwnsEntry || existing.updatedAt > entry.updatedAt)
+      existing &&
+      (clientOwnsEntry ||
+        (isAgentStatusFresh(existing, now) && existing.updatedAt > entry.updatedAt))
         ? {
             ...normalizeCompatibleAgentStatusEntryForOwner(existing, entry.agentType),
             ...(clientOwnsEntry && existing.state === 'working' && entry.state === 'working'
