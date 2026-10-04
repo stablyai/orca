@@ -17,6 +17,7 @@ import {
   getIndexedWorktreeById,
   getIndexedWorktreeMap
 } from '@/store/worktree-repo-index'
+import { useRepoMap } from '@/store/selectors'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import { branchDisplayName } from '@/components/sidebar/WorktreeCardHelpers'
 import { getCyclicProjectedWorktreeLineageIds } from '@/components/sidebar/worktree-lineage-projection'
@@ -33,11 +34,9 @@ import {
   getLineageChildrenByParentId,
   getLineageChildWorktree
 } from '@/components/right-sidebar/folder-workspace-attached-worktrees'
+import { getWorktreeOwnerHostId } from '@/components/sidebar/worktree-parent-candidates'
+import { WorktreeParentRepoBadge } from '@/components/sidebar/WorktreeParentPickerRow'
 import { COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
-import {
-  sharesWorktreeLineageBoundary,
-  type WorktreeLineageBoundary
-} from '../../../../shared/resolved-worktree-lineage'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -51,7 +50,6 @@ type ComposerParentWorktreePickerProps = {
   repoId: string
   /** Parent must belong to the same execution host that will create the child. */
   executionHostId?: ExecutionHostId | null
-  projectId?: string | null
   value: string | null
   onChange: (id: string | null) => void
   disabled?: boolean
@@ -62,7 +60,6 @@ type ComposerParentWorktreePickerProps = {
 type ParentWorktreeCandidateListProps = {
   repoId: string
   executionHostId?: ExecutionHostId | null
-  projectId?: string | null
   value: string | null
   activeFolderWorkspaceId: string | null
   onSelect: (id: string | null) => void
@@ -78,7 +75,6 @@ type ParentWorktreeCandidateListProps = {
 function ComposerParentWorktreePickerImpl({
   repoId,
   executionHostId,
-  projectId,
   value,
   onChange,
   disabled = false,
@@ -155,7 +151,6 @@ function ComposerParentWorktreePickerImpl({
           <ParentWorktreeCandidateList
             repoId={repoId}
             executionHostId={executionHostId}
-            projectId={projectId}
             value={value}
             activeFolderWorkspaceId={activeFolderWorkspaceId}
             onSelect={handleSelect}
@@ -209,12 +204,12 @@ function getFolderWorkspaceSubtreeIds(
 function ParentWorktreeCandidateList({
   repoId,
   executionHostId,
-  projectId,
   value,
   activeFolderWorkspaceId,
   onSelect
 }: ParentWorktreeCandidateListProps): React.JSX.Element {
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const repoMap = useRepoMap()
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const listRef = useRef<HTMLDivElement>(null)
@@ -225,14 +220,6 @@ function ParentWorktreeCandidateList({
   const [highlightedIndex, setHighlightedIndex] = useState(0)
 
   const candidates = useMemo(() => {
-    // Why `?? undefined`: an unresolved host or project is "not known yet", not "no host", and
-    // the boundary check reads undefined on either side as a wildcard. A candidate in this repo
-    // with no recorded hostId inherits that repo's host, so it is on the child's host too.
-    const childBoundary: WorktreeLineageBoundary = {
-      repoId,
-      hostId: executionHostId ?? undefined,
-      projectId: projectId ?? undefined
-    }
     const worktreeMap = getIndexedWorktreeMap(worktreesByRepo)
     const cyclicLineageIds = getCyclicProjectedWorktreeLineageIds(worktreeLineageById, worktreeMap)
     const folderSubtreeIds = activeFolderWorkspaceId
@@ -246,9 +233,11 @@ function ParentWorktreeCandidateList({
     return getIndexedAllWorktrees(worktreesByRepo)
       .filter(
         (candidate) =>
-          candidate.repoId === repoId &&
           !candidate.isArchived &&
-          sharesWorktreeLineageBoundary(childBoundary, candidate) &&
+          // Why: an unresolved child host can only vouch for its own repo's worktrees.
+          (executionHostId == null
+            ? candidate.repoId === repoId
+            : getWorktreeOwnerHostId(candidate, repoMap) === executionHostId) &&
           !cyclicLineageIds.has(candidate.id) &&
           (folderSubtreeIds === null || folderSubtreeIds.has(candidate.id))
       )
@@ -256,8 +245,8 @@ function ParentWorktreeCandidateList({
   }, [
     activeFolderWorkspaceId,
     executionHostId,
-    projectId,
     repoId,
+    repoMap,
     workspaceLineageByChildKey,
     worktreeLineageById,
     worktreesByRepo
@@ -370,6 +359,8 @@ function ParentWorktreeCandidateList({
               return null
             }
             const isHighlighted = rowIndex === activeIndex
+            const otherRepo =
+              candidate && candidate.repoId !== repoId ? repoMap.get(candidate.repoId) : undefined
             return (
               <div
                 key={virtualRow.key}
@@ -396,6 +387,7 @@ function ParentWorktreeCandidateList({
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[13px] font-medium">{candidate.displayName}</div>
                     <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] leading-none text-muted-foreground">
+                      {otherRepo ? <WorktreeParentRepoBadge repo={otherRepo} /> : null}
                       <GitBranch className="size-3 shrink-0" />
                       <span className="truncate">{branchDisplayName(candidate.branch)}</span>
                     </div>

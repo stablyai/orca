@@ -102,6 +102,7 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     getDb: () => this.getOrchestrationDbIfAvailable(),
     resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
     listResolvedWorktrees: () => this.listResolvedWorktrees(),
+    invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
     showTerminal: (handle) => this.showTerminal(handle)
   })
 

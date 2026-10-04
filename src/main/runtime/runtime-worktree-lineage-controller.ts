@@ -24,6 +24,7 @@ type RuntimeWorktreeLineageDependencies = {
   getDb(): OrchestrationDb | null
   resolveWorktree(selector: string): Promise<ResolvedWorktree>
   listResolvedWorktrees(): Promise<ResolvedWorktree[]>
+  invalidateResolvedWorktrees(): void
   showTerminal(handle: string): Promise<{ worktreeId: string }>
 }
 
@@ -90,7 +91,7 @@ export class RuntimeWorktreeLineageController {
     if (!sharesResolvedWorktreeLineageBoundary(child, parent)) {
       throw new RuntimeLineageError(
         'LINEAGE_PARENT_CONTEXT_CONFLICT',
-        'Parent worktree must belong to the same repository, execution host, and project.'
+        'Parent worktree must belong to the same execution host.'
       )
     }
     const instanceById = new Map(
@@ -147,6 +148,7 @@ export class RuntimeWorktreeLineageController {
     if (!store?.getWorktreeLineage || !store.setWorktreeLineage) {
       return
     }
+    let wroteLineage = false
     for (const worktree of await this.deps.listResolvedWorktrees()) {
       if (store.getWorktreeLineage(worktree.id) || !worktree.instanceId) {
         continue
@@ -178,6 +180,11 @@ export class RuntimeWorktreeLineageController {
         taskId,
         createdAt: Date.now()
       })
+      wroteLineage = true
+    }
+    // Why: the loop read the resolved snapshot, so it was cached before these edges existed.
+    if (wroteLineage) {
+      this.deps.invalidateResolvedWorktrees()
     }
   }
 

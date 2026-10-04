@@ -174,11 +174,57 @@ export async function resolveRepoWorktreeRows(
 }
 
 /**
+ * Projects lineage over every repo's rows at once, one execution host at a time, keeping input order.
+ * Why per host: edges may cross repos but never hosts, and one bare id can exist on two hosts.
+ */
+export function projectRepoWorktreeRowsLineage(
+  perRepoRows: readonly { repo: Repo; rows: readonly RepoWorktreeRow[] }[],
+  lineageById: Readonly<Record<string, WorktreeLineage>>
+): RepoWorktreeRow[] {
+  const rowsByHost = new Map<ExecutionHostId, RepoWorktreeRow[]>()
+  for (const { repo, rows } of perRepoRows) {
+    const hostId = getRepoExecutionHostId(repo)
+    const hostRows = rowsByHost.get(hostId) ?? []
+    hostRows.push(...rows)
+    rowsByHost.set(hostId, hostRows)
+  }
+  const projectedByHost = new Map(
+    [...rowsByHost].map(([hostId, rows]) => [
+      hostId,
+      projectResolvedWorktreeLineage(rows, lineageById)
+    ])
+  )
+  const offsetByHost = new Map<ExecutionHostId, number>()
+  return perRepoRows.flatMap(({ repo, rows }) => {
+    const hostId = getRepoExecutionHostId(repo)
+    const start = offsetByHost.get(hostId) ?? 0
+    offsetByHost.set(hostId, start + rows.length)
+    return projectedByHost.get(hostId)?.slice(start, start + rows.length) ?? []
+  })
+}
+
+/** Whether stored lineage links this worktree to one in another repo, as child or as parent. */
+function hasCrossRepoLineage(
+  worktreeId: string,
+  repoId: string,
+  lineageById: Readonly<Record<string, WorktreeLineage>>
+): boolean {
+  const ownParentId = lineageById[worktreeId]?.parentWorktreeId
+  if (ownParentId !== undefined && splitWorktreeId(ownParentId)?.repoId !== repoId) {
+    return true
+  }
+  return Object.entries(lineageById).some(
+    ([childId, lineage]) =>
+      lineage.parentWorktreeId === worktreeId && splitWorktreeId(childId)?.repoId !== repoId
+  )
+}
+
+/**
  * Resolve one `<repoId>::<path>` worktree id by scanning only its owning repo.
  *
- * Lineage edges are intra-repo by construction (`sharesResolvedWorktreeLineageBoundary` requires a
- * matching repoId), so projecting over one repo's rows yields the same parent and child ids the
- * fleet scan would. Returns `null` whenever that does not hold, and the caller falls back.
+ * Projecting over one repo's rows yields the same parent and child ids the fleet scan would only
+ * while the worktree's stored lineage stays inside that repo. Returns `null` whenever that does
+ * not hold — including a cross-repo edge — and the caller falls back to the fleet scan.
  */
 export async function resolveScopedWorktreeIdRow(
   deps: RepoWorktreeRowDeps,
@@ -209,10 +255,11 @@ export async function resolveScopedWorktreeIdRow(
     store.getAllWorktreeMeta() ?? {},
     resolveLocalProjectRuntimesForRepos(store, [repo])
   )
-  const projected = projectResolvedWorktreeLineage(rows, store.getAllWorktreeLineage?.() ?? {})
+  const lineageById = store.getAllWorktreeLineage?.() ?? {}
+  const projected = projectResolvedWorktreeLineage(rows, lineageById)
   const exact = projected.find((worktree) => worktree.id === worktreeId)
   if (exact) {
-    return exact
+    return hasCrossRepoLineage(exact.id, repo.id, lineageById) ? null : exact
   }
   // Why (#16243): the scan can spell this id's path differently — the divergence `path:` absorbs.
   // One equivalent row may stand in; two is an ambiguity a scoped lookup must refuse, not guess.
@@ -223,5 +270,9 @@ export async function resolveScopedWorktreeIdRow(
   const equivalent = projected.filter(
     (worktree) => worktreeIdComparisonKey(worktree.id) === comparisonKey
   )
-  return equivalent.length === 1 ? equivalent[0] : null
+  return equivalent.length === 1 &&
+    !hasCrossRepoLineage(equivalent[0].id, repo.id, lineageById) &&
+    !hasCrossRepoLineage(worktreeId, repo.id, lineageById)
+    ? equivalent[0]
+    : null
 }
