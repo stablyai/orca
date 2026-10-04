@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   TERMINAL_INTERRUPT_ETX,
   TERMINAL_INTERRUPT_KITTY_CTRL_C,
+  containsTerminalInterruptInput,
   isTerminalInterruptInput,
   terminalInterruptBytes
 } from './terminal-interrupt-bytes'
@@ -33,5 +34,17 @@ describe('isTerminalInterruptInput', () => {
     expect(isTerminalInterruptInput('\x1b')).toBe(false)
     expect(isTerminalInterruptInput('\x1b[99;1u')).toBe(false)
     expect(isTerminalInterruptInput('c')).toBe(false)
+  })
+})
+
+describe('containsTerminalInterruptInput', () => {
+  it('finds either Ctrl+C encoding inside an accepted input chunk', () => {
+    expect(containsTerminalInterruptInput(`partial${TERMINAL_INTERRUPT_ETX}`)).toBe(true)
+    expect(containsTerminalInterruptInput(`partial${TERMINAL_INTERRUPT_KITTY_CTRL_C}`)).toBe(true)
+  })
+
+  it('does not classify ordinary or unrelated Kitty input as Ctrl+C', () => {
+    expect(containsTerminalInterruptInput('partial command')).toBe(false)
+    expect(containsTerminalInterruptInput('\x1b[99;1u')).toBe(false)
   })
 })

@@ -12,6 +12,11 @@ export function isTerminalInterruptInput(data: string): boolean {
   return data === TERMINAL_INTERRUPT_ETX || data === TERMINAL_INTERRUPT_KITTY_CTRL_C
 }
 
+/** True when an accepted input chunk contains either Ctrl+C wire encoding. */
+export function containsTerminalInterruptInput(data: string): boolean {
+  return data.includes(TERMINAL_INTERRUPT_ETX) || data.includes(TERMINAL_INTERRUPT_KITTY_CTRL_C)
+}
+
 /**
  * Progressive-enhancement bits that change Ctrl+C from a legacy ETX into CSI u.
  * Alternate-key reporting (4) only annotates sequences that are already encoded,
