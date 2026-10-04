@@ -358,21 +358,18 @@ describe('captureScreenshot', () => {
     await settled
   })
 
-  it('reports the timeout when both CDP and fallback capture stall', async () => {
+  it('reports the timeout without starting fallback capture when a pulse remains unresolved', async () => {
     vi.useFakeTimers()
     const webContents = createMockWebContents()
     webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
     webContents.capturePage.mockImplementation(() => new Promise(() => {}))
-    const onSettled = vi.fn()
 
     const capture = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
-    capture.catch(onSettled)
+    const settled = expect(capture).rejects.toThrow(TIMEOUT_MESSAGE)
     await vi.advanceTimersByTimeAsync(8000)
-    expect(webContents.capturePage).toHaveBeenCalledTimes(2)
-    expect(onSettled).not.toHaveBeenCalled()
 
-    await vi.advanceTimersByTimeAsync(1000)
-    await expect(capture).rejects.toThrow(TIMEOUT_MESSAGE)
+    expect(webContents.capturePage).toHaveBeenCalledTimes(1)
+    await settled
   })
 })
 
@@ -494,5 +491,129 @@ describe('captureFullPageScreenshot', () => {
       captureBeyondViewport: true,
       clip: { x: 0, y: 0, width: 800, height: 1600, scale: 1 }
     })
+  })
+})
+
+describe('shared native frame admission', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('keeps an unresolved native pulse from one invocation from overlapping the next on the same guest', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    let resolveFirstCapture: ((value: { data: string }) => void) | undefined
+    let resolveSecondCapture: ((value: { data: string }) => void) | undefined
+    let resolveNative: (() => void) | undefined
+    let screenshotCalls = 0
+    webContents.debugger.sendCommand.mockImplementation(() => {
+      screenshotCalls += 1
+      return new Promise<{ data: string }>((resolve) => {
+        if (screenshotCalls === 1) {
+          resolveFirstCapture = resolve
+        } else {
+          resolveSecondCapture = resolve
+        }
+      })
+    })
+    webContents.capturePage.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveNative = () => resolve({ isEmpty: () => false })
+        })
+    )
+
+    const first = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(webContents.capturePage).toHaveBeenCalledTimes(1)
+    resolveFirstCapture?.({ data: 'first' })
+    await expect(first).resolves.toEqual({ data: 'first' })
+
+    const second = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(webContents.capturePage).toHaveBeenCalledTimes(1)
+
+    resolveNative?.()
+    await vi.advanceTimersByTimeAsync(500)
+    expect(webContents.capturePage).toHaveBeenCalledTimes(2)
+    resolveSecondCapture?.({ data: 'second' })
+    await expect(second).resolves.toEqual({ data: 'second' })
+  })
+
+  it('does not launch fallback capturePage while a prior invocation pulse remains unresolved', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    let resolveFirstCapture: ((value: { data: string }) => void) | undefined
+    let resolveNative: (() => void) | undefined
+    let screenshotCalls = 0
+    webContents.debugger.sendCommand.mockImplementation(() => {
+      screenshotCalls += 1
+      if (screenshotCalls === 1) {
+        return new Promise<{ data: string }>((resolve) => {
+          resolveFirstCapture = resolve
+        })
+      }
+      return new Promise(() => {})
+    })
+    webContents.capturePage.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveNative = () => resolve({ isEmpty: () => false })
+        })
+    )
+
+    const first = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
+    await vi.advanceTimersByTimeAsync(250)
+    resolveFirstCapture?.({ data: 'first' })
+    await expect(first).resolves.toEqual({ data: 'first' })
+
+    const second = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
+    const settled = expect(second).rejects.toThrow(TIMEOUT_MESSAGE)
+    await vi.advanceTimersByTimeAsync(9000)
+    await settled
+    expect(webContents.capturePage).toHaveBeenCalledTimes(1)
+    resolveNative?.()
+  })
+
+  it('admits native pulses independently for distinct guests', async () => {
+    vi.useFakeTimers()
+    const first = createMockWebContents()
+    const second = createMockWebContents()
+    first.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
+    second.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
+    first.capturePage.mockImplementation(() => new Promise(() => {}))
+    second.capturePage.mockImplementation(() => new Promise(() => {}))
+
+    const captureFirst = captureScreenshot(first.guest, { format: 'png' }, noHold)
+    const captureSecond = captureScreenshot(second.guest, { format: 'png' }, noHold)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(first.capturePage).toHaveBeenCalledTimes(1)
+    expect(second.capturePage).toHaveBeenCalledTimes(1)
+    captureFirst.catch(() => {})
+    captureSecond.catch(() => {})
+  })
+
+  it('releases admission after a rejected or synchronous native capture failure', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    let resolveCapture: ((value: { data: string }) => void) | undefined
+    webContents.debugger.sendCommand.mockImplementation(
+      () =>
+        new Promise<{ data: string }>((resolve) => {
+          resolveCapture = resolve
+        })
+    )
+    webContents.capturePage
+      .mockImplementationOnce(() => {
+        throw new Error('sync failure')
+      })
+      .mockRejectedValueOnce(new Error('async failure'))
+      .mockImplementationOnce(() => Promise.resolve({ isEmpty: () => false }))
+
+    const capture = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
+    await vi.advanceTimersByTimeAsync(1750)
+    expect(webContents.capturePage).toHaveBeenCalledTimes(3)
+    resolveCapture?.({ data: 'primary' })
+    await expect(capture).resolves.toEqual({ data: 'primary' })
   })
 })

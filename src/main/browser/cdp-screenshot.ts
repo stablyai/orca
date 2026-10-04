@@ -9,6 +9,47 @@ const FRAME_PROBE_OFFSETS_MS = [250, 750, 1750, 3750]
 const FALLBACK_CAPTURE_TIMEOUT_MS = 1000
 const SCREENSHOT_TIMEOUT_MESSAGE = 'Screenshot timed out — the browser page did not draw a frame.'
 
+type NativeCaptureAdmission = {
+  promise: Promise<Electron.NativeImage>
+}
+
+// Why: native capturePage mutates the guest's presentation state and cannot be cancelled. The
+// lease must outlive a single CDP request, otherwise a later request can overlap a discarded
+// pulse that is still settling after its original caller returned.
+const nativeCaptureAdmissions = new WeakMap<WebContents, NativeCaptureAdmission>()
+
+function startAdmittedNativeCapture(
+  webContents: WebContents
+): Promise<Electron.NativeImage> | null {
+  if (nativeCaptureAdmissions.has(webContents)) {
+    return null
+  }
+
+  let promise: Promise<Electron.NativeImage>
+  try {
+    promise = Promise.resolve(
+      webContents.capturePage(undefined, { stayHidden: true, stayAwake: false })
+    )
+  } catch {
+    return null
+  }
+
+  const admission = { promise }
+  nativeCaptureAdmissions.set(webContents, admission)
+  void promise.then(
+    () => {
+      if (nativeCaptureAdmissions.get(webContents) === admission) {
+        nativeCaptureAdmissions.delete(webContents)
+      }
+    },
+    () => {
+      if (nativeCaptureAdmissions.get(webContents) === admission) {
+        nativeCaptureAdmissions.delete(webContents)
+      }
+    }
+  )
+  return promise
+}
 function applyFallbackClip(
   image: Electron.NativeImage,
   params: Record<string, unknown> | undefined
@@ -181,18 +222,17 @@ function captureUntilDrawn(
         return
       }
       nativeProbeInFlight = true
-      try {
-        void Promise.resolve(
-          webContents.capturePage(undefined, { stayHidden: true, stayAwake: false })
-        )
-          .catch(() => {})
-          .finally(() => {
-            // Why: capturePage cannot be cancelled, so only its actual settlement may permit another pulse.
-            nativeProbeInFlight = false
-          })
-      } catch {
+      const nativeProbe = startAdmittedNativeCapture(webContents)
+      if (!nativeProbe) {
         nativeProbeInFlight = false
+        return
       }
+      void nativeProbe
+        .catch(() => {})
+        .finally(() => {
+          // Why: the module lease outlives this invocation; this flag only suppresses its own timers.
+          nativeProbeInFlight = false
+        })
     }
     const deadline = setTimeout(() => finish(() => resolve(null)), SCREENSHOT_TIMEOUT_MS)
     const probes = FRAME_PROBE_OFFSETS_MS.map((offsetMs) => setTimeout(pulseNativeFrame, offsetMs))
@@ -282,13 +322,14 @@ export async function captureScreenshot(
       return frame
     }
     // Why: capturePage is only a best-effort fallback for a page that never answered.
-    const fallback = await withTimeout(
-      Promise.resolve().then(() => webContents.capturePage()),
-      FALLBACK_CAPTURE_TIMEOUT_MS,
-      SCREENSHOT_TIMEOUT_MESSAGE
-    )
-      .then((image) => encodeNativeImageScreenshot(image, params))
-      .catch(() => null)
+    // Why: never overlap a retained pulse or queue work beyond the fallback deadline. A busy native
+    // admission preserves the existing timeout result; its image belongs to the earlier request.
+    const admittedFallback = startAdmittedNativeCapture(webContents)
+    const fallback = admittedFallback
+      ? await withTimeout(admittedFallback, FALLBACK_CAPTURE_TIMEOUT_MS, SCREENSHOT_TIMEOUT_MESSAGE)
+          .then((image) => encodeNativeImageScreenshot(image, params))
+          .catch(() => null)
+      : null
     if (fallback) {
       return fallback
     }
