@@ -124,7 +124,12 @@ function AnnotationTrayHarness(): React.JSX.Element | null {
   }
   return (
     <TooltipProvider>
-      <BrowserPageAnnotationTray {...annotationSend} annotationTraySendOpen worktreeId="folder-1" />
+      <BrowserPageAnnotationTray
+        {...annotationSend}
+        getAnnotationTitle={(annotation) => annotation.payload.target.tagName}
+        annotationTraySendOpen
+        worktreeId="folder-1"
+      />
     </TooltipProvider>
   )
 }

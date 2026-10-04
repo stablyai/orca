@@ -1,6 +1,11 @@
 import { open, readFile, stat } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { extname } from 'node:path'
+import {
+  binaryPreviewReadResult,
+  SYNCTEX_GZIP_MIME_TYPE,
+  synctexGzipMimeType
+} from '../shared/synctex-file-path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { MAX_CONCURRENT_STREAMS, STREAM_ACK_WINDOW_CHUNKS, STREAM_CHUNK_SIZE } from './protocol'
 import { TooManyStreamsError, type RelayStreamRegistry } from './fs-stream-registry'
@@ -13,9 +18,13 @@ import {
   isBinaryFilePrefix
 } from './fs-handler-utils'
 
+function previewMimeType(filePath: string): string | undefined {
+  return IMAGE_MIME_TYPES[extname(filePath).toLowerCase()] ?? synctexGzipMimeType(filePath)
+}
+
 export async function readRelayFileContent(filePath: string) {
   const stats = await stat(filePath)
-  const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
+  const mimeType = previewMimeType(filePath)
   const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
   if (stats.size > sizeLimit) {
     throw new Error(
@@ -25,7 +34,7 @@ export async function readRelayFileContent(filePath: string) {
 
   if (mimeType) {
     const buffer = await readFile(filePath)
-    return { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType }
+    return binaryPreviewReadResult(buffer.toString('base64'), mimeType)
   }
 
   if (stats.size > BINARY_PROBE_BYTES && (await isBinaryFilePrefix(filePath))) {
@@ -79,7 +88,8 @@ export async function readRelayFileStreamMetadata(
   pumpOptions?: StreamPumpOptions
 ): Promise<StreamMetadata> {
   const stats = await stat(filePath)
-  const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
+  const mimeType = previewMimeType(filePath)
+  const isImage = mimeType && mimeType !== SYNCTEX_GZIP_MIME_TYPE ? true : undefined
   const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
   if (stats.size > sizeLimit) {
     throw new Error(
@@ -92,7 +102,7 @@ export async function readRelayFileStreamMetadata(
       totalSize: 0,
       isBinary: !!mimeType,
       mimeType,
-      isImage: mimeType ? true : undefined,
+      isImage,
       empty: true
     }
   }
@@ -139,7 +149,7 @@ export async function readRelayFileStreamMetadata(
     streamId,
     totalSize: stats.size,
     isBinary: !!mimeType,
-    isImage: mimeType ? true : undefined,
+    isImage,
     mimeType,
     chunkEncoding: 'base64',
     resultEncoding: mimeType ? 'base64' : 'utf-8'

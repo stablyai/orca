@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { BrowserPageAnnotation } from '../../../../../shared/browser-grab-types'
 import { BrowserPageAnnotationTray } from './browser-page-annotation-tray'
+import { browserAnnotationMatchesPageUrl } from './browser-annotation-page-url'
 
 afterEach(() => {
   cleanup()
@@ -80,7 +81,13 @@ function renderTray(currentUrl?: string): {
     <TooltipProvider>
       <BrowserPageAnnotationTray
         browserAnnotations={[makeAnnotation()]}
-        currentUrl={currentUrl}
+        getAnnotationTitle={(annotation) => annotation.payload.target.tagName}
+        getAnnotationElsewhereLabel={(annotation) =>
+          currentUrl !== undefined &&
+          !browserAnnotationMatchesPageUrl(annotation.payload.page.sanitizedUrl, currentUrl)
+            ? annotation.payload.page.sanitizedUrl
+            : undefined
+        }
         annotationTraySendOpen={false}
         handleAnnotationTraySendOpenChange={vi.fn()}
         worktreeId="wt-1"

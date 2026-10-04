@@ -4,6 +4,7 @@ import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { cn } from '@/lib/utils'
 import ImageViewerPopup from './ImageViewerPopup'
 import PdfViewer from './PdfViewer'
+import type { PdfAnnotationContext } from './use-pdf-annotate-mode'
 import {
   type ApplyImageViewerZoomChange,
   applyAnchoredImageViewerZoomChange,
@@ -35,6 +36,7 @@ type ImageViewerProps = {
   // Why: absent means "no PDF scroll memory" — diff and conflict-review callers
   // mount several viewers on one path, so they deliberately pass nothing.
   scrollCacheKey?: string | null
+  pdfAnnotation?: PdfAnnotationContext | null
 }
 
 export default function ImageViewer({
@@ -43,7 +45,8 @@ export default function ImageViewer({
   mimeType = FALLBACK_IMAGE_MIME_TYPE,
   layout = 'fill',
   preferenceKey,
-  scrollCacheKey = null
+  scrollCacheKey = null,
+  pdfAnnotation = null
 }: ImageViewerProps): JSX.Element {
   const [isPopupOpen, setIsPopupOpen] = useState(false)
   const [inlineZoom, setInlineZoom] = useState(1)
@@ -224,6 +227,7 @@ export default function ImageViewer({
         filePath={filePath}
         preferenceKey={preferenceKey}
         scrollCacheKey={scrollCacheKey}
+        annotation={pdfAnnotation}
       />
     )
   }

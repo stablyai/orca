@@ -8,6 +8,7 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import { extname } from 'node:path'
 import type { DirEntry, MarkdownDocument } from '../../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../../shared/file-name-sort'
+import { binaryPreviewReadResult, synctexGzipMimeType } from '../../../shared/synctex-file-path'
 import { requireSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
 import { resolveAuthorizedPath } from '../filesystem-auth'
@@ -88,7 +89,9 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         return readLocalLogSnapshot(filePath)
       }
       const stats = await stat(filePath)
-      const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
+      const mimeType =
+        PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()] ??
+        synctexGzipMimeType(filePath)
       const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
       if (stats.size > sizeLimit) {
         throw new Error(
@@ -98,13 +101,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
 
       if (mimeType) {
         const buffer = await readFile(filePath)
-        return {
-          content: buffer.toString('base64'),
-          isBinary: true,
-          // Why: the renderer keys previewable-binary rendering off `isImage`, so set it for PDFs too to stay compatible.
-          isImage: true,
-          mimeType
-        }
+        return binaryPreviewReadResult(buffer.toString('base64'), mimeType)
       }
 
       // Why: probe large unknown files first so archives aren't fully buffered only to discover they aren't editable text.

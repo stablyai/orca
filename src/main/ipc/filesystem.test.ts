@@ -374,6 +374,23 @@ describe('registerFilesystemHandlers', () => {
     })
   })
 
+  it('returns SyncTeX data base64 so the PDF viewer can inflate it, without marking it an image', async () => {
+    const buf = Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0x00])
+    statMock.mockResolvedValue({ size: buf.length, isDirectory: () => false, mtimeMs: 123 })
+    readFileMock.mockResolvedValue(buf)
+    registerFilesystemHandlers(store as never)
+    await expect(
+      handlers.get('fs:readFile')!(null, {
+        filePath: path.resolve('/workspace/repo/main.synctex.gz')
+      })
+    ).resolves.toEqual({
+      content: buf.toString('base64'),
+      isBinary: true,
+      isImage: false,
+      mimeType: 'application/gzip'
+    })
+  })
+
   it('opens text files larger than the old 5MB guard', async () => {
     const content = 'a'.repeat(6 * 1024 * 1024)
     statMock.mockResolvedValue({ size: content.length, isDirectory: () => false, mtimeMs: 123 })

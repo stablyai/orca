@@ -16,6 +16,7 @@ import { requireRuntimeFileProvider } from './runtime-file-command-target'
 import { open, stat } from 'node:fs/promises'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { extname } from 'node:path'
+import { binaryPreviewReadResult, synctexGzipMimeType } from '../../shared/synctex-file-path'
 import {
   NodeFileReadTooLargeError,
   readNodeFileWithinLimit
@@ -68,7 +69,9 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
     }
 
     const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
-    const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
+    const mimeType =
+      RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()] ??
+      synctexGzipMimeType(filePath)
     const maxBytes = mimeType ? binaryMaxBytes : MOBILE_FILE_READ_MAX_BYTES
     let buffer: Buffer
     try {
@@ -81,12 +84,7 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
     }
     if (mimeType) {
       return assertPreviewWithinTransportBudget(
-        {
-          content: buffer.toString('base64'),
-          isBinary: true,
-          isImage: true,
-          mimeType
-        },
+        binaryPreviewReadResult(buffer.toString('base64'), mimeType),
         maxContentBytes
       )
     }

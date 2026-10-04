@@ -7,6 +7,7 @@ import { extname } from 'node:path'
 import type { SFTPWrapper, Stats } from 'ssh2'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { IMAGE_FILE_MIME_TYPES } from '../../shared/image-file-extensions'
+import { binaryPreviewReadResult, synctexGzipMimeType } from '../../shared/synctex-file-path'
 import { capturePathExistence, type PathExistenceResult } from '../../shared/path-existence-batch'
 import type { SearchResult } from '../../shared/code-search-types'
 import type { DirEntry } from '../../shared/filesystem-entry-types'
@@ -181,7 +182,8 @@ export class SshSftpFilesystemProvider implements IFilesystemProvider {
     const path = toSftpPath(filePath)
     return this.run(async (sftp) => {
       const stats = await statViaSftp(sftp, path)
-      const mimeType = PREVIEW_MIME_TYPES[extname(filePath).toLowerCase()]
+      const mimeType =
+        PREVIEW_MIME_TYPES[extname(filePath).toLowerCase()] ?? synctexGzipMimeType(filePath)
       const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
       if (stats.size > sizeLimit) {
         throw new Error(
@@ -192,7 +194,7 @@ export class SshSftpFilesystemProvider implements IFilesystemProvider {
         sftp.readFile(path, (err, data) => (err ? reject(err) : resolve(data)))
       )
       if (mimeType) {
-        return { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType }
+        return binaryPreviewReadResult(buffer.toString('base64'), mimeType)
       }
       if (isBinaryBuffer(buffer)) {
         return { content: '', isBinary: true }
