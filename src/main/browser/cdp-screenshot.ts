@@ -128,16 +128,16 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
 }
 
 // Why: a request made before the held page is drawn never resolves, and an offscreen drawn page can
-// skip one; a later request makes the page produce a frame, which answers every pending request.
-// So the capture is sent once and identical probes follow: they prompt a frame without changing the
-// pending capture's compositor geometry or encoding. Resolves null when no frame arrives by the
-// deadline; a CDP error is an answer. Unanswered probes settle on the next frame or reject on detach.
+// skip one; a later native capture makes the page produce a frame without issuing another CDP capture
+// that could retain the full-page viewport. Resolves null when no frame arrives by the deadline; a CDP
+// error is an answer. Native probe pixels are discarded and never become the screenshot result.
 function captureUntilDrawn(
   webContents: WebContents,
   params: Record<string, unknown>
 ): Promise<{ data: string } | null> {
   return new Promise((resolve, reject) => {
     let settled = false
+    let nativeProbeInFlight = false
     const finish = (settle: () => void): void => {
       if (settled) {
         return
@@ -165,10 +165,37 @@ function captureUntilDrawn(
       }
       return webContents.debugger.sendCommand('Page.captureScreenshot', requestParams)
     }
+    const pulseNativeFrame = (): void => {
+      if (settled) {
+        return
+      }
+      if (webContents.isDestroyed()) {
+        finish(() => reject(new Error('WebContents destroyed')))
+        return
+      }
+      if (!webContents.debugger.isAttached()) {
+        finish(() => reject(new Error('Debugger detached')))
+        return
+      }
+      if (nativeProbeInFlight) {
+        return
+      }
+      nativeProbeInFlight = true
+      try {
+        void Promise.resolve(
+          webContents.capturePage(undefined, { stayHidden: true, stayAwake: false })
+        )
+          .catch(() => {})
+          .finally(() => {
+            // Why: capturePage cannot be cancelled, so only its actual settlement may permit another pulse.
+            nativeProbeInFlight = false
+          })
+      } catch {
+        nativeProbeInFlight = false
+      }
+    }
     const deadline = setTimeout(() => finish(() => resolve(null)), SCREENSHOT_TIMEOUT_MS)
-    const probes = FRAME_PROBE_OFFSETS_MS.map((offsetMs) =>
-      setTimeout(() => send(params)?.catch(() => {}), offsetMs)
-    )
+    const probes = FRAME_PROBE_OFFSETS_MS.map((offsetMs) => setTimeout(pulseNativeFrame, offsetMs))
     send(params)?.then(
       (result) => finish(() => resolve(result?.data ? { data: result.data } : null)),
       (error: unknown) =>
