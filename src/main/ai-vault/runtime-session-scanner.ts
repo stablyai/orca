@@ -60,6 +60,7 @@ export async function scanRuntimeAiVaultSessions(
       limit: args.limit,
       unlimited: args.unlimited,
       force: args.force,
+      includeReasonixHistory: args.includeReasonixHistory !== false,
       // Why: cap here so the set of scanned paths is explicit on this side —
       // the RPC schema CLAMPS to the same bound anyway (older hosts had no
       // cap). Dropped paths only lose the older-than-recency-cap guarantee,

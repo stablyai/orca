@@ -30,6 +30,17 @@ export function unavailableSessionSearchStatus(): AiVaultSearchStatus {
   }
 }
 
+export function emptySessionSearchResults(generation: number): AiVaultSearchResponse {
+  return {
+    kind: 'results',
+    hits: [],
+    page: { cursor: null, hasMore: false },
+    generation,
+    truncated: { candidates: false, snippets: 0, query: false, freshness: false },
+    durationMs: 0
+  }
+}
+
 // Only an explicit unknown-method refusal proves the old host lacks this surface.
 export function isUnknownSessionSearchMethod(error: unknown): boolean {
   if (!error || typeof error !== 'object' || !('code' in error)) {
@@ -48,20 +59,24 @@ export function createSessionSearchClient(
   return {
     searchSessions: async (request) => {
       const parsed = AiVaultSearchRequestSchema.parse(request)
-      let hostRequest = parsed
       let raw: unknown
       try {
+        let hostRequest = parsed
         // IPC and its all-hosts merge are this build; each remote leg negotiates its own host.
         if (transport !== 'ipc' && parsed.filters?.agents?.length) {
           const status = await readSessionSearchStatus(call)
           const agents = compatibleSearchAgents(parsed.filters.agents, status)
           if (agents.length === 0) {
-            return { kind: 'unavailable', reason: 'unsupported-agent' }
+            return parsed.filters.agents.some((agent) => agent === 'reasonix' || agent === 'dsh')
+              ? emptySessionSearchResults(status.generation)
+              : { kind: 'unavailable', reason: 'unsupported-agent' }
           }
           hostRequest = { ...parsed, filters: { ...parsed.filters, agents } }
         }
         raw = await call('aiVault.searchSessions', {
           ...hostRequest,
+          includeDshHistory: true,
+          includeReasonixHistory: true,
           supportedAgents: [...AI_VAULT_AGENTS],
           supportsQoderHistory: true,
           supportsJcodeHistory: true

@@ -16,6 +16,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   trae: 'Trae',
   muse: 'Muse',
   dsh: 'DeepSeek Harness',
+  reasonix: 'Reasonix',
   zcode: 'ZCode',
   autohand: 'Autohand Code',
   opencode: 'OpenCode',

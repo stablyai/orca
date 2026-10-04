@@ -92,7 +92,7 @@ function tokenLooksExecutable(token: string, index: number, firstNormalized: str
 }
 
 export function findInterpreterEntrypointToken(
-  tokens: string[],
+  tokens: readonly string[],
   firstNormalized: string
 ): string | null {
   if (!isInterpreterProcessName(firstNormalized)) {

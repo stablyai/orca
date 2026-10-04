@@ -26,6 +26,9 @@ export function createRelayAiVaultFilesystemProvider(
     readTranscriptBytes: readRelayTranscriptBytes,
     async stat(filePath) {
       const stats = await lstat(filePath)
+      if (!stats.isFile() && !stats.isDirectory() && !stats.isSymbolicLink()) {
+        throw new Error('Session path is not a regular file or directory')
+      }
       return {
         size: stats.size,
         type: stats.isDirectory() ? 'directory' : stats.isSymbolicLink() ? 'symlink' : 'file',

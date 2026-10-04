@@ -59,7 +59,7 @@ describe('session search over real relay frames', () => {
         limit: 20,
         filters: {
           agents: AI_VAULT_AGENTS.filter(
-            (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode'].includes(agent)
+            (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode', 'dsh', 'reasonix'].includes(agent)
           )
         }
       },
@@ -69,6 +69,29 @@ describe('session search over real relay frames', () => {
     expect(await client.searchStatus()).toMatchObject({ enabled: true, generation: 7 })
     await expect(mux.request('aiVault.searchSessions', { query: 42 })).rejects.toThrow()
     expect(service.search).toHaveBeenCalledTimes(2)
+  })
+  it('negotiates DSH results before publishing them to a new client', async () => {
+    const service = fakeSearchService()
+    setSessionSearchService(service)
+    const { client } = wire(true)
+    await client.searchSessions({ query: 'needle', filters: { agents: ['dsh'] } })
+    expect(service.search).toHaveBeenCalledWith(
+      { query: 'needle', limit: 20, filters: { agents: ['dsh'] } },
+      undefined
+    )
+    expect(await client.searchStatus()).toMatchObject({ dshHistory: true })
+  })
+  it('does not widen a DSH-only filter without the new-client capability', async () => {
+    const service = fakeSearchService()
+    setSessionSearchService(service)
+    const { mux } = wire(true)
+    expect(
+      await mux.request('aiVault.searchSessions', { query: 'needle', filters: { agents: ['dsh'] } })
+    ).toMatchObject({ kind: 'results', hits: [] })
+    expect(service.search).toHaveBeenCalledExactlyOnceWith(
+      { query: 'needle', limit: 20, filters: { agents: ['dsh'] } },
+      { kind: 'resolved', paths: [''] }
+    )
   })
   it('maps a real old-host unknown-method response to unavailable without invoking a local service', async () => {
     const local = fakeSearchService()

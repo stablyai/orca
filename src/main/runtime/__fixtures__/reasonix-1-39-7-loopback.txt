@@ -1,0 +1,21 @@
+[?2026$p[?2027$p[?1002h[?1006h[>4m[?1049h[?5W[?2004h[?1002h[?1006h[>4;2m[>1u[?u[5 q[H[2J◆ reasonix  · orca-loopback
+  Context is kept across turns. Type 'exit' or Ctrl-D to quit.[27d──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ❯
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   [1mWorkspace[m  · ready · Shift+Tab read-only/workspace/YOLO/plan · Ctrl+Y YOLO[14X[30;92HMODEL orca-loopback
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  CTX 4.1K (12%)  COMPACT 68%[28;4H[?25h[?25lOrca loopb[?25h[?25lack transport prob[?25h[?25l[4d│ › Orca loopback transport probe[26;3H⣽  thinking… (0s · Esc cancels)
+
+[4G[K[?25h[?25l[2A  working · 0s[K[32;9H5K (13%)  COMPACT 67[28;4H[?25h[?25l[2A⣻ 
+
+[?25h[?25l[5d◆ Reasonix
+
+  Loopback transport proof only.[26;3H⢿ [32;9H6K[28;4H[?25h[?25l[2A⡿ 
+
+[?25h[?25l[2A⣟ 
+
+[?25h[?25l[2A⣯ 
+
+[?25h[?1002h[?1006h[?25l[2A[K
+
+[4G[?25h

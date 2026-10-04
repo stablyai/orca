@@ -366,7 +366,9 @@ describe('aiVault.listSessions handler + shared cache', () => {
     // First call via the shared module (what the desktop IPC handler invokes).
     await listAiVaultSessions({ limit: 500 })
     // Second call via the RPC method with the same cache key.
-    await dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 500 }))
+    await dispatcher.dispatch(
+      makeRequest('aiVault.listSessions', { limit: 500, includeReasonixHistory: true })
+    )
     expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
   })
 

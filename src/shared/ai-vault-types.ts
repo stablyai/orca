@@ -25,6 +25,8 @@ export const AI_VAULT_AGENTS = [
   'cline',
   'kimi',
   'muse',
+  'dsh',
+  'reasonix',
   'jcode'
 ] as const satisfies readonly TuiAgent[]
 
@@ -76,6 +78,8 @@ export const AI_VAULT_AGENT_LABELS = {
   cline: 'Cline',
   kimi: 'Kimi',
   muse: 'Muse',
+  dsh: 'DeepSeek Harness',
+  reasonix: 'Reasonix',
   jcode: 'Jcode'
 } as const satisfies Record<AiVaultAgent, string>
 
@@ -136,6 +140,7 @@ export type AiVaultSession = {
   // recoverable signal for zero-turn sessions.
   subagentTranscriptCount: number
   resumeCommand: string
+  resumeUnavailableReason?: 'workspace-unverified'
   subagent: AiVaultSessionSubagentInfo | null
   /** Present only when the negotiated client can open the native structured owner. */
   structuredSession?: {
@@ -216,6 +221,7 @@ export type AiVaultScanIssue = {
 }
 
 export type AiVaultListArgs = {
+  includeReasonixHistory?: boolean
   /** Opt-in promises this client starts IDE history in a new CLI conversation. */
   includeAntigravityIdeSessions?: boolean
   limit?: number

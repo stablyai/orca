@@ -110,8 +110,8 @@ export class SessionSearchFileRecords {
     const identity = fileIdentity(file)
     this.db
       .prepare(
-        `INSERT INTO files(path, dev, ino, byte_offset, mtime_ms, size_bytes, session_row_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO files(path, dev, ino, byte_offset, mtime_ms, size_bytes, metadata_key, session_row_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(path) DO UPDATE SET
            -- Partial observations must never create a pair that no stat proved.
            dev = CASE WHEN excluded.dev IS NOT NULL AND excluded.ino IS NOT NULL
@@ -119,7 +119,8 @@ export class SessionSearchFileRecords {
            ino = CASE WHEN excluded.dev IS NOT NULL AND excluded.ino IS NOT NULL
              THEN excluded.ino ELSE files.ino END,
            byte_offset = excluded.byte_offset, mtime_ms = excluded.mtime_ms,
-           size_bytes = excluded.size_bytes, session_row_id = excluded.session_row_id`
+           size_bytes = excluded.size_bytes, metadata_key = excluded.metadata_key,
+           session_row_id = excluded.session_row_id`
       )
       .run(
         file.path,
@@ -128,6 +129,7 @@ export class SessionSearchFileRecords {
         byteOffset,
         file.mtimeMs,
         file.sizeBytes ?? null,
+        candidate.metadataKey ?? null,
         sessionRowId
       )
   }

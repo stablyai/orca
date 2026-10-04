@@ -23,6 +23,7 @@ import { getDevinManagedCommand, getDevinRemoteManagedCommand } from '../devin/h
 import { getGrokManagedCommand } from '../grok/grok-hook-script'
 import { getMuseManagedCommand, getMuseRemoteManagedCommand } from '../muse/hook-settings'
 import { getDshManagedCommand, getDshRemoteManagedCommand } from '../dsh/hook-settings'
+import { getReasonixManagedCommand } from '../reasonix/hook-settings'
 import { getZCodeManagedCommand, getZCodeRemoteManagedCommand } from '../zcode/hook-settings'
 import { getJcodeManagedCommand, getJcodeRemoteManagedCommand } from '../jcode/hook-settings'
 import {
@@ -217,6 +218,13 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     {
       local: (path) => [getZCodeManagedCommand(path)],
       remote: (path) => [getZCodeRemoteManagedCommand(path)]
+    }
+  ],
+  [
+    'reasonix',
+    {
+      local: (path) => [getReasonixManagedCommand(path)],
+      remote: (path) => [getReasonixManagedCommand(path, 'linux')]
     }
   ],
   [

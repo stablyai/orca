@@ -1,0 +1,15 @@
+{
+  "provider": "Reasonix",
+  "version": "1.39.7",
+  "source": "https://github.com/esengine/DeepSeek-Reasonix",
+  "sourceCommit": "6dbabcbf7135c56ff5186b0cd36f5cc2725f47b4",
+  "sourceTag": "v1.39.7",
+  "platform": "darwin-arm64",
+  "format": "reasonix.session.linear/v4",
+  "sha256": "f7ee4301c3ac4e697db2af2d20c9a4bf1e7725f4589be2520a50b1b0b15b160a",
+  "sessionId": "c6ba053c5f6f35229354dbd95635c82d",
+  "provenance": "Actual released binary, isolated HOME/USERPROFILE/REASONIX_HOME with executed private-PTY nonce artifact before launch. One task-local loopback OpenAI-compatible request; no external provider request, paid model generation or account credential. Native --resume and --continue replayed the saved turn.",
+  "capturedAt": "2026-10-02T10:30:49Z",
+  "manifestArtifact": "reasonix-1-39-7-loopback.manifest.json",
+  "manifestSha256": "c5d29e25325c20ff259c5d78eec139254eb60907ae4a27e61db3d7b47763c281"
+}

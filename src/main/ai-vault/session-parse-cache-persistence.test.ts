@@ -168,6 +168,7 @@ const CACHED_SESSION_FIELDS = {
   queuedMessageCount: true,
   subagentTranscriptCount: true,
   resumeCommand: true,
+  resumeUnavailableReason: true,
   subagent: true,
   structuredSession: true
 } satisfies Record<keyof AiVaultSession, true>

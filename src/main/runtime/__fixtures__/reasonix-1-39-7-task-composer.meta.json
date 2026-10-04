@@ -1,0 +1,18 @@
+{
+  "label": "fresh-turn",
+  "argv": [],
+  "platform": "darwin",
+  "arch": "arm64",
+  "cols": 100,
+  "rows": 30,
+  "sourceRevision": "6dbabcbf7135c56ff5186b0cd36f5cc2725f47b4",
+  "version": "1.39.7",
+  "exitCode": 0,
+  "signal": 0,
+  "sha256": "77b7292e2dde68dcd4fd3fbb440829cbd39f8ce750b3dd4ac7c3f496b178d8ab",
+  "rawEscapes": true,
+  "loopback401Only": true,
+  "paidProvider": false,
+  "captureBoundary": "Fresh dispatched worker private native task; no authenticated or paid assistant turn",
+  "file": "reasonix-1-39-7-task-composer.txt"
+}

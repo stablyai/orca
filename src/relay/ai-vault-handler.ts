@@ -101,7 +101,8 @@ export class AiVaultHandler {
           limit: params.limit,
           unlimited: params.unlimited,
           scopePaths: params.scopePaths,
-          scopePathsTruncated: params.scopePathsTruncated
+          scopePathsTruncated: params.scopePathsTruncated,
+          includeReasonixHistory: params.includeReasonixHistory === true
         }),
         force: params.force,
         signal,
@@ -201,6 +202,7 @@ export function normalizeSshAiVaultRelayListParams(
     ...(unlimited ? { unlimited: true } : {}),
     ...(limit === undefined ? {} : { limit }),
     ...(params.force === true ? { force: true } : {}),
+    ...(params.includeReasonixHistory === true ? { includeReasonixHistory: true } : {}),
     ...(scopePaths === undefined ? {} : { scopePaths }),
     ...(scopePathsTruncated ? { scopePathsTruncated: true } : {})
   }

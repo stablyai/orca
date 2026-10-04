@@ -248,6 +248,8 @@ describe('web AI Vault preload API', () => {
       {
         method: 'aiVault.listSessions',
         params: {
+          includeReasonixHistory: true,
+          includeAntigravityIdeSessions: undefined,
           limit: 25,
           force: true,
           scopePaths: ['/srv/app'],

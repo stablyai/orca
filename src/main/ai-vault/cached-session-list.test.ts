@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
 
 const {
@@ -25,11 +27,16 @@ vi.mock('../wsl', () => ({
   listRunningWslHomeDirsAsync
 }))
 vi.mock('../wsl-running-path-filter', () => ({ filterPathsToRunningWslDistrosAsync }))
+const reasonixRoots = vi.hoisted(() => vi.fn())
+vi.mock('../reasonix/execution-host-config', () => ({
+  resolveReasonixExecutionHostRoots: reasonixRoots
+}))
 
 import {
   getAiVaultWslHomeDirs,
   invalidateAiVaultSessionListCache,
   listAiVaultSessions,
+  localAiVaultScanRoots,
   resetAiVaultSessionListCacheForTests
 } from './cached-session-list'
 
@@ -60,6 +67,10 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
     getCachedWslDistros.mockReset().mockReturnValue(null)
     hasCachedWslDistros.mockReset().mockReturnValue(false)
     listRunningWslHomeDirsAsync.mockReset().mockResolvedValue([])
+    reasonixRoots.mockReset().mockResolvedValue({
+      configHome: join(tmpdir(), 'host-config'),
+      stateHome: join(tmpdir(), 'host-state')
+    })
     scanAiVaultSessionsInService.mockReset()
   })
   afterEach(() => {
@@ -121,5 +132,19 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
 
     await expect(getAiVaultWslHomeDirs()).resolves.toEqual([])
     expect(listRunningWslHomeDirsAsync).not.toHaveBeenCalled()
+  })
+
+  it('shares the owning host storage root with local history and search', async () => {
+    const roots = await localAiVaultScanRoots()
+    expect(roots.reasonixProjectsDir).toBe(join(tmpdir(), 'host-state', 'projects'))
+    expect(roots.executionHostId).toBe('local')
+    expect(roots.includeReasonixHistory).toBe(true)
+  })
+
+  it('does not probe Reasonix configuration when a legacy client omits history opt-in', async () => {
+    const roots = await localAiVaultScanRoots(undefined, false)
+    expect(roots.reasonixProjectsDir).toBeUndefined()
+    expect(roots.includeReasonixHistory).toBe(false)
+    expect(reasonixRoots).not.toHaveBeenCalled()
   })
 })

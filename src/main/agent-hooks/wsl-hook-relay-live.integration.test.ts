@@ -8,6 +8,7 @@
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -60,7 +61,7 @@ describe.skipIf(process.platform === 'win32')(
     })
 
     it('delivers a Claude hook POST from the live relay into ingestRemote and installs guest hooks', async () => {
-      fakeHome = mkdtempSync(join('/tmp', 'wsl-live-home-'))
+      fakeHome = mkdtempSync(join(tmpdir(), 'wsl-live-home-'))
       const preferredPort = await pickFreePort()
       const version = readFileSync(join(BUNDLE_DIR, '.version'), 'utf8').trim()
 

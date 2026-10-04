@@ -55,6 +55,7 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
       }
       // Why: no local filesystem in the browser, so every history scan runs on and is stamped as the paired runtime host.
       return callRuntimeResult<AiVaultListResult>('aiVault.listSessions', {
+        includeReasonixHistory: args?.includeReasonixHistory !== false,
         includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions,
         limit: args?.limit,
         force: args?.force,

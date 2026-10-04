@@ -31,6 +31,7 @@ export async function installWslGuestHooks(options: {
     options
   let agents
   let claudeVersion: string | null = null
+  let reasonixConfigHomeDir: string | undefined
   try {
     const detected = readManagedHookDetectionResult(
       await mux.request('preflight.detectAgents', {
@@ -39,6 +40,7 @@ export async function installWslGuestHooks(options: {
     )
     agents = detected.agents
     claudeVersion = detected.claudeVersion
+    reasonixConfigHomeDir = detected.reasonixConfigHome
   } catch (error) {
     warn(
       `[agent-hooks] WSL agent detection for '${distro}' failed: ${
@@ -69,6 +71,7 @@ export async function installWslGuestHooks(options: {
   const remoteAgents = agents.filter((agent) => agent !== 'codex')
   const results = await installHooks(createWslHookSftpAdapter(mux), guestHome, {
     agents: remoteAgents,
+    ...(reasonixConfigHomeDir ? { reasonixConfigHomeDir } : {}),
     ...(claudeVersion ? { claudeVersion } : {})
   })
   const failed = results.filter((r) => r.state === 'error').length

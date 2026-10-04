@@ -1,3 +1,4 @@
+import { resolveReasonixExecutionHostConfig } from '../reasonix/execution-host-config'
 import { execFile } from 'node:child_process'
 import { basename } from 'node:path'
 import { homedir, userInfo } from 'node:os'
@@ -87,6 +88,9 @@ export async function installManagedHooks(options?: {
   }
   const home = homedir()
   const grokHomeDir = await resolveRelayGrokHome(home, options?.signal)
+  const reasonixConfigHomeDir = agents.includes('reasonix')
+    ? await resolveReasonixExecutionHostConfig(options?.signal)
+    : undefined
   options?.signal?.throwIfAborted()
   const hostIdentity = scopeManagedHookHostIdentity(
     await readManagedHookHostIdentity(),
@@ -101,6 +105,7 @@ export async function installManagedHooks(options?: {
         home,
         {
           grokHomeDir,
+          ...(reasonixConfigHomeDir ? { reasonixConfigHomeDir } : {}),
           signal: options?.signal,
           agents,
           ...(options?.claudeVersion ? { claudeVersion: options.claudeVersion } : {})

@@ -4,6 +4,7 @@ import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD
 } from '../../shared/agent-hook-relay'
 import { getDefaultSettings } from '../../shared/constants'
+import { AGENT_HOOK_REASONIX_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import type { Store } from '../persistence'
 import { SshRelaySession } from './ssh-relay-session'
 import type { SshConnection } from './ssh-connection'
@@ -161,6 +162,48 @@ describe('SshRelaySession managed hooks', () => {
       })
     )
   })
+
+  it.each([
+    {
+      name: 'an old host without hook capability',
+      detection: { agents: ['codex', 'reasonix'], reasonixConfigHome: '/host/reasonix' },
+      agents: ['codex']
+    },
+    {
+      name: 'an advertised host without an owned root',
+      detection: {
+        agents: ['codex', 'reasonix'],
+        capabilities: [AGENT_HOOK_REASONIX_RUNTIME_CAPABILITY]
+      },
+      agents: ['codex']
+    },
+    {
+      name: 'a host with Reasonix hook capability and an owned root',
+      detection: {
+        agents: ['codex', 'reasonix'],
+        capabilities: [AGENT_HOOK_REASONIX_RUNTIME_CAPABILITY],
+        reasonixConfigHome: '/host/reasonix'
+      },
+      agents: ['codex', 'reasonix']
+    }
+  ])('keeps installer ownership on $name', async ({ detection, agents }) => {
+    muxRequestMock.mockImplementation(async (method: string) =>
+      method === 'preflight.detectAgents' ? detection : { ok: true }
+    )
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const session = new SshRelaySession('reasonix-host', getMainWindow, mockStore, mockPortForward)
+    try {
+      await session.establish(mockConn)
+      await vi.waitFor(() =>
+        expect(muxRequestMock).toHaveBeenCalledWith(AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD, {
+          agents
+        })
+      )
+    } finally {
+      session.dispose()
+    }
+  })
+
   it('refreshes OpenCode sources on settings changes and releases its subscription', async () => {
     muxRequestMock.mockResolvedValue({ agents: [] })
     const { mockStore, mockConn, mockPortForward, getMainWindow } = createMockDeps()

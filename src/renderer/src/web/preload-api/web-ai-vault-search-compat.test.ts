@@ -22,6 +22,8 @@ describe('web session search preload compatibility', () => {
     expect(callRuntimeResult).toHaveBeenCalledExactlyOnceWith('aiVault.searchSessions', {
       query: 'needle',
       limit: 20,
+      includeDshHistory: true,
+      includeReasonixHistory: true,
       supportedAgents: [...AI_VAULT_AGENTS],
       supportsQoderHistory: true,
       supportsJcodeHistory: true

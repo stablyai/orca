@@ -1,0 +1,40 @@
+{
+  "revision": "6dbabcbf7135c56ff5186b0cd36f5cc2725f47b4",
+  "version": "1.39.7",
+  "scrub": "Only nonce private workspace path replaced with /workspace; original payload bytes and SHA256 in durable worker evidence",
+  "events": [
+    {
+      "event": "SessionStart",
+      "sessionId": "985b66b859ffae5cd8d17ef63ec3d33c",
+      "cwd": "/workspace",
+      "source": "startup"
+    },
+    {
+      "event": "UserPromptSubmit",
+      "sessionId": "985b66b859ffae5cd8d17ef63ec3d33c",
+      "cwd": "/workspace",
+      "prompt": "Record this harmless observer prompt. Do not run tools.",
+      "turn": 1
+    },
+    {
+      "event": "StopFailure",
+      "sessionId": "985b66b859ffae5cd8d17ef63ec3d33c",
+      "cwd": "/workspace",
+      "turn": 1,
+      "error": "authentication failed for provider \"loopback \u00b7 Chat Completions\" (HTTP 401): RX_LOOPBACK_KEY is invalid or expired \u2014 update it (in .env or your environment) and retry, or run `reasonix setup`"
+    },
+    {
+      "event": "Stop",
+      "sessionId": "985b66b859ffae5cd8d17ef63ec3d33c",
+      "cwd": "/workspace",
+      "turn": 1,
+      "error": "authentication failed for provider \"loopback \u00b7 Chat Completions\" (HTTP 401): RX_LOOPBACK_KEY is invalid or expired \u2014 update it (in .env or your environment) and retry, or run `reasonix setup`"
+    },
+    {
+      "event": "SessionEnd",
+      "sessionId": "985b66b859ffae5cd8d17ef63ec3d33c",
+      "cwd": "/workspace",
+      "reason": "other"
+    }
+  ]
+}

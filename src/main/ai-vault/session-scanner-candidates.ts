@@ -31,7 +31,10 @@ export async function sessionCandidatesFromDiscoveries(
           antigravityHistoryPath:
             discovery.agent === 'antigravity'
               ? antigravityHistoryPathForBrainDir(discovery.rootDir)
-              : undefined
+              : undefined,
+          ...(discovery.agent === 'reasonix'
+            ? { reasonixWorkspaceRoots: options.reasonixWorkspaceRoots }
+            : {})
         }))
       )
       .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs),

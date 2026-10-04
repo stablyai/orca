@@ -89,6 +89,8 @@ describe.each(['qoder', 'jcode'] as const)('%s search negotiation', (agent) => {
         query: 'q',
         limit: 20,
         filters: { agents: [agent] },
+        includeDshHistory: true,
+        includeReasonixHistory: true,
         supportedAgents: [...AI_VAULT_AGENTS],
         supportsQoderHistory: true,
         supportsJcodeHistory: true
@@ -112,6 +114,8 @@ describe.each(['qoder', 'jcode'] as const)('%s search negotiation', (agent) => {
       query: 'q',
       limit: 20,
       filters: { agents: ['codex'] },
+      includeDshHistory: true,
+      includeReasonixHistory: true,
       supportedAgents: [...AI_VAULT_AGENTS],
       supportsQoderHistory: true,
       supportsJcodeHistory: true
@@ -128,6 +132,8 @@ describe.each(['qoder', 'jcode'] as const)('%s search negotiation', (agent) => {
       query: 'q',
       limit: 20,
       filters: { agents: [agent] },
+      includeDshHistory: true,
+      includeReasonixHistory: true,
       supportedAgents: [...AI_VAULT_AGENTS],
       supportsQoderHistory: true,
       supportsJcodeHistory: true
@@ -186,6 +192,8 @@ describe.each(['qoder', 'jcode'] as const)('%s search negotiation', (agent) => {
         query: 'q',
         limit: 20,
         filters: { agents: ['jcode'] },
+        includeDshHistory: true,
+        includeReasonixHistory: true,
         supportedAgents: [...AI_VAULT_AGENTS],
         supportsQoderHistory: true,
         supportsJcodeHistory: true
@@ -207,5 +215,65 @@ describe.each(['qoder', 'jcode'] as const)('%s search negotiation', (agent) => {
       })
     ).toEqual({ kind: 'unavailable', reason: 'unsupported-agent' })
     expect(call).toHaveBeenCalledExactlyOnceWith('aiVault.searchStatus', {})
+  })
+})
+
+describe('independent negotiated history opt-ins', () => {
+  it.each([
+    { dshHistory: false, reasonixHistory: false, supportsQoderHistory: false, agents: ['codex'] },
+    {
+      dshHistory: true,
+      reasonixHistory: false,
+      supportsQoderHistory: false,
+      agents: ['dsh', 'codex']
+    },
+    {
+      dshHistory: false,
+      reasonixHistory: true,
+      supportsQoderHistory: false,
+      agents: ['reasonix', 'codex']
+    },
+    {
+      dshHistory: false,
+      reasonixHistory: false,
+      supportsQoderHistory: true,
+      agents: ['qoder', 'codex']
+    },
+    {
+      dshHistory: true,
+      reasonixHistory: true,
+      supportsQoderHistory: true,
+      agents: ['reasonix', 'dsh', 'qoder', 'codex']
+    }
+  ])('negotiates independent history capabilities in one probe: $agents', async (capabilities) => {
+    for (const transport of ['runtime', 'relay'] as const) {
+      const { agents, ...advertised } = capabilities
+      const call = vi.fn(async (method: string) =>
+        method === 'aiVault.searchStatus'
+          ? { ...unavailableSessionSearchStatus(), ...advertised }
+          : searchResults()
+      )
+      await createSessionSearchClient(call, transport).searchSessions({
+        query: 'needle',
+        limit: 1,
+        cursor: 'next-page',
+        filters: { agents: ['reasonix', 'dsh', 'qoder', 'codex'], scopePaths: ['/host/folder'] }
+      })
+      expect(call.mock.calls.map(([method]) => method)).toEqual([
+        'aiVault.searchStatus',
+        'aiVault.searchSessions'
+      ])
+      expect(call).toHaveBeenLastCalledWith('aiVault.searchSessions', {
+        query: 'needle',
+        limit: 1,
+        cursor: 'next-page',
+        filters: { agents, scopePaths: ['/host/folder'] },
+        includeDshHistory: true,
+        includeReasonixHistory: true,
+        supportedAgents: [...AI_VAULT_AGENTS],
+        supportsQoderHistory: true,
+        supportsJcodeHistory: true
+      })
+    }
   })
 })

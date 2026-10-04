@@ -1,4 +1,9 @@
-import type { SleepingAgentLaunchConfig } from './agent-session-resume'
+export type SleepingAgentLaunchConfig = {
+  agentCommand?: string
+  agentArgs: string
+  agentEnv: Record<string, string>
+  ompResumeFilePath?: string
+}
 
 export function buildSleepingAgentLaunchConfig(args: {
   agentCommand?: string | null

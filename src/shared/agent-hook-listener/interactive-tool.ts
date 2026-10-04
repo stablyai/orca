@@ -1,4 +1,5 @@
 import { isAskUserQuestionTool } from '../agent-question-answered-intent'
+import type { AgentType } from '../agent-status-types'
 import type { ToolSnapshot } from './listener-event'
 import { parseAgentHookJson } from './request-body'
 import { readString, toolUpdate } from './tool-input-preview'
@@ -39,14 +40,15 @@ export function summarizeApprovalInput(toolInput: unknown): string {
 export function deriveInteractivePrompt(
   toolName: string | undefined,
   toolInput: unknown,
-  eventName?: unknown
+  eventName?: unknown,
+  agentType?: AgentType
 ): string | undefined {
   // Why: providers vary casing; any post-tool event means the question is no longer pending — don't recreate its answered card.
   const normalizedEventName = normalizeHookEventName(eventName)
   const isPostToolEvent =
     normalizedEventName === 'post_tool_use' || normalizedEventName === 'post_tool_use_failure'
   if (
-    isAskUserQuestionTool(toolName) &&
+    isAskUserQuestionTool(toolName, agentType) &&
     !isPostToolEvent &&
     toolInput !== undefined &&
     toolInput !== null

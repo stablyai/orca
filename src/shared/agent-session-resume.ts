@@ -1,7 +1,10 @@
+import { isReasonixStorageSessionId } from './reasonix-session-paths'
 import type { AgentHookSource } from './agent-hook-relay'
 import type { AgentStatusState } from './agent-status-types'
 import type { AgentMainAgentStatus } from './main-agent-status'
 import type { TuiAgent } from './tui-agent'
+import type { SleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
+export type { SleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
 
 export const RESUMABLE_TUI_AGENTS = [
   'claude',
@@ -27,6 +30,7 @@ export const RESUMABLE_TUI_AGENTS = [
   'muse',
   'zcode',
   'dsh',
+  'reasonix',
   'jcode'
 ] as const satisfies readonly TuiAgent[]
 
@@ -44,13 +48,6 @@ export type AgentProviderSessionMetadata = {
    *  `id` alone fails. Claude/Codex still resume by id; Pi uses its reported
    *  `session_file` as the authoritative `--session` resume locator. */
   transcriptPath?: string
-}
-
-export type SleepingAgentLaunchConfig = {
-  agentCommand?: string
-  agentArgs: string
-  agentEnv: Record<string, string>
-  ompResumeFilePath?: string
 }
 
 export type SleepingAgentSessionRecord = {
@@ -197,6 +194,10 @@ export function extractAgentProviderSession(
   payload: Record<string, unknown>
 ): AgentProviderSessionMetadata | null {
   switch (source) {
+    case 'reasonix': {
+      const id = readSessionId(payload, ['sessionId'])
+      return id && isReasonixStorageSessionId(id) ? { key: 'session_id', id } : null
+    }
     // Native-chat agents: also capture the hook's authoritative transcript_path,
     // since recent Claude Code names the transcript file with a UUID that differs
     // from the hook session_id (so the id-based glob no longer finds it).

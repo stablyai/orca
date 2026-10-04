@@ -62,6 +62,7 @@ const AGENT_HOOK_SOURCES = [
   'muse',
   'zcode',
   'dsh',
+  'reasonix',
   'jcode'
 ] as const
 

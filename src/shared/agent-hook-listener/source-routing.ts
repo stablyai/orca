@@ -29,6 +29,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/muse': 'muse',
   '/hook/zcode': 'zcode',
   '/hook/dsh': 'dsh',
+  '/hook/reasonix': 'reasonix',
   '/hook/jcode': 'jcode'
 })
 

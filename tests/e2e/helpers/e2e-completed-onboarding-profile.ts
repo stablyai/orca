@@ -1,3 +1,4 @@
+import type { GlobalSettings } from '../../../src/shared/global-settings-types'
 import {
   ONBOARDING_FINAL_STEP,
   ONBOARDING_FLOW_VERSION
@@ -14,9 +15,10 @@ const SEEN_FIRST_RUN_CONTEXTUAL_TOUR_IDS = [
 ] as const
 const SEEN_FIRST_RUN_FEATURE_INTERACTION_TIMESTAMP = Date.parse('2026-01-01T00:00:00.000Z')
 
-export function getE2ECompletedOnboardingProfile() {
+export function getE2ECompletedOnboardingProfile(settings: Partial<GlobalSettings> = {}) {
   return {
     settings: {
+      ...settings,
       telemetry: {
         optedIn: true,
         installId: '00000000-0000-4000-8000-000000000000',

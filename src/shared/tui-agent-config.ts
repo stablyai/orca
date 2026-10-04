@@ -301,6 +301,13 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Muse 1.3 treats subcommand-shaped prompts as commands even after `--`.
     promptInjectionMode: 'stdin-after-start'
   },
+  reasonix: {
+    detectCmd: 'reasonix',
+    // Why: -p/run are one-shot; the interactive CLI ignores positional task text.
+    promptInjectionMode: 'stdin-after-start',
+    // Why: captured connection setup hides the cursor; the ready composer shows it.
+    draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
+  },
   dsh: {
     detectCmd: 'dsh-tui',
     detectCmdAliases: ['dst'],

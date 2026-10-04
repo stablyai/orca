@@ -142,6 +142,7 @@ const ICONABLE_AGENT_TYPES: Record<TerminalAgent, true> = {
   trae: true,
   muse: true,
   zcode: true,
+  reasonix: true,
   dsh: true,
   dsb: true,
   jcode: true

@@ -2,6 +2,7 @@ import { readAgentProcessPresence } from '../../../shared/agent-process-presence
 import { createHash } from 'node:crypto'
 
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
+import { normalizeReasonixPromptId } from '../../../shared/reasonix-hook-turn'
 import {
   normalizeAgentStatusPayload,
   type AgentMainAgentStatus,
@@ -145,7 +146,9 @@ export function sanitizeHydratedEntry(
       ? normalizeClaudePromptId(record.providerPromptId)
       : source === 'grok'
         ? normalizeGrokPromptId(record.providerPromptId)
-        : undefined
+        : source === 'reasonix'
+          ? normalizeReasonixPromptId(record.providerPromptId, providerSession?.id)
+          : undefined
   const compactTrigger =
     source === 'claude' && (record.compactTrigger === 'manual' || record.compactTrigger === 'auto')
       ? record.compactTrigger

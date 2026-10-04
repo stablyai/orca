@@ -25,6 +25,7 @@ export const AGENT_HOOK_TARGETS = [
   'muse',
   'zcode',
   'dsh',
+  'reasonix',
   'jcode'
 ] as const
 export type AgentHookTarget = (typeof AGENT_HOOK_TARGETS)[number]

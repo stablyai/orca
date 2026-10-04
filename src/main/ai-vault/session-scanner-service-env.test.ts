@@ -164,3 +164,12 @@ it('preserves execution-host OpenCode roots in the relay service', () => {
     OPENCODE_DB: 'opencode-team.db'
   })
 })
+
+it('passes only the execution host DSH home to both scanner services', () => {
+  const env = { DSH_HOME: '/host/custom-dsh', DEEPSEEK_API_KEY: 'test-only-key' }
+  expect(buildRelayAiVaultServiceEnv(env, 'linux')).toEqual({ DSH_HOME: '/host/custom-dsh' })
+  expect(buildAiVaultServiceEnv(env, 'linux')).toEqual({
+    DSH_HOME: '/host/custom-dsh',
+    ELECTRON_RUN_AS_NODE: '1'
+  })
+})

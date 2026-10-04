@@ -5,6 +5,7 @@
 // Split out of agent-process-recognition.ts so the recognizer keeps only its logic and a
 // new agent's install path is a data edit, as in agent-node-entrypoint-identities.ts.
 export const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
+  reasonix: ['node_modules/reasonix/'],
   codex: ['node_modules/@openai/codex/'],
   codebuddy: ['node_modules/@tencent-ai/codebuddy-code/'],
   gemini: ['node_modules/@google/gemini-cli/'],

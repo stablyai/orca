@@ -1,4 +1,5 @@
 import { open, type FileHandle } from 'node:fs/promises'
+import { openRegularFileReadHandle } from '../../shared/regular-file-open'
 import {
   invalidTranscriptHandleError,
   type WslTranscriptFsReusableProcessCall
@@ -59,14 +60,15 @@ export function runWslTranscriptFsProcess<T>(
 export function openWslTranscriptFsProcess(
   path: string,
   signal: AbortSignal,
-  laneKey: string
+  laneKey: string,
+  regularFile = false
 ): Promise<WslTranscriptFsProcessHandle | FileHandle> {
   if (inVitestWorker()) {
     // A real FileHandle: suites drive reads and closes through the plain
     // handle branch, mirroring non-UNC ownership.
-    return open(path, 'r')
+    return regularFile ? openRegularFileReadHandle(path, undefined, signal) : open(path, 'r')
   }
-  return getLaneClient(laneKey).open(path, signal)
+  return getLaneClient(laneKey).open(path, signal, regularFile)
 }
 
 export function readWslTranscriptFsProcess(

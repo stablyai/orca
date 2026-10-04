@@ -37,6 +37,7 @@ export type SessionSearchFileRow = {
   identity: SessionSearchFileIdentity
   mtimeMs: number
   sizeBytes: number | null
+  metadataKey?: string | null
   state: SessionSearchFileState
   failCount: number
   failedMtimeMs: number | null
@@ -199,6 +200,21 @@ export class SessionSearchStore {
     this.setFileState(candidate.file.path, 'current')
   }
 
+  invalidateSessionResumeMetadata(path: string): void {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db
+        .prepare(`UPDATE sessions SET cwd = NULL, cwd_key = NULL, resume_command = ''
+        WHERE id = (SELECT session_row_id FROM files WHERE path = ?)`)
+        .run(path)
+      this.db.prepare('UPDATE files SET metadata_key = NULL WHERE path = ?').run(path)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   reportWriteFailure(error: unknown): void {
     this.onError(error)
   }
@@ -212,22 +228,29 @@ export class SessionSearchStore {
    * enough.
    */
   files(): SessionSearchFileRow[] {
-    return (
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The files schema and SELECT aliases define this row; REAL casts return numeric IDs or null.
-      (
-        this.db
-          .prepare(
-            // Numeric stat IDs may exceed SQLite's safe INTEGER-to-number read range.
-            `SELECT path, CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
-                  mtime_ms AS mtimeMs, size_bytes AS sizeBytes,
+    const rows = this.db
+      .prepare(
+        // Numeric stat IDs may exceed SQLite's safe INTEGER-to-number read range.
+        `SELECT path, CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
+                  mtime_ms AS mtimeMs, size_bytes AS sizeBytes, metadata_key AS metadataKey,
                   state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs
            FROM files`
-          )
-          .all() as (Omit<SessionSearchFileRow, 'identity'> & {
-          dev: number | null
-          ino: number | null
-        })[]
-      ).map((row) => ({
+      )
+      .all()
+    return rows.map((value) => {
+      const row = asRecord(value)
+      if (
+        !row ||
+        typeof row.path !== 'string' ||
+        typeof row.mtimeMs !== 'number' ||
+        (row.sizeBytes !== null && typeof row.sizeBytes !== 'number') ||
+        (row.state !== 'current' && row.state !== 'due' && row.state !== 'failed') ||
+        typeof row.failCount !== 'number' ||
+        (row.failedMtimeMs !== null && typeof row.failedMtimeMs !== 'number')
+      ) {
+        throw new Error('Invalid session search file row')
+      }
+      return {
         path: row.path,
         identity:
           typeof row.dev === 'number' && typeof row.ino === 'number'
@@ -235,11 +258,12 @@ export class SessionSearchStore {
             : null,
         mtimeMs: row.mtimeMs,
         sizeBytes: row.sizeBytes,
+        ...(typeof row.metadataKey === 'string' ? { metadataKey: row.metadataKey } : {}),
         state: row.state,
         failCount: row.failCount,
         failedMtimeMs: row.failedMtimeMs
-      }))
-    )
+      }
+    })
   }
 
   /**

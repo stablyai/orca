@@ -1,3 +1,5 @@
+import { AGENT_HOOK_REASONIX_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { isReasonixRemoteConfigHome } from '../../shared/reasonix-config-roots'
 import type { AgentHookTarget } from '../../shared/agent-hook-types'
 import {
   extractExecutableToken,
@@ -49,11 +51,22 @@ export function detectedManagedHookAgents(values: unknown): AgentHookTarget[] {
 export function readManagedHookDetectionResult(value: unknown): {
   agents: AgentHookTarget[]
   claudeVersion: string | null
+  reasonixConfigHome?: string
 } {
   if (value === null || typeof value !== 'object') {
     return { agents: [], claudeVersion: null }
   }
-  const agents = detectedManagedHookAgents('agents' in value ? value.agents : null)
+  const capabilities = 'capabilities' in value ? value.capabilities : null
+  const root = 'reasonixConfigHome' in value ? value.reasonixConfigHome : null
+  const reasonixConfigHome =
+    Array.isArray(capabilities) &&
+    capabilities.includes(AGENT_HOOK_REASONIX_RUNTIME_CAPABILITY) &&
+    isReasonixRemoteConfigHome(root)
+      ? root
+      : undefined
+  const agents = detectedManagedHookAgents('agents' in value ? value.agents : null).filter(
+    (agent) => agent !== 'reasonix' || reasonixConfigHome !== undefined
+  )
   const versions = 'versions' in value ? value.versions : null
   const rawClaudeVersion =
     versions !== null && typeof versions === 'object' && 'claude' in versions
@@ -61,6 +74,7 @@ export function readManagedHookDetectionResult(value: unknown): {
       : null
   return {
     agents,
+    ...(reasonixConfigHome ? { reasonixConfigHome } : {}),
     claudeVersion: parseClaudeCliVersion(
       typeof rawClaudeVersion === 'string' ? rawClaudeVersion : null
     )

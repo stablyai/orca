@@ -1,3 +1,4 @@
+import { dshHomeFromSessionPath } from '../../../shared/dsh-session-paths'
 import {
   assertAntigravityReferenceTarget,
   buildAntigravityReferenceStartup
@@ -216,6 +217,8 @@ function buildAiVaultResumeForWorktree(
               })
             : buildAiVaultResumeShellCommand({
                 resumeCommand: startupPlan.launchCommand,
+                dshHome:
+                  args.session.agent === 'dsh' ? dshHomeFromSessionPath(resumeFilePath) : null,
                 cwd,
                 platform,
                 codexHome,
@@ -223,6 +226,9 @@ function buildAiVaultResumeForWorktree(
                 clearEnvNames
               }),
         ...(startupPlan.env ? { env: startupPlan.env } : {}),
+        ...(args.session.agent === 'dsh' && dshHomeFromSessionPath(resumeFilePath)
+          ? { env: { ...startupPlan.env, DSH_HOME: dshHomeFromSessionPath(resumeFilePath) ?? '' } }
+          : {}),
         ...realHomeCodexResumeEnvDeletion(args.session),
         ...startupCwd,
         launchConfig: startupPlan.launchConfig,
@@ -273,10 +279,7 @@ function resolveAiVaultResumeShell(args: AiVaultResumeWorktreeArgs): AgentStartu
 export function getAiVaultAgentProviderSession(
   session: Pick<AiVaultSession, 'agent' | 'sessionId'> & { filePath?: string }
 ): AgentProviderSessionMetadata | null {
-  if (!isResumableTuiAgent(session.agent)) {
-    return null
-  }
-  if (isAntigravityReferenceSession(session)) {
+  if (!isResumableTuiAgent(session.agent) || isAntigravityReferenceSession(session)) {
     return null
   }
   if (session.agent === 'antigravity' || session.agent === 'cursor') {

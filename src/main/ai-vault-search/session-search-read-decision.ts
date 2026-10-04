@@ -53,6 +53,13 @@ export function sessionSearchReadDecision(args: {
     // from wherever it likes: there is no span this index has to reach past.
     return 'any'
   }
+  // Reasonix ownership and schema live beside its unchanged frames.
+  if (
+    candidate.agent === 'reasonix' &&
+    (candidate.metadataKey === null || candidate.metadataKey !== row.metadataKey)
+  ) {
+    return 'whole'
+  }
   if (heldOut(row, file.mtimeMs)) {
     return 'skip'
   }

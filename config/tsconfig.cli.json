@@ -232,6 +232,10 @@
     "../src/main/dsh/dsh-home-patch.ts",
     "../src/main/dsh/hook-service.ts",
     "../src/main/dsh/hook-settings.ts",
+    "../src/main/reasonix/hook-service.ts",
+    "../src/main/reasonix/execution-host-config.ts",
+    "../src/main/reasonix/hook-settings.ts",
+    "../src/main/reasonix/hook-script.ts",
     "../src/main/muse/hook-config-json.ts",
     "../src/main/muse/hook-service.ts",
     "../src/main/muse/hook-settings.ts",
@@ -241,6 +245,7 @@
     "../src/main/openclaude/hook-service.ts",
     "../src/main/rolling-file-backup.ts",
     "../src/main/startup/hydrate-shell-path.ts",
+    "../src/main/startup/login-shell-environment.ts",
     "../src/main/startup/shell-path-probe.ts",
     "../src/main/startup/windows-shell-path-ownership.ts",
     // Why: serve-electron-flag-parity.test.ts checks the Electron-side serve argv rewrite against this

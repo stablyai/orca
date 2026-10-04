@@ -27,6 +27,7 @@ import { normalizeDevinEvent } from './providers/devin-events'
 import { normalizeKimiEvent } from './providers/kimi-events'
 import { normalizeMuseEvent } from './providers/muse-events'
 import { normalizeDshEvent } from './providers/dsh-events'
+import { normalizeReasonixEvent } from './providers/reasonix-events'
 import { normalizeZCodeEvent } from './providers/zcode-events'
 import { normalizeJcodeEvent } from './providers/jcode-events'
 
@@ -191,6 +192,17 @@ export function normalizeProviderEvent(input: {
       break
     case 'dsh':
       payload = normalizeDshEvent(state, eventName, promptText, paneKey, hookPayload)
+      break
+    case 'reasonix':
+      payload = normalizeReasonixEvent(state, eventName, promptText, paneKey, hookPayload)
+      if (
+        eventName === 'UserPromptSubmit' &&
+        typeof hookPayload.turn === 'number' &&
+        Number.isSafeInteger(hookPayload.turn) &&
+        hookPayload.turn > 0
+      ) {
+        promptInteractionKey = `reasonix-${String(hookPayload.sessionId)}-${String(hookPayload.turn)}`
+      }
       break
     case 'zcode':
       payload = normalizeZCodeEvent(state, eventName, promptText, paneKey, hookPayload)

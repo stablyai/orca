@@ -20,11 +20,14 @@ import type * as osModule from 'node:os'
 
 let isolatedUserDataDir = ''
 let previousUserDataPath: string | undefined
+let previousXdgConfigHome: string | undefined
 
 beforeEach(() => {
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+  previousXdgConfigHome = process.env.XDG_CONFIG_HOME
   isolatedUserDataDir = mkdtempSync(join(tmpdir(), 'orca-hook-refresh-user-data-'))
   process.env.ORCA_USER_DATA_PATH = isolatedUserDataDir
+  process.env.XDG_CONFIG_HOME = join(isolatedUserDataDir, 'config')
 })
 
 afterEach(() => {
@@ -32,6 +35,11 @@ afterEach(() => {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+  }
+  if (previousXdgConfigHome === undefined) {
+    delete process.env.XDG_CONFIG_HOME
+  } else {
+    process.env.XDG_CONFIG_HOME = previousXdgConfigHome
   }
   rmSync(isolatedUserDataDir, { recursive: true, force: true })
 })
@@ -42,6 +50,10 @@ const { homedirMock } = vi.hoisted(() => ({
 
 vi.mock('../codex/codex-hook-trust-grant', () => ({
   grantManagedCodexHookTrust: async () => ({ lane: 'fallback', reason: 'unsupported' })
+}))
+
+vi.mock('../reasonix/execution-host-config', () => ({
+  resolveReasonixExecutionHostConfig: async () => join(homedirMock(), '.reasonix')
 }))
 
 vi.mock('electron', () => ({
@@ -152,9 +164,9 @@ describe('managed hook script refresh', () => {
     delete process.env.KIMI_CODE_HOME
     delete process.env.XDG_CONFIG_HOME
     try {
-      await withPlatform('win32', () => {
+      await withPlatform('win32', async () => {
         for (const [, install] of MANAGED_AGENT_HOOK_INSTALLERS) {
-          install()
+          await install()
         }
       })
       const hooksDir = join(home, '.orca', 'agent-hooks')

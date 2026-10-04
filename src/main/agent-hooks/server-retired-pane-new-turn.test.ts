@@ -48,6 +48,7 @@ const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   muse: 'UserPromptSubmit',
   zcode: 'SessionStart',
   dsh: 'SessionStart',
+  reasonix: 'SessionStart',
   jcode: 'turn_start'
 }
 

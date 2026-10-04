@@ -1,4 +1,7 @@
-import type { RemoteSessionFilesystemProvider } from './remote-session-scanner-types'
+import type {
+  RemoteSessionFilesystemProvider,
+  RemoteTranscriptReadOptions
+} from './remote-session-scanner-types'
 
 // Why: discovery batches (8 sources) each stat in batches of 8, and parse
 // batches read whole transcripts — nested fan-out put ~64 filesystem round
@@ -23,7 +26,7 @@ export function limitRemoteScanFilesystemConcurrency(
           readTranscriptBytes: async function* (
             path: string,
             signal?: AbortSignal,
-            options?: { regularFileOnly: true; maxBytes: number }
+            options?: RemoteTranscriptReadOptions
           ) {
             let enter!: () => void
             let release!: () => void

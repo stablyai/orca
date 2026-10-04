@@ -1,7 +1,8 @@
+import { readSshFileWithHistoryDecoding } from './ssh-filesystem-decoded-history'
 import { readSshPathExistenceBatch } from './ssh-filesystem-path-existence'
 import type { PathExistenceResult } from '../../shared/path-existence-batch'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import { isMethodNotFoundError, readFileViaStream } from '../ssh/ssh-filesystem-stream-reader'
+import { isMethodNotFoundError } from '../ssh/ssh-filesystem-stream-reader'
 import { uploadBuffer } from '../ssh/sftp-upload'
 import { requestGitStreamable } from '../ssh/ssh-git-response-stream-reader'
 import { lstatViaSftp } from './ssh-filesystem-provider-sftp'
@@ -63,9 +64,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     this.mux = mux
 
     if (createSftp) {
-      // Why: system SSH has raw single-file transfer but no ssh2 SFTP channel;
-      // omitting this method makes folder capability truthful at the provider boundary.
-      // windowsRemotePaths is provider-owned (from host platform), not a caller option.
+      // Folder transfer requires SFTP and the owning host's path flavor.
       const windowsRemotePaths = hostPlatform ? isWindowsRemoteHost(hostPlatform) : undefined
       this.downloadFolder = (sourcePath, destinationPath, options) =>
         downloadFolderViaSftp(createSftp, sourcePath, destinationPath, {
@@ -94,23 +93,20 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     this.watchListeners.clear()
   }
 
-  getConnectionId(): string {
-    return this.connectionId
-  }
+  getConnectionId = (): string => this.connectionId
 
   async readDir(dirPath: string): Promise<DirEntry[]> {
     return (await this.mux.request('fs.readDir', { dirPath })) as DirEntry[]
   }
 
   async readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult> {
-    // Why: streaming is the default path so previews above the legacy single-
-    // frame budget (~12 MB after base64) don't hit MAX_MESSAGE_SIZE. Old relays
-    // that don't implement fs.readFileStream surface as MethodNotFound; we fall
-    // back to the legacy single-shot fs.readFile (which retains the old 10 MB
-    // cap on those hosts).
+    // Old relays retain the legacy 10 MB read cap when streaming is unavailable.
     try {
-      return await readFileViaStream(this.mux, filePath, limits)
+      return await readSshFileWithHistoryDecoding(this.mux, filePath, limits)
     } catch (err) {
+      if (limits?.decodeReasonixHistory && isMethodNotFoundError(err)) {
+        throw new Error('Decoded Reasonix history requires a newer transcript-owning Orca host')
+      }
       if (isMethodNotFoundError(err)) {
         if (!this.loggedStreamFallback) {
           this.loggedStreamFallback = true

@@ -68,6 +68,7 @@ function runtimeScanArgs(
   listArgs: AiVaultListArgs | undefined
 ): AiVaultListArgs {
   const scanArgs: AiVaultListArgs = { executionHostScope: hostInfo.executionHostId }
+  scanArgs.includeReasonixHistory = listArgs?.includeReasonixHistory !== false
   if (listArgs?.limit !== undefined) {
     scanArgs.limit = listArgs.limit
   }

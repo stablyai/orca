@@ -10,6 +10,7 @@ import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-t
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { prepareOpenCodeWslReaders } from './opencode-wsl-runtime-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { resolveReasonixExecutionHostRoots } from '../reasonix/execution-host-config'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
 import {
   aiVaultSessionDepthCovers,
@@ -29,6 +30,7 @@ const AI_VAULT_CACHE_TTL_MS = 60_000
 // drop managed-Codex sessions from remote/SSH results.
 export type AiVaultSessionSources = {
   getAdditionalCodexHomePaths?: () => readonly string[]
+  getReasonixWorkspaceRoots?: () => readonly string[] | Promise<readonly string[]>
 }
 
 type CachedAiVaultList = {
@@ -56,13 +58,24 @@ export function configureAiVaultSessionSources(next: AiVaultSessionSources): voi
  * or stop between scans. The search index reads the same function, so it walks
  * exactly what the session list walks.
  */
-export async function localAiVaultScanRoots(): Promise<
+export async function localAiVaultScanRoots(
+  signal?: AbortSignal,
+  includeReasonixHistory = true
+): Promise<
   Required<Pick<AiVaultScanOptions, 'additionalCodexSessionsDirs' | 'wslHomeDirs'>> &
-    Pick<AiVaultScanOptions, 'executionHostId' | 'wslOpenCodeReaders'>
+    Pick<
+      AiVaultScanOptions,
+      | 'executionHostId'
+      | 'wslOpenCodeReaders'
+      | 'includeReasonixHistory'
+      | 'reasonixProjectsDir'
+      | 'reasonixWorkspaceRoots'
+    >
 > {
-  const [additionalCodexHomes, wslHomeDirs] = await Promise.all([
+  const [additionalCodexHomes, wslHomeDirs, reasonixRoots] = await Promise.all([
     filterPathsToRunningWslDistrosAsync(configuredAdditionalCodexHomePaths()),
-    getAiVaultWslHomeDirs()
+    getAiVaultWslHomeDirs(),
+    includeReasonixHistory ? resolveReasonixExecutionHostRoots(signal) : null
   ])
   return {
     additionalCodexSessionsDirs: additionalCodexHomes.map((homePath) => join(homePath, 'sessions')),
@@ -70,7 +83,10 @@ export async function localAiVaultScanRoots(): Promise<
     wslOpenCodeReaders: await prepareOpenCodeWslReaders(wslHomeDirs),
     // Why: this scan is always host-local; callers addressing this host by a
     // runtime id get the result restamped at the RPC edge, never rescanned.
-    executionHostId: LOCAL_EXECUTION_HOST_ID
+    executionHostId: LOCAL_EXECUTION_HOST_ID,
+    includeReasonixHistory,
+    ...(reasonixRoots ? { reasonixProjectsDir: join(reasonixRoots.stateHome, 'projects') } : {}),
+    reasonixWorkspaceRoots: (await sources.getReasonixWorkspaceRoots?.()) ?? []
   }
 }
 
@@ -87,6 +103,7 @@ export async function listAiVaultSessions(
   // Scope paths change the result set, so they must be part of the cache key.
   const key = JSON.stringify({
     scopePaths: [...new Set(args?.scopePaths ?? [])].sort(),
+    includeReasonixHistory: args?.includeReasonixHistory !== false,
     includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions === true
   })
   const depth = requestedAiVaultSessionDepth(args)
@@ -120,7 +137,7 @@ export async function listAiVaultSessions(
           limit: args?.limit,
           unlimited: args?.unlimited,
           scopePaths: args?.scopePaths,
-          ...(await localAiVaultScanRoots())
+          ...(await localAiVaultScanRoots(scanSignal, args?.includeReasonixHistory !== false))
         },
         scanSignal
       )

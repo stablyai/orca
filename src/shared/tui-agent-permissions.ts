@@ -32,6 +32,8 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   hermes: '--yolo',
   copilot: '--yolo',
   grok: '--permission-mode bypassPermissions',
+  // Why: native --yolo is deprecated and migrates to workspace-write.
+  reasonix: '--permission-mode danger-full-access',
   devin: '--permission-mode bypass --respect-workspace-trust false',
   ante: '--yolo',
   trae: '--yolo',

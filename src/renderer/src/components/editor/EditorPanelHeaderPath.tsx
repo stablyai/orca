@@ -1,3 +1,4 @@
+import { canExportDecodedDshLog, exportDecodedDshLog } from './dsh-decoded-log-export'
 import { useEffect, useRef, useState } from 'react'
 import { Copy, ExternalLink, Eye, Pencil } from 'lucide-react'
 import {
@@ -178,6 +179,18 @@ export function EditorPanelHeaderPath({
             <Pencil className="w-3.5 h-3.5 mr-1.5" />
             {translate('auto.components.editor.EditorPanelHeader.84cdc0794b', 'Rename')}
           </DropdownMenuItem>
+          {canExportDecodedDshLog(activeFile) ? (
+            <DropdownMenuItem
+              onSelect={() => {
+                void exportDecodedDshLog(activeFile)
+              }}
+            >
+              {translate(
+                'auto.components.editor.EditorPanelHeader.exportDecodedDshLog',
+                'Export decoded DSH log…'
+              )}
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuSeparator />
           {!isVirtualEditorTab && (
             <>

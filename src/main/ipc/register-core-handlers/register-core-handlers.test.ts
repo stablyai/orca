@@ -641,8 +641,11 @@ describe('registerCoreHandlers', () => {
       'aiVault.listSessions',
       {
         limit: 10,
+        unlimited: undefined,
         force: undefined,
         scopePaths: ['/workspace'],
+        includeReasonixHistory: true,
+        includeAntigravityIdeSessions: undefined,
         executionHostId: 'runtime:env-123'
       },
       3000

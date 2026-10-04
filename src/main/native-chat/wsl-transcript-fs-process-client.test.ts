@@ -39,6 +39,23 @@ function fakeChild(process: FakeProcess): ChildProcess {
 }
 
 describe('WSL transcript filesystem process client', () => {
+  it('forwards the opt-in regular-file guard to the process that owns the descriptor', async () => {
+    const child = new FakeProcess()
+    const client = new WslTranscriptFsProcessClient(() => fakeChild(child))
+    const opening = client.open(
+      '\\\\wsl.localhost\\Ubuntu\\events.frames',
+      new AbortController().signal,
+      true
+    )
+    expect(child.sent[0]).toMatchObject({ operation: 'open', regularFile: true })
+    child.respond({ id: child.sent[0].id, ok: true, value: 1 })
+    const handle = await opening
+    const closing = client.close(handle)
+    child.respond({ id: child.sent[1].id, ok: true, value: true })
+    await closing
+    client.dispose()
+  })
+
   it('reuses a healthy process for sequential operations', async () => {
     const child = new FakeProcess()
     const factory = vi.fn(() => fakeChild(child))

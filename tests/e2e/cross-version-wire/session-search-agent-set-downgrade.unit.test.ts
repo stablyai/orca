@@ -184,7 +184,7 @@ test.each(['v1.4.211', LEGACY_REF])(
       expect(request).toMatchObject({
         filters: {
           agents: AI_VAULT_AGENTS.filter(
-            (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode'].includes(agent)
+            (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode', 'dsh', 'reasonix'].includes(agent)
           ),
           scopePaths: ['/execution-host/folder']
         }

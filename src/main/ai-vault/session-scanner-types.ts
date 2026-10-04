@@ -49,6 +49,10 @@ export type AiVaultScanOptions = {
   clineSessionsDir?: string
   kimiSessionsDir?: string
   museSessionsDir?: string
+  dshSessionsDir?: string
+  reasonixProjectsDir?: string
+  includeReasonixHistory?: boolean
+  reasonixWorkspaceRoots?: readonly string[]
   jcodeSessionsDir?: string
   limit?: number
   unlimited?: boolean
@@ -85,10 +89,12 @@ export type FileWithMtime = {
 }
 
 export type SessionFileCandidate = {
+  metadataKey?: string | null
   agent: AiVaultAgent
   file: FileWithMtime
   codexHome: string | null
   antigravityHistoryPath?: string
+  reasonixWorkspaceRoots?: readonly string[]
 }
 
 export type SessionFileDiscovery = {
@@ -103,6 +109,8 @@ export type SessionParseResult = {
 }
 
 export type ResumableParseFinalizeOptions = {
+  reasonixMetadataRead?: (key: string) => void
+  reasonixWorkspaceRoots?: readonly string[]
   executionHostId?: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
 }

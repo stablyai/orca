@@ -80,7 +80,10 @@ export function serializeWithAbsoluteCursor<TOpts>(
   opts?: TOpts,
   savedCursor?: SavedCursorRegister | null
 ): string {
-  const serialized = serializer.serialize(opts)
+  // The normal buffer's live pen must not add bold/dim to alternate-buffer cells.
+  const serialized = serializer
+    .serialize(opts)
+    .replace('\x1b[?1049h\x1b[H', '\x1b[?1049h\x1b[22m\x1b[H')
   // Why skip empty snapshots: several callers treat '' as "nothing to
   // restore" (e.g. shutdown layout capture drops empty buffers); a bare CUP
   // would turn every idle pane into a persisted snapshot.

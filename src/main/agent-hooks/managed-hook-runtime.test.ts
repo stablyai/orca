@@ -51,7 +51,7 @@ beforeEach(() => {
 })
 
 const tempHomes: string[] = []
-const tempRoot = process.platform === 'win32' ? tmpdir() : '/tmp'
+const tempRoot = tmpdir()
 const SHELL_NAME = 'login-shell'
 const SHELL_RUNS_NAME = 'login-shell-runs'
 

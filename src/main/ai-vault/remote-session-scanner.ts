@@ -55,6 +55,9 @@ const REMOTE_SCOPE_PARSE_CANDIDATE_LIMIT = 1000
 export async function scanRemoteAiVaultSessions(args: {
   provider: RemoteSessionFilesystemProvider
   executionHostId: ExecutionHostId
+  dshSessionsDir?: string
+  reasonixProjectsDir?: string
+  includeReasonixHistory?: boolean
   remoteHome: string
   hostPlatform: RemoteHostPlatform
   includeAntigravityIdeSessions?: boolean
@@ -86,7 +89,13 @@ export async function scanRemoteAiVaultSessions(args: {
           ...remoteSessionSources(
             args.remoteHome,
             args.hostPlatform,
-            args.includeAntigravityIdeSessions
+            args.includeAntigravityIdeSessions,
+            args.dshSessionsDir,
+            {
+              include: args.includeReasonixHistory === true,
+              projectsDir: args.reasonixProjectsDir,
+              workspaceRoots: args.scopePaths
+            }
           ),
           ...remoteOpenCodeSources(
             provider.openCode,

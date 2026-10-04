@@ -1,0 +1,9 @@
+{
+  "upstream": "https://github.com/esengine/DeepSeek-Reasonix",
+  "sourceCommit": "6dbabcbf7135c56ff5186b0cd36f5cc2725f47b4",
+  "version": "1.39.7",
+  "platform": "darwin-arm64",
+  "cols": 110,
+  "rows": 32,
+  "note": "composer and task-local mocked provider turn; actual binary with asserted isolated HOME; no external model request"
+}

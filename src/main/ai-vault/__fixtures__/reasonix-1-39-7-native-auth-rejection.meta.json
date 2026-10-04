@@ -1,0 +1,20 @@
+{
+  "version": "1.39.7",
+  "revision": "6dbabcbf7135c56ff5186b0cd36f5cc2725f47b4",
+  "sessionId": "985b66b859ffae5cd8d17ef63ec3d33c",
+  "capture": "fresh task private native CLI with localhost 401, no assistant or paid provider",
+  "files": [
+    {
+      "file": "reasonix-1-39-7-native-auth-rejection.frames",
+      "sha256": "3793d0af2d4ee67a09e8e9b90092bffd88f02794d946b62301d239a222353510"
+    },
+    {
+      "file": "reasonix-1-39-7-native-auth-rejection.manifest.json",
+      "sha256": "21b457d81a1cb0c018ba60558dd9ebd99e5084601a05d8e2df74a5ac6815e002"
+    },
+    {
+      "file": "reasonix-1-39-7-native-auth-rejection-initial.frames",
+      "sha256": "91bb07c9acb7eb4a3ca104398d6427ae565c78b35213f0c7a81fd97f6a17bff6"
+    }
+  ]
+}

@@ -36,7 +36,15 @@ export async function searchSessionService(
   // The choke point every entry point funnels through, so every host kind
   // resolves alike; the verdict goes to the service, which answers off and
   // not-ready first.
-  const { within, supportedAgents, supportsQoderHistory, supportsJcodeHistory, ...request } = parsed
+  const {
+    within,
+    supportedAgents,
+    supportsQoderHistory,
+    supportsJcodeHistory,
+    includeDshHistory,
+    includeReasonixHistory,
+    ...request
+  } = parsed
   // Older clients reject the whole page when a hit has an unknown agent tag.
   const requestedAgents = request.filters?.agents
   const agents = requestedAgents?.length ? requestedAgents : AI_VAULT_AGENTS
@@ -45,12 +53,13 @@ export async function searchSessionService(
     transport === 'ipc'
       ? { supportedAgents: [...AI_VAULT_AGENTS] }
       : {
-          // An explicit tag also proves the requesting parser understands that agent.
-          supportedAgents:
-            supportedAgents ?? (requestedAgents?.length ? requestedAgents : undefined),
+          supportedAgents,
+          dshHistory: includeDshHistory,
+          reasonixHistory: includeReasonixHistory,
           supportsQoderHistory,
           supportsJcodeHistory
-        }
+        },
+    requestedAgents
   )
   const compatibleRequest =
     compatibleAgents.length === 0 || compatibleAgents.length === agents.length
@@ -99,6 +108,8 @@ export async function sessionSearchServiceStatus(
   return redactStatusForTransport(
     AiVaultSearchStatusSchema.parse({
       ...(service ? await service.status() : unavailableSessionSearchStatus()),
+      dshHistory: true,
+      reasonixHistory: true,
       supportedAgents: [...AI_VAULT_AGENTS],
       supportsQoderHistory: true,
       supportsJcodeHistory: true

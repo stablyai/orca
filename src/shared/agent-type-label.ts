@@ -31,6 +31,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   kimi: 'Kimi',
   muse: 'Muse',
   zcode: 'ZCode',
+  reasonix: 'Reasonix',
   dsh: 'DeepSeek Harness',
   dsb: 'DeepSeek Build',
   jcode: 'Jcode'

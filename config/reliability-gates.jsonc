@@ -11,6 +11,72 @@
   },
   "gates": [
     {
+      "id": "agent-session.reasonix-content-read-lifetime",
+      "title": "Reasonix referenced history releases its transcript lease first",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session-history",
+      "layer": "unit",
+      "surfaces": ["Reasonix canonical v4 decoder", "execution-host filesystem limiter"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Actual pinned Darwin arm64 transcript plus synthetic referenced content and iterator ownership; no physical remote or Linux/Windows certification.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/23216"],
+      "invariant": "Validated complete commits alone affect visible history; the transcript iterator closes before referenced content acquires the execution-host filesystem limiter.",
+      "oracle": "Nested content callback asserts the source generator finally block ran; actual fixture, integrity, visible rewrite, cancellation and bounded content tests preserve native semantics.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/ai-vault/session-scanner-reasonix-batches.test.ts src/shared/reasonix-session-paths.test.ts"
+      ],
+      "testFiles": [
+        "src/main/ai-vault/session-scanner-reasonix-batches.test.ts",
+        "src/shared/reasonix-session-paths.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ai-vault/session-scanner-reasonix-batches.test.ts",
+          "assertions": ["closes the transcript source before requesting referenced content"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-02",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/ai-vault/session-scanner-reasonix-batches.test.ts src/shared/reasonix-session-paths.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.375,
+          "summary": "40 tests in two suites pass; nested source-close regression fails original and passes candidate."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Focused deterministic suites; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local red/green only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Original nested callback sees closed=false; candidate drains and closes transcript before replay."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "64 MiB source/decoded/ref budgets, 8 MiB frame/object, 32 MiB pending batch, 50,000 visible messages. Selected events remain within decoded budget; consumed batch slots cleared. Zero transcript leases at content callback; no polling, subprocess or new cache."
+      },
+      "knownGaps": [
+        "History discovery, resume, UI and wire integration pending.",
+        "No physical SSH/WSL/Windows/Linux nested-content run or heap/CPU measurement.",
+        "Managed hook status is not wired; this gate covers history decoding only."
+      ],
+      "promotionCriteria": [
+        "100 CI runs over 14 days without unexplained flakes plus physical provider/platform evidence."
+      ],
+      "demotionRule": "Investigate integrity, budget, cancellation or lease regressions without weakening assertions; remain experimental until soak."
+    },
+    {
       "id": "terminal-preview.connection-settings-ownership",
       "title": "Terminal preview connections survive unrelated settings updates",
       "maturity": "experimental",

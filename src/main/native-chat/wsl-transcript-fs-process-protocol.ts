@@ -3,7 +3,7 @@ export type WslTranscriptFsProcessCall =
   | { operation: 'stat' | 'lstat' | 'readdir'; path: string }
   // Kept as its own member so the reusable-call Exclude below can strip it:
   // Exclude compares whole union members, not individual operation literals.
-  | { operation: 'open'; path: string }
+  | { operation: 'open'; path: string; regularFile?: true }
   | { operation: 'readfile'; path: string; encoding: BufferEncoding }
   | { operation: 'read'; handleId: number; position: number; length: number }
   | { operation: 'close'; handleId: number }

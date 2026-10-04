@@ -1,4 +1,5 @@
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
+import { normalizeReasonixPromptId } from '../../../shared/reasonix-hook-turn'
 import {
   normalizeClaudePromptId,
   normalizeGrokPromptId
@@ -35,6 +36,7 @@ export function normalizeRemoteEnvelopeFields(envelope: {
   providerSession?: unknown
 }): RemoteEnvelopeFields {
   const source = isAgentHookSource(envelope.source) ? envelope.source : undefined
+  const providerSession = normalizeAgentProviderSession(envelope.providerSession) ?? undefined
   return {
     hookEventName:
       typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
@@ -46,7 +48,9 @@ export function normalizeRemoteEnvelopeFields(envelope: {
         ? normalizeClaudePromptId(envelope.providerPromptId)
         : source === 'grok'
           ? normalizeGrokPromptId(envelope.providerPromptId)
-          : undefined,
+          : source === 'reasonix'
+            ? normalizeReasonixPromptId(envelope.providerPromptId, providerSession?.id)
+            : undefined,
     grokPromptBoundary:
       source === 'grok' && envelope.grokPromptBoundary === true ? true : undefined,
     compactTrigger:
@@ -79,6 +83,6 @@ export function normalizeRemoteEnvelopeFields(envelope: {
       typeof envelope.toolAgentType === 'string' && envelope.toolAgentType.trim().length > 0
         ? envelope.toolAgentType.trim()
         : undefined,
-    providerSession: normalizeAgentProviderSession(envelope.providerSession) ?? undefined
+    providerSession
   }
 }

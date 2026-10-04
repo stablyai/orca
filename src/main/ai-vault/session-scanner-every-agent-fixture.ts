@@ -1,3 +1,5 @@
+import { readFile, mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import {
   isolatedScanRoots,
   writeJcodeSessionFixture,
@@ -14,7 +16,10 @@ import { writeOpenCodeSqliteDatabase } from './session-scanner-opencode-sqlite-f
 // would drift the moment an agent's layout changed.
 
 export type EveryAgentVault = {
-  roots: ReturnType<typeof isolatedScanRoots>
+  roots: ReturnType<typeof isolatedScanRoots> & {
+    includeReasonixHistory: true
+    reasonixWorkspaceRoots: readonly string[]
+  }
   /** Ids the caller asserts resume commands against. */
   antigravitySessionId: string
   /** OMP and Prime Agent resume by absolute transcript path, not by id. */
@@ -30,11 +35,39 @@ export type EveryAgentVault = {
  * @returns The scan roots for `root`, and the ids a caller asserts against.
  */
 export async function writeEveryAgentVault(root: string): Promise<EveryAgentVault> {
-  const roots = isolatedScanRoots(root)
+  const roots = {
+    ...isolatedScanRoots(root),
+    includeReasonixHistory: true as const,
+    reasonixWorkspaceRoots: ['/workspace']
+  }
   const antigravitySessionId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
   const { ompSessionFile, primeAgentSessionFile } = await writeLogAgentFixtures(roots)
   await writeDocumentAgentFixtures(root, roots, antigravitySessionId)
   await writeMuseScannerFixture(roots.museSessionsDir)
+  const dshDir = join(roots.dshSessionsDir, 'project', 'session-dsh-history-proof')
+  await mkdir(dshDir, { recursive: true })
+  await writeFile(
+    join(dshDir, 'session.v4.jsonl'),
+    await readFile(new URL('./__fixtures__/dsh-v4-auth-rejected.jsonl', import.meta.url))
+  )
+  const reasonixDir = join(
+    roots.reasonixProjectsDir,
+    '-workspace',
+    'sessions-v4',
+    '985b66b859ffae5cd8d17ef63ec3d33c'
+  )
+  await mkdir(reasonixDir, { recursive: true })
+  for (const [source, destination] of [
+    ['frames', 'events.frames'],
+    ['manifest.json', 'manifest.json']
+  ]) {
+    await writeFile(
+      join(reasonixDir, destination),
+      await readFile(
+        new URL(`./__fixtures__/reasonix-1-39-7-native-auth-rejection.${source}`, import.meta.url)
+      )
+    )
+  }
   await writeJcodeSessionFixture(roots)
   roots.opencodeDbPaths = [await writeOpenCode2SqliteFixture(root)]
   writeOpenCodeSqliteDatabase(roots.zcodeDbPath, [

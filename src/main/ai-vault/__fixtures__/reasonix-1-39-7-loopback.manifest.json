@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 4,
+  "codec": "reasonix.session.linear/v4",
+  "storageRevision": 3,
+  "contentRoot": "../.content-v1",
+  "sessionId": "c6ba053c5f6f35229354dbd95635c82d",
+  "createdAt": "2026-10-02T10:30:49.887303Z",
+  "writerGeneration": 1
+}

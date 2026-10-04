@@ -53,12 +53,21 @@ export class WslTranscriptFsProcessClient {
       : this.send<T>(acquired, request, signal, 'idle')
   }
 
-  async open(path: string, signal: AbortSignal): Promise<WslTranscriptFsProcessHandle> {
+  async open(
+    path: string,
+    signal: AbortSignal,
+    regularFile = false
+  ): Promise<WslTranscriptFsProcessHandle> {
     signal.throwIfAborted()
     const acquired = this.takeSlotOrThrow(signal)
     const slot = acquired instanceof Promise ? await acquired : acquired
     this.pool.claim(slot, signal)
-    const handleId = await this.send<number>(slot, { operation: 'open', path }, signal, 'pin')
+    const handleId = await this.send<number>(
+      slot,
+      { operation: 'open', path, ...(regularFile ? { regularFile: true as const } : {}) },
+      signal,
+      'pin'
+    )
     if (!this.pool.has(slot)) {
       throw wslTranscriptFsProcessFailureError('the process exited while opening a file')
     }

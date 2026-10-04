@@ -14,6 +14,10 @@ export async function discoverFiles(args: {
   limit: number
   agent: AiVaultAgent
   issues: AiVaultScanIssue[]
+  selectDirectoryEntries?: (
+    entries: Dirent[],
+    reportInvalid?: (message: string) => void
+  ) => Dirent[]
   extensions: string[]
   filePredicate?: (path: string) => boolean
   contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>
@@ -29,7 +33,8 @@ export async function discoverFiles(args: {
       {
         extensions: new Set(args.extensions),
         filePredicate: args.filePredicate,
-        directoryPredicate: args.directoryPredicate
+        directoryPredicate: args.directoryPredicate,
+        selectDirectoryEntries: args.selectDirectoryEntries
       },
       async (path) => {
         try {
@@ -115,6 +120,10 @@ function isMissingSidecarError(error: unknown): boolean {
 }
 
 export type SessionFileWalkOptions = {
+  selectDirectoryEntries?: (
+    entries: Dirent[],
+    reportInvalid?: (message: string) => void
+  ) => Dirent[]
   extensions: Set<string>
   filePredicate?: (path: string) => boolean
   // Return false to skip descending into a directory; depth 0 is a child of
@@ -163,7 +172,9 @@ export async function forEachSessionFile(
     return
   }
 
-  for (const entry of entries) {
+  for (const entry of options.selectDirectoryEntries?.(entries, (message) =>
+    recordSessionScanIssue(issues, { agent, path: dirPath, message })
+  ) ?? entries) {
     options.signal?.throwIfAborted()
     const fullPath = join(dirPath, entry.name)
     if (entry.isDirectory()) {

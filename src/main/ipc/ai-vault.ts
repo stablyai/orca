@@ -94,9 +94,11 @@ async function listAiVaultSessions(
         ? [...new Set(scopePaths)].sort()
         : scopePaths,
     executionHostScope,
+    includeReasonixHistory: args?.includeReasonixHistory !== false,
     includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions === true
   })
   const depth = requestedAiVaultSessionDepth(args)
+  // A coalesced scan aborts only after every caller cancels.
   // Why: every renderer request carries its own cancellation signal, so
   // coalescing has to survive them — the coordinator hands all same-key callers
   // one scan and only aborts it once every one of them has cancelled.
@@ -255,10 +257,7 @@ async function scanLocalAiVaultSessions(
 
 export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): void {
   handlerOptions = options
-  // Why: configure the SAME shared cache module the runtime RPC method uses so
-  // there is exactly one cache instance and neither caller drops codex-home or
-  // WSL injection. The runtime also configures these sources from its deps
-  // (serve-mode reachable); this desktop path supplies the same source.
+  // Desktop and serve mode configure the same host-owned session sources and cache.
   configureAiVaultSessionSources(options)
   ipcMain.handle('aiVault:listSessions', async (event, args?: AiVaultListArgs) => {
     const requestToken =

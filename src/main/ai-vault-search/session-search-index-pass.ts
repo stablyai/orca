@@ -1,3 +1,5 @@
+import { reasonixHistoryAccess } from '../ai-vault/session-scanner-reasonix-access'
+import { reasonixLocalHistoryReader } from '../ai-vault/session-scanner-reasonix-parser'
 import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
 import {
   createSessionParseStats,
@@ -53,6 +55,27 @@ export async function runSessionSearchIndexPass(
     throwIfAiVaultScanCancelled(options.signal)
     const path = candidate.file.path
     const row = options.rows.get(path)
+    if (candidate.agent === 'reasonix') {
+      try {
+        const { host, provider } = reasonixLocalHistoryReader(
+          path,
+          process.platform,
+          options.signal
+        )
+        const access = await reasonixHistoryAccess(
+          provider,
+          host,
+          path,
+          options.signal,
+          candidate.reasonixWorkspaceRoots
+        )
+        candidate.metadataKey = access.metadataKey
+      } catch {
+        throwIfAiVaultScanCancelled(options.signal)
+        candidate.metadataKey = null
+        store.invalidateSessionResumeMetadata(path)
+      }
+    }
     const decision = sessionSearchReadDecision({
       candidate,
       row,

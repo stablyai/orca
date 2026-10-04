@@ -1,4 +1,4 @@
-import { mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -15,6 +15,33 @@ afterEach(async () => {
 })
 
 describe('WSL transcript filesystem process operations', () => {
+  it.skipIf(process.platform === 'win32')(
+    'refuses a symlink only for an opted-in regular-file open',
+    async () => {
+      const directory = await mkdtemp(join(tmpdir(), 'orca-wsl-regular-'))
+      temporaryDirectories.push(directory)
+      const path = join(directory, 'events.frames')
+      const target = join(directory, 'target.frames')
+      await writeFile(target, 'native transcript bytes')
+      await symlink(target, path)
+      const operations = new WslTranscriptFsProcessOperations()
+      await expect(
+        operations.execute({ id: 1, operation: 'open', path, regularFile: true })
+      ).rejects.toThrow('regular file')
+      const handleId = await operations.execute({ id: 2, operation: 'open', path })
+      if (typeof handleId !== 'number') {
+        throw new Error('Invalid process-owned handle')
+      }
+      try {
+        await expect(
+          operations.execute({ id: 3, operation: 'read', handleId, position: 0, length: 64 })
+        ).resolves.toEqual(Buffer.from('native transcript bytes'))
+      } finally {
+        await operations.execute({ id: 4, operation: 'close', handleId })
+      }
+    }
+  )
+
   // Local NTFS rejects replacing an open file; WSL/9P follows Linux rename semantics.
   it.skipIf(process.platform === 'win32')(
     'keeps positional reads on the opened inode after atomic path replacement',

@@ -1,15 +1,12 @@
-import {
-  ANTIGRAVITY_HISTORY_ROOTS,
-  type AntigravitySessionOrigin
-} from '../../shared/antigravity-session-origin'
+import { remoteReasonixSource } from './remote-session-scanner-reasonix-source'
+import { remoteDshSource } from './remote-session-scanner-dsh-source'
+import { ANTIGRAVITY_HISTORY_ROOTS } from '../../shared/antigravity-session-origin'
 import { parseQoderSessionContent } from './session-scanner-qoder-parser'
 import { remoteSessionDocumentParsers } from './remote-session-document-parsers'
 import type { RemoteSessionContent } from './remote-session-content-lines'
 import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
-import { parseAntigravitySessionContent } from './session-scanner-antigravity-parser'
-import { isAntigravityTranscriptPath } from './session-scanner-antigravity-paths'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
 import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
 import { parseCodebuddySessionContent } from './session-scanner-codebuddy-parser'
@@ -29,7 +26,8 @@ import {
   remoteOmpSessionsSegments,
   remotePathSegments,
   remotePiSessionsSegments,
-  remotePrimeAgentSessionsSegments
+  remotePrimeAgentSessionsSegments,
+  remoteAntigravitySource
 } from './remote-session-scanner-source-parsers'
 import type { FileWithMtime } from './session-scanner-types'
 import { remoteCodexSources } from './remote-session-scanner-codex-sources'
@@ -53,10 +51,23 @@ type RemoteContentParser<T = string> = (
 export function remoteSessionSources(
   remoteHome: string,
   hostPlatform: RemoteHostPlatform,
-  includeAntigravityIdeSessions = false
+  includeAntigravityIdeSessions = false,
+  dshSessionsDir?: string,
+  reasonix?: { include: boolean; projectsDir?: string; workspaceRoots?: readonly string[] }
 ): RemoteSessionSource[] {
   return [
     ...remoteCodexSources(remoteHome, hostPlatform),
+    remoteDshSource(remoteHome, hostPlatform, dshSessionsDir),
+    ...(reasonix?.include
+      ? [
+          remoteReasonixSource(
+            remoteHome,
+            hostPlatform,
+            reasonix.projectsDir,
+            reasonix.workspaceRoots
+          )
+        ]
+      : []),
     {
       ...jsonlSource(
         'claude',
@@ -181,39 +192,6 @@ export function remoteSessionSources(
     ),
     ...remoteOpenClawSources(remoteHome, hostPlatform)
   ]
-}
-
-function remoteAntigravitySource(
-  remoteHome: string,
-  hostPlatform: RemoteHostPlatform,
-  origin: AntigravitySessionOrigin
-): RemoteSessionSource {
-  const cliRoot = joinRemotePath(hostPlatform, remoteHome, '.gemini', origin)
-  const historyPath = joinRemotePath(hostPlatform, cliRoot, 'history.jsonl')
-  const parse = async (
-    file: FileWithMtime,
-    content: RemoteSessionContent,
-    context: RemoteScannerContext
-  ) => {
-    const session = await parseAntigravitySessionContent(
-      file,
-      content,
-      context.hostPlatform.os,
-      parserOptions(context),
-      context.signal
-    )
-    return session ? context.antigravityWorkspaceResolver.enrich(session, historyPath) : null
-  }
-  return {
-    agent: 'antigravity',
-    rootDir: joinRemotePath(hostPlatform, cliRoot, 'brain'),
-    extensions: ['.jsonl'],
-    filePredicate: isAntigravityTranscriptPath,
-    fixedChildFileSegments: ['.system_generated', 'logs', 'transcript.jsonl'],
-    additionalFixedChildFileSegments: [['.system_generated', 'logs', 'transcript_full.jsonl']],
-    parse,
-    parseLines: parse
-  }
 }
 
 function source(

@@ -63,6 +63,7 @@ async function scanOneSshHost(
   const relayTimeoutMs = options.relayTimeoutMs ?? options.timeoutMs
   try {
     const params = {
+      includeReasonixHistory: args?.includeReasonixHistory !== false,
       ...(args?.includeAntigravityIdeSessions === true
         ? { includeAntigravityIdeSessions: true }
         : {}),
@@ -114,9 +115,6 @@ async function scanOneSshHost(
         includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions,
         remoteHome: hostInfo.remoteHome,
         hostPlatform: hostInfo.hostPlatform,
-        ...(args?.includeAntigravityIdeSessions === true
-          ? { includeAntigravityIdeSessions: true }
-          : {}),
         limit: args?.limit,
         unlimited: args?.unlimited,
         scopePaths,

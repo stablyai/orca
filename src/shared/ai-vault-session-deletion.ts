@@ -29,6 +29,7 @@ export type AiVaultDeleteSessionResult =
 // - codex: session_index.jsonl plus hardlink aliases between the Orca-managed
 //   home and ~/.codex, so a one-sided delete reappears on the next scan.
 // - opencode 1.17.x: a SQLite row, not a file.
+// - dsh: generations, projection caches and fork references share session identity.
 export const AI_VAULT_DELETABLE_AGENTS = [
   'gemini',
   'copilot',

@@ -31,6 +31,7 @@ const SEEDS = Math.max(1, Number(process.env.SERIALIZE_TRANSCRIPT_SEEDS) || 2)
 // build's did — pre-existing serializer limitations, not regressions (verified
 // with ORCA_OLD_SERIALIZE_ADDON): the live SGR pen leaks into the alt buffer, and
 // an alt buffer first entered after a shrink keeps hidden scrollback. Shrink when one is fixed.
+// Counts exclude the normal-to-alternate bold/dim leaks fixed by the snapshot wrapper.
 const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   less: 6,
   nano: 2,
@@ -44,10 +45,10 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'qoder-no-account': 2,
   'qoder-ready': 2,
   // Codex 0.157 header border restores with an extra attribute bit (STA-8628 fixtures).
-  'codex-0157-config-override-embedded-warning': 22,
-  'codex-0157-effort-override-embedded-warning': 4,
-  'codex-0157-no-daemon-effort-override': 16,
-  'codex-0157-plain-ready': 18,
+  'codex-0157-config-override-embedded-warning': 16,
+  'codex-0157-effort-override-embedded-warning': 2,
+  'codex-0157-no-daemon-effort-override': 12,
+  'codex-0157-plain-ready': 0,
   // Fresh-home 0.157/0.158 captures: the live pen's true-colour fg/bg leaks onto restored cells.
   'codex-0157-fresh-home-daemon-install': 48,
   'codex-0158-fresh-home-greeting': 9,
@@ -57,15 +58,15 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'codex-0158-update-available-dialog': 8,
   'codex-0157-hooks-review-dialog': 24,
   'codex-0158-hooks-review-dialog': 8,
-  'codex-0157-model-retired-dialog': 22,
+  'codex-0157-model-retired-dialog': 20,
   'codex-0158-model-retired-dialog': 6,
   // Same extra dim bit on the 0.157/0.158 header row (STA-8834 fixtures).
-  'codex-0-157-1-update-dialog': 16,
-  'codex-0-157-1-timed-sleep-turn': 6,
-  'codex-0-158-0-approval': 12,
-  'codex-0-158-0-timed-turn': 20,
-  'codex-0-158-0-trustprompt': 36,
-  'claude-dialog-trust-workspace-answered': 13,
+  'codex-0-157-1-update-dialog': 14,
+  'codex-0-157-1-timed-sleep-turn': 0,
+  'codex-0-158-0-approval': 0,
+  'codex-0-158-0-timed-turn': 0,
+  'codex-0-158-0-trustprompt': 8,
+  'claude-dialog-trust-workspace-answered': 11,
   // DSH-TUI's whale intro paints whole rows of 24-bit background, and every one of this
   // transcript's divergences is the same shape: `visible-grid row=0`, a true-colour
   // background that the round trip does not restore to default. Verified as upstream, not a
@@ -73,7 +74,7 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   // (`build-serialize-addon-at-ref.mjs --ref origin/main`): I1 and I3 both hold.
   'dsh-tui-ready-no-key': 10,
   // Hermes banner cells restore with an extra bold bit under the jitter schedule.
-  'hermes-tui-ready': 2,
+  'hermes-tui-ready': 0,
   // STA-8741 agy/Cline/Prime captures, serializer untouched: the same true-colour background
   // left on restored cells as DSH, plus Prime's cursor row after its alternate-screen repaints.
   'antigravity-1-2-14-busy-thinking': 2,
@@ -112,7 +113,7 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'omp-18-setup': 6
 }
 
-// Exact resize checkpoints and full GridDiff hashes from base 6835b9b4e3ea, not this branch.
+// Base 6835b9b4e3ea diffs, with the two lifecycle jitter hashes narrowed by the intensity fix.
 const FREEBUFF_BASELINE: Record<string, readonly string[]> = JSON.parse(
   readFileSync(join(__dirname, '__fixtures__/freebuff-serialize-baseline.json'), 'utf8')
 )
@@ -247,18 +248,9 @@ describe('serialize round trip over captured PTY transcripts', () => {
         console.log(`${transcript.name} ${JSON.stringify(counts)}`)
       }
       expect(blocking).toEqual([])
-      if (SEEDS === 2 && transcript.name === 'hermes-tui-ready') {
-        expect(failureSignatures).toEqual([
-          'jitter/false/2/34:0db2561506ff28d2e83276b07bc8684541957f61e488b6f8081627e8cad80c63',
-          'jitter/true/2/34:0db2561506ff28d2e83276b07bc8684541957f61e488b6f8081627e8cad80c63'
-        ])
-      }
-      // The pre-#22586 serializer has these same row-1 bold diffs on the untouched capture.
-      if (SEEDS === 2 && transcript.name === 'dsb-6-9-0-folder') {
-        expect(failureSignatures).toEqual([
-          'jitter/false/2/19:2050835176269320209c56be5ae9e525424635dfca511d44d3911d3a22ba9d27',
-          'jitter/true/2/19:2050835176269320209c56be5ae9e525424635dfca511d44d3911d3a22ba9d27'
-        ])
+      // The buffer-boundary intensity reset removes these formerly pinned bold leaks.
+      if (SEEDS === 2 && ['hermes-tui-ready', 'dsb-6-9-0-folder'].includes(transcript.name)) {
+        expect(failureSignatures).toEqual([])
       } else if (SEEDS === 2 && transcript.name.startsWith('freebuff-')) {
         expect(failureSignatures).toEqual(FREEBUFF_BASELINE[transcript.name] ?? [])
       } else if (!OLD_ADDON_PATH && SEEDS === 2) {

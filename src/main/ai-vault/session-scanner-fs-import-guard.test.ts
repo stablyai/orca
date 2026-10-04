@@ -30,6 +30,7 @@ const ALLOWLIST = new Set([
   // paths they touch are temp directories this process just made.
   'session-scanner-test-fixtures.ts',
   'session-scanner-document-agent-fixtures.ts',
+  'session-scanner-every-agent-fixture.ts',
   'session-scanner-log-agent-fixtures.ts',
   'session-scanner-opencode-sqlite-fixture.ts'
 ])
@@ -76,6 +77,7 @@ describe('WSL transcript gate import guard', () => {
         'session-scanner.ts',
         'session-scanner-values.ts',
         'session-scanner-codex-title-index.ts',
+        'session-scanner-dsh-stream.ts',
         'session-scanner-kimi-paths.ts',
         'session-scanner-opencode-sources.ts'
       ])

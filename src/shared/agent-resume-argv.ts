@@ -1,3 +1,4 @@
+import { isReasonixStorageSessionId } from './reasonix-session-paths'
 import type { AgentProviderSessionMetadata, ResumableTuiAgent } from './agent-session-resume'
 
 /** The argv that re-enters an existing session, per agent. Split from
@@ -10,6 +11,13 @@ export function getAgentResumeArgv(
 ): string[] | null {
   const id = providerSession.id
   switch (agent) {
+    case 'reasonix':
+      return providerSession.key === 'session_id' &&
+        !id.startsWith('-') &&
+        !id.includes('\u007f') &&
+        isReasonixStorageSessionId(id)
+        ? ['reasonix', '--resume', id]
+        : null
     case 'codebuddy':
       return providerSession.key === 'session_id' ? ['codebuddy', '--resume', id] : null
     case 'claude':

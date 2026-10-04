@@ -1,0 +1,15 @@
+{
+  "sourceRevision": "6dbabcbf7135c56ff5186b0cd36f5cc2725f47b4",
+  "version": "1.39.7",
+  "platform": "darwin",
+  "arch": "arm64",
+  "cols": 100,
+  "rows": 30,
+  "beforeAnyInput": true,
+  "noConfiguredProvider": true,
+  "noModelRequest": true,
+  "paidProvider": false,
+  "sha256": "e6203caa2c2e9aa30c2b2a9b207bdd4f4caf5367759a2021e15edce85114319c",
+  "captureBoundary": "Fresh dispatched worker private native task; no authenticated or paid assistant turn",
+  "file": "reasonix-1-39-7-task-first-setup.txt"
+}

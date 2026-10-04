@@ -1,9 +1,9 @@
-import { constants, type Stats } from 'node:fs'
-import { open, realpath, stat, type FileHandle } from 'node:fs/promises'
+import { realpath, type FileHandle } from 'node:fs/promises'
 import { extname } from 'node:path'
 import { isBinaryBuffer } from './binary-buffer'
 import { isPathInsideOrEqual } from './cross-platform-path'
 import { IMAGE_FILE_MIME_TYPES } from './image-file-extensions'
+import { openRegularFileReadHandle } from './regular-file-open'
 import {
   NodeFileReadTooLargeError,
   readNodeFileHandleWithinLimit
@@ -34,11 +34,6 @@ const DOC_PREVIEW_BINARY_MIME_TYPES: Record<string, string> = {
 const DOC_PREVIEW_MAX_TEXT_BYTES = 10 * 1024 * 1024
 const DOC_PREVIEW_MAX_BINARY_BYTES = 50 * 1024 * 1024
 
-const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0
-// Why: opening a writer-less FIFO blocks before the regular-file check can refuse it, pinning a
-// threadpool slot for good; non-blocking open returns at once and does not change regular-file reads.
-const OPEN_NONBLOCK = typeof constants.O_NONBLOCK === 'number' ? constants.O_NONBLOCK : 0
-
 function authorizationError(): Error {
   return new Error(DOC_PREVIEW_PATH_AUTHORIZATION_ERROR)
 }
@@ -48,10 +43,6 @@ function clampReadLimit(requested: number, maximum: number): number {
     throw new RangeError('Document preview read limit must be a non-negative safe integer')
   }
   return Math.min(requested, maximum)
-}
-
-function sameFileIdentity(opened: Stats, current: Stats): boolean {
-  return opened.dev === current.dev && opened.ino === current.ino
 }
 
 async function openAuthorizedDocPreviewTarget(
@@ -86,18 +77,12 @@ async function openAuthorizedDocPreviewTarget(
     throw authorizationError()
   }
 
-  const handle = await open(canonicalTarget, constants.O_RDONLY | OPEN_NOFOLLOW | OPEN_NONBLOCK)
+  const handle = await openRegularFileReadHandle(
+    canonicalTarget,
+    DOC_PREVIEW_PATH_AUTHORIZATION_ERROR
+  )
   try {
-    const [openedStats, currentCanonicalTarget, currentTargetStats] = await Promise.all([
-      handle.stat(),
-      realpath(canonicalTarget),
-      stat(canonicalTarget)
-    ])
-    if (
-      !openedStats.isFile() ||
-      currentCanonicalTarget !== canonicalTarget ||
-      !sameFileIdentity(openedStats, currentTargetStats)
-    ) {
+    if ((await realpath(canonicalTarget)) !== canonicalTarget) {
       throw authorizationError()
     }
     return { handle, canonicalTarget }

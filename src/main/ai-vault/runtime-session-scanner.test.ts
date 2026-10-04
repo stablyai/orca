@@ -62,7 +62,8 @@ describe('runtime AI Vault session scanner', () => {
         limit: 25,
         force: true,
         scopePaths: ['/srv/app'],
-        executionHostId: 'runtime:env-1'
+        executionHostId: 'runtime:env-1',
+        includeReasonixHistory: true
       },
       3000
     )

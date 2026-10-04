@@ -25,6 +25,7 @@ export const executionHostIdSchema = z.string().transform((value, ctx): `runtime
 
 export const AiVaultListSessionsParams = z
   .object({
+    includeReasonixHistory: z.boolean().optional(),
     limit: z
       .unknown()
       .transform((value) =>

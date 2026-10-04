@@ -86,6 +86,7 @@ export async function parseRemoteSessionFileCached(args: {
   const key = remoteSessionCandidateKey(args.candidate)
   const entry = cache.get(key)
   const unchanged =
+    args.candidate.source.agent !== 'reasonix' &&
     entry !== undefined &&
     entry.hostKey === args.hostKey &&
     entry.mtimeMs === file.mtimeMs &&

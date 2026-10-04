@@ -1,4 +1,5 @@
 import type { ToolSnapshot } from '../listener-event'
+import type { AgentType } from '../../agent-status-types'
 import { deriveToolInputPreview, hasOwnField, readString, toolUpdate } from '../tool-input-preview'
 import {
   clearActiveToolFieldsUpdate,
@@ -9,7 +10,8 @@ import { readLastAssistantFromTranscript } from '../transcript-lines'
 
 export function extractClaudeToolFields(
   eventName: unknown,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  agentType?: AgentType
 ): ToolSnapshot {
   const update: ToolSnapshot = {}
   if (eventName === 'PostToolUseFailure') {
@@ -26,7 +28,12 @@ export function extractClaudeToolFields(
         {
           toolName,
           toolInput: deriveToolInputPreview(toolName, hookPayload.tool_input),
-          interactivePrompt: deriveInteractivePrompt(toolName, hookPayload.tool_input, eventName)
+          interactivePrompt: deriveInteractivePrompt(
+            toolName,
+            hookPayload.tool_input,
+            eventName,
+            agentType
+          )
         },
         { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
       )

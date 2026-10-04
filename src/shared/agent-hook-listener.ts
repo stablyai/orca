@@ -69,10 +69,7 @@ export function normalizeHookPayload(
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
     hookPayloadRecord.hook_event_name ??
     hookPayloadRecord.hookEventName ??
-    // Why jcode only: its payload names the lifecycle point `event`, and it is posted
-    // verbatim through the shared transport rather than re-stated as a form field.
-    // Scoped so another provider's unrelated `event` key cannot become an event name.
-    (source === 'jcode' ? hookPayloadRecord.event : undefined)
+    (source === 'reasonix' || source === 'jcode' ? hookPayloadRecord.event : undefined)
   // Codex child hooks expose the child's session_id on the parent's pane.
   const providerSession =
     source === 'codex' && readString(hookPayloadRecord, 'agent_id')
@@ -257,7 +254,10 @@ export function normalizeHookPayload(
   return {
     paneKey,
     source,
-    agentPresence,
+    agentPresence:
+      agentPresence && source === 'reasonix' && eventName === 'SessionEnd'
+        ? { ...agentPresence, ended: true as const }
+        : agentPresence,
     launchToken,
     tabId,
     worktreeId,
@@ -279,7 +279,17 @@ export function normalizeHookPayload(
     promptInteractionKey: dispatched.promptInteractionKey,
     hookEventName: typeof eventName === 'string' ? eventName : undefined,
     providerPromptId:
-      source === 'grok' ? (grokActiveTurn?.promptId ?? providerPromptId) : providerPromptId,
+      source === 'reasonix' &&
+      typeof hookPayloadRecord.turn === 'number' &&
+      Number.isSafeInteger(hookPayloadRecord.turn) &&
+      hookPayloadRecord.turn > 0 &&
+      providerSession
+        ? `${providerSession.id}:${hookPayloadRecord.turn}`
+        : source === 'reasonix' && eventName === 'SessionEnd'
+          ? previousStatus?.providerPromptId
+          : source === 'grok'
+            ? (grokActiveTurn?.promptId ?? providerPromptId)
+            : providerPromptId,
     grokPromptBoundary: grokActiveTurn ? true : undefined,
     compactTrigger,
     toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),

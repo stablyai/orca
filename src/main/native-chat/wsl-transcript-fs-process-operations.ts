@@ -1,5 +1,6 @@
 import { access, lstat, open, readdir, readFile, stat, type FileHandle } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
+import { openRegularFileReadHandle } from '../../shared/regular-file-open'
 import {
   invalidTranscriptHandleError,
   type WslTranscriptFsDirent,
@@ -38,7 +39,9 @@ export class WslTranscriptFsProcessOperations {
       case 'readfile':
         return readFile(request.path, request.encoding)
       case 'open': {
-        const handle = await open(request.path, 'r')
+        const handle = request.regularFile
+          ? await openRegularFileReadHandle(request.path)
+          : await open(request.path, 'r')
         const handleId = this.nextHandleId++
         this.handles.set(handleId, handle)
         return handleId

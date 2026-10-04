@@ -3,6 +3,7 @@ import { access, lstat, open, readdir, readFile, stat, type FileHandle } from 'n
 import { Readable } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
 import { isWslUncPath } from '../../shared/wsl-paths'
+import { openRegularFileReadHandle } from '../../shared/regular-file-open'
 import { runWslTranscriptFsTask, type WslTranscriptFsTaskPriority } from './wsl-transcript-fs-gate'
 import {
   closeWslTranscriptFsProcess,
@@ -96,10 +97,11 @@ export function wslGatedReadFile(
 export function wslGatedOpen(
   path: string,
   priority: WslTranscriptFsTaskPriority,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  regularFile = false
 ): Promise<TranscriptFileHandle> {
   if (!isWslUncPath(path)) {
-    return open(path, 'r')
+    return regularFile ? openRegularFileReadHandle(path, undefined, signal) : open(path, 'r')
   }
   return runWslTranscriptFsTask<TranscriptFileHandle>(
     {
@@ -111,7 +113,12 @@ export function wslGatedOpen(
       onAbandonedResult: (handle) => void closeTranscriptHandle(handle, path)
     },
     (taskSignal) =>
-      openWslTranscriptFsProcess(path, taskSignal, wslTranscriptFsLaneKey(path, priority))
+      openWslTranscriptFsProcess(
+        path,
+        taskSignal,
+        wslTranscriptFsLaneKey(path, priority),
+        regularFile
+      )
   )
 }
 
@@ -198,6 +205,7 @@ export async function readTranscriptSlice(
 
 export type TranscriptReadStreamOptions = {
   start?: number
+  regularFile?: true
   /** Inclusive, matching `createReadStream`. */
   end?: number
   /** Set it to get decoded string chunks on both branches; leave it unset and
@@ -212,13 +220,14 @@ async function* gatedChunks(
   priority: WslTranscriptFsTaskPriority,
   signal?: AbortSignal
 ): AsyncGenerator<Buffer | string> {
-  const handle = await wslGatedOpen(path, priority, signal)
+  const handle = await wslGatedOpen(path, priority, signal, options.regularFile)
   // Why: chunk boundaries fall mid-codepoint, so decoding each slice
   // independently would emit U+FFFD on both sides of any straddling character.
   const decoder = options.encoding ? new StringDecoder(options.encoding) : null
   try {
     let position = options.start ?? 0
     for (;;) {
+      signal?.throwIfAborted()
       const length =
         options.end === undefined
           ? WSL_TRANSCRIPT_READ_CHUNK_BYTES
@@ -237,6 +246,7 @@ async function* gatedChunks(
         priority,
         signal
       )
+      signal?.throwIfAborted()
       if (bytesRead <= 0) {
         break
       }
@@ -275,10 +285,10 @@ export function openTranscriptReadStream(
   priority: WslTranscriptFsTaskPriority,
   signal?: AbortSignal
 ): Readable {
-  if (!isWslUncPath(path)) {
+  if (!isWslUncPath(path) && !options.regularFile) {
     // Node destroys the stream with an AbortError on abort, matching how the
     // gated branch surfaces cancellation to the same consumers.
     return createReadStream(path, { ...options, signal })
   }
-  return Readable.from(gatedChunks(path, options, priority, signal))
+  return Readable.from(gatedChunks(path, options, priority, signal), { signal })
 }

@@ -77,6 +77,7 @@ export const AI_VAULT_METHODS = [
           unlimited: params.unlimited,
           force: params.force,
           scopePaths: params.scopePaths,
+          includeReasonixHistory: params.includeReasonixHistory === true,
           includeAntigravityIdeSessions: params.includeAntigravityIdeSessions
         })
       } catch (error) {

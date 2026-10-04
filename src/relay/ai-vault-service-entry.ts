@@ -1,4 +1,6 @@
+import { join } from 'node:path'
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
+import { resolveReasonixExecutionHostRoots } from '../main/reasonix/execution-host-config'
 import { scanRemoteAiVaultSessions } from '../main/ai-vault/remote-session-scanner'
 import { readAiVaultSessionTitlesFromFiles } from '../main/ai-vault/session-title-file-reader'
 import { createRelayAiVaultFilesystemProvider } from './ai-vault-service-filesystem'
@@ -46,10 +48,16 @@ async function execute(request: RelayAiVaultServiceRequest): Promise<void> {
       send({ type: 'result', id: request.id, operation: 'titles', value })
       return
     }
+    const reasonixRoots = request.params.includeReasonixHistory
+      ? await resolveReasonixExecutionHostRoots(controller.signal)
+      : null
     const value = await scanRemoteAiVaultSessions({
       provider,
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       remoteHome: init.remoteHome,
+      includeReasonixHistory: request.params.includeReasonixHistory === true,
+      ...(reasonixRoots ? { reasonixProjectsDir: join(reasonixRoots.stateHome, 'projects') } : {}),
+      dshSessionsDir: process.env.DSH_HOME ? join(process.env.DSH_HOME, 'sessions') : undefined,
       hostPlatform: init.hostPlatform,
       limit: request.params.limit,
       unlimited: request.params.unlimited,

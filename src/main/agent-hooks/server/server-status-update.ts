@@ -17,6 +17,7 @@ import {
   withHeldChildWaitMainAgent
 } from './server-claude-status-rules'
 import { isStaleGrokTurnEnd } from './server-grok-status-rules'
+import { isStaleReasonixTurn } from '../../../shared/reasonix-hook-turn'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
 
@@ -37,6 +38,9 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     }
     const { authorityRestartId, ...payload } = { ...incoming, ...transitioned }
     if (!this.canWriteLegacyStatusRow(payload)) {
+      return undefined
+    }
+    if (isStaleReasonixTurn(this.state.lastStatusByPaneKey.get(payload.paneKey), payload)) {
       return undefined
     }
     if (payload.agentPresence?.ended) {

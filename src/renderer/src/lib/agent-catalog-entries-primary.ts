@@ -1,3 +1,4 @@
+import { createReasonixAgentCatalogEntry } from './reasonix-agent-catalog-entry'
 import { getCatalogPlatform } from './agent-catalog-platform'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
@@ -98,6 +99,7 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       searchAliases: ['deepseek', 'dsh', 'dst', 'deepseek harness'],
       homepageUrl: 'https://deepseek-harness.github.io/deepseek-harness/'
     },
+    createReasonixAgentCatalogEntry(),
     {
       id: 'qoder',
       label: translate('auto.lib.agent.catalog.qoder_label', 'Qoder CLI'),

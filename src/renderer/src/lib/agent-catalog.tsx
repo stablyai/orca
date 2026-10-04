@@ -19,14 +19,11 @@ import { buildAgentCatalogEntries } from './agent-catalog-entries'
 export type AgentCatalogEntry = {
   id: TuiAgent
   label: string
-  /** Default CLI binary name used for PATH detection. */
   cmd: string
   searchAliases?: readonly string[]
-  /** Direct or bundled image URL for agents whose project identity is not represented by a favicon service. */
   iconUrl?: string
   /** Domain for Google's favicon service — used for agents without an SVG icon. */
   faviconDomain?: string
-  /** Homepage/install docs URL, sourced from the README agent badge list. */
   homepageUrl: string
 }
 
@@ -39,13 +36,12 @@ export function getAgentLabel(agent: TerminalAgent): string {
   return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? formatAgentTypeLabel(agent)
 }
 
-export function AgentIcon({
-  agent,
-  size = 14
-}: {
+type AgentIconProps = {
   agent: TerminalAgent | null | undefined
   size?: number
-}): React.JSX.Element {
+}
+
+export function AgentIcon({ agent, size = 14 }: AgentIconProps): React.JSX.Element {
   // Why: render a neutral question-mark glyph when the agent identity is not
   // yet known. Before, the caller coerced null → 'claude', which caused Codex
   // panes to briefly show the Claude icon until the first hook callback

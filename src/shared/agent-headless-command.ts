@@ -1,3 +1,4 @@
+import { isReasonixNonInteractiveCommand } from './reasonix-noninteractive-command'
 import { isCodebuddyNonInteractiveCommand } from './codebuddy-headless-command'
 import { isQoderHeadlessCommand } from './qoder-headless-command'
 import { isAnteHeadlessOneShotCommand } from './ante-headless-command'
@@ -27,6 +28,7 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   ante: isAnteHeadlessOneShotCommand,
   muse: isMuseHeadlessOneShotCommand,
   zcode: isZCodeHeadlessOneShotCommand,
+  reasonix: isReasonixNonInteractiveCommand,
   dsh: isDshNonInteractiveCommand,
   dsb: isDsbHeadlessOneShotCommand
 }

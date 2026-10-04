@@ -16,9 +16,16 @@ export type AgentQuestionAnsweredInferenceRequest = {
  *  `request_user_input` (same questions/options input shape).
  *  Why: this is the structured "pick an option" prompt whose full input the
  *  clients render as a live card. */
-export function isAskUserQuestionTool(toolName: string | undefined): boolean {
+export function isAskUserQuestionTool(
+  toolName: string | undefined,
+  agentType?: AgentType
+): boolean {
   const normalized = toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase()
-  return normalized === 'askuserquestion' || normalized === 'requestuserinput'
+  return (
+    normalized === 'askuserquestion' ||
+    normalized === 'requestuserinput' ||
+    (agentType === 'reasonix' && normalized === 'ask')
+  )
 }
 
 const QUESTION_ANSWER_ENTER_INPUTS: ReadonlySet<string> = new Set([

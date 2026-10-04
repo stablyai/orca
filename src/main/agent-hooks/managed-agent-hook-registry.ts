@@ -12,6 +12,7 @@ import { copilotHookService } from '../copilot/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
 import { devinHookService } from '../devin/hook-service'
 import { dshHookService } from '../dsh/hook-service'
+import { reasonixHookService } from '../reasonix/hook-service'
 import { droidHookService } from '../droid/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
 import { grokHookService } from '../grok/hook-service'
@@ -65,6 +66,7 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['muse', () => museHookService.install()],
   ['zcode', () => zcodeHookService.install()],
   ['dsh', () => dshHookService.install()],
+  ['reasonix', () => reasonixHookService.installForExecutionHost()],
   ['jcode', () => jcodeHookService.install()]
 ]
 
@@ -94,6 +96,7 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
   ['muse', () => museHookService.refreshManagedScripts()],
   ['zcode', () => zcodeHookService.refreshManagedScripts()],
   ['dsh', () => dshHookService.refreshManagedScripts()],
+  ['reasonix', () => reasonixHookService.refreshManagedScripts()],
   ['jcode', () => jcodeHookService.refreshManagedScripts()]
 ]
 
@@ -119,6 +122,7 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['muse', () => museHookService.remove()],
   ['zcode', () => zcodeHookService.remove()],
   ['dsh', () => dshHookService.remove()],
+  ['reasonix', () => reasonixHookService.removeForExecutionHost()],
   ['jcode', () => jcodeHookService.remove()]
 ]
 
@@ -148,5 +152,6 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
   ['muse', () => museHookService.getStatus()],
   ['zcode', () => zcodeHookService.getStatus()],
   ['dsh', () => dshHookService.getStatus()],
+  ['reasonix', () => reasonixHookService.getStatus()],
   ['jcode', () => jcodeHookService.getStatus()]
 ]

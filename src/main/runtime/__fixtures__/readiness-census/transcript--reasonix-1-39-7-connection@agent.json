@@ -1,0 +1,9 @@
+{
+  "description": "reasonix recording at 110x32 replayed on the agent pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-15: now=pending:after-paint edge=pending:after-paint quiet=pending:after-paint wait=ready@poll"
+    ],
+    "clockless": ["0-15: verdict=pending:after-paint wait=pending"]
+  }
+}

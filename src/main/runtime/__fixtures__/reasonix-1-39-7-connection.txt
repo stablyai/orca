@@ -1,0 +1,14 @@
+[?2026$p[?2027$p[?1002h[?1006h[>4m[?1049h[?25l[?5W[?2004h[?1002h[?1006h[>4;2m[>1u[?u[H[2J◆ reasonix  · deepseek-flash
+  Context is kept across turns. Type 'exit' or Ctrl-D to quit.
+  ! provider "deepseek-flash": missing env DEEPSEEK_API_KEY
+  · Selected model is missing its API key.[22d──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Configure connection
+ ❯ 1. deepseek-flash (active)
+[7Gopenai · 1 model(s) · key required
+[4G2. deepseek-pro
+[7Gopenai · 1 model(s) · key required
+ Type to filter · ↑/↓ navigate · Enter select · Esc cancel
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   [1mWorkspace[m  · Configure connection[40X[30;77HMODEL deepseek-flash   EFFORT auto
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  CTX 4.1K (0%)  COMPACT 80%

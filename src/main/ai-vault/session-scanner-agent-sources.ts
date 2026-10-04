@@ -1,3 +1,6 @@
+import type { Dirent } from 'node:fs'
+import { REASONIX_AGENT_SOURCE } from './session-scanner-reasonix-source'
+import { DSH_AGENT_SOURCE } from './session-scanner-dsh-source'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { pathSegments } from './session-file-discovery'
@@ -82,6 +85,10 @@ export type AiVaultAgentSource = {
   // module-scope call binds across chunks at init time and breaks on bundle
   // ordering. Returns the local host root plus one per WSL distro home.
   rootDirs: (options: AiVaultScanOptions, wslHomeDirs: readonly string[]) => string[]
+  selectDirectoryEntries?: (
+    entries: Dirent[],
+    reportInvalid?: (message: string) => void
+  ) => Dirent[]
   extensions: readonly string[]
   filePredicate?: (filePath: string) => boolean
   // A sibling whose stat participates in candidate freshness and recency; async
@@ -320,6 +327,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     filePredicate: (filePath) =>
       basename(filePath) === 'state.json' && basename(dirname(filePath)).startsWith('session_')
   },
+  reasonix: REASONIX_AGENT_SOURCE,
+  dsh: DSH_AGENT_SOURCE,
   muse: {
     rootDirs: (options, wslHomeDirs) =>
       sessionRootDirs(resolveMuseSessionsDir(options.museSessionsDir), wslHomeDirs, [
