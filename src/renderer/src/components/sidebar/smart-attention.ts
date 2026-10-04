@@ -251,7 +251,7 @@ export function buildExplicitEntriesByTabId(
   return byTab
 }
 
-function buildExplicitEntriesByWorktreeId(
+export function buildExplicitEntriesByWorktreeId(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined
 ): Map<string, AgentStatusEntry[]> {
   const byWorktree = new Map<string, AgentStatusEntry[]>()

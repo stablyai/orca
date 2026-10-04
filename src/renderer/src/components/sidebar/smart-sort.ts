@@ -1,6 +1,7 @@
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { Worktree } from '../../../../shared/worktree/types'
+import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
+import { getWorkspaceStatus } from '../../../../shared/workspace-statuses'
 import type {
   AgentStatusEntry,
   MigrationUnsupportedPtyEntry
@@ -46,6 +47,40 @@ export function effectiveRecentActivity(worktree: Worktree, now: number): number
     return lastActivityAt
   }
   return Math.max(lastActivityAt, createdAt + CREATE_GRACE_MS)
+}
+
+/** `effectiveRecentActivity`, raised to the worktree's latest agent turn start or completion. */
+export function effectiveAgentRecentActivity(
+  worktree: Worktree,
+  now: number,
+  agentActivityByWorktree?: ReadonlyMap<string, number>
+): number {
+  return Math.max(
+    effectiveRecentActivity(worktree, now),
+    agentActivityByWorktree?.get(worktree.id) ?? 0
+  )
+}
+
+// Why: the built-in Done lane, the same id the board's Done column keys on.
+const DONE_WORKSPACE_STATUS_ID = 'completed'
+
+/**
+ * Group by Status: Done-lane worktrees rank as idle, so Agent Activity orders that lane by
+ * recency while other lanes keep attention priority.
+ * Why not a lane-aware comparator: one key per worktree keeps the flat (persisted) order a total order.
+ */
+export function rankDoneLaneByRecency(
+  attentionByWorktree: ReadonlyMap<string, WorktreeAttention>,
+  worktrees: readonly Worktree[],
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+): Map<string, WorktreeAttention> {
+  const ranked = new Map(attentionByWorktree)
+  for (const worktree of worktrees) {
+    if (getWorkspaceStatus(worktree, workspaceStatuses) === DONE_WORKSPACE_STATUS_ID) {
+      ranked.set(worktree.id, IDLE)
+    }
+  }
+  return ranked
 }
 
 export type WorktreeSortLabelInput = Pick<Worktree, 'displayName' | 'path' | 'id'>
@@ -100,14 +135,18 @@ export function compareWorktreeSortLabel(
  * Why non-optional: a forgotten caller would silently regress every worktree
  * to Class 5 (idle) and degrade the comparator to recent-activity ordering;
  * making the param required surfaces the omission as a typecheck error.
+ * `agentActivityByWorktree` folds agent turns into Recent and Smart's idle recency.
  */
 export function buildWorktreeComparator(
   sortBy: SortBy,
   repoMap: Map<string, Repo>,
   now: number,
   attentionByWorktree: Map<string, WorktreeAttention>,
-  labels?: WorktreeSortLabels
+  labels?: WorktreeSortLabels,
+  agentActivityByWorktree?: ReadonlyMap<string, number>
 ): (a: Worktree, b: Worktree) => number {
+  const recency = (worktree: Worktree): number =>
+    effectiveAgentRecentActivity(worktree, now, agentActivityByWorktree)
   return (a, b) => {
     switch (sortBy) {
       case 'name':
@@ -122,7 +161,7 @@ export function buildWorktreeComparator(
           bw.attentionTimestamp - aw.attentionTimestamp ||
           // Why: idle worktrees fall through to recency (and the create-grace
           // floor for brand-new worktrees) before alphabetical.
-          effectiveRecentActivity(b, now) - effectiveRecentActivity(a, now) ||
+          recency(b) - recency(a) ||
           compareWorktreeSortLabel(a, b, labels)
         )
       }
@@ -137,11 +176,9 @@ export function buildWorktreeComparator(
         // mode, so it's frozen in Recent mode and ignores new terminal
         // events, meta edits, etc. lastActivityAt is the real "recency"
         // signal — bumped by bumpWorktreeActivity (PTY spawn, background
-        // events) and by meaningful meta edits (comment, isUnread).
-        return (
-          effectiveRecentActivity(b, now) - effectiveRecentActivity(a, now) ||
-          compareWorktreeSortLabel(a, b, labels)
-        )
+        // events) and by meaningful meta edits (comment, isUnread); agent
+        // turns arrive through agentActivityByWorktree.
+        return recency(b) - recency(a) || compareWorktreeSortLabel(a, b, labels)
       case 'repo': {
         const ra = repoMap.get(a.repoId)?.displayName ?? ''
         const rb = repoMap.get(b.repoId)?.displayName ?? ''

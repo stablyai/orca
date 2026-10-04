@@ -10,8 +10,10 @@ import {
   buildWorktreeComparator,
   buildWorktreeSortLabels,
   compareWorktreeSortLabel,
+  rankDoneLaneByRecency,
   type SortBy
 } from '../../smart-sort'
+import { buildAgentActivityByWorktree } from '../../agent-activity-recency'
 import {
   buildAttentionByWorktree,
   hasFreshAttributedAgentStatus,
@@ -98,6 +100,10 @@ export function useSidebarWorktreeSortOrder(args: {
     return count
   }, [allWorktrees])
   const debouncedSortEpoch = useDebouncedSortEpoch(worktreeCount, sortBy)
+  // Why a memo input: toggling Group by Status reorders the Done lane but bumps no sortEpoch.
+  const doneLaneStatuses = useAppStore((s) =>
+    s.groupBy === 'workspace-status' ? s.workspaceStatuses : null
+  )
 
   // Why a latching ref: a live signal makes Smart authoritative for the session, even after that activity ends.
   const sessionHasHadLiveSmartSignal = useRef(false)
@@ -149,8 +155,29 @@ export function useSidebarWorktreeSortOrder(args: {
             state.terminalLayoutsByTabId
           )
         : new Map<string, WorktreeAttention>()
+    // Why: agent turns do not update lastActivityAt directly; only a terminal bell
+    // can, once per unread cycle.
+    const agentActivityByWorktree =
+      sortBy === 'smart' || sortBy === 'recent'
+        ? buildAgentActivityByWorktree(
+            nonArchivedWorktrees,
+            state.tabsByWorktree,
+            state.agentStatusByPaneKey
+          )
+        : undefined
+    const comparatorAttention =
+      sortBy === 'smart' && doneLaneStatuses
+        ? rankDoneLaneByRecency(attentionByWorktree, nonArchivedWorktrees, doneLaneStatuses)
+        : attentionByWorktree
     nonArchivedWorktrees.sort(
-      buildWorktreeComparator(sortBy, repoMap, now, attentionByWorktree, labels)
+      buildWorktreeComparator(
+        sortBy,
+        repoMap,
+        now,
+        comparatorAttention,
+        labels,
+        agentActivityByWorktree
+      )
     )
     return {
       sortedIds: nonArchivedWorktrees.map((w) => w.id),
@@ -159,7 +186,7 @@ export function useSidebarWorktreeSortOrder(args: {
     }
     // debouncedSortEpoch is an intentional trigger not read in the memo; its change (debounced) signals a recompute.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSortEpoch, repoMap, sortBy])
+  }, [debouncedSortEpoch, doneLaneStatuses, repoMap, sortBy])
   // Why: stable ID order prevents rank-only refreshes from echoing an unchanged snapshot.
   const sortedIds = useReusedArrayIdentity(recomputedSort.sortedIds)
 
