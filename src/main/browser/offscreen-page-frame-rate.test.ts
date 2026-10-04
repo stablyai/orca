@@ -22,7 +22,7 @@ describe('createOffscreenPageFrameRate', () => {
   it('runs at 60fps while shown and slowly while hidden', () => {
     const contents = fakeContents()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every WebContents member the pacer touches.
-    const rate = createOffscreenPageFrameRate(contents as never)
+    const rate = createOffscreenPageFrameRate(contents as never, () => 120)
     rate.setVisible(true)
     expect(contents.setFrameRate).toHaveBeenLastCalledWith(60)
     expect(contents.invalidate).toHaveBeenCalledOnce()
@@ -33,7 +33,7 @@ describe('createOffscreenPageFrameRate', () => {
   it('boosts a hidden page while it receives input, then settles back', () => {
     const contents = fakeContents()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every WebContents member the pacer touches.
-    const rate = createOffscreenPageFrameRate(contents as never)
+    const rate = createOffscreenPageFrameRate(contents as never, () => 120)
     rate.setVisible(false)
     contents.emit('input-event')
     expect(contents.setFrameRate).toHaveBeenLastCalledWith(60)
@@ -50,12 +50,24 @@ describe('createOffscreenPageFrameRate', () => {
   it('repaces and repaints only when visibility changes, not on every viewport sync', () => {
     const contents = fakeContents()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every WebContents member the pacer touches.
-    const rate = createOffscreenPageFrameRate(contents as never)
+    const rate = createOffscreenPageFrameRate(contents as never, () => 120)
     expect(rate.visible).toBe(false)
     rate.setVisible(true)
     rate.setVisible(true)
     expect(rate.visible).toBe(true)
     expect(contents.setFrameRate).toHaveBeenCalledOnce()
     expect(contents.invalidate).toHaveBeenCalledOnce()
+  })
+
+  it('runs a shown page at the display rate while the user drives it, then back at 60fps', () => {
+    const contents = fakeContents()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every WebContents member the pacer touches.
+    const rate = createOffscreenPageFrameRate(contents as never, () => 120.00000762939453)
+    rate.setVisible(true)
+    contents.emit('input-event')
+    expect(contents.setFrameRate).toHaveBeenLastCalledWith(120)
+    vi.advanceTimersByTime(3000)
+    expect(contents.setFrameRate).toHaveBeenLastCalledWith(60)
+    rate.dispose()
   })
 })

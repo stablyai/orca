@@ -157,6 +157,9 @@ export function electronWheelEvent(
     y: Math.round(input.y),
     deltaX: input.deltaX,
     deltaY: input.deltaY,
+    // Why precise: otherwise Chromium eases each event over ~100ms, so a fast swipe trails the
+    // hand. The DOM can't tell a trackpad from a wheel, and macOS already accelerates wheels.
+    hasPreciseScrollingDeltas: true,
     modifiers: input.modifiers
   }
 }

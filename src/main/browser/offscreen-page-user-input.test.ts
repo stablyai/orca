@@ -132,7 +132,15 @@ describe('Electron input shapes', () => {
   it('rounds a wheel to whole pixels and keeps its deltas', () => {
     expect(
       electronWheelEvent({ kind: 'wheel', x: 10.6, y: 4.2, deltaX: 1, deltaY: -2, modifiers: [] })
-    ).toEqual({ type: 'mouseWheel', x: 11, y: 4, deltaX: 1, deltaY: -2, modifiers: [] })
+    ).toEqual({
+      type: 'mouseWheel',
+      x: 11,
+      y: 4,
+      deltaX: 1,
+      deltaY: -2,
+      hasPreciseScrollingDeltas: true,
+      modifiers: []
+    })
   })
 
   it('spells a key the way before-input-event does', () => {

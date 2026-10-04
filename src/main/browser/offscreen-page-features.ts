@@ -1,4 +1,4 @@
-import type { BaseWindow, WebContents, WebPreferences } from 'electron'
+import { screen, type BaseWindow, type WebContents, type WebPreferences } from 'electron'
 import {
   createOffscreenPageCdpSession,
   type OffscreenPageCdpSession
@@ -53,7 +53,9 @@ export function createOffscreenPageFeatures(args: {
   // Why dialogs again: a file input in a cross-site iframe opens its chooser from that frame.
   const frames = createOffscreenPageFrames(session, () => OFFSCREEN_PAGE_DIALOG_SETUP)
   const unregisterFrames = registerOffscreenPageFrames(contents, frames)
-  const frameRate = createOffscreenPageFrameRate(contents)
+  const frameRate = createOffscreenPageFrameRate(contents, () =>
+    Math.max(...screen.getAllDisplays().map((display) => display.displayFrequency))
+  )
   const drag = createOffscreenPageDragBridge(session, frames, contents)
   const stopDialogs = routeOffscreenPageDialogs({
     contents,

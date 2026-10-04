@@ -7,7 +7,8 @@ const HIDDEN_FRAME_RATE = 10
 // animating at 120Hz costs twice what 60 does with no visible gain for web content.
 const SHOWN_FRAME_RATE = 60
 // Why boost on input: Chromium acks pointer input on the next frame, so an agent driving a hidden
-// page at the idle rate would wait up to 100ms per mouse event instead of one display frame.
+// page at the idle rate would wait up to 100ms per mouse event instead of one display frame. A
+// shown page goes to the display's rate instead: scrolling tracks the hand, and 120Hz shows it.
 const INPUT_BOOST_MS = 3000
 
 export type OffscreenPageFrameRate = {
@@ -17,20 +18,20 @@ export type OffscreenPageFrameRate = {
   dispose(): void
 }
 
-/** Paces an offscreen page: 60fps while shown or driven, slow otherwise. */
-export function createOffscreenPageFrameRate(contents: WebContents): OffscreenPageFrameRate {
+/** Paces an offscreen page: the display's rate while shown and driven, 60fps while shown, slow otherwise. */
+export function createOffscreenPageFrameRate(
+  contents: WebContents,
+  displayFrameRate: () => number
+): OffscreenPageFrameRate {
   let visible: boolean | null = null
   let boostTimer: ReturnType<typeof setTimeout> | null = null
 
   const apply = (): void => {
     if (!contents.isDestroyed()) {
-      contents.setFrameRate(visible || boostTimer ? SHOWN_FRAME_RATE : HIDDEN_FRAME_RATE)
+      contents.setFrameRate(frameRateFor(visible === true, boostTimer !== null, displayFrameRate))
     }
   }
   const onInput = (): void => {
-    if (visible) {
-      return
-    }
     const wasBoosted = boostTimer !== null
     if (boostTimer) {
       clearTimeout(boostTimer)
@@ -71,4 +72,16 @@ export function createOffscreenPageFrameRate(contents: WebContents): OffscreenPa
       }
     }
   }
+}
+
+function frameRateFor(visible: boolean, driven: boolean, displayFrameRate: () => number): number {
+  if (!visible) {
+    return driven ? SHOWN_FRAME_RATE : HIDDEN_FRAME_RATE
+  }
+  if (!driven) {
+    return SHOWN_FRAME_RATE
+  }
+  // Why round: displays report rates like 120.0000076, and setFrameRate throws on a fraction.
+  const display = Math.round(displayFrameRate())
+  return Number.isFinite(display) ? Math.max(SHOWN_FRAME_RATE, display) : SHOWN_FRAME_RATE
 }
