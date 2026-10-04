@@ -172,7 +172,8 @@
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
         "cursorToggleDescription": "Show Cursor plan usage when signed in through cursor-agent or Cursor IDE.",
-        "zcodeToggleDescription": "Show ZCode Coding Plan quota usage."
+        "zcodeToggleDescription": "Show ZCode Coding Plan quota usage.",
+        "lineBlameToggleDescription": "Show the author and date of the last commit that changed the line at your cursor."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -4152,6 +4153,10 @@
             "autoDescription": "Stay awake while an agent is working",
             "offDescription": "Allow normal system sleep behavior"
           },
+          "LineBlameStatusSegment": {
+            "uncommitted": "Uncommitted",
+            "uncommittedTooltip": "This line has uncommitted changes."
+          },
           "RuntimeHostStatusRow": {
             "previous_connection_closed": "The previous connection closed",
             "workspace_window_closed": "The workspace window is closed",
@@ -7382,7 +7387,9 @@
           "7ddd66fede": "Editor Word Wrap",
           "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
           "collapseUnchangedTitle": "Collapse Unchanged Regions",
-          "collapseUnchangedDescription": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way."
+          "collapseUnchangedDescription": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way.",
+          "inlineBlameTitle": "Inline Git Blame",
+          "inlineBlameDescription": "Show who last changed the cursor line at the end of that line."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -9439,6 +9446,10 @@
             "zcode": "zcode",
             "zai": "zai",
             "glm": "glm",
+            "lineBlameTitle": "Line Author",
+            "lineBlameDescription": "Show who last changed the current line in the status bar.",
+            "lineBlameKeywordAuthor": "author",
+            "lineBlameKeywordLine": "line",
             "tray": {
               "tray": "tray",
               "system": "system tray",
@@ -9453,7 +9464,8 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "lineBlameKeywordBlame": "blame"
           }
         },
         "auto": {
@@ -15723,6 +15735,9 @@
           "insertColumnRight": "Insert column right",
           "deleteRow": "Delete row",
           "deleteColumn": "Delete column"
+        },
+        "useInlineGitBlame": {
+          "uncommitted": "Uncommitted changes"
         },
         "CheckRunAnnotations": {
           "copy": "Copy annotations"

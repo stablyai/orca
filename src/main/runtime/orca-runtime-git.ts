@@ -1,3 +1,4 @@
+import { RuntimeGitBlameCommands } from './runtime-git-blame-commands'
 import { RuntimeGitDiffCommands } from './runtime-git-diff-commands'
 import { RuntimeGitGenerationCommands } from './runtime-git-generation-commands'
 import { RuntimeGitStagingCommands } from './runtime-git-staging-commands'
@@ -23,6 +24,8 @@ export class RuntimeGitCommands {
   readonly getRuntimeGitCommitCompare: RuntimeGitDiffCommands['getRuntimeGitCommitCompare']
   readonly getRuntimeGitBranchDiff: RuntimeGitDiffCommands['getRuntimeGitBranchDiff']
   readonly getRuntimeGitCommitDiff: RuntimeGitDiffCommands['getRuntimeGitCommitDiff']
+  readonly getRuntimeGitFileBlame: RuntimeGitBlameCommands['getRuntimeGitFileBlame']
+  readonly getRuntimeGitLineBlame: RuntimeGitBlameCommands['getRuntimeGitLineBlame']
   readonly getRuntimeGitRemoteFileUrl: RuntimeGitDiffCommands['getRuntimeGitRemoteFileUrl']
   readonly getRuntimeGitRemoteCommitUrl: RuntimeGitDiffCommands['getRuntimeGitRemoteCommitUrl']
   readonly abortRuntimeGitMerge: RuntimeGitSyncCommands['abortRuntimeGitMerge']
@@ -50,6 +53,7 @@ export class RuntimeGitCommands {
   constructor(host: RuntimeGitCommandHost) {
     const status = new RuntimeGitStatusCommands(host)
     const diff = new RuntimeGitDiffCommands(host)
+    const blame = new RuntimeGitBlameCommands(host)
     const sync = new RuntimeGitSyncCommands(host)
     const generation = new RuntimeGitGenerationCommands(host)
     const staging = new RuntimeGitStagingCommands(host)
@@ -66,6 +70,8 @@ export class RuntimeGitCommands {
     this.getRuntimeGitCommitCompare = diff.getRuntimeGitCommitCompare.bind(diff)
     this.getRuntimeGitBranchDiff = diff.getRuntimeGitBranchDiff.bind(diff)
     this.getRuntimeGitCommitDiff = diff.getRuntimeGitCommitDiff.bind(diff)
+    this.getRuntimeGitFileBlame = blame.getRuntimeGitFileBlame.bind(blame)
+    this.getRuntimeGitLineBlame = blame.getRuntimeGitLineBlame.bind(blame)
     this.getRuntimeGitRemoteFileUrl = diff.getRuntimeGitRemoteFileUrl.bind(diff)
     this.getRuntimeGitRemoteCommitUrl = diff.getRuntimeGitRemoteCommitUrl.bind(diff)
     this.abortRuntimeGitMerge = sync.abortRuntimeGitMerge.bind(sync)

@@ -4,6 +4,7 @@ import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git-status-
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { PreloadApi } from '../api-types'
+import type { GitLineBlameResult } from '../../shared/git-line-blame-types'
 
 export const gitApi = {
   status: (args: {
@@ -56,6 +57,18 @@ export const gitApi = {
     compareAgainstHead?: boolean
     connectionId?: string
   }) => ipcRenderer.invoke('git:diff', args),
+  fileBlame: (args: {
+    worktreePath: string
+    filePath: string
+    connectionId?: string
+  }): Promise<Record<number, GitLineBlameResult> | null> =>
+    ipcRenderer.invoke('git:fileBlame', args),
+  lineBlame: (args: {
+    worktreePath: string
+    filePath: string
+    line: number
+    connectionId?: string
+  }): Promise<GitLineBlameResult | null> => ipcRenderer.invoke('git:lineBlame', args),
   branchCompare: (args: { worktreePath: string; baseRef: string; connectionId?: string }) =>
     ipcRenderer.invoke('git:branchCompare', args),
   commitCompare: (args: { worktreePath: string; commitId: string; connectionId?: string }) =>
