@@ -89,6 +89,20 @@ const checks = [
     enabled: process.platform === 'win32'
   },
   {
+    name: 'Windows window targeting tests',
+    command: 'powershell.exe',
+    args: [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'RemoteSigned',
+      '-File',
+      'native/computer-use-windows/runtime-window-targeting.test.ps1'
+    ],
+    enabled: process.platform === 'win32'
+  },
+  {
     name: 'macOS helper app bundle and signature',
     run: verifyMacOSHelperApp,
     enabled: process.platform === 'darwin'
