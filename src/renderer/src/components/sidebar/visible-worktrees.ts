@@ -51,6 +51,9 @@ import { isWorkspaceFromOtherDevice } from './workspace-creator-visibility'
 import { isDefaultBranchWorkspace } from './default-branch-workspace'
 import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import type { SidebarFilterQueryEvaluation } from './sidebar-filter-query-evaluation'
+import { getExplicitWorkspaceFilterKinds } from './workspace-filter-query'
+import { filterWorktreesBySidebarQuery } from './workspace-filter-subject'
 
 /**
  * Whether the "Hide sleeping" sweep must keep this row (#8873).
@@ -86,6 +89,8 @@ export type VisibleWorktreeOptions = {
   worktreeLineageById: Record<string, WorktreeLineage>
   injectLineageAncestors?: boolean
   forcedVisibleWorktreeIds?: readonly string[]
+  /** Typed sidebar query, already evaluated for free text; null when blank. */
+  filterQuery?: SidebarFilterQueryEvaluation | null
 }
 
 export function computeVisibleWorktrees(
@@ -108,19 +113,25 @@ export function computeVisibleWorktrees(
     )
   }
 
-  if (opts.hideDefaultBranchWorkspace) {
+  // Why: an explicit `is:` ask in the typed query outranks the toggle that
+  // would hide that kind, so `is:sleeping` can find what "Hide sleeping" hid.
+  const explicitKinds = opts.filterQuery
+    ? getExplicitWorkspaceFilterKinds(opts.filterQuery.parsed)
+    : null
+
+  if (opts.hideDefaultBranchWorkspace && !explicitKinds?.has('main')) {
     all = all.filter((w) => !isDefaultBranchWorkspace(w, opts.repoMap.get(w.repoId)))
   }
 
-  if (opts.hideAutomationGeneratedWorkspaces) {
+  if (opts.hideAutomationGeneratedWorkspaces && !explicitKinds?.has('automation')) {
     all = all.filter((w) => !isAutomationGeneratedWorkspace(w))
   }
 
-  if (opts.hideCliCreatedWorkspaces) {
+  if (opts.hideCliCreatedWorkspaces && !explicitKinds?.has('cli')) {
     all = all.filter((w) => !isCliCreatedWorkspace(w))
   }
 
-  if (opts.hideDetachedHeadWorkspaces) {
+  if (opts.hideDetachedHeadWorkspaces && !explicitKinds?.has('detached')) {
     all = all.filter((w) => !isDetachedHeadWorkspace(w))
   }
 
@@ -145,21 +156,27 @@ export function computeVisibleWorktrees(
     all = all.filter((w) => selectedRepoIds.has(w.repoId))
   }
 
-  if (!opts.showSleepingWorkspaces) {
+  const isSleeping = (w: Worktree): boolean =>
+    isInactiveWorkspace(
+      w.id,
+      opts.tabsByWorktree,
+      opts.ptyIdsByTabId,
+      opts.browserTabsByWorktree,
+      opts.worktreeIdsWithLiveAgent,
+      opts.worktreeIdsWithStructuredChat
+    )
+
+  if (!opts.showSleepingWorkspaces && !explicitKinds?.has('sleeping')) {
     // Why no !hideDefaultBranchWorkspace term: that filter already ran above, so
     // an explicit hide still wins over the exemption.
     all = all.filter(
       (w) =>
-        isSleepingSweepExemptWorkspace(w, opts.alwaysShowDefaultBranchWorkspace) ||
-        !isInactiveWorkspace(
-          w.id,
-          opts.tabsByWorktree,
-          opts.ptyIdsByTabId,
-          opts.browserTabsByWorktree,
-          opts.worktreeIdsWithLiveAgent,
-          opts.worktreeIdsWithStructuredChat
-        )
+        isSleepingSweepExemptWorkspace(w, opts.alwaysShowDefaultBranchWorkspace) || !isSleeping(w)
     )
+  }
+
+  if (opts.filterQuery) {
+    all = filterWorktreesBySidebarQuery(all, opts.filterQuery, opts, isSleeping)
   }
 
   if (opts.forcedVisibleWorktreeIds && opts.forcedVisibleWorktreeIds.length > 0) {

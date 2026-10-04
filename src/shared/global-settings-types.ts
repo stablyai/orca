@@ -1,3 +1,4 @@
+import type { SidebarSavedFilterView } from './sidebar-saved-filter-view'
 import type { ExecutionHostId } from './execution-host'
 import type { GitHubProjectSettings } from './github/project-types'
 import type { VoiceSettings } from './speech-types'
@@ -490,6 +491,10 @@ export type GlobalSettings = {
   experimentalEphemeralVms?: boolean
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */
   compactWorktreeCards: boolean
+  /** Named sidebar filter queries (GitHub-style grammar). Optional for pre-feature profiles. */
+  sidebarSavedFilterViews?: SidebarSavedFilterView[]
+  /** Dense sidebar rows: single-line workspace rows with tighter spacing. Optional for pre-feature profiles. */
+  sidebarDenseRows?: boolean
   /** Legacy persisted key from the Experimental rollout; new writes use compactWorktreeCards. */
   experimentalCompactWorktreeCards?: boolean
   /** Active non-local runtime environment for client-routed RPC; null keeps local desktop behavior. */

@@ -6,6 +6,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { computeVisibleWorktrees } from '../../visible-worktrees'
+import type { SidebarFilterQueryEvaluation } from '../../sidebar-filter-query-evaluation'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
@@ -33,8 +34,11 @@ export function useVisibleSidebarWorktrees(args: {
    *  423-workspace scan on every unrelated settings write. */
   defaultHostId: ExecutionHostId
   agentSendTargetWorktreeId: string | null
+  /** Evaluated typed query; null when the filter field is blank. */
+  filterQuery?: SidebarFilterQueryEvaluation | null
 }) {
   const { filterState, sortBy, sortedIds, repoMap, worktreeLineageById, defaultHostId } = args
+  const filterQuery = args.filterQuery ?? null
   const {
     showSleepingWorkspaces,
     filterRepoIds,
@@ -48,10 +52,19 @@ export function useVisibleSidebarWorktrees(args: {
     workspaceHostScope
   } = filterState
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
+  // Why: `is:sleeping` / `is:active` need the activity maps even when the
+  // sleeping sweep is off, since that is when the query is the only reader.
+  const queryReadsActivity =
+    filterQuery?.parsed.clauses.some(
+      (clause) =>
+        clause.key === 'is' &&
+        clause.values.some((value) => value === 'sleeping' || value === 'active')
+    ) ?? false
+  const readsLiveAgents = !showSleepingWorkspaces || queryReadsActivity
+  const agentStatusEpoch = useAppStore((s) => (readsLiveAgents ? s.agentStatusEpoch : 0))
   // Why: skip the clock entirely when the epoch is the opt-out sentinel, so a
   // sleeping-workspaces list cannot evict the sample the live lists share.
-  const agentStatusNow = showSleepingWorkspaces ? 0 : getAgentStatusEpochNow(agentStatusEpoch)
+  const agentStatusNow = readsLiveAgents ? getAgentStatusEpochNow(agentStatusEpoch) : 0
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const pairedDeviceIdsByEnvironment = useMemo(
@@ -63,13 +76,13 @@ export function useVisibleSidebarWorktrees(args: {
   )
 
   // Read tabsByWorktree when needed for filtering or sorting
-  const needsActivityMaps = !showSleepingWorkspaces || sortBy === 'smart'
+  const needsActivityMaps = !showSleepingWorkspaces || sortBy === 'smart' || queryReadsActivity
   const tabsByWorktree = useAppStore((s) =>
     needsActivityMaps ? getVisibleWorktreeTerminalActivityTabs(s.tabsByWorktree) : null
   )
   const ptyIdsByTabId = useAppStore((s) => (needsActivityMaps ? s.ptyIdsByTabId : null))
   const browserTabsByWorktree = useAppStore((s) =>
-    !showSleepingWorkspaces ? getVisibleWorktreeBrowserActivityTabs(s.browserTabsByWorktree) : null
+    readsLiveAgents ? getVisibleWorktreeBrowserActivityTabs(s.browserTabsByWorktree) : null
   )
   const worktreeIdsWithStructuredChat = useAppStore((s) =>
     getStructuredChatWorktreeIds(showSleepingWorkspaces, s.unifiedTabsByWorktree)
@@ -87,7 +100,7 @@ export function useVisibleSidebarWorktrees(args: {
       browserTabsByWorktree,
       worktreeIdsWithStructuredChat,
       // Why snapshot on agentStatusEpoch: update membership immediately without repainting on every hook ping.
-      worktreeIdsWithLiveAgent: showSleepingWorkspaces
+      worktreeIdsWithLiveAgent: !readsLiveAgents
         ? EMPTY_WORKTREE_ID_SET
         : getWorktreeIdsWithLiveAgent(
             useAppStore.getState().agentStatusByPaneKey,
@@ -108,11 +121,14 @@ export function useVisibleSidebarWorktrees(args: {
       worktreeLineageById,
       forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
         ? [args.agentSendTargetWorktreeId]
-        : undefined
+        : undefined,
+      filterQuery
     })
   }, [
     args.agentSendTargetWorktreeId,
     agentStatusEpoch,
+    filterQuery,
+    readsLiveAgents,
     agentStatusNow,
     filterRepoIds,
     showSleepingWorkspaces,

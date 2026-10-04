@@ -45,7 +45,9 @@ export function useWorktreeCardFoundation({
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
-  const compactCards = !newCardStyle && settings?.compactWorktreeCards === true
+  const denseRows = settings?.sidebarDenseRows === true
+  // Why: dense rows are compact cards with the padding and meta lane removed, in either card style.
+  const compactCards = denseRows || (!newCardStyle && settings?.compactWorktreeCards === true)
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -219,6 +221,7 @@ export function useWorktreeCardFoundation({
     projectGroups,
     newCardStyle,
     compactCards,
+    denseRows,
     handleEditIssue,
     handleEditComment,
     handleOpenAutomation,

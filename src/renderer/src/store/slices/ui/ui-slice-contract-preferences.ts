@@ -64,6 +64,12 @@ export type UISlicePreferences = {
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
   filterRepoIds: readonly string[]
   setFilterRepoIds: (ids: readonly string[]) => void
+  /** Typed sidebar filter (GitHub-style query); session-only, never persisted. */
+  sidebarFilterQuery: string
+  setSidebarFilterQuery: (query: string) => void
+  /** Worktree rows the sidebar rendered under the current query; null when no query is active. */
+  sidebarFilterMatchCount: number | null
+  setSidebarFilterMatchCount: (count: number | null) => void
   /** Agents-view scope filters, independent from workspace navigation filters. */
   agentsVisibleHostIds: VisibleWorkspaceHostIds
   setAgentsVisibleHostIds: (ids: VisibleWorkspaceHostIds) => void

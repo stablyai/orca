@@ -24,6 +24,7 @@ import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
 import {
   getLeftSidebarAppearanceEntry,
   getShowPinnedWorktreesInGroupsEntry,
+  getSidebarDenseRowsEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
 import { translate } from '@/i18n/i18n'
@@ -78,6 +79,7 @@ export function AppearanceWindowSidebarSection({
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
+  const sidebarDenseRowsEntry = getSidebarDenseRowsEntry()
   const layoutEntries = getLayoutEntries()
   const statusBarTitle = translate(
     'auto.components.settings.AppearancePane.3e4175e5c6',
@@ -104,6 +106,7 @@ export function AppearanceWindowSidebarSection({
     )
   const sidebarAdvancedMatches = matchesSettingsSearch(searchQuery, [
     workspaceCardLayoutEntry,
+    sidebarDenseRowsEntry,
     ...sidebarEntries
   ])
   const fileExplorerAdvancedMatches = matchesSettingsSearch(searchQuery, layoutEntries)
@@ -237,6 +240,22 @@ export function AppearanceWindowSidebarSection({
                           ]}
                         />
                       }
+                    />
+                  </SearchableSetting>
+
+                  <SearchableSetting
+                    title={sidebarDenseRowsEntry.title}
+                    description={sidebarDenseRowsEntry.description}
+                    keywords={sidebarDenseRowsEntry.keywords}
+                  >
+                    <SettingsSwitchRow
+                      label={sidebarDenseRowsEntry.title}
+                      description={sidebarDenseRowsEntry.description}
+                      checked={settings.sidebarDenseRows === true}
+                      onChange={() =>
+                        updateSettings({ sidebarDenseRows: settings.sidebarDenseRows !== true })
+                      }
+                      ariaLabel={sidebarDenseRowsEntry.title}
                     />
                   </SearchableSetting>
 

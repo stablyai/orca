@@ -35,6 +35,8 @@ export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters
 export function useSidebarWorktreeFilters() {
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
+  // Why the fallback: lightweight test stores predate the field.
+  const sidebarFilterQuery = useAppStore((s) => s.sidebarFilterQuery ?? '')
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
@@ -56,10 +58,16 @@ export function useSidebarWorktreeFilters() {
     (s) => s.setAlwaysShowDefaultBranchWorkspace
   )
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
+  const setSidebarFilterQuery = useAppStore((s) => s.setSidebarFilterQuery)
   const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
 
   const revealWorkspaceFilters = useCallback((worktree: Worktree) => {
     const state = useAppStore.getState()
+    // Why: a typed query is transient; revealing a row the user asked for
+    // beats keeping a filter that hides it.
+    if (state.sidebarFilterQuery?.trim()) {
+      state.setSidebarFilterQuery('')
+    }
     const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
     let targetHostId = getWorktreeExecutionHostId(
       worktree,
@@ -148,6 +156,7 @@ export function useSidebarWorktreeFilters() {
     () => ({
       showSleepingWorkspaces,
       filterRepoIds,
+      sidebarFilterQuery,
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
@@ -160,6 +169,7 @@ export function useSidebarWorktreeFilters() {
     [
       showSleepingWorkspaces,
       filterRepoIds,
+      sidebarFilterQuery,
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
@@ -178,6 +188,9 @@ export function useSidebarWorktreeFilters() {
     }
     if (actions.resetFilterRepoIds) {
       setFilterRepoIds([])
+    }
+    if (actions.resetSidebarFilterQuery) {
+      setSidebarFilterQuery('')
     }
     if (actions.resetHideDefaultBranchWorkspace) {
       setHideDefaultBranchWorkspace(false)
@@ -203,6 +216,7 @@ export function useSidebarWorktreeFilters() {
   }, [
     setShowSleepingWorkspaces,
     setFilterRepoIds,
+    setSidebarFilterQuery,
     setHideDefaultBranchWorkspace,
     setHideAutomationGeneratedWorkspaces,
     setHideCliCreatedWorkspaces,

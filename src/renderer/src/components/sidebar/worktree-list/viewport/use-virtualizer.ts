@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef } from 'react'
+import { useAppStore } from '@/store'
 import type React from 'react'
 import {
   measureElement as measureVirtualElementSize,
@@ -10,6 +11,7 @@ import {
   extractWorktreeVirtualRowIndexes,
   getStickyHeaderIndexes,
   getVirtualRowIndex,
+  WORKTREE_SIDEBAR_DENSE_VIRTUAL_ROW_GAP,
   WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP
 } from './virtual-rows'
 import { getRenderRowKey } from '../listing/render-row'
@@ -103,6 +105,7 @@ export function useWorktreeListVirtualizer(args: {
     [firstHeaderIndex, isCurrentVirtualRowElement, renderRows]
   )
 
+  const denseRows = useAppStore((s) => s.settings?.sidebarDenseRows === true)
   const virtualizer = useVirtualizer({
     count: renderRows.length,
     getScrollElement: () => scrollRef.current,
@@ -127,7 +130,7 @@ export function useWorktreeListVirtualizer(args: {
       [renderRows, stickyHeaderIndexes]
     ),
     overscan: 10,
-    gap: WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP,
+    gap: denseRows ? WORKTREE_SIDEBAR_DENSE_VIRTUAL_ROW_GAP : WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP,
     // Why: the sticky group header lives inside the virtual list, so scroll math needs the same top inset as the DOM reveal.
     scrollPaddingStart: WORKTREE_SIDEBAR_REVEAL_TOP_INSET,
     isScrollingResetDelay: USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS,

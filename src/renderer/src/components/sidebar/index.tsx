@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
+import SidebarFilterQueryField from './SidebarFilterQueryField'
 import SidebarNav from './SidebarNav'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
@@ -183,6 +184,7 @@ function Sidebar({
               </React.Suspense>
             ) : (
               <>
+                <SidebarFilterQueryField />
                 <LocalGitToolchainScanBanner />
                 <WorktreeList
                   scrollOffsetRef={worktreeScrollOffsetRef}

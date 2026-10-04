@@ -24,6 +24,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     contentIndent,
     newCardStyle,
     compactCards,
+    denseRows,
     isFolder,
     detachedHeadDisplay,
     branch,
@@ -106,9 +107,12 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     cacheStartedAt != null ||
     showMetaRowDetails
   )
-  const hasMetaRow = compactCards
-    ? hasMetadataBadge || cacheStartedAt != null
-    : hasDetailedMetaRowContent
+  // Why: dense rows keep everything on the title line; badges move to hover.
+  const hasMetaRow = denseRows
+    ? false
+    : compactCards
+      ? hasMetadataBadge || cacheStartedAt != null
+      : hasDetailedMetaRowContent
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
   // Why: normalize the title once so title/branch de-dupe and identity-only hover eligibility stay in sync.
   const trimmedVisibleCardTitle = visibleCardTitle.trim()

@@ -249,6 +249,8 @@ export function buildDefaultSettings(args: {
     experimentalNewWorktreeCardStyle: false,
     experimentalEphemeralVms: false,
     compactWorktreeCards: false,
+    sidebarSavedFilterViews: [],
+    sidebarDenseRows: false,
     // Why: local desktop stays the default until the user picks a saved runtime environment.
     activeRuntimeEnvironmentId: null,
     // Why: hydrate a stable empty shape so renderer optional-chained reads never hit undefined.

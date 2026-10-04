@@ -112,6 +112,19 @@ export const SettingsUpdate = z
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),
     compactWorktreeCards: z.boolean().optional(),
+    sidebarSavedFilterViews: z
+      .array(
+        z
+          .object({
+            id: z.string().trim().min(1).max(64),
+            name: z.string().trim().min(1).max(80),
+            query: z.string().max(2048)
+          })
+          .strict()
+      )
+      .max(100)
+      .optional(),
+    sidebarDenseRows: z.boolean().optional(),
     minimaxGroupId: z.string().optional(),
     minimaxUsageModels: z.string().optional(),
     minimaxEndpoint: z.enum(['overseas', 'cn']).optional(),

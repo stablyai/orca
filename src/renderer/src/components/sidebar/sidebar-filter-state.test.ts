@@ -37,6 +37,7 @@ function filterState(overrides: Partial<FilterState> = {}): FilterState {
   return {
     showSleepingWorkspaces: true,
     filterRepoIds: [],
+    sidebarFilterQuery: '',
     hideDefaultBranchWorkspace: false,
     hideAutomationGeneratedWorkspaces: false,
     hideCliCreatedWorkspaces: false,
@@ -154,11 +155,25 @@ describe('isSleepingSweepExemptionNarrowingList', () => {
   })
 })
 
+describe('sidebarHasActiveFilters with a typed query', () => {
+  it('counts a non-blank query as a filter', () => {
+    expect(sidebarHasActiveFilters(filterState({ sidebarFilterQuery: 'host:mac' }))).toBe(true)
+    expect(sidebarHasActiveFilters(filterState({ sidebarFilterQuery: '   ' }))).toBe(false)
+  })
+
+  it('flags the query for reset when set', () => {
+    expect(
+      computeClearFilterActions(filterState({ sidebarFilterQuery: 'orca' })).resetSidebarFilterQuery
+    ).toBe(true)
+  })
+})
+
 describe('computeClearFilterActions', () => {
   it('returns no-op actions when nothing is set', () => {
     expect(computeClearFilterActions(filterState())).toEqual({
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
+      resetSidebarFilterQuery: false,
       resetHideDefaultBranchWorkspace: false,
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
@@ -176,6 +191,7 @@ describe('computeClearFilterActions', () => {
     expect(computeClearFilterActions(filterState({ hideDefaultBranchWorkspace: true }))).toEqual({
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
+      resetSidebarFilterQuery: false,
       resetHideDefaultBranchWorkspace: true,
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
@@ -192,6 +208,7 @@ describe('computeClearFilterActions', () => {
     ).toEqual({
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
+      resetSidebarFilterQuery: false,
       resetHideDefaultBranchWorkspace: false,
       resetHideAutomationGeneratedWorkspaces: true,
       resetHideCliCreatedWorkspaces: false,
@@ -206,6 +223,7 @@ describe('computeClearFilterActions', () => {
     expect(computeClearFilterActions(filterState({ hideCliCreatedWorkspaces: true }))).toEqual({
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
+      resetSidebarFilterQuery: false,
       resetHideDefaultBranchWorkspace: false,
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: true,
@@ -220,6 +238,7 @@ describe('computeClearFilterActions', () => {
     expect(computeClearFilterActions(filterState({ hideDetachedHeadWorkspaces: true }))).toEqual({
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
+      resetSidebarFilterQuery: false,
       resetHideDefaultBranchWorkspace: false,
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
@@ -247,6 +266,7 @@ describe('computeClearFilterActions', () => {
     expect(computeClearFilterActions(filterState({ workspaceHostScope: 'ssh:host-1' }))).toEqual({
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
+      resetSidebarFilterQuery: false,
       resetHideDefaultBranchWorkspace: false,
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
@@ -263,6 +283,7 @@ describe('computeClearFilterActions', () => {
     ).toEqual({
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
+      resetSidebarFilterQuery: false,
       resetHideDefaultBranchWorkspace: false,
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
@@ -287,6 +308,7 @@ describe('computeClearFilterActions', () => {
     ).toEqual({
       resetShowSleepingWorkspaces: true,
       resetFilterRepoIds: true,
+      resetSidebarFilterQuery: false,
       resetHideDefaultBranchWorkspace: true,
       resetHideAutomationGeneratedWorkspaces: true,
       resetHideCliCreatedWorkspaces: false,

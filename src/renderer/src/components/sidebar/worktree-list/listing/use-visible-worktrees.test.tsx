@@ -36,7 +36,9 @@ describe('useVisibleSidebarWorktrees', () => {
   })
 
   it('projects both host rows through the primary sidebar pipeline', () => {
-    const local = makeWorktree('shared', 'Local workspace', { hostId: 'local' })
+    const local = makeWorktree('shared', 'Local workspace', {
+      hostId: 'local'
+    })
     const ssh = makeWorktree('shared', 'SSH workspace', { hostId: 'ssh:box' })
     const repo = makeRepo()
     useAppStore.setState({ worktreesByRepo: { [repo.id]: [local, ssh] } })
@@ -46,6 +48,7 @@ describe('useVisibleSidebarWorktrees', () => {
         filterState: {
           showSleepingWorkspaces: true,
           filterRepoIds: [],
+          sidebarFilterQuery: '',
           hideDefaultBranchWorkspace: false,
           hideAutomationGeneratedWorkspaces: false,
           hideCliCreatedWorkspaces: false,
@@ -71,7 +74,9 @@ describe('useVisibleSidebarWorktrees', () => {
   })
 
   it('does not expand one host-filtered collision into both rows', () => {
-    const local = makeWorktree('shared', 'Local workspace', { hostId: 'local' })
+    const local = makeWorktree('shared', 'Local workspace', {
+      hostId: 'local'
+    })
     const ssh = makeWorktree('shared', 'SSH workspace', { hostId: 'ssh:box' })
     const repo = makeRepo()
     useAppStore.setState({ worktreesByRepo: { [repo.id]: [local, ssh] } })
@@ -81,6 +86,7 @@ describe('useVisibleSidebarWorktrees', () => {
         filterState: {
           showSleepingWorkspaces: true,
           filterRepoIds: [],
+          sidebarFilterQuery: '',
           hideDefaultBranchWorkspace: false,
           hideAutomationGeneratedWorkspaces: false,
           hideCliCreatedWorkspaces: false,
@@ -105,13 +111,16 @@ describe('useVisibleSidebarWorktrees', () => {
   })
   it('does not rescan every worktree when a settings write leaves the focused host unchanged', () => {
     const repo = makeRepo()
-    const worktree = makeWorktree('alpha', 'Alpha workspace', { hostId: 'local' })
+    const worktree = makeWorktree('alpha', 'Alpha workspace', {
+      hostId: 'local'
+    })
     useAppStore.setState({ worktreesByRepo: { [repo.id]: [worktree] } })
 
-    const baseArgs = {
+    const baseArgs: Parameters<typeof useVisibleSidebarWorktrees>[0] = {
       filterState: {
         showSleepingWorkspaces: true,
         filterRepoIds: [],
+        sidebarFilterQuery: '',
         hideDefaultBranchWorkspace: false,
         hideAutomationGeneratedWorkspaces: false,
         hideCliCreatedWorkspaces: false,
@@ -127,7 +136,7 @@ describe('useVisibleSidebarWorktrees', () => {
       worktreeLineageById: {},
       defaultHostId: LOCAL_EXECUTION_HOST_ID,
       agentSendTargetWorktreeId: null
-    } as Parameters<typeof useVisibleSidebarWorktrees>[0]
+    }
     // Why the extra `settings`: it is the pre-fix memo key. Passing it keeps
     // this test red against the old hook, which re-keyed the whole scan on the
     // settings object identity.
@@ -156,7 +165,11 @@ describe('useVisibleSidebarWorktrees', () => {
     expect(result.current.visibleWorktrees).toBe(initialVisible)
 
     // A write that does move it still recomputes.
-    rerender(Object.assign({}, withSettings(nextSettings), { defaultHostId: 'runtime:other' }))
+    rerender(
+      Object.assign({}, withSettings(nextSettings), {
+        defaultHostId: 'runtime:other'
+      })
+    )
     expect(computeVisibleWorktreesCalls.count).toBe(callsAfterFirstRender + 1)
   })
 
@@ -171,6 +184,7 @@ describe('useVisibleSidebarWorktrees', () => {
         filterState: {
           showSleepingWorkspaces: true,
           filterRepoIds: [],
+          sidebarFilterQuery: '',
           hideDefaultBranchWorkspace: false,
           hideAutomationGeneratedWorkspaces: false,
           hideCliCreatedWorkspaces: false,

@@ -34,6 +34,9 @@ import { useSidebarWorktreeFilters } from './worktree-list/listing/use-filters'
 import { useSidebarWorktreeSelection } from './worktree-list/navigation/use-selection'
 import { useSidebarWorktreeSortOrder } from './worktree-list/listing/use-sort-order'
 import { useVisibleSidebarWorktrees } from './worktree-list/listing/use-visible-worktrees'
+import { useSidebarFilterQueryEvaluation } from './worktree-list/listing/use-filter-query-evaluation'
+import { useSidebarHostLabelById } from './worktree-list/listing/use-sidebar-host-options'
+import { useSidebarFilterQueryScope } from './worktree-list/listing/use-filter-query-scope'
 import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-mutations'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
@@ -108,11 +111,27 @@ const WorktreeList = React.memo(function WorktreeList({
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
   const { filterState, hasFilters, clearFilters, revealWorkspaceFilters } =
     useSidebarWorktreeFilters()
-  const sortedIds = useSidebarWorktreeSortOrder({ allWorktrees, repoMap, sortBy })
+  const sortedIds = useSidebarWorktreeSortOrder({
+    allWorktrees,
+    repoMap,
+    sortBy
+  })
   const manualOrderCatalog = useMemo(
-    () => buildWorktreeManualOrderCatalog({ worktrees: allWorktrees, folderWorkspaces }),
+    () =>
+      buildWorktreeManualOrderCatalog({
+        worktrees: allWorktrees,
+        folderWorkspaces
+      }),
     [allWorktrees, folderWorkspaces]
   )
+  const hostLabelById = useSidebarHostLabelById()
+  const filterQuery = useSidebarFilterQueryEvaluation({
+    query: filterState.sidebarFilterQuery,
+    allWorktrees,
+    repoMap,
+    hostLabelById,
+    defaultHostId
+  })
   const { visibleWorktrees, pairedDeviceIdsByEnvironment } = useVisibleSidebarWorktrees({
     filterState,
     sortBy,
@@ -120,7 +139,8 @@ const WorktreeList = React.memo(function WorktreeList({
     repoMap,
     worktreeLineageById,
     defaultHostId,
-    agentSendTargetWorktreeId
+    agentSendTargetWorktreeId,
+    filterQuery
   })
   const effectiveCollapsedGroups = useEffectiveCollapsedGroups({
     collapsedGroups,
@@ -139,13 +159,21 @@ const WorktreeList = React.memo(function WorktreeList({
     folderWorkspaces,
     defaultHostId
   })
-  const visibleScope = useSidebarHostVisibleScope({
+  const hostVisibleScope = useSidebarHostVisibleScope({
     filterState,
     defaultHostId,
     repos,
     projectGroups,
     folderWorkspaces,
     pairedDeviceIdsByEnvironment
+  })
+  const visibleScope = useSidebarFilterQueryScope({
+    hostVisibleScope,
+    filterQuery,
+    visibleWorktrees,
+    projectGroups,
+    defaultHostId,
+    hostLabelById
   })
   const externalWorktreeCards = useSidebarExternalWorktreeCards({
     repos,
@@ -187,7 +215,11 @@ const WorktreeList = React.memo(function WorktreeList({
     workspaceStatuses,
     sortBy
   })
-  const projectGroupDialogs = useProjectGroupDialogs({ repos, repoMap, projectGroups })
+  const projectGroupDialogs = useProjectGroupDialogs({
+    repos,
+    repoMap,
+    projectGroups
+  })
 
   const handleImmediateWorktreeActivate = useCallback((worktreeId: string, rowKey?: string) => {
     // Why: re-rendering the virtualized sidebar on the pointer path adds visible latency; mutate the row directly and let store state reconcile after.
@@ -196,20 +228,30 @@ const WorktreeList = React.memo(function WorktreeList({
 
   const handleCreateForRepo = useCallback(
     (projectId: string) => {
-      openModal('new-workspace-composer', { initialRepoId: projectId, telemetrySource: 'sidebar' })
+      openModal('new-workspace-composer', {
+        initialRepoId: projectId,
+        telemetrySource: 'sidebar'
+      })
     },
     [openModal]
   )
   const handleOpenRepoSettings = useCallback(
     (projectId: string, sectionId?: string) => {
-      openSettingsTarget({ pane: 'repo', repoId: projectId, ...(sectionId ? { sectionId } : {}) })
+      openSettingsTarget({
+        pane: 'repo',
+        repoId: projectId,
+        ...(sectionId ? { sectionId } : {})
+      })
       openSettingsPage()
     },
     [openSettingsPage, openSettingsTarget]
   )
   const handleOpenWorktreeVisibility = useCallback(
     (repo: Repo) => {
-      openModal('worktree-visibility', { repoId: repo.id, hostId: getRepoExecutionHostId(repo) })
+      openModal('worktree-visibility', {
+        repoId: repo.id,
+        hostId: getRepoExecutionHostId(repo)
+      })
     },
     [openModal]
   )

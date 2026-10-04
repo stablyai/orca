@@ -33,6 +33,39 @@ export const getLeftSidebarAppearanceEntry = createLocalizedCatalog((): Settings
   ]
 }))
 
+export const getSidebarDenseRowsEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  title: translate(
+    'auto.components.settings.appearance.search.sidebarDenseRows.title',
+    'Dense Rows'
+  ),
+  description: translate(
+    'auto.components.settings.appearance.search.sidebarDenseRows.description',
+    'Show each workspace as a single tight line in the sidebar list.'
+  ),
+  keywords: [
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.sidebarDenseRows.dense',
+      'dense'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.sidebarDenseRows.density',
+      'density'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.sidebarDenseRows.compact',
+      'compact'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.sidebarDenseRows.rows',
+      'rows'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.sidebarDenseRows.sidebar',
+      'sidebar'
+    )
+  ]
+}))
+
 export const getWorkspaceCardLayoutEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
   title: translate(
     'auto.components.settings.appearance.search.workspaceCardLayout.title',
@@ -188,6 +221,7 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
     ]
   },
   getWorkspaceCardLayoutEntry(),
+  getSidebarDenseRowsEntry(),
   getLeftSidebarAppearanceEntry(),
   getShowPinnedWorktreesInGroupsEntry()
 ])

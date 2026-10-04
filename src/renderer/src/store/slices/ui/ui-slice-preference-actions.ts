@@ -152,6 +152,10 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
 
     filterRepoIds: [],
     setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
+    sidebarFilterQuery: '',
+    setSidebarFilterQuery: (query) => set({ sidebarFilterQuery: query }),
+    sidebarFilterMatchCount: null,
+    setSidebarFilterMatchCount: (count) => set({ sidebarFilterMatchCount: count }),
 
     agentsVisibleHostIds: null,
     setAgentsVisibleHostIds: (ids) => {
@@ -223,9 +227,15 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     },
     setWorktreeCardProperties: (properties) => {
       const normalized = normalizeWorktreeCardProperties(properties)
-      set({ worktreeCardProperties: normalized, _worktreeCardModeDefaulted: false })
+      set({
+        worktreeCardProperties: normalized,
+        _worktreeCardModeDefaulted: false
+      })
       window.api.ui
-        .set({ worktreeCardProperties: normalized, _worktreeCardModeDefaulted: false })
+        .set({
+          worktreeCardProperties: normalized,
+          _worktreeCardModeDefaulted: false
+        })
         .catch(console.error)
     },
     agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,

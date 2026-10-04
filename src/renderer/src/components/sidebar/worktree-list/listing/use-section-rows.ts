@@ -10,7 +10,6 @@ import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shar
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import { buildRows } from '../grouping/build-rows'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, Row, WorktreeGroupBy } from '../grouping/row-types'
@@ -18,7 +17,7 @@ import { getLogicalRepoOrderRankById } from '../../project-header-drop'
 import { getEmptyProjectPlaceholderRepoIds } from '../../empty-project-placeholder-repos'
 import { addHostSectionRows } from '../../host-section-rows'
 import { orderHostSectionOptions } from '../../host-section-order'
-import { buildSidebarHostOptions } from '../../sidebar-host-options'
+import { useSidebarHostOptions } from './use-sidebar-host-options'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 
 type SectionRowsArgs = {
@@ -71,10 +70,6 @@ function collectRenderedSidebarRowKeys(sectionRows: ReturnType<typeof addHostSec
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, effectiveCollapsedGroups, defaultHostId } = args
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
-  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
-  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
 
@@ -111,31 +106,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       }),
     [pendingCreationKeys]
   )
-  const hostLabelOverrides = useMemo(
-    () => getHostDisplayLabelOverrides(args.settings),
-    [args.settings]
-  )
-  const hostOptions = useMemo(
-    () =>
-      buildSidebarHostOptions({
-        repos,
-        sshTargetLabels,
-        sshConnectionStates,
-        settings: args.settings,
-        runtimeEnvironments,
-        runtimeStatusByEnvironmentId,
-        hostLabelOverrides
-      }),
-    [
-      repos,
-      sshTargetLabels,
-      sshConnectionStates,
-      args.settings,
-      runtimeEnvironments,
-      runtimeStatusByEnvironmentId,
-      hostLabelOverrides
-    ]
-  )
+  const hostOptions = useSidebarHostOptions()
   const hostLabelById = useMemo(
     () => new Map(hostOptions.map((host) => [host.id, host.label])),
     [hostOptions]

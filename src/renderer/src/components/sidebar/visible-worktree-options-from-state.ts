@@ -1,13 +1,24 @@
 import type { Repo } from '../../../../shared/repo-types'
-import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getSettingsFocusedExecutionHostId,
+  getWorktreeExecutionHostId
+} from '../../../../shared/execution-host'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import type { useAppStore } from '@/store'
+import { getAllWorktreesFromState } from '@/store/selectors'
+import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getWorktreeIdsWithStructuredChat } from './visible-worktree-activity-inputs'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
 } from './workspace-creator-visibility'
 import type { VisibleWorktreeOptions } from './visible-worktrees'
+import { buildSidebarHostOptions } from './sidebar-host-options'
+import {
+  buildSidebarFilterQueryEvaluation,
+  type SidebarFilterQueryEvaluation
+} from './sidebar-filter-query-evaluation'
+import { buildWorkspaceStatusLabelById } from './workspace-filter-subject'
 
 /**
  * Read the store into the filter inputs `computeVisibleWorktrees` decides from.
@@ -48,6 +59,36 @@ export function buildVisibleWorktreeOptionsFromState(
     workspaceHostScope: state.workspaceHostScope,
     visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
     defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
-    worktreeLineageById: state.worktreeLineageById
+    worktreeLineageById: state.worktreeLineageById,
+    filterQuery: buildSidebarFilterQueryEvaluationFromState(state, repoMap)
   }
+}
+
+/** Evaluates the typed query outside React; returns null when the field is blank. */
+export function buildSidebarFilterQueryEvaluationFromState(
+  state: ReturnType<typeof useAppStore.getState>,
+  repoMap: Map<string, Repo>
+): SidebarFilterQueryEvaluation | null {
+  const query = state.sidebarFilterQuery ?? ''
+  if (!query.trim()) {
+    return null
+  }
+  const hostOptions = buildSidebarHostOptions({
+    repos: state.repos,
+    sshTargetLabels: state.sshTargetLabels,
+    sshConnectionStates: state.sshConnectionStates,
+    settings: state.settings,
+    runtimeEnvironments: state.runtimeEnvironments,
+    runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
+    hostLabelOverrides: getHostDisplayLabelOverrides(state.settings)
+  })
+  const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
+  return buildSidebarFilterQueryEvaluation({
+    query,
+    worktrees: getAllWorktreesFromState(state),
+    repoMap,
+    hostLabelById: new Map(hostOptions.map((host) => [host.id, host.label])),
+    statusLabelById: buildWorkspaceStatusLabelById(state.workspaceStatuses),
+    resolveHostId: (worktree, repo) => getWorktreeExecutionHostId(worktree, repo, defaultHostId)
+  })
 }

@@ -52,6 +52,8 @@ export function isDetachedHeadWorkspace(worktree: Worktree): boolean {
 export type SidebarFilterState = {
   showSleepingWorkspaces: boolean
   filterRepoIds: readonly string[]
+  /** Typed query from the sidebar filter field; blank or absent means none. */
+  sidebarFilterQuery?: string
   hideDefaultBranchWorkspace: boolean
   hideAutomationGeneratedWorkspaces: boolean
   hideCliCreatedWorkspaces: boolean

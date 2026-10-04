@@ -6438,6 +6438,31 @@
           "copied": "Command copied",
           "retry": "Retry now",
           "restored": "Git is working again. Worktrees refreshed."
+        },
+        "SidebarFilterQueryField": {
+          "c78a56fadc": "Filter workspaces",
+          "0c048febe3": "Filter — try host: branch: is:",
+          "0533a99376": "Clear filter",
+          "2d75a40c73": "{{value0}} of {{value1}} workspaces match",
+          "0f8d520dd0": "workspace name",
+          "132df25183": "project name or path",
+          "46399c418f": "branch name",
+          "9787a72366": "execution host",
+          "eae0f4ca99": "checkout path",
+          "e8450c86f8": "workspace status",
+          "0d8ad67fa9": "pinned, main, sleeping, active, detached, cli, automation, unread, folder",
+          "3734cb9183": "linked pull or merge request number",
+          "b7db4543a5": "linked issue number",
+          "2584a36229": "match any field, including comments, reviews and ports"
+        },
+        "SidebarSavedFilterViewsMenu": {
+          "723d16c3eb": "Saved filters",
+          "0f0f48b5f9": "No saved filters yet",
+          "3c3176fad2": "Delete saved filter {{value0}}",
+          "c9f064aa7d": "Save current filter…",
+          "8318903a33": "Filter name",
+          "50a853e1e5": "Cancel",
+          "2ed6826c1d": "Save"
         }
       },
       "shared": {
@@ -9368,6 +9393,15 @@
               "kw": {
                 "cursor": "cursor"
               }
+            },
+            "sidebarDenseRows": {
+              "title": "Dense Rows",
+              "description": "Show each workspace as a single tight line in the sidebar list.",
+              "dense": "dense",
+              "density": "density",
+              "compact": "compact",
+              "rows": "rows",
+              "sidebar": "sidebar"
             }
           }
         },
