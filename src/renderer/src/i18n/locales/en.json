@@ -6470,7 +6470,8 @@
           "cliCreated": "Hide CLI-created",
           "detachedHead": "Hide detached HEAD",
           "keepDefaultBranch": "Except default branch",
-          "keepDefaultBranchAria": "Keep the default branch visible while hiding sleeping workspaces"
+          "keepDefaultBranchAria": "Keep the default branch visible while hiding sleeping workspaces",
+          "hideFilterBadge": "Hide filter badge"
         },
         "SidebarHeader": {
           "92154beb7e": "New workspace",
