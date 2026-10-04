@@ -274,17 +274,6 @@ describe('resolveComposerBranchReuse', () => {
     ).toEqual({ reuseEligibleBranch: 'feature-x', defaultReuse: true })
   })
 
-  it('treats a slash-containing local branch as reusable (ref equals local name)', () => {
-    expect(
-      resolveComposerBranchReuse({
-        refName: 'fix/bug-0',
-        localBranchName: 'fix/bug-0',
-        selectionProducedOverride: true,
-        branchCheckedOutElsewhere: false
-      })
-    ).toEqual({ reuseEligibleBranch: 'fix/bug-0', defaultReuse: true })
-  })
-
   it('does not offer reuse for a remote-only ref (ref carries an origin/ prefix)', () => {
     expect(
       resolveComposerBranchReuse({

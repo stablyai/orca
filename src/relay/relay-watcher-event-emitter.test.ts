@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import type { WatcherProcessEvent } from '../main/ipc/parcel-watcher-process-protocol'
 import { RelayDispatcher } from './dispatcher'
@@ -200,13 +198,6 @@ describe('relay watcher writer admission', () => {
 })
 
 describe('relay watcher overflow suppression key', () => {
-  it('keeps the source free of NUL bytes so git and grep still see text', () => {
-    const source = readFileSync(
-      fileURLToPath(new URL('./relay-watcher-event-emitter.ts', import.meta.url))
-    )
-    expect(source.includes(0)).toBe(false)
-  })
-
   it('scopes the outstanding marker per client as well as per root', () => {
     const primary = createRecordingSink(65536)
     const secondary = createRecordingSink(65536)

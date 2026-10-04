@@ -89,8 +89,21 @@ beforeEach(() => {
 })
 
 describe('session parsers that stop consuming a gated transcript early', () => {
+  it('destroys the bounded Antigravity stream when its read fails', async () => {
+    const stream = Readable.from(
+      (async function* () {
+        yield Buffer.from('{}\n')
+        throw new Error(PARSE_FAILURE)
+      })()
+    )
+    mocks.openStream.mockReturnValue(stream)
+    await expect(
+      parseAntigravitySessionFile(file('/w/conversation.jsonl'), 'linux')
+    ).rejects.toThrow(PARSE_FAILURE)
+    expect(stream.destroyed).toBe(true)
+  })
+
   it.each([
-    ['antigravity', () => parseAntigravitySessionFile(file('/w/conversation.jsonl'), 'linux')],
     ['droid', () => parseDroidSessionFile(file('/w/session.jsonl'), 'linux')],
     ['message graph', () => parseMessageGraphSessionFile('pi', file('/w/session.jsonl'), 'linux')]
   ])('destroys the stream when the %s parse throws', async (_agent, parse) => {

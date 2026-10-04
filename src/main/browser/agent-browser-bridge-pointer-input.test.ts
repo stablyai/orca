@@ -430,17 +430,4 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
 
     expect(wc.focus).toHaveBeenCalled()
   })
-
-  it('drops empty command queues after pointer commands finish', async () => {
-    await bridge.mouseMove(10, 20)
-    await bridge.mouseWheel(120)
-
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reads the bridge's own private queue bookkeeping, mirroring agent-browser-bridge-mouse-input.test.ts.
-    const internals = bridge as unknown as {
-      commandQueues: Map<string, unknown[]>
-      processingQueues: Set<string>
-    }
-    expect(internals.commandQueues.size).toBe(0)
-    expect(internals.processingQueues.size).toBe(0)
-  })
 })

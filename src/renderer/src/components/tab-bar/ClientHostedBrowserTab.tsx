@@ -12,7 +12,8 @@ import {
   getClientHostedBrowserRowLabel
 } from './client-hosted-browser-row-label'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
-import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 
 /**
  * A page rendering on a paired client desktop, shown in this host's strip.
@@ -36,13 +37,14 @@ export default function ClientHostedBrowserTab({
   onClose: () => void
   includeTopTabBorder?: boolean
 }): React.JSX.Element {
+  const slotProps = useTabStripSlotProps(row.browserPageId, isActive)
   const loading = row.loading && !row.hostAbsent
   const PageIcon = loading ? Loader2 : Laptop
   const label = getClientHostedBrowserRowLabel(row)
   const hostDescription = describeClientHostedBrowserRowHost(row)
 
   return (
-    <div className={TAB_CONTAINER_WIDTH_CLASSES}>
+    <div {...slotProps}>
       <Tooltip>
         <TooltipTrigger asChild>
           <div

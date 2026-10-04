@@ -14,21 +14,45 @@ export const ARTIFACT_RGB = '0,128,255'
  *
  * The component is imported rather than reimplemented, and `resolveExtensions` puts `.web.tsx` first
  * so this is the file the bundle ships. `renderSource` is a marker the Source case looks for.
+ *
+ * Wrapped in the page's own provider because the preview asks the shell what it may do
+ * (`use-html-preview-link-grant.web.ts` reads `init.grants.native`), and `usePageBridgeClient`
+ * throws outside one. The client is the two members that read is made of and nothing else: a fuller
+ * fake would be a second implementation of the bridge, and what an arm needs to vary is the grant
+ * list. `grants` defaults to carrying `externalNavigation`, which is what the session route
+ * declares, so an arm that does not mention it measures the shipped screen.
  */
 export const ENTRY_SOURCE = `
 import { createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Text } from 'react-native'
-import { MobileHtmlPreview, MOBILE_HTML_PREVIEW_SANDBOX } from './MobileHtmlPreview'
+import { RpcClientProvider } from '../transport/client-context.web'
+import {
+  MobileHtmlPreview,
+  MOBILE_HTML_PREVIEW_SANDBOX,
+  MOBILE_HTML_PREVIEW_SEALED_SANDBOX
+} from './MobileHtmlPreview'
 
 window.__sandbox = MOBILE_HTML_PREVIEW_SANDBOX
-window.__mount = (html, sandboxOverride) => {
+window.__sealedSandbox = MOBILE_HTML_PREVIEW_SEALED_SANDBOX
+window.__mount = (html, sandboxOverride, grants) => {
   const host = document.getElementById('root')
+  const native = grants ?? ['navigate', 'storage', 'externalNavigation']
+  window.__grants = native
+  const client = {
+    getShellSession: () => ({ grants: { native } }),
+    getState: () => 'connected',
+    onStateChange: () => () => {}
+  }
   createRoot(host).render(
-    createElement(MobileHtmlPreview, {
-      html,
-      renderSource: () => createElement(Text, null, 'SOURCE_TAB_RENDERED')
-    })
+    createElement(
+      RpcClientProvider,
+      { client },
+      createElement(MobileHtmlPreview, {
+        html,
+        renderSource: () => createElement(Text, null, 'SOURCE_TAB_RENDERED')
+      })
+    )
   )
   // A control arm needs a frame the product would never build -- one with allow-scripts -- so that
   // "the script did not run" can be told apart from "the fixture has no script". Built here rather
@@ -78,13 +102,17 @@ window.__mount = (html, sandboxOverride) => {
  * `extra.head` and `extra.body` let a case add a `<meta refresh>` or a script without a second
  * fixture, so the thing under test is the only difference between the arms.
  */
-export function artifact({ links, assets, extra = {}, nonce = 'n0' }) {
+export function artifact({ links, assets, extra = {}, nonce = 'n0', doctype = '<!doctype html>' }) {
   // Every foreign URL carries this arm's nonce, because a closed page's requests can still land and
   // a hit list shared across arms would report the previous one's fetches as this one's.
   const tag = `?n=${nonce}`
   // Subresources move to `assets` and the links do not: a case about what the policy fetches should
   // not also change which origin a tapped link navigates to.
-  return `<!doctype html><html><head><title>ARTIFACT</title>
+  //
+  // `doctype` is a parameter for one case's sake (C8.1 round 2): the hidden-link path reparses and
+  // reserialises the artifact, and the doctype is what an engine reads its rendering mode from, so
+  // an arm has to be able to hand the frame one that is not the bare name.
+  return `${doctype}<html><head><title>ARTIFACT</title>
 <style>html,body{margin:0;height:100%;background:rgb(${ARTIFACT_RGB})}
 #bg{background-image:url("${assets}/css-bg.png${tag}")}
 @font-face{font-family:probe;src:url("${assets}/probe.woff2${tag}")}
@@ -95,6 +123,10 @@ export function artifact({ links, assets, extra = {}, nonce = 'n0' }) {
 <a id="blanklink" href="${links}/blank.html${tag}" target="_blank">window</a>
 <a id="rootlink" href="/" target="_top">root</a>
 <a id="emptylink" href="" target="_top">empty</a>
+<a id="fraglink" href="#fragtarget">contents</a><h2 id="fragtarget">F</h2>
+<pre id="pre">
+
+kept</pre>
 <form id="topform" action="${links}/form.html" target="_top" method="get"><button id="submit">go</button></form>
 ${extra.body ?? ''}</body></html>`
 }

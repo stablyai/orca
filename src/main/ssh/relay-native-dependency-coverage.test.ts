@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { build } from 'esbuild'
+import { JSONC_PARSER_ESM_ALIAS } from '../../../config/build-plugins/jsonc-parser-esm'
 import { describe, expect, it } from 'vitest'
 import { RELAY_NATIVE_DEPS } from './ssh-relay-deploy'
 
@@ -69,6 +70,7 @@ async function relayReachableSources(): Promise<string[]> {
     write: false,
     metafile: true,
     external: ['node-pty', '@parcel/watcher', 'electron'],
+    alias: JSONC_PARSER_ESM_ALIAS,
     define: { 'process.env.NODE_ENV': '"production"' }
   })
   return Object.keys(result.metafile.inputs).filter((input) => !input.includes('node_modules'))

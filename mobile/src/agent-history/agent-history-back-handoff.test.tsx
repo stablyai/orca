@@ -25,7 +25,7 @@ const router = vi.hoisted(() => ({
   canGoBack: vi.fn(() => false)
 }))
 
-vi.mock('expo-router', () => ({ useRouter: () => router }))
+vi.mock('expo-router', () => ({ useRouter: () => router, usePathname: () => '/' }))
 
 // The house pattern for a screen test: react-native is Flow source vitest cannot parse, so the
 // host components become strings and the tree below is the panel's own structure.
@@ -60,7 +60,7 @@ vi.mock('../transport/client-context', async () => await import('../transport/cl
 // runtime this test does not have. The panel reads `client`/`state` off `useHostClient`.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
-  useForceReconnect: () => () => Promise.resolve(),
+  useForceReconnect: () => null,
   useForgetHostClient: () => () => {},
   useHostClient: () => ({ client: null, clientId: null, state: 'disconnected' }),
   usePrimeHosts: () => () => {},

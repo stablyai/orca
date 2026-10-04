@@ -1,9 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  renameSync
+} from 'node:fs'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { openProfileStateDatabase } from '../persistence/profile-state/profile-state-database'
 import {
   createDefaultLocalOrcaProfile,
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
@@ -66,6 +74,9 @@ describe('profile index store', () => {
     expect(activeProfile.dataFile).toBe(
       join(testState.dir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json')
     )
+    expect(activeProfile.stateDatabaseFile).toBe(
+      join(testState.dir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'profile-state.db')
+    )
     expect(readJson(activeProfile.dataFile)).toEqual(legacyState)
     expect(readJson(`${activeProfile.dataFile}.bak.0`)).toEqual(legacyBackup)
     expect(
@@ -115,7 +126,57 @@ describe('profile index store', () => {
 
     expect(activeProfile.profile.id).toBe(profileId)
     expect(activeProfile.dataFile).toBe(join(profileDirectory, 'orca-data.json'))
+    expect(activeProfile.stateDatabaseFile).toBe(join(profileDirectory, 'profile-state.db'))
     expect(readJson(activeProfile.dataFile)).toEqual(profileData)
+  })
+
+  it('does not copy legacy JSON into a database-only default profile', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({ settings: { theme: 'legacy' } }),
+      'utf-8'
+    )
+    const profileDirectory = join(testState.dir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID)
+    mkdirSync(profileDirectory, { recursive: true })
+    const database = openProfileStateDatabase(
+      join(profileDirectory, 'profile-state.db'),
+      DEFAULT_LOCAL_ORCA_PROFILE_ID
+    )
+    database.db.close()
+
+    const { ensureActiveOrcaProfile } = await loadProfileIndexStore()
+    const activeProfile = ensureActiveOrcaProfile()
+
+    expect(activeProfile.stateDatabaseFile).toBe(join(profileDirectory, 'profile-state.db'))
+    expect(existsSync(activeProfile.dataFile)).toBe(false)
+    expect(readFileSync(join(testState.dir, 'orca-data.json'), 'utf-8')).toContain('legacy')
+  })
+
+  it.each([
+    'orca-data.json.sqlite-export.1.json',
+    'profile-state.db.backup.1789999999999-00000000-0000-4000-8000-000000000000.db',
+    'profile-state.db-wal',
+    'profile-state.db-shm',
+    'profile-state.db-journal'
+  ])('does not seed a stale mirror when %s exists without the database', async (artifact) => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({ settings: { theme: 'legacy' } }),
+      'utf-8'
+    )
+    const profileDirectory = join(testState.dir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID)
+    mkdirSync(profileDirectory, { recursive: true })
+    writeFileSync(
+      join(profileDirectory, artifact),
+      JSON.stringify({ settings: { theme: 'migrated' } }),
+      'utf-8'
+    )
+
+    const { ensureActiveOrcaProfile } = await loadProfileIndexStore()
+    const activeProfile = ensureActiveOrcaProfile()
+
+    expect(existsSync(activeProfile.dataFile)).toBe(false)
+    expect(readFileSync(join(testState.dir, 'orca-data.json'), 'utf-8')).toContain('legacy')
   })
 
   it('creates an empty local profile without copying legacy state into it', async () => {
@@ -195,6 +256,45 @@ describe('profile index store', () => {
     expect(recovered.profiles.length).toBeGreaterThanOrEqual(2)
   })
 
+  it('retains the selected profile when only its backup index remains', async () => {
+    const store = await loadProfileIndexStore()
+    store.ensureActiveOrcaProfile()
+    const created = store.createLocalOrcaProfile({ name: 'Work' })
+    store.setActiveOrcaProfile(created.profile.id)
+    const indexPath = store.getOrcaProfileIndexPath()
+    renameSync(indexPath, `${indexPath}.bak`)
+
+    expect(store.loadOrCreateProfileIndex(testState.dir).activeProfileId).toBe(created.profile.id)
+    expect(store.ensureActiveOrcaProfile().profile.id).toBe(created.profile.id)
+    expect(readJson(indexPath)).toMatchObject({ activeProfileId: created.profile.id })
+  })
+
+  it.each(['primary', 'backup', 'both'] as const)(
+    'refuses an unreadable %s index without replacing it',
+    async (source) => {
+      const store = await loadProfileIndexStore()
+      const indexPath = store.getOrcaProfileIndexPath()
+      if (source !== 'backup') {
+        writeFileSync(indexPath, '{broken-primary')
+      }
+      if (source !== 'primary') {
+        writeFileSync(`${indexPath}.bak`, '{broken-backup')
+      }
+
+      expect(() => store.loadOrCreateProfileIndex(testState.dir)).toThrow(
+        'Could not read active profile index'
+      )
+      expect(() => store.ensureActiveOrcaProfile()).toThrow('Could not read active profile index')
+      if (source !== 'backup') {
+        expect(readFileSync(indexPath, 'utf8')).toBe('{broken-primary')
+      }
+      if (source !== 'primary') {
+        expect(readFileSync(`${indexPath}.bak`, 'utf8')).toBe('{broken-backup')
+      }
+      expect(existsSync(join(testState.dir, 'profiles'))).toBe(false)
+    }
+  )
+
   it('rejects profile ids that are not safe path segments', async () => {
     const store = await loadProfileIndexStore()
     const indexPath = store.getOrcaProfileIndexPath()
@@ -216,8 +316,7 @@ describe('profile index store', () => {
     mkdirSync(testState.dir, { recursive: true })
     writeFileSync(indexPath, JSON.stringify(index), 'utf-8')
 
-    // The tampered entry is filtered; startup falls back to a fresh default.
-    const state = store.ensureActiveOrcaProfile()
-    expect(state.profile.id).toBe(DEFAULT_LOCAL_ORCA_PROFILE_ID)
+    expect(() => store.ensureActiveOrcaProfile()).toThrow('Could not read active profile index')
+    expect(readJson(indexPath)).toEqual(index)
   })
 })

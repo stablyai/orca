@@ -142,6 +142,9 @@ export function collectDeregisteredRepoIds(state: PersistedState): Set<string> {
     for (const tombstone of Object.values(session.terminalSurfaceTombstonesByPaneKey ?? {})) {
       addWorktreeId(tombstone.worktreeId)
     }
+    for (const record of Object.values(session.closedTerminalTabTombstonesByTabId ?? {})) {
+      addWorktreeId(record.worktreeId)
+    }
   }
   return orphanRepoIds
 }

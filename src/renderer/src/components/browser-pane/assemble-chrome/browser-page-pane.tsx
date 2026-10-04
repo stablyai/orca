@@ -224,7 +224,7 @@ export function BrowserPagePane({
     onUpdatePageState,
     onSetUrl,
     setAddressBarValue: nav.setAddressBarValue,
-    setPendingAnnotationPayload: grabAnnotations.setPendingAnnotationPayload,
+    cancelPendingBrowserCapture: grabAnnotations.cancelPendingBrowserCapture,
     setBrowserOverlayViewport,
     setFindOpen,
     focusAddressBarNow,
@@ -232,7 +232,6 @@ export function BrowserPagePane({
     paneZoomLevelRef: zoom.paneZoomLevelRef,
     setBrowserZoomPercent: zoom.setBrowserZoomPercent,
     pendingAnnotationPayload: grabAnnotations.pendingAnnotationPayload,
-    browserAnnotationsLength: annotationSend.browserAnnotations.length,
     inputLocked,
     faviconUrl: browserTab.faviconUrl,
     webviewRef,
@@ -278,7 +277,9 @@ export function BrowserPagePane({
   })
   useBrowserPageKeyboardShortcuts({
     browserTabId: browserTab.id,
+    workspaceId,
     isActive,
+    chromeShortcutScope,
     isActiveRef,
     markupIsActive: markup.isActive,
     webviewRef,

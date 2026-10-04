@@ -20,6 +20,7 @@ import {
   presentRendererRecoveryPrompt,
   type RendererRecoveryPromptFailure
 } from '../window/renderer-recovery-prompt'
+import { probeRendererLaunchCapacity } from '../window/renderer-launch-failure-probe'
 
 // The window module injects this callback to avoid a cycle between actions and lifecycle code.
 let openWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
@@ -149,17 +150,20 @@ export function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
   webContents?.send('ui:openCrashReport')
 }
 
-// Why: on renderer crash-loop the breaker stops auto-reloading and the window goes blank, so a main-process dialog is the only retry/quit surface.
+// Why: once auto-recovery gives up the window stays blank, so a main-process dialog is the only retry/quit surface.
 export async function showRendererRecoveryPrompt(
   recentRecoveryCount: number,
   failure?: RendererRecoveryPromptFailure,
-  retry?: () => void
+  retry?: () => void,
+  availableCommitMB?: number
 ): Promise<void> {
   await presentRendererRecoveryPrompt({
     recentRecoveryCount,
     ...(failure ? { failure } : {}),
+    ...(availableCommitMB === undefined ? {} : { availableCommitMB }),
     isQuitting: () => state.isQuitting,
     diagnose: describeInstallDirAclPoison,
+    probeLaunchCapacity: () => probeRendererLaunchCapacity(),
     showMessageBox: (options) => {
       const window =
         state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined

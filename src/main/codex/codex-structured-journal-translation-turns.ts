@@ -1,9 +1,10 @@
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalTurnItem,
-  AgentJournalTurnLifecycle,
-  AgentJournalTurnLifecycleState,
-  AgentJournalTurnOutcome
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemIdentity,
+  type AgentJournalTurnItem,
+  type AgentJournalTurnLifecycle,
+  type AgentJournalTurnLifecycleState,
+  type AgentJournalTurnOutcome
 } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
@@ -43,12 +44,12 @@ export function codexTurnLifecycleBody(
   return agentJournalTurnBody(turnLifecycle)
 }
 
-/** Maps a `turn/completed` status; a missing one is a clean finish. A terminal
- *  `error` also ends a turn and names its own outcome rather than coming here. */
+/** Maps a `turn/completed` status, live or restored. Only `interrupted` is a stop;
+ *  a failed turn completed, and `codexTurnOutcome` says it failed. */
 export function codexTurnLifecycleState(
   status: string | null
 ): Extract<AgentJournalTurnLifecycleState, 'completed' | 'interrupted'> {
-  return status === null || status === 'completed' ? 'completed' : 'interrupted'
+  return status === 'interrupted' ? 'interrupted' : 'completed'
 }
 
 /**
@@ -109,6 +110,7 @@ export function publishCodexTurnLifecycle(input: {
   // The running row's `ts` is the host's turn-start receipt so clients can anchor a live counter.
   const appendOptions = {
     lifecycle: true,
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE,
     ...(input.state === 'running' && input.startedAt !== undefined
       ? { observedAt: input.startedAt }
       : {})
@@ -121,7 +123,7 @@ export function publishCodexTurnLifecycle(input: {
   } else {
     input.sink.appendItem(identity, body, appendOptions)
   }
-  // Preserve first-work evidence when completion arrives before the journal drains.
+  // Keyed apart, so a completion's publication never replaces a start one still waiting to run.
   const publishOptions = {
     lifecycle: true,
     ...(input.state === 'running'

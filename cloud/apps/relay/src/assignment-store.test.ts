@@ -2,7 +2,11 @@ import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RelayCellConfig } from './config.js'
-import { RelayAssignmentStore, STRANDED_MIGRATION_ABANDON_MS } from './assignment-store.js'
+import {
+  RelayAssignmentRowBusyError,
+  RelayAssignmentStore,
+  STRANDED_MIGRATION_ABANDON_MS
+} from './assignment-store.js'
 import {
   encodeMembership,
   type CellAdmissionMembership
@@ -110,6 +114,7 @@ class OneShotInventoryFailureDatabase implements RelayDatabase {
     return await this.delegate.transaction(
       async (transaction) =>
         await operation({
+          dialect: transaction.dialect,
           query: async (sql, params = []) => await transaction.query(sql, params),
           queryLocked: async (sql, params = [], options = {}) =>
             await this.lockedQuery(transaction, sql, params, options),
@@ -173,6 +178,7 @@ class RepeatedDrainAccountingFailureDatabase implements RelayDatabase {
     return await this.delegate.transaction(
       async (transaction) =>
         await operation({
+          dialect: transaction.dialect,
           query: async (sql, params = []) => await transaction.query(sql, params),
           queryLocked: async (sql, params = [], options = {}) =>
             await this.lockedQuery(transaction, sql, params, options),
@@ -1654,6 +1660,39 @@ describe('RelayAssignmentStore', () => {
         [identity.userId, identity.relayHostId]
       )
     ).toEqual([{ activity_kind: 'control', cell_id: 'cell-b' }])
+  })
+
+  it('skips a host whose row is busy and still evacuates the rest of the dead cell', async () => {
+    let now = 100
+    const cells: RelayCellConfig[] = [
+      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
+      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
+    ]
+    const store = await setupWithHeartbeats(() => now, cells)
+    for (const cell of cells) await heartbeat(store, cell)
+    await store.setCellEnabled('cell-b', false)
+    const busy = { userId: 'a-busy', relayHostId: 'host000000000001' }
+    const later = { userId: 'b-later', relayHostId: 'host000000000002' }
+    expect(await store.assign(busy)).toMatchObject({ cellId: 'cell-a' })
+    expect(await store.assign(later)).toMatchObject({ cellId: 'cell-a' })
+    await store.setCellEnabled('cell-b', true)
+
+    now += 45_001
+    await heartbeat(store, cells[1]!)
+    // The sweep reaches the busy host first: its own release holds its row.
+    const assign = store.assign.bind(store)
+    vi.spyOn(store, 'assign').mockImplementation(async (identity, ...rest) => {
+      if (identity.relayHostId === busy.relayHostId) throw new RelayAssignmentRowBusyError()
+      return await assign(identity, ...rest)
+    })
+
+    expect(await store.evacuateDeadCells()).toBe(1)
+    expect(await store.resolve(later)).toMatchObject({ cellId: 'cell-b' })
+    expect(
+      await database!.query(`SELECT cell_id FROM relay_assignments WHERE user_id = ?`, [
+        busy.userId
+      ])
+    ).toEqual([{ cell_id: 'cell-a' }])
   })
 
   it('does not let an unfenced capped cell starve eligible legacy recovery', async () => {

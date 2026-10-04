@@ -1,3 +1,5 @@
+import type { MarkdownPreviewDocument } from './markdown-preview-document-types'
+import type { VirtualMarkdownPreviewNavigation } from './VirtualMarkdownPreviewBody'
 import { useCallback, useEffect, useLayoutEffect, type MutableRefObject } from 'react'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { resolveMarkdownPreviewAddReviewNoteKey } from './markdown-preview-annotation-shortcut'
@@ -6,34 +8,29 @@ import {
   getMarkdownPreviewAnchorScrollTop
 } from './markdown-preview-anchor-navigation'
 import { cancelMarkdownPreviewEditorRevealFrames } from './markdown-preview-editor-reveal'
-import {
-  applyMarkdownPreviewSearchHighlights,
-  clearMarkdownPreviewSearchHighlights,
-  isMarkdownPreviewFindShortcut,
-  setActiveMarkdownPreviewSearchMatch
-} from './markdown-preview-search'
+import { clearMarkdownPreviewReviewTimers } from './markdown-preview-review-timer-cleanup'
+import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
+import { useMarkdownPreviewDomSearch } from './use-markdown-preview-dom-search'
 import type { MarkdownPreviewFoundation } from './use-markdown-preview-foundation'
 import { useMarkdownPreviewScrollViewport } from './use-markdown-preview-scroll-viewport'
-
-function clearMarkdownPreviewTimeout(timeoutRef: MutableRefObject<number | null>): void {
-  if (timeoutRef.current === null) {
-    return
-  }
-  window.clearTimeout(timeoutRef.current)
-  timeoutRef.current = null
-}
 
 export function useMarkdownPreviewViewport({
   foundation,
   scrollCacheKey,
   initialAnchor,
   content,
-  markdownAnnotationsEnabled
+  markdownAnnotationsEnabled,
+  largePreview = false,
+  largeDocument = null,
+  largeNavigationRef
 }: {
   foundation: MarkdownPreviewFoundation
   scrollCacheKey: string
   initialAnchor: string | null
   content: string
+  largePreview?: boolean
+  largeDocument?: MarkdownPreviewDocument | null
+  largeNavigationRef?: MutableRefObject<VirtualMarkdownPreviewNavigation | null>
   markdownAnnotationsEnabled: boolean
 }) {
   const {
@@ -41,18 +38,12 @@ export function useMarkdownPreviewViewport({
     bodyRef,
     inputRef,
     matchesRef,
-    searchInstanceRef,
     lastAppliedInitialAnchorRef,
     pendingEditorRevealFrameIdsRef,
     isSearchOpen,
     setIsSearchOpen,
-    query,
     setQuery,
     matchCount,
-    setMatchCount,
-    searchRevision,
-    setSearchRevision,
-    activeMatchIndex,
     setActiveMatchIndex,
     keybindings,
     activeAnnotationBlockKeyRef,
@@ -61,22 +52,32 @@ export function useMarkdownPreviewViewport({
     copiedReviewNoteResetTimerRef,
     reviewNotesCopyMountedRef,
     attentionReviewCommentTimeoutRef,
-    renderedContent
+    pendingReviewActionFrameIdsRef,
+    pendingReviewActionTimeoutIdsRef,
+    reviewActionFrameGenerationRef
   } = foundation
 
-  useMarkdownPreviewScrollViewport({ foundation, scrollCacheKey })
+  useMarkdownPreviewScrollViewport({
+    foundation,
+    scrollCacheKey,
+    restorePixels: !largePreview
+  })
 
   const moveToMatch = useCallback(
     (direction: 1 | -1) => {
-      if (matchesRef.current.length === 0) {
+      const count = largePreview ? matchCount : matchesRef.current.length
+      if (count === 0) {
         return
+      }
+      if (largePreview) {
+        largeNavigationRef?.current?.search()
       }
       setActiveMatchIndex((cur) => {
         const base = cur >= 0 ? cur : direction === 1 ? -1 : 0
-        return (base + direction + matchesRef.current.length) % matchesRef.current.length
+        return (base + direction + count) % count
       })
     },
-    [matchesRef, setActiveMatchIndex]
+    [largeNavigationRef, largePreview, matchCount, matchesRef, setActiveMatchIndex]
   )
 
   const openSearch = useCallback(() => {
@@ -109,15 +110,24 @@ export function useMarkdownPreviewViewport({
   }, [copiedReviewNoteResetTimerRef])
 
   const cleanupPreviewSurfaceTimers = useCallback((): void => {
+    reviewActionFrameGenerationRef.current += 1
+    const reviewFrames = pendingReviewActionFrameIdsRef.current
+    pendingReviewActionFrameIdsRef.current = []
+    const reviewTimeouts = pendingReviewActionTimeoutIdsRef.current
+    pendingReviewActionTimeoutIdsRef.current = []
     cancelMarkdownPreviewEditorRevealFrames(pendingEditorRevealFrameIdsRef)
-    clearMarkdownPreviewTimeout(attentionReviewCommentTimeoutRef)
+    clearMarkdownPreviewReviewTimers(attentionReviewCommentTimeoutRef, reviewTimeouts)
     clearReviewNotesCopiedResetTimer()
     clearCopiedReviewNoteResetTimer()
+    cancelMarkdownPreviewEditorRevealFrames({ current: reviewFrames })
   }, [
     attentionReviewCommentTimeoutRef,
     clearCopiedReviewNoteResetTimer,
     clearReviewNotesCopiedResetTimer,
-    pendingEditorRevealFrameIdsRef
+    pendingEditorRevealFrameIdsRef,
+    pendingReviewActionFrameIdsRef,
+    pendingReviewActionTimeoutIdsRef,
+    reviewActionFrameGenerationRef
   ])
 
   const setRootRef = useCallback(
@@ -133,6 +143,9 @@ export function useMarkdownPreviewViewport({
 
   const scrollToAnchor = useCallback(
     (rawAnchor: string): boolean => {
+      if (largePreview) {
+        return largeNavigationRef?.current?.anchor(rawAnchor) ?? false
+      }
       const container = rootRef.current
       const body = bodyRef.current
       if (!container || !body) {
@@ -155,7 +168,13 @@ export function useMarkdownPreviewViewport({
       target.focus({ preventScroll: true })
       return true
     },
-    [bodyRef, rootRef]
+    [bodyRef, rootRef, largeNavigationRef, largePreview]
+  )
+
+  const scrollToSourceLine = useCallback(
+    (line: number): boolean =>
+      largePreview ? (largeNavigationRef?.current?.sourceLine(line) ?? false) : false,
+    [largeNavigationRef, largePreview]
   )
 
   const navigateToTableOfContentsItem = useCallback(
@@ -165,49 +184,7 @@ export function useMarkdownPreviewViewport({
     [scrollToAnchor]
   )
 
-  useEffect(() => {
-    const body = bodyRef.current
-    if (!body) {
-      return
-    }
-
-    const instanceId = searchInstanceRef.current
-
-    if (!isSearchOpen) {
-      matchesRef.current = []
-      setMatchCount(0)
-      clearMarkdownPreviewSearchHighlights(instanceId)
-      return
-    }
-
-    const matches = applyMarkdownPreviewSearchHighlights(instanceId, body, query)
-    matchesRef.current = matches
-    setMatchCount(matches.length)
-    setSearchRevision((value) => value + 1)
-    setActiveMatchIndex((cur) =>
-      matches.length === 0 ? -1 : cur >= 0 && cur < matches.length ? cur : 0
-    )
-
-    return () => clearMarkdownPreviewSearchHighlights(instanceId)
-  }, [
-    bodyRef,
-    isSearchOpen,
-    matchesRef,
-    query,
-    renderedContent,
-    searchInstanceRef,
-    setActiveMatchIndex,
-    setMatchCount,
-    setSearchRevision
-  ])
-
-  useEffect(() => {
-    setActiveMarkdownPreviewSearchMatch(
-      searchInstanceRef.current,
-      matchesRef.current,
-      activeMatchIndex
-    )
-  }, [activeMatchIndex, matchCount, matchesRef, searchInstanceRef, searchRevision])
+  useMarkdownPreviewDomSearch(foundation, largePreview)
 
   useLayoutEffect(() => {
     if (!initialAnchor || initialAnchor === lastAppliedInitialAnchorRef.current) {
@@ -231,7 +208,7 @@ export function useMarkdownPreviewViewport({
 
     tryRevealAnchor()
     return () => window.cancelAnimationFrame(frameId)
-  }, [content, initialAnchor, lastAppliedInitialAnchorRef, scrollToAnchor])
+  }, [content, initialAnchor, largeDocument, lastAppliedInitialAnchorRef, scrollToAnchor])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -314,6 +291,7 @@ export function useMarkdownPreviewViewport({
     clearCopiedReviewNoteResetTimer,
     setRootRef,
     scrollToAnchor,
+    scrollToSourceLine,
     navigateToTableOfContentsItem
   }
 }

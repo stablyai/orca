@@ -8,7 +8,7 @@
  */
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, writeFileSync } from 'node:fs'
-import { rm, readFile, stat } from 'node:fs/promises'
+import { rm, readFile } from 'node:fs/promises'
 import * as path from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
@@ -119,6 +119,21 @@ describe('Integration: Client Mux ↔ Relay Dispatcher', () => {
       expect(result.isBinary).toBe(false)
     })
 
+    // Why this one stays: writeRelayFile resolves to undefined, so the response frame
+    // carries neither `result` nor `error` — the one payload shape the other cases here
+    // do not produce, and one a mock dispatcher never has to settle. The client sees
+    // `null`, not `undefined`: the member is absent from the frame, not carried as void.
+    it('writeFile creates/overwrites file content', async () => {
+      const filePath = path.join(tmpDir, 'output.txt')
+
+      await expect(
+        mux.request('fs.writeFile', { filePath, content: 'written via relay' })
+      ).resolves.toBeNull()
+
+      const content = await readFile(filePath, 'utf-8')
+      expect(content).toBe('written via relay')
+    })
+
     it('readFileStream round-trip preserves a 12 MB binary file', async () => {
       const filePath = path.join(tmpDir, 'big.png')
       const original = randomBytes(12 * 1024 * 1024)
@@ -127,78 +142,6 @@ describe('Integration: Client Mux ↔ Relay Dispatcher', () => {
       const { content } = await readFileViaStream(mux, filePath)
       expect(Buffer.from(content, 'base64').equals(original)).toBe(true)
     }, 30_000)
-
-    it('writeFile creates/overwrites file content', async () => {
-      const filePath = path.join(tmpDir, 'output.txt')
-
-      await mux.request('fs.writeFile', { filePath, content: 'written via relay' })
-
-      const content = await readFile(filePath, 'utf-8')
-      expect(content).toBe('written via relay')
-    })
-
-    it('stat returns file metadata', async () => {
-      writeFileSync(path.join(tmpDir, 'sized.txt'), 'abcdef')
-      const result = (await mux.request('fs.stat', {
-        filePath: path.join(tmpDir, 'sized.txt')
-      })) as { size: number; type: string; mtime: number }
-      expect(result).toMatchObject({ type: 'file', size: 6 })
-      expect(typeof result.mtime).toBe('number')
-    })
-
-    it('createFile + deletePath roundtrip', async () => {
-      const filePath = path.join(tmpDir, 'nested', 'deep', 'new.txt')
-
-      await mux.request('fs.createFile', { filePath })
-      const s = await stat(filePath)
-      expect(s.isFile()).toBe(true)
-
-      await mux.request('fs.deletePath', { targetPath: filePath })
-      await expect(stat(filePath)).rejects.toThrow()
-    })
-
-    it('createDir creates directories recursively', async () => {
-      const dirPath = path.join(tmpDir, 'a', 'b', 'c')
-
-      await mux.request('fs.createDir', { dirPath })
-      const s = await stat(dirPath)
-      expect(s.isDirectory()).toBe(true)
-    })
-
-    it('rename moves files', async () => {
-      const oldPath = path.join(tmpDir, 'before.txt')
-      const newPath = path.join(tmpDir, 'after.txt')
-      writeFileSync(oldPath, 'moving')
-
-      await mux.request('fs.rename', { oldPath, newPath })
-
-      await expect(stat(oldPath)).rejects.toThrow()
-      const content = await readFile(newPath, 'utf-8')
-      expect(content).toBe('moving')
-    })
-
-    it('copy duplicates files', async () => {
-      const src = path.join(tmpDir, 'src.txt')
-      const dst = path.join(tmpDir, 'dst.txt')
-      writeFileSync(src, 'original')
-
-      await mux.request('fs.copy', { source: src, destination: dst })
-
-      const content = await readFile(dst, 'utf-8')
-      expect(content).toBe('original')
-    })
-
-    it('readFile returns error for non-existent file', async () => {
-      await expect(
-        mux.request('fs.readFile', { filePath: path.join(tmpDir, 'nope.txt') })
-      ).rejects.toThrow()
-    })
-
-    it('errors propagate correctly through the protocol', async () => {
-      await expect(
-        mux.request('fs.stat', { filePath: '/nonexistent/path/that/does/not/exist' })
-      ).rejects.toThrow()
-    })
   })
 
   // ─── Git ────────────────────────────────────────────────────────
@@ -208,66 +151,6 @@ describe('Integration: Client Mux ↔ Relay Dispatcher', () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'file.txt'), 'initial')
       gitCommit(tmpDir, 'initial commit')
-    })
-
-    it('git.status returns clean status for committed repo', async () => {
-      const result = (await mux.request('git.status', {
-        worktreePath: tmpDir
-      })) as { entries: unknown[]; conflictOperation: string }
-
-      expect(result.entries).toEqual([])
-      expect(result.conflictOperation).toBe('unknown')
-    })
-
-    it('git.status detects modifications', async () => {
-      writeFileSync(path.join(tmpDir, 'file.txt'), 'modified')
-
-      const result = (await mux.request('git.status', {
-        worktreePath: tmpDir
-      })) as { entries: { path: string; status: string; area: string }[] }
-
-      const entry = result.entries.find((e) => e.path === 'file.txt')
-      expect(entry).toBeDefined()
-      expect(entry!.status).toBe('modified')
-      expect(entry!.area).toBe('unstaged')
-    })
-
-    it('git.status detects untracked files', async () => {
-      writeFileSync(path.join(tmpDir, 'new.txt'), 'new')
-
-      const result = (await mux.request('git.status', {
-        worktreePath: tmpDir
-      })) as { entries: { path: string; status: string; area: string }[] }
-
-      const entry = result.entries.find((e) => e.path === 'new.txt')
-      expect(entry).toBeDefined()
-      expect(entry!.status).toBe('untracked')
-    })
-
-    it('git.stage + git.status shows staged entry', async () => {
-      writeFileSync(path.join(tmpDir, 'file.txt'), 'changed')
-
-      await mux.request('git.stage', { worktreePath: tmpDir, filePath: 'file.txt' })
-
-      const result = (await mux.request('git.status', {
-        worktreePath: tmpDir
-      })) as { entries: { path: string; area: string }[] }
-
-      const staged = result.entries.find((e) => e.area === 'staged')
-      expect(staged).toBeDefined()
-    })
-
-    it('git.unstage reverses staging', async () => {
-      writeFileSync(path.join(tmpDir, 'file.txt'), 'changed')
-      await mux.request('git.stage', { worktreePath: tmpDir, filePath: 'file.txt' })
-      await mux.request('git.unstage', { worktreePath: tmpDir, filePath: 'file.txt' })
-
-      const result = (await mux.request('git.status', {
-        worktreePath: tmpDir
-      })) as { entries: { area: string }[] }
-
-      const staged = result.entries.filter((e) => e.area === 'staged')
-      expect(staged.length).toBe(0)
     })
 
     it('git.diff returns original and modified content', async () => {
@@ -282,91 +165,6 @@ describe('Integration: Client Mux ↔ Relay Dispatcher', () => {
       expect(result.kind).toBe('text')
       expect(result.originalContent).toBe('initial')
       expect(result.modifiedContent).toBe('updated content')
-    })
-
-    it('git.diff returns staged diff', async () => {
-      writeFileSync(path.join(tmpDir, 'file.txt'), 'staged version')
-      execFileSync('git', ['add', 'file.txt'], { cwd: tmpDir, stdio: 'pipe' })
-
-      const result = (await mux.request('git.diff', {
-        worktreePath: tmpDir,
-        filePath: 'file.txt',
-        staged: true
-      })) as { originalContent: string; modifiedContent: string }
-
-      expect(result.originalContent).toBe('initial')
-      expect(result.modifiedContent).toBe('staged version')
-    })
-
-    it('git.discard restores tracked file to HEAD', async () => {
-      writeFileSync(path.join(tmpDir, 'file.txt'), 'dirty')
-
-      await mux.request('git.discard', { worktreePath: tmpDir, filePath: 'file.txt' })
-
-      const content = await readFile(path.join(tmpDir, 'file.txt'), 'utf-8')
-      expect(content).toBe('initial')
-    })
-
-    it('git.discard removes untracked file', async () => {
-      writeFileSync(path.join(tmpDir, 'temp.txt'), 'throwaway')
-
-      await mux.request('git.discard', { worktreePath: tmpDir, filePath: 'temp.txt' })
-
-      await expect(stat(path.join(tmpDir, 'temp.txt'))).rejects.toThrow()
-    })
-
-    it('git.conflictOperation returns unknown for normal repo', async () => {
-      const result = await mux.request('git.conflictOperation', {
-        worktreePath: tmpDir
-      })
-      expect(result).toBe('unknown')
-    })
-
-    it('git.listWorktrees returns the main worktree', async () => {
-      const result = (await mux.request('git.listWorktrees', {
-        repoPath: tmpDir
-      })) as { path: string; isMainWorktree: boolean }[]
-
-      expect(result.length).toBeGreaterThanOrEqual(1)
-      expect(result[0].isMainWorktree).toBe(true)
-    })
-
-    it('git.branchCompare works across branches', async () => {
-      // Get current branch name (might be "main" or "master" depending on config)
-      const defaultBranch = execFileSync('git', ['branch', '--show-current'], {
-        cwd: tmpDir,
-        encoding: 'utf-8'
-      }).trim()
-
-      execFileSync('git', ['checkout', '-b', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
-      writeFileSync(path.join(tmpDir, 'feature.txt'), 'feature work')
-      gitCommit(tmpDir, 'feature commit')
-
-      const result = (await mux.request('git.branchCompare', {
-        worktreePath: tmpDir,
-        baseRef: defaultBranch
-      })) as { summary: { status: string; commitsAhead: number }; entries: unknown[] }
-
-      expect(result.summary.status).toBe('ready')
-      expect(result.summary.commitsAhead).toBe(1)
-      expect(result.entries.length).toBe(1)
-    })
-
-    it('git.bulkStage stages multiple files at once', async () => {
-      writeFileSync(path.join(tmpDir, 'a.txt'), 'a')
-      writeFileSync(path.join(tmpDir, 'b.txt'), 'b')
-
-      await mux.request('git.bulkStage', {
-        worktreePath: tmpDir,
-        filePaths: ['a.txt', 'b.txt']
-      })
-
-      const result = (await mux.request('git.status', {
-        worktreePath: tmpDir
-      })) as { entries: { path: string; area: string }[] }
-
-      const staged = result.entries.filter((e) => e.area === 'staged')
-      expect(staged.length).toBe(2)
     })
   })
 

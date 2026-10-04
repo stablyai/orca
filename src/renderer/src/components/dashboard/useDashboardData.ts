@@ -1,6 +1,7 @@
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
 import type { AgentRowState } from '@/lib/agent-row-decay-state'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { AgentChildRowModel } from '../../../../shared/agent-child-row-model'
 
 export type DashboardAgentRow = {
   /** Row identity. For 'subagent' rows this is a synthetic key (the child has
@@ -18,6 +19,8 @@ export type DashboardAgentRow = {
    *  stateHistory entry, falling back to updatedAt when no history exists yet.
    *  Used to sort agents by when they started. */
   startedAt: number
+  /** Subagent rows only: what the row shows, decided once for every surface. */
+  childRow?: AgentChildRowModel
   lineage?: {
     depth: 0 | 1
     parentPaneKey?: string

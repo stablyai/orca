@@ -2,3 +2,4 @@ packages:
   - apps/*
   - packages/*
 
+minimumReleaseAge: 4320

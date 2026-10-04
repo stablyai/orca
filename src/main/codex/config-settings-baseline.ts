@@ -21,6 +21,9 @@ export type CodexSettingsBaseline = {
    * table reads as an addition rather than as a canonical removal.
    */
   registrations: ReadonlyMap<string, ReadonlyMap<string, string>>
+  /** MCP server names the last mirror copied from the canonical source. */
+  mcpServers: ReadonlySet<string>
+  mcpServerRoot: boolean
 }
 
 type StoredSettingsBaseline = {
@@ -28,6 +31,8 @@ type StoredSettingsBaseline = {
   settings: Record<string, string | null>
   conflicts?: Record<string, CodexSettingsConflict>
   registrations?: Record<string, Record<string, string>>
+  mcpServers?: string[]
+  mcpServerRoot?: boolean
 }
 
 /**
@@ -81,12 +86,23 @@ function readParsedCodexSettingsBaseline(
         conflicts.set(key, conflict)
       }
     }
-    return { settings, conflicts, registrations: readStoredRegistrations(parsed.registrations) }
+    return {
+      settings,
+      conflicts,
+      registrations: readStoredRegistrations(parsed.registrations),
+      mcpServers: readStoredMcpServers(parsed.mcpServers),
+      // Older mirrors owned the whole MCP root; retain that removal policy for one pass.
+      mcpServerRoot: parsed.mcpServers === undefined || parsed.mcpServerRoot === true
+    }
   } catch (error) {
     // Why: invalid baseline state is still `null` — resetting it is the intent,
     // and only a read that FAILED must be preserved.
     return isDefinitiveAbsence(error) || isRebuildableBaselineError(error) ? null : 'unreadable'
   }
+}
+
+function readStoredMcpServers(stored: string[] | undefined): ReadonlySet<string> {
+  return new Set((stored ?? []).filter((name): name is string => typeof name === 'string'))
 }
 
 function readStoredRegistrations(
@@ -124,7 +140,8 @@ export function writeCodexSettingsBaseline(
 ): void {
   const file: StoredSettingsBaseline = {
     version: 3,
-    settings: Object.fromEntries(baseline.settings)
+    settings: Object.fromEntries(baseline.settings),
+    mcpServers: [...baseline.mcpServers]
   }
   if (baseline.conflicts.size > 0) {
     file.conflicts = Object.fromEntries(baseline.conflicts)
@@ -133,6 +150,9 @@ export function writeCodexSettingsBaseline(
     file.registrations = Object.fromEntries(
       [...baseline.registrations].map(([key, fields]) => [key, Object.fromEntries(fields)])
     )
+  }
+  if (baseline.mcpServerRoot) {
+    file.mcpServerRoot = true
   }
   const baselinePath = getCodexSettingsBaselinePath(runtimeHomePath)
   const serialized = `${JSON.stringify(file, null, 2)}\n`

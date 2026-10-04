@@ -1,3 +1,12 @@
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  writeDataFile,
+  readDataFile,
+  makeRepo,
+  makeTerminalTab
+} from './persistence-test-harness'
 // Why this file exists: deregistering a project used to strand every row it owned. No sweeper could
 // reach them because the missing-directory prune is gated on the repo still being registered.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -8,14 +17,6 @@ import { getDefaultWorkspaceSession } from '../shared/constants'
 import { composeWorktreeHostIdentity } from '../shared/worktree/host-qualified-identity'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
 import type { PersistedState } from '../shared/persisted-state-types'
-import {
-  testState,
-  createStore,
-  writeDataFile,
-  readDataFile,
-  makeRepo,
-  makeTerminalTab
-} from './persistence-test-harness'
 
 vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
@@ -67,7 +68,8 @@ describe('deregistered repo residue', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-orphan-sweep-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
@@ -182,6 +184,31 @@ describe('deregistered repo residue', () => {
 
     // Self-clearing: with the residue gone nothing re-seeds the orphan id, so the next launch has
     // no work. Before the fix this stayed non-empty forever and every load scheduled another save.
+    const reloaded = await createStore()
+    expect(reloaded.sweepDeregisteredRepoResidue()).toEqual([])
+  })
+
+  // A close record names its workspace only in its value, so like a sleeping agent it must seed the
+  // sweep itself or a removed project's records wait out the TTL.
+  it("drops a close record that is the orphan repo's only residue, and self-clears", async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo({ id: LIVE_REPO, path: '/workspace/live' })],
+      worktreeMeta: {},
+      workspaceSession: {
+        ...getDefaultWorkspaceSession(),
+        closedTerminalTabTombstonesByTabId: {
+          'tab-gone': { worktreeId: GONE_WORKTREE, closedAt: Date.now(), reason: 'user' },
+          'tab-live': { worktreeId: LIVE_WORKTREE, closedAt: Date.now(), reason: 'user' }
+        }
+      }
+    })
+
+    const store = await createStore()
+    store.flush()
+    expect(
+      Object.keys(store.getWorkspaceSession('local').closedTerminalTabTombstonesByTabId ?? {})
+    ).toEqual(['tab-live'])
     const reloaded = await createStore()
     expect(reloaded.sweepDeregisteredRepoResidue()).toEqual([])
   })

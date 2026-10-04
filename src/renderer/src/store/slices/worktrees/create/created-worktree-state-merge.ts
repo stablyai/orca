@@ -1,4 +1,5 @@
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
+import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-version-state'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import {
   getProjectHostSetupForRepoHost,
@@ -28,6 +29,8 @@ export function applyCreatedWorktree(
         )
       : [...current, createdWorktree]
     return {
+      // Why: a listing scanned before this create must not be applied after it.
+      ...appliedWorktreeCatalogVersionPatch(s, repoId, hostId, result.catalogVersion),
       worktreesByRepo: {
         ...s.worktreesByRepo,
         [repoId]: nextWorktrees

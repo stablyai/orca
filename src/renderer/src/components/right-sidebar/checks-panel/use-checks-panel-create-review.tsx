@@ -1,68 +1,54 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
-import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
 import { openHttpLink } from '@/lib/http-link-routing'
-import { resolveCreatedHostedReviewLink } from '../source-control-created-review-link'
 import { formatCreateError } from '../create-pull-request-review-copy'
 import { stripBaseRef } from '../create-pull-request-base-ref-normalization'
 import { normalizeHostedReviewHeadRef } from '../../../../../shared/hosted-review-refs'
-import {
-  hostedReviewProviderSupportsDraft,
-  type HostedReviewProvider
-} from '../../../../../shared/hosted-review'
+import { hostedReviewProviderSupportsDraft } from '../../../../../shared/hosted-review'
 import type { ChecksPanelReviewState } from './use-checks-panel-review-state'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
-import type { ChecksPanelContextState } from './use-checks-panel-context-state'
-import type { ChecksPanelPollingState } from './use-checks-panel-polling'
 import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
 import type { ChecksPanelBranchActionsState } from './use-checks-panel-branch-actions'
-import type { ChecksPanelCheckAndReviewActionsState } from './use-checks-panel-check-and-review-actions'
 import { clearPullRequestGenerationRequiresPushBeforeCreate } from '@/store/slices/pull-request-generation'
 import { translate } from '@/i18n/i18n'
+import type { PullRequestGenerationFields } from '@/store/slices/pull-request-generation'
+import { useGenerateBeforeCreatePullRequest } from '../use-generate-before-create-pull-request'
+import { createdReviewIsForeground } from '../created-review-foreground'
+import {
+  useChecksPanelCreatedReview,
+  type ChecksPanelCreatedReviewInput
+} from './use-checks-panel-created-review'
 
-type ChecksPanelCreateReviewInput = Pick<
-  ChecksPanelReviewState,
-  | 'activePullRequestGenerationKey'
-  | 'createComposerOpen'
-  | 'createPrPushFirst'
-  | 'hostedReviewCreateCopy'
-  | 'hostedReviewCreateProvider'
-  | 'hostedReviewCreation'
-  | 'prCreationDefaults'
-> &
+type ChecksPanelCreateReviewInput = ChecksPanelCreatedReviewInput &
+  Pick<
+    ChecksPanelReviewState,
+    | 'activePullRequestGenerationKey'
+    | 'createComposerOpen'
+    | 'createPrPushFirst'
+    | 'hostedReviewCreateCopy'
+    | 'hostedReviewCreateProvider'
+    | 'hostedReviewCreation'
+    | 'prCreationDefaults'
+  > &
   Pick<
     ChecksPanelControllerState,
-    | 'activeWorktreeId'
     | 'activeWorktreePath'
-    | 'branch'
     | 'createHostedReview'
     | 'createPrInFlightRef'
     | 'createStackedHostedReview'
-    | 'fetchHostedReviewForBranch'
+    | 'mountedRef'
+    | 'ownerSettings'
     | 'panelContextKey'
     | 'panelContextKeyRef'
-    | 'repo'
     | 'setCreatePrError'
     | 'setGitStatusRefreshNonce'
     | 'setIsCreatingPr'
-    | 'setRightSidebarOpen'
-    | 'setRightSidebarTab'
     | 'updatePullRequestGenerationRecord'
-    | 'updateWorktreeMeta'
   > &
-  Pick<
-    ChecksPanelContextState,
-    | 'fallbackGitHubPRNumber'
-    | 'linkedAzureDevOpsPR'
-    | 'linkedBitbucketPR'
-    | 'linkedGiteaPR'
-    | 'linkedGitLabMR'
-    | 'linkedPR'
-  > &
-  Pick<ChecksPanelPollingState, 'fetchGitLabDetails'> &
   Pick<ChecksPanelComposerState, 'prBase' | 'prBody' | 'prDraft' | 'prGenerating' | 'prTitle'> &
-  Pick<ChecksPanelBranchActionsState, 'pushBeforeCreatePullRequest'> &
-  Pick<ChecksPanelCheckAndReviewActionsState, 'refreshLinkedGitHubPullRequest'>
+  Pick<ChecksPanelComposerState, 'handleGeneratePullRequestFields' | 'prAiGenerationEnabled'> &
+  Pick<ChecksPanelComposerState, 'prFieldsAreSeedPlaceholders'> &
+  Pick<ChecksPanelBranchActionsState, 'pushBeforeCreatePullRequest'>
 
 export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) {
   const {
@@ -75,160 +61,91 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
     createPrInFlightRef,
     createPrPushFirst,
     createStackedHostedReview,
-    fallbackGitHubPRNumber,
-    fetchGitLabDetails,
-    fetchHostedReviewForBranch,
+    handleGeneratePullRequestFields,
     hostedReviewCreateCopy,
     hostedReviewCreateProvider,
     hostedReviewCreation,
-    linkedAzureDevOpsPR,
-    linkedBitbucketPR,
-    linkedGiteaPR,
-    linkedGitLabMR,
-    linkedPR,
+    ownerSettings,
     panelContextKey,
     panelContextKeyRef,
+    prAiGenerationEnabled,
     prBase,
     prBody,
     prCreationDefaults,
     prDraft,
+    prFieldsAreSeedPlaceholders,
     prGenerating,
     prTitle,
     pushBeforeCreatePullRequest,
-    refreshLinkedGitHubPullRequest,
     repo,
     setCreatePrError,
     setGitStatusRefreshNonce,
     setIsCreatingPr,
-    setRightSidebarOpen,
-    setRightSidebarTab,
-    updatePullRequestGenerationRecord,
-    updateWorktreeMeta
+    updatePullRequestGenerationRecord
   } = model
-  const handlePullRequestCreated = useCallback(
-    async (result: {
-      provider: HostedReviewProvider
-      number: number
-      url: string
-    }): Promise<void> => {
-      if (!repo || !branch) {
-        return
-      }
-      setRightSidebarOpen(true)
-      setRightSidebarTab('checks')
-      try {
-        const createdLink = resolveCreatedHostedReviewLink(result.provider, result.number)
-        if (activeWorktreeId && result.provider !== 'unsupported') {
-          await updateWorktreeMeta(activeWorktreeId, createdLink.worktree)
-        }
-        const linkedReviewNumbers = {
-          linkedGitHubPR: linkedPR,
-          fallbackGitHubPR: fallbackGitHubPRNumber,
-          linkedGitLabMR,
-          linkedBitbucketPR,
-          linkedAzureDevOpsPR,
-          linkedGiteaPR,
-          ...createdLink.lookup
-        }
-        if (result.provider === 'gitlab') {
-          const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
-            repoPath: repo.path,
-            repoId: repo.id,
-            branch,
-            ...linkedReviewNumbers
-          })
-          const refreshedGitLabReview =
-            refreshedReview?.provider === 'gitlab' ? refreshedReview : null
-          await fetchGitLabDetails({
-            mrNumberOverride: result.number,
-            headShaOverride: refreshedGitLabReview?.headSha,
-            commitAsCurrent: true
-          })
-          return
-        }
-        if (result.provider !== 'github') {
-          await refreshHostedReviewCard(fetchHostedReviewForBranch, {
-            repoPath: repo.path,
-            repoId: repo.id,
-            branch,
-            ...linkedReviewNumbers
-          })
-          return
-        }
-        await refreshLinkedGitHubPullRequest(result.number)
-      } catch {
-        // The success toast keeps the hosted URL available; Checks can be refreshed manually.
-      }
-    },
-    [
-      branch,
-      fallbackGitHubPRNumber,
-      fetchGitLabDetails,
-      fetchHostedReviewForBranch,
-      linkedAzureDevOpsPR,
-      linkedBitbucketPR,
-      linkedGiteaPR,
-      linkedGitLabMR,
-      linkedPR,
-      refreshLinkedGitHubPullRequest,
-      repo,
-      setRightSidebarOpen,
-      setRightSidebarTab,
-      activeWorktreeId,
-      updateWorktreeMeta
-    ]
-  )
+  const handlePullRequestCreated = useChecksPanelCreatedReview(model)
 
-  const handleCreatePullRequest = useCallback(
-    async (stacked = false): Promise<void> => {
-      if (!repo || !branch || !createComposerOpen || prGenerating || createPrInFlightRef.current) {
-        return
-      }
-
+  const createPullRequest = useCallback(
+    async (stacked = false, generated?: PullRequestGenerationFields): Promise<void> => {
       const requestContextKey = panelContextKey
+      // Why: a click-owned run can reach here after the panel moved on; it still creates and links the clicked branch's review, and drives only the panel that still shows it.
+      const panelShowsRequest = panelContextKeyRef.current === requestContextKey
+      if (
+        !repo ||
+        !branch ||
+        !createComposerOpen ||
+        prGenerating ||
+        (panelShowsRequest && createPrInFlightRef.current)
+      ) {
+        return
+      }
       const isCurrentCreateRequest = (): boolean =>
         panelContextKeyRef.current === requestContextKey &&
         createPrInFlightRef.current === requestContextKey
-      const base = stripBaseRef(prBase).trim()
-      const title = prTitle.trim()
+      const showCreateError = (message: string): void => {
+        if (isCurrentCreateRequest()) {
+          setCreatePrError(message)
+        }
+      }
+      const fields = generated ?? { base: prBase, title: prTitle, body: prBody, draft: prDraft }
+      const base = stripBaseRef(fields.base).trim()
+      const title = fields.title.trim()
       const worktreePath = activeWorktreePath ?? repo.path
-      if (!title) {
-        setCreatePrError(
-          translate(
+      const invalidFieldsError = !title
+        ? translate(
             'auto.components.right.sidebar.SourceControl.f3a8b2c1d0e5',
             'Enter a {{value0}} title.',
             {
               value0: hostedReviewCreateCopy.reviewLabel
             }
           )
-        )
-        return
-      }
-      if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(branch).toLowerCase()) {
-        setCreatePrError(
-          translate(
-            'auto.components.right.sidebar.SourceControl.ae743199cd',
-            'Choose a different base branch before creating a {{value0}}.',
-            { value0: hostedReviewCreateCopy.reviewLabel }
-          )
-        )
+        : !base || stripBaseRef(base).toLowerCase() === stripBaseRef(branch).toLowerCase()
+          ? translate(
+              'auto.components.right.sidebar.SourceControl.ae743199cd',
+              'Choose a different base branch before creating a {{value0}}.',
+              { value0: hostedReviewCreateCopy.reviewLabel }
+            )
+          : null
+      if (invalidFieldsError) {
+        if (panelShowsRequest) {
+          setCreatePrError(invalidFieldsError)
+        }
         return
       }
 
-      createPrInFlightRef.current = requestContextKey
-      setIsCreatingPr(true)
-      setCreatePrError(null)
+      if (panelShowsRequest) {
+        createPrInFlightRef.current = requestContextKey
+        setIsCreatingPr(true)
+        setCreatePrError(null)
+      }
       let pushed = false
       try {
         const shouldPushBeforeCreate =
           createPrPushFirst || hostedReviewCreation?.blockedReason === 'needs_push'
         if (shouldPushBeforeCreate) {
           const ok = await pushBeforeCreatePullRequest()
-          if (!isCurrentCreateRequest()) {
-            return
-          }
           if (!ok) {
-            setCreatePrError('Push failed. Resolve the push error, then try again.')
+            showCreateError('Push failed. Resolve the push error, then try again.')
             return
           }
           pushed = true
@@ -239,24 +156,23 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
           base,
           head: normalizeHostedReviewHeadRef(branch),
           title,
-          body: prBody,
-          draft: prDraft && hostedReviewProviderSupportsDraft(hostedReviewCreateProvider),
+          body: fields.body,
+          draft: fields.draft && hostedReviewProviderSupportsDraft(hostedReviewCreateProvider),
           worktreePath,
           useTemplate: prCreationDefaults.useTemplate
         }
         const result = stacked
           ? await createStackedHostedReview(repo.path, createInput)
           : await createHostedReview(repo.path, createInput)
-        if (!isCurrentCreateRequest()) {
-          return
-        }
+        // Why: read before linking, which changes the panel's context key.
+        const panelShowsReview = model.mountedRef.current && isCurrentCreateRequest()
         if (result.ok) {
-          await handlePullRequestCreated({
-            provider: hostedReviewCreateProvider,
-            number: result.number,
-            url: result.url
-          })
-          if (prCreationDefaults.openAfterCreate) {
+          const foreground = createdReviewIsForeground(activeWorktreeId, panelShowsReview)
+          await handlePullRequestCreated(
+            { provider: hostedReviewCreateProvider, number: result.number, url: result.url },
+            panelShowsReview
+          )
+          if (prCreationDefaults.openAfterCreate && foreground) {
             openHttpLink(result.url, { worktreeId: activeWorktreeId })
           }
           if (activePullRequestGenerationKey) {
@@ -293,11 +209,10 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
             }
           )
           if (number) {
-            await handlePullRequestCreated({
-              provider: hostedReviewCreateProvider,
-              number,
-              url: result.existingReview.url
-            })
+            await handlePullRequestCreated(
+              { provider: hostedReviewCreateProvider, number, url: result.existingReview.url },
+              panelShowsReview
+            )
             if (activePullRequestGenerationKey) {
               updatePullRequestGenerationRecord(
                 activePullRequestGenerationKey,
@@ -313,19 +228,15 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
         if ('createdReview' in result && result.createdReview?.url) {
           const { number, url } = result.createdReview
           if (number) {
-            await handlePullRequestCreated({
-              provider: hostedReviewCreateProvider,
-              number,
-              url
-            })
+            await handlePullRequestCreated(
+              { provider: hostedReviewCreateProvider, number, url },
+              panelShowsReview
+            )
           }
         }
-        setCreatePrError(formatCreateError(result, pushed, hostedReviewCreateCopy.shortLabel))
+        showCreateError(formatCreateError(result, pushed, hostedReviewCreateCopy.shortLabel))
       } catch (error) {
-        if (!isCurrentCreateRequest()) {
-          return
-        }
-        setCreatePrError(
+        showCreateError(
           error instanceof Error
             ? error.message
             : translate(
@@ -358,6 +269,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
       hostedReviewCreateCopy.titleLabel,
       hostedReviewCreateProvider,
       hostedReviewCreation?.blockedReason,
+      model.mountedRef,
       panelContextKey,
       prBase,
       prBody,
@@ -376,6 +288,16 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
       setCreatePrError
     ]
   )
+  const { handleCreatePullRequest } = useGenerateBeforeCreatePullRequest({
+    aiGenerationEnabled: prAiGenerationEnabled,
+    canCreate: createComposerOpen,
+    createPullRequest,
+    fieldsAreSeedPlaceholders: prFieldsAreSeedPlaceholders,
+    generatePullRequestFields: handleGeneratePullRequestFields,
+    generationKey: activePullRequestGenerationKey,
+    repo,
+    settings: ownerSettings
+  })
   return { handlePullRequestCreated, handleCreatePullRequest }
 }
 

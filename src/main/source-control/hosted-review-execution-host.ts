@@ -1,10 +1,5 @@
-import {
-  getRepoExecutionHostId,
-  getSshTargetIdForExecutionHost,
-  LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId
-} from '../../shared/execution-host'
-import type { Repo } from '../../shared/repo-types'
+import type { ExecutionHostId } from '../../shared/execution-host'
+export { getStoredRepoExecutionHostId as getRepoHostedReviewExecutionHostId } from '../repo-execution-host'
 import {
   ExecutionHostNotDispatchableError,
   resolveGitRouteForHost
@@ -29,21 +24,4 @@ export function hostedReviewSshConnectionId(executionHostId: ExecutionHostId): s
     throw new ExecutionHostNotDispatchableError(route.hostId)
   }
   return route.kind === 'ssh' ? route.connectionId : null
-}
-
-/**
- * The host this process may run a hosted review on for a row in *its own* store.
- *
- * `getSshTargetIdForExecutionHost` and not `getRepoSshConnectionId`: a `runtime:` stamp on a row in
- * this store is how a paired client addresses it, not a second machine holding the files. The
- * runtime registration controller only adopts that stamp onto a row with no `connectionId`
- * (`runtimeRepoMatchesExecutionHost` refuses to match an SSH row), so the checkout really is here
- * and this keeps the review that has always been created for it. A row whose files sit on an SSH
- * host keeps its own target — including one that carries only `executionHostId: ssh:…`.
- */
-export function getRepoHostedReviewExecutionHostId(
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'>
-): ExecutionHostId {
-  const hostId = getRepoExecutionHostId(repo)
-  return getSshTargetIdForExecutionHost(hostId) ? hostId : LOCAL_EXECUTION_HOST_ID
 }

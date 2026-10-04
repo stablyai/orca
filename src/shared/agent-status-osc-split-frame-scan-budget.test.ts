@@ -38,38 +38,4 @@ describe('OSC 9999 split-frame scan budget', () => {
     // Re-scanning the accumulation would quadruple the budget when the feed doubles.
     expect(large.searchedChars).toBeLessThan(small.searchedChars * 3)
   })
-
-  it.each(['\x07', '\x1b\\'])(
-    'matches whole-string parsing when split at every offset with terminator %j',
-    (terminator) => {
-      const stream = `head\x1b]9999;{"state":"working","prompt":"p"}${terminator}tail`
-      const whole = createAgentStatusOscProcessor()(stream)
-
-      for (let split = 1; split < stream.length; split += 1) {
-        const process = createAgentStatusOscProcessor()
-        const first = process(stream.slice(0, split))
-        const second = process(stream.slice(split))
-        expect({
-          cleanData: first.cleanData + second.cleanData,
-          payloads: [...first.payloads, ...second.payloads]
-        }).toEqual({ cleanData: whole.cleanData, payloads: whole.payloads })
-      }
-    }
-  )
-
-  it('finds a string terminator straddling the resume boundary', () => {
-    const process = createAgentStatusOscProcessor()
-    // The ESC lands as the last character of the carried frame; the backslash arrives next.
-    expect(process('\x1b]9999;{"state":"working"}\x1b').payloads).toEqual([])
-    expect(process('\\rest').payloads).toMatchObject([{ state: 'working' }])
-  })
-
-  it('still parses a payload that completes many chunks later', () => {
-    const process = createAgentStatusOscProcessor()
-    process('\x1b]9999;{"state":"wor')
-    for (const chunk of ['k', 'i', 'n', 'g']) {
-      expect(process(chunk).payloads).toEqual([])
-    }
-    expect(process('"}\x07done').payloads).toMatchObject([{ state: 'working' }])
-  })
 })

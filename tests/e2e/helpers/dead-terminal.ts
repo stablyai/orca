@@ -125,10 +125,20 @@ export async function createAndActivateWorktreeWithSetup(
 
 export async function removeWorktreeViaStore(page: TestPage, worktreeId: string): Promise<void> {
   await page.evaluate(async (id) => {
-    try {
-      await window.__store?.getState().removeWorktree(id, true)
-    } catch {
-      /* best-effort */
+    const state = window.__store?.getState()
+    if (!state) {
+      throw new Error('Worktree cleanup requires the app store')
+    }
+    const worktree = state.getKnownWorktreeById(id)
+    if (!worktree) {
+      return
+    }
+    const result = await state.removeWorktree(
+      { id, executionHostId: worktree.hostId ?? null },
+      true
+    )
+    if (!result.ok) {
+      throw new Error(`Worktree cleanup failed: ${result.error}`)
     }
   }, worktreeId)
 }

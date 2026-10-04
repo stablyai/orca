@@ -13,6 +13,7 @@ import {
   listMarkdownDocuments,
   markdownDocumentsFromRelativePaths
 } from '../ipc/markdown-documents'
+import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
 import {
   validatePathExistenceBatch,
   type PathExistenceResult
@@ -82,7 +83,14 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
       const relativePaths = await provider.listFiles(target.worktree.path)
       return markdownDocumentsFromRelativePaths(target.worktree.path, relativePaths)
     }
-    return listMarkdownDocuments(target.worktree.path)
+    return listMarkdownDocuments(
+      target.worktree.path,
+      getLocalGitOptionsForRegisteredWorktree(
+        this.host.requireStore(),
+        target.worktree.path,
+        target.worktree.path
+      )
+    )
   }
 
   async pathsExistRuntimeFiles(

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
@@ -56,6 +56,38 @@ describe('orchestration.send to a settled Dispatch mailbox', () => {
         subject: 'One more thing'
       })
     ).rejects.toThrow(new RegExp(`run:${dispatch.run_id}`))
+  })
+
+  it('names the Run a settled assignee now coordinates, not the sender Run', async () => {
+    setup()
+    const leadPane = 'tab_lead:22222222-2222-4222-9222-222222222222'
+    vi.spyOn(ctx.runtime, 'getLiveTerminalPaneKey').mockReturnValue(leadPane)
+    const task = db.createTask({ spec: 'lead that settled and kept coordinating' })
+    const dispatch = createRootDispatch(db, task.id, 'term_lead', leadPane)
+    db.completeDispatch(dispatch.id)
+    const leadRun = db.createRun({
+      objective: 'lead',
+      coordinatorHandle: 'term_lead',
+      coordinatorPaneKey: leadPane
+    })
+
+    const rejection = call('orchestration.send', {
+      from: 'term_coord',
+      to: `dispatch:${dispatch.id}`,
+      subject: 'One more thing'
+    })
+
+    await expect(rejection).rejects.toMatchObject({ code: 'dispatch_inactive' })
+    await expect(rejection).rejects.toThrow(new RegExp(`run:${leadRun.id}`))
+    await expect(rejection).rejects.not.toThrow(new RegExp(`run:${dispatch.run_id}`))
+    expect(db.getInbox()).toEqual([])
+    await expect(
+      call('orchestration.check', { terminal: 'term_coord', run: leadRun.id })
+    ).rejects.toMatchObject({ code: 'consumer_fenced' })
+    // Run addresses are already visible to callers; a hint grants no consuming authority.
+    expect(await call('orchestration.runShow', { id: leadRun.id })).toMatchObject({
+      run: { id: leadRun.id }
+    })
   })
 
   it('does not write an undeliverable message row', async () => {

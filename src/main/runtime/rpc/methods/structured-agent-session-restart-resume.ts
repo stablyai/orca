@@ -1,8 +1,9 @@
-// `agentSession.restartResumable` / `agentSession.restartResume` — the restart-resume offer.
+// The restart-resume offer: list it, act on it, or turn it down.
 //
-// Both reach for records on disk this process may not have opened yet, so they build the host the
-// way hold and reveal do. Listing is read-only and takes nothing live; resuming goes through the
-// host's single resume path, which re-derives eligibility rather than trusting the ids it is given.
+// Each method reaches for records on disk this process may not have opened yet, so each builds the
+// host the way hold and reveal do. Listing takes nothing live and spends no live offer; acting goes
+// through the host's single resume path, which re-derives eligibility rather than trusting the ids
+// it is given.
 
 import { defineMethod } from '../core'
 import {
@@ -18,23 +19,39 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     params: RestartResumableParams,
     handler: async (_params, ctx) => {
       await ensureStructuredHostInstalled(ctx)
-      return { sessions: await requireStructuredHost(ctx).restartResume.list() }
+      const host = requireStructuredHost(ctx)
+      return {
+        sessions: await host.restartResume.list(),
+        // Acted-on offers whose agent did not carry on. Optional on the wire; older clients ignore it.
+        failed: await host.restartResume.listFailures()
+      }
     }
   }),
   defineMethod({
-    // Spends the markers without resuming; see the collaborator for why turning the offer down
-    // consumes it rather than leaving it to return at every launch.
+    // Explicitly abandons the markers without resuming. Closing the dialog is a snooze and does
+    // not call this method, so the status-bar entry can reopen the offer later.
     name: 'agentSession.restartResumableDismiss',
     params: RestartResumableParams,
-    handler: async (_params, ctx) => {
+    handler: async (params, ctx) => {
       await ensureStructuredHostInstalled(ctx)
-      return { dismissed: await requireStructuredHost(ctx).restartResume.dismiss() }
+      const host = requireStructuredHost(ctx)
+      const dismissed = await host.restartResume.dismiss(params.sessionIds)
+      if (params.sessionIds === undefined) {
+        // clearAll is the authoritative mutation: it removes pending and in-flight records, so a
+        // second read would only add a new failure point after the user's explicit dismissal.
+        return { dismissed, sessions: [], failed: [] }
+      }
+      return {
+        dismissed,
+        sessions: await host.restartResume.list(),
+        failed: await host.restartResume.listFailures()
+      }
     }
   }),
   defineMethod({
-    // Reconnect AND ask each reconnected agent to carry on. Separate from `restartResume` on
-    // purpose: that method sends nothing, and the automatic-reconnect setting only ever calls it,
-    // so no configuration can reach this one.
+    // Reattach AND ask each reattached agent to carry on — what the desktop prompt calls resuming,
+    // and what an opted-in launch runs without asking. Separate from `restartResume`, which sends
+    // nothing, but reachable from a setting rather than only from a button.
     name: 'agentSession.restartContinue',
     params: RestartResumeParams,
     handler: async (params, ctx) => {
@@ -47,17 +64,15 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     }
   }),
   defineMethod({
+    // Reattach only, no send. Reattaching is nothing now — an agent starts only for work — so this
+    // answers that nothing was resumed. No Orca surface calls it, but it is a PUBLISHED wire
+    // method, so dropping it is a wire removal an older client would meet as an unknown method.
     name: 'agentSession.restartResume',
     params: RestartResumeParams,
-    handler: async (params, ctx) => {
+    handler: async (_params, ctx) => {
       await ensureStructuredHostInstalled(ctx)
-      const host = requireStructuredHost(ctx)
-      return {
-        results: await host.restartResume.resume(
-          params.sessionIds,
-          structuredCallerFor(ctx).callerKey
-        )
-      }
+      requireStructuredHost(ctx)
+      return { results: [] }
     }
   })
 ]

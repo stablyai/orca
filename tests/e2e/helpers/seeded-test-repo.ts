@@ -3,12 +3,38 @@
  * disposable test repo (plus its secondary worktree) that specs operate on.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { execSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
 import { TEST_REPO_PATH_FILE } from '../global-setup'
+import { cleanupTestRepository } from '../global-teardown'
+
+export async function provideWorkerTestRepository(
+  provideFixture: (repository: string) => Promise<void>
+): Promise<void> {
+  const persistedRepoPath = existsSync(TEST_REPO_PATH_FILE)
+    ? readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+    : ''
+  const repoPath = isValidGitRepo(persistedRepoPath) ? persistedRepoPath : createSeededTestRepo()
+  try {
+    await provideFixture(repoPath)
+  } finally {
+    if (existsSync(repoPath)) {
+      cleanupTestRepository(repoPath)
+    }
+    rmSync(TEST_REPO_PATH_FILE, { force: true })
+  }
+}
 
 export function isValidGitRepo(repoPath: string): boolean {
   if (!repoPath || !existsSync(repoPath)) {

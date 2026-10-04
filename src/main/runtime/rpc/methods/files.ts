@@ -11,6 +11,7 @@ import {
   DocPreviewFileRead,
   FileListAll,
   FileOpenDiff,
+  FileOpenTab,
   FilePathSearch,
   FileReadChunk,
   FileSearch,
@@ -56,15 +57,20 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.open',
-    params: FileOpen,
+    params: FileOpenTab,
     handler: async (params, { runtime }) =>
-      runtime.openMobileFile(params.worktree, params.relativePath)
+      runtime.openMobileFile(params.worktree, params.relativePath, params.navigation)
   }),
   defineMethod({
     name: 'files.openDiff',
     params: FileOpenDiff,
     handler: async (params, { runtime }) =>
-      runtime.openMobileDiff(params.worktree, params.relativePath, params.staged === true)
+      runtime.openMobileDiff(
+        params.worktree,
+        params.relativePath,
+        params.staged === true,
+        params.navigation
+      )
   }),
   defineMethod({
     name: 'files.read',

@@ -4,6 +4,7 @@ import {
   ORCAD_SNAPSHOT_EXCLUDED,
   ORCAD_SNAPSHOT_MEMBERS,
   captureOrcadStateSnapshotCommand,
+  compareOrcadStateSnapshotCommand,
   newestStateMtimeCommand,
   orcadSnapshotDirName,
   parseNewestStateMtimeSeconds,
@@ -93,6 +94,7 @@ describe('Windows hosts', () => {
   it.each([
     ['capture', () => captureOrcadStateSnapshotCommand(windows, ROOT, SNAP)],
     ['restore', () => restoreOrcadStateSnapshotCommand(windows, ROOT, SNAP)],
+    ['compare', () => compareOrcadStateSnapshotCommand(windows, ROOT, SNAP)],
     ['mtime', () => newestStateMtimeCommand(windows, ROOT)]
   ])('refuses %s rather than emitting a POSIX command', (_label, build) => {
     expect(build).toThrow('orcad to a Windows host is not implemented')

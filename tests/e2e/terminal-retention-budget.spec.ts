@@ -124,7 +124,7 @@ test.describe('terminal hidden-worktree retention budget', () => {
           const state = window.__store?.getState()
           state?.setActiveWorktree(worktreeId)
           state?.setActiveTab(tabId)
-          state?.setActiveTabType('terminal')
+          state?.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
         },
         { worktreeId: older.worktreeId, tabId: olderTabId }
       )

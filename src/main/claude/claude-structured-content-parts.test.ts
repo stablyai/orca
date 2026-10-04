@@ -121,18 +121,6 @@ describe('Claude message content parts', () => {
     expect(state.sink.publish).not.toHaveBeenCalled()
   })
 
-  it('does not render injected image companions or start a turn', () => {
-    const state = sinkState()
-    const translator = createClaudeJournalTranslator({ sink: state.sink })
-    const event = userMessageWith(null)
-    const content = [{ type: 'text', text: '[Image: source: /tmp/pasted.png]' }]
-    translator.handle({
-      ...event,
-      message: { ...event.message, isMeta: true, message: { role: 'user', content } }
-    })
-    expect(state.items).toEqual([])
-  })
-
   it('does not leak a wire kind for a locally attached image', () => {
     const state = sinkState()
     const translator = createClaudeJournalTranslator({ sink: state.sink })

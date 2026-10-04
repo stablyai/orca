@@ -39,7 +39,11 @@ jobs:
           root=pathlib.Path(os.environ['RUNNER_TEMP'])/'old-orca'
           package=root/'orca-ide_1.4.188_amd64.deb'
           expected='uGONFUDfinYggxcT9ac72wnnlofLQaqasDDeP0HWOSqarBwTi1Ax3khmzKUY3vUnvuYOpSCEmsH4InzLZ2vg6g=='
-          assert base64.b64encode(hashlib.sha512(package.read_bytes()).digest()).decode()==expected
+          digest=hashlib.sha512()
+          with package.open('rb') as archive:
+              for block in iter(lambda: archive.read(1024*1024), b''):
+                  digest.update(block)
+          assert base64.b64encode(digest.digest()).decode()==expected
           extracted=root/'extracted'
           subprocess.run(['dpkg-deb','-x',str(package),str(extracted)],check=True)
           executable=extracted/'opt'/'Orca'/'orca-ide'

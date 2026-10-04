@@ -27,7 +27,8 @@ const owned: AgentSessionStatusSummary = {
   status: 'working',
   latestPrompt: 'work',
   updatedAt: 1,
-  hostExecutionOwned: true
+  hostExecutionOwned: true,
+  hostExecutionPhase: 'starting'
 }
 const done: AgentSessionStatusSummary = {
   ...owned,
@@ -69,7 +70,11 @@ describe('structured status feed execution authority lifecycle', () => {
     subscription().emit({ type: 'snapshot', sessions: [owned, done] })
     subscription().emit({ type: 'end' })
     expect(subscription().unsubscribe).toHaveBeenCalledOnce()
-    expect(feed.getSnapshot().get('running')).toEqual({ ...owned, hostExecutionOwned: undefined })
+    expect(feed.getSnapshot().get('running')).toEqual({
+      ...owned,
+      hostExecutionOwned: undefined,
+      hostExecutionPhase: undefined
+    })
     expect(feed.getSnapshot().get('completed')).toBe(done)
     subscription().emit({ type: 'status', session: owned })
     expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBeUndefined()

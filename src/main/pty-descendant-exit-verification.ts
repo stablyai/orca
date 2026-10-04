@@ -1,21 +1,25 @@
 import {
   DESCENDANT_KILL_GRACE_MS,
   DESCENDANT_SNAPSHOT_TIMEOUT_MS,
+  collectDescendantRows,
   hasUnambiguousStartIdentity,
   readProcessTable,
   readProcessTableBeforeDeadline,
   sendDescendantSignal,
   type DescendantSnapshot,
+  type ProcessTableCapture,
   type ProcessTableRow,
   type TerminateDeps
 } from './pty-descendant-termination'
 
 export const DESCENDANT_KILL_VERIFY_MS = 3_500
 
-function waitForDelay(ms: number): Promise<void> {
+function waitForDelay(ms: number, keepAlive = false): Promise<void> {
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, ms)
-    timer.unref?.()
+    if (!keepAlive) {
+      timer.unref?.()
+    }
   })
 }
 
@@ -27,6 +31,9 @@ function matchingSnapshotRows(
   const expected = new Map(snapshot.descendants.map((row) => [row.pid, row]))
   const rowsByPid = new Map<number, ProcessTableRow[]>()
   for (const live of table) {
+    if (!expected.has(live.pid)) {
+      continue
+    }
     const rows = rowsByPid.get(live.pid)
     if (rows) {
       rows.push(live)
@@ -45,6 +52,28 @@ function matchingSnapshotRows(
   })
 }
 
+function rederiveSnapshotPids(
+  snapshot: DescendantSnapshot,
+  capture: ProcessTableCapture
+): ReadonlySet<number> | undefined {
+  if (!snapshot.root) {
+    return
+  }
+  const uniqueRows = new Map<number, ProcessTableRow | null>()
+  for (const row of capture.rows) {
+    uniqueRows.set(row.pid, uniqueRows.has(row.pid) ? null : row)
+  }
+  const fresh = collectDescendantRows(
+    snapshot.root.pid,
+    [...uniqueRows.values()].filter((row): row is ProcessTableRow => row !== null),
+    capture.capturedAtMs
+  )
+  if (fresh.root?.startedAt === snapshot.root.startedAt && fresh.rootPgid === snapshot.rootPgid) {
+    return fresh.reDerivedPids
+  }
+  return undefined
+}
+
 function hasDuplicateSnapshotPids(
   snapshot: DescendantSnapshot,
   table: readonly ProcessTableRow[]
@@ -61,6 +90,8 @@ function hasDuplicateSnapshotPids(
 
 type VerificationDeps = TerminateDeps & {
   verifyMs?: number
+  /** A departing daemon must finish escalation after its last PTY exits. */
+  keepAlive?: boolean
   /** Revalidate identities before signaling; used by Claude's close proof. */
   requireIdentityBeforeSignal?: boolean
 }
@@ -90,12 +121,39 @@ export async function terminateDescendantSnapshotWithVerdict(
   const graceMs = deps.graceMs ?? DESCENDANT_KILL_GRACE_MS
   const verifyMs = deps.verifyMs ?? DESCENDANT_KILL_VERIFY_MS
   const deadline = Date.now() + verifyMs
-  let forced = false
-  let signalled = !deps.requireIdentityBeforeSignal
-  let missingObservations = 0
-  if (signalled) {
+  const forced = new Set<number>()
+  const signalled = new Set<number>()
+  const missingObservations = new Map(snapshot.descendants.map((row) => [row.pid, 0]))
+  // The snapshot is itself a table read that saw each target alive. An absence is evidence only
+  // from a read that started after the target was last seen: a shared or in-flight read begun
+  // earlier can miss a descendant forked since, but a later full scan cannot miss a live one.
+  const lastSeenAtMs = new Map(
+    snapshot.descendants.map((row) => [
+      row.pid,
+      snapshot.capturedAtMsByPid?.[String(row.pid)] ?? snapshot.capturedAtMs
+    ])
+  )
+  const recordIdentityObservation = (
+    capture: ProcessTableCapture,
+    live: readonly ProcessTableRow[]
+  ): void => {
+    for (const row of snapshot.descendants) {
+      const lastSeen = lastSeenAtMs.get(row.pid) ?? Infinity
+      if (live.some((current) => current.pid === row.pid)) {
+        missingObservations.set(row.pid, 0)
+        // A read that started earlier but resolved later must not move the sighting back.
+        lastSeenAtMs.set(row.pid, Math.max(lastSeen, capture.capturedAtMs))
+      } else if (capture.capturedAtMs > lastSeen) {
+        missingObservations.set(row.pid, (missingObservations.get(row.pid) ?? 0) + 1)
+      }
+    }
+  }
+  const provenAbsent = (): boolean =>
+    snapshot.descendants.every((row) => (missingObservations.get(row.pid) ?? 0) >= 2)
+  if (!deps.requireIdentityBeforeSignal) {
     for (const row of snapshot.descendants) {
       sendSignal(row.pid, 'SIGTERM')
+      signalled.add(row.pid)
     }
   }
   while (Date.now() < deadline) {
@@ -110,58 +168,62 @@ export async function terminateDescendantSnapshotWithVerdict(
       if (deps.requireIdentityBeforeSignal && hasDuplicateSnapshotPids(snapshot, capture.rows)) {
         // A duplicate target pid is an ambiguous non-atomic read. Do not signal
         // either row and do not turn that uncertainty into an exited verdict.
-        await waitForDelay(50)
+        await waitForDelay(50, deps.keepAlive)
         continue
       }
       const live = matchingSnapshotRows(snapshot, capture.rows, deps.requireIdentityBeforeSignal)
+      if (deps.requireIdentityBeforeSignal) {
+        recordIdentityObservation(capture, live)
+      }
       if (live.length === 0) {
         // Before a signal has been sent, an empty identity match means the
         // snapshotted descendants already exited or were replaced. Signalling
-        // those old numeric pids would be unsafe.
-        if (deps.requireIdentityBeforeSignal) {
-          // A single process-table read can race a fork or return a partial
-          // view; require two bounded absences before claiming the tree gone.
-          missingObservations += 1
-          if (missingObservations < 2) {
-            await waitForDelay(50)
-            continue
-          }
+        // those old numeric pids would be unsafe. Every identity needs two
+        // absences from reads that started after it was last seen.
+        if (deps.requireIdentityBeforeSignal && !provenAbsent()) {
+          await waitForDelay(50, deps.keepAlive)
+          continue
         }
         return 'exited'
       }
-      missingObservations = 0
-      if (!signalled) {
-        // Revalidate every identity immediately before the first signal. A PID
-        // can be recycled between the original walk and close, so never signal
-        // from the stale snapshot alone.
-        for (const row of live) {
+      for (const row of live) {
+        if (!signalled.has(row.pid)) {
           sendSignal(row.pid, 'SIGTERM')
+          signalled.add(row.pid)
         }
-        signalled = true
       }
-      if (!forced && Date.now() >= deadline - verifyMs + graceMs) {
-        forced = true
-        for (const row of live) {
-          // A row a walk re-derived from a live root is ours whatever second it
-          // was born in, which start time alone can never establish for one born
-          // in its own capture second. Rows no walk re-derived still answer to
-          // the second-resolution fence, which is all the evidence they have.
-          // Scoped to the identity-revalidating callers; the same argument holds
-          // for the rest, but widening it is a deliberate change of its own.
+      if (Date.now() >= deadline - verifyMs + graceMs) {
+        const pending = live.filter((row) => !forced.has(row.pid))
+        const freshPids =
+          deps.requireIdentityBeforeSignal &&
+          pending.some(
+            (row) =>
+              snapshot.reDerivedPids?.has(row.pid) === true &&
+              !hasUnambiguousStartIdentity(
+                row,
+                snapshot.capturedAtMsByPid?.[String(row.pid)] ?? snapshot.capturedAtMs
+              )
+          )
+            ? rederiveSnapshotPids(snapshot, capture)
+            : undefined
+        for (const row of pending) {
+          // Birth-second identity needs ownership from this read, not a stale walk.
           if (
             (deps.requireIdentityBeforeSignal === true &&
-              snapshot.reDerivedPids?.has(row.pid) === true) ||
+              snapshot.reDerivedPids?.has(row.pid) === true &&
+              freshPids?.has(row.pid) === true) ||
             hasUnambiguousStartIdentity(
               row,
               snapshot.capturedAtMsByPid?.[String(row.pid)] ?? snapshot.capturedAtMs
             )
           ) {
             sendSignal(row.pid, 'SIGKILL')
+            forced.add(row.pid)
           }
         }
       }
     }
-    await waitForDelay(50)
+    await waitForDelay(50, deps.keepAlive)
   }
   const finalCapture = await readProcessTableBeforeDeadline(
     readTable,
@@ -181,5 +243,9 @@ export async function terminateDescendantSnapshotWithVerdict(
   if (finalLive.length > 0) {
     return 'live'
   }
-  return deps.requireIdentityBeforeSignal && missingObservations < 2 ? 'unverifiable' : 'exited'
+  if (deps.requireIdentityBeforeSignal) {
+    recordIdentityObservation(finalCapture, finalLive)
+    return provenAbsent() ? 'exited' : 'unverifiable'
+  }
+  return 'exited'
 }

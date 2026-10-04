@@ -1,6 +1,7 @@
-import * as pty from 'node-pty'
+import type * as pty from 'node-pty'
 import { statSync } from 'node:fs'
 import { release } from 'node:os'
+import { getCmdExePath } from '../../../shared/windows-batch-spawn'
 import {
   ensureNodePtySpawnHelperExecutable,
   getNodePtySpawnHelperCandidates,
@@ -12,6 +13,10 @@ import { TerminalAttachCanceledError } from '../daemon-errors'
 import { DaemonProtocolError } from '../types'
 
 const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
+
+async function loadNodePty(): Promise<typeof pty> {
+  return import('node-pty')
+}
 
 function daemonEnvironmentDiagSuffix(): string {
   const orca = process.env.ORCA_APP_VERSION?.trim() || '0.0.0-dev'
@@ -154,21 +159,33 @@ export function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: s
   return formatted
 }
 
-export function runPtySpawnHealthProbe(): Promise<void> {
+export async function runPtySpawnHealthProbe(): Promise<void> {
   const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
     ? process.env.ORCA_USER_DATA_PATH
     : resolveSafePtyDefaultCwd()
+  const command =
+    process.platform === 'win32'
+      ? { file: getCmdExePath(), args: ['/d', '/c', 'exit', '0'] }
+      : { file: '/bin/sh', args: ['-c', 'exit 0'] }
   let proc: pty.IPty
   try {
-    proc = pty.spawn('/bin/sh', ['-c', 'exit 0'], {
+    const env: Record<string, string> = { TERM: 'xterm-256color' }
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined) {
+        env[key] = value
+      }
+    }
+    proc = (await loadNodePty()).spawn(command.file, command.args, {
       name: 'xterm-256color',
       cols: 2,
       rows: 1,
       cwd,
-      env: { ...process.env, TERM: 'xterm-256color' }
+      env,
+      // Qualify the bundled ConPTY the daemon spawns with (native-pty-spawn.ts), not the OS one.
+      ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
   } catch (err) {
-    throw formatPtySpawnError(err, '/bin/sh', cwd)
+    throw formatPtySpawnError(err, command.file, cwd)
   }
 
   return new Promise<void>((resolve, reject) => {
@@ -181,7 +198,9 @@ export function runPtySpawnHealthProbe(): Promise<void> {
       settled = true
       clearTimeout(timer)
       exitDisposable?.dispose()
-      if (opts?.kill) {
+      // Windows keeps the conout worker thread and pseudoconsole until kill(), even after the
+      // shell exits; left alive, they hold the probing process open.
+      if (opts?.kill || process.platform === 'win32') {
         try {
           proc.kill()
         } catch {
@@ -213,9 +232,7 @@ export function preflightPtySpawnHealth(): boolean {
   if (process.platform === 'win32') {
     return false
   }
-  if (process.platform === 'darwin') {
-    ensureNodePtySpawnHelperExecutable()
-  }
+  ensureNodePtySpawnHelperExecutable()
   preflightUnixPtySpawnEnvironment()
   return true
 }

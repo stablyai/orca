@@ -122,16 +122,22 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     )
     // Why: xterm focus reports share this transport queue. Bypassing it can
     // race CSI I against the draft on ConPTY and expose a literal `[I` prefix.
-    void sendAgentDraftPasteContent(settings, ptyId, session.startupDraftPrompt, async (data) => {
-      const accepted = await writeTerminalPastePtyInput(session.transport, data)
-      if (accepted && !startupDraftInputRecorded) {
-        // Why: this transport write bypasses xterm's user-input signal; keep
-        // the composed draft from being discarded by later hibernation.
-        startupDraftInputRecorded = true
-        session.recordTerminalInputForHibernation()
+    void sendAgentDraftPasteContent(
+      settings,
+      ptyId,
+      session.startupDraftPrompt,
+      'launch',
+      async (data) => {
+        const accepted = await writeTerminalPastePtyInput(session.transport, data, 'launch')
+        if (accepted && !startupDraftInputRecorded) {
+          // Why: this transport write bypasses xterm's user-input signal; keep
+          // the composed draft from being discarded by later hibernation.
+          startupDraftInputRecorded = true
+          session.recordTerminalInputForHibernation()
+        }
+        return accepted
       }
-      return accepted
-    })
+    )
       .catch(() => false)
       .finally(() => {
         startupDraftPasteInFlight = false

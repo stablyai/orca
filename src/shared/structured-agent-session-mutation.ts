@@ -43,6 +43,7 @@ export function structuredAgentSessionCreateFingerprint(input: {
   worktree: string
   agent: 'claude' | 'codex'
   resumeFrom?: { providerSessionId: string }
+  tabId?: string
 }): string {
   return structuredAgentSessionPayloadFingerprint({
     method: 'agentSession.create',
@@ -52,7 +53,10 @@ export function structuredAgentSessionCreateFingerprint(input: {
       agent: input.agent,
       // `canonicalize` drops undefined, so a plain create keeps the digest it has always had.
       // Adopting a conversation is a different intent and must not replay as a blank create.
-      resumeFrom: input.resumeFrom
+      resumeFrom: input.resumeFrom,
+      // The host digests the same field; a retry naming another tab still replays with the
+      // recorded one, since the host owns the id.
+      tabId: input.tabId
     }
   })
 }

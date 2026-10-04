@@ -42,9 +42,17 @@ export const ORCAD_PID_FILENAME = '.orcad-pid'
  * A host without `ps` yields an empty state, which falls through to "alive" — the safe
  * direction for both callers.
  */
-export function posixProcessAliveShellFunction(): string {
+export function posixProcessAliveShellFunction(
+  options: { refuseUnverifiable?: boolean } = {}
+): string {
+  // Destructive lifecycle steps need explicit absence; permission failures cannot prove exit.
+  const probe = options.refuseUnverifiable
+    ? 'probe_error=$(LC_ALL=C kill -0 "$1" 2>&1) || { ' +
+      'case "$probe_error" in *"No such process"*) return 1;; ' +
+      '*) echo UNKNOWN; exit 0;; esac; }; '
+    : 'kill -0 "$1" 2>/dev/null || return 1; '
   return (
-    'orcad_alive() { kill -0 "$1" 2>/dev/null || return 1; ' +
+    `orcad_alive() { ${probe}` +
     'case "$(ps -o stat= -p "$1" 2>/dev/null)" in Z*) return 1;; esac; return 0; };'
   )
 }

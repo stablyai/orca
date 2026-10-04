@@ -1,4 +1,5 @@
 import type { AppState } from '../../../src/renderer/src/store/types'
+import type { PaneManager } from '../../../src/renderer/src/lib/pane-manager/pane-manager'
 import type { OpenFile, RightSidebarTab } from '../../../src/renderer/src/store/slices/editor'
 import type {
   ManagedPane,
@@ -12,6 +13,7 @@ import type { WorkspaceVisibleTabType } from '../../../src/shared/tab-types'
 import type { TerminalTab } from '../../../src/shared/terminal-tab-types'
 import type { Worktree } from '../../../src/shared/worktree/types'
 import type { DictationMeterState } from '../../../src/renderer/src/components/dictation/dictation-audio-meter'
+import type { ReactCommitHook } from './tab-render-recorder'
 
 // Why: window.__store is the Zustand bound store itself, so specs get the whole StoreApi.
 export type AppStore = {
@@ -31,6 +33,7 @@ export type PaneManagerLike = {
   getPanes(limit?: number): ManagedPaneHandle[]
   splitPane(paneId: number, direction: 'vertical' | 'horizontal'): ManagedPaneHandle | null
   closePane(paneId: number): void
+  movePane: PaneManager['movePane']
   setActivePane(paneId: number, opts?: { focus?: boolean }): void
   suspendRendering(): void
   resumeRendering(): void
@@ -66,6 +69,8 @@ declare global {
     __store?: AppStore
     __dictationMeterE2E?: { publish(meter: DictationMeterState): void }
     __paneManagers?: Map<string, PaneManagerLike>
+    __REACT_DEVTOOLS_GLOBAL_HOOK__?: ReactCommitHook
+    __tabsRenderedPerCommit?: number[]
   }
 }
 

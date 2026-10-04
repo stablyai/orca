@@ -20,6 +20,8 @@ import { finalizeRuntimeMobileSessionTabsResult } from './runtime-mobile-session
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import {
   getLatestAgentCandidateTitle,
+  getLeafDisplayRecord,
+  getPtyDisplayRecord,
   terminalTitleBlocksExplicitAgentStatus
 } from './runtime-worktree-status-projection'
 
@@ -146,16 +148,20 @@ export function projectRuntimeMobileSessionTabs(
     // null, because persisted ids can collide with an unrelated pane after restart — reading
     // that pane's tracker would publish its title here, ahead of every other source.
     const trackerOnlyTitle = host.getTrackedTitle(liveLeafPtyId ?? pty?.ptyId ?? null)
-    const leafTitle = leaf
+    const displayLeaf = leaf
+      ? getLeafDisplayRecord(leaf, host.getTitleDisplayClear(leaf.ptyId))
+      : null
+    const displayPty = pty ? getPtyDisplayRecord(pty, host.getTitleDisplayClear(pty.ptyId)) : null
+    const leafTitle = displayLeaf
       ? getLatestAgentCandidateTitle(
-          { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
-          { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
+          { title: displayLeaf.paneTitle, updatedAt: displayLeaf.paneTitleUpdatedAt },
+          { title: displayLeaf.lastOscTitle, updatedAt: displayLeaf.lastOscTitleAt }
         )
       : null
-    const ptyTitle = pty
+    const ptyTitle = displayPty
       ? getLatestAgentCandidateTitle(
-          { title: pty.title, updatedAt: pty.titleUpdatedAt },
-          { title: pty.lastOscTitle, updatedAt: pty.lastOscTitleAt }
+          { title: displayPty.title, updatedAt: displayPty.titleUpdatedAt },
+          { title: displayPty.lastOscTitle, updatedAt: displayPty.lastOscTitleAt }
         )
       : null
     // Renderer omission is authoritative: PTY launch provenance outlives agent exit.
@@ -198,7 +204,10 @@ export function projectRuntimeMobileSessionTabs(
         (hookAgentStatus.providerSessionReceivedAt ?? -1) >= tab.agentStatus.updatedAt)
         ? hookAgentStatus.providerSession
         : tab.agentStatus?.providerSession
-    const statusPty = liveLeafPty ?? mobileStatusPty
+    const nativeStatusPty = liveLeafPty ?? mobileStatusPty
+    const statusPty = nativeStatusPty
+      ? getPtyDisplayRecord(nativeStatusPty, host.getTitleDisplayClear(nativeStatusPty.ptyId))
+      : null
     const normalizedTabAgentStatus = renewRuntimeMobileAgentStatusFromPtyTitle(
       tab.agentStatus
         ? normalizeCompatibleAgentStatusEntryForOwner(

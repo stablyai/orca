@@ -102,7 +102,8 @@ export function DocPreviewToolbar({
         label: translate(
           'auto.components.editor.HtmlDocPreview.openSourceControl',
           'Open source file'
-        )
+        ),
+        alreadyInOverflowMenu: true
       }}
       openExternal={{
         onSelect: onOpenExternally,
@@ -111,15 +112,16 @@ export function DocPreviewToolbar({
           'Open with default app'
         )
       }}
-      overflowMenu={
+      overflowMenu={(overflow) => (
         <DocPreviewOverflowMenu
           onReload={onReload}
           onHardReload={onHardReload}
           onOpenSource={onOpenSource}
           onCopyPath={onCopyPath}
           onCopyRelativePath={onCopyRelativePath}
+          overflow={overflow}
         />
-      }
+      )}
     />
   )
 }

@@ -47,7 +47,7 @@ export function NativeChatCodeBlock({
         <NativeChatCopyButton
           text={code}
           label={translate('components.native-chat.copyCode', 'Copy code')}
-          className="absolute right-2 top-2 opacity-100 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/code:pointer-events-auto group-hover/code:opacity-100 group-has-[:focus-visible]/code:pointer-events-auto group-has-[:focus-visible]/code:opacity-100"
+          className="absolute right-2 top-2 opacity-100 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/code:pointer-events-auto group-hover/code:opacity-100 [[class~='group/code']:has(:focus-visible)_&]:pointer-events-auto [[class~='group/code']:has(:focus-visible)_&]:opacity-100"
         />
       ) : null}
     </div>

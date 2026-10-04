@@ -40,6 +40,7 @@ export async function discoverOpenCodeSessions(args: {
   dbPaths: readonly string[]
   limitPerAgent: number
   issues: AiVaultScanIssue[]
+  signal?: AbortSignal
 }): Promise<SessionFileDiscovery> {
   const [fileDiscovery, sqliteCandidates] = await Promise.all([
     discoverFiles({
@@ -54,7 +55,8 @@ export async function discoverOpenCodeSessions(args: {
     listOpenCodeSqliteSessionsViaWorker({
       dbPaths: args.dbPaths,
       limit: args.limitPerAgent,
-      issues: args.issues
+      issues: args.issues,
+      signal: args.signal
     })
   ])
 

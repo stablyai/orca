@@ -1,7 +1,6 @@
 import type { AppState } from '../../../types'
 import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import type { EditorSlice } from '../types/editor-slice'
 import { isEditorTabContentType } from './editor-tab-content-type'
 
 export function getGroupActiveTab(group: TabGroup, tabsById: Map<string, Tab>): Tab | null {
@@ -81,7 +80,7 @@ export function resolveEditorOpenTargetGroupId(
 }
 
 export function buildEditorActiveResult(
-  state: Pick<EditorSlice, 'activeFileIdByWorktree' | 'activeTabTypeByWorktree'>,
+  state: Pick<AppState, 'activeFileIdByWorktree' | 'activeTabTypeByWorktree' | 'activeWorktreeId'>,
   worktreeId: string,
   fileId: string
 ): {
@@ -91,8 +90,8 @@ export function buildEditorActiveResult(
   activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
 } {
   return {
-    // Why: floating markdown tabs must not become the worktree's active editor, so update only the per-worktree maps.
-    ...(worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+    // Why: only the on-screen worktree owns the main editor; a background or floating open updates only the per-worktree maps.
+    ...(worktreeId === FLOATING_TERMINAL_WORKTREE_ID || worktreeId !== state.activeWorktreeId
       ? {}
       : { activeFileId: fileId, activeTabType: 'editor' as const }),
     activeFileIdByWorktree: { ...state.activeFileIdByWorktree, [worktreeId]: fileId },

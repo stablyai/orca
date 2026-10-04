@@ -1,23 +1,12 @@
 import { expect, it, vi } from 'vitest'
 import { normalizePromptField } from './agent-status-field-normalization'
-import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { selectStructuredAgentTurnActivity } from './native-chat-turn-activity'
 
-function status(text: string): AgentJournalRenderItem {
-  return {
-    itemId: 'status',
-    revision: 1,
-    sequence: 1,
-    observedAt: 1,
-    body: { kind: 'status', text }
-  }
-}
-
-it('does not trim every preceding status line to select the final activity', () => {
+it('does not trim every preceding activity line to select the final activity', () => {
   const text = `${'Previous activity\n'.repeat(500)}Preparing the answer`
   const trim = vi.spyOn(String.prototype, 'trim')
   try {
-    expect(selectStructuredAgentTurnActivity([status(text)], 'turn')).toEqual({
+    expect(selectStructuredAgentTurnActivity([], 'turn', { turnId: 'turn', text })).toEqual({
       kind: 'description',
       text: 'Preparing the answer'
     })
@@ -79,7 +68,6 @@ it('preserves the last nonempty LF-delimited line before prompt normalization', 
       .findLast((part) => part.length > 0)
     const normalized = line ? normalizePromptField(line) : ''
     const expected = normalized ? { kind: 'description', text: normalized } : null
-    expect(selectStructuredAgentTurnActivity([status(text)], 'turn')).toEqual(expected)
     expect(selectStructuredAgentTurnActivity([], 'turn', { turnId: 'turn', text })).toEqual(
       expected
     )

@@ -146,9 +146,23 @@ describe('leaving the file preview', () => {
     expect(native.addEventListener.mock.calls[0]?.[0]).toBe('hardwareBackPress')
   })
 
-  it('never arms it on the web, where it is inert and says so on the console', () => {
-    native.platform.os = 'web'
-    render(false, vi.fn())
-    expect(native.addEventListener).not.toHaveBeenCalled()
+  // Which module answers is the bundler's, not this hook's: `use-back-claim.web.ts` claims the key
+  // from the shell instead, and the census beside it is what holds every site to the one seam.
+  it('registers once across a rebuilt handler, rather than per dependency change', () => {
+    const leave = vi.fn()
+    const renderer = render(false, leave)
+    expect(native.addEventListener).toHaveBeenCalledTimes(1)
+    act(() => {
+      renderer.update(createElement(Screen, { hasUnsavedDraft: true, leave }))
+    })
+    expect(native.addEventListener).toHaveBeenCalledTimes(1)
+    // And the newest handler is the one that answers: the prompt, not the leave it replaced.
+    let handled = false
+    act(() => {
+      handled = native.addEventListener.mock.calls[0]?.[1]?.() ?? false
+    })
+    expect(handled).toBe(true)
+    expect(leave).not.toHaveBeenCalled()
+    expect(held.back?.confirmingDiscard).toBe(true)
   })
 })

@@ -70,6 +70,26 @@ describe('pane foreground agent slice', () => {
     })
   })
 
+  // Why: a reattach seeds the launch agent; the read confirming the same agent must still land,
+  // or sidebar rows would never treat the pane as process-backed.
+  it('lands a process read that confirms a launch-record agent', () => {
+    const store = createTestStore()
+    store.getState().setPaneForegroundAgent('tab-1:leaf-1', {
+      agent: 'codex',
+      agentEvidence: 'launch-record',
+      shellForeground: false
+    })
+    store.getState().setPaneForegroundAgent('tab-1:leaf-1', {
+      agent: 'codex',
+      agentEvidence: 'process-read',
+      shellForeground: false
+    })
+
+    expect(store.getState().paneForegroundAgentByPaneKey['tab-1:leaf-1']?.agentEvidence).toBe(
+      'process-read'
+    )
+  })
+
   it('sweeps only the closed tab prefix, not sibling tabs or prefix-share ids', () => {
     const store = createTestStore()
     store

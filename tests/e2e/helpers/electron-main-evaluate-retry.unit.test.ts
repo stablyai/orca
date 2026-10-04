@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 
-const transient = (): Error =>
-  new Error('Execution context was destroyed, most likely because of a navigation.')
+const transientMessages = [
+  'Execution context was destroyed, most likely because of a navigation.',
+  'electronApplication.evaluate: Resulting promise was garbage collected.'
+]
 
 describe('retryTransientMainEvaluate', () => {
   it('returns the first successful read without retrying', async () => {
@@ -16,13 +18,13 @@ describe('retryTransientMainEvaluate', () => {
     expect(calls).toBe(1)
   })
 
-  it('rides out the startup window that made the paired-client launch flaky', async () => {
+  it.each(transientMessages)('retries a transient startup failure: %s', async (message) => {
     let calls = 0
     await expect(
       retryTransientMainEvaluate(async () => {
         calls += 1
         if (calls < 3) {
-          throw transient()
+          throw new Error(message)
         }
         return '/isolated/home'
       })
@@ -41,14 +43,30 @@ describe('retryTransientMainEvaluate', () => {
     expect(calls).toBe(1)
   })
 
-  it('gives up rather than looping forever when the app never becomes evaluable', async () => {
+  it.each(transientMessages)(
+    'bounds retries when evaluation keeps failing: %s',
+    async (message) => {
+      let calls = 0
+      await expect(
+        retryTransientMainEvaluate(async () => {
+          calls += 1
+          throw new Error(message)
+        })
+      ).rejects.toThrow(message)
+      expect(calls).toBe(5)
+    }
+  )
+
+  it('does not retry a closed application', async () => {
     let calls = 0
     await expect(
       retryTransientMainEvaluate(async () => {
         calls += 1
-        throw transient()
+        throw new Error(
+          'electronApplication.evaluate: Target page, context or browser has been closed'
+        )
       })
-    ).rejects.toThrow(/Execution context was destroyed/)
-    expect(calls).toBe(5)
+    ).rejects.toThrow(/has been closed/)
+    expect(calls).toBe(1)
   })
 })

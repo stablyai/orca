@@ -76,10 +76,8 @@ function command(
 describe('readCodexBackgroundTaskFrame', () => {
   it('reads activity as child metadata without inferring execution state', () => {
     expect(readCodexBackgroundTaskFrame(activity('interacted'), PRIMARY)).toEqual({
-      kind: 'subagent',
-      agentThreadId: CHILD,
-      label: 'count_a',
-      parentTurnId: PARENT_TURN
+      kind: 'subagents',
+      children: [{ agentThreadId: CHILD, label: 'count_a', parentTurnId: PARENT_TURN }]
     })
   })
 

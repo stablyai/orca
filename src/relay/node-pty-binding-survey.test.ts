@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -7,6 +15,7 @@ import { isFlattenedNodePtyLoaderMessage } from '../main/orcad/node-pty-loader-d
 import {
   collectNodePtyUnavailableDiagnosis,
   readNodeGypBuildRecord,
+  resolveNodePtyInstallDir,
   surveyNodePtyBinding
 } from './node-pty-binding-survey'
 import { formatNodePtyUnavailableMessage } from './node-pty-unavailable-diagnosis'
@@ -73,6 +82,26 @@ describe('readNodeGypBuildRecord', () => {
   })
 })
 
+describe('resolveNodePtyInstallDir', () => {
+  it('finds the install an ancestor node_modules supplies, as the bare import does', () => {
+    // realpath: the resolver answers the real path, and macOS tmpdir is a link.
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-node-pty-')))
+    roots.push(root)
+    const installDir = join(root, 'node_modules', 'node-pty')
+    mkdirSync(installDir, { recursive: true })
+    writeFileSync(join(installDir, 'package.json'), '{}\n')
+
+    expect(resolveNodePtyInstallDir(join(root, 'relay', 'abc123'))).toBe(installDir)
+  })
+
+  it('answers nothing when no node_modules up the tree holds node-pty', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-node-pty-'))
+    roots.push(root)
+
+    expect(resolveNodePtyInstallDir(root)).toBeNull()
+  })
+})
+
 describe('collectNodePtyUnavailableDiagnosis', () => {
   it("recovers the dynamic loader's own words that node-pty threw away", async () => {
     // The whole defect in one assertion: what reaches the relay is FLATTENED, which names
@@ -107,17 +136,61 @@ describe('collectNodePtyUnavailableDiagnosis', () => {
     }
   }, 20_000)
 
-  it('reports an unlocatable install as unverifiable, not as a diagnosis', async () => {
+  it('diagnoses a node-pty directory that does not exist instead of calling it unverifiable (#20386)', async () => {
+    // What a Linux host without a compiler gets: the deploy reinstalls with node-pty removed.
+    const root = mkdtempSync(join(tmpdir(), 'orca-node-pty-'))
+    roots.push(root)
+    const missingDir = join(root, 'node-pty')
     const diagnosis = await collectNodePtyUnavailableDiagnosis({
-      nodePtyDir: null,
-      error: new Error(FLATTENED)
+      nodePtyDir: missingDir,
+      error: new Error(`no node-pty at ${join(missingDir, 'lib', 'index.js')}`)
     })
-    expect(diagnosis.status).toBe('unverifiable')
-    const text = formatNodePtyUnavailableMessage(diagnosis)
-    expect(text).toContain('could not establish why')
-    // It still has to be reportable: the raw error is the only thing an issue can quote.
-    expect(text).toContain(FLATTENED)
-  })
+    expect(diagnosis.status).toBe('blocked')
+    expect(['toolchain_missing', 'dependency_missing']).toContain(diagnosis.reason)
+    expect(diagnosis.survey).toMatchObject({ installed: false, bindingPath: null })
+    expect(diagnosis.toolchain === null).toBe(process.platform !== 'linux')
+    expect(formatNodePtyUnavailableMessage(diagnosis)).toContain(
+      `node-pty is not installed at ${missingDir}`
+    )
+  }, 20_000)
+
+  it.skipIf(process.platform === 'win32')(
+    'treats a node-pty link whose target is gone as not installed',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-node-pty-'))
+      roots.push(root)
+      const linked = join(root, 'node-pty')
+      symlinkSync(join(root, 'gone'), linked)
+      const diagnosis = await collectNodePtyUnavailableDiagnosis({ nodePtyDir: linked })
+      expect(diagnosis.survey).toMatchObject({ installed: false, bindingPath: null })
+    },
+    20_000
+  )
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'keeps a directory it was refused as unverifiable rather than absent',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-node-pty-'))
+      roots.push(root)
+      const locked = join(root, 'locked')
+      mkdirSync(join(locked, 'node-pty'), { recursive: true })
+      chmodSync(locked, 0o000)
+      try {
+        const diagnosis = await collectNodePtyUnavailableDiagnosis({
+          nodePtyDir: join(locked, 'node-pty'),
+          error: new Error(FLATTENED)
+        })
+        expect(diagnosis.status).toBe('unverifiable')
+        expect(diagnosis.detail).toContain('EACCES')
+        const text = formatNodePtyUnavailableMessage(diagnosis)
+        expect(text).toContain('could not establish why')
+        // It still has to be reportable: the raw error is the only thing an issue can quote.
+        expect(text).toContain(FLATTENED)
+      } finally {
+        chmodSync(locked, 0o755)
+      }
+    }
+  )
 
   it('probes the host toolchain only when nothing was compiled', async () => {
     const diagnosis = await collectNodePtyUnavailableDiagnosis({

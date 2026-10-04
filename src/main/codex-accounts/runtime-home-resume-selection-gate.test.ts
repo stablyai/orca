@@ -103,7 +103,7 @@ async function createServiceWithSelectedAccount(): Promise<{
   )
   const store = createStore(
     createSettings({
-      shellStartupEnvProbeSupported: true,
+      realHomeRoutable: true,
       codexManagedAccounts: [
         createCodexAccountRecord('account-a', 'a@example.com', 'acct-a', managedHomePath),
         createCodexAccountRecord(

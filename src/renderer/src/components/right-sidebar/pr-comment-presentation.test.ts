@@ -8,10 +8,6 @@ import {
 } from './pr-comment-presentation'
 
 describe('pr-comment-presentation', () => {
-  it('defaults to cards layout', () => {
-    expect(DEFAULT_PR_COMMENT_PRESENTATION_VARIANT).toBe('cards')
-  })
-
   it('returns card layout tokens for cards and focus variants', () => {
     const cards = getPRCommentPresentationClasses('cards')
     expect(cards.useCardLayout).toBe(true)

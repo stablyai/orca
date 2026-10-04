@@ -90,24 +90,6 @@ describe('structuredClaudeMatchesActiveManagedAccount', () => {
     expect(structuredClaudeMatchesActiveManagedAccount(undefined)).toBe(false)
   })
 
-  /** The four states this gate exists to tell apart, pinned together so a change to one is visible
-   *  against the others. */
-  it.each([
-    ['no managed accounts', [], null, true],
-    ['accounts present, none active, no WSL account', [account('host-1', 'host')], null, true],
-    ['host account selected', [account('host-1', 'host')], 'host-1', true],
-    ['WSL-only, normalized to no host selection', [account('wsl-1', 'wsl')], null, false]
-  ] as const)('resolves %s', (_name, claudeManagedAccounts, activeId, expected) => {
-    expect(
-      structuredClaudeMatchesActiveManagedAccount(
-        settings({
-          claudeManagedAccounts: [...claudeManagedAccounts],
-          activeClaudeManagedAccountIdsByRuntime: { host: activeId, wsl: {} }
-        })
-      )
-    ).toBe(expected)
-  })
-
   /** THE discriminator, and the whole of this rule. With nothing selected for the host runtime the
    *  settings alone cannot distinguish honest deselection from the WSL-only steady state, because
    *  `pruneInvalidClaudeRuntimeSelection` empties the host slot in the second case and persists it.

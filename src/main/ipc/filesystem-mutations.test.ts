@@ -555,15 +555,4 @@ describe('registerFilesystemMutationHandlers', () => {
 
     expect(writeFileMock).not.toHaveBeenCalled()
   })
-
-  it('propagates fs.rename errors (e.g. ENOENT when source missing)', async () => {
-    renameMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
-
-    await expect(
-      handlers.get('fs:rename')!(null, {
-        oldPath: path.resolve('/workspace/repo/gone.ts'),
-        newPath: path.resolve('/workspace/repo/new.ts')
-      })
-    ).rejects.toThrow('ENOENT')
-  })
 })

@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import type { OnMount } from '@monaco-editor/react'
 import { useAppStore } from '@/store'
 import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-selection'
@@ -61,6 +61,11 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
     },
     gutterMenu: { setGutterMenuOpen, setGutterMenuPoint, setGutterMenuLine }
   } = params
+  // Why: retained listeners must follow committed ownership, never an abandoned render.
+  const fileIdRef = useRef(fileId)
+  useLayoutEffect(() => {
+    fileIdRef.current = fileId
+  }, [fileId])
 
   return useCallback<OnMount>(
     (editorInstance, monaco) => {
@@ -145,7 +150,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
 
       const { cursorPositionSub, scrollStateSub } = installMonacoViewStateTracking({
         editorInstance,
-        filePath,
+        fileIdRef,
         viewStateKey,
         scrollThrottleTimerRef,
         setEditorCursorLine

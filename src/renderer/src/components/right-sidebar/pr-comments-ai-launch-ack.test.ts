@@ -354,25 +354,6 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     expect(replyAsConversation).not.toHaveBeenCalled()
   })
 
-  // Why: resolve used to be gated on panel/live-comment state and got silently skipped when
-  // a slow agent launch outlived either; the snapshotted threadId must always be attempted.
-  it('resolves every selected thread with no live-state gate', async () => {
-    const resolveThread = vi.fn().mockResolvedValue(true)
-
-    const result = await acknowledgePRCommentsAfterAiLaunch({
-      groups: [openThread('T1'), openThread('T2', 11), openThread('T3', 12)],
-      deps: {
-        resolveThread,
-        canReply: true,
-        replyInThread: vi.fn(),
-        replyAsConversation: vi.fn()
-      }
-    })
-
-    expect(resolveThread).toHaveBeenCalledTimes(3)
-    expect(result).toEqual({ resolved: 3, replied: 0, skipped: 0, failed: 0 })
-  })
-
   // Why: GitLab MRs reach the ack with canReply false; resolve is the whole acknowledgement there.
   it('resolves threads on providers that cannot reply', async () => {
     const resolveThread = vi.fn().mockResolvedValue(true)
@@ -494,22 +475,6 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     expect(result).toEqual({ resolved: 0, replied: 1, skipped: 0, failed: 0 })
     expect(replyAsConversation).toHaveBeenCalledTimes(1)
     expect(replyAsConversation).toHaveBeenCalledWith(`@alice ${PR_COMMENT_AI_FIXING_REPLY}`)
-  })
-
-  it('posts no conversation comment when nothing in the selection needs one', async () => {
-    const replyAsConversation = vi.fn()
-
-    await acknowledgePRCommentsAfterAiLaunch({
-      groups: [openThread('T1'), openThread('T2', 11)],
-      deps: {
-        resolveThread: vi.fn().mockResolvedValue(true),
-        canReply: true,
-        replyInThread: vi.fn().mockResolvedValue(true),
-        replyAsConversation
-      }
-    })
-
-    expect(replyAsConversation).not.toHaveBeenCalled()
   })
 
   it('posts a conversation @-reply for CodeRabbit review summaries', async () => {

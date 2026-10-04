@@ -21,6 +21,7 @@ import type {
   MirroredAgentTab
 } from './state'
 import type { Tab } from '../../../../shared/tab-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/structured-agent-session-launch-registry'
 
@@ -56,6 +57,8 @@ export function isAgentSessionTab(
 
 export function buildMirroredAgentTabs(
   snapshot: RuntimeMobileSessionTabsResult,
+  /** The host that published the snapshot; stamped so later operations reach the chat there. */
+  executionHostId: ExecutionHostId,
   hostGroupIdByTabId: ReadonlyMap<string, string>,
   fallbackGroupId: string,
   sortOffset: number,
@@ -84,9 +87,8 @@ export function buildMirroredAgentTabs(
       currentUnifiedTabs.find(
         (candidate) =>
           !replacementIds.has(candidate.id) &&
-          (candidate.structuredSessionId === tab.replacesSessionId ||
-            (candidate.contentType === 'agent-session' &&
-              candidate.entityId === tab.replacesSessionId))
+          candidate.contentType === 'agent-session' &&
+          candidate.entityId === tab.replacesSessionId
       )
     if (existing) {
       replacementTabs.set(tab.sessionId, existing)
@@ -121,6 +123,7 @@ export function buildMirroredAgentTabs(
         // user's split choice and must not move the mounted pane during adoption.
         groupId: existing?.groupId ?? hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId,
         worktreeId: snapshot.worktree,
+        executionHostId,
         contentType: 'agent-session',
         agentSessionAgent: tab.agent,
         // Why: `title` is wire data typed `string`; a host that violates that must
@@ -201,6 +204,12 @@ export function chooseRemoteTerminalLayout(
       : parentLayout?.expandedLeafId && knownLeafIds.has(parentLayout.expandedLeafId)
         ? parentLayout.expandedLeafId
         : null
+  const chatLeafId =
+    parentLayout?.chatLeafId && knownLeafIds.has(parentLayout.chatLeafId)
+      ? parentLayout.chatLeafId
+      : existingLayout?.chatLeafId && knownLeafIds.has(existingLayout.chatLeafId)
+        ? existingLayout.chatLeafId
+        : undefined
   // Why retained: this rebuilds the layout from the host's picture, and the host publishes no
   // scrollback of its own — a parked remote pane's bytes live only in the client's copy. Without
   // this, ANY inventory frame landing between park and reveal drops the only copy: the rebuild is
@@ -220,6 +229,7 @@ export function chooseRemoteTerminalLayout(
     }),
     activeLeafId,
     expandedLeafId,
+    ...(chatLeafId ? { chatLeafId } : {}),
     ptyIdsByLeafId,
     // Why: surface.title is the tab/PTY label, not a pane title; restoring it as one renders a fake title bar. Only host layout titles are real pane titles.
     ...(parentLayout?.titlesByLeafId ? { titlesByLeafId: parentLayout.titlesByLeafId } : {})

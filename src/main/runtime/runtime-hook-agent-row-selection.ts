@@ -28,6 +28,43 @@ function isLiveObservation(row: AgentStatusIpcPayload): boolean {
   return row.restoredUnconfirmed !== true && row.providerSessionOnly !== true
 }
 
+type HookRowJoin = {
+  handles: Iterable<string>
+  paneKeys: Iterable<string>
+  hookRows: readonly AgentStatusIpcPayload[]
+}
+
+function isPermissionState(state: AgentStatusEntry['state']): boolean {
+  return mapExplicitAgentStateToRuntimeTerminalStatus(state) === 'permission'
+}
+
+/** The freshest live hook row for a terminal, joined on any of its handles or pane keys. */
+export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatusIpcPayload | null {
+  const now = Date.now()
+  const handles = new Set(args.handles)
+  const paneKeys = new Set(args.paneKeys)
+  let best: AgentStatusIpcPayload | null = null
+  for (const row of args.hookRows) {
+    if (!(row.terminalHandle && handles.has(row.terminalHandle)) && !paneKeys.has(row.paneKey)) {
+      continue
+    }
+    if (!row.state || !isLiveObservation(row) || typeof row.receivedAt !== 'number') {
+      continue
+    }
+    if (now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS) {
+      continue
+    }
+    if (
+      !best ||
+      row.receivedAt > best.receivedAt ||
+      (row.receivedAt === best.receivedAt && isPermissionState(row.state))
+    ) {
+      best = row
+    }
+  }
+  return best
+}
+
 /** The freshest explicit state for a terminal, matched on its handle or its pane key. */
 export function selectFreshExplicitAgentStatus(args: {
   handle: string
@@ -38,49 +75,16 @@ export function selectFreshExplicitAgentStatus(args: {
   updatedAt: number
   stateStartedAt: number
 } | null {
-  const now = Date.now()
-  let bestStatus: NonNullable<RuntimeTerminalAgentStatus['status']> | null = null
-  let bestUpdatedAt = -1
-  let bestStateStartedAt = -1
-  const consider = (
-    state: AgentStatusEntry['state'] | undefined,
-    updatedAt: number | null | undefined,
-    evidenceObservedAt: number | null | undefined,
-    restoredUnconfirmed = false,
-    providerSessionOnly = false,
-    stateStartedAt?: number | null
-  ): void => {
-    if (!state || restoredUnconfirmed || providerSessionOnly || typeof updatedAt !== 'number') {
-      return
-    }
-    if (now - (evidenceObservedAt ?? updatedAt) > AGENT_STATUS_STALE_AFTER_MS) {
-      return
-    }
-    const status = mapExplicitAgentStateToRuntimeTerminalStatus(state)
-    if (updatedAt > bestUpdatedAt || (updatedAt === bestUpdatedAt && status === 'permission')) {
-      bestStatus = status
-      bestUpdatedAt = updatedAt
-      bestStateStartedAt = typeof stateStartedAt === 'number' ? stateStartedAt : updatedAt
-    }
-  }
-  for (const row of args.hookRows) {
-    if (row.terminalHandle !== args.handle && (!args.paneKey || row.paneKey !== args.paneKey)) {
-      continue
-    }
-    consider(
-      row.state,
-      row.receivedAt,
-      row.evidenceObservedAt,
-      row.restoredUnconfirmed,
-      row.providerSessionOnly,
-      row.stateStartedAt
-    )
-  }
-  return bestStatus
+  const row = selectFreshExplicitAgentStatusRow({
+    handles: [args.handle],
+    paneKeys: args.paneKey ? [args.paneKey] : [],
+    hookRows: args.hookRows
+  })
+  return row
     ? {
-        status: bestStatus,
-        updatedAt: bestUpdatedAt,
-        stateStartedAt: bestStateStartedAt
+        status: mapExplicitAgentStateToRuntimeTerminalStatus(row.state),
+        updatedAt: row.receivedAt,
+        stateStartedAt: typeof row.stateStartedAt === 'number' ? row.stateStartedAt : row.receivedAt
       }
     : null
 }

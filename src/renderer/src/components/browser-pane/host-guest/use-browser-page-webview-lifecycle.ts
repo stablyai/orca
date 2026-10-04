@@ -54,7 +54,7 @@ export function useBrowserPageWebviewLifecycle({
   onUpdatePageState,
   onSetUrl,
   setAddressBarValue,
-  setPendingAnnotationPayload,
+  cancelPendingBrowserCapture,
   setBrowserOverlayViewport,
   setFindOpen,
   focusAddressBarNow,
@@ -62,7 +62,6 @@ export function useBrowserPageWebviewLifecycle({
   paneZoomLevelRef,
   setBrowserZoomPercent,
   pendingAnnotationPayload,
-  browserAnnotationsLength,
   inputLocked,
   faviconUrl,
   webviewRef,
@@ -96,7 +95,7 @@ export function useBrowserPageWebviewLifecycle({
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
   onSetUrl: BrowserPageUrlSetter
   setAddressBarValue: Dispatch<SetStateAction<string>>
-  setPendingAnnotationPayload: Dispatch<SetStateAction<BrowserGrabPayload | null>>
+  cancelPendingBrowserCapture: () => void
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
   setFindOpen: Dispatch<SetStateAction<boolean>>
   focusAddressBarNow: () => boolean
@@ -104,7 +103,6 @@ export function useBrowserPageWebviewLifecycle({
   paneZoomLevelRef: MutableRefObject<number>
   setBrowserZoomPercent: Dispatch<SetStateAction<number>>
   pendingAnnotationPayload: BrowserGrabPayload | null
-  browserAnnotationsLength: number
   inputLocked: boolean
   faviconUrl: string | null
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
@@ -139,9 +137,10 @@ export function useBrowserPageWebviewLifecycle({
   const browserAnnotations = useAppStore(
     (s) => s.browserAnnotationsByPageId[browserTabId] ?? EMPTY_BROWSER_ANNOTATIONS
   )
-  const browserAnnotationsRef = useRef(browserAnnotations)
-  const clearBrowserPageAnnotations = useAppStore((s) => s.clearBrowserPageAnnotations)
-  const clearBrowserPageAnnotationsRef = useRef(clearBrowserPageAnnotations)
+  const browserAnnotationMarkerIds = useAppStore(
+    (s) => s.browserAnnotationMarkerIdsByPageId[browserTabId]
+  )
+  const invalidatePendingCaptureRef = useRef(cancelPendingBrowserCapture)
 
   useLayoutEffect(() => {
     browserTabLoadingRef.current = browserTabLoading
@@ -149,13 +148,11 @@ export function useBrowserPageWebviewLifecycle({
     viewportPresetIdRef.current = viewportPresetId
     isActiveRef.current = isActive
     pendingAnnotationPayloadRef.current = pendingAnnotationPayload
-    browserAnnotationsRef.current = browserAnnotations
-    clearBrowserPageAnnotationsRef.current = clearBrowserPageAnnotations
+    invalidatePendingCaptureRef.current = cancelPendingBrowserCapture
     isPaintableRef.current = isPaintable
   }, [
-    browserAnnotations,
     browserTabLoading,
-    clearBrowserPageAnnotations,
+    cancelPendingBrowserCapture,
     inputLocked,
     isActive,
     isPaintable,
@@ -211,14 +208,30 @@ export function useBrowserPageWebviewLifecycle({
   )
 
   const syncBrowserAnnotationViewportBridge = useCallback((): void => {
+    const state = useAppStore.getState()
     syncGuestAnnotationViewportBridge({
       toolTargetId: browserTabId,
-      annotations: browserAnnotationsRef.current,
+      annotations: state.browserAnnotationsByPageId[browserTabId] ?? EMPTY_BROWSER_ANNOTATIONS,
+      currentDocument: {
+        markerIds: state.browserAnnotationMarkerIdsByPageId[browserTabId] ?? [],
+        url: browserTabUrlRef.current
+      },
       pendingPayload: pendingAnnotationPayloadRef.current,
       surfaceActive: isActiveRef.current,
       token: annotationViewportBridgeTokenRef.current
     })
-  }, [browserTabId])
+  }, [browserTabId, browserTabUrlRef])
+
+  const invalidateBrowserAnnotationDocument = useCallback((): void => {
+    useAppStore.getState().invalidateBrowserPageAnnotationGeometry(browserTabId)
+    invalidatePendingCaptureRef.current()
+    pendingAnnotationPayloadRef.current = null
+    syncBrowserAnnotationViewportBridge()
+  }, [browserTabId, syncBrowserAnnotationViewportBridge])
+  const invalidateBrowserAnnotationDocumentRef = useRef(invalidateBrowserAnnotationDocument)
+  useLayoutEffect(() => {
+    invalidateBrowserAnnotationDocumentRef.current = invalidateBrowserAnnotationDocument
+  }, [invalidateBrowserAnnotationDocument])
 
   // Why: browserTab.url excluded from deps (changes every navigation → would destroy/recreate the webview); URL logic reads browserTabUrlRef.
   useEffect(() => {
@@ -255,9 +268,8 @@ export function useBrowserPageWebviewLifecycle({
       addressBarInputRef,
       lastKnownWebviewUrlRef,
       trackNextLoadingEventRef,
-      clearBrowserPageAnnotationsRef,
+      invalidateBrowserAnnotationDocumentRef,
       onSetUrlRef,
-      setPendingAnnotationPayload,
       setBrowserOverlayViewport,
       setAddressBarValue,
       addBrowserHistoryEntryRef,
@@ -295,8 +307,10 @@ export function useBrowserPageWebviewLifecycle({
   useEffect(() => {
     syncBrowserAnnotationViewportBridge()
   }, [
-    browserAnnotationsLength,
+    browserAnnotations,
+    browserAnnotationMarkerIds,
     browserTabId,
+    browserTabUrl,
     isActive,
     pendingAnnotationPayload,
     syncBrowserAnnotationViewportBridge

@@ -1,3 +1,7 @@
+import type {
+  AgentProcessPresence,
+  AgentProcessVerdict
+} from '../../../shared/agent-process-presence'
 import type { createServer } from 'node:http'
 import { randomBytes, randomUUID } from 'node:crypto'
 
@@ -24,7 +28,7 @@ import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-ty
 import type { SpoolRecord } from '../../../shared/agent-hook-spool'
 import { createAgentStatusStore, type AgentStatusStore } from '../../../shared/agent-status-store'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
-import type { AgentStatusStructuredSessionSubject } from '../../../shared/agent-status-subject'
+import type { AgentStatusSubject } from '../../../shared/agent-status-subject'
 import type {
   AgentHookAuthorityEvidence,
   AgentHookProviderSessionIdentity,
@@ -69,10 +73,7 @@ export abstract class AgentHookServerState {
     return this.canonicalStatusStoreInstance
   }
   protected readonly canonicalListingOrder = new Map<string, number>()
-  protected readonly canonicalSubjectsByPane = new Map<
-    string,
-    Map<string, AgentStatusStructuredSessionSubject>
-  >()
+  protected readonly canonicalSubjectsByPane = new Map<string, Map<string, AgentStatusSubject>>()
   private statusListingOrder = 0
   protected nextStatusListingOrder = (): number => ++this.statusListingOrder
 
@@ -88,6 +89,9 @@ export abstract class AgentHookServerState {
   protected env = 'production'
   protected onAgentStatus: ServerAgentStatusListener = null
   protected onClaudeStatusLine: ServerStatusLineListener = null
+  protected onStartupPromptClaim: ((body: unknown) => boolean | 'pending') | null = null
+  protected clearStartupPromptClaims: (() => void) | null = null
+  protected statusHooksEnabled = true
   protected onPaneStatusCleared: PaneStatusClearListener | null = null
   protected paneStatusClearListeners = new Set<PaneStatusClearListener>()
   protected statusDropListeners = new Set<StatusDropListener>()
@@ -159,6 +163,14 @@ export abstract class AgentHookServerState {
   )
 
   protected abstract withdrawReplayObservation(paneKey: string): void
+  protected abstract getTmuxSelectedStatus(
+    paneKey: string
+  ): EnrichedAgentHookEventPayload | undefined
+  protected abstract deleteTmuxSelectedStatus(
+    paneKey: string
+  ): EnrichedAgentHookEventPayload | undefined
+  protected abstract clearTmuxInnerSubjects(paneKey: string): void
+  protected abstract clearTmuxTabSubjects(tabId: string): void
   protected abstract ingestSpoolRecord(record: SpoolRecord): void
   protected abstract emitPaneStatusCleared(clear: AgentStatusClearIpcPayload): void
   protected abstract buildStatusChangeNotification(): {
@@ -213,9 +225,9 @@ export abstract class AgentHookServerState {
   ): EnrichedAgentHookEventPayload | undefined
   protected abstract emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void
   protected abstract clearAssistantMessageRetry(paneKey: string): void
-  protected abstract clearCodexSubagentPoll(paneKey: string): void
-  protected abstract clearAllCodexSubagentPolls(): void
-  protected abstract scheduleCodexSubagentPoll(
+  protected abstract clearTranscriptPoll(paneKey: string): void
+  protected abstract clearAllTranscriptPolls(): void
+  protected abstract scheduleTranscriptPoll(
     source: AgentHookSource,
     body: unknown,
     original: EnrichedAgentHookEventPayload
@@ -255,9 +267,24 @@ export abstract class AgentHookServerState {
     entry: EnrichedAgentHookEventPayload | null | undefined
   ): EnrichedAgentHookEventPayload | null
   protected abstract hasLiveClaimsForPaneKey(paneKey: string): boolean
+  abstract checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null>
+  abstract checkAgentPresenceAfterHook(
+    event: AgentHookEventPayload,
+    row: AgentHookEventPayload
+  ): void
+
+  abstract reconcileEndedProcessForPaneKeys(
+    paneKeys: Iterable<string>,
+    options?: { preserveResumeIdentity?: boolean; endedPresence?: AgentProcessPresence }
+  ): number
+
   protected abstract clearPaneState(
     paneKey: string,
-    options?: { emitStatusRowMutation?: boolean }
+    options?: {
+      emitStatusRowMutation?: boolean
+      preserveTmuxInnerSubjects?: boolean
+      statusUnavailable?: true
+    }
   ): void
   protected abstract deleteStatusEntry(
     paneKey: string,

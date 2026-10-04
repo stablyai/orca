@@ -1,0 +1,169 @@
+name: SSH Windows hosts
+
+# Design D5/D6 exit gate, Windows half: the real client-side relay deploy against a real
+# Win32-OpenSSH server on 127.0.0.1 (inbox capability and the pinned 10.0.0.0p2-Preview release),
+# on x64 and arm64. Each job provisions a private sshd service and one standard account per cell
+# (config/ci/windows-ssh-provider/), hides the host toolchain from SSH sessions behind logging
+# shims, and asserts rung A on the pinned node.exe in both DefaultShell cases plus the opt-out.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/main/ssh/ssh-relay-*'
+      - 'src/main/ssh/*runtime*'
+      - 'src/main/ssh/orcad-*'
+      - 'src/main/ssh/remote-install-*'
+      - 'src/main/ssh/ssh-remote-*'
+      - 'src/main/ssh/ssh-hostile-host-*'
+      - 'src/main/ssh/ssh-windows-host-*'
+      - 'src/main/ssh/ssh-session-command-audit.ts'
+      - 'src/relay/**'
+      - 'src/shared/node-runtime-pin.ts'
+      - 'src/shared/orcad-artifacts.ts'
+      - 'config/scripts/build-orcad-*.mjs'
+      - 'config/scripts/orcad-prebuild-*.mjs'
+      - 'config/scripts/orcad-windows-process-tree.mjs'
+      - 'config/scripts/build-relay.mjs'
+      - 'config/patches/node-pty*'
+      - 'config/patches/@vscode__windows-process-tree*'
+      - 'config/scripts/build-windows-process-tree-relay-addon.mjs'
+      - 'config/scripts/relay-windows-process-tree-staging.mjs'
+      - 'config/scripts/relay-windows-process-tree-prepared-addon*.mjs'
+      - 'config/scripts/windows-process-tree-gyp-rebuild.mjs'
+      - 'src/shared/relay-windows-breakaway-launch.ts'
+      - '!src/**/*.test.ts'
+      - 'src/main/ssh/ssh-relay-windows-host-lane.test.ts'
+      - 'config/ci/windows-ssh-provider/**'
+      - '.github/workflows/ssh-windows-hosts.yml'
+      - '.github/actions/prepare-orcad-prebuilds/**'
+      - '.github/actions/restore-pnpm-verification/**'
+      - 'config/scripts/orcad-windows-prebuild-cache.mjs'
+  workflow_dispatch:
+    inputs:
+      cells:
+        description: Comma-separated cell ids from src/main/ssh/ssh-windows-host-cells.ts; empty runs all.
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ssh-windows-hosts-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hosts:
+    # A draft carries no verdict; readiness re-triggers this workflow.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft != true }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2022
+            server: inbox
+          - arch: x64
+            runner: windows-2022
+            server: preview
+            archive: OpenSSH-Win64.zip
+          - arch: arm64
+            runner: windows-11-arm
+            server: inbox
+          - arch: arm64
+            runner: windows-11-arm
+            server: preview
+            archive: OpenSSH-ARM64.zip
+    runs-on: ${{ matrix.runner }}
+    # Installing the inbox capability alone can take several minutes on a fresh image.
+    timeout-minutes: 75
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+      ORCA_ISOLATED_SSH_CI: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Self-test the provisioning scripts before touching the machine
+        shell: pwsh
+        run: |
+          foreach($file in @(Get-ChildItem -Recurse -Filter *.ps1 config/ci/windows-ssh-provider)){
+            $errors=$null;$tokens=$null
+            [Management.Automation.Language.Parser]::ParseFile($file.FullName,[ref]$tokens,[ref]$errors)|Out-Null
+            if($errors.Count){throw "PowerShell parse failed: $($file.FullName)"}
+          }
+          & config/ci/windows-ssh-provider/preview-ssh/test-preview-diagnostics.ps1
+      # ARM inbox servicing can finish while the independent Node artifacts are prepared.
+      - name: Prepare the Windows inbox SSH capability
+        id: inbox-capability
+        background: true
+        shell: pwsh
+        run: |
+          if('${{ matrix.server }}' -eq 'inbox' -and '${{ matrix.arch }}' -eq 'arm64'){
+            $receipts=Join-Path $pwd '.build/ssh-windows-host-receipts'
+            New-Item -ItemType Directory -Force -Path $receipts | Out-Null
+            . config/ci/windows-ssh-provider/preview-ssh/windows-ssh-capability.ps1
+            Initialize-WindowsInboxSshCapability -Arch '${{ matrix.arch }}' -Receipt (Join-Path $receipts 'inbox-capability-preparation.json')
+          }
+      - uses: ./.github/actions/install-node-dependencies
+        id: dependencies
+        with:
+          native-runtime: node
+          cache-pnpm-store: 'false'
+      # The deploy materializes rung A from this template; only this runner's slot exists here.
+      # The process-tree addon carries the launcher that starts the relay outside sshd's job; the
+      # orcad slot and the relay both stage it, and a standard-user host has no other launch route.
+      - name: Build this runner's Windows process-table addon
+        shell: bash
+        env:
+          REUSE_PREPARED_RUNTIME: ${{ github.event_name == 'pull_request' && steps.dependencies.outputs.native-cache-hit == 'true' }}
+        run: |
+          reuse_args=()
+          if [ "$REUSE_PREPARED_RUNTIME" = true ]; then
+            reuse_args+=(--reuse-prepared-runtime)
+          fi
+          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=${{ matrix.arch }} "${reuse_args[@]}"
+      - uses: ./.github/actions/prepare-orcad-prebuilds
+        with:
+          resolve-windows-cache: ${{ github.event_name == 'pull_request' }}
+          restore-windows-cache: ${{ github.event_name == 'pull_request' }}
+      - name: Build the win32 template and the relay
+        shell: bash
+        env:
+          ORCA_REQUIRE_RELAY_NATIVE_ADDONS: ${{ matrix.arch }}
+        run: |
+          pnpm build:orcad-prebuilds --require-slots "win32-${{ matrix.arch }}"
+          node config/scripts/build-orcad-template.mjs --targets "win32-${{ matrix.arch }}"
+          pnpm run build:relay
+      - wait: inbox-capability
+      - name: Run the Windows host cells against a private ${{ matrix.server }} sshd
+        shell: pwsh
+        timeout-minutes: 50
+        env:
+          CELLS: ${{ github.event.inputs.cells || '' }}
+        run: |
+          $tools=Join-Path $pwd 'config/ci/windows-ssh-provider'
+          $sourceRoot=$pwd.Path
+          $receipts=Join-Path $pwd '.build/ssh-windows-host-receipts'
+          New-Item -ItemType Directory -Force -Path $receipts | Out-Null
+          $cells=@($env:CELLS -split ',' | ForEach-Object {$_.Trim()} | Where-Object {$_})
+          if(-not $cells.Count){$cells=@('pinned-cmd','pinned-powershell','legacy-opt-out')}
+          $archive=''
+          $preparation=''
+          if('${{ matrix.server }}' -eq 'inbox' -and '${{ matrix.arch }}' -eq 'arm64'){$preparation=Join-Path $receipts 'inbox-capability-preparation.json'}
+          if('${{ matrix.server }}' -eq 'preview'){
+            $archive=Join-Path $env:RUNNER_TEMP 'preview-${{ matrix.archive }}'
+            # The provisioning script refuses the archive unless its sha256 and every binary's match the pin.
+            & "$env:WINDIR\System32\curl.exe" --fail --location --connect-timeout 15 --max-time 90 --output $archive 'https://github.com/PowerShell/Win32-OpenSSH/releases/download/10.0.0.0p2-Preview/${{ matrix.archive }}'
+            if($LASTEXITCODE -ne 0){throw 'SSH archive fetch failed'}
+          }
+          $callback={param($context)
+            & (Join-Path $tools 'invoke-pinned-relay-cells.ps1') -SourceRoot $sourceRoot -Context $context -Target 'win32-${{ matrix.arch }}' -ReceiptRoot $receipts -Cells $cells
+          }.GetNewClosure()
+          & (Join-Path $tools 'preview-ssh/prove-preview-openssh.ps1') -Archive $archive -Arch '${{ matrix.arch }}' -Server '${{ matrix.server }}' -Receipt (Join-Path $receipts 'provider-server.json') -InboxPreparationReceipt $preparation -Accounts $cells.Count -HiddenTools @('npm','npx','node-gyp','gcc','g++','cc','c++','make','cl','clang','clang++','msbuild','cmake') -HostCellProbe $callback 2>&1 | Tee-Object (Join-Path $receipts 'provision.log')
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ssh-windows-host-${{ matrix.arch }}-${{ matrix.server }}-receipts
+          path: .build/ssh-windows-host-receipts/
+          retention-days: 7

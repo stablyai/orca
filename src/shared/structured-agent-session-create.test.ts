@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import {
+  AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,
+  RUNTIME_CAPABILITIES
+} from './protocol-version'
 import { structuredAgentSessionCreateParams } from './structured-agent-session-create'
 import {
   structuredAgentSessionCreateFingerprint,
@@ -15,7 +19,9 @@ function nextUuid(): string {
   return `00000000-0000-4000-8000-${String(uuidCounter).padStart(12, '0')}`
 }
 
-function createParams(overrides: { resumeFrom?: { providerSessionId: string } } = {}) {
+function createParams(
+  overrides: { resumeFrom?: { providerSessionId: string }; tabId?: string } = {}
+) {
   return structuredAgentSessionCreateParams({
     sessionId: SESSION_ID,
     worktree: 'id:repo-1::/repo/orca',
@@ -78,5 +84,28 @@ describe('structured agent session create params', () => {
     expect(createParams().envelope.payloadFingerprint).toBe(
       '56cb15e22414c0f62fd89d77d00d2d6a0a422f16e95edee154fb8b5bf53fbbc3'
     )
+  })
+})
+
+describe('the tab id a create reserves', () => {
+  it('rides the params and the fingerprint together', () => {
+    const params = createParams({ tabId: 'tab-1' })
+
+    expect(params.tabId).toBe('tab-1')
+    expect(params.envelope.payloadFingerprint).toBe(
+      structuredAgentSessionCreateFingerprint({
+        sessionId: SESSION_ID,
+        worktree: 'id:repo-1::/repo/orca',
+        agent: 'codex',
+        tabId: 'tab-1'
+      })
+    )
+    // The declared digest covers the tab; the host still replays a retry on its attach fingerprint.
+    expect(params.envelope.payloadFingerprint).not.toBe(createParams().envelope.payloadFingerprint)
+  })
+
+  it('is advertised as a capability, because an older host refuses the strict payload', () => {
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY)
+    expect(AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY).toBe('agentSession.create.tab-id.v1')
   })
 })

@@ -6,7 +6,7 @@ import { applyManualRepoOrder } from '../../../shared/manual-repo-order'
 import type { DirectSshAuthority } from '../../../shared/ssh-types'
 import { isWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '../store/types'
-import { reuseEqualRecordMap } from '../store/slices/repo-identity-reconcile'
+import { reconcileFetchedRepos, reuseEqualRecordMap } from '../store/slices/repo-identity-reconcile'
 import type {
   DirectSshLineageOutcome,
   DirectSshPreparationInput,
@@ -66,13 +66,14 @@ function mergeExactHostCatalog(state: AppState, snapshot: HostRepoCatalogSnapsho
   const hostId = snapshot.authority.executionHostId
   // Why re-apply the overlay: re-appending the host's rows puts them at the tail, which would
   // undo the user's manual cross-host order on every connect.
-  return {
-    ...state,
-    repos: applyManualRepoOrder(
+  const repos = reconcileFetchedRepos(
+    state.repos,
+    applyManualRepoOrder(
       [...state.repos.filter((repo) => getRepoExecutionHostId(repo) !== hostId), ...snapshot.repos],
       state.manualRepoOrder
     )
-  }
+  )
+  return repos === state.repos ? state : { ...state, repos }
 }
 
 // Why: the host owns every in-scope key, so drop the stale in-scope rows, overlay the snapshot's,

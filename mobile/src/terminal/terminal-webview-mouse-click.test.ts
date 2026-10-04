@@ -7,6 +7,7 @@ describe('terminal WebView external mouse click', () => {
 
   it('reports a mouse click to a click-tracking TUI the way a touch tap does (#8818)', () => {
     mouse.boot()
+    mouse.writeLegacyMouseEncoding()
     mouse.activeTerminal().modes.mouseTrackingMode = 'vt200'
 
     mouse.mouseClick(40, 60)
@@ -19,6 +20,18 @@ describe('terminal WebView external mouse click', () => {
     expect(bytes.slice(6, 10)).toBe(`${ESC}[M#`)
     expect(bytes.slice(4, 6)).toBe(bytes.slice(10, 12))
     expect(mouse.postedMessages().filter((message) => message.type === 'terminal-tap')).toEqual([])
+  })
+
+  it('sends no click report and focuses the keyboard while the encoding is unproven', () => {
+    mouse.boot()
+    mouse.activeTerminal().modes.mouseTrackingMode = 'vt200'
+
+    mouse.mouseClick(40, 60)
+
+    expect(mouse.terminalInputBytes()).toBe('')
+    expect(
+      mouse.postedMessages().filter((message) => message.type === 'terminal-tap')
+    ).toHaveLength(1)
   })
 
   it('dismisses an existing selection with a click without focusing the keyboard', () => {

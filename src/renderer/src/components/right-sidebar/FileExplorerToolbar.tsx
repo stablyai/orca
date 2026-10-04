@@ -32,6 +32,7 @@ type FileExplorerToolbarProps = {
   onToggleDotfiles: () => void
 }
 
+/** Shares repository actions across explorer views. */
 export function FileExplorerToolbar({
   repoName,
   worktreePath,

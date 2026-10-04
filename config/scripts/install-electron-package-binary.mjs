@@ -16,6 +16,7 @@ import { createRequire } from 'node:module'
 import { platform as osPlatform, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getElectronPlatformPath } from './electron-platform-path.mjs'
+import { getZipExtractorCommand } from './zip-extractor-command.mjs'
 import {
   shareElectronDistFromCache,
   hasAdoptedSharedElectronDist,
@@ -448,33 +449,7 @@ function getExtractorCommand(zipPath, extractDir) {
     }
   }
 
-  if (osPlatform() === 'win32') {
-    return {
-      file: process.env.ORCA_POWERSHELL_BIN || 'powershell',
-      args: [
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        [
-          "$ErrorActionPreference = 'Stop'",
-          `Expand-Archive -LiteralPath ${quotePowerShellLiteral(zipPath)} -DestinationPath ${quotePowerShellLiteral(extractDir)} -Force`
-        ].join('; ')
-      ],
-      label: 'powershell Expand-Archive'
-    }
-  }
-
-  return {
-    file: process.env.ORCA_UNZIP_BIN || 'unzip',
-    args: ['-q', zipPath, '-d', extractDir],
-    label: 'unzip'
-  }
-}
-
-function quotePowerShellLiteral(value) {
-  return `'${String(value).replaceAll("'", "''")}'`
+  return getZipExtractorCommand(zipPath, extractDir)
 }
 
 function formatExtractorFailure(command, result) {

@@ -60,7 +60,10 @@ export function probeDaemonSocket(
   socketPath: string,
   timeoutMs = DAEMON_SOCKET_PROBE_TIMEOUT_MS
 ): Promise<boolean> {
-  const { promise, resolve } = Promise.withResolvers<boolean>()
+  let resolve!: (alive: boolean) => void
+  const promise = new Promise<boolean>((settle) => {
+    resolve = settle
+  })
   if (process.platform !== 'win32' && !existsSync(socketPath)) {
     resolve(false)
     return promise

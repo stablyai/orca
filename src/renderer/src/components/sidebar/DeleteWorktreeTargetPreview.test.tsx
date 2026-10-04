@@ -1,12 +1,18 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
 import { buildSidebarHostOptions } from './sidebar-host-options'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getDeleteWorktreeDirtyChangePreview,
+  type DeleteWorktreeDirtyChangePreview
+} from './delete-worktree-dirty-change-counts'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 function buildHostLabels(
   hostLabelOverrides?: ReadonlyMap<ExecutionHostId, string>
@@ -47,6 +53,8 @@ function renderPreview(args: {
   worktree?: Worktree | null
   isBatchDelete?: boolean
   hostLabelById?: ReadonlyMap<ExecutionHostId, string>
+  dirtyChangeCountsByWorktreeId?: ReadonlyMap<string, number>
+  dirtyChangePreviewsByWorktreeId?: ReadonlyMap<string, DeleteWorktreeDirtyChangePreview>
 }): void {
   render(
     <DeleteWorktreeTargetPreview
@@ -56,7 +64,8 @@ function renderPreview(args: {
       collisionWorktrees={args.collisionWorktrees ?? args.worktrees}
       hostLabelById={args.hostLabelById ?? savedHostLabels}
       deleteStateByWorktreeId={{}}
-      dirtyChangeCountsByWorktreeId={new Map()}
+      dirtyChangeCountsByWorktreeId={args.dirtyChangeCountsByWorktreeId ?? new Map()}
+      dirtyChangePreviewsByWorktreeId={args.dirtyChangePreviewsByWorktreeId ?? new Map()}
     />
   )
 }
@@ -150,5 +159,103 @@ describe('DeleteWorktreeTargetPreview host labels', () => {
     const target = screen.getByRole('region', { name: 'alpha /work/alpha' })
     expect(target).toHaveAccessibleName('alpha /work/alpha')
     expect(within(target).queryByText('QA Linux')).not.toBeInTheDocument()
+  })
+})
+
+describe('DeleteWorktreeTargetPreview loaded paths', () => {
+  it('expands a single warning into ten loaded paths while retaining the entry count', () => {
+    const worktree = makeWorktree('one', 'alpha')
+    const entries: GitStatusEntry[] = [
+      { path: 'src/app.ts', status: 'added', area: 'staged' },
+      { path: 'src/app.ts', status: 'modified', area: 'unstaged' },
+      { path: 'scratch.txt', status: 'untracked', area: 'untracked' },
+      ...Array.from({ length: 10 }, (_, index) => ({
+        path: `build/out-${index}.js`,
+        status: 'added' as const,
+        area: 'staged' as const
+      }))
+    ]
+    renderPreview({
+      isBatchDelete: false,
+      worktree,
+      worktrees: [worktree],
+      dirtyChangeCountsByWorktreeId: new Map([['one', entries.length]]),
+      dirtyChangePreviewsByWorktreeId: new Map([
+        ['one', getDeleteWorktreeDirtyChangePreview(entries)]
+      ])
+    })
+
+    const trigger = screen.getByRole('button', {
+      name: '13 uncommitted or untracked changes: Show loaded paths'
+    })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('src/app.ts')).not.toBeInTheDocument()
+    expect(
+      screen.getByText('Deleting this workspace permanently removes these changes from disk.')
+    ).toBeVisible()
+    fireEvent.click(trigger)
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getAllByText('src/app.ts')).toHaveLength(1)
+    expect(screen.getByText('scratch.txt')).toBeVisible()
+    expect(screen.getByText('build/out-7.js')).toBeVisible()
+    expect(screen.queryByText('build/out-8.js')).not.toBeInTheDocument()
+    expect(screen.getByText('and 2 more loaded paths')).toBeVisible()
+    expect(screen.getByText('Loaded paths may be incomplete or out of date.')).toBeVisible()
+    expect(screen.getByLabelText('modified')).toHaveTextContent('M')
+    expect(screen.getByLabelText('untracked')).toHaveTextContent('U')
+    fireEvent.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('src/app.ts')).not.toBeInTheDocument()
+  })
+
+  it('keeps a generic warning without an empty list when only deletion proved it dirty', () => {
+    const worktree = makeWorktree('one', 'alpha')
+    renderPreview({
+      isBatchDelete: false,
+      worktree,
+      worktrees: [worktree],
+      dirtyChangeCountsByWorktreeId: new Map([['one', 0]])
+    })
+    expect(screen.getByText('Uncommitted or untracked changes')).toBeVisible()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.queryByText(/No files|clean|0 changes/)).not.toBeInTheDocument()
+  })
+
+  it('expands each qualified batch target independently', () => {
+    const local = makeWorktree('same', 'collide', 'local')
+    const runtime = makeWorktree('same', 'collide', 'runtime:runtime-7')
+    const localKey = getWorktreeHostIdentity(local)
+    const runtimeKey = getWorktreeHostIdentity(runtime)
+    renderPreview({
+      worktrees: [local, runtime],
+      dirtyChangeCountsByWorktreeId: new Map([
+        [localKey, 1],
+        [runtimeKey, 1]
+      ]),
+      dirtyChangePreviewsByWorktreeId: new Map([
+        [
+          localKey,
+          getDeleteWorktreeDirtyChangePreview([
+            { path: 'local.ts', status: 'deleted', area: 'unstaged' }
+          ])
+        ],
+        [
+          runtimeKey,
+          getDeleteWorktreeDirtyChangePreview([
+            { path: 'runtime.ts', status: 'renamed', area: 'staged' }
+          ])
+        ]
+      ])
+    })
+    const localRow = screen.getByRole('listitem', { name: /Local/ })
+    const runtimeRow = screen.getByRole('listitem', { name: /Build Mac/ })
+    fireEvent.click(within(localRow).getByRole('button'))
+    expect(within(localRow).getByText('local.ts')).toBeVisible()
+    expect(within(runtimeRow).queryByText('runtime.ts')).not.toBeInTheDocument()
+    fireEvent.click(within(runtimeRow).getByRole('button'))
+    expect(within(runtimeRow).getByText('runtime.ts')).toBeVisible()
+    expect(within(localRow).getByLabelText('deleted')).toHaveTextContent('D')
+    expect(within(runtimeRow).getByLabelText('renamed')).toHaveTextContent('R')
   })
 })

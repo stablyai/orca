@@ -40,6 +40,10 @@ const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
+vi.mock('../codex/codex-hook-trust-grant', () => ({
+  grantManagedCodexHookTrust: async () => ({ lane: 'fallback', reason: 'unsupported' })
+}))
+
 vi.mock('electron', () => ({
   app: {
     getPath: () => '/tmp/orca-user-data'

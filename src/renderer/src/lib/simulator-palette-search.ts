@@ -92,7 +92,7 @@ export const SIMULATOR_TYPE_SEARCH_ALIASES = [
   'emulator'
 ] as const
 
-export function isSimulatorPaletteQueryTooLarge(
+function isSimulatorPaletteQueryTooLarge(
   query: string,
   maxBytes = SIMULATOR_PALETTE_QUERY_MAX_BYTES
 ): boolean {

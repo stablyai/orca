@@ -63,6 +63,46 @@ describe.each(['opencode', 'opencode2'] as const)('%s hook normalization', (sour
     expect(result?.payload.agentType).toBe(source)
   })
 
+  it.each([
+    ['UnknownError', 'failure', undefined],
+    ['MessageAbortedError', 'cancellation', true]
+  ])('retains the reported root outcome for %s', (errorName, outcome, interrupted) => {
+    const result = _internals.normalizeHookPayload(
+      source,
+      buildBody({
+        hook_event_name: 'SessionIdle',
+        root_state: 'done',
+        root_turn_error_name: errorName
+      }),
+      'production'
+    )
+    expect(result?.payload.mainAgent).toMatchObject({ state: 'done', outcome })
+    expect(result?.payload.interrupted).toBe(interrupted)
+  })
+
+  it('does not infer an outcome for an older plugin', () => {
+    const result = _internals.normalizeHookPayload(
+      source,
+      buildBody({ hook_event_name: 'SessionIdle' }),
+      'production'
+    )
+    expect(result?.payload.mainAgent).toBeUndefined()
+  })
+
+  it('keeps a root failure beside still-working child work', () => {
+    const result = _internals.normalizeHookPayload(
+      source,
+      buildBody({
+        hook_event_name: 'SessionBusy',
+        root_state: 'done',
+        root_turn_error_name: 'api'
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.mainAgent).toMatchObject({ state: 'done', outcome: 'failure' })
+  })
+
   it('PermissionRequest maps to waiting', () => {
     const result = _internals.normalizeHookPayload(
       source,

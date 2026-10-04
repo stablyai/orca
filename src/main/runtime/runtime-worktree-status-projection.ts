@@ -39,11 +39,85 @@ type PtyTitleRecord = {
   lastOscTitleAt: number | null
 }
 
+type TitleCandidate = { title: string | null | undefined; updatedAt: number | null | undefined }
+
 type PtyAgentPresenceRecord = {
   launchAgent: TuiAgent | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
   incarnationId: PtyIncarnationId | null
+}
+
+/** The stale-working timer's display-only clear of a PTY's native title, while it stands. */
+export type TitleDisplayClear = {
+  title: string
+  status: AgentStatus | null
+  /** Dated as a genuine title would be: observation sequence and wall clock. */
+  observedAt: number
+  observedAtEpochMs: number
+}
+
+type PtyTitleEvidence = PtyTitleRecord & {
+  lastOscTitleEpochMs: number | null
+  lastAgentStatus: AgentStatus | null
+  lastAgentStatusStartedAtEpochMs: number | null
+}
+
+/**
+ * A PTY record as display surfaces show it. Records keep the agent's own title for readiness,
+ * delivery and presence; display readers project through here so they show the cleared title
+ * the tab shows. Why max(): a restore seed re-stamps the native title after the clear.
+ */
+export function getPtyDisplayRecord<T extends PtyTitleEvidence>(
+  pty: T,
+  clear: TitleDisplayClear | null
+): T {
+  if (!clear) {
+    return pty
+  }
+  return {
+    ...pty,
+    lastOscTitle: clear.title,
+    lastOscTitleAt: Math.max(pty.lastOscTitleAt ?? 0, clear.observedAt),
+    lastOscTitleEpochMs: clear.observedAtEpochMs,
+    lastAgentStatus: clear.status,
+    lastAgentStatusStartedAtEpochMs:
+      clear.status === pty.lastAgentStatus
+        ? pty.lastAgentStatusStartedAtEpochMs
+        : clear.observedAtEpochMs
+  }
+}
+
+/** The leaf counterpart of {@link getPtyDisplayRecord}; `clear` is its PTY's. */
+export function getLeafDisplayRecord<T extends LeafStatusRecord>(
+  leaf: T,
+  clear: TitleDisplayClear | null
+): T {
+  if (!clear) {
+    return leaf
+  }
+  return {
+    ...leaf,
+    lastOscTitle: clear.title,
+    lastOscTitleAt: Math.max(leaf.lastOscTitleAt ?? 0, clear.observedAt),
+    lastAgentStatus: clear.status
+  }
+}
+
+/**
+ * The prompt lifecycle as display shows it. Main recorded the clear's status there as well, so a
+ * title snapshot projected through the clear is only comparable with a lifecycle projected the
+ * same way. Display, blocked-dialog checks and prompt-submission verification read it; readiness
+ * and delivery never do.
+ */
+export function getDisplayPromptLifecycle(
+  lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined,
+  clear: TitleDisplayClear | null
+): { status: AgentStatus | null; updatedAt: number } | null | undefined {
+  if (!clear || (lifecycle && lifecycle.updatedAt > clear.observedAtEpochMs)) {
+    return lifecycle
+  }
+  return { status: clear.status, updatedAt: clear.observedAtEpochMs }
 }
 
 export function getLeafWorktreeStatus(
@@ -62,7 +136,7 @@ export function getLeafWorktreeStatus(
 }
 
 export function classifyLatestAgentTitle(
-  ...titles: { title: string | null | undefined; updatedAt: number | null | undefined }[]
+  ...titles: TitleCandidate[]
 ): 'agent' | 'management' | 'neutral' {
   return classifyAgentTitle(getLatestAgentCandidateTitle(...titles))
 }
@@ -132,24 +206,27 @@ export function terminalTitleBlocksExplicitAgentStatus(title: string | null): bo
   return isClaudeManagementTitle(title) || isShellProcess(title)
 }
 
-export function getLatestAgentCandidateTitle(
-  ...titles: { title: string | null | undefined; updatedAt: number | null | undefined }[]
-): string | null {
+export function getLatestAgentCandidateTitle(...titles: TitleCandidate[]): string | null {
   return getLatestAgentCandidateTitleInfo(...titles)?.title ?? null
 }
 
 export function getLatestAgentCandidateTitleInfo(
-  ...titles: { title: string | null | undefined; updatedAt: number | null | undefined }[]
+  ...titles: TitleCandidate[]
 ): { title: string; updatedAt: number } | null {
-  let latest: { title: string; updatedAt: number } | null = null
-  for (const candidate of titles) {
-    const title = candidate.title?.trim()
-    if (!title) {
+  const latest = getLatestAgentCandidate(...titles)
+  const title = latest?.title?.trim()
+  return latest && title ? { title, updatedAt: latest.updatedAt ?? 0 } : null
+}
+
+/** The newest non-blank candidate itself, so a caller can tell which source won. */
+export function getLatestAgentCandidate<T extends TitleCandidate>(...candidates: T[]): T | null {
+  let latest: T | null = null
+  for (const candidate of candidates) {
+    if (!candidate.title?.trim()) {
       continue
     }
-    const updatedAt = candidate.updatedAt ?? 0
-    if (!latest || updatedAt > latest.updatedAt) {
-      latest = { title, updatedAt }
+    if (!latest || (candidate.updatedAt ?? 0) > (latest.updatedAt ?? 0)) {
+      latest = candidate
     }
   }
   return latest

@@ -78,6 +78,14 @@ export function detectNativeHostAbi(): NativeHostAbi {
   }
 }
 
+/** Highest Node-API version this runtime supports, or null when it reports none. */
+export function hostNodeApiVersion(
+  versions: NodeJS.ProcessVersions = process.versions
+): number | null {
+  const napi = Number.parseInt(versions.napi ?? '', 10)
+  return Number.isInteger(napi) && napi > 0 ? napi : null
+}
+
 /** `linux-x64-glibc`, `linux-arm64-musl`, `darwin-arm64`, `win32-x64`. */
 export function nativeSlotName(abi: Pick<NativeHostAbi, 'platform' | 'arch' | 'libc'>): string {
   return abi.libc === 'none'

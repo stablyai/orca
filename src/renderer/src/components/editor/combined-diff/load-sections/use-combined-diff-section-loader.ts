@@ -108,15 +108,6 @@ export function useCombinedDiffSectionLoader({
         } as GitDiffResult
       }
 
-      const largeDiffRenderLimit =
-        !error && result.kind === 'text'
-          ? (result.largeDiffRenderLimit ??
-            getLargeDiffRenderLimit({
-              originalContent: result.originalContent,
-              modifiedContent: result.modifiedContent
-            }))
-          : null
-
       if (generationRef.current !== gen) {
         // Why: the generation reset already cleared the in-flight set, and a newer load for this
         // index may own the entry now — deleting it here would hide that load from the guard above.
@@ -129,6 +120,14 @@ export function useCombinedDiffSectionLoader({
         requestSectionReloadRef.current(index)
         return
       }
+      const largeDiffRenderLimit =
+        !error && result.kind === 'text'
+          ? (result.largeDiffRenderLimit ??
+            getLargeDiffRenderLimit({
+              originalContent: result.originalContent,
+              modifiedContent: result.modifiedContent
+            }))
+          : null
       const storedContent = getStoredTextDiffContent(result, largeDiffRenderLimit)
       const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
       loadedIndicesRef.current.add(index)

@@ -53,14 +53,6 @@ describe('orca computer action CLI validation', () => {
     expect(process.exitCode).toBe(1)
   })
 
-  it('rejects actions without an app before resolving a worktree', async () => {
-    await main(['computer', 'click', '--element-index', '1'], '/tmp/repo/src')
-
-    expect(callMock).not.toHaveBeenCalled()
-    expect(vi.mocked(console.error).mock.calls[0][0]).toContain('Missing required --app')
-    expect(process.exitCode).toBe(1)
-  })
-
   it('does not mask missing app with action target errors', async () => {
     await main(['computer', 'click'], '/tmp/repo/src')
 

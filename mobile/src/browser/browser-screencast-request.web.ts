@@ -150,6 +150,8 @@ export function buildMobileBrowserScreencastRequest(
     layout,
     pixelRatio,
     viewMode,
-    budgetedMobileViewDeviceScaleFactor(layout)
+    viewMode === 'mobile'
+      ? budgetedMobileViewDeviceScaleFactor(layout)
+      : MOBILE_VIEW_DEVICE_SCALE_FACTOR
   )
 }

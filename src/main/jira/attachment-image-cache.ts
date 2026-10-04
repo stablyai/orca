@@ -2,6 +2,8 @@
 // refetch after every post. Cache finished data URLs in main so the second path
 // does not re-download or re-base64 the same attachment bytes.
 
+import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
+
 const CACHE_TTL_MS = 30 * 60_000
 const MAX_CACHE_ENTRIES = 96
 const MAX_CACHE_BYTES = 24 * 1024 * 1024
@@ -14,6 +16,8 @@ type CacheEntry = {
 
 const cache = new Map<string, CacheEntry>()
 const inFlight = new Map<string, Promise<string | null>>()
+let expiryTimer: ReturnType<typeof setTimeout> | null = null
+let scheduledExpiryAt = Infinity
 // Why: mid-flight downloads must not repopulate cache after disconnect/clearToken.
 // Why ONE ticker across both scopes: summing separate counters lets distinct clear
 // states collide, passing the guard and re-inserting credentialed bytes.
@@ -34,11 +38,48 @@ function currentEpoch(siteId: string): number {
   return Math.max(globalEpoch, siteEpoch.get(siteId) ?? 0)
 }
 
+function clearExpiryTimer(): void {
+  if (expiryTimer !== null) {
+    clearTimeout(expiryTimer)
+    expiryTimer = null
+  }
+  scheduledExpiryAt = Infinity
+}
+
+function scheduleAttachmentExpiry(): void {
+  let nextExpiryAt = Infinity
+  for (const entry of cache.values()) {
+    nextExpiryAt = Math.min(nextExpiryAt, entry.storedAt + CACHE_TTL_MS)
+  }
+  if (nextExpiryAt === Infinity) {
+    clearExpiryTimer()
+    return
+  }
+  if (expiryTimer !== null && scheduledExpiryAt <= nextExpiryAt) {
+    return
+  }
+  clearExpiryTimer()
+  scheduledExpiryAt = nextExpiryAt
+  expiryTimer = setTimeout(
+    () => {
+      expiryTimer = null
+      scheduledExpiryAt = Infinity
+      pruneExpired()
+      scheduleAttachmentExpiry()
+    },
+    Math.min(MAX_TIMER_DELAY_MS, Math.max(0, nextExpiryAt - Date.now()))
+  )
+  expiryTimer.unref()
+}
+
 function pruneExpired(now = Date.now()): void {
   for (const [key, entry] of cache) {
     if (now - entry.storedAt >= CACHE_TTL_MS) {
       cache.delete(key)
     }
+  }
+  if (cache.size === 0) {
+    clearExpiryTimer()
   }
 }
 
@@ -93,6 +134,7 @@ export function setCachedAttachmentDataUrl(args: {
   cache.delete(key)
   cache.set(key, entry)
   evictUntilWithinBounds()
+  scheduleAttachmentExpiry()
 }
 
 /**
@@ -147,6 +189,7 @@ export async function loadAttachmentDataUrlWithCache(args: {
 export function clearAttachmentImagesForSite(siteId?: string): void {
   if (siteId == null || siteId === '') {
     cache.clear()
+    clearExpiryTimer()
     inFlight.clear()
     globalEpoch = nextEpoch()
     siteEpoch.clear()
@@ -164,10 +207,14 @@ export function clearAttachmentImagesForSite(siteId?: string): void {
       inFlight.delete(key)
     }
   }
+  if (cache.size === 0) {
+    clearExpiryTimer()
+  }
 }
 
 /** @internal — test-only */
 export function _resetAttachmentImageCache(): void {
+  clearExpiryTimer()
   cache.clear()
   inFlight.clear()
   epochTicker = 0

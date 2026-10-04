@@ -6,6 +6,7 @@ import { withDiffContentReloadRequest } from '../file-ids/editor-file-ids'
 import { resolveDiffRuntimeEnvironmentId } from '../git/diff-runtime-owner'
 import { toBranchCompareSnapshot, toCommitCompareSnapshot } from '../git/git-status-reconciliation'
 import { resolveEditorOpenTargetGroupId } from '../tabs/editor-open-target-group'
+import { resolveEditorPreviewIntent } from '../tabs/editor-preview-tab-setting'
 import {
   getReplaceablePreviewFileId,
   openWorkspaceEditorItem,
@@ -20,7 +21,7 @@ export function createOpenHistoryDiff(
     openBranchDiff: (worktreeId, worktreePath, entry, compare, language, options) => {
       const branchCompare = toBranchCompareSnapshot(compare)
       const id = `${worktreeId}::diff::branch::${compare.baseRef}::${branchCompare.compareVersion}::${entry.path}`
-      const isPreview = options?.preview ?? false
+      const isPreview = resolveEditorPreviewIntent(get(), options?.preview)
       let editorItemTargetGroupId = options?.targetGroupId
       set((s) => {
         const targetGroupId =
@@ -111,7 +112,7 @@ export function createOpenHistoryDiff(
     openCommitDiff: (worktreeId, worktreePath, entry, compare, language, options) => {
       const commitCompare = toCommitCompareSnapshot(compare)
       const id = `${worktreeId}::diff::commit::${commitCompare.compareVersion}::${entry.path}`
-      const isPreview = options?.preview ?? false
+      const isPreview = resolveEditorPreviewIntent(get(), options?.preview)
       let editorItemTargetGroupId = options?.targetGroupId
       set((s) => {
         const targetGroupId =

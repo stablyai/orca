@@ -44,13 +44,4 @@ describe('shouldIgnoreMonacoContentChange', () => {
       })
     ).toBe(false)
   })
-
-  it('does not ignore a user edit that happens to match the saved prop content', () => {
-    expect(
-      shouldIgnoreMonacoContentChange({
-        filePath: '/repo/seed.spec.ts',
-        isApplyingProgrammaticContent: false
-      })
-    ).toBe(false)
-  })
 })

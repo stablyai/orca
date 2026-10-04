@@ -80,4 +80,22 @@ describe('resolveStructuredAgentSessionCreateSupport', () => {
       reason
     })
   })
+
+  it.each(['claude', 'codex'] as const)(
+    "refuses %s when this host overrides the agent's launch command",
+    (agent) => {
+      expect(
+        support({
+          agent,
+          getSettings: () => ({ ...HOST_SELECTED, agentCmdOverrides: { [agent]: 'wrapper' } })
+        })
+      ).toEqual({ supported: false, reason: 'agent' })
+    }
+  )
+
+  it('ignores a blank launch command override', () => {
+    expect(
+      support({ getSettings: () => ({ ...HOST_SELECTED, agentCmdOverrides: { claude: '  ' } }) })
+    ).toEqual({ supported: true })
+  })
 })

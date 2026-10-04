@@ -241,7 +241,10 @@ describe('GitHandler', () => {
             return { stdout: `${'a'.repeat(40)}\n`, stderr: '' }
           }
           if (args.includes('--name-status')) {
-            return { stdout: 'M\tsrc/file.ts\n', stderr: '' }
+            return {
+              stdout: `M\0src/file.ts\0`,
+              stderr: ''
+            }
           }
           throw new Error(`unexpected git args: ${args.join(' ')}`)
         })
@@ -362,7 +365,10 @@ describe('GitHandler', () => {
             return { stdout: `${'a'.repeat(40)}\n`, stderr: '' }
           }
           if (args.includes('--name-status')) {
-            return { stdout: 'M\tsrc/file.ts\n', stderr: '' }
+            return {
+              stdout: `M\0src/file.ts\0`,
+              stderr: ''
+            }
           }
           throw new Error(`unexpected git args: ${args.join(' ')}`)
         })
@@ -447,31 +453,32 @@ describe('GitHandler', () => {
       await expect(retry).rejects.toThrow('commitOid must be a full git object id')
     })
 
-    // Why: regression for #1503 on git.branchDiff — branchDiffEntries is a separate quotePath=false path that must round-trip UTF-8.
-    it('preserves UTF-8 paths in branch-diff entries', async () => {
-      gitInit(tmpDir)
-      writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
-      gitCommit(tmpDir, 'initial')
+    it.each(process.platform === 'win32' ? ['sample.md'] : ['sample.md', 'tab\tline\n"日本語.md'])(
+      'preserves literal branch-diff path characters: %s',
+      async (name) => {
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+        gitCommit(tmpDir, 'initial')
 
-      const baseRef = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-        cwd: tmpDir,
-        encoding: 'utf-8'
-      }).trim()
+        const baseRef = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
 
-      execFileSync('git', ['checkout', '-b', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
-      const utf8Dir = path.join(tmpDir, 'docs', '日本語')
-      mkdirSync(utf8Dir, { recursive: true })
-      writeFileSync(path.join(utf8Dir, 'sample.md'), 'hello')
-      gitCommit(tmpDir, 'feature commit')
+        execFileSync('git', ['checkout', '-b', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
+        const utf8Dir = path.join(tmpDir, 'docs', '日本語')
+        mkdirSync(utf8Dir, { recursive: true })
+        writeFileSync(path.join(utf8Dir, name), 'hello')
+        gitCommit(tmpDir, 'feature commit')
 
-      const result = (await dispatcher.callRequest('git.branchDiff', {
-        worktreePath: tmpDir,
-        baseRef,
-        filePath: 'docs/日本語/sample.md'
-      })) as Record<string, unknown>[]
+        const result = await dispatcher.callRequest('git.branchDiff', {
+          worktreePath: tmpDir,
+          baseRef,
+          filePath: `docs/日本語/${name}`
+        })
 
-      // length===1 confirms the path filter matched the raw UTF-8 path; octal-quoted (default quotePath) wouldn't match.
-      expect(result).toHaveLength(1)
-    })
+        expect(result).toHaveLength(1)
+      }
+    )
   })
 })

@@ -10,18 +10,26 @@ import {
 } from '@/lib/agent-feature-install-commands'
 import { CliSection } from './CliSection'
 
-const capturedPanel = vi.hoisted(() => ({
-  canUseLocalSkillFreshness: true,
-  props: null as null | {
-    command: string
-    installedCommand: string
-    terminalRuntime?: { runtime: 'host' | 'wsl'; wslDistro?: string | null; label: string }
-    freshnessSkillName?: string
-    getPrerequisiteStatus: () => Promise<unknown>
-    onBeforeOpenTerminal: () => Promise<void>
-  },
-  useInstalledAgentSkill: vi.fn()
-}))
+type CapturedPanelProps = {
+  command: string
+  installedCommand: string
+  terminalRuntime?: { runtime: 'host' | 'wsl'; wslDistro?: string | null; label: string }
+  freshnessSkillName?: string
+  getPrerequisiteStatus?: () => Promise<unknown>
+  onBeforeOpenTerminal?: () => Promise<void>
+}
+
+const capturedPanel = vi.hoisted(
+  (): {
+    canUseLocalSkillFreshness: boolean
+    props: CapturedPanelProps | null
+    useInstalledAgentSkill: ReturnType<typeof vi.fn>
+  } => ({
+    canUseLocalSkillFreshness: true,
+    props: null,
+    useInstalledAgentSkill: vi.fn()
+  })
+)
 const toastError = vi.hoisted(() => vi.fn())
 
 vi.mock('sonner', () => ({ toast: { error: toastError, success: vi.fn() } }))
@@ -52,13 +60,7 @@ afterEach(() => {
 })
 
 vi.mock('./AgentSkillSetupPanel', () => ({
-  AgentSkillSetupPanel: function AgentSkillSetupPanel(props: {
-    command: string
-    installedCommand: string
-    freshnessSkillName?: string
-    getPrerequisiteStatus: () => Promise<unknown>
-    onBeforeOpenTerminal: () => Promise<void>
-  }) {
+  AgentSkillSetupPanel: function AgentSkillSetupPanel(props: CapturedPanelProps) {
     capturedPanel.props = props
     return <div data-testid="agent-skill-setup-panel" />
   }
@@ -101,7 +103,7 @@ describe('CliSection project runtime defaults', () => {
     expect(capturedPanel.props?.freshnessSkillName).toBeUndefined()
   })
 
-  it('passes the default project WSL distro to CLI skill prerequisite checks', async () => {
+  it('targets the default project WSL distro without registering the CLI', async () => {
     const getWslInstallStatus = vi
       .fn()
       .mockResolvedValue({ supported: true, state: 'installed', pathConfigured: true })
@@ -130,9 +132,6 @@ describe('CliSection project runtime defaults', () => {
       />
     )
 
-    await capturedPanel.props?.getPrerequisiteStatus()
-    await capturedPanel.props?.onBeforeOpenTerminal()
-
     expect(capturedPanel.useInstalledAgentSkill).toHaveBeenCalledWith(
       'orca-cli',
       expect.objectContaining({
@@ -147,8 +146,9 @@ describe('CliSection project runtime defaults', () => {
       wslDistro: 'Ubuntu',
       label: 'WSL Ubuntu'
     })
-    expect(getWslInstallStatus).toHaveBeenCalledWith({ distro: 'Ubuntu' })
-    expect(getWslInstallStatus).toHaveBeenCalledTimes(2)
+    expect(capturedPanel.props?.getPrerequisiteStatus).toBeUndefined()
+    expect(capturedPanel.props?.onBeforeOpenTerminal).toBeUndefined()
+    expect(getWslInstallStatus).not.toHaveBeenCalled()
   })
 
   it('renders an inline unknown PATH state without offering a mutation', async () => {

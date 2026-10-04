@@ -26,7 +26,7 @@ const result = spawnSync(
   [
     ...prefixArgs,
     'dlx',
-    'react-doctor@0.9.1',
+    'react-doctor@0.9.14',
     '.',
     '--yes',
     '--scope',

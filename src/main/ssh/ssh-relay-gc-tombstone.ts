@@ -1,5 +1,6 @@
 import type { SshConnection } from './ssh-connection'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { removeRemoteTreeCommand } from './ssh-remote-commands'
 import {
   getRemoteHostPlatform,
@@ -25,6 +26,9 @@ export async function cleanupRelayGcTombstones(
     await execCommand(conn, removeRemoteTreeCommand(host, tombstone), {
       wrapCommand: !isWindowsRemoteHost(host)
     }).catch((err) => {
+      if (isUnconfirmedSshCommandTermination(err)) {
+        throw err
+      }
       console.warn(
         `[ssh-relay] GC failed to remove tombstone ${tombstone}: ${err instanceof Error ? err.message : String(err)}`
       )

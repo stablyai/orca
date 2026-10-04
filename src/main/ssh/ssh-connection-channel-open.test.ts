@@ -44,6 +44,19 @@ describe('SshConnection', () => {
     expect(wrapped).not.toContain('base64')
   })
 
+  it('opens an interactive shell with the requested pty for plain SSH terminals', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+
+    await conn.shell({ cols: 100, rows: 30, term: 'xterm-256color' })
+
+    expect(clientInstances[0].lastShellWindow).toEqual({
+      cols: 100,
+      rows: 30,
+      term: 'xterm-256color'
+    })
+  })
+
   it('can execute native remote commands without the POSIX shell wrapper', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()

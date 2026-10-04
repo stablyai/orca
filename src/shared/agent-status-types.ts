@@ -3,10 +3,17 @@
 // a narrow interrupt fallback synthesizes a final `done` when an agent misses its cancellation hook.
 
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentMainAgentStatus } from './main-agent-status'
+import type { AgentStateHistoryEntry } from './agent-state-history'
+import { isAgentTurnOutcome } from './agent-turn-outcome'
 import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
-import type { TuiAgent } from './tui-agent'
+import type { AgentChildWorkView } from './agent-status-child-work-view'
+import type { TerminalAgent } from './terminal-agent'
 import {
+  AGENT_MODEL_MAX_LENGTH,
+  AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
+  AGENT_TYPE_MAX_LENGTH,
   normalizeInteractivePromptField,
   normalizeOptionalField,
   normalizeOptionalMultilineField,
@@ -15,40 +22,41 @@ import {
 } from './agent-status-field-normalization'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
-export { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
+import {
+  normalizeAgentSubagentsField,
+  type AgentSubagentSnapshot
+} from './agent-status-subagent-snapshot'
+
+export {
+  AGENT_MODEL_MAX_LENGTH,
+  AGENT_STATUS_MAX_FIELD_LENGTH,
+  AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
+  AGENT_TYPE_MAX_LENGTH
+} from './agent-status-field-normalization'
+export {
+  AGENT_STATUS_MAX_SUBAGENTS,
+  agentSubagentsEqual,
+  type AgentSubagentSnapshot,
+  type AgentSubagentState
+} from './agent-status-subagent-snapshot'
 export type {
   AgentStatusCacheIdentity,
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
 } from './agent-status-ipc-payload'
+export { mainAgentStatusEqual, type AgentMainAgentStatus } from './main-agent-status'
+export { AGENT_STATE_HISTORY_MAX, type AgentStateHistoryEntry } from './agent-state-history'
 
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
 export type AgentWorkingMode = 'monitoring'
+
 // Why: agent types aren't a fixed set (custom agents exist); any non-empty string is
-// accepted — the well-known names are the launchable TuiAgent ids plus the 'unknown'
+// accepted — the well-known names are the recognized TerminalAgent ids plus the 'unknown'
 // sentinel (no agent identified yet), a convenience union for pattern-matching.
-export type WellKnownAgentType = TuiAgent | 'unknown'
+export type WellKnownAgentType = TerminalAgent | 'unknown'
 export type AgentType = WellKnownAgentType | (string & {})
-
-/** A snapshot of a previous agent state, used to render activity blocks.
- *  Why: intentionally narrower than AgentStatusEntry — tool/assistant context is
- *  per-turn, not meaningful on a historical snapshot, and would bloat memory.
- *  Coalesced-turn output lives in AgentStatusEntry.lastCompletedAssistantMessage,
- *  one copy per pane, so it can't multiply by AGENT_STATE_HISTORY_MAX. */
-export type AgentStateHistoryEntry = {
-  state: AgentStatusState
-  prompt: string
-  /** When this state was first reported. */
-  startedAt: number
-  /** True when this `done` was a cancellation (agent hook like Claude `is_interrupt`,
-   *  or Orca's guarded fallback). Always falsy for non-`done` states so retention logic can preserve it. */
-  interrupted?: boolean
-}
-
-/** Maximum number of history entries kept per agent to bound memory. */
-export const AGENT_STATE_HISTORY_MAX = 20
 
 export type AgentStatusOrchestrationContext = {
   taskId: string
@@ -63,22 +71,6 @@ export type AgentStatusOrchestrationContext = {
   orchestrationRunId?: string
   /** Durable orchestration categories combined with the current push-fed status observation. */
   attention?: OrchestrationFleetAttention
-}
-
-export type AgentSubagentState = 'working' | 'blocked' | 'waiting' | 'idle' | 'unverifiable'
-
-/** A live in-process child of the pane's provider session. Rendered as an
- *  indented child row with no PTY of its own. */
-export type AgentSubagentSnapshot = {
-  /** Provider-assigned lifecycle id. */
-  id: string
-  agentType?: string
-  /** Provider model used by this child, when exposed by its lifecycle event. */
-  model?: string
-  description?: string
-  state: AgentSubagentState
-  /** Timestamp (ms) when this subagent was first observed. */
-  startedAt: number
 }
 
 export type AgentStatusEntry = {
@@ -101,6 +93,11 @@ export type AgentStatusEntry = {
   /** Timestamp (ms) when the current `state` was first reported.
    *  Why: separate from updatedAt so tool/prompt pings (which reset updatedAt) don't move it. */
   stateStartedAt: number
+  /** `updatedAt` of the write that switched into `state`; see AgentStateHistoryEntry.observedAt. */
+  stateObservedAt?: number
+  /** When the main agent's current turn began, as the hook server stamped it. Absent from old hosts
+   *  and writers without a turn clock; readers fall back to `stateStartedAt`. */
+  turnStartedAt?: number
   agentType?: AgentType
   /** Provider model currently used by this session. */
   model?: string
@@ -149,6 +146,12 @@ export type AgentStatusEntry = {
   /** Live in-process subagents/teammates of this pane's session. Absent when
    *  none are tracked; the sidebar derives indented child rows from it. */
   subagents?: AgentSubagentSnapshot[]
+  /** The main agent's own state; absent from old hosts and from writers that carry no main agent fact
+   *  (OSC, launch seeds), where readers fall back to `state`. */
+  mainAgent?: AgentMainAgentStatus
+  /** The host's child-work views for this session, when it publishes them; child rows then read
+   *  these instead of `subagents`. Absent from older hosts. */
+  children?: AgentChildWorkView[]
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
@@ -193,6 +196,9 @@ export type AgentStatusPayload = {
   turnCompletedAt?: number
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
+  /** The main agent's own state and last-turn verdict. See AgentMainAgentStatus. Producers publish it
+   *  beside the combined `state`; a reader that predates it keeps reading `state`. */
+  mainAgent?: AgentMainAgentStatus
 }
 
 /**
@@ -230,7 +236,8 @@ export function pickParsedAgentStatusPayload(
     ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
     ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
-    ...(row.subagents !== undefined ? { subagents: row.subagents } : {})
+    ...(row.subagents !== undefined ? { subagents: row.subagents } : {}),
+    ...(row.mainAgent !== undefined ? { mainAgent: row.mainAgent } : {})
   }
 }
 
@@ -240,8 +247,6 @@ export function pickParsedAgentStatusPayload(
  */
 /** Maximum character length for the toolName field. */
 export const AGENT_STATUS_TOOL_NAME_MAX_LENGTH = 60
-/** Maximum character length for the toolInput preview. */
-export const AGENT_STATUS_TOOL_INPUT_MAX_LENGTH = 160
 /** Maximum character length for the lastAssistantMessage preview.
  *  Why: 8 KB fits a multi-paragraph summary while bounding per-pane cache against a buggy/malicious agent spamming huge strings. */
 export const AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH = 8000
@@ -259,95 +264,36 @@ export {
 
 // Why: ReadonlySet<string> so .has() accepts any string without a cast here; the narrowing cast stays on the return line where it's proven safe.
 const VALID_STATES: ReadonlySet<string> = new Set<string>(AGENT_STATUS_STATES)
-/** Maximum character length for the agentType label. Truncated on parse. */
-export const AGENT_TYPE_MAX_LENGTH = 40
-export const AGENT_MODEL_MAX_LENGTH = 120
 
-/** Maximum subagent child rows carried per status entry. Bounds per-pane cache
- *  and IPC fanout against a runaway spawner. */
-export const AGENT_STATUS_MAX_SUBAGENTS = 32
+export function isAgentStatusState(value: unknown): value is AgentStatusState {
+  return typeof value === 'string' && VALID_STATES.has(value)
+}
+
 export const AGENT_STATUS_JSON_STRUCTURE_LIMITS = {
   structuralTokens: 4096,
   nestingDepth: 16
 } as const
-const AGENT_SUBAGENT_ID_MAX_LENGTH = 64
 
-function normalizeSubagentSnapshot(value: unknown): AgentSubagentSnapshot | null {
+/** A malformed `mainAgent` drops the FIELD, never the row: the combined `state` is still valid
+ *  evidence, and readers fall back to it exactly as they do for a host that predates the field. */
+export function normalizeMainAgentStatusField(value: unknown): AgentMainAgentStatus | undefined {
   if (typeof value !== 'object' || value === null) {
-    return null
-  }
-  const obj = value as Record<string, unknown>
-  if (typeof obj.id !== 'string') {
-    return null
-  }
-  const id = obj.id.trim()
-  if (id.length === 0 || id.length > AGENT_SUBAGENT_ID_MAX_LENGTH) {
-    return null
-  }
-  if (
-    obj.state !== 'working' &&
-    obj.state !== 'blocked' &&
-    obj.state !== 'waiting' &&
-    obj.state !== 'idle' &&
-    obj.state !== 'unverifiable'
-  ) {
-    return null
-  }
-  return {
-    id,
-    state: obj.state,
-    startedAt:
-      typeof obj.startedAt === 'number' && Number.isFinite(obj.startedAt) ? obj.startedAt : 0,
-    agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
-    model: normalizeOptionalField(obj.model, AGENT_MODEL_MAX_LENGTH),
-    description: normalizeOptionalField(obj.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
-  }
-}
-
-function normalizeSubagentsField(value: unknown): AgentSubagentSnapshot[] | undefined {
-  if (!Array.isArray(value) || value.length === 0) {
     return undefined
   }
-  const normalized: AgentSubagentSnapshot[] = []
-  for (const item of value) {
-    const snapshot = normalizeSubagentSnapshot(item)
-    if (snapshot) {
-      normalized.push(snapshot)
-      if (normalized.length >= AGENT_STATUS_MAX_SUBAGENTS) {
-        break
-      }
-    }
+  const obj = value as Record<string, unknown>
+  const state = obj.state
+  if (!isAgentStatusState(state)) {
+    return undefined
   }
-  return normalized.length > 0 ? normalized : undefined
-}
-
-/** Structural equality for subagent lists so stores can reuse the previous
- *  array reference (and skip fanout) when nothing actually changed. */
-export function agentSubagentsEqual(
-  a: AgentSubagentSnapshot[] | undefined,
-  b: AgentSubagentSnapshot[] | undefined
-): boolean {
-  if (a === b) {
-    return true
+  if (typeof obj.stateStartedAt !== 'number' || !Number.isFinite(obj.stateStartedAt)) {
+    return undefined
   }
-  if (!a || !b || a.length !== b.length) {
-    return !a && !b
+  return {
+    state,
+    // Why: a verdict belongs to a finished turn; anything riding on a live state is stale.
+    ...(state === 'done' && isAgentTurnOutcome(obj.outcome) ? { outcome: obj.outcome } : {}),
+    stateStartedAt: obj.stateStartedAt
   }
-  for (let i = 0; i < a.length; i++) {
-    const x = a[i]
-    const y = b[i]
-    if (
-      x.id !== y.id ||
-      x.state !== y.state ||
-      x.startedAt !== y.startedAt ||
-      x.agentType !== y.agentType ||
-      x.model !== y.model ||
-      x.description !== y.description
-    ) {
-      return false
-    }
-  }
-  return true
 }
 
 /**
@@ -397,7 +343,8 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
     turnCompletedAt: normalizeTurnCompletedAtField(obj.turnCompletedAt, state),
-    subagents: normalizeSubagentsField(obj.subagents)
+    subagents: normalizeAgentSubagentsField(obj.subagents),
+    mainAgent: normalizeMainAgentStatusField(obj.mainAgent)
   }
 }
 

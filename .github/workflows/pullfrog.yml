@@ -1,6 +1,6 @@
-# PULLFROG ACTION — DO NOT EDIT EXCEPT WHERE INDICATED
+# Explicit review identities share workflow concurrency; legacy names use ordered cancellation.
 name: Pullfrog
-run-name: ${{ inputs.name || github.workflow }}
+run-name: ${{ inputs.name || github.workflow }}${{ inputs.pull_request_number && format(' | PR {0}', inputs.pull_request_number) || '' }}
 on:
   workflow_dispatch:
     inputs:
@@ -11,21 +11,71 @@ on:
         type: string
         description: Run name
 
+      pull_request_number:
+        type: string
+        description: Optional PR identity for cancelling superseded reviews
+      head_sha:
+        type: string
+        description: Optional expected PR head; stale reviews are skipped
+
 permissions:
   contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ inputs.pull_request_number && format('pullfrog-pr-{0}', inputs.pull_request_number) || format('pullfrog-run-{0}', github.run_id) }}
+  cancel-in-progress: true
 
 jobs:
+  review_scope:
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    outputs:
+      current: ${{ steps.scope.outputs.current }}
+      number: ${{ steps.scope.outputs.number }}
+      head: ${{ steps.scope.outputs.head }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: config/scripts/pullfrog-review-scope.cjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: actions/github-script@v8
+        id: scope
+        with:
+          script: |
+            const { reviewScope } = require('./config/scripts/pullfrog-review-scope.cjs')
+            await reviewScope({ github, context, core })
+
   pullfrog:
+    needs: review_scope
+    if: needs.review_scope.outputs.current == 'true'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
+      pull-requests: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
+      - name: Recheck review head before starting agent
+        id: freshness
+        if: needs.review_scope.outputs.number != ''
+        uses: actions/github-script@v8
+        env:
+          REVIEW_NUMBER: ${{ needs.review_scope.outputs.number }}
+          REVIEW_HEAD: ${{ needs.review_scope.outputs.head }}
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: Number(process.env.REVIEW_NUMBER) })
+            core.setOutput('current', pr.state === 'open' && pr.head.sha === process.env.REVIEW_HEAD)
       - name: Run agent
+        if: needs.review_scope.outputs.number == '' || steps.freshness.outputs.current == 'true'
         uses: pullfrog/pullfrog@v0
         with:
           prompt: ${{ inputs.prompt }}

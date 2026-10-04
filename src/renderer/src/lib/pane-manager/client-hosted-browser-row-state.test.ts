@@ -187,12 +187,6 @@ describe('active client-hosted row for a strip', () => {
     expect(resolveActiveClientHostedBrowserRowId(null, scope)).toBeNull()
   })
 
-  it('names nothing once the group activates another tab', () => {
-    expect(
-      resolveActiveClientHostedBrowserRowId(selection, { ...scope, groupActiveTabId: 'tab-2' })
-    ).toBeNull()
-  })
-
   it('leaves other strips alone', () => {
     expect(
       resolveActiveClientHostedBrowserRowId(selection, { ...scope, groupId: 'group-2' })

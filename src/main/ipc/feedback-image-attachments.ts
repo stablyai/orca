@@ -1,4 +1,10 @@
 import { readFetchResponseJsonWithinLimit } from '../../shared/fetch-response-body'
+import {
+  MAX_FEEDBACK_IMAGE_BYTES,
+  MAX_FEEDBACK_IMAGE_COUNT,
+  MAX_FEEDBACK_IMAGE_TOTAL_BYTES
+} from '../../shared/feedback-image-limits'
+import type { FeedbackImageAttachment } from '../../shared/feedback-submit-contract'
 
 // Why: mirrors the server allow-list. Slack picks a renderer from the filename
 // extension, so every accepted type needs one.
@@ -9,15 +15,15 @@ const FEEDBACK_IMAGE_EXTENSIONS: Record<string, string> = {
   'image/gif': 'gif'
 }
 
-export const MAX_FEEDBACK_IMAGE_COUNT = 4
-export const MAX_FEEDBACK_IMAGE_BYTES = 8 * 1024 * 1024
+export {
+  MAX_FEEDBACK_IMAGE_BYTES,
+  MAX_FEEDBACK_IMAGE_COUNT,
+  MAX_FEEDBACK_IMAGE_TOTAL_BYTES
+} from '../../shared/feedback-image-limits'
+export type { FeedbackImageAttachment } from '../../shared/feedback-submit-contract'
+
 export const MAX_FEEDBACK_IMAGE_RESPONSE_BYTES = 64 * 1024
 export const FEEDBACK_IMAGE_FORM_FIELD = 'feedbackImage'
-
-export type FeedbackImageAttachment = {
-  contentType: string
-  data: Uint8Array
-}
 
 export function isSupportedFeedbackImageContentType(contentType: string): boolean {
   // Why: `in` walks the prototype chain, so "constructor" and "__proto__" would
@@ -37,6 +43,7 @@ export function validateFeedbackImages(images: unknown): string | null {
   if (images.length > MAX_FEEDBACK_IMAGE_COUNT) {
     return `Attach ${MAX_FEEDBACK_IMAGE_COUNT} images or fewer.`
   }
+  let totalBytes = 0
   for (const image of images) {
     if (!image || typeof image !== 'object') {
       return 'Invalid image attachment.'
@@ -56,6 +63,10 @@ export function validateFeedbackImages(images: unknown): string | null {
     if (image.data.byteLength > MAX_FEEDBACK_IMAGE_BYTES) {
       return `Each image must be ${MAX_FEEDBACK_IMAGE_BYTES} bytes or fewer.`
     }
+    totalBytes += image.data.byteLength
+  }
+  if (totalBytes > MAX_FEEDBACK_IMAGE_TOTAL_BYTES) {
+    return `Image attachments must total ${MAX_FEEDBACK_IMAGE_TOTAL_BYTES} bytes or fewer.`
   }
   return null
 }

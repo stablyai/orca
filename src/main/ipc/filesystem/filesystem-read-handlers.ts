@@ -13,6 +13,7 @@ import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cach
 import { resolveAuthorizedPath } from '../filesystem-auth'
 import { isENOENT } from '../filesystem-path-containment'
 import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from '../markdown-documents'
+import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { recordCrashBreadcrumb } from '../../crash-reporting/crash-breadcrumb-store'
 import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from '../readdir-error-diagnostics'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
@@ -131,7 +132,10 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         return markdownDocumentsFromRelativePaths(args.rootPath, relativePaths)
       }
       const rootPath = await resolveRegisteredWorktreePath(args.rootPath, store)
-      return listMarkdownDocuments(rootPath)
+      return listMarkdownDocuments(
+        rootPath,
+        getLocalGitOptionsForRegisteredWorktree(store, args.rootPath, rootPath)
+      )
     }
   )
 

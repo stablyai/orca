@@ -1,11 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { rmSync, mkdtempSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
-import { getDefaultWorkspaceSession } from '../shared/constants'
-import { isTerminalLeafId } from '../shared/stable-pane-id'
 import {
+  closeTestStores,
   testState,
   createStore,
   writeDataFile,
@@ -13,6 +7,13 @@ import {
   makeRepo,
   makeTerminalTab
 } from './persistence-test-harness'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { rmSync, mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
+import { getDefaultWorkspaceSession } from '../shared/constants'
+import { isTerminalLeafId } from '../shared/stable-pane-id'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -47,7 +48,8 @@ describe('cross-host pane identity migration', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

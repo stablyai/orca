@@ -5,12 +5,13 @@ import type {
 } from '../../../shared/onboarding-state-types'
 import type { NotificationSettings } from '../../../shared/notification-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import { getDefaultNotificationSettings } from '../../../shared/notification-settings-defaults'
+import { normalizeVisibleExecutionHostIds } from '../../../shared/execution-host'
 import {
-  getDefaultNotificationSettings,
   getDefaultOnboardingState,
   ONBOARDING_FINAL_STEP,
   ONBOARDING_FLOW_VERSION
-} from '../../../shared/constants'
+} from '../../../shared/onboarding-defaults'
 
 export function normalizeNotificationSettings(value: unknown): NotificationSettings {
   const defaults = getDefaultNotificationSettings()
@@ -56,8 +57,31 @@ export function normalizeNotificationSettings(value: unknown): NotificationSetti
       typeof candidate.customSoundPath === 'string'
         ? candidate.customSoundPath
         : defaults.customSoundPath,
-    customSoundVolume
+    customSoundVolume,
+    mutedNotificationSourceIds: normalizeMutedNotificationSourceIds(
+      candidate.mutedNotificationSourceIds
+    )
   }
+}
+
+function normalizeMutedNotificationSourceIds(
+  raw: unknown
+): NotificationSettings['mutedNotificationSourceIds'] {
+  const strings = Array.isArray(raw)
+    ? raw.filter((value): value is string => typeof value === 'string')
+    : null
+  return normalizeVisibleExecutionHostIds(strings) ?? []
+}
+
+function sameNotificationSettingValue(raw: unknown, normalized: unknown): boolean {
+  if (Array.isArray(normalized)) {
+    return (
+      Array.isArray(raw) &&
+      raw.length === normalized.length &&
+      raw.every((value, index) => value === normalized[index])
+    )
+  }
+  return raw === normalized
 }
 
 /**
@@ -76,7 +100,9 @@ export function persistedNotificationSettingsRepaired(
     return true
   }
   const raw = value as Record<string, unknown>
-  return Object.entries(normalized).some(([key, normalizedValue]) => raw[key] !== normalizedValue)
+  return Object.entries(normalized).some(
+    ([key, normalizedValue]) => !sameNotificationSettingValue(raw[key], normalizedValue)
+  )
 }
 
 export type SanitizeOnboardingUpdateOptions = {

@@ -10,6 +10,7 @@ import type {
   AgentStatusObservationOrigin
 } from '../../../shared/agent-status-observation'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
+import type { AgentStatusState, ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { agentTypeToPromptSentAgentKind } from './server-status-identity'
@@ -17,6 +18,41 @@ import { AgentHookServerStatusDisposition } from './server-status-disposition'
 
 /** Bounds the retained observation clock; eviction only degrades a replay to `now`. */
 const MAX_REMEMBERED_EVIDENCE_OBSERVATIONS = 1024
+
+function mainAgentState(payload: ParsedAgentStatusPayload): AgentStatusState {
+  return payload.mainAgent?.state ?? payload.state
+}
+
+/**
+ * When the main agent's current turn began. Its own turn-opening event stamps it (the same
+ * classifier the observation boundary uses), except a session boundary, which lands idle with no
+ * turn open. Replays, child events and identity-only rows restate a turn rather than open one.
+ */
+function resolveTurnStartedAt(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  payload: AgentHookEventPayload,
+  at: number
+): number | undefined {
+  if (
+    payload.source !== undefined &&
+    payload.toolAgentId === undefined &&
+    payload.isReplay !== true &&
+    payload.providerSessionOnly !== true &&
+    isNewTurnEvent(payload.source, payload.hookEventName)
+  ) {
+    return payload.payload.sessionBoundary === true ? undefined : at
+  }
+  // Why: a settled main agent running again with no opening event (an OSC repaint racing the
+  // prompt hook) is a turn edge nothing dated; carrying the old stamp would count from that turn.
+  if (
+    previous &&
+    mainAgentState(previous.payload) === 'done' &&
+    mainAgentState(payload.payload) !== 'done'
+  ) {
+    return undefined
+  }
+  return previous?.turnStartedAt
+}
 
 export abstract class AgentHookServerStatusApplication extends AgentHookServerStatusDisposition {
   protected refreshTerminalStatusEvidence(
@@ -113,12 +149,15 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
       previous && previous.payload.state === payload.payload.state && !commandCodeNewTurn
         ? previous.stateStartedAt
         : (observedAt ?? now)
+    const turnStartedAt = resolveTurnStartedAt(previous, payload, observedAt ?? now)
     // Why: `stateStartedAt` tracks the current state, while `receivedAt` tracks every arrival.
     return {
       ...payload,
       receivedAt: now,
       evidenceObservedAt: observedAt ?? this.resolveEvidenceObservedAt(payload, previous, now),
-      stateStartedAt
+      stateStartedAt,
+      // Always written here, so a producer can never declare it.
+      turnStartedAt
     }
   }
 

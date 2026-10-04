@@ -1,4 +1,5 @@
 import type { WorkspaceCleanupBackgroundRemovalArgs } from './workspace-cleanup-background-removal'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export function createWorkspaceCleanupSnapshotPruneBatch():
   | WorkspaceCleanupBackgroundRemovalArgs['snapshotPruneBatch']
@@ -9,7 +10,7 @@ export function createWorkspaceCleanupSnapshotPruneBatch():
   if (typeof begin !== 'function' || typeof record !== 'function' || typeof finish !== 'function') {
     return undefined
   }
-  const batchId = crypto.randomUUID()
+  const batchId = createBrowserUuid()
   return {
     batchId,
     begin: () => begin({ batchId }),

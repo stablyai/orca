@@ -46,6 +46,8 @@ async function createWorktreeFixture(prefix: string): Promise<string> {
   // directory would add a relay-only `prunable` annotation and muddy the comparison.
   await mkdir(path.join(mainPath, 'sparse-wt'))
   await mkdir(path.join(mainPath, 'locked-wt'))
+  await mkdir(path.join(mainPath, '.git'))
+  await writeFile(path.join(mainPath, '.git', 'HEAD'), 'ref: refs/heads/main\n')
   return mainPath
 }
 

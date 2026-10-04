@@ -217,6 +217,86 @@ export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsAntigravitySearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('accounts.antigravity.searchTitle', 'Antigravity Accounts'),
+    description: translate(
+      'accounts.antigravity.searchDescription',
+      'Save and select native agy Google accounts on the execution host.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('accounts.antigravity.keyword.antigravity', 'antigravity'),
+      ...translateSearchKeyword('accounts.antigravity.keyword.agy', 'agy'),
+      ...translateSearchKeyword('accounts.antigravity.keyword.google', 'google'),
+      ...translateSearchKeyword('accounts.antigravity.keyword.accounts', 'accounts'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.a9f3d7b5c8', 'login'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.cursor.kw.usage', 'usage')
+    ]
+  }
+])
+
+export const getAccountsCursorSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.cursor.title', 'Cursor Usage'),
+    description: translate(
+      'auto.components.settings.accounts.search.cursor.description',
+      'Monthly plan usage read from the Cursor sign-in already on this computer (cursor-agent login).'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.cursor.kw.cursor',
+        'cursor'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.cursor.kw.usage',
+        'usage'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.cursor.kw.spend',
+        'spend'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.cursor.kw.rateLimit',
+        'rate limit'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.cursor.kw.statusBar',
+        'status bar'
+      )
+    ]
+  }
+])
+
+export const getAccountsZcodePlanSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.zcodePlan.title', 'GLM Coding Plan'),
+    description: translate(
+      'auto.components.settings.accounts.search.zcodePlan.description',
+      'Track Z.AI or Zhipu (BigModel) GLM Coding Plan usage. Pick the site and save the plan API key.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.zcodePlan.kw.glm', 'glm'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.zcodePlan.kw.zai', 'zai'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.zcodePlan.kw.zhipu',
+        'zhipu'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.zcodePlan.kw.bigmodel',
+        'bigmodel'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.zcodePlan.kw.codingPlan',
+        'coding plan'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.zcodePlan.kw.rateLimit',
+        'rate limit'
+      )
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
@@ -224,5 +304,8 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
-  ...getAccountsGrokSearchEntries()
+  ...getAccountsGrokSearchEntries(),
+  ...getAccountsAntigravitySearchEntries(),
+  ...getAccountsCursorSearchEntries(),
+  ...getAccountsZcodePlanSearchEntries()
 ])

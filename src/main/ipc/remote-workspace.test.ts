@@ -242,7 +242,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     })
     registerRemoteWorkspaceNotificationHandlerMock.mockClear()
 
-    registerRemoteWorkspaceHandlers(store, () => null)
+    registerRemoteWorkspaceHandlers(store, () => null, { readMachineName: () => 'Build server' })
   })
 
   async function callSetForConnectedTargets(args: {

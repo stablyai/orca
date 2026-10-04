@@ -1,0 +1,44 @@
+diff --git a/dist/cjs/extractor/core/extractor.js b/dist/cjs/extractor/core/extractor.js
+index 6d61ade2471c20bf1a253e3784bfadcb01440545..c1b001e78a215f89a8d4da1756a87562a5a6e723 100644
+--- a/dist/cjs/extractor/core/extractor.js
++++ b/dist/cjs/extractor/core/extractor.js
+@@ -143,6 +143,8 @@ const extractionSiteRegexes = new WeakMap();
+  * @internal
+  */
+ function mayContainExtractionSite(code, config) {
++    // Escaped identifiers need the parser; comments can separate a name from its call.
++    if (code.includes('\\u')) return true;
+     let re = extractionSiteRegexes.get(config);
+     if (!re) {
+         const calls = new Set(['t']);
+@@ -160,7 +162,7 @@ function mayContainExtractionSite(code, config) {
+         for (const component of config.extract.transComponents || ['Trans'])
+             names.add(component.split('.').pop());
+         const alt = (set) => [...set].map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+-        re = new RegExp(`(?<!\\w)(?:(?:${alt(calls)})\\s*(?:\\?\\.\\s*)?[(<]|(?:${alt(names)})(?![\\w$]))`);
++        re = new RegExp(`(?<![\\w$])(?:${alt(calls)}|${alt(names)})(?![\\w$])`);
+         extractionSiteRegexes.set(config, re);
+     }
+     return re.test(code);
+diff --git a/dist/esm/extractor/core/extractor.js b/dist/esm/extractor/core/extractor.js
+index 910bdb6e25e26c01ea6127191f1a00c7089693c1..00da4a6a7acb6c3da8d4b6fe7be106c409542f8d 100644
+--- a/dist/esm/extractor/core/extractor.js
++++ b/dist/esm/extractor/core/extractor.js
+@@ -141,6 +141,8 @@ const extractionSiteRegexes = new WeakMap();
+  * @internal
+  */
+ function mayContainExtractionSite(code, config) {
++    // Escaped identifiers need the parser; comments can separate a name from its call.
++    if (code.includes('\\u')) return true;
+     let re = extractionSiteRegexes.get(config);
+     if (!re) {
+         const calls = new Set(['t']);
+@@ -158,7 +160,7 @@ function mayContainExtractionSite(code, config) {
+         for (const component of config.extract.transComponents || ['Trans'])
+             names.add(component.split('.').pop());
+         const alt = (set) => [...set].map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+-        re = new RegExp(`(?<!\\w)(?:(?:${alt(calls)})\\s*(?:\\?\\.\\s*)?[(<]|(?:${alt(names)})(?![\\w$]))`);
++        re = new RegExp(`(?<![\\w$])(?:${alt(calls)}|${alt(names)})(?![\\w$])`);
+         extractionSiteRegexes.set(config, re);
+     }
+     return re.test(code);

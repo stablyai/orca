@@ -1,6 +1,6 @@
-import { createElement, StrictMode, type ComponentProps } from 'react'
+import { createElement, createRef, StrictMode, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { Keyboard } from 'react-native'
+import { Keyboard, type TextInput } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { radii, spacing } from '../theme/mobile-theme'
 import { MobileNativeChatComposer as NativeChatComposer } from './MobileNativeChatComposer'
@@ -282,6 +282,26 @@ describe('MobileNativeChatComposer', () => {
     }
     expect(input.props.editable).not.toBe(false)
     expect(sendButton().props).toMatchObject({ disabled: true })
+  })
+
+  it('hands its owner the text field, so Edit can focus it', async () => {
+    const focus = vi.fn()
+    const inputRef = createRef<TextInput>()
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          inputRef,
+          value: '',
+          onChangeText: vi.fn(),
+          onSend: vi.fn().mockResolvedValue(true),
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: getCurrentSendCompletionGeneration
+        }),
+        { createNodeMock: (element) => (element.type === 'TextInput' ? { focus } : null) }
+      )
+    })
+    inputRef.current?.focus()
+    expect(focus).toHaveBeenCalledTimes(1)
   })
 
   it('renders a removable thumbnail for each pending image attachment', async () => {

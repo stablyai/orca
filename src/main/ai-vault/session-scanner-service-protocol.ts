@@ -14,9 +14,11 @@ import type { SessionSearchHostScope } from '../ai-vault-search/session-search-s
 import type { SessionSearchScanRoots } from '../ai-vault-search/session-search-scan-roots'
 import type { ReadAiVaultFirstUserPromptArgs } from './session-first-user-prompt-read'
 import type { SessionParseCachePersistenceOptions } from './session-parse-cache-persistence'
-import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
+import type { AiVaultScanOptions } from './session-scanner-types'
 
 export const AI_VAULT_SERVICE_PROTOCOL_VERSION = 1
+
+export type AiVaultServiceScanOptions = Omit<AiVaultScanOptions, 'signal'>
 
 export type AiVaultServiceLane = 'cache' | 'interactive'
 export type AiVaultServiceOperation =
@@ -67,7 +69,7 @@ export type AiVaultServiceInit = {
 }
 
 export type AiVaultServiceRequestBody =
-  | { type: 'request'; operation: 'scan'; options: AiVaultWorkerScanOptions }
+  | { type: 'request'; operation: 'scan'; options: AiVaultServiceScanOptions }
   | {
       type: 'request'
       operation: 'titles'

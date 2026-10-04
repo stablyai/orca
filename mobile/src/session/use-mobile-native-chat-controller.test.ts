@@ -90,6 +90,7 @@ vi.mock('./use-mobile-structured-agent-session', () => ({
   useMobileStructuredAgentSession: () => ({
     session: structuredSessionState,
     ...structuredActivity,
+    queued: { cards: [], send: vi.fn(), delete: vi.fn(), edit: vi.fn() },
     sendWithOutcome: structuredSendWithOutcome,
     cancel: structuredCancel,
     cancelPrompt: structuredCancelPrompt,

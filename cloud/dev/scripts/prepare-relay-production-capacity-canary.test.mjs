@@ -2,8 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
   parseProductionCapacityCellArguments,
-  prepareProductionCapacityCell,
-  PRODUCTION_CAPACITY_CELL_IDS
+  prepareProductionCapacityCell
 } from './prepare-relay-production-capacity-canary.mjs'
 
 const config = {
@@ -63,24 +62,6 @@ function canaryFetch() {
 
 describe('production Relay capacity cell admission', () => {
   it('allows only the serving rollout cells', () => {
-    assert.deepEqual(PRODUCTION_CAPACITY_CELL_IDS, [
-      'production-gce-c7',
-      'production-gce-c8',
-      'production-gce-c9',
-      'production-gce-c10',
-      'production-gce-c13',
-      'production-gce-c14',
-      'production-gce-c15',
-      'production-gce-c16',
-      'production-gce-c19',
-      'production-gce-c20',
-      'production-gce-c21',
-      'production-gce-c22',
-      'production-gce-c23',
-      'production-gce-c24',
-      'production-gce-c25',
-      'production-gce-c26'
-    ])
     assert.deepEqual(parseProductionCapacityCellArguments([
       '--director-origin', 'https://relay.onorca.dev',
       '--cell-origin', 'https://c7.relay.onorca.dev',
@@ -115,9 +96,12 @@ describe('production Relay capacity cell admission', () => {
 
   it('admits the same-cap Asia and migration-only cells only under the same-cap allowlist', () => {
     for (const cellId of [
-      'production-gce-c27', 'production-gce-c28', 'production-gce-c29',
+      'production-gce-c27', 'production-gce-c28', 'production-gce-c29', 'production-gce-c30',
+      'production-gce-c31',
       // Migration-only canaries: the US-only capacity rollout never touches them either.
-      'production-gce-c17', 'production-gce-c18'
+      'production-gce-c17', 'production-gce-c18',
+      // US cells at the Asia shape: the 1,000-cap capacity rollout never touches them.
+      'production-gce-c32', 'production-gce-c33'
     ]) {
       const hostname = cellId.slice('production-gce-'.length)
       assert.deepEqual(parseProductionCapacityCellArguments([
@@ -134,7 +118,7 @@ describe('production Relay capacity cell admission', () => {
         paceWindowMs: 0
       })
     }
-    for (const cellId of ['production-gce-c12', 'production-gce-c30']) {
+    for (const cellId of ['production-gce-c12', 'production-gce-c34']) {
       const hostname = cellId.slice('production-gce-'.length)
       assert.throws(() => parseProductionCapacityCellArguments([
         '--director-origin', 'https://relay.onorca.dev',

@@ -30,6 +30,8 @@ export type ClaudeSendEchoTurnInput = {
   requestedAt?: number
   /** Provider key of the user row this turn is anchored to. */
   userItemId: string
+  /** The submission this echo acknowledged. */
+  openedBy?: string
 }
 
 /** The turn a replayed send echo opens, or null when this frame is not one. */
@@ -46,7 +48,8 @@ export function claudeTurnOpenedBySendEcho(
         turnId: envelope.uuid,
         startedAt: input.observedAt,
         ...(input.requestedAt === undefined ? {} : { requestedAt: input.requestedAt }),
-        userItemId: input.userItemId
+        userItemId: input.userItemId,
+        ...(input.openedBy === undefined ? {} : { openedBy: input.openedBy })
       }
     : null
 }
@@ -57,6 +60,19 @@ export function claudeTurnOpenedBySendEcho(
  *  turns. */
 export function isRootClaudeFrame(frame: Record<string, unknown>): boolean {
   return typeof frame.parent_tool_use_id !== 'string'
+}
+
+/** The parent this frame names, or null when it names none.
+ *
+ *  Deliberately STRICTER than `isRootClaudeFrame` above, which asks only whether
+ *  the field is a string: an empty string is a string but names no parent, and
+ *  attribution must not mint a producer out of it. The two therefore disagree on
+ *  `''` — and this is the side that decides who produced a row, where treating
+ *  `''` as a parent would stamp an id no reader could ever resolve. */
+export function claudeFrameParentRef(frame: Record<string, unknown>): string | null {
+  return typeof frame.parent_tool_use_id === 'string' && frame.parent_tool_use_id.length > 0
+    ? frame.parent_tool_use_id
+    : null
 }
 
 export type ClaudeTurnSource = { sessionId: string; uuid: string; assistant: boolean }

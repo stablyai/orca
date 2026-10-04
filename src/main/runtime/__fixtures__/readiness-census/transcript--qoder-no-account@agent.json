@@ -1,0 +1,15 @@
+{
+  "description": "qoder recording at 100x32 replayed on the agent pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-33: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "34-47: now=working edge=working quiet=working wait=pending",
+      "48-61: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending"
+    ],
+    "clockless": [
+      "0-33: verdict=pending:closed wait=pending",
+      "34-47: verdict=working wait=pending",
+      "48-61: verdict=pending:closed wait=pending"
+    ]
+  }
+}

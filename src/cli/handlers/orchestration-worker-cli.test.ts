@@ -104,34 +104,6 @@ describe('orchestration worker-start CLI contract', () => {
     expect(process.exitCode).toBeUndefined()
   })
 
-  it.each(['succeeded', 'failed'])(
-    'accepts a successful start whose task already %s',
-    async (workerOutcome) => {
-      const receipt = {
-        taskId: 'task_1',
-        dispatchId: 'ctx_1',
-        state: 'ready',
-        stage: 'settled',
-        workerOutcome,
-        effects: [],
-        residualResources: []
-      }
-      callMock.mockResolvedValue({ result: receipt })
-      await invokeWorkerStart(
-        new Map([
-          ['task', 'task_1'],
-          ['from', 'term_coord']
-        ])
-      )
-      expect(process.exitCode).toBeUndefined()
-      expect(printResult).toHaveBeenCalledWith(
-        expect.objectContaining({ result: receipt }),
-        true,
-        expect.any(Function)
-      )
-    }
-  )
-
   it('capability-gates and forwards per-invocation launch preferences', async () => {
     callMock
       .mockResolvedValueOnce({
@@ -275,15 +247,14 @@ describe('orchestration worker-start CLI contract', () => {
     }
   )
 
-  it('prints the Structured Chat recovery action for a refused worker start', async () => {
+  it('prints the host error for a refused worker start', async () => {
     callMock.mockResolvedValue({
       result: {
         taskId: 'task_1',
         dispatchId: 'ctx_1',
         state: 'failed',
         failedStage: 'dispatch_input',
-        lastError:
-          'The target terminal is in Structured Chat. Switch it to Terminal, then retry `orca orchestration worker-start`.',
+        lastError: 'terminal_not_writable',
         effects: [],
         residualResources: []
       }
@@ -315,10 +286,9 @@ describe('orchestration worker-start CLI contract', () => {
         dispatchId: 'ctx_1',
         state: 'failed',
         failedStage: 'dispatch_input',
-        lastError:
-          'The target terminal is in Structured Chat. Switch it to Terminal, then retry `orca orchestration worker-start`.'
+        lastError: 'terminal_not_writable'
       })
-    ).toMatch(/Structured Chat.*Switch it to Terminal.*orca orchestration worker-start/s)
+    ).toContain('terminal_not_writable')
   })
 
   it('prints a reveal warning for a live background worker', async () => {

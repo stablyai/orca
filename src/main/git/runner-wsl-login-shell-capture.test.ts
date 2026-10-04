@@ -96,7 +96,7 @@ describe('WSL login-shell reads are fenced', () => {
     execFileMock.mockImplementation((_command, args, _options, callback) => {
       const script = String(args.at(-1))
       const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(script)?.[1] ?? ''
-      const stdout = script.includes('core.sshCommand')
+      const stdout = script.includes('sshcommand')
         ? `${BANNER}__ORCA_WSL_CAPTURE_BEGIN_${nonce}__${configured}__ORCA_WSL_CAPTURE_END_${nonce}__`
         : 'ok'
       queueMicrotask(() => callback?.(null, stdout, ''))
@@ -106,7 +106,7 @@ describe('WSL login-shell reads are fenced', () => {
 
   function sshCommandFromLastGitCall(): string | undefined {
     const gitCall = execFileMock.mock.calls.findLast(
-      (call) => !String(call[1]?.at(-1)).includes('core.sshCommand')
+      (call) => !String(call[1]?.at(-1)).includes('sshcommand')
     )
     return (gitCall?.[2] as { env?: NodeJS.ProcessEnv } | undefined)?.env?.GIT_SSH_COMMAND
   }
@@ -126,7 +126,7 @@ describe('WSL login-shell reads are fenced', () => {
   })
 
   it('still honors a genuinely configured core.sshCommand', async () => {
-    respondToSshPolicyProbe('ssh -i /home/alice/.ssh/id_ed25519\n')
+    respondToSshPolicyProbe('core.sshcommand\nssh -i /home/alice/.ssh/id_ed25519\0')
 
     await gitExecFileAsync(['fetch', 'origin'], {
       cwd: WSL_CWD,

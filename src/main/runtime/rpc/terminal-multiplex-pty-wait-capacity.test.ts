@@ -284,7 +284,6 @@ describe('terminal multiplex RPC', () => {
         )!
       )
     }
-    expect(TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION).toBe(128)
     for (
       let streamId = 1;
       streamId <= TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION + 1;
@@ -595,7 +594,11 @@ describe('terminal multiplex RPC', () => {
     // Widened gate: a desktop client must mount + await its late PTY, not skip
     // straight to the bare scrollback path the way it did under the mobile-only gate.
     expect(runtime.requestRendererTerminalTabMount).toHaveBeenCalledWith('terminal-1')
-    expect(runtime.waitForLeafPtyId).toHaveBeenCalledWith('terminal-1', 10_000, undefined)
+    expect(runtime.waitForLeafPtyId).toHaveBeenCalledWith(
+      'terminal-1',
+      10_000,
+      expect.any(AbortSignal)
+    )
     expect(messages.map((msg) => JSON.parse(msg).result?.type)).toEqual(['subscribed', 'end'])
   })
 })

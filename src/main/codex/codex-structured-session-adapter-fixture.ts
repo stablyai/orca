@@ -11,9 +11,9 @@ import type {
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredLaunch,
-  type CodexStructuredSessionAdapterDeps,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
 
 export const THREAD_ID = 'thread-abc'
 
@@ -89,13 +89,25 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
   return { connections, openConnection, routes }
 }
 
+/** A `turn/start` route for a Codex that opened the turn before its answer was read. */
+export function answerWithOpenedTurn(
+  codex: Pick<ReturnType<typeof fakeCodex>, 'connections'>,
+  turnId: string
+): Route {
+  return () => {
+    codex.connections
+      .at(-1)
+      ?.handlers.onNotification?.('turn/started', { threadId: THREAD_ID, turn: { id: turnId } })
+    return { turn: { id: turnId } }
+  }
+}
+
 export function adapterFor(
   codex: ReturnType<typeof fakeCodex>,
   launch: Partial<CodexStructuredLaunch> = {},
   events: CodexStructuredSessionEvent[] = [],
-  processControl: Partial<
-    Pick<CodexStructuredSessionAdapterDeps, 'captureTurnProcesses' | 'terminateTurnProcesses'>
-  > = {}
+  /** Host wiring the runtime adds, such as the late dispatch settlement. */
+  deps: Partial<CodexStructuredSessionAdapterDeps> = {}
 ): CodexStructuredSessionAdapter {
   let acquisitionGeneration = 0
   return new CodexStructuredSessionAdapter({
@@ -110,11 +122,9 @@ export function adapterFor(
     onEvent: (event) => events.push(event),
     openConnection: codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
-    captureTurnProcesses: async () => ({ platform: 'win32', identities: new Map() }),
-    terminateTurnProcesses: async () => true,
     now: () => 1_700_000_000_500,
     mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`,
-    ...processControl
+    ...deps
   })
 }
 

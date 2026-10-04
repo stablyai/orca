@@ -1,44 +1,52 @@
-import { claudeTeammateIdMatchesName } from '../../../shared/claude-subagent-roster'
+import { mainAgentStatusEqual } from '../../../shared/main-agent-status'
+import {
+  claudeTeammateIdMatchesName,
+  isClaudeChildTurnEndEvent
+} from '../../../shared/claude-subagent-roster'
 import { isAskUserQuestionTool } from '../../../shared/agent-question-answered-intent'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
-export function attachClaudeChildOnlyBoundary(
+/** The shell fact a Claude row stores beside its `mainAgent`; restart seeds a settled main agent only
+ *  when it reads `false`. The listener restates it on every event it produces; any other write keeps
+ *  the previous fact only while `mainAgent` is unchanged, since the fact was observed with that one. */
+export function pairedClaudeNonAgentWork(
   previous: EnrichedAgentHookEventPayload | undefined,
   next: AgentHookEventPayload
-): AgentHookEventPayload & { claudeLeadBoundaryChildOnly?: true } {
-  const establishesBoundary =
-    next.payload.agentType === 'claude' &&
-    (next.hookEventName === 'Stop' || next.hookEventName === 'StopFailure') &&
-    !next.toolAgentId &&
-    next.payload.state === 'working' &&
-    next.payload.subagents?.some((subagent) => subagent.state === 'working') === true &&
-    next.claudeRunningNonAgentTask === false
-  const carriesBoundary =
-    previous?.claudeLeadBoundaryChildOnly === true &&
-    next.payload.agentType === 'claude' &&
-    next.claudeRunningNonAgentTask === false &&
-    (next.toolAgentId !== undefined ||
-      next.hookEventName === 'SubagentStart' ||
-      next.hookEventName === 'SubagentStop' ||
-      next.hookEventName === 'TeammateIdle')
-  return establishesBoundary || carriesBoundary
-    ? { ...next, claudeLeadBoundaryChildOnly: true }
-    : next
+): boolean | undefined {
+  if (next.claudeRunningNonAgentTask !== undefined) {
+    return next.claudeRunningNonAgentTask
+  }
+  return previous && mainAgentStatusEqual(previous.payload.mainAgent, next.payload.mainAgent)
+    ? previous.claudeRunningNonAgentTask
+    : undefined
 }
 
-export function invalidateClaudeChildOnlyBoundary(
-  previous: EnrichedAgentHookEventPayload | undefined,
+/** A child's permission prompt stays visible over the main agent's own progress, but the row must
+ *  still carry that progress: restart seeds the main agent from it, and a stale `done` would let the
+ *  children's drain settle a row whose main agent is working. Returns `previous` when nothing changed,
+ *  and keeps `previous.payload` when only the unpublished shell fact did. */
+export function withHeldChildWaitMainAgent(
+  previous: EnrichedAgentHookEventPayload,
   next: AgentHookEventPayload
-): EnrichedAgentHookEventPayload | undefined {
-  if (
-    previous?.claudeLeadBoundaryChildOnly !== true ||
-    attachClaudeChildOnlyBoundary(previous, next).claudeLeadBoundaryChildOnly === true
-  ) {
+): EnrichedAgentHookEventPayload {
+  const mainAgent = next.payload.mainAgent
+  if (!previous.toolAgentId || !mainAgent) {
     return previous
   }
-  const { claudeLeadBoundaryChildOnly: _boundary, ...withoutBoundary } = previous
-  return withoutBoundary
+  const runningNonAgentTask = pairedClaudeNonAgentWork(previous, next)
+  const mainAgentChanged = !mainAgentStatusEqual(previous.payload.mainAgent, mainAgent)
+  if (!mainAgentChanged && runningNonAgentTask === previous.claudeRunningNonAgentTask) {
+    return previous
+  }
+  const { claudeRunningNonAgentTask: _unpaired, ...unpaired } = previous
+  return {
+    ...unpaired,
+    ...(runningNonAgentTask !== undefined
+      ? { claudeRunningNonAgentTask: runningNonAgentTask }
+      : {}),
+    payload: mainAgentChanged ? { ...previous.payload, mainAgent } : previous.payload
+  }
 }
 
 export function shouldKeepClaudePermissionVisible(
@@ -81,7 +89,7 @@ function isClaudePermissionOwningChildEnding(
   if (!ownerId) {
     return false
   }
-  if (next.hookEventName === 'SubagentStop') {
+  if (isClaudeChildTurnEndEvent(next.hookEventName, next.toolAgentId)) {
     return ownerId === next.toolAgentId?.trim()
   }
   return (

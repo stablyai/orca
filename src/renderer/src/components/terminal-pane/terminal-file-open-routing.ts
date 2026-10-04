@@ -8,7 +8,11 @@ import {
   buildWorkspaceFileContext,
   canClientOsOpenWorkspaceFile
 } from '@/lib/workspace-file-host-routing'
-import { statRuntimePath, type RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import {
+  isMissingRuntimePathError,
+  statRuntimePath,
+  type RuntimeFileOperationArgs
+} from '@/runtime/runtime-file-client'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
@@ -20,12 +24,20 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 
+export type FileOpenFailure = {
+  /** `missing` is a verified absence; `unverifiable` means the host could not answer (dropped SSH, timeout, denied path). */
+  verdict: 'missing' | 'unverifiable'
+  error: unknown
+}
+
 type TerminalFileOpenDeps = {
   worktreeId: string
   worktreePath: string
   runtimeEnvironmentId?: string | null
   wslDistro?: string | null
   openWithSystemDefault?: boolean
+  /** Reports a path that could not be verified before opening; skipped once a later open supersedes it. */
+  onOpenFailure?: (failure: FileOpenFailure) => void
 }
 
 export function isHtmlFilePath(filePath: string): boolean {
@@ -166,7 +178,14 @@ export function openDetectedFilePath(
         await window.api.fs.authorizeExternalPath({ targetPath: mappedFilePath })
       }
       statResult = await statRuntimePath(fileContext, mappedFilePath)
-    } catch {
+    } catch (error) {
+      if (requestId === latestOpenDetectedFilePathRequestId && deps.onOpenFailure) {
+        // Why: loss of contact with the host is not evidence the file is gone.
+        deps.onOpenFailure({
+          verdict: isMissingRuntimePathError(error) ? 'missing' : 'unverifiable',
+          error
+        })
+      }
       return
     }
 

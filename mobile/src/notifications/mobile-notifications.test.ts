@@ -3,6 +3,7 @@ import { subscribeToDesktopNotifications } from './mobile-notifications'
 import { dismissHostPushNotification } from './push-socket-dismissal'
 import { requestNotificationCatchup } from './push-dismissal-reconciliation'
 import { RpcClientStreamRegistry } from '../transport/rpc-client-stream-registry'
+import { MobileRelayRpcStreams } from '../transport/mobile-relay-rpc-streams'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 
@@ -37,10 +38,28 @@ function readSentFrame(request: unknown): SentFrame {
   }
 }
 
+function transportClient(subscribe: RpcClient['subscribe']) {
+  const requests: { method: string; params: unknown }[] = []
+  const client: RpcClient = {
+    sendRequest: async (method, params) => {
+      requests.push({ method, params })
+      return { id: 'reply-1', ok: true, result: {}, _meta: { runtimeId: 'runtime-1' } }
+    },
+    subscribe,
+    updateTerminalSubscriptionViewport: () => {},
+    getState: () => 'connected',
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
+    notifyForeground: () => {},
+    close: () => {}
+  }
+  return { requests, client }
+}
+
 /** The real stream registry, so dispose-before-ready is answered by the transport, not by a fake. */
 function registryClient() {
   const sent: SentFrame[] = []
-  const requests: { method: string; params: unknown }[] = []
   let id = 0
   const registry = new RpcClientStreamRegistry({
     nextId: () => `rpc-${++id}`,
@@ -51,22 +70,44 @@ function registryClient() {
       return true
     }
   })
-  const client: RpcClient = {
-    sendRequest: async (method, params) => {
-      requests.push({ method, params })
-      return { id: 'reply-1', ok: true, result: {}, _meta: { runtimeId: 'runtime-1' } }
-    },
-    subscribe: (method, params, onData, options) =>
-      registry.subscribe(method, params, onData, options),
-    updateTerminalSubscriptionViewport: () => {},
-    getState: () => 'connected',
-    getReconnectAttempt: () => 0,
-    getLastConnectedAt: () => null,
-    onStateChange: () => () => {},
-    notifyForeground: () => {},
-    close: () => {}
+  return {
+    registry,
+    sent,
+    ...transportClient((method, params, onData, options) =>
+      registry.subscribe(method, params, onData, options)
+    )
   }
-  return { registry, sent, requests, client }
+}
+
+/** The real relay stream manager, the other transport a paired phone reaches a host through. */
+function relayClient() {
+  const sent: SentFrame[] = []
+  let id = 0
+  const streams = new MobileRelayRpcStreams({
+    nextId: () => `relay-${++id}`,
+    sendFrame: (frame) => {
+      sent.push(readSentFrame(frame))
+      return true
+    },
+    waitForConnected: async () => {}
+  })
+  return {
+    streams,
+    sent,
+    ...transportClient((method, params, onData, options) =>
+      streams.subscribe(method, params, onData, options)
+    )
+  }
+}
+
+/** Every `notifications.unsubscribe` the phone put on the wire, by either route. */
+function notificationReleases(rpc: {
+  sent: SentFrame[]
+  requests: { method: string; params: unknown }[]
+}): unknown[] {
+  return [...rpc.sent, ...rpc.requests]
+    .filter((frame) => frame.method === 'notifications.unsubscribe')
+    .map((frame) => frame.params)
 }
 
 function readyReply(id: string, subscriptionId: string): RpcResponse {
@@ -123,7 +164,7 @@ describe('subscribeToDesktopNotifications', () => {
     expect(dismissHostPushNotification).toHaveBeenCalledWith(dismissal, 'host-1')
   })
 
-  it('never runs the ready arm when the disposer ran before the reply landed', () => {
+  it('releases the host stream once a ready lands after the disposer ran (direct)', () => {
     const rpc = registryClient()
     const stop = subscribeToDesktopNotifications(rpc.client, 'host-1')
     const subscribeFrame = rpc.sent[0]!
@@ -133,12 +174,24 @@ describe('subscribeToDesktopNotifications', () => {
     rpc.registry.handleResponse(readyReply(subscribeFrame.id, 'sub-1'))
 
     expect(requestNotificationCatchup).not.toHaveBeenCalled()
-    // The subscription id never reaches this module, so nothing closes the host's stream.
-    expect(rpc.requests).toEqual([])
-    expect(rpc.sent).toHaveLength(1)
+    expect(notificationReleases(rpc)).toEqual([{ subscriptionId: 'sub-1' }])
   })
 
-  it('closes the host stream when the disposer runs after the ready reply', async () => {
+  it('releases the host stream once a ready lands after the disposer ran (relay)', async () => {
+    const rpc = relayClient()
+    const stop = subscribeToDesktopNotifications(rpc.client, 'host-1')
+    await Promise.resolve()
+    const subscribeFrame = rpc.sent[0]!
+    expect(subscribeFrame.method).toBe('notifications.subscribe')
+
+    stop()
+    rpc.streams.handleResponse(readyReply(subscribeFrame.id, 'sub-1'))
+
+    expect(requestNotificationCatchup).not.toHaveBeenCalled()
+    expect(notificationReleases(rpc)).toEqual([{ subscriptionId: 'sub-1' }])
+  })
+
+  it('closes the host stream once when the disposer runs after the ready reply (direct)', async () => {
     const rpc = registryClient()
     const stop = subscribeToDesktopNotifications(rpc.client, 'host-1')
     rpc.registry.handleResponse(readyReply(rpc.sent[0]!.id, 'sub-1'))
@@ -146,8 +199,47 @@ describe('subscribeToDesktopNotifications', () => {
     stop()
     await Promise.resolve()
 
-    expect(rpc.requests).toEqual([
-      { method: 'notifications.unsubscribe', params: { subscriptionId: 'sub-1' } }
-    ])
+    expect(notificationReleases(rpc)).toEqual([{ subscriptionId: 'sub-1' }])
+  })
+
+  it('closes the host stream once when the disposer runs after the ready reply (relay)', async () => {
+    const rpc = relayClient()
+    const stop = subscribeToDesktopNotifications(rpc.client, 'host-1')
+    await Promise.resolve()
+    rpc.streams.handleResponse(readyReply(rpc.sent[0]!.id, 'sub-1'))
+
+    stop()
+    await Promise.resolve()
+
+    expect(notificationReleases(rpc)).toEqual([{ subscriptionId: 'sub-1' }])
+  })
+
+  it('releases the replayed stream by its new id, never the one the closed socket assigned', () => {
+    const rpc = registryClient()
+    const stop = subscribeToDesktopNotifications(rpc.client, 'host-1')
+    const subscribeFrame = rpc.sent[0]!
+    rpc.registry.handleResponse(readyReply(subscribeFrame.id, 'sub-1'))
+
+    rpc.registry.markForReplay()
+    rpc.registry.replayAfterAuthentication()
+    expect(rpc.sent[1]).toMatchObject({ id: subscribeFrame.id, method: 'notifications.subscribe' })
+    stop()
+    rpc.registry.handleResponse(readyReply(subscribeFrame.id, 'sub-2'))
+
+    expect(notificationReleases(rpc)).toEqual([{ subscriptionId: 'sub-2' }])
+  })
+
+  it('catches up again when a replayed subscribe is ready', () => {
+    const rpc = registryClient()
+    subscribeToDesktopNotifications(rpc.client, 'host-1')
+    const subscribeFrame = rpc.sent[0]!
+    rpc.registry.handleResponse(readyReply(subscribeFrame.id, 'sub-1'))
+
+    rpc.registry.markForReplay()
+    rpc.registry.replayAfterAuthentication()
+    rpc.registry.handleResponse(readyReply(subscribeFrame.id, 'sub-2'))
+
+    expect(requestNotificationCatchup).toHaveBeenCalledTimes(2)
+    expect(notificationReleases(rpc)).toEqual([])
   })
 })

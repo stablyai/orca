@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
+import { reportedLiveInputComposing } from '../platform/live-input-composing-range'
 import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
@@ -148,7 +149,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       void applyLiveInputMirror(
         activeHandle,
         normalizeTerminalTextInput(nativeEvent.text),
-        nativeEvent.isComposing
+        reportedLiveInputComposing(nativeEvent.isComposing)
       )
     },
     [

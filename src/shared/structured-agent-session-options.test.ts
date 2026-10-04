@@ -5,8 +5,16 @@ import { createNativeChatSessionOptionRecord } from './native-chat-session-optio
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionSnapshot
+  structuredAgentSessionOptionSnapshot,
+  structuredAgentSessionOptionView
 } from './structured-agent-session-options'
+
+function viewModel(...args: Parameters<typeof structuredAgentSessionOptionView>) {
+  const model = structuredAgentSessionOptionSnapshot(
+    structuredAgentSessionOptionView(...args)
+  ).find((descriptor) => descriptor.id === 'model')
+  return model?.kind.type === 'select' ? model.kind.currentValue : undefined
+}
 
 describe('structured agent session options', () => {
   it('projects native Codex selects while bridge Codex keeps its agent picker', () => {
@@ -184,5 +192,22 @@ describe('structured agent session options', () => {
         valueSource: 'unknown'
       })
     )
+  })
+
+  it('shows the launch seed until the record names a model, and held picks over both', () => {
+    const seeded = createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG)
+    const seed = { model: 'gpt-5.5' }
+    expect(viewModel(seeded, seed, {})).toBe('gpt-5.5')
+    // A model outside the static list still gets a labelled row.
+    expect(viewModel(seeded, { model: 'gpt-next' }, {})).toBe('gpt-next')
+    // Derived only: the record itself never takes the seed.
+    expect(seeded.record.model).toBeUndefined()
+    const live = applyStructuredAgentSessionOptions(seeded, CODEX_SESSION_OPTION_CATALOG, {
+      models: [{ id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', isDefault: true, efforts: [] }],
+      current: { model: 'gpt-5.6-luna', confirmed: ['model'] }
+    })
+    expect(viewModel(live, seed, {})).toBe('gpt-5.6-luna')
+    expect(viewModel(live, seed, { model: 'gpt-5.5' })).toBe('gpt-5.5')
+    expect(live.record.model?.value).toBe('gpt-5.6-luna')
   })
 })

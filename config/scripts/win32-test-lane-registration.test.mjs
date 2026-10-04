@@ -69,7 +69,10 @@ import { classifyPrJobs } from './pr-code-change-scope.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const WINDOWS_LANE_JOB = 'package_windows'
-const WINDOWS_LANE_STEP = 'Test Windows-specific boundaries'
+const WINDOWS_LANE_STEPS = [
+  'Test Windows-specific boundaries',
+  'Test Windows installer process probe'
+]
 const WINDOWS_LANE_RUNNER = 'windows-2022'
 
 /**
@@ -288,19 +291,20 @@ function readWindowsWorkflow() {
   const jobs = Object.entries(workflow.jobs ?? {})
   const windowsJobs = jobs.filter(([, job]) => couldRunOnWindows(job?.['runs-on']))
   const steps = workflow.jobs?.[WINDOWS_LANE_JOB]?.steps ?? []
-  const step = steps.find((candidate) => candidate?.name === WINDOWS_LANE_STEP)
-  if (!step) {
-    throw new Error(
-      `No "${WINDOWS_LANE_STEP}" step in the ${WINDOWS_LANE_JOB} job of .github/workflows/pr.yml. ` +
-        'If it was renamed, update WINDOWS_LANE_STEP here -- do not delete this guard.'
-    )
-  }
-  const run = String(step.run ?? '')
-  if (!run.includes('vitest run')) {
-    throw new Error(
-      `The "${WINDOWS_LANE_STEP}" step no longer invokes vitest; this guard is stale.`
-    )
-  }
+  const runs = WINDOWS_LANE_STEPS.map((name) => {
+    const step = steps.find((candidate) => candidate?.name === name)
+    if (!step) {
+      throw new Error(
+        `No "${name}" step in ${WINDOWS_LANE_JOB}; update WINDOWS_LANE_STEPS if renamed.`
+      )
+    }
+    const run = String(step.run ?? '')
+    if (!run.includes('vitest run')) {
+      throw new Error(`The "${name}" step no longer invokes vitest; this guard is stale.`)
+    }
+    return run
+  })
+  const run = runs.join(' ')
   return {
     windowsJobNames: windowsJobs.map(([name]) => name),
     laneFiles: run.split(/\s+/).filter((token) => TEST_FILE_PATTERN.test(token))
@@ -331,7 +335,7 @@ function registrationFailure(path) {
   const missing = []
   if (!laneFiles.includes(path)) {
     missing.push(
-      `add "${path}" to the "${WINDOWS_LANE_STEP}" vitest argv in .github/workflows/pr.yml ` +
+      `add "${path}" to the "${WINDOWS_LANE_STEPS[0]}" vitest argv in .github/workflows/pr.yml ` +
         `(job ${WINDOWS_LANE_JOB})`
     )
   }

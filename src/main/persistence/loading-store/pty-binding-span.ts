@@ -10,11 +10,13 @@ export type PtyBindingSpanOutcome = 'fast_lane' | 'flushed' | 'refused' | 'threw
  */
 export type PtyBindingOrigin = 'reattach' | 'spawn' | 'relay_reattach' | 'split' | 'unknown'
 
+export type PtySpawnCommitOrigin = Extract<PtyBindingOrigin, 'reattach' | 'spawn' | 'split'>
+
 /** The spawn-commit paths share one rule: a split outranks a reattach, a reattach outranks a spawn. */
 export function spawnCommitBindingOrigin(
   commit: { isReattach?: boolean; agentSessionEnsure?: { disposition: string } },
   expectedSourceBinding?: unknown
-): PtyBindingOrigin {
+): PtySpawnCommitOrigin {
   if (expectedSourceBinding !== undefined) {
     return 'split'
   }

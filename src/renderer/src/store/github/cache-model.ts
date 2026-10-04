@@ -61,4 +61,5 @@ export type ProjectRowContentPatch = {
 
 export type GitHubPatchWorkItemOptions = {
   sourceContext?: TaskSourceContext | null
+  ownerRepo?: GitHubOwnerRepo | null
 }

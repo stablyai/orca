@@ -107,6 +107,60 @@ describe('classifySupersededRelay', () => {
 })
 
 describe('sweepSupersededRelayEndpoints', () => {
+  it.each(['listing', 'reap', 'removal'] as const)(
+    'stops after unconfirmed %s termination without examining another endpoint',
+    async (phase) => {
+      const secondSock = `${HOME}/.orca-remote/relay-0.1.0+cafebabe1234/${SOCK_NAME}`
+      const error = Object.assign(new Error('Remote termination is unconfirmed'), {
+        sshChannelCloseConfirmed: false
+      })
+      if (phase !== 'listing') {
+        execCommand
+          .mockResolvedValueOnce(`${OLD_SOCK}\n${secondSock}\n`)
+          .mockResolvedValueOnce(
+            probe(
+              phase === 'reap'
+                ? ['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 2 0']
+                : ['PRESENT=yes', 'LISTEN=refused', 'HOLDERS_SOURCE=lsof']
+            )
+          )
+      }
+      execCommand.mockRejectedValueOnce(error)
+
+      await expect(sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)).rejects.toBe(error)
+
+      expect(issuedCommands()).toHaveLength(phase === 'listing' ? 1 : 3)
+    }
+  )
+
+  it.each(['reap', 'removal'] as const)(
+    'keeps an ordinary %s failure nonfatal and examines later endpoints',
+    async (phase) => {
+      const secondSock = `${HOME}/.orca-remote/relay-0.1.0+cafebabe1234/${SOCK_NAME}`
+      execCommand
+        .mockResolvedValueOnce(`${OLD_SOCK}\n${secondSock}\n`)
+        .mockResolvedValueOnce(
+          probe(
+            phase === 'reap'
+              ? ['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 2 0']
+              : ['PRESENT=yes', 'LISTEN=refused', 'HOLDERS_SOURCE=lsof']
+          )
+        )
+        .mockRejectedValueOnce(new Error('Operation failed'))
+        .mockResolvedValueOnce(
+          probe(['PRESENT=yes', 'LISTEN=unknown', 'HOLDERS_SOURCE=unavailable'])
+        )
+
+      const findings = await sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)
+
+      expect(findings.map((finding) => finding.outcome)).toEqual([
+        phase === 'reap' ? 'reap-unconfirmed' : 'unverifiable',
+        'unverifiable'
+      ])
+      expect(issuedCommands()).toHaveLength(4)
+    }
+  )
+
   it('stops the sweep before cleanup when probe group termination is unconfirmed', async () => {
     execCommand
       .mockResolvedValueOnce(OLD_SOCK)

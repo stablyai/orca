@@ -132,7 +132,9 @@ export default function PullRequestPage({
       return
     }
 
-    const result = activateAndRevealWorktree(currentAttached.id)
+    const result = activateAndRevealWorktree(currentAttached.id, {
+      navigationIntent: 'user-open'
+    })
     if (result === false) {
       toast.error(
         translate(

@@ -1,8 +1,10 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { StringDecoder } from 'node:string_decoder'
 import type { EphemeralVmRecipeContext } from './ephemeral-vm-recipe-runner'
 import { admitProcessTreeKill } from './child-process/process-tree-kill-gate'
+import { GrowingByteBuffer } from './growing-byte-buffer'
 
-const DEFAULT_MAX_CAPTURE_BYTES = 1024 * 1024
+export const DEFAULT_MAX_CAPTURE_BYTES = 1024 * 1024
 const CANCEL_FORCE_KILL_DELAY_MS = 5_000
 
 export type ProcessRunResult = {
@@ -37,7 +39,7 @@ export async function runRecipeCommand(args: {
   onStderr?: (chunk: string) => void
   spawnCommand?: typeof spawn
 }): Promise<ProcessRunResult> {
-  const maxBytes = args.maxCaptureBytes ?? DEFAULT_MAX_CAPTURE_BYTES
+  const maxBytes = clampRecipeCaptureBytes(args.maxCaptureBytes)
   const spawnCommand = args.spawnCommand ?? spawn
 
   return new Promise((resolve, reject) => {
@@ -55,12 +57,12 @@ export async function runRecipeCommand(args: {
       return
     }
 
-    let stdout = ''
-    let stderr = ''
+    const stdout = new GrowingByteBuffer()
+    const stderr = new GrowingByteBuffer()
     let settled = false
     let aborted = false
     let forceKillTimer: ReturnType<typeof setTimeout> | undefined
-    const finish = (result: ProcessRunResult): void => {
+    const finish = (result: Omit<ProcessRunResult, 'stdout' | 'stderr'>): void => {
       if (settled) {
         return
       }
@@ -69,7 +71,7 @@ export async function runRecipeCommand(args: {
         clearTimeout(forceKillTimer)
       }
       args.signal?.removeEventListener('abort', abort)
-      resolve(result)
+      resolve({ stdout: takeRetainedTail(stdout), stderr: takeRetainedTail(stderr), ...result })
     }
     const fail = (error: Error): void => {
       if (settled) {
@@ -80,6 +82,8 @@ export async function runRecipeCommand(args: {
         clearTimeout(forceKillTimer)
       }
       args.signal?.removeEventListener('abort', abort)
+      stdout.clear()
+      stderr.clear()
       reject(error)
     }
     const abort = (): void => {
@@ -92,7 +96,7 @@ export async function runRecipeCommand(args: {
           return
         }
         killRecipeProcess(child, true)
-        finish({ stdout, stderr, exitCode: null, signal: null, aborted: true })
+        finish({ exitCode: null, signal: null, aborted: true })
         child.stdin.destroy()
         child.stdout.destroy()
         child.stderr.destroy()
@@ -102,21 +106,37 @@ export async function runRecipeCommand(args: {
       killRecipeProcess(child)
     }
 
-    child.stdout.setEncoding('utf8')
-    child.stderr.setEncoding('utf8')
-    child.stdout.on('data', (chunk: string) => {
-      stdout = appendBounded(stdout, chunk, maxBytes)
-      args.onStdout?.(chunk)
-    })
-    child.stderr.on('data', (chunk: string) => {
-      stderr = appendBounded(stderr, chunk, maxBytes)
-      args.onStderr?.(chunk)
-    })
+    // No setEncoding: the retained tail stays raw bytes, and a per-stream StringDecoder gives the
+    // callbacks the same character boundaries setEncoding would have (it uses the same decoder).
+    const stdoutDecoder = new StringDecoder('utf8')
+    const stderrDecoder = new StringDecoder('utf8')
+    const capture = (
+      buffer: GrowingByteBuffer,
+      decoder: StringDecoder,
+      chunk: Buffer,
+      forward: ((chunk: string) => void) | undefined
+    ): void => {
+      if (!settled) {
+        buffer.appendRetainedSuffix(chunk, maxBytes)
+      }
+      if (!forward) {
+        return
+      }
+      const decoded = decoder.write(chunk)
+      if (decoded.length > 0) {
+        forward(decoded)
+      }
+    }
+    child.stdout.on('data', (chunk: Buffer) => capture(stdout, stdoutDecoder, chunk, args.onStdout))
+    child.stderr.on('data', (chunk: Buffer) => capture(stderr, stderrDecoder, chunk, args.onStderr))
+    // setEncoding flushes its decoder at end-of-stream; keep that final replacement character.
+    child.stdout.on('end', () => flushDecoder(stdoutDecoder, args.onStdout))
+    child.stderr.on('end', () => flushDecoder(stderrDecoder, args.onStderr))
     child.on('error', (error) => {
       fail(error)
     })
     child.on('close', (exitCode, signal) => {
-      finish({ stdout, stderr, exitCode, signal, ...(aborted ? { aborted: true } : {}) })
+      finish({ exitCode, signal, ...(aborted ? { aborted: true } : {}) })
     })
 
     if (args.signal?.aborted) {
@@ -131,6 +151,38 @@ export async function runRecipeCommand(args: {
       child.stdin.end()
     }
   })
+}
+
+/** No production caller overrides the cap, so odd values are clamped rather than coerced per chunk. */
+export function clampRecipeCaptureBytes(value: number | undefined): number {
+  if (value === undefined || Number.isNaN(value)) {
+    return DEFAULT_MAX_CAPTURE_BYTES
+  }
+  if (value <= 0) {
+    return 0
+  }
+  const floored = Math.floor(value)
+  return Number.isSafeInteger(floored) ? floored : DEFAULT_MAX_CAPTURE_BYTES
+}
+
+// Retention cuts on a byte boundary, so drop the partial sequence the old per-chunk trim removed.
+function takeRetainedTail(buffer: GrowingByteBuffer): string {
+  const bytes = buffer.takeBuffer()
+  let start = 0
+  while (start < bytes.byteLength && (bytes[start]! & 0xc0) === 0x80) {
+    start += 1
+  }
+  return bytes.toString('utf8', start)
+}
+
+function flushDecoder(
+  decoder: StringDecoder,
+  forward: ((chunk: string) => void) | undefined
+): void {
+  const trailing = decoder.end()
+  if (trailing.length > 0) {
+    forward?.(trailing)
+  }
 }
 
 /** Exported for the refusal-fallback test; the abort path is otherwise unreachable. */
@@ -198,27 +250,4 @@ function buildRecipeEnv(
     ORCA_RECIPE_RESULT_SCHEMA_VERSION: String(resultSchemaVersion),
     ORCA_VERSION: context.orcaVersion ?? ''
   }
-}
-
-function appendBounded(current: string, chunk: string, maxBytes: number): string {
-  if (maxBytes <= 0) {
-    return ''
-  }
-  const chunkBytes = Buffer.byteLength(chunk, 'utf8')
-  if (chunkBytes >= maxBytes) {
-    return utf8Tail(chunk, maxBytes)
-  }
-  return utf8Tail(current, maxBytes - chunkBytes) + chunk
-}
-
-function utf8Tail(value: string, maxBytes: number): string {
-  const bytes = Buffer.from(value, 'utf8')
-  if (bytes.byteLength <= maxBytes) {
-    return value
-  }
-  let start = bytes.byteLength - maxBytes
-  while (start < bytes.byteLength && (bytes[start]! & 0xc0) === 0x80) {
-    start += 1
-  }
-  return bytes.subarray(start).toString('utf8')
 }

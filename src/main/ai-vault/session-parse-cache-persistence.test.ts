@@ -162,6 +162,7 @@ const CACHED_SESSION_FIELDS = {
   totalTokens: true,
   previewMessages: true,
   previewMessagesTruncated: true,
+  antigravityOpeningPrompt: true,
   firstUserPrompt: true,
   lastUserPrompt: true,
   queuedMessageCount: true,
@@ -240,23 +241,6 @@ describe('session parse cache persistence', () => {
 
     const persisted = JSON.parse(await readFile(cacheFile, 'utf-8'))
     persisted.schemaVersion = 999
-    await writeFile(cacheFile, JSON.stringify(persisted))
-
-    simulateRestart(cacheFile)
-    const stats = await coldParseStats(transcript)
-    expect(stats.fullParses).toBe(1)
-    expect(stats.reused).toBe(0)
-  })
-
-  it('rejects the legacy schema 1 cache after parser semantics changed', async () => {
-    const root = await makeTempDir()
-    const cacheFile = join(root, 'session-parse-cache.json')
-    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
-    const transcript = await writeTranscript(root)
-    await parseAndPersist(transcript)
-
-    const persisted = JSON.parse(await readFile(cacheFile, 'utf-8'))
-    persisted.schemaVersion = 1
     await writeFile(cacheFile, JSON.stringify(persisted))
 
     simulateRestart(cacheFile)

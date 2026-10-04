@@ -13,6 +13,7 @@ import { useFileExplorerDragExpand } from './useFileExplorerDragExpand'
 
 type UseFileExplorerDragDropParams = {
   worktreePath: string | null
+  displayRootPath?: string | null
   activeWorktreeId: string | null
   expanded: Set<string>
   toggleDir: (worktreeId: string, dirPath: string) => void
@@ -48,8 +49,10 @@ type UseFileExplorerDragDropResult = {
   clearNativeDragState: () => void
 }
 
+/** Routes background drops to the displayed directory while preserving the worktree context for move operations. */
 export function useFileExplorerDragDrop({
   worktreePath,
+  displayRootPath = worktreePath,
   activeWorktreeId,
   expanded,
   toggleDir,
@@ -184,18 +187,18 @@ export function useFileExplorerDragDrop({
         // not the React drop handler. We only clear native drag visual state
         // here; the actual import is triggered from onFileDrop.
         clearNativeDragState()
-        if (worktreePath) {
+        if (displayRootPath) {
           const dragPaths = readWorkspaceFileDragPaths(e.dataTransfer)
           if (dragPaths.status === 'rejected') {
             toast.error(getWorkspaceFileDragRejectionMessage(dragPaths.reason))
             return
           }
           for (const sourcePath of dragPaths.paths) {
-            handleMoveDrop(sourcePath, worktreePath)
+            handleMoveDrop(sourcePath, displayRootPath)
           }
         }
       },
-      [worktreePath, handleMoveDrop, stopDragEdgeScroll, clearNativeDragState]
+      [displayRootPath, handleMoveDrop, stopDragEdgeScroll, clearNativeDragState]
     )
   }
 

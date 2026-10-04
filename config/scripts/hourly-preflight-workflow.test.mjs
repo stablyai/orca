@@ -62,7 +62,7 @@ describe('hourly build preflight', () => {
     expect(
       preflight.steps.find((step) => step.id === 'app_token').with['permission-contents']
     ).toBe('read')
-    expect(build.needs).toBe('preflight')
+    expect(build.needs).toEqual(['preflight', 'relay-windows-process-tree'])
     expect(build.if).toBe("needs.preflight.outputs.should_build == 'true'")
     expect(build.steps.find((step) => step.name === 'Checkout').with.ref).toBe(
       build.outputs.head_sha

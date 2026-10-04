@@ -3,7 +3,6 @@ import { appendFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  CODEX_SESSION_INDEX_HEAL_VERSION,
   appendHealLedgerRecord,
   collectPendingHealThreads,
   isHealMarkerCurrent,
@@ -149,6 +148,5 @@ describe('codex session index heal state', () => {
     expect(await collectPendingHealThreads(paths)).toEqual([
       expect.objectContaining({ threadId: THREAD_ID })
     ])
-    expect(CODEX_SESSION_INDEX_HEAL_VERSION).toBe(3)
   })
 })

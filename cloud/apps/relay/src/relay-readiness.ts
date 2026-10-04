@@ -131,6 +131,7 @@ export function createRelayReadiness(
   const settleSql = createDependencyGrace('sql', options.sqlGraceMs ?? RELAY_READINESS_SQL_GRACE_MS)
   let cachedAt = Number.NEGATIVE_INFINITY
   let cached = false
+  let pending: Promise<boolean> | null = null
   let lastObservedReady: boolean | undefined
   let degraded: RelayReadinessDependency[] = []
 
@@ -153,8 +154,7 @@ export function createRelayReadiness(
     }
   }
 
-  const check = async (): Promise<boolean> => {
-    if (now() - cachedAt < cacheMs) return cached
+  const probe = async (): Promise<boolean> => {
     const startedAt = now()
     const [jwks, sql] = await Promise.all([timed(now, probeJwks), timed(now, probeSql)])
     const completedAt = now()
@@ -183,6 +183,14 @@ export function createRelayReadiness(
     }
     lastObservedReady = cached
     return cached
+  }
+
+  const check = async (): Promise<boolean> => {
+    if (now() - cachedAt < cacheMs) return cached
+    pending ??= probe().finally(() => {
+      pending = null
+    })
+    return pending
   }
 
   return { check, degradedDependencies: () => [...degraded] }

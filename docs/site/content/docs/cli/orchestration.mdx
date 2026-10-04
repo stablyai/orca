@@ -40,11 +40,11 @@ orca orchestration task-create --spec "Audit billing settings for mobile layout"
 orca orchestration worker-start --task <taskId> --worktree current --agent codex --json
 # or new worktree:
 orca orchestration worker-start --task <taskId> --worktree new-child --name billing-audit --agent codex --setup run --json
-# optional per-worker model / effort (Claude, Codex, Cursor only; not with --terminal):
+# optional per-worker model / effort (Claude, Codex, Cursor, Antigravity, Muse; not with --terminal):
 orca orchestration worker-start --task <taskId> --worktree current --agent claude --model <opaque-model-id> --effort high --json
 ```
 
-`--model` accepts opaque provider model IDs for Claude, Codex, and Cursor. `--effort` requires `--model` and only applies when that agent/model supports the level. Neither flag can combine with `--terminal` (reuse an existing pane). Overrides apply to that launch only and show under `launch.requested` / `launch.effective` in the start receipt. Federated starts need a worker host that advertises launch-preference support.
+`--agent` takes any Orca agent ID enabled on the worker server, for example `claude`, `codex`, `cursor`, `antigravity`, `muse`, `opencode`, or `opencode2`. `--model` accepts opaque provider model IDs for Claude, Codex, Cursor, Antigravity, and Muse (for example `--agent muse --model muse-spark-1.3`); other agents, including opencode, run the model from their own config. `--effort` requires `--model` and only applies when that agent/model supports the level. Neither flag can combine with `--terminal` (reuse an existing pane). Overrides apply to that launch only and show under `launch.requested` / `launch.effective` in the start receipt. Federated starts need a worker host that advertises launch-preference support.
 
 Wait for completions (process every message in a Delivery, then ack):
 

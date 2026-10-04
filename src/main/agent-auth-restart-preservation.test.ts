@@ -32,30 +32,6 @@ describe('preserveAgentAuthBeforeRestart', () => {
     expect(calls).toEqual(['codex', 'claude', 'flush'])
   })
 
-  it('runs Claude preservation after Codex and before the store flush', async () => {
-    const calls: string[] = []
-
-    await preserveAgentAuthBeforeRestart({
-      codexRuntimeHome: {
-        syncForCurrentSelection: vi.fn(() => {
-          calls.push('codex-host')
-        })
-      },
-      claudeRuntimeAuth: {
-        syncForCurrentSelection: vi.fn(async () => {
-          calls.push('claude')
-        })
-      },
-      store: {
-        flushPendingOrThrowAsync: vi.fn(async () => {
-          calls.push('flush')
-        })
-      }
-    })
-
-    expect(calls).toEqual(['codex-host', 'claude', 'flush'])
-  })
-
   it('drains retained WSL Codex auth before flushing the store', async () => {
     const calls: string[] = []
 
@@ -151,12 +127,14 @@ describe('preserveAgentAuthBeforeRestart', () => {
     )
   })
 
-  it('flushes the store when auth services are missing', async () => {
+  it('checkpoints admitted state without waiting for ongoing edits when auth services are missing', async () => {
     const flushPendingOrThrowAsync = vi.fn()
 
     await preserveAgentAuthBeforeRestart({ store: { flushPendingOrThrowAsync } })
 
-    expect(flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
+    expect(flushPendingOrThrowAsync).toHaveBeenCalledExactlyOnceWith({
+      drainToStableGeneration: false
+    })
   })
 
   it('logs secret-free warnings and does not throw when sync fails', async () => {

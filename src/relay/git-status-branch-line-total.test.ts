@@ -9,7 +9,10 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { invalidateGitBranchLineTotalInFlight } from '../shared/git-branch-line-total'
+import {
+  invalidateGitBranchLineTotalInFlight,
+  isGitBranchLineTotalMergeBase
+} from '../shared/git-branch-line-total'
 import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
 import type { GitExec } from './git-handler-ops'
 import { getStatusOp } from './git-handler-status-ops'
@@ -34,7 +37,12 @@ const STATUS_OUTPUT = [
 ].join('\n')
 
 function isRangedNumstat(args: string[]): boolean {
-  return args.includes('diff') && args.includes('--numstat') && args.includes('-z')
+  return (
+    args.includes('diff') &&
+    args.includes('--numstat') &&
+    args.includes('-z') &&
+    isGitBranchLineTotalMergeBase(args.at(-2))
+  )
 }
 
 function rangedDiffCalls(calls: readonly GitCall[]): string[][] {
@@ -62,10 +70,10 @@ function createMockGit(overrides: {
       return { stdout: overrides.status ?? STATUS_OUTPUT, stderr: '' }
     }
     if (isRangedNumstat(args)) {
-      return overrides.ranged ? overrides.ranged() : { stdout: '12\t5\tsrc/a.ts\n', stderr: '' }
+      return overrides.ranged ? overrides.ranged() : { stdout: '12\t5\tsrc/a.ts\0', stderr: '' }
     }
     if (args.includes('diff')) {
-      return { stdout: overrides.areaNumstat ?? '3\t2\tsrc/a.ts\n', stderr: '' }
+      return { stdout: overrides.areaNumstat ?? '3\t2\tsrc/a.ts\0', stderr: '' }
     }
     throw new Error(`Unexpected git command: ${args.join(' ')}`)
   })
@@ -173,7 +181,18 @@ describe('getStatusOp branch line total', () => {
       generated: NO_LINES
     })
     expect(rangedDiffCalls(git.mock.calls)).toEqual([
-      ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M', mergeBase, '--']
+      [
+        '-c',
+        'core.quotePath=false',
+        '-c',
+        'diff.autoRefreshIndex=false',
+        'diff',
+        '-z',
+        '--numstat',
+        '-M',
+        mergeBase,
+        '--'
+      ]
     ])
   })
 
@@ -324,7 +343,7 @@ describe('getStatusOp branch line total', () => {
         throw error
       }
       if (args.includes('diff')) {
-        return { stdout: '3\t2\tsrc/a.ts\n', stderr: '' }
+        return { stdout: '3\t2\tsrc/a.ts\0', stderr: '' }
       }
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })
@@ -373,10 +392,10 @@ describe('getStatusOp branch line total', () => {
       }
       if (isRangedNumstat(args)) {
         await new Promise((resolve) => setTimeout(resolve, 20))
-        return { stdout: '12\t5\tsrc/a.ts\n', stderr: '' }
+        return { stdout: '12\t5\tsrc/a.ts\0', stderr: '' }
       }
       if (args.includes('diff')) {
-        return { stdout: '3\t2\tsrc/a.ts\n', stderr: '' }
+        return { stdout: '3\t2\tsrc/a.ts\0', stderr: '' }
       }
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })

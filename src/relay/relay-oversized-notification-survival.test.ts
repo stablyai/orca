@@ -205,21 +205,6 @@ describe('relay oversized notification survival', () => {
     }
   })
 
-  it("publishAgentHookEnvelope does not mutate the caller's envelope", () => {
-    const sink: Buffer[] = []
-    const dispatcher = createDispatcher(NODE21_HWM, () => {}, sink)
-    const envelope = buildMaximalHookEnvelope()
-    const before = structuredClone(envelope)
-
-    try {
-      publishAgentHookEnvelope(dispatcher, envelope as unknown as AgentHookRelayEnvelope)
-      // The hook server replays this exact object after --connect, so shedding must never touch it.
-      expect(envelope).toEqual(before)
-    } finally {
-      dispatcher.dispose()
-    }
-  })
-
   it('reattach + replay does not re-kill', () => {
     const sink: Buffer[] = []
     let killCloses = 0

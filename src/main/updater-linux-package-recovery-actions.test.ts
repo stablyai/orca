@@ -38,7 +38,13 @@ const {
     }
   }
   return {
-    appMock: { isPackaged: true, getVersion: vi.fn(() => '1.0.51'), on: vi.fn(), quit: vi.fn() },
+    appMock: {
+      isPackaged: true,
+      getVersion: vi.fn(() => '1.0.51'),
+      on: vi.fn(),
+      prependListener: vi.fn(),
+      quit: vi.fn()
+    },
     autoUpdaterMock,
     clearTrackedLinuxPackageArtifactMock: vi.fn(),
     getTrackedLinuxPackageArtifactMock: vi.fn(),

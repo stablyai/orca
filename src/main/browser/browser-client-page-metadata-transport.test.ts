@@ -188,24 +188,4 @@ describe('published-url observation', () => {
     await expect(transport.publish(PARAMS)).rejects.toBeInstanceOf(RemoteRuntimeClientError)
     expect(observeCurrentUrl).toHaveBeenCalledWith(PARAMS)
   })
-
-  it('observes params the schema will reject rather than pre-filtering them', async () => {
-    const observeCurrentUrl = vi.fn()
-    const transport = new BrowserClientPageMetadataTransport(observeCurrentUrl)
-    transport.bind({
-      sendPageMetadataRequest: vi.fn().mockResolvedValue(answered({ accepted: true }))
-    })
-
-    await transport.publish({ nonsense: true })
-
-    expect(observeCurrentUrl).toHaveBeenCalledWith({ nonsense: true })
-  })
-
-  it('publishes normally when no observer was supplied', async () => {
-    const sendPageMetadataRequest = vi.fn().mockResolvedValue(answered({ accepted: true }))
-    const transport = new BrowserClientPageMetadataTransport()
-    transport.bind({ sendPageMetadataRequest })
-
-    await expect(transport.publish(PARAMS)).resolves.toEqual({ accepted: true })
-  })
 })

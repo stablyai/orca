@@ -1,3 +1,5 @@
+import { createWatcherSender } from './filesystem-watcher-test-sender'
+import { statSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock } = vi.hoisted(() => ({
@@ -29,6 +31,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 
 import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
 import { stat } from 'node:fs/promises'
+import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -48,15 +51,31 @@ describe('filesystem watcher unwatchable root cache', () => {
     await closeAllWatchers()
   })
 
+  it('releases the install record when the root is a file', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const sender = createWatcherSender(1)
+    vi.mocked(stat).mockResolvedValue(statSync(new URL(import.meta.url)))
+    try {
+      await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/not-directory' })
+      expect(watcherLifecycleState.inFlightLocalInstalls.size).toBe(0)
+      expect(watcherLifecycleState.pendingLocalInstallPromises.size).toBe(0)
+    } finally {
+      warnSpy.mockRestore()
+      await closeAllWatchers()
+    }
+  })
+
   it('evicts oldest failed local roots while suppressing recent retries', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     vi.mocked(stat).mockRejectedValue(new Error('missing'))
 
     for (let i = 0; i < 257; i += 1) {
       await handlers['fs:watchWorktree']({ sender }, { worktreePath: `/tmp/missing-${i}` })
     }
     expect(stat).toHaveBeenCalledTimes(257)
+    expect(watcherLifecycleState.inFlightLocalInstalls.size).toBe(0)
+    expect(watcherLifecycleState.pendingLocalInstallPromises.size).toBe(0)
 
     await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/missing-0' })
     expect(stat).toHaveBeenCalledTimes(258)

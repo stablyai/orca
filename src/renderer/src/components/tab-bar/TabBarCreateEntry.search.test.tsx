@@ -99,6 +99,66 @@ afterEach(() => {
 })
 
 describe('TabBarCreateEntry search behavior', () => {
+  it.each([false, true])('searches weak file matches on Enter (delayed listing: %s)', (delayed) => {
+    const readyListing = {
+      files: [
+        'tests/e2e/terminal-split-activation-latency-main-probe.ts',
+        'src/main/linear/issue-context-inline-media.test.ts',
+        'src/renderer/src/components/editor/combined-diff/resolve-changes/combined-diff-section-cache-match.ts'
+      ],
+      loading: false,
+      loadError: null
+    }
+    fileListMock.current = delayed ? { files: [], loading: true, loadError: null } : readyListing
+    const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+    renderEntry({ onOpenEntry })
+    setQuery('asciinema')
+
+    if (delayed) {
+      expect(container.querySelector('[aria-selected="true"]')).toBeNull()
+      submit()
+      expect(onOpenEntry).not.toHaveBeenCalled()
+      fileListMock.current = readyListing
+      renderEntry({ onOpenEntry })
+    }
+
+    expect(container.querySelector('[role="option"]')?.textContent).toContain('Search Google')
+    expect(container.querySelector('[aria-selected="true"]')?.textContent).toContain(
+      'Search Google'
+    )
+    submit()
+    expect(onOpenEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classification: { kind: 'search', engine: 'google', query: 'asciinema' }
+      })
+    )
+  })
+
+  it.each(['a', 'ab', 'asciinema'])('waits for an exact filename before arming %s', (query) => {
+    fileListMock.current = { files: [], loading: true, loadError: null }
+    const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+    renderEntry({ onOpenEntry })
+    setQuery(query)
+
+    expect(container.querySelector('[aria-selected="true"]')).toBeNull()
+    submit()
+    expect(onOpenEntry).not.toHaveBeenCalled()
+
+    fileListMock.current = { files: [`docs/${query}`], loading: false, loadError: null }
+    renderEntry({ onOpenEntry })
+    expect(container.querySelector('[aria-selected="true"]')?.textContent).toContain('Open file')
+    submit()
+    expect(onOpenEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classification: {
+          kind: 'existing-file',
+          matchKind: 'exact-basename',
+          relativePath: `docs/${query}`
+        }
+      })
+    )
+  })
+
   it('tracks the configured provider and submits its exact classification', () => {
     const onOpenEntry = vi.fn().mockResolvedValue(undefined)
     renderEntry({ onOpenEntry })

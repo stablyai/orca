@@ -8,6 +8,7 @@ import {
   deleteUntouchedUntitledFile,
   shouldDeleteUntouchedUntitledFile
 } from '../tabs/untitled-file-cleanup'
+import { unifiedTabsKeepWorktreeSelected } from './unified-tabs-keep-worktree-selected'
 
 export function createCloseFileAction(
   set: EditorSet,
@@ -26,7 +27,6 @@ export function createCloseFileAction(
 
       set((s) => {
         const closedFile = s.openFiles.find((f) => f.id === fileId)
-        const idx = s.openFiles.findIndex((f) => f.id === fileId)
         const newFiles = s.openFiles.filter((f) => f.id !== fileId)
         const newEditorDrafts = { ...s.editorDrafts }
         delete newEditorDrafts[fileId]
@@ -59,24 +59,20 @@ export function createCloseFileAction(
         const newActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
 
         if (s.activeFileId === fileId) {
-          // Find next file within the same worktree
-          const worktreeId = closedFile?.worktreeId
+          // Why: a stale activeFileId (e.g. an orphan editor tab promoted by closeUnifiedTab) is not in openFiles; scope the fallback to the active worktree.
+          const worktreeId = closedFile?.worktreeId ?? s.activeWorktreeId
           const worktreeFiles = worktreeId
             ? newFiles.filter((f) => f.worktreeId === worktreeId)
-            : newFiles
+            : []
           if (worktreeFiles.length === 0) {
             newActiveId = null
           } else {
-            // Pick adjacent file from same worktree
-            const closedWorktreeIdx = worktreeId
-              ? s.openFiles
-                  .filter((f) => f.worktreeId === worktreeId)
-                  .findIndex((f) => f.id === fileId)
-              : idx
+            // Pick adjacent file from same worktree; -1 (closed file not open) clamps to the first.
+            const closedWorktreeIdx = (
+              worktreeId ? s.openFiles.filter((f) => f.worktreeId === worktreeId) : s.openFiles
+            ).findIndex((f) => f.id === fileId)
             newActiveId =
-              closedWorktreeIdx >= worktreeFiles.length
-                ? worktreeFiles.at(-1)!.id
-                : worktreeFiles[closedWorktreeIdx].id
+              worktreeFiles[Math.min(Math.max(closedWorktreeIdx, 0), worktreeFiles.length - 1)].id
           }
           if (worktreeId) {
             newActiveFileIdByWorktree[worktreeId] = newActiveId
@@ -111,11 +107,19 @@ export function createCloseFileAction(
           newActiveTabTypeByWorktree[activeWorktreeId] =
             browserTabsForWorktree.length > 0 ? 'browser' : 'terminal'
         }
+        // Structured chats have no legacy terminal row to keep their workspace selected.
+        const hasRemainingUnifiedTabs =
+          activeWorktreeId !== null &&
+          unifiedTabsKeepWorktreeSelected(
+            s.unifiedTabsByWorktree?.[activeWorktreeId],
+            new Set([fileId])
+          )
         const shouldDeactivateWorktree =
           activeWorktreeId !== null &&
           remainingForWorktree.length === 0 &&
           browserTabsForWorktree.length === 0 &&
-          terminalTabsForWorktree.length === 0
+          terminalTabsForWorktree.length === 0 &&
+          !hasRemainingUnifiedTabs
 
         // Why: prune the closed id from tabBarOrderByWorktree so stale ids don't shift positions on the next reconcile.
         const worktreeId = closedFile?.worktreeId ?? activeWorktreeId

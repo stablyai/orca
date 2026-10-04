@@ -5,8 +5,8 @@ import { join } from 'node:path'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 
-const steps = parse(readFileSync('.github/actions/install-node-dependencies/action.yml', 'utf8'))
-  .runs.steps
+const steps = parse(readFileSync('.github/actions/prepare-native-runtime/action.yml', 'utf8')).runs
+  .steps
 const toolchain = steps.find((step) => step.name === 'Use external node-gyp')
 
 describe('CI native toolchain preparation', () => {
@@ -17,7 +17,7 @@ describe('CI native toolchain preparation', () => {
       expect(toolchain.env.NATIVE_CACHE_HIT).toContain(`steps.${id}.outputs.cache-hit`)
     }
     expect(index).toBeLessThan(steps.findIndex((step) => step.name === 'Prepare native runtime'))
-    expect(toolchain.if).toBe("runner.os == 'Linux' && inputs.native-runtime != 'none'")
+    expect(toolchain.if).toBe("runner.os == 'Linux' && inputs.native-runtime == 'node'")
   })
 
   // The action's toolchain workaround only runs in Linux Bash.
@@ -25,9 +25,7 @@ describe('CI native toolchain preparation', () => {
     ['node', 'true', '0', false],
     ['node', 'true', '1', true],
     ['node', 'false', '0', true],
-    ['node', '', '0', true],
-    ['electron', 'true', '0', true],
-    ['electron', 'false', '0', true]
+    ['node', '', '0', true]
   ])('runtime=%s cache=%s probe=%s installs=%s', (runtime, hit, probeStatus, installs) => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-ci-native-toolchain-'))
     const log = join(directory, 'commands')
@@ -65,5 +63,14 @@ describe('CI native toolchain preparation', () => {
     } finally {
       rmSync(directory, { recursive: true, force: true })
     }
+  })
+
+  it('prepares Electron native modules through the existing rebuild path without the global toolchain', () => {
+    const preparation = steps.find((step) => step.name === 'Prepare native runtime')
+    expect(preparation.if).toBe("inputs.native-runtime != 'none'")
+    expect(preparation.env.NATIVE_RUNTIME).toBe('${{ inputs.native-runtime }}')
+    expect(preparation.run).toBe(
+      'node config/scripts/ensure-native-runtime.mjs --runtime="$NATIVE_RUNTIME"'
+    )
   })
 })

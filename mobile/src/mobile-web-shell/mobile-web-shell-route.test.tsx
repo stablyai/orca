@@ -150,6 +150,9 @@ describe('the hybrid shell route', () => {
     const tree = rendered.tree
     expect(tree === null ? [] : byName(tree, 'Redirect')).toEqual([])
     expect(dependencies.mounted).toEqual([])
+    // The neutral state itself, rendered for real here: `shell-switch-null-flag.test.tsx` mocks it
+    // to count mounts across all nine switches, so this is where its shape stays pinned.
+    expect(tree === null ? [] : byName(tree, 'ActivityIndicator')).toHaveLength(1)
     await act(async () => {})
   })
 })

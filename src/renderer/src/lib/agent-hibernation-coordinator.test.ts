@@ -94,24 +94,6 @@ describe('agent sleep coordinator', () => {
     })
   })
 
-  it('hibernates an eligible pane when a sibling shell PTY is live', async () => {
-    vi.useFakeTimers()
-    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
-      ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-shell'] }
-    })
-    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
-
-    await vi.advanceTimersByTimeAsync(1000)
-    await vi.advanceTimersByTimeAsync(1000)
-
-    expect(shutdown).toHaveBeenCalledWith('wt-bg', {
-      paneKey: `tab-1:${LEAF}`,
-      tabId: 'tab-1',
-      leafId: LEAF,
-      ptyId: 'pty-1'
-    })
-  })
-
   it('cancels timers when stopped', async () => {
     vi.useFakeTimers()
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))

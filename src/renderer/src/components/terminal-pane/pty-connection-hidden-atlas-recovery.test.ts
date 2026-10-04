@@ -134,15 +134,28 @@ function expectNoGlobalAtlasRecovery(): void {
   expect(resetAndRefreshAllTerminalWebglAtlases).not.toHaveBeenCalled()
 }
 
+// Why: connectPanePty takes the real pane/manager/deps types and every test in this file
+// passes structural fakes. Funnelling the widening through one helper keeps the casts in
+// a single reviewable place instead of three per test.
+function connectFakePane(
+  connect: (pane: never, manager: never, deps: never) => { dispose: () => void },
+  pane: unknown,
+  manager: unknown,
+  deps: Parameters<typeof createDeps>[0]
+): { dispose: () => void } {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the three values are this suite's structural fakes for pane/manager/deps; connectPanePty only reads the fields they define.
+  return connect(pane as never, manager as never, createDeps(deps) as never)
+}
+
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -349,7 +362,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('keeps output after a skipped hidden alternate-screen frame pane-local', async () => {
+  it('keeps a background-origin alternate-screen chunk in the stream, pane-local', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
@@ -388,11 +401,12 @@ describe('connectPanePty', () => {
 
       isVisibleRef.current = false
       ;(pane.terminal.buffer.active as { type: 'normal' | 'alternate' }).type = 'normal'
-      capturedDataCallback.current?.('plain after skipped close\r\n')
+      capturedDataCallback.current?.('plain after close\r\n')
       vi.advanceTimersByTime(50)
       parseCallbacks.shift()?.()
 
-      expect(writes).toEqual(['plain after skipped close\r\n'])
+      // Dropping the close would strand xterm inside synchronized output.
+      expect(writes).toEqual(['\x1b[?2026lplain after close\r\n'])
       expectNoGlobalAtlasRecovery()
     } finally {
       vi.useRealTimers()
@@ -536,6 +550,46 @@ describe('connectPanePty', () => {
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
       '\x1b]11;?\x1b\\startup frame\r\n',
       expect.any(Function)
+    )
+
+    binding.dispose()
+  })
+
+  it('does not answer hidden Jcode startup color queries (composer-text leak guard)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const binding = connectFakePane(connectPanePty, createPane(1), createManager(1), {
+      isVisibleRef: { current: false },
+      startup: {
+        command: 'jcode',
+        launchAgent: 'jcode',
+        telemetry: {
+          agent_kind: 'jcode',
+          launch_source: 'tab_bar_quick_launch',
+          request_kind: 'new'
+        }
+      }
+    })
+    await flushAsyncTicks(6)
+
+    expect(capturedDataCallback.current).not.toBeNull()
+
+    capturedDataCallback.current?.('\x1b]10;?\x1b\\\x1b]11;?\x1b\\startup frame\r\n')
+
+    expect(transport.sendInput).not.toHaveBeenCalledWith(
+      '\x1b]10;rgb:1111/1111/1111\x1b\\',
+      expect.anything()
+    )
+    expect(transport.sendInput).not.toHaveBeenCalledWith(
+      '\x1b]11;rgb:1111/1111/1111\x1b\\',
+      expect.anything()
     )
 
     binding.dispose()

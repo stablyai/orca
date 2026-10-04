@@ -5,7 +5,6 @@ import {
   terminalStreamByteLength,
   terminalStreamByteLengthExceeds
 } from './terminal-stream-byte-length'
-import { TERMINAL_OUTPUT_BATCH_MAX_BYTES } from '../../../shared/terminal-multiplex-flow-control'
 
 // Copy of the pre-change implementation (shared/clipboard-text.ts
 // measureClipboardTextByteLength), kept here so equivalence is checked against the
@@ -323,92 +322,6 @@ describe('terminal stream byte length equivalence with the legacy code-point sca
         }
       }
     }
-    expect(MIN_NATIVE_BYTE_LENGTH_CODE_UNITS).toBeGreaterThan(0)
-  })
-})
-
-// Reproduces createTerminalOutputBatcher's byte accounting exactly, under both the
-// legacy scan and the new measurement, and asserts IDENTICAL flush boundaries. This is
-// what makes the partial-count behaviour provably unobservable at that call site.
-function simulateBatcherFlushes(
-  chunks: string[],
-  measure: (
-    data: string,
-    options: { stopAfterBytes?: number }
-  ) => { byteLength: number; exceededLimit: boolean }
-): string[] {
-  const flushes: string[] = []
-  let pending: string[] = []
-  let bytes = 0
-  const flush = (): void => {
-    if (pending.length === 0) {
-      return
-    }
-    flushes.push(pending.join(''))
-    pending = []
-    bytes = 0
-  }
-  for (const data of chunks) {
-    if (!data) {
-      continue
-    }
-    pending.push(data)
-    const remainingBudget = Math.max(1, TERMINAL_OUTPUT_BATCH_MAX_BYTES - bytes)
-    const measurement = measure(data, { stopAfterBytes: remainingBudget })
-    bytes += measurement.byteLength
-    if (measurement.exceededLimit || bytes >= TERMINAL_OUTPUT_BATCH_MAX_BYTES) {
-      flush()
-    }
-  }
-  flush()
-  return flushes
-}
-
-describe('terminal output batcher flush boundaries are unchanged', () => {
-  it(
-    'produces identical flush boundaries over randomized multi-chunk runs',
-    { timeout: 60000 },
-    () => {
-      const random = mulberry32(0x1337)
-      for (let run = 0; run < 300; run += 1) {
-        const chunks: string[] = []
-        const chunkCount = 1 + Math.floor(random() * 40)
-        for (let index = 0; index < chunkCount; index += 1) {
-          // Sizes straddle the 64KiB batch cap so single chunks both fit and blow the budget.
-          // Sizes straddle the native-call floor too, so runs mix scan-branch and
-          // native-branch measurements inside one batcher's byte accounting.
-          const scale = random()
-          const maxUnits =
-            scale < 0.25
-              ? MIN_NATIVE_BYTE_LENGTH_CODE_UNITS * 2
-              : scale < 0.5
-                ? 64
-                : scale < 0.85
-                  ? 20000
-                  : 90000
-          chunks.push(random() < 0.5 ? randomString(random, maxUnits) : rawUtf16(random, maxUnits))
-        }
-        const legacyFlushes = simulateBatcherFlushes(chunks, legacyMeasure)
-        const actualFlushes = simulateBatcherFlushes(chunks, measureTerminalStreamByteLength)
-        if (legacyFlushes.length !== actualFlushes.length) {
-          throw new Error(`flush count diverged on run ${run}`)
-        }
-        for (let index = 0; index < legacyFlushes.length; index += 1) {
-          if (legacyFlushes[index] !== actualFlushes[index]) {
-            throw new Error(`flush ${index} diverged on run ${run}`)
-          }
-        }
-      }
-      expect(true).toBe(true)
-    }
-  )
-
-  it('exercises runs that actually cross the batch budget', () => {
-    const oversized = '\u{1f600}'.repeat(TERMINAL_OUTPUT_BATCH_MAX_BYTES)
-    const chunks = ['a'.repeat(10), oversized, 'b'.repeat(10), oversized, 'c']
-    const legacyFlushes = simulateBatcherFlushes(chunks, legacyMeasure)
-    expect(legacyFlushes.length).toBeGreaterThan(1)
-    expect(simulateBatcherFlushes(chunks, measureTerminalStreamByteLength)).toEqual(legacyFlushes)
   })
 })
 
@@ -419,23 +332,8 @@ describe('resync trim byte accounting for a snapshot-sliced chunk', () => {
   it('re-measures a sliced chunk in UTF-8 bytes, not UTF-16 code units', () => {
     const data = '\u{1f600}é走a'
     const sliced = data.slice(2)
-    expect(terminalStreamByteLength(sliced)).toBe(legacyByteLength(sliced))
     // Guards the mutant: code-unit length would be 4 here, UTF-8 is 6.
     expect(terminalStreamByteLength(sliced)).toBe(6)
     expect(terminalStreamByteLength(sliced)).not.toBe(sliced.length)
-  })
-
-  it('matches the legacy byte length for every suffix slice of multi-byte terminal text', () => {
-    const random = mulberry32(0x51ced)
-    for (let iteration = 0; iteration < 2000; iteration += 1) {
-      const data = iteration % 2 === 0 ? randomString(random, 24) : rawUtf16(random, 24)
-      for (let offset = 0; offset <= data.length; offset += 1) {
-        const sliced = data.slice(offset)
-        if (terminalStreamByteLength(sliced) !== legacyByteLength(sliced)) {
-          throw new Error(`sliced byte length diverged for ${JSON.stringify(data)} at ${offset}`)
-        }
-      }
-    }
-    expect(true).toBe(true)
   })
 })

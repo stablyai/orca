@@ -9,8 +9,12 @@ import {
   gates,
   readySession,
   run,
-  started
+  started,
+  BUNDLE_REFUSED,
+  LINK_LOST,
+  withoutRecord
 } from './mobile-web-shell-session-test-fixtures'
+import { shellPageFrame } from './shell-page-frame'
 
 describe('the gates decide whether a step is taken at all', () => {
   it('waits while a connection is still being made', () => {
@@ -73,7 +77,7 @@ describe('the offline rule', () => {
   it('opens a cached generation with no compat check when the host is unreachable', () => {
     const start = started({ reachability: 'unreachable', hostCapabilities: [] })
     const step = run(start.session, { type: 'cache-read', generation: CACHED })
-    expect(step.session.state).toEqual({ kind: 'activating' })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
     expect(step.effects).toEqual([
       {
         kind: 'open-generation',
@@ -134,14 +138,17 @@ describe('the connected flow', () => {
 
   it('opens the cached generation without paging when the build ids match', () => {
     const step = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: MANIFEST })
-    expect(step.session.state).toEqual({ kind: 'activating' })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
+    // And it writes the manifest it just matched: the routes are the only thing a same-build read
+    // can have changed, and nothing else on this path touches the disk.
     expect(step.effects).toEqual([
       {
         kind: 'open-generation',
         directory: CACHED.directory,
         buildId: CACHED.buildId,
         totalBytes: CACHED.totalBytes
-      }
+      },
+      { kind: 'persist-manifest', manifest: MANIFEST.wire }
     ])
   })
 
@@ -213,6 +220,25 @@ describe('the connected flow', () => {
     })
   })
 
+  it('walls a listed route whose page is older than this shell, as a desktop to update', () => {
+    for (const manifest of [
+      { ...MANIFEST, pageVersion: 0 },
+      { ...MANIFEST, pageVersion: undefined }
+    ]) {
+      const step = run(afterCacheRead(null).session, { type: 'manifest-read', manifest })
+      expect(step.session.state).toEqual({
+        kind: 'wall',
+        verdict: {
+          kind: 'blocked',
+          reason: 'bundle-incompatible',
+          side: 'desktop',
+          pageVersion: 0,
+          requiredPageVersion: 1
+        }
+      })
+    }
+  })
+
   it('tells the page which routes it may keep, so it hands the rest back', () => {
     const step = run(afterCacheRead(null).session, { type: 'manifest-read', manifest: MANIFEST })
     expect(step.session.pageRoutes).toEqual(['/h/[hostId]'])
@@ -232,7 +258,7 @@ describe('the connected flow', () => {
     })
     expect(progressed.session.state).toMatchObject({ kind: 'fetching', completedAssets: 2 })
     const staged = run(progressed.session, { type: 'download-staged' })
-    expect(staged.session.state).toEqual({ kind: 'activating' })
+    expect(staged.session.state).toEqual({ kind: 'activating', source: 'download' })
     const ready = run(staged.session, {
       type: 'activated',
       generationDirectory: '/cache/gen',
@@ -266,7 +292,7 @@ describe('the connected flow', () => {
   it('fails when the download or the cache write never produced a generation', () => {
     const step = run(afterCacheRead(null).session, {
       type: 'download-failed',
-      failure: 'bundle'
+      cause: BUNDLE_REFUSED
     })
     expect(step.session.state).toEqual({
       kind: 'failed',
@@ -283,9 +309,9 @@ describe('a read the link cut short falls back to what is on disk', () => {
   }
 
   it('opens the cached generation when the socket drops before the reachability change does', () => {
-    const step = run(manifestInFlight().session, { type: 'download-failed', failure: 'transport' })
-    expect(step.session.state).toEqual({ kind: 'activating' })
-    expect(step.effects).toEqual([
+    const step = run(manifestInFlight().session, { type: 'download-failed', cause: LINK_LOST })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
+    expect(withoutRecord(step.effects)).toEqual([
       {
         kind: 'open-generation',
         directory: CACHED.directory,
@@ -307,26 +333,21 @@ describe('a read the link cut short falls back to what is on disk', () => {
   it('still says the workspace could not be downloaded when nothing is on disk', () => {
     const step = run(afterCacheRead(null).session, {
       type: 'download-failed',
-      failure: 'transport'
+      cause: LINK_LOST
     })
     expect(step.session.state).toEqual({
       kind: 'failed',
       reason: 'download-failed',
       retriedOnce: false
     })
-    expect(step.effects).toEqual([])
+    expect(withoutRecord(step.effects)).toEqual([])
   })
 
-  it('fails on a verdict about the bundle even with a generation cached', () => {
-    // A host that refuses the read, or bytes that do not hash, is an answer about the bundle. A
-    // cached generation is no reason to hide it behind a workspace that is merely older.
-    const step = run(manifestInFlight().session, { type: 'download-failed', failure: 'bundle' })
-    expect(step.session.state).toEqual({
-      kind: 'failed',
-      reason: 'download-failed',
-      retriedOnce: false
-    })
-    expect(step.effects).toEqual([])
+  it('leaves no notice on it, because nothing says an update was there to fail', () => {
+    // The link went before the host said what it serves. "Update failed" would be a claim about a
+    // generation this phone never heard of.
+    const step = run(manifestInFlight().session, { type: 'download-failed', cause: LINK_LOST })
+    expect(step.session.updateNotice).toBeNull()
   })
 })
 
@@ -346,7 +367,7 @@ describe('a displayed generation is not restarted by the gates', () => {
     expect(run(wall.session, { type: 'gates-changed', gates: gates() }).effects).toEqual([])
     const failed = run(afterCacheRead(null).session, {
       type: 'download-failed',
-      failure: 'bundle'
+      cause: BUNDLE_REFUSED
     })
     expect(run(failed.session, { type: 'gates-changed', gates: gates() }).effects).toEqual([])
   })
@@ -571,7 +592,7 @@ describe('a result from a superseded flow reports into nothing', () => {
     expect(ready.session.state).toMatchObject({ kind: 'ready' })
     const late = run(ready.session, {
       type: 'download-failed',
-      failure: 'bundle',
+      cause: BUNDLE_REFUSED,
       flow: inFlight.session.flow
     })
     expect(late.session.state).toEqual(ready.session.state)
@@ -765,5 +786,88 @@ describe('the page has to speak for the document that loaded', () => {
       elapsedMs: 9
     })
     expect(reactivated.session.pageReady).toBe(false)
+  })
+})
+
+/**
+ * A commit is not a paint, and `ready` is posted before the page has built anything: the only
+ * thing that says the view is worth showing is the page saying so.
+ */
+describe('the page reporting a frame on screen', () => {
+  it('keeps the frame covered past ready until the report', () => {
+    const spoken = run(readySession().session, { type: 'page-ready' })
+    expect(spoken.session.pagePainted).toBe(false)
+    expect(shellPageFrame(spoken.session)).toBe('unpainted')
+    const painted = run(spoken.session, { type: 'page-painted' })
+    expect(painted.session.pagePainted).toBe(true)
+    expect(shellPageFrame(painted.session)).toBe('painted')
+  })
+
+  it('makes a remounted document report its own frame', () => {
+    const painted = run(readySession().session, { type: 'page-ready' }, { type: 'page-painted' })
+    const remounted = run(painted.session, { type: 'remounted', sessionId: 'session-two' })
+    expect(remounted.session.pagePainted).toBe(false)
+    expect(shellPageFrame(remounted.session)).toBe('unpainted')
+  })
+
+  it('makes a freshly activated generation report its own frame', () => {
+    const painted = run(readySession().session, { type: 'page-ready' }, { type: 'page-painted' })
+    const reactivated = run(painted.session, {
+      type: 'activated',
+      generationDirectory: CACHED.directory,
+      sessionId: 'session-three',
+      buildId: MANIFEST.buildId,
+      totalBytes: MANIFEST.totalBytes,
+      elapsedMs: 9
+    })
+    expect(reactivated.session.pagePainted).toBe(false)
+  })
+
+  it('makes the document that replaced a painted one inside this mount report its own frame', () => {
+    const painted = run(readySession().session, { type: 'page-ready' }, { type: 'page-painted' })
+    expect(shellPageFrame(painted.session)).toBe('painted')
+    // No new session and no new generation: the view reloaded under the one already on screen.
+    const restarted = run(painted.session, { type: 'document-started' })
+    expect(restarted.session.pagePainted).toBe(false)
+    const reasked = run(restarted.session, { type: 'page-ready' })
+    expect(shellPageFrame(reasked.session)).toBe('unpainted')
+    expect(shellPageFrame(run(reasked.session, { type: 'page-painted' }).session)).toBe('painted')
+  })
+
+  it('retires the wait the document it replaced armed', () => {
+    const loaded = run(readySession().session, { type: 'document-loaded' })
+    expect(loaded.effects).toEqual([{ kind: 'await-page-ready' }])
+    const armed = loaded.session.flow
+    const spoken = run(loaded.session, { type: 'page-ready' })
+    const restarted = run(spoken.session, { type: 'document-started' })
+    // The replacement is still loading and has said nothing, which is exactly what the retired
+    // document's deadline reads as a document that never loaded.
+    const expired = run(restarted.session, { type: 'page-ready-deadline', flow: armed })
+    expect(expired.session.state.kind).toBe('ready')
+    // And the replacement arms a wait of its own, so a document that really never speaks still
+    // takes the session down.
+    const reloaded = run(restarted.session, { type: 'document-loaded' })
+    expect(reloaded.effects).toEqual([{ kind: 'await-page-ready' }])
+  })
+
+  it('keeps the frame of a document that repeats its own handshake', () => {
+    const painted = run(
+      readySession().session,
+      { type: 'page-ready' },
+      { type: 'page-painted' },
+      { type: 'page-ready' }
+    )
+    // The document never restarted, so its frame is still the one on screen.
+    expect(painted.session.pagePainted).toBe(true)
+    expect(shellPageFrame(painted.session)).toBe('painted')
+  })
+
+  it('records nothing from a page whose generation is no longer on screen', () => {
+    const failed = run(readySession().session, {
+      type: 'shell-failed',
+      reason: 'document-load-failed'
+    })
+    expect(failed.session.state.kind).not.toBe('ready')
+    expect(run(failed.session, { type: 'page-painted' }).session.pagePainted).toBe(false)
   })
 })

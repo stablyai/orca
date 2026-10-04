@@ -97,7 +97,7 @@ describe('relay worktree Git capabilities', () => {
           )
         }
         return Promise.resolve({
-          stdout: '/repo\n/git-store/project.git\n',
+          stdout: '/repo\n/git-store/project.git\n/git-store/project.git\n',
           stderr: ''
         })
       })
@@ -107,9 +107,9 @@ describe('relay worktree Git capabilities', () => {
 
     const revParseCalls = gitSpy.mock.calls.filter(([args]) => args[0] === 'rev-parse')
     expect(revParseCalls.map(([args]) => args)).toEqual([
-      ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
-      ['rev-parse', '--show-toplevel', '--git-common-dir'],
-      ['rev-parse', '--show-toplevel', '--git-common-dir']
+      ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir', '--git-dir'],
+      ['rev-parse', '--show-toplevel', '--git-common-dir', '--git-dir'],
+      ['rev-parse', '--show-toplevel', '--git-common-dir', '--git-dir']
     ])
   })
 })

@@ -47,7 +47,9 @@ vi.mock('@/store', async () => {
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
-    state.testRuntimeOwner ?? null
+    state.testRuntimeOwner ?? null,
+  getExecutionHostIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
+    state.testRuntimeOwner ? `runtime:${state.testRuntimeOwner}` : 'local'
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
@@ -63,7 +65,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 import {
   getStructuredAgentSessionTabs,
-  StructuredAgentSessionStatusBridge
+  StructuredAgentSessionStatusBridge,
+  useStructuredAgentSessionHostExecutionPhase
 } from './StructuredAgentSessionStatusBridge'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 
@@ -320,6 +323,132 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(statuses()).toEqual([expect.objectContaining({ subagents: undefined })])
   })
 
+  // The same fold the hook lane applies to a subagent roster: an idle lead is not idle
+  // while its children run, and a backgrounded shell reads as monitoring.
+  it('keeps an idle session working while a subagent runs, and monitoring while a shell runs', async () => {
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    act(() =>
+      feed().emit({
+        type: 'snapshot',
+        sessions: [
+          summary({
+            status: 'idle',
+            updatedAt: 1,
+            backgroundTasks: [
+              { id: 'child-1', kind: 'agent', state: 'working' },
+              { id: 'shell-1', kind: 'command', state: 'working' }
+            ]
+          })
+        ]
+      })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({ state: 'working', workingMode: undefined, stateStartedAt: 1 })
+    ])
+
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({
+          status: 'idle',
+          updatedAt: 2,
+          backgroundTasks: [
+            { id: 'child-1', kind: 'agent', state: 'done' },
+            { id: 'shell-1', kind: 'command', state: 'working' }
+          ]
+        })
+      })
+    )
+    // Monitoring is its own displayed state, so its clock starts when the label does.
+    expect(statuses()).toEqual([
+      expect.objectContaining({ state: 'working', workingMode: 'monitoring', stateStartedAt: 2 })
+    ])
+
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({
+          status: 'idle',
+          updatedAt: 3,
+          backgroundTasks: [
+            { id: 'child-1', kind: 'agent', state: 'done' },
+            { id: 'shell-1', kind: 'command', state: 'done' }
+          ]
+        })
+      })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({ state: 'done', workingMode: undefined, stateStartedAt: 3 })
+    ])
+  })
+
+  // A watch loop's age is not how long the agent has been working: the clock restarts when the
+  // user's prompt turns a monitoring row into a real turn.
+  it('restarts the state clock when monitoring becomes a real turn', async () => {
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    act(() =>
+      feed().emit({
+        type: 'snapshot',
+        sessions: [
+          summary({
+            status: 'idle',
+            updatedAt: 1,
+            backgroundTasks: [{ id: 'shell-1', kind: 'command', state: 'working' }]
+          })
+        ]
+      })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({ state: 'working', workingMode: 'monitoring', stateStartedAt: 1 })
+    ])
+
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({
+          status: 'working',
+          updatedAt: 2_700_001,
+          backgroundTasks: [{ id: 'shell-1', kind: 'command', state: 'working' }]
+        })
+      })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({
+        state: 'working',
+        workingMode: undefined,
+        stateStartedAt: 2_700_001
+      })
+    ])
+  })
+
+  // Mirrors the host ingest: the journal clock cannot date child work, so a row held open by a
+  // live roster alone must not age into staleness while the work is still running.
+  it('dates a child-work row by when this client saw it, not by the journal clock', async () => {
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+    const before = Date.now()
+
+    act(() =>
+      feed().emit({
+        type: 'snapshot',
+        sessions: [
+          summary({
+            status: 'idle',
+            updatedAt: 1,
+            backgroundTasks: [{ id: 'shell-1', kind: 'command', state: 'working' }]
+          })
+        ]
+      })
+    )
+    const [row] = statuses()
+    expect(row).toMatchObject({ state: 'working', workingMode: 'monitoring' })
+    expect(row?.evidenceObservedAt ?? 0).toBeGreaterThanOrEqual(before)
+  })
+
   it('requires fresh parent evidence as well as a reconfirmed feed after reconnect', async () => {
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
@@ -558,6 +687,20 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(feed().target).toEqual({ kind: 'environment', environmentId: 'env-1' })
   })
 
+  // Two hosts can publish the same workspace id; the tab records which one holds this chat.
+  it("reads a chat's status from the host recorded on its tab, not its workspace", async () => {
+    mocks.store?.setState({
+      testRuntimeOwner: null,
+      unifiedTabsByWorktree: {
+        'wt-1': [{ ...structuredTab, executionHostId: 'runtime:server-1' }]
+      }
+    })
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    expect(feed().target).toEqual({ kind: 'environment', environmentId: 'server-1' })
+  })
+
   it('does not project an unknown provider as Codex', async () => {
     mocks.store?.setState({
       unifiedTabsByWorktree: {
@@ -569,5 +712,99 @@ describe('StructuredAgentSessionStatusBridge', () => {
 
     expect(mocks.subscribeStatus).not.toHaveBeenCalled()
     expect(mocks.setAgentStatus).not.toHaveBeenCalled()
+  })
+
+  it('re-renders a startup reader only when its phase changes', async () => {
+    const phases: ReturnType<typeof useStructuredAgentSessionHostExecutionPhase>[] = []
+    function PhaseProbe(): null {
+      phases.push(useStructuredAgentSessionHostExecutionPhase('session-1', { kind: 'local' }))
+      return null
+    }
+    render(<PhaseProbe />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    act(() => feed().emit({ type: 'status', session: summary({ hostExecutionPhase: 'starting' }) }))
+    const rendersWhileStarting = phases.length
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({ hostExecutionPhase: 'starting', latestPrompt: 'next', updatedAt: 2 })
+      })
+    )
+    expect(phases).toHaveLength(rendersWhileStarting)
+    // Older hosts (v1.4.218 on) also send which provider child is starting; nothing reads it.
+    const olderHostChild = { hostExecutionChild: { generation: 'child-1', fence: 2 } }
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({ hostExecutionPhase: 'starting', ...olderHostChild })
+      })
+    )
+    expect(phases).toHaveLength(rendersWhileStarting)
+
+    act(() => feed().emit({ type: 'status', session: summary({ hostExecutionPhase: 'ready' }) }))
+    expect(phases.at(-1)).toBe('ready')
+    act(() => feed().emit({ type: 'status', session: summary({ hostExecutionPhase: 'starting' }) }))
+    expect(phases.at(-1)).toBe('starting')
+  })
+})
+
+describe('the main agent fact the bridge writes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStructuredAgentSessionStatusFeedsForTests()
+    mocks.subscribeStatus.mockResolvedValue({ unsubscribe: mocks.unsubscribe })
+    mocks.supportsCapability.mockResolvedValue(true)
+    mocks.store?.setState({
+      agentStatusByPaneKey: {},
+      testRuntimeOwner: null,
+      unifiedTabsByWorktree: { 'wt-1': [structuredTab] }
+    })
+  })
+
+  afterEach(() => {
+    cleanup()
+    resetStructuredAgentSessionStatusFeedsForTests()
+  })
+
+  it('stamps the main agent beside the folded state, with its verdict and its own clock', async () => {
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    act(() =>
+      feed().emit({
+        type: 'snapshot',
+        sessions: [
+          summary({
+            status: 'idle',
+            updatedAt: 1,
+            turnOutcome: 'cancellation',
+            backgroundTasks: [{ id: 'shell-1', kind: 'command', state: 'working' }]
+          })
+        ]
+      })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({
+        state: 'working',
+        workingMode: 'monitoring',
+        mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 1 }
+      })
+    ])
+
+    // The shell drains: the row settles, the main agent was done all along, so its clock holds.
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({ status: 'idle', updatedAt: 2, turnOutcome: 'cancellation' })
+      })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({
+        state: 'done',
+        stateStartedAt: 2,
+        mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 1 }
+      })
+    ])
   })
 })

@@ -89,11 +89,6 @@ describe('SshConnectionStore', () => {
     sshConfigHostsToTargetsMock.mockReset()
   })
 
-  it('listTargets delegates to store', () => {
-    sshStore.listTargets()
-    expect(mockStore.getSshTargets).toHaveBeenCalled()
-  })
-
   it('lists picker suppression aliases without consulting re-adoption tombstones', () => {
     mockStore.addDeletedSshConfigAlias('config-removed')
     mockStore.addRemovedSshTargetTombstone({
@@ -166,24 +161,42 @@ describe('SshConnectionStore', () => {
     expect(sshStore.listTargets()).toEqual([userTarget])
   })
 
-  it('updateTarget delegates to store', () => {
-    const original: SshTarget = {
-      id: 'ssh-1',
-      label: 'Old Name',
-      host: 'example.com',
-      port: 22,
-      username: 'user'
+  it('clears the runtime ladder decision when the runtime choice or endpoint changes', () => {
+    const resolution = {
+      rung: 'legacy' as const,
+      pinnedRefusal: 'missing_lib',
+      glibc: '2.31',
+      runtimeSha256: 'a'.repeat(64),
+      orcaMajor: 1
     }
-    mockStore.addSshTarget(original)
+    mockStore.addSshTarget({
+      id: 'ssh-ladder',
+      label: 'Ladder',
+      host: 'ladder.example.com',
+      port: 22,
+      username: 'user',
+      remoteRuntime: 'pinned-node',
+      remoteRuntimeResolution: resolution
+    })
 
-    const result = sshStore.updateTarget('ssh-1', { label: 'New Name' })
-    expect(result).toBeTruthy()
-    expect(mockStore.updateSshTarget).toHaveBeenCalledWith('ssh-1', { label: 'New Name' })
-  })
+    sshStore.updateTarget('ssh-ladder', { label: 'Renamed', remoteRuntime: 'pinned-node' })
+    expect(mockStore.updateSshTarget).toHaveBeenLastCalledWith('ssh-ladder', {
+      label: 'Renamed',
+      remoteRuntime: 'pinned-node'
+    })
 
-  it('removeTarget delegates to store', () => {
-    sshStore.removeTarget('ssh-1')
-    expect(mockStore.removeSshTarget).toHaveBeenCalledWith('ssh-1')
+    sshStore.updateTarget('ssh-ladder', { remoteRuntime: 'legacy' })
+    expect(mockStore.updateSshTarget).toHaveBeenLastCalledWith('ssh-ladder', {
+      remoteRuntime: 'legacy',
+      remoteRuntimeResolution: undefined
+    })
+
+    sshStore.updateTarget('ssh-ladder', { remoteRuntimeResolution: resolution })
+    sshStore.updateTarget('ssh-ladder', { host: 'other.example.com' })
+    expect(mockStore.updateSshTarget).toHaveBeenLastCalledWith('ssh-ladder', {
+      host: 'other.example.com',
+      remoteRuntimeResolution: undefined
+    })
   })
 
   describe('importFromSshConfig', () => {

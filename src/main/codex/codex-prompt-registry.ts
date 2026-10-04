@@ -31,6 +31,9 @@ export type CodexPendingPrompt = {
   answers: Map<string, string>
 }
 
+export type CodexAbandonedCommand = { threadId: string; itemId: string }
+const NO_ABANDONED_COMMANDS: readonly CodexAbandonedCommand[] = []
+
 export type CodexPromptClaim = {
   readonly itemId: string
   readonly prompt: CodexPendingPrompt
@@ -54,6 +57,7 @@ export class CodexPromptRegistry {
   private readonly journalItemIds = new Map<string, string>()
   private readonly boundPrompts = new Map<string, CodexPendingPrompt>()
   private readonly claims = new Map<CodexPendingPrompt, CodexPromptClaim>()
+  private abandonedCommands: CodexAbandonedCommand[] = []
 
   get sizes(): { prompts: number; journalBindings: number } {
     return { prompts: this.byAddress.size, journalBindings: this.journalItemIds.size }
@@ -187,23 +191,6 @@ export class CodexPromptRegistry {
     return this.claims.get(claim.prompt) === claim && this.find(claim.itemId) === claim.prompt
   }
 
-  ownsBoundClaim(
-    claim: CodexPromptClaim,
-    journalItemId: string,
-    threadId: string,
-    turnId: string
-  ): boolean {
-    return (
-      claim.itemId === journalItemId &&
-      this.claims.get(claim.prompt) === claim &&
-      this.journalItemIds.get(journalItemId) ===
-        this.address(claim.prompt.threadId, claim.prompt.promptKey) &&
-      this.boundPrompts.get(journalItemId) === claim.prompt &&
-      claim.prompt.threadId === threadId &&
-      codexPromptMatchesTurn(claim.prompt, turnId)
-    )
-  }
-
   releaseClaim(claim: CodexPromptClaim): void {
     if (this.claims.get(claim.prompt) === claim) {
       this.claims.delete(claim.prompt)
@@ -232,7 +219,25 @@ export class CodexPromptRegistry {
     )
     for (const prompt of prompts) {
       this.forget(prompt)
+      // Codex abandons a turn's unanswered prompts: a command still awaiting approval never ran.
+      // An `approvalId` asks for a subcommand, not the item's own command.
+      if (
+        prompt.method === CODEX_COMMAND_APPROVAL_METHOD &&
+        prompt.promptKey === prompt.codexItemId
+      ) {
+        this.abandonedCommands.push({ threadId: prompt.threadId, itemId: prompt.codexItemId })
+      }
     }
+  }
+
+  /** The commands whose approval a turn ended without, since the last call. */
+  takeAbandonedCommands(): readonly CodexAbandonedCommand[] {
+    if (this.abandonedCommands.length === 0) {
+      return NO_ABANDONED_COMMANDS
+    }
+    const taken = this.abandonedCommands
+    this.abandonedCommands = []
+    return taken
   }
 
   clear(): void {
@@ -240,6 +245,7 @@ export class CodexPromptRegistry {
     this.journalItemIds.clear()
     this.boundPrompts.clear()
     this.claims.clear()
+    this.abandonedCommands = []
   }
 
   private address(threadId: string, promptKey: string): string {

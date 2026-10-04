@@ -8,7 +8,7 @@ import { SourceControlAgentActionDialog } from '../SourceControlAgentActionDialo
 import { ChecksPanelUpdatedAtMetadata } from '../checks-panel-updated-at-metadata'
 import { getChecksPanelRefreshErrorBannerLine } from '../github-refresh-error-copy'
 import { resolveChecksPanelHostedReviewModifierDestination } from '../checks-panel-hosted-review-click-routing'
-import { readSourceControlLaunchRecipeAgentId } from '@/lib/source-control-launch-agent-selection'
+import { readSourceControlLaunchRecipeAgentId } from '../../../../../shared/source-control-launch-agent-selection'
 import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control-ai'
 import { clearPendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
 import { getBrokenChecks } from '../../pr-checks-fix-prompt'

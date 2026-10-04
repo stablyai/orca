@@ -20,3 +20,23 @@ import { readBridgeExternalLinkUrl } from './bridge/bridge-caps'
 export function cancelledShellNavigationTarget(url: unknown): string | null {
   return typeof url === 'string' ? readBridgeExternalLinkUrl(url) : null
 }
+
+/**
+ * The grant that names this behaviour, declared beside the rule that acts on it.
+ *
+ * One camelCase token rather than a dotted name, for `screencastBinary`'s reason: the manifest's
+ * grant grammar admits a bare name or a `native.<domain>.<action>` verb, and this is not a verb.
+ * Nothing is requested and nothing is answered -- the shell cancels a navigation the browser hands
+ * it and opens the URL, so there is no reply a page could await. It is not a notify's name either:
+ * the page posts nothing to make this happen.
+ *
+ * It exists as a grant because it is the only thing that can tell a page whether a tap inside the
+ * sealed HTML-preview frame escapes at all. A shell built before C7.10 A cancels the navigation and
+ * drops it in silence, so a page that rendered the artifact's links as links would be offering a
+ * tap that does nothing -- which is what `MobileHtmlPreview.web.tsx` reads this to avoid.
+ *
+ * A constant and not a platform read: both engines dispatch the event
+ * (`ios/MobileWebShellView.swift`, `android/.../MobileWebShellView.kt`), so an app build either
+ * carries the behaviour on both or on neither (ruling 37.1).
+ */
+export const BRIDGE_EXTERNAL_NAVIGATION_GRANT = 'externalNavigation'

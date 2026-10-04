@@ -183,6 +183,31 @@ describe('runQuickCommandInNewTab', () => {
     })
   })
 
+  it('uses the same ready-state path for plain OpenCode installs', () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'tab-opencode' }
+    })
+    mockState.unifiedTabsByWorktree['repo::worktree'] = [
+      { entityId: 'tab-opencode', contentType: 'terminal', groupId: 'group-1' }
+    ]
+
+    runQuickCommandInNewTab({
+      command: {
+        id: 'agent-opencode',
+        label: 'OpenCode review',
+        action: 'agent-prompt',
+        agent: 'opencode',
+        prompt: 'Review this diff'
+      },
+      worktreeId: 'repo::worktree',
+      groupId: 'group-1'
+    })
+
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'opencode', promptDelivery: 'submit-after-ready' })
+    )
+  })
+
   it('falls back to the active group when context-menu group resolution is missing', () => {
     mockState.activeGroupIdByWorktree['repo::worktree'] = 'active-group'
     mocks.launchAgentInNewTab.mockReturnValue({

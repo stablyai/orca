@@ -7,7 +7,8 @@ import {
   shellScreenRouteKey
 } from '../../../../src/mobile-web-shell/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
-import { useMobileWebShellEnabled } from '../../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
+import { ShellSwitchPendingScreen } from '../../../../src/mobile-web-shell/ShellSwitchPendingScreen'
+import { useShellSwitchDecision } from '../../../../src/mobile-web-shell/shell-switch-decision'
 
 /**
  * The session screen — terminal and chat — from the desktop's bundle or from this app.
@@ -40,7 +41,6 @@ export default function MobileSessionScreen() {
   }>()
   const hostId = firstParam(params.hostId)
   const worktreeId = firstParam(params.worktreeId)
-  const enabled = useMobileWebShellEnabled()
   const router = useRouter()
   const native = <MobileSessionRouteScreen />
   const paneKey = firstParam(params.paneKey) ?? ''
@@ -77,7 +77,12 @@ export default function MobileSessionScreen() {
         })
       : null
 
-  if (enabled !== true || !hostId || route === null) {
+  const decision = useShellSwitchDecision(route)
+
+  if (decision.kind === 'pending') {
+    return <ShellSwitchPendingScreen />
+  }
+  if (decision.kind === 'native') {
     return native
   }
   // Keyed on the route minus `paneKey`: a host captures the grants its session was opened with, so
@@ -90,9 +95,9 @@ export default function MobileSessionScreen() {
   const { paneKey: _paneKey, ...identity } = routeParams
   return (
     <MobileWebShellScreen
-      key={shellScreenRouteKey({ pathname: route.pathname, params: identity })}
+      key={shellScreenRouteKey({ pathname: decision.route.pathname, params: identity })}
       hostId={hostId}
-      route={route}
+      route={decision.route}
       fallback={native}
       onRouteParamClear={erasePaneKey}
     />

@@ -35,7 +35,7 @@ async function assertCreatedFileRendered(
         throw new Error(`Paired web editor did not open ${filePath}`)
       }
       state.setActiveFile(file.id)
-      state.setActiveTabType('editor')
+      state.setActiveTabType('editor', window.__store?.getState().activeWorktreeId ?? null)
       return file.id
     },
     { fileName, filePath, worktreeId }
@@ -47,7 +47,7 @@ async function assertCreatedFileRendered(
   await page.evaluate((id) => {
     const state = window.__store?.getState()
     state?.closeFile(id)
-    state?.setActiveTabType('terminal')
+    state?.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
   }, fileId)
   await expect(page.locator('.editor-header-path').filter({ hasText: fileName })).toHaveCount(0)
 }

@@ -230,6 +230,15 @@ describe('isNativeFileDropPayload', () => {
         target: 'rejected'
       })
     ).toBe(true)
+    expect(
+      isNativeFileDropPayload({
+        byteLength: 0,
+        pathCount: 1,
+        reason: 'temp-copy-failed',
+        target: 'rejected',
+        commonReason: 'permission-denied'
+      })
+    ).toBe(true)
 
     expect(
       isNativeFileDropPayload({
@@ -283,6 +292,18 @@ describe('isNativeFileDropPayload', () => {
         target: 'rejected'
       })
     ).toBe(false)
+    // commonReason is rendered in a toast, so only known tokens may cross.
+    for (const commonReason of [{ text: 'x' }, 'Raw English failure text']) {
+      expect(
+        isNativeFileDropPayload({
+          byteLength: 0,
+          pathCount: 1,
+          reason: 'temp-copy-failed',
+          target: 'rejected',
+          commonReason
+        })
+      ).toBe(false)
+    }
   })
 
   it('enforces native file-drop count and byte limits at their boundaries', () => {

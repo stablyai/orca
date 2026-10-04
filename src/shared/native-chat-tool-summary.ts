@@ -111,12 +111,6 @@ function formatNormalizedToolInput(input: unknown): string {
   }
 }
 
-/** Whether the expanded detail would show structured JSON rather than repeating
- *  the row label — i.e. whether expanding the row is worth offering. */
-export function isStructuredToolInput(input: unknown): boolean {
-  return isStructuredNormalizedToolInput(normalizeToolInput(input))
-}
-
 function isStructuredNormalizedToolInput(input: unknown): boolean {
   if (input === null || typeof input !== 'object') {
     return false

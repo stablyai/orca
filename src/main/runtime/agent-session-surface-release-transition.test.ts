@@ -18,5 +18,7 @@ describe('agent session surface release transition', () => {
     })
 
     expect(released.lease.runtimeFence).toBe(9)
+    // The proof names the owner it released, not the fence the floor moved to.
+    expect(released.lease.deathEvidence).toMatchObject({ kind: 'exit-observed', ownerFence: 7 })
   })
 })

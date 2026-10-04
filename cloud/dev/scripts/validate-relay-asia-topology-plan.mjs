@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-const REGION = 'asia-east2'
+// The root region's cells carry no region label or line, and a pool line only off its default.
+const PRIMARY_REGION = 'us-central1'
+const PRIMARY_DATABASE_POOL_MAX = '10'
 // Mirrors local.relay_gce_topology in infra/terraform/relay-gce-cells.tf, which Terraform
 // cannot export to JS; the census test below the validator equates the two by reading the
 // .tf source, so this pair and the topology `check` assert cannot drift apart.
@@ -14,20 +16,41 @@ const CELL_SHAPES = {
   production: {
     domain: 'relay.onorca.dev',
     project: 'onorca-cloud',
+    databasePoolMax: { 'asia-east2': '16', 'us-central1': '10' },
     cells: {
       'production-gce-c27': 'asia-east2-a',
       'production-gce-c28': 'asia-east2-b',
-      'production-gce-c29': 'asia-east2-c'
-    }
+      'production-gce-c29': 'asia-east2-c',
+      'production-gce-c30': 'asia-east2-a',
+      'production-gce-c31': 'asia-east2-b',
+      'production-gce-c32': 'us-central1-a',
+      'production-gce-c33': 'us-central1-b'
+    },
+    waves: [
+      ['production-gce-c27', 'production-gce-c28', 'production-gce-c29'],
+      ['production-gce-c30'],
+      ['production-gce-c31'],
+      // Declared together, so they plan together: a lone C32 plan would hit C33's missing template.
+      ['production-gce-c32', 'production-gce-c33']
+    ]
   },
   staging: {
     domain: 'relay-staging.onorca.dev',
     project: 'onorca-cloud-staging',
-    cells: { 'staging-gce-c4': 'asia-east2-a' }
+    databasePoolMax: { 'asia-east2': '10' },
+    cells: { 'staging-gce-c4': 'asia-east2-a' },
+    waves: [['staging-gce-c4']]
   }
 }
 
-function parseArguments(argv) {
+// Every reviewed wave is single-region, so its first cell's zone names the region.
+function waveRegion(environment, cells) {
+  const zone = CELL_SHAPES[environment]?.cells[cells[0]]
+  if (!zone) throw new Error('--cell-ids must be the exact reviewed Asia topology set')
+  return zone.slice(0, zone.lastIndexOf('-'))
+}
+
+export function parseRelayAsiaTopologyPlanArguments(argv) {
   const values = {}
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index]
@@ -40,11 +63,15 @@ function parseArguments(argv) {
   }
   if (!(values.environment in CELL_SHAPES)) throw new Error('--environment is invalid')
   const cells = values['cell-ids'].split(',').map((value) => value.trim()).filter(Boolean)
-  const expectedCells = Object.keys(CELL_SHAPES[values.environment].cells)
-  if (new Set(cells).size !== cells.length || JSON.stringify(cells.sort()) !== JSON.stringify(expectedCells.sort())) {
+  const sorted = JSON.stringify([...cells].sort())
+  if (
+    new Set(cells).size !== cells.length ||
+    !CELL_SHAPES[values.environment].waves.some((wave) => JSON.stringify([...wave].sort()) === sorted)
+  ) {
     throw new Error('--cell-ids must be the exact reviewed Asia topology set')
   }
-  if (values.region !== REGION) throw new Error('--region must be asia-east2')
+  const region = waveRegion(values.environment, cells)
+  if (values.region !== region) throw new Error(`--region must be ${region}`)
   const expectedImagePrefix = `us-central1-docker.pkg.dev/${CELL_SHAPES[values.environment].project}/orca-cloud/relay@sha256:`
   if (!values.image.startsWith(expectedImagePrefix) || !/sha256:[a-f0-9]{64}$/.test(values.image)) {
     throw new Error('--image must be the environment Relay image pinned by digest')
@@ -76,21 +103,24 @@ function unknownOrMatches(value, predicate) {
   return value === undefined || value === null || predicate(String(value))
 }
 
-function requireCellTemplate(change, config, cellId) {
+function requireCellTemplate(change, config, cellId, region) {
   const after = change.change.after
   const script = after?.metadata_startup_script ?? ''
+  const regionLine = region === PRIMARY_REGION ? undefined : region
+  const pool = CELL_SHAPES[config.environment].databasePoolMax[region]
   if (
     after?.machine_type !== 'e2-standard-4' ||
     after?.labels?.['orca-relay-cell'] !== cellId ||
-    after?.labels?.['orca-relay-region'] !== REGION ||
+    after?.labels?.['orca-relay-region'] !== regionLine ||
     !unknownOrMatches(
       after?.network_interface?.[0]?.subnetwork,
-      (value) => value.includes(`/regions/${REGION}/subnetworks/`)
+      (value) => value.includes(`/regions/${region}/subnetworks/`)
     ) ||
     (after?.network_interface?.[0]?.access_config?.length ?? 0) !== 0 ||
-    startupValue(script, 'ORCA_RELAY_REGION') !== REGION ||
+    startupValue(script, 'ORCA_RELAY_REGION') !== regionLine ||
     startupValue(script, 'ORCA_RELAY_CELL_CAPACITY') !== '6000' ||
-    startupValue(script, 'ORCA_RELAY_DATABASE_POOL_MAX') !== '10' ||
+    startupValue(script, 'ORCA_RELAY_DATABASE_POOL_MAX') !==
+      (regionLine === undefined && pool === PRIMARY_DATABASE_POOL_MAX ? undefined : pool) ||
     startupValue(script, 'ORCA_RELAY_CELL_CONNECTION_HARD_CAP') !== '3000' ||
     startupValue(script, 'ORCA_RELAY_CELL_CONNECTION_UNOBSERVED_BOUND') !== '60' ||
     startupValue(script, 'ORCA_RELAY_IMAGE_DIGEST') !== config.image.split('@')[1] ||
@@ -143,10 +173,10 @@ function requireCellBackend(change, config, cellId) {
   ) throw new Error(`${change.address} does not have the reviewed Asia backend shape`)
 }
 
-function requireNetworkResource(change, config) {
+function requireNetworkResource(change, config, region) {
   const after = change.change.after
   const networkSuffix = `/global/networks/${relayGceName(config.environment)}`
-  if (after?.region !== REGION) throw new Error(`${change.address} is outside asia-east2`)
+  if (after?.region !== region) throw new Error(`${change.address} is outside ${region}`)
   if (
     change.address.startsWith('google_compute_subnetwork.') &&
     (after.ip_cidr_range !== '10.42.1.0/24' ||
@@ -165,7 +195,7 @@ function requireNetworkResource(change, config) {
       after.subnetwork?.length !== 1 ||
       !unknownOrMatches(after.subnetwork[0]?.name, (value) =>
         value.endsWith(
-          `/regions/${REGION}/subnetworks/${relayGceName(config.environment)}-${REGION}`
+          `/regions/${region}/subnetworks/${relayGceName(config.environment)}-${region}`
         )) ||
       JSON.stringify(after.subnetwork[0]?.source_ip_ranges_to_nat) !==
         JSON.stringify(['ALL_IP_RANGES']))
@@ -250,12 +280,14 @@ function requireUrlMap(change, config) {
 
 export function validateRelayAsiaTopologyPlan(plan, config) {
   if (!Array.isArray(plan.resource_changes)) throw new Error('Terraform plan has no resource changes')
-  const required = new Map([
-    [address('google_compute_subnetwork.relay_gce_additional', REGION), [['create'], ['no-op']]],
-    [address('google_compute_router.relay_gce_additional', REGION), [['create'], ['no-op']]],
-    [address('google_compute_router_nat.relay_gce_additional', REGION), [['create'], ['no-op']]],
-    ['google_compute_url_map.relay_gce[0]', [['update'], ['no-op']]]
+  const region = waveRegion(config.environment, config.cells)
+  // The root region's network predates every cell, so only an additional region's is planned.
+  const required = new Map(region === PRIMARY_REGION ? [] : [
+    [address('google_compute_subnetwork.relay_gce_additional', region), [['create'], ['no-op']]],
+    [address('google_compute_router.relay_gce_additional', region), [['create'], ['no-op']]],
+    [address('google_compute_router_nat.relay_gce_additional', region), [['create'], ['no-op']]]
   ])
+  required.set('google_compute_url_map.relay_gce[0]', [['update'], ['no-op']])
   for (const cellId of config.cells) {
     required.set(address('google_compute_instance_template.relay_gce_cell', cellId), [['create'], ['no-op']])
     required.set(address('google_compute_instance_group_manager.relay_gce_cell', cellId), [['create'], ['no-op']])
@@ -269,7 +301,7 @@ export function validateRelayAsiaTopologyPlan(plan, config) {
     }
     const cellId = config.cells.find((candidate) => resourceAddress.endsWith(`[${JSON.stringify(candidate)}]`))
     if (resourceAddress.startsWith('google_compute_instance_template.') && cellId) {
-      requireCellTemplate(change, config, cellId)
+      requireCellTemplate(change, config, cellId, region)
     } else if (resourceAddress.startsWith('google_compute_instance_group_manager.') && cellId) {
       requireCellManager(change, config, cellId)
     } else if (resourceAddress.startsWith('google_compute_backend_service.') && cellId) {
@@ -279,7 +311,7 @@ export function validateRelayAsiaTopologyPlan(plan, config) {
       resourceAddress.startsWith('google_compute_router.') ||
       resourceAddress.startsWith('google_compute_router_nat.')
     ) {
-      requireNetworkResource(change, config)
+      requireNetworkResource(change, config, region)
     } else if (resourceAddress === 'google_compute_url_map.relay_gce[0]') {
       requireUrlMap(change, config)
     }
@@ -288,6 +320,12 @@ export function validateRelayAsiaTopologyPlan(plan, config) {
     (action) => action === 'no-op' || action === 'read'
   ))
   for (const change of changes) {
+    const cellId = /^google_compute_(?:instance_template|instance_group_manager|backend_service)\.relay_gce_cell\["([^"]+)"\]$/
+      .exec(change.address)?.[1]
+    // Usually a stale committed image; the workflow overlays live images so this stays empty.
+    if (cellId && !config.cells.includes(cellId)) {
+      throw new Error(`${change.address} changes a live cell outside the planned wave`)
+    }
     const allowedActions = required.get(change.address)
     if (!allowedActions || !allowedActions.some((expected) => sameActions(change, expected))) {
       throw new Error(`${change.address} has an unreviewed topology action`)
@@ -297,7 +335,7 @@ export function validateRelayAsiaTopologyPlan(plan, config) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const config = parseArguments(process.argv.slice(2))
+  const config = parseRelayAsiaTopologyPlanArguments(process.argv.slice(2))
   const plan = JSON.parse(readFileSync(config.planJson, 'utf8'))
   console.log(JSON.stringify(validateRelayAsiaTopologyPlan(plan, config)))
 }

@@ -1,5 +1,6 @@
 import { isAbsolute } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 
 export type ClipboardFileResult = { ok: boolean; reason?: string }
 
@@ -47,15 +48,14 @@ export async function writeFileToClipboard(
 
   if (deps.platform === 'win32') {
     // Set-Clipboard -LiteralPath populates CF_HDROP, which Explorer pastes as a
-    // file. Single-quote escaping for the PowerShell string literal. Guard the
-    // spawn so a missing/erroring PowerShell surfaces as a result, not a throw.
-    const escaped = clipboardPath.replace(/'/g, "''")
+    // file. Guard the spawn so a missing/erroring PowerShell surfaces as a
+    // result, not a throw.
     try {
       await deps.runCommand('powershell.exe', [
         '-NoProfile',
         '-NonInteractive',
         '-Command',
-        `Set-Clipboard -LiteralPath '${escaped}'`
+        `Set-Clipboard -LiteralPath ${quotePowerShellLiteral(clipboardPath)}`
       ])
       return { ok: true }
     } catch {

@@ -11,6 +11,7 @@ import {
 } from '../../../src/shared/mobile-e2ee-v2-framing'
 import { deriveSharedKey, generateKeyPair, publicKeyFromBase64, publicKeyToBase64 } from './e2ee'
 import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
+import { decodeBase64Bytes, encodeBase64Bytes } from './base64-byte-codec'
 
 export class MobileE2EEV2ClientSession {
   readonly hello: MobileE2EEV2Hello
@@ -46,7 +47,7 @@ export class MobileE2EEV2ClientSession {
         type: 'e2ee_hello',
         v: 2,
         clientPublicKeyB64: publicKeyToBase64(keyPair.publicKey),
-        clientNonceB64: encodeBase64(clientNonce),
+        clientNonceB64: encodeBase64Bytes(clientNonce),
         capabilities: { framing: [2], payloadKinds: ['text', 'binary'] },
         context: {
           protocol: 'orca-mobile-e2ee',
@@ -70,7 +71,7 @@ export class MobileE2EEV2ClientSession {
       clientNonce: handshake.clientNonce,
       desktopNonce: handshake.desktopNonce
     })
-    this.transcriptHashB64Value = encodeBase64(this.schedule.transcriptHash)
+    this.transcriptHashB64Value = encodeBase64Bytes(this.schedule.transcriptHash)
     return true
   }
 
@@ -95,7 +96,7 @@ export class MobileE2EEV2ClientSession {
   }
 
   sealText(plaintext: string): string {
-    return encodeBase64(this.seal(new TextEncoder().encode(plaintext), 'text'))
+    return encodeBase64Bytes(this.seal(new TextEncoder().encode(plaintext), 'text'))
   }
 
   sealBinary(plaintext: Uint8Array): Uint8Array {
@@ -137,19 +138,10 @@ export class MobileE2EEV2ClientSession {
   }
 }
 
-function encodeBase64(bytes: Uint8Array): string {
-  let binary = ''
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte)
-  }
-  return btoa(binary)
-}
-
 function decodeCanonicalBase64(value: string): Uint8Array | null {
   try {
-    const binary = atob(value)
-    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
-    return encodeBase64(bytes) === value ? bytes : null
+    const bytes = decodeBase64Bytes(value)
+    return encodeBase64Bytes(bytes) === value ? bytes : null
   } catch {
     return null
   }

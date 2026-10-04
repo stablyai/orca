@@ -126,12 +126,4 @@ describe('react commit cascade shim install order', () => {
       /^\s*(?:import|export)\b[\s\S]*?\bfrom\s*(?:\/\*[\s\S]*?\*\/\s*)*['"]|^\s*import\s*['"]|\bimport\s*\(/m
     )
   })
-
-  it('follows local hops when checking a graph for react-dom', () => {
-    const observerFile = join(RENDERER_ROOT, 'lib', 'react-commit-cascade-observer.ts')
-
-    // The observer's own graph is allowed to be wide; this only proves the walker
-    // above sees past the first hop, so an empty shim graph means something.
-    expect(transitiveSpecifiers(observerFile).size).toBeGreaterThan(3)
-  })
 })

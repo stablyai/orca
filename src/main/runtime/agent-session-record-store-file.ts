@@ -1,13 +1,9 @@
 /**
- * On-disk layer for the durable agent-session store.
- *
- * Every mutation is a whole-file atomic transaction — temp write, fsync, rename — so a SIGKILL
- * at any point leaves either the previous committed state or the next one, never a torn lease.
- * That matters because this host restarts its runtime often; a half-written lease would be
- * indistinguishable from an owner whose identity cannot be verified.
+ * The records file the agent-session store kept before it moved into the chat journal database,
+ * read once by the version-4 migration (agent-session-legacy-record-import.ts) and never written.
+ * Its `.bak` fallback and salvage survive here for that one read, until the import is retired.
  */
 
-import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
@@ -17,15 +13,16 @@ import {
 } from '../../shared/agent-session-operation-ledger'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
-  isAgentSessionRecord,
+  isPersistedAgentSessionRecord,
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
-import { agentSessionStoreBackupPath as backupPath } from './agent-session-record-store-write'
-export { saveAgentSessionStore } from './agent-session-record-store-write'
-import { parseVisibleSessionIds } from './agent-session-visible-tab-index'
-import { serializeAgentSessionStoreState } from './agent-session-store-serialization'
+import { normalizeLegacyHandoffRecord } from '../../shared/agent-session-legacy-handoff-lease'
+import { parseAgentSessionTabTable, type AgentSessionTabTable } from './agent-session-tab-table'
 
 export const AGENT_SESSION_STORE_SCHEMA_VERSION = 2 as const
+
+/** In a host's state directory, beside the journal database, where the records file lived. */
+export const AGENT_SESSION_STORE_DIR_NAME = 'agent-sessions'
 
 export const AGENT_SESSION_STORE_FILE_NAME = 'agent-sessions.json'
 
@@ -39,10 +36,10 @@ export type AgentSessionStoreState = {
   retiredClaimKeys: RetiredAgentSessionClaimKey[]
   /** Rows this build cannot validate, kept with a durable refusal reason. */
   unreadableRecords: Map<string, { reason: string; raw: unknown }>
-  /** Structured sessions that currently have a visible chat tab. */
-  visibleSessionIds: Set<string>
-  /** True once this store has committed the visibility index field. */
-  visibleSessionIdsIndexPresent: boolean
+  /** Chat tab id → the conversation it shows; null until this store first records a tab. */
+  sessionTabs: AgentSessionTabTable | null
+  /** Tab rows an index never recorded holds (chats opened while the import was owed). */
+  unrecordedSessionTabs?: AgentSessionTabTable
 }
 
 export type LoadedAgentSessionStore = {
@@ -52,13 +49,18 @@ export type LoadedAgentSessionStore = {
   readOnly: boolean
   /** True when the primary file was unusable and the previous committed copy was used. */
   recoveredFromBackup: boolean
-  /** True when the normalized current-schema quarantine must be persisted. */
-  needsRewrite: boolean
 }
 
 export function agentSessionStorePath(directory: string): string {
   return join(directory, AGENT_SESSION_STORE_FILE_NAME)
 }
+
+/** The records file of the host whose state directory this is. */
+export function legacyAgentSessionStorePath(stateDirectory: string): string {
+  return agentSessionStorePath(join(stateDirectory, AGENT_SESSION_STORE_DIR_NAME))
+}
+
+const backupPath = (filePath: string): string => `${filePath}.bak`
 
 function emptyState(hostId: string): AgentSessionStoreState {
   return {
@@ -68,23 +70,11 @@ function emptyState(hostId: string): AgentSessionStoreState {
     operations: new Map(),
     retiredClaimKeys: [],
     unreadableRecords: new Map(),
-    visibleSessionIds: new Set(),
-    visibleSessionIdsIndexPresent: false
+    sessionTabs: null
   }
 }
 
-export function agentSessionStoreRevision(state: AgentSessionStoreState): string {
-  return createHash('sha256')
-    .update(String(state.schemaVersion))
-    .update('\0')
-    .update(serializeAgentSessionStoreState(state))
-    .digest('hex')
-}
-
-function parseState(
-  raw: string,
-  hostId: string
-): { state: AgentSessionStoreState; needsRewrite: boolean } | null {
+function parseState(raw: string, hostId: string): Pick<LoadedAgentSessionStore, 'state'> | null {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
@@ -102,6 +92,7 @@ function parseState(
     operations?: unknown
     retiredClaimKeys?: unknown
     unusableRecords?: unknown
+    sessionTabs?: unknown
     visibleSessionIds?: unknown
   }
   if (
@@ -136,10 +127,12 @@ function parseState(
   const state = emptyState(hostId)
   state.schemaVersion = schemaVersion
   state.hostId = file.hostId
-  let needsRewrite = false
   if (typeof file.records === 'object' && file.records !== null) {
     for (const [sessionId, value] of Object.entries(file.records)) {
-      const record = isAgentSessionRecord(value) ? value : null
+      const decoded = isPersistedAgentSessionRecord(value)
+        ? normalizeLegacyHandoffRecord(value)
+        : null
+      const record = decoded?.record ?? null
       if (record?.sessionId === sessionId) {
         state.records.set(sessionId, record)
       } else {
@@ -153,7 +146,6 @@ function parseState(
             ? 'current_shape_invalid'
             : 'unsupported_schema'
         state.unreadableRecords.set(sessionId, { reason, raw: value })
-        needsRewrite ||= schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION
       }
     }
   }
@@ -210,17 +202,16 @@ function parseState(
       state.retiredClaimKeys.push({ keyId: key.keyId, retiredAt: key.retiredAt as number })
     }
   }
-  const visibleSessionIds = parseVisibleSessionIds(
-    file.visibleSessionIds,
-    schemaVersion,
-    AGENT_SESSION_STORE_SCHEMA_VERSION
+  const sessionTabs = parseAgentSessionTabTable(
+    file,
+    state.records,
+    schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION
   )
-  if (!visibleSessionIds.valid) {
+  if (!sessionTabs.valid) {
     return null
   }
-  state.visibleSessionIdsIndexPresent = visibleSessionIds.present
-  visibleSessionIds.ids.forEach((sessionId) => state.visibleSessionIds.add(sessionId))
-  return { state, needsRewrite }
+  state.sessionTabs = sessionTabs.table
+  return { state }
 }
 
 /** A record the primary retained as unreadable may still have a valid copy in the previous
@@ -270,12 +261,9 @@ export async function loadAgentSessionStore(
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         // Only a missing or unparseable primary means "fall back". A transient read failure
-        // (EACCES, EIO, EMFILE) says nothing about the primary's contents, and treating it as
-        // recovery would replace newer state with a stale backup and latch the recovery path.
-        if (!recoveredFromBackup) {
-          throw new Error('agent_session_store_corrupt')
-        }
-        unusableStoreFound = true
+        // (EACCES, EIO, EMFILE) says nothing about either copy's contents: the primary is not
+        // replaced by a stale backup, and a backup that could not be read is not unusable.
+        throw new Error('agent_session_store_corrupt', { cause: error })
       }
       continue
     }
@@ -288,11 +276,10 @@ export async function loadAgentSessionStore(
       await salvageUnreadableRecordsFromBackup(parsed.state, backupPath(filePath), hostId)
     }
     return {
-      state: parsed.state,
+      ...parsed,
       storeFound: true,
       readOnly: parsed.state.schemaVersion > AGENT_SESSION_STORE_SCHEMA_VERSION,
-      recoveredFromBackup,
-      needsRewrite: parsed.needsRewrite
+      recoveredFromBackup
     }
   }
   if (unusableStoreFound) {
@@ -302,7 +289,6 @@ export async function loadAgentSessionStore(
     state: emptyState(hostId),
     storeFound: false,
     readOnly: false,
-    recoveredFromBackup: false,
-    needsRewrite: false
+    recoveredFromBackup: false
   }
 }

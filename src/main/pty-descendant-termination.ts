@@ -5,21 +5,15 @@ import {
   verifyWindowsTreeKillTarget,
   type WindowsTreeKillTarget
 } from './windows-pty-root-identity'
+import { parseProcessTable, type ProcessTableRow } from './pty-process-table-parser'
+
+export { parseProcessTable, type ProcessTableRow } from './pty-process-table-parser'
 
 export const DESCENDANT_KILL_GRACE_MS = 2_000
 export const DESCENDANT_SNAPSHOT_TIMEOUT_MS = 1_000
 // Why: a full process table on a busy host can exceed execFile's 1MB default;
 // truncation would silently drop descendants from the snapshot.
 const PS_MAX_BUFFER_BYTES = 32 * 1024 * 1024
-
-export type ProcessTableRow = {
-  pid: number
-  ppid: number
-  pgid: number
-  /** ps lstart text, kept verbatim. Delayed SIGKILL additionally requires an
-   * unambiguous capture-second boundary and matching pgid. */
-  startedAt: string
-}
 
 export type PosixProcessIdentity = Pick<ProcessTableRow, 'pid' | 'startedAt'>
 
@@ -50,25 +44,6 @@ export type ProcessTableCapture = {
 
 export type ProcessTableReader = (timeoutMs?: number) => Promise<ProcessTableCapture>
 export type SignalSender = (pid: number, signal: NodeJS.Signals) => void
-
-export function parseProcessTable(psOutput: string): ProcessTableRow[] {
-  const rows: ProcessTableRow[] = []
-  for (const line of psOutput.split('\n')) {
-    // lstart itself contains spaces ("Mon Jul 13 12:54:47 2026"), so only the
-    // three leading numeric columns are positional.
-    const match = line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s*$/)
-    if (!match) {
-      continue
-    }
-    rows.push({
-      pid: Number(match[1]),
-      ppid: Number(match[2]),
-      pgid: Number(match[3]),
-      startedAt: match[4]
-    })
-  }
-  return rows
-}
 
 function readFreshProcessTable(
   timeoutMs = DESCENDANT_SNAPSHOT_TIMEOUT_MS
@@ -252,6 +227,9 @@ export async function captureDescendantSnapshot(
 type KillSweepDeps = SnapshotDeps &
   TerminateDeps & {
     ownsRoot?: () => boolean
+    /** Shutdown can retain the owner until descendant escalation finishes. */
+    terminateDescendants?: (snapshot: DescendantSnapshot) => void | Promise<unknown>
+    awaitEscalation?: boolean | (() => boolean)
     /**
      * Terminate the PTY's job object. Returns `unavailable` when this tree has
      * no job, which is not permission to assume it is gone.
@@ -312,11 +290,29 @@ export async function killWithDescendantSweep(
   }
 
   const snapshot = await captureDescendantSnapshot(rootPid, deps)
+  let descendants: void | Promise<unknown> = undefined
+  const awaitEscalation =
+    typeof deps.awaitEscalation === 'function' ? deps.awaitEscalation() : deps.awaitEscalation
+  if (awaitEscalation) {
+    try {
+      if (snapshot && (deps.ownsRoot?.() ?? true)) {
+        descendants = deps.terminateDescendants
+          ? deps.terminateDescendants(snapshot)
+          : terminateDescendantSnapshot(snapshot, deps)
+      }
+      await descendants
+    } finally {
+      killRoot()
+    }
+    return
+  }
   try {
     // Signal the captured descendants while their parent links still exist;
     // killing the root first creates a reparent/PID-reuse window.
     if (snapshot && (deps.ownsRoot?.() ?? true)) {
-      terminateDescendantSnapshot(snapshot, deps)
+      descendants = deps.terminateDescendants
+        ? deps.terminateDescendants(snapshot)
+        : terminateDescendantSnapshot(snapshot, deps)
     }
   } finally {
     killRoot()

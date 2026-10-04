@@ -5,7 +5,6 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import {
   isImeCompositionKeyDown,
   isImeOwnedKeyboardEvent,
-  resolveImeModifierGesture,
   useImeEnterGestureOwnership
 } from './ime-composition-keyboard-event'
 
@@ -58,38 +57,6 @@ describe('isImeCompositionKeyDown', () => {
     const chord = { key: 'J', code: 'KeyJ', ctrlKey: true, shiftKey: true, keyCode: 74 }
     expect(isImeOwnedKeyboardEvent({ ...chord, isComposing: true })).toBe(true)
     expect(isImeOwnedKeyboardEvent({ ...chord, isComposing: false })).toBe(false)
-  })
-
-  it('keeps ownership through the recorded marked modifiers and unmarked dispatch key', () => {
-    let gesture = resolveImeModifierGesture(false, {
-      ctrlKey: true,
-      isComposing: true
-    })
-    expect(gesture).toEqual({ active: true, carried: false, owned: true })
-
-    gesture = resolveImeModifierGesture(gesture.active, {
-      ctrlKey: true,
-      shiftKey: true,
-      isComposing: true
-    })
-    gesture = resolveImeModifierGesture(gesture.active, {
-      ctrlKey: true,
-      shiftKey: true,
-      isComposing: false
-    })
-    expect(gesture).toEqual({ active: true, carried: true, owned: true })
-
-    gesture = resolveImeModifierGesture(gesture.active, {
-      isComposing: false
-    })
-    expect(gesture).toEqual({ active: false, carried: true, owned: true })
-    expect(
-      resolveImeModifierGesture(false, {
-        ctrlKey: true,
-        shiftKey: true,
-        isComposing: false
-      })
-    ).toEqual({ active: false, carried: false, owned: false })
   })
 })
 

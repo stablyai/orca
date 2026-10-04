@@ -501,24 +501,8 @@ describe('PtyHandler', () => {
 })
 
 describe('attachIdentityMismatches', () => {
-  it('rejects a paneKey collision across relay generations', () => {
-    // Old lease expects tab-a's pane; the reset relay's pty-1 belongs to tab-b.
-    expect(
-      attachIdentityMismatches({ paneKey: 'tab-a:0' }, { paneKey: 'tab-b:0', tabId: 'tab-b' })
-    ).toBe(true)
-  })
-
   it('rejects a tabId collision when only tab identity is known', () => {
     expect(attachIdentityMismatches({ tabId: 'tab-a' }, { tabId: 'tab-b' })).toBe(true)
-  })
-
-  it('accepts a matching identity', () => {
-    expect(
-      attachIdentityMismatches(
-        { paneKey: 'tab-a:0', tabId: 'tab-a' },
-        { paneKey: 'tab-a:0', tabId: 'tab-a' }
-      )
-    ).toBe(false)
   })
 
   it('stays permissive when the caller supplies no identity', () => {

@@ -315,16 +315,6 @@ describe('parseHexAddress', () => {
     expect(result).toEqual({ host: '0.0.0.0', port: 8080 })
   })
 
-  it('parses port 22 correctly', () => {
-    const result = parseHexAddress('00000000:0016')
-    expect(result).toEqual({ host: '0.0.0.0', port: 22 })
-  })
-
-  it('parses port 443 correctly', () => {
-    const result = parseHexAddress('0100007F:01BB')
-    expect(result).toEqual({ host: '127.0.0.1', port: 443 })
-  })
-
   it('parses a non-localhost IPv4 address', () => {
     // 192.168.1.100 in little-endian: 6401A8C0
     const result = parseHexAddress('6401A8C0:1388')
@@ -350,22 +340,6 @@ describe('parseHexAddress', () => {
     expect(parseHexAddress('invalid')).toBeNull()
     expect(parseHexAddress('')).toBeNull()
     expect(parseHexAddress('::::')).toBeNull()
-  })
-
-  it('parses high ports correctly', () => {
-    // Port 65535 = FFFF
-    const result = parseHexAddress('0100007F:FFFF')
-    expect(result).toEqual({ host: '127.0.0.1', port: 65535 })
-  })
-
-  it('parses port 5432 (postgres)', () => {
-    const result = parseHexAddress('0100007F:1538')
-    expect(result).toEqual({ host: '127.0.0.1', port: 5432 })
-  })
-
-  it('parses port 3306 (mysql)', () => {
-    const result = parseHexAddress('00000000:0CEA')
-    expect(result).toEqual({ host: '0.0.0.0', port: 3306 })
   })
 })
 

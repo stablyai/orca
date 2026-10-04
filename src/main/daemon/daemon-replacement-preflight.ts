@@ -1,5 +1,6 @@
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { DaemonReplaceReason } from '../../shared/daemon-lifecycle-telemetry'
+import { migrateLegacyDaemonScope } from './daemon-cgroup-scope'
 import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
 import { DaemonEndpointOwnershipError } from './daemon-endpoint-adoption'
 import { checkDaemonHealth, getMacDaemonSystemResolverHealth } from './daemon-health'
@@ -10,8 +11,9 @@ import {
 } from './daemon-launch-paths'
 import { trackDaemonReplaced } from './daemon-lifecycle-event'
 import { getDaemonLaunchIdentity } from './daemon-pid-identity'
+import { readDaemonPidRecord } from './daemon-endpoint-incarnation'
 import { cleanupDaemonForProtocol } from './daemon-protocol-cleanup'
-import type { DaemonProcessHandle } from './daemon-spawner'
+import { getDaemonPidPath, type DaemonProcessHandle } from './daemon-spawner'
 import { killStaleDaemon } from './daemon-stale-kill'
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
 import { PROTOCOL_VERSION } from './types'
@@ -33,6 +35,7 @@ type ReplacementPreflightOptions = {
   attributedReason: DaemonReplaceReason | null
   releaseAdoptionClient: () => void
   preserveDaemon: PreserveDaemon
+  launchNonce: string
 }
 
 export async function prepareDaemonReplacement(
@@ -46,7 +49,8 @@ export async function prepareDaemonReplacement(
     recoveryDeadlineMs,
     attributedReason,
     releaseAdoptionClient,
-    preserveDaemon
+    preserveDaemon,
+    launchNonce
   } = options
   let pendingReplacement:
     | {
@@ -57,6 +61,12 @@ export async function prepareDaemonReplacement(
   let confirmedReplacement = false
   const health = await checkDaemonHealth(socketPath, tokenPath)
   if (health === 'healthy') {
+    const pidRecord = readDaemonPidRecord(getDaemonPidPath(runtimeDir))
+    if (pidRecord && migrateLegacyDaemonScope(pidRecord.pid, launchNonce)) {
+      console.warn(
+        `[daemon] Migrated adopted daemon PID ${pidRecord.pid} out of legacy app scope into a durable scope`
+      )
+    }
     const resolverHealth = await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
     if (resolverHealth === 'unhealthy') {
       const liveSessionCount = await getAliveDaemonSessionCount(

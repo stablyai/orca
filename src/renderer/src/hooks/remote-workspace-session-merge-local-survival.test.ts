@@ -72,24 +72,6 @@ describe('direct-SSH reconnect merge: local state the host has not seen', () => 
     expect(merged.tabsByWorktree[WORKTREE].map((tab) => tab.id)).toContain('setup')
   })
 
-  it('drops a tab closed locally rather than resurrecting it from the snapshot', () => {
-    // The other side of the coin. Closing a tab removes it from local state, so it is absent from
-    // BOTH sides — and the preserve must not reach into the stale payload and bring it back.
-    const agent = terminalTab('agent')
-    const closed = terminalTab('closed')
-    const current = sessionState({ tabsByWorktree: { [WORKTREE]: [agent] } })
-    const remote = sessionState({ tabsByWorktree: { [WORKTREE]: [agent, closed] } })
-
-    // Live state is the truth about what is open locally: the user closed `closed`.
-    const merged = merge(current, remote, { [WORKTREE]: [agent] })
-
-    // The host still lists it, so it survives here — the host is authoritative for what it knows.
-    // What matters is that the preserve branch invents nothing: the ids come from the two inputs.
-    for (const tab of merged.tabsByWorktree[WORKTREE]) {
-      expect(['agent', 'closed']).toContain(tab.id)
-    }
-  })
-
   it('keeps a tab another client closed, which is the accepted cost of the rule', () => {
     // Pinned because it is a deliberate trade, not an oversight. Absence in the snapshot cannot
     // distinguish "never uploaded" from "closed on another client sharing this host", and the two

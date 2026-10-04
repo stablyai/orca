@@ -180,7 +180,7 @@ async function reportDaemonAdoption(
         () => null
       )
     ])
-    trackDaemonAdopted(
+    await trackDaemonAdopted(
       readDaemonPidRecord(getDaemonPidPath(runtimeDir)),
       tccAttribution,
       liveSessionCount

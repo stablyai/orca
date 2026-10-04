@@ -1,9 +1,10 @@
 import { pathToFileURL } from 'node:url'
 import { fetchAdminOnceMore } from './relay-admin-transient-retry.mjs'
 
-// Every general cell that carries the rehome identity: the sixteen US cells and the
-// three asia-east2 cells that drain mis-homed hosts back the other way.
-const PRODUCTION_CELL = /^production-gce-c(?:7|8|9|10|13|14|15|16|19|20|21|22|23|24|25|26|27|28|29)$/
+// Every cell that carries the rehome identity: the eighteen US cells and the
+// five asia-east2 cells that drain mis-homed hosts back the other way.
+const PRODUCTION_CELL =
+  /^production-gce-c(?:7|8|9|10|13|14|15|16|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33)$/
 const DIRECTOR_ORIGIN = 'https://relay.onorca.dev'
 
 export function parseRehomeTrustProbeArguments(argv, environment = process.env) {

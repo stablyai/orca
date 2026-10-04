@@ -150,5 +150,17 @@ it('carries OMP root/profile inputs only to the desktop service, retaining empty
     XDG_DATA_HOME: '/home/dev/data'
   }
   expect(buildAiVaultServiceEnv(roots, 'linux')).toEqual({ ...roots, ELECTRON_RUN_AS_NODE: '1' })
-  expect(buildRelayAiVaultServiceEnv(roots, 'linux')).toEqual({})
+  expect(buildRelayAiVaultServiceEnv(roots, 'linux')).toEqual({ XDG_DATA_HOME: '/home/dev/data' })
+})
+
+it('preserves execution-host OpenCode roots in the relay service', () => {
+  expect(
+    buildRelayAiVaultServiceEnv(
+      { XDG_DATA_HOME: '/srv/data', OPENCODE_DB: 'opencode-team.db' },
+      'linux'
+    )
+  ).toEqual({
+    XDG_DATA_HOME: '/srv/data',
+    OPENCODE_DB: 'opencode-team.db'
+  })
 })

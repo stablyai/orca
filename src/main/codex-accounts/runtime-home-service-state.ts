@@ -214,7 +214,10 @@ export abstract class CodexRuntimeHomeState {
   protected abstract syncRuntimeAuthWithSystemDefault(): void
   protected abstract syncLegacySharedSystemDefaultAuthForRetainedPanes(): void
   protected abstract restoreSystemDefaultSnapshot(options: { detectExternalLogin: boolean }): void
-  protected abstract writeSystemDefaultAuth(contents: string): void
+  protected abstract writeSystemDefaultAuth(
+    contents: string,
+    options?: { expectedContents: string | null }
+  ): boolean
   protected abstract clearRuntimeAuthAfterSystemDefaultLogout(runtimeAuthPath: string): void
   protected abstract readSystemDefaultAuth(): string | null
   protected abstract writeRuntimeAuth(

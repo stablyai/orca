@@ -1,9 +1,16 @@
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  writeDataFile,
+  makeTerminalTab
+} from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../shared/constants'
-import { testState, createStore, writeDataFile, makeTerminalTab } from './persistence-test-harness'
+
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
@@ -54,7 +61,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   it('remaps legacy SSH lease leaf ids by PTY when the layout is already normalized', async () => {
@@ -204,7 +212,7 @@ describe('Store', () => {
       }
     })
 
-    store.persistPtyBinding({
+    await store.persistPtyBinding({
       worktreeId: 'wt1',
       tabId: 'tab1',
       leafId: TEST_LEAF_1,
@@ -228,7 +236,7 @@ describe('Store', () => {
       terminalTopologyRevisionByRepoId: { wt1: 1 }
     })
 
-    store.persistPtyBinding({
+    await store.persistPtyBinding({
       worktreeId: 'wt1',
       tabId: 'fresh-tab',
       leafId: TEST_LEAF_1,
@@ -330,7 +338,7 @@ describe('Store', () => {
     })
 
     expect(
-      store.persistPtyBinding({
+      await store.persistPtyBinding({
         worktreeId: 'wt1',
         tabId: 'tab1',
         leafId: TEST_LEAF_1,
@@ -370,7 +378,7 @@ describe('Store', () => {
       const staleRendererSession = structuredClone(store.getWorkspaceSession(hostId))
 
       expect(
-        store.persistPtyBinding(
+        await store.persistPtyBinding(
           {
             worktreeId: 'wt1',
             tabId: 'different-target-tab',
@@ -393,7 +401,7 @@ describe('Store', () => {
       ).toBe(false)
 
       expect(
-        store.persistPtyBinding(
+        await store.persistPtyBinding(
           {
             worktreeId: 'wt-canonical',
             tabId: 'tab1',
@@ -425,7 +433,7 @@ describe('Store', () => {
       })
 
       expect(
-        store.persistPtyBinding(
+        await store.persistPtyBinding(
           {
             worktreeId: 'wt1',
             tabId: 'rejected-tab',

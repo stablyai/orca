@@ -8,7 +8,6 @@ import {
   BRIDGE_MAX_PENDING_REQUESTS,
   BRIDGE_MAX_REPLY_BYTES,
   BRIDGE_MAX_REPLY_PARTS,
-  BRIDGE_DIRECTIONS,
   BRIDGE_MAX_SUBSCRIPTIONS,
   isBridgeExternalLinkUrl,
   readBridgeExternalLinkUrl,
@@ -179,10 +178,6 @@ describe('derived caps', () => {
 })
 
 describe('parseBridgeMessage direction', () => {
-  it('names both directions and nothing else', () => {
-    expect(BRIDGE_DIRECTIONS).toEqual(['page-to-shell', 'shell-to-page'])
-  })
-
   it('lets a reply past the node cap through, and refuses the same document from the page', () => {
     const raw = listingReply(5_000)
     expect(utf8ByteLength(raw)).toBeLessThan(BRIDGE_MAX_MESSAGE_BYTES)

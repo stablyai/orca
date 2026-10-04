@@ -54,6 +54,8 @@ export async function writeOpenCode2SqliteFixture(root: string): Promise<string>
 export function isolatedScanRoots(root: string) {
   return {
     claudeProjectsDir: join(root, 'claude-projects'),
+    codebuddyProjectsDir: join(root, 'codebuddy-projects'),
+    qoderProjectsDir: join(root, 'qoder-projects'),
     codexSessionsDir: join(root, 'codex-sessions'),
     geminiSessionsDir: join(root, 'gemini-sessions'),
     antigravityBrainDir: join(root, 'antigravity-brain'),
@@ -63,6 +65,7 @@ export function isolatedScanRoots(root: string) {
     // Why: prevent the SQLite scanner from picking up the real
     // ~/.local/share/opencode/opencode.db during tests.
     opencodeDbPaths: [] as readonly string[],
+    zcodeDbPath: join(root, 'zcode', 'db.sqlite'),
     grokSessionsDir: join(root, 'grok-sessions'),
     devinTranscriptsDir: join(root, 'devin-transcripts'),
     hermesSessionsDir: join(root, 'hermes-sessions'),
@@ -75,7 +78,9 @@ export function isolatedScanRoots(root: string) {
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
     clineSessionsDir: join(root, 'cline-sessions'),
-    kimiSessionsDir: join(root, 'kimi-sessions')
+    kimiSessionsDir: join(root, 'kimi-sessions'),
+    museSessionsDir: join(root, 'muse-sessions'),
+    jcodeSessionsDir: join(root, 'jcode-sessions')
   }
 }
 
@@ -189,4 +194,103 @@ export function writeAntigravityScannerFixture(
       content: 'Done'
     }
   ])
+}
+
+// Muse sessions are date-sharded <root>/YYYY/MM/DD/<uuid>/session.jsonl
+// envelopes mixing bare records, retained_frame envelopes, and
+// omitted_live_only retention markers (verified against muse 1.0.3).
+export async function writeMuseScannerFixture(sessionsDir: string): Promise<string> {
+  const sessionFile = join(sessionsDir, '2026', '05', '01', 'muse-session', 'session.jsonl')
+  const bare = (payloadType: string, payload: unknown, recordedAt: number) => ({
+    record_type: 'event',
+    payload_type: payloadType,
+    recorded_at: recordedAt,
+    payload
+  })
+  await writeJsonlFile(sessionFile, [
+    bare(
+      'runtime.session.metadata',
+      { kind: 'metadata', record: { workspace_root: '/tmp/muse', provider_id: 'meta' } },
+      1780000000000000
+    ),
+    bare(
+      'runtime.user_intent.accepted',
+      { intent_id: 'intent-1', refill_blocks: [{ kind: 'text', text: 'Muse vault title' }] },
+      1780000001000000
+    ),
+    // Why: every turn also emits `run :: started` carrying the same prompt —
+    // the parser must fold it once (messageCount stays 2 below).
+    bare(
+      'runtime.session',
+      { kind: 'run', run_id: 'run-1', event: { kind: 'started', prompt: 'Muse vault title' } },
+      1780000001000007
+    ),
+    {
+      retained_frame: true,
+      frame_schema_version: 1,
+      outer_log_ordinal: 3,
+      transaction_id: 'txn-1',
+      children: [
+        {
+          child_index: 0,
+          record_json: JSON.stringify(
+            bare(
+              'runtime.session',
+              {
+                kind: 'run',
+                run_id: 'run-1',
+                event: { kind: 'assistant_message_committed', text: 'Muse answer' }
+              },
+              1780000002000000
+            )
+          )
+        }
+      ]
+    },
+    bare(
+      'runtime.session',
+      {
+        kind: 'run',
+        run_id: 'run-1',
+        event: {
+          kind: 'model_completed',
+          model: 'muse-spark-test',
+          usage: { input_tokens: 10, output_tokens: 5 }
+        }
+      },
+      1780000003000000
+    ),
+    {
+      retained_marker: 'omitted_live_only',
+      schema_version: 1,
+      stream: { kind: 'session', id: 'muse-session' }
+    }
+  ])
+  return sessionFile
+}
+
+export async function writeJcodeSessionFixture(
+  roots: ReturnType<typeof isolatedScanRoots>
+): Promise<void> {
+  await mkdir(roots.jcodeSessionsDir, { recursive: true })
+  await writeFile(
+    join(roots.jcodeSessionsDir, 'session_jcode-session.json'),
+    JSON.stringify({
+      id: 'session_jcode-session',
+      short_name: 'jcode-session',
+      model: 'jcode-model',
+      working_dir: '/tmp/jcode',
+      created_at: '2026-05-01T10:12:00.000Z',
+      updated_at: '2026-05-01T10:12:01.000Z',
+      messages: [
+        {
+          id: 'm1',
+          role: 'user',
+          display_role: 'system',
+          content: [{ type: 'text', text: '<system-reminder>injected</system-reminder>' }]
+        },
+        { id: 'm2', role: 'user', content: [{ type: 'text', text: 'Jcode title' }] }
+      ]
+    })
+  )
 }

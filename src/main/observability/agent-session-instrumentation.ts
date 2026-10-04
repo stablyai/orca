@@ -3,13 +3,11 @@ import { withSpan, type ActiveSpan } from './tracer'
 export type AgentSessionCreatePhase =
   | 'reconcile_leases'
   | 'resolve_recovery'
-  | 'settlement_retry'
   | 'probe_owner'
   | 'reserve_owner'
   | 'acquire_owner'
   | 'auth_settle'
   | 'spawn'
-  | 'init'
   | 'restore_options'
   | 'publish'
 

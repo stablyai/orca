@@ -30,39 +30,52 @@ describe('deferred split pane handoff', () => {
     const cwdPromise = Promise.resolve('/source/cwd')
     const initial = beginDeferredSplitPaneHandoff(key, cwdPromise)
 
-    appendDeferredSplitPaneInput(initial, { data: 'typed', kind: 'ordinary' })
-    appendDeferredSplitPaneInput(initial, { data: '\x1b[0n', kind: 'immediate' })
-    appendDeferredSplitPaneInput(initial, { data: '\x03', kind: 'accepted' })
+    appendDeferredSplitPaneInput(initial, { data: 'typed', kind: 'ordinary', inputKind: 'driving' })
+    appendDeferredSplitPaneInput(initial, {
+      data: '\x1b[0n',
+      kind: 'immediate',
+      inputKind: 'query-reply'
+    })
+    appendDeferredSplitPaneInput(initial, { data: '\x03', kind: 'accepted', inputKind: 'driving' })
 
     const remounted = claimDeferredSplitPaneHandoff(key)
 
     expect(remounted?.cwdPromise).toBe(cwdPromise)
     expect(remounted?.preconnectInput).toEqual([
-      { data: 'typed', kind: 'ordinary' },
-      { data: '\x1b[0n', kind: 'immediate' },
-      { data: '\x03', kind: 'accepted' }
+      { data: 'typed', kind: 'ordinary', inputKind: 'driving' },
+      { data: '\x1b[0n', kind: 'immediate', inputKind: 'query-reply' },
+      { data: '\x03', kind: 'accepted', inputKind: 'driving' }
     ])
   })
 
   it('keeps input across repeated remounts and fences stale owners', () => {
     const key = makePaneKey('tab-1', LEAF_1)
     const initial = beginDeferredSplitPaneHandoff(key, Promise.resolve('/source/cwd'))
-    appendDeferredSplitPaneInput(initial, { data: 'before-first-remount', kind: 'ordinary' })
+    appendDeferredSplitPaneInput(initial, {
+      data: 'before-first-remount',
+      kind: 'ordinary',
+      inputKind: 'driving'
+    })
     const firstRemount = claimDeferredSplitPaneHandoff(key)
     expect(firstRemount).not.toBeNull()
 
-    appendDeferredSplitPaneInput(initial, { data: 'stale-input', kind: 'ordinary' })
+    appendDeferredSplitPaneInput(initial, {
+      data: 'stale-input',
+      kind: 'ordinary',
+      inputKind: 'driving'
+    })
     clearDeferredSplitPaneHandoff(initial)
     clearDeferredSplitPaneHandoff(initial)
     appendDeferredSplitPaneInput(firstRemount!.handle, {
       data: 'before-second-remount',
-      kind: 'ordinary'
+      kind: 'ordinary',
+      inputKind: 'driving'
     })
 
     const secondRemount = claimDeferredSplitPaneHandoff(key)
     expect(secondRemount?.preconnectInput).toEqual([
-      { data: 'before-first-remount', kind: 'ordinary' },
-      { data: 'before-second-remount', kind: 'ordinary' }
+      { data: 'before-first-remount', kind: 'ordinary', inputKind: 'driving' },
+      { data: 'before-second-remount', kind: 'ordinary', inputKind: 'driving' }
     ])
 
     clearDeferredSplitPaneHandoff(firstRemount!.handle)
@@ -74,21 +87,33 @@ describe('deferred split pane handoff', () => {
   it('releases an unmounted owner without dropping its pending handoff', () => {
     const key = makePaneKey('tab-1', LEAF_1)
     const initial = beginDeferredSplitPaneHandoff(key, Promise.resolve('/source/cwd'))
-    appendDeferredSplitPaneInput(initial, { data: 'before-unmount', kind: 'ordinary' })
+    appendDeferredSplitPaneInput(initial, {
+      data: 'before-unmount',
+      kind: 'ordinary',
+      inputKind: 'driving'
+    })
 
     releaseDeferredSplitPaneHandoff(initial)
-    appendDeferredSplitPaneInput(initial, { data: 'late-stale', kind: 'ordinary' })
+    appendDeferredSplitPaneInput(initial, {
+      data: 'late-stale',
+      kind: 'ordinary',
+      inputKind: 'driving'
+    })
     clearDeferredSplitPaneHandoff(initial)
 
     expect(claimDeferredSplitPaneHandoff(key)?.preconnectInput).toEqual([
-      { data: 'before-unmount', kind: 'ordinary' }
+      { data: 'before-unmount', kind: 'ordinary', inputKind: 'driving' }
     ])
   })
 
   it('lets a late close discard a released handoff by its stable pane key', () => {
     const key = makePaneKey('tab-1', LEAF_1)
     const owner = beginDeferredSplitPaneHandoff(key, Promise.resolve('/source/cwd'))
-    appendDeferredSplitPaneInput(owner, { data: 'must-not-replay', kind: 'ordinary' })
+    appendDeferredSplitPaneInput(owner, {
+      data: 'must-not-replay',
+      kind: 'ordinary',
+      inputKind: 'driving'
+    })
 
     // Whole-tab cleanup releases the mount-local handle before a stale close callback can run.
     releaseDeferredSplitPaneHandoff(owner)
@@ -112,7 +137,11 @@ describe('deferred split pane handoff', () => {
   it('drops a stale record when an authoritative restored PTY wins the key', () => {
     const key = makePaneKey('tab-authoritative', LEAF_1)
     const stale = beginDeferredSplitPaneHandoff(key, Promise.resolve('/stale'))
-    appendDeferredSplitPaneInput(stale, { data: 'must-not-replay', kind: 'ordinary' })
+    appendDeferredSplitPaneInput(stale, {
+      data: 'must-not-replay',
+      kind: 'ordinary',
+      inputKind: 'driving'
+    })
 
     discardDeferredSplitPaneHandoffForKey(key)
 
@@ -123,26 +152,44 @@ describe('deferred split pane handoff', () => {
   it('replaces an older handoff for the same stable pane key', () => {
     const key = makePaneKey('tab-1', LEAF_1)
     const stale = beginDeferredSplitPaneHandoff(key, Promise.resolve('/stale'))
-    appendDeferredSplitPaneInput(stale, { data: 'stale', kind: 'ordinary' })
+    appendDeferredSplitPaneInput(stale, { data: 'stale', kind: 'ordinary', inputKind: 'driving' })
     const currentPromise = Promise.resolve('/current')
     const current = beginDeferredSplitPaneHandoff(key, currentPromise)
 
-    appendDeferredSplitPaneInput(stale, { data: 'late-stale', kind: 'ordinary' })
+    appendDeferredSplitPaneInput(stale, {
+      data: 'late-stale',
+      kind: 'ordinary',
+      inputKind: 'driving'
+    })
     clearDeferredSplitPaneHandoff(stale)
-    appendDeferredSplitPaneInput(current, { data: 'current', kind: 'ordinary' })
+    appendDeferredSplitPaneInput(current, {
+      data: 'current',
+      kind: 'ordinary',
+      inputKind: 'driving'
+    })
 
     const claimed = claimDeferredSplitPaneHandoff(key)
     expect(claimed?.cwdPromise).toBe(currentPromise)
-    expect(claimed?.preconnectInput).toEqual([{ data: 'current', kind: 'ordinary' }])
+    expect(claimed?.preconnectInput).toEqual([
+      { data: 'current', kind: 'ordinary', inputKind: 'driving' }
+    ])
   })
 
   it('retains input within the shared preconnect entry and code-unit caps', () => {
     const entryKey = makePaneKey('tab-entries', LEAF_1)
     const entryHandle = beginDeferredSplitPaneHandoff(entryKey, Promise.resolve('/entries'))
     for (let index = 0; index < PTY_PRECONNECT_INPUT_MAX_ENTRIES; index += 1) {
-      appendDeferredSplitPaneInput(entryHandle, { data: '', kind: 'ordinary' })
+      appendDeferredSplitPaneInput(entryHandle, {
+        data: '',
+        kind: 'ordinary',
+        inputKind: 'driving'
+      })
     }
-    appendDeferredSplitPaneInput(entryHandle, { data: 'overflow', kind: 'ordinary' })
+    appendDeferredSplitPaneInput(entryHandle, {
+      data: 'overflow',
+      kind: 'ordinary',
+      inputKind: 'driving'
+    })
     expect(claimDeferredSplitPaneHandoff(entryKey)?.preconnectInput).toHaveLength(
       PTY_PRECONNECT_INPUT_MAX_ENTRIES
     )
@@ -154,11 +201,20 @@ describe('deferred split pane handoff', () => {
     )
     appendDeferredSplitPaneInput(codeUnitHandle, {
       data: 'x'.repeat(PTY_PRECONNECT_INPUT_MAX_CODE_UNITS),
-      kind: 'ordinary'
+      kind: 'ordinary',
+      inputKind: 'driving'
     })
-    appendDeferredSplitPaneInput(codeUnitHandle, { data: 'overflow', kind: 'ordinary' })
+    appendDeferredSplitPaneInput(codeUnitHandle, {
+      data: 'overflow',
+      kind: 'ordinary',
+      inputKind: 'driving'
+    })
     expect(claimDeferredSplitPaneHandoff(codeUnitKey)?.preconnectInput).toEqual([
-      { data: 'x'.repeat(PTY_PRECONNECT_INPUT_MAX_CODE_UNITS), kind: 'ordinary' }
+      {
+        data: 'x'.repeat(PTY_PRECONNECT_INPUT_MAX_CODE_UNITS),
+        kind: 'ordinary',
+        inputKind: 'driving'
+      }
     ])
   })
 
@@ -209,12 +265,12 @@ describe('deferred split pane handoff', () => {
   it('does not expose the registry input array by reference', () => {
     const key = makePaneKey('tab-1', LEAF_1)
     const handle = beginDeferredSplitPaneHandoff(key, Promise.resolve('/source/cwd'))
-    appendDeferredSplitPaneInput(handle, { data: 'kept', kind: 'ordinary' })
+    appendDeferredSplitPaneInput(handle, { data: 'kept', kind: 'ordinary', inputKind: 'driving' })
     const firstClaim = claimDeferredSplitPaneHandoff(key)
     firstClaim?.preconnectInput.splice(0)
 
     expect(claimDeferredSplitPaneHandoff(key)?.preconnectInput).toEqual([
-      { data: 'kept', kind: 'ordinary' }
+      { data: 'kept', kind: 'ordinary', inputKind: 'driving' }
     ])
   })
 })

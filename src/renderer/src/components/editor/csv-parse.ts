@@ -107,9 +107,7 @@ export function detectCsvDelimiter(filePath: string, content: string): string {
   if (filePath.toLowerCase().endsWith('.tsv')) {
     return '\t'
   }
-  // Why: sniff the first non-empty line for tab vs comma to handle CSVs that
-  // were saved with a different extension. Semicolons/pipes are out of scope;
-  // this tool is a viewer, not a general data importer.
+  // Include semicolon spreadsheet exports without adding general importer heuristics.
   // Why: strip a leading UTF-8 BOM so it doesn't get counted as part of the
   // first cell's characters (and so BOM-prefixed TSVs still sniff correctly).
   let text = content
@@ -121,8 +119,84 @@ export function detectCsvDelimiter(filePath: string, content: string): string {
   // (0 tabs vs 0 commas, tie goes to comma), misdetecting blank-leading TSVs.
   const firstLine = findFirstNonEmptyCsvSniffLine(text)
   const tabs = countDelimiterOutsideQuotes(firstLine, '\t')
+  const semicolons = countDelimiterOutsideQuotes(firstLine, ';')
   const commas = countDelimiterOutsideQuotes(firstLine, ',')
-  return tabs > commas ? '\t' : ','
+  // Keep the existing comma/tab choice unless semicolon strictly wins.
+  const existingDelimiter = tabs > commas ? '\t' : ','
+  if (semicolons > commas && semicolons > tabs) {
+    return hasConsistentExistingCsvColumns(text, existingDelimiter) ? existingDelimiter : ';'
+  }
+  return existingDelimiter
+}
+
+// Header punctuation should not replace an otherwise consistent comma/tab table.
+function hasConsistentExistingCsvColumns(text: string, delimiter: string): boolean {
+  const scanLength = Math.min(text.length, CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS)
+  const records: { delimiters: number; semicolons: number }[] = []
+  let delimiters = 0
+  let semicolons = 0
+  let inQuotes = false
+  let fieldIsEmpty = true
+  let hasContent = false
+  const pushRecord = (): void => {
+    if (hasContent) {
+      records.push({ delimiters, semicolons })
+    }
+    delimiters = 0
+    semicolons = 0
+    fieldIsEmpty = true
+    hasContent = false
+  }
+
+  for (let index = 0; index < scanLength && records.length < 8; index += 1) {
+    const ch = text[index]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[index + 1] === '"' && index + 1 < scanLength) {
+          fieldIsEmpty = false
+          index += 1
+        } else {
+          inQuotes = false
+        }
+      } else {
+        fieldIsEmpty = false
+      }
+      continue
+    }
+    if (ch === '"' && fieldIsEmpty) {
+      inQuotes = true
+      hasContent = true
+      continue
+    }
+    if (ch === '\r' || ch === '\n') {
+      pushRecord()
+      if (ch === '\r' && text[index + 1] === '\n') {
+        index += 1
+      }
+      continue
+    }
+    if (ch === delimiter) {
+      delimiters += 1
+      fieldIsEmpty = true
+    } else {
+      fieldIsEmpty = false
+    }
+    if (ch === ';') {
+      semicolons += 1
+    }
+    hasContent ||= !isCsvSniffWhitespace(text.charCodeAt(index))
+  }
+  if (scanLength === text.length && records.length < 8 && !inQuotes) {
+    pushRecord()
+  }
+  const first = records[0]
+  return Boolean(
+    first &&
+    first.delimiters > 0 &&
+    records.length > 1 &&
+    records.every((record) => record.delimiters === first.delimiters) &&
+    records.some((record) => record.semicolons !== first.semicolons)
+  )
 }
 
 function findFirstNonEmptyCsvSniffLine(text: string): string {

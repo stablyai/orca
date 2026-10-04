@@ -47,25 +47,4 @@ describe('registerComputerUsePermissionHandlers', () => {
     await expect(registration![1](null, { id: 'accessibility' })).resolves.toBe(result)
     expect(openComputerUsePermissionsMock).toHaveBeenCalledWith('accessibility')
   })
-
-  it('returns computer-use permission status', async () => {
-    const result = {
-      platform: 'darwin',
-      permissions: [
-        { id: 'accessibility', status: 'granted' },
-        { id: 'screenshots', status: 'not-granted' }
-      ]
-    }
-    getComputerUsePermissionStatusMock.mockReturnValue(result)
-
-    registerComputerUsePermissionHandlers()
-
-    const registration = handleMock.mock.calls.find(
-      ([channel]) => channel === 'computerUsePermissions:getStatus'
-    )
-    expect(registration).toBeTruthy()
-
-    await expect(registration![1]()).resolves.toBe(result)
-    expect(getComputerUsePermissionStatusMock).toHaveBeenCalledWith()
-  })
 })

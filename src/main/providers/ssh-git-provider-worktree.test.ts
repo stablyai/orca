@@ -140,20 +140,53 @@ describe('SshGitProvider', () => {
     expect(result).toEqual({ clean: false })
   })
 
-  it('refreshLocalBaseRefForWorktreeCreate sends the narrow refresh request', async () => {
-    await provider.refreshLocalBaseRefForWorktreeCreate({
+  it('refreshLocalBaseRefForWorktreeCreate sends the narrow refresh request and returns its outcome', async () => {
+    const refs = {
       repoPath: '/home/user/repo',
       fullRef: 'refs/heads/main',
-      remoteTrackingRef: 'refs/remotes/origin/main',
+      remoteTrackingRef: 'refs/remotes/origin/main'
+    }
+    mux.request.mockResolvedValueOnce({
+      status: 'skipped_dirty_worktree',
       ownerWorktreePath: '/home/user/repo'
     })
 
-    expect(mux.request).toHaveBeenCalledWith('git.refreshLocalBaseRefForWorktreeCreate', {
-      repoPath: '/home/user/repo',
-      fullRef: 'refs/heads/main',
-      remoteTrackingRef: 'refs/remotes/origin/main',
+    await expect(provider.refreshLocalBaseRefForWorktreeCreate(refs)).resolves.toEqual({
+      status: 'skipped_dirty_worktree',
       ownerWorktreePath: '/home/user/repo'
     })
+    expect(mux.request).toHaveBeenCalledWith('git.refreshLocalBaseRefForWorktreeCreate', refs)
+  })
+
+  it('refreshLocalBaseRefForWorktreeCreate reads a malformed relay reply as an error', async () => {
+    mux.request.mockResolvedValueOnce(undefined)
+
+    await expect(
+      provider.refreshLocalBaseRefForWorktreeCreate({
+        repoPath: '/home/user/repo',
+        fullRef: 'refs/heads/main',
+        remoteTrackingRef: 'refs/remotes/origin/main'
+      })
+    ).resolves.toEqual({ status: 'skipped_error' })
+  })
+
+  it('getLocalBaseRefFastForwardableBehind asks the relay to inspect without moving anything', async () => {
+    const refs = {
+      repoPath: '/home/user/repo',
+      fullRef: 'refs/heads/main',
+      remoteTrackingRef: 'refs/remotes/origin/main'
+    }
+    mux.request
+      .mockResolvedValueOnce({ status: 'behind', behind: 4, localOid: 'a', remoteOid: 'b' })
+      .mockResolvedValueOnce({ status: 'skipped_dirty_worktree', ownerWorktreePath: '/x' })
+
+    await expect(provider.getLocalBaseRefFastForwardableBehind(refs)).resolves.toBe(4)
+    await expect(provider.getLocalBaseRefFastForwardableBehind(refs)).resolves.toBeUndefined()
+    expect(mux.request).toHaveBeenCalledWith('git.inspectLocalBaseRefForWorktreeCreate', refs)
+    expect(mux.request).not.toHaveBeenCalledWith(
+      'git.refreshLocalBaseRefForWorktreeCreate',
+      expect.anything()
+    )
   })
 
   it('worktreeIsClean falls back to git.status for old relays', async () => {

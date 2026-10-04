@@ -58,10 +58,8 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
         (candidate) => candidate.id === group.activeTabId
       )
-      // contentType gates out standalone structured (agent-session) tabs;
-      // structuredSessionId gates out a terminal tab that adopted one, which
-      // renders the structured surface with no TUI to switch back to.
-      if (!tab || tab.contentType !== 'terminal' || tab.structuredSessionId) {
+      // contentType gates out standalone structured (agent-session) tabs.
+      if (!tab || tab.contentType !== 'terminal') {
         return
       }
       const terminalTab = (state.tabsByWorktree[worktreeId] ?? []).find(

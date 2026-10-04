@@ -53,7 +53,7 @@ describe('workerRelease on a retained resource whose process exited', () => {
   it('records the archive as unavailable rather than retaining the pane forever', async () => {
     const { dispatchId } = await harness.startWorker()
     // Abandoned workers never reach `requested`, the only state that writes an archive.
-    expect(harness.db.abandonWorkerDispatch(dispatchId).disposition).toBe('abandoned')
+    expect(harness.db.abandonWorkerDispatch(dispatchId, 'epoch_test').disposition).toBe('abandoned')
     expect(harness.db.getWorkerTerminalArchive(dispatchId)).toBeFalsy()
 
     harness.inspectProcessLiveness.mockResolvedValue('exited')
@@ -83,7 +83,7 @@ describe('workerRelease on a retained resource whose process exited', () => {
   it('still refuses when an archive names a different resource', async () => {
     const { dispatchId } = await harness.startWorker()
     const resource = harness.db.getWorkerTerminalResourceByOwner(dispatchId)!
-    expect(harness.db.abandonWorkerDispatch(dispatchId).disposition).toBe('abandoned')
+    expect(harness.db.abandonWorkerDispatch(dispatchId, 'epoch_test').disposition).toBe('abandoned')
     harness.db.storeWorkerTerminalArchive({
       dispatchId,
       resourceId: `${resource.id}-other`,

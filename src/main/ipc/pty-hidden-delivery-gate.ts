@@ -27,6 +27,10 @@ const deliveryInterestRendererPtys = new Set<string>()
 // or full PTY teardown — never by re-marking hidden, so drop memory survives
 // hidden remounts and renderer reloads.
 const droppedSinceHiddenPtys = new Set<string>()
+// Why: a runtime background spawn has no renderer party to re-mark it after a
+// reload/crash, so its hidden mark must outlive renderer-scoped resets until a
+// renderer unmarks it (visible mount) or the PTY is torn down.
+const runtimeOwnedHiddenRendererPtys = new Set<string>()
 
 let droppedHiddenDeliveryChars = 0
 let droppedHiddenDeliveryChunks = 0
@@ -54,12 +58,23 @@ export function markHiddenRendererPty(id: string): void {
  *  the caller can emit a restore marker to the now-visible renderer. */
 export function unmarkHiddenRendererPty(id: string): { droppedWhileHidden: boolean } {
   hiddenRendererPtys.delete(id)
+  runtimeOwnedHiddenRendererPtys.delete(id)
   const droppedWhileHidden = droppedSinceHiddenPtys.delete(id)
   return { droppedWhileHidden }
 }
 
 export function isHiddenRendererPty(id: string): boolean {
   return hiddenRendererPtys.has(id)
+}
+
+/** Marks a PTY hidden on behalf of the runtime (no renderer view exists). */
+export function markRuntimeOwnedHiddenRendererPty(id: string): void {
+  hiddenRendererPtys.add(id)
+  runtimeOwnedHiddenRendererPtys.add(id)
+}
+
+export function isRuntimeOwnedHiddenRendererPty(id: string): boolean {
+  return runtimeOwnedHiddenRendererPtys.has(id)
 }
 
 /** For freeze diagnostics only: hidden ptys must appear in the per-pty report
@@ -105,19 +120,24 @@ export function recordHiddenRendererPtyDataDrop(
 
 /** Renderer process replaced (reload / crash): its ref-counted interest
  *  holds and hidden marks died with it, so keeping them would gate (or
- *  force-feed) PTYs no live renderer party asked about. Drop memory is
+ *  force-feed) PTYs no live renderer party asked about. Runtime-owned marks
+ *  survive: no renderer party exists to re-mark them. Drop memory is
  *  preserved — surviving daemon/SSH PTYs may have dropped bytes the old
  *  renderer never restored; the new renderer's first hidden/visible sync
  *  re-marks or unmarks and the unmark path re-emits the restore marker. */
 export function resetRendererScopedHiddenPtyDeliveryState(): void {
   hiddenRendererPtys.clear()
   deliveryInterestRendererPtys.clear()
+  for (const id of runtimeOwnedHiddenRendererPtys) {
+    hiddenRendererPtys.add(id)
+  }
 }
 
 /** Full per-PTY teardown — wired into clearProviderPtyState so every exit
  *  path (local, daemon, SSH, connection teardown) releases gate state. */
 export function clearHiddenRendererPtyDeliveryState(id: string): void {
   hiddenRendererPtys.delete(id)
+  runtimeOwnedHiddenRendererPtys.delete(id)
   deliveryInterestRendererPtys.delete(id)
   droppedSinceHiddenPtys.delete(id)
 }
@@ -146,6 +166,7 @@ export function resetHiddenRendererPtyDeliveryDebugCounters(): void {
 /** Test seam: reset all module state between tests. */
 export function _resetHiddenRendererPtyDeliveryGateForTest(): void {
   hiddenRendererPtys.clear()
+  runtimeOwnedHiddenRendererPtys.clear()
   deliveryInterestRendererPtys.clear()
   droppedSinceHiddenPtys.clear()
   resetHiddenRendererPtyDeliveryDebugCounters()

@@ -1,6 +1,7 @@
 import { expect, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type * as GitUsernameModule from '../../git/git-username'
+import type * as FilesystemPathContainmentModule from '../../ipc/filesystem-path-containment'
 import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
 
 // Why: durable review-head refs are scoped by remote identity (name + URL hash).
@@ -412,18 +413,23 @@ vi.mock('../../ipc/worktree-logic', async (importOriginal) => {
 vi.mock('../../ipc/filesystem-auth', () => ({
   resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue),
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
+  invalidateAuthorizedRootsCacheForRepo: invalidateAuthorizedRootsCacheMock,
   isENOENT: (error: unknown) =>
     Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
 }))
 
 vi.mock('../../ipc/registered-worktree-roots-cache', () => ({
-  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
+  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
+  invalidateAuthorizedRootsCacheForRepo: invalidateAuthorizedRootsCacheMock
 }))
 
-vi.mock('../../ipc/filesystem-path-containment', () => ({
-  isENOENT: (error: unknown) =>
-    Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
-}))
+// Why: the real check also matches relay-rebuilt errors, which carry only the ENOENT message.
+vi.mock('../../ipc/filesystem-path-containment', async () => {
+  const actual = await vi.importActual<typeof FilesystemPathContainmentModule>(
+    '../../ipc/filesystem-path-containment'
+  )
+  return { isENOENT: actual.isENOENT }
+})
 
 vi.mock('../../worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock

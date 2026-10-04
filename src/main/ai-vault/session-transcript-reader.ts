@@ -160,6 +160,7 @@ export async function readWholeTranscript(args: {
   candidate: SessionFileCandidate
   platform: NodeJS.Platform
   stats?: TranscriptReadStats
+  signal?: AbortSignal
 }): Promise<AiVaultSession | null> {
   const { file } = args.candidate
   if (args.stats) {
@@ -169,7 +170,7 @@ export async function readWholeTranscript(args: {
   const channel = new TranscriptMessageChannel()
   channel.beginRead({ candidate: args.candidate, mode: 'replace', previousByteOffset: 0 })
   try {
-    const session = await parseAgentSessionFile(args.candidate, args.platform, channel)
+    const session = await parseAgentSessionFile(args.candidate, args.platform, channel, args.signal)
     channel.finishRead({ session, byteOffset: file.sizeBytes ?? 0, incomplete: false })
     return session
   } catch (error) {

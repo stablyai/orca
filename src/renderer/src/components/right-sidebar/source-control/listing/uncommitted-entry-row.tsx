@@ -64,7 +64,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   connectionId?: string | null
   onOpen: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   onStage: (filePath: string) => Promise<void>
-  onUnstage: (filePath: string) => Promise<void>
+  onUnstage: (filePath: string, oldPath?: string) => Promise<void>
   onDiscard: (entry: GitStatusEntry) => void
   commentCount: number
   showPathHint?: boolean
@@ -249,7 +249,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
               title={translate('auto.components.right.sidebar.SourceControl.df5040e3c3', 'Unstage')}
               onClick={(event) => {
                 event.stopPropagation()
-                void onUnstage(entry.path)
+                void onUnstage(entry.path, entry.status === 'renamed' ? entry.oldPath : undefined)
               }}
             />
           )}

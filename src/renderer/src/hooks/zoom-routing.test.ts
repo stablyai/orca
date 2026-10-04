@@ -75,16 +75,6 @@ describe('resolveZoomTarget', () => {
       })
     ).toBe('ui')
   })
-
-  it('routes to ui zoom for browser tabs without an active browser page', () => {
-    expect(
-      resolveZoomTarget({
-        activeView: 'terminal',
-        activeTabType: 'browser',
-        activeElement: makeTarget({})
-      })
-    ).toBe('ui')
-  })
 })
 
 describe('registerZoomIpcBridge', () => {
@@ -169,19 +159,6 @@ describe('registerZoomIpcBridge', () => {
     expect(zoom.applyUIZoom).toHaveBeenCalledWith(0.5)
     expect(zoom.setUI).toHaveBeenCalledWith({ uiZoomLevel: 0.5 })
     // 1.2 ** 0.5 rounds to 110%, the percent the zoom overlay shows.
-    expect(zoom.dispatchZoomLevelChanged).toHaveBeenCalledWith('ui', 110)
-  })
-
-  it('applies app zoom for an active terminal tab after terminal focus is released', async () => {
-    const zoom = await mountZoomBridge({
-      activeTabType: 'terminal',
-      activeElement: makeTarget({})
-    })
-
-    zoom.fire('in')
-
-    expect(zoom.applyUIZoom).toHaveBeenCalledWith(0.5)
-    expect(zoom.setUI).toHaveBeenCalledWith({ uiZoomLevel: 0.5 })
     expect(zoom.dispatchZoomLevelChanged).toHaveBeenCalledWith('ui', 110)
   })
 

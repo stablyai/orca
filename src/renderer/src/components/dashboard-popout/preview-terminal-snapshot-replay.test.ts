@@ -110,7 +110,7 @@ describe('replayPreviewConnectionSnapshot', () => {
     expect(modes.snapshotFlags).toBe(0)
   })
 
-  it('writes scrollback, frame, escape tail, then replay, in that order', () => {
+  it('writes scrollback, frame, kitty restore, escape tail, then replay, in that order', () => {
     const { written } = apply(
       {
         scrollbackAnsi: 'history',
@@ -119,6 +119,6 @@ describe('replayPreviewConnectionSnapshot', () => {
       },
       [{ data: 'tail', mode: 'live' }]
     )
-    expect(written).toEqual(['history', 'frame', '\x1b[', 'tail'])
+    expect(written).toEqual(['history', 'frame', '\x1b[<99u', '\x1b[', 'tail'])
   })
 })

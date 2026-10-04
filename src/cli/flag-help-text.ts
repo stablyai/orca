@@ -1,5 +1,7 @@
 /** One-line flag descriptions shared by every command's help output. */
 export const FLAG_HELP_TEXT: Record<string, string> = {
+  'external-worktree-visibility':
+    '--external-worktree-visibility show|hide|inherit  Override or inherit non-Orca worktree visibility',
   agent: '--agent <id>          Launch a known TUI agent in the first terminal',
   'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
   command: '--command <text>       Command to run in the terminal on startup',
@@ -26,6 +28,10 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   interrupt: '--interrupt            Send as an interrupt-style input when supported',
   id: '--id <id>             Identifier for a target item or permission',
   issue: '--issue <number|null>  Linked GitHub issue number',
+  'gitlab-issue':
+    '--gitlab-issue <number|url|null> Linked GitLab issue number or URL; null clears on set',
+  'gitlab-mr':
+    '--gitlab-mr <number|url|null> Linked GitLab merge request number or URL; null clears on set',
   'linear-issue':
     '--linear-issue <id|url|null> Linked Linear issue identifier or URL; null clears on set',
   json: '--json                 Emit machine-readable JSON',
@@ -45,6 +51,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'parent-worktree':
     '--parent-worktree <selector> Parent worktree selector such as identity:<identity>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current',
   path: '--path <path>          Path argument for the command',
+  pr: '--pr <number|null>     Linked GitHub pull request number; null clears on set',
   prompt: '--prompt <text>        Prompt text for agent-backed commands',
   query: '--query <text>        Search text for matching refs',
   ref: '--ref <ref>            Base ref to persist for the repo',

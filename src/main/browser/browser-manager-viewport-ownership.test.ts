@@ -50,16 +50,16 @@ const mobile = { width: 375, height: 667, deviceScaleFactor: 2, mobile: true }
 const desktop = { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false }
 const guests = new Map<number, Record<string, unknown>>()
 const registeredGuests = readViewportStateMap('webContentsIdByTabId')
-const uaIntents = readViewportStateMap('viewportUaOverrideMobileByTabId')
-const presetIntents = readViewportStateMap('viewportPresetActiveByTabId')
+const presetIntents = readViewportStateMap('viewportPresetByTabId')
 const pendingOperations = readViewportStateMap('viewportOpsByTabId')
+const cdpUserAgentOverrides = readViewportStateMap('cdpUserAgentOverrideStateByGuestId')
 
 function readViewportStateMap(
   name:
     | 'webContentsIdByTabId'
-    | 'viewportUaOverrideMobileByTabId'
-    | 'viewportPresetActiveByTabId'
+    | 'viewportPresetByTabId'
     | 'viewportOpsByTabId'
+    | 'cdpUserAgentOverrideStateByGuestId'
 ): Map<unknown, unknown> {
   const value: unknown = browserManager[name]
   if (!(value instanceof Map)) {
@@ -116,7 +116,7 @@ describe('browser viewport operation ownership', () => {
     const result = browserManager.setViewportOverride('closed', mobile)
     await gate.entered
     browserManager.unregisterGuest('closed')
-    expect(uaIntents.size).toBe(0)
+    expect(presetIntents.size).toBe(0)
     const isDestroyed = handle.guest.isDestroyed
     expect(vi.isMockFunction(isDestroyed)).toBe(true)
     if (vi.isMockFunction(isDestroyed)) {
@@ -126,7 +126,7 @@ describe('browser viewport operation ownership', () => {
     await expect(result).resolves.toBe(false)
     expect(registeredGuests.size).toBe(0)
     expect(presetIntents.size).toBe(0)
-    expect(uaIntents.get('closed')).toBeUndefined()
+    expect(cdpUserAgentOverrides.size).toBe(0)
   })
 
   it('does not restore closed-tab UA intent after a failed clear', async () => {
@@ -143,7 +143,8 @@ describe('browser viewport operation ownership', () => {
     }
     gate.reject(new Error('Target closed'))
     await expect(result).resolves.toBe(false)
-    expect(uaIntents.get('clear-close')).toBeUndefined()
+    expect(presetIntents.get('clear-close')).toBeUndefined()
+    expect(cdpUserAgentOverrides.size).toBe(0)
   })
 
   it('preserves replacement desktop intent after an old clear fails', async () => {
@@ -155,14 +156,13 @@ describe('browser viewport operation ownership', () => {
     browserManager.unregisterGuest('replacement')
     register('replacement', 103)
     await expect(browserManager.setViewportOverride('replacement', desktop)).resolves.toBe(true)
-    expect(uaIntents.get('replacement')).toBe(false)
     gate.reject(new Error('Old target closed'))
     await expect(result).resolves.toBe(false)
     expect(registeredGuests.get('replacement')).toBe(103)
-    expect(uaIntents.get('replacement')).toBe(false)
     expect(presetIntents.get('replacement')).toEqual({
       guestWebContentsId: 103,
-      active: true
+      requested: desktop,
+      applied: desktop
     })
   })
 
@@ -177,11 +177,17 @@ describe('browser viewport operation ownership', () => {
     await browserManager.setViewportOverride('late-delete', mobile)
     gate.resolve()
     await expect(result).resolves.toBe(false)
-    expect(uaIntents.has('late-delete')).toBe(true)
+    expect(presetIntents.get('late-delete')).toEqual({
+      guestWebContentsId: 105,
+      requested: mobile,
+      applied: mobile
+    })
     expect(registeredGuests.get('late-delete')).toBe(105)
   })
 
-  it('same-owner clear failure still restores the legitimate earlier intent', async () => {
+  // The request is still "no preset"; what survives the failure is the record that the mobile
+  // override stands, which is what lets the next navigation clear it.
+  it('same-owner clear failure keeps the standing mobile override tracked', async () => {
     const handle = register('same-owner', 106)
     await browserManager.setViewportOverride('same-owner', mobile)
     const gate = pause(handle, 'Emulation.setUserAgentOverride')
@@ -189,7 +195,13 @@ describe('browser viewport operation ownership', () => {
     await gate.entered
     gate.reject(new Error('Protocol error'))
     await expect(result).resolves.toBe(false)
-    expect(uaIntents.get('same-owner')).toBe(true)
+    expect(presetIntents.get('same-owner')).toEqual({
+      guestWebContentsId: 106,
+      requested: null,
+      applied: null
+    })
+    expect(handle.presentedUserAgent()).toContain('iPhone')
+    expect(cdpUserAgentOverrides.has(106)).toBe(true)
   })
 
   it('old apply cannot overwrite a replacement guest desktop intent', async () => {
@@ -202,7 +214,15 @@ describe('browser viewport operation ownership', () => {
     await browserManager.setViewportOverride('late-apply', desktop)
     gate.resolve()
     await expect(pending).resolves.toBe(false)
-    expect(uaIntents.get('late-apply')).toBe(false)
+    expect(presetIntents.get('late-apply')).toEqual({
+      guestWebContentsId: 111,
+      requested: desktop,
+      applied: desktop
+    })
+    expect(old.debuggerSendCommand).not.toHaveBeenCalledWith(
+      'Emulation.setUserAgentOverride',
+      expect.anything()
+    )
   })
 
   it('an old guest cannot write UA intent after replacement in native process mode', async () => {
@@ -216,7 +236,11 @@ describe('browser viewport operation ownership', () => {
     register('native-replacement', 113)
     gate.resolve()
     await expect(pending).resolves.toBe(false)
-    expect(uaIntents.get('native-replacement')).toBeUndefined()
+    expect(presetIntents.get('native-replacement')).toBeUndefined()
+    expect(old.debuggerSendCommand).not.toHaveBeenCalledWith(
+      'Emulation.setUserAgentOverride',
+      expect.anything()
+    )
   })
 
   it('old queued operations cannot remove or join a replacement promise tail', async () => {
@@ -240,7 +264,12 @@ describe('browser viewport operation ownership', () => {
     await expect(replacementFirst).resolves.toBe(true)
     await expect(replacementSecond).resolves.toBe(true)
     expect(pendingOperations.size).toBe(0)
-    expect(uaIntents.get('queued-replacement')).toBe(true)
+    expect(presetIntents.get('queued-replacement')).toEqual({
+      guestWebContentsId: 115,
+      requested: mobile,
+      applied: mobile
+    })
+    expect(replacement.presentedUserAgent()).toContain('iPhone')
   })
 
   it('normal same-owner toggles preserve last-requested order and remove the promise tail', async () => {
@@ -252,6 +281,8 @@ describe('browser viewport operation ownership', () => {
     const third = browserManager.setViewportOverride('serialized', null)
     gate.resolve()
     expect(await Promise.all([first, second, third])).toEqual([true, true, true])
+    // Identity follows each viewport as it is applied, so the mobile UA stands only while the mobile
+    // metrics do and is cleared once the desktop metrics land.
     expect(handle.debuggerSendCommand.mock.calls.map(([method]) => method)).toEqual([
       'Emulation.setDeviceMetricsOverride',
       'Emulation.setTouchEmulationEnabled',
@@ -260,11 +291,15 @@ describe('browser viewport operation ownership', () => {
       'Emulation.setTouchEmulationEnabled',
       'Emulation.setUserAgentOverride',
       'Emulation.clearDeviceMetricsOverride',
-      'Emulation.setTouchEmulationEnabled',
-      'Emulation.setUserAgentOverride'
+      'Emulation.setTouchEmulationEnabled'
     ])
+    expect(handle.presentedUserAgent()).toBe(GUEST_CLEAN_UA)
     expect(pendingOperations.size).toBe(0)
-    expect(uaIntents.size).toBe(0)
+    expect(presetIntents.get('serialized')).toEqual({
+      guestWebContentsId: 116,
+      requested: null,
+      applied: null
+    })
   })
 
   it.each([false, true])(
@@ -276,13 +311,20 @@ describe('browser viewport operation ownership', () => {
       await expect(
         browserManager.setViewportOverride('native', mobileMode ? mobile : desktop)
       ).resolves.toBe(true)
-      expect(handle.debuggerSendCommand).toHaveBeenCalledWith(
-        'Emulation.setUserAgentOverride',
-        mobileMode
-          ? expect.objectContaining({ userAgent: expect.stringContaining('iPhone') })
-          : { userAgent: GUEST_ELECTRON_UA }
+      if (mobileMode) {
+        expect(handle.debuggerSendCommand).toHaveBeenCalledWith(
+          'Emulation.setUserAgentOverride',
+          expect.objectContaining({ userAgent: expect.stringContaining('iPhone') })
+        )
+      } else {
+        expect(handle.debuggerSendCommand).not.toHaveBeenCalledWith(
+          'Emulation.setUserAgentOverride',
+          expect.anything()
+        )
+      }
+      expect(handle.presentedUserAgent()).toEqual(
+        mobileMode ? expect.stringContaining('iPhone') : GUEST_ELECTRON_UA
       )
-      expect(uaIntents.get('native')).toBe(mobileMode)
     }
   )
 
@@ -304,7 +346,7 @@ describe('browser viewport operation ownership', () => {
     expect(await Promise.all(operations.map(({ pending }) => pending))).toEqual(
       Array(16).fill(false)
     )
-    expect(uaIntents.size).toBe(0)
+    expect(cdpUserAgentOverrides.size).toBe(0)
     expect(registeredGuests.size).toBe(0)
     expect(pendingOperations.size).toBe(0)
     expect(presetIntents.size).toBe(0)

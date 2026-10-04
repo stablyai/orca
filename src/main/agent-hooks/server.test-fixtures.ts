@@ -20,6 +20,7 @@ export type Body = {
   worktreeId?: string
   env?: string
   version?: string
+  agentProcess?: string
   payload: Record<string, unknown>
 }
 

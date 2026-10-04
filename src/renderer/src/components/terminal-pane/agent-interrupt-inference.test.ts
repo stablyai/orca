@@ -99,33 +99,6 @@ describe('agent interrupt inference', () => {
     entry = undefined
   })
 
-  it('records a Codex Escape before its immediate done hook replaces the working row', () => {
-    vi.useFakeTimers()
-    let entry: AgentStatusEntry | undefined = makeEntry({ agentType: 'codex' })
-    const inferInterrupt = vi.fn()
-    const tracker = createAgentInterruptInference({
-      paneKey: PANE_KEY,
-      getStatusEntry: () => entry,
-      inferInterrupt,
-      now: () => 1_100
-    })
-
-    tracker.observeInputIntent('plain-escape')
-    entry = makeEntry({ state: 'done', updatedAt: 1_101, stateStartedAt: 1_101 })
-    vi.advanceTimersByTime(500)
-
-    expect(inferInterrupt).toHaveBeenCalledTimes(1)
-    expect(inferInterrupt).toHaveBeenCalledWith({
-      paneKey: PANE_KEY,
-      baselineUpdatedAt: 1_000,
-      baselineStateStartedAt: 900,
-      baselinePrompt: 'write tests',
-      baselineAgentType: 'codex',
-      intent: 'plain-escape'
-    })
-    tracker.dispose()
-  })
-
   it('reports Escape while Claude is waiting on AskUserQuestion', () => {
     vi.useFakeTimers()
     const inferInterrupt = vi.fn()
@@ -197,9 +170,9 @@ describe('agent interrupt inference', () => {
     entry = undefined
   })
 
-  it('does not infer Ctrl+C for Droid', () => {
+  it.each(['codex', 'droid'] as const)('does not infer Ctrl+C for %s', (agentType) => {
     vi.useFakeTimers()
-    let entry: AgentStatusEntry | undefined = makeEntry({ agentType: 'droid' })
+    let entry: AgentStatusEntry | undefined = makeEntry({ agentType })
     const inferInterrupt = vi.fn()
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
@@ -216,7 +189,7 @@ describe('agent interrupt inference', () => {
     entry = undefined
   })
 
-  it.each(['opencode', 'copilot'] as const)(
+  it.each(['opencode', 'opencode2', 'copilot'] as const)(
     'infers immediately on double Escape for %s',
     (agentType) => {
       vi.useFakeTimers()
@@ -269,7 +242,7 @@ describe('agent interrupt inference', () => {
     entry = undefined
   })
 
-  it.each(['opencode', 'copilot'] as const)(
+  it.each(['opencode'] as const)(
     'does not count a %s Escape after the double-Escape window expires',
     (agentType) => {
       vi.useFakeTimers()

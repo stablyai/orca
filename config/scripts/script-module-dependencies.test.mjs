@@ -1,7 +1,13 @@
-import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
 
@@ -23,6 +29,23 @@ function copiedNames(files, entryName) {
 }
 
 describe('copyScriptWithLocalModules', () => {
+  it('preserves parent paths for modules shared with the runtime', () => {
+    const sourceDir = sourceTree({ 'runtime.ts': 'export const value = 42\n' })
+    mkdirSync(join(sourceDir, 'scripts'))
+    writeFileSync(
+      join(sourceDir, 'scripts', 'entry.mjs'),
+      "export { value } from '../runtime.ts'\n"
+    )
+    const destinationRoot = mkdtempSync(join(fixtureDir, 'dest-'))
+    copyScriptWithLocalModules(
+      join(sourceDir, 'scripts', 'entry.mjs'),
+      join(destinationRoot, 'scripts')
+    )
+    expect(readFileSync(join(destinationRoot, 'runtime.ts'), 'utf8')).toBe(
+      'export const value = 42\n'
+    )
+  })
+
   it('takes the entry script itself', () => {
     expect(copiedNames({ 'entry.mjs': 'export const a = 1\n' }, 'entry.mjs')).toEqual(['entry.mjs'])
   })
@@ -83,19 +106,5 @@ describe('copyScriptWithLocalModules', () => {
     const destinationDir = join(mkdtempSync(join(fixtureDir, 'dest-')), 'nested', 'scripts')
     copyScriptWithLocalModules(join(sourceDir, 'entry.mjs'), destinationDir)
     expect(existsSync(join(destinationDir, 'entry.mjs'))).toBe(true)
-  })
-
-  // The real tree this stages: the packaged-addon gate reaches its PE reader by
-  // require, so a walker that missed it would break every rebuild fixture.
-  it('stages the node-pty job-ownership gate with everything it requires', () => {
-    const destinationDir = join(mkdtempSync(join(fixtureDir, 'dest-')), 'scripts')
-    copyScriptWithLocalModules(
-      fileURLToPath(new URL('./node-pty-job-ownership.cjs', import.meta.url)),
-      destinationDir
-    )
-    expect(readdirSync(destinationDir).sort()).toEqual([
-      'node-pty-job-ownership.cjs',
-      'windows-pe-machine.cjs'
-    ])
   })
 })

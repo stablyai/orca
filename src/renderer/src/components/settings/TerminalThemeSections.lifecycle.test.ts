@@ -210,6 +210,44 @@ describe('TerminalThemeCatalogSection', () => {
     expect(updateSettings).toHaveBeenCalledWith({ terminalThemeLight: 'GitHub Light' })
   })
 
+  it('clears imported color overrides when selecting a different theme', () => {
+    const updateSettings = vi.fn()
+    const element = renderCatalog(
+      makeSettings({ terminalColorOverrides: { background: '#111111' } }),
+      updateSettings
+    )
+    const picker = findElementByTypeName(element, 'ThemePicker')
+    const selectTheme = picker?.props?.onSelectTheme as (theme: string) => void
+
+    selectTheme('GitHub Dark')
+
+    expect(updateSettings.mock.calls[0]?.[0]).toStrictEqual({
+      terminalThemeDark: 'GitHub Dark',
+      terminalColorOverrides: undefined
+    })
+  })
+
+  it('clears imported color overrides when selecting a light theme', () => {
+    const updateSettings = vi.fn()
+    const element = renderCatalog(
+      makeSettings({
+        terminalUseSeparateLightTheme: true,
+        terminalColorOverrides: { background: '#111111' }
+      }),
+      updateSettings,
+      'light'
+    )
+    const picker = findElementByTypeName(element, 'ThemePicker')
+    const selectTheme = picker?.props?.onSelectTheme as (theme: string) => void
+
+    selectTheme('GitHub Light')
+
+    expect(updateSettings.mock.calls[0]?.[0]).toStrictEqual({
+      terminalThemeLight: 'GitHub Light',
+      terminalColorOverrides: undefined
+    })
+  })
+
   it('reopens the manually edited light target while the active appearance is dark', () => {
     const firstOpen = renderCatalog(
       makeSettings({ terminalUseSeparateLightTheme: true }),

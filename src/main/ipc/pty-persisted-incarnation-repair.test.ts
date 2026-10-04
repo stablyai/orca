@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime/runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { statSyncMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
@@ -272,7 +273,7 @@ describe('registerPtyHandlers', () => {
         },
         terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-dead-persisted-owner' }
       }
-      const store = {
+      const store = withDurableRuntimeStore({
         getWorkspaceSession: vi.fn(() => session),
         setWorkspaceSession: vi.fn((next) => {
           session = next
@@ -293,7 +294,7 @@ describe('registerPtyHandlers', () => {
         ]),
         getProjectGroups: vi.fn(() => []),
         getRepos: vi.fn(() => [])
-      }
+      })
       const runtime = {
         setPtyController: vi.fn(),
         resolveTerminalPane: vi.fn(() => {
@@ -434,7 +435,7 @@ describe('registerPtyHandlers', () => {
       },
       terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-unproven-owner' }
     }
-    const store = {
+    const store = withDurableRuntimeStore({
       getWorkspaceSession: vi.fn(() => session),
       setWorkspaceSession: vi.fn((next) => {
         session = next
@@ -445,7 +446,7 @@ describe('registerPtyHandlers', () => {
       getFolderWorkspaces: vi.fn(() => []),
       getProjectGroups: vi.fn(() => []),
       getRepos: vi.fn(() => [])
-    }
+    })
     const runtime = {
       setPtyController: vi.fn(),
       resolveTerminalPane: vi.fn(() => {

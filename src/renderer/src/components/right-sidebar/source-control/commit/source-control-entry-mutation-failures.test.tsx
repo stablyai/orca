@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   toastDismiss: vi.fn<(id: string) => void>(),
   stagePath: vi.fn(),
   unstagePath: vi.fn(),
+  bulkUnstagePaths: vi.fn(),
   discardPath: vi.fn()
 }))
 
@@ -26,7 +27,7 @@ vi.mock('@/runtime/runtime-git-client', () => ({
   unstageRuntimeGitPath: (...args: unknown[]) => mocks.unstagePath(...args),
   discardRuntimeGitPath: (...args: unknown[]) => mocks.discardPath(...args),
   bulkDiscardRuntimeGitPaths: vi.fn(),
-  bulkUnstageRuntimeGitPaths: vi.fn()
+  bulkUnstageRuntimeGitPaths: (...args: unknown[]) => mocks.bulkUnstagePaths(...args)
 }))
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(() => undefined, {
@@ -152,6 +153,25 @@ describe('source-control entry mutation failures', () => {
     })
 
     expect(lastToast().title).toBe('Failed to unstage “src/app.ts”')
+  })
+
+  it('unstages both rename paths in one request and retains them on retry', async () => {
+    mocks.bulkUnstagePaths.mockRejectedValueOnce(new Error('index.lock exists'))
+    mocks.bulkUnstagePaths.mockResolvedValueOnce(undefined)
+    const { result } = renderMutations()
+
+    await act(async () => {
+      await result.current.handleUnstage('src/new.ts', 'src/old.ts')
+    })
+    await act(async () => {
+      clickRetry()
+    })
+
+    expect(mocks.unstagePath).not.toHaveBeenCalled()
+    expect(mocks.bulkUnstagePaths).toHaveBeenCalledTimes(2)
+    for (const call of mocks.bulkUnstagePaths.mock.calls) {
+      expect(call[1]).toEqual(['src/new.ts', 'src/old.ts'])
+    }
   })
 
   it('leaves a successful stage silent, and clears a stale failure it supersedes', async () => {

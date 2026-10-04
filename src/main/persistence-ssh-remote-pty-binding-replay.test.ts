@@ -1,8 +1,9 @@
+import { closeTestStores, testState, createStore } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { testState, createStore } from './persistence-test-harness'
+
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 
@@ -54,7 +55,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   it('retains an SSH host binding when a stale renderer clears its pty map', async () => {
@@ -390,62 +392,5 @@ describe('Store', () => {
     expect(persisted.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
       [TEST_LEAF_2]: 'runtime-pty-2'
     })
-  })
-
-  it('does not restore a binding with an explicit SSH termination tombstone', async () => {
-    const store = await createStore()
-    const hostId = 'ssh:ssh-1'
-    const session: WorkspaceSessionState = {
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'ssh:ssh-1@@closed'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { type: 'leaf', leafId: TEST_LEAF_1 },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [TEST_LEAF_1]: 'ssh:ssh-1@@closed' }
-        }
-      }
-    }
-    store.setWorkspaceSession(session, hostId)
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'closed',
-      worktreeId: 'wt1',
-      tabId: 'tab1',
-      leafId: TEST_LEAF_1,
-      state: 'terminated'
-    })
-    store.setWorkspaceSession(
-      {
-        ...session,
-        tabsByWorktree: {
-          wt1: [{ ...session.tabsByWorktree.wt1[0]!, ptyId: null }]
-        },
-        terminalLayoutsByTabId: {
-          tab1: { ...session.terminalLayoutsByTabId.tab1!, ptyIdsByLeafId: {} }
-        }
-      },
-      hostId
-    )
-
-    const persisted = store.getWorkspaceSession(hostId)
-    expect(persisted.tabsByWorktree.wt1[0]!.ptyId).toBeNull()
-    expect(persisted.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
   })
 })

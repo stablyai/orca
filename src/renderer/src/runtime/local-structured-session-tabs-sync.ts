@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../store'
-import { clearLocalStructuredSessionTabs } from './local-structured-session-tabs-sync/snapshot-apply'
 import { startLocalStructuredSessionTabsSync } from './local-structured-session-tabs-sync/subscription'
+import { useLocalStructuredChatsInUse } from './local-structured-chats'
 
 export {
   isCurrentLocalStructuredSessionGeneration,
@@ -14,25 +14,21 @@ export {
 } from './local-structured-session-tabs-sync/inventory-refresh'
 export {
   applyLocalStructuredSessionTabSnapshots,
-  applyStructuredSessionTabSnapshots,
-  clearLocalStructuredSessionTabs,
-  removeLocalStructuredSessionTabs
+  applyStructuredSessionTabSnapshots
 } from './local-structured-session-tabs-sync/snapshot-apply'
 export { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
 export { projectLocalStructuredSessionTabs } from './local-structured-session-tabs-sync/snapshot-projection'
 export { startLocalStructuredSessionTabsSync } from './local-structured-session-tabs-sync/subscription'
 
+/** Mirrors this machine's structured chats whenever they can exist, whatever the chat setting says:
+ *  the setting picks what new agents open as, and chats that already exist keep showing. */
 export function useLocalStructuredSessionTabsSync(): void {
   const ready = useAppStore(
     (state) => state.workspaceSessionReady && state.terminalStartupRestorationReady
   )
-  const enabled = useAppStore((state) => state.settings?.experimentalStructuredNativeChat === true)
+  const inUse = useLocalStructuredChatsInUse()
   useEffect(() => {
-    if (!ready) {
-      return
-    }
-    if (!enabled) {
-      clearLocalStructuredSessionTabs()
+    if (!ready || !inUse) {
       return
     }
     let disposed = false
@@ -47,5 +43,5 @@ export function useLocalStructuredSessionTabsSync(): void {
       disposed = true
       unsubscribe()
     }
-  }, [enabled, ready])
+  }, [inUse, ready])
 }

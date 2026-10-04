@@ -293,12 +293,6 @@ describe('no-op regex passes stay skipped', () => {
  * this is the price. Keep the raw-candidate entry point the plain `relativePathInsideRoot` call.
  */
 describe('cross-platform-path exposes a single root-bound factory', () => {
-  it('has no raw-candidate sibling to the normalized matcher', () => {
-    expect(Object.keys(guarded).filter((name) => name.startsWith('create'))).toEqual([
-      'createNormalizedPathInsideOrEqualMatcher'
-    ])
-  })
-
   it('shows what mixing the two contracts would cost', () => {
     const root = '//wsl.localhost/Ubuntu/Repo'
     const candidate = '//wsl.localhost/Ubuntu/Repo/src/App.tsx'

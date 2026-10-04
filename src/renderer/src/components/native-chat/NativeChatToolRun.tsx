@@ -23,6 +23,7 @@ import {
   pairNativeChatToolResults
 } from '../../../../shared/native-chat-tool-pairing'
 import {
+  describeLatestToolCall,
   NATIVE_CHAT_TOOL_ACTIVITY_COPY,
   selectActiveToolCall
 } from '../../../../shared/native-chat-tool-activity'
@@ -37,8 +38,11 @@ import { NativeChatTaskList } from './NativeChatTaskList'
 import { buildNativeChatTaskListRows } from './native-chat-task-list-history'
 import { NativeChatBackgroundTaskRun } from './NativeChatBackgroundTaskRun'
 import { NativeChatSubagentRun } from './NativeChatSubagentRun'
-import { NativeChatToolIcon, NativeChatToolRunIcon } from './NativeChatToolIcon'
-import { nativeChatToolActivityLabel } from './native-chat-tool-activity-label'
+import type {
+  NativeChatSubagentDisclosure,
+  NativeChatSubagentRosterState
+} from './native-chat-subagent-sections'
+import { NativeChatToolRunIcon } from './NativeChatToolIcon'
 
 /** Stable empty default: a fresh array literal per render breaks memoization. */
 const NO_SUBAGENT_GROUPS: NativeChatSubagentGroupBlock[] = []
@@ -53,11 +57,13 @@ export function NativeChatToolRun({
   revealedDiff,
   onRevealDiff,
   subagentGroups = NO_SUBAGENT_GROUPS,
+  subagentRoster,
+  subagentDisclosure,
   backgroundTasks = NO_BACKGROUND_TASKS,
   expandSignal,
   activeTurnIsWorking,
+  trailing,
   expandOverride,
-  structuredActivityUi = true,
   disclosureId,
   onLinkClick
 }: {
@@ -68,6 +74,9 @@ export function NativeChatToolRun({
   onRevealDiff?: (element: HTMLElement) => void
   /** Spawn-group rosters that belong with this run's activity, one row each. */
   subagentGroups?: NativeChatSubagentGroupBlock[]
+  /** The rosters' list state, and their children whose rows open below this run. */
+  subagentRoster?: NativeChatSubagentRosterState
+  subagentDisclosure?: NativeChatSubagentDisclosure
   /** Background tasks that belong with this run's activity, one row each. */
   backgroundTasks?: NativeChatBackgroundTaskBlock[]
   /** Legacy view-level default; production native-chat entry points pass false. */
@@ -76,7 +85,10 @@ export function NativeChatToolRun({
   expandOverride?: boolean
   /** Structured lifecycle state, when available, keeps orphaned running calls from spinning. */
   activeTurnIsWorking?: boolean
-  structuredActivityUi?: boolean
+  /** Whether this run is the working turn's last. Only that run is live: a run
+   *  the agent has already moved past reads as settled even mid-call. Left
+   *  unset, a working turn's run is taken to be its last. */
+  trailing?: boolean
   /** Message this run belongs to. Windowing unmounts rows, so a run the reader
    *  opened has to be remembered somewhere that outlives the row. */
   disclosureId?: string
@@ -100,7 +112,20 @@ export function NativeChatToolRun({
   // deciding the row is worth mounting cannot disagree about what draws.
   const subagentRows = subagentGroups
     .filter(isRenderableSubagentGroup)
-    .map((group) => <NativeChatSubagentRun key={group.groupId} block={group} />)
+    .map((group) => (
+      <NativeChatSubagentRun
+        key={group.groupId}
+        block={group}
+        open={subagentRoster?.open}
+        onSetOpen={
+          subagentRoster && subagentDisclosure && disclosureId !== undefined
+            ? (open) => subagentDisclosure.setRosterOpen(disclosureId, open)
+            : undefined
+        }
+        sections={subagentRoster?.sections}
+        onSetSectionOpen={subagentDisclosure?.setSectionOpen}
+      />
+    ))
   // Neither a roster nor a background task is tool activity, so both take every
   // escape below that the tool header does not: a task row outlives the turn
   // that started it and is the only durable report of how it ended.
@@ -117,14 +142,24 @@ export function NativeChatToolRun({
   const askSubject = hasAskCall ? nativeChatAskRunSubject(asks) : null
   const showsHeader = !hasAskCall || countToolCalls(headerBlocks) > 0
   const callCount = countToolCalls(headerBlocks) || headerBlocks.length
+  const askIsActive = selectActiveToolCall(unansweredAsks, { activeTurnIsWorking }) !== null
+  // Live is the turn's state, not a call's. Deriving it from "some call is
+  // running" flipped the header to settled and back around every call, and a
+  // call that finished inside a frame still bought the whole flip. The turn's
+  // trailing run stays live from its first call until the agent moves on; a
+  // caller with no turn state, or a turn blocked on the reader's answer, falls
+  // back to the calls themselves.
+  const live =
+    activeTurnIsWorking === true && !askIsActive
+      ? trailing !== false
+      : selectActiveToolCall(headerBlocks, { activeTurnIsWorking }) !== null
   // One sentence for the whole run, or the command itself when the run is one
   // call — the reader recognizes `git push` faster than "Ran 1 command".
-  const runSentence = nativeChatToolRunSentence(headerBlocks)
-  const headerActiveCall = structuredActivityUi
-    ? selectActiveToolCall(headerBlocks, { activeTurnIsWorking })
-    : null
-  const isSettled = headerActiveCall == null
-  const askIsActive = selectActiveToolCall(unansweredAsks, { activeTurnIsWorking }) !== null
+  const runSentence = nativeChatToolRunSentence(headerBlocks, { live })
+  // What the run is doing now, beside the sentence: the latest call, running or
+  // not, so a call that finished in a frame still leaves its name until the next.
+  const latestCall = live ? headerBlocks.findLast(isToolCallBlock) : undefined
+  const latestCallLabel = latestCall ? describeLatestToolCall(latestCall) : null
   const { succeeded: runSucceeded, failedCallCount } = nativeChatToolRunOutcome(headerBlocks, {
     activeTurnIsWorking
   })
@@ -183,10 +218,9 @@ export function NativeChatToolRun({
   // the grouped row visible here made a failed child command look like the
   // whole response was still running (or had failed) even while collapsed.
   if (
-    structuredActivityUi &&
     expandOverride === false &&
     !(revealedDiff && open) &&
-    isSettled &&
+    !live &&
     activeTurnIsWorking === false
   ) {
     // The roster is not tool activity, so it survives this guard exactly as it
@@ -201,39 +235,41 @@ export function NativeChatToolRun({
     <div className="mt-3">
       {standaloneRows}
       {hasAskCall ? (
-        <NativeChatAwaitingInputRow subject={askSubject} pending={askIsActive} />
+        <NativeChatAwaitingInputRow
+          subject={askSubject}
+          pending={askIsActive}
+          disclosureKey={disclosureId === undefined ? undefined : `ask:${disclosureId}`}
+          // A grouped ask here still names only its count.
+          listsQuestions={false}
+        />
       ) : null}
-      {!showsHeader ? null : headerActiveCall ? (
+      {!showsHeader ? null : (
+        // One element for the run's whole life. Live and settled are states of
+        // this button, not two buttons: a header that remounted as a call started
+        // and again as it ended lost its hover, its mark, and its count each time.
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className="group/tool-run flex min-h-6 w-full items-center gap-1.5 rounded-md py-0.5 text-left text-sm leading-relaxed text-muted-foreground hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+          className="group/tool-run flex min-h-6 w-full items-center gap-1.5 rounded-md py-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
           aria-expanded={open}
           aria-live="polite"
+          data-native-chat-tool-run-state={live ? 'live' : 'settled'}
         >
-          <NativeChatToolIcon
-            mcpIdentity={headerActiveCall.mcpIdentity}
-            rowWord={headerActiveCall.name}
-            className="text-muted-foreground"
-          />
-          <span className="min-w-0 animate-pulse truncate text-foreground/85 motion-reduce:animate-none">
-            {nativeChatToolActivityLabel(headerActiveCall)}
-          </span>
-          {open ? <ChevronRight className="size-3.5 rotate-90 text-muted-foreground" /> : null}
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          className="group/tool-run flex min-h-6 w-full items-center gap-1.5 py-0.5 text-left"
-          aria-expanded={open}
-        >
-          {structuredActivityUi && settledHeaderIcon ? (
+          {settledHeaderIcon ? (
             <NativeChatToolRunIcon iconName={settledHeaderIcon} className="text-muted-foreground" />
           ) : null}
-          {/* The run in words, in the transcript's own type. The calls it counts
-              are one click away, so the header does not have to list them. */}
-          <span className="min-w-0 truncate text-sm leading-relaxed text-muted-foreground transition-colors group-hover/tool-run:text-foreground/80">
+          {/* The run in words, in the transcript's own type. Present tense while
+              live, past once settled; the text changes in place and nothing
+              around it moves. While live it keeps its width and the preview
+              beside it is what gives way. */}
+          <span
+            className={cn(
+              'truncate text-sm leading-relaxed transition-colors',
+              live
+                ? 'max-w-[72%] shrink-0 animate-pulse text-foreground/85 motion-reduce:animate-none'
+                : 'min-w-0 text-muted-foreground group-hover/tool-run:text-foreground/80'
+            )}
+          >
             {runSentence ?? fallbackLabel}
           </span>
           {failedCallCount > 0 ? (
@@ -257,9 +293,16 @@ export function NativeChatToolRun({
               )}
             </span>
           ) : null}
-          {/* Only a stated success is marked done — see nativeChatToolRunOutcome. */}
-          {structuredActivityUi && runSucceeded ? (
+          {/* Only a stated success is marked done — see nativeChatToolRunOutcome —
+              and never while live: between two calls nothing is running, and a
+              mark that appeared then would flash on every call. */}
+          {!live && runSucceeded ? (
             <Check aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+          ) : null}
+          {latestCallLabel ? (
+            <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
+              {latestCallLabel}
+            </span>
           ) : null}
           {/* Revealed on hover of this header alone — see NativeChatToolLine on
               why the group is named — and points down when open. */}

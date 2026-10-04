@@ -46,6 +46,19 @@ describe('relay launch options', () => {
     })
   })
 
+  it('reads the bundled ripgrep path, which older launch commands omit', () => {
+    expect(
+      parseRelayLaunchOptions([
+        'node',
+        'relay.js',
+        '--detached',
+        '--ripgrep-path',
+        '/home/me/.orca-remote/ripgrep/c0ffee0123456789-linux-x64/rg'
+      ]).ripgrepPath
+    ).toBe('/home/me/.orca-remote/ripgrep/c0ffee0123456789-linux-x64/rg')
+    expect(parseRelayLaunchOptions(['node', 'relay.js', '--detached']).ripgrepPath).toBe(undefined)
+  })
+
   it('keeps zero grace unlimited and ignores invalid replacements', () => {
     expect(
       parseRelayLaunchOptions(['node', 'relay.js', '--grace-time', '0', '--grace-time', '-1'])

@@ -249,7 +249,9 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
 
       const listCallsAfterBound = hostListCalls
-      await expect(transport.sendInputAccepted?.('retry while reconnecting')).resolves.toBe(false)
+      await expect(
+        transport.sendInputAccepted?.('retry while reconnecting', 'driving')
+      ).resolves.toBe(false)
       await vi.advanceTimersByTimeAsync(16_000)
 
       // The accepted-snapshot listener already owns recovery. User input must

@@ -93,6 +93,83 @@ describe('registerWorktreeHandlers', () => {
     setupWorktreeHandlers()
   })
 
+  it('fetches a missing slash-named SSH base through the narrow RPC and uses the verified tracking ref', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1'
+    }
+    let fetched = false
+    const provider = {
+      exec: vi.fn(async (args: string[]) => {
+        if (args[0] === 'fetch') {
+          throw new Error('generic fetch is forbidden')
+        }
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          throw missingShowRefError()
+        }
+        if (args[0] === 'rev-parse') {
+          if (fetched && args.includes('refs/remotes/origin/release/mobile^{commit}')) {
+            return { stdout: 'verified-sha\n', stderr: '' }
+          }
+          throw missingShowRefError()
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn(async () => {
+        fetched = true
+      }),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo-missing-base',
+          head: 'verified-sha',
+          branch: 'refs/heads/missing-base',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue({
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    })
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:create'](null, {
+      repoId: repo.id,
+      name: 'missing-base',
+      baseBranch: 'release/mobile'
+    })
+
+    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
+      repo.path,
+      'origin',
+      'release/mobile',
+      'refs/remotes/origin/release/mobile',
+      { skipAutoMaintenance: true }
+    )
+    expect(provider.exec.mock.calls.some(([args]) => args[0] === 'fetch')).toBe(false)
+    expect(provider.addWorktree).toHaveBeenCalledWith(
+      repo.path,
+      'missing-base',
+      '/remote/repo-missing-base',
+      { base: 'origin/release/mobile' }
+    )
+  })
+
   it('reuses a fresh SSH remote-tracking base refresh for repeated creates', async () => {
     const repo = {
       id: 'repo-ssh',
@@ -105,6 +182,9 @@ describe('registerWorktreeHandlers', () => {
     }
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
@@ -179,6 +259,9 @@ describe('registerWorktreeHandlers', () => {
     }
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
@@ -251,6 +334,9 @@ describe('registerWorktreeHandlers', () => {
     })
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
@@ -317,6 +403,9 @@ describe('registerWorktreeHandlers', () => {
     const events: string[] = []
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         events.push(`exec:${args[0]}:${registeredRoots.has('/remote/repo')}`)
         if (!registeredRoots.has('/remote/repo')) {
           throw new Error('root not registered')
@@ -397,6 +486,9 @@ describe('registerWorktreeHandlers', () => {
     }
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'symbolic-ref') {
           return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
         }
@@ -479,6 +571,9 @@ describe('registerWorktreeHandlers', () => {
     })
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'remote') {
           return pendingRemoteList
         }
@@ -548,6 +643,9 @@ describe('registerWorktreeHandlers', () => {
     })
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
@@ -595,7 +693,13 @@ describe('registerWorktreeHandlers', () => {
 
     resolveExactFetch()
     await vi.waitFor(() =>
-      expect(provider.exec.mock.calls.filter(([args]) => args[0] === 'fetch')).toHaveLength(1)
+      expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
+        '/remote/repo',
+        'origin',
+        'local-base',
+        'refs/remotes/origin/local-base',
+        { skipAutoMaintenance: true }
+      )
     )
     await prefetch
     await create

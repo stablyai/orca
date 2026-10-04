@@ -1,3 +1,4 @@
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 /**
  * The desktop authority's end of the scoped-list and owner-fenced contracts:
  * a parameterless read still answers with everything it stores, a scoped read is
@@ -106,14 +107,15 @@ async function createStore() {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'automation-fencing-'))
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTestStores()
   rmSync(testState.dir, { recursive: true, force: true })
 })
 

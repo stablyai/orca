@@ -8,7 +8,21 @@
 
 /** Longer than the longest backtick run inside, and never under three. */
 export function codeFenceFor(code: string): string {
-  const longest = (code.match(/`+/g) ?? []).reduce((run, match) => Math.max(run, match.length), 0)
+  let longest = 0
+  let longRun: RegExp | undefined
+  let start = code.indexOf('`')
+  while (start !== -1) {
+    let end = start + 1
+    if (code.charCodeAt(end) === 96) {
+      longRun ??= /`+/y
+      longRun.lastIndex = end
+      if (longRun.test(code)) {
+        end = longRun.lastIndex
+      }
+    }
+    longest = Math.max(longest, end - start)
+    start = code.indexOf('`', end)
+  }
   return '`'.repeat(Math.max(3, longest + 1))
 }
 

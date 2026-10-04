@@ -176,14 +176,6 @@ export function loadWindowsTerminalCapabilities(
   return nextPendingCapabilities
 }
 
-export function refreshWindowsTerminalCapabilities(
-  ownerKey?: string,
-  target: WindowsTerminalCapabilityLoadTarget = { kind: 'local' },
-  sshConnectionId?: string | null
-): Promise<WindowsTerminalCapabilities> {
-  return loadWindowsTerminalCapabilities({ force: true, ownerKey, target, sshConnectionId })
-}
-
 export function selectWindowsTerminalCapabilitiesForOwner(
   state: WindowsTerminalCapabilityHookState,
   enabled: boolean,

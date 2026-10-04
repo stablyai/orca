@@ -24,14 +24,6 @@ export function buildMacIdentityMenuItems(
   ]
 }
 
-/** The native Window-menu Minimize/Zoom role items, with localized labels. */
-export function buildWindowMenuItems(): Electron.MenuItemConstructorOptions[] {
-  return [
-    { role: 'minimize', label: translateMain('menu.minimize', 'Minimize') },
-    { role: 'zoom', label: translateMain('menu.zoom', 'Zoom') }
-  ]
-}
-
 /** The Edit-menu Undo/Redo/Cut role items, with localized labels. Non-macOS
  *  disables the accelerator so Ctrl+Z/Ctrl+Y can reach the focused terminal
  *  or DOM control instead of the native role handler. */

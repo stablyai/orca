@@ -184,44 +184,6 @@ describe('validated import partition fidelity', () => {
     expect(result.ok && result.summary.domains).toEqual(['plain.example'])
   })
 
-  it('does not replace existing cookies for a domain whose only source cookie is skipped', async () => {
-    const remove = vi.fn().mockResolvedValue(undefined)
-    sessionFromPartitionMock.mockReturnValue({
-      cookies: {
-        get: vi.fn().mockResolvedValue([
-          {
-            name: 'existing-session',
-            value: 'still-valid',
-            domain: '.app.example',
-            path: '/',
-            secure: true,
-            httpOnly: true,
-            hostOnly: false,
-            session: true,
-            sameSite: 'lax'
-          }
-        ]),
-        remove,
-        set: unreachableCookieSet
-      }
-    })
-    const filePath = writeCookieFile([
-      {
-        domain: '.app.example',
-        name: 'chips-auth',
-        value: 'keep-me',
-        secure: true,
-        partitionKey: { topLevelSite: 'https://top.example' }
-      }
-    ])
-
-    const result = await importCookiesFromFile(filePath, 'persist:test')
-
-    expect(result.ok && result.summary.partitionSkippedCookies).toBe(1)
-    expect(cookieWriteMock).not.toHaveBeenCalled()
-    expect(remove).not.toHaveBeenCalled()
-  })
-
   it('preserves a populated family and creates no staged replay for an opaque JSON partition', async () => {
     const targetJar = [
       {

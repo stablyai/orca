@@ -18,8 +18,6 @@ const HOST_CLIENT_CONTEXT_MODULE = 'mobile/src/transport/client-context.tsx'
  * an import, so no type checker sees it and a rename of the local surfaces as a `ReferenceError`
  * mid-recording; five hand-copied spellings are five independent ways to arrive there, and
  * `adapter-seam.test.ts` both pins the local against the product source and refuses a sixth copy.
- * The cost is where the pin lives: this text is inside `recorderSha256`, so editing it re-records
- * the whole corpus rather than the five families that mount through it.
  */
 export const hostClientContextExposure: OperationExposure = [
   'client-context.tsx',

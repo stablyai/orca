@@ -1,3 +1,4 @@
+import { CLAUDE_HOOK_PARENT_CAPTURE } from './hook-process-capture'
 import {
   POSIX_HOOK_STDIN_DRAIN_COMMAND,
   WINDOWS_GIT_BASH_HOOK_ENVIRONMENT_GUARD,
@@ -46,7 +47,7 @@ export function wrapRuntimeHomeHookCommand(
   const powershellInvocation = `${powershell} ${WINDOWS_POWERSHELL_HOOK_SWITCHES} -EncodedCommand ${encodedCommand}`
   const encodedWindowsBranch = `if [ -f ${powershell} ]; then ${powershellInvocation}; else ${windowsMissingScriptFallback}; fi`
   const windowsBranch = `if [ -f ${windowsScript} ]; then case "\${HOME-}" in ${WINDOWS_GIT_BASH_RUNTIME_HOME_UNSAFE}) ${encodedWindowsBranch} ;; *) ${windowsScript} ;; esac; else ${windowsMissingScriptFallback}; fi`
-  const posixBranch = `if [ -f ${posixScript} ] && [ -r ${posixScript} ] && [ -x ${posixScript} ]; then /bin/sh ${posixScript}; else ${posixMissingScriptFallback}; fi`
+  const posixBranch = `if [ -f ${posixScript} ] && [ -r ${posixScript} ] && [ -x ${posixScript} ]; then ${scriptBaseName === 'claude-hook' || scriptBaseName === 'openclaude-hook' ? CLAUDE_HOOK_PARENT_CAPTURE : ''}/bin/sh ${posixScript}; else ${posixMissingScriptFallback}; fi`
   // Why: OSTYPE is shell-owned, so platform selection adds no process to every hook invocation.
   return `if [ -z "\${HOME-}" ]; then ${missingScriptFallback}; else case "\${OSTYPE-}" in msys*|cygwin*|win32*) ${windowsBranch} ;; *) ${posixBranch} ;; esac; fi`
 }

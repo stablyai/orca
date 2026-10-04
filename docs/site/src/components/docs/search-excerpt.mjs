@@ -25,13 +25,16 @@ export function stripSearchExcerptMarkdown(value) {
     codeSpans.push(code)
     return codeToken(codeSpans.length - 1)
   })
-  const stripped = protectedCode
-    .replace(/!\[([^\]]*)\]\((?:\\.|[^)])*\)/g, '$1')
-    .replace(/\[([^\]]+)\]\((?:\\.|[^)])*\)/g, '$1')
-    .replace(/\[([^\]]+)\]\s*\[[^\]]*\]/g, '$1')
-    .replace(/\[\[([^|\]]+)\|([^\]]+)\]\]/g, '$2')
-    .replace(/\[\[([^\]]+)\]\]/g, '$1')
-    .replace(/<[^>]+>/g, '')
+  const linkedText = protectedCode.includes(']')
+    ? protectedCode
+        .replace(/!\[([^\]]*)\]\((?:\\.|[^)])*\)/g, '$1')
+        .replace(/\[([^\]]+)\]\((?:\\.|[^)])*\)/g, '$1')
+        .replace(/\[([^\]]+)\]\s*\[[^\]]*\]/g, '$1')
+        .replace(/\[\[([^|\]]+)\|([^\]]+)\]\]/g, '$2')
+        .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    : protectedCode
+  const withoutTags = linkedText.includes('>') ? linkedText.replace(/<[^>]+>/g, '') : linkedText
+  const stripped = withoutTags
     .replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, '$2')
     .replace(/(^|[^\w])\*([^\s*][^*]*?\S)\*(?!\w)/g, '$1$2')
     .replace(/(^|[^\w])_([^\s_][^_]*?\S)_(?!\w)/g, '$1$2')

@@ -71,7 +71,10 @@ vi.mock('@/lib/connection-context', () => ({
 vi.mock('@/lib/connection-owner-resolution', () => ({
   createConnectionIdForFileSelector: () => () => connectionOwner.value
 }))
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
+  translate: (_key: string, fallback: string) => fallback
+}))
 vi.mock('./useLocalImageSrc', () => ({ useLocalImageSrc: (src?: string) => src }))
 vi.mock('./MermaidBlock', () => ({ default: () => null }))
 vi.mock('./CodeBlockCopyButton', () => ({

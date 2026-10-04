@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getAgentSessionOptionCatalog } from '../../../../../../shared/agent-session-option-catalog'
+import { resolveAgentSessionOptionLaunch } from '../../../../../../shared/agent-session-option-launch'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import {
   assertWorkerLaunchPreferencesCreateTerminal,
@@ -11,6 +12,43 @@ import {
 import { WorkerStartParams } from './worker-start-schema'
 
 describe('orchestration worker launch preferences', () => {
+  it('passes a discovered OMP model through the existing launch arguments and receipt', () => {
+    const model = 'google-vertex/claude-haiku-4-5@20251001'
+    const launch = resolveWorkerLaunchPreferences({ agent: 'omp', model })
+
+    expect(launch).toEqual({
+      preferences: { model },
+      receipt: {
+        requested: { agent: 'omp', model, effort: null },
+        effective: { agent: 'omp', model, effort: null }
+      }
+    })
+    expect(resolveAgentSessionOptionLaunch('omp', launch.preferences, [], false)).toEqual({
+      args: ['--model', model],
+      appliedValues: { model }
+    })
+  })
+
+  it('keeps OMP configuration defaults when no model is requested', () => {
+    expect(resolveWorkerLaunchPreferences({ agent: 'omp' })).toEqual({
+      preferences: undefined,
+      receipt: {
+        requested: { agent: 'omp', model: null, effort: null },
+        effective: { agent: 'omp', model: null, effort: null }
+      }
+    })
+  })
+
+  it('rejects OMP effort until its model options support it', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({
+        agent: 'omp',
+        model: 'google-vertex/claude-haiku-4-5@20251001',
+        effort: 'low'
+      })
+    ).toThrow('does not support effort low')
+  })
+
   it('passes an opaque Claude model and portable effort through the shared catalog', () => {
     expect(
       resolveWorkerLaunchPreferences({
@@ -25,6 +63,64 @@ describe('orchestration worker launch preferences', () => {
         effective: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' }
       }
     })
+  })
+
+  it('passes an account-scoped Antigravity model and supported effort through the shared catalog', () => {
+    expect(
+      resolveWorkerLaunchPreferences({
+        agent: 'antigravity',
+        model: 'gemini-3.1-pro-high',
+        effort: 'high'
+      })
+    ).toEqual({
+      preferences: { model: 'gemini-3.1-pro-high', effort: 'high' },
+      receipt: {
+        requested: {
+          agent: 'antigravity',
+          model: 'gemini-3.1-pro-high',
+          effort: 'high'
+        },
+        effective: {
+          agent: 'antigravity',
+          model: 'gemini-3.1-pro-high',
+          effort: 'high'
+        }
+      }
+    })
+  })
+
+  it('rejects unsupported Antigravity effort values', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({
+        agent: 'antigravity',
+        model: 'gemini-3.1-pro-high',
+        effort: 'xhigh'
+      })
+    ).toThrow('does not support effort xhigh')
+  })
+
+  it('passes a Muse model and reasoning effort through the shared catalog', () => {
+    expect(
+      resolveWorkerLaunchPreferences({ agent: 'muse', model: 'muse-spark-1.3', effort: 'xhigh' })
+    ).toEqual({
+      preferences: { model: 'muse-spark-1.3', effort: 'xhigh' },
+      receipt: {
+        requested: { agent: 'muse', model: 'muse-spark-1.3', effort: 'xhigh' },
+        effective: { agent: 'muse', model: 'muse-spark-1.3', effort: 'xhigh' }
+      }
+    })
+  })
+
+  it('rejects Muse effort values outside its reasoning ladder', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({ agent: 'muse', model: 'muse-spark-1.3', effort: 'turbo' })
+    ).toThrow('does not support effort turbo')
+  })
+
+  it('refuses an opencode model because the opencode 2 TUI rejects --model', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({ agent: 'opencode', model: 'meta/muse-spark-1.3' })
+    ).toThrow('does not support launch-time model selection')
   })
 
   it('does not invent an effort when only a model is requested', () => {
@@ -104,8 +200,8 @@ describe('orchestration worker launch preferences', () => {
     }
   })
 
-  it('rejects effort without a model', () => {
-    expect(() => resolveWorkerLaunchPreferences({ agent: 'codex', effort: 'high' })).toThrow(
+  it.each(['codex', 'omp'] as const)('rejects %s effort without a model', (agent) => {
+    expect(() => resolveWorkerLaunchPreferences({ agent, effort: 'high' })).toThrow(
       '--effort requires --model'
     )
   })

@@ -14,7 +14,10 @@ vi.mock('@/lib/worker-terminal-takeover-report', () => ({
 
 const ATTACHMENT = { id: 'a1', path: '/tmp/shot.png' } as NativeChatComposerImageAttachment
 
-function harness(agent: AgentType) {
+function harness(
+  agent: AgentType,
+  threadGoal?: NativeChatStructuredComposerTransport['threadGoal']
+) {
   const structuredTransport = {
     send: vi.fn(() => true),
     dispatchCommand: (text: string) =>
@@ -32,6 +35,9 @@ function harness(agent: AgentType) {
     sessionId: 'session-test',
     runtimeEnvironmentId: null
   } as unknown as NativeChatStructuredComposerTransport
+  if (threadGoal) {
+    structuredTransport.threadGoal = threadGoal
+  }
   const { result } = renderHook(() =>
     useNativeChatStructuredComposerSend({
       agent,
@@ -78,5 +84,16 @@ describe('attachment guard follows what the host claims', () => {
     expect(structuredTransport.onError).not.toHaveBeenCalledWith(
       'Remove attachments before using a chat-session command.'
     )
+  })
+
+  it('refuses attachments on /goal where the host sets the goal, since no message is sent', () => {
+    const setObjective = vi.fn(async () => true)
+    const { send, structuredTransport } = harness('codex', { setObjective })
+    send('/goal ship the fix')
+    expect(structuredTransport.onError).toHaveBeenCalledWith(
+      'Remove attachments before using a chat-session command.'
+    )
+    expect(setObjective).not.toHaveBeenCalled()
+    expect(structuredTransport.send).not.toHaveBeenCalled()
   })
 })

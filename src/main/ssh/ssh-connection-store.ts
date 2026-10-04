@@ -85,7 +85,16 @@ export class SshConnectionStore {
   }
 
   updateTarget(id: string, updates: Partial<Omit<SshTarget, 'id'>>): SshTarget | null {
-    const updated = this.store.updateSshTarget(id, updates)
+    const existing = this.store.getSshTarget(id)
+    // Why: a new runtime choice or endpoint must re-run the ladder, not replay the old rung.
+    const changed = (key: 'remoteRuntime' | 'host' | 'port' | 'configHost'): boolean =>
+      key in updates && existing?.[key] !== updates[key]
+    const resetsRuntime =
+      changed('remoteRuntime') || changed('host') || changed('port') || changed('configHost')
+    const updated = this.store.updateSshTarget(
+      id,
+      resetsRuntime ? { ...updates, remoteRuntimeResolution: undefined } : updates
+    )
     if (updated) {
       // Why: actively editing a target reclaims its alias from the deleted set,
       // so an edit can never leave the host tombstoned.

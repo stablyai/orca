@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
 import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
@@ -442,7 +443,9 @@ describe('OrcaRuntimeService', () => {
     })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const closeTerminalTab = vi.fn(async () => {})
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow })
+    )
     runtime.setPtyController({
       write: () => true,
       kill,

@@ -1,0 +1,16 @@
+{
+  "source_scenario": "shell-cancel",
+  "claude_version": "2.1.280 (Claude Code)",
+  "argv": [
+    "claude",
+    "--settings",
+    "/Users/uuuuuuuuuuuuu/orca-qa/phase0-cancel/settings.json",
+    "--dangerously-skip-permissions"
+  ],
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-22",
+  "clock": "t is seconds since the first record; hook records keep the ps snapshot taken inside the hook",
+  "note": "Claude Code driven over a real PTY with every hook logged to stdin-capture. A background `sleep 600` is started, then a foreground turn is cancelled with Esc twice (mid-tool, mid-stream); the shell is later SIGKILLed from outside, a `sleep 500` is started and killed, and a turn is cancelled after that kill. Esc fires no hook and kills only the foreground tool; every Stop inventory matched the process table. Scrubbed: username replaced by a same-length placeholder."
+}

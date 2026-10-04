@@ -1,4 +1,4 @@
-import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
+import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import {
   RELAY_UPLOAD_IDENTITY_FILE_NAME,
   RELAY_UPLOAD_OWNER_FILE_NAME,
@@ -9,11 +9,15 @@ import {
   type RelayUploadStageSlot
 } from './ssh-relay-upload-stage-contract'
 
-export function reserveWindowsRelayUploadStageCommand(poolDir: string, owner: string): string {
+export function reserveWindowsRelayUploadStageCommand(
+  poolDir: string,
+  owner: string,
+  identity: WindowsUploadStageIdentity = {}
+): string {
   return powerShellCommand(
     [
       "$ErrorActionPreference = 'Stop'",
-      ...windowsFileIdentityScript(),
+      ...windowsFileIdentityScript(identity),
       `$pool = ${powerShellLiteral(poolDir)}`,
       `$owner = ${powerShellLiteral(owner)}`,
       '$null = New-Item -ItemType Directory -Force -Path $pool',
@@ -43,8 +47,33 @@ export function reserveWindowsRelayUploadStageCommand(poolDir: string, owner: st
   )
 }
 
-function windowsFileIdentityScript(): string[] {
+/** Where a Windows stage command reads file identities; `node` is a verified pinned node.exe. */
+export type WindowsUploadStageIdentity = { node?: string }
+
+/**
+ * `vol:indexHigh:indexLow` in lowercase hex, the format the legacy Add-Type helper persisted.
+ * libuv fills `dev`/`ino` from the same volume serial and file index, so either reader accepts
+ * the other's identity files. Single quotes only: PS 5.1 drops embedded double quotes from argv.
+ */
+export const WINDOWS_UPLOAD_STAGE_IDENTITY_JS =
+  "const s=require('fs').lstatSync(process.argv[1],{bigint:true});const m=0xffffffffn;" +
+  "process.stdout.write((s.dev&m).toString(16)+':'+(s.ino>>32n).toString(16)+':'+(s.ino&m).toString(16))"
+
+function windowsFileIdentityScript(identity: WindowsUploadStageIdentity = {}): string[] {
+  // Why normalize: a leading zero or upper-case digit from either reader is not a different file.
+  const normalize =
+    "function ConvertTo-OrcaFileIdentity([string]$value) { (($value.Trim().ToLowerInvariant() -split ':') | ForEach-Object { $digits = $_.TrimStart('0'); if ($digits -eq '') { '0' } else { $digits } }) -join ':' }"
+  if (identity.node) {
+    // Why node.exe and not Add-Type: runtime-compiled P/Invoke is an EDR signal (design D5).
+    return [
+      normalize,
+      `$orcaIdentityNode = ${powerShellLiteral(identity.node)}`,
+      `$getFileIdentity = { param($path) $value = & $orcaIdentityNode -e ${powerShellNativeArg(WINDOWS_UPLOAD_STAGE_IDENTITY_JS)} -- $path; if ($LASTEXITCODE -ne 0) { throw 'Orca could not read a relay upload stage file identity' }; ConvertTo-OrcaFileIdentity ([string]$value) }`
+    ]
+  }
+  // Legacy: host-Node relays have no verified node.exe to run; see windows-edr-posture.md.
   return [
+    normalize,
     "if ($env:OS -eq 'Windows_NT') {",
     "if ($null -eq ('OrcaRelayUploadFileIdentity' -as [type])) {",
     "Add-Type -TypeDefinition @'",
@@ -66,9 +95,9 @@ function windowsFileIdentityScript(): string[] {
     '}',
     "'@",
     '}',
-    '$getFileIdentity = { param($path) [OrcaRelayUploadFileIdentity]::Read($path) }',
+    '$getFileIdentity = { param($path) ConvertTo-OrcaFileIdentity ([OrcaRelayUploadFileIdentity]::Read($path)) }',
     '} else {',
-    '$getFileIdentity = { param($path) $resolved = (Get-Item -LiteralPath $path -Force -ErrorAction Stop).FullName; $value = & /usr/bin/stat -f "%i" -- $resolved 2>$null; if ($LASTEXITCODE -ne 0) { $value = & /usr/bin/stat -c "%i" -- $resolved }; ([string]$value).Trim() }',
+    '$getFileIdentity = { param($path) $resolved = (Get-Item -LiteralPath $path -Force -ErrorAction Stop).FullName; $value = & /usr/bin/stat -f "%i" -- $resolved 2>$null; if ($LASTEXITCODE -ne 0) { $value = & /usr/bin/stat -c "%i" -- $resolved }; ConvertTo-OrcaFileIdentity ([string]$value) }',
     '}'
   ]
 }
@@ -103,7 +132,7 @@ function windowsOwnershipScript(
     '$ownerItem = Get-Item -LiteralPath $ownerPath -Force -ErrorAction SilentlyContinue',
     '$identityItem = Get-Item -LiteralPath $identityPath -Force -ErrorAction SilentlyContinue',
     '$actualOwner = if ($null -ne $ownerItem) { [System.IO.File]::ReadAllText($ownerPath).Trim() } else { "" }',
-    '$expectedIdentity = if ($null -ne $identityItem) { [System.IO.File]::ReadAllText($identityPath).Trim() } else { "" }',
+    '$expectedIdentity = if ($null -ne $identityItem) { ConvertTo-OrcaFileIdentity ([System.IO.File]::ReadAllText($identityPath)) } else { "" }',
     '$actualIdentity = if ($null -ne $claimItem) { & $getFileIdentity $ownedPath } else { "" }',
     '$owned = ($null -ne $claimItem) -and $claimItem.PSIsContainer -and (($claimItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) -and ($null -ne $ownerItem) -and -not $ownerItem.PSIsContainer -and (($ownerItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) -and ($null -ne $identityItem) -and -not $identityItem.PSIsContainer -and (($identityItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) -and ($actualOwner -ceq $expectedOwner) -and ($actualIdentity -ceq $expectedIdentity)',
     ...(requirePayload
@@ -133,7 +162,7 @@ function windowsStaleOwnershipScript(pathExpression: string): string[] {
     '$ownerItem = Get-Item -LiteralPath $ownerPath -Force -ErrorAction SilentlyContinue',
     '$identityItem = Get-Item -LiteralPath $identityPath -Force -ErrorAction SilentlyContinue',
     '$actualOwner = if ($null -ne $ownerItem) { [System.IO.File]::ReadAllText($ownerPath).Trim() } else { "" }',
-    '$expectedIdentity = if ($null -ne $identityItem) { [System.IO.File]::ReadAllText($identityPath).Trim() } else { "" }',
+    '$expectedIdentity = if ($null -ne $identityItem) { ConvertTo-OrcaFileIdentity ([System.IO.File]::ReadAllText($identityPath)) } else { "" }',
     '$actualIdentity = if ($null -ne $ownedItem) { & $getFileIdentity $ownedPath } else { "" }',
     "$owned = ($null -ne $ownedItem) -and $ownedItem.PSIsContainer -and (($ownedItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) -and ($null -ne $ownerItem) -and -not $ownerItem.PSIsContainer -and (($ownerItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) -and ($null -ne $identityItem) -and -not $identityItem.PSIsContainer -and (($identityItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) -and ($actualIdentity -ceq $expectedIdentity) -and ($ownerItem.LastWriteTimeUtc -lt $cutoff) -and ($actualOwner -match '^\\.sftp-namespace-[0-9a-f]{32}$')",
     '$reparse = $null',
@@ -161,12 +190,13 @@ function windowsDeleteOwnedClaimScript(owner: string): string[] {
 export function promoteWindowsRelayUploadStageCommand(
   stage: RelayUploadStageSlot,
   owner: string,
-  destinationDir: string
+  destinationDir: string,
+  identity: WindowsUploadStageIdentity = {}
 ): string {
   return powerShellCommand(
     [
       "$ErrorActionPreference = 'Stop'",
-      ...windowsFileIdentityScript(),
+      ...windowsFileIdentityScript(identity),
       ...windowsClaimPrelude(stage),
       ...windowsOwnershipScript(owner, true),
       'if (-not $owned) {',
@@ -183,12 +213,13 @@ export function promoteWindowsRelayUploadStageCommand(
 
 export function cleanupWindowsRelayUploadStageCommand(
   stage: RelayUploadStageSlot,
-  owner: string
+  owner: string,
+  identity: WindowsUploadStageIdentity = {}
 ): string {
   return powerShellCommand(
     [
       "$ErrorActionPreference = 'Stop'",
-      ...windowsFileIdentityScript(),
+      ...windowsFileIdentityScript(identity),
       ...windowsClaimPrelude(stage),
       ...windowsOwnershipScript(owner, true),
       'if ($owned) {',
@@ -202,12 +233,13 @@ export function cleanupWindowsRelayUploadStageCommand(
 
 export function recoverWindowsRelayUploadStageCommand(
   poolDir: string,
-  staleSeconds: number
+  staleSeconds: number,
+  identity: WindowsUploadStageIdentity = {}
 ): string {
   return powerShellCommand(
     [
       "$ErrorActionPreference = 'Stop'",
-      ...windowsFileIdentityScript(),
+      ...windowsFileIdentityScript(identity),
       `$pool = ${powerShellLiteral(poolDir)}`,
       `$cutoff = [DateTime]::UtcNow.AddSeconds(-${staleSeconds})`,
       '$poolItem = Get-Item -LiteralPath $pool -Force -ErrorAction SilentlyContinue',

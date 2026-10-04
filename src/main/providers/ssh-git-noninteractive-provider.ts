@@ -27,8 +27,10 @@ export class SshGitNoninteractiveProvider extends SshGitReadProvider {
         args: plan.args,
         cwd,
         stdin: plan.stdinPayload,
+        ...(plan.env ? { env: plan.env } : {}),
         timeoutMs,
-        operation
+        operation,
+        shell: true
       },
       undefined,
       operation
@@ -99,6 +101,7 @@ export class SshGitNoninteractiveProvider extends SshGitReadProvider {
       timeoutMs: number
       env?: Record<string, string>
       operation?: string
+      shell?: boolean
     },
     signal?: AbortSignal,
     operation?: string

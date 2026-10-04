@@ -1,6 +1,8 @@
-import { parse, stringify } from 'yaml'
+import { isDeepStrictEqual } from 'node:util'
+import { parse } from 'yaml'
 
 import { HERMES_PLUGIN_NAME } from './hermes-managed-plugin-source'
+import { updateHermesPluginDocument } from './hermes-config-document'
 
 export type HermesConfig = Record<string, unknown>
 
@@ -41,16 +43,14 @@ export function parseHermesConfig(content: string | null): ConfigParseResult {
   }
 }
 
-export function serializeHermesConfig(config: HermesConfig): string {
-  return `${stringify(config, { lineWidth: 0 }).trimEnd()}\n`
-}
-
 export function enablePlugin(config: HermesConfig): HermesConfig {
   const next: HermesConfig = { ...config }
   const plugins = isRecord(next.plugins) ? { ...next.plugins } : {}
   const enabled = asStringArray(plugins.enabled) ?? []
   const disabled = asStringArray(plugins.disabled)
-  plugins.enabled = Array.from(new Set([...enabled, HERMES_PLUGIN_NAME])).sort()
+  plugins.enabled = enabled.includes(HERMES_PLUGIN_NAME)
+    ? enabled
+    : [...enabled, HERMES_PLUGIN_NAME]
   if (disabled === null) {
     // Why: Hermes treats a malformed disabled list as empty. Normalize it here
     // so Orca's install status matches what the real Hermes loader will do.
@@ -70,7 +70,7 @@ export function disablePlugin(config: HermesConfig): HermesConfig {
   }
   const plugins = { ...next.plugins }
   const enabled = asStringArray(plugins.enabled)
-  if (enabled !== null) {
+  if (enabled !== null && plugins.enabled !== undefined) {
     plugins.enabled = enabled.filter((name) => name !== HERMES_PLUGIN_NAME)
   }
   next.plugins = plugins
@@ -85,7 +85,11 @@ export function updateConfigContent(
   if (!parsed.ok) {
     return { content: null, detail: parsed.detail }
   }
-  return { content: serializeHermesConfig(updater(parsed.config)) }
+  const next = updater(parsed.config)
+  if (isDeepStrictEqual(parsed.config, next)) {
+    return { content: content ?? '' }
+  }
+  return updateHermesPluginDocument(content ?? '', next)
 }
 
 export function getConfigEnablement(config: HermesConfig): {

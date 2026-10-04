@@ -8,6 +8,9 @@
 //
 // The release CHAINS off the hold rather than racing it: an unmount during the hold's round trip
 // would otherwise release a hold that has not landed yet, and the late hold would never be undone.
+//
+// A current host ignores both: it starts an agent only for a send. They stay for older hosts, until
+// MIN_COMPATIBLE_RUNTIME_SERVER_VERSION passes the first host that ignores them.
 
 import { useEffect, useRef } from 'react'
 import { structuredAgentSessionHolderId } from '../../../../shared/structured-agent-session-holder'
@@ -39,8 +42,10 @@ export function useStructuredAgentSessionHold(args: {
     const held = callStructuredAgentSession(runtimeTarget, 'agentSession.hold', {
       sessionId,
       holderId
-      // An older host has no such method; the session still reads, it just is not held.
-    }).catch(() => undefined)
+    }).catch((error: unknown) => {
+      // The session still reads, and a send restarts the agent itself; this only leaves a trace.
+      console.warn('[structured-agent-session] hold failed:', error)
+    })
     return () => {
       void held.then(() =>
         callStructuredAgentSession(runtimeTarget, 'agentSession.release', {

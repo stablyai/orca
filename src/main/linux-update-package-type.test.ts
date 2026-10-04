@@ -221,7 +221,7 @@ describe('getLinuxRootPackageType', () => {
   })
 
   it('returns unusable when the marker is unreadable', async () => {
-    // A directory in the marker's place makes readFileSync fail with EISDIR.
+    // A directory in the marker's place makes fail with EISDIR.
     await fsp.mkdir(path.join(resourcesDir, 'package-type'))
     const module = await loadPackageType()
     expect(module.getLinuxPackageType()).toBe('unusable')

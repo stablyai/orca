@@ -1,0 +1,10 @@
+{
+  "description": "hermes recording at 120x31 replayed on the agent pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-4: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "5-257: now=pending:closed edge=pending:closed quiet=ready-weak wait=ready@start"
+    ],
+    "clockless": ["0-257: verdict=pending:closed wait=pending"]
+  }
+}

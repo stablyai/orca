@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  appendNormalizedToTailBuffer,
-  appendNormalizedToMultilineTailBufferUnwindowed
-} from './orca-runtime'
+import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
+import { appendNormalizedToMultilineTailBufferUnwindowed } from './terminal-tail-redraw-buffer'
 
 // Differential guard for the windowed redraw tail path: the public
 // appendNormalizedToTailBuffer routes vertical-control chunks through a

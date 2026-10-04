@@ -104,6 +104,9 @@
   --color-status-success: var(--status-success);
   --color-status-success-background: var(--status-success-background);
   --color-status-success-border: var(--status-success-border);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-background: var(--status-warning-background);
+  --color-status-warning-border: var(--status-warning-border);
   --color-workspace-status-done: var(--workspace-status-done);
   --color-workspace-status-review: var(--workspace-status-review);
   --color-workspace-status-progress: var(--workspace-status-progress);
@@ -185,6 +188,11 @@
   --status-success: #15803d;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  /* Needs-attention state that is not an error: a resume that did not carry on, an update that
+     failed. Yellow, so it stays apart from destructive red and from the orange working state. */
+  --status-warning: #ca8a04;
+  --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
   /* Workspace PR-state tones: same hue in both themes so a status keeps its
      identity when the theme flips. */
   --workspace-status-done: #c7a594;
@@ -299,6 +307,9 @@
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  --status-warning: #eab308;
+  --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;
@@ -398,7 +409,14 @@
 
 [data-sonner-toaster] {
   font-family: var(--font-sans);
-  z-index: 40 !important;
+  z-index: var(--toaster-z-index, 40) !important;
+}
+
+/* Keep errors above standard modal backdrops at the existing popover tier.
+   Why: overlays portal straight into body, and `>` plus a :has() on body alone (not in the toaster's
+   selector) keeps unrelated DOM changes from rescanning the page; the old form froze large diffs. */
+body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
+  --toaster-z-index: 60;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
@@ -708,9 +726,22 @@
   mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 100%);
 }
 
-.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start) {
+/* Why: the status bar's usage cluster reuses the end fade so a clipped cluster never cuts a glyph. */
+.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start),
+.status-bar-usage-cluster[data-overflowing='true'] {
   -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
   mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
+}
+
+/* Why: tabs only draw a right border, so a tab docked at the end has no seam against the tab it covers. */
+.terminal-tab-strip[data-active-tab-docked='end'] > [data-active-tab-dock]::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 1px;
+  background: var(--border);
+  z-index: 30;
 }
 
 /* Tab activity affordance (amber wash) is rendered as a React DOM child in
@@ -1608,6 +1639,31 @@ html.native-shell .app-layout {
   animation: compact-agent-expansion-reveal 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Keep the disclosure in the timestamp slot without moving adjacent content. */
+.agent-child-disclosure-time {
+  visibility: hidden;
+}
+
+@media (hover: hover) {
+  .agent-child-disclosure[data-expanded='false'] .agent-child-disclosure-time {
+    visibility: visible;
+  }
+
+  .agent-child-disclosure[data-expanded='false'] [data-agent-child-disclosure-button] {
+    opacity: 0;
+  }
+
+  .agent-disclosure-row:hover .agent-child-disclosure-time,
+  .agent-disclosure-row:focus-within .agent-child-disclosure-time {
+    visibility: hidden;
+  }
+
+  .agent-disclosure-row:hover [data-agent-child-disclosure-button],
+  .agent-disclosure-row:focus-within [data-agent-child-disclosure-button] {
+    opacity: 1;
+  }
+}
+
 /* Why: the collapsed summary still uses pill spacing, while expanded compact
    agents read as a quiet tree inside the existing worktree card. */
 .compact-agent-summary-panel {
@@ -2215,6 +2271,18 @@ html.native-shell .app-layout {
   justify-content: center !important;
   width: 100% !important;
   height: 100% !important;
+}
+
+/* Why: notebook cells paint their own code surface; Monaco's theme background would cover it. */
+.ipynb-code-surface .monaco-editor,
+.ipynb-code-surface .monaco-editor-background,
+.ipynb-code-surface .monaco-editor .margin {
+  background-color: transparent;
+}
+
+/* Why: bracket-pair colouring is a global Monaco model option; notebook cells neutralise it locally to match their preview. */
+.ipynb-code-surface .monaco-editor [class*='bracket-highlighting-'] {
+  color: inherit;
 }
 
 .monaco-editor .monaco-search-result-highlight {
@@ -2833,6 +2901,39 @@ html.native-shell .app-layout {
 
 .orca-diff-comment-inline > .orca-diff-comment-card {
   max-width: 420px;
+}
+
+/* Why: embedded card in the diff flow, not a floating popup — use the
+   documented "subtle lift" tier (shadow-xs) rather than a hand-rolled shadow.
+   Restated under `.dark` (same value) so this still outranks the base
+   `.orca-diff-comment-popover` dark shadow at equal selector specificity. */
+.orca-diff-comment-inline > .orca-diff-comment-draft-card {
+  position: relative;
+  left: auto;
+  right: auto;
+  width: 100%;
+  max-width: 420px;
+  z-index: 1;
+  @apply shadow-xs;
+}
+
+.dark .orca-diff-comment-inline > .orca-diff-comment-draft-card {
+  @apply shadow-xs;
+}
+
+.orca-diff-comment-draft-margin {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.orca-diff-comment-draft-margin::after {
+  content: '';
+  width: 3px;
+  height: 100%;
+  background: var(--primary);
+  border-radius: 1px;
 }
 
 /* Why: the saved note used to blend into the editor background because it

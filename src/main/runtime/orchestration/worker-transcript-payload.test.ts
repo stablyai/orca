@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { MAX_CODEX_SUBAGENTS_PER_GROUP } from '../../codex/codex-structured-journal-limits'
+import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
 import {
   boundWorkerTranscriptMessages,
+  boundWorkerTranscriptTail,
   redactWorkerTerminalLines
 } from './worker-transcript-payload'
 
@@ -175,6 +177,28 @@ describe('worker transcript wire bounds', () => {
     ])
 
     expect(result).toMatchObject({ limited: false, warnings: [] })
+  })
+
+  it("serves a structured worker's journal rows without their list position", () => {
+    const [message] = projectStructuredItemsToNativeChat([
+      {
+        itemId: 'reply',
+        revision: 1,
+        sequence: 7,
+        sequenceIndex: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'done' }] }
+      }
+    ])
+    // Anti-vacuous: the projection itself does position the row.
+    expect(message?.journalPosition).toEqual({ sequence: 7, index: 1 })
+    for (const served of [
+      boundWorkerTranscriptMessages([message!]).messages,
+      boundWorkerTranscriptTail([message!], 262_144).messages
+    ]) {
+      expect(served).toHaveLength(1)
+      expect(served[0]).not.toHaveProperty('journalPosition')
+    }
   })
 
   it('keeps two roster ids sharing a 512-char prefix distinct', () => {

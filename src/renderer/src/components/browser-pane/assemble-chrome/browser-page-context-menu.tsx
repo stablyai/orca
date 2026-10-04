@@ -11,6 +11,7 @@ import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { normalizeExternalBrowserUrl } from '../../../../../shared/browser-url'
+import { resolveBrowserSourceUnifiedTab } from '@/lib/browser-workspace-source-resolution'
 import type { BrowserPageContextMenuState } from '../describe-page/browser-page-types'
 
 // `focus:` rather than `focus-visible:` — items are only ever focused programmatically
@@ -186,9 +187,18 @@ export function BrowserPageContextMenu({
               role="menuitem"
               className={MENU_ITEM_CLASS}
               onClick={() => {
+                const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(
+                  useAppStore.getState(),
+                  browserPageId,
+                  worktreeId
+                )
                 createBrowserTab(worktreeId, contextMenu.linkUrl!, {
                   title: contextMenu.linkUrl!,
-                  activate: false
+                  activate: false,
+                  ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
+                  ...(sourceUnifiedTab?.executionHostId
+                    ? { executionHostId: sourceUnifiedTab.executionHostId }
+                    : {})
                 })
                 closeMenu()
               }}

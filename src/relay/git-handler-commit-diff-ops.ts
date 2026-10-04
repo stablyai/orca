@@ -1,8 +1,8 @@
+import { isGitReadInterruptedError } from './git-buffer-overflow'
 import { readBlobAtOid, type GitBufferExec, type GitExec } from './git-handler-ops'
-import { parseBranchDiff } from './git-handler-utils'
+import { gitChangeListArgs, parseGitChangeList } from '../shared/git-change-list'
 import { buildDiffResult } from './git-diff-result'
-import { parseNumstat } from '../shared/git-uncommitted-line-stats'
-import { parseGitRevListFirstParentOid } from '../shared/git-rev-list-output'
+import { parseGitRevListCommitAndFirstParentOid } from '../shared/git-rev-list-output'
 
 const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/
 
@@ -15,25 +15,40 @@ function assertFullGitObjectId(value: string, label: string): void {
 export async function commitCompare(git: GitExec, worktreePath: string, commitId: string) {
   assertFullGitObjectId(commitId, 'commitId')
   let commitOid = ''
+  let parentOid: string | null = null
+  let parentReadFailure: { error: unknown } | undefined
   try {
     const { stdout } = await git(
-      ['rev-parse', '--verify', '--end-of-options', `${commitId}^{commit}`],
+      ['rev-list', '--parents', '-n', '1', '--end-of-options', `${commitId}^{commit}`],
       worktreePath
     )
-    commitOid = stdout.trim()
-  } catch {
-    return {
-      summary: {
-        commitOid: '',
-        parentOid: null,
-        compareRef: commitId,
-        baseRef: 'parent',
-        changedFiles: 0,
-        status: 'invalid-commit',
-        errorMessage: `Commit ${commitId} could not be resolved in this repository.`
-      },
-      entries: []
+    ;({ commitOid, parentOid } = parseGitRevListCommitAndFirstParentOid(stdout))
+  } catch (error) {
+    // Why: preserve invalid-commit versus a resolved commit with unreadable parents on failure.
+    try {
+      const { stdout } = await git(
+        ['rev-parse', '--verify', '--end-of-options', `${commitId}^{commit}`],
+        worktreePath
+      )
+      commitOid = stdout.trim()
+    } catch (error) {
+      if (isGitReadInterruptedError(error)) {
+        throw error
+      }
+      return {
+        summary: {
+          commitOid: '',
+          parentOid: null,
+          compareRef: commitId,
+          baseRef: 'parent',
+          changedFiles: 0,
+          status: 'invalid-commit',
+          errorMessage: `Commit ${commitId} could not be resolved in this repository.`
+        },
+        entries: []
+      }
     }
+    parentReadFailure = { error }
   }
 
   const summary = {
@@ -46,67 +61,14 @@ export async function commitCompare(git: GitExec, worktreePath: string, commitId
   }
 
   try {
-    const { stdout: parentsOut } = await git(
-      ['rev-list', '--parents', '-n', '1', commitOid],
-      worktreePath
-    )
-    const firstParent = parseGitRevListFirstParentOid(parentsOut)
-    summary.parentOid = firstParent
-    summary.baseRef = firstParent ? firstParent.slice(0, 7) : 'empty tree'
+    if (parentReadFailure) {
+      throw parentReadFailure.error
+    }
+    summary.parentOid = parentOid
+    summary.baseRef = parentOid ? parentOid.slice(0, 7) : 'empty tree'
 
-    // Why: root commits have no parent tree; diff-tree --root asks git to
-    // compare against the repository's empty tree without hardcoding hash format.
-    const diffArgs = summary.parentOid
-      ? [
-          '-c',
-          'core.quotePath=false',
-          'diff',
-          '--name-status',
-          '-M',
-          '-C',
-          summary.parentOid,
-          commitOid
-        ]
-      : [
-          '-c',
-          'core.quotePath=false',
-          'diff-tree',
-          '--root',
-          '--no-commit-id',
-          '--name-status',
-          '-r',
-          '-M',
-          '-C',
-          commitOid
-        ]
-    const numstatArgs = summary.parentOid
-      ? [
-          '-c',
-          'core.quotePath=false',
-          'diff',
-          '--numstat',
-          '-M',
-          '-C',
-          summary.parentOid,
-          commitOid
-        ]
-      : [
-          '-c',
-          'core.quotePath=false',
-          'diff-tree',
-          '--root',
-          '--no-commit-id',
-          '--numstat',
-          '-r',
-          '-M',
-          '-C',
-          commitOid
-        ]
-    const [{ stdout }, { stdout: numstat }] = await Promise.all([
-      git(diffArgs, worktreePath),
-      git(numstatArgs, worktreePath)
-    ])
-    const entries = parseBranchDiff(stdout, parseNumstat(numstat))
+    const { stdout } = await git(gitChangeListArgs(summary.parentOid, commitOid), worktreePath)
+    const entries = parseGitChangeList(stdout)
     summary.changedFiles = entries.length
     return { summary, entries }
   } catch (error) {
@@ -137,10 +99,12 @@ export async function commitDiffEntry(
   }
   try {
     const oldPath = args.oldPath ?? args.filePath
-    const left = args.parentOid
-      ? await readBlobAtOid(gitBuffer, worktreePath, args.parentOid, oldPath)
-      : { content: '', isBinary: false }
-    const right = await readBlobAtOid(gitBuffer, worktreePath, args.commitOid, args.filePath)
+    const [left, right] = await Promise.all([
+      args.parentOid
+        ? readBlobAtOid(gitBuffer, worktreePath, args.parentOid, oldPath)
+        : Promise.resolve({ content: '', isBinary: false }),
+      readBlobAtOid(gitBuffer, worktreePath, args.commitOid, args.filePath)
+    ])
     return buildDiffResult(
       left.content,
       right.content,
@@ -148,7 +112,10 @@ export async function commitDiffEntry(
       right.isBinary,
       args.filePath
     )
-  } catch {
+  } catch (error) {
+    if (isGitReadInterruptedError(error)) {
+      throw error
+    }
     return {
       kind: 'text',
       originalContent: '',

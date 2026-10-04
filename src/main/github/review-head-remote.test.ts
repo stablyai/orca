@@ -98,7 +98,7 @@ describe('resolveGitHubReviewHeadRemote', () => {
 
     expect(remote).toBe('origin')
     expect(getGitHubApiRepositoryForRemoteMock).not.toHaveBeenCalled()
-    expect(getDefaultRemoteMock).toHaveBeenCalledWith('/repo', { wslDistro: 'Ubuntu' })
+    expect(getDefaultRemoteMock).toHaveBeenCalledWith('/repo', { wslDistro: 'Ubuntu' }, ['origin'])
   })
 
   it('prefers origin over other remotes on SSH repos when no identity resolves', async () => {

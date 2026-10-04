@@ -1,10 +1,10 @@
-import { compileFunction } from 'node:vm'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import ts from 'typescript'
 import { nativeMountingSubstitutes } from './native-mounting-substitutes'
 import { observeSalvagedReads } from './salvage-observation'
 import * as deliveryAmbiguity from '../../transport/rpc-delivery-ambiguity'
+import { compiledOperationModule } from './compiled-operation-module'
 
 export type OperationModule = Record<string, (...args: any[]) => unknown>
 /** One anchored in-memory source edit, resolved by the caller so the loader needs no mutant table. */
@@ -139,17 +139,8 @@ export function operationModuleLoader(
     }
     const exports: OperationModule = {}
     cache.set(file, exports)
-    const output = ts.transpileModule(source, {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2022,
-        // Product sources use the automatic runtime and never import React, so a classic
-        // `React.createElement` emit throws `React is not defined` on the first screen render.
-        jsx: ts.JsxEmit.ReactJSX
-      }
-    }).outputText
     const exposure = exposures.find(([suffix]) => file.endsWith(suffix))?.[1] ?? ''
-    const evaluate = compileFunction(output + exposure, ['require', 'exports'], { filename: file })
+    const evaluate = compiledOperationModule(file, source, exposure)
     evaluate((name: string) => imported(file, name), exports)
     observeSalvagedReads(file, exports)
     return exports

@@ -20,18 +20,27 @@ vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
     listOpenCode2SqliteSessionsViaWorker: (
       args: Parameters<typeof list2.listOpenCode2SqliteSessions>[0]
     ) => list2.listOpenCode2SqliteSessions(args),
+    listZcodeSqliteSessionsViaWorker: (
+      args: Parameters<typeof list.listOpenCodeSqliteSessions>[0]
+    ) => list.listOpenCodeSqliteSessions({ ...args, agent: 'zcode' }),
     parseOpenCodeSqliteSessionViaWorker: (
       args: Parameters<typeof parse.parseOpenCodeSqliteSession>[0]
     ) => parse.parseOpenCodeSqliteSession(args),
     parseOpenCode2SqliteSessionViaWorker: (
       args: Parameters<typeof parse2.parseOpenCode2SqliteSession>[0]
     ) => parse2.parseOpenCode2SqliteSession(args),
+    parseZcodeSqliteSessionViaWorker: (
+      args: Parameters<typeof parse.parseOpenCodeSqliteSession>[0]
+    ) => parse.parseOpenCodeSqliteSession({ ...args, agent: 'zcode' }),
     captureOpenCodeSqliteSessionViaWorker: (
       args: Parameters<typeof capture.captureOpenCodeSqliteSession>[0]
     ) => capture.captureOpenCodeSqliteSession(args),
     captureOpenCode2SqliteSessionViaWorker: (
       args: Parameters<typeof capture2.captureOpenCode2SqliteSession>[0]
-    ) => capture2.captureOpenCode2SqliteSession(args)
+    ) => capture2.captureOpenCode2SqliteSession(args),
+    captureZcodeSqliteSessionViaWorker: (
+      args: Parameters<typeof capture.captureOpenCodeSqliteSession>[0]
+    ) => capture.captureOpenCodeSqliteSession({ ...args, agent: 'zcode' })
   }
 })
 import { AI_VAULT_AGENTS, type AiVaultAgent } from '../../shared/ai-vault-types'

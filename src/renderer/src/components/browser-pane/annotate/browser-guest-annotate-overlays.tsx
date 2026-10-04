@@ -39,7 +39,8 @@ export function BrowserGuestAnnotateOverlays({
   markupPortalContainer,
   webviewRef,
   browserOverlayViewport,
-  worktreeId
+  worktreeId,
+  currentUrl
 }: {
   markup: MarkupModeController
   grab: GrabModeHook
@@ -50,6 +51,7 @@ export function BrowserGuestAnnotateOverlays({
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   browserOverlayViewport: BrowserOverlayViewport
   worktreeId: string
+  currentUrl?: string
 }): React.JSX.Element {
   const {
     pendingAnnotationPayload,
@@ -110,6 +112,7 @@ export function BrowserGuestAnnotateOverlays({
       {browserAnnotations.length > 0 && browserAnnotationTrayOpen ? (
         <BrowserPageAnnotationTray
           browserAnnotations={browserAnnotations}
+          currentUrl={currentUrl}
           annotationTraySendOpen={annotationTraySendOpen}
           handleAnnotationTraySendOpenChange={handleAnnotationTraySendOpenChange}
           worktreeId={worktreeId}

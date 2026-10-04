@@ -11,6 +11,8 @@ import {
   findNextTomlTableHeader,
   parseProjectTomlHeaderPath
 } from './config-toml-syntax'
+import { findProjectTrustLevelEntries } from './config-toml-project-trust-level'
+import { repairOrcaDuplicateTrustTables } from './config-toml-project-duplicate-repair'
 
 export function upsertProjectTrustContent(
   existingContent: string,
@@ -18,7 +20,7 @@ export function upsertProjectTrustContent(
   trustLevel: CodexProjectTrustLevel,
   options?: { alreadyCanonical?: boolean }
 ): string {
-  const existing = stripLeadingBom(existingContent)
+  const existing = repairOrcaDuplicateTrustTables(stripLeadingBom(existingContent))
   const trustedProjectPath = options?.alreadyCanonical
     ? projectPath
     : canonicalizeLocalProjectPath(projectPath)
@@ -30,14 +32,13 @@ export function upsertProjectTrustContent(
   }
   const nextHeaderOffset = findNextTomlTableHeader(existing.slice(headerLineEnd))
   const blockEnd = nextHeaderOffset === -1 ? existing.length : headerLineEnd + nextHeaderOffset
-  const existingBlock = existing.slice(headerLineEnd, blockEnd)
-  const trustLevelPattern =
-    /^[ \t]*trust_level[ \t]*=[ \t]*(?:"(?:trusted|untrusted)"|'(?:trusted|untrusted)')[ \t\r]*(?:#.*)?$/m
-  if (trustLevelPattern.test(existingBlock)) {
+  // Why: rewrite any existing trust_level key, whatever its spelling or value, so none is duplicated.
+  const existingEntry = findProjectTrustLevelEntries(existing.slice(headerLineEnd, blockEnd))[0]
+  if (existingEntry) {
     return (
-      existing.slice(0, headerLineEnd) +
-      existingBlock.replace(trustLevelPattern, trustLine) +
-      existing.slice(blockEnd)
+      existing.slice(0, headerLineEnd + existingEntry.start) +
+      trustLine +
+      existing.slice(headerLineEnd + existingEntry.end)
     )
   }
   return `${existing.slice(0, headerLineEnd)}${eol}${trustLine}${existing.slice(headerLineEnd)}`

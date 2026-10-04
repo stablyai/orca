@@ -10,6 +10,8 @@ import { readOpenCodeDatabase } from './session-scanner-opencode-sqlite-open'
 import { canReadOpenCodeMessageParts } from './session-scanner-opencode-sqlite-schema'
 import type { TranscriptMessage, TranscriptMessageRole } from './session-transcript-consumers'
 import { boundedText, toolCallText } from './session-transcript-message-content'
+import { zcodeVisibleMessageFilter } from './session-scanner-zcode-visibility'
+import { zcodeTranscriptOrder } from './session-scanner-zcode-order'
 import type SyncDatabase from '../sqlite/sync-database'
 
 // Why: the session list needs the newest few messages, and the search index
@@ -119,7 +121,7 @@ function captureRole(role: string | null): TranscriptMessageRole | null {
   return role === 'user' || role === 'assistant' ? role : null
 }
 
-function buildCaptureQuery(): string {
+function buildCaptureQuery(db: SyncDatabase, agent: 'opencode' | 'zcode'): string {
   // Message order, then part order within a message: the same key the preview
   // read uses, run forwards and without the newest-N window.
   return `SELECT m.id AS message_id,
@@ -130,9 +132,11 @@ function buildCaptureQuery(): string {
           FROM message m
           JOIN part p ON p.message_id = m.id
           WHERE m.session_id = ?
+            ${zcodeVisibleMessageFilter(agent)}
             AND json_extract(m.data, '$.role') IN ('user','assistant')
             AND json_extract(p.data, '$.type') IN ${OPENCODE_CAPTURE_PART_TYPES}
-          ORDER BY m.time_created ASC, m.id ASC, p.time_created ASC, p.rowid ASC
+          ORDER BY ${zcodeTranscriptOrder(db, agent, 'message', 'm', 'ASC')},
+                   ${zcodeTranscriptOrder(db, agent, 'part', 'p', 'ASC')}
           LIMIT ?`
 }
 
@@ -149,20 +153,24 @@ function buildCaptureQuery(): string {
  */
 export function readOpenCodeSessionMessages(
   db: SyncDatabase,
-  sessionId: string
+  sessionId: string,
+  agent: 'opencode' | 'zcode' = 'opencode'
 ): TranscriptMessage[] {
+  const agentName = agent === 'zcode' ? 'ZCode' : 'OpenCode'
   if (!canReadOpenCodeMessageParts(db)) {
     // Thrown for the same reason the part limit below throws: an empty capture
     // returned here is committed under a complete-read cursor, so the session
     // stays out of search with nothing on its row to say why and no retry.
     throw new Error(
-      `OpenCode session ${sessionId} uses an unreadable message-part schema; its transcript was not read.`
+      `${agentName} session ${sessionId} uses an unreadable message-part schema; its transcript was not read.`
     )
   }
-  const rows = db.prepare(buildCaptureQuery()).all(sessionId, OPENCODE_CAPTURE_RECORD_LIMIT + 1)
+  const rows = db
+    .prepare(buildCaptureQuery(db, agent))
+    .all(sessionId, OPENCODE_CAPTURE_RECORD_LIMIT + 1)
   if (rows.length > OPENCODE_CAPTURE_RECORD_LIMIT) {
     throw new Error(
-      `OpenCode session ${sessionId} holds more than ${OPENCODE_CAPTURE_RECORD_LIMIT} text parts; its transcript was not read.`
+      `${agentName} session ${sessionId} holds more than ${OPENCODE_CAPTURE_RECORD_LIMIT} text parts; its transcript was not read.`
     )
   }
 
@@ -178,7 +186,7 @@ export function readOpenCodeSessionMessages(
     captured += message.text.length
     if (captured > OPENCODE_CAPTURE_TEXT_LIMIT) {
       throw new Error(
-        `OpenCode session ${sessionId} decodes to more than ${OPENCODE_CAPTURE_TEXT_LIMIT} characters; its transcript was not read.`
+        `${agentName} session ${sessionId} decodes to more than ${OPENCODE_CAPTURE_TEXT_LIMIT} characters; its transcript was not read.`
       )
     }
     messages.push(message)
@@ -237,13 +245,17 @@ export async function captureOpenCodeSqliteSession(args: {
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
+  agent?: 'opencode' | 'zcode'
 }): Promise<OpenCodeSqliteCapture> {
   return readOpenCodeDatabase({
     dbPath: args.dbPath,
     read: (db) => {
       const session = readOpenCodeSqliteSession({ db, ...args })
       // No session row is no transcript: the id names nothing in this database.
-      return { session, messages: session ? readOpenCodeSessionMessages(db, args.sessionId) : [] }
+      return {
+        session,
+        messages: session ? readOpenCodeSessionMessages(db, args.sessionId, args.agent) : []
+      }
     }
   })
 }

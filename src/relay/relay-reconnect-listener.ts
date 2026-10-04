@@ -3,6 +3,7 @@ import type { RelayDispatcher } from './dispatcher'
 import { setupDaemonHandshake } from './relay-handshake'
 import { relayLogLine } from './relay-diagnostic-log'
 import type { RelaySocketOwnership } from './relay-socket-ownership'
+import { isRelaySocketPeerClosed } from './relay-socket-peer-close'
 
 type RelayReconnectCallbacks = {
   detachPrimaryInput: () => void
@@ -62,6 +63,9 @@ export class RelayReconnectListener {
       onAccepted: (acceptedSocket, leftover) => this.attachAcceptedSocket(acceptedSocket, leftover)
     })
     socket.on('end', () => {
+      // Why detach first: a relay write between this destroy and 'close' fails, and the dispatcher
+      // would close the client as 'local', holding its PTY owner for the full grace (seen on Windows).
+      this.detachSocketClient(socket)
       if (!socket.destroyed) {
         socket.destroy()
       }
@@ -93,10 +97,18 @@ export class RelayReconnectListener {
     socket.on('error', flushDrainWaiters)
     const clientId = this.dispatcher.attachClient(
       (data, onSettled) => {
+        // Why detach before settling: a failed settlement closes the client as 'local', and a peer
+        // that reset the pipe must get the peer-closed grace floor, not the full grace.
         if (!socket.destroyed) {
           return socket.write(data, (error) => {
+            if (error && isRelaySocketPeerClosed(socket, error)) {
+              this.detachSocketClient(socket)
+            }
             onSettled(error ? { ok: false, error } : { ok: true })
           })
+        }
+        if (isRelaySocketPeerClosed(socket)) {
+          this.detachSocketClient(socket)
         }
         onSettled({ ok: false, error: new Error('Relay socket is closed') })
         return false
@@ -133,12 +145,16 @@ export class RelayReconnectListener {
     })
   }
 
-  private handleSocketClose(socket: Socket): void {
+  private detachSocketClient(socket: Socket): void {
     const clientId = this.socketClients.get(socket)
     this.socketClients.delete(socket)
     if (clientId !== undefined) {
       this.dispatcher.detachClient(clientId, 'peer-closed')
     }
+  }
+
+  private handleSocketClose(socket: Socket): void {
+    this.detachSocketClient(socket)
     relayLogLine(`[relay] Socket client closed (clients=${this.socketClients.size})`)
     if (this.socketClients.size === 0) {
       this.callbacks.onLastClientClosed()

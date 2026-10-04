@@ -8,10 +8,11 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { classifyStoreFailure } from './structured-agent-session-attach'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const MAX_RECONCILIATION_PASSES = 8
 
-/** Adjudicates leases loaded by this process or refreshed from another writer.
+/** Adjudicates leases loaded by this process.
  *  Answers with the refusal attach owes its caller, or null once settled. */
 export function createRestartReconciler(deps: {
   store: AgentSessionRecordStore
@@ -43,6 +44,73 @@ export function createRestartReconciler(deps: {
       )
     }
   }
+}
+
+/** Reports each distinct failure once, until `clear` says the bookkeeping settled again: the
+ *  startup check, the restore pass and a restore retried after a failed journal open would each
+ *  log the same store failure. */
+export type ReaderBookkeepingFailures = {
+  report: (failure: unknown) => void
+  clear: () => void
+}
+
+/** Startup and the read carry on past a failure: the next attach or send reconciles and resolves
+ *  recovery again before it acts. */
+export function reportEachFailureOnce(
+  logger: StructuredAgentSessionLogger
+): ReaderBookkeepingFailures {
+  let reported: string | null = null
+  return {
+    report: (failure) => {
+      const key = failureKey(failure)
+      if (key !== reported) {
+        reported = key
+        logger.warn('chat lease bookkeeping for a read failed', {
+          scope: 'lease-reconcile',
+          error: failure
+        })
+      }
+    },
+    clear: () => {
+      reported = null
+    }
+  }
+}
+
+/** The reconcile a reader runs, at startup and before each restored read: it never throws, since
+ *  an unreconciled lease grants no writer and the next send reconciles again before it acts.
+ *  Answers whether every lease is settled. */
+export function createReaderReconcile(
+  reconcile: (sessionId: string) => Promise<AgentSessionWireRefusal | null>,
+  failures: ReaderBookkeepingFailures
+): (sessionId: string) => Promise<boolean> {
+  return async (sessionId) => {
+    let failure: unknown
+    try {
+      const refusal = await reconcile(sessionId)
+      if (!refusal) {
+        failures.clear()
+        return true
+      }
+      failure = refusal
+    } catch (error) {
+      failure = error
+    }
+    failures.report(failure)
+    return false
+  }
+}
+
+function failureKey(failure: unknown): string {
+  if (typeof failure === 'object' && failure !== null) {
+    if ('code' in failure && failure.code) {
+      return String(failure.code)
+    }
+    if ('message' in failure) {
+      return String(failure.message)
+    }
+  }
+  return String(failure)
 }
 
 async function reconcileCurrentLeases(deps: {

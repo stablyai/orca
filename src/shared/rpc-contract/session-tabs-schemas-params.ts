@@ -117,6 +117,7 @@ export const UpdatePaneLayout = WorktreeTabSelector.extend({
     .pipe(z.string().min(1, 'Missing tab id')),
   root: z.union([z.null(), TerminalPaneLayoutNodeSchema]),
   expandedLeafId: z.string().max(128).nullable().optional(),
+  chatLeafId: z.string().max(128).nullable().optional(),
   titlesByLeafId: z.record(z.string(), z.string()).optional()
 })
 

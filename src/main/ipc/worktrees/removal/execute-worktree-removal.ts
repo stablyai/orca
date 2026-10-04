@@ -36,6 +36,8 @@ import { removeFolderWorkspace } from './remove-folder-workspace'
 import { removeUnregisteredWorktree } from './remove-unregistered-worktree'
 import { removeRegisteredRemoteWorktree } from './remove-registered-remote-worktree'
 import { removeRegisteredLocalWorktree } from './remove-registered-local-worktree'
+import { retryFailedLocalWorktreeRemoval } from './retry-failed-local-worktree-removal'
+import { retryFailedRemovalUnlessRegistered } from '../../../worktree-removal-table'
 
 /**
  * Refuses a repo row whose two host spellings disagree.
@@ -114,6 +116,14 @@ export async function executeWorktreeRemoval(
     registeredWorktrees,
     resolveWorktreeRemovalHomeForHost(removalHostId)
   )
+  if (
+    !repo.connectionId &&
+    retryFailedRemovalUnlessRegistered(args.worktreeId, worktreePath, registeredWorktrees, () =>
+      retryFailedLocalWorktreeRemoval(context, args, removalHostId)
+    )
+  ) {
+    return { removing: true }
+  }
   if (!registeredWorktree) {
     return removeUnregisteredWorktree(
       context,

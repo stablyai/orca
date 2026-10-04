@@ -132,14 +132,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -240,7 +240,7 @@ describe('connectPanePty', () => {
 
     const forward = deferPtyInput.mock.calls[0]?.[2] as (data: string) => void
     forward('a')
-    expect(transport.sendInput).toHaveBeenCalledWith('a')
+    expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
   })
 
   it('forwards terminal input directly when the host supplies no deferPtyInput', async () => {
@@ -253,7 +253,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
     sendTerminalInputThroughPane(pane, 'a')
 
-    expect(transport.sendInput).toHaveBeenCalledWith('a')
+    expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
   })
 
   it('keeps large ANSI redraws after captured shortcut input on the immediate path', async () => {

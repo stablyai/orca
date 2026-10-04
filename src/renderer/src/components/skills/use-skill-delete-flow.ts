@@ -22,6 +22,7 @@ import {
   skillDeletePlacementSummary,
   skillDeleteRetainedSourceLines
 } from './skill-delete-copy'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type SkillDeleteFlow = {
   /** False while the target is unresolved or the host predates the capability. */
@@ -38,7 +39,7 @@ export type SkillDeleteFlow = {
 
 function toRequest(skills: readonly DiscoveredSkill[]): SkillDeleteRequest {
   return {
-    operationId: crypto.randomUUID(),
+    operationId: createBrowserUuid(),
     skills: skills.map((skill) => ({
       id: skill.id,
       directoryPath: skill.directoryPath,

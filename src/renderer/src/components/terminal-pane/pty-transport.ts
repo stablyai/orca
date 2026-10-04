@@ -1,3 +1,4 @@
+import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { attachIpcPty } from './ipc-pty-attach'
 import { connectIpcPty } from './ipc-pty-connect'
 import { createIpcPtySessionHandlers } from './ipc-pty-session-handlers'
@@ -5,6 +6,7 @@ import { createPtyInputWriteQueue } from './pty-input-write-queue'
 import { createPtyOutputProcessor } from './pty-output-processor'
 import { createPtyPreconnectInputBuffer } from './pty-preconnect-input-buffer'
 import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
+import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 
 export {
   ensurePtyDispatcher,
@@ -57,8 +59,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
   const inputWriteQueue = createPtyInputWriteQueue({
     isWritable: (id) => !destroyed && connected && ptyId === id,
-    write: (id, data) => window.api.pty.write(id, data),
-    writeAccepted: (id, data) => window.api.pty.writeAccepted(id, data),
+    write: (id, data, inputKind) => window.api.pty.write(id, data, inputKind),
+    writeAccepted: (id, data, inputKind) => window.api.pty.writeAccepted(id, data, inputKind),
     onDrainFailure: (id) => {
       if (ptyId === id) {
         storedCallbacks.onWriteUnavailable?.()
@@ -104,23 +106,37 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   const setCallbacks = (callbacks: typeof storedCallbacks): void => {
     storedCallbacks = callbacks
   }
+  const dropPreconnectInput = (reason: string): void => {
+    if (preconnectInputBuffer?.hasPendingInput()) {
+      console.warn(
+        `[pty-transport] dropped keys typed while the terminal was connecting: ${reason}`
+      )
+    }
+    preconnectInputBuffer?.clear()
+  }
   const flushPreconnectInput = async (): Promise<void> => {
     if (!preconnectInputBuffer?.isBuffering()) {
       return
     }
     const id = ptyId
     if (destroyed || !connected || !id) {
-      preconnectInputBuffer.clear()
+      // Why: a closed pane's keys have no owner; only a failed attach is worth reporting.
+      if (destroyed) {
+        preconnectInputBuffer.clear()
+      } else {
+        dropPreconnectInput('the terminal did not attach')
+      }
       return
     }
     await preconnectInputBuffer.flush({
       isCurrent: () => !destroyed && connected && ptyId === id,
-      sendInput: (data) => inputWriteQueue.enqueue(id, data),
+      sendInput: (data, inputKind) => inputWriteQueue.enqueue(id, data, inputKind),
       sendInputImmediate: (data) => inputWriteQueue.enqueueQueryReply(id, data),
       ...(connectionId
         ? {}
         : {
-            sendInputAccepted: (data: string) => inputWriteQueue.enqueueAccepted(id, data)
+            sendInputAccepted: (data: string, inputKind: TerminalInputKind) =>
+              inputWriteQueue.enqueueAccepted(id, data, inputKind)
           })
     })
   }
@@ -176,7 +192,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     abandonPreconnectInput() {
-      preconnectInputBuffer?.clear()
+      dropPreconnectInput('its pending connection was abandoned')
     },
 
     disconnect() {
@@ -213,16 +229,23 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       storedCallbacks = {}
     },
 
-    sendInput(data) {
+    sendInput(data, inputKind) {
       if (!destroyed && preconnectInputBuffer?.isBuffering()) {
-        return preconnectInputBuffer.enqueue(data, 'ordinary', opts.onPreconnectInput)
+        return preconnectInputBuffer.enqueue(data, 'ordinary', inputKind, opts.onPreconnectInput)
       }
-      return !destroyed && connected && ptyId ? inputWriteQueue.enqueue(ptyId, data) : false
+      return !destroyed && connected && ptyId
+        ? inputWriteQueue.enqueue(ptyId, data, inputKind)
+        : false
     },
 
     sendInputImmediate(data) {
       if (!destroyed && preconnectInputBuffer?.isBuffering()) {
-        return preconnectInputBuffer.enqueue(data, 'immediate', opts.onPreconnectInput)
+        return preconnectInputBuffer.enqueue(
+          data,
+          'immediate',
+          'query-reply',
+          opts.onPreconnectInput
+        )
       }
       return !destroyed && connected && ptyId
         ? inputWriteQueue.enqueueQueryReply(ptyId, data)
@@ -232,14 +255,14 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     ...(connectionId
       ? {}
       : {
-          async sendInputAccepted(data: string): Promise<boolean> {
+          async sendInputAccepted(data: string, inputKind: TerminalInputKind): Promise<boolean> {
             if (!destroyed && preconnectInputBuffer?.isBuffering()) {
-              return preconnectInputBuffer.enqueueAccepted(data, opts.onPreconnectInput)
+              return preconnectInputBuffer.enqueueAccepted(data, inputKind, opts.onPreconnectInput)
             }
             if (destroyed || !connected || !ptyId) {
               return false
             }
-            return inputWriteQueue.enqueueAccepted(ptyId, data)
+            return inputWriteQueue.enqueueAccepted(ptyId, data, inputKind)
           }
         }),
 
@@ -265,6 +288,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     isConnected: () => connected,
     getPtyId: () => ptyId,
     getConnectionId: () => connectionId ?? null,
+    getExecutionHostId: () => (connectionId ? toSshExecutionHostId(connectionId) : 'local'),
+    getRuntimeEnvironmentId: () => null,
     getLocalSessionMetadata: () =>
       connectionId
         ? null

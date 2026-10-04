@@ -4,14 +4,29 @@ import {
   getSshGitProvider,
   getSshGitProviderGeneration,
   registerSshGitProvider,
+  requireSshGitProvider,
+  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE,
   unregisterSshGitProvider
 } from './ssh-git-dispatch'
+import { clearSshPlainSshMode, setSshPlainSshMode } from '../ssh/ssh-plain-ssh-mode'
 
 describe('SSH Git provider registry', () => {
   const connectionId = 'ssh-generation-test'
 
   afterEach(() => {
     unregisterSshGitProvider(connectionId)
+  })
+
+  it('names the plain SSH reason instead of a dropped connection when git is relay-only', () => {
+    expect(() => requireSshGitProvider(connectionId)).toThrow(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+    setSshPlainSshMode(connectionId, { reason: 'no_runtime', message: 'm' })
+    try {
+      expect(() => requireSshGitProvider(connectionId)).toThrow(
+        'Git needs the Orca remote server, which is not running on this host (no_runtime).'
+      )
+    } finally {
+      clearSshPlainSshMode(connectionId)
+    }
   })
 
   it('keeps provider generations monotonic across unregister and re-register', () => {

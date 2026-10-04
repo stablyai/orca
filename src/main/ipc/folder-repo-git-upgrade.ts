@@ -164,10 +164,17 @@ async function pollOnce(watch: UpgradeWatch): Promise<void> {
     const key = normalizeRuntimePathForComparison(repo.path)
     liveKeys.add(key)
     const signature = await readGitMarkerSignature(repo.path)
+    if (watch.disposed) {
+      return
+    }
     if (signature === null || rejectedMarkers.get(key) === signature) {
       continue
     }
-    if ((await upgradeFolderRepo(watch, repo.id)) === 'rejected') {
+    const result = await upgradeFolderRepo(watch, repo.id)
+    if (watch.disposed) {
+      return
+    }
+    if (result === 'rejected') {
       rejectedMarkers.set(key, signature)
     }
   }

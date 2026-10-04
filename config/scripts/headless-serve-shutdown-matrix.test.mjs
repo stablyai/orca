@@ -135,6 +135,23 @@ describe('packaged shutdown matrix', () => {
     ).toBe(true)
   })
 
+  it('uses a restored image only as a build cache and still runs every oracle', async () => {
+    vi.stubEnv('ORCA_SHUTDOWN_FIXTURE_CACHE_IMAGE', 'sha256:restored-fixture')
+    try {
+      await run('--all-entrypoints')
+      const builds = commands().filter((args) => args[0] === 'build')
+      expect(builds).toHaveLength(1)
+      expect(builds[0]).toContain('--cache-from')
+      expect(builds[0]).toContain('sha256:restored-fixture')
+      expect(builds[0]).toContain('--platform')
+      expect(builds[0]).toContain('linux/amd64')
+      expect(signalRuns()).toHaveLength(6)
+      expect(commands().filter((args) => args[0] === 'run')).toHaveLength(8)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('rejects ambiguous matrix overrides before invoking Docker', async () => {
     await expect(run('--all-entrypoints', '--entrypoint', 'launcher')).rejects.toThrow(
       'cannot be combined'

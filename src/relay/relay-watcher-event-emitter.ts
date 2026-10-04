@@ -15,6 +15,7 @@ type MappedWatcherEvent = {
 type WatcherBatchSizing = {
   eventBytes: Map<MappedWatcherEvent, number>
   batchBytes: number
+  groupedEventBytes?: number[]
 }
 
 const overflowMarkerPublishers = new WeakMap<RelayDispatcher, RelayClientResyncMarkerPublisher>()
@@ -123,14 +124,17 @@ function publishWatcherBatchToClient(
     emitWatcherOverflowToClient(dispatcher, clientId, rootPath)
     return
   }
-  const { eventBytes, batchBytes } = batchSizing()
+  const sizing = batchSizing()
+  const { eventBytes, batchBytes } = sizing
   if (batchBytes <= eventsCapacity) {
     emitWatcherOverflowToClient(dispatcher, clientId, rootPath)
     return
   }
 
   const grouped = groupedByDirectory()
-  const groupedEventBytes = grouped.map((event) => eventBytes.get(event)!)
+  const groupedEventBytes = (sizing.groupedEventBytes ??= grouped.map((event) =>
+    eventBytes.get(event)!
+  ))
   let index = 0
   while (index < grouped.length) {
     // Why: the retention ledger covers every producer publication despite its legacy name, and admission

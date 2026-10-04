@@ -1,3 +1,4 @@
+import { readPersistedProfileState } from './helpers/persisted-profile-state'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -31,7 +32,6 @@ import type {
 } from '../../src/shared/runtime-types'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { parsePaneKey } from '../../src/shared/stable-pane-id'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 
 const electronPackageDir = path.join(process.cwd(), 'node_modules', 'electron')
 const electronPath = path.join(
@@ -76,12 +76,8 @@ function readPersistedPromotionBinding(
   leafId: string
 ): { tabId: string; leafId: string; ptyId: string } | null {
   try {
-    const persisted = JSON.parse(
-      readFileSync(
-        path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json'),
-        'utf8'
-      )
-    ) as {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+    const persisted = readPersistedProfileState(userDataDir) as {
       workspaceSession?: {
         tabsByWorktree?: Record<string, { id?: string; ptyId?: string | null }[]>
         terminalLayoutsByTabId?: Record<string, { ptyIdsByLeafId?: Record<string, string | null> }>

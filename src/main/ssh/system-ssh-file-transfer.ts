@@ -119,7 +119,7 @@ async function uploadDirectoryViaSystemSshWindows(
   if (!hostPlatform) {
     throw new Error('Windows system SSH upload requires a remote host platform')
   }
-  const plan = await collectWindowsUploadPlan(localDir, remoteDir, hostPlatform, options.signal)
+  const plan = await collectLocalUploadPlan(localDir, remoteDir, hostPlatform, options.signal)
   await createWindowsUploadDirectories(target, plan.directories, options)
   for (const file of plan.files) {
     throwIfAborted(options.signal)
@@ -129,7 +129,7 @@ async function uploadDirectoryViaSystemSshWindows(
   }
 }
 
-type WindowsUploadPlan = {
+export type LocalUploadPlan = {
   directories: string[]
   files: { localPath: string; remotePath: string }[]
 }
@@ -141,13 +141,13 @@ type WindowsUploadPlan = {
  * about a directory upload requires one frame: the plan carries paths only, and the bytes go per
  * file, in writes bounded by WINDOWS_STDIN_WRITE_CHUNK_BYTES.
  */
-async function collectWindowsUploadPlan(
+export async function collectLocalUploadPlan(
   localDir: string,
   remoteDir: string,
   hostPlatform: RemoteHostPlatform,
   signal: AbortSignal | undefined,
-  plan: WindowsUploadPlan = { directories: [], files: [] }
-): Promise<WindowsUploadPlan> {
+  plan: LocalUploadPlan = { directories: [], files: [] }
+): Promise<LocalUploadPlan> {
   plan.directories.push(remoteDir)
   const dirEntries = await readdir(localDir, { withFileTypes: true })
   for (const entry of dirEntries) {
@@ -159,7 +159,7 @@ async function collectWindowsUploadPlan(
       continue
     }
     if (statResult.isDirectory()) {
-      await collectWindowsUploadPlan(localPath, remotePath, hostPlatform, signal, plan)
+      await collectLocalUploadPlan(localPath, remotePath, hostPlatform, signal, plan)
       continue
     }
     plan.files.push({ localPath, remotePath })

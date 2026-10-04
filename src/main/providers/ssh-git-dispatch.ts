@@ -1,4 +1,5 @@
 import type { SshGitProvider } from './ssh-git-provider'
+import { getSshPlainSshMode, PlainSshUnsupportedError } from '../ssh/ssh-plain-ssh-mode'
 
 const sshProviders = new Map<string, SshGitProvider>()
 const sshProviderGenerations = new Map<string, number>()
@@ -55,6 +56,10 @@ export function getSshGitProvider(connectionId: string): SshGitProvider | undefi
 export function requireSshGitProvider(connectionId: string): SshGitProvider {
   const provider = getSshGitProvider(connectionId)
   if (!provider) {
+    const plainMode = getSshPlainSshMode(connectionId)
+    if (plainMode) {
+      throw new PlainSshUnsupportedError('Git', plainMode)
+    }
     throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
   }
   return provider

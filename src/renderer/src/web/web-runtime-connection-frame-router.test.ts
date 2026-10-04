@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY,
+  WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import { routeWebRuntimeConnectionFrame } from './web-runtime-connection-frame-router'
 
 describe('web runtime connection capability advertisement', () => {
-  it('advertises GitHub PR suppression during E2EE authentication', async () => {
+  it('advertises GitHub PR suppression and the removing marker during E2EE authentication', async () => {
     const sendEncrypted = vi.fn(() => true)
 
     await routeWebRuntimeConnectionFrame(JSON.stringify({ type: 'e2ee_ready' }), undefined, {
@@ -24,7 +27,9 @@ describe('web runtime connection capability advertisement', () => {
       expect.objectContaining({
         type: 'e2ee_auth',
         clientCapabilities: expect.arrayContaining([
-          WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY
+          WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
+          // The web client runs the desktop renderer, which shows Deleting from the marker.
+          WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
         ])
       })
     )

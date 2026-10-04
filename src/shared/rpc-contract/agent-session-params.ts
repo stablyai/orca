@@ -36,14 +36,16 @@ export const WorktreeSelector = StrictNonEmptyString(
 
 export const Presentation = z.enum(['background', 'focused'])
 
+/** A caller-chosen terminal tab id; the length bound is the one the PTY spawn reservation keys on. */
+export const TerminalTabIdParam = z
+  .string()
+  .min(1)
+  .max(512)
+  .refine(isValidTerminalTabId, 'Invalid terminal tab ID')
+
 export const Placement = z
   .object({
-    tabId: z
-      .string()
-      .min(1)
-      .max(512)
-      .refine(isValidTerminalTabId, 'Invalid terminal tab ID')
-      .optional(),
+    tabId: TerminalTabIdParam.optional(),
     leafId: z.string().min(1).max(128).optional()
   })
   .strict()

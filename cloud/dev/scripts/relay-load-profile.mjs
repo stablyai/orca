@@ -247,10 +247,11 @@ export function parseRelayLoadArguments(argv) {
   if (requestUnitCleanupTimeoutMs > 0 && requestUnitOverflowProbes !== 1) {
     throw new Error('request-unit cleanup requires the overflow proof')
   }
+  // A US cell's canary uses the same synthetic principals, aimed at the root region instead.
   if (
     relayAsiaLoadPrincipalCount > 32 ||
     (relayAsiaLoadPrincipalCount > 0 &&
-      (!directorOrigin || preferredRegionValue(values) !== 'asia-east2'))
+      (!directorOrigin || !['asia-east2', 'us-central1'].includes(preferredRegionValue(values))))
   ) throw new Error('Relay Asia load principals require a regional director proof')
   if (capacityCellOrigin) {
     const origin = new URL(capacityCellOrigin)

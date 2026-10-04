@@ -7,7 +7,7 @@
  * `HapticFeedbackConstants` must not be written twice.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { BRIDGE_HAPTICS_KINDS, type BridgeHapticsKind } from './bridge/bridge-haptics-notify'
+import { BRIDGE_HAPTICS_KINDS } from './bridge/bridge-haptics-notify'
 
 /** Annotated rather than asserted: the platform is a two-value union and the log starts empty. */
 type MockDevice = { platform: { OS: 'ios' | 'android' }; calls: string[] }
@@ -106,12 +106,5 @@ describe('the kinds and the functions behind them', () => {
       playPageHaptic(kind)
     }
     expect(new Set(calls).size).toBe(BRIDGE_HAPTICS_KINDS.length)
-  })
-})
-
-describe('the kind union', () => {
-  it('is the five the app has and nothing else', () => {
-    const kinds: readonly BridgeHapticsKind[] = BRIDGE_HAPTICS_KINDS
-    expect([...kinds]).toEqual(['mediumImpact', 'selection', 'success', 'error', 'edgeBump'])
   })
 })

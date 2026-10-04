@@ -27,16 +27,8 @@ vi.mock('../git/runner', async () =>
   (await import('./orca-runtime-files-mock-registry')).gitRunnerModuleMock()
 )
 vi.mock(
-  '../ipc/rg-availability',
-  async () => (await import('./orca-runtime-files-mock-registry')).rgAvailabilityMock
-)
-vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
-)
-vi.mock(
-  '../ipc/filesystem-search-git',
-  async () => (await import('./orca-runtime-files-mock-registry')).filesystemSearchGitMock
 )
 vi.mock(
   '../providers/ssh-filesystem-dispatch',

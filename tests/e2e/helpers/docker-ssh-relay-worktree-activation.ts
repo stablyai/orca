@@ -61,7 +61,7 @@ export async function createAndActivateDockerSshRelayWorktree(
     if ((store.getState().tabsByWorktree[id] ?? []).length === 0) {
       store.getState().createTab(id)
     }
-    store.getState().setActiveTabType('terminal')
+    store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
   }, worktreeId)
   return { worktreeId }
 }

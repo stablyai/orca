@@ -8,9 +8,9 @@ import {
 import { workspaceSessionPartitionHostId } from '../../../shared/workspace-session-partition-owner'
 import { cloneWorkspaceSessionState, deleteOwnerKeyedSessionFields } from './session-owner-fields'
 
-// Scans the pane-key-keyed maps and the shutdown list once, removing every entry
-// owned by a key matched by `isRemovedOwner` (or, for pty incarnations, whose tab
-// was removed). Kept separate from the O(1) deletes so a batch prune scans each
+// Scans the pane-key-keyed maps, the close records and the shutdown list once, removing
+// every entry owned by a key matched by `isRemovedOwner` (or, for pty incarnations, whose
+// tab was removed). Kept separate from the O(1) deletes so a batch prune scans each
 // collection a single time regardless of how many owners are being removed.
 export function deleteScannedSessionFieldsForOwners(
   next: WorkspaceSessionState,
@@ -36,6 +36,14 @@ export function deleteScannedSessionFieldsForOwners(
     for (const [paneKey, record] of Object.entries(next.sleepingAgentSessionsByPaneKey)) {
       if (isRemovedOwner(record.worktreeId)) {
         delete next.sleepingAgentSessionsByPaneKey[paneKey]
+      }
+    }
+  }
+  // Why: a close record answers for its workspace; once the workspace's rows go, so does it.
+  if (next.closedTerminalTabTombstonesByTabId) {
+    for (const [tabId, record] of Object.entries(next.closedTerminalTabTombstonesByTabId)) {
+      if (isRemovedOwner(record.worktreeId)) {
+        delete next.closedTerminalTabTombstonesByTabId[tabId]
       }
     }
   }

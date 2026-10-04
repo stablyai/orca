@@ -218,6 +218,10 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
     inputSnapshot.expandedLeafId && !duplicatedInputLeafIds.has(inputSnapshot.expandedLeafId)
       ? (leafIdByInputLeafId.get(inputSnapshot.expandedLeafId) ?? null)
       : null
+  const chatLeafId =
+    inputSnapshot.chatLeafId && !duplicatedInputLeafIds.has(inputSnapshot.chatLeafId)
+      ? (leafIdByInputLeafId.get(inputSnapshot.chatLeafId) ?? null)
+      : null
   const ptyIdsByLeafId = remapLeafRecordForPersistence(
     inputSnapshot.ptyIdsByLeafId,
     leafIdByInputLeafId,
@@ -244,7 +248,9 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
     !leafRecordEquivalent(inputSnapshot.scrollbackRefsByLeafId, scrollbackRefsByLeafId) ||
     !leafRecordEquivalent(inputSnapshot.titlesByLeafId, titlesByLeafId)
   const metadataChanged =
-    activeLeafId !== inputSnapshot.activeLeafId || expandedLeafId !== inputSnapshot.expandedLeafId
+    activeLeafId !== inputSnapshot.activeLeafId ||
+    expandedLeafId !== inputSnapshot.expandedLeafId ||
+    chatLeafId !== (inputSnapshot.chatLeafId ?? null)
   if (!changed && !recordsChanged && !metadataChanged) {
     return { snapshot, changed: false, leafIdByInputLeafId }
   }
@@ -253,6 +259,7 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
     buffersByLeafId: _oldBuffersByLeafId,
     scrollbackRefsByLeafId: _oldScrollbackRefsByLeafId,
     titlesByLeafId: _oldTitlesByLeafId,
+    chatLeafId: _oldChatLeafId,
     ...snapshotWithoutLeafRecords
   } = inputSnapshot
   return {
@@ -261,6 +268,7 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
       root,
       activeLeafId,
       expandedLeafId,
+      ...(chatLeafId ? { chatLeafId } : {}),
       ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
       ...(buffersByLeafId ? { buffersByLeafId } : {}),
       ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),

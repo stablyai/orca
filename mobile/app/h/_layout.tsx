@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { View, StyleSheet, PanResponder } from 'react-native'
-import { Stack, useGlobalSearchParams, usePathname } from 'expo-router'
+import { useGlobalSearchParams, usePathname } from 'expo-router'
 import { colors } from '../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../src/layout/responsive-layout'
 import {
@@ -12,6 +12,7 @@ import {
 } from '../../src/storage/preferences'
 import { HostProtocolGate } from '../../src/components/HostProtocolGate'
 import { HostScreen } from '../../src/host-screen/HostScreen'
+import { HostStack } from '../../src/navigation/host-stack'
 
 // Keep at least this much room for the detail pane when resizing the sidebar.
 const MIN_DETAIL_WIDTH = 320
@@ -25,43 +26,6 @@ function clampSidebarToWindow(width: number, windowWidth: number): number {
     Math.min(HOST_SIDEBAR_MAX_WIDTH, windowWidth - MIN_DETAIL_WIDTH)
   )
   return Math.min(hardMax, Math.max(HOST_SIDEBAR_MIN_WIDTH, Math.round(width)))
-}
-
-function HostStack({ animation }: { animation: 'none' | 'default' }) {
-  return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: colors.bgBase },
-        // In the tablet split view the detail pane should swap instantly like
-        // a desktop master-detail; the default slide animates the outgoing
-        // screen and briefly reveals the one beneath it. Phones keep the slide.
-        animation
-      }}
-    >
-      <Stack.Screen name="[hostId]/index" options={{ title: 'Host' }} />
-      <Stack.Screen name="[hostId]/edit" options={{ title: 'Edit host' }} />
-      <Stack.Screen name="[hostId]/accounts" options={{ title: 'Accounts' }} />
-      <Stack.Screen name="[hostId]/tasks" options={{ title: 'Tasks' }} />
-      <Stack.Screen name="[hostId]/session/[worktreeId]" options={{ title: 'Terminal' }} />
-      <Stack.Screen
-        name="[hostId]/source-control/[worktreeId]"
-        options={{ title: 'Source Control' }}
-      />
-      <Stack.Screen
-        name="[hostId]/agent-history/[worktreeId]"
-        options={{ title: 'Agent Session History' }}
-      />
-      <Stack.Screen name="[hostId]/review/[worktreeId]" options={{ title: 'Changes' }} />
-      <Stack.Screen name="[hostId]/pr/[worktreeId]" options={{ title: 'Pull Request' }} />
-      {/* Dev-flag only: redirects to the host screen unless the hybrid shell flag is on. */}
-      <Stack.Screen name="[hostId]/web" options={{ title: 'Workspace' }} />
-      {/* Last, and matched last: every pathname above has a file of its own, so this takes only
-          what expo-router would otherwise send to Unmatched. Declared for the title alone — an
-          undeclared child still renders, appended after these with this group's screenOptions. */}
-      <Stack.Screen name="[hostId]/[...page]" options={{ title: 'Workspace' }} />
-    </Stack>
-  )
 }
 
 export default function HostGroupLayout() {

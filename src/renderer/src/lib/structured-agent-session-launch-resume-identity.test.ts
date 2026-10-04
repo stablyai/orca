@@ -41,6 +41,7 @@ vi.mock('@/store', () => ({
 
 import {
   getStructuredAgentLaunchStatus,
+  getStructuredAgentSessionLaunchResumes,
   startStructuredAgentLaunch
 } from './structured-agent-session-launch'
 
@@ -87,6 +88,9 @@ describe('a launch that adopts a conversation is its own identity', () => {
     await flushLaunchDispatch()
 
     expect(resume.sessionId).not.toBe(blank.sessionId)
+    // A resumed conversation may keep its own model, so its picker names no listed default.
+    expect(getStructuredAgentSessionLaunchResumes(resume.sessionId)).toBe(true)
+    expect(getStructuredAgentSessionLaunchResumes(blank.sessionId)).toBe(false)
     expect(createParams()).toEqual([
       expect.not.objectContaining({ resumeFrom: expect.anything() }),
       expect.objectContaining({ resumeFrom: { providerSessionId: 'thread-1' } })

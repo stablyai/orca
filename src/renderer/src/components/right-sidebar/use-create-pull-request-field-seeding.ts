@@ -6,7 +6,7 @@ import type {
   PullRequestFieldName,
   PullRequestFieldRevisions
 } from '@/store/slices/pull-request-generation'
-import { resolveCreateReviewDraftTitle } from './create-review-draft-title'
+import { resolveCreateReviewSeedText } from './create-review-draft-title'
 import { stripBaseRef } from './create-pull-request-base-ref-normalization'
 import {
   createInitialPullRequestFieldRevisions,
@@ -146,8 +146,9 @@ export function useCreatePullRequestFieldSeeding({
     baseEditedByUserRef.current = false
     syncedDefaultBaseRef.current = resolvedDefaultBaseRef || null
     setBase(resolvedDefaultBaseRef)
-    setTitle(resolveCreateReviewDraftTitle({ branch, eligibilityTitle: eligibility.title }))
-    setBody(eligibility.body ?? '')
+    const seedText = resolveCreateReviewSeedText({ branch, eligibility })
+    setTitle(seedText.title)
+    setBody(seedText.body)
     setDraft(resolvedPrDefaults.draft)
     setBaseQuery('')
     setBaseResults([])

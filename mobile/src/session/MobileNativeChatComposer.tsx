@@ -31,11 +31,14 @@ import {
 } from './MobileNativeChatSessionOptionPickers'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { mobileNativeChatInputStyles } from './mobile-native-chat-input-styles'
+import { keepHeldPressThroughLongPress } from './held-press-long-press'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 
 type Props = {
+  /** Lets the owner focus the field, e.g. after Edit moves a queued message into it. */
+  inputRef?: React.Ref<TextInput>
   structuredCommands?: readonly AgentSessionConversationCommand[]
   /** Controlled composer text — owned by the parent so dictation can write to it. */
   value: string
@@ -71,6 +74,7 @@ type Props = {
 }
 
 export function MobileNativeChatComposer({
+  inputRef,
   value,
   onChangeText,
   onSend,
@@ -249,6 +253,7 @@ export function MobileNativeChatComposer({
       <View style={styles.composerInset} testID="native-chat-composer-inset">
         <View style={styles.bar} testID="native-chat-composer">
           <TextInput
+            ref={inputRef}
             style={mobileNativeChatInputStyles.input}
             value={value}
             onChangeText={handleChange}
@@ -297,17 +302,26 @@ export function MobileNativeChatComposer({
                 onPress={dictationMode === 'hold' ? undefined : onMicPress}
                 onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
                 onPressOut={dictationMode === 'hold' ? onMicPressOut : undefined}
+                onLongPress={dictationMode === 'hold' ? keepHeldPressThroughLongPress : undefined}
                 disabled={disabled}
               >
+                {/* The icon swaps on press; as the page's touch target, its removal would send
+                    touchend to a detached node and lose the release. */}
                 {micActive ? (
                   <Square
+                    pointerEvents="none"
                     size={18}
                     color={colors.statusRed}
                     strokeWidth={2.4}
                     fill={colors.statusRed}
                   />
                 ) : (
-                  <Mic size={20} color={colors.textSecondary} strokeWidth={2} />
+                  <Mic
+                    pointerEvents="none"
+                    size={20}
+                    color={colors.textSecondary}
+                    strokeWidth={2}
+                  />
                 )}
               </Pressable>
             ) : null}

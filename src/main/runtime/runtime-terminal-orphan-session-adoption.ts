@@ -3,7 +3,6 @@ import type { RuntimeTerminalOrphanAdoptionRequest } from '../../shared/runtime-
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { collectPersistedTerminalLeafIds } from './mobile-session-layout-projection'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import { getLatestPtyTitle } from './runtime-worktree-status-projection'
 import { mergeTerminalOrphanGroupLayout } from './terminal-orphan-topology'
 import { canonicalizeTerminalSessionWorktreeId } from './workspace-session-worktree-id'
 import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
@@ -19,6 +18,7 @@ export function buildRuntimeTerminalOrphanSession(args: {
   validated: readonly { claim: Claim; pty: RuntimePtyWorktreeRecord; paneKey: string }[]
   topologyTabsById: ReadonlyMap<string, Topology['tabs'][number]>
   topologyGroups: Topology['groups']
+  getDisplayTitle: (pty: RuntimePtyWorktreeRecord) => string | null
 }): WorkspaceSessionState {
   const {
     session,
@@ -27,7 +27,8 @@ export function buildRuntimeTerminalOrphanSession(args: {
     request,
     validated,
     topologyTabsById,
-    topologyGroups
+    topologyGroups,
+    getDisplayTitle
   } = args
   const next = structuredClone(session)
   canonicalizeTerminalSessionWorktreeId(next, sessionWorktreeId, worktreeId)
@@ -36,7 +37,7 @@ export function buildRuntimeTerminalOrphanSession(args: {
   for (const { claim, pty, paneKey } of validated) {
     let tab = tabsById.get(claim.tabId)
     if (!tab) {
-      const title = getLatestPtyTitle(pty) ?? pty.controllerTitle ?? `Terminal ${tabsById.size + 1}`
+      const title = getDisplayTitle(pty) ?? pty.controllerTitle ?? `Terminal ${tabsById.size + 1}`
       tab = {
         id: claim.tabId,
         ptyId: claim.ptyId,

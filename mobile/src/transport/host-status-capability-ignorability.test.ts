@@ -11,8 +11,8 @@ import { supportsMobileQuickCommands } from '../terminal/quick-commands'
 import { useHostStatusGates, type HostStatusGates } from './host-status-gates'
 import {
   hostAnsweredStatusProbe,
-  readHostStatusGates,
-  readProbedHostCapabilities
+  readProbedHostCapabilities,
+  readProbedHostStatus
 } from './host-status-probe-operations'
 import type { HostStatusReply } from './host-status-reply-schema'
 import type { RpcClient } from './rpc-client'
@@ -21,8 +21,12 @@ import type { RpcResponse } from './types'
 const recordHostAppVersionMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
 vi.mock('./host-app-version-store', () => ({
-  normalizeHostAppVersion: (value: unknown) => (typeof value === 'string' ? value : null),
   recordHostAppVersion: (...args: unknown[]) => recordHostAppVersionMock(...args)
+}))
+
+// Why: the recorder reaches the durable host store, which this hook-level suite never exercises.
+vi.mock('./host-descriptor-recorder', () => ({
+  recordHostDescriptorFromStatus: vi.fn()
 }))
 
 /**
@@ -103,7 +107,7 @@ async function readEverything(capabilities: readonly string[]): Promise<ClientVi
   const gates = await renderGates(client)
   return {
     gates,
-    gateStatus: readHostStatusGates(reply),
+    gateStatus: readProbedHostStatus(reply)?.status ?? null,
     probedCapabilities: readProbedHostCapabilities(reply),
     answeredProbe: hostAnsweredStatusProbe(reply),
     quickCommandsSupported: supportsMobileQuickCommands(gates.hostCapabilities),

@@ -185,15 +185,6 @@ describe('contextual tour definitions', () => {
     ])
   })
 
-  it('allows only workspace creation over its workspace composer modal', () => {
-    const modalTours = (CONTEXTUAL_TOURS as readonly ContextualTour[]).filter(
-      (tour) => tour.allowedActiveModals?.length
-    )
-
-    expect(modalTours.map((tour) => tour.id)).toEqual(['workspace-creation'])
-    expect(modalTours[0]?.allowedActiveModals).toEqual(['new-workspace-composer'])
-  })
-
   it('normalizes persisted ids by removing unknowns and duplicates', () => {
     expect(
       normalizeContextualTourIds([

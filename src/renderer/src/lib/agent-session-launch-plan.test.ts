@@ -84,7 +84,9 @@ describe('planAgentSessionLaunch', () => {
         prompt: 'Review this',
         promptDelivery: 'submit-after-ready',
         resumeFrom,
-        onPromptDelivered
+        onPromptDelivered,
+        // The chat is created on the host the route was decided for.
+        executionHostId: 'local'
       },
       hooks
     )
@@ -100,26 +102,10 @@ describe('planAgentSessionLaunch', () => {
     expect(mocks.beginStructuredAgentLaunchSettlement).toHaveBeenCalledWith(
       'folder:ws-1',
       'codex',
-      {},
+      { executionHostId: 'local' },
       hooks
     )
   })
-
-  it.each(['legacy-native-chat', 'terminal-tui'] as const)(
-    'returns null from launch on the %s route without touching the loop',
-    async (route) => {
-      mocks.resolveAgentLaunchRoute.mockReturnValue(route)
-      const plan = planAgentSessionLaunch(store, {
-        agent: 'codex',
-        workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
-      })
-
-      expect(plan.route).toBe(route)
-      await expect(plan.launch(hooks)).resolves.toBeNull()
-      expect(plan.begin(hooks)).toBeNull()
-      expect(mocks.beginStructuredAgentLaunchSettlement).not.toHaveBeenCalled()
-    }
-  )
 
   it('returns null for an agent that cannot hold a structured session even on the structured route', async () => {
     const plan = planAgentSessionLaunch(store, {
@@ -144,7 +130,7 @@ describe('planAgentSessionLaunch', () => {
     expect(mocks.beginStructuredAgentLaunchSettlement).toHaveBeenCalledWith(
       'wt-created',
       'codex',
-      { prompt: 'Fix it', promptDelivery: 'auto-submit' },
+      { prompt: 'Fix it', promptDelivery: 'auto-submit', executionHostId: 'local' },
       hooks
     )
   })

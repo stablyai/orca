@@ -1,3 +1,4 @@
+import { mergeCommandEnvironment } from '../../shared/command-environment'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import {
   resolveCodexHomeProcessLockKeyForSpawnEnv,
@@ -25,13 +26,21 @@ export function runLocalPlanForAgent(input: {
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
 }): Promise<InternalTextGenerationResult> {
+  const target = {
+    ...input.target,
+    env: mergeCommandEnvironment(
+      input.target.env,
+      input.plan.env,
+      input.target.wslDistro ? 'linux' : process.platform
+    )
+  }
   const start = (
     holdHomeLockUntilExit = false
   ): LocalProcessExecution<InternalTextGenerationResult> =>
     runLocalSourceControlPlan({
       plan: input.plan,
       cwd: input.target.cwd,
-      env: input.target.env,
+      env: input.target.wslDistro ? input.target.env : target.env,
       emptyResultName: input.emptyResultName,
       operation: input.operation,
       wslDistro: input.target.wslDistro,
@@ -41,13 +50,14 @@ export function runLocalPlanForAgent(input: {
   if (input.agentId !== 'codex') {
     return start().result
   }
-  return runCodexLocalPlanUnderHomeLock(start, input.target, input.operation)
+  return runCodexLocalPlanUnderHomeLock(start, target, input.operation, input.plan.env)
 }
 
 function runCodexLocalPlanUnderHomeLock(
   start: (holdHomeLockUntilExit: boolean) => LocalProcessExecution<InternalTextGenerationResult>,
   target: LocalGenerationTarget,
-  operation: TextGenerationOperation
+  operation: TextGenerationOperation,
+  commandEnv?: Record<string, string>
 ): Promise<InternalTextGenerationResult> {
   const laneKey = localGenerationLaneKey(operation, target.cwd)
   let canceledWhileQueued = false
@@ -69,7 +79,7 @@ function runCodexLocalPlanUnderHomeLock(
   }
   setLocalGenerationCancelToken(laneKey, queuedCancel)
   void withCodexHomeProcessLock(
-    resolveCodexHomeProcessLockKeyForSpawnEnv(target.env, target.wslDistro),
+    resolveCodexHomeProcessLockKeyForSpawnEnv(target.env, target.wslDistro, commandEnv),
     async () => {
       if (canceledWhileQueued) {
         publishResult({ success: false, error: 'Generation canceled.', canceled: true })

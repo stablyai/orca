@@ -1,5 +1,6 @@
 import {
   RELAY_INSTALL_COMPLETE_FILENAME,
+  RELAY_PID_FILENAME,
   relayArtifactFilenames
 } from '../../shared/relay-artifacts'
 import {
@@ -72,17 +73,18 @@ export function moveRemoteTreeCommand(
   )
 }
 
-export function promoteRemoteTreeContentsCommand(
+// A concurrent installer may already have recreated the original directory.
+export function restoreRemoteTreeCommand(
   host: RemoteHostPlatform,
-  sourcePath: string,
-  destinationPath: string
+  source: string,
+  destination: string
 ): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `cp -a ${shellEscape(sourcePath)}/. ${shellEscape(destinationPath)}/ && rm -rf ${shellEscape(sourcePath)}`
+  if (isWindowsRemoteHost(host)) {
+    return powerShellCommand(
+      `if (-not (Test-Path -LiteralPath ${powerShellLiteral(destination)})) { Move-Item -LiteralPath ${powerShellLiteral(source)} -Destination ${powerShellLiteral(destination)} -ErrorAction Stop; 'MOVED' } else { 'BUSY' }`
+    )
   }
-  return powerShellCommand(
-    `$ErrorActionPreference = 'Stop'; Get-ChildItem -LiteralPath ${powerShellLiteral(sourcePath)} -Force -ErrorAction Stop | Copy-Item -Destination ${powerShellLiteral(destinationPath)} -Recurse -Force -ErrorAction Stop; Remove-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Recurse -Force -ErrorAction Stop`
-  )
+  return `if [ ! -e ${shellEscape(destination)} ] && [ ! -L ${shellEscape(destination)} ]; then mv ${shellEscape(source)} ${shellEscape(destination)} && echo MOVED; else echo BUSY; fi`
 }
 
 export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath: string): string {
@@ -200,10 +202,55 @@ export function probeFileExistsCommand(host: RemoteHostPlatform, remotePath: str
   )
 }
 
-type WindowsRelayLivenessOptions = {
+export type WindowsRelayLivenessOptions = {
   nodePath: string
   pipePaths: string[]
 }
+
+/**
+ * Design D5 on Windows: a recorded `.relay-pid` that is still running answers ALIVE before any
+ * pipe is touched (a connect would cancel an idling daemon's grace timer). Only a dead PID
+ * (ESRCH) plus every pipe refusing is DEAD/WAITING; any other kill(0) error is UNVERIFIABLE.
+ * Without a PID file the old marker/pipe rule stands.
+ */
+export const WINDOWS_RELAY_LIVENESS_JS = [
+  'const fs=require("fs"),path=require("path"),net=require("net");',
+  'const [dir,...seed]=process.argv.slice(1);',
+  'const answer=(token)=>{process.stdout.write(token);process.exit(0)};',
+  'let pidDead=false;',
+  'let rawPid=null;',
+  `try{rawPid=fs.readFileSync(path.join(dir,${JSON.stringify(RELAY_PID_FILENAME)}),"utf8").trim()}catch(e){if(e.code!=="ENOENT")answer("UNVERIFIABLE")}`,
+  'if(rawPid!==null){',
+  'if(!/^[1-9][0-9]*$/.test(rawPid))answer("UNVERIFIABLE");',
+  'try{process.kill(Number(rawPid),0)}catch(e){if(e.code!=="ESRCH")answer("UNVERIFIABLE");pidDead=true}',
+  'if(!pidDead)answer("ALIVE")',
+  '}',
+  'const valid=/^\\\\\\\\[.?]\\\\pipe\\\\orca-relay-[0-9a-f]{20}$/i;',
+  'const pipes=[];',
+  'let markerCount=0;',
+  'for(const p of seed){if(valid.test(p)&&!pipes.includes(p))pipes.push(p)}',
+  'try{for(const name of fs.readdirSync(dir)){',
+  'if(!name.startsWith(".windows-active-pipe-"))continue;',
+  'markerCount++;',
+  'const p=fs.readFileSync(path.join(dir,name),"utf8").trim();',
+  'if(valid.test(p)&&!pipes.includes(p))pipes.push(p)',
+  '}}catch{}',
+  'if(markerCount===0&&pipes.length===0)answer(pidDead?"DEAD":"ALIVE");',
+  'let i=0;',
+  'function done(ok){process.stdout.write(ok?"ALIVE":"WAITING")}',
+  'function next(){',
+  'const pipe=pipes[i++];',
+  'if(!pipe)return done(false);',
+  'const s=net.connect(pipe);',
+  'let settled=false;',
+  'function finish(ok){if(settled)return;settled=true;s.destroy();if(ok)done(true);else next()}',
+  's.setTimeout(200);',
+  's.on("connect",()=>finish(true));',
+  's.on("timeout",()=>finish(false));',
+  's.on("error",()=>finish(false));',
+  '}',
+  'next();'
+].join('')
 
 export function relayLivenessProbeCommand(
   host: RemoteHostPlatform,
@@ -220,35 +267,7 @@ export function relayLivenessProbeCommand(
   if (!windowsOptions) {
     return powerShellCommand("'ALIVE'")
   }
-  const js = [
-    'const fs=require("fs"),path=require("path"),net=require("net");',
-    'const [dir,...seed]=process.argv.slice(1);',
-    'const valid=/^\\\\\\\\[.?]\\\\pipe\\\\orca-relay-[0-9a-f]{20}$/i;',
-    'const pipes=[];',
-    'let markerCount=0;',
-    'for(const p of seed){if(valid.test(p)&&!pipes.includes(p))pipes.push(p)}',
-    'try{for(const name of fs.readdirSync(dir)){',
-    'if(!name.startsWith(".windows-active-pipe-"))continue;',
-    'markerCount++;',
-    'const p=fs.readFileSync(path.join(dir,name),"utf8").trim();',
-    'if(valid.test(p)&&!pipes.includes(p))pipes.push(p)',
-    '}}catch{}',
-    'if(markerCount===0&&pipes.length===0){process.stdout.write("ALIVE");process.exit(0)}',
-    'let i=0;',
-    'function done(ok){process.stdout.write(ok?"ALIVE":"WAITING")}',
-    'function next(){',
-    'const pipe=pipes[i++];',
-    'if(!pipe)return done(false);',
-    'const s=net.connect(pipe);',
-    'let settled=false;',
-    'function finish(ok){if(settled)return;settled=true;s.destroy();if(ok)done(true);else next()}',
-    's.setTimeout(200);',
-    's.on("connect",()=>finish(true));',
-    's.on("timeout",()=>finish(false));',
-    's.on("error",()=>finish(false));',
-    '}',
-    'next();'
-  ].join('')
+  const js = WINDOWS_RELAY_LIVENESS_JS
   return commandWithNodePath(
     host,
     windowsOptions.nodePath,
@@ -260,19 +279,6 @@ export function relayLivenessProbeCommand(
       powerShellNativeArg(dir),
       ...windowsOptions.pipePaths.map((pipePath) => powerShellNativeArg(pipePath))
     ].join(' ')
-  )
-}
-
-export function commandInRemoteDirectory(
-  host: RemoteHostPlatform,
-  remoteDir: string,
-  command: string
-): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `cd ${shellEscape(remoteDir)} && ${command}`
-  }
-  return powerShellCommand(
-    `Set-Location -ErrorAction Stop -LiteralPath ${powerShellLiteral(remoteDir)}; ${command}`
   )
 }
 

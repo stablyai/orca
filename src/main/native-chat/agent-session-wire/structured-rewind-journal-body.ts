@@ -9,10 +9,15 @@ import { NATIVE_CHAT_ROLES } from '../../../shared/native-chat-types'
 
 type StoredBody = AgentSessionRewindRecord['retained'][number]['body']
 
-/** Unknown future values remain visible evidence, never invented turn or prompt state. */
+/** A row this build cannot place stays visible as a row, never invented turn or prompt state —
+ *  and never as its stored JSON, which is Orca's record, not something a person reads. */
 export function restoreRewindJournalBody(body: StoredBody): AgentJournalItemBody {
   let normalized: unknown = body
-  const fallback = () => ({ kind: 'status', text: JSON.stringify(body) })
+  // A placeholder, not a failure anyone can act on, so it carries no fact.
+  const fallback = () => ({
+    kind: 'status',
+    text: 'Orca could not show this item after the rewind.'
+  })
   if (body.kind === 'message') {
     normalized = {
       ...body,

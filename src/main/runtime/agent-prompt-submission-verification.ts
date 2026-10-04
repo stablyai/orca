@@ -1,11 +1,11 @@
 export { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../shared/orchestration-timing-budgets'
 import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../shared/orchestration-timing-budgets'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalAgent } from '../../shared/terminal-agent'
 
 export const AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS = AGENT_PROMPT_EFFECT_TIMEOUT_MS
 const AGENT_PROMPT_EFFECT_POLL_MS = 50
 
-const HOOK_OBSERVED_TURN_START_AGENTS = new Set<TuiAgent>(['codex', 'kimi'])
+const HOOK_OBSERVED_TURN_START_AGENTS = new Set<TerminalAgent>(['antigravity', 'codex', 'kimi'])
 
 /** The prompt bytes are written before verification, so this only ever means "not observed". */
 export const AGENT_PROMPT_STALLED_ERROR = 'agent_prompt_stalled'
@@ -44,7 +44,7 @@ type AgentPromptVerificationOptions = {
   timeoutMs?: number
 }
 
-export function resolveAgentPromptEffectTimeoutMs(agent: TuiAgent | null | undefined): number {
+export function resolveAgentPromptEffectTimeoutMs(agent: TerminalAgent | null | undefined): number {
   return agent && HOOK_OBSERVED_TURN_START_AGENTS.has(agent)
     ? AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS
     : AGENT_PROMPT_EFFECT_TIMEOUT_MS
@@ -52,9 +52,9 @@ export function resolveAgentPromptEffectTimeoutMs(agent: TuiAgent | null | undef
 
 /** Only these providers expose a turn-start signal Orca can settle a prompt receipt against. */
 export function isTerminalSendSettlementAgent(
-  agent: TuiAgent | null | undefined
-): agent is 'claude' | 'codex' {
-  return agent === 'claude' || agent === 'codex'
+  agent: TerminalAgent | null | undefined
+): agent is 'antigravity' | 'claude' | 'codex' {
+  return agent === 'antigravity' || agent === 'claude' || agent === 'codex'
 }
 
 export function isAgentPromptStalledError(error: unknown): boolean {

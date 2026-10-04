@@ -1,5 +1,8 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
+import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/catalog-version'
+import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-version-state'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
@@ -23,9 +26,24 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   hostId: ExecutionHostId | undefined
   requiredExecutionHostId: ExecutionHostId | null
   terminalPtyIdsBeforeRemoval: readonly string[]
+  /** The catalog the host's removal produced, when the host stamps it. */
+  catalogVersion?: WorktreeCatalogVersion
 }): Promise<void> {
   const { set, get, worktreeId, hostId, requiredExecutionHostId, terminalPtyIdsBeforeRemoval } =
     args
+  // Why first: a listing scanned before this removal must not be applied after it and bring
+  // the row back, so the version is on record before any await below yields.
+  if (hostId && args.catalogVersion) {
+    const catalogVersion = args.catalogVersion
+    set((s) =>
+      appliedWorktreeCatalogVersionPatch(
+        s,
+        getRepoIdFromWorktreeId(worktreeId),
+        hostId,
+        catalogVersion
+      )
+    )
+  }
   for (const tab of get().unifiedTabsByWorktree[worktreeId] ?? []) {
     if (tab.contentType === 'agent-session') {
       get().closeUnifiedTab(tab.id, {

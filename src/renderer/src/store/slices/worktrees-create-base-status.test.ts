@@ -389,7 +389,7 @@ describe('createWorktree base status merge', () => {
     await store.getState().createWorktree('repo1', 'feature', 'origin/main')
 
     expect(toast.warning).toHaveBeenCalledWith('Local main was not refreshed for "feature-wt"', {
-      id: 'local-base-ref-refresh-failed:repo1::/path/wt1:main',
+      id: 'local-base-ref-refresh-failed:repo1:main',
       description: expect.stringContaining(expectedReason),
       duration: Infinity,
       dismissible: true
@@ -457,9 +457,36 @@ describe('createWorktree base status merge', () => {
     expect(toast.warning).toHaveBeenCalledWith(
       'Local main was not refreshed for "feature"',
       expect.objectContaining({
-        id: 'local-base-ref-refresh-failed:repo1::/path/wt1:main'
+        id: 'local-base-ref-refresh-failed:repo1:main'
       })
     )
+  })
+
+  // Creates that joined one refresh report the same fact, so they share one toast per repo+branch.
+  it('reuses one toast id for every create of the same repo and base branch', async () => {
+    const store = createTestStore()
+    const refresh = {
+      status: 'skipped_error',
+      baseRef: 'origin/main',
+      localBranch: 'main'
+    } as const
+    for (const [id, repoId] of [
+      ['repo1::/path/wt1', 'repo1'],
+      ['repo1::/path/wt2', 'repo1'],
+      ['repo2::/path/wt3', 'repo2']
+    ]) {
+      mockApi.worktrees.create.mockResolvedValueOnce({
+        worktree: makeWorktree({ id, repoId, path: id.split('::')[1] }),
+        localBaseRefRefresh: refresh
+      })
+      await store.getState().createWorktree(repoId, 'feature', 'origin/main')
+    }
+
+    expect(vi.mocked(toast.warning).mock.calls.map(([, options]) => options?.id)).toEqual([
+      'local-base-ref-refresh-failed:repo1:main',
+      'local-base-ref-refresh-failed:repo1:main',
+      'local-base-ref-refresh-failed:repo2:main'
+    ])
   })
 
   it('does not warn when the local base ref refresh succeeds', async () => {

@@ -1,27 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from '../agent-session-journal/journal-payload-bounds'
-import { CODEX_APP_SERVER_NOTIFICATION_METHODS } from '../../codex/codex-app-server-notification-schema'
-import { CLAUDE_STREAM_JSON_FRAME_KINDS } from './claude-stream-json-frame-schema'
 import {
   classifyProviderFrame,
+  hasTypedProviderFrameTranslator,
   isDeltaProviderFrameKind,
   PROVIDER_FRAME_CLASSIFICATIONS
 } from './provider-frame-disposition'
 import { unhandledProviderFrameJournalItem } from './unhandled-provider-frame'
 
 describe('provider frame classification catalog', () => {
-  it('classifies every pinned Codex app-server notification method', () => {
-    expect(Object.keys(PROVIDER_FRAME_CLASSIFICATIONS.codex)).toEqual([
-      ...CODEX_APP_SERVER_NOTIFICATION_METHODS
-    ])
-  })
-
-  it('classifies every pinned Claude stream-json frame kind', () => {
-    expect(Object.keys(PROVIDER_FRAME_CLASSIFICATIONS.claude)).toEqual([
-      ...CLAUDE_STREAM_JSON_FRAME_KINDS
-    ])
-  })
-
   it('classifies every pinned delta kind as stream-into-item', () => {
     const deltaKinds = [
       ...Object.keys(PROVIDER_FRAME_CLASSIFICATIONS.codex),
@@ -213,7 +200,22 @@ describe('typed translator coverage', () => {
     ).toMatchObject({ classification: 'error-surface' })
   })
 
-  it('covers Claude only — the same method name on another provider still falls back', () => {
+  it('covers the Codex thread status, which reports `systemError` beside the `error` row', () => {
+    const kind = 'notification:thread/status/changed'
+    const payload = { threadId: 'thread-1', status: { type: 'systemError' } }
+
+    expect(hasTypedProviderFrameTranslator('codex', kind)).toBe(true)
+    expect(
+      unhandledProviderFrameJournalItem('codex', kind, payload, DEFAULT_JOURNAL_PAYLOAD_LIMITS, {
+        coveredByTypedTranslator: true
+      })
+    ).toBeNull()
+    expect(unhandledProviderFrameJournalItem('codex', kind, payload)).toMatchObject({
+      classification: 'error-surface'
+    })
+  })
+
+  it('covers a kind only for its own provider — a Claude kind from Codex still falls back', () => {
     expect(
       unhandledProviderFrameJournalItem('codex', 'message:system:task_notification', {
         status: 'failed'

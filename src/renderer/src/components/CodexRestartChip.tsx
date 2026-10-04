@@ -20,10 +20,12 @@ type RestartNotice = {
 export default function CodexRestartChip({
   isVisible = true,
   ptyId,
+  onReturnFocus,
   shouldFocus = false
 }: {
   isVisible?: boolean
   ptyId: string
+  onReturnFocus: () => void
   shouldFocus?: boolean
 }): React.JSX.Element | null {
   // Why: one O(1) selector per mounted pane stays idle when unrelated PTY maps
@@ -35,10 +37,12 @@ export default function CodexRestartChip({
 
   const handleRestart = (): void => {
     useAppStore.getState().queueCodexPaneRestarts([ptyId])
+    onReturnFocus()
   }
 
   const handleDismiss = (): void => {
     useAppStore.getState().dismissCodexRestartNotices([ptyId])
+    onReturnFocus()
     // Why: notices are renderer-only, so the persisted launch record must be
     // cleared for this pane or the startup sweep re-raises its answered prompt.
     void window.api.codexAccounts.forgetStalePanes({ ptyIds: [ptyId] }).catch((err: unknown) => {
@@ -106,7 +110,19 @@ function LoudRestartOverlay({
       aria-live="assertive"
       aria-labelledby={titleId}
       aria-describedby={bodyId}
-      className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center p-6 outline-none"
+      onMouseDown={(event) => {
+        if (event.button === 0 && event.target === event.currentTarget) {
+          onDismiss()
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          event.stopPropagation()
+          onDismiss()
+        }
+      }}
+      className="absolute inset-0 z-50 flex items-center justify-center p-6 outline-none"
     >
       <div className="pointer-events-auto flex w-full max-w-[30rem] flex-col gap-3 rounded-lg border border-border bg-card p-6 pb-5 text-card-foreground shadow-xs">
         <div className="flex items-start gap-3">

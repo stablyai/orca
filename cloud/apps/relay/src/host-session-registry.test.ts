@@ -535,6 +535,8 @@ describe('host session cleanup races', () => {
     const socket = new FakeSocket()
 
     const activation = activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(activateControl).toHaveBeenCalledOnce()
     socket.close()
     blocked.resolve('control:production-gce-c3:1')
     await activation
@@ -560,6 +562,8 @@ describe('host session cleanup races', () => {
 
     const rebindSocket = new FakeSocket()
     const rebinding = activate(rebindSocket as unknown as WebSocket, identity, original, 1, true, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(activateControl).toHaveBeenCalledTimes(2)
     rebindSocket.close()
     blocked.resolve('control:production-gce-c3:1')
     await rebinding
@@ -572,6 +576,49 @@ describe('host session cleanup races', () => {
       { userId: identity.sub, relayHostId: identity.relayHostId },
       'control:production-gce-c3:1'
     )
+  })
+
+  it('skips a closed queued control so its live retry avoids abandoned database work', async () => {
+    const stalled = deferred<string>()
+    const activateControl = vi
+      .fn<RelayAssignmentStore['activateControl']>()
+      .mockReturnValueOnce(stalled.promise)
+      .mockImplementation(async () => {
+        await new Promise<void>((resolve) => setTimeout(resolve, 4_000))
+        return 'control:production-gce-c3:1'
+      })
+    const { registry, activate, releaseActivity } = createRegistry(activateControl)
+    const firstSocket = new FakeSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
+    const first = activate(firstSocket as unknown as WebSocket, identity, null, 1, false, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(activateControl).toHaveBeenCalledOnce()
+    const abandonedSocket = new FakeSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
+    const abandoned = activate(abandonedSocket as unknown as WebSocket, identity, null, 1, false, 1)
+    const liveSocket = new FakeSocket()
+    const startedAt = Date.now()
+    let liveCompletedAt: number | undefined
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
+    const live = activate(liveSocket as unknown as WebSocket, identity, null, 1, false, 1)
+      .then(() => { liveCompletedAt = Date.now() })
+    firstSocket.close()
+    abandonedSocket.close()
+    stalled.resolve('control:production-gce-c3:1')
+    await vi.advanceTimersByTimeAsync(8_000)
+    await Promise.all([first, abandoned, live])
+
+    console.log(JSON.stringify({
+      scenario: 'closed queued control before a live retry',
+      activationCalls: activateControl.mock.calls.length,
+      activityReleases: releaseActivity.mock.calls.length,
+      liveReadyMs: liveCompletedAt === undefined ? null : liveCompletedAt - startedAt
+    }))
+    expect(activateControl).toHaveBeenCalledTimes(2)
+    expect(releaseActivity).toHaveBeenCalledOnce()
+    expect(liveCompletedAt! - startedAt).toBe(4_000)
+    expect(registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })?.socket)
+      .toBe(liveSocket)
   })
 
   it('rejects client lookup when the indexed control socket is not open', async () => {

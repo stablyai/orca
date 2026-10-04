@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getRemoteHostPlatform, type RemoteHostPlatform } from './ssh-remote-platform'
+import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
 import {
   cleanupOwnedRelayUploadStageCommand,
   parseReservedRelayUploadStage,
@@ -73,17 +74,19 @@ function runCommand(host: RemoteHostPlatform, command: string, prefix = '') {
   return spawnSync('/bin/sh', ['-c', `${prefix}\n${command}`], { encoding: 'utf8' })
 }
 
-function createStage(
-  host: RemoteHostPlatform,
+function createStage(host: RemoteHostPlatform, pool: string, index: number): string {
+  const reservation = runCommand(host, reserveRelayUploadStageCommand(host, pool, owner))
+  expect(reservation.status, reservation.stderr).toBe(0)
+  return populateReservedStage(pool, index)
+}
+
+function populateReservedStage(
   pool: string,
   index: number,
-  stageOwner = owner,
+  replacementOwner?: string,
   stale = false,
   state: 'slot' | 'claim' | 'delete' = 'slot'
 ): string {
-  const reservedOwner = /^\.sftp-namespace-[0-9a-f]{32}$/u.test(stageOwner) ? stageOwner : owner
-  const reservation = runCommand(host, reserveRelayUploadStageCommand(host, pool, reservedOwner))
-  expect(reservation.status, reservation.stderr).toBe(0)
   const slot = join(pool, `slot-${index}`)
   const stage = join(pool, `${state}-${index}`)
   if (stage !== slot) {
@@ -91,8 +94,8 @@ function createStage(
     renameSync(slot, stage)
   }
   const marker = join(stage, '.orca-upload-owner')
-  if (stageOwner !== reservedOwner) {
-    writeFileSync(marker, stageOwner)
+  if (replacementOwner !== undefined) {
+    writeFileSync(marker, replacementOwner)
   }
   writeFileSync(join(stage, 'payload', 'relay.js'), `relay-${index}`)
   if (stale) {
@@ -102,16 +105,48 @@ function createStage(
   return stage
 }
 
+function createStages(host: RemoteHostPlatform, pool: string, count: number): void {
+  if (host.commandDialect !== 'powershell' || count < 2) {
+    for (let index = 0; index < count; index += 1) {
+      createStage(host, pool, index)
+    }
+    return
+  }
+  const command = reserveRelayUploadStageCommand(host, pool, owner)
+  // Only fixture setup shares a process; each unmodified script gets a fresh local scope.
+  const batch = powerShellCommand(
+    [
+      "$ErrorActionPreference = 'Stop'",
+      `$fixtureScript = ${powerShellLiteral(decodePowerShellCommand(command))}`,
+      '$reservation = [PowerShell]::Create()',
+      'try {',
+      `foreach ($fixtureIndex in 1..${count}) {`,
+      '$reservation.Commands.Clear()',
+      '$reservation.Streams.Error.Clear()',
+      '$null = $reservation.AddScript($fixtureScript, $true)',
+      '$reservation.Invoke()',
+      'if ($reservation.InvocationStateInfo.State -ne "Completed") { throw $reservation.InvocationStateInfo.Reason }',
+      '}',
+      '} finally { $reservation.Dispose() }'
+    ].join('\n')
+  )
+  const result = runCommand(host, batch)
+  expect(result.status, result.stderr).toBe(0)
+  const reservations = result.stdout.trim().split(/\r?\n/u)
+  expect(reservations).toHaveLength(count)
+  for (const [index, output] of reservations.entries()) {
+    expect(parseReservedRelayUploadStage(host, pool, owner, output).slotName).toBe(`slot-${index}`)
+    populateReservedStage(pool, index)
+  }
+}
+
 afterEach(() => {
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
 })
 
-// Why: every case spawns a real interpreter per command, and on non-Windows hosts the PowerShell
-// path also forks `/usr/bin/stat` per file-identity lookup — the 8-entry reservation alone measured
-// ~50s idle, nearly all of it process-spawn sys time, and the full suite multiplies that under CPU
-// contention. Sized for spawn count, not the assertions, which run in microseconds.
+// Allow for real interpreter startup and file-identity probes under full-suite contention.
 const SPAWNED_INTERPRETER_TIMEOUT_MS = 240_000
 
 describe.each([
@@ -126,9 +161,7 @@ describe.each([
   (_label, host) => {
     it.each([0, 1, 7, 8, 9])('bounds reservation with %i occupied entries', (count) => {
       const pool = createPool()
-      for (let index = 0; index < Math.min(count, RELAY_UPLOAD_STAGE_SLOT_COUNT); index += 1) {
-        createStage(host, pool, index)
-      }
+      createStages(host, pool, Math.min(count, RELAY_UPLOAD_STAGE_SLOT_COUNT))
       if (count > RELAY_UPLOAD_STAGE_SLOT_COUNT) {
         mkdirSync(join(pool, 'foreign-extra'))
       }
@@ -204,9 +237,9 @@ describe.each([
 
     it('reclaims one stale owned stage but preserves fresh and foreign stages', () => {
       const pool = createPool()
-      createStage(host, pool, 0, owner, false)
-      createStage(host, pool, 1, '.foreign-owner', true)
-      createStage(host, pool, 2, owner, true)
+      createStages(host, pool, 3)
+      populateReservedStage(pool, 1, '.foreign-owner', true)
+      populateReservedStage(pool, 2, undefined, true)
 
       const result = runCommand(host, recoverOneStaleRelayUploadStageCommand(host, pool, 60))
 
@@ -218,8 +251,9 @@ describe.each([
 
     it('drains fixed stale claim and delete states across repeated deployments', () => {
       const pool = createPool()
-      createStage(host, pool, 0, owner, true, 'claim')
-      createStage(host, pool, 1, owner, true, 'delete')
+      createStages(host, pool, 2)
+      populateReservedStage(pool, 0, undefined, true, 'claim')
+      populateReservedStage(pool, 1, undefined, true, 'delete')
 
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const result = runCommand(host, recoverOneStaleRelayUploadStageCommand(host, pool, 60))

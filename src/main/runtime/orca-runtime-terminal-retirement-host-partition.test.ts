@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
@@ -123,7 +124,8 @@ function partitionedStore(): PartitionedStoreHarness {
   ])
   const writes: { hostId: ExecutionHostId | undefined; session: WorkspaceSessionState }[] = []
   const reads: (ExecutionHostId | undefined)[] = []
-  const store = {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This runtime fixture supplies the persistence and graph methods exercised by the test.
+  const store = withDurableRuntimeStore({
     getRepos: () => [SSH_REPO],
     getRepo: (id: string) => (id === SSH_REPO_ID ? SSH_REPO : undefined),
     getWorkspaceSessionHostIds: () => [...sessions.keys()],
@@ -136,7 +138,7 @@ function partitionedStore(): PartitionedStoreHarness {
       sessions.set(hostId ?? LOCAL_EXECUTION_HOST_ID, session)
     },
     flushOrThrow: vi.fn()
-  } as never
+  }) as never
   return { store, sessions, writes, reads }
 }
 
@@ -210,7 +212,8 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
         }
       ]
     ])
-    const store = {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This runtime fixture supplies the persistence and graph methods exercised by the test.
+    const store = withDurableRuntimeStore({
       getRepos: () => [{ ...SSH_REPO, executionHostId: staleHostId }],
       getRepo: () => ({ ...SSH_REPO, executionHostId: staleHostId }),
       getWorktreeMeta: () => undefined,
@@ -221,7 +224,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
       setWorkspaceSession: (session: WorkspaceSessionState, hostId?: ExecutionHostId) =>
         sessions.set(hostId ?? LOCAL_EXECUTION_HOST_ID, session),
       flushOrThrow: vi.fn()
-    } as never
+    }) as never
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -285,7 +288,8 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
       // The SSH copy of the same `repoId::path` currently has no terminals.
       [SSH_HOST_ID, { ...getDefaultWorkspaceSession(), tabsByWorktree: { [SSH_WORKTREE_ID]: [] } }]
     ])
-    const store = {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This runtime fixture supplies the persistence and graph methods exercised by the test.
+    const store = withDurableRuntimeStore({
       getRepos: () => [SSH_REPO],
       getRepo: (id: string) => (id === SSH_REPO_ID ? SSH_REPO : undefined),
       getWorktreeMeta: () => ({ hostId: SSH_HOST_ID }),
@@ -298,7 +302,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
         sessions.set(hostId ?? LOCAL_EXECUTION_HOST_ID, session),
       flushOrThrow: vi.fn(),
       persistPtyBinding: vi.fn()
-    } as never
+    }) as never
     const runtime = new OrcaRuntimeService(store)
     const stopAndWait = vi.fn(async () => true)
     runtime.setPtyController({
@@ -334,7 +338,8 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
       ],
       [staleHostId, { ...getDefaultWorkspaceSession(), tabsByWorktree: { [SSH_WORKTREE_ID]: [] } }]
     ])
-    const store = {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This runtime fixture supplies the persistence and graph methods exercised by the test.
+    const store = withDurableRuntimeStore({
       getRepos: () => [{ ...SSH_REPO, executionHostId: staleHostId }],
       getRepo: () => ({ ...SSH_REPO, executionHostId: staleHostId }),
       getWorktreeMeta: () => ({}),
@@ -347,7 +352,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
         sessions.set(hostId ?? LOCAL_EXECUTION_HOST_ID, session),
       flushOrThrow: vi.fn(),
       persistPtyBinding: vi.fn()
-    } as never
+    }) as never
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -406,6 +411,62 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
     const targets = controller.getHydrationTargets(true)
 
     expect(targets.get(folderWorktreeId)).toBe(localSession)
+  })
+
+  it.each<[string, string, Record<string, unknown>, ExecutionHostId]>([
+    ['local repo', 'repo::/wt', { id: 'repo' }, LOCAL_EXECUTION_HOST_ID],
+    ['SSH repo', 'repo::/wt', { id: 'repo', connectionId: 'c1' }, 'ssh:c1'],
+    ['runtime repo', 'repo::/wt', { id: 'repo', executionHostId: 'runtime:e1' }, 'runtime:e1'],
+    ['local folder', 'folder:f1', { folderId: 'f1' }, LOCAL_EXECUTION_HOST_ID],
+    ['SSH folder', 'folder:f1', { folderId: 'f1', connectionId: 'c1' }, 'ssh:c1'],
+    ['explicit SSH folder', 'folder:f1', { folderId: 'f1', executionHostId: 'ssh:c2' }, 'ssh:c2'],
+    ['runtime folder', 'folder:f1', { folderId: 'f1', executionHostId: 'runtime:e1' }, 'runtime:e1']
+  ])('reads a %s own saved partition', (_label, worktreeId, owner, ownerHostId) => {
+    const listing = (id: string) => ({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [
+          {
+            id,
+            ptyId: null,
+            worktreeId,
+            title: id,
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+    const sessions = new Map<ExecutionHostId, WorkspaceSessionState>([
+      [ownerHostId, listing('own')],
+      ['runtime:e0', listing('rotated')]
+    ])
+    const { folderId, ...repoOrFolder } = owner
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the controller reads only repos, folder workspaces and workspace sessions.
+    const store = {
+      getRepos: () => (folderId ? [] : [repoOrFolder]),
+      getRepo: () => (folderId ? undefined : repoOrFolder),
+      getFolderWorkspaces: () => (folderId ? [{ ...repoOrFolder, id: folderId }] : []),
+      getWorkspaceSessionHostIds: () => [...sessions.keys()],
+      getWorkspaceSession: (hostId: ExecutionHostId) =>
+        sessions.get(hostId) ?? getDefaultWorkspaceSession()
+    } as never
+    const controller = new RuntimeWorkspaceSessionController({
+      getStore: () => store,
+      resolveFolderConnectionId: (workspace) => workspace.connectionId ?? null,
+      hasRuntimeOwnedPtyCandidate: () => false
+    })
+
+    expect(controller.getOwnPartition(worktreeId)).toBe(sessions.get(ownerHostId))
+    expect(controller.get(worktreeId)).toBe(sessions.get(ownerHostId))
+
+    sessions.set(ownerHostId, getDefaultWorkspaceSession())
+    const fellBack = controller.get(worktreeId) === sessions.get('runtime:e0')
+    // Only a runtime owner rotates onto another copy; that copy is never read as its own.
+    expect(fellBack).toBe(ownerHostId.startsWith('runtime:'))
+    expect(controller.getOwnPartition(worktreeId)?.tabsByWorktree[worktreeId]).toBeUndefined()
   })
 
   it('waits for provider retirement on a direct worktree stop', async () => {
@@ -491,7 +552,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
       incarnationId: 'incarnation-a'
     })
 
-    runtime.onPtyExit(SSH_PTY_LEFT, 0, 'incarnation-a')
+    await runtime.onPtyExit(SSH_PTY_LEFT, 0, 'incarnation-a')
 
     // The durable retirement must land in the pane's own host partition.
     expect(harness.writes.map((write) => write.hostId)).toEqual([SSH_HOST_ID])
@@ -624,7 +685,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
       incarnationId: 'incarnation-a'
     })
 
-    runtime.onPtyExit('pty-left', 0, 'incarnation-a')
+    await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
 
     expect(harness.writes.map((write) => write.hostId ?? LOCAL_EXECUTION_HOST_ID)).toEqual([
       LOCAL_EXECUTION_HOST_ID

@@ -1,3 +1,4 @@
+import { getStoredRepoSshConnectionId } from '../repo-execution-host'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import type { Repo } from '../../shared/repo-types'
@@ -27,8 +28,9 @@ export class RuntimeRepositoryHooksCommands {
 
   async getRepoHooks(repoSelector: string) {
     const repo = await this.deps.resolveRepo(repoSelector)
-    if (repo.connectionId) {
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
+    const connectionId = getStoredRepoSshConnectionId(repo)
+    if (connectionId) {
+      const fsProvider = getSshFilesystemProvider(connectionId)
       if (!fsProvider) {
         return {
           hasHooksFile: false,
@@ -73,8 +75,9 @@ export class RuntimeRepositoryHooksCommands {
     if (isFolderRepo(repo)) {
       return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
     }
-    if (repo.connectionId) {
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
+    const connectionId = getStoredRepoSshConnectionId(repo)
+    if (connectionId) {
+      const fsProvider = getSshFilesystemProvider(connectionId)
       if (!fsProvider) {
         return { status: 'error' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
       }
@@ -115,8 +118,9 @@ export class RuntimeRepositoryHooksCommands {
     }
     return inspectSetupScriptImportCandidates(async (relativePath) => {
       const filePath = joinWorktreeRelativePath(repo.path, relativePath)
-      if (repo.connectionId) {
-        const fsProvider = getSshFilesystemProvider(repo.connectionId)
+      const connectionId = getStoredRepoSshConnectionId(repo)
+      if (connectionId) {
+        const fsProvider = getSshFilesystemProvider(connectionId)
         if (!fsProvider) {
           return null
         }

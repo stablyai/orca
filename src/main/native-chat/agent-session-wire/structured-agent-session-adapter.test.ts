@@ -1,15 +1,31 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionRootExitObservedError,
-  rethrowAfterAgentSessionAcquisitionCleanup
+  AgentSessionAcquisitionRefusal,
+  AgentSessionAcquisitionRootExitObservedError
 } from './structured-agent-session-adapter'
+import { rethrowAfterAgentSessionAcquisitionCleanup } from './structured-agent-session-provider-exit-proof'
 
 describe('failed agent-session acquisition cleanup', () => {
-  it('preserves the acquisition failure after proven cleanup', async () => {
+  it('names a failure exit-proven after proven cleanup, keeping its diagnostic and cause', async () => {
     const cause = new Error('proof failed')
+    const thrown = await rethrowAfterAgentSessionAcquisitionCleanup(
+      { releaseAcquisition: vi.fn(async () => true) },
+      'session-1',
+      cause
+    ).catch((error: unknown) => error)
 
+    expect(thrown).toBeInstanceOf(AgentSessionAcquisitionExitProvenError)
+    expect(thrown).toMatchObject({ message: 'proof failed', cause })
+  })
+
+  it.each([
+    ['a refusal', new AgentSessionAcquisitionRefusal('not signed in')],
+    ['a root exit', new AgentSessionAcquisitionRootExitObservedError(new Error('exited'))],
+    ['a host store code', new Error('agent_session_checkpoint_stale')]
+  ])('keeps %s that already names its verdict after proven cleanup', async (_label, cause) => {
     await expect(
       rethrowAfterAgentSessionAcquisitionCleanup(
         { releaseAcquisition: vi.fn(async () => true) },

@@ -14,7 +14,8 @@ export type ShellWrapperFile = readonly [path: string, content: string]
 
 export function writeShellWrapperFiles(
   files: readonly ShellWrapperFile[],
-  logPrefix: string
+  logPrefix: string,
+  consequence = 'Shell will launch unwrapped'
 ): boolean {
   try {
     for (const [path, content] of files) {
@@ -38,7 +39,7 @@ export function writeShellWrapperFiles(
         ? `${error.message} (${(error as NodeJS.ErrnoException).code || 'unknown'})`
         : String(error)
     console.error(`${logPrefix} Failed to write shell wrapper files: ${errorMessage}`)
-    console.error(`${logPrefix} Shell will launch unwrapped`)
+    console.error(`${logPrefix} ${consequence}`)
     return false
   }
 }

@@ -293,7 +293,12 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       }
     })
 
-    expect(mockSendRuntimePtyInputVerified).toHaveBeenCalledWith({}, 'pty-1', 'fix the spinner\r')
+    expect(mockSendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      'fix the spinner\r',
+      'launch'
+    )
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
 

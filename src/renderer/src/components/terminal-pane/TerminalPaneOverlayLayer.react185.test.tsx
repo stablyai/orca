@@ -23,6 +23,7 @@ vi.mock('../../store', () => ({
 }))
 
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
+import { registerTabGroupBody } from '../tab-group/tab-group-body-geometry'
 
 const GROUP_ID = 'group-react185'
 const TAB_ID = 'tab-react185'
@@ -52,6 +53,7 @@ let capturedResizeCallback: (() => void) | null = null
 let container: HTMLDivElement
 let bodyEl: HTMLDivElement
 let bodyRect: DOMRect
+let unregisterBody: () => void
 let root: Root
 
 class CapturingResizeObserver {
@@ -103,12 +105,14 @@ beforeEach(() => {
   bodyRect = createRect({ top: 32, height: 568 })
   bodyEl.getBoundingClientRect = () => bodyRect
   document.body.appendChild(bodyEl)
+  unregisterBody = registerTabGroupBody(GROUP_ID, bodyEl)
 })
 
 afterEach(() => {
   act(() => {
     root?.unmount()
   })
+  unregisterBody()
   container?.remove()
   bodyEl?.remove()
   vi.unstubAllGlobals()
@@ -124,20 +128,6 @@ describe('TerminalPaneOverlayLayer fallback measure<->fit loop (React #185)', ()
     })
 
     expect(markUnverifiedPtyLoss).toHaveBeenCalledWith(TAB_ID)
-  })
-
-  it('does not re-render on ResizeObserver ticks with an unchanged rect', () => {
-    renderSlot()
-    expect(capturedResizeCallback).toBeTypeOf('function')
-
-    const rendersAfterMount = terminalPaneRenderCount
-    for (let i = 0; i < 50; i += 1) {
-      act(() => {
-        capturedResizeCallback?.()
-      })
-    }
-
-    expect(terminalPaneRenderCount - rendersAfterMount).toBe(0)
   })
 
   it('settles sub-pixel jitter across an integer boundary without losing precision', () => {

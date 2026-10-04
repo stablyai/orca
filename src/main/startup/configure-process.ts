@@ -1,11 +1,16 @@
 import { app } from 'electron'
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
 import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
+import {
+  hasMissingProfileStateDatabaseWithRetainedExport,
+  readActiveProfileId,
+  readPersistedHttp1CompatibilityMode
+} from './http1-compatibility-profile-state'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
@@ -32,22 +37,6 @@ function parseBooleanEnvFlag(value: string | undefined): boolean | null {
   return null
 }
 
-function readPersistedHttp1CompatibilityMode(userDataPath: string): boolean {
-  const dataFile = join(userDataPath, 'orca-data.json')
-  if (!existsSync(dataFile)) {
-    return false
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(dataFile, 'utf-8')) as {
-      settings?: { electronHttp1CompatibilityMode?: unknown }
-    }
-    return parsed.settings?.electronHttp1CompatibilityMode === true
-  } catch {
-    return false
-  }
-}
-
 export function shouldDisableHttp2ForElectronNetworking(
   options: NetworkCompatibilityOptions = {}
 ): boolean {
@@ -56,11 +45,22 @@ export function shouldDisableHttp2ForElectronNetworking(
     return envValue
   }
   const userDataPath = options.userDataPath ?? app.getPath('userData')
+  const activeProfileId = readActiveProfileId(userDataPath)
   // Why the marker first: this runs before app.whenReady(), and the settings file is the multi-MB
-  // orca-data.json the Store parses again moments later. The marker is refreshed whenever settings
-  // change, so the full read only happens on a profile that has never written one.
+  // profile document the Store parses again moments later. The marker is refreshed whenever
+  // settings change; an untrusted SQLite profile fails closed rather than falling back to JSON.
+  if (
+    activeProfileId !== undefined &&
+    activeProfileId !== null &&
+    hasMissingProfileStateDatabaseWithRetainedExport(userDataPath, activeProfileId)
+  ) {
+    return false
+  }
   return (
-    readHttp1CompatibilityMarker(userDataPath) ?? readPersistedHttp1CompatibilityMode(userDataPath)
+    (activeProfileId === null
+      ? null
+      : readHttp1CompatibilityMarker(userDataPath, activeProfileId)) ??
+    readPersistedHttp1CompatibilityMode(userDataPath)
   )
 }
 

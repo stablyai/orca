@@ -3,6 +3,7 @@ import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { build } from 'esbuild'
+import { JSONC_PARSER_ESM_ALIAS } from '../../config/build-plugins/jsonc-parser-esm'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { spawnRelay, type RelayProcess } from './subprocess-test-utils'
 
@@ -27,6 +28,7 @@ beforeAll(async () => {
     format: 'cjs',
     outfile: relayEntry,
     external: ['node-pty', '@parcel/watcher', 'electron'],
+    alias: JSONC_PARSER_ESM_ALIAS,
     logLevel: 'silent'
   })
 })

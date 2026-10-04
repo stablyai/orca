@@ -5,7 +5,8 @@
 //
 // Env contract (set by the test):
 //   ORCA_SDK_CONTRACT_SCENARIO_PATH — JSON file
-//     { steps: Step[], controlResponses?: { [subtype]: <response> } } where a Step is
+//     { steps: Step[], controlResponses?: { [subtype]: <response> },
+//       controlResponseLeadingFrames?: { [subtype]: <frame>[] } } where a Step is
 //     { emit: <frame> } | { awaitUserMessage: true } | { stderr: <text> } |
 //     { awaitControlResponse: <request_id> } | { delayMs: <n> } | { exit: <code> }
 //   ORCA_SDK_CONTRACT_REPORT_PATH — where argv/env observations are written
@@ -93,7 +94,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     if (process.env.ORCA_SDK_CONTRACT_IGNORE_CONTROL_REQUESTS) {
       return
     }
-    emit({
+    const response = {
       type: 'control_response',
       response: {
         subtype: 'success',
@@ -103,7 +104,10 @@ createInterface({ input: process.stdin }).on('line', (line) => {
           models: []
         }
       }
-    })
+    }
+    // Frames the CLI wrote just before its answer, in the same write: one read chunk.
+    const leading = scenario.controlResponseLeadingFrames?.[frame.request?.subtype] ?? []
+    process.stdout.write([...leading, response].map((line) => `${JSON.stringify(line)}\n`).join(''))
     return
   }
   if (frame.type === 'control_response') {

@@ -15,9 +15,9 @@ export function createTerminalCommandLifecycle(options: TerminalCommandLifecycle
   // Why: the byte parsing lives in shared so main's side-effect tracker emits
   // identical command-finished facts for local/SSH PTYs; this renderer wrapper
   // remains the byte path for remote-runtime PTYs and the kill-switch-off mode.
-  const scanner = createOsc133CommandFinishedScanner(
-    options.onCommandFinished,
-    options.onCommandStarted
+  // Why the wrapper: the scanner passes a chunk offset, which a callback with its own optional parameter must not receive.
+  const scanner = createOsc133CommandFinishedScanner(options.onCommandFinished, () =>
+    options.onCommandStarted?.()
   )
   const disposables: IDisposable[] = []
 

@@ -1,6 +1,9 @@
 import type { Repo } from '../../../shared/repo-types'
 import type { Store } from '../../persistence'
-import type { LocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
+import {
+  getLocalProjectWorktreeGitOptions,
+  type LocalProjectWorktreeGitOptions
+} from '../../project-runtime-git-options'
 import type { CommitMessageAgentRuntimeTarget } from '../../text-generation/commit-message-agent-environment'
 import type { CommitMessageGenerationTarget } from '../../text-generation/commit-message-text-generation'
 import { resolve } from 'node:path'
@@ -77,7 +80,11 @@ async function localRepoOwnsWorktree(
     return true
   }
   try {
-    const worktrees = await listRepoWorktreeGraph(repo)
+    // Why the project runtime: WSL Git names a drive worktree differently than host Git does.
+    const worktrees = await listRepoWorktreeGraph(
+      repo,
+      getLocalProjectWorktreeGitOptions(store, repo)
+    )
     return worktrees.some((worktree) => candidatePaths.has(comparableLocalPath(worktree.path)))
   } catch {
     return false

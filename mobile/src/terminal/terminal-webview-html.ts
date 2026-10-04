@@ -21,4 +21,20 @@ export const XTERM_HTML = [
   TERMINAL_HTML_DOCUMENT_CLOSE
 ].join('')
 
-export const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }
+/**
+ * The WebView's document, starting as its view mounted: at this text scale, and whether it was
+ * shown. Written into the page ahead of the document script, which reads them as it starts.
+ */
+export function xtermWebViewSource(start: { textScale: number; shown: boolean }) {
+  const startValues =
+    `window.__orcaTerminalTextScale = ${JSON.stringify(start.textScale)};\n` +
+    `window.__orcaTerminalShown = ${JSON.stringify(start.shown)};\n`
+  return {
+    html: [
+      TERMINAL_HTML_DOCUMENT_SHELL,
+      startValues,
+      TERMINAL_DOCUMENT_SCRIPT,
+      TERMINAL_HTML_DOCUMENT_CLOSE
+    ].join('')
+  }
+}

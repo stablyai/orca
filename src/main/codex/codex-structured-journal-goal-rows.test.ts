@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -35,8 +36,11 @@ function frames(): {
     },
     publish: vi.fn()
   } as unknown as StructuredAgentSessionEventSink
-  const goals = new CodexJournalGoals(sink)
-  const generic = new CodexJournalGenericFrames({ sink }, () => null)
+  const goals = new CodexJournalGoals(sink, () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }))
+  const generic = new CodexJournalGenericFrames(
+    { sink, attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }) },
+    () => null
+  )
   return {
     rows,
     frames: {
@@ -62,6 +66,34 @@ describe('codex goal frames as journal rows', () => {
     generic.appendUnhandled('notification:thread/goal/updated', goalFrame({}), THREAD)
 
     expect(texts(rows)).toEqual(['Goal set: Keep the current scratch directory tidy.'])
+  })
+
+  it('records the goal in typed form so readers never parse the frame head', () => {
+    const { rows, frames: generic } = frames()
+
+    generic.appendUnhandled(
+      'notification:thread/goal/updated',
+      goalFrame({ tokenBudget: 50_000, tokensUsed: 12, timeUsedSeconds: 9 }),
+      THREAD
+    )
+    generic.appendUnhandled('notification:thread/goal/cleared', { threadId: THREAD }, THREAD)
+
+    expect(rows.map((row) => (row.kind === 'status' ? row.threadGoal : undefined))).toEqual([
+      {
+        state: 'set',
+        goal: {
+          objective: 'Keep the current scratch directory tidy.',
+          status: 'active',
+          tokenBudget: 50_000,
+          tokensUsed: 12,
+          timeUsedSeconds: 9,
+          // Codex reports epoch seconds; the journal keeps epoch ms.
+          createdAt: 1789067988_000,
+          updatedAt: 1789067988_000
+        }
+      },
+      { state: 'cleared' }
+    ])
   })
 
   it('does not repeat the row while only the counters climb', () => {

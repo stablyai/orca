@@ -17,8 +17,12 @@ export function record(value: unknown): JsonRecord | undefined {
   return typeof value === 'object' && value !== null ? (value as JsonRecord) : undefined
 }
 
-/** Returns undefined when the file is unreadable, distinguishing a vanished rollout from one with no new lines. */
-export function readJsonlCursor(cursor: JsonlCursor): JsonRecord[] | undefined {
+/** Returns undefined when the file is unreadable, distinguishing a vanished rollout from one with no new lines.
+ *  `lineFilter` skips JSON.parse for raw lines the caller can reject by substring. */
+export function readJsonlCursor(
+  cursor: JsonlCursor,
+  lineFilter?: (line: string) => boolean
+): JsonRecord[] | undefined {
   if (!cursor.filePath) {
     return undefined
   }
@@ -63,7 +67,10 @@ export function readJsonlCursor(cursor: JsonlCursor): JsonRecord[] | undefined {
   }
   const records: JsonRecord[] = []
   for (const line of lines) {
-    if (Buffer.byteLength(line, 'utf8') > TRANSCRIPT_LINE_MAX_BYTES) {
+    if (
+      (lineFilter && !lineFilter(line)) ||
+      Buffer.byteLength(line, 'utf8') > TRANSCRIPT_LINE_MAX_BYTES
+    ) {
       continue
     }
     try {

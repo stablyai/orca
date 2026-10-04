@@ -172,7 +172,7 @@ test('paints a nonempty lossy initial snapshot on a paired Electron client @head
         state?.setActiveView('terminal')
         state?.setActiveWorktree(worktreeId)
         state?.setActiveTab(tabId)
-        state?.setActiveTabType('terminal')
+        state?.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
       },
       { tabId: webTabId, worktreeId }
     )

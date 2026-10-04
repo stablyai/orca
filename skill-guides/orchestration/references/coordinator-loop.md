@@ -21,14 +21,19 @@ when an older CLI rejects the flag. A nested worker must respect
 
 ## Launch preferences
 
-For a fresh Claude, Codex, or Cursor terminal, `--model` accepts an opaque
-provider model ID. Pass it only when the user named a model; otherwise omit it
-so the worker inherits the user's configured agent default. Add `--effort` only
-when that model supports it:
+For a fresh Claude, Codex, Cursor, Antigravity, or Muse terminal, `--model`
+accepts an opaque provider model ID. Pass it only when the user named a model;
+otherwise omit it so the worker inherits the user's configured agent default.
+Add `--effort` only when that model supports it:
 
 ```text
 ORCA orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json
+ORCA orchestration worker-start --task <task_id> --worktree current --agent muse --model muse-spark-1.3 --json
 ```
+
+Other agents, including `opencode`, reject `--model`; they run the model set in
+their own config, so a coordinator wanting a same-model opencode worker relies
+on that config.
 
 `--effort` requires `--model`; neither option combines with `--terminal`. A
 connected worker server must advertise launch-preference support before Orca

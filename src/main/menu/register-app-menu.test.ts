@@ -32,6 +32,7 @@ vi.mock('electron', () => ({
 }))
 
 import { getNextDefaultOnAppearanceSettingValue, registerAppMenu } from './register-app-menu'
+import { setMainUiLanguage } from '../i18n/main-i18n'
 
 const isMac = process.platform === 'darwin'
 
@@ -72,6 +73,60 @@ function getSubmenu(
 }
 
 describe('registerAppMenu', () => {
+  it.each(['linux', 'win32', 'darwin'] as const)(
+    'leaves Ctrl+M to the terminal while preserving macOS minimize on %s',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      registerAppMenu(buildMenuOptions())
+
+      const windowSubmenu = getSubmenu(getTemplate(), 'Window')
+      const minimize = windowSubmenu.find((item) => item.role === 'minimize')
+      expect(minimize).toEqual(
+        platform === 'darwin'
+          ? { role: 'minimize', label: 'Minimize' }
+          : { role: 'minimize', label: 'Minimize', accelerator: '', registerAccelerator: false }
+      )
+      expect(windowSubmenu.find((item) => item.role === 'zoom')).toEqual({
+        role: 'zoom',
+        label: 'Zoom'
+      })
+    }
+  )
+
+  it.each(['linux', 'win32', 'darwin'] as const)(
+    'localizes native window roles without changing minimize shortcuts on %s',
+    async (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      await setMainUiLanguage('tr')
+      registerAppMenu(buildMenuOptions())
+
+      const windowSubmenu = getSubmenu(getTemplate(), 'Pencere')
+      expect(windowSubmenu.find((item) => item.role === 'minimize')).toEqual({
+        role: 'minimize',
+        label: 'Küçült',
+        ...(platform === 'darwin' ? {} : { accelerator: '', registerAccelerator: false })
+      })
+      expect(windowSubmenu.find((item) => item.role === 'zoom')).toEqual({
+        role: 'zoom',
+        label: 'Büyüt'
+      })
+    }
+  )
+
+  it('shows the Settings hint when the user assigns a shortcut', () => {
+    registerAppMenu({
+      ...buildMenuOptions(),
+      getKeybindings: () => ({ 'app.settings': ['Mod+Comma'] })
+    })
+
+    const submenu = getSubmenu(getTemplate(), isMac ? 'Orca' : 'File')
+    expect(submenu).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}` })
+      ])
+    )
+  })
+
   it('toggles missing default-on appearance settings from visible to hidden', () => {
     expect(getNextDefaultOnAppearanceSettingValue(undefined)).toBe(false)
     expect(getNextDefaultOnAppearanceSettingValue(true)).toBe(false)
@@ -87,7 +142,8 @@ describe('registerAppMenu', () => {
     buildFromTemplateMock.mockImplementation((template) => ({ template }))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await setMainUiLanguage('en')
     vi.restoreAllMocks()
   })
 
@@ -381,10 +437,8 @@ describe('registerAppMenu', () => {
 
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
     expect(fileLabels).not.toContain(`Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`)
-    expect(fileLabels[0]).toBe(`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`)
-    expect(fileLabels).toEqual(
-      expect.arrayContaining([`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`, 'Exit'])
-    )
+    expect(fileLabels[0]).toBe('Settings')
+    expect(fileLabels).toEqual(expect.arrayContaining(['Settings', 'Exit']))
 
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
     expect(helpLabels).toEqual(
@@ -403,9 +457,7 @@ describe('registerAppMenu', () => {
     const template = getTemplate()
     const appSubmenu = getSubmenu(template, 'Orca')
     const appLabels = appSubmenu.map((item) => item.label)
-    expect(appLabels).toEqual(
-      expect.arrayContaining(['Check for Updates...', `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`])
-    )
+    expect(appLabels).toEqual(expect.arrayContaining(['Check for Updates...', 'Settings']))
     // Why: on macOS File should NOT duplicate Settings/Exit — those live in
     // the system app menu. Without global Export, there is no File item left.
     expect(template.find((item) => item.label === 'File')).toBeUndefined()

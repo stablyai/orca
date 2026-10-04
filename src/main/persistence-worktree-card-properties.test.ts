@@ -1,8 +1,8 @@
+import { closeTestStores, testState, createStore, writeDataFile } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { testState, createStore, writeDataFile } from './persistence-test-harness'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -52,7 +52,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── worktree-card property migration ───────────────────────────────
@@ -80,7 +81,8 @@ describe('Store', () => {
       'pr',
       'comment',
       'ports',
-      'inline-agents'
+      'inline-agents',
+      'host'
     ])
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
     expect(store.getUI()._expandedWorktreeCardPropertiesDefaulted).toBe(true)
@@ -117,7 +119,8 @@ describe('Store', () => {
       'pr',
       'comment',
       'ports',
-      'inline-agents'
+      'inline-agents',
+      'host'
     ])
     expect(store.getUI().worktreeCardProperties).not.toContain('branch')
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
@@ -147,7 +150,8 @@ describe('Store', () => {
       'cli',
       'comment',
       'ports',
-      'inline-agents'
+      'inline-agents',
+      'host'
     ])
     expect(store.getUI().worktreeCardProperties).not.toContain('branch')
     expect(store.getUI()._worktreeCardModeDefaulted).toBe(true)
@@ -177,7 +181,8 @@ describe('Store', () => {
       'jira-issue',
       'pr',
       'ports',
-      'inline-agents'
+      'inline-agents',
+      'host'
     ])
     expect(store.getUI().worktreeCardProperties).not.toContain('branch')
   })
@@ -199,7 +204,7 @@ describe('Store', () => {
     })
     const store = await createStore()
 
-    expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread', 'pr'])
+    expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread', 'pr', 'host'])
     expect(store.getUI().worktreeCardProperties).not.toContain('branch')
     expect(store.getUI().worktreeCardProperties).not.toContain('ports')
     expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
@@ -267,7 +272,8 @@ describe('Store', () => {
       'linear-issue',
       'pr',
       'comment',
-      'ports'
+      'ports',
+      'host'
     ])
     expect(store.getUI().worktreeCardProperties).not.toContain('branch')
     expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
@@ -305,7 +311,8 @@ describe('Store', () => {
       'jira-issue',
       'pr',
       'ports',
-      'inline-agents'
+      'inline-agents',
+      'host'
     ])
     expect(
       store.getUI().worktreeCardProperties?.filter((property) => property === 'jira-issue')
@@ -335,7 +342,8 @@ describe('Store', () => {
       'unread',
       'issue',
       'linear-issue',
-      'pr'
+      'pr',
+      'host'
     ])
     expect(store.getUI().worktreeCardProperties).not.toContain('jira-issue')
   })
@@ -410,6 +418,51 @@ describe('Store', () => {
     expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread'])
     expect(store.getUI().worktreeCardProperties).not.toContain('ports')
     expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+  })
+
+  it('backfills host once for profiles stamped before it became a card property', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: false },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'pr', 'ports', 'inline-agents'],
+        _inlineAgentsDefaultedForAllUsers: true,
+        _expandedWorktreeCardPropertiesDefaulted: true,
+        _jiraIssueWorktreeCardPropertyDefaulted: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(
+      store.getUI().worktreeCardProperties?.filter((property) => property === 'host')
+    ).toHaveLength(1)
+    expect(store.getUI()._hostWorktreeCardPropertyDefaulted).toBe(true)
+  })
+
+  it('preserves a deliberate host removal after the backfill has run', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: false },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'pr'],
+        _inlineAgentsDefaultedForAllUsers: true,
+        _expandedWorktreeCardPropertiesDefaulted: true,
+        _jiraIssueWorktreeCardPropertyDefaulted: true,
+        _hostWorktreeCardPropertyDefaulted: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread', 'pr'])
+    expect(store.getUI().worktreeCardProperties).not.toContain('host')
   })
 
   it.each([

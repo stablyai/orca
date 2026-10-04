@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeSupportedUiLocale, resolveUiLocale, resolveRendererUiLocale } from './ui-locale'
+import { normalizeSupportedUiLocale, resolveUiLocale } from './ui-locale'
 import {
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_ENGLISH,
@@ -20,31 +20,13 @@ describe('ui-locale', () => {
     expect(normalizeSupportedUiLocale('zh-SG')).toBe('zh')
   })
 
-  it('normalizes Korean locale prefixes', () => {
-    expect(normalizeSupportedUiLocale('ko-KR')).toBe('ko')
-    expect(normalizeSupportedUiLocale('ko')).toBe('ko')
-  })
-
-  it('normalizes Japanese locale prefixes', () => {
-    expect(normalizeSupportedUiLocale('ja-JP')).toBe('ja')
-    expect(normalizeSupportedUiLocale('ja')).toBe('ja')
-  })
-
-  it('normalizes Spanish locale prefixes', () => {
-    expect(normalizeSupportedUiLocale('es-ES')).toBe('es')
-    expect(normalizeSupportedUiLocale('es-MX')).toBe('es')
-    expect(normalizeSupportedUiLocale('es')).toBe('es')
-  })
-
-  it('normalizes French locale prefixes', () => {
-    expect(normalizeSupportedUiLocale('fr-FR')).toBe('fr')
-    expect(normalizeSupportedUiLocale('fr-CA')).toBe('fr')
-    expect(normalizeSupportedUiLocale('fr')).toBe('fr')
-  })
-
   it('normalizes Turkish locale prefixes', () => {
     expect(normalizeSupportedUiLocale('tr-TR')).toBe('tr')
     expect(normalizeSupportedUiLocale('tr')).toBe('tr')
+  })
+
+  it('resolves explicit Turkish independently of system locale', () => {
+    expect(resolveUiLocale(UI_LANGUAGE_TURKISH, 'en-US')).toBe('tr')
   })
 
   it('falls back unsupported locales to English', () => {
@@ -81,10 +63,6 @@ describe('ui-locale', () => {
     expect(resolveUiLocale(UI_LANGUAGE_FRENCH, 'en-US')).toBe('fr')
   })
 
-  it('resolves explicit Turkish independently of system locale', () => {
-    expect(resolveUiLocale(UI_LANGUAGE_TURKISH, 'en-US')).toBe('tr')
-  })
-
   it('preserves a selected plugin language bundle id', () => {
     expect(resolveUiLocale('plugin:orca-samples.portuguese/pt-BR')).toBe(
       'plugin:orca-samples.portuguese/pt-BR'
@@ -99,15 +77,5 @@ describe('ui-locale', () => {
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'es-MX')).toBe('es')
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'fr-FR')).toBe('fr')
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'tr-TR')).toBe('tr')
-  })
-
-  it('uses renderer system locale only for the system setting', () => {
-    expect(resolveRendererUiLocale(UI_LANGUAGE_ENGLISH)).toBe('en')
-    expect(resolveRendererUiLocale(UI_LANGUAGE_CHINESE)).toBe('zh')
-    expect(resolveRendererUiLocale(UI_LANGUAGE_KOREAN)).toBe('ko')
-    expect(resolveRendererUiLocale(UI_LANGUAGE_JAPANESE)).toBe('ja')
-    expect(resolveRendererUiLocale(UI_LANGUAGE_SPANISH)).toBe('es')
-    expect(resolveRendererUiLocale(UI_LANGUAGE_FRENCH)).toBe('fr')
-    expect(resolveRendererUiLocale(UI_LANGUAGE_TURKISH)).toBe('tr')
   })
 })

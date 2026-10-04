@@ -30,7 +30,7 @@ vi.mock('./orchestration/federation/federated-worker-start', () => ({
 }))
 vi.mock('./orchestration-structured-worker-session', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  sendStructuredWorkerPreamble: async () => {},
+  sendStructuredWorkerPreamble: async () => 'accepted',
   releaseStructuredWorkerSession: () => {},
   discardStructuredWorkerSession: async () => {}
 }))

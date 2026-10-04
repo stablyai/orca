@@ -10,17 +10,19 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { Automation } from '../../shared/automations-types'
 import { AUTOMATION_ORPHAN_ISSUES } from '../../shared/automation-list-scope'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import type { Store } from '../persistence'
 import { resolveAutomationRunTarget } from './run-target-resolution'
 import { AutomationService } from './service'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 
 const testState = { dir: '' }
 
@@ -40,7 +42,7 @@ async function createStore(): Promise<Store> {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store: StoreClass, initDataPath } = await import('../persistence')
   initDataPath()
-  return new StoreClass()
+  return createSqliteTestStore(StoreClass, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 /** The reachable shape: a runtime-owned id is derived, not minted per lifecycle. */
@@ -183,9 +185,10 @@ describe('scheduled dispatch fenced on the host the record captured', () => {
     vi.useFakeTimers()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     vi.useRealTimers()
-    rmSync(testState.dir, { recursive: true, force: true })
+    removeTreeSync(testState.dir)
   })
 
   it('refuses the run once the same id carries a new registration', async () => {

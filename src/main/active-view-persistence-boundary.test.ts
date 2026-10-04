@@ -1,3 +1,8 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson
+} from './persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -27,7 +32,8 @@ describe('active-view persistence boundary', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-active-view-boundary-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     vi.useRealTimers()
     rmSync(testState.dir, { recursive: true, force: true })
   })
@@ -37,9 +43,9 @@ describe('active-view persistence boundary', () => {
     vi.resetModules()
     const { Store } = await import('./persistence')
     const dataFile = join(testState.dir, 'orca-data.json')
-    const store = new Store({ dataFile })
+    const store = createSqliteTestStore(Store, { dataFile })
     store.flush()
-    const durableBefore = readFileSync(dataFile, 'utf-8')
+    const durableBefore = readPersistedStateJson(dataFile)
 
     store.updateUI({ activeView: 'settings' })
     vi.advanceTimersByTime(1_000)
@@ -49,10 +55,10 @@ describe('active-view persistence boundary', () => {
     const preferencePayload = readFileSync(preferenceFile, 'utf-8')
     expect(Buffer.byteLength(preferencePayload)).toBeLessThan(64)
     expect(JSON.parse(preferencePayload)).toEqual({ activeView: 'settings' })
-    expect(readFileSync(dataFile, 'utf-8')).toBe(durableBefore)
+    expect(readPersistedStateJson(dataFile)).toBe(durableBefore)
     expect(store.getUI().activeView).toBe('settings')
 
-    const reloaded = new Store({ dataFile })
+    const reloaded = createSqliteTestStore(Store, { dataFile })
     expect(reloaded.getUI().activeView).toBe('settings')
   })
 })

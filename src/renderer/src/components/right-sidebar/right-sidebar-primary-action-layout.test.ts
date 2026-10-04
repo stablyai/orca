@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  REVIEW_ACTION_MERGE_BUTTON_CLASS,
   RIGHT_SIDEBAR_MERGE_PRIMARY_BUTTON_CLASS,
   RIGHT_SIDEBAR_MORPHING_PRIMARY_BUTTON_CLASS,
   RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS
@@ -26,9 +25,5 @@ describe('right sidebar primary action layout classes', () => {
     expect(RIGHT_SIDEBAR_MORPHING_PRIMARY_BUTTON_CLASS).not.toContain('min-w-[10.5rem]')
     expect(RIGHT_SIDEBAR_MERGE_PRIMARY_BUTTON_CLASS).toContain('w-[11.5rem]')
     expect(RIGHT_SIDEBAR_MERGE_PRIMARY_BUTTON_CLASS).not.toContain('min-w-[11.5rem]')
-  })
-
-  it('shares the shrinkable merge sizing with full-page review actions', () => {
-    expect(REVIEW_ACTION_MERGE_BUTTON_CLASS).toBe(RIGHT_SIDEBAR_MERGE_PRIMARY_BUTTON_CLASS)
   })
 })

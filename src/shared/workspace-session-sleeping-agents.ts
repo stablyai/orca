@@ -5,6 +5,7 @@ import {
   RESUMABLE_TUI_AGENTS
 } from './agent-session-resume'
 import { isValidTerminalTabId } from './terminal-tab-id'
+import { normalizeMainAgentStatusField } from './agent-status-types'
 import { salvagingRecord } from './zod-salvage'
 
 const terminalTabIdSchema = z
@@ -96,6 +97,8 @@ const sleepingAgentSessionRecordSchema = z
     terminalTitle: z.string().optional(),
     lastAssistantMessage: z.string().optional(),
     interrupted: z.boolean().optional(),
+    // A malformed value drops the field, never the record.
+    mainAgent: z.unknown().transform(normalizeMainAgentStatusField).optional(),
     connectionId: z.string().nullable().optional(),
     launchConfig: sleepingAgentLaunchConfigSchema.optional(),
     origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),

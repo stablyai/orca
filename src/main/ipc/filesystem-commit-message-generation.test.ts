@@ -176,39 +176,6 @@ describe('registerFilesystemHandlers', () => {
     )
   })
 
-  it('prepares the Orca-managed Codex home for the default system selection', async () => {
-    const context = {
-      branch: 'feature/ai',
-      stagedSummary: 'M\tREADME.md',
-      stagedPatch: '+hello'
-    }
-    const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
-    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
-    getStagedCommitContextMock.mockResolvedValue(context)
-    generateCommitMessageFromContextMock.mockResolvedValue({
-      success: true,
-      message: 'Update README'
-    })
-
-    registerFilesystemHandlers(store as never, {
-      prepareForCodexLaunch: () => '/orca-managed/codex-home'
-    })
-
-    await handlers.get('git:generateCommitMessage')!(null, {
-      worktreePath: WORKTREE_FEATURE_PATH
-    })
-
-    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
-      context,
-      params,
-      expect.objectContaining({
-        kind: 'local',
-        cwd: WORKTREE_FEATURE_PATH,
-        env: expect.objectContaining({ CODEX_HOME: '/orca-managed/codex-home' })
-      })
-    )
-  })
-
   it('routes local WSL project commit-message generation through the project runtime target', async () => {
     await withPlatform('win32', async () => {
       const context = {

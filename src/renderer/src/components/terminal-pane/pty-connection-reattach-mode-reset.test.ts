@@ -7,9 +7,9 @@ import {
   POST_REPLAY_REATTACH_RESET,
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
   RESET_GRAPHIC_RENDITION,
-  RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
+import { replayEpilogue } from './pty-connection-test-replay-epilogue'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   withMockedDocumentActiveElement,
@@ -157,14 +157,14 @@ function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -275,8 +275,8 @@ describe('connectPanePty', () => {
     transport.sendInputImmediate.mockClear()
     sendTerminalInputThroughPane(pane, 'yes')
     sendTerminalInputThroughPane(pane, '\x1b[A') // arrow-key auto-repeat stays batched
-    expect(transport.sendInput).toHaveBeenCalledWith('yes')
-    expect(transport.sendInput).toHaveBeenCalledWith('\x1b[A')
+    expect(transport.sendInput).toHaveBeenCalledWith('yes', 'query-reply')
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b[A', 'query-reply')
     expect(transport.sendInputImmediate).not.toHaveBeenCalled()
 
     // terminal-query-reply.test proves real xterm emits this as one framed onData reply; this pins it to the immediate path.
@@ -291,7 +291,7 @@ describe('connectPanePty', () => {
     const printableInputs = [']10;hello', '>|xterm.js(6.1.0-beta.287)', ']|literal-text']
     for (const data of printableInputs) {
       sendTerminalInputThroughPane(pane, data)
-      expect(transport.sendInput).toHaveBeenCalledWith(data)
+      expect(transport.sendInput).toHaveBeenCalledWith(data, 'query-reply')
     }
     expect(transport.sendInputImmediate).not.toHaveBeenCalled()
   })
@@ -368,10 +368,10 @@ describe('connectPanePty', () => {
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(20)
 
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
       // Snapshot ends with ?25l (Cursor Agent parks/hides the cursor); the reset must preserve it, not force ?25h, or a stray block paints.
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
+        replayEpilogue(RESET_TERMINAL_CURSOR_STYLE),
         expect.any(Function)
       )
       const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
@@ -411,11 +411,11 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(20)
 
     expect(pane.terminal.write).toHaveBeenCalledWith(
-      POST_REPLAY_DEAD_TUI_RESET,
+      replayEpilogue(POST_REPLAY_DEAD_TUI_RESET),
       expect.any(Function)
     )
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
-      POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+      replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET),
       expect.any(Function)
     )
   })
@@ -459,8 +459,8 @@ describe('connectPanePty', () => {
       expect(writes).toContain(
         `${RESET_GRAPHIC_RENDITION}\x1b[?1003h\x1b[?1006h\x1b[?2004huser@host ~ $ `
       )
-      expect(writes).toContain(POST_REPLAY_MODE_RESET)
-      expect(writes).not.toContain(POST_REPLAY_LIVE_AGENT_REATTACH_RESET)
+      expect(writes).toContain(replayEpilogue(POST_REPLAY_MODE_RESET, 0))
+      expect(writes).not.toContain(replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET))
     })
   })
 
@@ -512,11 +512,11 @@ describe('connectPanePty', () => {
       )
       const output = writes.join('')
       const snapshotIndex = output.indexOf('\x1b[?1003h\x1b[?1006h\x1b[?2004huser@host ~ $ ')
-      const resetIndex = output.indexOf(POST_REPLAY_MODE_RESET)
+      const resetIndex = output.indexOf(replayEpilogue(POST_REPLAY_MODE_RESET, 0))
       expect(snapshotIndex).toBeGreaterThanOrEqual(0)
       expect(resetIndex).toBeGreaterThan(snapshotIndex)
-      expect(writes).toContain(POST_REPLAY_MODE_RESET)
-      expect(writes).not.toContain(POST_REPLAY_LIVE_AGENT_REATTACH_RESET)
+      expect(writes).toContain(replayEpilogue(POST_REPLAY_MODE_RESET, 0))
+      expect(writes).not.toContain(replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET))
     })
   })
 
@@ -547,7 +547,7 @@ describe('connectPanePty', () => {
       await flushAsyncTicks(20)
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET),
         expect.any(Function)
       )
     })
@@ -581,7 +581,7 @@ describe('connectPanePty', () => {
 
       expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
+        replayEpilogue(RESET_TERMINAL_CURSOR_STYLE),
         expect.any(Function)
       )
     })
@@ -614,11 +614,11 @@ describe('connectPanePty', () => {
 
       expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        POST_REPLAY_REATTACH_RESET,
+        replayEpilogue(POST_REPLAY_REATTACH_RESET),
         expect.any(Function)
       )
       expect(pane.terminal.write).not.toHaveBeenCalledWith(
-        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET),
         expect.any(Function)
       )
     })
@@ -650,7 +650,8 @@ describe('connectPanePty', () => {
         .map((call) => String(call[0]))
         .find(
           (data) =>
-            data === POST_REPLAY_REATTACH_RESET || data === POST_REPLAY_REATTACH_RESET_KEEP_MOUSE
+            data === replayEpilogue(POST_REPLAY_REATTACH_RESET) ||
+            data === replayEpilogue(POST_REPLAY_REATTACH_RESET_KEEP_MOUSE)
         )
     })
   }
@@ -658,12 +659,12 @@ describe('connectPanePty', () => {
   it('keeps mouse reporting when a reattach snapshot restores a live alternate-screen TUI', async () => {
     await expect(
       reattachSnapshotResetFor('\x1b[?1049h\x1b[?1002h\x1b[?1006hthird-party tui session')
-    ).resolves.toBe(POST_REPLAY_REATTACH_RESET_KEEP_MOUSE)
+    ).resolves.toBe(replayEpilogue(POST_REPLAY_REATTACH_RESET_KEEP_MOUSE))
   })
 
   it('still disarms mouse reporting when a reattach snapshot ends on the normal buffer', async () => {
     await expect(reattachSnapshotResetFor('\x1b[?1003h\x1b[?1006hdead tui residue')).resolves.toBe(
-      POST_REPLAY_REATTACH_RESET
+      replayEpilogue(POST_REPLAY_REATTACH_RESET)
     )
   })
 
@@ -703,11 +704,11 @@ describe('connectPanePty', () => {
 
       expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        POST_REPLAY_REATTACH_RESET,
+        replayEpilogue(POST_REPLAY_REATTACH_RESET),
         expect.any(Function)
       )
       expect(pane.terminal.write).not.toHaveBeenCalledWith(
-        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET),
         expect.any(Function)
       )
     })
@@ -741,11 +742,11 @@ describe('connectPanePty', () => {
 
       expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        POST_REPLAY_REATTACH_RESET,
+        replayEpilogue(POST_REPLAY_REATTACH_RESET),
         expect.any(Function)
       )
       expect(pane.terminal.write).not.toHaveBeenCalledWith(
-        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET),
         expect.any(Function)
       )
     })
@@ -782,11 +783,11 @@ describe('connectPanePty', () => {
 
       expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        POST_REPLAY_REATTACH_RESET,
+        replayEpilogue(POST_REPLAY_REATTACH_RESET),
         expect.any(Function)
       )
       expect(pane.terminal.write).not.toHaveBeenCalledWith(
-        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        replayEpilogue(POST_REPLAY_LIVE_AGENT_REATTACH_RESET),
         expect.any(Function)
       )
     })

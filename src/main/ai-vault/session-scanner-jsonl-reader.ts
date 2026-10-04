@@ -119,7 +119,12 @@ export async function consumeCompleteJsonlLines(args: {
   return {
     consumedThrough,
     trailingPartialLine:
-      remainderLength > 0 ? Buffer.concat(remainderParts, remainderLength).toString('utf-8') : null,
+      remainderLength > 0
+        ? (remainderParts.length === 1
+            ? remainderParts[0]
+            : Buffer.concat(remainderParts, remainderLength)
+          ).toString('utf-8')
+        : null,
     bytesRead,
     skippedRecords
   }

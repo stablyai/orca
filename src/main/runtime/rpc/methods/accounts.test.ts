@@ -51,7 +51,11 @@ describe('account RPC methods', () => {
 
   it.each([
     ['accounts.addClaudeFromConfigDir', { configDir: join(tmpdir(), 'claude-login') }],
-    ['accounts.addCodexFromHome', { sourceHome: join(tmpdir(), 'codex-login') }]
+    ['accounts.addCodexFromHome', { sourceHome: join(tmpdir(), 'codex-login') }],
+    [
+      'accounts.addDataFromHome',
+      { provider: 'opencode', sourceDataHome: join(tmpdir(), 'login'), label: 'Work' }
+    ]
   ])('rejects paired-device calls to %s', async (methodName, params) => {
     const runtime = {
       addClaudeAccountFromConfigDir: vi.fn(),

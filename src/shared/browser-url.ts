@@ -64,6 +64,24 @@ function isValidDnsName(name: string): boolean {
     )
 }
 
+/** Avoids parsing a dotted host and port as a scheme; .localhost defaults to HTTP. */
+function classifySchemeLessDomainPortAddress(input: string): URL | null {
+  const match = /^([^\s/\\:@?#]+):\d+(?:[/?#].*)?$/.exec(input)
+  if (!match || !match[1].includes('.')) {
+    return null
+  }
+  try {
+    const url = new URL(`https://${input}`)
+    const hostname = normalizeCertificateHostname(url.hostname)
+    if (!isValidDnsName(hostname)) {
+      return null
+    }
+    return hostname.endsWith('.localhost') ? new URL(`http://${input}`) : url
+  } catch {
+    return null
+  }
+}
+
 function isIpv4Loopback(hostname: string): boolean {
   const octets = hostname.split('.')
   if (octets.length !== 4 || octets.some((octet) => !/^\d{1,3}$/.test(octet))) {
@@ -288,6 +306,11 @@ export function normalizeBrowserNavigationUrl(
 
   if (UNIX_ABSOLUTE_PATH_PATTERN.test(trimmed) || WINDOWS_ABSOLUTE_PATH_PATTERN.test(trimmed)) {
     return absolutePathToFileUrl(trimmed)
+  }
+
+  const domainPortAddress = classifySchemeLessDomainPortAddress(trimmed)
+  if (domainPortAddress) {
+    return domainPortAddress.toString()
   }
 
   try {

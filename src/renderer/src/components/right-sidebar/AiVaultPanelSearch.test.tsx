@@ -1,13 +1,19 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { searchResults } from '../../../../shared/ai-vault-search-test-fixture'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import { AiVaultPanelSearch } from './AiVaultPanelSearch'
 import type { useAiVaultPanelSearch } from './use-ai-vault-search'
 
-vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
+const store = vi.hoisted(() => ({
+  settings: null,
+  markFeatureTipsSeen: vi.fn(),
+  updateSettingsOrThrow: vi.fn(async () => {})
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 
 afterEach(cleanup)
 
@@ -43,6 +49,12 @@ function renderPanel(search: PanelSearch) {
 }
 
 describe('AiVaultPanelSearch', () => {
+  it('explains an unsupported agent without reporting zero matches or a missing host service', () => {
+    renderPanel(panelSearch({ response: { kind: 'unavailable', reason: 'unsupported-agent' } }))
+    expect(screen.getByRole('status').textContent).toContain(
+      'does not support history search for the selected agent'
+    )
+  })
   it('names every computer the merge could not search, with its reason', () => {
     const response = searchResults()
     renderPanel(
@@ -139,5 +151,18 @@ describe('AiVaultPanelSearch', () => {
     expect(screen.queryByRole('status')).toBeNull()
     expect(screen.queryByText(/choose one computer/i)).toBeNull()
     expect(screen.getByText('results')).toBeTruthy()
+  })
+
+  it('retires the session search tip when the user turns search on here', async () => {
+    const search = panelSearch({ needsLocalConsent: true })
+    renderPanel(search)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Enable' }))
+    })
+    expect(store.markFeatureTipsSeen).toHaveBeenCalledWith(['agent-session-search'])
+    expect(store.updateSettingsOrThrow).toHaveBeenCalledWith({
+      aiVaultSearch: { enabled: true, historyDays: null }
+    })
+    expect(search.retry).toHaveBeenCalled()
   })
 })

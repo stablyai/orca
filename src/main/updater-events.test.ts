@@ -12,7 +12,8 @@ const {
   appMock: {
     isPackaged: true,
     getVersion: vi.fn(() => '1.0.51'),
-    on: vi.fn()
+    on: vi.fn(),
+    prependListener: vi.fn()
   },
   nativeUpdaterMock: { on: vi.fn() },
   getLinuxPackageTypeMock: vi.fn<() => 'deb' | 'rpm' | 'non-root' | 'unusable'>(() => 'deb'),

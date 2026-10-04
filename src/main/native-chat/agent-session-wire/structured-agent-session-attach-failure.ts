@@ -2,9 +2,9 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import {
   AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionRootExitObservedError,
-  rethrowAfterAgentSessionAcquisitionCleanup
+  AgentSessionAcquisitionRootExitObservedError
 } from './structured-agent-session-adapter'
+import { rethrowAfterAgentSessionAcquisitionCleanup } from './structured-agent-session-provider-exit-proof'
 
 export async function settlePostAcquisitionAttachFailure(
   input: AttachFlowInput,
@@ -24,8 +24,7 @@ export async function settlePostAcquisitionAttachFailure(
           ? 'root-exit-observed'
           : 'exit-proven'
   }
-  // A failed close must not prevent durable failure settlement.
-  await Promise.resolve(input.onAttachFailed?.()).catch(() => undefined)
+  input.onAcquisitionReleased?.(cause, { rootGone: exitProof !== 'unproven' })
   try {
     await input.store.settleFailedPostAcquisitionAttachment({
       sessionId: record.sessionId,
@@ -36,6 +35,7 @@ export async function settlePostAcquisitionAttachFailure(
       outcome: {
         status: 'failed',
         code: 'agent_session_operation_invalid',
+        details: { reason: 'attachFailed' },
         message: cause instanceof Error ? cause.message : String(cause)
       },
       exitProof,

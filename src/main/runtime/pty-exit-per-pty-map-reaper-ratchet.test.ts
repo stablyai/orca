@@ -53,7 +53,6 @@ const SELF_CLEARING_IN_FLIGHT = new Set([
   'providerVisibleStateReadsByPtyId',
   'agentPromptSubmissionTailByPtyId',
   'interactiveWaitProbesByPtyId',
-  'orchestrationPointerAdmissionByPtyId',
   'messageDeliveryFlightsByPtyId',
   'parkedMessageRedeliveriesByPtyId'
 ])

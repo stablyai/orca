@@ -1,38 +1,86 @@
 // What the host may durably say about a turn whose provider child is gone.
 //
-// `interrupted` requires the host to have seen the child exit; that receipt is the only end time it
-// is allowed to record. Everything weaker — a pid probe, an identity mismatch, a journal found
-// running on a cold acquire — is `unverifiable` and carries no end at all.
+// `interrupted` requires proof that the child which wrote the turn is gone: death evidence naming
+// that turn's owner by fence — a watched exit, or a local probe that found the recorded pid gone or
+// reused. A release nothing proved — lost contact, an unverifiable identity, a stop that outlived the
+// ladder — carries none, and neither does a later owner's death; the turn is then `unverifiable`
+// with no end at all, until a proof naming its owner is written and revises it.
 
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalTurnLifecycle
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalRenderItem,
+  type AgentJournalTurnLifecycle
 } from '../../../shared/agent-session-journal-types'
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
 } from '../../../shared/agent-session-turn-record'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
-import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { cancelledJournalPromptBody } from '../agent-session-journal/journal-prompt-body-bounds'
 
 export type StructuredAgentSessionTurnVerdict =
-  | { state: 'interrupted'; completedAt: number }
-  | { state: 'unverifiable' }
+  /** Whose end it was is the Stop event's to say, where the row is built (`turnEndAfterStop`). */
+  { state: 'interrupted'; completedAt: number } | { state: 'unverifiable' }
 
 export const UNVERIFIABLE_TURN_VERDICT: StructuredAgentSessionTurnVerdict = {
   state: 'unverifiable'
 }
 
 export function turnVerdictFromDeathEvidence(
-  evidence: AgentSessionDeathEvidence | null | undefined
+  evidence: AgentSessionDeathEvidence | null | undefined,
+  /** Fence of the owner that wrote the turn. */
+  turnFence: number | undefined,
+  /** When a Stop event found the turn running (`stopFoundTurnLiveAt`): a later proof of life. */
+  liveAt?: number
 ): StructuredAgentSessionTurnVerdict {
-  return evidence?.kind === 'exit-observed'
-    ? { state: 'interrupted', completedAt: evidence.observedAt }
-    : UNVERIFIABLE_TURN_VERDICT
+  if (!evidence) {
+    return UNVERIFIABLE_TURN_VERDICT
+  }
+  if (evidence.ownerFence === undefined) {
+    // Evidence an older build wrote names no owner; it keeps the rule that build applied.
+    return evidence.kind === 'exit-observed'
+      ? { state: 'interrupted', completedAt: evidence.observedAt }
+      : UNVERIFIABLE_TURN_VERDICT
+  }
+  if (evidence.ownerFence !== turnFence) {
+    return UNVERIFIABLE_TURN_VERDICT
+  }
+  if (evidence.kind === 'exit-observed') {
+    return { state: 'interrupted', completedAt: evidence.observedAt }
+  }
+  // A probe finds a dead child long after it died; its last renewal bounds the end, so the turn never
+  // counts the time Orca was down. Timeline rows don't: a send can land there after the death. A
+  // Stop that found the turn running is a later renewal, so the end reads after that Stop.
+  const lastAlive = Math.max(evidence.lastProvenAliveAt ?? evidence.observedAt, liveAt ?? 0)
+  return { state: 'interrupted', completedAt: Math.min(lastAlive, evidence.observedAt) }
+}
+
+/** When the latest Stop event found `item`'s turn running: E1 writes one only for a live turn. */
+export function stopFoundTurnLiveAt(
+  journal: Pick<AgentSessionJournal, 'stopMarks'>,
+  item: AgentJournalRenderItem
+): number | undefined {
+  const stop = journal.stopMarks.latest()
+  const turnId = readAgentJournalTurn(item.body)?.turnId
+  return stop && turnId !== undefined && stop.event.turnId === turnId ? stop.event.at : undefined
+}
+
+/** Every turn this settle interrupts is a person's Stop's to end (`turnEndAfterStop`), so it reads
+ *  as theirs, muted, with no row saying the provider stopped: as a live Stop writes none. */
+export function endedByPersonsStop(
+  journal: Pick<AgentSessionJournal, 'stopMarks'>,
+  turnEnds: readonly JournalLifecycleMutationInput[]
+): boolean {
+  const interrupted = turnEnds.flatMap((mutation) => {
+    const turn = mutation.kind === 'item' ? readAgentJournalTurn(mutation.body) : undefined
+    return turn?.state === 'interrupted' ? [turn] : []
+  })
+  return (
+    interrupted.length > 0 &&
+    interrupted.every((turn) => journal.stopMarks.personStopDecides(turn.turnId, turn.completedAt))
+  )
 }
 
 /** Revises every still-running lifecycle item in place, keeping its identity and start. */
@@ -40,86 +88,77 @@ export function runningTurnLifecycleRevisions(
   items: readonly AgentJournalRenderItem[],
   verdict: StructuredAgentSessionTurnVerdict
 ): JournalLifecycleMutationInput[] {
-  const revisions: JournalLifecycleMutationInput[] = []
-  for (const item of items) {
+  return items.flatMap((item) => {
     const turn = readAgentJournalTurn(item.body)
-    if (turn?.state !== 'running') {
-      continue
-    }
-    const identity = parseAgentJournalItemKey(item.itemId)
-    if (!identity) {
-      continue
-    }
-    revisions.push({
-      kind: 'item',
-      identity,
-      body: agentJournalTurnBody(settledLifecycle(turn, verdict))
-    })
-  }
-  return revisions
+    return turn?.state === 'running' ? turnLifecycleRevision(item, turn, verdict) : []
+  })
 }
 
-function staleSessionLifecycleRevisions(
-  items: readonly AgentJournalRenderItem[]
+/**
+ * A turn an earlier settle could only call `unverifiable`, because the proof had not been written
+ * yet, revised once a proof names the owner that wrote it. Only ever upward, and never from an
+ * older build's proof, which names no owner.
+ */
+export function provenUnverifiableTurnRevisions(
+  items: readonly AgentJournalRenderItem[],
+  evidence: AgentSessionDeathEvidence | null | undefined,
+  journal: Pick<AgentSessionJournal, 'itemFence' | 'stopMarks'>
 ): JournalLifecycleMutationInput[] {
-  const revisions: JournalLifecycleMutationInput[] = []
-  for (const item of items) {
-    const identity = parseAgentJournalItemKey(item.itemId)
-    if (!identity) {
-      continue
-    }
-    const cancelled =
-      (item.body.kind === 'approval' || item.body.kind === 'question') &&
-      item.body.resolution.state === 'pending'
-        ? cancelledJournalPromptBody(item.body)
-        : null
-    if (cancelled) {
-      revisions.push({ kind: 'item', identity, body: cancelled })
-    }
+  const ownerFence = evidence?.ownerFence
+  if (ownerFence === undefined) {
+    return []
   }
-  revisions.push(...runningTurnLifecycleRevisions(items, UNVERIFIABLE_TURN_VERDICT))
-  return revisions
+  return items.flatMap((item) => {
+    const turn = readAgentJournalTurn(item.body)
+    return turn?.state === 'unverifiable' && journal.itemFence(item.itemId) === ownerFence
+      ? turnLifecycleRevision(
+          item,
+          turn,
+          turnVerdictFromDeathEvidence(evidence, ownerFence, stopFoundTurnLiveAt(journal, item))
+        )
+      : []
+  })
 }
 
+function turnLifecycleRevision(
+  item: AgentJournalRenderItem,
+  turn: AgentJournalTurnLifecycle,
+  verdict: StructuredAgentSessionTurnVerdict
+): JournalLifecycleMutationInput[] {
+  const identity = parseAgentJournalItemKey(item.itemId)
+  return identity
+    ? [
+        {
+          kind: 'item',
+          identity,
+          body: agentJournalTurnBody(settledLifecycle(turn, verdict)),
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }
+      ]
+    : []
+}
+
+/** The verdict owns the turn's end and nothing else; every other field the row
+ *  carries, including ones this build does not know, stays as it was. */
 function settledLifecycle(
   lifecycle: AgentJournalTurnLifecycle,
   verdict: StructuredAgentSessionTurnVerdict
 ): AgentJournalTurnLifecycle {
-  const settled: AgentJournalTurnLifecycle = { turnId: lifecycle.turnId, state: verdict.state }
-  if (lifecycle.userItemId !== undefined) {
-    settled.userItemId = lifecycle.userItemId
+  const {
+    state: _state,
+    outcome: _outcome,
+    completedAt: _completedAt,
+    durationMs: _durationMs,
+    ...kept
+  } = lifecycle
+  if (verdict.state !== 'interrupted') {
+    return { ...kept, state: verdict.state }
   }
-  if (lifecycle.startedAt !== undefined) {
-    settled.startedAt = lifecycle.startedAt
+  // A renewal can predate the turn, which started with its owner alive; it never ends before that.
+  const began = Math.max(lifecycle.requestedAt ?? 0, lifecycle.startedAt ?? 0)
+  return {
+    ...kept,
+    state: verdict.state,
+    completedAt: Math.max(verdict.completedAt, began)
   }
-  if (lifecycle.requestedAt !== undefined) {
-    settled.requestedAt = lifecycle.requestedAt
-  }
-  if (verdict.state === 'interrupted') {
-    settled.completedAt = verdict.completedAt
-  }
-  return settled
-}
-
-/** A running row found when a NEW child is acquired belongs to a generation whose exit nobody
- *  observed. Must run before that child's buffered events land, or a live turn would be judged. */
-export async function settleStaleSessionStateOnAcquire(input: {
-  journal: AgentSessionJournal
-  sessionId: string
-  fence: number
-  acquisitionGeneration: string | null
-}): Promise<number> {
-  const { journal } = input
-  const revisions = staleSessionLifecycleRevisions(journal.snapshot().items)
-  const generation = input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`
-  const settlementId = `stale-session:${input.sessionId}:${input.fence}:${generation}`
-  for (const chunk of partitionJournalLifecycleMutations(settlementId, revisions)) {
-    await journal.appendLifecycleBatch({
-      settlementId: chunk.settlementId,
-      fence: input.fence,
-      recovered: true,
-      mutations: chunk.mutations
-    })
-  }
-  return revisions.length
 }

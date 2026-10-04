@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { eventSchemas, setupScriptImportProviderSchema } from './telemetry-events'
+import { eventSchemas } from './telemetry-events'
 
 describe('setup script prompt schemas', () => {
   it('accepts a bucketed candidate prompt exposure', () => {
@@ -147,15 +147,5 @@ describe('setup script prompt schemas', () => {
       edited_before_save: false
     })
     expect(parsed.success).toBe(false)
-  })
-
-  it('keeps the provider schema in sync with known setup import providers', () => {
-    expect(setupScriptImportProviderSchema.options).toEqual([
-      'superset',
-      'conductor',
-      'codex',
-      'cmux',
-      'package-manager'
-    ])
   })
 })

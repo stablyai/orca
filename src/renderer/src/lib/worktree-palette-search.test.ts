@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  getWorktreePaletteSearchScope,
-  makeEmptyPaletteSearchResult,
-  searchWorktrees
-} from './worktree-palette-search'
+import { getWorktreePaletteSearchScope, searchWorktrees } from './worktree-palette-search'
 import {
   WORKTREE_PALETTE_QUERY_MAX_BYTES,
   isWorktreePaletteQueryTooLarge
@@ -33,6 +29,20 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     lastActivityAt: 0,
     ...overrides
   }
+}
+
+const EMPTY_QUERY_RESULT_WT1 = {
+  worktreeId: 'wt-1',
+  matchedFields: [],
+  displayNameRanges: [],
+  branchRanges: [],
+  repoRanges: [],
+  hostRanges: [],
+  supportingText: null,
+  qualityClass: null,
+  rank: null,
+  lastActiveAt: null,
+  activity: { ageBucket: null, timestamp: 0 }
 }
 
 const repoMap = new Map<string, Repo>([
@@ -91,22 +101,7 @@ describe('worktree-palette-search', () => {
   })
 
   it('returns every worktree with no match metadata for an empty query', () => {
-    expect(searchWorktrees([makeWorktree()], '', repoMap)).toEqual([
-      makeEmptyPaletteSearchResult('wt-1')
-    ])
-    expect(makeEmptyPaletteSearchResult('wt-1')).toEqual({
-      worktreeId: 'wt-1',
-      matchedFields: [],
-      displayNameRanges: [],
-      branchRanges: [],
-      repoRanges: [],
-      hostRanges: [],
-      supportingText: null,
-      qualityClass: null,
-      rank: null,
-      lastActiveAt: null,
-      activity: { ageBucket: null, timestamp: 0 }
-    })
+    expect(searchWorktrees([makeWorktree()], '', repoMap)).toEqual([EMPTY_QUERY_RESULT_WT1])
   })
 
   it('finds an emoji-named workspace by its readable branch shortcode', () => {
@@ -194,7 +189,7 @@ describe('worktree-palette-search', () => {
       branch: undefined as unknown as string
     })
 
-    expect(searchWorktrees([cleared], '', repoMap)).toEqual([makeEmptyPaletteSearchResult('wt-1')])
+    expect(searchWorktrees([cleared], '', repoMap)).toEqual([EMPTY_QUERY_RESULT_WT1])
   })
 
   it('returns a truncated comment snippet with the highlighted match range', () => {

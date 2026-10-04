@@ -40,7 +40,7 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
       }
       for (const id of ids) {
         const projected = this.clientSessionTabSelections.activate(
-          this.withClientHostedPagesHold(snapshot, id),
+          this.withSessionTabsHolds(snapshot, id),
           id,
           activeTabId
         )
@@ -52,7 +52,7 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
     } else if (clientNavigationId) {
       // Why: follow-host still starts as caller navigation; the host is an additional target, not a replacement owner.
       callerSnapshot = this.clientSessionTabSelections.activate(
-        this.withClientHostedPagesHold(snapshot, clientNavigationId),
+        this.withSessionTabsHolds(snapshot, clientNavigationId),
         clientNavigationId,
         activeTabId
       )
@@ -70,6 +70,31 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
       return projectClientSessionTabSelection(snapshot, selection).snapshot
     }
     return snapshot
+  }
+
+  /**
+   * Records a tab a create just published as one paired client's selection, as a create does for
+   * its own tab. Not the tap path: a tap is a wake gesture that may respawn a non-ready pane.
+   * Returns false when the tab is not in the snapshot.
+   */
+  selectCreatedMobileSessionTabForClient(
+    worktreeId: string,
+    surface: { tabId: string; leafId: string } | { sessionId: string },
+    clientNavigationId: string
+  ): boolean {
+    const snapshot = this.getMobileSessionTabsForWorktree(worktreeId)
+    const tab = snapshot.tabs.find((candidate) =>
+      'sessionId' in surface
+        ? candidate.type === 'agent-session' && candidate.sessionId === surface.sessionId
+        : candidate.type === 'terminal' &&
+          candidate.parentTabId === surface.tabId &&
+          candidate.leafId === surface.leafId
+    )
+    if (!tab) {
+      return false
+    }
+    this.applyMobileSessionTabNavigation(snapshot, tab.id, 'caller', clientNavigationId)
+    return true
   }
 
   /**

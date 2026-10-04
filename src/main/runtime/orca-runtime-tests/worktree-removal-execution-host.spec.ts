@@ -19,6 +19,7 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import { getLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
 
 // Why: these fixtures register an SSH provider, which models a connected relay session — and a
 // connected session has always read the host's `$HOME`. The removal guards refuse without it.
@@ -245,6 +246,38 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
       expect(provider.removeWorktree).not.toHaveBeenCalled()
       expect(removeWorktree).not.toHaveBeenCalled()
       expect(metaById[TEST_WORKTREE_ID]).toBeDefined()
+    } finally {
+      unregisterSshGitProvider('target-a')
+    }
+  })
+
+  it('moves the scan generation before the first step after an SSH git worktree remove', async () => {
+    const { runtimeStore, repo } = makeRemoteRepoStore('ssh:target-a', { connectionId: 'target-a' })
+    const provider = makeGitProvider([REPO_ROOT_ENTRY, REGISTERED_ENTRY])
+    const witness: { during?: number; after?: number } = {}
+    provider.removeWorktree.mockImplementationOnce(async () => {
+      witness.during = getLocalWorktreeScanGeneration(repo.id)
+      return {}
+    })
+    registerSshGitProvider('target-a', provider as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
+    // Why the watcher gate: releasing it is the first awaited step after the git removal.
+    vi.spyOn(runtime, 'acquireFileWatcherRemoval').mockResolvedValue({
+      finish: vi.fn(async () => {
+        witness.after ??= getLocalWorktreeScanGeneration(repo.id)
+      })
+    })
+
+    try {
+      await runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: true,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        hostId: 'ssh:target-a'
+      })
+
+      expect(provider.removeWorktree).toHaveBeenCalledOnce()
+      expect(witness.after).toBeGreaterThan(witness.during ?? Infinity)
     } finally {
       unregisterSshGitProvider('target-a')
     }

@@ -24,7 +24,7 @@ import {
   type PaletteActivityRank,
   type PaletteSearchContext
 } from './palette-match/palette-ranking'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { getUnifiedTabPaletteExecutionHostId } from './unified-tab-host-ownership'
 import type {
   SearchableWorkspaceTab,
@@ -42,7 +42,7 @@ export type WorkspaceTabPaletteSearchResult = {
   worktreeId: string
   groupId: string
   contentType: WorkspaceTabContentType
-  occupantAgent: TuiAgent | null
+  occupantAgent: TerminalAgent | null
   title: string
   secondaryText: string
   secondaryMatches: readonly { text: string; ranges: readonly MatchRange[] }[]

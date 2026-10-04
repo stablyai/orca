@@ -96,6 +96,7 @@ describe('openWorkspaceBrowserTab', () => {
       {
         activate: true,
         browserRuntimeEnvironmentId: null,
+        executionHostId: 'ssh:ssh-target',
         focusAddressBar: false,
         sessionProfileId: 'ssh-profile',
         targetGroupId: 'group-1',
@@ -118,6 +119,7 @@ describe('openWorkspaceBrowserTab', () => {
     await openWorkspaceBrowserTab({
       workspaceId: WORKSPACE_ID,
       url: 'https://github.com/acme/orca/pull/456',
+      afterTabId: 'source-unified-tab',
       intent: { kind: 'url' },
       focusOnCreate: false,
       selectWorktree: false
@@ -126,7 +128,7 @@ describe('openWorkspaceBrowserTab', () => {
     expect(createBrowserTab).toHaveBeenCalledWith(
       WORKSPACE_ID,
       'https://github.com/acme/orca/pull/456',
-      expect.objectContaining({ activate: false })
+      expect.objectContaining({ activate: false, afterTabId: 'source-unified-tab' })
     )
   })
 
@@ -202,6 +204,7 @@ describe('openWorkspaceBrowserTab', () => {
     await openWorkspaceBrowserTab({
       workspaceId: WORKSPACE_ID,
       url: 'https://gitlab.com/acme/orca/-/merge_requests/77',
+      afterTabId: 'source-unified-tab',
       intent: { kind: 'url' },
       focusOnCreate: false,
       selectWorktree: false
@@ -209,6 +212,7 @@ describe('openWorkspaceBrowserTab', () => {
 
     expect(mocks.createRemote).toHaveBeenCalledWith(
       expect.objectContaining({
+        clientAfterTabId: 'source-unified-tab',
         focusOnCreate: false,
         selectWorktree: false,
         url: 'https://gitlab.com/acme/orca/-/merge_requests/77'

@@ -14,6 +14,7 @@ import {
   restrictWindowsRelayEndpointCredential
 } from './relay-endpoint-credential-publication'
 import { SKILL_RELAY_CAPABILITIES } from './skill-install-handler'
+import { publishRelayPid } from './relay-pid-publication'
 
 export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void> {
   if (options.detached && options.logFile) {
@@ -105,6 +106,7 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
     // exits inside start() and never reaches the credential file, so racing starters cannot
     // rotate the secret a surviving daemon enforces.
     await reconnectListener.start()
+    publishRelayPid()
     reconnectListener.setEndpointCredential(publishRelayEndpointCredential(options.credentialFile))
     agentHooks.publishEndpointFile()
   } catch (error) {

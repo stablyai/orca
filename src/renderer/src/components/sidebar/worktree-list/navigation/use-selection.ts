@@ -131,19 +131,29 @@ export function useSidebarWorktreeSelection(args: {
 
   // Why layout effect: the Cmd/Ctrl+1–9 handler can fire right after commit; publishing after paint would leave the shortcut cache stale.
   useLayoutEffect(() => {
+    const chipKeysByIdentity = new Map<string, string>()
+    for (const row of sectionRows) {
+      if (row.type === 'item' && row.lineageGroupKey && row.lineageChildCount > 0) {
+        chipKeysByIdentity.set(getWorktreeHostIdentity(row.worktree), row.lineageGroupKey)
+      }
+    }
     setVisibleWorktreeIds(renderedWorktreeIds)
     setVisibleWorktreeShortcutTargets(
-      renderedWorktrees.map((worktree) => ({
-        id: worktree.id,
-        ...(worktree.hostId ? { executionHostId: worktree.hostId } : {})
-      }))
+      renderedWorktrees.map((worktree) => {
+        const lineageGroupKey = chipKeysByIdentity.get(getWorktreeHostIdentity(worktree))
+        return {
+          id: worktree.id,
+          ...(worktree.hostId ? { executionHostId: worktree.hostId } : {}),
+          ...(lineageGroupKey ? { lineageGroupKey } : {})
+        }
+      })
     )
     // Why null, not []: [] is a real rendered order (all collapsed/filtered); null tells shortcuts the list is unmounted.
     return () => {
       setVisibleWorktreeIds(null)
       setVisibleWorktreeShortcutTargets(null)
     }
-  }, [renderedWorktreeIds, renderedWorktrees])
+  }, [renderedWorktreeIds, renderedWorktrees, sectionRows])
 
   return {
     renderedWorktreeIds,

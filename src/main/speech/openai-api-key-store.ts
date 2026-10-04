@@ -1,4 +1,6 @@
 import { getSecretStore } from '../../shared/secret-store'
+import { readCredentialFileProtection } from '../credential-file-protection'
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -45,6 +47,15 @@ export function hasOpenAiSpeechApiKey(): boolean {
   // Why: Settings and model-state refresh call this on startup; checking file
   // existence avoids a decrypt that triggers macOS keychain prompts.
   return existsSync(getOpenAiKeyPath())
+}
+
+/** How the stored speech key sits on disk, or null when none is stored. */
+export function getOpenAiSpeechApiKeyProtection(): SecretAtRestProtection | null {
+  // The legacy JSON wrapper only ever held base64 ciphertext, so it is sealed by shape.
+  if (readLegacyJsonStoredOpenAiKey()) {
+    return 'sealed'
+  }
+  return readCredentialFileProtection(getOpenAiKeyPath())
 }
 
 export function saveOpenAiSpeechApiKey(apiKey: string): void {

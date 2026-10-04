@@ -81,14 +81,30 @@ export function workerTerminalResourceHasIdentityConflict(
   )
 }
 
+/** Every resource whose process incarnation starts with `prefix`, newest first. */
+export function listWorkerTerminalResourcesByIncarnationPrefix(
+  this: OrchestrationDb,
+  prefix: string
+): WorkerTerminalResourceRow[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
+  return this.db
+    .prepare(
+      `SELECT * FROM worker_terminal_resources
+        WHERE substr(process_incarnation, 1, ?) = ? ORDER BY updated_at DESC`
+    )
+    .all(prefix.length, prefix) as WorkerTerminalResourceRow[]
+}
+
 export type WorkerTerminalTransferMethods = {
   findTransferableWorkerTerminalResource: typeof findTransferableWorkerTerminalResource
   workerTerminalResourceHasIdentityConflict: typeof workerTerminalResourceHasIdentityConflict
+  listWorkerTerminalResourcesByIncarnationPrefix: typeof listWorkerTerminalResourcesByIncarnationPrefix
 }
 
 export function attachWorkerTerminalTransfer(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     findTransferableWorkerTerminalResource,
-    workerTerminalResourceHasIdentityConflict
+    workerTerminalResourceHasIdentityConflict,
+    listWorkerTerminalResourcesByIncarnationPrefix
   })
 }

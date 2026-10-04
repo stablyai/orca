@@ -195,6 +195,17 @@ export type IncidentFailure = {
   threshold?: number
 }
 
+// Keep the source/code prefix other tooling matches on, then name the signal and
+// its numbers so a frozen wave is attributable without re-reading the sample.
+export function describeIncidentFailure(failure: IncidentFailure): string {
+  const detail = [
+    failure.signal,
+    failure.observed === undefined ? null : `observed=${failure.observed}`,
+    failure.threshold === undefined ? null : `threshold=${failure.threshold}`
+  ].filter((part): part is string => part !== null && part !== undefined)
+  return [`${failure.source}/${failure.code}`, ...detail].join(' ')
+}
+
 export type IncidentEvaluation = {
   status: 'green' | 'freeze'
   evaluatedAt: string

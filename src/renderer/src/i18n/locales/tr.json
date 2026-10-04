@@ -250,7 +250,7 @@
     "toggleDevTools": "Geliştirici Araçlarını Aç/Kapat",
     "toggleFullScreen": "Tam Ekranı Aç/Kapat",
     "minimize": "Küçült",
-    "zoom": "Yaklaştır"
+    "zoom": "Büyüt"
   },
   "tray": {
     "openOrca": "Orca'yı Aç",
@@ -1373,11 +1373,7 @@
         "5f3d2c8a1b": "MR tabanı belirlenemedi.",
         "dropPartiallyAttached": "{{count}} öğeden {{failureCount}} tanesi eklenemedi.",
         "dropPartiallyAttached_one": "{{count}} öğeden {{failureCount}} tanesi eklenemedi.",
-        "dropPartiallyAttached_other": "{{count}} öğeden {{failureCount}} tanesi eklenemedi.",
-        "attachSkipMissing": "Artık orijinal yolunda değil.",
-        "attachSkipSymlink": "Sembolik bağlantılar eklenemez.",
-        "attachSkipPermissionDenied": "İzin reddedildi.",
-        "attachSkipUnsupported": "Desteklenmeyen dosya türü."
+        "dropPartiallyAttached_other": "{{count}} öğeden {{failureCount}} tanesi eklenemedi."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "Bırakılan dosyalar yüklenemedi.",
@@ -2068,7 +2064,6 @@
         "notConnected": "Bağlı değil",
         "notePasteTooLarge": "Yapıştırılan içerik not alanı için çok büyük.",
         "waitForSetupBeforeAgent": "Ajanı başlatmadan önce setup'ın tamamlanmasını bekle",
-        "waitForSetupBeforeAgentHelp": "Setup; ajanın başlangıçta ihtiyaç duyduğu bağımlılıkları, MCP sunucularını veya yapılandırma dosyalarını kuruyorsa bunu açın.",
         "destroyDisabled": "yok etme devre dışı",
         "destroyConfigured": "yok etme yapılandırıldı",
         "noDestroyConfigured": "yok etme yok",
@@ -2294,8 +2289,7 @@
         "4725b0e931": "Quick Open taraması çok büyük (",
         "b227d88520": "{{value0}} dosya bulundu",
         "995be8ea22": "Kopyala",
-        "cf144856dc": "Kopyalandı",
-        "344f8a48dd": "hızlı ve gitignore'a duyarlı listeleme için Quick Open taramasını çalıştıran sunucuda:"
+        "cf144856dc": "Kopyalandı"
       },
       "SelectedTextCopyMenu": {
         "9b40d7b018": "Kopyala"
@@ -2304,41 +2298,18 @@
         "title": "Kesintiye uğrayan sohbetler yeniden bağlansın mı?",
         "body": "Orca kapandığında bu sohbetler tur ortasındaydı. Yeniden bağlamak, her birini kaldığı yerden, tüm bağlamıyla ve prompt'unuzu yeniden göndermeden geri yükler; kesintiye uğrayan yanıt kendiliğinden devam etmez.",
         "updateBody": "Orca bir güncelleme kurduğunda bu sohbetler tur ortasındaydı. Yeniden bağlamak, her birini kaldığı yerden, tüm bağlamıyla ve prompt'unuzu yeniden göndermeden geri yükler; kesintiye uğrayan yanıt kendiliğinden devam etmez.",
-        "terminalSessionsUnaffected": "Yalnızca sohbetler etkilenir; terminal oturumlarınız çalışmaya devam etti ve sizden bir şey gerekmiyor.",
-        "resume": "Yeniden bağlan",
-        "reconnectAgent": "{{value0}} sohbetini yeniden bağla",
-        "resumeAll": "Tümünü yeniden bağla",
         "resuming": "Yeniden bağlanıyor…",
-        "notNow": "Şimdi değil",
         "untitled": "Başlıksız sohbet",
         "listLabel": "Yeniden bağlanacak sohbetler",
-        "notNowHint": "Şimdi değil seçeneği her şeyi olduğu gibi bırakır; herhangi bir sohbeti daha sonra yeniden açıp aynı noktadan devam edebilirsiniz.",
         "dontAskAgain": "Bir daha sorma, bir sonraki sefer otomatik olarak yeniden bağlan",
         "dontAskAgainHint": "Uygun sohbetler, yeniden başlatmanın ardından otomatik olarak yeniden bağlanır ve Orca bunu size bildirir. Bunu Ayarlar → Deneysel → Sohbet Arayüzü bölümünden kapatabilirsiniz.",
-        "resumedOne": "1 sohbet yeniden bağlandı",
-        "resumedMany": "{{value0}} sohbet yeniden bağlandı",
-        "oneAgent": "1 ajan",
-        "manyAgents": "{{value0}} ajan",
-        "reconnectAndContinue": "Yeniden bağlan ve devam et",
         "continuedOne": "1 sohbet yeniden bağlandı ve devam etmesi istendi",
         "continuedMany": "{{value0}} sohbet yeniden bağlandı ve devam etmeleri istendi",
-        "whatIsSentTitle": "Orca ne gönderir",
-        "whatIsSentBody": "Devam etmek, her ajana kısa bir mesaj göndererek Orca'nın yeniden başladığını bildirir ve devam etmeden önce son işlemini kontrol etmesini ister. Kendi prompt'unuz asla yeniden gönderilmez.",
         "selectAgent": "{{value2}} içindeki \"{{value1}}\" adlı {{value0}} sohbetini yeniden bağla",
-        "projects": "Klasör çalışma alanları",
         "resumeSelected": "{{value0}} öğesini yeniden bağla",
         "continueUnconfirmed": "{{value0}} sohbet için devam mesajının iletildiği doğrulanamadı. Başka bir mesaj göndermeden önce bunları açıp kontrol edin.",
         "continueUnconfirmed_one": "{{value0}} sohbet için devam mesajının iletildiği doğrulanamadı. Başka bir mesaj göndermeden önce onu açıp kontrol edin.",
-        "continueUnconfirmed_other": "{{value0}} sohbet için devam mesajının iletildiği doğrulanamadı. Başka bir mesaj göndermeden önce bunları açıp kontrol edin.",
-        "reconnectUnconfirmed": "{{value0}} sohbet için yeniden bağlanma doğrulanamadı. Yine de bunları normal şekilde açabilirsiniz.",
-        "reconnectUnconfirmed_one": "{{value0}} sohbet için yeniden bağlanma doğrulanamadı. Yine de onu normal şekilde açabilirsiniz.",
-        "reconnectUnconfirmed_other": "{{value0}} sohbet için yeniden bağlanma doğrulanamadı. Yine de bunları normal şekilde açabilirsiniz.",
-        "continueRefused": "{{value0}} sohbet devam ettirilemedi. Elle devam ettirmek için bunları açın.",
-        "continueRefused_one": "{{value0}} sohbet devam ettirilemedi. Elle devam ettirmek için onu açın.",
-        "continueRefused_other": "{{value0}} sohbet devam ettirilemedi. Elle devam ettirmek için bunları açın.",
-        "reconnectRefused": "{{value0}} sohbet yeniden bağlanamadı. Yine de bunları normal şekilde açabilirsiniz.",
-        "reconnectRefused_one": "{{value0}} sohbet yeniden bağlanamadı. Yine de onu normal şekilde açabilirsiniz.",
-        "reconnectRefused_other": "{{value0}} sohbet yeniden bağlanamadı. Yine de bunları normal şekilde açabilirsiniz."
+        "continueUnconfirmed_other": "{{value0}} sohbet için devam mesajının iletildiği doğrulanamadı. Başka bir mesaj göndermeden önce bunları açıp kontrol edin."
       },
       "StarNagCard": {
         "92b0f9d921": "kimlik doğrulamasının yapıldığından emin olun ve tekrar deneyin.",
@@ -4622,7 +4593,6 @@
           "444585cb41": "verili",
           "ecb0cd8a4c": "etkin -",
           "33f7b043d2": "Sağlayıcılar",
-          "60002bb22f": "Henüz yerel Claude, Codex veya OpenCode kullanımı bulunamadı. Bir sonraki ajan oturumu token günlükleri yazdığında genel bakış doldurulacaktır.",
           "70f36452d4": "Önbellek payı",
           "327603fe8b": "Etkin gün",
           "0eaf937335": "Tahmini maliyet",
@@ -4690,7 +4660,6 @@
               "1dd166c920": "Daha az",
               "52d9221dc0": "Son token etkinliği ısı haritası",
               "c424eb3f8e": "En iyi:",
-              "f28ff1f852": "Son birleşik Claude, Codex ve OpenCode token etkinliği.",
               "69e2b50427": "Günlük yoğunluk",
               "3a795542fa": "Birleşik token dağılımı",
               "e65084cb4b": "akıl yürütme",
@@ -6410,13 +6379,11 @@
           "6e7f8a9b0c": "Host'u kaldır…"
         },
         "LinearAgentSkillSetupPrompt": {
-          "missingCliAndSkill": "Orca CLI ve Linear ajan skill'i eksik.",
           "modalTitle": "Linear ticket erişimini etkinleştir",
           "modalDescription": "Linear skill'ini bir terminalden yükleyin.",
           "modalPrompt": "Ajanların eklenen Linear ticket'ını okumasını ve düzenlemesini etkinleştirin.",
           "dontShowAgain": "Bir daha gösterme",
           "missingBoth": "Orca CLI ve Linear ajan skill'i eksik.",
-          "missingCli": "Orca CLI eksik.",
           "missingSkill": "Linear ajan skill'i eksik.",
           "title": "Linear ajan skill'ini kur",
           "remoteCopy": "Bu, host kurulumunu yükler; uzak ajan ortamlarının ayrı bir kuruluma ihtiyacı olabilir.",
@@ -6428,7 +6395,6 @@
           "panelDescription": "Bağlı Linear görev devirleri için host ajan skill'ini yükleyin.",
           "terminalTitle": "Linear ajan skill'ini yükle",
           "terminalAria": "Linear ajan skill'i yükleyici terminali",
-          "install": "CLI ve Skill'i Yükle",
           "successTitle": "Linear ticket erişimi hazır",
           "successDescription": "Ajanlar artık bu çalışma alanından bağlı Linear ticket'larını okuyup güncelleyebilir.",
           "successDescriptionWsl": "WSL ajanları artık bu çalışma alanından bağlı Linear ticket'larını kullanabilir.",
@@ -6437,11 +6403,7 @@
           "done": "Tamamlandı",
           "wslCopy": "Bağlı Linear işlerinden WSL ajanına devir için bunu yükleyin.",
           "wslLabel": "WSL varsayılanı",
-          "toastMissingCliAndSkill": "Orca CLI ve Linear skill'i eksik",
-          "toastMissingCli": "Orca CLI eksik",
           "toastMissingSkill": "Linear skill'i eksik",
-          "toastInstallCliAndSkillDescription": "Ajanlarınızın Linear görevlerini okuyup düzenleyebilmesi için Orca CLI'yı ve Linear skill'ini yükleyin.",
-          "toastInstallCliDescription": "Ajanlarınızın Linear görevlerini okuyup düzenleyebilmesi için Orca CLI'yı yükleyin.",
           "toastInstallSkillDescription": "Ajanlarınızın Orca CLI aracılığıyla Linear görevlerini okuyup düzenleyebilmesi için Linear skill'ini yükleyin.",
           "toastRemoteDescription": "{{value0}} Uzak ajan ortamlarının kendi kurulumuna ihtiyacı olabilir.",
           "toastWslDescription": "{{value0}} Bu kurulum, seçili WSL ajan çalışma zamanında çalışır."
@@ -6606,7 +6568,6 @@
           "parkTerminal": "Terminali park et"
         },
         "SidebarFeedbackImageAttachments": {
-          "screenshotsHint": "En fazla {count} ekran görüntüsü ekleyin",
           "attachImages": "Ekle",
           "removeImage": "{{fileName}} kaldır"
         },
@@ -6726,7 +6687,6 @@
           "xcodeLicense": "Git çalışabilmesi için önce Apple geliştirici araçları lisans onayı gerektirir.",
           "developerTools": "Apple komut satırı geliştirici araçları eksik veya kullanılamıyor.",
           "architectureMismatch": "Bir Git ile ilgili çalıştırılabilir dosya, CPU mimarisi bu çalıştırma host'uyla uyumsuz olduğu için çalıştırılamadı. Git ve ilgili araçları host mimarisi için yükleyin.",
-          "copyCommand": "Komutu kopyala",
           "copyDiagnostics": "Tanılamayı kopyala"
         }
       },
@@ -6766,7 +6726,6 @@
           "SetupGuideModal": {
             "3598a3ca0c": "Orca'yı paralel ajan çalışması için kullanışlı hale getiren temel iş akışlarını tamamlayın.",
             "48a9e5ef2d": "Başlarken",
-            "28cf59fcb4": "Bu, kontrol listesini kenar çubuğundan gizleyecek",
             "f3b5ffb2a6": "Kontrol listesini kenar çubuğundan gizle"
           },
           "SetupGuideProgressRing": {
@@ -7246,22 +7205,12 @@
           "af8c83ed61": "Ajanların girişlerinizi yeniden kullanabilmesi için Chrome, Edge veya diğer tarayıcılardan çerezleri içe aktarın.",
           "68ea76eb71": "Ajanların Orca'nın tarayıcısını kullanabilmesi için Browser Use becerisini yükleyin.",
           "2d6ead9ab2": "Browser Use Becerisini Yükle",
-          "e9f3f3b488": "Yüklendiği konum",
-          "9fca1f7f5d": "Ajanların kabuklarından tarayıcıyı yönetebilmesi için Orca CLI komutunu kaydeder.",
-          "c6065d205d": "Orca CLI'yi Etkinleştir",
-          "c79eff0213": "Ajanların tarayıcıyı yönetebilmesi için Orca CLI'yi kaydedin.",
-          "702488a5f7": "Kodlama ajanlarının bu tarayıcıyı sizin girişlerinizle kullanmasına izin verin. Aşağıdaki üç adımı tamamlayın.",
           "b8a1f2d84d": "Ajan Tarayıcı Kullanımı",
           "96b91c6349": "Kodlama ajanlarının bu tarayıcıyı sizin girişlerinizle kullanmasına izin verin.",
           "2ea4617e3a": "{{value1}}{{value2}} kaynağından {{value0}} çerez içe aktarıldı.",
-          "721aee31b4": "Orca CLI, PATH'e kaydedildi.",
-          "180a9abf3a": "CLI durumu yüklenemedi.",
           "2ccfc9cff8": "İçe Aktar",
           "0462565413": "Yeniden içe aktar",
           "de9b2f32f3": "Etkinleştir",
-          "ad8cb0ee22": "PATH'i düzelt",
-          "0289434ed6": "Etkin",
-          "8b3054dac7": "Kaydediliyor...",
           "8f2675c2f3": "Dosyadan {{value0}} çerez içe aktarıldı.",
           "5301857d88": "{{value0}} kaynağından"
         },
@@ -7282,7 +7231,6 @@
           "5dae812f50": "Yenile",
           "52e640f3a0": "CLI durumunu yenile",
           "38edbb5721": "Kabuk komutu",
-          "6930feda9e": "Uygulamayı açmak, worktree'leri yönetmek ve Orca terminalleriyle etkileşim kurmak için Orca'yı terminalinizden kullanın.",
           "c5c0f2641d": "Orca CLI",
           "d77352f2df": "`{{value0}}` PATH'ten kaldırılamadı.",
           "af5540930c": "`{{value0}}` PATH'ten kaldırıldı.",
@@ -7920,15 +7868,9 @@
           "c7f3fe0a6e": "Yaygın emülatör komutları",
           "d94ca6a623": "Ajanların mobil emülatör kontrolü de dahil olmak üzere Orca CLI komutlarını kullanmasını sağlar.",
           "67e19ee03c": "Orca CLI yeteneği",
-          "aaf62a3dd2": "Yüklendiği konum",
-          "2fef055608": "Ajanların kendi kabuklarından etkin emülatörü kontrol edebilmesi için Orca CLI komutunu kaydeder.",
-          "4f2205f3b6": "Orca CLI'yi Etkinleştir",
           "ff4b7e65d6": "Kodlama ajanlarının Orca CLI komutlarıyla etkin mobil emülatörü kontrol etmesine izin verin.",
           "2a674aa810": "Ajan Mobil Emülatör Kontrolü",
-          "cdeaed9e37": "Orca CLI, PATH içine kaydedildi.",
-          "3d34423e88": "Orca CLI kaydediliyor",
-          "3be27641c9": "böylece emülatör komutları ajan kabuklarından çalıştırılabilir.",
-          "3941719a56": "Yetenek kurulumu açılmadan önce Orca CLI kontrol ediliyor."
+          "cdeaed9e37": "Orca CLI, PATH içine kaydedildi."
         },
         "MobileEmulatorExamples": {
           "edf13dd03b": "Kopyala",
@@ -8285,8 +8227,7 @@
           "81057d5f71": "Kaydediliyor...",
           "da37d6f10e": "Kopyala",
           "3149964b66": "Kopyalandı",
-          "waitForSetupBeforeAgent": "Ajanı başlatmadan önce kurulumun tamamlanmasını bekle",
-          "waitForSetupBeforeAgentHelp": "Kurulum, ajanın başlangıçta ihtiyaç duyduğu bağımlılıkları, MCP sunucularını veya yapılandırma dosyalarını yüklüyorsa bunu açın."
+          "waitForSetupBeforeAgent": "Ajanı başlatmadan önce kurulumun tamamlanmasını bekle"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} depo rengini kullan",
@@ -9751,16 +9692,7 @@
               "9d97446873": "ajan",
               "a2d489263e": "beceri",
               "a7e82445fa": "Ajanların Orca'nın tarayıcısını çalıştırabilmesi için Tarayıcı Kullanımı becerisini yükleyin.",
-              "a1414dcefb": "Tarayıcı Kullanımı Becerisini Yükle",
-              "e56c7b55c9": "kurulum",
-              "034c5e8d7f": "etkinleştir",
-              "7e0dcb257a": "kabuk",
-              "3ffafc9b95": "komut",
-              "30c74aaa1f": "yol",
-              "ff05cbc344": "orca",
-              "85fab5e12c": "cli",
-              "890ddf943d": "Ajanların tarayıcıyı yönetebilmesi için Orca CLI'yi kaydedin.",
-              "50f0860e18": "Orca CLI'yi Etkinleştir"
+              "a1414dcefb": "Tarayıcı Kullanımı Becerisini Yükle"
             }
           }
         },
@@ -13962,10 +13894,7 @@
           "69af7e9c1c": "henüz PATH'inizde değil. Orca bunu varsayılan olarak ayarlayacak ve istediğiniz zaman kurabilirsiniz.",
           "1eee1c7bd8": "PATH'inizde algılanan ajan yok. Daha sonra kurmak için bir tane seçin veya boş bir terminalle devam edin.",
           "hideAgents": "Ajanları gizle",
-          "showMoreAgents": "{{value0}} ajan daha göster→",
-          "yoloPermissionsLabel": "Yolo / İzinleri tehlikeli şekilde atla",
-          "yoloPermissionsInfo": "Ajan izin bilgisi",
-          "yoloPermissionsTooltip": "Daha az kesinti için ajanlarda izin kontrollerini atla"
+          "showMoreAgents": "{{value0}} ajan daha göster→"
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Komutu çalıştırmak için Enter'a basın ve sorulursa npx'i onaylayın. Bunu Ayarlar'da daha sonra da kurabilirsiniz.",
@@ -14000,7 +13929,6 @@
         "NotificationStep": {
           "3bede04483": "Test Bildirimi Gönder",
           "dc897423e1": "Bildirim sesi seç",
-          "53aaffe49a": "Bildirim Sesi",
           "0fe570690c": "Orca'nın masaüstü bildirimi gönderildikten sonra çalacağı sesi seçin.",
           "0af746e41f": "Bir ses seçin",
           "8124d085a6": "Mac Ayarları'nı Aç",
@@ -14525,8 +14453,7 @@
             "e9eb197e12": "Bilgisayar Kullanımı izinleri açıldı",
             "3a59452a67": "Beceri komutu kopyalandı ve incelemeniz için aşağıya eklendi.",
             "c605f51f2b": "Yetenek kurulumu hazır",
-            "1aa657d8f4": "Bazı yetenek kurulumları dikkat gerektiriyor",
-            "c89534cbe9": "CLI ve Becerileri Kur"
+            "1aa657d8f4": "Bazı yetenek kurulumları dikkat gerektiriyor"
           },
           "AiCommitPrSettingsCard": {
             "8d4152701a": "örn. ollama run llama3.1 {{value0}}",
@@ -14619,7 +14546,6 @@
             "1a6a7d6c80": "Kurulum",
             "713cc529a5": "Kilometre Taşları",
             "b1f1981c5e": "Görevleri görüntüle",
-            "0235b268b2": "Henüz tamamlanmadı",
             "13294d3405": "Bitti"
           },
           "FeatureWallSetupWorkflowActions": {
@@ -14730,12 +14656,9 @@
               "setup": {
                 "status": {
                   "8eccfcb314": "Kuruldu",
-                  "21d4f79c93": "macOS erişim ayarlarını açmak için CLI ve Becerileri Kur'a tıklayın",
                   "5c9293e51a": "uygulama erişimi kontrol ediliyor",
-                  "aae94eeb52": "CLI ve Becerileri Kur'a tıklayın",
                   "aa8e143a2f": "Kurulum kontrol edilemedi",
                   "9b33e7fb13": "Kurulum kontrol ediliyor",
-                  "4c8e1f92a7": "bu Mac'te Orca Desktop'ı açın",
                   "6d2b0a84e1": "Bu derlemede kullanılamıyor"
                 }
               }
@@ -14747,7 +14670,6 @@
                 "checklist": {
                   "localized": {
                     "copy": {
-                      "ec0a363633": "Çoklu görev",
                       "62bac8f43c": "Aynı anda 2 farklı worktree'de çalışın. Her biri izole edilmiştir (aynı proje içinde bile). Aynı anda 2 özellik üzerinde çalışmak için idealdir.",
                       "908898c3ee": "Orca'nın tarayıcısını kullanın",
                       "43781563c3": "Orca'dan çıkmadan web uygulamanıza göz atın. Herhangi bir öğeyi seçin ve tam kaynağını ve stillerini tek tıklamayla bir ajana gönderin.",
@@ -14755,8 +14677,6 @@
                       "71bd9a8c95": "Bir ajan işini bitirdiği, dikkat gerektirdiği veya engellendiği anı hemen öğrenin.",
                       "46db810da8": "Varsayılan ajanınızı seçin",
                       "b8e5bae17f": "Tercih ettiğiniz ajan önceden seçili olduğu için yeni işlere daha hızlı başlayın.",
-                      "fee5557b02": "Orca CLI'yi etkinleştirin",
-                      "7bcb4097fa": "Orca kabuk komutunu kaydedin ve tarayıcı, bilgisayar ve orkestrasyon iş akışları için ajan becerilerini kurun.",
                       "ad342dd4c6": "Entegrasyonları bağlayın",
                       "06fe30fdb0": "Bir görevden tek tıklamayla ajan başlatın ve PR durumunu görünür tutun.",
                       "eddc532e58": "Çalışma alanı kurulumunu otomatikleştirin",
@@ -14882,8 +14802,7 @@
             "d6d15077df": "Beceri komutu kopyalandı ve incelemeniz için aşağıya eklendi.",
             "78e65f19d9": "Tarayıcı kurulumu başarısız oldu",
             "b7345c18db": "Beklenmeyen bir hata oluştu.",
-            "5f97caf76b": "Kuruluyor…",
-            "c2df599513": "CLI ve Beceriyi Kur"
+            "5f97caf76b": "Kuruluyor…"
           },
           "ConnectIntegrationsList": {
             "3dddb2d565": "görevler için bağlandı",
@@ -15025,17 +14944,8 @@
                 "agent": {
                   "setup": {
                     "state": {
-                      "fdcca1ec75": "Kaydediliyor...",
-                      "69fb2c2289": "Etkin",
-                      "c6705092ba": "PATH'i düzelt",
-                      "7c1b6bdb1e": "Etkinleştir",
-                      "51074ccb05": "CLI durumu yüklenemedi.",
                       "35dea1ae12": "Ajan kontrolü hazır.",
-                      "9dff3a6338": "Beceri kuruldu. Kurulumu tamamlamak için Orca CLI'yi etkinleştirin.",
-                      "15986a1080": "Orca CLI hazır. Kurulumu tamamlamak için beceriyi kurun.",
-                      "4c26913def": "Henüz kurulmadı. Ajan kontrolünü etkinleştirmek için her iki adımı da tamamlayın.",
-                      "c94ff11e91": "Kurulum durumu yeniden kontrol edilemedi.",
-                      "2b519eed94": "Orca CLI PATH'e kaydedildi."
+                      "c94ff11e91": "Kurulum durumu yeniden kontrol edilemedi."
                     }
                   }
                 },
@@ -15053,7 +14963,6 @@
             "2fda9ff015": "Ajan kontrolünü kurun",
             "0ac0fef514": "Ajan kontrolü hazır.",
             "2bdfff8763": "Ajan kontrolü (isteğe bağlı).",
-            "72736b051f": "Ajanların bu simülatörü kullanmasını istediğinizde Orca CLI + beceriyi kurun.",
             "d10ae98046": "Bitti",
             "3756cbeca7": "Şimdi değil",
             "6d950431d2": "Gizle",
@@ -15061,15 +14970,10 @@
             "3f003507f4": "Ayarlar'da tam kurulumu aç"
           },
           "MobileEmulatorAgentSetupGuideSteps": {
-            "9b49d892e3": "Orca CLI'yi etkinleştir",
-            "3d8dc52c93": "Ajan kabuklarında emülatör kontrolü için orca komutunu kaydeder.",
             "21f5687c07": "Orca CLI becerisi",
             "64fb057667": "Ajanlara bu worktree için orca emülatör komutlarını öğretir.",
             "5c59ea96ca": "Mobil emülatör Orca CLI beceri kurulumu",
-            "bff5341ac3": "Mobil emülatör Orca CLI beceri kurulum terminali",
-            "3d34423e88": "Orca CLI kaydediliyor",
-            "3be27641c9": "böylece emülatör komutları ajan kabuklarından çalıştırılabilir.",
-            "3941719a56": "Beceri kurulumunu açmadan önce Orca CLI kontrol ediliyor."
+            "bff5341ac3": "Mobil emülatör Orca CLI beceri kurulum terminali"
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "Kapat",
@@ -15288,8 +15192,6 @@
           "10ed04a685": "Notebook hücreleri, notebook klasöründen bu makinede yerel Python kodu çalıştırır. Yalnızca güvendiğiniz dosyalardaki hücreleri çalıştırın.",
           "9e06ae5d36": "Notebook Kodu Çalıştırılsın mı?",
           "d6f37a640b": "Boş notebook",
-          "8c3b21369a": "nbformat",
-          "329764e9fc": "BETA",
           "15ec40a735": "Notebook'u kaydet",
           "07e7d96612": "hücre",
           "c1601b23b2": "Notebook görüntülenemedi",
@@ -15303,9 +15205,7 @@
           "fd8ac707bc": "Hücreyi yukarı taşı",
           "3e4cbf15ea": "Ham",
           "1833dbbc43": "Markdown",
-          "7005960d73": "Kod",
-          "59b6cd874b": "kod",
-          "ba149053d5": "markdown"
+          "7005960d73": "Kod"
         },
         "MarkdownPreview": {
           "e4683f70c4": "İptal",
@@ -17653,8 +17553,6 @@
         "chooseInAgentPicker": "Ajan seçicide seçin…",
         "toggleOption": "{{value0}} aç/kapat",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueIsDefault": "Varsayılan",
-        "valueNotReported": "Bildirilmedi",
         "sentNotConfirmed": "Ajana gönderildi, onaylanmadı",
         "setWhenSessionStarts": "Oturum başladığında ayarlanır.",
         "availableAfterSessionStarts": "Oturum başladıktan sonra kullanılabilir.",
@@ -17770,7 +17668,6 @@
         "stateIdle": "durduruldu",
         "stateUnverifiable": "doğrulanamıyor",
         "reasonWaiting": "onay gerekiyor",
-        "reasonUnverifiable": "bağlantı yok",
         "reasonBlocked": "başarısız oldu",
         "groupAgents": "Ajanlar",
         "groupShell": "Kabuk",
@@ -17841,42 +17738,6 @@
         }
       },
       "launchPromptNotDelivered": "İletilmedi, terminali kontrol edin",
-      "structuredSessionCloseFailed": "Bu sohbet oturumu kapatılamadı",
-      "structuredSessionLaunchFailed": "{{value0}} sohbeti açılamadı",
-      "structuredSessionCloseFailedDescription": "Terminal açık kaldı, böylece sağlayıcı kurtarılabilir durumda kalır.",
-      "handoff": {
-        "stage": {
-          "finishingChat": "Sohbet oturumu sonlandırılıyor…",
-          "finishingTerminal": "Ajan terminali sonlandırılıyor…",
-          "openingTerminal": "Ajan terminali açılıyor…",
-          "resumingChat": "Sohbet oturumu devam ettiriliyor…",
-          "verifyingTerminal": "Ajan terminali doğrulanıyor…",
-          "verifyingChat": "Sohbet oturumu doğrulanıyor…",
-          "recovering": "Ajan oturumu kurtarılıyor…",
-          "manualRecovery": "Ajan oturumunun kurtarılması gerekiyor"
-        },
-        "switchingOwner": "Oturum sahibi değiştiriliyor…",
-        "mode": {
-          "switching": "Geçiliyor",
-          "terminal": "Terminal",
-          "chat": "Sohbet"
-        },
-        "switchingAfterTurn": "Bu turdan sonra geçiş yapılacak",
-        "returningAfterTurn": "Bu turdan sonra geri dönülecek",
-        "cancel": "İptal",
-        "switchAfterTurn": "Bu turdan sonra geç",
-        "stopTurnAndSwitch": "Turu durdur ve geç",
-        "openAgentTui": "Ajan TUI'sini aç",
-        "returnAfterTurn": "Bu turdan sonra dön",
-        "returnToChat": "Sohbete dön",
-        "agentOpenOnHost": "Ajan {{value0}} üzerinde terminalde açık.",
-        "agentOpen": "Ajan terminalde açık.",
-        "exitTerminal": "Sohbette devam etmek için ajan terminalinden çıkın.",
-        "retryProof": "Yeniden deneme kanıtı",
-        "retry": "Yeniden dene",
-        "details": "Ayrıntılar"
-      },
-      "structuredSessionLaunchFailedDescription": "Orca, yapılandırılmış bir {{value0}} sohbeti açamadı. Ayrıntılar için günlüklere bakın.",
       "subagents": {
         "state": {
           "completed": "tamamlandı",
@@ -17898,8 +17759,7 @@
         "tokens": "{{value0}} token"
       },
       "conversationCommand": {
-        "pendingWork": "Bu komutu kullanmadan önce bekleyen işlerin ve mesajların bitmesini bekleyin.",
-        "unconfirmed": "Konuşma işlemi onaylanmadı."
+        "pendingWork": "Bu komutu kullanmadan önce bekleyen işlerin ve mesajların bitmesini bekleyin."
       },
       "drop": {
         "title": "Bu sohbete eklemek için bırakın",

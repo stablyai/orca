@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  getEditorExternalWatchTargets,
+  selectEditorExternalWatchTargets as getEditorExternalWatchTargets,
   type EditorExternalWatchTargetState
-} from './useEditorExternalWatch'
+} from './editor-external-watch-targets'
 
 vi.mock('@/store', () => ({
   useAppStore: {

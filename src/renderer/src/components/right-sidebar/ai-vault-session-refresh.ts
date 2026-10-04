@@ -21,6 +21,7 @@ import {
   readCachedAiVaultSessionResult,
   resetAiVaultSessionResultCacheForTest
 } from './ai-vault-session-result-cache'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 // In-app session creation bypasses the cache so the new session appears promptly.
 // Keep the budget at module scope so tab remounts cannot amplify full scans.
@@ -94,7 +95,7 @@ export function useAiVaultSessionRefresh(
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const requestTokenRef = useRef<string>(undefined!)
-  requestTokenRef.current ??= crypto.randomUUID()
+  requestTokenRef.current ??= createBrowserUuid()
   const refreshIdRef = useRef(0)
   const refreshInFlightRef = useRef(false)
   const pendingRefreshRef = useRef(false)
@@ -173,6 +174,7 @@ export function useAiVaultSessionRefresh(
       const scanKey = `${baseKey}\n${selectedLimit}`
       try {
         const result = await window.api.aiVault.listSessions({
+          includeAntigravityIdeSessions: true,
           limit,
           unlimited: selectedLimit === 'unlimited',
           scopePaths: scopePathsRef.current,

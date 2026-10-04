@@ -1,9 +1,10 @@
-import {
-  BridgeInitRouteSchema,
-  type BridgeClientMessage,
-  type BridgeInitRoute
-} from './bridge/bridge-envelope'
+import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge/bridge-envelope'
 import { readBridgeRouteUpdate } from './bridge/bridge-route-update'
+import {
+  sameSafeAreaInsets,
+  ZERO_SAFE_AREA_INSETS,
+  type BridgeSafeAreaInsets
+} from './bridge/bridge-safe-area-insets'
 
 /** The screen one host is serving, which is the one field of `init` that moves under a live page. */
 export type BridgeHostRoute = {
@@ -11,13 +12,10 @@ export type BridgeHostRoute = {
   readonly current: () => BridgeInitRoute | null
   /** Why the opened route was refused, for the line the host prints at construction. */
   readonly openIssue: () => string
-  /** What the page's latest `ready` said it can be sent. Reset by each document's `ready`. */
-  readonly readReady: (message: Extract<BridgeClientMessage, { type: 'ready' }>) => void
   /**
    * Hands the page a rewritten param for the screen it is already on, and sends one `init` when
    * that moved the route. The held route moves either way, so a page that reloads inside this
-   * mount is given the newest one on its next `ready` even when it is too old to be sent one in
-   * flight.
+   * mount is given the newest one on its next `ready`.
    *
    * Answers nothing, and nothing here learns anything from a post (ruling 34). It cannot: a frame
    * the page received and then failed to handle is caught by the page and reported there, so what
@@ -27,6 +25,17 @@ export type BridgeHostRoute = {
    * as on `send`. The request that route carries is spent by the page, which erases the param.
    */
   readonly publish: (next: BridgeInitRoute, deliverable: boolean) => void
+  /** The insets the next `init` carries. */
+  readonly safeAreaInsets: () => BridgeSafeAreaInsets
+  /**
+   * Moves the held insets, and sends one `init` when they moved. The same lane as a pane update:
+   * held either way, so the next `ready` carries them.
+   */
+  readonly publishSafeAreaInsets: (next: BridgeSafeAreaInsets, deliverable: boolean) => void
+  /** The keyboard height the next `init` carries. */
+  readonly keyboardInset: () => number
+  /** Moves the held keyboard height on the same lane as the insets. */
+  readonly publishKeyboardInset: (next: number, deliverable: boolean) => void
 }
 
 /**
@@ -51,24 +60,44 @@ export function createBridgeHostRoute(args: {
   refused: boolean
   sendInit: () => void
   onRefused: (issue: string) => void
+  safeAreaInsets?: BridgeSafeAreaInsets
+  keyboardInset?: number
 }): BridgeHostRoute {
   const parsed = BridgeInitRouteSchema.safeParse(args.opened)
   let route = parsed.success && !args.refused ? parsed.data : null
-  let accepts: readonly string[] = []
+  let insets = args.safeAreaInsets ?? ZERO_SAFE_AREA_INSETS
+  let keyboard = args.keyboardInset ?? 0
   return {
     current: () => route,
     openIssue: () => (parsed.success ? 'unknown' : (parsed.error.issues[0]?.message ?? 'unknown')),
-    readReady: (message) => {
-      accepts = message.accepts ?? []
-    },
     publish: (next, deliverable) => {
-      const update = readBridgeRouteUpdate({ held: route, next, accepts, deliverable })
+      const update = readBridgeRouteUpdate({ held: route, next, deliverable })
       if (update.kind === 'refuse') {
         args.onRefused(update.issue)
         return
       }
       route = update.route
       if (update.kind === 'send') {
+        args.sendInit()
+      }
+    },
+    safeAreaInsets: () => insets,
+    publishSafeAreaInsets: (next, deliverable) => {
+      if (sameSafeAreaInsets(insets, next)) {
+        return
+      }
+      insets = next
+      if (deliverable) {
+        args.sendInit()
+      }
+    },
+    keyboardInset: () => keyboard,
+    publishKeyboardInset: (next, deliverable) => {
+      if (keyboard === next) {
+        return
+      }
+      keyboard = next
+      if (deliverable) {
         args.sendInit()
       }
     }

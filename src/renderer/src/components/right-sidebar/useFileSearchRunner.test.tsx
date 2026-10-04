@@ -163,4 +163,53 @@ describe('useFileSearchRunner result ownership', () => {
       resultOwner: { worktreeId, runtimeEnvironmentId: null }
     })
   })
+
+  it('shows an active failure and clears it when the next search succeeds or is empty', async () => {
+    const worktreeId = 'missing-repo::/repo'
+    const { hook, updates } = renderSearchRunner(
+      { settings: {}, repos: [], worktreesByRepo: {}, fileSearchStateByWorktree: {} },
+      worktreeId
+    )
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.searchRuntimeFiles.mockRejectedValueOnce(
+      new Error("Error invoking remote method 'search': Error: regex parse error\nUnclosed group")
+    )
+    await finishSearch(hook.result.current.executeSearch)
+    expect(Object.assign({}, ...updates)).toMatchObject({
+      error: 'regex parse error\nUnclosed group',
+      results: null,
+      loading: false
+    })
+
+    await finishSearch(hook.result.current.executeSearch)
+    expect(Object.assign({}, ...updates)).toMatchObject({ error: null, results: RESULTS })
+    act(() => hook.result.current.executeSearch(''))
+    expect(Object.assign({}, ...updates)).toMatchObject({ error: null, results: null })
+    log.mockRestore()
+  })
+
+  it('ignores an older rejection after a newer search has succeeded', async () => {
+    const { hook, updates } = renderSearchRunner(
+      { settings: {}, repos: [], worktreesByRepo: {}, fileSearchStateByWorktree: {} },
+      'missing-repo::/repo'
+    )
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let rejectOldSearch: (reason: Error) => void = () => {}
+    mocks.searchRuntimeFiles.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectOldSearch = reject
+        })
+    )
+    await finishSearch(hook.result.current.executeSearch)
+    await finishSearch(hook.result.current.executeSearch)
+    await act(async () => rejectOldSearch(new Error('old failure')))
+    expect(Object.assign({}, ...updates)).toMatchObject({
+      error: null,
+      results: RESULTS,
+      loading: false
+    })
+    expect(updates.some((update) => update.error === 'old failure')).toBe(false)
+    log.mockRestore()
+  })
 })

@@ -95,6 +95,37 @@ afterEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
 
+describe('UpdateCard staged install recovery', () => {
+  it.each([undefined, 'local'] as const)(
+    'retries a blocked staged install without downloading again (source %s)',
+    (source) => {
+      renderWithInitialStatus({
+        state: 'error',
+        version: '1.4.200',
+        message:
+          'Close the other Orca instances (process IDs: 12345) before installing this update.',
+        retryAction: 'install',
+        ...(source ? { source } : {})
+      })
+
+      expect(screen.getByText(/process IDs: 12345/)).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Try Again' }))
+      expect(quitAndInstall).toHaveBeenCalledTimes(1)
+      expect(download).not.toHaveBeenCalled()
+      expect(screen.queryByRole('button', { name: 'Retry Download' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Choose Another Build' })).toBeNull()
+    }
+  )
+
+  it('keeps the download retry for errors from older hosts without an install action', () => {
+    renderWithInitialStatus({ state: 'error', version: '1.4.200', message: 'Download failed' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Download' }))
+    expect(download).toHaveBeenCalledTimes(1)
+    expect(quitAndInstall).not.toHaveBeenCalled()
+  })
+})
+
 describe('UpdateCard Windows signature failures', () => {
   it('does not offer the rejected version as a manual publisher-check bypass', () => {
     const message =

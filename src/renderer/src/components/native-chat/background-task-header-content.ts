@@ -8,6 +8,7 @@ import type {
 } from '../../../../shared/agent-session-wire'
 import { translate } from '@/i18n/i18n'
 import {
+  backgroundTaskCountedState,
   backgroundTaskElapsedLabel,
   backgroundTaskStateReason,
   backgroundTaskStateWord,
@@ -148,7 +149,7 @@ export function backgroundTasksHeaderContent(
     return {
       segments: [
         {
-          text: `${kindCountLabel(group.kind, count)} ${backgroundTaskStateWord(uniformState)}`,
+          text: backgroundTaskCountedState(kindCountLabel(group.kind, count), uniformState),
           kind: group.kind
         }
       ],
@@ -166,8 +167,8 @@ export function backgroundTasksHeaderContent(
         : kindCountLabel(group.kind, 1)
     // A still-growing clock on finished work would lie, exactly as on the row.
     const elapsed =
-      group.kind === 'command' && !entry.settled
-        ? backgroundTaskElapsedLabel(entry.task, options.now)
+      group.kind === 'command' && !entry.row.settled
+        ? backgroundTaskElapsedLabel(entry.row.firstObservedAt, options.now)
         : null
     return {
       segments: [{ text: subject, kind: group.kind }],
@@ -185,7 +186,7 @@ export function backgroundTasksHeaderContent(
     detail:
       stateCounts.length > 0
         ? stateCounts
-            .map((entry) => `${entry.count} ${backgroundTaskStateWord(entry.state)}`)
+            .map((entry) => backgroundTaskCountedState(entry.count, entry.state))
             .join(', ')
         : null
   }

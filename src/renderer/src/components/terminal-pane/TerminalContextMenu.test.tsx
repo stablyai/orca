@@ -78,6 +78,7 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     onEqualizePaneSizes: vi.fn(),
     onClosePane: vi.fn(),
     onClearScreen: vi.fn(),
+    onResetTerminal: vi.fn(),
     canContinueAgentSessionInNewSession: false,
     onContinueAgentSessionInNewSession: vi.fn(),
     onForkAgentSession: vi.fn(),

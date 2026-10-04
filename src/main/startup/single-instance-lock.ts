@@ -64,17 +64,37 @@ export function shouldBypassSingleInstanceLock(options: {
   )
 }
 
+// Why only the E2E harness: dev desktops lock like packaged ones, since two on one profile corrupt
+// every store; each E2E launch has its own throwaway profile, and a spec opts in to test the lock.
 export function shouldSkipSingleInstanceLock(options: {
   env?: NodeJS.ProcessEnv
   isDev: boolean
   isServeMode: boolean
 }): boolean {
   const env = options.env ?? process.env
-  return options.isDev && !options.isServeMode && env[SINGLE_INSTANCE_LOCK_E2E_ENFORCE_ENV] !== '1'
+  return (
+    options.isDev &&
+    !options.isServeMode &&
+    Boolean(env.ORCA_E2E_USER_DATA_DIR) &&
+    env[SINGLE_INSTANCE_LOCK_E2E_ENFORCE_ENV] !== '1'
+  )
 }
 
-export function logSingleInstanceLockFailure(write?: StartupDiagnosticSink): void {
-  writeStartupDiagnosticLine(SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE, write)
+export function singleInstanceLockFailureMessage(options: {
+  isDevDesktop: boolean
+  userDataPath: string
+}): string {
+  if (!options.isDevDesktop) {
+    return SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE
+  }
+  return `[single-instance] Another Orca dev instance is already running on the profile at ${options.userDataPath}; exiting this launch after passing it this launch's request. To run another dev copy at the same time, give it its own profile: ORCA_DEV_USER_DATA_PATH=<another directory> pnpm dev`
+}
+
+export function logSingleInstanceLockFailure(
+  options: { isDevDesktop: boolean; userDataPath: string },
+  write?: StartupDiagnosticSink
+): void {
+  writeStartupDiagnosticLine(singleInstanceLockFailureMessage(options), write)
 }
 
 export function logSingleInstanceLockBypass(write?: StartupDiagnosticSink): void {

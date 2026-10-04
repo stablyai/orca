@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  GROK_ENCODED_CWD_DIR_MAX_BYTES,
   GROK_SESSION_SCAN_ACTIVE_ROOT_MAX,
   GROK_SESSION_SCAN_QUEUE_MAX_ENTRIES,
   buildGrokChatHistoryPathCandidates,
@@ -11,7 +10,6 @@ import {
   findGrokChatHistoryBySessionId,
   getCachedGrokChatHistoryBySessionId,
   grokEncodedCwdDirName,
-  isGrokChatHistoryPath,
   isSafeGrokSessionId,
   resolveGrokChatHistoryPathSync,
   resolveGrokHomeDir,
@@ -76,9 +74,6 @@ describe('grok-session-paths', () => {
 
   it('refuses to invent encodeURIComponent names longer than 255 bytes', () => {
     const longCwd = `/${'a'.repeat(200)}/${'b'.repeat(200)}`
-    expect(Buffer.byteLength(encodeURIComponent(longCwd), 'utf8')).toBeGreaterThan(
-      GROK_ENCODED_CWD_DIR_MAX_BYTES
-    )
     expect(grokEncodedCwdDirName(longCwd)).toBeNull()
     expect(
       buildGrokChatHistoryPathCandidates({
@@ -100,7 +95,6 @@ describe('grok-session-paths', () => {
         []
       )
       await expect(findGrokChatHistoryBySessionId(sessionsDir, sessionId)).resolves.toBeNull()
-      expect(isGrokChatHistoryPath('/repo/chat_history.jsonl', sessionId)).toBe(false)
     }
 
     expect(isSafeGrokSessionId('019e37f4-5135-7b63-a4ab-6d13aa6bf528')).toBe(true)

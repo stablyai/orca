@@ -82,6 +82,8 @@ const CATEGORY_BY_ROW_WORD = new Map<string, NativeChatToolCategory>([
   // Claude's tool names, which its lane renders verbatim.
   ['grep', 'search'],
   ['glob', 'search'],
+  // Claude's Task call lasts as long as its subagent. Codex's `spawn_agent` ends once the helper
+  // starts, so it is deliberately absent: its roster row, not the call, stands for the helper.
   ['task', 'subAgentActivity'],
   ['webfetch', 'webSearch'],
   ['todowrite', 'todoList'],

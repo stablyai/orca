@@ -2,10 +2,7 @@ import {
   parseAgentChildWorkAliasRecord,
   type AgentChildWorkAliasRecord
 } from './agent-status-child-work-alias'
-import {
-  deserializeAgentChildWorkBindingKey,
-  serializeAgentChildWorkBindingKey
-} from './agent-status-child-work-binding'
+import { serializeAgentChildWorkBindingKey } from './agent-status-child-work-binding'
 import {
   agentChildWorkBelongsTo,
   agentChildWorkFencesEqual,
@@ -28,7 +25,6 @@ import {
   parseAgentStatusTombstoneRecord
 } from './agent-status-store-codec'
 import {
-  deserializeAgentStatusFactKey,
   parseAgentStatusFactRecord,
   serializeAgentStatusFactKey
 } from './agent-status-store-fact-codec'
@@ -36,7 +32,8 @@ import {
   parseAgentStatusParentRecord,
   type AgentStatusParentRecord
 } from './agent-status-store-parent'
-import { deserializeAgentStatusSubject, serializeAgentStatusSubject } from './agent-status-subject'
+import { storedBindingKey, tombstoneKeyIsValid } from './agent-status-store-record-keys'
+import { serializeAgentStatusSubject } from './agent-status-subject'
 
 export type AgentStatusStoreState = {
   epoch: string
@@ -117,70 +114,125 @@ function hasMatchingFence(child: AgentChildWorkRecord, alias: AgentChildWorkAlia
   )
 }
 
+type Lookup<V> = { get(key: string): V | undefined; has(key: string): boolean }
+
+/** What one record's validity depends on besides itself. */
+export type AgentStatusStoreRecordLookups = {
+  revision: number
+  parents: Lookup<AgentStatusParentRecord>
+  children: Lookup<AgentChildWorkRecord>
+  tombstones: Lookup<AgentStatusTombstoneRecord>
+}
+
+export function agentStatusStoreSizesFit(sizes: {
+  parents: { size: number }
+  children: { size: number }
+  aliases: { size: number }
+  facts: { size: number }
+  tombstones: { size: number }
+}): boolean {
+  return (
+    sizes.parents.size <= AGENT_STATUS_STORE_LIMITS.parents &&
+    sizes.children.size <= AGENT_STATUS_STORE_LIMITS.children &&
+    sizes.aliases.size <= AGENT_STATUS_STORE_LIMITS.aliases &&
+    sizes.facts.size <= AGENT_STATUS_STORE_LIMITS.facts &&
+    sizes.tombstones.size <= AGENT_STATUS_STORE_LIMITS.tombstones
+  )
+}
+
+export function storedParentIsValid(
+  lookups: AgentStatusStoreRecordLookups,
+  key: string,
+  parent: AgentStatusParentRecord
+): boolean {
+  return (
+    key === serializeAgentStatusSubject(parent.subject) &&
+    parent.revision <= lookups.revision &&
+    (lookups.tombstones.get(agentStatusTombstoneMapKey('parent', key))?.revision ?? -1) <
+      parent.revision
+  )
+}
+
+export function storedChildIsValid(
+  lookups: AgentStatusStoreRecordLookups,
+  childWorkId: string,
+  child: AgentChildWorkRecord
+): boolean {
+  return (
+    childWorkId === child.childWorkId &&
+    child.revision <= lookups.revision &&
+    lookups.parents.has(serializeAgentStatusSubject(child.parent)) &&
+    !lookups.tombstones.has(agentStatusTombstoneMapKey('child', childWorkId))
+  )
+}
+
+export function storedAliasIsValid(
+  lookups: AgentStatusStoreRecordLookups,
+  key: string,
+  alias: AgentChildWorkAliasRecord
+): boolean {
+  const child = lookups.children.get(alias.childWorkId)
+  const tombstone = lookups.tombstones.get(agentStatusTombstoneMapKey('alias', key))
+  return (
+    key === storedBindingKey(alias) &&
+    alias.revision <= lookups.revision &&
+    child !== undefined &&
+    agentChildWorkBelongsTo(child, alias.parent) &&
+    child.provider === alias.provider &&
+    child.kind === alias.kind &&
+    hasMatchingFence(child, alias) &&
+    (tombstone === undefined || tombstone.revision < alias.revision)
+  )
+}
+
+export function storedFactIsValid(
+  lookups: AgentStatusStoreRecordLookups,
+  key: string,
+  fact: AgentStatusFactRecord
+): boolean {
+  const tombstone = lookups.tombstones.get(agentStatusTombstoneMapKey('fact', key))
+  return (
+    key === agentStatusFactMapKey(fact) &&
+    fact.revision <= lookups.revision &&
+    lookups.parents.has(serializeAgentStatusSubject(fact.subject)) &&
+    (tombstone === undefined || tombstone.revision < fact.revision)
+  )
+}
+
+export function storedTombstoneIsValid(
+  lookups: Pick<AgentStatusStoreRecordLookups, 'revision'>,
+  tombstone: AgentStatusTombstoneRecord
+): boolean {
+  return tombstone.revision <= lookups.revision && tombstoneKeyIsValid(tombstone)
+}
+
+/** Every invariant over the whole store: for snapshot restore, and the oracle mutations are held to. */
 export function validateAgentStatusStoreState(state: AgentStatusStoreState): boolean {
-  if (
-    state.parents.size > AGENT_STATUS_STORE_LIMITS.parents ||
-    state.children.size > AGENT_STATUS_STORE_LIMITS.children ||
-    state.aliases.size > AGENT_STATUS_STORE_LIMITS.aliases ||
-    state.facts.size > AGENT_STATUS_STORE_LIMITS.facts ||
-    state.tombstones.size > AGENT_STATUS_STORE_LIMITS.tombstones
-  ) {
+  if (!agentStatusStoreSizesFit(state)) {
     return false
   }
   for (const [key, parent] of state.parents) {
-    if (
-      key !== serializeAgentStatusSubject(parent.subject) ||
-      parent.revision > state.revision ||
-      (state.tombstones.get(agentStatusTombstoneMapKey('parent', key))?.revision ?? -1) >=
-        parent.revision
-    ) {
+    if (!storedParentIsValid(state, key, parent)) {
       return false
     }
   }
   for (const [childWorkId, child] of state.children) {
-    if (
-      childWorkId !== child.childWorkId ||
-      child.revision > state.revision ||
-      !state.parents.has(serializeAgentStatusSubject(child.parent)) ||
-      state.tombstones.has(agentStatusTombstoneMapKey('child', childWorkId))
-    ) {
+    if (!storedChildIsValid(state, childWorkId, child)) {
       return false
     }
   }
   for (const [key, alias] of state.aliases) {
-    const child = state.children.get(alias.childWorkId)
-    const tombstone = state.tombstones.get(agentStatusTombstoneMapKey('alias', key))
-    if (
-      key !== serializeAgentChildWorkBindingKey(alias) ||
-      alias.revision > state.revision ||
-      !child ||
-      !agentChildWorkBelongsTo(child, alias.parent) ||
-      child.provider !== alias.provider ||
-      child.kind !== alias.kind ||
-      !hasMatchingFence(child, alias) ||
-      (tombstone !== undefined && tombstone.revision >= alias.revision)
-    ) {
+    if (!storedAliasIsValid(state, key, alias)) {
       return false
     }
   }
   for (const [key, fact] of state.facts) {
-    const tombstone = state.tombstones.get(agentStatusTombstoneMapKey('fact', key))
-    if (
-      key !== agentStatusFactMapKey(fact) ||
-      fact.revision > state.revision ||
-      !state.parents.has(serializeAgentStatusSubject(fact.subject)) ||
-      (tombstone !== undefined && tombstone.revision >= fact.revision)
-    ) {
+    if (!storedFactIsValid(state, key, fact)) {
       return false
     }
   }
   for (const item of state.tombstones.values()) {
-    if (
-      item.revision > state.revision ||
-      (item.entity === 'parent' && !deserializeAgentStatusSubject(item.key)) ||
-      (item.entity === 'alias' && !deserializeAgentChildWorkBindingKey(item.key)) ||
-      (item.entity === 'fact' && !deserializeAgentStatusFactKey(item.key))
-    ) {
+    if (!storedTombstoneIsValid(state, item)) {
       return false
     }
   }

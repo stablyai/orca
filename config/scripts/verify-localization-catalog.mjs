@@ -442,7 +442,27 @@ async function reportPluginCatalog(root, catalog, pluginCatalogPath) {
   return interpolationMismatches.length > 0 ? 1 : 0
 }
 
-export async function main(root = process.cwd(), options = parseArgs(process.argv.slice(2))) {
+export async function collectLocalizationReferences(root) {
+  const sourceRoots = LOCALIZATION_SOURCE_ROOTS.map((sourceRoot) => path.join(root, sourceRoot))
+  const references = []
+
+  for (const sourceRoot of sourceRoots) {
+    const files = await collectSourceFiles(root, sourceRoot)
+    for (const filePath of files) {
+      references.push(
+        ...collectLocalizationKeyReferences(filePath, await fs.readFile(filePath, 'utf8'), root)
+      )
+    }
+  }
+
+  return references
+}
+
+export async function main(
+  root = process.cwd(),
+  options = parseArgs(process.argv.slice(2)),
+  sharedReferences
+) {
   const localesDir = path.join(root, LOCALES_RELATIVE_DIR)
   const catalogPath = path.join(localesDir, 'en.json')
   const catalog = JSON.parse(await fs.readFile(catalogPath, 'utf8'))
@@ -461,17 +481,7 @@ export async function main(root = process.cwd(), options = parseArgs(process.arg
     return 0
   }
   let catalogKeys = new Set(flattenCatalogKeys(catalog))
-  const sourceRoots = LOCALIZATION_SOURCE_ROOTS.map((sourceRoot) => path.join(root, sourceRoot))
-  const references = []
-
-  for (const sourceRoot of sourceRoots) {
-    const files = await collectSourceFiles(root, sourceRoot)
-    for (const filePath of files) {
-      references.push(
-        ...collectLocalizationKeyReferences(filePath, await fs.readFile(filePath, 'utf8'), root)
-      )
-    }
-  }
+  const references = sharedReferences ?? (await collectLocalizationReferences(root))
 
   const missing = references.filter((reference) => !catalogKeys.has(reference.key))
   if (missing.length > 0) {

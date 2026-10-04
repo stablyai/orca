@@ -109,10 +109,8 @@ async function terminalWait(
 describe.skipIf(process.platform === 'win32')('tui-idle against a real agent pty', () => {
   it('does not satisfy while the real process streams under a name-only title', async () => {
     const { runtime, transcript, handle } = await startRealAgentPane('quiet', 60_000)
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    // The OSC title really did reach the runtime as control bytes, not literal text.
-    expect(transcript.join('')).toContain(']0;Codex')
+    // Wait for real control bytes before measuring idle behavior.
+    await expect.poll(() => transcript.join(''), { timeout: 5_000 }).toContain(']0;Codex')
 
     const outcome = await terminalWait(runtime, handle, 8_000)
     expect(outcome.satisfied).toBe(false)

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { restoreLocalStructuredChatsAtStartup } from '@/runtime/local-structured-chats'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/codex-detached-pane-restart-scheduler'
 import { useAppStore } from '../store'
@@ -35,7 +36,6 @@ import {
 } from '../../../shared/execution-host'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
-import { restoreLocalStructuredSessionTabsOnce } from '../runtime/local-structured-session-tabs-sync'
 import { ensureLocalRuntimeCapabilities } from '../runtime/local-runtime-capabilities'
 
 async function listRuntimeSessionHostIdsForStartup(): Promise<ExecutionHostId[]> {
@@ -92,7 +92,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         await timeRendererStartupStep('fetch-settings', () =>
           actions.fetchSettings({ deferOwnerWorktreeVisibilityDefaults: true })
         )
-        // Why: hidden-at-launch PTYs can query OSC 10/11 before any pane mounts; publish view attributes as soon as settings exist so main's silent-until-push responder has data.
+        // Why: hidden-at-launch PTYs can query before any pane mounts; publish view attributes as soon as settings exist so every PTY owner answers from the composed theme.
         publishTerminalViewAttributesAtAppStart(
           useAppStore.getState().settings,
           getSystemPrefersDark()
@@ -281,11 +281,9 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           await timeRendererStartupStep('recover-legacy-worker-terminals-post-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
-          if (useAppStore.getState().settings?.experimentalStructuredNativeChat === true) {
-            await timeRendererStartupStep('project-structured-session-tabs', () =>
-              restoreLocalStructuredSessionTabsOnce()
-            )
-          }
+          await restoreLocalStructuredChatsAtStartup(useAppStore.getState().settings, (restore) =>
+            timeRendererStartupStep('project-structured-session-tabs', restore)
+          )
           if (cancelled) {
             return
           }

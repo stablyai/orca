@@ -1,3 +1,5 @@
+import { registerMarkdownTokenizerStart } from './markdown-tokenizer-start'
+import { guardMarkdownDirectiveTokenizer } from './markdown-directive-tokenizer'
 import { decodeHtmlEntities, type AnyExtension, type Editor } from '@tiptap/core'
 import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details'
 import type { PlaceholderOptions } from '@tiptap/extension-placeholder'
@@ -228,7 +230,7 @@ const OrcaDetails = Details.extend({
   markdownTokenizer: {
     name: 'details',
     level: 'block',
-    start: '<details',
+    start: registerMarkdownTokenizerStart('<', (source) => source.search(/<details\b/i)),
     tokenize(src, _tokens, lexer) {
       const detailsBlock = matchDetailsHtmlBlock(src, 0)
       if (!detailsBlock || !isEditableDetailsHtmlBlock(detailsBlock)) {
@@ -287,6 +289,10 @@ const OrcaDetails = Details.extend({
 })
 
 const OrcaDetailsSummary = DetailsSummary.extend({
+  markdownTokenizer: guardMarkdownDirectiveTokenizer(
+    DetailsSummary.config.markdownTokenizer,
+    'detailsSummary'
+  ),
   // Why: the summary parser runs parseInline, which emits image/math nodes that
   // upstream's text*-only summary rejects, so the doc is schema-invalid until the
   // first edit reassembles the summary and ProseMirror throws.
@@ -294,6 +300,10 @@ const OrcaDetailsSummary = DetailsSummary.extend({
 })
 
 const OrcaDetailsContent = DetailsContent.extend({
+  markdownTokenizer: guardMarkdownDirectiveTokenizer(
+    DetailsContent.config.markdownTokenizer,
+    'detailsContent'
+  ),
   // Why: detailsContent's double-Enter escape must run before StarterKit's
   // generic paragraph split, otherwise users can get stuck inside a toggle.
   priority: 1000,

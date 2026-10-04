@@ -5,7 +5,7 @@ import type {
   HistoryRecoveryContext,
   PendingDaemonSpawnOperation
 } from './daemon-pty-runtime-state'
-import { trackDaemonPtyCwdDeniedIfDiverged } from './daemon-adoption-telemetry-event'
+import { reportDaemonPtyCwdVerdict } from './daemon-adoption-telemetry-event'
 import { STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { TerminalKilledError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySpawnResult } from './daemon-pty-spawn-result'
@@ -253,7 +253,13 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     activeSpawnContext = context
     const result = await this.createOrAttachSpawn(context, context.historySeedSegments)
     if (result.isNew && !attachOnly) {
-      trackDaemonPtyCwdDeniedIfDiverged(effectiveCwd, result.cwdReadableByDaemon, this.pidPath)
+      // Not awaited: the app-side read behind it can sit on an unanswered macOS folder prompt.
+      void reportDaemonPtyCwdVerdict({
+        cwd: effectiveCwd,
+        cwdReadableByDaemon: result.cwdReadableByDaemon,
+        pidPath: this.pidPath,
+        daemonIdentity: this.client.getDaemonIdentity()
+      })
     }
     return this.finishSpawn(context, result)
   }

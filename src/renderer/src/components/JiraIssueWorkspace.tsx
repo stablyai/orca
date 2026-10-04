@@ -95,11 +95,14 @@ export default function JiraIssueWorkspace({
     [providerSettings]
   )
 
+  // oxlint-disable-next-line react-doctor/no-derived-state-effect -- Why: seeds editable issue drafts while IPC hydration runs and invalidates obsolete requests.
   useEffect(() => {
+    requestIdRef.current += 1
     if (!issue) {
       setFullIssue(null)
       setIssueLoading(false)
       setComments([])
+      setCommentsLoading(false)
       setCommentsError(null)
       setTransitions([])
       setPriorities([])
@@ -109,7 +112,6 @@ export default function JiraIssueWorkspace({
       return
     }
 
-    requestIdRef.current += 1
     const requestId = requestIdRef.current
     optimisticCommentsRef.current = []
     setFullIssue(issue)

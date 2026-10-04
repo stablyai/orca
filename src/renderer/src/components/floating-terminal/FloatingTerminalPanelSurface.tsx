@@ -60,7 +60,6 @@ export function renderFloatingTerminalPanelSurface({
   activeTabType,
   browserTabs,
   createBrowserTab,
-  activeGroup,
   closeAllFiles,
   makePreviewFilePermanent,
   pinFile,
@@ -177,14 +176,14 @@ export function renderFloatingTerminalPanelSurface({
               onCloseFile={closeFloatingItemConfirmed}
               onActivateBrowserTab={activateFloatingItem}
               onCloseBrowserTab={closeFloatingItemConfirmed}
-              onDuplicateBrowserTab={(browserTabId) => {
+              onDuplicateBrowserTab={(browserTabId, sourceUnifiedTabId) => {
                 const source = browserTabs.find((tab) => tab.id === browserTabId)
                 if (!source) {
                   return
                 }
                 createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, source.url, {
                   ...buildDuplicatedBrowserTabOptions(source),
-                  targetGroupId: activeGroup?.id,
+                  afterTabId: sourceUnifiedTabId,
                   browserRuntimeEnvironmentId: null
                 })
               }}

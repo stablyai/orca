@@ -3,6 +3,7 @@ import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { RefreshCw } from 'lucide-react-native'
 import { MobileRichMarkdownEditor } from '../components/MobileRichMarkdownEditor'
 import { resolveMarkdownFloatingActionsBottom } from './markdown-floating-actions-layout'
+import { markdownReaderStatusText } from './mobile-markdown-reader-status'
 import { colors, spacing } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
 import type { MarkdownDocState } from './mobile-session-route-types'
@@ -48,13 +49,7 @@ export function MarkdownReader({
     )
   }
 
-  const statusText = doc.saveError
-    ? doc.saveError
-    : doc.readOnlyReason
-      ? 'Read only'
-      : doc.stale
-        ? 'Changed on desktop'
-        : null
+  const statusText = markdownReaderStatusText(doc)
   const showRefresh = (doc.stale && !doc.isDirty) || !doc.editable
   const showCopy = doc.saveError || !doc.editable
   const showSave = doc.isDirty || doc.saving

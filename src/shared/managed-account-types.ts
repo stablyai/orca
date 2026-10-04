@@ -1,3 +1,17 @@
+export type ManagedDataAccountProvider = 'opencode' | 'devin'
+
+export type ManagedDataAccountSummary = {
+  id: string
+  label: string
+  integrations: string[]
+  createdAt: number
+}
+
+export type ManagedDataAccountsState = {
+  accounts: ManagedDataAccountSummary[]
+  activeAccountId: string | null
+}
+
 export type CodexManagedAccount = {
   id: string
   email: string

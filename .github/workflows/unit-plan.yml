@@ -1,0 +1,48 @@
+name: Unit plan
+
+# Why its own workflow: the caller's `needs` gate the whole called workflow, so while this lived
+# inside unit-tests.yml it waited on static analysis and typecheck before it could even start —
+# and the shards then waited on it. Planning needs neither (its inputs are the checkout, a git
+# diff against HEAD^1, the import graph, and the checked-in timing baseline), so hoisting it out
+# lets it overlap the gate instead of queueing behind it. Measured: a median 93s off the shard
+# matrix's start.
+on:
+  workflow_call:
+    inputs:
+      selection_mode:
+        description: Shadow validates selection; selected applies it only to draft PRs.
+        required: false
+        default: shadow
+        type: string
+
+    outputs:
+      shards:
+        description: JSON array of shard assignments for the unit matrix.
+        value: ${{ jobs.plan.outputs.shards }}
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - name: Plan unit selection
+        id: plan
+        env:
+          ORCA_UNIT_SELECTION_MODE: ${{ inputs.selection_mode }}
+        run: node config/scripts/ci-unit-plan.mjs
+      - uses: actions/upload-artifact@v7
+        continue-on-error: true
+        with:
+          name: unit-selection-attempt-${{ github.run_attempt }}
+          path: ci-shards/unit-selection.json
+          retention-days: 14

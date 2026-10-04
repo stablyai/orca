@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 import type { Project, ProjectHostSetup } from '../shared/project-types'
 import type { Repo } from '../shared/repo-types'
@@ -9,16 +9,84 @@ import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-sc
 import type { PersistedState } from '../shared/persisted-state-types'
 import { hydrateWorktreeMetaAliasProjection } from './persistence/loading-store/worktree-meta-alias-projection'
 import { Store } from './persistence/loading-store/store'
-import { initDataPath } from './persistence/loading-store/user-data-path'
+import { getDataFile, initDataPath } from './persistence/loading-store/user-data-path'
+import type { StoreRuntimeOptions } from './persistence/loading-store/store-runtime-state'
+import { ProfileStateSqliteAuthority } from './persistence/profile-state/profile-state-sqlite-authority'
+import {
+  openProfileStateDatabaseReadOnly,
+  profileStateDatabaseFile
+} from './persistence/profile-state/profile-state-database'
+import { exportProfileStateJson } from './persistence/profile-state/profile-state-documents'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 export const testState = { dir: '' }
+const stores = new Set<Store>()
+
+class UnitTestProfileStateAuthority extends ProfileStateSqliteAuthority {
+  // Worker backup coverage uses the dedicated real-worker fixtures.
+  override scheduleBackup(): void {}
+}
+
+export function createSqliteTestStore(
+  StoreConstructor: typeof Store,
+  options: Omit<StoreRuntimeOptions, 'profileStateAuthority'> = {}
+): Store {
+  const path = options.dataFile ?? getDataFile()
+  const databaseFile = profileStateDatabaseFile(dirname(path))
+  mkdirSync(dirname(path), { recursive: true })
+  const authority = new UnitTestProfileStateAuthority(databaseFile, 'persistence-test')
+  try {
+    if (!existsSync(databaseFile) && existsSync(path)) {
+      authority.writeSerializedState(readFileSync(path))
+    }
+    const store = new StoreConstructor({
+      ...options,
+      dataFile: path,
+      profileStateAuthority: authority
+    })
+    stores.add(store)
+    return store
+  } catch (error) {
+    authority.close()
+    throw error
+  }
+}
+
+export function writePersistedStateJson(path: string, json: string): void {
+  mkdirSync(dirname(path), { recursive: true })
+  const databaseFile = profileStateDatabaseFile(dirname(path))
+  const authority = new UnitTestProfileStateAuthority(databaseFile, 'persistence-test')
+  try {
+    authority.writeSerializedState(Buffer.from(json))
+  } finally {
+    authority.close()
+  }
+}
+
+export async function closeTestStores(): Promise<void> {
+  const opened = [...stores]
+  stores.clear()
+  await Promise.all(opened.map((store) => store.freezeWritesAsync()))
+}
+
+export function readPersistedStateJson(path = dataFile(), profileId = 'persistence-test'): string {
+  const databaseFile = profileStateDatabaseFile(dirname(path))
+  if (!existsSync(databaseFile)) {
+    return readFileSync(path, 'utf8')
+  }
+  const opened = openProfileStateDatabaseReadOnly(databaseFile, profileId)
+  try {
+    return exportProfileStateJson(opened.db)
+  } finally {
+    opened.db.close()
+  }
+}
 
 /** Create a profile store without rebuilding its large module graph inside each test timeout. */
 export function createStore(): Store {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
-  return new Store({ dataFile: dataFile() })
+  return createSqliteTestStore(Store, { dataFile: dataFile() })
 }
 
 export async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
@@ -37,7 +105,12 @@ export function dataFile(): string {
 
 export function writeDataFile(data: unknown): void {
   mkdirSync(testState.dir, { recursive: true })
-  writeFileSync(dataFile(), JSON.stringify(data, null, 2), 'utf-8')
+  const json = JSON.stringify(data, null, 2)
+  if (existsSync(profileStateDatabaseFile(testState.dir))) {
+    writePersistedStateJson(dataFile(), json)
+    return
+  }
+  writeFileSync(dataFile(), json, 'utf-8')
 }
 
 /**
@@ -47,7 +120,8 @@ export function writeDataFile(data: unknown): void {
  * the literal bytes parse the file themselves (see `worktree-meta-alias-projection.test.ts`).
  */
 export function readDataFile(): unknown {
-  const parsed = JSON.parse(readFileSync(dataFile(), 'utf-8')) as PersistedState
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Store exports use PersistedState; this fixture reader restores only its omitted aliases.
+  const parsed = JSON.parse(readPersistedStateJson()) as PersistedState
   hydrateWorktreeMetaAliasProjection(parsed)
   return parsed
 }

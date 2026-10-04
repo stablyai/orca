@@ -8,6 +8,7 @@ import { CdpDebuggerChannel } from './cdp-debugger-channel'
 import { CdpPageNavigationCommands } from './cdp-page-navigation-commands'
 import { CdpDomFocusReplay } from './cdp-dom-focus-replay'
 import { CdpPageCaptureCommands } from './cdp-page-capture-commands'
+import type { CapturePaintHold } from './cdp-screenshot'
 
 export class CdpWsProxy {
   private httpServer: Server | null = null
@@ -23,7 +24,10 @@ export class CdpWsProxy {
   private readonly domFocusReplay: CdpDomFocusReplay
   private readonly pageCapture: CdpPageCaptureCommands
 
-  constructor(private readonly webContents: WebContents) {
+  constructor(
+    private readonly webContents: WebContents,
+    holdPaint: CapturePaintHold
+  ) {
     this.discovery = new CdpTargetDiscovery(
       webContents,
       this.responder,
@@ -44,7 +48,7 @@ export class CdpWsProxy {
       this.debuggerChannel
     )
     this.domFocusReplay = new CdpDomFocusReplay(webContents, this.responder, this.debuggerChannel)
-    this.pageCapture = new CdpPageCaptureCommands(webContents, this.responder)
+    this.pageCapture = new CdpPageCaptureCommands(webContents, this.responder, holdPaint)
   }
 
   async start(): Promise<string> {
@@ -171,7 +175,7 @@ export class CdpWsProxy {
     }
     // Why: Page.captureScreenshot via debugger.sendCommand hangs on Electron webview guests.
     if (msg.method === 'Page.captureScreenshot') {
-      this.pageCapture.handleScreenshot(client, clientId, msg.params)
+      void this.pageCapture.handleScreenshot(client, clientId, msg.params)
       return
     }
     // Why: CDP Page.printToPDF is not available for Electron webview guests.

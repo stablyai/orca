@@ -301,7 +301,7 @@ export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Pro
             state.createTab(worktreeId)
           state.setActiveTab(activeTab.id)
           if (state.activeTabType !== 'terminal') {
-            state.setActiveTabType('terminal')
+            state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
           }
 
           state = store.getState()

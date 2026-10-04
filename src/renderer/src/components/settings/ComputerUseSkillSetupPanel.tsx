@@ -5,21 +5,13 @@ import {
   COMPUTER_USE_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
-} from '@/lib/agent-skill-cli-prerequisite'
-import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useAppStore } from '@/store'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
-import {
-  buildSkillCommandForRuntime,
-  ensureWslCliAvailableForAgentSkillTerminal,
-  getWslCliDistroRequest
-} from './CliSkillRuntimeSetup'
+import { buildSkillCommandForRuntime } from './CliSkillRuntimeSetup'
 import { translate } from '@/i18n/i18n'
 
 export function ComputerUseSkillSetupPanel(): React.JSX.Element {
@@ -65,19 +57,8 @@ export function ComputerUseSkillSetupPanel(): React.JSX.Element {
       error={activeSkillRuntime.installDisabledReason ?? computerUseSkillError}
       installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
       icon={<MonitorCog className="size-5" />}
-      preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-      getPrerequisiteStatus={() =>
-        activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-          ? window.api.cli.getWslInstallStatus(
-              getWslCliDistroRequest(activeSkillRuntime.agentRuntime)
-            )
-          : window.api.cli.getInstallStatus()
-      }
-      onBeforeOpenTerminal={async () => {
+      onBeforeOpenTerminal={() => {
         useAppStore.getState().recordFeatureInteraction('computer-use-setup')
-        await (activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-          ? ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
-          : ensureOrcaCliAvailableForAgentSkillTerminal())
       }}
       onRecheck={refreshComputerUseSkill}
       freshnessSkillName={

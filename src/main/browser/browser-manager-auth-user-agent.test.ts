@@ -137,10 +137,22 @@ describe('browserManager', () => {
       { userAgent: guestBaseUserAgent }
     ])
 
-    // A navigation that doesn't change the required UA must not thrash setUserAgent.
+    // The next direct navigation is the first safe moment to rewrite the WebContents UA, so it
+    // restores the process identity there and drops the CDP override that stood in for it.
     setUserAgent.mockClear()
+    sendCommand.mockClear()
     didStartNavigation(null, 'https://example.com/', false, true)
+    expect(setUserAgent).toHaveBeenCalledOnce()
+    expect(setUserAgent).toHaveBeenLastCalledWith(guestBaseUserAgent)
+    expect(sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', { userAgent: '' })
+    await expect(sendCommand.mock.results.at(-1)?.value).resolves.toBeUndefined()
+
+    // A navigation that doesn't change the required UA must not thrash either layer.
+    setUserAgent.mockClear()
+    sendCommand.mockClear()
+    didStartNavigation(null, 'https://example.org/', false, true)
     expect(setUserAgent).not.toHaveBeenCalled()
+    expect(sendCommand).not.toHaveBeenCalled()
   })
 
   it('leaves the UA untouched on Google auth hosts in native process mode', () => {
@@ -270,7 +282,8 @@ describe('browserManager', () => {
 
     // Why: the CDP override outranks the WebContents UA, so getUserAgent() still reports the base
     // identity. Leaving the auth host must read the override, not that stale value, or the guest
-    // keeps presenting Firefox on every later host.
+    // keeps presenting Firefox on every later host. The WebContents UA already presents the process
+    // identity, so leaving clears the override rather than restating the UA without client hints.
     sendCommand.mockClear()
     const didStartNavigation = guestOnMock.mock.calls.find(
       ([event]) => event === 'did-start-navigation'
@@ -282,8 +295,8 @@ describe('browserManager', () => {
 
     expect(guest.setUserAgent).not.toHaveBeenCalled()
     expect(sendCommand.mock.calls).toEqual([
-      ['Emulation.setUserAgentOverride', { userAgent: guestBaseUserAgent }],
-      ['Emulation.setUserAgentOverride', { userAgent: guestBaseUserAgent }]
+      ['Emulation.setUserAgentOverride', { userAgent: '' }],
+      ['Emulation.setUserAgentOverride', { userAgent: '' }]
     ])
 
     // A newer confirmed write outranks an older write that remains in flight.
@@ -330,9 +343,7 @@ describe('browserManager', () => {
 
     sendCommand.mockClear()
     didStartNavigation(null, 'https://example.com/', false, true)
-    expect(sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
-      userAgent: guestBaseUserAgent
-    })
+    expect(sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', { userAgent: '' })
     browserManager.unregisterGuest('browser-redirect-ua')
   })
 
@@ -420,14 +431,14 @@ describe('browserManager', () => {
     )
   })
 
-  // Why: the direct-navigation branch still writes the Firefox UA through WebContents.setUserAgent,
-  // and nothing ever restores it once the guest switches to the CDP override. A viewport preset that
-  // read getUserAgent() back as its base identity would therefore republish Firefox on every ordinary
-  // host — the wire UA saying Firefox while sec-ch-ua still says Chrome, the exact cross-layer tell
-  // this scope exists to remove.
-  it('keeps a viewport preset on the session identity after an auth-host visit', async () => {
+  // Why: a direct navigation onto the auth host writes Firefox into the WebContents UA, and a redirect
+  // off it cannot rewrite that layer without cancelling the navigation. Clearing the CDP override
+  // there would expose that stale Firefox UA on an ordinary host, so the override must carry the
+  // process identity until the next direct navigation can restore the WebContents UA and clear it.
+  it('never clears the override onto a stale Firefox WebContents UA and heals it on the next navigation', async () => {
     browserMocks.processUserAgent = GUEST_CLEAN_UA
-    const { guest, debuggerSendCommand } = makeViewportGuest(9001)
+    const { guest, debuggerSendCommand, presentedUserAgent, standingUserAgentOverride } =
+      makeViewportGuest(9001)
     webContentsFromIdMock.mockReturnValue(guest)
     browserManager.attachGuestPolicies(guest as never)
     browserManager.registerGuest({
@@ -452,22 +463,23 @@ describe('browserManager', () => {
 
     didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
     await flushViewportOps()
-    // The direct branch pins the WebContents UA to Firefox and never restores it.
     expect((guest.getUserAgent as () => string)()).toBe(googleAuthUserAgent())
 
+    debuggerSendCommand.mockClear()
     willRedirect({ preventDefault: vi.fn() }, 'https://myaccount.google.com/', false, true)
     await flushViewportOps()
+    expect(debuggerSendCommand).toHaveBeenLastCalledWith('Emulation.setUserAgentOverride', {
+      userAgent: GUEST_CLEAN_UA
+    })
+    expect(presentedUserAgent()).toBe(GUEST_CLEAN_UA)
 
     debuggerSendCommand.mockClear()
     didStartNavigation(null, 'https://github.com/', false, true)
     await flushViewportOps()
-
-    const uaWrites = debuggerSendCommand.mock.calls.filter(
-      ([method]) => method === 'Emulation.setUserAgentOverride'
-    )
-    expect(uaWrites.length).toBeGreaterThan(0)
-    for (const [, params] of uaWrites) {
-      expect((params as { userAgent: string }).userAgent).toBe(GUEST_CLEAN_UA)
-    }
+    expect(debuggerSendCommand).toHaveBeenLastCalledWith('Emulation.setUserAgentOverride', {
+      userAgent: ''
+    })
+    expect(standingUserAgentOverride()).toBeNull()
+    expect(presentedUserAgent()).toBe(GUEST_CLEAN_UA)
   })
 })

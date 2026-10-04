@@ -9,9 +9,9 @@
 //
 // Those numbers are the `!useConptyDll` branch, which is the branch a RELAY runs. Every desktop
 // site that opens a terminal pane sets `useConptyDll: true` and takes the other branch, where
-// upstream already destroys the input socket. Two hidden rate-limit probes
-// (`src/main/rate-limits/claude-pty.ts`, `codex-pty-rate-limit-probe.ts`) do omit the option and so
-// do run this hunk, but no user-visible pane does. The divergence pinned below is about which
+// upstream already destroys the input socket. The hidden rate-limit probe
+// (`src/main/rate-limits/claude-pty.ts`) does omit the option and so does run this hunk, but no
+// user-visible pane does. The divergence pinned below is about which
 // branch each host runs for terminals -- not about a regression in the panes users open.
 import { createRequire } from 'node:module'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'

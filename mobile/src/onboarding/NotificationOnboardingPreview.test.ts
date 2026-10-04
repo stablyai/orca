@@ -77,8 +77,7 @@ describe('NotificationOnboardingPreview', () => {
     const preview = renderer!.root.findByProps({ testID: 'notification-onboarding-preview' })
     const copy = renderer!.root
       .findAllByType('Text')
-      .map((node) => node.props.children)
-      .flat()
+      .flatMap((node) => node.props.children)
       .join(' ')
 
     expect(preview.props.accessibilityElementsHidden).toBe(true)

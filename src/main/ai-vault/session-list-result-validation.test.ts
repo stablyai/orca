@@ -32,20 +32,6 @@ describe('parseAiVaultListResult', () => {
     expect(parsed.issues).toEqual([])
   })
 
-  it('accepts an all-unknown-agent response as an empty supported session list', () => {
-    const parsed = parseAiVaultListResult({
-      sessions: [
-        { ...validSession('future-1'), agent: 'future-agent' },
-        { ...validSession('future-2'), agent: 'newer-agent' }
-      ],
-      issues: [],
-      scannedAt: '2026-07-27T00:00:00.000Z'
-    })
-
-    expect(parsed.sessions).toEqual([])
-    expect(parsed.issues).toEqual([])
-  })
-
   it('keeps known scan issues while silently dropping unknown-agent issues', () => {
     const parsed = parseAiVaultListResult({
       sessions: [],

@@ -22,11 +22,10 @@ function runtimeWithAgentLaunch(): {
   spawn: ReturnType<typeof vi.fn>
 } {
   const runtime = new OrcaRuntimeService()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver under test is a protected member; the assertion names only the three internals this stub replaces, each of which is assigned before the create reaches it.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver under test is a protected member; the assertion names only the two internals this stub replaces, each of which is assigned before the create reaches it.
   const internal = runtime as unknown as {
     store: { getSettings: () => Record<string, unknown> }
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
-    markWorkspaceTrustedForAgent: () => Promise<void>
   }
   internal.store = { getSettings: () => ({}) }
   vi.spyOn(internal, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
@@ -36,8 +35,6 @@ function runtimeWithAgentLaunch(): {
     repo: null,
     folderWorkspace: null
   })
-  // Trust presets touch the real filesystem and are not what this resolver is being asked about.
-  internal.markWorkspaceTrustedForAgent = async () => undefined
   const spawn = vi.fn().mockResolvedValue({ id: 'pty-1' })
   runtime.setPtyController({
     spawn,

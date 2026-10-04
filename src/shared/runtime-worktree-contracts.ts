@@ -1,4 +1,5 @@
 import type { AgentStatusState, AgentType, AgentWorkingMode } from './agent-status-types'
+import type { AgentMainAgentStatus } from './main-agent-status'
 import type { BaseRefSearchResult, Repo } from './repo-types'
 import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
 import type {
@@ -22,6 +23,10 @@ export type RuntimeWorktreeAgentRow = {
   toolName: string | null
   toolInput: string | null
   interrupted: boolean
+  /** The main agent's own state, verdict and clock, sent whenever the host row has one, including
+   *  while subagents hold the row `working`. Optional on the wire: old hosts never send it, and a
+   *  reader without it falls back to `interrupted`. */
+  mainAgent?: AgentMainAgentStatus
   stateStartedAt: number
   updatedAt: number
   restoredUnconfirmed?: boolean
@@ -71,6 +76,10 @@ export type RuntimeWorktreePsSummary = {
   /** Optional discriminator for a working workspace; older clients fall back to ordinary working. */
   workingMode?: AgentWorkingMode
   agents: RuntimeWorktreeAgentRow[]
+  /** See `Worktree.removing`; sent only to clients that advertise background removal. */
+  removing?: true
+  /** See `GitWorktreeInfo.removalError`. */
+  removalError?: string
 }
 
 export type RuntimeGitLocalBranches = {

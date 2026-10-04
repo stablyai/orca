@@ -4,6 +4,10 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import type * as ReactModule from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+
+const toastError = vi.hoisted(() => vi.fn())
+vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) => {
@@ -397,7 +401,7 @@ describe('NativeChatSessionOptionPickers', () => {
     expect(screen.queryByText(/not confirmed/)).toBeNull()
   })
 
-  it.each(['catalog', 'agent-session'] as const)(
+  it.each(['catalog'] as const)(
     'does not hedge a reported value on the %s transport',
     (transport) => {
       render(
@@ -439,6 +443,55 @@ describe('NativeChatSessionOptionPickers', () => {
     expect(screen.queryByText('GPT-5.2 Codex')).toBeNull()
     screen.getByRole('button', { name: 'Choose in agent picker…' }).click()
     await waitFor(() => expect(invokeAction).toHaveBeenCalledWith('model'))
+  })
+
+  it.each([
+    [
+      "the table's words for a host's refusal, not its message",
+      new RuntimeRpcCallError({
+        id: 'request-1',
+        ok: false,
+        error: {
+          code: 'runtime_error',
+          message: 'agent_session_journal_unreadable',
+          data: {
+            refusal: {
+              code: 'agent_session_journal_unreadable',
+              details: { reason: 'journalCorrupt' }
+            }
+          }
+        },
+        _meta: { runtimeId: 'runtime-1' }
+      }),
+      "Unable to load this chat. The setting wasn't changed."
+    ],
+    [
+      "a local surface's own sentence",
+      new Error('The terminal did not accept the command.'),
+      'The terminal did not accept the command.'
+    ]
+  ])('describes a failed option change with %s', async (_label, error, description) => {
+    toastError.mockClear()
+    const invokeAction = vi.fn().mockRejectedValue(error)
+    render(
+      <NativeChatSessionOptionPickers
+        surface={{ ...surface, invokeAction }}
+        snapshot={[
+          model({
+            kind: { type: 'select', choices: [{ value: 'gpt-5.5', label: 'GPT-5.5' }] },
+            valueSource: 'unknown',
+            action: { type: 'agent-picker' }
+          })
+        ]}
+        isWorking={false}
+      />
+    )
+    screen.getByRole('button', { name: 'Choose in agent picker…' }).click()
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledExactlyOnceWith('Could not update option', {
+        description
+      })
+    )
   })
 
   it('uses a Toggle action for unknown flip-only options via invokeAction', async () => {
@@ -530,24 +583,12 @@ describe('NativeChatSessionOptionPickers', () => {
     await waitFor(() => expect(setOption).toHaveBeenCalledWith('thinking', false))
   })
 
-  // Both arms: `default` and `unreported` make opposite claims, and only
-  // `unreported` is reachable in the structured lane, so one arm proves nothing.
+  // The switch row is the label and the switch, whatever said the value; no provenance caption.
   it.each([
-    {
-      name: 'a live unreported boolean is never labelled a default',
-      valueSource: 'unknown',
-      transport: 'agent-session',
-      shown: 'Not reported',
-      hidden: 'Default'
-    },
-    {
-      name: 'a draft catalog default says so',
-      valueSource: 'default',
-      transport: 'catalog',
-      shown: 'Default',
-      hidden: 'Not reported'
-    }
-  ] as const)('$name', ({ valueSource, transport, shown, hidden }) => {
+    { valueSource: 'unknown', transport: 'agent-session' },
+    { valueSource: 'default', transport: 'catalog' },
+    { valueSource: 'reported', transport: 'agent-session' }
+  ] as const)('shows a $valueSource boolean as its switch alone', ({ valueSource, transport }) => {
     render(
       <NativeChatSessionOptionPickers
         surface={surface}
@@ -558,27 +599,11 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
-    expect(screen.getAllByText(shown).length).toBeGreaterThan(0)
-    expect(screen.queryByText(hidden)).toBeNull()
-    // The marker qualifies the value; it must not become part of the control's name.
     const control = screen.getByRole('switch', { name: 'Fast mode' })
-    // ...but it must still reach assistive tech: hiding it would leave screen
-    // reader users unable to tell a default from an unreported value at all.
-    const describedBy = control.getAttribute('aria-describedby') ?? ''
-    expect(describedBy).not.toBe('')
-    expect(document.getElementById(describedBy)?.textContent).toBe(shown)
-  })
-
-  it('drops the marker once something has picked the value', () => {
-    render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), { ...fast, valueSource: 'reported' }]}
-        isWorking={false}
-      />
-    )
-    expect(screen.queryByText('Default')).toBeNull()
+    expect(control.textContent).toBe('Fast mode')
+    expect(control.hasAttribute('aria-describedby')).toBe(false)
     expect(screen.queryByText('Not reported')).toBeNull()
+    expect(screen.queryByText('Default')).toBeNull()
   })
 
   it('tooltips a dispatched option pill with the category alone', () => {

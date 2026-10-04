@@ -5,7 +5,7 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatBackgroundTaskBlock } from '../../../../shared/native-chat-types'
-import { deriveNativeChatRowContent } from './native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
 import { NativeChatBackgroundTaskRun } from './NativeChatBackgroundTaskRun'
 
 afterEach(cleanup)
@@ -56,10 +56,10 @@ describe('NativeChatBackgroundTaskRun', () => {
     expect(screen.getByText('Background workflow')).toBeInTheDocument()
   })
 
-  it('reads a state this build has no word for as no contact, never as live', () => {
+  it('reads a state this build has no word for as no recent update, never as live', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: models a row a newer build wrote, which the wire admits as an open string.
     render(<NativeChatBackgroundTaskRun block={task({ state: 'teleported' as 'done' })} />)
-    expect(screen.getByText(/unverifiable/)).toBeInTheDocument()
+    expect(screen.getByText(/no recent update/)).toBeInTheDocument()
   })
 })
 

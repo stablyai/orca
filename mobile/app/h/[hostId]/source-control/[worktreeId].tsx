@@ -7,14 +7,16 @@ import {
   shellScreenRouteKey
 } from '../../../../src/mobile-web-shell/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
-import { useMobileWebShellEnabled } from '../../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
+import { ShellSwitchPendingScreen } from '../../../../src/mobile-web-shell/ShellSwitchPendingScreen'
+import { useShellSwitchDecision } from '../../../../src/mobile-web-shell/shell-switch-decision'
 
 /**
  * The source-control hub, from the desktop's bundle or from this app.
  *
  * The files switch's shape, for its reasons: the shell answers `native-route` for a route the
  * bundle does not list or this app's grants do not cover, and `fallback` is what that renders.
- * `enabled === null` is the flag read still settling, which is the only frame a store build paints.
+ * A flag read still settling is a third answer and paints neither renderer; see
+ * `shell-switch-decision.ts`.
  *
  * `pr` and `history` are not switched and never will be. Both are `Redirect`s into this route, and
  * a redirect inside the page would leave the session bound to a pathname the page has left; left
@@ -37,7 +39,6 @@ export default function MobileSourceControlScreen() {
   const name = firstParam(params.name)
   const origin = firstParam(params.origin)
   const tab = firstParam(params.tab)
-  const enabled = useMobileWebShellEnabled()
   const native = (
     <MobileSourceControlPanel
       hostId={hostId}
@@ -65,7 +66,12 @@ export default function MobileSourceControlScreen() {
         })
       : null
 
-  if (enabled !== true || !hostId || route === null) {
+  const decision = useShellSwitchDecision(route)
+
+  if (decision.kind === 'pending') {
+    return <ShellSwitchPendingScreen />
+  }
+  if (decision.kind === 'native') {
     return native
   }
   // Keyed on the route: a host captures the grants its session was opened with, so a screen reused
@@ -73,9 +79,9 @@ export default function MobileSourceControlScreen() {
   // left. The key is what makes the change a remount, which disposes that bridge in the commit.
   return (
     <MobileWebShellScreen
-      key={shellScreenRouteKey(route)}
+      key={shellScreenRouteKey(decision.route)}
       hostId={hostId}
-      route={route}
+      route={decision.route}
       fallback={native}
     />
   )

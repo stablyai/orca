@@ -43,10 +43,17 @@ export function structuredClaudeMatchesActiveManagedAccount(
     // apart after the fact: honest deselection, where ambient auth is the truth and the UI names no
     // identity, and the WSL-only case, where the prune emptied the host slot and persisted null
     // while the UI still names the WSL account. The presence of any WSL-bound account decides.
-    return !accounts.some((candidate) => candidate.managedAuthRuntime === 'wsl')
+    return !hasWslBoundClaudeAccount(settings)
   }
   const active = accounts.find((candidate) => candidate.id === activeHostId)
   return active ? active.managedAuthRuntime !== 'wsl' : false
+}
+
+/** Whether any managed Claude account lives in WSL, the account shape the gate refuses over. */
+export function hasWslBoundClaudeAccount(settings: ClaudeManagedAccountGateSettings): boolean {
+  return (settings.claudeManagedAccounts ?? []).some(
+    (candidate) => candidate.managedAuthRuntime === 'wsl'
+  )
 }
 
 /** Reads the gate's settings, answering null when they cannot be read so callers refuse. */

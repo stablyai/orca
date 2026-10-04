@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   decideSshPendingPtyKill,
   MAX_SSH_PENDING_PTY_KILLS_PER_TARGET,
+  normalizeSshPendingPtyKill,
   prunePendingSshPtyKills,
   SSH_PENDING_PTY_KILL_TTL_MS,
   type SshPendingPtyKill,
@@ -61,6 +62,26 @@ describe('decideSshPendingPtyKill', () => {
       decideSshPendingPtyKill(intent(), { hostListsPty: true, hostIncarnationId: undefined }, NOW)
         .action
     ).toBe('defer')
+  })
+})
+
+// A close whose incarnation was never learned (the host was offline across a relaunch) still owes
+// the kill: a `pty2:` id carries a per-start mint epoch, so the id alone names one process.
+describe('a pending kill with no incarnation', () => {
+  const unfenced = { requestedAt: NOW, attempts: 0 }
+
+  it('is kept for an epoch-scoped relay id and dropped for a legacy one', () => {
+    expect(normalizeSshPendingPtyKill(unfenced, 'pty2:epoch-a:3')).toEqual(unfenced)
+    expect(normalizeSshPendingPtyKill(unfenced, 'pty-3')).toBeNull()
+  })
+
+  it('replays while the host lists the id and retires once it does not', () => {
+    expect(
+      decideSshPendingPtyKill(unfenced, { hostListsPty: true, hostIncarnationId: 'inc-z' }, NOW)
+    ).toEqual({ action: 'replay' })
+    expect(
+      decideSshPendingPtyKill(unfenced, { hostListsPty: false, hostIncarnationId: undefined }, NOW)
+    ).toEqual({ action: 'retire', reason: 'host-reports-absent' })
   })
 })
 

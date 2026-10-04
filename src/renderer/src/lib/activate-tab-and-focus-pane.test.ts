@@ -3,18 +3,29 @@ import { activateTabAndFocusPane } from './activate-tab-and-focus-pane'
 
 const setActiveTab = vi.hoisted(() => vi.fn())
 const setActiveTabType = vi.hoisted(() => vi.fn())
+const worktreeState = vi.hoisted(() => {
+  const state: {
+    activeWorktreeId: string | null
+    tabsByWorktree: Record<string, { id: string }[]>
+  } = { activeWorktreeId: 'wt-1', tabsByWorktree: {} }
+  return state
+})
 
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
       setActiveTab,
-      setActiveTabType
+      setActiveTabType,
+      activeWorktreeId: worktreeState.activeWorktreeId,
+      tabsByWorktree: worktreeState.tabsByWorktree
     })
   }
 }))
 
 describe('activateTabAndFocusPane', () => {
   beforeEach(() => {
+    worktreeState.activeWorktreeId = 'wt-1'
+    worktreeState.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }], 'wt-2': [{ id: 'tab-2' }] }
     setActiveTab.mockImplementation(() => undefined)
     setActiveTabType.mockImplementation(() => undefined)
   })
@@ -76,9 +87,19 @@ describe('activateTabAndFocusPane', () => {
 
     activateTabAndFocusPane('tab-1', null)
 
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
     expect(setActiveTab).toHaveBeenCalledWith('tab-1')
     expect(requestAnimationFrame).not.toHaveBeenCalled()
     expect(dispatchEvent).not.toHaveBeenCalled()
+  })
+
+  it("scopes the terminal reveal to the tab's own worktree, not the one the main window shows", () => {
+    vi.stubGlobal('requestAnimationFrame', vi.fn())
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.stubGlobal('window', { dispatchEvent: vi.fn() })
+
+    activateTabAndFocusPane('tab-2', null)
+
+    expect(setActiveTabType).toHaveBeenCalledExactlyOnceWith('terminal', 'wt-2')
   })
 })

@@ -45,7 +45,7 @@ import {
   launchPairedElectronClient
 } from './helpers/paired-electron-client'
 import { focusActiveTerminalInput } from './helpers/terminal'
-import { waitForTabParked } from './helpers/terminal-hidden-parking'
+import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'
 
 const PARK_DELAY_MS = 30_000
 const PAINT_BUDGET_MS = 20_000
@@ -206,7 +206,7 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
         state?.setActiveView('terminal')
         state?.setActiveWorktree(worktreeId)
         state?.setActiveTab(tabId)
-        state?.setActiveTabType('terminal')
+        state?.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
       },
       { worktreeId, tabId: hostTabId }
     )
@@ -234,7 +234,7 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
         state?.setActiveView('terminal')
         state?.setActiveWorktree(worktreeId)
         state?.setActiveTab(webTabId)
-        state?.setActiveTabType('terminal')
+        state?.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
       },
       { webTabId, worktreeId }
     )
@@ -269,19 +269,6 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
 
     // 3. The host cold-parks the pane the client is watching. Nobody touches
     //    it on the host again.
-    // Two decoy tabs on the host: one to age the target, one to take the
-    // most-recently-hidden exemption. Sampled before and after the park lands
-    // so decoy churn cannot be mistaken for the park itself.
-    for (let i = 0; i < 2; i += 1) {
-      await orcaPage.evaluate((id) => {
-        const state = window.__store?.getState()
-        const tab = state?.createTab(id, undefined, undefined, { activate: true })
-        if (tab) {
-          state?.setActiveTab(tab.id)
-          state?.setActiveTabType('terminal')
-        }
-      }, worktreeId)
-    }
     const readClientState = async (): Promise<unknown> =>
       client.page.evaluate((id) => {
         const manager = window.__paneManagers?.get(id)
@@ -292,8 +279,10 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
           recoveryState: pane?.container?.dataset?.ptyRecoveryState ?? null
         }
       }, webTabId)
-    console.log(`[sta2854] decoys-created client=${JSON.stringify(await readClientState())}`)
-    await waitForTabParked(orcaPage, hostTabId, { parkDelayMs: PARK_DELAY_MS })
+    console.log(`[sta2854] before-park client=${JSON.stringify(await readClientState())}`)
+    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, hostTabId, {
+      parkDelayMs: PARK_DELAY_MS
+    })
     console.log(`[sta2854] post-park client=${JSON.stringify(await readClientState())}`)
 
     // Direct probe: is the host-minted terminal handle still resolvable once

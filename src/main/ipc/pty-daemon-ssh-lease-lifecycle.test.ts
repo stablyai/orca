@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { openCodeClearPtyMock, piClearPtyMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import { TerminalIntentionalStops } from '../runtime/terminal-intentional-stops'
 import {
   SSH_PTY_IDENTITY_MISMATCH_ERROR,
   SSH_SESSION_EXPIRED_ERROR
@@ -359,7 +360,8 @@ describe('registerPtyHandlers', () => {
         const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
         const runtime = {
           setPtyController: vi.fn(),
-          onPtyExit: vi.fn()
+          onPtyExit: vi.fn(),
+          intentionalPtyStops: new TerminalIntentionalStops()
         }
         setLocalPtyProvider({
           spawn: vi.fn(),
@@ -393,15 +395,14 @@ describe('registerPtyHandlers', () => {
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
-          markReversibleStops: (ptyIds: readonly string[]) => () => void
           stopAndWait: (ptyId: string) => Promise<boolean>
         }
-        const release = controller.markReversibleStops(['local-pty'])
+        const settleStop = runtime.intentionalPtyStops.mark('local-pty', 'reversible', null)
 
         const stopPromise = controller.stopAndWait('local-pty')
         await vi.advanceTimersByTimeAsync(1_200)
         await expect(stopPromise).resolves.toBe(true)
-        release()
+        settleStop(true)
 
         expect(
           mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')

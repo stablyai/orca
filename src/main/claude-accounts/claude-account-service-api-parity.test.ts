@@ -1,27 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ClaudeRateLimitAccountsState } from '../../shared/managed-account-types'
 import { ClaudeAccountService } from './service'
-import type { ClaudeAccountAddTarget, ClaudeAccountImportOptions } from './service'
+import type { ClaudeAccountAddTarget } from './service'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp/orca-claude-api-parity' } }))
-
-type PublicClaudeAccountService = {
-  listAccounts(): ClaudeRateLimitAccountsState
-  addAccount(target?: ClaudeAccountAddTarget): Promise<ClaudeRateLimitAccountsState>
-  addAccountFromConfigDir(
-    configDir: string,
-    options?: ClaudeAccountImportOptions
-  ): Promise<ClaudeRateLimitAccountsState>
-  reauthenticateAccount(accountId: string): Promise<ClaudeRateLimitAccountsState>
-  removeAccount(accountId: string): Promise<ClaudeRateLimitAccountsState>
-  selectAccount(accountId: string | null): Promise<ClaudeRateLimitAccountsState>
-  selectAccountForTarget(
-    accountId: string | null,
-    target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }
-  ): Promise<ClaudeRateLimitAccountsState>
-  cancelPendingLogin(): boolean
-  getRuntimeConfigDir(target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): string
-}
 
 function createService(): ClaudeAccountService {
   const settings = {
@@ -41,16 +23,7 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise: new Promise<void>((done) => (resolve = done)), resolve }
 }
 
-describe('ClaudeAccountService API parity', () => {
-  it('keeps the exact runtime export and assignable public surface', async () => {
-    const runtimeExports = await import('./service')
-    const service: PublicClaudeAccountService = createService()
-
-    expect(Object.keys(runtimeExports)).toEqual(['ClaudeAccountService'])
-    expect(service.cancelPendingLogin()).toBe(false)
-    expect(service.getRuntimeConfigDir()).toBe('/tmp/claude')
-  })
-
+describe('ClaudeAccountService mutation serialization', () => {
   it('serializes mutations within one service', async () => {
     const service = createService()
     const first = deferred()

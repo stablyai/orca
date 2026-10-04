@@ -264,6 +264,31 @@ it('keeps a synthetic row when this pass did not enumerate its container', async
   ).resolves.toMatchObject({ retired: [], unverifiable: [row] })
 })
 
+it('keeps a ZCode SQLite row when its database read failed during discovery', async () => {
+  const db = join(harness.root, 'db.sqlite')
+  await writeFile(db, '')
+  const row = `${db}#zcode-session`
+
+  const result = await retire([row], { roots: [] })
+  expect(result.retired).toEqual([])
+  expect(result.unverifiable).toEqual([row])
+  expect(removed).toEqual([])
+})
+
+it('retires a ZCode SQLite row only after a successful full database enumeration', async () => {
+  const db = join(harness.root, 'db.sqlite')
+  await writeFile(db, '')
+  const kept = `${db}#session-1`
+  const deleted = `${db}#session-2`
+
+  const result = await retire([kept, deleted], {
+    roots: [],
+    enumeratedContainers: new Map([[db, new Set(['session-1'])]])
+  })
+  expect(result.retired).toEqual([deleted])
+  expect(result.unverifiable).toEqual([])
+})
+
 it('retires a synthetic row when the container it came from is gone', async () => {
   const db = join(harness.root, 'opencode.db')
   await writeFile(db, '')

@@ -11,6 +11,7 @@ vi.mock('react-native', () => ({
 }))
 
 vi.mock('./MobileNativeChatView', () => ({ MobileNativeChatView: 'ChatView' }))
+vi.mock('./MobileNativeChatQueuedMessages', () => ({ MobileNativeChatQueuedMessages: 'Queued' }))
 
 function assistantTurn(id: string, text: string): NativeChatMessage {
   return { id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp: 0, source: 'hook' }
@@ -27,6 +28,7 @@ type Tick = {
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the overlay reads only these controller members; the rest of the controller is unreachable from it.
   const controller = {
     showNativeChat: tick.show ?? true,
     nativeChatSession: { messages: tick.messages ?? [], status: 'ready' },
@@ -38,7 +40,16 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     chatPending: [],
     chatImagePreviewsByMessageId: {},
     chatComposerText: '',
-    setChatComposerText: vi.fn()
+    setChatComposerText: vi.fn(),
+    nativeChatQueued: {
+      cards: [],
+      send: vi.fn(),
+      delete: vi.fn(),
+      edit: vi.fn(),
+      pause: null,
+      resume: vi.fn(),
+      sessionKey: 'session-a'
+    }
   } as unknown as MobileNativeChatController
   return createElement(MobileNativeChatOverlay, {
     controller,

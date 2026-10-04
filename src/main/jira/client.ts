@@ -16,7 +16,8 @@ import {
   hasStoredToken,
   readToken,
   saveToken,
-  writeSiteFile
+  writeSiteFile,
+  getSiteTokenProtection
 } from './site-credential-store'
 import {
   apiBasePath,
@@ -62,13 +63,19 @@ export function getStatus(): JiraConnectionStatus {
   const credentialError = sites
     .map((site) => credentialErrors.get(site.id))
     .find((message) => message !== undefined)
+  // Why any-not-active: sealing is a host-wide property, so a second site stored while
+  // the keyring was missing is exposed even when the active one is sealed.
+  const credentialProtection = sites.some((site) => getSiteTokenProtection(site.id) === 'plaintext')
+    ? 'plaintext'
+    : null
   return {
     connected: sites.length > 0,
     viewer: siteToViewer(activeSite),
     sites,
     activeSiteId: activeSite?.id ?? null,
     selectedSiteId: file.selectedSiteId ?? activeSite?.id ?? null,
-    ...(credentialError ? { credentialError } : {})
+    ...(credentialError ? { credentialError } : {}),
+    credentialProtection
   }
 }
 

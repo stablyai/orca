@@ -2,8 +2,9 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { View } from 'react-native'
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import type { ConnectionState, RpcResponse } from '../transport/types'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
 
 // The screen-state module these loaders share with the panel pulls the icon set in; none of it is
@@ -260,5 +261,38 @@ describe('useMobileSourceControlLoaders branch compare', () => {
 
     await settleCompare(calls, 'origin/dev')
     expect(read.loaders?.branchCompareState).toEqual({ kind: 'idle' })
+  })
+})
+
+describe('useMobileSourceControlLoaders status on reconnect', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  function Harness(props: { client: RpcClient | null; connState: ConnectionState }): null {
+    useMobileSourceControlLoaders({
+      client: props.client,
+      connState: props.connState,
+      statusIdentityKey: IDENTITY,
+      worktreeId: WORKTREE,
+      setActionError: IGNORE_ACTION_ERROR
+    })
+    return null
+  }
+
+  it('reads status again when the shell reconnects, which is what the missing page Retry relies on', async () => {
+    // The page hides the status Retry while unreachable because nothing there re-dials; the read
+    // has to come back on its own from the client and state the shell's reconnect delivers.
+    await act(async () => {
+      renderer = create(createElement(Harness, { client: null, connState: 'reconnecting' }))
+    })
+    const client = createFakeRpcClient()
+    await act(async () => {
+      renderer?.update(createElement(Harness, { client, connState: 'connected' }))
+    })
+    expect(client.requests.map((request) => request.method)).toContain('git.status')
   })
 })

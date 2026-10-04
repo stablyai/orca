@@ -7,12 +7,14 @@
  * mid-evaluation. Keeping the maps and pure disposal here lets the slice
  * import cycle-free, mirroring how pty-dispatcher exports its handler maps.
  */
+import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
 import { discardPreHandlerPtyState, hasPreHandlerPtyExit } from './pty-pre-handler-buffer'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { releaseTerminalScrollIntentKey } from '../../lib/pane-manager/terminal-scroll-intent-key-store'
 
 export type ParkedTerminalPaneCapture = {
+  workspaceOwner?: NotificationWorkspaceOwner
   ptyId: string | null
   /** PaneManager numeric pane id the live pane used for runtime titles. */
   paneId: number

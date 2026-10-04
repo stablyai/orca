@@ -100,6 +100,9 @@ export async function resolveCodexAutomationRunUsage(
       acc.outputTokens += entry.outputTokens
       acc.reasoningOutputTokens += entry.reasoningOutputTokens
       acc.totalTokens += entry.totalTokens
+      acc.longContextInputTokens += entry.longContextInputTokens
+      acc.longContextCachedInputTokens += entry.longContextCachedInputTokens
+      acc.longContextOutputTokens += entry.longContextOutputTokens
       return acc
     },
     {
@@ -108,7 +111,10 @@ export async function resolveCodexAutomationRunUsage(
       cachedInputTokens: 0,
       outputTokens: 0,
       reasoningOutputTokens: 0,
-      totalTokens: 0
+      totalTokens: 0,
+      longContextInputTokens: 0,
+      longContextCachedInputTokens: 0,
+      longContextOutputTokens: 0
     }
   )
   const scopedModelRows = session.locationModelBreakdown.filter(
@@ -120,24 +126,14 @@ export async function resolveCodexAutomationRunUsage(
   let hasKnownCost = false
   if (scopedModelRows.length > 0) {
     for (const modelRow of scopedModelRows) {
-      const cost = estimateCostUsd(
-        modelRow.modelKey,
-        modelRow.inputTokens,
-        modelRow.cachedInputTokens,
-        modelRow.outputTokens
-      )
+      const cost = estimateCostUsd(modelRow.modelKey, modelRow)
       if (cost !== null) {
         hasKnownCost = true
         estimatedCostUsd += cost
       }
     }
   } else if (!session.hasMixedModels) {
-    const cost = estimateCostUsd(
-      session.primaryModel,
-      totals.inputTokens,
-      totals.cachedInputTokens,
-      totals.outputTokens
-    )
+    const cost = estimateCostUsd(session.primaryModel, totals)
     if (cost !== null) {
       hasKnownCost = true
       estimatedCostUsd += cost

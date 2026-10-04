@@ -1,3 +1,4 @@
+import { DEDICATED_E2E_SPECS } from './ci-e2e-job-selection.mjs'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { parse } from 'yaml'
@@ -30,9 +31,7 @@ it('gives the localhost SSH journey its same-filesystem server and agent prerequ
   expect(run.run).toContain('--project=electron-headless')
   expect(run.run).not.toContain('--retries')
   expect(run['continue-on-error']).toBeUndefined()
-  expect(
-    workflow.jobs['changed-e2e'].steps.find((step) => step.name === 'Run changed E2E specs').run
-  ).toContain(`. != "${spec}"`)
+  expect(DEDICATED_E2E_SPECS).toContain(spec)
 })
 
 it('selects the localhost journey for its remote hook authorities', () => {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useHostClient, useForceReconnect } from '../transport/client-context'
+import { connectionRetryAction } from '../transport/connection-retry-action'
 import type {
   AiVaultScanIssue,
   AiVaultScope,
@@ -174,13 +175,16 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     }
   }, [loadSessions, scope])
 
-  const retry = useCallback(() => {
-    if (connState !== 'connected' && hostId) {
-      void forceReconnect(hostId)
-      return
-    }
-    void loadSessions({ scope, force: false })
-  }, [connState, forceReconnect, hostId, loadSessions, scope])
+  const retry = useMemo(
+    () =>
+      connectionRetryAction({
+        hostId,
+        needsReconnect: connState !== 'connected',
+        forceReconnect,
+        reload: () => void loadSessions({ scope, force: false })
+      }),
+    [connState, forceReconnect, hostId, loadSessions, scope]
+  )
 
   return {
     connState,

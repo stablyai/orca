@@ -6,11 +6,17 @@ import { parse } from 'yaml'
 const projectDir = resolve(import.meta.dirname, '../..')
 
 describe('client-hosted browser package coverage', () => {
-  it('bundles the WSL browser-network relay with its version stamp', () => {
-    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.mjs'), 'utf8')
-
-    expect(relayBuild).toContain("outfile: join(outDir, 'wsl-browser-network-relay.js')")
-    expect(relayBuild).toContain("join(outDir, '.browser-network-version')")
+  it('finishes the installer process probe before concurrent native boundaries', () => {
+    const workflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
+    const steps = workflow.jobs.package_windows.steps
+    const probe = steps.findIndex((step) => step.name === 'Test Windows installer process probe')
+    const boundaries = steps.findIndex((step) => step.name === 'Test Windows-specific boundaries')
+    const file = 'config/scripts/nsis-process-check.test.mjs'
+    expect(probe).toBeGreaterThanOrEqual(0)
+    expect(probe).toBeLessThan(boundaries)
+    expect(steps[probe].background).toBeUndefined()
+    expect(steps[probe].run).toContain(file)
+    expect(steps[boundaries].run).not.toContain(file)
   })
 
   it('runs client-hosted Electron lifecycle coverage on native package hosts', () => {

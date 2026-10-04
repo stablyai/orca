@@ -1,3 +1,10 @@
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  writeDataFile,
+  readDataFile
+} from './persistence-test-harness'
 /**
  * Load-time normalization repairs the in-memory state; without a matching dirty mark the bad value
  * stays on disk and the repair reruns on every launch. Each case here reloads a profile the current
@@ -10,7 +17,6 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
-import { testState, createStore, writeDataFile, readDataFile } from './persistence-test-harness'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -81,7 +87,8 @@ describe('load-time normalization durability', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

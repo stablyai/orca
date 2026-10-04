@@ -55,7 +55,7 @@ describe('remote drift Git probes', () => {
       'older subject'
     ])
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['log', '--format=%s', '-n', '5', 'HEAD..origin/main'],
+      ['log', '--no-show-signature', '--no-color', '--format=%s', '-n', '5', 'HEAD..origin/main'],
       { cwd: '/repo', timeout: 15_000 }
     )
 

@@ -104,16 +104,12 @@ describe('session write subscriber defers writes across a closed persistence gat
 
     expect(persist).toHaveBeenCalledTimes(1)
     const patch = persist.mock.calls[0][0].patch
+    // Close records are main's; the renderer's mirror of them is never written back.
+    expect(patch.closedTerminalTabTombstonesByTabId).toBeUndefined()
     expect(
-      patch.closedTerminalTabTombstonesByTabId,
-      'the tombstone written during the apply window was discarded, not deferred'
-    ).toEqual({
-      'closed-during-apply': {
-        closedAt: expect.any(Number),
-        worktreeId: 'wt-remote'
-      }
-    })
-    expect(patch.activeTabId).toBe('still-open-tab')
+      patch.activeTabId,
+      'the mutation made during the apply window was discarded, not deferred'
+    ).toBe('still-open-tab')
     expect(patch.activeRepoId).toBe('repo-1')
     cleanup()
   })
@@ -198,7 +194,7 @@ describe('session write subscriber defers writes across a closed persistence gat
       'target B lost a tab close because target A was mid-apply'
     ).toEqual([])
     expect(patch.tabsByWorktree?.['wt-target-a']).toHaveLength(1)
-    expect(patch.closedTerminalTabTombstonesByTabId?.['tab-b']?.worktreeId).toBe('wt-target-b')
+    expect(patch.closedTerminalTabTombstonesByTabId).toBeUndefined()
     cleanup()
   })
 

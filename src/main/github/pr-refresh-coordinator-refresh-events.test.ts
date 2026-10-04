@@ -27,23 +27,6 @@ describe('pr-refresh-coordinator', () => {
     vi.useRealTimers()
   })
 
-  it('preserves the coordinator public module API', async () => {
-    const coordinator = await import('./pr-refresh-coordinator')
-
-    expect(Object.keys(coordinator).sort()).toEqual([
-      '_getPRRefreshAliasCountForTests',
-      '_getPRRefreshErrorBackoffCountForTests',
-      '_getPRRefreshQueueSizeForTests',
-      '_getVisiblePRRefreshWindowCountForTests',
-      'clearVisiblePRRefreshWindow',
-      'enqueuePRRefresh',
-      'pruneWorktreePRRefreshAliases',
-      'refreshPRNow',
-      'reportVisiblePRRefreshCandidates',
-      'setPRRefreshOutcomeObserver'
-    ])
-  })
-
   it('ignores a stale visibility generation before it can replace queued work', async () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
     getPRForBranchOutcomeMock.mockResolvedValue({ kind: 'no-pr', fetchedAt: Date.now() })

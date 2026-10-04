@@ -86,7 +86,7 @@ export function getWorktreePaletteSearchScope(args: {
   return args.allWorktrees.filter((worktree) => !worktree.isArchived)
 }
 
-export function makeEmptyPaletteSearchResult(
+function makeEmptyPaletteSearchResult(
   worktreeId: string,
   worktreeHostId?: Worktree['hostId'],
   context = createPaletteSearchContext(Date.now()),

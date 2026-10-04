@@ -11,10 +11,6 @@ describe('SshGitProvider', () => {
     provider = new SshGitProvider('conn-1', mux as never)
   })
 
-  it('returns the connectionId', () => {
-    expect(provider.getConnectionId()).toBe('conn-1')
-  })
-
   it('getStatus sends git.status request', async () => {
     const statusResult = {
       entries: [{ path: 'generated/a.ts', status: 'untracked', area: 'untracked' }],

@@ -5,6 +5,7 @@ import {
 } from './agent-status-child-work'
 import {
   agentChildWorkAliasesForChild,
+  agentChildWorkSettledAt,
   buildAgentChildWork,
   buildAgentChildWorkAliases,
   commitAgentChildWork,
@@ -63,15 +64,19 @@ export function resumeAgentChildWork(
     {
       fence: child.invocation,
       ...(child.outcome !== undefined ? { outcome: child.outcome } : {}),
-      ...(child.membership === 'settled' ? { settledAt: child.observedAt } : {})
+      ...(child.settledAt !== undefined ? { settledAt: child.settledAt } : {})
     }
   ].slice(-AGENT_CHILD_WORK_INVOCATION_HISTORY_MAX)
   const resumed = buildAgentChildWork(
     request,
-    child.childWorkId,
-    child.firstObservedAt,
-    nextFence,
-    previousInvocations
+    {
+      childWorkId: child.childWorkId,
+      firstObservedAt: child.firstObservedAt,
+      invocation: nextFence,
+      previousInvocations,
+      settledAt: agentChildWorkSettledAt(request)
+    },
+    child
   )
   const retainedFences = [nextFence, ...previousInvocations.map((entry) => entry.fence)]
   const removeAliases = agentChildWorkAliasesForChild(store, child.childWorkId)

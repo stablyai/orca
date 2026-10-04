@@ -61,20 +61,43 @@ export function decodeLogHeader(buffer: Buffer): number | null {
 }
 
 export function encodeLogBatch(seq: number, records: PendingOutputRecord[]): Buffer {
-  const frames: Buffer[] = [encodeFrame(FRAME_BATCH, encodeSeqPayload(seq))]
+  let byteLength = 9
+  const outputPayloads: Buffer[] = []
   for (const record of records) {
     if (record.kind === 'output') {
-      frames.push(encodeFrame(FRAME_OUTPUT, Buffer.from(record.data, 'utf8')))
-    } else if (record.kind === 'resize') {
-      const payload = Buffer.alloc(4)
-      payload.writeUInt16LE(clampU16(record.cols), 0)
-      payload.writeUInt16LE(clampU16(record.rows), 2)
-      frames.push(encodeFrame(FRAME_RESIZE, payload))
+      const payload = Buffer.from(record.data, 'utf8')
+      outputPayloads.push(payload)
+      byteLength += 5 + payload.length
     } else {
-      frames.push(encodeFrame(FRAME_CLEAR, Buffer.alloc(0)))
+      byteLength += record.kind === 'resize' ? 9 : 5
     }
   }
-  return Buffer.concat(frames)
+  const batch = Buffer.allocUnsafe(byteLength)
+  batch.writeUInt8(FRAME_BATCH, 0)
+  batch.writeUInt32LE(4, 1)
+  batch.writeUInt32LE(seq >>> 0, 5)
+  let offset = 9
+  let outputIndex = 0
+  for (const record of records) {
+    if (record.kind === 'output') {
+      batch.writeUInt8(FRAME_OUTPUT, offset)
+      const payload = outputPayloads[outputIndex++]
+      batch.writeUInt32LE(payload.length, offset + 1)
+      payload.copy(batch, offset + 5)
+      offset += 5 + payload.length
+    } else if (record.kind === 'resize') {
+      batch.writeUInt8(FRAME_RESIZE, offset)
+      batch.writeUInt32LE(4, offset + 1)
+      batch.writeUInt16LE(clampU16(record.cols), offset + 5)
+      batch.writeUInt16LE(clampU16(record.rows), offset + 7)
+      offset += 9
+    } else {
+      batch.writeUInt8(FRAME_CLEAR, offset)
+      batch.writeUInt32LE(0, offset + 1)
+      offset += 5
+    }
+  }
+  return batch
 }
 
 /** Returns null for missing magic / unknown format version — callers fall
@@ -148,19 +171,6 @@ export function decodeTerminalHistoryLog(buffer: Buffer): TerminalHistoryLogCont
   }
 
   return { generation, batches, truncatedTail }
-}
-
-function encodeFrame(kind: number, payload: Buffer): Buffer {
-  const header = Buffer.alloc(5)
-  header.writeUInt8(kind, 0)
-  header.writeUInt32LE(payload.length, 1)
-  return Buffer.concat([header, payload])
-}
-
-function encodeSeqPayload(seq: number): Buffer {
-  const payload = Buffer.alloc(4)
-  payload.writeUInt32LE(seq >>> 0, 0)
-  return payload
 }
 
 function clampU16(value: number): number {

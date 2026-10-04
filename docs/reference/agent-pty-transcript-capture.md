@@ -103,7 +103,9 @@ text is tested on something no pane ever sees.
 
 `src/main/runtime/agent-transcript-pane-test-harness.ts` builds the pane;
 `src/main/runtime/terminal-interactive-wait-visibility.test.ts` (cursor-agent) and
-`src/main/runtime/antigravity-readiness-transcripts.test.ts` (Antigravity) are the two consumers.
+`src/main/runtime/antigravity-readiness-transcripts.test.ts` (Antigravity) are examples. An agent
+whose readiness is read off the live screen gets its suite from
+`src/main/runtime/screen-ruled-agent-transcript-suite.ts`.
 
 ## Worked example: the Antigravity captures
 

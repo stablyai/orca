@@ -94,7 +94,6 @@ export function connectPanePty(
   session.terminalBellNotificationTimer = null
   session.pendingTerminalBellNotification = false
   session.reattachIdleAgentCursorResetTimer = null
-  session.alternateScreenBackgroundRepaintTimer = null
   session.shiftEnterReconfirmTimer = null
   session.synchronizedForegroundOutputActive = false
   // Why: carries up to one marker-length-1 of trailing bytes so a ConPTY-split DEC 2026 marker is still detected (#8754).
@@ -115,10 +114,6 @@ export function connectPanePty(
   session.remoteOutputGatedPtyId = null
   session.remoteOutputFactConsumerPtyId = null
   session.suppressViewportClaimTerminalResize = false
-  // Why: idle callbacks are registered before the deferred PTY output plumbing
-  // exists. Start with the shared scheduler, then switch to the PTY writer
-  // below so hidden-tab resets keep backlog-recovery callbacks and byte order.
-  session.idleAgentTerminalModeReset = RESET_TERMINAL_CURSOR_STYLE
   session.suppressNativeWindowsIdleCodexFocusReports = false
   session.setFocusReportSuppressionForAgentCompletion = (
     title: string | undefined,
@@ -128,11 +123,14 @@ export function connectPanePty(
     session.suppressNativeWindowsIdleCodexFocusReports =
       agentType && agentType !== 'unknown' ? agentType === 'codex' : titleAgentType === 'codex'
   }
+  // Why: idle callbacks are registered before the deferred PTY output plumbing
+  // exists. Start with the shared scheduler, then switch to the PTY writer
+  // so hidden-tab resets keep backlog-recovery callbacks and byte order.
   session.queueAgentIdleTerminalModeReset = (): void => {
     if (session.disposed) {
       return
     }
-    writeTerminalOutput(session.pane.terminal, session.idleAgentTerminalModeReset, {
+    writeTerminalOutput(session.pane.terminal, RESET_TERMINAL_CURSOR_STYLE, {
       foreground: shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
     })
   }
@@ -150,20 +148,29 @@ export function connectPanePty(
   // mutation does not propagate back.
   session.paneStartup = session.deps.startup ?? null
   session.deps.startup = undefined
+  // Why the session holds it until a spawn request carries it: the pane already dropped every other
+  // reference to this PTY, so the stop is owed until main takes it or dispose kills it.
+  session.pendingReplacedPtyId = session.deps.replacesPtyId ?? null
+  session.deps.replacesPtyId = undefined
+  session.claimPendingReplacedPtyId = (): string | null => {
+    const ptyId: string | null = session.pendingReplacedPtyId
+    session.pendingReplacedPtyId = null
+    return ptyId
+  }
 
   // Why: paneKey crosses PTY env, hook IPC, retained rows, and reload/replay.
   // Use the stable layout leaf UUID, not the renderer-local numeric pane id.
   session.cacheKey = makePaneKey(session.deps.tabId, session.pane.leafId)
-  // Why: mirrors the kitty keyboard flags the pane's application negotiates.
-  // Fed only from application output (live PTY bytes + daemon replay
-  // payloads), never from renderer-generated resets, so it reflects what the
-  // application expects even after defensive renderer-side kitty wipes.
+  // Why: xterm exposes no kitty read, so this mirror tracks the flags xterm's
+  // encoder applies; see TerminalKittyKeyboardModeTracker for its feeds.
   session.kittyKeyboardModes = (() => {
     const existing = session.deps.paneKittyKeyboardModesRef.current.get(session.pane.id)
     if (existing) {
       return existing
     }
-    const created = new TerminalKittyKeyboardModeTracker()
+    const created = new TerminalKittyKeyboardModeTracker({
+      kittyKeyboard: session.pane.terminal.options.vtExtensions?.kittyKeyboard === true
+    })
     session.deps.paneKittyKeyboardModesRef.current.set(session.pane.id, created)
     return created
   })()

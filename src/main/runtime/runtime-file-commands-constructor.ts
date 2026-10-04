@@ -11,6 +11,7 @@ import {
 } from './runtime-file-command-host'
 import { basenameFromRelativePath } from './runtime-file-paths'
 import type { RuntimeFileListResult, RuntimeFileOpenResult } from '../../shared/runtime-types'
+import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import { listQuickOpenFiles } from '../ipc/filesystem-list-files'
 import {
   MOBILE_FILE_LIST_LIMIT,
@@ -155,14 +156,14 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
 
   async openMobileFile(
     worktreeSelector: string,
-    relativePath: string
+    relativePath: string,
+    navigation?: RuntimeNavigationTarget
   ): Promise<RuntimeFileOpenResult> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
-    // Previewable images open like text (mobile renders via files.readPreview); other binaries stay unavailable on mobile.
     const kind = isMobilePreviewableImagePath(relativePath)
       ? 'image'
       : isMobileBinaryPath(relativePath)
@@ -170,23 +171,19 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
         : isMobileMarkdownPath(relativePath)
           ? 'markdown'
           : 'text'
-    if (kind === 'binary') {
-      return { worktree: worktree.id, relativePath, kind, opened: false }
-    }
+    // Why: `kind` only describes the file; the desktop editor opens binaries (e.g. PDFs) like the File Explorer.
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    // Why: CLI/agents treat opened:true as success; stat first so missing paths fail the RPC instead of opening a ghost tab.
-    await this.assertMobileOpenTargetExists(filePath, runtimeFileRouteForTarget(target))
+    // Why: CLI/agents treat opened:true as success; stat first so missing paths and directories fail the RPC instead of opening a ghost tab.
+    await this.assertOpenTargetIsFile(filePath, runtimeFileRouteForTarget(target))
     // Why: the internal runtimeId isn't a valid env selector; pass undefined so openFile falls back to activeRuntimeEnvironmentId.
-    this.host.openFile(worktree.id, filePath, relativePath, undefined)
+    this.host.openFile(worktree.id, filePath, relativePath, undefined, navigation)
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 
-  protected async assertMobileOpenTargetExists(
-    filePath: string,
-    route: RuntimeFileRoute
-  ): Promise<void> {
+  protected async assertOpenTargetIsFile(filePath: string, route: RuntimeFileRoute): Promise<void> {
+    let stats: { isDirectory: () => boolean }
     try {
-      await (route.kind === 'ssh'
+      stats = await (route.kind === 'ssh'
         ? this.statRemoteTerminalPath(filePath, route.connectionId)
         : stat(await resolveAuthorizedPath(filePath, this.host.requireStore())))
     } catch (error) {
@@ -198,12 +195,16 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
       }
       throw error
     }
+    if (stats.isDirectory()) {
+      throw new Error(`EISDIR: illegal operation on a directory, open '${filePath}'`)
+    }
   }
 
   async openMobileDiff(
     worktreeSelector: string,
     relativePath: string,
-    staged: boolean
+    staged: boolean,
+    navigation?: RuntimeNavigationTarget
   ): Promise<RuntimeFileOpenResult> {
     const { worktree } = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     if (!isSafeMobileRelativePath(relativePath)) {
@@ -216,7 +217,7 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
         : 'text'
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
     // Why: see openMobileFile; avoid stamping internal runtimeId as runtimeEnvironmentId.
-    this.host.openDiff(worktree.id, filePath, relativePath, staged, undefined)
+    this.host.openDiff(worktree.id, filePath, relativePath, staged, undefined, navigation)
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 }

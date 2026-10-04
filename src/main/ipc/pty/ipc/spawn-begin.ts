@@ -14,6 +14,24 @@ import {
 } from '../pane/spawn-reservation'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
 import type { PtyIpcSpawnState } from './spawn-state'
+import type { PtySpawnIpcArgs } from './spawn-types'
+
+/** The pane key a spawn names before preflight; null when it names no stable pane. */
+function resolveEarlyPaneKey(args: PtySpawnIpcArgs): string | null {
+  const leafId =
+    typeof args.leafId === 'string' && isTerminalLeafId(args.leafId) ? args.leafId : null
+  return typeof args.worktreeId === 'string' &&
+    typeof args.tabId === 'string' &&
+    isValidTerminalTabId(args.tabId) &&
+    args.tabId.length <= 512 &&
+    leafId
+    ? makePaneKey(args.tabId, leafId)
+    : null
+}
+
+export function resolveEarlyPaneSpawnReservationKey(args: PtySpawnIpcArgs): string | null {
+  return makePaneSpawnReservationKey(args.worktreeId, args.connectionId, resolveEarlyPaneKey(args))
+}
 
 export async function beginPtyIpcSpawn(
   ctx: PtyIpcSpawnState
@@ -23,16 +41,7 @@ export async function beginPtyIpcSpawn(
   ctx.codexHomeLaunchStartedSequence = !args.connectionId
     ? allocatePtyLifecycleSequence()
     : undefined
-  const initialLeafId =
-    typeof args.leafId === 'string' && isTerminalLeafId(args.leafId) ? args.leafId : null
-  const initialPaneKey =
-    typeof args.worktreeId === 'string' &&
-    typeof args.tabId === 'string' &&
-    isValidTerminalTabId(args.tabId) &&
-    args.tabId.length <= 512 &&
-    initialLeafId
-      ? makePaneKey(args.tabId, initialLeafId)
-      : null
+  const initialPaneKey = resolveEarlyPaneKey(args)
   const initialStablePanePtyId = (() => {
     try {
       return !args.connectionId && initialPaneKey
@@ -59,39 +68,29 @@ export async function beginPtyIpcSpawn(
   ctx.spawnTiming = createPtySpawnTiming()
   ctx.cwd = ctx.deps.resolvePtySpawnStartupCwd(args.worktreeId, args.cwd)
 
-  const earlyLeafId =
-    typeof args.leafId === 'string' && isTerminalLeafId(args.leafId) ? args.leafId : null
-  const earlyPaneKey =
-    typeof args.worktreeId === 'string' &&
-    typeof args.tabId === 'string' &&
-    isValidTerminalTabId(args.tabId) &&
-    args.tabId.length <= 512 &&
-    earlyLeafId
-      ? makePaneKey(args.tabId, earlyLeafId)
-      : null
-  const earlyReservationKey = makePaneSpawnReservationKey(
-    args.worktreeId,
-    args.connectionId,
-    earlyPaneKey
-  )
-  const pendingRuntimeCreate = earlyReservationKey
-    ? pendingRuntimePaneCreatesByOwnerKey.get(earlyReservationKey)
-    : undefined
-  if (pendingRuntimeCreate) {
-    await pendingRuntimeCreate.promise
-  }
-  const existingPaneSpawn = earlyReservationKey
-    ? paneSpawnReservationsByOwnerKey.get(earlyReservationKey)
-    : undefined
-  if (existingPaneSpawn) {
-    return { ...(await existingPaneSpawn.promise), isReattach: true }
+  const earlyReservationKey = resolveEarlyPaneSpawnReservationKey(args)
+  // Why: a replacing spawn reserved its pane before stopping the owner; joining itself would deadlock.
+  const heldReservation = ctx.paneSpawnReservation
+  if (!heldReservation) {
+    const pendingRuntimeCreate = earlyReservationKey
+      ? pendingRuntimePaneCreatesByOwnerKey.get(earlyReservationKey)
+      : undefined
+    if (pendingRuntimeCreate) {
+      await pendingRuntimeCreate.promise
+    }
+    const existingPaneSpawn = earlyReservationKey
+      ? paneSpawnReservationsByOwnerKey.get(earlyReservationKey)
+      : undefined
+    if (existingPaneSpawn) {
+      return { ...(await existingPaneSpawn.promise), isReattach: true }
+    }
   }
   ctx.earlyStablePaneOwner =
-    earlyPaneKey && args.worktreeId
+    initialPaneKey && args.worktreeId
       ? resolveStablePaneOwner(
           ctx.deps.runtime,
           ctx.deps.store,
-          earlyPaneKey,
+          initialPaneKey,
           args.worktreeId,
           args.connectionId
         )
@@ -99,9 +98,9 @@ export async function beginPtyIpcSpawn(
   ctx.earlyWorktreeId = args.worktreeId
   // Reserve early so renderer/runtime materialization cannot start duplicate provider spawns.
   ctx.paneSpawnReservationKey = earlyReservationKey
-  ctx.paneSpawnReservation = ctx.paneSpawnReservationKey
-    ? reservePaneSpawn(ctx.paneSpawnReservationKey)
-    : null
+  ctx.paneSpawnReservation =
+    heldReservation ??
+    (ctx.paneSpawnReservationKey ? reservePaneSpawn(ctx.paneSpawnReservationKey) : null)
   ctx.finishTerminalInstall = (): void => {}
   ctx.stablePaneOwner = null
   ctx.stablePaneBindingPersisted = false

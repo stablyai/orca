@@ -61,7 +61,6 @@ export function useBrowserGuestPaintRetention(browserPageIds: readonly string[])
 // Why one exported predicate rather than the same OR-list at each site: a hand-rolled copy stays
 // green when a term is added — nothing typechecks a site that never names the new signal — and the
 // remote-viewer term reached the panes while four copies in Terminal.tsx still had three terms.
-// browser-guest-retention-site-census.test.ts holds the sites to this function.
 export function browserPageNeedsPaintRetention(browserPageId: string): boolean {
   return (
     isBrowserAutomationVisible(browserPageId) ||

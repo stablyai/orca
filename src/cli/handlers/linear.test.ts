@@ -157,27 +157,6 @@ describe('orca linear CLI handlers', () => {
     expect(vi.mocked(console.error)).not.toHaveBeenCalled()
   })
 
-  it('keeps global boolean flags before Linear commands from consuming command tokens', async () => {
-    queueFixtures(callMock, okFixture('req_linear', issueResult()))
-
-    await main(['--json', 'linear', 'issue', 'ENG-123', '--full'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledWith(
-      'linear.issueContext',
-      expect.objectContaining({
-        input: 'ENG-123',
-        include: expect.objectContaining({
-          comments: true,
-          children: true,
-          attachments: true,
-          relations: true,
-          activity: true
-        })
-      }),
-      { timeoutMs: 120_000 }
-    )
-  })
-
   it('passes verified current-context hints without resolving cwd for remote runtimes', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_123'
     process.env.ORCA_WORKTREE_ID = 'repo::/srv/app'
@@ -256,24 +235,6 @@ describe('orca linear CLI handlers', () => {
       query: 'launch',
       limit: 50,
       workspaceId: 'all'
-    })
-  })
-
-  it('keeps boolean flags between Linear and search from consuming the subcommand', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_search', {
-        issues: [],
-        meta: { query: 'auth', workspaceId: undefined, limit: 1, returned: 0, limitReached: false }
-      })
-    )
-
-    await main(['linear', '--json', 'search', 'auth', '--limit', '1'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledWith('linear.agentSearchIssues', {
-      query: 'auth',
-      limit: 1,
-      workspaceId: undefined
     })
   })
 

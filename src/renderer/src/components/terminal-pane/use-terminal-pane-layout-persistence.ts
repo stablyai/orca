@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '../../store'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { serializeTerminalLayout } from './layout-serialization'
@@ -16,7 +16,9 @@ import type { TerminalPaneStartupController } from './use-terminal-pane-startup-
 export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartupController) {
   const {
     clearedScrollbackLeafIdsRef,
+    chatLeafId,
     containerRef,
+    isChatViewMode,
     expandedPaneIdRef,
     managerRef,
     paneCount,
@@ -32,6 +34,10 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     terminalTab,
     worktreeId
   } = controller
+  const chatOwnerRef = useRef({ chatLeafId, isChatViewMode })
+  useLayoutEffect(() => {
+    chatOwnerRef.current = { chatLeafId, isChatViewMode }
+  }, [chatLeafId, isChatViewMode])
   const persistLayoutSnapshot = useCallback((): void => {
     const manager = managerRef.current
     const container = containerRef.current
@@ -49,6 +55,11 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
     const currentPanes = manager.getPanes()
     const currentLeafIds = new Set(currentPanes.map((pane) => pane.leafId))
+    // PaneManager retains this callback for its entire mount.
+    const { chatLeafId, isChatViewMode } = chatOwnerRef.current
+    if (isChatViewMode && chatLeafId && currentPanes.some((pane) => pane.leafId === chatLeafId)) {
+      layout.chatLeafId = chatLeafId
+    }
     const clearedScrollbackLeafIds = clearedScrollbackLeafIdsRef.current
     const scrollbackPreserveLeafIds = new Set(
       [...currentLeafIds].filter((leafId) => !clearedScrollbackLeafIds.has(leafId))
@@ -121,6 +132,10 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [tabId, setTabLayout, worktreeId])
+
+  useEffect(() => {
+    persistLayoutSnapshot()
+  }, [chatLeafId, isChatViewMode, persistLayoutSnapshot])
 
   const clearPaneScrollback = useCallback(
     (pane: ManagedPane): void => {

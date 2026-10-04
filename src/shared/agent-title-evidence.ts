@@ -14,13 +14,14 @@ import {
   titleHasAgentName
 } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
+import { isDeepSeekBuildTerminalTitle } from './dsb-terminal-title'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { getPiCompatibleSyntheticAgentLabel } from './pi-compatible-synthetic-title'
 import {
   SYNTHETIC_AGENT_TITLE_AGENTS,
   SYNTHETIC_AGENT_TITLE_PROFILES
 } from './synthetic-agent-title'
-import type { TuiAgent } from './tui-agent'
+import type { TerminalAgent } from './terminal-agent'
 import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 
 /**
@@ -49,16 +50,16 @@ export type AgentTitleEvidenceReason =
   | 'no-evidence'
 
 export type AgentTitleEvidence = {
-  readonly vendorMarkers: readonly TuiAgent[]
-  readonly anchoredNames: readonly TuiAgent[]
-  readonly freeTextNames: readonly TuiAgent[]
+  readonly vendorMarkers: readonly TerminalAgent[]
+  readonly anchoredNames: readonly TerminalAgent[]
+  readonly freeTextNames: readonly TerminalAgent[]
   /** Null whenever the title cannot answer on its own. Callers fall back to stronger signals. */
-  readonly agent: TuiAgent | null
+  readonly agent: TerminalAgent | null
   readonly reason: AgentTitleEvidenceReason
 }
 
 /** Names matched as whole tokens, paired with the agent each identifies. */
-const NAME_TOKENS: readonly (readonly [string, TuiAgent])[] = [
+const NAME_TOKENS: readonly (readonly [string, TerminalAgent])[] = [
   ['claude', 'claude'],
   ['openclaude', 'openclaude'],
   ['codex', 'codex'],
@@ -75,7 +76,7 @@ const NAME_TOKENS: readonly (readonly [string, TuiAgent])[] = [
 ]
 
 /** Agents whose name is matched by a dedicated pattern rather than a plain token. */
-const PATTERN_NAMES: readonly (readonly [RegExp, TuiAgent])[] = [
+const PATTERN_NAMES: readonly (readonly [RegExp, TerminalAgent])[] = [
   [AGY_AGENT_NAME_RE, 'antigravity'],
   [DROID_AGENT_NAME_RE, 'droid'],
   [HERMES_AGENT_NAME_RE, 'hermes']
@@ -88,7 +89,7 @@ const EMITTED_DISPLAY_LABEL_AGENTS = [
   'prime-agent',
   'command-code',
   'copilot'
-] as const satisfies readonly TuiAgent[]
+] as const satisfies readonly TerminalAgent[]
 
 const DISPLAY_LABELS = [
   ...EMITTED_DISPLAY_LABEL_AGENTS.map(
@@ -97,7 +98,7 @@ const DISPLAY_LABELS = [
   ['claude code', 'claude'],
   ['gemini cli', 'gemini'],
   ['agent teams', 'claude-agent-teams']
-] satisfies readonly (readonly [string, TuiAgent])[]
+] satisfies readonly (readonly [string, TerminalAgent])[]
 
 const GEMINI_GLYPHS = [GEMINI_WORKING, GEMINI_SILENT_WORKING, GEMINI_IDLE, GEMINI_PERMISSION]
 const ANTIGRAVITY_MODEL_TITLE_RE = /^(?:agy|antigravity)(?:\s*[·—:-]\s*|\s+)gemini\s+\d/i
@@ -111,7 +112,7 @@ const OWNER_SUFFIX_RE = /\s-\s+([A-Za-z][\w-]*)\s*$/
 const WINDOWS_LAUNCHER_SUFFIX_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const WRAPPER_SEPARATOR = ' | '
 const MAX_WRAPPER_EVIDENCE_SEGMENTS = 8
-const RESERVED_OWNER_IDS: ReadonlyMap<string, TuiAgent> = new Map([
+const RESERVED_OWNER_IDS: ReadonlyMap<string, TerminalAgent> = new Map([
   ['pi', 'pi'],
   ['omp', 'omp'],
   ['claude-agent-teams', 'claude-agent-teams'],
@@ -135,8 +136,8 @@ function getEvidenceTitleSegments(title: string): string[] {
   return segments
 }
 
-function namesIn(text: string): TuiAgent[] {
-  const found = new Set<TuiAgent>()
+function namesIn(text: string): TerminalAgent[] {
+  const found = new Set<TerminalAgent>()
   for (const [token, agent] of NAME_TOKENS) {
     if (titleHasAgentName(text, token)) {
       found.add(agent)
@@ -157,7 +158,7 @@ function stripBareNameDecoration(text: string): string {
     .replace(/[^\p{L}\p{N}]+$/u, '')
 }
 
-function agentForBareName(text: string): TuiAgent | null {
+function agentForBareName(text: string): TerminalAgent | null {
   const trimmed = text.trim()
   if (!trimmed || /[\\/]/.test(trimmed)) {
     return null
@@ -177,7 +178,7 @@ function agentForBareName(text: string): TuiAgent | null {
   return names.length === 1 && /^[\p{L}\p{N}]+$/u.test(bareToken) ? names[0] : null
 }
 
-function agentForWholeTitle(text: string): TuiAgent | null {
+function agentForWholeTitle(text: string): TerminalAgent | null {
   const trimmed = text.trim()
   if (!trimmed || /[\\/]/.test(trimmed)) {
     return null
@@ -194,12 +195,12 @@ function agentForWholeTitle(text: string): TuiAgent | null {
   return agentForBareName(stripped)
 }
 
-function agentForOwnerSuffix(text: string): TuiAgent | null {
+function agentForOwnerSuffix(text: string): TerminalAgent | null {
   const normalized = text.trim().toLowerCase()
   return RESERVED_OWNER_IDS.get(normalized) ?? agentForBareName(text)
 }
 
-function agentForSyntheticTitle(text: string): TuiAgent | null {
+function agentForSyntheticTitle(text: string): TerminalAgent | null {
   const trimmed = text.trim()
   if (/[\\/]/.test(trimmed)) {
     return null
@@ -228,8 +229,8 @@ function agentForSyntheticTitle(text: string): TuiAgent | null {
   return null
 }
 
-function collectVendorMarkers(segments: readonly string[]): TuiAgent[] {
-  const markers = new Set<TuiAgent>()
+function collectVendorMarkers(segments: readonly string[]): TerminalAgent[] {
+  const markers = new Set<TerminalAgent>()
   for (const segment of segments) {
     // Why prefix-only: a sigil marks the pane's own status line only in the identity position.
     // The same character inside task text is decoration, not a vendor emission.
@@ -253,9 +254,9 @@ function collectVendorMarkers(segments: readonly string[]): TuiAgent[] {
 
 function namesConsumedByAnchoredLabels(
   segments: readonly string[],
-  anchoredNames: ReadonlySet<TuiAgent>
-): Set<TuiAgent> {
-  const consumed = new Set<TuiAgent>()
+  anchoredNames: ReadonlySet<TerminalAgent>
+): Set<TerminalAgent> {
+  const consumed = new Set<TerminalAgent>()
   for (const segment of segments) {
     const normalized = stripBareNameDecoration(segment).toLowerCase()
     const label = DISPLAY_LABELS.find(([text]) => text === normalized)
@@ -268,14 +269,22 @@ function namesConsumedByAnchoredLabels(
   return consumed
 }
 
-function collectAnchoredNames(segments: readonly string[]): TuiAgent[] {
-  const anchored = new Set<TuiAgent>()
+function collectAnchoredNames(
+  segments: readonly string[],
+  vendorMarkers: readonly TerminalAgent[]
+): TerminalAgent[] {
+  const anchored = new Set<TerminalAgent>()
+  // Why: a native owner's task text can end with DSB's product-name suffix, including inside wrappers.
+  const allowDsbTitle = vendorMarkers.length === 0 && !segments.some(isOpenCodeNativeTitle)
 
   for (const segment of segments) {
     // Why anchored and not a bare marker: the native envelope owns the whole wrapped pane title.
     // Its session text may name other agents without changing the OpenCode owner.
     if (isOpenCodeNativeTitle(segment)) {
       anchored.add('opencode')
+    }
+    if (allowDsbTitle && isDeepSeekBuildTerminalTitle(segment)) {
+      anchored.add('dsb')
     }
 
     const suffix = OWNER_SUFFIX_RE.exec(segment)
@@ -332,7 +341,7 @@ export function collectAgentTitleEvidence(title: string): AgentTitleEvidence {
 
   const segments = getEvidenceTitleSegments(title)
   const vendorMarkers = collectVendorMarkers(segments)
-  const anchoredNames = collectAnchoredNames(segments)
+  const anchoredNames = collectAnchoredNames(segments, vendorMarkers)
   const anchoredSet = new Set(anchoredNames)
   const anchoredLabelNames = namesConsumedByAnchoredLabels(segments, anchoredSet)
   const freeTextNames = namesIn(title).filter(

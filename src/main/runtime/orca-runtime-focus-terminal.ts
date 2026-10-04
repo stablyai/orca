@@ -77,7 +77,7 @@ export class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitForLeafPtyI
           const parsedPaneKey = parsePaneKey(live.pty.paneKey ?? '')
           const revealed = await notifier.revealTerminalSession(live.pty.worktreeId, {
             ptyId: live.pty.ptyId,
-            title: getLatestPtyTitle(live.pty),
+            title: getLatestPtyTitle(this.getPtyDisplayRecord(live.pty)),
             ...(live.pty.launchConfig
               ? { launchConfig: copySleepingAgentLaunchConfig(live.pty.launchConfig) }
               : {}),

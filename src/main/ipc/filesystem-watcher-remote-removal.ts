@@ -1,3 +1,4 @@
+import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
 import type { WebContents } from 'electron'
 import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
@@ -5,6 +6,7 @@ import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { getRemoteWatcherKey } from './filesystem-watcher-paths'
 import {
   clearDormantRemoteWatcher,
+  registerWatcherSenderCleanup,
   clearRemoteWatcherResync
 } from './filesystem-watcher-listener-lifecycle'
 import {
@@ -71,11 +73,18 @@ export async function restoreRemoteWatcherAfterFailedRemoval(
     return
   }
   watcherLifecycleState.suspendedRemoteWatcherListeners.delete(key)
-  for (const sender of suspended.listeners.values()) {
-    if (sender.isDestroyed()) {
+  const owners = Array.from(suspended.listeners.values(), (sender) => ({
+    sender,
+    signal: registerWatcherSenderCleanup(sender)
+  }))
+  for (const { sender, signal } of owners) {
+    if (!isCurrentWatcherSender(sender, signal)) {
       continue
     }
-    const result = await installRemoteWatcher(sender, connectionId, worktreePath)
+    const result = await installRemoteWatcher(sender, connectionId, worktreePath, undefined, signal)
+    if (!isCurrentWatcherSender(sender, signal)) {
+      continue
+    }
     if (result === 'capacity') {
       scheduleDormantRemoteWatcherRearm(connectionId, worktreePath)
     } else if (result === 'unavailable') {

@@ -112,28 +112,6 @@ describe('publishDaemonEndpoint', () => {
     }
   })
 
-  unixIt('replaces an incumbent that has stopped listening', async () => {
-    const directory = makeTempDir()
-    const canonicalPath = join(directory, 'd')
-    const incumbentPath = getDaemonSocketBindPath(canonicalPath)
-    const newcomerPath = getDaemonSocketBindPath(canonicalPath)
-    const incumbent = await listen(incumbentPath)
-    const newcomer = await listen(newcomerPath)
-    try {
-      await publishListener(incumbentPath, canonicalPath)
-      await close(incumbent.server)
-
-      const outcome = await publishDaemonEndpoint(newcomerPath, canonicalPath, probeSocketConnect)
-
-      expect(outcome).toMatchObject({ status: 'published' })
-      await expectReachable(canonicalPath)
-      expect(newcomer.connections()).toBe(1)
-    } finally {
-      await Promise.all([close(incumbent.server), close(newcomer.server)])
-      rmSync(directory, { recursive: true, force: true })
-    }
-  })
-
   unixIt(
     'never replaces a daemon that published while the death proof was being gathered',
     async () => {

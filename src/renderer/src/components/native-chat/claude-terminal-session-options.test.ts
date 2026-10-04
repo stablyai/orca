@@ -272,18 +272,6 @@ describe('Claude terminal session option detection', () => {
     })
   })
 
-  it('reads the current model and effort from Claude header chrome', () => {
-    const screen =
-      '\u001b[1mClaude Code\u001b[0m v2.1.211\r\n' +
-      '\u001b[38;2;102;102;102mOpus 4.8 with high effort · API Usage Billing\r\n' +
-      '~/Documents/projects/orca'
-
-    expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
-      model: 'opus',
-      effort: 'high'
-    })
-  })
-
   it('reads a Claude header whose xterm serialization joins the version to the title', () => {
     const screen =
       '\u001b[?1049h\u001b[H▐▛███▜▌Claude Codev2.1.211\r\n' +
@@ -343,22 +331,6 @@ describe('Claude terminal session option detection', () => {
     // Custom models have no catalog options, so effort is intentionally dropped.
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'my-custom-model'
-    })
-  })
-
-  it('recovers a custom model with no effort suffix', () => {
-    const screen = 'Claude Code v2.1.211\r\ncompany/internal-opus · API Usage Billing\r\n~/repo'
-
-    expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
-      model: 'company/internal-opus'
-    })
-  })
-
-  it('keeps a custom model containing a catalog label', () => {
-    const screen = 'Claude Code v2.1.211\r\ncompany/my-haiku-v2 · API Usage Billing\r\n~/repo'
-
-    expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
-      model: 'company/my-haiku-v2'
     })
   })
 

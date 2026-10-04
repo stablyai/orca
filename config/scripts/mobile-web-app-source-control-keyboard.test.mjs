@@ -26,17 +26,6 @@ const REVIEW = 'app/h/[hostId]/review/[worktreeId].tsx'
 const SEAM = 'src/platform/keyboard-occlusion.web.ts'
 
 /**
- * The one module that subscribes to the stub and is not the seam, exempt by name.
- *
- * `mounted-bottom-drawer.tsx` reads more than a height: `Keyboard.metrics()` for a sheet opened
- * over an already-raised keyboard, and each event's `duration` to animate with it. The seam models
- * neither, and the drawer is in C1's, C2's, C3's and C5's closures as well as these two, so moving
- * it is a change to every page rather than to this domain. Its listeners are inert on the web the
- * same way, which is exactly why the composer inside it takes its own padding here.
- */
-const SUBSCRIBES_TO_THE_STUB = ['src/components/mounted-bottom-drawer.tsx']
-
-/**
  * The seam itself, which is the one place allowed to name the stub.
  *
  * The two files by name rather than everything under `src/platform/`: a later
@@ -56,7 +45,9 @@ function keyboardSubscribers(closure, rootDir = mobileDir) {
     .filter((file) => !SEAM_FILES.includes(file))
     .filter((file) => {
       try {
-        return readFileSync(join(rootDir, file), 'utf8').includes('Keyboard.addListener')
+        const source = readFileSync(join(rootDir, file), 'utf8')
+        // `metrics()` too: the stub has none, so a page module calling it throws on the spot.
+        return source.includes('Keyboard.addListener') || source.includes('Keyboard.metrics')
       } catch {
         return false
       }
@@ -69,7 +60,7 @@ describeClosure(
   () => {
     it.each([HUB, REVIEW])('measures it through the seam and nowhere else: %s', async (route) => {
       const closure = await mobileWebAppRouteClosure(route)
-      expect(keyboardSubscribers(closure)).toEqual(SUBSCRIBES_TO_THE_STUB)
+      expect(keyboardSubscribers(closure)).toEqual([])
     })
 
     it.each([HUB, REVIEW])('carries the seam, so the rule is not vacuous: %s', async (route) => {
@@ -100,17 +91,6 @@ describeClosure(
         ).toEqual(['src/platform/other.web.ts'])
       } finally {
         rmSync(root, { recursive: true, force: true })
-      }
-    })
-
-    it('names an exemption that is really in both closures, so it cannot outlive its subject', async () => {
-      const [hub, review] = await Promise.all([
-        mobileWebAppRouteClosure(HUB),
-        mobileWebAppRouteClosure(REVIEW)
-      ])
-      for (const file of SUBSCRIBES_TO_THE_STUB) {
-        expect(hub.local, file).toContain(file)
-        expect(review.local, file).toContain(file)
       }
     })
   },

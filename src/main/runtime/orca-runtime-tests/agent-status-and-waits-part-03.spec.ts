@@ -85,7 +85,7 @@ describe('OrcaRuntimeService', () => {
       runtime.sendTerminal(
         terminal.handle,
         { text: 'notes', enter: true },
-        { beforeWrite, afterWrite }
+        { inputKind: 'driving', beforeWrite, afterWrite }
       )
     ).rejects.toThrow('terminal_not_writable')
     expect(writes).toEqual(['notes', '\r'])

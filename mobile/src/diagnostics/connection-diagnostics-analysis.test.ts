@@ -98,23 +98,6 @@ describe('diagnoseConnection', () => {
     })
   })
 
-  it('marks authenticated Relay liveness failures as safe to send', () => {
-    expect(
-      diagnoseConnection({
-        endpoint: 'ws://192.168.1.2:6768',
-        state: 'reconnecting',
-        activePath: 'relay',
-        entries: [
-          {
-            ...event('Relay health check failed'),
-            code: 'liveness-timeout',
-            path: 'relay'
-          }
-        ]
-      }).reportability
-    ).toBe('orca-relay')
-  })
-
   it.each([
     ['direct timeout', 'connect-timeout', 'tailscale'],
     ['handshake timeout', 'handshake-timeout', 'relay'],

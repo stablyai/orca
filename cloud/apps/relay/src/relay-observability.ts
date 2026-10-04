@@ -44,8 +44,10 @@ export type AssignmentAdmissionOutcome =
   | 'sticky-rejected'
   | 'placement'
   | 'placement-rejected'
+  | 'drain-return'
+  | 'drain-return-deferred'
 
-export type AssignmentAdmissionLane = 'sticky' | 'placement'
+export type AssignmentAdmissionLane = 'sticky' | 'placement' | 'drain-return'
 
 export interface RelayRuntimeObserver {
   recordAuth(success: boolean): void
@@ -58,6 +60,7 @@ export interface RelayRuntimeObserver {
   recordControlActivityRecovery?(success: boolean): void
   recordAssignmentAdmission?(outcome: AssignmentAdmissionOutcome): void
   recordAssignmentRejectionReason?(lane: AssignmentAdmissionLane, reason: string): void
+  recordDrainReturnRetryAfter?(seconds: number): void
   recordRegionRequest?(region: RelayRegion | undefined): void
   recordRegionSelection?(input: {
     targetRegion: RelayRegion
@@ -107,6 +110,11 @@ type RelayMetricDeltas = {
   placementAssignmentRejections: number
   stickyRejectionsByReason: Record<string, number>
   placementRejectionsByReason: Record<string, number>
+  drainReturnAssignments: number
+  drainReturnDeferrals: number
+  drainReturnRejectionsByReason: Record<string, number>
+  drainReturnRetryAfterSecondsMax: number
+  drainReturnRetryAfterSecondsSum: number
   requestedRegions: Record<string, number>
   selectedRegions: Record<string, number>
   regionFallbacks: Record<string, number>
@@ -148,6 +156,11 @@ const emptyDeltas = (): RelayMetricDeltas => ({
   placementAssignmentRejections: 0,
   stickyRejectionsByReason: {},
   placementRejectionsByReason: {},
+  drainReturnAssignments: 0,
+  drainReturnDeferrals: 0,
+  drainReturnRejectionsByReason: {},
+  drainReturnRetryAfterSecondsMax: 0,
+  drainReturnRetryAfterSecondsSum: 0,
   requestedRegions: {},
   selectedRegions: {},
   regionFallbacks: {},
@@ -243,6 +256,8 @@ export class RelayObservability implements RelayRuntimeObserver {
     if (outcome === 'sticky') this.deltas.stickyAssignments++
     else if (outcome === 'sticky-rejected') this.deltas.stickyAssignmentRejections++
     else if (outcome === 'placement') this.deltas.placementAssignments++
+    else if (outcome === 'drain-return') this.deltas.drainReturnAssignments++
+    else if (outcome === 'drain-return-deferred') this.deltas.drainReturnDeferrals++
     else this.deltas.placementAssignmentRejections++
   }
 
@@ -250,8 +265,18 @@ export class RelayObservability implements RelayRuntimeObserver {
     const counts =
       lane === 'sticky'
         ? this.deltas.stickyRejectionsByReason
-        : this.deltas.placementRejectionsByReason
+        : lane === 'drain-return'
+          ? this.deltas.drainReturnRejectionsByReason
+          : this.deltas.placementRejectionsByReason
     counts[reason] = (counts[reason] ?? 0) + 1
+  }
+
+  recordDrainReturnRetryAfter(seconds: number): void {
+    this.deltas.drainReturnRetryAfterSecondsMax = Math.max(
+      this.deltas.drainReturnRetryAfterSecondsMax,
+      seconds
+    )
+    this.deltas.drainReturnRetryAfterSecondsSum += seconds
   }
 
   recordRegionRequest(region: RelayRegion | undefined): void {
@@ -416,6 +441,11 @@ export class RelayObservability implements RelayRuntimeObserver {
       placementAssignmentRejectionsDelta: deltas.placementAssignmentRejections,
       stickyRejectionsByReasonDelta: deltas.stickyRejectionsByReason,
       placementRejectionsByReasonDelta: deltas.placementRejectionsByReason,
+      drainReturnAssignmentsDelta: deltas.drainReturnAssignments,
+      drainReturnDeferralsDelta: deltas.drainReturnDeferrals,
+      drainReturnRejectionsByReasonDelta: deltas.drainReturnRejectionsByReason,
+      drainReturnRetryAfterSecondsMax: deltas.drainReturnRetryAfterSecondsMax,
+      drainReturnRetryAfterSecondsSum: deltas.drainReturnRetryAfterSecondsSum,
       requestedRegionsDelta: deltas.requestedRegions,
       selectedRegionsDelta: deltas.selectedRegions,
       ...regionCounterFields('requestedRegion', deltas.requestedRegions),

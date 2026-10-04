@@ -1,3 +1,4 @@
+import { createMarkdownTokenizerStart } from './markdown-tokenizer-start'
 import { Node, mergeAttributes } from '@tiptap/core'
 import { isEditableDetailsHtmlBlock, matchDetailsHtmlBlock } from './details-markdown-html'
 import { formatMarkdownDocLinkBody, parseMarkdownDocLink } from './markdown-doc-links'
@@ -44,11 +45,7 @@ function isLineOnlyHtml(line: string): boolean {
 function matchBlockHtml(content: string, start: number): string | null {
   const lineEnd = findLineEnd(content, start)
   const line = content.slice(start, lineEnd)
-  if (!isLineOnlyHtml(line)) {
-    return null
-  }
-
-  return line
+  return isLineOnlyHtml(line) ? line : null
 }
 
 export function encodeRawMarkdownHtmlForRichEditor(
@@ -282,7 +279,9 @@ function createRawSourceNode({
     markdownTokenizer: {
       name,
       level: inline ? 'inline' : 'block',
-      start: inline ? skipInlineTransportStartScan : transport.startFor(kind),
+      start: inline
+        ? skipInlineTransportStartScan
+        : createMarkdownTokenizerStart(transport.startFor(kind)),
       tokenize(src) {
         const matched = transport.match(src, kind)
         if (!matched) {

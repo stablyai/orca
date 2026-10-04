@@ -245,31 +245,3 @@ it('reports a description-only change and lets a later report drop the text', ()
   expect(catalog.observe({ ...changed, commands: [{ name: 'clear' }] })).toBe(true)
   expect(catalog.commands).toEqual([{ name: 'clear', kind: 'command' }])
 })
-
-it('describes nothing when the session reported names only', () => {
-  expect(readClaudeSlashCommands(init())).toEqual([
-    { name: 'clear', kind: 'command' },
-    { name: 'ref-oss', kind: 'skill' },
-    { name: 'opsx:apply', kind: 'command' }
-  ])
-  expect(new ClaudeSlashCommandCatalog(init()).commands).toEqual([
-    { name: 'clear', kind: 'command' },
-    { name: 'ref-oss', kind: 'skill' },
-    { name: 'opsx:apply', kind: 'command' }
-  ])
-})
-
-it('still hides terminal-only names however well the provider describes them', () => {
-  const catalog = new ClaudeSlashCommandCatalog(init())
-  expect(
-    catalog.observe({
-      type: 'system',
-      subtype: 'commands_changed',
-      commands: [
-        { name: 'doctor', description: 'Diagnose the CLI install' },
-        { name: 'ref-oss', description: 'A skill' }
-      ]
-    })
-  ).toBe(true)
-  expect(catalog.commands).toEqual([{ name: 'ref-oss', kind: 'skill', description: 'A skill' }])
-})

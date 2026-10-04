@@ -4,10 +4,7 @@ import {
   spawnSurfaceClaimSequence,
   SURFACE_CLAIM_WITHOUT_STANDING
 } from './pty-recorded-surface-topology'
-import {
-  observeStructuredWorker,
-  resolveStructuredWorkerAuthority
-} from './structured-worker-authority'
+import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
 import { OrcaRuntimeWithSubscribeToTerminalResize } from './orca-runtime-subscribe-to-terminal-resize'
 import type {
@@ -21,6 +18,7 @@ import { resolveTerminalSessionWorktreeId } from './runtime-worktree-path-identi
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { adoptRuntimeTerminalOrphansFromInventory } from './runtime-terminal-orphan-adoption'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { getLatestPtyTitle } from './runtime-worktree-status-projection'
 import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
 
 export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntimeWithSubscribeToTerminalResize {
@@ -65,6 +63,7 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
         getPty: (handle) => this.getLivePtyForHandle(handle)?.pty ?? null,
         getLeaves: (ptyId) => this.getLeavesForPty(ptyId),
         getLeaf: (tabId, leafId) => this.leaves.get(this.getLeafKey(tabId, leafId)),
+        getDisplayTitle: (pty) => getLatestPtyTitle(this.getPtyDisplayRecord(pty)),
         replayPersistedSurface: (pty, tabId, paneKey) =>
           recordPtySurface(pty, tabId, paneKey, SURFACE_CLAIM_WITHOUT_STANDING),
         recordAdoptedSurface: (pty, tabId, paneKey) =>
@@ -210,12 +209,10 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
       this.getOrchestrationDbIfAvailable?.() ?? null
     )
     if (structured) {
-      // `resolveBareOrchestrationRecipient` routes direct mail through this, not through
-      // getTerminalPaneKey. The connected-gate below exists so mail is never routed to a corpse,
-      // so the structured answer needs a real liveness proof too, not just a registry hit.
-      return observeStructuredWorker(structured.identity).status === 'live'
-        ? structured.identity.paneKey
-        : null
+      // `resolveBareOrchestrationRecipient` routes direct mail through this. A structured worker is
+      // a recipient while this runtime owns it, running or at rest: mail to one at rest is a send,
+      // and the send starts its agent.
+      return structured.identity.paneKey
     }
     const runtimePty = this.getLivePtyForHandle(handle)
     if (runtimePty) {

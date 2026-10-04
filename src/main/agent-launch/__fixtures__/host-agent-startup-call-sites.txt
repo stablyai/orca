@@ -1,0 +1,10 @@
+# Host-side calls to the agent startup-plan builders, per file: <path> <calls> <decision>.
+#   attributes      a fresh agent the host builds; carries agentStartedTelemetry
+#   resume          continues an existing agent session; not a new start
+#   mobile-followup the phone's session-tab launch; attribution is a separate follow-up
+# The resolve-worktree-removal-target call also serves a bare typed command, which stays unattributed.
+src/main/runtime/orca-runtime-create-agent-session.ts 2 attributes
+src/main/runtime/orca-runtime-resolve-worktree-removal-target.ts 1 attributes
+src/main/runtime/runtime-worktree-agent-startup.ts 3 attributes
+src/main/runtime/orca-runtime-get-agent-session-execution-namespace.ts 1 resume
+src/main/runtime/orca-runtime-resolve-mobile-session-terminal-command.ts 1 mobile-followup

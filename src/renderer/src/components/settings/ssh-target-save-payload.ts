@@ -58,6 +58,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
+  const remoteRuntime = form.remoteRuntime === 'auto' ? undefined : form.remoteRuntime
 
   const target: SshTargetCreateInput = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost),
@@ -70,7 +71,8 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
-    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {})
+    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
+    ...(remoteRuntime ? { remoteRuntime } : {})
   }
 
   return {
@@ -86,6 +88,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
         proxyCommand,
         jumpHost,
         systemSshConnectionReuse,
+        remoteRuntime,
         source: 'manual'
       }
     }

@@ -97,7 +97,7 @@ vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32'
 }))
 
-vi.mock('@/lib/source-control-launch-agent-selection', () => ({
+vi.mock('../../../shared/source-control-launch-agent-selection', () => ({
   pickSourceControlLaunchAgent: mocks.pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId: mocks.readSourceControlLaunchRecipeAgentId
 }))

@@ -1,16 +1,17 @@
 /**
  * Where dictation's audio comes from, as the hook that drives it sees it.
  *
- * One seam, two hosts. Natively it is `@orca/expo-two-way-audio` and `expo-keep-awake` called
- * directly; on the page it is `native.audio.start|read|stop` and `native.wakelock.set` over the
- * bridge. Everything above it — the five composer states, the generation guards, the pending-audio
- * budget, where a transcript is routed — is the same code on both, because the part that differs
- * is the capability and the part that does not is the product.
+ * One seam, two hosts. Natively it is `@orca/expo-two-way-audio` called directly; on the page it is
+ * `native.audio.start|read|stop` over the bridge. Everything above it — the five composer states,
+ * the generation guards, the pending-audio budget, where a transcript is routed — is the same code
+ * on both, because the part that differs is the capability and the part that does not is the
+ * product.
  *
- * The shape is the native one: a permission and an open, a start and a stop, two event lanes and a
- * wake tag. That is deliberate. The page's pull is what `dictation-capture.web.ts` turns into these
- * events, so the flow above the seam cannot tell which host it is on, and the native half is the
- * calls it always made in the order it always made them.
+ * The shape is the native one: a permission and an open, a start and a stop, and two event lanes.
+ * That is deliberate. The page's pull is what `dictation-capture.web.ts` turns into these events,
+ * so the flow above the seam cannot tell which host it is on, and the native half is the calls it
+ * always made in the order it always made them. The screen is not here at all: an open microphone
+ * holds it on the device side, under both halves.
  */
 
 /**
@@ -43,13 +44,6 @@ export type DictationCaptureOpen =
 
 export type DictationCaptureSubscription = { readonly remove: () => void }
 
-/** The two calls that keep the screen alive while a dictation runs, and nothing else: the tag
- *  bookkeeping, its retries and its timeouts are host-independent and stay above this. */
-export type DictationKeepAwakeDevice = {
-  readonly activate: (tag: string) => Promise<void>
-  readonly deactivate: (tag: string) => Promise<void>
-}
-
 export type DictationCapture = {
   /** Runs the OS permission prompt if there is one and brings the engine up. */
   readonly open: () => Promise<DictationCaptureOpen>
@@ -58,10 +52,10 @@ export type DictationCapture = {
   /**
    * Stops producing chunks, after handing over everything the capture still holds.
    *
-   * Asynchronous because of the page, where the audio lives in the shell's ring and the last one
-   * of them has to be fetched: up to one drain interval of the utterance's tail is sitting there
-   * when the user lifts the button, and no timer is coming for it. Natively that audio already
-   * reached the hook as it was produced, so there the promise is already resolved.
+   * Asynchronous because of the page, where the audio lives in the shell's ring and comes back on
+   * the stop's own reply: up to one drain interval of the utterance's tail is sitting there when
+   * the user lifts the button, and no timer is coming for it. Natively that audio already reached
+   * the hook as it was produced, so there the promise is already resolved.
    *
    * Never rejects. It runs on every exit including a throw, where a rejection would replace what
    * brought us here with a complaint about cleaning up after it.
@@ -75,13 +69,12 @@ export type DictationCapture = {
   /**
    * The capture was taken away — a call, another app, a shell that no longer has one.
    *
-   * No argument, because what the flow does about any of them is the same: cancel, release the
-   * tag, tell the desktop. Natively this is `onAudioInterruption`'s `began` and `blocked`; on the
+   * No argument, because what the flow does about any of them is the same: cancel and tell the
+   * desktop. Natively this is `onAudioInterruption`'s `began` and `blocked`; on the
    * page it is the same two riding a `read` reply, plus a read the shell refused, which is a
    * capture that is gone by another name.
    */
   readonly onInterruption: (handler: () => void) => DictationCaptureSubscription
-  readonly keepAwake: DictationKeepAwakeDevice
 }
 
 /**

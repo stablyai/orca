@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { vi, type Mock } from 'vitest'
 import type { AgentBrowserBridge } from './agent-browser-bridge'
 import type { BrowserManager } from './browser-manager'
@@ -32,8 +33,6 @@ export function mockBrowserManager(
     getBrowserPageLoadError: vi.fn(() => null),
     getBrowserPageCertificateFailure: vi.fn(() => null),
     unregisterGuest: vi.fn(),
-    ensureWebviewVisible: vi.fn(async () => () => {}),
-    acquireAutomationVisibility: vi.fn(async () => () => {}),
     ...overrides
   } as unknown as BrowserManager
 }
@@ -58,6 +57,7 @@ export type MockWebContents = {
   on: Mock<(event: string, listener: MockEmitterListener) => void>
   removeListener: Mock<(event: string, listener: MockEmitterListener) => void>
   isDestroyed: () => boolean
+  isCrashed: () => boolean
   invalidate: Mock<() => void>
   focus: Mock<() => void>
   debugger: MockWebContentsDebugger
@@ -80,6 +80,7 @@ export function mockWebContents(
     on: vi.fn(),
     removeListener: vi.fn(),
     isDestroyed: () => false,
+    isCrashed: () => false,
     invalidate: vi.fn(),
     focus: vi.fn(),
     debugger: {
@@ -111,14 +112,19 @@ export function overrideBridgeWebContentsLookup(
   })
 }
 
+// Why: runAgentBrowserRaw listens for the child's exit/close, so execFile fakes must be emitters.
+export function createFakeAgentBrowserChild<T extends object>(fields: T): EventEmitter & T {
+  return Object.assign(new EventEmitter(), fields)
+}
+
 export function createSucceedWith(execFileMock: Mock, stdinWrites: string[]) {
   return function succeedWith(data: unknown): void {
     execFileMock.mockImplementation(
       (_bin: string, _args: string[], _opts: unknown, cb: ExecFileCallback) => {
         cb(null, JSON.stringify({ success: true, data }), '')
-        return {
+        return createFakeAgentBrowserChild({
           stdin: { on: vi.fn(), end: (text: string) => stdinWrites.push(text) }
-        }
+        })
       }
     )
   }

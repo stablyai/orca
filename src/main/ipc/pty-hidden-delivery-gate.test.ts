@@ -5,6 +5,7 @@ import {
   getHiddenRendererPtyDeliveryDebug,
   isHiddenPtyDeliveryGateEnabled,
   markHiddenRendererPty,
+  markRuntimeOwnedHiddenRendererPty,
   recordHiddenRendererPtyDataDrop,
   resetRendererScopedHiddenPtyDeliveryState,
   setRendererPtyDeliveryInterest,
@@ -92,6 +93,20 @@ describe('pty hidden delivery gate', () => {
     // Drop memory survives so the new renderer's first unhide still restores.
     markHiddenRendererPty(PTY_ID)
     expect(unmarkHiddenRendererPty(PTY_ID).droppedWhileHidden).toBe(true)
+  })
+
+  it('keeps runtime-owned marks across reload until unmark or teardown', () => {
+    markRuntimeOwnedHiddenRendererPty(PTY_ID)
+    markRuntimeOwnedHiddenRendererPty('pty-2')
+
+    resetRendererScopedHiddenPtyDeliveryState()
+    expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(true)
+
+    unmarkHiddenRendererPty(PTY_ID)
+    clearHiddenRendererPtyDeliveryState('pty-2')
+    resetRendererScopedHiddenPtyDeliveryState()
+    expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(false)
+    expect(shouldDropHiddenRendererPtyData('pty-2', {})).toBe(false)
   })
 
   it('clears all per-PTY state on teardown and tracks debug counters', () => {

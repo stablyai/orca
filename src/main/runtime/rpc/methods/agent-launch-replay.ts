@@ -11,8 +11,8 @@
  * resolving the caller's worktree selector, because a selector resolution is a live precondition
  * and a replay must not be able to fail on one: an operation that already ran has an answer, and
  * re-deciding it against today's world is how a recorded success becomes a fresh refusal the client
- * then retries as a second effect. `admitAgentSessionMutation` puts the ledger ahead of the lease
- * and the fence for that same reason.
+ * then retries as a second effect. `admitAgentSessionMutation` puts the ledger ahead of the writer
+ * lease for that same reason.
  */
 
 import { deriveAgentLaunchChildOperationId } from '../../../../shared/agent-launch-operation'

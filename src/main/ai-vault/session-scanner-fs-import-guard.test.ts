@@ -22,7 +22,6 @@ const ALLOWLIST = new Set([
   // `existsSync` on bundled module paths inside the app dir.
   'session-scanner-service-entry-path.ts',
   'session-scanner-service-spawn.ts',
-  'session-scanner-worker-spawn.ts',
   'session-scanner-opencode-sqlite-worker-spawn.ts',
   // On-demand IPC readers, gated in the STA-4049 follow-up.
   'session-scanner-claude-subagents.ts',

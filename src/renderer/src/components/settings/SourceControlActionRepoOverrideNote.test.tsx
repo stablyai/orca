@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '../ui/tooltip'
 import { SourceControlActionRepoOverrideNote } from './SourceControlActionRepoOverrideNote'
-import type { SourceControlActionRecipeOverrideSummary } from '@/lib/source-control-launch-agent-selection'
+import type { SourceControlActionRecipeOverrideSummary } from '../../../../shared/source-control-launch-agent-selection'
 
 let container: HTMLDivElement
 let root: Root

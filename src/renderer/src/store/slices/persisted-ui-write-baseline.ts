@@ -26,6 +26,7 @@ export type PersistedUIWriteBaseline = {
   hideDetachedHeadWorkspaces: boolean
   hideWorkspacesFromOtherDevices: boolean
   alwaysShowDefaultBranchWorkspace: boolean
+  explorerDisplayRootByWorktree: Record<string, string>
   showDotfilesByWorktree: Record<string, boolean>
   filterRepoIds: readonly string[]
   acknowledgedAgentsByPaneKey: Record<string, number>
@@ -55,6 +56,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   hideDetachedHeadWorkspaces: true,
   hideWorkspacesFromOtherDevices: true,
   alwaysShowDefaultBranchWorkspace: true,
+  explorerDisplayRootByWorktree: true,
   showDotfilesByWorktree: true,
   filterRepoIds: true,
   acknowledgedAgentsByPaneKey: true,
@@ -95,11 +97,13 @@ function stringArrayEqual(a: readonly string[], b: readonly string[]): boolean {
   return a === b || (a.length === b.length && a.every((value, i) => value === b[i]))
 }
 
+/** Compares collection fields by value so hydration does not produce redundant persistence writes from new identities. */
 function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: unknown): boolean {
   if (field === 'filterRepoIds') {
     return stringArrayEqual(a as readonly string[], b as readonly string[])
   }
   if (
+    field === 'explorerDisplayRootByWorktree' ||
     field === 'showDotfilesByWorktree' ||
     field === 'acknowledgedAgentsByPaneKey' ||
     field === 'activityClearedAtByPaneKey' ||

@@ -10,7 +10,7 @@ export function beginFullCreationStructuredLaunch(args: {
   /** Planned before the worktree existed; `worktreeId` names the one that was created. */
   plan: AgentSessionLaunchPlan
   worktreeId: string
-  beforeOpen: (sessionId: string) => boolean | void
+  beforeOpen: (sessionId?: string) => boolean | void
 }): StructuredAgentSessionProvisionalLaunch | null {
   return beginStructuredAgentSessionProvisionalLaunch({
     plan: args.plan,

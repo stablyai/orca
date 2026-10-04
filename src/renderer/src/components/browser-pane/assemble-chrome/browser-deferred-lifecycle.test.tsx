@@ -201,51 +201,41 @@ describe('deferred browser lifecycle through the overlay and SSH gate', () => {
     }
   )
 
-  it.each(['url', 'document'])(
-    'retains %s content across page and tab switches within a visible worktree',
-    (kind) => {
-      if (kind === 'document') {
-        mocks.state!.browserPagesByWorkspace.a[0].docLocation = {
-          kind: 'workspace-doc',
-          worktreeId: 'wt-1',
-          filePath: '/workspace/report.html'
-        }
-      }
-      const view = render(surface())
-      const page = view.container.querySelector<HTMLInputElement>('[data-page-id="a-1"]')!
-      page.value = 'unsaved state'
-      page.scrollTop = 80
-      expect(view.container.querySelectorAll('[data-page-id]')).toHaveLength(1)
-      selectPage('a-2')
-      redraw(view)
-      expect(page.isConnected).toBe(true)
-      expect(page.dataset.active).toBe('false')
-      selectTab('b')
-      redraw(view)
-      expect(page.isConnected).toBe(true)
-      selectPage('a-1')
-      selectTab('a')
-      redraw(view)
-      expect(view.container.querySelector('[data-page-id="a-1"]')).toBe(page)
-      expect(page.value).toBe('unsaved state')
-      expect(page.scrollTop).toBe(80)
-      expect(page.dataset.active).toBe('true')
-      expect(view.container.querySelector('[data-page-id="b-2"]')).toBeNull()
+  it('retains page content across page and tab switches within a visible worktree', () => {
+    const view = render(surface())
+    const page = view.container.querySelector<HTMLInputElement>('[data-page-id="a-1"]')!
+    page.value = 'unsaved state'
+    page.scrollTop = 80
+    expect(view.container.querySelectorAll('[data-page-id]')).toHaveLength(1)
+    selectPage('a-2')
+    redraw(view)
+    expect(page.isConnected).toBe(true)
+    expect(page.dataset.active).toBe('false')
+    selectTab('b')
+    redraw(view)
+    expect(page.isConnected).toBe(true)
+    selectPage('a-1')
+    selectTab('a')
+    redraw(view)
+    expect(view.container.querySelector('[data-page-id="a-1"]')).toBe(page)
+    expect(page.value).toBe('unsaved state')
+    expect(page.scrollTop).toBe(80)
+    expect(page.dataset.active).toBe('true')
+    expect(view.container.querySelector('[data-page-id="b-2"]')).toBeNull()
 
-      redraw(view, false)
-      expect(view.container.querySelectorAll('[data-page-id]')).toHaveLength(0)
-      redraw(view)
-      const restored = view.container.querySelector('[data-page-id="a-1"]')!
-      expect(restored).not.toBe(page)
-      expect(view.container.querySelectorAll('[data-page-id]')).toHaveLength(1)
+    redraw(view, false)
+    expect(view.container.querySelectorAll('[data-page-id]')).toHaveLength(0)
+    redraw(view)
+    const restored = view.container.querySelector('[data-page-id="a-1"]')!
+    expect(restored).not.toBe(page)
+    expect(view.container.querySelectorAll('[data-page-id]')).toHaveLength(1)
 
-      mocks.state!.browserPagesByWorkspace.a = mocks.state!.browserPagesByWorkspace.a.slice(1)
-      mocks.state!.browserTabsByWorktree['wt-1'] = [...mocks.state!.browserTabsByWorktree['wt-1']]
-      redraw(view)
-      expect(page.isConnected).toBe(false)
-      expect(restored.isConnected).toBe(false)
-    }
-  )
+    mocks.state!.browserPagesByWorkspace.a = mocks.state!.browserPagesByWorkspace.a.slice(1)
+    mocks.state!.browserTabsByWorktree['wt-1'] = [...mocks.state!.browserTabsByWorktree['wt-1']]
+    redraw(view)
+    expect(page.isConnected).toBe(false)
+    expect(restored.isConnected).toBe(false)
+  })
 
   it('keeps a prepared SSH gate and its opened pages alive when switching tabs', async () => {
     mocks.executionHostId = 'ssh:target-a'

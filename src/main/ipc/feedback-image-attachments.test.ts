@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_FEEDBACK_IMAGE_BYTES,
   MAX_FEEDBACK_IMAGE_COUNT,
+  MAX_FEEDBACK_IMAGE_TOTAL_BYTES,
   appendFeedbackImagesToFormData,
   feedbackImageFilename,
   isSupportedFeedbackImageContentType,
@@ -94,5 +95,25 @@ describe('validateFeedbackImages', () => {
     expect(validateFeedbackImages([image('image/png', MAX_FEEDBACK_IMAGE_BYTES + 1)])).toBe(
       `Each image must be ${MAX_FEEDBACK_IMAGE_BYTES} bytes or fewer.`
     )
+  })
+
+  it('accepts a set that totals exactly the attachment budget', () => {
+    const quarter = MAX_FEEDBACK_IMAGE_TOTAL_BYTES / MAX_FEEDBACK_IMAGE_COUNT
+    expect(
+      validateFeedbackImages(
+        Array.from({ length: MAX_FEEDBACK_IMAGE_COUNT }, () => image('image/png', quarter))
+      )
+    ).toBeNull()
+  })
+
+  it('rejects a set over the total byte budget even when each image fits', () => {
+    const half = MAX_FEEDBACK_IMAGE_TOTAL_BYTES / 2
+    expect(
+      validateFeedbackImages([
+        image('image/png', half),
+        image('image/png', half),
+        image('image/png', 1)
+      ])
+    ).toBe(`Image attachments must total ${MAX_FEEDBACK_IMAGE_TOTAL_BYTES} bytes or fewer.`)
   })
 })

@@ -4,15 +4,14 @@ import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 
 /**
  * A row whose path names a container and an entry inside it rather than a file
- * of its own. OpenCode's SQLite sessions are the one shape today
- * (`<opencode.db>#<sessionId>`), which is why this reads through that source's
- * own splitter rather than reinventing the encoding.
+ * of its own. OpenCode and ZCode SQLite sessions share the same encoding,
+ * with distinct database names validated by the source splitter.
  */
 export type SessionSearchSyntheticSource = { container: string; id: string }
 
 export function splitSyntheticSessionSource(path: string): SessionSearchSyntheticSource | null {
-  const openCode = splitOpenCodeSqliteCandidate(path)
-  return openCode ? { container: openCode.dbPath, id: openCode.sessionId } : null
+  const sqlite = splitOpenCodeSqliteCandidate(path) ?? splitOpenCodeSqliteCandidate(path, 'zcode')
+  return sqlite ? { container: sqlite.dbPath, id: sqlite.sessionId } : null
 }
 
 /**

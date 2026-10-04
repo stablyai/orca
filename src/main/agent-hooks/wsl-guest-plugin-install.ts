@@ -4,11 +4,14 @@
 // Mirrors the SSH relay's installPluginsOnRelay swallow list.
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../shared/agent-hook-relay'
+import { selectOpenCodePluginSources } from './opencode-plugin-settings'
+import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
 import type { PluginSources } from '../../relay/plugin-overlay'
 
 /** Structural, not the deps type itself, so this stays free of the deps module. */
 type GuestPluginInstallDeps = {
   pluginSources: () => PluginSources
+  managedHookSettings?: () => ManagedHookDetectionSettings
   warn: (message: string) => void
 }
 
@@ -29,7 +32,7 @@ export async function requestGuestOpenCodeOverlayDir(
   try {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
     const res = (await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
-      ...deps.pluginSources(),
+      ...selectOpenCodePluginSources(deps.pluginSources(), deps.managedHookSettings?.() ?? null),
       ...(launchKind ? { launchKind } : {})
     })) as {
       overlayDirs?: { opencode?: unknown; opencode2?: unknown; pi?: unknown; omp?: unknown }

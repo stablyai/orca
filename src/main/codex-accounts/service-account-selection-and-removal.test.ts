@@ -215,47 +215,67 @@ describe('CodexAccountService config sync', () => {
     })
   })
 
-  it('removes an account and cleans up managed home', async () => {
-    const managedHomePath = createManagedHome(
-      testState.userDataDir,
-      'account-1',
-      '',
-      '{"account":"managed"}\n'
-    )
-    const settings = createSettings({
-      codexManagedAccounts: [
-        {
-          id: 'account-1',
-          email: 'user@example.com',
-          managedHomePath,
-          providerAccountId: null,
-          workspaceLabel: null,
-          workspaceAccountId: null,
-          createdAt: 1,
-          updatedAt: 1,
-          lastAuthenticatedAt: 1
-        }
-      ],
-      activeCodexManagedAccountId: 'account-1'
-    })
-    const store = createStore(settings)
-    const rateLimits = createRateLimits()
-    const runtimeHome = createRuntimeHome()
+  it.each(['healthy', 'unreadable'])(
+    'removes an account with a %s credit ledger',
+    async (ledger) => {
+      const managedHomePath = createManagedHome(
+        testState.userDataDir,
+        'account-1',
+        '',
+        '{"account":"managed"}\n'
+      )
+      const settings = createSettings({
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            email: 'user@example.com',
+            managedHomePath,
+            providerAccountId: null,
+            workspaceLabel: null,
+            workspaceAccountId: null,
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ],
+        activeCodexManagedAccountId: 'account-1'
+      })
+      const store = createStore(settings)
+      const rateLimits = createRateLimits()
+      const runtimeHome = createRuntimeHome()
 
-    const { CodexAccountService } = await import('./service')
-    const service = new CodexAccountService(
-      store as never,
-      rateLimits as never,
-      runtimeHome as never
-    )
+      const ledgerError = new Error('credit ledger unreadable')
+      if (ledger === 'unreadable') {
+        store.getCodexResetCreditAttemptLedger.mockImplementation(() => {
+          throw ledgerError
+        })
+      }
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    const result = await service.removeAccount('account-1')
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeHome as never
+      )
 
-    expect(result.accounts).toHaveLength(0)
-    expect(result.activeAccountId).toBe(null)
-    expect(existsSync(managedHomePath)).toBe(false)
-    expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
-  })
+      const result = await service.removeAccount('account-1')
+
+      expect(result.accounts).toHaveLength(0)
+      expect(result.activeAccountId).toBe(null)
+      expect(existsSync(managedHomePath)).toBe(false)
+      expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
+      expect(rateLimits.evictInactiveCodexCache).toHaveBeenCalledWith('account-1')
+      if (ledger === 'unreadable') {
+        expect(warn).toHaveBeenCalledWith(
+          '[codex-accounts] Removed account, but credit ledger cleanup failed:',
+          expect.any(Error)
+        )
+        expect(store.replaceCodexResetCreditAttemptLedgerAndFlush).not.toHaveBeenCalled()
+      }
+      warn.mockRestore()
+    }
+  )
 
   it('refuses to remove a managed home owned by a different account', async () => {
     const otherAccountHome = createManagedHome(

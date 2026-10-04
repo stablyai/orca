@@ -1,0 +1,19 @@
+{
+  "description": "prime-agent recording at 120x40 replayed on the agent pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-40: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "41-56: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "57: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "58-92: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "93-95: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending"
+    ],
+    "clockless": [
+      "0-40: verdict=pending:closed wait=pending",
+      "41-56: verdict=ready-strong wait=ready@start",
+      "57: verdict=pending:closed wait=pending",
+      "58-92: verdict=ready-strong wait=ready@start",
+      "93-95: verdict=pending:closed wait=pending"
+    ]
+  }
+}

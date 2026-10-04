@@ -10,6 +10,7 @@ import { upsertHookTrustEntries } from './config-toml-trust'
 import { getCodexConfigTomlPath, getConfigPath, writeCodexHooksJson } from './codex-hook-definition'
 import { getCodexManagedScriptFileName } from './codex-hook-identity'
 import { cleanupLegacyManagedHookRepresentations } from './codex-hook-legacy-cleanup'
+import { removeRealHomeCodexHookForOptOut } from './codex-real-home-hook-install'
 import {
   removeRuntimeManagedHookTrustEntries,
   removeStaleRuntimeHookTrustEntries
@@ -96,6 +97,7 @@ export async function removeCodexHooksExclusively(
   const config = readHooksJson(configPath)
   if (!config) {
     // Why: a malformed hooks.json shouldn't strand old hooks in ~/.codex or the legacy profile after disabling.
+    await removeRealHomeCodexHookForOptOut()
     await cleanupLegacyManagedHookRepresentations()
     return {
       agent: 'codex',
@@ -129,6 +131,9 @@ export async function removeCodexHooksExclusively(
   // Why: drop trust entries so config.toml doesn't accumulate dead [hooks.state] blocks across install/remove cycles.
   removeRuntimeManagedHookTrustEntries(configPath)
 
+  // Why here and nowhere automatic: the real-home entry is shared by every Orca
+  // on this HOME, so only the user's explicit opt-out may strip it.
+  await removeRealHomeCodexHookForOptOut()
   await cleanupLegacyManagedHookRepresentations()
 
   return getStatus()

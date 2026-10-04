@@ -9,6 +9,31 @@ export const DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS = 24 * 60 * 60
 export const DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 0
 export const SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD = 'relay.configureGraceTime'
 
+/**
+ * Which runtime executes the SSH relay. `legacy` runs it on the host's Node with native deps
+ * installed on the host; `pinned-node` uploads Orca's pinned Node and prebuilt addons (design D5).
+ */
+export const SSH_REMOTE_RUNTIMES = ['legacy', 'pinned-node'] as const
+export type SshRemoteRuntime = (typeof SSH_REMOTE_RUNTIMES)[number]
+export const DEFAULT_SSH_REMOTE_RUNTIME: SshRemoteRuntime = 'legacy'
+
+/** Where the design D6 fallback ladder landed; `legacy` is the host-npm path outside it. */
+export const SSH_REMOTE_RUNTIME_RUNGS = ['A', 'B', 'C', 'D', 'legacy'] as const
+export type SshRemoteRuntimeRung = (typeof SSH_REMOTE_RUNTIME_RUNGS)[number]
+
+/**
+ * Main-owned record of the last ladder decision for a host. Valid only while its key
+ * (glibc, pinned runtime hash, Orca major) still matches, so an upgrade re-evaluates.
+ */
+export type SshRemoteRuntimeResolution = {
+  rung: SshRemoteRuntimeRung
+  /** The classified refusal that stepped off Orca's pinned Node, when one did. */
+  pinnedRefusal?: string
+  glibc: string | null
+  runtimeSha256: string
+  orcaMajor: number
+}
+
 export type SshTarget = {
   id: string
   label: string
@@ -55,6 +80,10 @@ export type SshTarget = {
   /** Reuse a system OpenSSH connection across setup commands. Undefined means
    *  enabled; false is an explicit per-target compatibility opt-out. */
   systemSshConnectionReuse?: boolean
+  /** Relay runtime for this host; undefined means DEFAULT_SSH_REMOTE_RUNTIME. */
+  remoteRuntime?: SshRemoteRuntime
+  /** Main-owned ladder cache; renderer updates never set it. */
+  remoteRuntimeResolution?: SshRemoteRuntimeResolution
   /** Durable registration incarnation. Advances on create / re-create / explicit
    *  re-adopt only, so automations fenced on an old registration cannot run on a
    *  later target that happens to reuse the id. Never advanced by connect state. */
@@ -198,6 +227,14 @@ export type SshConnectionState = {
   supportsFolderDownload?: boolean
   /** Remote OS detected by the SSH relay once available. */
   remotePlatform?: SshRemotePlatform
+  /** Set while connected without the Orca remote server (runtime ladder rung D). */
+  plainSsh?: SshPlainSshMode
+}
+
+/** Plain SSH terminals and SFTP browsing only; `reason` is the ladder's classified cause. */
+export type SshPlainSshMode = {
+  reason: string
+  message: string
 }
 
 /** Non-secret mutation provenance. Both fields are required when an SSH provider is selected. */

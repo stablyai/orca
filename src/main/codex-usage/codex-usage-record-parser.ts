@@ -5,6 +5,7 @@ import {
   resolveCodexUsageDelta,
   type CodexUsageRawUsage
 } from './codex-usage-token-delta'
+import { LONG_CONTEXT_THRESHOLD_TOKENS } from './codex-model-pricing'
 import type { CodexUsageParsedEvent } from './types'
 
 type CodexUsageRawRecord = {
@@ -122,7 +123,7 @@ export function parseCodexUsageRecord(
     return null
   }
 
-  let delta = {
+  const delta = {
     ...resolvedUsage.delta,
     cachedInputTokens: Math.min(
       resolvedUsage.delta.cachedInputTokens,
@@ -142,6 +143,10 @@ export function parseCodexUsageRecord(
 
   context.previousTotals = resolvedUsage.nextTotals
 
+  // Why: the long-context tier is read as per request — GPT-5.6/6 pages say "full request", while
+  // GPT-5.4/5.5 pages say "full session", and one token_count's last_token_usage is one response.
+  // A total-only delta can span several requests, so it is never classed as long.
+  const isLongContext = lastUsage !== null && delta.inputTokens > LONG_CONTEXT_THRESHOLD_TOKENS
   const resolvedModel = extractModel(parsed.payload) ?? context.currentModel
   const hasInferredPricing = resolvedModel === null
 
@@ -156,6 +161,9 @@ export function parseCodexUsageRecord(
     cachedInputTokens: delta.cachedInputTokens,
     outputTokens: delta.outputTokens,
     reasoningOutputTokens: delta.reasoningOutputTokens,
-    totalTokens: delta.totalTokens
+    totalTokens: delta.totalTokens,
+    longContextInputTokens: isLongContext ? delta.inputTokens : 0,
+    longContextCachedInputTokens: isLongContext ? delta.cachedInputTokens : 0,
+    longContextOutputTokens: isLongContext ? delta.outputTokens : 0
   }
 }

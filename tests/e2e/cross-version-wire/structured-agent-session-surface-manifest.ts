@@ -11,12 +11,17 @@
 import { attachFingerprintFields } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
 import type { AgentSessionAttachParams } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
 import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session-mutation-envelope'
+import {
+  createStructuredAgentSessionOutboxEntry,
+  structuredAgentSessionSendRequest
+} from '../../../src/shared/structured-agent-session-outbox'
 
 export const SESSION = 'session-alpha'
 export const WORKSPACE = 'workspace-1'
 export const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 export const NOW = 1_800_000_000_000
 export const REWIND_METHOD = 'agentSession.rewind'
+export const CONVERSATION_OUTLINE_METHOD = 'agentSession.conversationOutline'
 export const STATUS_FEED_METHOD = 'agentSession.subscribeStatus'
 export const TURN_COMPLETION_FEED_METHOD = 'agentSession.subscribeTurnCompletions'
 
@@ -63,6 +68,23 @@ export const STRUCTURED_CALLS: {
   },
   { method: 'agentSession.send', hostMethod: 'send', result: { ok: true, replayed: false } },
   { method: 'agentSession.cancel', hostMethod: 'cancel', result: { ok: true, replayed: false } },
+  // Draft mutations for mid-turn queueing. Methods exist ahead of the
+  // capability's advertisement; only capability-gated clients ever call them.
+  {
+    method: 'agentSession.queuedMessageSend',
+    hostMethod: 'queuedMessageSend',
+    result: { ok: true, replayed: false }
+  },
+  {
+    method: 'agentSession.queuedMessageDelete',
+    hostMethod: 'queuedMessageDelete',
+    result: { ok: true, replayed: false }
+  },
+  {
+    method: 'agentSession.queuedMessagesResume',
+    hostMethod: 'queuedMessagesResume',
+    result: { ok: true, replayed: false }
+  },
   {
     method: REWIND_METHOD,
     hostMethod: 'rewind',
@@ -85,9 +107,9 @@ export const STRUCTURED_CALLS: {
     result: { ok: true, replayed: false }
   },
   {
-    method: 'agentSession.requestHandoff',
-    hostMethod: 'requestHandoff',
-    result: { status: { owner: 'native' } }
+    method: 'agentSession.threadGoal',
+    hostMethod: 'changeThreadGoal',
+    result: { ok: true, replayed: false }
   },
   {
     method: 'agentSession.handoffStatus',
@@ -100,6 +122,11 @@ export const STRUCTURED_CALLS: {
     result: { current: { model: 'gpt-live' } }
   },
   {
+    method: 'agentSession.modelCatalog',
+    hostMethod: 'modelCatalog',
+    result: { origin: 'unknown' }
+  },
+  {
     method: 'agentSession.commands',
     hostMethod: 'readCommands',
     result: { commands: [{ name: 'clear', kind: 'command' }] }
@@ -109,7 +136,8 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'revealSession',
     result: { ok: true, sessionId: SESSION, workspaceId: WORKSPACE, agent: 'codex', readable: true }
   },
-  { method: 'agentSession.hold', hostMethod: 'hold', result: { held: true } },
+  // A no-op on a host that starts an agent only for work; it still builds the host.
+  { method: 'agentSession.hold', hostMethod: null, result: { held: true } },
   // The restart-resume surface. Bare additions, not capability-negotiated: an RPC method's
   // absence is explicit (`method_not_found`), which the old-dispatcher case below asserts, so a
   // newer client learns it during negotiation instead of by being met with silence.
@@ -123,21 +151,23 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'restartResumableDismiss',
     result: { dismissed: 0 }
   },
-  {
-    method: 'agentSession.restartResume',
-    hostMethod: 'restartResumeAll',
-    result: { results: [] }
-  },
+  // Reattaching alone is nothing now, so this answers that nothing was resumed.
+  { method: 'agentSession.restartResume', hostMethod: null, result: { results: [] } },
   {
     method: 'agentSession.restartContinue',
     hostMethod: 'restartContinueAll',
     result: { resumed: [], continued: [] }
   },
-  { method: 'agentSession.release', hostMethod: 'release', result: { released: true } },
+  { method: 'agentSession.release', hostMethod: null, result: { released: true } },
   {
     method: 'agentSession.history',
     hostMethod: 'history',
     result: { ok: true, page: { items: [] } }
+  },
+  {
+    method: CONVERSATION_OUTLINE_METHOD,
+    hostMethod: 'journalSnapshot',
+    result: { sessionId: SESSION, entries: [], omittedEntries: 0 }
   },
   // A subscription that opens with nothing to say answers with no reply at all,
   // so reaching the host is the only signal that the gate opened.
@@ -211,9 +241,21 @@ export function createIntentParams(): Record<string, unknown> {
   return { envelope: envelope({ method: 'agentSession.create', fields, fence: null }), ...fields }
 }
 
-export function sendParams(text: string, fence: number): Record<string, unknown> {
-  const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
-  return { envelope: envelope({ method: 'agentSession.send', fields: { body }, fence }), body }
+/** Built by the outbox clients send from, so an older host is handed exactly what a current
+ *  client puts on the wire, fingerprint included. */
+export function sendParams(
+  text: string,
+  fence: number,
+  sentDelivery?: 'queue-if-active'
+): Record<string, unknown> {
+  const entry = createStructuredAgentSessionOutboxEntry({
+    clientMessageId: operationId(),
+    sessionId: SESSION,
+    text,
+    attachments: [],
+    queuedAt: NOW
+  })
+  return structuredAgentSessionSendRequest({ ...entry, sentDelivery }, fence)
 }
 
 /** Schema-valid params per method; values only need to survive validation. */
@@ -241,25 +283,30 @@ export function paramsFor(method: string): unknown {
         envelope: envelope({ method: 'agentSession.cancel', fields: { turnId: 'turn-1' }, fence }),
         turnId: 'turn-1'
       }
+    case 'agentSession.queuedMessageSend':
+    case 'agentSession.queuedMessageDelete': {
+      const fields = { messageId: 'queued-1' }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
+    case 'agentSession.queuedMessagesResume':
+      return { envelope: envelope({ method, fields: {}, fence }) }
     case 'agentSession.respondToApproval':
     case 'agentSession.respondToQuestion': {
       const fields = { itemId: 'item-1', expectedRevision: 1, optionId: 'allow' }
-      return { envelope: envelope({ method, fields, fence }), ...fields }
-    }
-    case 'agentSession.requestHandoff': {
-      const fields = {
-        direction: 'to-tui' as const,
-        mode: 'now' as const,
-        action: 'start' as const
-      }
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
     case 'agentSession.setOption': {
       const fields = { key: 'model', value: 'gpt-5' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
+    case 'agentSession.threadGoal': {
+      const fields = { change: { kind: 'set', objective: 'Ship the parser' } }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
     case 'agentSession.history':
       return { sessionId: SESSION, direction: 'tail' }
+    case 'agentSession.modelCatalog':
+      return { agent: 'codex', sessionId: SESSION }
     case 'agentSession.hold':
     case 'agentSession.release':
       return { sessionId: SESSION, holderId: 'surface-1' }

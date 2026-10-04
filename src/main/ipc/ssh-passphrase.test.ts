@@ -25,6 +25,7 @@ describe('SSH credential requests', () => {
       'target-1',
       'keyboard-interactive',
       'Duo response',
+      undefined,
       controller.signal
     )
     const request = vi.mocked(window.webContents.send).mock.calls[0][1] as { requestId: string }

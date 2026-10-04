@@ -8,11 +8,8 @@ import {
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuPasteItem, createAppMenuSelectionItem } from './app-menu-selection-item'
-import {
-  buildEditMenuNativeItems,
-  buildMacIdentityMenuItems,
-  buildWindowMenuItems
-} from './build-native-role-menu-items'
+import { createAppWindowMenu } from './app-menu-window'
+import { buildEditMenuNativeItems, buildMacIdentityMenuItems } from './build-native-role-menu-items'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -119,8 +116,16 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     click: checkForUpdatesClick
   }
 
+  const settingsBindings = getEffectiveKeybindingsForAction(
+    'app.settings',
+    process.platform,
+    getKeybindings?.()
+  )
+  const settingsShortcut = settingsBindings.length
+    ? `\t${formatKeybindingList(settingsBindings, process.platform)}`
+    : ''
   const settingsItem: Electron.MenuItemConstructorOptions = {
-    label: `${translateMain('menu.settings', 'Settings')}\t${shortcutLabel('app.settings')}`,
+    label: `${translateMain('menu.settings', 'Settings')}${settingsShortcut}`,
     click: () => onOpenSettings()
   }
 
@@ -297,10 +302,10 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     ]
   }
 
-  const windowMenu: Electron.MenuItemConstructorOptions = {
-    label: translateMain('menu.window', 'Window'),
-    submenu: buildWindowMenuItems()
-  }
+  const windowMenu = createAppWindowMenu(translateMain('menu.window', 'Window'), isMac, {
+    minimize: translateMain('menu.minimize', 'Minimize'),
+    zoom: translateMain('menu.zoom', 'Zoom')
+  })
 
   const helpMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.help', 'Help'),

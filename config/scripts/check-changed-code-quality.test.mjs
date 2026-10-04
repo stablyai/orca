@@ -1,10 +1,12 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { runProcessSync } from '../../src/shared/child-process/run-process'
+import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 import {
   OXLINT_SCANS,
   diagnosticTouchesAddedLines,
-  isAntiSlopDirectiveUnusedWarning,
+  isUnloadedPluginDirectiveUnusedWarning,
   isMovedCode,
   isRootCodeQualityPath,
   overlapsAddedLines,
@@ -124,7 +126,7 @@ describe('moved-code exemption', () => {
   })
 })
 
-describe('anti-slop directive unused warning', () => {
+describe('unloaded plugin directive unused warning', () => {
   const root = path.resolve(import.meta.dirname, '..', '..')
   // Assembled so no line here is itself a directive the gate would scan.
   const directive = (rule) => `/* oxlint-disable ${rule} -- reason */`
@@ -146,21 +148,149 @@ describe('anti-slop directive unused warning', () => {
 
   it('exempts a suppression the root scan cannot resolve', () => {
     withFixture(directive('anti-slop/no-module-mocking'), (diagnostic) => {
-      expect(isAntiSlopDirectiveUnusedWarning(diagnostic, root)).toBe(true)
+      expect(isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, 'code quality')).toBe(true)
     })
   })
 
   it('still reports an unused directive for a rule the root scan does load', () => {
     withFixture(directive('unicorn/no-array-reduce'), (diagnostic) => {
-      expect(isAntiSlopDirectiveUnusedWarning(diagnostic, root)).toBe(false)
+      expect(isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, 'code quality')).toBe(false)
     })
   })
 
   it('ignores diagnostics that are not unused-directive warnings', () => {
     withFixture(directive('anti-slop/no-module-mocking'), (diagnostic) => {
       expect(
-        isAntiSlopDirectiveUnusedWarning({ ...diagnostic, message: 'Unexpected any.' }, root)
+        isUnloadedPluginDirectiveUnusedWarning(
+          { ...diagnostic, message: 'Unexpected any.' },
+          root,
+          'code quality'
+        )
       ).toBe(false)
     })
+  })
+
+  function scanFixture(label, file) {
+    const scan = OXLINT_SCANS.find((candidate) => candidate.label === label)
+    if (!scan) {
+      throw new Error(`Missing ${label} scan`)
+    }
+    const { command, prefixArgs } = resolveOxlintInvocation(root)
+    const result = runProcessSync({
+      program: command,
+      args: [...prefixArgs, ...scan.args, '--format', 'json', file],
+      cwd: root,
+      timeoutMs: 30_000,
+      maxOutputBytes: 4 * 1024 * 1024
+    })
+    return JSON.parse(result.stdout).diagnostics
+  }
+
+  it('accepts a used Doctor directive only through its loaded scan', () => {
+    const source = [
+      "import { useEffect, useState } from 'react'",
+      directive('react-doctor/no-derived-state-effect'),
+      'export function Title({ title }: { title: string }) {',
+      "  const [value, setValue] = useState('')",
+      '  useEffect(() => { setValue(title) }, [title])',
+      '  return value',
+      '}'
+    ].join('\n')
+    withFixture(source, ({ filename }) => {
+      const normal = scanFixture('code quality', filename)
+      const unused = normal.find((diagnostic) => diagnostic.message.startsWith('Unused '))
+      expect(unused).toBeDefined()
+      expect(isUnloadedPluginDirectiveUnusedWarning(unused, root, 'code quality')).toBe(true)
+      expect(scanFixture('React Doctor', filename)).toEqual([])
+    })
+  })
+
+  it('keeps an unused Doctor directive failing in its loaded scan', () => {
+    withFixture(directive('react-doctor/no-derived-state-effect'), ({ filename }) => {
+      const diagnostics = scanFixture('React Doctor', filename)
+      expect(diagnostics).toHaveLength(1)
+      expect(diagnostics[0].message).toMatch(/^Unused /)
+      expect(isUnloadedPluginDirectiveUnusedWarning(diagnostics[0], root, 'React Doctor')).toBe(
+        false
+      )
+    })
+  })
+
+  it('does not hide unused native rules in a mixed directive', () => {
+    withFixture(
+      directive('react-doctor/no-derived-state-effect, unicorn/no-array-reduce'),
+      (diagnostic) => {
+        expect(isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, 'code quality')).toBe(false)
+      }
+    )
+  })
+
+  it('recognizes a standalone directive containing only Doctor rules', () => {
+    withFixture(
+      directive(
+        'react-doctor/no-derived-state-effect, react-doctor/no-adjust-state-on-prop-change'
+      ),
+      (diagnostic) => {
+        expect(isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, 'code quality')).toBe(true)
+      }
+    )
+  })
+
+  it('keeps adjacent native directive warnings visible', () => {
+    const doctor = directive('react-doctor/no-derived-state-effect')
+    const native = directive('unicorn/no-array-reduce')
+    for (const source of [`${doctor} ${native}`, `${native} ${doctor}`]) {
+      withFixture(source, ({ filename }) => {
+        const diagnostic = scanFixture('code quality', filename).find((candidate) =>
+          candidate.labels.some((label) => label.span.offset === source.indexOf(native))
+        )
+        expect(diagnostic).toBeDefined()
+        expect(diagnostic.message).toMatch(/^Unused /)
+        expect(isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, 'code quality')).toBe(false)
+      })
+    }
+  })
+
+  it('leaves used native directives to the scan that loads them', () => {
+    withFixture(
+      [
+        'export const banner = "λ"',
+        directive('typescript/no-explicit-any'),
+        'export const answer: any = 42'
+      ].join('\n'),
+      ({ filename }) => {
+        expect(scanFixture('code quality', filename)).toEqual([])
+        const diagnostics = scanFixture('React Doctor', filename)
+        expect(diagnostics).toHaveLength(1)
+        expect(isUnloadedPluginDirectiveUnusedWarning(diagnostics[0], root, 'React Doctor')).toBe(
+          true
+        )
+      }
+    )
+  })
+
+  it('does not exempt unused Doctor rules together with unloaded native rules', () => {
+    withFixture(
+      directive('react-doctor/no-derived-state-effect, typescript/no-explicit-any'),
+      ({ filename }) => {
+        const diagnostics = scanFixture('React Doctor', filename)
+        expect(diagnostics).toHaveLength(1)
+        expect(isUnloadedPluginDirectiveUnusedWarning(diagnostics[0], root, 'React Doctor')).toBe(
+          false
+        )
+      }
+    )
+  })
+
+  it('keeps blanket unused directives visible in the Doctor scan', () => {
+    for (const source of [directive(''), '// oxlint-disable-next-line -- reason']) {
+      withFixture(source, ({ filename }) => {
+        const diagnostics = scanFixture('React Doctor', filename)
+        expect(diagnostics).toHaveLength(1)
+        expect(isUnloadedPluginDirectiveUnusedWarning(diagnostics[0], root, 'React Doctor')).toBe(
+          false
+        )
+      })
+    }
   })
 })

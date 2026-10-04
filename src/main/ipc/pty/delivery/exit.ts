@@ -56,7 +56,7 @@ export function preparePtyExitForRenderer(
   session: PtyIpcSession,
   payload: { id: string; code: number; incarnationId?: string }
 ): (() => void) | null {
-  if (session.mainWindow.isDestroyed()) {
+  if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     session.sshOutputIntake?.transferPtyProjections(payload.id, 'renderer-destroyed')
     return () => {}
   }
@@ -122,7 +122,7 @@ export function finalizePtyExitForRenderer(
   session: PtyIpcSession,
   payload: { id: string; code: number; incarnationId?: string }
 ): void {
-  if (session.mainWindow.isDestroyed()) {
+  if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     session.rendererCreditBeforeExitByPty.delete(payload.id)
     return
   }
@@ -153,11 +153,12 @@ export function finalizePtyExitForRenderer(
       session.schedulePendingDataAfterCreditReport(true)
     }
   }
+  const intentionalStops =
+    session.runtime?.intentionalPtyStops?.claimExit(payload.id, payload.incarnationId) ?? []
   session.mainWindow.webContents.send('pty:exit', {
     ...payload,
-    ...(session.reversibleStopOwnersByPtyId.has(payload.id)
-      ? { preserveRendererBinding: true }
-      : {})
+    ...(intentionalStops.includes('reversible') ? { preserveRendererBinding: true } : {}),
+    ...(intentionalStops.includes('replaced') ? { replacedByRestart: true } : {})
   })
 }
 
@@ -179,7 +180,7 @@ export function sendPtyExitToRenderer(
 }
 
 export function sendPtySpawnedToRenderer(session: PtyIpcSession, id: string): void {
-  if (!session.mainWindow.isDestroyed()) {
+  if (session.mainWindow && !session.mainWindow.isDestroyed()) {
     session.mainWindow.webContents.send('pty:spawned', { id })
   }
 }

@@ -55,7 +55,7 @@ describe('orchestration.check from a terminal whose Attempt was superseded', () 
     ;({ db, ctx } = h.setup())
     const task = db.createTask({ spec: 'work that moves terminals' })
     const abandoned = startWorker(task.id, 'term_old', PANE_OLD)
-    db.abandonWorkerDispatch(abandoned)
+    db.abandonWorkerDispatch(abandoned, 'epoch_test')
     startWorker(task.id, 'term_new', PANE_NEW, abandoned)
     return abandoned
   }

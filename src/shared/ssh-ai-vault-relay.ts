@@ -6,6 +6,7 @@ export const SSH_AI_VAULT_LIST_LIMIT_MAX = 1000
 export const SSH_AI_VAULT_SCOPE_PATH_MAX_LENGTH = 4096
 
 export type SshAiVaultRelayListParams = {
+  includeAntigravityIdeSessions?: boolean
   limit?: number
   unlimited?: boolean
   force?: boolean

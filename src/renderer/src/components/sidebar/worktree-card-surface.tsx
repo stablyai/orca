@@ -51,7 +51,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         'relative flex cursor-pointer flex-col pr-1.5 transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none',
         titleOnlyCard ? 'py-2' : 'pt-1.25 pb-1.5',
         flushSurface ? 'ml-1 w-[calc(100%-0.25rem)]' : 'ml-1',
-        'rounded-lg',
+        'overflow-hidden rounded-lg',
         // Why: the live data attribute updates before React state during navigation,
         // so it must own the complete active style without stale utility classes.
         isLineageDropTarget

@@ -236,6 +236,7 @@ function ensureDependencies(upstreamRoot, manifest) {
   const stamp = path.join(upstreamRoot, 'node_modules', '.orca-xterm-install-stamp')
   const want = `${manifest.upstream.commit}\n${statSync(lockfile).size}\n`
   if (existsSync(stamp) && readFileSync(stamp, 'utf8') === want) {
+    assertToolchain(upstreamRoot, manifest)
     return
   }
   run('npm', ['ci'], {

@@ -12,6 +12,9 @@
 
 import {
   AGENT_SESSION_WIRE_REFUSAL_CODES,
+  agentSessionRefusalFromReference,
+  isAgentSessionRefusalError,
+  refuseUnclassified,
   type AgentSessionWireRefusal,
   type AgentSessionWireRefusalCode
 } from '../../../../shared/agent-session-wire'
@@ -40,19 +43,25 @@ function wireRefusalCode(error: unknown): AgentSessionWireRefusalCode | null {
   return null
 }
 
+const PRECOMMIT_REFUSAL_MESSAGE = 'Orca cannot open a structured agent chat for this workspace.'
+
 function precommitRefusal(error: unknown): AgentSessionWireRefusal {
+  // A refusal the host raised keeps its situation; a bare code names none.
+  if (isAgentSessionRefusalError(error)) {
+    return agentSessionRefusalFromReference(error.refusal, PRECOMMIT_REFUSAL_MESSAGE)
+  }
   const code = wireRefusalCode(error)
   if (code) {
-    return { code, message: 'Orca cannot open a structured agent chat for this workspace.' }
+    return refuseUnclassified(code, PRECOMMIT_REFUSAL_MESSAGE)
   }
   const message = error instanceof Error ? error.message : String(error)
   // A code-less failure here is often a defect, not a policy answer; the refusal keeps the user
-  // moving, the log keeps the cause findable.
+  // moving, the log keeps the cause findable. Nothing names its situation, so it carries no reason.
   console.warn('[agent-session] create refused before it committed anything', error)
-  return {
-    code: UNCODED_PRECOMMIT_REFUSAL_CODE,
-    message: `Orca could not prepare a structured agent chat for this workspace: ${message}`
-  }
+  return refuseUnclassified(
+    UNCODED_PRECOMMIT_REFUSAL_CODE,
+    `Orca could not prepare a structured agent chat for this workspace: ${message}`
+  )
 }
 
 /**

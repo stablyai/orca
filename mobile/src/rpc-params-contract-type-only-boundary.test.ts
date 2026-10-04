@@ -303,11 +303,14 @@ describe('RPC params contract boundary', () => {
     // a scanner that stopped reporting, a walk over the wrong root.
     expect(reaching.length).toBeGreaterThan(0)
 
-    const offenders = reaching.flatMap(({ path, source }) =>
-      contractValueImports(path, source).map(
-        (specifier) => `${relative(mobileRoot, path)} -> ${specifier}`
+    // A test file is never bundled, and the recorded-request check has to run the host's schemas.
+    const offenders = reaching
+      .filter(({ path }) => !/\.test\.tsx?$/.test(path))
+      .flatMap(({ path, source }) =>
+        contractValueImports(path, source).map(
+          (specifier) => `${relative(mobileRoot, path)} -> ${specifier}`
+        )
       )
-    )
     expect(offenders).toEqual([])
   })
 })

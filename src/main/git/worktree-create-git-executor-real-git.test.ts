@@ -81,11 +81,16 @@ it('creates cold and prepared worktrees with real Git while status capacity is o
         prepared.preparedPath,
         join(root, 'warm'),
         'warm',
-        'main'
+        'main',
+        false,
+        {},
+        prepared.lockReason
       )
       expect(await listWorktrees(repo)).toHaveLength(3)
     })
-    expect(events.some((event) => event.args.includes('core.sshCommand'))).toBe(true)
+    expect(
+      events.filter((event) => event.args[0] === 'config').map((event) => event.args)
+    ).toContainEqual(['config', '--null', '--get-regexp', '^(core\\.sshcommand|ssh\\.variant)$'])
     expect(events.some((event) => event.args.includes('fetch'))).toBe(true)
     expect(events.every((event) => event.tier === 'interactive')).toBe(true)
     expect(

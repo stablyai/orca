@@ -47,6 +47,9 @@ jobs:
     timeout-minutes: 75
     environment: production
     env:
+      # These drains are unpaced, but restart-safe still needs a quiet runtime for the production
+      # pace window, the same one the same-cap drain uses.
+      RESTART_SAFE_PACE_WINDOW_MS: '300000'
       GCP_PROJECT_ID: onorca-cloud
       GCP_REGION: ${{ vars.PRODUCTION_GCP_REGION }}
       DIRECTOR_SERVICE_NAME: orca-cloud-relay
@@ -565,6 +568,7 @@ jobs:
             --draining required \
             --activity restart-safe \
             --runtime required \
+            --pace-window-ms "${RESTART_SAFE_PACE_WINDOW_MS}" \
             --timeout-ms 450000 \
             --expected-image-digests \
               "${DESIRED_IMAGE_DIGEST},${PREDECESSOR_IMAGE_DIGEST}" \
@@ -615,6 +619,7 @@ jobs:
             --draining required \
             --activity restart-safe \
             --runtime required \
+            --pace-window-ms "${RESTART_SAFE_PACE_WINDOW_MS}" \
             --timeout-ms 450000 \
             --expected-image-digests \
               "${DESIRED_IMAGE_DIGEST},${PREDECESSOR_IMAGE_DIGEST}"
@@ -676,6 +681,8 @@ jobs:
             --draining required \
             --activity restart-safe \
             --runtime required \
+            --pace-window-ms "${RESTART_SAFE_PACE_WINDOW_MS}" \
+            --timeout-ms 480000 \
             --expected-image-digests \
               "${DESIRED_IMAGE_DIGEST},${PREDECESSOR_IMAGE_DIGEST}"
 

@@ -61,6 +61,7 @@ export async function createWorkerWorktree(args: {
     ...(args.withAgentTerminal
       ? {
           startupAgent: args.agent,
+          startupLaunchSource: 'orchestration',
           ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {})
         }
       : {}),

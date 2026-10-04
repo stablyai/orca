@@ -11,7 +11,7 @@ import { BridgeConnectionCache } from './bridge-client-connection-cache'
 import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
 import { createBridgeClientShellSession } from './bridge-client-shell-session'
 import type { BridgeShellSession } from './bridge-client-session'
-import { createBridgeInitHandshake } from './bridge-client-init-handshake'
+import { createBridgeInitHandshake, createPageReadyFrame } from './bridge-client-init-handshake'
 import {
   BridgeClientCapExceededError,
   BridgeClientClosedError,
@@ -24,19 +24,16 @@ import {
 import type { BridgeHapticsKind } from './bridge-haptics-notify'
 import { createBridgeInboundFrameReader } from './bridge-client-inbound-frames'
 import { createBridgeClientNotifications } from './bridge-client-notifications'
+import type { BridgeSafeAreaInsets } from './bridge-safe-area-insets'
+import { createPageBackConsumers, type PageBackConsumer } from './page-back-consumers'
 import { BridgeClientRequests } from './bridge-client-requests'
 import { BridgeClientSubscriptions } from './bridge-client-subscriptions'
 import { isBridgeNativeMethod, type BridgeNativeVerb } from './bridge-native-verbs'
-import {
-  BRIDGE_ROUTE_PARAM_CLEAR,
-  BRIDGE_ROUTE_UPDATE_ACCEPT,
-  type BridgeClearableRouteParam
-} from './bridge-route-update'
+import { BRIDGE_ROUTE_PARAM_CLEAR, type BridgeClearableRouteParam } from './bridge-route-update'
 import {
   BRIDGE_PROTOCOL_VERSION,
   type BridgeClientMessage,
   type BridgeConnectionSnapshot,
-  type BridgeHostMessage,
   type BridgeInitRoute
 } from './bridge-envelope'
 
@@ -78,6 +75,10 @@ export type BridgeRpcClient = RpcClient & {
    * listener that deduplicated by value would lose exactly that one.
    */
   onRouteUpdate: (listener: (route: BridgeInitRoute | null) => void) => () => void
+  /** Fires when an `init` moved the safe-area insets; the value itself is on `getShellSession`. */
+  onSafeAreaInsetsUpdate: (listener: (insets: BridgeSafeAreaInsets) => void) => () => void
+  /** Fires when an `init` moved the keyboard height; the value itself is on `getShellSession`. */
+  onKeyboardInsetUpdate: (listener: (height: number) => void) => () => void
   getShellSession: () => BridgeShellSession | null
   /**
    * Asks the shell to open a screen this page does not render. False when the shell granted no
@@ -106,6 +107,20 @@ export type BridgeRpcClient = RpcClient & {
    * runtime, so it has no `RpcOperation` and no entry in the desktop's method catalog.
    */
   callNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<RpcSuccess>
+  /**
+   * Tells the shell this document has a frame on screen, which is the only thing that does: the
+   * shell sees a document commit and a page say `ready`, and neither of those is a painted tree.
+   */
+  notifyPagePainted: () => void
+  /**
+   * Claims the device Back key for this document until the dispose is called.
+   *
+   * The shell owns the key and only hands a press over while something here is holding it, so a
+   * claim is what turns Android Back from "leave this screen" into "close what is on top of it".
+   * Consumers answer newest first and a `false` falls through, exactly as a native `BackHandler`
+   * listener does; a press nothing takes is handed back to the shell to pop with.
+   */
+  claimBack: (consumer: PageBackConsumer) => () => void
   /** Writes one allowlisted key into the app's store. False when the shell granted no `storage`. */
   notifyStorageWrite: (key: string, value: string | null) => boolean
   /**
@@ -127,9 +142,8 @@ export type BridgeRpcClient = RpcClient & {
    * (ruling 34). The reader erases: the shell tracks no delivery, so a request stays on the route
    * and keeps arriving until the page that applied it says so.
    *
-   * False when this shell never declared it takes one, which is every shell older than the field.
-   * Nothing is owed the caller either way — a clear that did not leave is repaired by the request
-   * arriving again, which is the same path a lost frame takes.
+   * False when the frame could not leave. Nothing is owed the caller — a clear that did not leave
+   * is repaired by the request arriving again, which is the same path a lost frame takes.
    */
   clearRouteParam: (param: BridgeClearableRouteParam, value: string) => boolean
 }
@@ -210,9 +224,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   })
 
   const handshake = createBridgeInitHandshake(() => {
-    // Declared on every ask, because the shell reads it off whichever `ready` it answers: this
-    // page build knows how to take a second `init` for the session it already holds.
-    sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready', accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT] })
+    sendFrame(createPageReadyFrame())
   })
 
   /**
@@ -258,11 +270,6 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     }
   })
 
-  function acceptInit(message: Extract<BridgeHostMessage, { type: 'init' }>): void {
-    handshake.stop()
-    shellSession.accept(message)
-  }
-
   /** A shell rebuilt under the page: what the cache holds is for a client that is already gone. */
   function acceptState(snapshotFromShell: BridgeConnectionSnapshot): void {
     if (cache.apply(snapshotFromShell) !== 'stale') {
@@ -272,12 +279,27 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     handshake.restart()
   }
 
+  const back = createPageBackConsumers({
+    publishClaim: (claimed) => notifications.notifyBackClaim(claimed),
+    onUnclaimed: () => {
+      report({ kind: 'back-unclaimed' })
+      notifications.notifyNavigateBack()
+    }
+  })
+
   const readInboundFrame = createBridgeInboundFrameReader({
     requests,
     subscriptions,
     report,
-    acceptInit,
-    acceptState
+    // Declared here rather than beside the others: the re-assert has to run after the session has
+    // taken this frame.
+    acceptInit: (message) => {
+      handshake.stop()
+      shellSession.accept(message)
+      back.reassert()
+    },
+    acceptState,
+    acceptBack: back.press
   })
 
   /** After `close` the page is not the document the shell is answering any more. */
@@ -376,6 +398,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     }
     closed = true
     handshake.stop()
+    back.clear()
     subscriptions.closeAll()
     sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'close' })
     requests.closeAll()
@@ -434,12 +457,15 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     notifyStorageWrite: notifications.notifyStorageWrite,
     notifyHaptics: notifications.notifyHaptics,
     notifyPageFault: notifications.notifyPageFault,
+    notifyPagePainted: notifications.notifyPagePainted,
+    claimBack: back.claim,
     close,
     onReady: shellSession.onReady,
     onRouteUpdate: shellSession.onRouteUpdate,
+    onSafeAreaInsetsUpdate: shellSession.onSafeAreaInsetsUpdate,
+    onKeyboardInsetUpdate: shellSession.onKeyboardInsetUpdate,
     getShellSession: shellSession.current,
     clearRouteParam: (param, value) =>
-      shellSession.current()?.accepts.includes(BRIDGE_ROUTE_PARAM_CLEAR) === true &&
       posted({
         v: BRIDGE_PROTOCOL_VERSION,
         type: 'notify',

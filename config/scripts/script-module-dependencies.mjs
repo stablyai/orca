@@ -1,8 +1,8 @@
 import { copyFileSync, mkdirSync, readFileSync } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 
 /**
- * Copy a script and every co-located module it imports into a fixture's `config/scripts`.
+ * Copy a script and its relative modules, preserving their paths in the fixture.
  *
  * Walked rather than listed: a module the script needs but the fixture never copied fails every
  * test in the suite with a module-resolution error that looks nothing like the defect it hides.
@@ -10,7 +10,9 @@ import { basename, dirname, join } from 'node:path'
 export function copyScriptWithLocalModules(sourceScriptPath, destinationScriptsDir) {
   mkdirSync(destinationScriptsDir, { recursive: true })
   for (const modulePath of collectScriptModules(sourceScriptPath)) {
-    copyFileSync(modulePath, join(destinationScriptsDir, basename(modulePath)))
+    const destination = join(destinationScriptsDir, relative(dirname(sourceScriptPath), modulePath))
+    mkdirSync(dirname(destination), { recursive: true })
+    copyFileSync(modulePath, destination)
   }
 }
 
@@ -27,7 +29,7 @@ function collectScriptModules(scriptPath, seen = new Set()) {
   // not against this file, so following them would stage the wrong path.
   const source = readFileSync(scriptPath, 'utf8')
   const specifiers = source.matchAll(
-    /(?:\bfrom|\brequire\s*\(|\bimport\s*\(|\bimport)\s*'(\.\/[^']+)'/g
+    /(?:\bfrom|\brequire\s*\(|\bimport\s*\(|\bimport)\s*'(\.\.?\/[^']+)'/g
   )
   for (const [, specifier] of specifiers) {
     collectScriptModules(join(dirname(scriptPath), specifier), seen)

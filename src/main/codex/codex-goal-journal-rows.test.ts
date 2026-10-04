@@ -113,15 +113,4 @@ describe('goal frames as journal rows', () => {
 
     expect(row?.body.text).toBe('Goal cleared')
   })
-
-  it('never shows the bare opcode, which is what a plain reclassify would have done', () => {
-    const row = unhandledProviderFrameJournalItem(
-      'codex',
-      'notification:thread/goal/updated',
-      goalFrame()
-    )
-
-    expect(row?.body.text).not.toContain('notification:')
-    expect(row?.body.text).not.toContain('codex · ')
-  })
 })

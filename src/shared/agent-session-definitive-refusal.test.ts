@@ -37,12 +37,9 @@ describe('definitive agent-session create refusals', () => {
   it('does not answer the durable-settlement question, which disagrees on the one code that matters', () => {
     // Guards the reuse this allowlist exists to avoid: settlement state calls the definitive
     // refusal pending-admission, which would rule out the fallback it is meant to allow.
-    expect(
-      agentSessionRefusalOperationState(
-        'agentSession.create',
-        'structured_agent_session_unsupported'
-      )
-    ).toBe('pending-admission')
+    expect(agentSessionRefusalOperationState('structured_agent_session_unsupported')).toBe(
+      'pending-admission'
+    )
     expect(isDefinitiveAgentSessionCreateRefusal('structured_agent_session_unsupported')).toBe(true)
   })
 })

@@ -48,6 +48,15 @@ after reset, disable or disposal. `config/scripts/xterm-image-lifecycle-contract
 exercises those boundaries against the installed addon. Font zoom scales visible
 tiles without creating enlarged full-image canvases;
 `config/scripts/xterm-image-resize-contract.test.mjs` checks allocation and tile mapping.
+Every wasm memory reserves its guard region inside V8's sandbox, which caps a
+renderer at about 124 live memories no matter how much RAM is free. Upstream
+gave each terminal a SIXEL decoder at activation and kept IIP decoders after the
+first image, so a window with ~120+ terminals ran out. The patch borrows SIXEL
+decoders from a small shared pool only while a sequence is open, keeping color
+registers on the terminal, and drops IIP decoders after each image. A decoder
+that cannot be allocated drops that image; before the patch it threw out of the
+parser and left the terminal's write queue stuck.
+`config/scripts/xterm-image-wasm-budget-contract.test.mjs` covers both.
 
 ## Rules
 

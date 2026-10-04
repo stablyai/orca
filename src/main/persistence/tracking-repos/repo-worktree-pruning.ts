@@ -74,6 +74,11 @@ export function pruneWorktreeStateForRepo(
         (tombstone) => tombstone.worktreeId
       )
     )
+    collectPrefixedKeys(
+      Object.values(session?.closedTerminalTabTombstonesByTabId ?? {}).map(
+        (record) => record.worktreeId
+      )
+    )
   }
   collectPrefixedKeys(Object.keys(state.worktreeMeta))
   collectScannedRecordOwners(state.workspaceSession)

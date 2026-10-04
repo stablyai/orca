@@ -2,6 +2,7 @@ import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getMachineNameSearchKeywords } from './machine-name-search'
 
 export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
@@ -57,7 +58,9 @@ export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
       ...translateSearchKeyword(
         'auto.components.settings.runtime.environments.search.c6e5a03aa0',
         'dev box'
-      )
+      ),
+      // Why: Share this host mounts the machine name field, so its keywords open this pane.
+      ...getMachineNameSearchKeywords()
     ]
   })
 )

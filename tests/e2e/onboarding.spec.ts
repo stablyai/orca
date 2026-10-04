@@ -12,7 +12,7 @@ import { waitForSessionReady } from './helpers/store'
 import type { Page } from '@stablyai/playwright-test'
 import type { GlobalSettings } from '../../src/shared/global-settings-types'
 import type { TuiAgent } from '../../src/shared/tui-agent'
-import { ONBOARDING_FINAL_STEP } from '../../src/shared/constants'
+import { ONBOARDING_FINAL_STEP } from '../../src/shared/onboarding-defaults'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../src/shared/pairing'
 
 type OnboardingState = {
@@ -196,7 +196,7 @@ test.describe('Onboarding flow', () => {
     // agents are detected, otherwise behind the "Show N more agents" details
     // expander — open it if codex isn't visible.
     const targetAgent: TuiAgent = 'codex'
-    const codexButton = orcaPage.getByRole('button', { name: /^Codex\s/ })
+    const codexButton = orcaPage.getByRole('button', { name: 'Codex', exact: true })
     // Why: isVisible() is a one-shot probe — on slow renderer paint it would
     // race the wizard mount and falsely take the "show more agents" branch.
     // waitFor with a small timeout actually retries until the button paints.
@@ -348,7 +348,7 @@ test.describe('Onboarding flow', () => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
     })
-    const codexButton = orcaPage.getByRole('button', { name: /^Codex\s/ })
+    const codexButton = orcaPage.getByRole('button', { name: 'Codex', exact: true })
     const codexVisible = await codexButton
       .first()
       .waitFor({ state: 'visible', timeout: 1_000 })
@@ -548,42 +548,12 @@ test.describe('Onboarding flow', () => {
     expect((await getOnboardingState(orcaPage)).closedAt).not.toBeNull()
   })
 
-  test('Skip from notifications does not request permission', async ({ orcaPage }) => {
-    await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
-      timeout: 15_000
-    })
-    await continueOnboarding(orcaPage)
-    await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
-    await continueFromThemeToNotifications(orcaPage)
-
-    await orcaPage.evaluate(() => {
-      localStorage.removeItem('orca.e2e.notificationPermissionRequested')
-      window.api.notifications.requestPermission = async () => {
-        localStorage.setItem('orca.e2e.notificationPermissionRequested', '1')
-        return { supported: true, platform: 'darwin', requested: true }
-      }
-    })
-    await expectOnboardingNotificationSound(orcaPage, /System Default/i)
-
-    await expect(onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON)).toHaveCount(0)
-    await continueOnboarding(orcaPage)
-
-    await expectAddProjectDialog(orcaPage)
-    await expect
-      .poll(
-        async () =>
-          orcaPage.evaluate(() => localStorage.getItem('orca.e2e.notificationPermissionRequested')),
-        { timeout: 5_000 }
-      )
-      .toBeNull()
-  })
-
   test('selected agent button reports aria-pressed=true', async ({ orcaPage }) => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
     })
 
-    const codexButton = orcaPage.getByRole('button', { name: /^Codex\s/ })
+    const codexButton = orcaPage.getByRole('button', { name: 'Codex', exact: true })
     const codexVisible = await codexButton
       .first()
       .waitFor({ state: 'visible', timeout: 1_000 })

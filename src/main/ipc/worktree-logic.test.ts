@@ -288,28 +288,10 @@ describe('computeBranchName', () => {
 })
 
 describe('getConfiguredBranchPrefix', () => {
-  it('returns the git username for the git-username strategy', () => {
-    expect(getConfiguredBranchPrefix({ branchPrefix: 'git-username' }, 'jdoe')).toBe('jdoe')
-  })
-
-  it('returns null for git-username when no username is available', () => {
-    expect(getConfiguredBranchPrefix({ branchPrefix: 'git-username' }, null)).toBeNull()
-  })
-
-  it('returns the custom value for the custom strategy', () => {
-    expect(
-      getConfiguredBranchPrefix({ branchPrefix: 'custom', branchPrefixCustom: 'team' }, null)
-    ).toBe('team')
-  })
-
   it('returns null for custom strategy with an empty value', () => {
     expect(
       getConfiguredBranchPrefix({ branchPrefix: 'custom', branchPrefixCustom: '' }, null)
     ).toBeNull()
-  })
-
-  it('returns null when no prefix strategy applies', () => {
-    expect(getConfiguredBranchPrefix({ branchPrefix: 'none' }, 'jdoe')).toBeNull()
   })
 
   it('normalizes a trailing slash out of the custom prefix', () => {

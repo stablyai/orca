@@ -29,10 +29,10 @@ function StructuredAgentSessionAttention({ tab }: { tab: StructuredTab }): null 
     () =>
       feed.subscribe((completion) => {
         if (completion.sessionId === tab.entityId) {
-          dispatchStructuredTurnCompletionAttention(tab, completion)
+          dispatchStructuredTurnCompletionAttention(tab, completion, target)
         }
       }),
-    [feed, tab]
+    [feed, tab, target]
   )
   return null
 }

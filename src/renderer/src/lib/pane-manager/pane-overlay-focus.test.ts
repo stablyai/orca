@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PaneManager } from './pane-manager'
 import { createInitialManagedPane } from './pane-manager-pane-creation'
+import { focusPanePreservingOverlays } from './pane-overlay-focus'
 import type { PaneManagerHost } from './pane-manager-host'
 import type { ManagedPaneInternal } from './pane-manager-types'
 
@@ -59,6 +60,14 @@ function overlay(role: string) {
   return element
 }
 
+function coverPane(f: ReturnType<typeof fixture>): HTMLElement {
+  const cover = document.createElement('div')
+  cover.className = 'native-chat-pane-shell'
+  cover.tabIndex = -1
+  f.container.append(cover)
+  return cover
+}
+
 describe.each(['initial', 'active'] as const)('%s pane focus', (operation) => {
   function focus(f: ReturnType<typeof fixture>, requested = true) {
     if (operation === 'initial') {
@@ -105,6 +114,26 @@ describe.each(['initial', 'active'] as const)('%s pane focus', (operation) => {
     expect(document.activeElement).toBe(f.textarea)
   })
 
+  it('preserves the focused list during arrow navigation', () => {
+    const f = fixture()
+    const sidebar = overlay('listbox')
+    sidebar.setAttribute('data-worktree-sidebar', '')
+    sidebar.setAttribute('data-keyboard-navigation', '')
+    focus(f)
+    expect(document.activeElement).toBe(sidebar)
+    expect(f.pane.terminal.focus).not.toHaveBeenCalled()
+  })
+
+  it('ignores a navigation marker on a list that no longer owns focus', () => {
+    const f = fixture()
+    const sidebar = overlay('listbox')
+    sidebar.setAttribute('data-worktree-sidebar', '')
+    sidebar.setAttribute('data-keyboard-navigation', '')
+    sidebar.blur()
+    focus(f)
+    expect(document.activeElement).toBe(f.textarea)
+  })
+
   it('allows focus after the overlay closes', () => {
     const f = fixture()
     overlay('menu').style.display = 'none'
@@ -123,9 +152,29 @@ describe.each(['initial', 'active'] as const)('%s pane focus', (operation) => {
     expect(document.activeElement).toBe(popup)
   })
 
+  it('lands on the chat covering the pane, never its hidden terminal', () => {
+    const f = fixture()
+    f.root.append(f.container)
+    const cover = coverPane(f)
+    focus(f)
+    expect(document.activeElement).toBe(cover)
+    expect(f.pane.terminal.focus).not.toHaveBeenCalled()
+  })
+
   it('honors an explicit no-focus request', () => {
     const f = fixture()
     focus(f, false)
     expect(f.pane.terminal.focus).not.toHaveBeenCalled()
   })
+})
+
+it('keeps focus that is already inside the chat covering the pane', () => {
+  const f = fixture()
+  f.root.append(f.container)
+  const composer = document.createElement('button')
+  coverPane(f).append(composer)
+  composer.focus()
+  focusPanePreservingOverlays(f.pane)
+  expect(document.activeElement).toBe(composer)
+  expect(f.pane.terminal.focus).not.toHaveBeenCalled()
 })

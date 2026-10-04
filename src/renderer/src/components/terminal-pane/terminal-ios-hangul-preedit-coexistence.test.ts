@@ -210,7 +210,7 @@ describe('the iPadOS Hangul path alongside everything else', () => {
     pretendIosWeb()
     const rig = openIosTerminal()
     const sent: string[] = []
-    writeTerminalPastePtyInput({ sendInput: (data) => (sent.push(data), true) }, 'echo ')
+    writeTerminalPastePtyInput({ sendInput: (data) => (sent.push(data), true) }, 'echo ', 'driving')
     expect(sent).toEqual(['echo '])
 
     await typeHangeul(rig)

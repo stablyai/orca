@@ -10,7 +10,6 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { hostNewWorktreeSessionRoute } from '../host-route-action-state'
 
 const TASKS_DIR = join(import.meta.dirname, '.')
 
@@ -43,11 +42,5 @@ describe('a session href built under the tasks tree', () => {
       hasRawHostTemplate(readFileSync(file, 'utf8'))
     )
     expect(offenders.map((file) => file.slice(TASKS_DIR.length + 1))).toEqual([])
-  })
-
-  it('encodes both segments, which is what the raw interpolation did not', () => {
-    expect(hostNewWorktreeSessionRoute('relay/one#50%', 'wt/1', 'Fix login', 'no terminal')).toBe(
-      '/h/relay%2Fone%2350%25/session/wt%2F1?name=Fix+login&created=1&warning=no+terminal'
-    )
   })
 })

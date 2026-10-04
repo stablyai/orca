@@ -12,6 +12,7 @@ import {
 import type { RpcClient } from './rpc-client'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import { subscribeConnectionRevivalTriggers } from './connection-revival-triggers'
+import { subscribeConnectionLogBackgroundFlush } from './connection-log-background-flush'
 import { HostClientOpenRegistry } from './host-client-open-registry'
 import {
   HostClientAcquisitionRegistry,
@@ -20,7 +21,7 @@ import {
 import { HostOpenRetryScheduler } from './host-open-retry-scheduler'
 import { openHostClientEntry, type HostClientStoreEntry } from './host-entry-opener'
 import { shouldPreserveActiveRelay } from './relay-reconnect-preservation'
-import { recordConnectionRevival } from './persisted-connection-log-store'
+import { connectionLogStore, recordConnectionRevival } from './persisted-connection-log-store'
 import {
   createHostClientSelectors,
   listHostClients,
@@ -326,6 +327,14 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
           // One broken physical session must not block recovery for other hosts.
         }
       }
+    })
+  }, [])
+
+  // Why: a connection-log write that failed is only retried by the next append, so
+  // flush before the OS can kill a backgrounded app (see connection-log-background-flush).
+  useEffect(() => {
+    return subscribeConnectionLogBackgroundFlush(() => {
+      void connectionLogStore.flush()
     })
   }, [])
 

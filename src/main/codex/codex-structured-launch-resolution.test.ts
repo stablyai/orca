@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { createCodexStructuredLaunchResolver } from './codex-structured-launch-resolution'
@@ -114,6 +115,35 @@ describe('codex structured launch resolution', () => {
     expect(launch.resumeThreadId).toBe('thread-current')
   })
 
+  it('lets only a thread this session created be superseded when Codex never saved it', async () => {
+    const link = (
+      origin: AgentSessionProviderHandleLink['origin'],
+      mintedAtFence: number
+    ): AgentSessionProviderHandleLink => ({
+      linkId: `link-${mintedAtFence}`,
+      handle: { provider: 'codex', threadId: 't' },
+      origin,
+      mintedAtFence,
+      observedAt: 1
+    })
+    const chainFor = (origin: 'created' | 'resumed' | 'adopted') =>
+      origin === 'resumed' ? [link('created', 1), link('resumed', 2)] : [link(origin, 1)]
+
+    const created = await resolverFor(record({ providerHandleChain: chainFor('created') }))({
+      identity: IDENTITY
+    })
+    expect(created).toMatchObject({ resumeThreadId: 't', supersedeIfUnsaved: true })
+    for (const origin of ['resumed', 'adopted'] as const) {
+      const launch = await resolverFor(record({ providerHandleChain: chainFor(origin) }))({
+        identity: IDENTITY
+      })
+      expect(launch.resumeThreadId).toBe('t')
+      expect(launch).not.toHaveProperty('supersedeIfUnsaved')
+    }
+    const fresh = await resolverFor(record())({ identity: IDENTITY })
+    expect(fresh).not.toHaveProperty('supersedeIfUnsaved')
+  })
+
   // Agent Permissions is the only thing derived from the arguments field. app-server owns it on
   // the thread RPC rather than through the interactive CLI's process flags.
   it('resolves the bypass posture as app-server thread policy', async () => {
@@ -148,6 +178,16 @@ describe('codex structured launch resolution', () => {
       approvalPolicy: 'on-request',
       sandbox: 'workspace-write'
     })
+  })
+
+  // A thread opened on the configured default and then given a turn on the saved model reads to
+  // Codex as a model switch, and it injects the saved model's whole prompt a second time.
+  it('opens the thread on the model the record saved', async () => {
+    const launch = await resolverFor(
+      record({ options: { model: 'gpt-chosen', effort: 'high', fastMode: 'false' } })
+    )({ identity: IDENTITY })
+
+    expect(launch.model).toBe('gpt-chosen')
   })
 
   // The configured CLI arguments are a terminal concern: a durable record written before they

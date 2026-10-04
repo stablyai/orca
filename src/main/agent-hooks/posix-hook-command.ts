@@ -1,6 +1,6 @@
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 
-function quotePosixShellString(value: string): string {
+export function quotePosixShellString(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`
 }
 

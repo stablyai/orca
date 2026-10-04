@@ -136,23 +136,15 @@ import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-de
 const DEFAULT_BRANCH_REF = 'refs/remotes/origin/master'
 
 /**
- * Answer the real resolveDefaultBaseRefViaExec probes (origin/HEAD
- * symbolic-ref + rev-parse verification), the merged-at-head `rev-parse HEAD`
- * probe, and the tracked-upstream `for-each-ref` snapshot.
+ * Answer the default-base and tracked-upstream snapshots and merged-at-head probe.
  */
 function primeGitExecForDefaultBranch({
   defaultRef = DEFAULT_BRANCH_REF,
   headOid = 'checkout-head-oid'
 }: { defaultRef?: string; headOid?: string } = {}): void {
   gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-    if (args[0] === 'symbolic-ref' && args.includes('refs/remotes/origin/HEAD')) {
-      return { stdout: `${defaultRef}\n`, stderr: '' }
-    }
-    if (args[0] === 'rev-parse' && args[1] === '--verify') {
-      if (args.includes(defaultRef)) {
-        return { stdout: 'default-branch-oid\n', stderr: '' }
-      }
-      throw new Error(`fatal: Needed a single revision: ${args.join(' ')}`)
+    if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+      return { stdout: `refs/remotes/origin/HEAD\0${defaultRef}\n`, stderr: '' }
     }
     if (args[0] === 'rev-parse' && args[1] === 'HEAD') {
       return { stdout: `${headOid}\n`, stderr: '' }

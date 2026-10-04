@@ -6,6 +6,7 @@ import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY
 } from './bridge/bridge-envelope'
+import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
 import {
   BRIDGE_HAPTICS_GRANT,
@@ -459,11 +460,30 @@ describe('the page erasing a one-shot route param', () => {
     expect(bridge.routeParamClears()).toEqual([])
     expect(bridge.diagnostics).toEqual([{ kind: 'refused', refusal: 'unrecognised-message' }])
   })
+})
 
-  it('tells the page it takes a clear, so a page built for an older shell does not post one', () => {
-    const bridge = harness({ route: { pathname: '/h/host-a/session/wt-1' } })
+/**
+ * The page's word about its own document, which is the only thing that says the view is worth
+ * uncovering: a document commit is the WebView's, and `ready` is posted before a tree is built.
+ */
+describe('the page reporting its first frame', () => {
+  it('hands the report to the session and asks the client for nothing', () => {
+    const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
-    const init = bridge.last()
-    expect(init.type === 'init' && init.accepts).toEqual([BRIDGE_ROUTE_PARAM_CLEAR])
+    bridge.host.receive(clientFrame({ type: 'notify', name: BRIDGE_PAGE_PAINTED }))
+    expect(bridge.pagePaintCount()).toBe(1)
+    expect(bridge.client.requests).toHaveLength(0)
+    expect(bridge.client.foregroundCalls).toHaveLength(0)
+  })
+
+  it('refuses a report from a document nothing has answered', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'notify', name: BRIDGE_PAGE_PAINTED }))
+    expect(bridge.pagePaintCount()).toBe(0)
+    expect(bridge.diagnostics).toContainEqual({
+      kind: 'notify-refused',
+      name: BRIDGE_PAGE_PAINTED,
+      why: 'before-ready'
+    })
   })
 })

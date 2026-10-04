@@ -72,25 +72,27 @@ describe('terminal close and handle incarnation continuity', () => {
     unsubscribe()
   })
 
-  it('publishes no retirement or absence when the durable headless close fails', async () => {
+  it('still kills and keeps the removal when the durable headless close fails to flush', async () => {
     const harness = await createStaleTabCloseHarness({ headless: true })
-    const published = vi.fn()
-    const unsubscribe = harness.runtime.onMobileSessionTabsChanged(published)
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     harness.rejectPersistenceFlush(new Error('disk-full'))
 
-    await expect(harness.runtime.closeTerminalTab(harness.terminal.handle)).rejects.toThrow(
-      'disk-full'
-    )
-
-    expect(harness.kill).not.toHaveBeenCalled()
-    expect(published).not.toHaveBeenCalled()
-    expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
-    const snapshot = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
-    expect(snapshot).toMatchObject({
-      tabs: [expect.objectContaining({ parentTabId: TAB_ID, leafId: LEAF_ID })]
+    await expect(harness.runtime.closeTerminalTab(harness.terminal.handle)).resolves.toMatchObject({
+      tabId: TAB_ID,
+      closeMode: 'tab'
     })
-    expect(snapshot.retiredTerminalSurfaces).toBeUndefined()
-    unsubscribe()
+
+    // Why: a failed flush is bookkeeping; the user's close still stops its process and the
+    // in-memory removal stays for the next flush to write.
+    expect(harness.kill).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID)
+    expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
+    const snapshot = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    expect(snapshot.tabs).toEqual([])
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[runtime] failed to persist terminal close:',
+      expect.any(Error)
+    )
+    errorSpy.mockRestore()
   })
 
   it('publishes each split leaf retirement with its own terminal handle', async () => {
@@ -365,6 +367,36 @@ describe('terminal close and handle incarnation continuity', () => {
     })
     expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
   })
+
+  it.each([true, false])(
+    'promises a retry only when the stop recorded a replayable kill (recorded: %s)',
+    async (recorded) => {
+      const harness = createHarness()
+      const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+      harness.setVerifiedStopResult(false)
+      const recordUnconfirmedStop = vi.fn(() => {
+        // The order must exist before the follow-up kill, whose own failure lands only later.
+        expect(harness.kill).not.toHaveBeenCalled()
+        return recorded
+      })
+      const controller = harness.runtime['ptyController']
+      if (!controller) {
+        throw new Error('fixture has no PTY controller')
+      }
+      Object.assign(controller, { recordUnconfirmedStop })
+
+      const closing = harness.runtime.closeTerminal(handle)
+      await vi.waitFor(() => expect(harness.closeTerminalTab).toHaveBeenCalled())
+      harness.retirePersistedTab()
+      harness.acknowledged.resolve()
+
+      const close = await closing
+      expect(recordUnconfirmedStop).toHaveBeenCalledWith(PTY_ID)
+      expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+      expect(close.ptyStopVerdict).toBe('unverifiable')
+      expect(close.pendingKillRecorded).toBe(recorded ? true : undefined)
+    }
+  )
 
   it('leaves a confirmed kill receipt free of any stop verdict', async () => {
     const harness = createHarness()

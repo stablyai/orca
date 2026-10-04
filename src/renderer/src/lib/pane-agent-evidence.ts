@@ -1,7 +1,7 @@
 import type { AgentStatus } from '../../../shared/agent-detection'
 import { detectAgentStatusFromTitle, getAgentLabel } from '../../../shared/agent-detection'
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   agentStatusEvidenceObservedAt,
@@ -57,7 +57,7 @@ export function resolveTitleActivityLabel(title: string): string | null {
 }
 
 /** See resolveTitleActivityLabel — the strict facet for identity decisions. */
-export function resolveCommittedTitleAgentType(title: string): TuiAgent | null {
+export function resolveCommittedTitleAgentType(title: string): TerminalAgent | null {
   return resolveExplicitTerminalTitleAgentType(title)
 }
 

@@ -10,21 +10,21 @@ const OWNER_PROCESS = {
   hostId: 'local',
   pid: 4242,
   processStartTimeMs: 1_700_000_000_000,
-  spawnToken: 'spawn-tui'
+  spawnToken: 'spawn-owner'
 }
 
-/** A proven-live TUI owner: the only lease state that admits a PTY write. */
+/** A proven-live owner: the only lease state that admits a write. */
 export function agentSessionLeaseFixture(
   overrides: Partial<AgentSessionLease> = {}
 ): AgentSessionLease {
   return {
     sessionId: 'session-alpha-1',
-    runtimeKind: 'tui',
+    runtimeKind: 'native',
     runtimeFence: 7,
     handoffStage: null,
     provenHandleLinkId: 'link-1',
     ownerProcess: OWNER_PROCESS,
-    reservedSpawnToken: 'spawn-tui',
+    reservedSpawnToken: 'spawn-owner',
     leaseDeadlineAt: 60_000,
     lastRenewedAt: 30_000,
     handoffOperationId: null,

@@ -95,6 +95,15 @@ export async function getBranchCompare(
   }
 
   try {
+    // Git must confirm equal raw tips are the same commit before skipping the reads.
+    if (baseOid === headOid && mergeBase === headOid) {
+      options.signal?.throwIfAborted()
+      summary.commitsAhead = 0
+      summary.commitsBehind = 0
+      summary.status = 'ready'
+      return { summary, entries: [] }
+    }
+
     const [entries, divergence] = await Promise.all([
       loadBranchChanges(worktreePath, mergeBase, headOid, options),
       countCompareDivergence(worktreePath, baseOid, headOid, options)

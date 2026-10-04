@@ -282,7 +282,7 @@ describe('removeWorktreeOp', () => {
     ])
   })
 
-  it('force-retries removal when git refuses a clean worktree containing an initialised submodule', async () => {
+  it('preserves Git refusal even when parent status cannot reveal unpublished submodule commits', async () => {
     const calls: string[] = []
     let listCount = 0
     const git = vi.fn<GitExec>(async (args, cwd) => {
@@ -311,19 +311,17 @@ describe('removeWorktreeOp', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
-
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).rejects.toThrow('git worktree remove failed')
     expect(calls).toEqual([
       '/repo-feature$ rev-parse --git-common-dir',
       `${resolvedRepoPath()}$ worktree list --porcelain -z`,
-      `${resolvedRepoPath()}$ worktree remove /repo-feature`,
-      '/repo-feature$ status --porcelain --untracked-files=all',
-      `${resolvedRepoPath()}$ worktree remove --force /repo-feature`,
-      `${resolvedRepoPath()}$ branch -d -- feature/test`
+      `${resolvedRepoPath()}$ worktree remove /repo-feature`
     ])
   })
 
-  it('surfaces uncommitted changes instead of force-removing a dirty submodule worktree', async () => {
+  it('preserves Git refusal for a dirty submodule worktree', async () => {
     const git = vi.fn<GitExec>(async (args) => {
       if (args[0] === 'rev-parse') {
         return { stdout: '/repo/.git\n', stderr: '' }
@@ -350,7 +348,7 @@ describe('removeWorktreeOp', () => {
 
     await expect(
       removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
-    ).rejects.toThrow('Worktree has uncommitted or untracked changes.')
+    ).rejects.toThrow('git worktree remove failed')
     expect(git).not.toHaveBeenCalledWith(
       ['worktree', 'remove', '--force', '/repo-feature'],
       expect.any(String)

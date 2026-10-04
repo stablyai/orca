@@ -70,7 +70,20 @@ env:
   DAILY_RETAIN_COUNT: 30
 
 jobs:
+  # Why its own job: this package ships relays for Windows SSH hosts, and only a
+  # Windows runner compiles the addon that launches one outside sshd's job.
+  # Why main and not the mac job's head_sha: that is resolved inside the mac job.
+  # A commit or two of drift is harmless; build-relay rejects a stale or wrong-arch addon.
+  relay-windows-process-tree:
+    if: github.repository == 'stablyai/orca'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/relay-windows-process-tree.yml
+    with:
+      ref: main
+
   build-daily-mac:
+    needs: relay-windows-process-tree
     if: github.repository == 'stablyai/orca'
     outputs:
       tag: ${{ steps.release.outputs.tag }}
@@ -247,6 +260,15 @@ jobs:
           fi
           cat "$RUNNER_TEMP/daily-identity.txt" >>"$GITHUB_OUTPUT"
 
+      # Only a Windows runner compiles these; the relay-windows-process-tree job
+      # built them for this run.
+      - name: Collect the Windows process-table addons for the relay
+        if: steps.freshness.outputs.should_build == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: relay-windows-process-tree
+          path: .build/windows-process-tree
+
       - name: Build app
         if: steps.freshness.outputs.should_build == 'true'
         run: pnpm build:release
@@ -256,6 +278,9 @@ jobs:
           # gate accepts only 'stable' or 'rc', so leaving this unset keeps them
           # silent, which is correct for unvetted dev artifacts.
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          # Fail the build rather than ship a relay that cannot launch outside
+          # sshd's job for a standard user on a Windows SSH host.
+          ORCA_REQUIRE_RELAY_NATIVE_ADDONS: x64,arm64
 
       # Why a second mint: everything from here on writes to the daily repo, and
       # the notary round trip inside the publish step can be tens of minutes. The

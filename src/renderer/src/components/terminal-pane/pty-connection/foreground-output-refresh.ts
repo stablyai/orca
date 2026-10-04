@@ -151,6 +151,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
       session.hiddenDeliverySyncedPtyId = null
     }
     if (
+      !ptyId ||
       !session.isHiddenDeliveryGateManagedPty(ptyId) ||
       !session.canUseHiddenOutputSnapshot(ptyId)
     ) {

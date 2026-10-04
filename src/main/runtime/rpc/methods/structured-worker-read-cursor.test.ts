@@ -79,7 +79,7 @@ function read(cursor?: string, limit?: number) {
   })
 }
 
-function textsOf(result: ReturnType<typeof read>): string[] {
+function textsOf(result: Awaited<ReturnType<typeof read>>): string[] {
   return result.transcript.messages.map((entry) =>
     entry.blocks.map((block) => ('text' in block ? block.text : '')).join('')
   )
@@ -90,57 +90,57 @@ describe('the structured worker-read cursor over a mutating journal', () => {
     hostRef.current = null
   })
 
-  it('refuses to resume when an already-delivered item was revised in place', () => {
+  it('refuses to resume when an already-delivered item was revised in place', async () => {
     // The `"hel"` / `"hello"` defect. The caller is handed a coalesced snapshot, resumes past it,
     // and the item is later revised at its original sequence — under the old anchor the resume was
     // accepted and that revision was never delivered to anyone.
     installJournal([message('i1', 'hel'), message('i2', 'second')])
-    const first = read(undefined, 1)
+    const first = await read(undefined, 1)
     expect(textsOf(first)).toEqual(['hel'])
 
     installJournal([message('i1', 'hello world', 2), message('i2', 'second')])
-    expect(() => read(first.cursor)).toThrow(/source changed/i)
+    await expect(read(first.cursor)).rejects.toThrow(/source changed/i)
   })
 
-  it('refuses to resume when a resolved prompt inserts ahead of the caller position', () => {
+  it('refuses to resume when a resolved prompt inserts ahead of the caller position', async () => {
     // Duplication. A pending approval projects to null, so resolving it inserts a message in the
     // MIDDLE; the oldest item never moved, so the old anchor accepted a now-stale index and the
     // caller re-read content it already had.
     installJournal([message('i1', 'first'), approval('i2', false), message('i3', 'second')])
-    const first = read(undefined, 2)
+    const first = await read(undefined, 2)
     expect(textsOf(first)).toEqual(['first', 'second'])
 
     installJournal([message('i1', 'first'), approval('i2', true, 2), message('i3', 'second')])
-    expect(() => read(first.cursor)).toThrow(/source changed/i)
+    await expect(read(first.cursor)).rejects.toThrow(/source changed/i)
   })
 
-  it('still resumes across a page boundary when only unread tail items change', () => {
+  it('still resumes across a page boundary when only unread tail items change', async () => {
     // The reason this is prefix-scoped and not whole-page: during an active turn the coalescer
     // revises the streaming item every 60ms. Fingerprinting the whole page would invalidate the
     // cursor continuously — a useless verb — while the worker is working.
     installJournal([message('i1', 'first'), message('i2', 'streaming')])
-    const first = read(undefined, 1)
+    const first = await read(undefined, 1)
     expect(textsOf(first)).toEqual(['first'])
 
     installJournal([message('i1', 'first'), message('i2', 'streaming more', 7)])
-    const second = read(first.cursor)
+    const second = await read(first.cursor)
     expect(textsOf(second)).toEqual(['streaming more'])
   })
 
-  it('delivers every message exactly once when nothing below the cursor changes', () => {
+  it('delivers every message exactly once when nothing below the cursor changes', async () => {
     // The property the two refusals above protect: no omission, no duplication.
     installJournal([message('i1', 'a'), message('i2', 'b'), message('i3', 'c')])
-    const first = read(undefined, 2)
-    const second = read(first.cursor, 2)
+    const first = await read(undefined, 2)
+    const second = await read(first.cursor, 2)
     expect([...textsOf(first), ...textsOf(second)]).toEqual(['a', 'b', 'c'])
   })
 
-  it('still refuses when the window slides off the front', () => {
+  it('still refuses when the window slides off the front', async () => {
     // The case the old anchor DID catch, and which the prefix scoping must not lose: a slide
     // shifts every index.
     installJournal([message('i1', 'a'), message('i2', 'b')])
-    const first = read(undefined, 1)
+    const first = await read(undefined, 1)
     installJournal([message('i2', 'b'), message('i3', 'c')])
-    expect(() => read(first.cursor)).toThrow(/source changed/i)
+    await expect(read(first.cursor)).rejects.toThrow(/source changed/i)
   })
 })

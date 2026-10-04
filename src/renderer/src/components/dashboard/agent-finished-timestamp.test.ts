@@ -51,6 +51,47 @@ describe('lastEnteredDoneAt shares the Smart Sort completion clock', () => {
     expect(lastEnteredDoneAt(row(entry))).toBe(2_000)
     expect(agentEntryCompletionAt(entry)).toBeNull()
   })
+
+  it('dates a failed turn as a completion, and a stopped one only for display', () => {
+    const verdictDone = (outcome: 'failure' | 'cancellation') =>
+      doneEntry({
+        stateStartedAt: 2_000,
+        mainAgent: { state: 'done', outcome, stateStartedAt: 2_000 }
+      })
+    expect(agentEntryCompletionAt(verdictDone('failure'))).toBe(2_000)
+    expect(lastEnteredDoneAt(row(verdictDone('failure')))).toBe(2_000)
+    expect(agentEntryCompletionAt(verdictDone('cancellation'))).toBeNull()
+    expect(lastEnteredDoneAt(row(verdictDone('cancellation')))).toBe(2_000)
+  })
+
+  it('dates a main agent that failed while its subagents run by when it failed', () => {
+    const held = (outcome: 'failure' | 'cancellation') =>
+      doneEntry({
+        state: 'working',
+        stateStartedAt: 3_000,
+        mainAgent: { state: 'done', outcome, stateStartedAt: 2_500 }
+      })
+    expect(agentEntryCompletionAt(held('failure'))).toBeNull()
+    expect(lastEnteredDoneAt(row(held('failure')))).toBe(2_500)
+    expect(lastEnteredDoneAt(row(held('cancellation')))).toBeNull()
+  })
+
+  it('reads the verdict history carries when a boundary displaced the completion', () => {
+    const history = { state: 'done' as const, prompt: '', startedAt: 1_500 }
+    const boundary = (outcome?: 'failure' | 'cancellation') =>
+      doneEntry({
+        sessionBoundary: true,
+        stateHistory: [
+          {
+            ...history,
+            ...(outcome ? { mainAgent: { state: 'done', outcome, stateStartedAt: 1_500 } } : {})
+          }
+        ]
+      })
+    expect(agentEntryCompletionAt(boundary())).toBe(1_500)
+    expect(agentEntryCompletionAt(boundary('failure'))).toBe(1_500)
+    expect(agentEntryCompletionAt(boundary('cancellation'))).toBeNull()
+  })
 })
 
 describe('lastEnteredDoneAt subagent rows', () => {

@@ -165,6 +165,57 @@ or moving a cell and rejects intervening drift. Then
 atomically register the new cells as migration-only, binding every mutation to
 the exact live selector generation and a durable attempt ID. Deploy and verify
 the director configuration only after registration, then promote C27 alone before C28/C29.
+
+The production Asia set is C27-C31. C27-C29 launched as one wave; C30 and C31 are each an additive
+wave of their own at the same shape, and C31 takes `asia-east2-b` so the five cells spread 2/2/1
+across the zones. The C30 steps below apply to C31 unchanged, with C31 in place of C30. C30's plan
+names its template, MIG, and backend plus the shared URL map, and the URL map pulls every existing
+cell's backend, MIG, and template into the plan. Committed images lag what same-cap rolls serve,
+so the workflow first reads each non-target cell's served image out of its live template in state
+and plans that cell at it. It reads the committed cell map from a
+no-refresh, unlocked plan over the same targets, not `terraform console`. Console evaluates every
+output against state, so `relay_gce_cell_deployments` wraps each per-cell resource lookup in
+`try`: until C30's topology apply, console succeeds and that output shows C30 with null MIG,
+backend, and template fields. The validator then rejects any change to a
+cell outside the wave, so the plan must read as C30's three creations plus the URL map update.
+Before the apply dispatch, run the plan mode and read its `Plan:` line; any other drift, such as a
+cell whose startup script changed since its last roll, fails the plan and must be rolled first.
+Register C30 alone as migration-only, configure the director with `cell-ids` set to C30 while
+regional rehome is paused, then promote it alone. Promotion requires C27-C29 to be general and takes
+no input evidence. It runs the same five-minute production control and splice canary C27 ran, on
+C30: the evidence must show the canary control was placed on C30, read C30's own runtime metrics,
+and bind the selector generation, and any failure returns C30 to migration-only. The SQL-failure and
+database-pool rules read C30's own metrics only. Director values are recorded under
+`director`-prefixed names but do not fail the canary, because directors show a steady baseline of
+`relay_cells` lock refusals and pool waits unrelated to C30. Director region fallbacks are keyed by
+the host's target region, and the canary fails on any Asia-targeted one. US-targeted fallbacks are
+recorded but not gated: they are placement-lane requests from unhinted or US-preferring hosts, which
+an Asia cell cannot cause. Staging still requires exactly its one
+intentional fallback. C30 was promoted to general on
+2026-09-23, so the same-cap job now rolls it as a general cell and the shadow gate's fleet pool list
+reads it beside C27-C29. A later Asia cell stays in the same-cap migration-only list and out of the
+fleet pool list until its own promotion, then moves to both together, as its own reviewed wave.
+C31 followed that path and was promoted to general on 2026-10-01, so it is now a same-cap general
+cell and in the fleet pool list beside C27-C30.
+
+C32 and C33 are US cells at that same 3,000-connection shape, in `us-central1-a` and
+`us-central1-b`, and use the same two workflows and the C30 steps. They are declared together, so
+they share one topology wave: the live-image step refuses a declared non-target cell with no
+template, so a lone C32 plan would fail on C33. Registration, director configuration, and
+promotion still take one cell at a time. Each wave's region comes from its reviewed zone. A US wave plans no additional-region network, and its template
+carries no region label or region line. Its pool stays at the US default of 10 and emits no pool
+line, because 16 exists only for the asia-east2 round trip. Registration and the runtime check
+expect `us-central1`. Promotion skips the Asia launch-order gates, which bind Asia cells only.
+The canary aims its load at `us-central1`, reads the cell's own `us-central1` metrics, and
+requires a US selection. It gates neither region's fallbacks: US-targeted fallbacks have a
+nonzero baseline while the US fleet is full, and Asia-targeted ones are not the cell's to cause.
+Both are recorded. The US selection gate is a fleet-level check that director metrics flowed; the
+placement check is what proves the cell. Placement breaks a load-ratio tie by cell ID, so do not
+promote while a same-cap restore has just returned an empty general US cell: the canary control
+would land there and the canary would roll the new cell back. Both cells are declared rehome
+sources and sit in the same-cap migration-only list until each one's canary promotes it, then move
+to the general list. The shadow gate's fleet pool list tracks the 16-connection Asia pools, so
+whether a US cell belongs there is decided at promotion, not assumed.
 Rollback returns
 Asia cells to migration-only; it does not destroy the network or use
 existing-only. The production topology dispatch remains unavailable until the
@@ -377,9 +428,22 @@ targeted Terraform plan, and per-cell heartbeat/admission oracle are unchanged.
 sets and the two migration-only US 600/60 cells, C17 and C18, without changing a cell's connection
 shape. Use `canary-apply` for exactly one cell. A successful canary
 seals its commit, target and rollback digests, selector generation, and durable rehome generation;
-`batch-apply` accepts only that same authority and rolls two to four cells sequentially. Each cell is
-isolated, drained to two restart-safe samples, replaced from a targeted saved plan, and restored only
-after a new incarnation reports the exact digest, cap, heartbeat, and rehome protocol. The durable
+`batch-apply` accepts only that same authority and rolls two to ten cells sequentially. Both apply
+modes and `rollback` first refuse a cell whose hosts (controls) exceed 80% of the free slots on the
+other fresh general cells, since drained hosts with nowhere to go keep redialling and pin the cell.
+`verify` runs the same read-only check, so it reports the headroom answer before an apply is
+dispatched; a rollback that resumes after its restart drains nothing and skips it. A cell's free
+slots are its normal admission pause minus the larger of observed connections and enforced units,
+minus outstanding control reservations; each moved host also brings its splices, which the 20%
+margin covers. Each cell is isolated, drained until restart-safe, replaced
+from a targeted saved plan, and restored only after a new incarnation reports the exact digest, cap,
+heartbeat, and rehome protocol. Restart-safe means the cell runtime itself carries nothing live (no
+controls, in-flight connections, reserved connection units, splices, or queued bytes) and no
+migration is open, for a whole drain pace window, which every live restart-safe call must pass.
+Pre-auth and total connections are printed but do not reset the window: they include
+unauthenticated redials that lose nothing on a restart. Director activity leases left by hosts that already went or cannot
+be placed do not hold the restart; every `relay_capacity_transition_restart_progress` sample and
+the final verified line report them under `stranded`. The durable
 worker must remain disabled throughout. The post-restart trust check is application-mediated by the
 director; the workflow never receives or mints a director or stamped-cell runtime token. A failure
 keeps only the selected cell migration-only, while the exact rollback digest remains dispatchable via
@@ -427,8 +491,14 @@ drained. Then read the cell's live runtime image from
 3. The job classifies the cell itself and needs no extra input:
    - serving the **rollback** image and draining, it is `stranded`. The wave stopped before
      or during its template apply. The job re-isolates, re-drains, applies the reviewed
-     template, and rolls the MIG explicitly if that template was already in place. The cell
-     comes back on a new instance, so the drain clears, and it is restored to its entry class.
+     template, and, if that template was already in place, recreates the cell's one instance
+     with `recreate-instances`. The cell comes back on a new instance, so the drain clears, and
+     it is restored to its entry class. The recovery does not use a rolling action: that
+     rewrites the MIG's version name outside Terraform. The plan validator does accept a MIG
+     moving back to the version name and update policy `relay-gce-cells.tf` declares, so a cell
+     an older rolling action left relabelled reconciles on its next apply, roll, or stranded
+     rollback. The recreate refuses a MIG that does not hold exactly one instance, such as a
+     fenced cell; that failure is the guard, not a fault, so unfence before dispatching.
    - serving the **target** image, it is `roll`, the ordinary rollback. The template applied
      and the instance was replaced.
    - serving the **rollback** image and not draining, it is `resume`: a rollback that failed
@@ -441,32 +511,46 @@ drained. Then read the cell's live runtime image from
    target image while the old instance is still up. Wait for the MIG to finish replacing it,
    then dispatch again; it will classify as `roll`.
 
-A mutating dispatch still needs a fresh aggregate monitor dry-run unless the break-glass
-override below is used.
+### Pre-drain fleet-health sample
 
-### Gate override (break-glass)
+A same-cap dispatch does not need a separate monitor run. Each `apply` wave samples fleet health
+itself, inside its own job, as the last step before it isolates its cell:
 
-Every mutating same-cap wave normally consumes a fresh 15-minute aggregate monitor dry-run.
-`gate-override-reason` plus `gate-override-confirmation`, the latter exactly
-`SKIP_RELAY_MONITOR_GATE <target-image-digest>`, skips that aggregate evidence and nothing
-else. A partial or mismatched override fails the run before any mutation, and `verify` mode
-rejects it outright.
+1. The live preflight takes one sample against the monitor's thresholds, with the expected
+   selector taken from the dispatch inputs (offset for the wave) and the migration policy pinned
+   to `strict`. The membership is canonicalised the way the monitor canonicalises its own, so it
+   must name every configured cell exactly once and its order does not matter.
+2. The headroom check reads how many hosts the cell carries.
+3. The pre-drain sample (`pnpm incident:relay-pre-drain-sample`) then samples once a minute for a
+   window sized to that count: up to 500 hosts, 3 minutes; up to 1,500, 5 minutes; above that,
+   8 minutes. Every sample is judged by the monitor's own evaluator and thresholds, with the same
+   tolerance for a flaky cell probe, a director instance replacement, or an unread signal (two
+   consecutive samples). Every sample also applies three lookback rules no single reading can
+   see: no container exit (`orca_relay_cell_process_exit`) in the last 10 minutes on a cell that
+   takes placements (general or migration-only in the dispatch membership) other than the cell
+   being rolled, no minute in the last 10 with more than 500 director 503s (a disconnect
+   pulse), and director concurrency p99 at most the monitor's 64 over the last 4 minutes. The window does not end on a
+   sample that still carries a tolerated failure, and trips if three samples past the window
+   still have not come back clean.
 
-It is legitimate when the roll is the fix for the condition the gate is freezing on, or
-during an incident with the director healthy. It is not a way to move faster on an ordinary
-wave.
+The exit metric names only an instance, so each exiting instance is matched to a cell by that
+instance's own newest `orca_relay_runtime_metrics` line from the last two hours. The target's own
+exits are ignored, because the roll exists to fix them, and so are existing-only legacy cells,
+which take no placements. An exit whose instance cannot be matched to a configured cell trips the
+rule; a failed lookup counts as a failed read. A newly booted instance can exit several times in
+its first seconds while its Cloud SQL proxy sidecar starts (c25's replacement did on
+2026-09-28); if that lands within 10 minutes of the next wave's sample, that wave trips and the
+remaining cells need a new dispatch.
 
-The live per-wave preflight still runs, against the same thresholds, with the expected
-selector taken from the dispatch inputs and the migration policy pinned to `strict`. That
-membership is canonicalised the same way the monitor canonicalises its own, so it must name
-every configured cell exactly once and its order does not matter.
-Durable rehome disabled, the exact selector generation and membership, the reviewed
-Terraform plan, the predecessor and new-incarnation checks, the rollout lease, the
-failed-wave failsafe, and single-dispatch mutation are all unchanged. The actor, reason,
-and confirmation are recorded in the gate job's run summary and, for a canary, sealed into
-the canary artifact under `gateOverride`; a batch may reuse a canary rolled under an
-override, because that authority never carried a monitor run ID. See
-[gate override (break-glass)](./relay-incident-monitor.md#gate-override-break-glass).
+Any trip fails the wave before isolation, so nothing has changed; dispatch again once the fleet is
+quiet. Every later cell in a batch runs all three again, so a batch never drains on health read
+before the previous cell rolled. `rollback` runs the live preflight but not the window, because
+getting off a crash-looping image must not wait for the crashes to stop; `verify` runs neither.
+
+The monitor workflow itself is unchanged and still gates the rehome enable path and incident
+watches. What a same-cap wave no longer has is the 15-minute history before the dispatch; the
+sized window plus the 10-minute lookbacks replace it, and the dispatch no longer has to land
+within minutes of a monitor run finishing.
 
 The first compatible director rollout uses `bootstrap-runtime-identity=true` with
 `BOOTSTRAP_RELAY_DIRECTOR_REHOME_IDENTITY`. That one-time path requires the exact stamped-cell

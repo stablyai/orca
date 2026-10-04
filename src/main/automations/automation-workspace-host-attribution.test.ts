@@ -1,3 +1,4 @@
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 /**
  * A folder workspace can pin its execution host while its repo stays local.
  * The desktop authority used to project only the repo, so those records listed
@@ -119,14 +120,15 @@ async function createStore(
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'automation-workspace-host-'))
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTestStores()
   rmSync(testState.dir, { recursive: true, force: true })
 })
 
@@ -218,7 +220,8 @@ describe('dispatch refused for an ambiguous workspace host', () => {
     vi.useFakeTimers()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     vi.useRealTimers()
     rmSync(testState.dir, { recursive: true, force: true })
   })

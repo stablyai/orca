@@ -98,6 +98,8 @@ export async function getStatusOp(
   const statusArgs = [
     '-c',
     'core.quotePath=false',
+    '-c',
+    'diff.autoRefreshIndex=false',
     'status',
     '--porcelain=v2',
     '--branch',
@@ -251,7 +253,17 @@ async function runNumstat(
 ): Promise<Map<string, GitLineStats> | null> {
   try {
     const { stdout } = await git(
-      ['-c', 'core.quotePath=false', 'diff', ...(cached ? ['--cached'] : []), '--numstat', '-M'],
+      [
+        '-c',
+        'core.quotePath=false',
+        '-c',
+        'diff.autoRefreshIndex=false',
+        'diff',
+        ...(cached ? ['--cached'] : []),
+        '-z',
+        '--numstat',
+        '-M'
+      ],
       worktreePath,
       { disableOptionalLocks: true, signal }
     )

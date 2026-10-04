@@ -174,13 +174,24 @@ function subjectKeyTuple(subject: AgentStatusSubject): AgentStatusSubjectKeyTupl
   ]
 }
 
+// Stored subjects are frozen, and the status store keys every record by one on each mutation.
+const frozenSubjectKeys = new WeakMap<AgentStatusSubject, string>()
+
 /** Stable serialized identity for maps, persistence, and snapshot transport. */
 export function serializeAgentStatusSubject(subject: AgentStatusSubject): string {
+  const cached = frozenSubjectKeys.get(subject)
+  if (cached !== undefined) {
+    return cached
+  }
   const parsed = parseAgentStatusSubject(subject)
   if (!parsed) {
     throw new Error('Invalid agent status subject')
   }
-  return `${SUBJECT_KEY_PREFIX}${JSON.stringify(subjectKeyTuple(parsed))}`
+  const key = `${SUBJECT_KEY_PREFIX}${JSON.stringify(subjectKeyTuple(parsed))}`
+  if (Object.isFrozen(subject)) {
+    frozenSubjectKeys.set(subject, key)
+  }
+  return key
 }
 
 export function deserializeAgentStatusSubject(value: string): AgentStatusSubject | null {

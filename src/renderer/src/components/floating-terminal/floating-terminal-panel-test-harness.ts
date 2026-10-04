@@ -31,6 +31,7 @@ export type FloatingTerminalPanelMocks = {
   >
   closeBrowserTab: Mock<FloatingPanelStoreState['closeBrowserTab']>
   closeWebRuntimeSessionTab: Mock<(args: { worktreeId: string; tabId: string }) => Promise<boolean>>
+  clearEditorDraft: Mock<FloatingPanelStoreState['clearEditorDraft']>
   closeFile: Mock<FloatingPanelStoreState['closeFile']>
   closeTab: Mock<(tabId: string, options?: { reason?: string }) => void>
   closeTerminalTab: Mock<(tabId: string, options?: { onClosed?: () => void }) => void>
@@ -71,6 +72,7 @@ export const mocks: FloatingTerminalPanelMocks = {
   activateWebRuntimeSessionTab: vi.fn(),
   closeBrowserTab: vi.fn(),
   closeWebRuntimeSessionTab: vi.fn(),
+  clearEditorDraft: vi.fn(),
   closeFile: vi.fn(),
   closeTab: vi.fn(),
   // Models terminal-tab-actions.closeTerminalTab: a real close removes the tab from the store, then
@@ -133,6 +135,7 @@ function resetStore(tabs: TerminalTab[] = []): void {
     expandedPaneByTabId: {},
     activateTab: mocks.activateTab,
     closeBrowserTab: mocks.closeBrowserTab,
+    clearEditorDraft: mocks.clearEditorDraft,
     closeFile: mocks.closeFile,
     closeUnifiedTab: mocks.closeUnifiedTab,
     createTab: mocks.createTab,

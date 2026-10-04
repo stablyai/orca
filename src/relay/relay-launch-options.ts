@@ -22,6 +22,8 @@ export type RelayLaunchOptions = {
   endpointDir?: string
   logFile?: string
   credentialFile?: string
+  /** Orca's uploaded ripgrep; absent when an older client launched this relay or no upload happened. */
+  ripgrepPath?: string
 }
 
 export function parseRelayLaunchOptions(argv: string[]): RelayLaunchOptions {
@@ -33,6 +35,7 @@ export function parseRelayLaunchOptions(argv: string[]): RelayLaunchOptions {
   let endpointDir: string | undefined
   let logFile: string | undefined
   let credentialFile: string | undefined
+  let ripgrepPath: string | undefined
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--grace-time' && argv[i + 1]) {
       const parsed = Number.parseInt(argv[i + 1], 10)
@@ -59,6 +62,9 @@ export function parseRelayLaunchOptions(argv: string[]): RelayLaunchOptions {
     } else if (argv[i] === '--credential-file' && argv[i + 1]) {
       credentialFile = argv[i + 1]
       i++
+    } else if (argv[i] === '--ripgrep-path' && argv[i + 1]) {
+      ripgrepPath = argv[i + 1]
+      i++
     }
   }
   if (!sockPath) {
@@ -72,7 +78,8 @@ export function parseRelayLaunchOptions(argv: string[]): RelayLaunchOptions {
     sockPath,
     endpointDir,
     logFile,
-    credentialFile
+    credentialFile,
+    ripgrepPath
   }
 }
 

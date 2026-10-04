@@ -1,3 +1,4 @@
+import { migrateExplorerDisplayRoots } from '../../../shared/file-explorer-display-root'
 import {
   getWorktreeCardModeProperties,
   isDefaultedCompactWorktreeCardProperties,
@@ -20,6 +21,7 @@ import {
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 
+/** Normalizes legacy UI payloads and marks one-time migrations for saving without replacing explicit user choices. */
 export function normalizeLoadedUiState(
   parsed: PersistedState,
   defaults: PersistedState,
@@ -28,6 +30,14 @@ export function normalizeLoadedUiState(
   osc52ClipboardNoticePending: boolean,
   markNeedsSave: () => void
 ): PersistedState['ui'] {
+  const explorerDisplayRootByWorktree = migrateExplorerDisplayRoots(
+    parsed.ui?.explorerDisplayRootByWorktree,
+    parsed.ui?._explorerDisplayRootMigrated === true,
+    parsed.worktreeMeta ?? {}
+  )
+  if (parsed.ui?._explorerDisplayRootMigrated !== true) {
+    markNeedsSave()
+  }
   const rawSort = parsed.ui?.sortBy
   const sort = normalizeSortBy(rawSort)
   const migrate = !parsed.ui?._sortBySmartMigrated && rawSort === 'recent'
@@ -68,6 +78,7 @@ export function normalizeLoadedUiState(
   const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
   const expandedCardPropsMigrated = parsed.ui?._expandedWorktreeCardPropertiesDefaulted === true
   const jiraIssueCardPropDefaulted = parsed.ui?._jiraIssueWorktreeCardPropertyDefaulted === true
+  const hostCardPropDefaulted = parsed.ui?._hostWorktreeCardPropertyDefaulted === true
   const hadExperimentOn = readDeprecatedExperimentFlag(parsed)
   const deliberateUncheck =
     hadExperimentOn && Array.isArray(rawCardProps) && !rawCardProps.includes('inline-agents')
@@ -109,7 +120,12 @@ export function normalizeLoadedUiState(
       jiraIssueCardPropDefaulted || expandedCandidate.includes('jira-issue')
         ? expandedCandidate
         : [...expandedCandidate, 'jira-issue' as const]
-    const normalized = normalizeWorktreeCardProperties(jiraCandidate)
+    // Why: the host pill was unconditional before it became a property, so existing profiles get it back once rather than silently losing it.
+    const hostCandidate =
+      hostCardPropDefaulted || jiraCandidate.includes('host')
+        ? jiraCandidate
+        : [...jiraCandidate, 'host' as const]
+    const normalized = normalizeWorktreeCardProperties(hostCandidate)
     const changed =
       normalized.length !== rawCardProps.length ||
       normalized.some((property, index) => property !== rawCardProps[index])
@@ -119,7 +135,8 @@ export function normalizeLoadedUiState(
     migratedCardProps !== undefined ||
     !inlineAgentsMigrated ||
     !expandedCardPropsMigrated ||
-    !jiraIssueCardPropDefaulted
+    !jiraIssueCardPropDefaulted ||
+    !hostCardPropDefaulted
   ) {
     markNeedsSave()
   }
@@ -189,6 +206,8 @@ export function normalizeLoadedUiState(
     // window exists, and it must survive a crash before the user ever sees the notice.
     osc52ClipboardDefaultOnNoticePending: osc52ClipboardNoticePending,
     sortBy: migrate ? ('smart' as const) : sort,
+    _explorerDisplayRootMigrated: true,
+    explorerDisplayRootByWorktree,
     showDotfilesByWorktree: normalizeShowDotfilesByWorktree(parsed.ui?.showDotfilesByWorktree),
     workspaceStatuses,
     _workspaceStatusesDefaultOrderMigrated: true,
@@ -201,6 +220,7 @@ export function normalizeLoadedUiState(
     _inlineAgentsDefaultedForExperiment: true,
     _inlineAgentsDefaultedForAllUsers: true,
     _expandedWorktreeCardPropertiesDefaulted: true,
-    _jiraIssueWorktreeCardPropertyDefaulted: true
+    _jiraIssueWorktreeCardPropertyDefaulted: true,
+    _hostWorktreeCardPropertyDefaulted: true
   }
 }

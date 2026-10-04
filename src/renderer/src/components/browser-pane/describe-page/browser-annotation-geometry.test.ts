@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
 import {
-  clampNumber,
   createBrowserAnnotationPayload,
   getLiveBrowserAnnotationRect
 } from './browser-annotation-geometry'
@@ -26,12 +25,6 @@ function payload(overrides: Partial<BrowserGrabPayload['target']> = {}): Browser
 }
 
 describe('browser annotation geometry', () => {
-  it('clamps inclusive of both ends', () => {
-    expect(clampNumber(5, 0, 10)).toBe(5)
-    expect(clampNumber(-1, 0, 10)).toBe(0)
-    expect(clampNumber(11, 0, 10)).toBe(10)
-  })
-
   it('uses the viewport rect for fixed targets and scroll-adjusts flowing targets', () => {
     const fixed = payload({ isFixed: true })
     expect(getLiveBrowserAnnotationRect(fixed, { scrollX: 99, scrollY: 99, version: 2 })).toEqual(

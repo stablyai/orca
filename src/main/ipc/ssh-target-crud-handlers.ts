@@ -34,8 +34,15 @@ function takeRepoReadoptions(): SshRepoReadoption[] {
   return repoReadoptions
 }
 
-function omitRendererSshTargetGeneration<T extends object>(value: T): Omit<T, 'generation'> {
-  const { generation: _generation, ...rest } = value as T & { generation?: unknown }
+// Why: generations and the runtime ladder cache are main-owned; a renderer must not forge them.
+function omitRendererSshTargetGeneration<
+  T extends { generation?: unknown; remoteRuntimeResolution?: unknown }
+>(value: T): Omit<T, 'generation' | 'remoteRuntimeResolution'> {
+  const {
+    generation: _generation,
+    remoteRuntimeResolution: _remoteRuntimeResolution,
+    ...rest
+  } = value
   return rest
 }
 

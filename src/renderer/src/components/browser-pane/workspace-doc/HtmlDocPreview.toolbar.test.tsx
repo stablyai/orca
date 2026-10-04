@@ -621,11 +621,11 @@ describe('HtmlDocPreview guest focus', () => {
 
   beforeEach(() => {
     focused = []
-    focusSpy = vi
-      .spyOn(HTMLElement.prototype, 'focus')
-      .mockImplementation(function (this: HTMLElement) {
-        focused.push(this)
-      })
+    focusSpy = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      focused.push(this)
+    })
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)

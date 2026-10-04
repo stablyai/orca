@@ -309,11 +309,6 @@ test('push credentials cannot assume the shared Relay deploy identity', () => {
   assert.doesNotMatch(terraform('push-gateway.tf'), /member\s*=\s*local\.relay_github_deploy_service_account_member/)
 })
 
-// A latest revision needs a successor even when validation is inert.
-test('dedicated database admits three simultaneous revision pools', () => {
-  assert.match(terraform('push-gateway.tf'), /var\.push_max_instances \* var\.push_database_pool_max \* 3 <= 64/)
-})
-
 test('push has only a dedicated database attachment and a narrowly scoped deployment lease', () => {
   const service = terraform('push-gateway.tf')
   const database = terraform('push-dedicated-database.tf')

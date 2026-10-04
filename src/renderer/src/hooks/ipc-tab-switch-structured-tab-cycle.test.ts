@@ -116,7 +116,7 @@ describe('handleSwitchTerminalTab with a structured chat tab active', () => {
     // Stepping from the stale 'term-2' would land on 'term-3'.
     expect(mocks.store.setActiveTab).toHaveBeenCalledWith('term-1')
     expect(mocks.store.setActiveTab).not.toHaveBeenCalledWith('term-3')
-    expect(mocks.store.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(mocks.store.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
   })
 
   it('still reaches the sole terminal rather than reading as already focused', () => {

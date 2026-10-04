@@ -12,7 +12,13 @@ import {
   sanitizeRecentTabIds,
   updateGroup
 } from '../tab-group-state'
-import { canReplacePreviewContentType } from './tabs-tab-order'
+import {
+  applyTabOrderSortValues,
+  canReplacePreviewContentType,
+  insertTabIdIntoOrder
+} from './tabs-tab-order'
+import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
+import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspace-worktree'
 
 export function createTabsCreateActions(
   set: TabsSliceSet,
@@ -23,13 +29,26 @@ export function createTabsCreateActions(
       const id = init?.id ?? createBrowserUuid()
       let created!: Tab
       set((state) => {
+        const existingTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+        const placement = resolveUnifiedTabCreatePlacement({
+          groups: state.groupsByWorktree[worktreeId] ?? [],
+          tabs: existingTabs,
+          activeGroupId: state.activeGroupIdByWorktree[worktreeId],
+          targetGroupId: init?.targetGroupId,
+          afterTabId: init?.afterTabId,
+          executionHostId: init?.executionHostId,
+          lookupWorktrees: () =>
+            [
+              ...(state.allWorktrees?.() ?? []),
+              ...(state.folderWorkspaces ?? []).map(folderWorkspaceToWorktree)
+            ].filter((worktree) => worktree.id === worktreeId)
+        })
         const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
           state.groupsByWorktree,
           state.activeGroupIdByWorktree,
           worktreeId,
-          init?.targetGroupId ?? state.activeGroupIdByWorktree[worktreeId]
+          placement.groupId
         )
-        const existingTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
 
         let nextTabs = existingTabs
         let nextOrder = dedupeTabOrder(group.tabOrder)
@@ -47,9 +66,21 @@ export function createTabsCreateActions(
         }
 
         const shouldActivate = init?.activate ?? true
+        const recordsFocus = shouldActivate && init?.recordFocus !== false
         const createdAt = Date.now()
         const executionHostId =
           init?.executionHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)
+        // Why: preview replacement may have removed the anchor; the order then appends in-partition.
+        nextOrder = insertTabIdIntoOrder(
+          nextOrder,
+          nextTabs,
+          id,
+          init?.isPinned === true,
+          placement.anchorTabId
+        )
+        const insertedIndex = nextOrder.indexOf(id)
+        // Why always: preview replacement can leave a gap, so an append alone would reuse a sibling's sortOrder.
+        nextTabs = applyTabOrderSortValues(nextTabs, nextOrder)
         created = {
           id,
           entityId: init?.entityId ?? id,
@@ -67,15 +98,14 @@ export function createTabsCreateActions(
             : {}),
           customLabel: init?.customLabel ?? null,
           color: init?.color ?? null,
-          sortOrder: nextOrder.length,
+          sortOrder: insertedIndex,
           createdAt,
           // Why: creating an active tab is a focus event; Cmd+J recency reads lastFocusedAt.
-          ...(shouldActivate ? { lastFocusedAt: createdAt } : {}),
+          ...(recordsFocus ? { lastFocusedAt: createdAt } : {}),
           isPreview: init?.isPreview,
           isPinned: init?.isPinned
         }
 
-        nextOrder = dedupeTabOrder([...nextOrder, created.id])
         const nextActiveTabId = shouldActivate ? created.id : (group.activeTabId ?? created.id)
         const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, nextOrder)
         // Why: automation-created browser tabs must paint without stealing the visible group selection from the user's current tab.

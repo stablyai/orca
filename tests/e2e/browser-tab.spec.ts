@@ -69,7 +69,7 @@ async function switchToTerminalTab(
     if (terminalTab) {
       state.setActiveTab(terminalTab.id)
     }
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
   }, worktreeId)
 }
 

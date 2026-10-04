@@ -71,6 +71,7 @@ const terminalLayoutSnapshotSchema = z.object({
   root: terminalPaneLayoutNodeSchema.nullable(),
   activeLeafId: z.string().nullable(),
   expandedLeafId: z.string().nullable(),
+  chatLeafId: z.string().optional(),
   ptyIdsByLeafId: salvagedOptional('ptyIdsByLeafId', leafStringsSchema),
   buffersByLeafId: salvagedOptional('buffersByLeafId', leafStringsSchema),
   scrollbackRefsByLeafId: salvagedOptional('scrollbackRefsByLeafId', leafStringsSchema),
@@ -133,9 +134,6 @@ const tabSchema = z.object({
   executionHostId: executionHostIdSchema.optional(),
   contentType: tabContentTypeSchema,
   agentSessionAgent: z.enum(['codex', 'claude']).optional().catch(undefined),
-  // Why: a structured terminal tab must recover its durable host session after
-  // restart; omitting this additive field silently routes it back through PTY.
-  structuredSessionId: z.string().min(1).optional().catch(undefined),
   label: z.string(),
   generatedLabel: z.string().nullable().optional(),
   aiVaultTitle: z

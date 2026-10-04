@@ -11,8 +11,9 @@
 <!-- What problem does this solve, and why is this approach better than the alternatives you considered? -->
 
 ## Linked Issue
-
-<!-- Link the issue this PR addresses, there should ALWAYS be one -->
+_If you do not have one and are an outside contributors, your PR **wiil** be ignored. Refs is not sufficient. Link an actual issue_
+<!-- Link the issue this PR addresses, there should ALWAYS be one (for outside contributors) -->
+<!-- SPECIAL CASE: If you are a maintainer (member of stablyai org) AVOID opening needless issues. Only attach pre-existing ones -->
 
 Fixes #
 

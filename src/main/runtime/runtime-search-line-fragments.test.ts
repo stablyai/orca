@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
-import {
-  checkRgAvailableMock,
-  resolveAuthorizedPathMock,
-  wslAwareSpawnMock
-} from './orca-runtime-files-mock-registry'
+import { resolveAuthorizedPathMock, wslAwareSpawnMock } from './orca-runtime-files-mock-registry'
 import {
   createRuntimeFileCommands,
   useRuntimeFileCommandsLifecycle
@@ -25,16 +21,8 @@ vi.mock('../git/runner', async () =>
   (await import('./orca-runtime-files-mock-registry')).gitRunnerModuleMock()
 )
 vi.mock(
-  '../ipc/rg-availability',
-  async () => (await import('./orca-runtime-files-mock-registry')).rgAvailabilityMock
-)
-vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
-)
-vi.mock(
-  '../ipc/filesystem-search-git',
-  async () => (await import('./orca-runtime-files-mock-registry')).filesystemSearchGitMock
 )
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
@@ -74,7 +62,6 @@ describe('RuntimeFileCommands', () => {
     })
     const child = createRuntimeSearchChild()
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
-    checkRgAvailableMock.mockResolvedValue(true)
     wslAwareSpawnMock.mockReturnValue(child)
     const resultPromise = commands.searchRuntimeFiles('id:wt-1', {
       query: 'needle',

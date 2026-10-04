@@ -69,7 +69,7 @@ function makeAnnotation(): BrowserPageAnnotation {
   }
 }
 
-function renderTray(): {
+function renderTray(currentUrl?: string): {
   handleDeleteBrowserAnnotation: ReturnType<typeof vi.fn>
   handleUpdateBrowserAnnotation: ReturnType<typeof vi.fn>
 } {
@@ -80,6 +80,7 @@ function renderTray(): {
     <TooltipProvider>
       <BrowserPageAnnotationTray
         browserAnnotations={[makeAnnotation()]}
+        currentUrl={currentUrl}
         annotationTraySendOpen={false}
         handleAnnotationTraySendOpenChange={vi.fn()}
         worktreeId="wt-1"
@@ -99,6 +100,21 @@ function renderTray(): {
 }
 
 describe('BrowserPageAnnotationTray edit mode', () => {
+  it('attributes a retained note to its captured page while preserving edit and delete controls', () => {
+    const { handleDeleteBrowserAnnotation } = renderTray('https://example.com/next')
+    expect(screen.getByTitle('https://example.com')).toHaveTextContent('https://example.com')
+    fireEvent.click(screen.getByRole('button', { name: 'Delete annotation 1' }))
+    expect(handleDeleteBrowserAnnotation).toHaveBeenCalledWith('annotation-1')
+  })
+
+  it('keeps current-page and document-preview metadata compact', () => {
+    renderTray('https://example.com/?query=private#fragment')
+    expect(screen.queryByTitle('https://example.com')).not.toBeInTheDocument()
+    cleanup()
+    renderTray()
+    expect(screen.queryByTitle('https://example.com')).not.toBeInTheDocument()
+  })
+
   it('seeds the textarea with the current comment when entering edit mode', () => {
     renderTray()
 

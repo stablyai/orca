@@ -141,7 +141,7 @@ describe('runtime file target execution host', () => {
     await runtime.listRuntimeMarkdownDocuments(`id:${WORKTREE_ID}`)
 
     expect(m4air.listFiles).not.toHaveBeenCalled()
-    expect(mocks.listMarkdownDocuments).toHaveBeenCalledWith(REMOTE_PATH)
+    expect(mocks.listMarkdownDocuments).toHaveBeenCalledWith(REMOTE_PATH, {})
   })
 
   // A `runtime:` row's `connectionId` names a target in the *server's* namespace. Reading it here

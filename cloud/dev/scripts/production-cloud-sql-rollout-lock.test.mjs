@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import {
   LEASED_WORKFLOWS,
@@ -21,7 +20,6 @@ import {
   revisionMintingScripts,
   workflowFiles
 } from './cloud-sql-rollout-lock-census.mjs'
-import { relayWorkflowFile } from './relay-repository.mjs'
 
 const expectedLease = { production: PRODUCTION_LEASE, staging: STAGING_LEASE, selectable: SELECTABLE_LEASE }
 const leasedFiles = Object.keys(LEASED_WORKFLOWS)
@@ -181,30 +179,4 @@ test('census: no workflow rolls out against the shared instance outside the leas
     assert.doesNotThrow(() => readWorkflow(file), `${file} is leased but does not exist`)
     assert.ok(!(file in NOT_A_CLOUD_SQL_CANDIDATE), `${file} cannot be both leased and a non-candidate`)
   }
-})
-
-// The API and auth deploy scripts share this contract but stay in the private repository.
-const serviceCapScripts = ['dev/scripts/deploy-relay-blue-green.mjs']
-
-test('budgets tagged Cloud Run candidates outside the service-wide instance cap', () => {
-  for (const file of serviceCapScripts) {
-    const script = readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8')
-    assert.match(script, /'--no-traffic'/, file)
-    assert.match(script, /'--max'/, file)
-  }
-  const budget = readFileSync(
-    new URL('../../dev/scripts/relay-cloud-sql-connection-budget.mjs', import.meta.url),
-    'utf8'
-  )
-  assert.match(budget, /directly addressable tagged revisions outside service-level caps/)
-  assert.match(
-    budget,
-    /apiCandidate: retainedDirectorRollback \+ inputs\.apiInstances \* inputs\.apiPoolMax/
-  )
-  const director = readWorkflow(relayWorkflowFile('deploy-relay-production-director.yml'))
-  const capacity = readWorkflow(relayWorkflowFile('deploy-relay-production-capacity-job.yml'))
-  const asia = readWorkflow(relayWorkflowFile('operate-relay-asia-admission.yml'))
-  assert.match(director, /--max-instances "\$\{DIRECTOR_MAX_INSTANCES\}"/)
-  assert.match(capacity, /--max-instances 5/)
-  assert.match(asia, /--max-instances "\$\{DIRECTOR_MAX_INSTANCES\}"/)
 })

@@ -92,9 +92,9 @@ describe('terminal interactive-wait visibility (STA-4513, STA-3714)', () => {
       await expect(
         assertTerminalAgentSendable({ runtime, handle, assertWritable: () => {} })
       ).rejects.toThrow('terminal_guard_permission')
-      await expect(runtime.sendTerminalAgentPrompt(handle, 'coordinator preamble')).rejects.toThrow(
-        'agent_prompt_blocked'
-      )
+      await expect(
+        runtime.sendTerminalAgentPrompt(handle, 'coordinator preamble', { inputKind: 'driving' })
+      ).rejects.toThrow('agent_prompt_blocked')
     })
 
     it('lets a dispatch preamble through once the same lane is working', async () => {

@@ -65,10 +65,10 @@ export function useWorktreeJumpPaletteSelectionActions({
         )
         return
       }
-      const activation = activateAndRevealWorktree(
-        worktree.id,
-        executionHostId ? { executionHostId } : {}
-      )
+      const activation = activateAndRevealWorktree(worktree.id, {
+        navigationIntent: 'user-open',
+        ...(executionHostId ? { executionHostId } : {})
+      })
       recordFeatureInteraction('cmd-j-workspace-open')
       skipRestoreFocusRef.current = true
       closeModal()

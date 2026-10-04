@@ -15,7 +15,10 @@ import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
 import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
 import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
-import { getWorktreeLineageAncestors } from '../../worktree-lineage-projection'
+import {
+  getHostScopedWorktreeLineageInputs,
+  getWorktreeLineageAncestors
+} from '../../worktree-lineage-projection'
 import { getFolderWorkspaceRevealGroupKeys } from './folder-reveal'
 import { getPinnedWorktreeRevealCollapsedGroupKeys } from './reveal-ancestors'
 
@@ -89,24 +92,15 @@ export function expandGroupsForWorktreeReveal(
     args.toggleGroup(hostGroupKey)
   }
 
-  const hostWorktreeMap = new Map<string, Worktree>()
-  const hostLineageById: Record<string, WorktreeLineage> = {}
-  for (const worktree of args.worktrees) {
-    if (executionHostId && worktree.hostId && worktree.hostId !== executionHostId) {
-      continue
-    }
-    hostWorktreeMap.set(worktree.id, worktree)
-    const projected = args.worktreeLineageById[worktree.id]
-    const inline = (worktree as Worktree & { lineage?: WorktreeLineage | null }).lineage
-    const lineage = projected?.worktreeInstanceId === worktree.instanceId ? projected : inline
-    if (lineage) {
-      hostLineageById[worktree.id] = lineage
-    }
-  }
+  const hostLineage = getHostScopedWorktreeLineageInputs(
+    args.worktrees,
+    args.worktreeLineageById,
+    executionHostId
+  )
   for (const parent of getWorktreeLineageAncestors(
     targetWorktree,
-    hostLineageById,
-    hostWorktreeMap
+    hostLineage.lineageById,
+    hostLineage.worktreeMap
   )) {
     const lineageGroupKey = getWorktreeLineageGroupKey(parent)
     if (args.collapsedGroups.has(lineageGroupKey)) {

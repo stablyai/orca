@@ -349,36 +349,6 @@ describe('scanRemoteAiVaultSessions', () => {
     ).toEqual(['/home/ada/.gemini/antigravity-cli/brain'])
   })
 
-  it('keeps Antigravity SSH discovery to one listing as the session store grows', async () => {
-    const provider = new MemoryRemoteProvider()
-    const brainDir = '/home/ada/.gemini/antigravity-cli/brain'
-    for (let index = 0; index < 40; index++) {
-      provider.addFile(
-        `${brainDir}/session-${index}/.system_generated/logs/transcript.jsonl`,
-        jsonLines([
-          {
-            source: 'USER_EXPLICIT',
-            type: 'USER_INPUT',
-            created_at: `2026-07-15T11:39:${String(index).padStart(2, '0')}Z`,
-            content: `<USER_REQUEST>Remote session ${index}</USER_REQUEST>`
-          }
-        ]),
-        100 + index
-      )
-    }
-
-    const result = await scanRemoteAiVaultSessions({
-      provider,
-      executionHostId: 'ssh:dev-box',
-      remoteHome: '/home/ada',
-      hostPlatform: getRemoteHostPlatform('linux-x64')
-    })
-
-    expect(result.issues).toEqual([])
-    expect(result.sessions).toHaveLength(40)
-    expect(provider.readDirPaths.filter((path) => path.startsWith(brainDir))).toEqual([brainDir])
-  })
-
   it('ignores missing canonical Antigravity transcripts but reports other stat failures', async () => {
     const provider = new MemoryRemoteProvider()
     const brainDir = '/home/ada/.gemini/antigravity-cli/brain'

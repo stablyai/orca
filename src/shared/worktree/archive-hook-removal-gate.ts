@@ -10,6 +10,15 @@
  */
 export const ARCHIVE_HOOK_TIMEOUT_MS = 120_000
 
+/**
+ * How long a client waits for worktree.rm's reply. Git's checkout delete has no timeout (measured
+ * up to ~60 s under load) and a bulk delete queues behind the host's two-at-a-time limit; a client
+ * that gives up instead settles the card from the host's listing, so this is not a failure deadline.
+ */
+export function worktreeRemovalReplyTimeoutMs(runsArchiveHook: boolean): number {
+  return (runsArchiveHook ? ARCHIVE_HOOK_TIMEOUT_MS : 0) + 180_000
+}
+
 /** RPC/CLI error code for a removal refused because the repo's archive hook did not succeed. */
 export const ARCHIVE_HOOK_FAILED_REMOVAL_CODE = 'worktree_archive_hook_failed'
 

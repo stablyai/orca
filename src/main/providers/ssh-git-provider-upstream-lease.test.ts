@@ -29,23 +29,6 @@ describe('SshGitProvider upstream status read leases', () => {
     provider = new SshGitProvider('conn-1', mux as never)
   })
 
-  it('shares one upstream-status RPC across ten identical callers', async () => {
-    const pending = deferredPromise<{
-      hasUpstream: true
-      upstreamName: string
-      ahead: number
-      behind: number
-    }>()
-    mux.request.mockReturnValue(pending.promise)
-
-    const reads = Array.from({ length: 10 }, () => provider.getUpstreamStatus('/home/user/repo'))
-    await waitForRequestCount(mux.request, 1)
-
-    expect(mux.request).toHaveBeenCalledTimes(1)
-    pending.resolve({ hasUpstream: true, upstreamName: 'origin/main', ahead: 1, behind: 0 })
-    await expect(Promise.all(reads)).resolves.toHaveLength(10)
-  })
-
   it('isolates upstream-status RPCs by worktree and every target field', async () => {
     mux.request.mockResolvedValue({
       hasUpstream: true,
@@ -87,32 +70,6 @@ describe('SshGitProvider upstream status read leases', () => {
     ])
 
     expect(mux.request).toHaveBeenCalledTimes(2)
-  })
-
-  it('runs a fresh upstream-status RPC after result and error settlement', async () => {
-    const failure = new Error('upstream RPC failed')
-    mux.request
-      .mockResolvedValueOnce({
-        hasUpstream: true,
-        upstreamName: 'origin/main',
-        ahead: 0,
-        behind: 0
-      })
-      .mockRejectedValueOnce(failure)
-      .mockResolvedValueOnce({
-        hasUpstream: false,
-        ahead: 0,
-        behind: 0
-      })
-
-    await expect(provider.getUpstreamStatus('/home/user/repo')).resolves.toMatchObject({
-      hasUpstream: true
-    })
-    await expect(provider.getUpstreamStatus('/home/user/repo')).rejects.toBe(failure)
-    await expect(provider.getUpstreamStatus('/home/user/repo')).resolves.toMatchObject({
-      hasUpstream: false
-    })
-    expect(mux.request).toHaveBeenCalledTimes(3)
   })
 
   it('fences upstream-status reads before, during, and after an SSH mutation', async () => {

@@ -14,6 +14,7 @@ import {
   type MobilePrTitleAction
 } from '../session/use-mobile-pr-title-action'
 import { useMobilePrAiTriage, type MobilePrAiTriage } from '../session/use-mobile-pr-ai-triage'
+import { useHostProtocolGates } from './HostProtocolGate'
 import { usePRBotAuthorOverrides } from '../session/use-pr-bot-author-overrides'
 import { buildFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
@@ -42,6 +43,8 @@ type Props = {
   bottomInset?: number
   // Hub chrome already shows open-on-web; hide the in-body icon there.
   showOpenOnWeb?: boolean
+  /** Named when an AI button's agent starts; the branch stands in when absent. */
+  workspaceLabel: string | null
 }
 
 // Mutation hooks run unconditionally here and gate internally until a PR is ready.
@@ -56,8 +59,10 @@ export function MobilePRSidebar({
   gitStatus,
   headSha,
   bottomInset = 0,
-  showOpenOnWeb = true
+  showOpenOnWeb = true,
+  workspaceLabel
 }: Props) {
+  const launchWorkspaceLabel = workspaceLabel || gitBranch
   const branch = prSidebarRenderBranch(state)
   // prNumber is 0 until ready; the hook gates on `ready` so it never fires early.
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
@@ -89,7 +94,16 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
-  const triage = useMobilePrAiTriage({ client, connState, worktreeId })
+  const { hostCapabilities, statusPending, statusReadable } = useHostProtocolGates()
+  const triage = useMobilePrAiTriage({
+    client,
+    connState,
+    worktreeId,
+    workspaceLabel: launchWorkspaceLabel,
+    hostCapabilities,
+    hostStatusPending: statusPending,
+    hostStatusReadable: statusReadable
+  })
   // Keyed on the PR payload identity so overrides re-fetch with each PR refetch
   // instead of staying a stale one-shot snapshot for the whole session.
   const botAuthorOverrides = usePRBotAuthorOverrides(
@@ -122,6 +136,7 @@ export function MobilePRSidebar({
         commentActions={commentActions}
         titleAction={titleAction}
         triage={triage}
+        workspaceLabel={launchWorkspaceLabel}
         botAuthorOverrides={botAuthorOverrides}
         showOpenOnWeb={showOpenOnWeb}
       />
@@ -143,6 +158,7 @@ function PrSidebarContent({
   commentActions,
   titleAction,
   triage,
+  workspaceLabel,
   showOpenOnWeb,
   botAuthorOverrides
 }: {
@@ -159,6 +175,7 @@ function PrSidebarContent({
   commentActions: MobilePrCommentActions
   titleAction: MobilePrTitleAction
   triage: MobilePrAiTriage
+  workspaceLabel: string | null
   showOpenOnWeb: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
@@ -211,6 +228,7 @@ function PrSidebarContent({
         gitBranch={gitBranch}
         gitStatus={gitStatus}
         connState={connState}
+        workspaceLabel={workspaceLabel}
         onCreated={refetch}
       />
     )
@@ -271,7 +289,8 @@ function PrSidebarSections({
         })
       ),
     isBusy: triage.isBusy('fix-checks'),
-    error: triage.error
+    availability: triage.availability,
+    ...triage.noticeFor('fix-checks')
   }
   const conflictsTriage = {
     resolveConflicts: () =>
@@ -283,7 +302,8 @@ function PrSidebarSections({
         })
       ),
     isBusy: triage.isBusy('resolve-conflicts'),
-    error: triage.error
+    availability: triage.availability,
+    ...triage.noticeFor('resolve-conflicts')
   }
   // One card for identity + actions so the ready PR isn't a stack of thin
   // duplicate blocks (badge row, title, branches, then another action band).

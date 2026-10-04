@@ -54,7 +54,7 @@ export function scanChromiumCookieRows(
         sourceKey.keyringUnavailable === true
       const raw =
         sourceKey && !appBoundIneligible && !keyringIneligible
-          ? decryptCookieValueRaw(encBuf, sourceKey)
+          ? decryptCookieValueRaw(encBuf, sourceKey, domain)
           : null
       if (!raw) {
         // Why: once decrypt returns null every failure looks identical, so attribute the cause

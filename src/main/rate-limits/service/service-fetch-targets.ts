@@ -6,6 +6,8 @@ import {
   type ClaudeRuntimeAuthPreparation,
   type CodexAccountSelectionTarget,
   type MiniMaxResolvedConfig,
+  type ZcodePlanResolvedConfig,
+  type OpenCodeGoResolvedConfig,
   type NormalizedCodexAccountSelectionTarget,
   type NormalizedClaudeAccountSelectionTarget,
   type ProviderRateLimits,
@@ -13,6 +15,7 @@ import {
   toErrorMessage
 } from './service-types'
 import type { CodexRateLimitResetOutcome } from '../../../shared/rate-limit-types'
+import { ApiKeyFileUnreadableError } from '../../credentials/api-key-file-unreadable-error'
 
 const CODEX_RESET_REFRESH_RETRIES = 3
 const CODEX_RESET_REFRESH_DELAY_MS = 250
@@ -127,7 +130,6 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       try {
         fresh = await fetchCodexRateLimits({
           codexHomePath,
-          allowPtyFallback: this.shouldAllowCodexPtyFallback(),
           signal: controller.signal
         })
       } catch (error) {
@@ -172,11 +174,6 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     return { ...stateBeforeReset, codex: scopedCodex, codexTarget: target }
   }
 
-  protected shouldAllowCodexPtyFallback(): boolean {
-    // Why: hidden PTY fallback can crash inside ConPTY on Windows; prefer RPC-only degradation there for background quota refresh.
-    return process.platform !== 'win32'
-  }
-
   protected shouldAllowClaudePtyFallback(
     authPreparation: ClaudeRuntimeAuthPreparation | undefined
   ): boolean {
@@ -191,6 +188,34 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
   protected shouldAllowClaudeUsagePanelSupplement(): boolean {
     // Why: keep this supplement off on Windows where hidden PTYs are still less reliable.
     return process.platform !== 'win32'
+  }
+
+  protected resolveOpenCodeGoConfig(): OpenCodeGoResolvedConfig {
+    const config = this.openCodeGoConfigResolver?.() ?? {
+      sessionCookie: '',
+      workspaceIdOverride: ''
+    }
+    try {
+      return {
+        ...config,
+        apiKey: this.openCodeGoApiKeyResolver?.() ?? '',
+        apiKeyError: null,
+        apiKeyReadSkipped: false
+      }
+    } catch (error) {
+      // Why: a transient read failure says nothing about the key, so skip it this cycle without blaming it.
+      if (error instanceof ApiKeyFileUnreadableError) {
+        return { ...config, apiKey: '', apiKeyError: null, apiKeyReadSkipped: true }
+      }
+      // Why: an unreadable saved key is treated as absent so the cookie and OpenCode's own key still run.
+      return {
+        ...config,
+        apiKey: '',
+        apiKeyError:
+          'OpenCode Go API key could not be decrypted. Re-enter or clear the key in Settings.',
+        apiKeyReadSkipped: false
+      }
+    }
   }
 
   protected resolveMiniMaxConfig(): MiniMaxResolvedConfig {
@@ -217,6 +242,18 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
         },
         error: toErrorMessage(error)
       }
+    }
+  }
+
+  protected resolveZcodePlanConfig(): ZcodePlanResolvedConfig {
+    try {
+      return {
+        config: this.zcodePlanConfigResolver?.() ?? { site: 'zai', apiKey: '' },
+        error: null
+      }
+    } catch (error) {
+      // Why: an undecryptable saved key must not abort every provider's refresh; surface it as ZCode-only state instead.
+      return { config: { site: 'zai', apiKey: '' }, error: toErrorMessage(error) }
     }
   }
 }

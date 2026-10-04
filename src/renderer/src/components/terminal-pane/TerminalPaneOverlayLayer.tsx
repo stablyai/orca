@@ -9,7 +9,9 @@ import {
 } from '../activity/activity-terminal-portal'
 import { shouldMountBackgroundWorktreeTab } from '../terminal/background-terminal-worktree-mount'
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
+import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
+import { TerminalRestoringPlaceholder } from './TerminalRestoringPlaceholder'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 
 type TerminalOverlayAssignment = {
@@ -132,40 +134,50 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
 
   return (
     <>
-      {terminalTabs
-        .filter((terminalTab) =>
-          shouldMountBackgroundWorktreeTab(backgroundMountTabIds, terminalTab.id)
-        )
-        .map((terminalTab) => {
-          const assignment = assignments.get(terminalTab.id)
-          const isVisible = Boolean(isWorktreeActive && assignment?.isActiveInGroup)
-          const isActive = Boolean(isVisible && assignment?.groupId === activeGroupId)
-          const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
-            worktreeId,
-            tabId: terminalTab.id
-          })
-          if (parkedTerminalTabIds.has(terminalTab.id)) {
-            return null
-          }
-          return (
-            <TerminalOverlaySlot
+      {terminalTabs.map((terminalTab) => {
+        const assignment = assignments.get(terminalTab.id)
+        const isVisible = Boolean(isWorktreeActive && assignment?.isActiveInGroup)
+        if (!shouldMountBackgroundWorktreeTab(backgroundMountTabIds, terminalTab.id)) {
+          // Why only the startup hold lands here visible: reveal admits every other visible
+          // deferred tab in the same render pass.
+          return isVisible ? (
+            <RetainedPaneHost
               key={terminalTab.id}
-              terminalTabId={terminalTab.id}
-              terminalGeneration={terminalTab.generation}
-              worktreeId={worktreeId}
-              worktreePath={worktreePath}
-              startupCwd={terminalTab.startupCwd}
               groupId={assignment?.groupId}
-              isWorktreeActive={isWorktreeActive}
-              isVisible={isVisible}
-              isActive={isActive}
-              activityTerminalPortal={activityTerminalPortal}
+              isVisible
               onFocusOwningGroup={focusOwningGroup}
-              consumeSuppressedPtyExit={consumeSuppressedPtyExit}
-              leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
-            />
-          )
-        })}
+            >
+              <TerminalRestoringPlaceholder />
+            </RetainedPaneHost>
+          ) : null
+        }
+        const isActive = Boolean(isVisible && assignment?.groupId === activeGroupId)
+        const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
+          worktreeId,
+          tabId: terminalTab.id
+        })
+        if (parkedTerminalTabIds.has(terminalTab.id)) {
+          return null
+        }
+        return (
+          <TerminalOverlaySlot
+            key={terminalTab.id}
+            terminalTabId={terminalTab.id}
+            terminalGeneration={terminalTab.generation}
+            worktreeId={worktreeId}
+            worktreePath={worktreePath}
+            startupCwd={terminalTab.startupCwd}
+            groupId={assignment?.groupId}
+            isWorktreeActive={isWorktreeActive}
+            isVisible={isVisible}
+            isActive={isActive}
+            activityTerminalPortal={activityTerminalPortal}
+            onFocusOwningGroup={focusOwningGroup}
+            consumeSuppressedPtyExit={consumeSuppressedPtyExit}
+            leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
+          />
+        )
+      })}
     </>
   )
 })

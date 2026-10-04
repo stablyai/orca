@@ -5,6 +5,7 @@ import { workspaceSourceSchema } from '../telemetry-events'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { sleepingAgentLaunchConfigSchema } from '../workspace-session-sleeping-agents'
 import { isTuiAgent } from '../tui-agent-config'
+import { LaunchSourceParam } from './launch-source-param'
 import {
   OptionalBoolean,
   OptionalFiniteNumber,
@@ -110,6 +111,8 @@ export const WorktreeCreate = z
     // workspaces execute in a different shell than the client process.
     startupAgent: OptionalTuiAgent,
     startupPrompt: OptionalString,
+    // Which surface asked for the agent the host launches from `startupAgent` or `startupDraft`.
+    launchSource: LaunchSourceParam.optional(),
     // Why: task-driven mobile creates need desktop parity: the host chooses
     // the same default/detected agent and drafts the linked issue/PR URL into it.
     startupDraft: OptionalString,

@@ -25,7 +25,10 @@ export {
   consumePendingWebRuntimeSplitMirrorTelemetry,
   closeWebRuntimeTerminal,
   updateWebRuntimePaneLayout,
-  setWebRuntimeTabProps,
-  clearWebRuntimeTerminalBuffer
+  setWebRuntimeTabProps
 } from './web-runtime-terminal-actions'
+export {
+  clearWebRuntimeTerminalBuffer,
+  resetWebRuntimeTerminalInputModes
+} from './web-runtime-terminal-buffer-actions'
 export type { WebRuntimeSplitSource } from './web-runtime-split-focus'

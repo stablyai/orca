@@ -8,7 +8,6 @@ import {
   PAGE_MOUNT_STATE_KEY,
   PAGE_SESSION_ID_KEY,
   shellRouteHref,
-  stampPageMountState,
   type PageMountTarget
 } from './page-bootstrap'
 import type { BridgeRpcClient, BridgeShellSession } from './bridge-rpc-client'
@@ -246,15 +245,5 @@ describe('the url the page writes for a route', () => {
     expect(shellRouteHref({ pathname: '/h/a', params: { name: 'a&b=c?d#e' } })).toBe(
       '/h/a?name=a%26b%3Dc%3Fd%23e'
     )
-  })
-})
-
-describe('the mount state attribute', () => {
-  it('records the last state reached, so the entry can say its script ran', () => {
-    const target = createTarget()
-    stampPageMountState(target, 'started')
-    expect(target.dataset[PAGE_MOUNT_STATE_KEY]).toBe('started')
-    stampPageMountState(target, 'mounted')
-    expect(target.dataset[PAGE_MOUNT_STATE_KEY]).toBe('mounted')
   })
 })

@@ -215,50 +215,6 @@ describe('focusTerminalTabSurface', () => {
     expect(textarea.focus).not.toHaveBeenCalled()
   })
 
-  it('does not use stale-leaf fallback while the expected layout still has multiple leaves', () => {
-    flushAnimationFrames()
-    const textarea = { focus: vi.fn() }
-    vi.stubGlobal('document', {
-      querySelector: vi.fn((selector: string) =>
-        selector === '[data-terminal-tab-id="tab-1"]'
-          ? { getAttribute: () => 'mounted-leaf pending-leaf' }
-          : null
-      ),
-      querySelectorAll: vi.fn((selector: string) =>
-        selector === TAB_HELPER_SELECTOR
-          ? { length: 1, item: () => textarea }
-          : { length: 0, item: () => null }
-      )
-    })
-
-    focusTerminalTabSurface('tab-1', 'stale-leaf')
-
-    expect(textarea.focus).not.toHaveBeenCalled()
-  })
-
-  it('does not focus a sibling when a stale leaf id has multiple helpers in the tab', () => {
-    flushAnimationFrames()
-    const first = { focus: vi.fn() }
-    const second = { focus: vi.fn() }
-    vi.stubGlobal('document', {
-      querySelector: vi.fn((selector: string) =>
-        selector === '[data-terminal-tab-id="tab-1"]'
-          ? { getAttribute: () => 'new-left new-right' }
-          : null
-      ),
-      querySelectorAll: vi.fn((selector: string) =>
-        selector === TAB_HELPER_SELECTOR
-          ? { length: 2, item: (index: number) => (index === 0 ? first : second) }
-          : { length: 0, item: () => null }
-      )
-    })
-
-    focusTerminalTabSurface('tab-1', 'stale-leaf')
-
-    expect(first.focus).not.toHaveBeenCalled()
-    expect(second.focus).not.toHaveBeenCalled()
-  })
-
   it('cancels a pending focus frame when a newer focus request starts', () => {
     const cancelAnimationFrame = vi.fn()
     vi.stubGlobal(

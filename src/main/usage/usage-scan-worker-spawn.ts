@@ -16,10 +16,16 @@ import type {
   OpenCodeUsagePersistedDatabase,
   OpenCodeUsageSession
 } from '../opencode-usage/types'
+import type {
+  MuseUsageDailyAggregate,
+  MuseUsagePersistedFile,
+  MuseUsageSession
+} from '../muse-usage/types'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import {
   scanClaudeUsageOnWorker,
   scanCodexUsageOnWorker,
+  scanMuseUsageOnWorker,
   scanOpenCodeUsageOnWorker,
   UsageScanWorkerClient
 } from './usage-scan-worker-client'
@@ -123,6 +129,32 @@ export async function scanOpenCodeUsageDatabasesViaWorker(
   )
   return {
     processedDatabases: value.source,
+    sessions: value.sessions,
+    dailyAggregates: value.dailyAggregates
+  }
+}
+
+/**
+ * Scan Muse Code session logs through the shared worker client.
+ * @param worktrees - Worktree refs used to attribute usage.
+ * @param previous - Last scan's per-file cache.
+ * @returns The same projection `scanMuseUsageFiles` returns, computed off the main thread.
+ */
+export async function scanMuseUsageFilesViaWorker(
+  worktrees: UsageScanWorktreeRef[],
+  previous: MuseUsagePersistedFile[] = []
+): Promise<{
+  processedFiles: MuseUsagePersistedFile[]
+  sessions: MuseUsageSession[]
+  dailyAggregates: MuseUsageDailyAggregate[]
+}> {
+  const value = await scanMuseUsageOnWorker(
+    (body) => getSharedClient().scan(body),
+    worktrees,
+    previous
+  )
+  return {
+    processedFiles: value.source,
     sessions: value.sessions,
     dailyAggregates: value.dailyAggregates
   }

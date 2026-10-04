@@ -38,7 +38,7 @@ export function NativeChatBackgroundTaskRun({
   // not read as two different things on the two surfaces.
   const label = resolveBackgroundTaskName({ id: block.taskId, kind, description: block.label })
   // Every attention state states its reason on the row, the same word the strip
-  // uses; `unverifiable` ("no contact") must never be silently dropped.
+  // uses; `unverifiable` has none beyond its state word, which must never be dropped.
   const reason = backgroundTaskStateReason(state)
   // The sentence the provider itself wrote. It is the row's whole reason for
   // existing when a task fails, and it is dropped from the prose above as the

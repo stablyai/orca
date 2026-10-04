@@ -22,7 +22,7 @@ export type AssignmentCleanupStore = {
   evacuateDeadCells(): Promise<unknown>
 }
 
-export function assignmentCleanupSteps(
+function assignmentCleanupSteps(
   assignments: AssignmentCleanupStore
 ): ReadonlyArray<readonly [string, () => Promise<unknown>]> {
   return [

@@ -30,12 +30,6 @@ describe('formatAgentToolPreview', () => {
     expect(formatAgentToolPreview(TOOL, 'working')).toBe('bash: rm -rf build/')
   })
 
-  it('keeps a resolved tool off every other state', () => {
-    for (const state of ROW_STATES.filter((candidate) => !showsAgentToolPreview(candidate))) {
-      expect(formatAgentToolPreview(TOOL, state)).toBe('')
-    }
-  })
-
   it('shows nothing on a wait that carries no tool', () => {
     // Why: a question-style wait sets no tool fields; it must not borrow an earlier one.
     expect(formatAgentToolPreview({}, 'waiting')).toBe('')

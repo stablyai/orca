@@ -288,7 +288,7 @@ describe('owner-fenced mutations', () => {
   })
 
   it('fences a desktop mutation over the local runtime target with the same precondition', async () => {
-    const { deleteAutomationForOwner, updateAutomationForOwner } = await client()
+    const { updateAutomationForOwner } = await client()
     callRuntimeRpc.mockResolvedValue({ automation: { id: 'a1' } })
     await updateAutomationForOwner({ authority: DESKTOP, selector: { kind: 'self' } }, 'a1', {
       enabled: true
@@ -300,7 +300,6 @@ describe('owner-fenced mutations', () => {
       expect.anything()
     )
     expect(getRuntimeEnvironmentStatus).not.toHaveBeenCalled()
-    expect(typeof deleteAutomationForOwner).toBe('function')
   })
 })
 

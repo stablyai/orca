@@ -29,6 +29,29 @@ function surface(markdown: string, options: { editable?: boolean } = {}) {
   return { scope, editor, html: editor.innerHTML }
 }
 
+/**
+ * The surface holding a paragraph that carries a list inside it, which is what an engine leaves.
+ *
+ * Built through the paragraph's own `innerHTML` rather than the editor's: the HTML parser closes a
+ * `<p>` before a `<ul>`, so `editor.innerHTML = '<p><ul>...'` gives two siblings and would measure
+ * the flat shape while claiming to measure the nested one. Each case asserts the nesting it got.
+ */
+function nestedListSurface(paragraphMarkup: string) {
+  document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
+  const scope = createRichMarkdownEditorScope()
+  scope.editable = true
+  startEditorSurface(scope)
+  const editor = document.getElementById('editor')!
+  const paragraph = document.createElement('p')
+  paragraph.innerHTML = paragraphMarkup
+  editor.append(paragraph)
+  return { scope, editor }
+}
+
+/** The item markup WebKit wraps the paragraph's text in: a styled span and a trailing break. */
+const webkitItem = (text: string) =>
+  `<li><span style="font-family: var(--font-sans);">${text}</span><br></li>`
+
 describe('the editor document, from markdown and back', () => {
   it('renders and serializes nested bullet, ordered and task lists with indentation intact', () => {
     const markdown = [
@@ -47,6 +70,45 @@ describe('the editor document, from markdown and back', () => {
     expect(html).toContain('<ul data-type="taskList">')
     expect(html).toContain('<li><p>Sibling</p></li></ul>')
     expect(currentMarkdown(scope)).toBe(markdown)
+  })
+
+  it('serializes a bullet list the engine nested inside a paragraph, as the flat shape does', () => {
+    // Captured from the render rig, not written from memory: on WebKit 26.4 and Chromium 147 alike,
+    // `insertUnorderedList` over `<p>alpha</p>` leaves `<p><ul><li>alpha</li></ul></p>` rather than
+    // replacing the paragraph, and WebKit additionally wraps the item's text in a styled span.
+    const { scope, editor } = nestedListSurface(
+      `<ul>${webkitItem('alpha')}${webkitItem('beta')}</ul>`
+    )
+
+    expect(editor.querySelector('ul')?.parentElement?.tagName).toBe('P')
+    const markdown = ['- alpha', '- beta'].join('\n')
+    expect(currentMarkdown(scope)).toBe(markdown)
+    // The flat shape the renderer produces from that same source, so the two shapes agree.
+    expect(currentMarkdown(surface(markdown).scope)).toBe(markdown)
+  })
+
+  it('serializes a numbered list the engine nested inside a paragraph', () => {
+    // The same capture with the Numbered list command: `<p><ol><li>...</li></ol></p>` on both.
+    const { scope, editor } = nestedListSurface(
+      `<ol>${webkitItem('first')}${webkitItem('second')}</ol>`
+    )
+
+    expect(editor.querySelector('ol')?.parentElement?.tagName).toBe('P')
+    expect(currentMarkdown(scope)).toBe(['1. first', '2. second'].join('\n'))
+  })
+
+  it('reads a paragraph that holds a list and text around it as separate blocks', () => {
+    // The trailing half is captured: leaving the list with two returns and typing puts the text in
+    // a `<div>` beside the `<ul>`, both still inside the one `<p>`. Text before the list is the
+    // same rule read forward — a run of inline content is a paragraph wherever it sits.
+    const { scope, editor } = nestedListSurface(
+      'before the list<ul><li>solo</li></ul><div>after the list</div>'
+    )
+
+    expect(editor.querySelector('ul')?.parentElement?.tagName).toBe('P')
+    expect(currentMarkdown(scope)).toBe(
+      ['before the list', '', '- solo', '', 'after the list'].join('\n')
+    )
   })
 
   it('renders markdown entities as characters without double-escaping them', () => {

@@ -1,14 +1,11 @@
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
-import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import {
   agentLaunchRun,
   agentLaunchReplayRun,
   worktreeCreateRun
 } from './mobile-workspace-create-operations'
-import { waitForRpcClientReconnected } from '../transport/rpc-client-reconnect-wait'
-import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import {
   CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS,
   getClientWorktreeCreateCandidate,
@@ -17,18 +14,22 @@ import {
 } from '../../../src/shared/new-workspace/worktree-create-retry-policy'
 import {
   agentLaunchCreateParams,
+  isAgentLaunchReplayUnsupportedRefusal,
   isAgentLaunchUnsupportedRefusal,
   readAgentLaunchCreateOutcome,
   type WorktreeCreateAgentLaunch
-} from './agent-launch-worktree-create'
+} from './agent-launch-request'
 import { structuredSessionOperationId } from '../session/structured-session-operation-id'
 import { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
 import type { WorkspaceCreateParams } from './workspace-create-params'
-import {
-  getWorktreeCreateReplayWindowMs,
-  type WorktreeCreateIdempotencyProbe,
-  type WorktreeCreateIdempotencySupport
+import type {
+  WorktreeCreateIdempotencyProbe,
+  WorktreeCreateIdempotencySupport
 } from './worktree-create-idempotency-policy'
+import {
+  sendReplayingAmbiguousDelivery,
+  type AmbiguousDeliveryReplay
+} from './replay-on-ambiguous-delivery'
 
 // Why: server-side collision checks (branch already exists locally / on a remote
 // / already has PR #N) can fire even after a pre-flight basename dedupe —
@@ -38,26 +39,6 @@ import {
 export type WorktreeCreateResult =
   | { worktreeId: string; name: string; warning?: string }
   | { error: string }
-
-// Why: a create in flight when the mobile transport migrates (relay/direct
-// hand-off on shoddy cellular, relay lease rotation) rejects with a cutover error
-// even though the host may have completed it. The shared clientMutationId makes a
-// retry idempotent, so re-issue on the fresh session a bounded number of times
-// instead of surfacing "RPC interrupted by connection migration" with the
-// worktree silently created.
-const WORKTREE_CREATE_CUTOVER_MAX_RETRIES = 5
-
-// Why: a connection migration is not the only way a create goes delivery-ambiguous.
-// A plain socket close (cellular flap, relay drop, the phone backgrounding and the
-// supervisor suspending a billed relay splice) rejects the in-flight frame as
-// delivery-unknown with no generation bump, and create holds the longest budget of
-// any mobile RPC — 10 minutes of clone/fetch/setup — so it is the likeliest request
-// to be caught by one. Surfacing that as a failure is wrong: the host may well have
-// finished the worktree. Replay on the same clientMutationId instead.
-const WORKTREE_CREATE_AMBIGUOUS_MAX_RETRIES = 2
-
-// Bounded so the Create spinner doesn't sit for the whole window; the deadline still caps it.
-export const WORKTREE_CREATE_AMBIGUOUS_RECONNECT_WAIT_MS = 20_000
 
 export type CreateWorktreeWithNameRetryArgs = {
   client: RpcClient
@@ -120,9 +101,7 @@ export async function createWorktreeWithNameRetry(
       !sent.replayed &&
       launch &&
       (launchOperationId
-        ? response.error.code === 'method_not_found' ||
-          response.error.code === 'forbidden' ||
-          response.error.code === 'agent_launch_replay_unsupported'
+        ? isAgentLaunchReplayUnsupportedRefusal(response.error)
         : isAgentLaunchUnsupportedRefusal(response.error))
     ) {
       // The probe said the host knows `agent.launch` but it refused the call — most likely this
@@ -196,10 +175,9 @@ function readCreateResult(
   }
 }
 
-// Sends the create, re-issuing whenever the request went delivery-ambiguous —
-// the frame reached the wire but no response came back, so the host may already have
-// built the worktree. Every arm below re-sends the SAME two names: a new one would be a new
-// operation and would defeat both mechanisms.
+// Sends the create, re-issuing whenever the request went delivery-ambiguous — the frame reached the
+// wire but no response came back, so the host may already have built the worktree. Every resend
+// carries the SAME two names: a new one would be a new operation and would defeat both mechanisms.
 //
 // On the `worktree.create` route the shared clientMutationId keeps the retry idempotent host-side.
 // On the launch route it does NOT reach the ledger: `agent.launch` caches the whole launch — the
@@ -207,7 +185,7 @@ function readCreateResult(
 // and outside it adds both. `launchOperationId` is what makes the replay durably safe, and it is
 // only sent when the host advertised the ledger.
 // A definite failure (never sent, or a server error response) is returned to the caller untouched.
-async function sendWorktreeCreateResilient(
+function sendWorktreeCreateResilient(
   client: RpcClient,
   launchAgent: TuiAgent | null,
   launchOperationId: string | null,
@@ -215,16 +193,17 @@ async function sendWorktreeCreateResilient(
   worktreeCreateIdempotency: WorktreeCreateIdempotencySupport | false
 ): Promise<{ response: RpcResponse; replayed: boolean }> {
   // Only the selected method's receipt can authorize replay after an ambiguous delivery.
-  const replaySupport = launchAgent ? launchOperationId : worktreeCreateIdempotency
-  let migrationRetry = 0
-  let ambiguousRetry = 0
-  const firstSentAt = Date.now()
-  let replayDeadlineAt: number | null = null
-  for (;;) {
-    try {
-      // `request` is the transport promise itself, so a delivery-unknown rejection reaches the
-      // catch below as the object the transport marked — the WeakSet cannot see through a wrapper.
-      const response = await (launchAgent
+  const replay: AmbiguousDeliveryReplay | null = launchAgent
+    ? launchOperationId
+      ? { kind: 'durable' }
+      : null
+    : worktreeCreateIdempotency
+      ? { kind: 'window', support: worktreeCreateIdempotency }
+      : null
+  return sendReplayingAmbiguousDelivery(
+    client,
+    () =>
+      launchAgent
         ? launchOperationId
           ? agentLaunchReplayRun.request(
               client,
@@ -241,65 +220,9 @@ async function sendWorktreeCreateResilient(
             )
         : worktreeCreateRun.request(client, params, {
             timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
-          }))
-      // A refusal on the replacement connection says nothing about what the first call created.
-      return { response, replayed: migrationRetry > 0 || ambiguousRetry > 0 }
-    } catch (error) {
-      if (!replaySupport) {
-        throw error
-      }
-      if (isLogicalClientCutoverError(error)) {
-        if (migrationRetry >= WORKTREE_CREATE_CUTOVER_MAX_RETRIES) {
-          throw error
-        }
-        migrationRetry += 1
-        // Why: LogicalClientCutoverError is raised only after migrateTo installs an
-        // authenticated replacement, so retry immediately instead of adding UI lag.
-        continue
-      }
-      if (!isRpcDeliveryUnknown(error) || ambiguousRetry >= WORKTREE_CREATE_AMBIGUOUS_MAX_RETRIES) {
-        throw error
-      }
-      // A legacy cache may expire before a request timeout; durable receipts refuse unsafe replay.
-      if (typeof replaySupport !== 'string' && client.getState() === 'connected') {
-        throw error
-      }
-      // Keep the legacy deadline fixed; the host itself refuses expired durable operation IDs.
-      replayDeadlineAt ??=
-        typeof replaySupport === 'string'
-          ? Infinity
-          : resolveReplayDeadline(client, firstSentAt, replaySupport)
-      const remainingWindowMs = replayDeadlineAt - Date.now()
-      if (remainingWindowMs <= 0) {
-        throw error
-      }
-      ambiguousRetry += 1
-      // Disconnected transports must reconnect before resend; bound the wait even for durable IDs.
-      if (
-        !(await waitForRpcClientReconnected(
-          client,
-          Math.min(WORKTREE_CREATE_AMBIGUOUS_RECONNECT_WAIT_MS, remainingWindowMs)
-        ))
-      ) {
-        throw error
-      }
-    }
-  }
-}
-
-// Latest instant the host's dedupe record is still guaranteed to exist, from the earliest
-// point the create could have resolved. lastInboundAt stamps a frame that really arrived,
-// so it stays honest across a suspension in a way a timer budget cannot; the send is the
-// fallback, and a sound floor either way, because the host cannot resolve a create it has
-// not yet received.
-function resolveReplayDeadline(
-  client: RpcClient,
-  firstSentAt: number,
-  support: WorktreeCreateIdempotencySupport
-): number {
-  const lastInboundAt = client.getLastInboundAt?.() ?? null
-  const anchor = lastInboundAt !== null && lastInboundAt > firstSentAt ? lastInboundAt : firstSentAt
-  return anchor + getWorktreeCreateReplayWindowMs(support)
+          }),
+    replay
+  )
 }
 
 function defaultWorktreeCreateMutationId(): string {

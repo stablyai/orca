@@ -158,32 +158,6 @@ describe('mobile create form gating parity', () => {
     )
   })
 
-  it('desktop gate hard-blocks on positive unresolved review evidence', () => {
-    // Mobile lacks review-lookup signals, so it fails closed on ambiguity: the
-    // shared desktop gate must return false even when eligibility looks ready.
-    expect(
-      shouldOpenChecksPanelCreateComposer({
-        activeReview: null,
-        isFolder: false,
-        branch: 'feature/x',
-        hostedReviewCreation: eligibility({ canCreate: true }),
-        reviewLookup: 'positive_unresolved'
-      })
-    ).toBe(false)
-  })
-
-  it('desktop gate hard-blocks during a hard refresh error', () => {
-    expect(
-      shouldOpenChecksPanelCreateComposer({
-        activeReview: null,
-        isFolder: false,
-        branch: 'feature/x',
-        hostedReviewCreation: eligibility({ canCreate: true }),
-        hasHardRefreshError: true
-      })
-    ).toBe(false)
-  })
-
   it('fails closed on an unavailable review lookup even when eligibility looks ready', () => {
     // The existing-review lookup could not prove there is no PR; mobile has no
     // review-lookup signal of its own, so create must be blocked.

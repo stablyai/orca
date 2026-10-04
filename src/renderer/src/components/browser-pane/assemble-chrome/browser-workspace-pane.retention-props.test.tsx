@@ -168,27 +168,6 @@ describe('browser workspace pane retention props', () => {
     expect(renderedIds()).toEqual(['page-0'])
   })
 
-  it.each(['automation', 'mobile', 'viewer'])('loads an inactive page for %s only', (consumer) => {
-    const token = consumer === 'automation' ? acquireBrowserAutomationVisibility('page-b') : null
-    if (consumer === 'mobile') {
-      hydrateBrowserDrivers([
-        { browserPageId: 'page-b', driver: { kind: 'mobile', clientId: 'phone-1' } }
-      ])
-    }
-    if (consumer === 'viewer') {
-      hydrateBrowserRemoteViewerPages(['page-b'])
-    }
-    try {
-      const view = render(<BrowserPane browserTab={createWorkspace()} isActive={false} />)
-      expect(view.container.querySelector('[data-browser-page-id="page-a"]')).toBeNull()
-      expect(view.container.querySelector('[data-browser-page-id="page-b"]')).not.toBeNull()
-    } finally {
-      if (token) {
-        releaseBrowserAutomationVisibility(token)
-      }
-    }
-  })
-
   it('threads all three retention terms to the page that owns them', () => {
     renderWorkspacePane()
     expect(mocks.pageProps.some((props) => props.id === 'page-b')).toBe(false)

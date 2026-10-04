@@ -103,13 +103,11 @@ const MAX_REPAIR_ATTEMPTS = 3
 
 /**
  * The probe's verdict is the only trigger: an orphan package ACE with no
- * well-known package grant to satisfy it. A localized icacls prints those grants
- * under translated names the probe cannot match, so an unreliable name check is
- * not evidence of poison — acting on it would spawn icacls and tell a user with a
- * healthy install that their permissions are broken.
+ * well-known package grant to satisfy it. The probe reads SDDL, so the verdict
+ * holds on every Windows display language.
  */
 export function isInstallDirAclPoisonVerdict(data: CrashReportBreadcrumbData): boolean {
-  return data.matchesPoisonSignature === true && data.wellKnownNameCheckReliable !== false
+  return data.matchesPoisonSignature === true
 }
 
 /** The commands to hand a user whose account cannot write the install ACL. */

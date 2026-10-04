@@ -1,9 +1,11 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
+import { isStaleWorktreeCatalogPublication } from './worktree-catalog-version-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import {
   getRepoExecutionHostId,
-  parseExecutionHostId
+  parseExecutionHostId,
+  type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
@@ -57,7 +59,9 @@ export function createFetchAllWorktrees(
             reuseRecentCompatibilityFailure: true,
             directSshAuthority,
             connectionId: r.connectionId,
-            knownWorktreeIds: getKnownWorktreeIdsForPurge(requestStartedState, r.id, hostId)
+            knownWorktreeIds: getKnownWorktreeIdsForPurge(requestStartedState, r.id, hostId),
+            isStaleCatalogPublication: (result) =>
+              isStaleWorktreeCatalogPublication(get(), r.id, hostId, result.catalogVersion)
           })
           if (refresh.status !== 'admitted') {
             return
@@ -87,7 +91,12 @@ export function createFetchAllWorktrees(
       async (
         r
       ): Promise<
-        | { repoId: string; ok: boolean; detected: DetectedWorktreeListResult }
+        | {
+            repoId: string
+            hostId: ExecutionHostId
+            ok: boolean
+            detected: DetectedWorktreeListResult
+          }
         | { repoId: string; ok: false }
       > => {
         try {
@@ -112,13 +121,15 @@ export function createFetchAllWorktrees(
               reuseRecentCompatibilityFailure: true,
               directSshAuthority,
               connectionId: r.connectionId,
-              knownWorktreeIds: getKnownWorktreeIdsForPurge(requestStartedState, r.id, hostId)
+              knownWorktreeIds: getKnownWorktreeIdsForPurge(requestStartedState, r.id, hostId),
+              isStaleCatalogPublication: (result) =>
+                isStaleWorktreeCatalogPublication(get(), r.id, hostId, result.catalogVersion)
             }
           )
           if (refresh.status !== 'admitted') {
             return { repoId: r.id, ok: false as const }
           }
-          const admitted = mergeFetchedWorktrees(set, {
+          const outcome = mergeFetchedWorktrees(set, {
             repoId: r.id,
             hostId,
             ownerWasMissingAtStart: false,
@@ -127,11 +138,13 @@ export function createFetchAllWorktrees(
             refresh,
             purgeRemovedWorktrees: false
           })
-          if (!admitted) {
+          // Why both refusals: rows from a listing that was not applied are no evidence for the purge.
+          if (outcome !== 'applied') {
             return { repoId: r.id, ok: false as const }
           }
           return {
             repoId: r.id,
+            hostId,
             ok: refresh.result.authoritative,
             detected: refresh.result
           }
@@ -158,6 +171,21 @@ export function createFetchAllWorktrees(
       get().hydrationSucceeded === false
     ) {
       // Why: startup refreshes local repos first; defer the one-shot purge to the later all-host refresh, once remote worktree ids are known.
+      return
+    }
+    // Why defer: a create or remove applied after a repo's listing leaves that listing's rows short
+    // of live worktrees (a new workspace's tabs would be purged), exactly like a refused listing.
+    const listingSuperseded = results.some(
+      (result) =>
+        'detected' in result &&
+        isStaleWorktreeCatalogPublication(
+          get(),
+          result.repoId,
+          result.hostId,
+          result.detected.catalogVersion
+        )
+    )
+    if (listingSuperseded) {
       return
     }
     const validIds = new Set<string>()

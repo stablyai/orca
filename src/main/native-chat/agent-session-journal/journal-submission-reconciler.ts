@@ -18,6 +18,7 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { DISPATCH_REJECTED_NOT_DELIVERED } from '../../../shared/structured-agent-session-dispatch-rejection'
 
 export type ProviderHistoryItem = {
   /** The provider's own id for this item. Used to claim it at most once; the
@@ -55,7 +56,7 @@ export type SubmissionReconciliation =
   | { clientMessageId: string; outcome: 'rejected'; reason: SubmissionRejectionReason }
   | { clientMessageId: string; outcome: 'unknown'; reason: SubmissionUnknownReason }
 
-export type SubmissionRejectionReason = 'not_delivered'
+export type SubmissionRejectionReason = typeof DISPATCH_REJECTED_NOT_DELIVERED
 
 export type SubmissionUnknownReason =
   | 'history_boundary_inconsistent'
@@ -197,6 +198,6 @@ function resolveOne(
   return {
     clientMessageId: submission.clientMessageId,
     outcome: 'rejected',
-    reason: 'not_delivered'
+    reason: DISPATCH_REJECTED_NOT_DELIVERED
   }
 }

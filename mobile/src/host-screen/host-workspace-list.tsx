@@ -47,8 +47,8 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
       {/* Auth failed: a latched relay rejection must reach the same re-pair affordance. */}
       {(connState === 'auth-failed' || relayRecovery.pairingRejected) && (
         <AuthFailedBanner
-          canRetry={!!hostId}
-          onRetry={() => hostId && void forceReconnectHost(hostId)}
+          canRetry={!!hostId && forceReconnectHost !== null}
+          onRetry={() => hostId && forceReconnectHost && void forceReconnectHost(hostId)}
           onRepair={() => router.push('/pair-scan')}
           onRemove={() => state.setConfirmRemoveHost(true)}
         />

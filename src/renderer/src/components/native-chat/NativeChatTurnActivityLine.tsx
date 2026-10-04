@@ -1,55 +1,30 @@
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat-turn-activity'
-import {
-  describeNativeChatActiveTurnLabel,
-  NATIVE_CHAT_TURN_STATUS_COPY,
-  type NativeChatTurnStatus
-} from '../../../../shared/native-chat-turn-status'
-import { useNativeChatElapsedSeconds } from './use-native-chat-elapsed-seconds'
+import { describeNativeChatActiveTurnLabel } from '../../../../shared/native-chat-turn-status'
 
-/** The live turn's one indicator: a spinner plus whatever the turn can say about
- *  itself — the provider's activity text, else that it is reasoning, else how
- *  long it has been working. A settled turn keeps its own `NativeChatWorkingStatus`
- *  row; this one is only ever rendered while the turn is in flight. */
+/** The live turn's tail line: a spinner plus what the turn is doing right now —
+ *  the provider's activity text, else that it is reasoning, else plain "Working…".
+ *  The clock lives in the turn bar under the user's message, not here. */
 export function NativeChatTurnActivityLine({
   activity,
-  status
+  thinking
 }: {
   activity?: NativeChatTurnActivity | null
-  status?: NativeChatTurnStatus | null
+  thinking: boolean
 }): React.JSX.Element {
-  const thinking = status?.thinking === true
-  // The clock only ticks when its number is the label; activity text and
-  // "Thinking" carry no duration.
-  const counting = status != null && !thinking && !activity?.text
-  const elapsedSeconds = useNativeChatElapsedSeconds(status?.startedAt ?? null, counting)
-  const resolved = describeNativeChatActiveTurnLabel({
-    activityText: activity?.text,
-    thinking,
-    elapsedSeconds
-  })
+  const resolved = describeNativeChatActiveTurnLabel({ activityText: activity?.text, thinking })
   const label =
     resolved.source === 'activity'
       ? resolved.text
-      : status == null
-        ? translate('components.native-chat.status.working', 'Working…')
-        : resolved.key === 'thinking'
-          ? translate(
-              'components.native-chat.status.thinking',
-              NATIVE_CHAT_TURN_STATUS_COPY.thinking
-            )
-          : translate(
-              'components.native-chat.status.workingFor',
-              NATIVE_CHAT_TURN_STATUS_COPY.workingFor,
-              { value0: resolved.duration }
-            )
+      : resolved.key === 'thinking'
+        ? translate('components.native-chat.status.thinking', 'Thinking')
+        : translate('components.native-chat.status.working', 'Working…')
 
   return (
     <div
       className="flex min-h-6 items-center gap-1.5 text-sm leading-relaxed text-muted-foreground"
       data-native-chat-turn-activity="true"
-      data-native-chat-turn-status="active"
       aria-live="polite"
       aria-atomic="true"
     >

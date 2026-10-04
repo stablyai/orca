@@ -1,112 +1,78 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
-import type * as NodeFsPromises from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
-
-const testState = { dir: '' }
-const cipherState = { available: true }
-
-const renameGate = vi.hoisted(() => ({
-  sourcePrefix: '',
-  release: null as Promise<void> | null,
-  started: null as (() => void) | null
-}))
-
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFsPromises>()
-  return {
-    ...actual,
-    rename: async (source: string, destination: string) => {
-      if (renameGate.release && source.startsWith(renameGate.sourcePrefix)) {
-        const release = renameGate.release
-        renameGate.release = null
-        renameGate.started?.()
-        await release
-      }
-      return actual.rename(source, destination)
-    }
-  }
-})
+import { getSecretStore, setSecretStore } from '../shared/secret-store'
+import {
+  createWorkerMaintenanceFixture,
+  maintenanceBarrier
+} from './persistence/loading-store/profile-state-maintenance-fixture'
+import { Store } from './persistence/loading-store/store'
 
 vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))
-
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('./telemetry/cohort-classifier', () => ({
-  getCohortAtEmit: vi.fn().mockReturnValue({ nth_repo_added: 2 })
+  getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
 
-vi.mock('electron', () => ({
-  app: { getPath: () => testState.dir }
-}))
+let encryptionAvailable = true
+let previousSecretStore: ReturnType<typeof getSecretStore>
 
-async function createStore() {
-  vi.resetModules()
-  const { setSecretStore } = await import('../shared/secret-store')
+beforeEach(() => {
+  encryptionAvailable = true
+  previousSecretStore = getSecretStore()
   setSecretStore({
-    isEncryptionAvailable: () => cipherState.available,
-    encryptString: (plaintext) => Buffer.from(`enc:${plaintext}`, 'utf-8'),
-    decryptString: (ciphertext) => ciphertext.toString('utf-8').slice('enc:'.length),
+    isEncryptionAvailable: () => encryptionAvailable,
+    encryptString: (plaintext) => Buffer.from(`enc:${plaintext}`, 'utf8'),
+    decryptString: (ciphertext) => ciphertext.toString('utf8').slice('enc:'.length),
     describeProtectionGap: () => null
   })
-  const { Store, initDataPath } = await import('./persistence')
-  // Why here: userData resolves through AppEnvironment, and this must point at this
-  // file's temp dir rather than the global fake's shared one, after resetModules.
-  installFakeAppEnvironment({ getPath: () => testState.dir })
-  initDataPath()
-  return new Store()
-}
-
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve!: () => void
-  const promise = new Promise<void>((next) => {
-    resolve = next
-  })
-  return { promise, resolve }
-}
+})
+afterEach(() => setSecretStore(previousSecretStore))
 
 describe('protected-secret async write retention', () => {
-  beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-protected-secret-write-race-'))
-    cipherState.available = true
-    renameGate.sourcePrefix = join(testState.dir, 'orca-data.json')
-    renameGate.release = null
-    renameGate.started = null
-    vi.useFakeTimers()
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-    rmSync(testState.dir, { recursive: true, force: true })
-  })
-
-  it('does not retain ciphertext from a superseded async secret write', async () => {
-    const store = await createStore()
+  it('does not retain ciphertext from a rejected worker write after a newer secret arrives', async () => {
+    const { store, authority, peer, dataFile, readState } = await createWorkerMaintenanceFixture()
     store.updateSettings({ opencodeSessionCookie: 'durable-cookie' })
-    vi.advanceTimersByTime(1_000)
-    await store.waitForPendingWrite()
-
-    const renameRelease = deferred()
-    const renameStarted = deferred()
-    renameGate.release = renameRelease.promise
-    renameGate.started = renameStarted.resolve
+    await store.flushPendingOrThrowAsync()
+    const durableCiphertext = readState().settings.opencodeSessionCookie
+    const entered = maintenanceBarrier()
+    const release = maintenanceBarrier()
+    const writeDomains = authority.writeSerializedDomains.bind(authority)
+    const pendingWrite = vi
+      .spyOn(authority, 'writeSerializedDomains')
+      .mockImplementationOnce(async () => {
+        entered.resolve()
+        await release.promise
+        await writeDomains([{ domain: 'settings', payload: '{' }])
+      })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
 
     store.updateSettings({ opencodeSessionCookie: 'intermediate-cookie' })
-    vi.advanceTimersByTime(1_000)
-    await renameStarted.promise
-
+    const writing = store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+    const rejected = expect(writing).rejects.toMatchObject({ outcome: 'known-failure' })
+    await entered.promise
     store.updateSettings({ opencodeSessionCookie: 'replacement-cookie' })
-    cipherState.available = false
-    vi.advanceTimersByTime(1_000)
-    renameRelease.resolve()
-    await store.waitForPendingWrite()
+    encryptionAvailable = false
+    release.resolve()
+    await rejected
+    pendingWrite.mockRestore()
+    await store.flushPendingOrThrowAsync()
 
-    cipherState.available = true
-    const restarted = await createStore()
-    expect(restarted.getSettings().opencodeSessionCookie).toBe('durable-cookie')
+    expect(readState().settings.opencodeSessionCookie).toBe(durableCiphertext)
+    expect(store.getSettings().opencodeSessionCookie).toBe('replacement-cookie')
+    encryptionAvailable = true
+    const restarted = new Store({ dataFile, profileStateAuthority: peer() })
+    try {
+      expect(restarted.getSettings().opencodeSessionCookie).toBe('durable-cookie')
+    } finally {
+      restarted.freezeWrites()
+    }
+
+    store.updateSettings({ theme: 'dark' })
+    await store.flushPendingOrThrowAsync()
+    expect(readState().settings.opencodeSessionCookie).toBe(
+      Buffer.from('enc:replacement-cookie').toString('base64')
+    )
   })
 })

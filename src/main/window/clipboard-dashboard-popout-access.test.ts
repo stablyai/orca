@@ -106,6 +106,9 @@ describe('dashboard popout clipboard access', () => {
     await expect(handlers.get('clipboard:saveImageAsTempFile')?.(popoutEvent)).rejects.toThrow(
       'Unauthorized clipboard IPC sender'
     )
+    expect(() => handlers.get('clipboard:readFilePaths')?.(popoutEvent)).toThrow(
+      'Unauthorized clipboard IPC sender'
+    )
     expect(() =>
       handlers.get('clipboard:writeFile')?.(popoutEvent, {
         filePath: '/tmp/copied-file.txt',

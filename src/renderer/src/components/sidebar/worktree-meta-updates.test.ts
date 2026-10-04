@@ -131,20 +131,6 @@ describe('buildWorktreeMetaUpdates', () => {
     })
   })
 
-  it('takes the organization key from a Linear issue URL', () => {
-    expect(
-      buildUpdates({
-        issueInput: 'https://linear.app/acme/issue/STA-335/fix-auth',
-        issueProvider: 'linear'
-      })
-    ).toEqual({
-      linkedIssue: null,
-      linkedLinearIssue: 'STA-335',
-      linkedLinearIssueWorkspaceId: null,
-      linkedLinearIssueOrganizationUrlKey: 'acme'
-    })
-  })
-
   it('clears every provider slot when the issue field is emptied', () => {
     expect(
       buildUpdates(

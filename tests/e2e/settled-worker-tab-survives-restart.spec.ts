@@ -1,8 +1,9 @@
+import { parseWorkspaceSession } from '../../src/shared/workspace-session-schema'
+import { readPersistedProfileState } from './helpers/persisted-profile-state'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { DaemonClient } from '../../src/main/daemon/client'
 import { getDaemonSocketPath, getDaemonTokenPath } from '../../src/main/daemon/daemon-spawner'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
@@ -19,7 +20,7 @@ import {
   completedWorkerFakeCodexCommand,
   completedWorkerLaunchEnv,
   listRuntimeTerminals,
-  readCompletedWorkerDispatchCapability,
+  hasCompletedWorkerReceivedPreamble,
   readCompletedWorkerLedger,
   seedCurrentCodexTranscript
 } from './helpers/completed-worker-retirement-fixture'
@@ -71,6 +72,8 @@ async function findSecondaryWorktree(
 }
 
 async function backgroundMountTab(page: Page, worktreeId: string, tabId: string): Promise<void> {
+  // The synthetic event bypasses the production queue, so its Terminal listener must be mounted.
+  await waitForActiveTerminalManager(page)
   await page.evaluate(
     ({ tabId, worktreeId }) => {
       window.dispatchEvent(
@@ -87,21 +90,20 @@ async function backgroundMountTab(page: Page, worktreeId: string, tabId: string)
 }
 
 function readPersistedSession(userDataDir: string) {
-  return JSON.parse(
-    readFileSync(
-      path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json'),
-      'utf8'
-    )
-  ).workspaceSession
+  const parsed = parseWorkspaceSession(readPersistedProfileState(userDataDir).workspaceSession)
+  if (!parsed.ok) {
+    throw new Error(`Invalid persisted workspace session: ${parsed.error}`)
+  }
+  return parsed.value
 }
 
 function expectNoPersistedWorkerFence(userDataDir: string, paneKey: string): void {
-  const persisted = readPersistedSession(userDataDir)
+  const persisted = readPersistedProfileState(userDataDir).workspaceSession
   // Keep the baseline running through reveal even when it still writes the withdrawn policy.
   expect
-    .soft(persisted.sleepingAgentSessionsByPaneKey?.[paneKey] ?? {})
-    .not.toHaveProperty('automaticResumeBlockedBy')
-  expect.soft(persisted.legacyWorkerResumeFencesByPaneKey ?? {}).not.toHaveProperty(paneKey)
+    .soft(persisted)
+    .not.toHaveProperty(['sleepingAgentSessionsByPaneKey', paneKey, 'automaticResumeBlockedBy'])
+  expect.soft(persisted).not.toHaveProperty(['legacyWorkerResumeFencesByPaneKey', paneKey])
 }
 
 // A restored worker must attach through main so revealing it never fabricates a missing PTY.
@@ -206,16 +208,7 @@ for (const daemonSessionGone of [false, true]) {
       const workerTabId = worker.tabId
       const workerPaneKey = `${worker.tabId}:${worker.leafId}`
       await backgroundMountTab(first.page, targetWorktreeId, workerTabId)
-      let dispatchCapability: string | null = null
-      await expect
-        .poll(() => {
-          dispatchCapability = readCompletedWorkerDispatchCapability()
-          return dispatchCapability
-        })
-        .not.toBeNull()
-      if (!dispatchCapability) {
-        throw new Error('Background worker did not receive its dispatch capability')
-      }
+      await expect.poll(() => hasCompletedWorkerReceivedPreamble()).toBe(true)
       const transcriptPath = seedCurrentCodexTranscript(
         isolatedHome,
         PROVIDER_SESSION_ID,
@@ -265,21 +258,17 @@ for (const daemonSessionGone of [false, true]) {
           worktreeId: targetWorktreeId
         }
       )
-      const completed = await client.call<{ message: { type: string } }>(
-        'orchestration.send',
-        {
-          from: workerHandle,
-          subject: 'Completed',
-          body: 'The fixture completed and stays open for inspection.',
-          type: 'worker_done',
-          payload: JSON.stringify({
-            taskId: task.result.task.id,
-            dispatchId: started.result.dispatchId,
-            outcome: 'succeeded'
-          })
-        },
-        { orchestrationCapability: dispatchCapability }
-      )
+      const completed = await client.call<{ message: { type: string } }>('orchestration.send', {
+        from: workerHandle,
+        subject: 'Completed',
+        body: 'The fixture completed and stays open for inspection.',
+        type: 'worker_done',
+        payload: JSON.stringify({
+          taskId: task.result.task.id,
+          dispatchId: started.result.dispatchId,
+          outcome: 'succeeded'
+        })
+      })
       expect(completed.result.message.type).toBe('worker_done')
       const taskBeforeRestart = (
         await client.call('orchestration.taskList', { run: run.result.run.id })
@@ -479,7 +468,7 @@ for (const daemonSessionGone of [false, true]) {
       const paneKeys = await second.page.evaluate((tabId) => {
         const layout = window.__store?.getState().terminalLayoutsByTabId[tabId]
         const leaves: string[] = []
-        const visit = (node: NonNullable<typeof layout>['root']) => {
+        const visit = (node: NonNullable<NonNullable<typeof layout>['root']>) => {
           if (node.type === 'leaf') {
             leaves.push(`${tabId}:${node.leafId}`)
           } else {
@@ -514,7 +503,7 @@ for (const daemonSessionGone of [false, true]) {
       expect(persisted.terminalLayoutsByTabId[workerTabId]).toBeDefined()
       if (!daemonSessionGone) {
         expect(
-          Object.values(persisted.terminalLayoutsByTabId[workerTabId].ptyIdsByLeafId)
+          Object.values(persisted.terminalLayoutsByTabId[workerTabId].ptyIdsByLeafId ?? {})
         ).toContain(workerPtyId)
       }
     } finally {

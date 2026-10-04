@@ -43,7 +43,7 @@ export function createActiveWorkspaceTerminalActions(
       }
       const terminal = get().createTab(worktreeId, groupId)
       get().setActiveTab(terminal.id)
-      get().setActiveTabType('terminal')
+      get().setActiveTabType('terminal', worktreeId)
       const latest = get()
       const currentTerminals = latest.tabsByWorktree[worktreeId] ?? []
       const currentEditors = latest.openFiles.filter((file) => file.worktreeId === worktreeId)

@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { onMock, spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers, getPtyRendererDeliveryDebugSnapshot } from './pty'
+import { _resetColorQueryReplyColorsForTest } from './pty/provider/registry'
+import { _resetPtyOwnerHostColorsForTest } from '../../shared/pty-owner-color-query-colors'
+import { _resetTerminalViewAttributesForTest } from '../runtime/terminal-view-attribute-store'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -55,6 +58,7 @@ describe('registerPtyHandlers', () => {
     createMockProc,
     getPtyWriteListener,
     getPtySetRendererPtyVisibleListener,
+    getPtySetHiddenRendererPtyListener,
     getPtyRendererDispatcherReadyListener,
     getMainFrameNavigationListener,
     getPtyResizeListener
@@ -164,7 +168,7 @@ describe('registerPtyHandlers', () => {
       vi.useRealTimers()
     }
   })
-  it('preserves background-origin metadata for repaint output caused by a hidden resize', async () => {
+  it('does not tag output read after reveal as background when the hidden resize repaint was gated', async () => {
     vi.useFakeTimers()
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
@@ -177,29 +181,30 @@ describe('registerPtyHandlers', () => {
         cwd: '/tmp'
       })) as { id: string }
       const setRendererPtyVisible = getPtySetRendererPtyVisibleListener()
+      const setHidden = getPtySetHiddenRendererPtyListener()
       const resizePty = getPtyResizeListener()
       mainWindow.webContents.send.mockClear()
 
       setRendererPtyVisible(null, { id: spawnResult.id, visible: false })
+      setHidden(null, { id: spawnResult.id, hidden: true })
       resizePty(null, { id: spawnResult.id, cols: 72, rows: 24 })
+      mockProc.emitData('\x1b[2Khidden-resize repaint')
+      vi.advanceTimersByTime(2)
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+        'pty:data',
+        expect.objectContaining({ data: '\x1b[2Khidden-resize repaint' })
+      )
+
+      setHidden(null, { id: spawnResult.id, hidden: false })
       setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
-      mockProc.emitData('\x1b[2Khidden-resize redraw')
-      vi.advanceTimersByTime(2)
-
-      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
-        id: spawnResult.id,
-        data: '\x1b[2Khidden-resize redraw',
-        background: true
-      })
-
       mainWindow.webContents.send.mockClear()
-      resizePty(null, { id: spawnResult.id, cols: 80, rows: 24 })
-      mockProc.emitData('visible repaint')
+      // The app's post-reveal full repaint: a background tag makes the renderer drop it.
+      mockProc.emitData('\x1b[2Kfull repaint')
       vi.advanceTimersByTime(2)
 
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
-        data: 'visible repaint'
+        data: '\x1b[2Kfull repaint'
       })
     } finally {
       vi.useRealTimers()
@@ -315,7 +320,7 @@ describe('registerPtyHandlers', () => {
       vi.useRealTimers()
     }
   })
-  it('does not answer ordinary terminal OSC color queries in main', async () => {
+  it('answers a plain shell at the owner, then from the colours the renderer pushes', async () => {
     vi.useFakeTimers()
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
@@ -333,16 +338,40 @@ describe('registerPtyHandlers', () => {
       })) as { id: string }
       mainWindow.webContents.send.mockClear()
 
-      const query = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\'
+      const query = '\x1b]11;?\x1b\\'
       mockProc.emitData(`${query}ready`)
+      const pushViewAttributes: unknown = onMock.mock.calls.find(
+        (call: unknown[]) => call[0] === 'pty:terminalViewAttributes'
+      )?.[1]
+      if (typeof pushViewAttributes !== 'function') {
+        throw new Error('pty:terminalViewAttributes listener was not registered')
+      }
+      pushViewAttributes(null, {
+        foreground: [0, 0, 0],
+        background: [0x12, 0x34, 0x56],
+        cursor: [0, 0, 0],
+        ansi: Array.from({ length: 256 }, () => [0, 0, 0]),
+        colorSchemeMode: 'light',
+        cursorStyle: 'block',
+        cursorBlink: false
+      })
+      mockProc.emitData(query)
 
-      expect(mockProc.proc.write).not.toHaveBeenCalled()
+      expect(mockProc.proc.write.mock.calls).toEqual([
+        ['\x1b]11;rgb:1111/1111/1111\x1b\\'],
+        ['\x1b]11;rgb:1212/3434/5656\x1b\\']
+      ])
       vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
-        data: `${query}ready`
+        data: 'ready',
+        rawLength: `${query}ready${query}`.length,
+        transformed: true
       })
     } finally {
+      _resetTerminalViewAttributesForTest()
+      _resetColorQueryReplyColorsForTest()
+      _resetPtyOwnerHostColorsForTest()
       vi.useRealTimers()
     }
   })

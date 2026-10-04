@@ -108,8 +108,10 @@ function boundMessage(
   if (blocks.length < message.blocks.length) {
     markClipped(state, 'Some transcript blocks were omitted from oversized messages.')
   }
+  // The journal position only orders a live list; a worker read is already in order.
+  const { journalPosition: _journalPosition, ...served } = message
   return {
-    ...message,
+    ...served,
     id: boundIdentifier(message.id, transcriptPath, state),
     ...(message.turnId ? { turnId: boundIdentifier(message.turnId, transcriptPath, state) } : {}),
     blocks: blocks.map((block) => boundBlock(block, state))

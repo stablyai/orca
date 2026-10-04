@@ -1,4 +1,5 @@
 import type { Worker } from 'node:worker_threads'
+import { getEventListeners } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorkerThreadRequestQueue } from './worker-thread-request-queue'
 
@@ -34,9 +35,12 @@ class FakeWorker {
 
   unref(): void {}
 
+  /** Set to hold termination open, as a native call in the worker does. */
+  exit: Promise<number> = Promise.resolve(1)
+
   async terminate(): Promise<number> {
     this.terminated = true
-    return 1
+    return this.exit
   }
 
   postMessage(request: Request): void {
@@ -64,10 +68,14 @@ const TIMEOUT_MS = 1_000
 const IDLE_TEARDOWN_MS = 60_000
 const MAX_CONSECUTIVE_DEATHS = 3
 
-function makeQueue(workers: FakeWorker[]): WorkerThreadRequestQueue<Request, Response> {
+function makeQueue(
+  workers: FakeWorker[],
+  options: { awaitRetirement?: boolean; makeWorker?: () => FakeWorker } = {}
+): WorkerThreadRequestQueue<Request, Response> {
   return new WorkerThreadRequestQueue<Request, Response>({
+    awaitRetirement: options.awaitRetirement,
     factory: () => {
-      const worker = new FakeWorker()
+      const worker = options.makeWorker?.() ?? new FakeWorker()
       workers.push(worker)
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeWorker implements every Worker member LazyWorkerThreadHost touches (on/off/removeAllListeners/unref/terminate/postMessage); the rest of the Worker surface is never reached.
       return worker as unknown as Worker
@@ -102,6 +110,88 @@ describe('WorkerThreadRequestQueue', () => {
   afterEach(() => {
     vi.useRealTimers()
   })
+
+  it('cancels queued requests without retiring active work and retires active cancellation', async () => {
+    const workers: FakeWorker[] = []
+    const queue = makeQueue(workers)
+    const active = new AbortController()
+    const queued = new AbortController()
+    const first = settle(
+      queue.dispatch((id) => ({ id, label: 'active' }), TIMEOUT_MS, active.signal)
+    )
+    const second = settle(
+      queue.dispatch((id) => ({ id, label: 'queued' }), TIMEOUT_MS, queued.signal)
+    )
+    const third = send(queue, 'survivor')
+    queued.abort(new Error('queued cancelled'))
+    await expect(second).resolves.toMatchObject({ message: 'queued cancelled' })
+    expect(workers[0].terminated).toBe(false)
+    active.abort(new Error('active cancelled'))
+    await expect(first).resolves.toMatchObject({ message: 'active cancelled' })
+    expect(workers[0].terminated).toBe(true)
+    expect(workers).toHaveLength(2)
+    expect(labels(workers[1])).toEqual(['survivor'])
+    workers[0].respond()
+    workers[1].respond()
+    await expect(third).resolves.toMatchObject({ label: 'survivor' })
+    queue.dispose()
+  })
+
+  it('never starts an already aborted request and rejects all work on disposal', async () => {
+    const workers: FakeWorker[] = []
+    const queue = makeQueue(workers)
+    await expect(
+      queue.dispatch(
+        (id) => ({ id, label: 'aborted' }),
+        TIMEOUT_MS,
+        AbortSignal.abort(new Error('cancelled'))
+      )
+    ).rejects.toThrow('cancelled')
+    expect(workers).toHaveLength(0)
+    const active = settle(send(queue, 'active'))
+    const queued = settle(send(queue, 'queued'))
+    queue.dispose()
+    await expect(active).resolves.toMatchObject({ message: 'Worker request queue disposed' })
+    await expect(queued).resolves.toMatchObject({ message: 'Worker request queue disposed' })
+    await expect(send(queue, 'later')).rejects.toThrow('disposed')
+    expect(workers[0].terminated).toBe(true)
+  })
+
+  it.each([false, true])(
+    'does not respawn for queued calls sharing the cancelled active signal (survivor: %s)',
+    async (hasSurvivor) => {
+      const workers: FakeWorker[] = []
+      const queue = makeQueue(workers)
+      const controller = new AbortController()
+      const reason = new Error('scan cancelled')
+      const pending = Array.from({ length: 8 }, (_, index) =>
+        settle(
+          queue.dispatch(
+            (id) => ({ id, label: `cancelled-${index}` }),
+            TIMEOUT_MS,
+            controller.signal
+          )
+        )
+      )
+      const survivor = hasSurvivor ? send(queue, 'survivor') : undefined
+      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(8)
+
+      controller.abort(reason)
+
+      expect(await Promise.all(pending)).toEqual(Array.from({ length: 8 }, () => reason))
+      expect(workers[0].terminated).toBe(true)
+      expect(workers).toHaveLength(hasSurvivor ? 2 : 1)
+      expect(workers.flatMap(labels)).toEqual(
+        hasSurvivor ? ['cancelled-0', 'survivor'] : ['cancelled-0']
+      )
+      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+      if (survivor) {
+        workers[1].respond()
+        await expect(survivor).resolves.toMatchObject({ label: 'survivor' })
+      }
+      queue.dispose()
+    }
+  )
 
   it('posts one request at a time and in the order it was dispatched', async () => {
     const workers: FakeWorker[] = []
@@ -236,5 +326,62 @@ describe('WorkerThreadRequestQueue', () => {
     expect(labels(workers[3])).toEqual(['d'])
     workers[3].respond()
     expect(await behind).toMatchObject({ label: 'd' })
+  })
+
+  describe('awaitRetirement', () => {
+    function stalledExit(): { worker: FakeWorker; finish: (code: number) => void } {
+      const worker = new FakeWorker()
+      let finish: (code: number) => void = () => {}
+      worker.exit = new Promise((resolve) => {
+        finish = resolve
+      })
+      return { worker, finish }
+    }
+
+    it('fails calls closed until the timed-out worker exits, then spawns again', async () => {
+      vi.useFakeTimers()
+      const workers: FakeWorker[] = []
+      const stalled = stalledExit()
+      const queue = makeQueue(workers, {
+        awaitRetirement: true,
+        makeWorker: () => (workers.length === 0 ? stalled.worker : new FakeWorker())
+      })
+
+      const first = settle(send(queue, 'stuck'))
+      await vi.advanceTimersByTimeAsync(TIMEOUT_MS)
+      expect(await first).toMatchObject({ message: `timed out after ${TIMEOUT_MS}ms` })
+
+      // No second thread beside one still inside a native call (#24572).
+      for (const label of ['a', 'b', 'c']) {
+        expect(await settle(send(queue, label))).toMatchObject({
+          message: 'unavailable: previous worker still exiting'
+        })
+      }
+      expect(workers).toHaveLength(1)
+
+      stalled.finish(1)
+      await vi.advanceTimersByTimeAsync(0)
+      const recovered = send(queue, 'recovered')
+      expect(workers).toHaveLength(2)
+      workers[1].respond()
+      await expect(recovered).resolves.toMatchObject({ label: 'recovered' })
+      queue.dispose()
+    })
+
+    it('does not latch spawning off when termination rejects', async () => {
+      vi.useFakeTimers()
+      const workers: FakeWorker[] = []
+      const queue = makeQueue(workers, { awaitRetirement: true })
+      const first = settle(send(queue, 'stuck'))
+      workers[0].terminate = () => Promise.reject(new Error('terminate failed'))
+      await vi.advanceTimersByTimeAsync(TIMEOUT_MS)
+      expect(await first).toMatchObject({ message: `timed out after ${TIMEOUT_MS}ms` })
+
+      const next = send(queue, 'next')
+      expect(workers).toHaveLength(2)
+      workers[1].respond()
+      await expect(next).resolves.toMatchObject({ label: 'next' })
+      queue.dispose()
+    })
   })
 })

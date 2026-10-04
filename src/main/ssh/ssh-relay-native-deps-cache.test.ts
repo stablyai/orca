@@ -168,7 +168,7 @@ describe('gcRelayNativeDepsCache', () => {
 
     const last = mockExec.mock.calls.at(-1)?.[1] ?? ''
     expect(last).toContain('rm -rf')
-    expect(last).toContain('.gc-tombstone.')
+    expect(last).toContain('.native-gc-')
   })
 
   it('keeps an entry a live relay depends on', async () => {
@@ -179,7 +179,7 @@ describe('gcRelayNativeDepsCache', () => {
     await gcRelayNativeDepsCache(conn, POSIX, HOME)
 
     expect(mockExec).toHaveBeenCalledTimes(2)
-    expect(mockExec.mock.calls.some(([, c]) => c.startsWith('rm -rf'))).toBe(false)
+    expect(mockExec.mock.calls.some(([, c]) => c.includes('rm -rf'))).toBe(false)
   })
 
   it('keeps every entry when the reference listing never answers', async () => {
@@ -219,7 +219,7 @@ describe('gcRelayNativeDepsCache', () => {
 
     await gcRelayNativeDepsCache(conn, POSIX, HOME)
 
-    expect(mockExec.mock.calls.some(([, c]) => c.startsWith('rm -rf'))).toBe(true)
+    expect(mockExec.mock.calls.some(([, c]) => c.includes('rm -rf'))).toBe(true)
   })
 
   it('restores the tree when a deploy links the entry after the tombstone rename', async () => {
@@ -235,7 +235,7 @@ describe('gcRelayNativeDepsCache', () => {
     const last = mockExec.mock.calls.at(-1)?.[1] ?? ''
     expect(last).toContain('mv ')
     expect(last).toContain(relayNativeDepsCacheEntryDir(POSIX, HOME, KEY))
-    expect(mockExec.mock.calls.some(([, c]) => c.startsWith('rm -rf'))).toBe(false)
+    expect(mockExec.mock.calls.some(([, c]) => c.includes('rm -rf'))).toBe(false)
   })
 
   it('restores the tree when the recheck itself cannot answer', async () => {
@@ -248,7 +248,7 @@ describe('gcRelayNativeDepsCache', () => {
 
     await gcRelayNativeDepsCache(conn, POSIX, HOME)
 
-    expect(mockExec.mock.calls.some(([, c]) => c.startsWith('rm -rf'))).toBe(false)
+    expect(mockExec.mock.calls.some(([, c]) => c.includes('rm -rf'))).toBe(false)
   })
 
   it('never removes a pinned key', async () => {

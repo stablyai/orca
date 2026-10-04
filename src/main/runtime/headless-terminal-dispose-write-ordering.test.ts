@@ -71,12 +71,12 @@ describe('disposeHeadlessTerminal write ordering', () => {
       events.push(`write:${emulators.indexOf(this)}:${data.trim()}`)
       return write.call(this, data, opts)
     })
-    vi.spyOn(HeadlessEmulator.prototype, 'dispose').mockImplementation(
-      function (this: HeadlessEmulator) {
-        events.push(`dispose:${emulators.indexOf(this)}`)
-        return dispose.call(this)
-      }
-    )
+    vi.spyOn(HeadlessEmulator.prototype, 'dispose').mockImplementation(function (
+      this: HeadlessEmulator
+    ) {
+      events.push(`dispose:${emulators.indexOf(this)}`)
+      return dispose.call(this)
+    })
 
     const runtime = createRuntime()
     // Queued but not yet parsed: the chain link is still pending here.

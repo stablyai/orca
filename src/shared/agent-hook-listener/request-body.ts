@@ -12,10 +12,12 @@ const AGENT_HOOK_JSON_STRUCTURE_LIMITS = {
 } as const
 
 export function parseAgentHookJson(content: string): unknown {
-  // Why: Cursor on Windows writes UTF-8-with-BOM to the hook's stdin and `JSON.parse` rejects U+FEFF,
-  // so the whole event was dropped. Strip exactly one leading BOM — not a trim — to keep every other
-  // malformed payload rejected as before.
-  const normalizedContent = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
+  // Cursor on Windows can pipe duplicated BOMs before the JSON (#21421).
+  let offset = 0
+  while (offset < content.length && content.charCodeAt(offset) === 0xfeff) {
+    offset += 1
+  }
+  const normalizedContent = offset > 0 ? content.slice(offset) : content
   assertJsonTextStructureWithinLimits(normalizedContent, AGENT_HOOK_JSON_STRUCTURE_LIMITS)
   return JSON.parse(normalizedContent) as unknown
 }

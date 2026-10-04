@@ -45,25 +45,25 @@ describe('pinned relay branch diff operation', () => {
   it.each([
     {
       name: 'addition',
-      status: `A\t${FILE_PATH}\n`,
+      status: `A\0${FILE_PATH}\0`,
       left: new Error('missing'),
       right: Buffer.from('added\n')
     },
     {
       name: 'deletion',
-      status: `D\t${FILE_PATH}\n`,
+      status: `D\0${FILE_PATH}\0`,
       left: Buffer.from('deleted\n'),
       right: new Error('missing')
     },
     {
       name: 'binary content',
-      status: `M\t${FILE_PATH}\n`,
+      status: `M\0${FILE_PATH}\0`,
       left: Buffer.from([0, 1]),
       right: Buffer.from([0, 2])
     },
     {
       name: 'blob read failure',
-      status: `M\t${FILE_PATH}\n`,
+      status: `M\0${FILE_PATH}\0`,
       left: new Error('left failed'),
       right: new Error('right failed')
     }
@@ -174,7 +174,7 @@ describe('GitHandler pinned branch diff route', () => {
     })
   }
 
-  function mockLegacyGit(nameStatus = '') {
+  function mockLegacyGit(rawDiff = '') {
     return vi.spyOn(handler as unknown as GitTarget, 'git').mockImplementation(async (args) => {
       if (args[0] === 'rev-parse' && args.includes('HEAD')) {
         return { stdout: `${HEAD_OID}\n`, stderr: '' }
@@ -185,7 +185,7 @@ describe('GitHandler pinned branch diff route', () => {
       if (args[0] === 'merge-base') {
         return { stdout: `${MERGE_BASE_OID}\n`, stderr: '' }
       }
-      return { stdout: nameStatus, stderr: '' }
+      return { stdout: rawDiff, stderr: '' }
     })
   }
 
@@ -289,7 +289,7 @@ describe('GitHandler pinned branch diff route', () => {
 
   // Why: a symbolic base ref used to select the pinned route and then throw.
   it('selects the pinned route only when the base ref is a full object id', async () => {
-    const gitSpy = mockLegacyGit(`M\t${FILE_PATH}\n`)
+    const gitSpy = mockLegacyGit(`M\0${FILE_PATH}\0`)
     const gitBufferSpy = vi
       .spyOn(handler as unknown as GitBufferTarget, 'gitBuffer')
       .mockResolvedValue(Buffer.from('content\n'))
@@ -300,7 +300,7 @@ describe('GitHandler pinned branch diff route', () => {
       'rev-parse --verify HEAD',
       'rev-parse --verify origin/main',
       `merge-base ${BASE_OID} ${HEAD_OID}`,
-      `-c core.quotePath=false diff --name-status -M -C ${MERGE_BASE_OID} ${HEAD_OID}`
+      `diff --name-status -z -M -C ${MERGE_BASE_OID} ${HEAD_OID} --`
     ])
     expect(gitBufferSpy.mock.calls.map(([args]) => args[2])).toEqual([
       `${MERGE_BASE_OID}:${FILE_PATH}`,
@@ -319,7 +319,7 @@ describe('GitHandler pinned branch diff route', () => {
   })
 
   it('serves an explicitly null head OID through the legacy path', async () => {
-    const gitSpy = mockLegacyGit(`M\t${FILE_PATH}\n`)
+    const gitSpy = mockLegacyGit(`M\0${FILE_PATH}\0`)
     const gitBufferSpy = vi.spyOn(handler as unknown as GitBufferTarget, 'gitBuffer')
 
     await expect(request({ headOid: null, includePatch: false })).resolves.toEqual([

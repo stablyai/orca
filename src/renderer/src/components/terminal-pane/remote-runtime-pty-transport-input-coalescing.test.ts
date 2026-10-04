@@ -143,9 +143,9 @@ describe('createRemoteRuntimePtyTransport', () => {
       })
       await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
       expect(transport.claimViewport?.(101, 33)).toBe(true)
-      expect(transport.sendInput('x')).toBe(true)
+      expect(transport.sendInput('x', 'driving')).toBe(true)
       expect(transport.sendInputImmediate('\x1b[?1;2c')).toBe(true)
-      expect(transport.sendInput('z')).toBe(true)
+      expect(transport.sendInput('z', 'driving')).toBe(true)
       await vi.advanceTimersByTimeAsync(8)
       expect(runtimeCall).not.toHaveBeenCalledWith(
         expect.objectContaining({ method: 'terminal.send' })
@@ -193,8 +193,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       runtimeCall.mockClear()
       subscriptionSendBinary.mockClear()
 
-      expect(transport.sendInput('a')).toBe(true)
-      expect(transport.sendInput('b')).toBe(true)
+      expect(transport.sendInput('a', 'driving')).toBe(true)
+      expect(transport.sendInput('b', 'driving')).toBe(true)
       expect(runtimeCall).not.toHaveBeenCalled()
 
       await vi.runOnlyPendingTimersAsync()
@@ -225,8 +225,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       runtimeCall.mockClear()
       subscriptionSendBinary.mockClear()
 
-      expect(transport.sendInput('a')).toBe(true)
-      expect(transport.sendInput('b')).toBe(true)
+      expect(transport.sendInput('a', 'driving')).toBe(true)
+      expect(transport.sendInput('b', 'driving')).toBe(true)
       await vi.runOnlyPendingTimersAsync()
 
       expect(runtimeCall).not.toHaveBeenCalled()
@@ -256,14 +256,14 @@ describe('createRemoteRuntimePtyTransport', () => {
       subscriptionSendBinary.mockClear()
 
       const chunk = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)
-      expect(transport.sendInput(chunk)).toBe(true)
+      expect(transport.sendInput(chunk, 'driving')).toBe(true)
       expect(subscriptionSendBinary).toHaveBeenCalledTimes(1)
       let frame = decodeTerminalStreamFrame(subscriptionSendBinary.mock.calls[0][0])
       expect(frame?.opcode).toBe(TerminalStreamOpcode.Input)
       expect(frame?.streamId).toBe(streamId)
       expect(frame ? decodeTerminalStreamText(frame.payload) : '').toBe(chunk)
 
-      expect(transport.sendInput('tail')).toBe(true)
+      expect(transport.sendInput('tail', 'driving')).toBe(true)
       await vi.runOnlyPendingTimersAsync()
 
       expect(runtimeCall).not.toHaveBeenCalled()
@@ -299,7 +299,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     await transport.connect({ url: '', callbacks: {} })
 
-    await expect(transport.sendInputAccepted?.('\x03')).resolves.toBe(true)
+    await expect(transport.sendInputAccepted?.('\x03', 'driving')).resolves.toBe(true)
     expect(runtimeCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'terminal.send',
@@ -339,8 +339,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       await transport.connect({ url: '', callbacks: {} })
       subscriptionSendBinary.mockClear()
 
-      expect(transport.sendInput('a')).toBe(true)
-      await expect(transport.sendInputAccepted?.('\x03')).resolves.toBe(true)
+      expect(transport.sendInput('a', 'driving')).toBe(true)
+      await expect(transport.sendInputAccepted?.('\x03', 'driving')).resolves.toBe(true)
       await vi.runOnlyPendingTimersAsync()
 
       expect(runtimeCall).toHaveBeenCalledWith({
@@ -383,7 +383,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     await transport.connect({ url: '', callbacks: {} })
 
-    await expect(transport.sendInputAccepted?.('\x03')).resolves.toBe(false)
+    await expect(transport.sendInputAccepted?.('\x03', 'driving')).resolves.toBe(false)
   })
 
   it('splits large acknowledged remote input before terminal.send RPCs', async () => {
@@ -415,7 +415,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     await transport.connect({ url: '', callbacks: {} })
 
     const chunk = '😀'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES / 4)
-    await expect(transport.sendInputAccepted?.(`${chunk}tail`)).resolves.toBe(true)
+    await expect(transport.sendInputAccepted?.(`${chunk}tail`, 'driving')).resolves.toBe(true)
 
     const sendCalls = runtimeCall.mock.calls.filter((call) => call[0].method === 'terminal.send')
     expect(sendCalls).toHaveLength(2)
@@ -455,7 +455,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       await transport.connect({ url: '', callbacks: {} })
       runtimeCall.mockClear()
 
-      const accepted = transport.sendInputAccepted?.(text)
+      const accepted = transport.sendInputAccepted?.(text, 'driving')
       await Promise.resolve()
 
       expect(runtimeCall).not.toHaveBeenCalled()
@@ -502,9 +502,9 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     await transport.connect({ url: '', callbacks: {} })
 
-    await expect(transport.sendInputAccepted?.(`${firstChunk}${rejectedChunk}after`)).resolves.toBe(
-      false
-    )
+    await expect(
+      transport.sendInputAccepted?.(`${firstChunk}${rejectedChunk}after`, 'driving')
+    ).resolves.toBe(false)
 
     const sendTexts = runtimeCall.mock.calls
       .filter((call) => call[0].method === 'terminal.send')
@@ -530,7 +530,10 @@ describe('createRemoteRuntimePtyTransport', () => {
     runtimeCall.mockClear()
 
     await expect(
-      transport.sendInputAccepted?.('😀'.repeat(Math.floor(TERMINAL_INPUT_MAX_BYTES / 4) + 1))
+      transport.sendInputAccepted?.(
+        '😀'.repeat(Math.floor(TERMINAL_INPUT_MAX_BYTES / 4) + 1),
+        'driving'
+      )
     ).resolves.toBe(false)
     expect(runtimeCall).not.toHaveBeenCalled()
   })
@@ -550,7 +553,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       runtimeCall.mockClear()
       subscriptionSendBinary.mockClear()
 
-      expect(transport.sendInput('echo one\necho two\r\n')).toBe(true)
+      expect(transport.sendInput('echo one\necho two\r\n', 'driving')).toBe(true)
       await vi.runOnlyPendingTimersAsync()
 
       expect(runtimeCall).not.toHaveBeenCalled()
@@ -614,7 +617,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       subscriptionSendBinary.mockClear()
 
       expect(transport.claimViewport?.(101, 33)).toBe(true)
-      expect(transport.sendInput('x')).toBe(true)
+      expect(transport.sendInput('x', 'driving')).toBe(true)
       await vi.runOnlyPendingTimersAsync()
 
       const frames = subscriptionSendBinary.mock.calls.map((call) =>

@@ -116,13 +116,16 @@ describe('omp session option catalog', () => {
   })
 
   it('yields to a user --model in the launch args, in either spelling', () => {
-    const override = OMP_SESSION_OPTION_CATALOG.modelApply.agentArgsOverride!
-    expect(override(['--model', 'opus'])).toBe(true)
-    expect(override(['--model=openai/gpt-5.5'])).toBe(true)
-    expect(override(['--no-extensions'])).toBe(false)
+    const remove = OMP_SESSION_OPTION_CATALOG.modelApply.removeAgentArgs!
+    expect(remove(['--model', 'opus', '--model=openai/gpt-5.5', '--no-extensions'])).toEqual([
+      '--no-extensions'
+    ])
     // `--models` scopes Ctrl+P cycling; it does not pick a model. omp has no `-m`.
-    expect(override(['--models=anthropic/*'])).toBe(false)
-    expect(override(['-m', 'opus'])).toBe(false)
+    expect(remove(['--models=anthropic/*', '-m', 'opus'])).toEqual([
+      '--models=anthropic/*',
+      '-m',
+      'opus'
+    ])
   })
 
   it('switches mid-session with /orca-model <selector>, which omp resolves exactly', () => {

@@ -306,6 +306,39 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     })
   })
 
+  it('preserves tmux evidence age and unavailable across the real notification adapter', async () => {
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: relay.transport,
+      serverBuildId: 'test-relay-build',
+      platform: 'linux-x64'
+    })
+    const events: CapturedStatus[] = []
+    captureAgentStatuses(events)
+    session = createSession('conn-tmux')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Mocked deployment never reads the connection.
+    await session.establish({} as SshConnection)
+    const envelope = makeEnvelope({
+      source: 'opencode',
+      evidenceAgeMs: 60_000,
+      payload: { state: 'done', prompt: 'older inner turn', agentType: 'opencode' }
+    })
+    const before = Date.now()
+    relay.notifyAgentHook(envelope)
+    await waitForStatusCount(events, 1)
+    const row = agentHookServer
+      .getStatusSnapshot()
+      .find((entry) => entry.paneKey === envelope.paneKey)
+    expect(row?.evidenceObservedAt).toBeGreaterThanOrEqual(before - 60_000)
+    expect(row?.evidenceObservedAt).toBeLessThanOrEqual(Date.now() - 60_000)
+    relay.notifyAgentHook({ ...envelope, statusUnavailable: true, payload: null })
+    await vi.waitFor(() =>
+      expect(
+        agentHookServer.getStatusSnapshot().find((entry) => entry.paneKey === envelope.paneKey)
+      ).toBeUndefined()
+    )
+  })
+
   it('preserves Claude monitoring mode across the SSH relay boundary', async () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({

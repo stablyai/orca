@@ -204,6 +204,7 @@ describe('SshConnection', () => {
       'target-1',
       'password',
       'example.com',
+      undefined,
       expect.any(AbortSignal)
     )
   })

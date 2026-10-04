@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { TASK_WORKTREE_CARD_PROPERTIES } from '../../../../shared/constants'
-import {
-  WORKTREE_CARD_PROPERTY_OPTIONS,
-  getWorktreeCardPropertyOptions
-} from './sidebar-workspace-option-items'
+import { getWorktreeCardPropertyOptions } from './sidebar-workspace-option-items'
 
 describe('worktree card property options', () => {
   it('keeps the combined Tasks option by default', () => {
     const options = getWorktreeCardPropertyOptions()
 
-    expect(WORKTREE_CARD_PROPERTY_OPTIONS).toEqual(options)
     expect(options.map((option) => option.id)).toContain('tasks')
     expect(options.map((option) => option.id)).toContain('automation')
     expect(options.find((option) => option.id === 'tasks')?.properties).toEqual(

@@ -2,7 +2,9 @@ import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { formatAgentTypeLabel, agentKindForAgentType } from '../../../lib/agent-status'
 import {
   deriveRunningAgentSendTargets,
-  resolveRunningAgentSendTarget
+  resolveRunningAgentSendTarget,
+  runningAgentMessageTarget,
+  runningAgentSendTargetAgentType
 } from '../../../lib/running-agent-targets'
 import { translate } from '@/i18n/i18n'
 import { createUiActivityActions } from './ui-slice-activity-actions'
@@ -123,7 +125,11 @@ export function createUiAgentActions(
       }
 
       const target = resolveRunningAgentSendTarget(get(), mode.worktreeId, paneKey)
-      if (!target || target.status !== 'eligible' || !target.ptyId) {
+      if (
+        !target ||
+        target.status !== 'eligible' ||
+        (target.kind === 'terminal' && !target.ptyId)
+      ) {
         // Why: eligibility can drop after the menu opened; keep the picker open (row title explains) rather than adding toast noise.
         return false
       }
@@ -142,13 +148,16 @@ export function createUiAgentActions(
           : s
       )
 
-      const label = formatAgentTypeLabel(target.entry.agentType)
-      const { activeAgentNotesSendFailureMessage, sendNotesToActiveAgentSession } =
-        await import('@/lib/active-agent-note-send')
-      const result = await sendNotesToActiveAgentSession({
+      const agentType = runningAgentSendTargetAgentType(target)
+      const label = formatAgentTypeLabel(agentType)
+      const [{ activeAgentNotesSendFailureMessage }, { sendMessageToAgent }] = await Promise.all([
+        import('@/lib/active-agent-note-send'),
+        import('@/lib/agent-message-send')
+      ])
+      const result = await sendMessageToAgent({
         worktreeId: mode.worktreeId,
         prompt: mode.prompt,
-        noteTarget: { tabId: target.tabId, leafId: target.leafId }
+        target: runningAgentMessageTarget(target)
       }).catch(() => {
         console.error('Failed to send notes to sidebar agent target:', {
           code: 'runtime-unverifiable'
@@ -200,7 +209,7 @@ export function createUiAgentActions(
         import('@/lib/telemetry')
       ])
       track('agent_prompt_sent', {
-        agent_kind: agentKindForAgentType(target.entry.agentType),
+        agent_kind: agentKindForAgentType(agentType),
         launch_source: mode.launchSource,
         request_kind: 'followup'
       })

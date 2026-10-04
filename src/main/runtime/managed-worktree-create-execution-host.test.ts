@@ -1,7 +1,6 @@
 // createManagedWorktree used to pick remote-vs-local from the raw `connectionId` field, so a repo
 // stamped only `executionHostId: 'ssh:*'` ran `git worktree add` on the client against a remote
-// path — and the folder branch, which returns before that check, wrote agent trust locally for a
-// remote workspace. Both are the #11163 shape: read the execution host, never one spelling of it.
+// path. That is the #11163 shape: read the execution host, never one spelling of it.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -19,16 +18,6 @@ vi.mock('./runtime-folder-worktree-create', () => ({
 const createRuntimeLocalManagedWorktreeMock = vi.hoisted(() => vi.fn())
 vi.mock('./runtime-local-worktree-create', () => ({
   createRuntimeLocalManagedWorktree: createRuntimeLocalManagedWorktreeMock
-}))
-
-const trustMocks = vi.hoisted(() => ({
-  local: vi.fn(async () => {}),
-  remote: vi.fn(async () => {})
-}))
-vi.mock('./runtime-worktree-agent-startup', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  markLocalWorktreeTrusted: trustMocks.local,
-  markRemoteWorktreeTrusted: trustMocks.remote
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
@@ -77,8 +66,6 @@ describe('createManagedWorktree execution-host routing', () => {
     createRuntimeLocalManagedWorktreeMock.mockRejectedValue(
       new Error('local_worktree_create_ran_for_remote_repo')
     )
-    trustMocks.local.mockClear()
-    trustMocks.remote.mockClear()
   })
 
   it('creates on the SSH host for a repo stamped executionHostId only', async () => {
@@ -114,42 +101,5 @@ describe('createManagedWorktree execution-host routing', () => {
       expect.objectContaining({ connectionId: TARGET_ID }),
       expect.anything()
     )
-  })
-
-  it('marks a folder workspace trusted on its SSH host, not on the client', async () => {
-    const { runtime } = makeRuntime({
-      id: 'repo-folder',
-      path: REMOTE_PATH,
-      kind: 'folder',
-      connectionId: TARGET_ID,
-      executionHostId: `ssh:${TARGET_ID}`
-    })
-
-    await runtime.createManagedWorktree({ repoSelector: 'repo-folder', name: 'notes' } as never)
-
-    const deps = createRuntimeFolderWorktreeMock.mock.calls[0]?.[0]?.deps
-    await deps.markTrusted('codex', '/srv/app')
-
-    expect(trustMocks.remote).toHaveBeenCalledWith('codex', TARGET_ID, '/srv/app')
-    expect(trustMocks.local).not.toHaveBeenCalled()
-  })
-
-  it('keeps a local folder workspace trusted on the client', async () => {
-    const { runtime } = makeRuntime({
-      id: 'repo-folder-local',
-      path: '/Users/me/notes',
-      kind: 'folder'
-    })
-
-    await runtime.createManagedWorktree({
-      repoSelector: 'repo-folder-local',
-      name: 'notes'
-    } as never)
-
-    const deps = createRuntimeFolderWorktreeMock.mock.calls[0]?.[0]?.deps
-    await deps.markTrusted('codex', '/Users/me/notes')
-
-    expect(trustMocks.local).toHaveBeenCalledWith('codex', '/Users/me/notes')
-    expect(trustMocks.remote).not.toHaveBeenCalled()
   })
 })

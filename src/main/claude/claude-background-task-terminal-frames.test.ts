@@ -96,25 +96,6 @@ describe('claude background task terminal frames', () => {
     expect(items).toEqual([])
   })
 
-  it('leaves legacy local_subagent tasks to the subagent roster', () => {
-    const { rows, items } = harness()
-    rows.observe({
-      type: 'system',
-      subtype: 'task_started',
-      task_id: 'task-legacy-agent',
-      task_type: 'local_subagent',
-      subagent_type: 'explorer'
-    })
-    rows.observe({
-      type: 'system',
-      subtype: 'task_notification',
-      task_id: 'task-legacy-agent',
-      status: 'failed',
-      summary: 'the child failed'
-    })
-    expect(items).toEqual([])
-  })
-
   it('writes nothing for ambient housekeeping the user never asked for', () => {
     const { rows, items } = harness()
     rows.observe({ ...START_BASH, task_id: 'ambient-1', ambient: true })

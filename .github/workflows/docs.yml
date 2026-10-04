@@ -49,7 +49,7 @@ jobs:
         # v5 avoids the v6 bootstrap/shim regression when pinning pnpm 10.
         uses: pnpm/action-setup@v5
         with:
-          version: 10.24.0
+          version: 10.34.6
           package_json_file: docs/site/package.json
           run_install: false
 
@@ -224,7 +224,7 @@ jobs:
         # v5 avoids the v6 bootstrap/shim regression when pinning pnpm 10.
         uses: pnpm/action-setup@v5
         with:
-          version: 10.24.0
+          version: 10.34.6
           package_json_file: docs/site/package.json
           run_install: false
 

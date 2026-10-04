@@ -23,7 +23,7 @@ import {
   type SimulatorPaletteSearchResult
 } from '@/lib/simulator-palette-search'
 import { getUnifiedTabPaletteExecutionHostId } from '@/lib/unified-tab-host-ownership'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import {
   searchWorkspaceTabs,
   type SearchableWorkspaceTab,
@@ -57,7 +57,7 @@ export type OpenTabSearchResult =
       entityId: string
       groupId: string
       relativePath: string | null
-      occupantAgent: TuiAgent | null
+      occupantAgent: TerminalAgent | null
     })
   | (OpenTabSearchResultBase & {
       source: 'browser'

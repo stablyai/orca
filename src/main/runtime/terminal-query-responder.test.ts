@@ -21,6 +21,7 @@ import {
   setTerminalViewAttributes
 } from './terminal-view-attribute-store'
 import type { TerminalViewAttributes, TerminalViewRgb } from '../../shared/terminal-view-attributes'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 
 const settingsState = {
   terminalMainSideEffectAuthority: true as boolean,
@@ -58,9 +59,11 @@ type RendererBufferStub = { data: string; cols: number; rows: number }
 function createResponderRuntime(opts: { rendererBuffer?: RendererBufferStub } = {}) {
   const runtime = new OrcaRuntimeService(store)
   const replies: { ptyId: string; data: string }[] = []
+  const inputKinds: TerminalInputKind[] = []
   runtime.setPtyController({
-    write: (ptyId, data) => {
+    write: (ptyId, data, inputKind) => {
       replies.push({ ptyId, data })
+      inputKinds.push(inputKind)
       return true
     },
     kill: () => true,
@@ -74,7 +77,7 @@ function createResponderRuntime(opts: { rendererBuffer?: RendererBufferStub } = 
         }
       : {})
   })
-  return { runtime, replies }
+  return { runtime, replies, inputKinds }
 }
 
 /** Awaits the per-PTY emulator writeChain so queued chunk links (and the
@@ -146,7 +149,7 @@ describe('reply parity for hidden-dropped chunks', () => {
     ['kitty CSI ? u default flags', '\x1b[?u', ['\x1b[?0u']],
     ['kitty CSI ? u reports pushed flags', '\x1b[=5;1u\x1b[?u', ['\x1b[?5u']]
   ])('%s', async (_label, chunk, expectedReplies) => {
-    const { runtime, replies } = createResponderRuntime()
+    const { runtime, replies, inputKinds } = createResponderRuntime()
     markHiddenRendererPty('pty-q')
 
     runtime.onPtyData('pty-q', chunk, Date.now())
@@ -154,6 +157,8 @@ describe('reply parity for hidden-dropped chunks', () => {
 
     expect(replies.map((reply) => reply.data)).toEqual(expectedReplies)
     expect(replies.every((reply) => reply.ptyId === 'pty-q')).toBe(true)
+    // Why: a reply written as driving input would read the untouched run as typed.
+    expect(inputKinds).toEqual(expectedReplies.map(() => 'query-reply'))
   })
 
   it.each([

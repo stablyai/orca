@@ -76,3 +76,26 @@ it('reads an added, dropped or changed root as a different set', () => {
   expect(sameSessionSearchRoots(base, { openclawStateDir: STATE })).toBe(false)
   expect(sameSessionSearchRoots(base, { ...base, wslHomeDirs: ['/home/b'] })).toBe(false)
 })
+
+it('compares WSL readers structurally without restarting for reordered objects', () => {
+  const ubuntu = { distro: 'Ubuntu', executable: '/usr/bin/node', readerPath: '/reader.cjs' }
+  const debian = { distro: 'Debian', error: 'Preparing' }
+  expect(
+    sameSessionSearchRoots(
+      { wslOpenCodeReaders: [ubuntu, debian] },
+      {
+        wslOpenCodeReaders: [
+          { error: 'Preparing', distro: 'debian' },
+          { readerPath: '/reader.cjs', executable: '/usr/bin/node', distro: 'ubuntu' }
+        ]
+      }
+    )
+  ).toBe(true)
+  expect(sameSessionSearchRoots({}, { wslOpenCodeReaders: [] })).toBe(true)
+  expect(
+    sameSessionSearchRoots(
+      { wslOpenCodeReaders: [ubuntu] },
+      { wslOpenCodeReaders: [{ ...ubuntu, executable: '/new/node' }] }
+    )
+  ).toBe(false)
+})

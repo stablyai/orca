@@ -13,6 +13,7 @@ import {
   type BridgeInitRoute
 } from './bridge-envelope'
 import type { BridgeErrorCapture } from './bridge-error-capture'
+import type { BridgeSafeAreaInsets } from './bridge-safe-area-insets'
 import {
   createBridgeRpcClient,
   type BridgeRpcClient,
@@ -55,6 +56,10 @@ export type BridgePortPair<TRpc extends RpcClient = FakeRpcClient> = {
   pageFaults: BridgeErrorCapture[]
   /** How many times the page asked for a session; it re-asks on a backoff until one lands. */
   readonly pageReadyCount: () => number
+  readonly pagePaintCount: () => number
+  /** Every claim on the device Back key the host reported, in order. */
+  readonly backClaims: boolean[]
+  /** What each answered `ready` declared it reports, in order. */
   /** Every clear the page asked the shell for, in order. */
   readonly routeParamClears: () => readonly { param: string; value: string }[]
   /** Why the host refused to open a session at all, if it did. */
@@ -94,8 +99,12 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   routeGrants?: readonly string[]
   /** Stands for a host rebuilt under a page whose session already handshook. */
   sessionEstablished?: boolean
+  /** This device's identity to the host; `null` stands for one the shell cannot read yet. */
+  clientIdentity?: string | null
   /** Replaces the verb handler, for the arms where the shell refuses rather than answers. */
   serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
+  safeAreaInsets?: BridgeSafeAreaInsets
+  keyboardInset?: number
 }
 
 type Lane = {
@@ -104,6 +113,9 @@ type Lane = {
   drainNow: () => number
   readonly depth: number
 }
+
+/** This device's identity to the host, as the shell reads it off the native client. */
+export const PORT_PAIR_CLIENT_IDENTITY = 'device-token-a'
 
 function createLane(deliver: (json: string) => void): Lane {
   const sent: string[] = []
@@ -178,9 +190,7 @@ function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
     case 'native.audio.read':
       return { base64: '', droppedBytes: 0, recording: true, interruption: null }
     case 'native.audio.stop':
-      return { stopped: true }
-    case 'native.wakelock.set':
-      return { active: true }
+      return { stopped: true, base64: '', droppedBytes: 0 }
   }
 }
 
@@ -196,7 +206,10 @@ export function createBridgePortPair<TRpc extends RpcClient>(
   const backPops: BridgeNavigateBackOutcome[] = []
   const storageWrites: { key: string; value: string | null }[] = []
   const pageFaults: BridgeErrorCapture[] = []
+  const backClaims: boolean[] = []
   let pageReadies = 0
+  let pagePaints = 0
+  /** What each answered `ready` declared it reports, in order. */
   const routeParamClears: { param: string; value: string }[] = []
   const routeRefusals: string[] = []
   let receiveOnPage: ((json: string) => void) | null = null
@@ -214,6 +227,10 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     buildId: options.buildId ?? 'build-a',
     sessionId: options.sessionId ?? 'session-a',
     route: options.route ?? { pathname: '/h/host-a' },
+    ...(options.safeAreaInsets === undefined ? {} : { safeAreaInsets: options.safeAreaInsets }),
+    ...(options.keyboardInset === undefined ? {} : { keyboardInset: options.keyboardInset }),
+    readClientIdentity: () =>
+      options.clientIdentity === undefined ? PORT_PAIR_CLIENT_IDENTITY : options.clientIdentity,
     pageRoutes: options.pageRoutes ?? ['/h/[hostId]'],
     routeGrants: options.routeGrants ?? MOBILE_WEB_SHELL_GRANTS,
     sessionEstablished: options.sessionEstablished ?? false,
@@ -240,6 +257,10 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     onPageReady: () => {
       pageReadies += 1
     },
+    onPagePainted: () => {
+      pagePaints += 1
+    },
+    onPageBackClaim: (claimed) => backClaims.push(claimed),
     onRouteParamClear: (param, value) => routeParamClears.push({ param, value }),
     onRouteRefused: (issue) => routeRefusals.push(issue),
     onDiagnostic: (diagnostic) => hostDiagnostics.push(diagnostic)
@@ -275,6 +296,8 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     storageWrites,
     pageFaults,
     pageReadyCount: () => pageReadies,
+    pagePaintCount: () => pagePaints,
+    backClaims,
     routeParamClears: () => routeParamClears,
     routeRefusals,
     async flush(): Promise<void> {

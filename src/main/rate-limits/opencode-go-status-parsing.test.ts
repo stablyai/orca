@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { parseOpenCodeGoStatusPayload } from './opencode-go-status-parsing'
+import {
+  parseOpenCodeGoStatusPayload,
+  parseOpenCodeGoUsageApiPayload
+} from './opencode-go-status-parsing'
 
 const ISSUE_PAYLOAD = {
   access: {
@@ -114,5 +117,37 @@ describe('parseOpenCodeGoStatusPayload', () => {
         })
       )
     ).toBeNull()
+  })
+})
+
+describe('parseOpenCodeGoUsageApiPayload', () => {
+  it('clamps an out-of-range percent and tolerates a missing resetsAt', () => {
+    const parsed = parseOpenCodeGoUsageApiPayload(
+      JSON.stringify({
+        usage: {
+          rolling: { status: 'rate-limited', percent: 140 },
+          weekly: { status: 'ok', percent: -5, resetsAt: 'not a date' }
+        }
+      })
+    )
+
+    expect(parsed?.session).toEqual({
+      usedPercent: 100,
+      windowMinutes: 300,
+      resetsAt: null,
+      resetDescription: null
+    })
+    expect(parsed?.weekly.usedPercent).toBe(0)
+    expect(parsed?.monthly).toBeNull()
+  })
+
+  it('returns null for the console error bodies and other non-usage payloads', () => {
+    expect(
+      parseOpenCodeGoUsageApiPayload(
+        JSON.stringify({ type: 'error', error: { type: 'AuthError', message: 'Unauthorized' } })
+      )
+    ).toBeNull()
+    expect(parseOpenCodeGoUsageApiPayload('{not json')).toBeNull()
+    expect(parseOpenCodeGoUsageApiPayload('')).toBeNull()
   })
 })

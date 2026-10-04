@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron'
+import type { PtyRendererDelivery } from '../session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { Store } from '../../../persistence'
 import type { IPtyProvider } from '../../../providers/types'
@@ -31,7 +31,6 @@ export type PtyRuntimeControllerDeps = {
     providerSession?: AgentProviderSessionMetadata
     target: CodexAccountSelectionTarget
     launchEnv?: NodeJS.ProcessEnv
-    workspacePath?: string
   }) => PreparedCodexResumeHome | null
   resolveCodexResumeLaunch: (
     command: string | undefined,
@@ -82,8 +81,9 @@ export type PtyRuntimeControllerDeps = {
   }
   trustedTerminalHandleEnv: Set<string>
   retiredRejectedPtyIds: Map<string, NodeJS.Timeout>
-  reversibleStopOwnersByPtyId: Map<string, number>
-  mainWindow: BrowserWindow
+  mainWindow?: PtyRendererDelivery
+  transitionSpawnHiddenRendererPtyDeliveryState?: (id: string, hidden: boolean) => void
+  syncPtyBackgroundedDelivery?: (id: string, caller: string) => void
 }
 
 export type { StablePaneOwner }

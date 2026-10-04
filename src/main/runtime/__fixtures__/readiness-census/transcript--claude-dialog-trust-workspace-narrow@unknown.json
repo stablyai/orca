@@ -1,0 +1,13 @@
+{
+  "description": "claude recording at 60x30 replayed on the unknown pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-13: now=pending:open edge=pending:open quiet=pending:open wait=ready@poll",
+      "14-16: now=pending:open edge=pending:open quiet=pending:open wait=blocked:agent-trust-workspace@poll"
+    ],
+    "clockless": [
+      "0-13: verdict=pending:open wait=ready@poll",
+      "14-16: verdict=pending:open wait=blocked:agent-trust-workspace@poll"
+    ]
+  }
+}

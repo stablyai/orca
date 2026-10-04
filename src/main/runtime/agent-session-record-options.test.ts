@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { readNativeSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-option-restoration'
-import { AgentSessionRecordStore } from './agent-session-record-store'
+import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-options'
@@ -46,7 +46,7 @@ it('drops provider-rejected persisted options before the next owner proof', asyn
 })
 
 it('persists resumed provider options atomically with owner proof', async () => {
-  const store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+  const store = await openTestAgentSessionRecordStore(directory)
   const reserved = await store.reserveOwner({
     sessionId: SESSION,
     location: {
@@ -57,7 +57,6 @@ it('persists resumed provider options atomically with owner proof', async () => 
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/accounts/codex' },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken: 'spawn-options',
     claimKeyId: 'key-1',
@@ -106,6 +105,6 @@ it('persists resumed provider options atomically with owner proof', async () => 
     ...(options ? { options } : {})
   })
 
-  const reopened = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+  const reopened = await openTestAgentSessionRecordStore(directory)
   expect(reopened.getRecord(SESSION)?.options).toEqual({ model: 'gpt-tui', effort: 'low' })
 })

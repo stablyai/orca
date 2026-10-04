@@ -1,9 +1,15 @@
 import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
 import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
+import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { IPtyProvider } from '../providers/types'
 
 export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
+  /** Identity of the daemon behind this adapter; null until hello completes or after a disconnect. */
+  getDaemonIdentity(): DaemonEndpointIdentity | null {
+    return this.client.getDaemonIdentity()
+  }
+
   protected setupEventRouting(): void {
     if (this.removeEventListener) {
       return

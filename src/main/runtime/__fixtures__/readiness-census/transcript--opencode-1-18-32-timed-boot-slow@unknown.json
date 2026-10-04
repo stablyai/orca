@@ -1,0 +1,13 @@
+{
+  "description": "opencode recording at 120x40 replayed on the unknown pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-21: now=pending:open edge=pending:open quiet=pending:open wait=ready@poll",
+      "22-26: now=ready-weak edge=ready-weak quiet=ready-weak wait=ready@start"
+    ],
+    "clockless": [
+      "0-21: verdict=pending:open wait=ready@poll",
+      "22-26: verdict=ready-weak wait=ready@start"
+    ]
+  }
+}

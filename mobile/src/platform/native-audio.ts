@@ -10,6 +10,7 @@ import {
 import type { BridgeNativeVerb } from '../mobile-web-shell/bridge/bridge-native-verbs'
 import { BridgeNativeVerbRefusedError } from '../mobile-web-shell/bridge-host-errors'
 import { bytesToBase64 } from '../hooks/mobile-dictation-session-state'
+import type { MicrophoneScreenLock } from './microphone-screen-lock'
 
 /**
  * The device side of `native.audio.start`, `read` and `stop`.
@@ -35,6 +36,9 @@ export type NativeAudioEngine = {
   readonly begin: () => boolean
   /** Stops producing them and releases the session. Called on every exit, including a throw. */
   readonly end: () => void
+  /** The screen, which an open microphone holds: a lock mid-capture suspends the app and takes the
+   *  audio with it. Injectable for the engine's own reason — `expo-keep-awake` is a device call. */
+  readonly screenLock: MicrophoneScreenLock
   readonly onMicrophoneData: (handler: (bytes: Uint8Array) => void) => { remove: () => void }
   readonly onInterruption: (handler: (kind: BridgeAudioInterruption) => void) => {
     remove: () => void
@@ -111,6 +115,7 @@ export type NativeAudioCapture = {
 }
 
 export function createNativeAudioCapture(engine: NativeAudioEngine): NativeAudioCapture {
+  const screen = engine.screenLock
   let capture: Capture | null = null
   let disposed = false
   /**
@@ -144,6 +149,7 @@ export function createNativeAudioCapture(engine: NativeAudioEngine): NativeAudio
     }
     capture.stopListening()
     capture = null
+    screen.release()
     engine.end()
     return true
   }
@@ -199,9 +205,17 @@ export function createNativeAudioCapture(engine: NativeAudioEngine): NativeAudio
       return { started: false, sampleRate: opened.sampleRate, permission }
     }
     capture = listen()
-    if (!engine.begin()) {
+    // The mic is open from here, so the screen is held from here — and given back by `end()`,
+    // which every exit below reaches, including the one an engine that throws takes.
+    screen.hold()
+    try {
+      if (!engine.begin()) {
+        end()
+        return { started: false, sampleRate: opened.sampleRate, permission }
+      }
+    } catch (error) {
       end()
-      return { started: false, sampleRate: opened.sampleRate, permission }
+      throw error
     }
     return { started: true, sampleRate: opened.sampleRate, permission }
   }
@@ -237,7 +251,16 @@ export function createNativeAudioCapture(engine: NativeAudioEngine): NativeAudio
       audioStopParamsSchema.parse(params)
       // Queued so a stop that followed a start ends the capture that start opened, rather than
       // finding nothing and leaving a live microphone behind it.
-      return enqueue(async () => ({ stopped: end() }))
+      return enqueue(async () => {
+        // Drained before the capture goes, because ending it takes the ring with it. This is the
+        // audio produced since the page's last read, which is the tail of the utterance.
+        const drained = capture?.ring.drain(BRIDGE_AUDIO_RING_MAX_BYTES)
+        return {
+          stopped: end(),
+          base64: drained === undefined ? '' : bytesToBase64(drained.bytes),
+          droppedBytes: drained?.droppedBytes ?? 0
+        }
+      })
     },
     dispose: () => {
       disposed = true

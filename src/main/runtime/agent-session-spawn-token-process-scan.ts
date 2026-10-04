@@ -56,7 +56,7 @@ export async function scanAgentSessionSpawnTokenProcesses(
 /**
  * Diagnostic evidence only. A null result is deliberately typed as
  * `unverifiable`, not as an empty process set; callers must never use this
- * Linux read-back as ownership or orphan-reaping proof.
+ * Linux read-back as ownership proof.
  */
 export async function scanAgentSessionSpawnTokenEvidence(
   platform: NodeJS.Platform = process.platform,

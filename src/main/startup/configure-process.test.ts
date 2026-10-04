@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -420,6 +420,22 @@ describe('configureElectronNetworkCompatibility', () => {
     return userDataPath
   }
 
+  function createProfileState(
+    userDataPath: string,
+    profileId: string,
+    settings: Record<string, unknown>
+  ): string {
+    const profileDirectory = join(userDataPath, 'profiles', profileId)
+    mkdirSync(profileDirectory, { recursive: true })
+    writeFileSync(
+      join(userDataPath, 'orca-profile-index.json'),
+      JSON.stringify({ activeProfileId: profileId, profiles: [{ id: profileId }] }),
+      'utf-8'
+    )
+    writeFileSync(join(profileDirectory, 'orca-data.json'), JSON.stringify({ settings }), 'utf-8')
+    return profileDirectory
+  }
+
   afterEach(() => {
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
@@ -502,6 +518,40 @@ describe('configureElectronNetworkCompatibility', () => {
     expect(
       shouldDisableHttp2ForElectronNetworking({ env: { ORCA_DISABLE_HTTP2: '0' }, userDataPath })
     ).toBe(false)
+  })
+
+  it('scopes a profile marker to the active profile before trusting it', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+    const { writeHttp1CompatibilityMarker } = await import('./http1-compatibility-marker')
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-http1-profile-'))
+    tempDirs.push(userDataPath)
+    createProfileState(userDataPath, 'profile-b', { electronHttp1CompatibilityMode: false })
+    writeHttp1CompatibilityMarker(userDataPath, true, 'profile-a')
+
+    expect(shouldDisableHttp2ForElectronNetworking({ env: {}, userDataPath })).toBe(false)
+  })
+
+  it('uses a matching profile marker even when the legacy JSON is stale', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+    const { writeHttp1CompatibilityMarker } = await import('./http1-compatibility-marker')
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-http1-profile-'))
+    tempDirs.push(userDataPath)
+    createProfileState(userDataPath, 'profile-b', { electronHttp1CompatibilityMode: false })
+    writeHttp1CompatibilityMarker(userDataPath, true, 'profile-b')
+
+    expect(shouldDisableHttp2ForElectronNetworking({ env: {}, userDataPath })).toBe(true)
+  })
+
+  it('fails closed when a profile database exists without a trusted marker', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-http1-profile-'))
+    tempDirs.push(userDataPath)
+    const profileDirectory = createProfileState(userDataPath, 'profile-b', {
+      electronHttp1CompatibilityMode: true
+    })
+    writeFileSync(join(profileDirectory, 'profile-state.db'), 'sqlite-present', 'utf-8')
+
+    expect(shouldDisableHttp2ForElectronNetworking({ env: {}, userDataPath })).toBe(false)
   })
 
   it('appends Electron disable-http2 before sessions are created', async () => {
@@ -890,39 +940,6 @@ describe('safe graphics mode startup switches', () => {
       'disable-features',
       'IntensiveWakeUpThrottling'
     )
-  })
-
-  // Why: the defect was the call site, not the switch — a win32 safe-graphics launch runs
-  // `if (!gpuFallbackActiveThisLaunch) enableMainProcessGpuFeatures()` and skips everything
-  // parked inside it, so only an unconditional call site reaches the users a GPU crash already hit.
-  it('calls the throttling opt-out outside the GPU-fallback gate in preflight', () => {
-    const mainSource = readFileSync(join(__dirname, 'main-process-preflight.ts'), 'utf8')
-    const gateStart = mainSource.indexOf('if (!state.gpuFallbackActiveThisLaunch) {')
-    expect(gateStart).toBeGreaterThanOrEqual(0)
-    const gateEnd = mainSource.indexOf('\n  }', gateStart)
-    expect(gateEnd).toBeGreaterThan(gateStart)
-
-    expect(mainSource.match(/\boptOutOfHiddenPageWakeUpThrottling\(\)/g)).toHaveLength(1)
-    expect(mainSource.slice(gateStart, gateEnd)).not.toContain('optOutOfHiddenPageWakeUpThrottling')
-  })
-
-  // Why: Chromium consumes the command line at ready, so this must stay in the pre-ready
-  // top-level block and never move into the whenReady callback, where appendSwitch is a silent
-  // no-op — the same invisible failure as parking it behind the GPU gate.
-  it('appends the throttling opt-out before app ready in preflight', () => {
-    const mainSource = readFileSync(join(__dirname, 'main-process-preflight.ts'), 'utf8')
-    const entrySource = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
-    const preflightEnd = mainSource.indexOf('\n  return true')
-    const readyStart = entrySource.indexOf('void app.whenReady()')
-    const preflightCall = entrySource.indexOf('runMainProcessPreflight({')
-    expect(preflightEnd).toBeGreaterThan(0)
-    expect(readyStart).toBeGreaterThan(0)
-    expect(preflightCall).toBeGreaterThanOrEqual(0)
-    expect(preflightCall).toBeLessThan(readyStart)
-
-    const callIndex = mainSource.indexOf('optOutOfHiddenPageWakeUpThrottling()')
-    expect(callIndex).toBeGreaterThan(0)
-    expect(callIndex).toBeLessThan(preflightEnd)
   })
 
   // Why: Chromium enables IntensiveWakeUpThrottling on every desktop platform, so the opt-out

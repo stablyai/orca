@@ -146,11 +146,16 @@ function resultText(value: unknown): string {
     .join('\n')
 }
 
+export function claudeToolResultId(part: Record<string, unknown> | null): string | null {
+  const toolUseId = claudeText(part?.tool_use_id)
+  return part?.type === 'tool_result' ? toolUseId : null
+}
+
 export function claudeToolResults(envelope: ClaudeMessageEnvelope): ClaudeToolResult[] {
   return envelope.content.flatMap((value) => {
     const part = claudeRecord(value)
-    const toolUseId = claudeText(part?.tool_use_id)
-    return part?.type === 'tool_result' && toolUseId
+    const toolUseId = claudeToolResultId(part)
+    return part && toolUseId
       ? [
           {
             toolUseId,

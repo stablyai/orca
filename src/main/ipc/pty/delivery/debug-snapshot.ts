@@ -46,13 +46,14 @@ export function buildMainDeliveryDiagnostics(session: PtyIpcSession): PtyMainDel
     })
   }
   perPty.sort((a, b) => b.inFlightChars + b.pendingChars - (a.inFlightChars + a.pendingChars))
-  const windowAlive = !session.mainWindow.isDestroyed()
+  const { mainWindow } = session
+  const windowAlive = mainWindow && !mainWindow.isDestroyed()
   return {
     appVersion: getAppEnvironment().getVersion(),
     mainUptimeMs: Math.round(process.uptime() * 1000),
-    windowFocused: windowAlive ? session.mainWindow.isFocused() : null,
-    windowVisible: windowAlive ? session.mainWindow.isVisible() : null,
-    windowMinimized: windowAlive ? session.mainWindow.isMinimized() : null,
+    windowFocused: windowAlive ? mainWindow.isFocused() : null,
+    windowVisible: windowAlive ? mainWindow.isVisible() : null,
+    windowMinimized: windowAlive ? mainWindow.isMinimized() : null,
     msSinceLastPowerSuspend: lastPowerSuspendAtMs === null ? null : now - lastPowerSuspendAtMs,
     msSinceLastPowerResume: lastPowerResumeAtMs === null ? null : now - lastPowerResumeAtMs,
     perPty: perPty.slice(0, DELIVERY_DIAGNOSTICS_MAX_PTYS),

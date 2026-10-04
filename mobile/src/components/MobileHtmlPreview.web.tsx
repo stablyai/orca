@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Code, Eye } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { htmlPreviewWithInertLinks } from './html-preview-inert-links'
+import { useHtmlPreviewLinkGrant } from './use-html-preview-link-grant'
 // The native component's own prop type, so a change to it fails here rather than drifting.
 import type { MobileHtmlPreviewProps } from './MobileHtmlPreview'
 
@@ -21,8 +23,23 @@ import type { MobileHtmlPreviewProps } from './MobileHtmlPreview'
  * a user click produces exactly one top-frame navigation, while a `<meta http-equiv="refresh">`, a
  * form submit and `target="_blank"` produce none, and with scripts deliberately enabled a
  * script-initiated `window.top.location` throws `SecurityError`. Only a human's tap gets out.
+ *
+ * And only if the shell on the other side of that tap has somewhere to send it. A shell built
+ * before the cancelled-navigation event drops the navigation in silence, so `externalNavigation` is
+ * asked for first (C8.1, ruling 37.2) and without it the artifact renders with its links as text.
+ * Hidden and not degraded: the document paints, the toggle works, the Source tab is untouched.
  */
 export const MOBILE_HTML_PREVIEW_SANDBOX = 'allow-top-navigation-by-user-activation'
+
+/**
+ * The same frame against a shell that cannot open what a tap would aim at.
+ *
+ * The token buys nothing there: the shell cancels the navigation and drops it, so a tap would do
+ * nothing and the page would be offering an affordance it cannot honour. Dropping it is the second
+ * of the two fences the inert-link pass sets -- see `html-preview-inert-links.ts` for why neither
+ * stands in for the other. Everything else about the frame is unchanged, opaque origin and all.
+ */
+export const MOBILE_HTML_PREVIEW_SEALED_SANDBOX = ''
 
 /**
  * Web sibling: the artifact rendered in a sealed frame, with the native component's Preview/Source
@@ -53,6 +70,14 @@ export const MOBILE_HTML_PREVIEW_SANDBOX = 'allow-top-navigation-by-user-activat
  */
 export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps) {
   const [mode, setMode] = useState<'preview' | 'source'>('preview')
+  // The shell's answer for this session, asked once: the page mounts after `init` and a session's
+  // grants do not change for the life of the document.
+  const linksOpen = useHtmlPreviewLinkGrant()
+  // Only the path that rewrites pays for a parse, and only when the artifact changes.
+  const rendered = useMemo(
+    () => (linksOpen ? html : htmlPreviewWithInertLinks(html)),
+    [html, linksOpen]
+  )
 
   return (
     <View style={styles.container}>
@@ -85,7 +110,10 @@ export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps
           <Text style={styles.toggleText}>Source</Text>
         </Pressable>
       </View>
-      {mode === 'preview' ? <PreviewFrame html={html} /> : renderSource()}
+      {/* The Source tab shows what the author wrote, never the rewrite: the rewrite is a rendering
+          decision about this shell, and a reader who flipped to Source to read the markup would
+          otherwise be shown markup that was never in the artifact. */}
+      {mode === 'preview' ? <PreviewFrame html={rendered} linksOpen={linksOpen} /> : renderSource()}
     </View>
   )
 }
@@ -97,12 +125,12 @@ export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps
  * for it, and `srcdoc` is set as an attribute so React never has to be told the content is trusted:
  * the browser parses it inside a frame that can run nothing.
  */
-function PreviewFrame({ html }: { html: string }) {
+function PreviewFrame({ html, linksOpen }: { html: string; linksOpen: boolean }) {
   return (
     <View style={styles.frame}>
       <iframe
         title="HTML preview"
-        sandbox={MOBILE_HTML_PREVIEW_SANDBOX}
+        sandbox={linksOpen ? MOBILE_HTML_PREVIEW_SANDBOX : MOBILE_HTML_PREVIEW_SEALED_SANDBOX}
         srcDoc={html}
         style={IFRAME_STYLE}
         // The artifact is untrusted, so nothing it navigates to may learn where it came from or

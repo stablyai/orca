@@ -11,6 +11,56 @@ import {
 } from './agent-process-recognition'
 
 describe('agent process recognition', () => {
+  it.each([
+    '/usr/local/bin/dsb',
+    '/usr/bin/deepseek-build',
+    'C:\\Users\\dev\\bin\\dsb.cmd',
+    'C:\\Users\\dev\\bin\\deepseek-build-agent.exe'
+  ])('recognizes manually started DeepSeek Build at %s', (processName) => {
+    expect(recognizeAgentProcess(processName)?.agent).toBe('dsb')
+  })
+
+  it('recognizes DeepSeek Build by binary name and its npm shim', () => {
+    expect(recognizeAgentProcess('dsb')).toEqual({ agent: 'dsb', processName: 'dsb' })
+    expect(recognizeAgentProcess('deepseek-build')).toEqual({
+      agent: 'dsb',
+      processName: 'deepseek-build'
+    })
+    expect(recognizeAgentProcess('deepseek-build-agent')).toEqual({
+      agent: 'dsb',
+      processName: 'deepseek-build-agent'
+    })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /usr/lib/node_modules/@innocarpe/deepseek-build/npm/bin/dsb.js'
+      )
+    ).toEqual({ agent: 'dsb', processName: 'dsb' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /usr/lib/node_modules/@innocarpe/deepseek-build/npm/bin/dsb.js run "explain this"'
+      )
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('dsb run "explain this"')).toBeNull()
+  })
+
+  it.each([
+    '-r ./preload.js',
+    '--require "./preload path.js"',
+    '--import ./preload.mjs',
+    '--loader ./loader.mjs',
+    '--experimental-loader ./loader.mjs',
+    '--require=./preload.js',
+    '--import=./preload.mjs'
+  ])('excludes a one-shot DSB npm shim after Node options %s', (options) => {
+    const shim = `node ${options} /usr/lib/node_modules/@innocarpe/deepseek-build/npm/bin/dsb.js`
+    expect(recognizeAgentProcessFromCommandLine(`${shim} run "task"`)).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(`${shim} run "task"`, { includeHeadlessOneShot: true })
+        ?.agent
+    ).toBe('dsb')
+    expect(recognizeAgentProcessFromCommandLine(`${shim} agent`)?.agent).toBe('dsb')
+  })
+
   it('recognizes packaged Codex foreground process names', () => {
     expect(recognizeAgentProcess('codex-aarch64-ap')).toEqual({
       agent: 'codex',
@@ -53,6 +103,13 @@ describe('agent process recognition', () => {
       expect(recognizeAgentProcessFromCommandLine(command)).toBeNull()
       expect(detectExplicitPiAgentKindFromCommand(command)).toBeNull()
     }
+  })
+
+  it('recognizes both published DeepSeek Build npm entrypoints and excludes run with cwd', () => {
+    const shim = '/usr/lib/node_modules/@innocarpe/deepseek-build/npm/bin/deepseek-build.js'
+    expect(recognizeAgentProcessFromCommandLine(`node ${shim}`)?.agent).toBe('dsb')
+    expect(recognizeAgentProcessFromCommandLine(`node ${shim} --cwd folder run task`)).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('dsb --cwd folder run task')).toBeNull()
   })
 
   it('recognizes the OpenClaude foreground process', () => {
@@ -202,6 +259,68 @@ describe('agent process recognition', () => {
     expect(recognizeAgentProcessFromCommandLine('traecli -- "--print the release notes"')).toEqual({
       agent: 'trae',
       processName: 'traecli'
+    })
+  })
+
+  it('recognizes Muse by its muse binary', () => {
+    expect(recognizeAgentProcess('muse')).toEqual({
+      agent: 'muse',
+      processName: 'muse'
+    })
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/muse')).toEqual({
+      agent: 'muse',
+      processName: 'muse'
+    })
+    expect(isExpectedAgentProcess('/Users/dev/.local/bin/muse', 'muse')).toBe(true)
+    expect(isRecognizedAgentType('muse')).toBe(true)
+  })
+
+  it('recognizes Muse by its versioned muse-bin sibling binary', () => {
+    // Why: the `muse` launcher execs `muse-bin-<version>` (a 242MB sibling),
+    // so the live foreground process carries the versioned name — truncated
+    // to `muse-bin-1.0.3-R` in macOS comm output (verified on-device).
+    expect(recognizeAgentProcess('muse-bin-1.0.3-R2198.1')).toEqual({
+      agent: 'muse',
+      processName: 'muse-bin-1.0.3-r2198.1'
+    })
+    expect(recognizeAgentProcess('muse-bin-1.0.3-R')).toEqual({
+      agent: 'muse',
+      processName: 'muse-bin-1.0.3-r'
+    })
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/muse-bin-1.0.3-R2198.1')).toEqual({
+      agent: 'muse',
+      processName: 'muse-bin-1.0.3-r2198.1'
+    })
+  })
+
+  it('does not recognize Muse headless exec commands as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('muse exec "summarize this diff"')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine('muse exec --json "review this" > result.jsonl')
+    ).toBeNull()
+    // Why: a bare `exec` token dispatches as the subcommand even past `--`
+    // (verified: `muse -- resume` still resumes), so this errors instead of
+    // hosting a pane — never an interactive agent.
+    expect(recognizeAgentProcessFromCommandLine('muse -- exec "summarize this diff"')).toBeNull()
+    // Why: a whole-prompt `muse 'exec'` takes the exec missing-prompt error
+    // path, not a TUI, so filtering it is correct.
+    expect(recognizeAgentProcessFromCommandLine("muse 'exec'")).toBeNull()
+    // Why: `muse resume` reopens the interactive TUI, so it still hosts a live session.
+    expect(recognizeAgentProcessFromCommandLine('muse resume')).toEqual({
+      agent: 'muse',
+      processName: 'muse'
+    })
+    // Why: `muse -- resume` still dispatches to the resume subcommand (verified
+    // against muse 1.0.3), which reopens the interactive TUI.
+    expect(recognizeAgentProcessFromCommandLine('muse -- resume')).toEqual({
+      agent: 'muse',
+      processName: 'muse'
+    })
+    // Why: the prompt is one quoted argv, so it never equals the bare `exec`
+    // token — this is the interactive pane Orca itself launches.
+    expect(recognizeAgentProcessFromCommandLine('muse -- "exec the release notes"')).toEqual({
+      agent: 'muse',
+      processName: 'muse'
     })
   })
 
@@ -432,6 +551,55 @@ describe('agent process recognition', () => {
     expect(recognizeAgentProcess('grok-0.2.51')).toEqual({
       agent: 'grok',
       processName: 'grok-0.2.51'
+    })
+  })
+
+  it('recognizes the versioned Muse binary execed by the launcher', () => {
+    expect(recognizeAgentProcess('muse-bin-1.3.0-r3401.1')).toEqual({
+      agent: 'muse',
+      processName: 'muse-bin-1.3.0-r3401.1'
+    })
+    expect(
+      recognizeAgentProcessFromCommandLine('/Users/dev/.local/bin/muse-bin-1.3.0-R3401.1')
+    ).toEqual({
+      agent: 'muse',
+      processName: 'muse-bin-1.3.0-r3401.1'
+    })
+    // Why: Linux truncates comm to 15 chars, so `muse-bin-1.0.3-R…` rows still match.
+    expect(recognizeAgentProcess('muse-bin-1.0.3-R')).toEqual({
+      agent: 'muse',
+      processName: 'muse-bin-1.0.3-r'
+    })
+    expect(recognizeAgentProcess('muse-workbench')).toBeNull()
+    expect(isRecognizedAgentType('muse-bin-1.3.0-R3401.1')).toBe(true)
+    expect(isExpectedAgentProcess('muse', 'muse')).toBe(true)
+    expect(isExpectedAgentProcess('muse-bin-1.3.0-R3401.1', 'muse')).toBe(true)
+    expect(isExpectedAgentProcess('/Users/dev/.local/bin/muse-bin-1.3.0-R3401.1', 'muse')).toBe(
+      true
+    )
+    expect(isExpectedAgentProcess('not-muse', 'muse')).toBe(false)
+    expect(isExpectedAgentProcess('muse-workbench', 'muse')).toBe(false)
+  })
+
+  it('does not recognize Muse headless exec runs as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('muse exec "summarize this diff"')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        '/Users/dev/.local/bin/muse-bin-1.3.0-R3401.1 exec --session-id abc "hi"'
+      )
+    ).toBeNull()
+    // Why: `exec` past any position is never the TUI — `muse exec` dispatches headless
+    // while `muse <flags> exec` fails fast with an arg error (verified on Muse 1.3.0).
+    expect(recognizeAgentProcessFromCommandLine('muse -- exec "summarize this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('muse --yolo exec "hi"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('muse -- yolo')).toEqual({
+      agent: 'muse',
+      processName: 'muse'
+    })
+    // Why: subcommand dispatch is case-sensitive, so an uppercase prompt is the TUI.
+    expect(recognizeAgentProcessFromCommandLine("muse 'EXEC'")).toEqual({
+      agent: 'muse',
+      processName: 'muse'
     })
   })
 })

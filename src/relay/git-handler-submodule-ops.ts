@@ -9,8 +9,8 @@
  */
 import * as path from 'node:path'
 import { buildDiffResult } from './git-diff-result'
-import { parseBranchDiff } from './git-handler-utils'
-import { parseNumstat } from '../shared/git-uncommitted-line-stats'
+import { isGitReadInterruptedError } from './git-buffer-overflow'
+import { gitChangeListArgs, parseGitChangeList } from '../shared/git-change-list'
 import { readBlobAtOid, type GitBufferExec, type GitExec } from './git-handler-ops'
 
 /**
@@ -133,7 +133,10 @@ export async function listSubmodulePaths(git: GitExec, worktreePath: string): Pr
               .replace(/\/+$/, '')
       })
       .filter((value) => value.length > 0)
-  } catch {
+  } catch (error) {
+    if (isGitReadInterruptedError(error)) {
+      throw error
+    }
     return []
   }
 }
@@ -236,28 +239,12 @@ export async function computeSubmoduleRangeEntries(
   fromOid: string,
   toOid: string
 ): Promise<Record<string, unknown>[]> {
-  let nameStatus = ''
-  let numstat = ''
   try {
-    const [statusResult, numstatResult] = await Promise.all([
-      git(
-        ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', fromOid, toOid],
-        submoduleWorktreePath
-      ),
-      git(
-        ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M', '-C', fromOid, toOid],
-        submoduleWorktreePath
-      )
-    ])
-    nameStatus = statusResult.stdout
-    numstat = numstatResult.stdout
+    const { stdout } = await git(gitChangeListArgs(fromOid, toOid), submoduleWorktreePath)
+    return parseGitChangeList(stdout).map((entry) => ({ ...entry, area: 'unstaged' }))
   } catch {
     return []
   }
-  return parseBranchDiff(nameStatus, parseNumstat(numstat)).map((entry) => ({
-    ...entry,
-    area: 'unstaged'
-  }))
 }
 
 /**

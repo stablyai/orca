@@ -1,6 +1,7 @@
 import {
   keybindingMatchesAction,
   type KeybindingInput,
+  type KeybindingActionId,
   type KeybindingMatchOptions,
   type KeybindingOverrides,
   type TerminalShortcutPolicy
@@ -31,7 +32,7 @@ export type TerminalShortcutEvent = {
 // Shared close-chord predicate: the terminal pane (L3) and the floating panel's focused-terminal
 // branch (L2) both treat terminal.closePane OR a terminal-scope tab.close as "close the active
 // pane," so the two layers can't diverge. Callers pass the options each binding needs —
-// terminal.closePane is context-free; tab.close is scoped to the terminal surface.
+// both bindings use the caller’s terminal priority policy.
 export function isTerminalPaneCloseChord(
   event: KeybindingInput,
   platform: NodeJS.Platform,
@@ -88,77 +89,75 @@ export function resolveTerminalShortcutAction(
   getWindowsShiftEnterEncoding?: () => WindowsShiftEnterEncoding,
   // Why: keybindings follow the client OS, but byte protocols follow the PTY host — they differ for macOS clients on Windows runtimes.
   isWindowsTerminalHost: () => boolean = () => isWindows,
-  // Why: gates the tab.close pane-close alias — under terminal-first a remapped tab.close yields to the shell (terminal.closePane, scope terminal, still closes).
+  // Why: terminal-first yields editing and TUI chords before xterm encodes them.
   terminalShortcutPolicy: TerminalShortcutPolicy = 'orca-first',
   // Why: query-only Droid/Grok consumers need CSI-u even when the live kitty flags remain inactive.
   hasCtrlEnterCsiUAuthority?: () => boolean
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
+  const matchOptions: KeybindingMatchOptions = { context: 'terminal', terminalShortcutPolicy }
+  const matches = (action: KeybindingActionId): boolean =>
+    keybindingMatchesAction(action, event, platform, keybindings, matchOptions)
 
   // Why: capture this chord even on repeat without blocking the OS default input-source switch.
-  if (keybindingMatchesAction('terminal.switchInputSource', event, platform, keybindings)) {
+  if (matches('terminal.switchInputSource')) {
     return { type: 'switchInputSource' }
   }
 
-  // Why: held select-all keydowns must remain claimed until keyup so Kitty
-  // event reporting cannot encode their repeat or release into the PTY.
-  if (keybindingMatchesAction('terminal.selectAll', event, platform, keybindings)) {
+  // Why: held select-all and copy keydowns must remain claimed until keyup so
+  // Kitty event reporting cannot encode their repeat or release into the PTY.
+  if (matches('terminal.selectAll')) {
     return { type: 'selectAll' }
   }
 
-  if (!event.repeat) {
-    if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
-      return { type: 'copySelection' }
-    }
+  if (matches('terminal.copySelection')) {
+    return { type: 'copySelection' }
+  }
 
-    if (keybindingMatchesAction('terminal.search', event, platform, keybindings)) {
+  if (!event.repeat) {
+    if (matches('terminal.search')) {
       return { type: 'toggleSearch' }
     }
 
-    if (keybindingMatchesAction('terminal.clear', event, platform, keybindings)) {
+    if (matches('terminal.clear')) {
       return { type: 'clearActivePane' }
     }
 
-    if (keybindingMatchesAction('terminal.focusPreviousPane', event, platform, keybindings)) {
+    if (matches('terminal.focusPreviousPane')) {
       return { type: 'focusPane', direction: 'previous' }
     }
 
-    if (keybindingMatchesAction('terminal.focusNextPane', event, platform, keybindings)) {
+    if (matches('terminal.focusNextPane')) {
       return { type: 'focusPane', direction: 'next' }
     }
 
-    if (keybindingMatchesAction('terminal.equalizePaneSizes', event, platform, keybindings)) {
+    if (matches('terminal.equalizePaneSizes')) {
       return { type: 'equalizePaneSizes' }
     }
 
-    if (keybindingMatchesAction('terminal.expandPane', event, platform, keybindings)) {
+    if (matches('terminal.expandPane')) {
       return { type: 'toggleExpandActivePane' }
     }
 
-    if (keybindingMatchesAction('terminal.setTitle', event, platform, keybindings)) {
+    if (matches('terminal.setTitle')) {
       return { type: 'setTitle' }
     }
 
-    if (keybindingMatchesAction('terminal.clearPaneTitle', event, platform, keybindings)) {
+    if (matches('terminal.clearPaneTitle')) {
       return { type: 'clearPaneTitle' }
     }
 
     // Why: recognize the active tab.close binding as a pane-close alias too, so a user who remaps
     // tab.close alone still closes the focused split pane (never the whole tab); L2 always defers to us.
-    if (
-      isTerminalPaneCloseChord(event, platform, keybindings, undefined, {
-        context: 'terminal',
-        terminalShortcutPolicy
-      })
-    ) {
+    if (isTerminalPaneCloseChord(event, platform, keybindings, matchOptions, matchOptions)) {
       return { type: 'closeActivePane' }
     }
 
-    if (keybindingMatchesAction('terminal.splitRight', event, platform, keybindings)) {
+    if (matches('terminal.splitRight')) {
       return { type: 'splitActivePane', direction: 'vertical' }
     }
 
-    if (keybindingMatchesAction('terminal.splitDown', event, platform, keybindings)) {
+    if (matches('terminal.splitDown')) {
       return { type: 'splitActivePane', direction: 'horizontal' }
     }
   }

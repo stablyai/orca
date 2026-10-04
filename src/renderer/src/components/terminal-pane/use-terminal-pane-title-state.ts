@@ -17,7 +17,7 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
     managerRef,
     paneTransportsRef,
     setPtyRecoveryStatesByPaneId,
-    setSessionStateSaveFailureOpen,
+    setSessionStateSaveFailureMessage,
     setTerminalError,
     setTerminalErrorsByPaneId,
     sshReconnectOwnsTerminalErrorsRef
@@ -89,7 +89,7 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
     if (isTerminalSessionStateSaveFailure(message)) {
       setTerminalError(null)
       setTerminalErrorsByPaneId({})
-      setSessionStateSaveFailureOpen(true)
+      setSessionStateSaveFailureMessage(message)
       return
     }
     const visibleMessage = sshReconnectOwnsTerminalErrorsRef.current

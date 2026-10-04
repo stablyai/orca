@@ -8,6 +8,7 @@ import { getCachedWslDistros, hasCachedWslDistros, listRunningWslHomeDirsAsync }
 import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
 import type { AiVaultScanOptions } from './session-scanner-types'
+import { prepareOpenCodeWslReaders } from './opencode-wsl-runtime-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
 import {
@@ -57,7 +58,7 @@ export function configureAiVaultSessionSources(next: AiVaultSessionSources): voi
  */
 export async function localAiVaultScanRoots(): Promise<
   Required<Pick<AiVaultScanOptions, 'additionalCodexSessionsDirs' | 'wslHomeDirs'>> &
-    Pick<AiVaultScanOptions, 'executionHostId'>
+    Pick<AiVaultScanOptions, 'executionHostId' | 'wslOpenCodeReaders'>
 > {
   const [additionalCodexHomes, wslHomeDirs] = await Promise.all([
     filterPathsToRunningWslDistrosAsync(configuredAdditionalCodexHomePaths()),
@@ -66,6 +67,7 @@ export async function localAiVaultScanRoots(): Promise<
   return {
     additionalCodexSessionsDirs: additionalCodexHomes.map((homePath) => join(homePath, 'sessions')),
     wslHomeDirs,
+    wslOpenCodeReaders: await prepareOpenCodeWslReaders(wslHomeDirs),
     // Why: this scan is always host-local; callers addressing this host by a
     // runtime id get the result restamped at the RPC edge, never rescanned.
     executionHostId: LOCAL_EXECUTION_HOST_ID
@@ -83,7 +85,10 @@ export async function listAiVaultSessions(
   options: { signal?: AbortSignal } = {}
 ): Promise<AiVaultListResult> {
   // Scope paths change the result set, so they must be part of the cache key.
-  const key = JSON.stringify({ scopePaths: [...new Set(args?.scopePaths ?? [])].sort() })
+  const key = JSON.stringify({
+    scopePaths: [...new Set(args?.scopePaths ?? [])].sort(),
+    includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions === true
+  })
   const depth = requestedAiVaultSessionDepth(args)
   const scanKey = JSON.stringify({ key, depth })
   const now = Date.now()
@@ -111,6 +116,7 @@ export async function listAiVaultSessions(
     start: async (scanSignal) => {
       const result = await scanAiVaultSessionsInBackground(
         {
+          includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions,
           limit: args?.limit,
           unlimited: args?.unlimited,
           scopePaths: args?.scopePaths,

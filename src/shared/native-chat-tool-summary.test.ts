@@ -5,7 +5,6 @@ import {
   createToolInputDisplay,
   describeToolInput,
   formatToolInput,
-  isStructuredToolInput,
   MAX_TOOL_DETAIL_LENGTH,
   summarizeToolInput,
   summarizeToolRun,
@@ -175,7 +174,6 @@ describe('Codex JSON-string tool arguments', () => {
     expect(toolFilePath('{"file_path":"src/index.ts"}')).toBe('src/index.ts')
     expect(briefToolArg('{"file_path":"src/app/index.ts"}')).toBe('index.ts')
     expect(briefToolArg('{"cmd":"git status --short"}')).toBe('git status --short')
-    expect(isStructuredToolInput('{"cmd":"ls"}')).toBe(true)
   })
 
   it('joins an argv-array command into one label', () => {
@@ -187,20 +185,8 @@ describe('Codex JSON-string tool arguments', () => {
     expect(describeToolInput('{ not json')).toBe('{ not json')
     expect(formatToolInput('just prose')).toBe('just prose')
     expect(toolFilePath('{"file_path":')).toBeNull()
-    expect(isStructuredToolInput('just prose')).toBe(false)
     // A JSON scalar is not an argument object — keep the literal text.
     expect(formatToolInput('"quoted"')).toBe('"quoted"')
-  })
-})
-
-describe('isStructuredToolInput', () => {
-  it('does not offer an expander whose detail would repeat the row label', () => {
-    // `{}` formats back to `{}` — the label itself.
-    expect(isStructuredToolInput({})).toBe(false)
-    expect(isStructuredToolInput([])).toBe(false)
-    expect(isStructuredToolInput('{}')).toBe(false)
-    expect(isStructuredToolInput({ command: 'ls' })).toBe(true)
-    expect(isStructuredToolInput([1])).toBe(true)
   })
 })
 

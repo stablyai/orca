@@ -1,3 +1,4 @@
+import type { SecretAtRestProtection } from './secret-at-rest-protection'
 // 'cloud' = Atlassian Cloud (email + API token, Basic auth, REST v3).
 // 'server' = self-hosted Jira Server/Data Center (personal access token,
 // Bearer auth, REST v2). Older stored sites omit the field and mean 'cloud'.
@@ -30,6 +31,9 @@ export type JiraConnectionStatus = {
   // Set when a stored token file exists but could not be decrypted, so the
   // UI can explain reads failing while the connection still looks saved.
   credentialError?: string
+  // 'plaintext' when any stored token is unsealed, so Settings can warn. Optional:
+  // an older remote host omits it, and absent must read as "unknown", not "sealed".
+  credentialProtection?: SecretAtRestProtection | null
 }
 
 export type JiraProject = {

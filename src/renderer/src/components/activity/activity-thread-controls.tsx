@@ -10,8 +10,8 @@ import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   formatAbsoluteDate,
+  activityThreadStatusId,
   formatRelativeTime,
-  threadAgentState,
   threadAgentStateLabel
 } from './activity-thread-presentation'
 import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
@@ -88,7 +88,7 @@ export function ThreadAgentStateIndicator({
 }: {
   thread: AgentPaneThread
 }): React.JSX.Element {
-  const state = threadAgentState(thread)
+  const state = activityThreadStatusId(thread)
   const label = threadAgentStateLabel(thread)
   return (
     <Tooltip>

@@ -179,32 +179,37 @@ describe('grok launch args', () => {
   })
 })
 
-describe('grok agentArgsOverride', () => {
-  const modelOverride = GROK_SESSION_OPTION_CATALOG.modelApply.agentArgsOverride!
-  const effortOverride = grokEffortOption().apply.agentArgsOverride!
+describe('grok agent-arg overrides', () => {
+  const removeModel = GROK_SESSION_OPTION_CATALOG.modelApply.removeAgentArgs!
+  const removeEffort = grokEffortOption().apply.removeAgentArgs!
 
-  it('detects a user-supplied model flag in every spelling', () => {
+  it('strips a user-supplied model flag in every spelling', () => {
     for (const tokens of [
       ['-m', 'grok-build'],
       ['-mgrok-build'],
       ['--model', 'grok-build'],
       ['--model=grok-build']
     ]) {
-      expect(modelOverride(tokens)).toBe(true)
+      expect(removeModel(tokens)).toEqual([])
     }
   })
 
   it('does not fire on a different flag or a positional that contains -m', () => {
-    expect(modelOverride(['--model-context', '8000'])).toBe(false)
-    expect(modelOverride(['summarize-my-diff'])).toBe(false)
-    expect(modelOverride(['--reasoning-effort', 'low'])).toBe(false)
-    expect(modelOverride([])).toBe(false)
+    for (const tokens of [
+      ['--model-context', '8000'],
+      ['summarize-my-diff'],
+      ['--reasoning-effort', 'low'],
+      []
+    ]) {
+      expect(removeModel(tokens)).toEqual(tokens)
+    }
   })
 
-  it('detects both effort spellings', () => {
-    expect(effortOverride(['--effort', 'low'])).toBe(true)
-    expect(effortOverride(['--reasoning-effort=low'])).toBe(true)
-    expect(effortOverride(['--effortless'])).toBe(false)
+  it('strips both effort spellings', () => {
+    expect(removeEffort(['--effort', 'low', '--reasoning-effort=high', '--keep'])).toEqual([
+      '--keep'
+    ])
+    expect(removeEffort(['--effortless'])).toEqual(['--effortless'])
   })
 
   it('drops only the overridden key from the launch record', () => {

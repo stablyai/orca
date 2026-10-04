@@ -1,5 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { splitFreebuffScreenUpdates } from '../../shared/freebuff-screen-status'
 import { OrcaRuntimeWithSerializeMainTerminalBuffer } from './orca-runtime-serialize-main-terminal-buffer'
+import { observeFreebuffTerminalStatus } from './freebuff-terminal-status'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import { detectAgentStatusFromTitle, normalizeTerminalTitle } from '../../shared/agent-detection'
 import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
@@ -125,6 +127,8 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     // once a live title was observed, so live state always wins.
     this.getOrCreatePtyTitleTrackerEntry(ptyId).tracker.seedInitialTitle(title)
     const status = detectAgentStatusFromTitle(title)
+    // Why evidence, not display: display readers project a stale-working clear over the record,
+    // so re-seeding the native working title cannot bring a cleared spinner back.
     // Why: live observations store normalized titles, so seeds must match —
     // otherwise the first live frame after hydration compares unequal and
     // touches session tabs once for no visible change.
@@ -171,7 +175,30 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
       // Why inside the chain: the ownership mirror must observe live bytes in
       // the same total order as seeds (seedOwner also runs on this chain).
       state.ownership.scan(data)
-      await state.emulator.write(data, { forwardQueryReplies })
+      for (const chunk of splitFreebuffScreenUpdates(data, state.emulator.partialEscapeTailAnsi)) {
+        await state.emulator.write(chunk, { forwardQueryReplies })
+        const pty = this.ptysById.get(ptyId)
+        if (pty && !pty.connectionId && this.headlessTerminals.get(ptyId) === state) {
+          const payload = observeFreebuffTerminalStatus(
+            state.emulator,
+            chunk,
+            this.terminalSpawnCommandsByPtyId.get(ptyId),
+            pty.launchAgent
+          )
+          if (payload) {
+            pty.lastExplicitAgentStatus = {
+              state: payload.state,
+              updatedAt: Date.now(),
+              sessionBoundary: payload.sessionBoundary
+            }
+            this.emitTerminalAgentStatusEvents(ptyId, {
+              cleanData: '',
+              payloads: [payload],
+              lastPayloadCleanOffset: null
+            })
+          }
+        }
+      }
       state.outputSequence = outputSequence
     })
     // Legacy callers remain best-effort; bounded SSH admission observes the raw receipt.

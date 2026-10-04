@@ -9,7 +9,7 @@ import {
   flattenSourceControlTree,
   type SourceControlTreeNode
 } from '@/components/right-sidebar/source-control-tree'
-import { SourceControlVirtualFileList } from '@/components/right-sidebar/source-control/listing/virtual-file-list'
+import { VirtualizedList } from '@/components/virtualized-list'
 import type { ConflictReviewEntry } from '@/store/slices/editor'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { translate } from '@/i18n/i18n'
@@ -103,7 +103,7 @@ export function ConflictReviewFileTree({
             )}
           </div>
         ) : (
-          <SourceControlVirtualFileList
+          <VirtualizedList
             rows={rows}
             scrollElement={listScrollElement}
             estimateRowHeightPx={CONFLICT_REVIEW_ROW_HEIGHT_PX}

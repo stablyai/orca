@@ -357,17 +357,19 @@ function startStoreSubscription(): void {
   if (unsubscribeStore) {
     return
   }
-  let previous: HandleGapStoreState = useAppStore.getState()
+  let { ptyIdsByTabId: previousPtyIdsByTabId, tabsByWorktree: previousTabsByWorktree } =
+    useAppStore.getState()
   unsubscribeStore = useAppStore.subscribe((state) => {
     // Why: only these two slices can release a waiter; title, status, and
     // usage ticks must not rescan every parked pane.
     if (
-      state.ptyIdsByTabId === previous.ptyIdsByTabId &&
-      state.tabsByWorktree === previous.tabsByWorktree
+      state.ptyIdsByTabId === previousPtyIdsByTabId &&
+      state.tabsByWorktree === previousTabsByWorktree
     ) {
       return
     }
-    previous = state
+    previousPtyIdsByTabId = state.ptyIdsByTabId
+    previousTabsByWorktree = state.tabsByWorktree
     retireVerdictsWithLandedHandles(state)
     releaseDueWaiters(state)
     stopStoreSubscriptionIfIdle()

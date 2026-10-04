@@ -74,7 +74,7 @@ describe('HermesHookService', () => {
     expect(config.plugins.disabled).toEqual([])
   })
 
-  it('normalizes malformed plugin lists during install', () => {
+  it('refuses malformed plugin lists during install', () => {
     writeFileSync(
       join(homeDir, 'config.yaml'),
       ['plugins:', '  enabled: "not-a-list"', '  disabled: "not-a-list"', ''].join('\n'),
@@ -83,12 +83,12 @@ describe('HermesHookService', () => {
 
     const status = new HermesHookService().install()
 
-    expect(status.state).toBe('installed')
+    expect(status.state).toBe('error')
     const config = parse(readFileSync(join(homeDir, 'config.yaml'), 'utf-8')) as {
       plugins: { enabled: string[]; disabled: string[] }
     }
-    expect(config.plugins.enabled).toEqual([_internals.HERMES_PLUGIN_NAME])
-    expect(config.plugins.disabled).toEqual([])
+    expect(config.plugins.enabled).toBe('not-a-list')
+    expect(config.plugins.disabled).toBe('not-a-list')
   })
 
   it('reports partial when the plugin exists but is not enabled', () => {

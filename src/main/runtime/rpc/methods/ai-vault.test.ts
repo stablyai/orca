@@ -3,21 +3,24 @@ import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { AiVaultScanOptions } from '../../../ai-vault/session-scanner-types'
+import type { AiVaultServiceScanOptions } from '../../../ai-vault/session-scanner-service-protocol'
 import {
   AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY,
   RUNTIME_CAPABILITIES
 } from '../../../../shared/protocol-version'
 
-const { scanAiVaultSessionsInWorker, resolveAiVaultSessionTitlesInWorker } = vi.hoisted(() => ({
-  scanAiVaultSessionsInWorker: vi.fn(),
-  resolveAiVaultSessionTitlesInWorker: vi.fn()
+const { scanAiVaultSessionsInService, resolveAiVaultSessionTitlesInService } = vi.hoisted(() => ({
+  scanAiVaultSessionsInService:
+    vi.fn<
+      (options: AiVaultServiceScanOptions, signal?: AbortSignal) => Promise<AiVaultListResult>
+    >(),
+  resolveAiVaultSessionTitlesInService: vi.fn()
 }))
 
-vi.mock('../../../ai-vault/session-scanner-worker-spawn', () => ({
-  scanAiVaultSessionsInWorker,
-  resolveAiVaultSessionTitlesInWorker,
-  resetAiVaultScannerWorkerForTests: vi.fn()
+vi.mock('../../../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  scanAiVaultSessionsInService,
+  resolveAiVaultSessionTitlesInService
 }))
 
 import {
@@ -25,6 +28,8 @@ import {
   AiVaultListSessionsParams,
   AiVaultPrepareSessionResumeParams
 } from './ai-vault'
+import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { recordStructuredAgentSessionHostInstallRefusal } from '../../structured-agent-session-host-refusal'
 import {
   configureAiVaultSessionSources,
   listAiVaultSessions,
@@ -69,13 +74,14 @@ function makeSession(): AiVaultSession {
 function makeDispatcher(): RpcDispatcher {
   // Why: the handler only needs getRuntimeId (envelope) + listAiVaultSessions,
   // which delegates to the shared cache module the IPC handler also uses.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers under test read only these three runtime members.
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     ensureStructuredAgentSessionHost: vi.fn(async () => undefined),
     listAiVaultSessions: (args?: Parameters<typeof listAiVaultSessions>[0]) =>
       listAiVaultSessions(args),
     resolveAiVaultSessionTitles: (requests: unknown[], signal?: AbortSignal) =>
-      resolveAiVaultSessionTitlesInWorker(requests, signal)
+      resolveAiVaultSessionTitlesInService(requests, signal)
   } as unknown as OrcaRuntimeService
   return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
 }
@@ -91,11 +97,11 @@ function makeFailingDispatcher(error: Error): RpcDispatcher {
 
 describe('aiVault.resolveSessionTitles handler', () => {
   beforeEach(() => {
-    resolveAiVaultSessionTitlesInWorker.mockReset()
+    resolveAiVaultSessionTitlesInService.mockReset()
   })
 
   it('advertises and routes the bounded exact-title capability', async () => {
-    resolveAiVaultSessionTitlesInWorker.mockResolvedValue({
+    resolveAiVaultSessionTitlesInService.mockResolvedValue({
       titles: [{ agent: 'codex', sessionId: 'session-1', title: 'Exact title' }]
     })
     const dispatcher = makeDispatcher()
@@ -109,12 +115,12 @@ describe('aiVault.resolveSessionTitles handler', () => {
       ok: true,
       result: { titles: [{ sessionId: 'session-1', title: 'Exact title' }] }
     })
-    expect(resolveAiVaultSessionTitlesInWorker).toHaveBeenCalledWith(requests, undefined)
+    expect(resolveAiVaultSessionTitlesInService).toHaveBeenCalledWith(requests, undefined)
     expect(RUNTIME_CAPABILITIES).toContain(AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY)
   })
 
   it('forwards transport cancellation to the background scanner', async () => {
-    resolveAiVaultSessionTitlesInWorker.mockResolvedValue({ titles: [] })
+    resolveAiVaultSessionTitlesInService.mockResolvedValue({ titles: [] })
     const dispatcher = makeDispatcher()
     const controller = new AbortController()
     const requests = [{ agent: 'codex', sessionId: 'session-1' }]
@@ -123,7 +129,7 @@ describe('aiVault.resolveSessionTitles handler', () => {
       signal: controller.signal
     })
 
-    expect(resolveAiVaultSessionTitlesInWorker).toHaveBeenCalledWith(requests, controller.signal)
+    expect(resolveAiVaultSessionTitlesInService).toHaveBeenCalledWith(requests, controller.signal)
   })
 
   it('rejects more than 64 title identities before reaching the host', async () => {
@@ -136,7 +142,7 @@ describe('aiVault.resolveSessionTitles handler', () => {
     await expect(
       dispatcher.dispatch(makeRequest('aiVault.resolveSessionTitles', { requests }))
     ).resolves.toMatchObject({ ok: false })
-    expect(resolveAiVaultSessionTitlesInWorker).not.toHaveBeenCalled()
+    expect(resolveAiVaultSessionTitlesInService).not.toHaveBeenCalled()
   })
 })
 
@@ -221,17 +227,92 @@ describe('aiVault.prepareSessionResume', () => {
   })
 })
 
+// Session history and terminal resume are not chats: a process whose chats are refused still
+// serves them, while any other host failure still fails the request.
+describe('aiVault methods without a structured host', () => {
+  const refusal = agentSessionRefusalError(
+    'agent_session_journal_unreadable',
+    { reason: 'journalCorrupt' },
+    'Unable to load this chat.'
+  )
+
+  beforeEach(() => {
+    resetAiVaultSessionListCacheForTests()
+    scanAiVaultSessionsInService.mockReset()
+    scanAiVaultSessionsInService.mockResolvedValue(makeResult())
+    recordStructuredAgentSessionHostInstallRefusal(refusal)
+  })
+
+  afterEach(() => {
+    recordStructuredAgentSessionHostInstallRefusal(null)
+    resetAiVaultSessionListCacheForTests()
+  })
+
+  function refusedDispatcher(installError: Error): RpcDispatcher {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the two aiVault handlers read only these runtime members.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      ensureStructuredAgentSessionHost: vi.fn().mockRejectedValue(installError),
+      listAiVaultSessions: (args?: Parameters<typeof listAiVaultSessions>[0]) =>
+        listAiVaultSessions(args),
+      prepareAiVaultSessionResume: vi.fn().mockResolvedValue({ useRealCodexHome: true })
+    } as unknown as OrcaRuntimeService
+    return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
+  }
+
+  it('lists and prepares a resume while chats are refused', async () => {
+    const dispatcher = refusedDispatcher(refusal)
+
+    await expect(
+      dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 500 }))
+    ).resolves.toMatchObject({ ok: true, result: makeResult() })
+    await expect(
+      dispatcher.dispatch(
+        makeRequest('aiVault.prepareSessionResume', {
+          agent: 'codex',
+          filePath: '/managed/sessions/rollout-a.jsonl',
+          codexHome: '/managed'
+        })
+      )
+    ).resolves.toMatchObject({ ok: true, result: { useRealCodexHome: true } })
+  })
+
+  it('still fails on a host error that refuses nothing', async () => {
+    const dispatcher = refusedDispatcher(new Error('the record store would not open'))
+
+    await expect(
+      dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 500 }))
+    ).resolves.toMatchObject({ ok: false })
+  })
+})
+
 describe('aiVault.listSessions handler + shared cache', () => {
   beforeEach(() => {
     resetAiVaultSessionListCacheForTests()
-    scanAiVaultSessionsInWorker.mockReset()
-    scanAiVaultSessionsInWorker.mockResolvedValue(makeResult())
-    resolveAiVaultSessionTitlesInWorker.mockReset()
-    resolveAiVaultSessionTitlesInWorker.mockResolvedValue({ titles: [] })
+    scanAiVaultSessionsInService.mockReset()
+    scanAiVaultSessionsInService.mockResolvedValue(makeResult())
+    resolveAiVaultSessionTitlesInService.mockReset()
+    resolveAiVaultSessionTitlesInService.mockResolvedValue({ titles: [] })
   })
 
   afterEach(() => {
     resetAiVaultSessionListCacheForTests()
+  })
+
+  it('isolates IDE opt-in scans from legacy clients sharing the host cache', async () => {
+    const dispatcher = makeDispatcher()
+    await dispatcher.dispatch(
+      makeRequest('aiVault.listSessions', { includeAntigravityIdeSessions: true })
+    )
+    await dispatcher.dispatch(makeRequest('aiVault.listSessions', {}))
+    await dispatcher.dispatch(makeRequest('aiVault.listSessions', {}))
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(2)
+    expect(scanAiVaultSessionsInService.mock.calls[0]?.[0]).toMatchObject({
+      includeAntigravityIdeSessions: true
+    })
+    expect(scanAiVaultSessionsInService.mock.calls[1]?.[0]?.includeAntigravityIdeSessions).not.toBe(
+      true
+    )
   })
 
   it('returns the AiVaultListResult unchanged', async () => {
@@ -275,7 +356,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
     const scopePaths = Array.from({ length: 65 }, (_, index) => `/p/${index}`)
     const response = await dispatcher.dispatch(makeRequest('aiVault.listSessions', { scopePaths }))
     expect(response).toMatchObject({ ok: true })
-    expect(scanAiVaultSessionsInWorker.mock.calls[0]?.[0]).toMatchObject({
+    expect(scanAiVaultSessionsInService.mock.calls[0]?.[0]).toMatchObject({
       scopePaths: scopePaths.slice(0, 64)
     })
   })
@@ -286,7 +367,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
     await listAiVaultSessions({ limit: 500 })
     // Second call via the RPC method with the same cache key.
     await dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 500 }))
-    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
   })
 
   it('keeps completed scans cached for one minute', async () => {
@@ -295,11 +376,11 @@ describe('aiVault.listSessions handler + shared cache', () => {
       await listAiVaultSessions({ limit: 500 })
       await vi.advanceTimersByTimeAsync(59_999)
       await listAiVaultSessions({ limit: 500 })
-      expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
+      expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
 
       await vi.advanceTimersByTimeAsync(1)
       await listAiVaultSessions({ limit: 500 })
-      expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(2)
+      expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
     }
@@ -310,14 +391,14 @@ describe('aiVault.listSessions handler + shared cache', () => {
     await listAiVaultSessions({ limit: 250 })
     await listAiVaultSessions({ limit: 500 })
 
-    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
   })
 
   it('shares a cache entry across equivalent scope path ordering', async () => {
     await listAiVaultSessions({ limit: 500, scopePaths: ['/repo/a', '/repo/b'] })
     await listAiVaultSessions({ limit: 500, scopePaths: ['/repo/b', '/repo/a'] })
 
-    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
   })
 
   it('forwards Unlimited without a numeric limit', async () => {
@@ -327,7 +408,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
     )
 
     expect(response).toMatchObject({ ok: true })
-    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledWith(
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledWith(
       expect.objectContaining({ limit: undefined, unlimited: true }),
       expect.any(AbortSignal)
     )
@@ -337,7 +418,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
     // Why: the resolving scan's cleanup must not clear tracking a concurrent
     // different-key scan replaced, or re-requests start a duplicate rescan.
     const deferreds: ((result: AiVaultListResult) => void)[] = []
-    scanAiVaultSessionsInWorker.mockImplementation(
+    scanAiVaultSessionsInService.mockImplementation(
       () => new Promise<AiVaultListResult>((resolve) => deferreds.push(resolve))
     )
     // The scanner is invoked a microtask after the call (WSL-home await), so
@@ -355,13 +436,13 @@ describe('aiVault.listSessions handler + shared cache', () => {
     // reverted guard reads 3, so this assertion — not a Promise.all hang — pins
     // the fix.
     await new Promise((resolve) => setTimeout(resolve))
-    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(2)
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(2)
     deferreds[1]?.(makeResult())
     await Promise.all([scanB, scanBAgain])
   })
 
   it('restamps the shared cached result as the addressed runtime host', async () => {
-    scanAiVaultSessionsInWorker.mockResolvedValue({
+    scanAiVaultSessionsInService.mockResolvedValue({
       sessions: [makeSession()],
       issues: [{ executionHostId: 'local', agent: 'claude', path: '/tmp', message: 'boom' }],
       scannedAt: SCANNED_AT
@@ -381,8 +462,8 @@ describe('aiVault.listSessions handler + shared cache', () => {
 
     // Why: the host id must never change what is scanned — one host-local scan
     // (and one cache entry) serves every caller; only the stamps differ.
-    expect(scanAiVaultSessionsInWorker).toHaveBeenCalledTimes(1)
-    expect(scanAiVaultSessionsInWorker.mock.calls[0]?.[0]).toMatchObject({
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
+    expect(scanAiVaultSessionsInService.mock.calls[0]?.[0]).toMatchObject({
       executionHostId: 'local'
     })
 
@@ -400,11 +481,11 @@ describe('aiVault.listSessions handler + shared cache', () => {
     })
     const dispatcher = makeDispatcher()
     await dispatcher.dispatch(makeRequest('aiVault.listSessions', {}))
-    const options = scanAiVaultSessionsInWorker.mock.calls[0]?.[0] as AiVaultScanOptions
+    const options = scanAiVaultSessionsInService.mock.calls[0]?.[0]
     // Why: the codex-home is sourced from the runtime, not the window-only
     // registerCoreHandlers path, so it survives in serve mode.
-    expect(options.additionalCodexSessionsDirs).toContain('/runtime/codex/home/sessions')
-    expect(options.wslHomeDirs).toEqual([])
+    expect(options?.additionalCodexSessionsDirs).toContain('/runtime/codex/home/sessions')
+    expect(options?.wslHomeDirs).toEqual([])
   })
 
   it('forwards codex-home through the real OrcaRuntimeService construction path', async () => {
@@ -415,7 +496,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
       getAdditionalAiVaultCodexHomePaths: () => ['/ctor/codex/home']
     })
     await runtime.listAiVaultSessions({})
-    const options = scanAiVaultSessionsInWorker.mock.calls[0]?.[0] as AiVaultScanOptions
-    expect(options.additionalCodexSessionsDirs).toContain('/ctor/codex/home/sessions')
+    const options = scanAiVaultSessionsInService.mock.calls[0]?.[0]
+    expect(options?.additionalCodexSessionsDirs).toContain('/ctor/codex/home/sessions')
   })
 })

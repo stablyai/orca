@@ -15,7 +15,20 @@ import {
 const CHILD_ALIAS_KEY_PREFIX = 'agent-child-work-alias-v1:'
 const MAX_ALIAS_PART_LENGTH = 512
 
-export type AgentChildWorkAliasKind = 'task_id' | 'tool_use_id'
+/**
+ * `thread_id` names a child by its own provider thread (a Codex subagent); `turn_id` names one run
+ * of such a child, as `tool_use_id` names one run of a task. The hook lane registers a Claude
+ * `agent_id` under `task_id` (it is the same registry id) and a Codex `agent_id` under `thread_id`;
+ * no `agent_id` kind exists on purpose.
+ */
+export const AGENT_CHILD_WORK_ALIAS_KINDS = [
+  'task_id',
+  'tool_use_id',
+  'thread_id',
+  'turn_id'
+] as const
+export type AgentChildWorkAliasKind = (typeof AGENT_CHILD_WORK_ALIAS_KINDS)[number]
+const ALIAS_KIND_SET: ReadonlySet<string> = new Set(AGENT_CHILD_WORK_ALIAS_KINDS)
 
 export type AgentChildWorkAliasIdentity = Pick<
   AgentChildWorkAliasInput,
@@ -85,6 +98,10 @@ function isKind(value: unknown): value is AgentChildWorkKind {
   )
 }
 
+function isAliasKind(value: unknown): value is AgentChildWorkAliasKind {
+  return typeof value === 'string' && ALIAS_KIND_SET.has(value)
+}
+
 export function parseAgentChildWorkAliasInput(value: unknown): AgentChildWorkAliasInput | null {
   if (
     !isRecord(value) ||
@@ -101,7 +118,7 @@ export function parseAgentChildWorkAliasInput(value: unknown): AgentChildWorkAli
     !isBoundedString(value.provider) ||
     !isBoundedString(value.segmentId) ||
     !isKind(value.kind) ||
-    (value.aliasKind !== 'task_id' && value.aliasKind !== 'tool_use_id') ||
+    !isAliasKind(value.aliasKind) ||
     !isBoundedString(value.alias) ||
     !isBoundedString(value.childWorkId)
   ) {

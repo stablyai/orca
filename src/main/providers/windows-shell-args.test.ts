@@ -308,6 +308,31 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
   })
 
+  it('keeps a plain Git Bash tab a login shell and wraps one with a startup command', () => {
+    const plain = resolveWindowsShellLaunchArgs(
+      'C:\\Program Files\\Git\\bin\\bash.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice'
+    )
+    const launched = resolveWindowsShellLaunchArgs(
+      'C:\\Program Files\\Git\\bin\\bash.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice',
+      undefined,
+      "codex 'fix the bug'"
+    )
+
+    expect(plain.shellArgs).toEqual([
+      '-c',
+      'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'
+    ])
+    // Why: without a preflight, only the rcfile carries the codex --no-daemon wrapper.
+    expect(readFileSync(getGitBashRcfilePath(launched.shellArgs[1]), 'utf8')).toContain(
+      'set -- --no-daemon "$@"'
+    )
+    expect(launched.startupCommandDeliveredInShellArgs).toBeUndefined()
+  })
+
   it('quotes a spaced preflight path through each shell environment', () => {
     const cmd = resolveWindowsShellLaunchArgs(
       'cmd.exe',

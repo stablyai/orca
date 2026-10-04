@@ -3,8 +3,6 @@
  *  and adjusted in fixed steps so Cmd/Ctrl +/-/0 behave like a browser zoom but
  *  scoped to the chat surface only. Kept DOM-free so it can be unit-tested. */
 
-import { isMacPlatform } from './native-chat-shortcut'
-
 export const MIN_CHAT_FONT_SCALE = 0.8
 export const MAX_CHAT_FONT_SCALE = 1.6
 export const DEFAULT_CHAT_FONT_SCALE = 1
@@ -12,7 +10,7 @@ export const CHAT_FONT_SCALE_STEP = 0.1
 
 /** Clamp a scale into the readable band and round away float drift so repeated
  *  steps land on clean tenths (e.g. 0.7999999 -> 0.8). */
-export function clampChatFontScale(scale: number): number {
+function clampChatFontScale(scale: number): number {
   const clamped = Math.min(MAX_CHAT_FONT_SCALE, Math.max(MIN_CHAT_FONT_SCALE, scale))
   return Math.round(clamped * 100) / 100
 }
@@ -51,19 +49,5 @@ export function chatFontScaleActionForEvent(
       return 'reset'
     default:
       return null
-  }
-}
-
-/** Human-readable labels for the chat font-scale shortcuts, platform-correct. */
-export function chatFontScaleShortcutLabels(isMac = isMacPlatform()): {
-  increase: string
-  decrease: string
-  reset: string
-} {
-  const mod = isMac ? '⌘' : 'Ctrl+'
-  return {
-    increase: `${mod}+`,
-    decrease: `${mod}-`,
-    reset: `${mod}0`
   }
 }

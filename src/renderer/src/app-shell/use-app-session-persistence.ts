@@ -4,6 +4,7 @@ import {
   isDirectSshRemoteWorkspaceApplyInProgress,
   onDirectSshRemoteWorkspaceApplyWindowClosed
 } from '../hooks/remote-workspace-snapshot-apply'
+import { terminalLayoutNodeEqual } from '../lib/terminal-layout-equality'
 import { createSessionWriteSubscriber } from '../lib/session-write-subscriber'
 import { buildActiveViewUnloadPatch } from '../lib/active-view-persist'
 import {
@@ -37,6 +38,8 @@ import {
   ORCA_RENDERER_UNLOAD_PREVENTED_EVENT
 } from '../../../shared/renderer-shutdown-events'
 import type { AppState } from '../store/types'
+import type { DirectSshLayoutEdit } from '../store/terminals/terminal-state'
+import type { RemoteWorkspaceObservedPatchResult } from '../../../shared/remote-workspace-types'
 import { applyRemoteWorkspacePushStatus } from '../hooks/remote-workspace-push-status'
 
 // Why: bound the resume-record loss window on a hard kill to ~1 min; capture skips unchanged records so per-tick cost is negligible.
@@ -89,6 +92,26 @@ function remoteWorkspaceUploadAuthorityIsCurrent(
   )
 }
 
+function captureUploadedDirectSshLayoutEdits(
+  pendingLayoutEdits: AppState['pendingDirectSshLayoutEditsByTabId'],
+  targetId: string,
+  result: RemoteWorkspaceObservedPatchResult | undefined
+): Record<string, DirectSshLayoutEdit> {
+  if (!result?.ok) {
+    return {}
+  }
+  return Object.fromEntries(
+    Object.entries(pendingLayoutEdits).flatMap(([tabId, entry]) => {
+      const uploaded = result.snapshot.session.terminalLayoutsByTabId[tabId]
+      return entry.targetId === targetId &&
+        uploaded &&
+        terminalLayoutNodeEqual(entry.root, uploaded.root)
+        ? [[tabId, entry]]
+        : []
+    })
+  )
+}
+
 /**
  * Writes durable renderer session state to disk: the debounced per-host writer, the remote
  * workspace upload chain, and the synchronous shutdown checkpoint.
@@ -108,6 +131,7 @@ export function useAppSessionPersistence(): void {
         const localWrite = patchWorkspaceSessionByHost(window.api.session, patch, state)
         void localWrite
         const uploadAuthorities = captureRemoteWorkspaceUploadAuthorities(state)
+        const pendingLayoutEdits = state.pendingDirectSshLayoutEditsByTabId
         if (uploadAuthorities.length > 0) {
           void (async () => {
             try {
@@ -141,6 +165,11 @@ export function useAppSessionPersistence(): void {
               for (const { targetId, result } of results ?? []) {
                 const authority = currentAuthorityByTargetId.get(targetId)
                 if (authority && remoteWorkspaceUploadAuthorityIsCurrent(resultState, authority)) {
+                  if (result?.ok) {
+                    resultState.acknowledgeDirectSshLayoutEdits(
+                      captureUploadedDirectSshLayoutEdits(pendingLayoutEdits, targetId, result)
+                    )
+                  }
                   applyRemoteWorkspacePushStatus(resultState, targetId, result, authority)
                 }
               }

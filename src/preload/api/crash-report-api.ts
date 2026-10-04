@@ -7,6 +7,10 @@ import type {
   ReactErrorBoundaryReportArgs,
   ReactErrorBoundaryReportResult
 } from '../../shared/crash-reporting'
+import type {
+  FeedbackSubmitArgs,
+  FeedbackSubmitResult
+} from '../../shared/feedback-submit-contract'
 import type { RendererHeapStatistics } from '../../shared/renderer-heap-statistics'
 import type { RendererProcessMemory } from '../../shared/renderer-process-memory'
 
@@ -29,13 +33,5 @@ export type CrashReportsApi = {
 }
 
 export type FeedbackApi = {
-  submit: (args: {
-    feedback: string
-    submitAnonymously?: boolean
-    githubLogin: string | null
-    githubEmail: string | null
-    images?: { contentType: string; data: Uint8Array }[]
-  }) => Promise<
-    { ok: true; imagesDelivered?: boolean } | { ok: false; status: number | null; error: string }
-  >
+  submit: (args: FeedbackSubmitArgs) => Promise<FeedbackSubmitResult>
 }

@@ -1,3 +1,4 @@
+import { prioritizeAntigravityTranscriptCandidates } from './antigravity-transcript-candidates'
 import { readCodexRolloutSessionMetaId } from '../codex/codex-rollout-session-meta'
 import { codexRolloutHardlinkIdentity, dedupeCodexRolloutAliases } from './codex-session-root-dedup'
 import { antigravityHistoryPathForBrainDir } from './session-scanner-antigravity-paths'
@@ -14,7 +15,7 @@ export async function sessionCandidatesFromDiscoveries(
   discoveries: SessionFileDiscovery[],
   options: AiVaultScanOptions
 ): Promise<SessionFileCandidate[]> {
-  return dedupeCodexRolloutAliases(
+  const candidates = await dedupeCodexRolloutAliases(
     discoveries
       .flatMap((discovery) =>
         discovery.files.map((file): SessionFileCandidate => ({
@@ -42,5 +43,9 @@ export async function sessionCandidatesFromDiscoveries(
     },
     (filePath) => readCodexRolloutSessionMetaId(filePath, options.signal, 'scan'),
     options.signal
+  )
+  return prioritizeAntigravityTranscriptCandidates(
+    candidates,
+    (candidate) => candidate.agent === 'antigravity'
   )
 }

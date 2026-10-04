@@ -102,7 +102,7 @@ async function createWindowsDefaultShellTerminalTab(
     await state.updateSettings({ terminalWindowsShell: selectedShell })
     const terminal = store.getState().createTab(worktreeId)
     store.getState().setActiveTab(terminal.id)
-    store.getState().setActiveTabType('terminal')
+    store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
     return terminal.id
   }, shell)
 
@@ -164,7 +164,7 @@ async function createWindowsProjectRuntimeTerminalTab(
 
     const terminal = store.getState().createTab(worktreeId)
     store.getState().setActiveTab(terminal.id)
-    store.getState().setActiveTabType('terminal')
+    store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
     return terminal.id
   })
 

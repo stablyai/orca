@@ -112,9 +112,8 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // src/notifications/ — push registration and delivery. Nothing is left here. Registration and
   // unregistration migrated in step 4; see mobile-push-registration-operations.ts. Tray
   // reconciliation followed once a scenario could declare the notification tray and the stored host
-  // list it resolves against; see push-dismissal-operations.ts. The stream unsubscribe inside the
-  // `notifications.subscribe` callback migrated in step 6 once the recorder could script the
-  // `ready` frame that hands it a subscription id; see desktop-notification-stream-operations.ts.
+  // list it resolves against; see push-dismissal-operations.ts. The stream's `notifications.unsubscribe`
+  // is no longer a request here: the stream transport sends it with the id from the current `ready`.
 
   // src/session/ — session screen: chat, diff review, PR actions, tabs. The github.* PR surface,
   // the diff-review loaders and the rest of the screen migrated in step 4; see
@@ -182,6 +181,7 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/transport/mobile-runtime-capability-negotiation.ts', references: 2 },
   // Sends through hostStatusProbe; the one reference left is its parameter type. Its callers do
   // not share a client type — push-registration.ts holds only the sender — so the parameter names
-  // the port itself. It reaches zero when the last such caller migrates.
-  { file: 'src/transport/runtime-capability-probe.ts', references: 1 }
+  // the port itself. It reaches zero when the last such caller migrates. Moved here from
+  // runtime-capability-probe.ts, which is now a projection of this probe and names no port.
+  { file: 'src/transport/runtime-status-probe.ts', references: 1 }
 ]

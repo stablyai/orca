@@ -41,7 +41,7 @@ describe('buildWorktreeRenameState value-owned worktree rows', () => {
     const next = buildWorktreeRenameState(
       appState({
         closedTerminalTabTombstonesByTabId: {
-          'tab-1': { closedAt: 5, worktreeId: OLD, ackRevision: 3 },
+          'tab-1': { closedAt: 5, worktreeId: OLD, reason: 'user' },
           'tab-2': { closedAt: 6, worktreeId: OTHER }
         }
       }),
@@ -49,7 +49,7 @@ describe('buildWorktreeRenameState value-owned worktree rows', () => {
       NEW
     )
     expect(next.closedTerminalTabTombstonesByTabId).toEqual({
-      'tab-1': { closedAt: 5, worktreeId: NEW, ackRevision: 3 },
+      'tab-1': { closedAt: 5, worktreeId: NEW, reason: 'user' },
       'tab-2': { closedAt: 6, worktreeId: OTHER }
     })
   })

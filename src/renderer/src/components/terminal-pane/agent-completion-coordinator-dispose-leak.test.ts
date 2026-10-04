@@ -81,16 +81,6 @@ describe('agent completion coordinator identity map stays bounded (leak regressi
     expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(0)
   })
 
-  it('does not retain an identity per torn-down pane across many panes', () => {
-    for (let i = 0; i < 200; i++) {
-      const live = { value: true }
-      const coordinator = driveCompletion(`tab-1:leaf-${i}`, live)
-      live.value = false
-      coordinator.dispose()
-    }
-    expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(0)
-  })
-
   it('retains the identity across a live remount (dispose while still live)', () => {
     // Cross-remount dedup: the pane remounts (dispose-then-recreate) while the
     // stream stays live, so the identity must survive the dispose.

@@ -9,7 +9,9 @@ import {
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { getIndexedRepoMap, getIndexedWorktreeById } from '@/store/worktree-repo-index'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { getIndexedRepoMap } from '@/store/worktree-repo-index'
+import { getLocalProjectRuntimeWorkspace } from './local-project-runtime-workspace'
 import { getProviderRuntimeContextKey } from './provider-runtime-context'
 import { getRendererAppPlatform } from './renderer-app-platform'
 import {
@@ -35,11 +37,11 @@ export {
 type LocalProjectRuntimeState = Pick<
   AppState,
   'activeRepoId' | 'activeWorktreeId' | 'projects' | 'repos' | 'settings' | 'worktreesByRepo'
->
+> &
+  Partial<Pick<AppState, 'folderWorkspaces' | 'projectGroups'>>
 
 // Why: the shared indexes are WeakMap-keyed on slice identity, so a fresh `{}`
 // or `[]` fallback would miss the cache on every read.
-const EMPTY_WORKTREES_BY_REPO: AppState['worktreesByRepo'] = {}
 const EMPTY_REPOS: AppState['repos'] = []
 
 type LocalProjectRuntimeWslContext = {
@@ -66,7 +68,13 @@ export function getLocalProjectExecutionRuntimeContext(
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return undefined
   }
-  const worktree = getLocalWorktree(state, worktreeId)
+  const worktree = getLocalProjectRuntimeWorkspace(state, worktreeId)
+  if (
+    !worktree &&
+    parseWorkspaceKey(worktreeId ?? state.activeWorktreeId ?? '')?.type === 'folder'
+  ) {
+    return undefined
+  }
   const repo = getLocalRuntimeRepoForWorktree(state, worktree)
   if (!isLocalRuntimeRepo(repo) || !isLocalRuntimeWorktree(worktree)) {
     return undefined
@@ -262,7 +270,7 @@ function getCachedLocalProjectRuntimeWslContext(): LocalProjectRuntimeWslContext
 }
 
 function getLocalPreflightWslDistro(state: AppState, worktreeId?: string | null): string | null {
-  const activeWorktree = getLocalWorktree(state, worktreeId)
+  const activeWorktree = getLocalProjectRuntimeWorkspace(state, worktreeId)
   const repo = getLocalRuntimeRepoForWorktree(state, activeWorktree)
   if (!isLocalRuntimeRepo(repo) || !isLocalRuntimeWorktree(activeWorktree)) {
     return null
@@ -275,6 +283,9 @@ function getLocalRuntimeRepoForWorktree(
   state: LocalProjectRuntimeState,
   worktree?: Pick<Worktree, 'repoId'> | null
 ): Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'> | undefined {
+  if (!worktree && parseWorkspaceKey(state.activeWorktreeId ?? '')?.type === 'folder') {
+    return undefined
+  }
   const repoId = worktree?.repoId ?? state.activeRepoId
   return repoId ? getIndexedRepoMap(state.repos ?? EMPTY_REPOS).get(repoId) : undefined
 }
@@ -303,25 +314,11 @@ function getLocalRuntimeProject(
   )
 }
 
-function getLocalWorktree(
-  state: LocalProjectRuntimeState,
-  worktreeId?: string | null
-): Pick<Worktree, 'id' | 'repoId' | 'projectId' | 'path' | 'hostId'> | null {
-  const targetWorktreeId = worktreeId ?? state.activeWorktreeId
-  if (!targetWorktreeId) {
-    return null
-  }
-  return (
-    getIndexedWorktreeById(state.worktreesByRepo ?? EMPTY_WORKTREES_BY_REPO, targetWorktreeId) ??
-    null
-  )
-}
-
 function getLocalPreflightProjectId(
   state: LocalProjectRuntimeState,
   worktreeId?: string | null
 ): string {
-  const activeWorktree = getLocalWorktree(state, worktreeId)
+  const activeWorktree = getLocalProjectRuntimeWorkspace(state, worktreeId)
   return (
     activeWorktree?.projectId ?? activeWorktree?.repoId ?? state.activeRepoId ?? 'local-project'
   )

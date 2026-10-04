@@ -1,0 +1,33 @@
+name: Clean closed PR caches
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  actions: write
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # No checkout: this runs trusted default-branch code, including for fork PRs.
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const ref = `refs/pull/${context.payload.pull_request.number}/merge`
+            const caches = await github.paginate(github.rest.actions.getActionsCacheList, {
+              ...context.repo, ref, per_page: 100
+            })
+            for (const cache of caches) {
+              if (cache.ref !== ref) throw new Error(`Unexpected cache ref: ${cache.ref}`)
+              try {
+                await github.rest.actions.deleteActionsCacheById({
+                  ...context.repo, cache_id: cache.id
+                })
+              } catch (error) {
+                if (error.status !== 404) throw error
+              }
+            }
+            core.info(`Removed ${caches.length} caches scoped to ${ref}`)

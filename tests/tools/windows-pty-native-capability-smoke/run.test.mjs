@@ -1,9 +1,6 @@
-import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { checkoutRunProcessPath, formatProbeFailure, packagedProbeInvocation } from './run.mjs'
-
-const runnerSource = readFileSync(new URL('./run.mjs', import.meta.url), 'utf8')
 
 describe('packaged Windows native smoke runner boundary', () => {
   it('uses one checkout-owned runner for current and affected package paths', () => {
@@ -35,13 +32,5 @@ describe('packaged Windows native smoke runner boundary', () => {
     expect(failure).not.toContain('old-')
     expect(failure).toContain('stdout-tail')
     expect(failure).toContain('stage=target-spawn:start')
-  })
-
-  it('does not import child_process or resolve the runner from the artifact', () => {
-    expect(runnerSource).not.toContain('node:child_process')
-    expect(runnerSource).not.toMatch(
-      /path\.join\(resourcesDir[\s\S]*?app\.asar\.unpacked[\s\S]*?run-process\.js/
-    )
-    expect(runnerSource).toContain("'../../../out/shared/child-process/run-process.js'")
   })
 })

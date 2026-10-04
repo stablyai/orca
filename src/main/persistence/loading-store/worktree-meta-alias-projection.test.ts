@@ -1,3 +1,8 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson
+} from '../../persistence-test-harness'
 /**
  * `setWorktreeMetaForHost` puts one object in both `worktreeMeta` and `worktreeMetaByIdentity`, so
  * a heavy profile serializes every metadata row twice. On a measured 3.64 MB install 1,347 of
@@ -11,7 +16,7 @@
  * to the same state, the locator map is never reduced (which is what makes a downgrade lossless),
  * and a build with no rebuild at all recovers every row from the file the new build wrote.
  */
-import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -54,15 +59,16 @@ function seededRandom(seed: number): () => number {
 }
 
 const stores: InstanceType<typeof Store>[] = []
-afterEach(() => {
+afterEach(async () => {
   for (const store of stores.splice(0)) {
     store.freezeWrites()
   }
+  await closeTestStores()
   vi.restoreAllMocks()
 })
 
 function openStore(dataFile: string): InstanceType<typeof Store> {
-  const store = new Store({ dataFile })
+  const store = createSqliteTestStore(Store, { dataFile })
   stores.push(store)
   return store
 }
@@ -229,7 +235,7 @@ describe('worktree meta alias projection', () => {
     const loaded = openStore(dataFile)
     const before = snapshot(loaded)
     loaded.flush()
-    const rewritten = readFileSync(dataFile, 'utf-8')
+    const rewritten = readPersistedStateJson(dataFile)
     const onDisk = JSON.parse(rewritten) as PersistedState
 
     // The counter this change exists for: 401 regenerable identity rows leave the file.
@@ -257,7 +263,7 @@ describe('worktree meta alias projection', () => {
 
     // A quiet app does not rewrite the file with new content on the next flush.
     reloaded.flush()
-    expect(readFileSync(dataFile, 'utf-8')).toBe(rewritten)
+    expect(readPersistedStateJson(dataFile)).toBe(rewritten)
   })
 
   /**
@@ -277,17 +283,19 @@ describe('worktree meta alias projection', () => {
 
     // What a build without this change does with that file: parse it, run the metadata normalizer
     // it already ships (untouched here), write the result back.
-    const downgraded = JSON.parse(readFileSync(dataFile, 'utf-8')) as PersistedState
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const downgraded = JSON.parse(readPersistedStateJson(dataFile)) as PersistedState
     normalizeWorktreeLinkedItemMetadata(downgraded)
     expect(Object.keys(downgraded.worktreeMeta).sort()).toEqual(Object.keys(before.meta).sort())
     // It drops the aliases whose identity row is not there; it never touches a locator row.
     expect(downgraded.worktreeIdentityAliases).not.toHaveProperty(
       composeWorktreeHostIdentity(LOCAL, worktreeId(0))
     )
-    writeFileSync(dataFile, JSON.stringify(downgraded), 'utf-8')
+    const rollbackDataFile = tempDataFile()
+    writeFileSync(rollbackDataFile, JSON.stringify(downgraded), 'utf-8')
 
     // Every reader is where it started, with no rebuild and without touching a row first.
-    const rolledBack = openStore(dataFile)
+    const rolledBack = openStore(rollbackDataFile)
     expect(rolledBack.getAllWorktreeMeta()).toEqual(before.meta)
     expect(rolledBack.getAllWorktreeMetaForHost(LOCAL)).toEqual(before.local)
     expect(rolledBack.getAllWorktreeMetaForHost(REMOTE as never)).toEqual(before.remote)
@@ -298,7 +306,8 @@ describe('worktree meta alias projection', () => {
       before.meta[worktreeId(0)]
     )
     rolledBack.flush()
-    const reminted = JSON.parse(readFileSync(dataFile, 'utf-8')) as PersistedState
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const reminted = JSON.parse(readPersistedStateJson(rollbackDataFile)) as PersistedState
     expect(
       reminted.worktreeIdentityAliases?.[composeWorktreeHostIdentity(LOCAL, worktreeId(0))]
     ).toEqual([
@@ -338,7 +347,7 @@ describe('worktree meta alias projection', () => {
     fromLegacy.flush()
 
     const compactFile = tempDataFile()
-    writeFileSync(compactFile, readFileSync(legacyFile))
+    writeFileSync(compactFile, readPersistedStateJson(legacyFile))
     const fromCompact = openStore(compactFile)
 
     expect(fromCompact.getAllWorktreeMeta()).toEqual(fromLegacy.getAllWorktreeMeta())
@@ -366,7 +375,8 @@ describe('worktree meta alias projection', () => {
       )
       expect(store.getAllWorktreeMeta()[worktreeId(0)]?.displayName).toBe('workspace-0')
       store.flush()
-      const onDisk = JSON.parse(readFileSync(dataFile, 'utf-8')) as PersistedState
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+      const onDisk = JSON.parse(readPersistedStateJson(dataFile)) as PersistedState
       expect(Object.keys(onDisk.worktreeMeta).length).toBe(
         Object.keys(fixture.state.worktreeMeta).length
       )
@@ -409,7 +419,8 @@ describe('worktree meta alias projection', () => {
     expect(Object.keys(store.getAllWorktreeMeta())).toEqual([worktreeId(0)])
     store.flush()
 
-    const onDisk = JSON.parse(readFileSync(dataFile, 'utf-8')) as PersistedState
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const onDisk = JSON.parse(readPersistedStateJson(dataFile)) as PersistedState
     expect(Object.hasOwn(onDisk, 'worktreeMetaByIdentity')).toBe(false)
     // The locator map and its lineage companions are all still there, untouched by the projection.
     expect(Object.keys(onDisk.worktreeMeta)).toEqual([worktreeId(0)])

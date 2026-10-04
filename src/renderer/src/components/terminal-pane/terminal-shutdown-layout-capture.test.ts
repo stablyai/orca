@@ -190,7 +190,8 @@ describe('captureTerminalShutdownLayout', () => {
       expandedPaneId: null,
       paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
       paneTitlesByPaneId: { 1: 'build logs' },
-      existingLayout: undefined
+      existingLayout: undefined,
+      chatLeafId: LEAF_ID
     })
 
     expect(order).toEqual(['flush', 'serialize'])
@@ -200,7 +201,8 @@ describe('captureTerminalShutdownLayout', () => {
       expandedLeafId: null,
       buffersByLeafId: { [LEAF_ID]: `snapshot:queued-before-quit${CURSOR_HOME}` },
       ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' },
-      titlesByLeafId: { [LEAF_ID]: 'build logs' }
+      titlesByLeafId: { [LEAF_ID]: 'build logs' },
+      chatLeafId: LEAF_ID
     })
   })
 

@@ -1,5 +1,6 @@
 export function quotePowerShellLiteral(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`
+  // Why: PowerShell also ends single-quoted strings at typographic single quotes.
+  return `'${value.replace(/['\u2018\u2019\u201A\u201B]/g, '$&$&')}'`
 }
 
 export function quotePowerShellNativeArgument(value: string): string {

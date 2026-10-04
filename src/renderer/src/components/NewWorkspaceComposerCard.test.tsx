@@ -69,7 +69,11 @@ vi.mock('@/components/new-workspace/SetProjectLocationDialog', () => ({
 }))
 
 vi.mock('@/components/sparse/SparseCheckoutPresetSelect', () => ({
-  default: () => <div data-testid="sparse-select" />
+  default: ({ onEditingChange }: { onEditingChange?: (editing: boolean) => void }) => (
+    <div data-testid="sparse-select">
+      <button onClick={() => onEditingChange?.(true)}>Begin preset</button>
+    </div>
+  )
 }))
 
 vi.mock('@/components/new-workspace/SmartWorkspaceNameField', () => ({
@@ -371,6 +375,19 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     )
 
     expect(advancedButton?.className).toContain('focus-visible:ring-inset')
+  })
+
+  it('shows only preset actions while editing and prevents hiding the draft', () => {
+    current = renderCard({
+      advancedOpen: true,
+      sparseControlsEnabled: true,
+      canUseSparseCheckout: true
+    })
+    const buttons = [...current.container.querySelectorAll('button')]
+    const button = (label: string) => buttons.find((node) => node.textContent?.includes(label))
+    act(() => button('Begin preset')?.click())
+    expect(button('Advanced')?.disabled).toBe(true)
+    expect(current.container.textContent).not.toContain('Create workspace')
   })
 
   it('removes collapsed Advanced controls from the Tab order', () => {

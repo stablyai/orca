@@ -92,7 +92,7 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
           }
         }
         if (shouldActivate) {
-          store.setActiveTabType('terminal')
+          store.setActiveTabType('terminal', worktreeId)
           store.setActiveTab(tab.id)
         }
         if (shouldSurfaceOwner) {

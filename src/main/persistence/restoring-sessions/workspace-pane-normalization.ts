@@ -2,6 +2,7 @@ import type { LegacyPaneKeyAliasEntry, PersistedState } from '../../../shared/pe
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status-types'
+import { agentHookServer } from '../../agent-hooks/server'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toSshExecutionHostId,
@@ -12,7 +13,8 @@ import { isTerminalLeafId, parsePaneKey } from '../../../shared/stable-pane-id'
 import { findCrossHostPaneTabIds, withoutPaneTabIds } from './cross-host-pane-tab-ids'
 import {
   createLazyTerminalTabLookup,
-  registerLegacyPaneKeyAliasesForTab
+  collectLegacyPaneKeyAliasesForTab,
+  type PaneAliasNormalizationOptions
 } from './pane-identity-migration'
 import { normalizeTerminalLayoutSnapshotForPersistence } from './terminal-layout-normalization'
 import {
@@ -37,7 +39,7 @@ export {
 export function normalizeWorkspaceSessionPaneIdentities(
   session: WorkspaceSessionState,
   priorLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {},
-  options: { skipAliasTabIds?: ReadonlySet<string> } = {}
+  options: PaneAliasNormalizationOptions & { skipAliasTabIds?: ReadonlySet<string> } = {}
 ): {
   session: WorkspaceSessionState
   changed: boolean
@@ -49,9 +51,6 @@ export function normalizeWorkspaceSessionPaneIdentities(
   let changed = false
   const leafIdByInputLeafIdByTabId = new Map<string, Map<string, string>>()
   const leafIdByPtyIdByTabId = new Map<string, Map<string, string>>()
-  // Why always empty: legacy numeric pane keys are bridged by aliases now, not persisted as
-  // restart-required rows; the field stays so callers keep clearing stale rows written by old builds.
-  const migrationUnsupportedEntries: MigrationUnsupportedPtyEntry[] = []
   const legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[] = []
   const terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
   let tabsById: ReturnType<typeof createLazyTerminalTabLookup> | null = null
@@ -64,7 +63,7 @@ export function normalizeWorkspaceSessionPaneIdentities(
     leafIdByInputLeafIdByTabId.set(tabId, normalized.leafIdByInputLeafId)
     if (!options.skipAliasTabIds?.has(tabId)) {
       tabsById ??= createLazyTerminalTabLookup(session)
-      const tabAliasEntries = registerLegacyPaneKeyAliasesForTab({
+      const tabAliasEntries = collectLegacyPaneKeyAliasesForTab({
         tabId,
         tab: tabsById.get(tabId),
         inputLayout: layout,
@@ -73,7 +72,18 @@ export function normalizeWorkspaceSessionPaneIdentities(
       })
       // Why: old split layouts can generate enough alias rows to exceed V8's argument limit if spread into push().
       for (const entry of tabAliasEntries) {
-        legacyPaneKeyAliasEntries.push(entry)
+        if (options.registerAliases !== false) {
+          agentHookServer.registerPaneKeyAlias(
+            entry.legacyPaneKey,
+            entry.stablePaneKey,
+            entry.ptyId
+          )
+        }
+        if (entry.ptyId) {
+          legacyPaneKeyAliasEntries.push({ ...entry, ptyId: entry.ptyId })
+        } else {
+          options.collectUnboundPaneAlias?.(entry)
+        }
       }
     }
     const leafIdByPtyId = new Map<string, string>()
@@ -97,7 +107,8 @@ export function normalizeWorkspaceSessionPaneIdentities(
     changed,
     leafIdByInputLeafIdByTabId,
     leafIdByPtyIdByTabId,
-    migrationUnsupportedEntries,
+    // Aliases replace old restart-required rows; callers still clear that legacy field.
+    migrationUnsupportedEntries: [],
     legacyPaneKeyAliasEntries
   }
 }
@@ -163,7 +174,10 @@ function mergeAcknowledgementLeafIdMapsByTabId(
   return merged
 }
 
-export function normalizePersistedPaneIdentityState(state: PersistedState): {
+export function normalizePersistedPaneIdentityState(
+  state: PersistedState,
+  options: PaneAliasNormalizationOptions = {}
+): {
   state: PersistedState
   changed: boolean
   migrationUnsupportedEntries: MigrationUnsupportedPtyEntry[]
@@ -174,6 +188,7 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
     state.workspaceSession,
     {},
     {
+      ...options,
       skipAliasTabIds: crossHostTabIds
     }
   )
@@ -200,6 +215,7 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
         hostSession,
         {},
         {
+          ...options,
           skipAliasTabIds: crossHostTabIds
         }
       )

@@ -97,10 +97,6 @@ afterEach(async () => {
 })
 
 describe('path containment across Unicode forms', () => {
-  it('spells the fixture two ways, or the rest of this file proves nothing', () => {
-    expect(NFC_FOLDER).not.toBe(NFD_FOLDER)
-  })
-
   it('accepts a child of a root the filesystem spells the other way', async () => {
     const scratch = await makeScratchDir()
     const { onDisk, registered } = await makeOneDirectoryTwoSpellings(scratch)

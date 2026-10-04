@@ -126,7 +126,7 @@ test.describe('SSH terminal hidden view parking', () => {
       await orcaPage.evaluate((tabId) => {
         const state = window.__store?.getState()
         state?.setActiveTab(tabId)
-        state?.setActiveTabType('terminal')
+        state?.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
       }, sshTabId)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       await expect

@@ -31,6 +31,12 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   }
 }))
 
+vi.mock('react-native', () => ({
+  ActivityIndicator: 'ActivityIndicator',
+  StyleSheet: { create: (styles: unknown) => styles },
+  View: 'View'
+}))
+
 vi.mock('expo-router', () => ({ useLocalSearchParams: () => dependencies.params }))
 
 vi.mock('../files/MobileFileExplorerPanel', () => ({
@@ -105,14 +111,15 @@ describe('the native file explorer route that hands off to the shell', () => {
     ])
   })
 
-  it('renders the native panel while the flag read is still settling', async () => {
-    await renderExplorer()
-    expect(dependencies.panels[0]).toEqual({
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      name: 'my worktree',
-      embedded: false
+  it('renders neither panel nor shell while the flag read is still settling', async () => {
+    // No `await` inside `act`, which leaves the read's promise pending: the native panel used to
+    // mount in this window and be replaced by the page the moment a flag-on read landed.
+    act(() => {
+      create(createElement(MobileFileExplorerScreen))
     })
+    expect(dependencies.panels).toEqual([])
+    expect(dependencies.routes).toEqual([])
+    await act(async () => {})
   })
 
   /**

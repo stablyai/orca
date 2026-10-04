@@ -47,6 +47,7 @@ export type AgentStatusSetData = {
   connectionId?: string | null
   receivedAt: number
   stateStartedAt: number
+  turnStartedAt?: number
 }
 export type StoreLike = Record<string, unknown>
 export type StoreSubscribeListener = (state: StoreLike, previousState: StoreLike) => void

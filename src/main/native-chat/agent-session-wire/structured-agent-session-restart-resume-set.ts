@@ -1,29 +1,30 @@
-// Which claimed teardown witnesses still describe resumable work.
+// Which durable teardown witnesses are still offers.
 //
-// Every clause here exists to refuse, and the bias is deliberate: a session resumed that should not
-// have been spends the user's tokens and can make an agent redo destructive work it already
-// finished. A session missed is an annoyance. When any input is ambiguous this answers "no".
+// The marker IS the answer to "was this chat working" AND the description of what it was doing:
+// teardown took both from the same check the sidebar shows, right before the chat's child was
+// stopped. Nothing here re-reads the journal to second-guess it — once reattached, a provider
+// rewrites that journal in its own words (a notice turn of its own, restated subagent rows, a
+// restored thread), and every reading of those rewrites as "the work is done" dropped chats that
+// were owed a resume.
 //
-// Two INDEPENDENT records must concur. The marker is teardown's word; the journal's own turn record
-// is the session's word. One without the other proves nothing — a marker whose journal never opened
-// that turn is a marker for work that did not exist, and a journal turn with no marker is the
-// stale-`running`-row case this whole mechanism exists to refuse.
+// An offer ends when the chat moves on after the restart — another message accepted, or its agent
+// started — or when the conversation forked. Both are reported back as `superseded` so the caller
+// DELETES the record rather than filtering it forever. What remains are structural checks that are not about work at all: the record still
+// exists and this build supports it, and the lease is free.
 
+import type { AgentSessionAnyRefusalDetails } from '../../../shared/agent-session-wire-refusals'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type {
-  AgentJournalSubmission,
-  AgentJournalTurnLifecycle
-} from '../../../shared/agent-session-journal-types'
 import {
   agentSessionProviderHandleChainHead,
   agentSessionProviderHandleRoot
 } from '../../../shared/agent-session-provider-handle'
-import {
-  isExpiredAgentSessionResumeMarker,
-  type AgentSessionResumeMarker,
-  type AgentSessionResumeTrigger,
-  type AgentSessionResumeWork
+import type {
+  AgentSessionResumeFailureOutcome,
+  AgentSessionResumeMarker,
+  AgentSessionResumeTrigger,
+  AgentSessionResumeWork
 } from '../../../shared/agent-session-resume-marker'
+import type { AgentSessionRestartActivity } from '../../../shared/agent-session-restart-activity'
 import { isResumableStructuredAgentSessionRecord } from './structured-agent-session-resume-eligibility'
 import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
 import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
@@ -44,24 +45,40 @@ export type StructuredAgentSessionResumeCandidate = {
   /** Model in force, read from the record's acknowledged options exactly as the status feed does.
    *  Absent until the host has read them. */
   model?: string
+  /** What the chat was doing, from the marker's own stop-time snapshot. Optional on the wire: an
+   *  older host omits it, and so does a marker from a build that recorded no snapshot. */
+  activity?: AgentSessionRestartActivity
+}
+
+/** An offer that was acted on and did not end with the agent carrying on. Same row shape as the
+ *  candidate so one surface renders both, plus what went wrong and when. */
+export type StructuredAgentSessionResumeFailure = StructuredAgentSessionResumeCandidate & {
+  failedAt: number
+  outcome: AgentSessionResumeFailureOutcome
+  /** The host's or provider's refusal code, verbatim, so it can be quoted in a report. */
+  reason: string
+  /** The refusal's details beside its code in `reason`; absent on older records and non-refusals. */
+  details?: AgentSessionAnyRefusalDetails
+  /** Whether naming it in an action would run it again: whether it is still an offer. A
+   *  continuation the chat already holds, or the user having moved on, makes a retry a no-op no
+   *  matter what the reason says. */
+  retryable: boolean
+}
+
+export type StructuredAgentSessionResumableSet = {
+  candidates: StructuredAgentSessionResumeCandidate[]
+  /** Markers the chat has provably moved past, or whose conversation forked. Every ending deletes:
+   *  the caller retires these rather than re-filtering them forever. */
+  superseded: AgentSessionResumeMarker[]
 }
 
 export type StructuredAgentSessionResumeSetInput = {
   markers: readonly AgentSessionResumeMarker[]
   getRecord: (sessionId: string) => AgentSessionRecord | null
   supportsRecord: (record: AgentSessionRecord) => boolean
-  /** The newest turn record in that session's journal, state included; null when the journal could
-   *  not be read. Deliberately not the live-turn reader: eviction has already rewritten that turn
-   *  to `interrupted` by the time this runs. */
-  journalTurn: (sessionId: string) => AgentJournalTurnLifecycle | null
-  /** The journalled submission with that client message id, for work that never became a turn. */
-  journalSubmission: (sessionId: string, clientMessageId: string) => AgentJournalSubmission | null
-  waitingOnUser: (sessionId: string) => boolean
-  /** Only teardown may validate before it rewrites the stopped child's running turn. */
-  providerStopped?: boolean
   latestPrompt: (sessionId: string) => string
-  latestUserItemId: (sessionId: string) => string | null
-  now: number
+  /** Whether the chat moved on since the offer was taken; false when its journal is not open here. */
+  movedOn: (marker: AgentSessionResumeMarker) => boolean
   /**
    * Whether the lease must be free.
    *
@@ -72,57 +89,12 @@ export type StructuredAgentSessionResumeSetInput = {
   leaseState?: 'must-be-released' | 'may-be-held'
 }
 
-/** Eviction rewrites `running` -> `interrupted` and never -> `completed`, so a completed turn is
- *  finished work and one still marked `running` was never settled by anyone. */
-function turnWasCutOff(turn: AgentJournalTurnLifecycle | null, providerStopped = false): boolean {
-  return (
-    turn !== null &&
-    (turn.state === 'interrupted' ||
-      turn.state === 'unverifiable' ||
-      (providerStopped && turn.state === 'running'))
-  )
-}
-
-/** Delivery acknowledgements do not prove turn state: provider events may arrive without one.
- * A completed or running newest turn makes interruption ambiguous, even without a matching key. */
-function submissionWorkWasCutOff(
-  input: StructuredAgentSessionResumeSetInput,
-  sessionId: string
-): boolean {
-  const turn = input.journalTurn(sessionId)
-  // No turn row at all: nothing finished, because finishing writes one.
-  // Otherwise the newest turn decides, and it decides the same way whether or not it names this
-  // submission — which is exactly why the link no longer has to be proved to answer safely.
-  return turn === null || turnWasCutOff(turn, input.providerStopped)
-}
-
-/** Follow every non-rejected submission forward to its turn, including lost acknowledgements. */
-function journalAgreesWorkWasCutOff(
-  input: StructuredAgentSessionResumeSetInput,
-  marker: AgentSessionResumeMarker
-): boolean {
-  if (marker.work.kind === 'turn') {
-    const turn = input.journalTurn(marker.sessionId)
-    return turn?.turnId === marker.work.id && turnWasCutOff(turn, input.providerStopped)
-  }
-  const submission = input.journalSubmission(marker.sessionId, marker.work.id)
-  if (submission?.clientMessageId !== marker.work.id) {
-    return false
-  }
-  if (submission.dispatchState === 'rejected') {
-    return false
-  }
-  return submissionWorkWasCutOff(input, marker.sessionId)
-}
-
 export function structuredAgentSessionResumableSet(
   input: StructuredAgentSessionResumeSetInput
-): StructuredAgentSessionResumeCandidate[] {
+): StructuredAgentSessionResumableSet {
   const candidates: StructuredAgentSessionResumeCandidate[] = []
+  const superseded: AgentSessionResumeMarker[] = []
   for (const marker of input.markers) {
-    if (isExpiredAgentSessionResumeMarker(marker, input.now)) {
-      continue
-    }
     const record = input.getRecord(marker.sessionId)
     if (!record || !input.supportsRecord(record)) {
       continue
@@ -132,17 +104,19 @@ export function structuredAgentSessionResumableSet(
     if (input.leaseState !== 'may-be-held' && !isResumableStructuredAgentSessionRecord(record)) {
       continue
     }
-    // A conversation that FORKED since teardown is not the one we marked. Compared by identity
-    // root, because a resume legitimately advances Claude's leaf and that is not a fork.
+    // A conversation that FORKED since teardown is not the one we marked, and can never be again:
+    // deleted, so it cannot sit unseen forever. Compared by identity root,
+    // because a resume legitimately advances Claude's leaf and that is not a fork.
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
-    if (!head || agentSessionProviderHandleRoot(head.handle) !== marker.providerHandleRoot) {
+    if (!head) {
       continue
     }
-    if (
-      input.waitingOnUser(marker.sessionId) ||
-      input.latestUserItemId(marker.sessionId) !== marker.latestUserItemId ||
-      !journalAgreesWorkWasCutOff(input, marker)
-    ) {
+    if (agentSessionProviderHandleRoot(head.handle) !== marker.providerHandleRoot) {
+      superseded.push(marker)
+      continue
+    }
+    if (input.movedOn(marker)) {
+      superseded.push(marker)
       continue
     }
     const model = normalizeOptionalField(record.options?.model, AGENT_MODEL_MAX_LENGTH)
@@ -156,8 +130,9 @@ export function structuredAgentSessionResumableSet(
       latestPrompt: input.latestPrompt(marker.sessionId),
       executionHostId: record.location.executionHostId,
       workspaceKind: record.location.workspaceKind,
-      ...(model === undefined ? {} : { model })
+      ...(model === undefined ? {} : { model }),
+      ...(marker.activity === undefined ? {} : { activity: marker.activity })
     })
   }
-  return candidates
+  return { candidates, superseded }
 }

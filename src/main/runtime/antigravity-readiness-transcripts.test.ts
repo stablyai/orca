@@ -234,44 +234,4 @@ describe('Antigravity readiness, decided by captured transcripts', () => {
       expect(doc).toContain(`${transcript.name}.txt`)
     }
   })
-
-  it('reports how much evidence exists, so a fully skipped run is visible', () => {
-    const missing = TRANSCRIPTS.filter(
-      (transcript) => !existsSync(fixturePath(transcript.name))
-    ).map((transcript) => `${transcript.name}.txt`)
-    if (missing.length > 0) {
-      console.info(
-        `Antigravity transcripts: ${TRANSCRIPTS.length - missing.length}/${TRANSCRIPTS.length} captured. Missing: ${missing.join(', ')}`
-      )
-    }
-    expect(missing.length).toBeLessThanOrEqual(TRANSCRIPTS.length)
-  })
-})
-
-describe('scaffold self-check', () => {
-  // Why these two live here: when a transcript lands and fails, the failure has to mean the
-  // capture disagreed with the detector — not that the harness or the timeouts are broken.
-  // Neither case is evidence about Antigravity; both are shapes the current detector already
-  // decides, used only to prove the plumbing reaches a verdict.
-  it('reaches a ready verdict through the harness', async () => {
-    const verdict = await readinessVerdict(
-      [
-        'Antigravity CLI 1.0.3',
-        'user@example.com (Antigravity Business)',
-        'Gemini 3.5 Flash (High)',
-        '~/orca/workspaces/orca/agy-dispatch-issue',
-        '>'
-      ].join('\n'),
-      READY_TIMEOUT_MS
-    )
-    expect(verdict.ready).toBe(true)
-  })
-
-  it('reaches a not-ready verdict through the harness', async () => {
-    const verdict = await readinessVerdict(
-      'Do you trust this workspace directory?\nPress t to trust\n',
-      REFUSAL_TIMEOUT_MS
-    )
-    expect(verdict.ready).toBe(false)
-  })
 })

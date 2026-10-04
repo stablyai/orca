@@ -89,8 +89,7 @@ describe('MobileOnboardingPage', () => {
   function collectText(): string {
     return renderer!.root
       .findAllByType('Text')
-      .map((node) => node.props.children)
-      .flat()
+      .flatMap((node) => node.props.children)
       .join(' ')
   }
 

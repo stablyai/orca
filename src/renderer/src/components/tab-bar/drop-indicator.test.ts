@@ -43,13 +43,11 @@ describe('getDropIndicatorClasses', () => {
 })
 
 describe('ACTIVE_TAB_INDICATOR_CLASSES', () => {
-  it('renders a neutral 2px bottom-edge marker without shifting layout', () => {
+  it('renders a full-foreground 2px bottom-edge marker without shifting layout', () => {
     expect(ACTIVE_TAB_INDICATOR_CLASSES).toContain('absolute')
     expect(ACTIVE_TAB_INDICATOR_CLASSES).toContain('bottom-0')
     expect(ACTIVE_TAB_INDICATOR_CLASSES).toContain('h-[2px]')
-    expect(ACTIVE_TAB_INDICATOR_CLASSES).toContain(
-      'bg-[color-mix(in_srgb,var(--foreground)_60%,var(--card))]'
-    )
+    expect(ACTIVE_TAB_INDICATOR_CLASSES).toContain('bg-foreground')
     expect(ACTIVE_TAB_INDICATOR_CLASSES).toContain('pointer-events-none')
     expect(ACTIVE_TAB_INDICATOR_CLASSES).not.toContain('-top-px')
     expect(ACTIVE_TAB_INDICATOR_CLASSES).not.toContain('bg-[#1e3d9c]')

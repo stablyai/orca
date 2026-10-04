@@ -210,17 +210,18 @@ describe('Claude provider history source budget', () => {
   })
 
   it('replays a concurrent repair at the grown size, not the pinned one', async () => {
-    const tail = `${JSON.stringify({
+    const grown = `${JSON.stringify({
       type: 'user',
       uuid: 'grown',
       parentUuid: 'latest',
       sessionId: 'provider',
       message: { role: 'user', content: 'appended' }
-    })}\n${JSON.stringify({ type: 'last-prompt', sessionId: 'provider', leafUuid: 'grown' })}\n`
-    // No marker yet: the proof's first attempt fails, and the retry is what sees
-    // both the repair AND the record the window has to report.
-    await writeFile(state.path, SOURCE.slice(0, SOURCE.lastIndexOf('{"type":"last-prompt"')))
-    state.growth = tail
+    })}\n`
+    const torn = Math.floor(grown.length / 2)
+    // A torn last record: the proof's first attempt fails, and the retry is what
+    // sees both the repair AND the record the window has to report.
+    await writeFile(state.path, SOURCE + grown.slice(0, torn))
+    state.growth = grown.slice(torn)
 
     const result = await read()
 

@@ -57,7 +57,6 @@ export function useTerminalWorkspaceStoreBindings(controller: TerminalWorkspaceF
   const activeGroupIdByWorktree = useAppStore((state) => state.activeGroupIdByWorktree)
   const ensureWorktreeRootGroup = useAppStore((state) => state.ensureWorktreeRootGroup)
   const reconcileWorktreeTabModel = useAppStore((state) => state.reconcileWorktreeTabModel)
-  const markFileDirty = useAppStore((state) => state.markFileDirty)
   const setTabBarOrder = useAppStore((state) => state.setTabBarOrder)
   const tabBarOrderByWorktree = useAppStore((state) => state.tabBarOrderByWorktree)
   const tabBarOrder = renderedActiveWorktreeId
@@ -106,7 +105,6 @@ export function useTerminalWorkspaceStoreBindings(controller: TerminalWorkspaceF
     activeGroupIdByWorktree,
     ensureWorktreeRootGroup,
     reconcileWorktreeTabModel,
-    markFileDirty,
     setTabBarOrder,
     tabBarOrderByWorktree,
     tabBarOrder,

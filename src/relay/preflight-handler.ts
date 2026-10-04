@@ -39,10 +39,7 @@ const CONSERVATIVE_SYSTEM_SHELL_DIRS = new Set(['/bin', '/usr/bin'])
 const AGENT_PATH_PREFIX = '__ORCA_AGENT_PATH__'
 
 export class PreflightHandler {
-  private dispatcher: RelayDispatcher
-
-  constructor(dispatcher: RelayDispatcher) {
-    this.dispatcher = dispatcher
+  constructor(private readonly dispatcher: RelayDispatcher) {
     this.registerHandlers()
   }
 
@@ -53,9 +50,7 @@ export class PreflightHandler {
     )
   }
 
-  // Why: the client sends the command list rather than importing TUI_AGENT_CONFIG
-  // on the relay side. This keeps the relay bundle minimal and makes the protocol
-  // self-describing — the relay doesn't need to know the agent catalog.
+  // Why: client-supplied commands keep the relay independent of the agent catalog.
   private async detectAgents(params: Record<string, unknown>): Promise<{
     agents: string[]
     versions?: Record<string, string>
@@ -66,9 +61,11 @@ export class PreflightHandler {
     }
     const probeCommands = [
       ...new Set(
-        commands
-          .filter((command) => !isDetectionUnsupportedInRuntime(command, process.platform))
-          .flatMap((command) => [command.cmd, ...(command.requiredCommands ?? [])])
+        commands.flatMap((command) =>
+          isDetectionUnsupportedInRuntime(command, process.platform)
+            ? []
+            : [command.cmd, ...(command.requiredCommands ?? [])]
+        )
       )
     ]
 
@@ -173,16 +170,6 @@ function isDetectionUnsupportedInRuntime(
   runtime: AgentDetectionRuntime
 ): boolean {
   return command.unsupportedRuntimes?.includes(runtime) === true
-}
-
-export function buildCommandLookupSpec(
-  command: string,
-  platform: NodeJS.Platform,
-  env: NodeJS.ProcessEnv = process.env,
-  accountLoginShell?: string | null
-): CommandLookupSpec {
-  const [spec] = buildCommandLookupSpecs(command, platform, env, accountLoginShell)
-  return spec ?? buildPosixCommandLookupSpec(command, '/bin/sh')
 }
 
 export function buildCommandLookupSpecs(

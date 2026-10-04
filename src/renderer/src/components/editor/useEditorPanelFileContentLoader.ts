@@ -6,6 +6,7 @@ import { getDiskBaselineSignature } from './diff-content-signature'
 import { getRuntimeFileReadScope, readRuntimeFileContent } from '@/runtime/runtime-file-client'
 import { RuntimeRpcCallError, settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
+import { selectWorktreeHostConnectionPhase } from '@/lib/worktree-host-connection-phase'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
@@ -81,6 +82,7 @@ export function useEditorPanelFileContentLoader({
       fileReadGenerationCounterRef.current = generation
       fileReadGenerationRef.current[id] = generation
       outstandingFileReadsRef.current[id] = generation
+      let readConnectionId: string | undefined
       try {
         const resolvedConnectionId = getConnectionIdForFile(worktreeId ?? null, filePath)
         const connectionId = resolvedConnectionId ?? undefined
@@ -94,7 +96,7 @@ export function useEditorPanelFileContentLoader({
         // worktree's SSH owner must never be inferred for them (a stamp still routes).
         const isLiveTailLogTab =
           restoredOpenFile?.readOnly === true && restoredOpenFile.liveTail === true
-        let readConnectionId = connectionId
+        readConnectionId = connectionId
         let readWorktreeId = worktreeId
         let readRelativePath = restoredOpenFile?.relativePath ?? relativePath
         if (
@@ -204,10 +206,25 @@ export function useEditorPanelFileContentLoader({
         if (fileReadGenerationRef.current[id] !== generation) {
           return
         }
-        const message = err instanceof Error ? err.message : String(err)
+        const hostConnection = selectWorktreeHostConnectionPhase(
+          useAppStore.getState(),
+          worktreeId ?? null
+        )
+        // Why: a read through an SSH host that is still connecting failed on the connection,
+        // not the file; the retry gate waits for it rather than showing "connection dropped".
+        const hostConnecting =
+          hostConnection.phase === 'connecting' &&
+          readConnectionId !== undefined &&
+          readConnectionId === hostConnection.targetId
+        const message = hostConnecting
+          ? WORKTREE_OWNER_NOT_READY_ERROR
+          : err instanceof Error
+            ? err.message
+            : String(err)
         // Why: a host may put prose on the message and the machine token on `.code`;
         // classifiers downstream must see the token, not only its rendering (#21041).
-        const loadErrorCode = err instanceof RuntimeRpcCallError ? err.code : undefined
+        const loadErrorCode =
+          !hostConnecting && err instanceof RuntimeRpcCallError ? err.code : undefined
         setFileContents((prev) => ({
           ...prev,
           [id]: {

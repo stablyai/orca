@@ -10,6 +10,16 @@ const RESUME_PROBE_TIMEOUT_MS = 5_000
 const RESUME_PROBE_ATTEMPTS = 2
 
 async function isRelayLinkAliveAfterResume(session: SshRelaySession): Promise<boolean> {
+  const plainSsh = session.getPlainSshSession()
+  if (plainSsh) {
+    // Why: plain SSH has no mux to probe, and a needless reconnect would end every open shell.
+    for (let attempt = 0; attempt < RESUME_PROBE_ATTEMPTS; attempt++) {
+      if (await plainSsh.probeTransport(RESUME_PROBE_TIMEOUT_MS)) {
+        return true
+      }
+    }
+    return false
+  }
   const mux = session.getMux()
   if (!mux || mux.isDisposed()) {
     return false

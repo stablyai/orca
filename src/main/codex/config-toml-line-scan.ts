@@ -95,8 +95,18 @@ export function updateTomlLineScanState(state: TomlLineScanState, line: string):
 }
 
 export function getTomlTableHeader(line: string): string | null {
-  const match = /^(\s*\[\[?.+\]\]?\s*)(?:#.*)?$/.exec(line)
-  return match?.[1] ?? null
+  let index = 0
+  while (index < line.length && line[index] !== '#') {
+    if (line[index] === '"') {
+      index = skipTomlBasicString(line, index + 1)
+    } else if (line[index] === "'") {
+      index = skipTomlLiteralString(line, index + 1)
+    } else {
+      index++
+    }
+  }
+  const header = line.slice(0, index).trimEnd()
+  return /^\s*\[\[?.+\]\]?$/.test(header) ? header : null
 }
 
 export function parseTomlSingleLineStringValue(

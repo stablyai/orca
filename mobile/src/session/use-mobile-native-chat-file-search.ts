@@ -34,6 +34,14 @@ export function useMobileNativeChatFileSearch(args: {
     new GenerationScopedRequestOwner<WorkspaceInventoryParameters, string[]>()
   ).current
 
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
   useEffect(() => {
     sequenceRef.current++
     queryCacheRef.current.clear()
@@ -90,6 +98,9 @@ export function useMobileNativeChatFileSearch(args: {
           setNativeChatFilePaths(paths)
         }
         const loadLegacyPaths = async (): Promise<void> => {
+          if (!mountedRef.current) {
+            return
+          }
           // What retires the inventory: this host, this workspace, this logical authority. A
           // reconnect to the same host leaves the files on disk alone, so the physical session
           // epoch is deliberately not in it. Read once, so a cutover between the two calls below

@@ -16,6 +16,7 @@ import {
 
 export type InstallPluginsResult = {
   installed: {
+    opencodeStartupPrompt?: boolean
     opencode: boolean
     opencode2?: boolean
     pi: boolean
@@ -43,18 +44,21 @@ export function createInstallPluginsHandler(
   let materialized2: { source: string; sourceDir: string | undefined; dir: string } | null = null
 
   return (params) => {
+    const startupPrompt = params.opencodeStartupPromptSource
     const opencode = params.opencodePluginSource
     const opencode2 = params.opencode2PluginSource
     const pi = params.piExtensionSource
     const omp = params.ompExtensionSource
     const primeAgent = params.primeAgentExtensionSource
     // Why: bound per-source bytes so a buggy/hostile host can't OOM the guest relay.
+    assertPluginSourceUnderByteCap('opencodeStartupPromptSource', startupPrompt)
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
     assertPluginSourceUnderByteCap('opencode2PluginSource', opencode2)
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
     assertPluginSourceUnderByteCap('ompExtensionSource', omp)
     assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
     pluginOverlay.setSources({
+      opencodeStartupPromptSource: typeof startupPrompt === 'string' ? startupPrompt : undefined,
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
       opencode2PluginSource: typeof opencode2 === 'string' ? opencode2 : undefined,
       piExtensionSource: typeof pi === 'string' ? pi : undefined,
@@ -135,8 +139,28 @@ export function createInstallPluginsHandler(
         }
       }
     }
+    const promptConfigDirs = [opencodeDir, opencode2Dir].filter(
+      (dir): dir is string => typeof dir === 'string'
+    )
+    if (promptConfigDirs.length === 0) {
+      promptConfigDirs.push(
+        resolveOpenCodeSourceConfigDir(
+          Object.fromEntries(
+            Object.entries(env).flatMap(([key, value]) =>
+              typeof value === 'string' ? [[key, value]] : []
+            )
+          ),
+          env.SHELL
+        ) ?? resolveOpenCodeConfigDirectory(env, env.HOME)
+      )
+    }
+    const promptInstallResults = promptConfigDirs.map((dir) =>
+      pluginOverlay.installOpenCodeStartupPromptPlugin(env, dir)
+    )
+    const startupPromptInstalled = promptInstallResults.every(Boolean)
     return {
       installed: {
+        opencodeStartupPrompt: startupPromptInstalled,
         opencode: pluginOverlay.hasOpenCodeSource(),
         opencode2: pluginOverlay.hasOpenCode2Source(),
         pi: pluginOverlay.hasPiSource('pi'),

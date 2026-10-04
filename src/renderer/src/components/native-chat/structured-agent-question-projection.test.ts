@@ -215,3 +215,19 @@ describe('structured agent session ask-row projection', () => {
     ).toHaveLength(1)
   })
 })
+
+describe("a subagent's pending question keeps its producer", () => {
+  it('carries the linkage onto the row that stands in for the question', () => {
+    const projected = projectQuestion({
+      ...item('child-q', {
+        kind: 'question',
+        question: 'Which branch?',
+        options: [{ id: 'q1:main', label: 'main' }],
+        resolution: { ...PENDING }
+      }),
+      agentId: 'task-1',
+      producerKind: 'agent'
+    })
+    expect(projected).toMatchObject({ role: 'system', agentId: 'task-1' })
+  })
+})

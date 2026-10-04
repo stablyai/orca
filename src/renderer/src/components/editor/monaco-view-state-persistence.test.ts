@@ -76,7 +76,7 @@ describe('Monaco view state persistence', () => {
 
     installMonacoViewStateTracking({
       editorInstance,
-      filePath: 'file.ts',
+      fileIdRef: { current: 'file.ts' },
       viewStateKey: 'file.ts::tab-1',
       scrollThrottleTimerRef: { current: null },
       setEditorCursorLine

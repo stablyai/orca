@@ -6,6 +6,7 @@ import { waitForSessionReady } from './helpers/store'
 import {
   blockDockerSshRelayTargetTcpForwarding,
   cleanupDockerSshRelayTarget,
+  refuseDockerSshRelayTargetConnections,
   startDockerSshRelayTarget,
   type DockerSshRelayTarget
 } from './helpers/docker-ssh-relay-target'
@@ -86,6 +87,17 @@ async function readSshState(page: Page, targetId: string): Promise<SshState> {
       providerEpoch: state?.providerEpoch ?? null
     }
   }, targetId)
+}
+
+/**
+ * The status the panes read. Main's `ssh:getState` drops a target's entry on disconnect and on a
+ * failed connect, so only the renderer store still holds a settled failure verdict.
+ */
+async function readRendererSshStatus(page: Page, targetId: string): Promise<string | null> {
+  return page.evaluate(
+    (targetId) => window.__store?.getState().sshConnectionStates.get(targetId)?.status ?? null,
+    targetId
+  )
 }
 
 /**
@@ -570,6 +582,9 @@ test('holds the mount and offers a working local escape hatch when the SSH host 
     const worktreeId = remote.worktreeId
 
     await installBrowserPaneMountCensus(orcaPage)
+    // Why: the workspace's terminal redials a disconnected host, and a redial that connects
+    // rightly recovers the route; only a host that stays unreachable can hold the card.
+    refuseDockerSshRelayTargetConnections(target)
     await orcaPage.evaluate(
       async (targetId) => window.api.ssh.disconnect({ targetId }),
       remote.targetId
@@ -620,6 +635,17 @@ test('holds the mount and offers a working local escape hatch when the SSH host 
     ).toHaveCount(0)
 
     // (d) The escape hatch, proven by an origin only this device can reach.
+    await expect
+      .poll(() => readRendererSshStatus(orcaPage, remote.targetId), {
+        timeout: 180_000,
+        message: 'the redial of an unreachable host must settle as a failure, not an auth prompt'
+      })
+      .toMatch(/^(disconnected|error|reconnection-failed)$/)
+    await expect(strandedPane.getByText(SSH_UNAVAILABLE_TITLE)).toBeVisible()
+    expect(
+      (await readSshState(orcaPage, remote.targetId)).status,
+      'a host that reconnected would make this escape hatch vacuous'
+    ).not.toBe('connected')
     await strandedPane.getByRole('button', { name: BROWSE_LOCALLY_LABEL }).click()
     await expect
       .poll(

@@ -84,7 +84,7 @@ function reportProbePoisoned(): { finishRepair: () => Promise<void> } {
     release = resolve
   })
   startWindowsInstallDirAclRepairIfPoisoned(
-    { status: 'ok', matchesPoisonSignature: true, wellKnownNameCheckReliable: true },
+    { status: 'ok', matchesPoisonSignature: true },
     {
       ...recoveryOptions(),
       runProcessFn: (async () => {
@@ -115,7 +115,7 @@ async function reportProbePoisonedWithSettledRepair(
   userDataPath?: string
 ): Promise<void> {
   startWindowsInstallDirAclRepairIfPoisoned(
-    { status: 'ok', matchesPoisonSignature: true, wellKnownNameCheckReliable: true },
+    { status: 'ok', matchesPoisonSignature: true },
     {
       ...recoveryOptions(userDataPath),
       runProcessFn: (async () => ({
@@ -268,7 +268,7 @@ describe('handleGpuChildCrash vs the install-dir ACL verdict', () => {
 
     // The reading lands poisoned: the claim was false, and engagement stays withheld.
     startWindowsInstallDirAclRepairIfPoisoned(
-      { status: 'ok', matchesPoisonSignature: true, wellKnownNameCheckReliable: true },
+      { status: 'ok', matchesPoisonSignature: true },
       recoveryOptions(userData.path)
     )
     await decisive

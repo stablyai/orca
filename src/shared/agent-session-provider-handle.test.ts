@@ -391,3 +391,79 @@ describe('adopted chain heads', () => {
     expect(isAgentSessionProviderHandleChain([adopted()])).toBe(true)
   })
 })
+
+describe('superseding a creation the provider never saved', () => {
+  const unsaved: AgentSessionProviderHandle = { provider: 'codex', threadId: 'thread-unsaved' }
+  const created = link({ linkId: 'codex-1-thread-unsaved', handle: unsaved })
+  function replacement(overrides: Partial<AgentSessionProviderHandleLink> = {}) {
+    return link({
+      linkId: 'codex-3-thread-new',
+      handle: { provider: 'codex', threadId: 'thread-new' },
+      mintedAtFence: 3,
+      supersedesKey: agentSessionProviderHandleKey(unsaved),
+      ...overrides
+    })
+  }
+
+  it('replaces the unsaved creation instead of standing beside it', () => {
+    const chain = appendAgentSessionProviderHandleLink([created], replacement())
+    expect(chain).toEqual([replacement()])
+    expect(isAgentSessionProviderHandleChain(chain)).toBe(true)
+    // An unused chat reopened across many restarts stays one link long.
+    const again = appendAgentSessionProviderHandleLink(
+      chain,
+      replacement({
+        linkId: 'codex-5-thread-newer',
+        handle: { provider: 'codex', threadId: 'thread-newer' },
+        mintedAtFence: 5,
+        supersedesKey: agentSessionProviderHandleKey({ provider: 'codex', threadId: 'thread-new' })
+      })
+    )
+    expect(again).toHaveLength(1)
+    expect(again[0]?.handle).toEqual({ provider: 'codex', threadId: 'thread-newer' })
+  })
+
+  it('never supersedes a conversation a resume, fork or adoption proved', () => {
+    const resumed = link({ linkId: 'codex-2-thread-unsaved', origin: 'resumed', handle: unsaved })
+    expect(() => appendAgentSessionProviderHandleLink([created, resumed], replacement())).toThrow(
+      'agent_session_provider_handle_invalid'
+    )
+    expect(() =>
+      appendAgentSessionProviderHandleLink([{ ...created, origin: 'adopted' }], replacement())
+    ).toThrow('agent_session_provider_handle_invalid')
+  })
+
+  it('names exactly the head it replaces, on a new root, under a current fence', () => {
+    expect(() =>
+      appendAgentSessionProviderHandleLink(
+        [created],
+        replacement({ supersedesKey: 'codex:"thread-other"' })
+      )
+    ).toThrow('agent_session_provider_handle_invalid')
+    expect(() =>
+      appendAgentSessionProviderHandleLink([created], replacement({ handle: unsaved }))
+    ).toThrow('agent_session_provider_handle_invalid')
+    expect(() =>
+      appendAgentSessionProviderHandleLink([created], replacement({ linkId: created.linkId }))
+    ).toThrow('agent_session_provider_handle_invalid')
+    expect(() =>
+      appendAgentSessionProviderHandleLink(
+        [{ ...created, mintedAtFence: 4 }],
+        replacement({ mintedAtFence: 3 })
+      )
+    ).toThrow('agent_session_provider_handle_stale_fence')
+  })
+
+  it('carries supersession only on a creation, and never as a persisted second link', () => {
+    expect(
+      appendAgentSessionProviderHandleLink([], replacement({ origin: 'created' }))
+    ).toHaveLength(1)
+    expect(() =>
+      appendAgentSessionProviderHandleLink(
+        [created],
+        replacement({ origin: 'resumed', handle: unsaved })
+      )
+    ).toThrow('agent_session_provider_handle_invalid')
+    expect(isAgentSessionProviderHandleChain([created, replacement()])).toBe(false)
+  })
+})

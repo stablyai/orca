@@ -96,7 +96,7 @@ export function createDaemonActiveProviderFixtures(ctx: {
     getSelectedCodexHomePath?: (
       target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null },
       launchEnv?: NodeJS.ProcessEnv,
-      launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
+      launchContext?: { unavailableManagedHomePath?: string }
     ) => string | null,
     getSettings?: () => {
       httpProxyUrl?: string
@@ -157,7 +157,7 @@ export function createDaemonActiveProviderFixtures(ctx: {
     getSelectedCodexHomePath?: (
       target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null },
       launchEnv?: NodeJS.ProcessEnv,
-      launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
+      launchContext?: { unavailableManagedHomePath?: string }
     ) => string | null,
     getSettings?: () => {
       httpProxyUrl?: string

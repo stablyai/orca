@@ -14,12 +14,17 @@ export function limitRemoteScanFilesystemConcurrency(
 ): RemoteSessionFilesystemProvider {
   const gate = createConcurrencyGate(maxInFlight)
   return {
+    openCode: provider.openCode,
     readDir: (dirPath) => gate(() => provider.readDir(dirPath)),
-    readFile: (filePath) => gate(() => provider.readFile(filePath)),
+    readFile: (filePath, limits) => gate(() => provider.readFile(filePath, limits)),
     stat: (filePath) => gate(() => provider.stat(filePath)),
     ...(provider.readTranscriptBytes
       ? {
-          readTranscriptBytes: async function* (path: string, signal?: AbortSignal) {
+          readTranscriptBytes: async function* (
+            path: string,
+            signal?: AbortSignal,
+            options?: { regularFileOnly: true; maxBytes: number }
+          ) {
             let enter!: () => void
             let release!: () => void
             const entered = new Promise<void>((resolve) => {
@@ -34,7 +39,7 @@ export function limitRemoteScanFilesystemConcurrency(
             })
             await entered
             try {
-              yield* provider.readTranscriptBytes!(path, signal)
+              yield* provider.readTranscriptBytes!(path, signal, options)
             } finally {
               release()
               await held

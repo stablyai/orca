@@ -3,8 +3,10 @@ import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { useAppStore } from '@/store'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import {
+  structuredAgentSessionOwnerForTab,
+  structuredAgentSessionTargetForHost
+} from '@/runtime/structured-agent-session-owner'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import NativeChatView from './NativeChatView'
 
@@ -21,16 +23,21 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   groupId,
   isActive,
   isFocusedGroup,
-  target,
   onFocusOwningGroup
 }: {
   tab: StructuredAgentSessionTab
   groupId: string | undefined
   isActive: boolean
   isFocusedGroup: boolean
-  target: RuntimeClientTarget
   onFocusOwningGroup: ((groupId: string) => void) | undefined
-}): React.JSX.Element {
+}): React.JSX.Element | null {
+  // Each chat is read from the host recorded on its tab, never from its workspace id, which two
+  // hosts can share.
+  const owner = useAppStore((state) => structuredAgentSessionOwnerForTab(state, tab))
+  const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
+  if (!target) {
+    return null
+  }
   return (
     <RetainedPaneHost
       groupId={groupId}
@@ -60,19 +67,14 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
     worktreeId: string
     isWorktreeActive: boolean
   }): React.JSX.Element {
-    const { unifiedTabs, groups, runtimeEnvironmentId, activeGroupId } = useAppStore(
+    const { unifiedTabs, groups, activeGroupId } = useAppStore(
       useShallow((state) => ({
         unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
         groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS,
-        runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId),
         activeGroupId: state.activeGroupIdByWorktree[worktreeId]
       }))
     )
     const focusGroup = useAppStore((state) => state.focusGroup)
-    const target = useMemo(
-      () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId }),
-      [runtimeEnvironmentId]
-    )
     const focusOwningGroup = useCallback(
       (groupId: string) => focusGroup(worktreeId, groupId),
       [focusGroup, worktreeId]
@@ -104,7 +106,6 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
               groupActiveTabById.get(tab.groupId) === tab.id &&
               tab.groupId === activeGroupId
             )}
-            target={target}
             onFocusOwningGroup={focusOwningGroup}
           />
         ))}

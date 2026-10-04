@@ -88,7 +88,8 @@ describe('launchAiVaultSessionInNewTab', () => {
         request_kind: 'resume'
       }
     })
-    expect(mockSetActiveTabType).toHaveBeenCalledWith('terminal')
+    // Why: a resume can target a worktree the user is not viewing (it is activated afterwards).
+    expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith('terminal', 'wt-1')
     expect(mockSetTabBarOrder).toHaveBeenCalledWith('wt-1', ['tab-1'])
     expect(result).toEqual({ tabId: 'tab-1', groupId: 'group-1' })
   })
@@ -188,6 +189,6 @@ describe('launchAiVaultSessionInNewTab', () => {
     if (result.tabId === null) {
       await expect(result.runtimeLaunch).resolves.toEqual({ status: 'created' })
     }
-    expect(mockSetActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith('terminal', 'wt-1')
   })
 })

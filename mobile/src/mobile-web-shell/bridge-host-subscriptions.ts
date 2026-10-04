@@ -143,6 +143,7 @@ export class BridgeHostSubscriptions {
       )
     } catch (error) {
       this.open.delete(id)
+      record.backlog?.dispose()
       throw error
     }
     // A stream that emitted and overflowed inside `subscribe` is already retired, and its

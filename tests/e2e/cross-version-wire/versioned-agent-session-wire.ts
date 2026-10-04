@@ -1,3 +1,4 @@
+import type { sendPlan } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-mutation-plans'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -17,6 +18,10 @@ export const WORKING_TREE = 'working-tree' as const
  *  in current source is invisible to a release checkout's dispatcher. */
 const STRUCTURED_HOST_REGISTRY =
   '/src/main/native-chat/agent-session-wire/structured-agent-session-registry.ts'
+const MUTATION_PLANS =
+  '/src/main/native-chat/agent-session-wire/structured-agent-session-mutation-plans.ts'
+const MUTATION_ADMISSION =
+  '/src/main/native-chat/agent-session-wire/structured-agent-session-mutation-admission.ts'
 
 export type RpcReply = {
   id: string
@@ -60,6 +65,10 @@ export type AgentSessionWireBuild = {
    *  the surface stays loadable, and throws rather than no-opping so a build with
    *  no slot cannot read as a surface that answered. */
   installStructuredHost: (host: unknown) => Promise<void>
+  /** This build's own admission of the `agentSession.send` params its host was handed. With no
+   *  journal it stops after the fingerprint check: a fingerprint it derives differently refuses
+   *  as `fingerprintMismatch`, one it agrees with as `sessionNotAttached`. */
+  admitSend: (sent: SentMessage) => Promise<unknown>
 }
 
 type DispatcherModule = {
@@ -84,6 +93,32 @@ function applyStructuredHost(module: Record<string, unknown>, label: string, hos
     throw new Error(`Build ${label} publishes no structured agent-session host registry`)
   }
   ;(install as (next: unknown) => void)(host)
+}
+
+/** The `agentSession.send` params a host is handed. */
+export type SentMessage = Parameters<typeof sendPlan>[0]
+
+type SendAdmissionModules = {
+  sendPlan: (sent: SentMessage) => unknown
+  admitAndRunAgentSessionMutation: (request: {
+    plan: unknown
+    envelope: SentMessage['envelope']
+    journal: () => undefined
+  }) => Promise<unknown>
+}
+
+async function admitSend(
+  plans: Record<string, unknown>,
+  admission: Record<string, unknown>,
+  sent: SentMessage
+): Promise<unknown> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the build's own send plan and admission; with no `prepareSession` it reads only plan, envelope and journal. A drifted export or shape fails this check.
+  const build = { ...plans, ...admission } as unknown as SendAdmissionModules
+  return build.admitAndRunAgentSessionMutation({
+    plan: build.sendPlan(sent),
+    envelope: sent.envelope,
+    journal: () => undefined
+  })
 }
 
 function capabilityStrings(module: Record<string, unknown>): readonly string[] {
@@ -117,6 +152,13 @@ async function loadWorkingTreeBuild(): Promise<AgentSessionWireBuild> {
       const registry =
         await import('../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry')
       applyStructuredHost(registry as unknown as Record<string, unknown>, WORKING_TREE, host)
+    },
+    admitSend: async (sent) => {
+      const [plans, admission] = await Promise.all([
+        import('../../../src/main/native-chat/agent-session-wire/structured-agent-session-mutation-plans'),
+        import('../../../src/main/native-chat/agent-session-wire/structured-agent-session-mutation-admission')
+      ])
+      return admitSend(plans, admission, sent)
     }
   }
 }
@@ -146,6 +188,13 @@ async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<AgentSession
         checkout.ref,
         host
       )
+    },
+    admitSend: async (sent) => {
+      const [plans, admission] = await Promise.all([
+        importReleaseCheckoutModule(checkout, MUTATION_PLANS),
+        importReleaseCheckoutModule(checkout, MUTATION_ADMISSION)
+      ])
+      return admitSend(plans, admission, sent)
     }
   }
 }

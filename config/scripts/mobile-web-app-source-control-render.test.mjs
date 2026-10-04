@@ -283,10 +283,8 @@ describeRender(
  * this tree by driving the page with the double. Scripting that chain would put five hand-written
  * fixtures against five Zod schemas into a transport double, which is the thing the harness's own
  * docstring says it must not become. So neither the comment avatar nor the drawer is exercised on
- * this page at all: the avatar's branch is the component test named in the header, and the drawer's
- * scroll handler is answered by `mobile/src/components/right-drawer-scroll-handler.test.ts`, which
- * records the two static facts that make the missing dependency array unobservable. The behavioural
- * scroll probe belongs with the device proof, which reaches a real PR.
+ * this page at all: the avatar's branch is the component test named in the header. The drawer's
+ * scroll behavior belongs with the device proof, which reaches a real PR.
  *
  * **The seams.** The external-link, clipboard and router seams this series moved are each reached
  * from a control that only renders once the screens have provider data, for the same reason. They

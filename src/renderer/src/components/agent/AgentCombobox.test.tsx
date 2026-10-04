@@ -199,9 +199,11 @@ describe('AgentCombobox', () => {
   it('renders bundled favicons for favicon-domain agents instead of the remote Google service', () => {
     // Why: previously loaded from Google's favicon service (#8451). Iterate the
     // full asset map so missing files/key mismatches fail the test.
+    const sharedIcons = new Map([['qoder-cn', 'qoder']])
     for (const agent of Object.keys(AGENT_FAVICON_ASSETS) as TuiAgent[]) {
       const markup = renderToStaticMarkup(<AgentIcon agent={agent} />)
-      expect(markup).toContain(`/shared/agent-icons/${agent}.png`)
+      const iconName = sharedIcons.get(agent) ?? agent
+      expect(markup).toContain(`/shared/agent-icons/${iconName}.png`)
       expect(markup).not.toContain('https://www.google.com/s2/favicons')
     }
   })

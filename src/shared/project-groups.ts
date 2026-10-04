@@ -1,16 +1,9 @@
 import { normalizeExecutionHostId } from './execution-host'
 import type { ProjectGroup, ProjectGroupCreatedFrom } from './project-group-types'
 import type { Repo } from './repo-types'
+import { createNonSecureContextUuid } from './non-secure-context-uuid'
 
 export const UNGROUPED_PROJECT_GROUP_KEY = 'project-group:ungrouped'
-
-function createProjectGroupId(): string {
-  const randomUUID = globalThis.crypto?.randomUUID
-  if (randomUUID) {
-    return randomUUID.call(globalThis.crypto)
-  }
-  return `project-group-${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
 
 export function normalizeProjectGroupName(name: string, fallback = 'Untitled group'): string {
   const trimmed = name.trim()
@@ -28,7 +21,7 @@ export function createProjectGroup(input: {
 }): ProjectGroup {
   const now = input.now ?? Date.now()
   return {
-    id: createProjectGroupId(),
+    id: createNonSecureContextUuid(),
     name: normalizeProjectGroupName(input.name),
     parentPath: input.parentPath ?? null,
     connectionId: input.connectionId ?? null,

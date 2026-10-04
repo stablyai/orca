@@ -9,6 +9,7 @@ import { accountNameFromUser, fetchBitbucketUserResult } from './user-request'
 import {
   clearStoredBitbucketCredential,
   getStoredBitbucketMetadata,
+  getBitbucketCredentialProtection,
   hasStoredBitbucketCredential,
   saveBitbucketCredential
 } from './credential-store'
@@ -87,6 +88,7 @@ export function getBitbucketConnectionStatus(): BitbucketConnectionStatus {
     return {
       configured: true,
       source: 'environment',
+      credentialProtection: null,
       account: null,
       authMode: env.accessToken ? 'token' : 'basic',
       email: env.email,
@@ -98,6 +100,7 @@ export function getBitbucketConnectionStatus(): BitbucketConnectionStatus {
     return {
       configured: true,
       source: 'stored',
+      credentialProtection: getBitbucketCredentialProtection(),
       account: metadata?.account ?? null,
       authMode: metadata?.authMode ?? null,
       email: metadata?.email ?? null,
@@ -107,6 +110,7 @@ export function getBitbucketConnectionStatus(): BitbucketConnectionStatus {
   return {
     configured: false,
     source: 'none',
+    credentialProtection: null,
     account: null,
     authMode: null,
     email: null,

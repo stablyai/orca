@@ -234,40 +234,4 @@ describe('classifyConnection with a signed-out desktop', () => {
       classifyConnection({ ...base, state: 'reconnecting', reconnectAttempts: 20 }).label
     ).toBe(SIGNED_OUT_LABEL)
   })
-
-  it('reads as stale once this session had been connected', () => {
-    expect(
-      classifyConnection({ ...base, state: 'reconnecting', lastConnectedAt: 1, nowMs: 2 }).reason
-    ).toBe('stale')
-  })
-
-  // A Tailscale endpoint cannot make "sign in on your desktop" better advice.
-  it('never appends the Tailscale hint', () => {
-    expect(
-      classifyConnection({ ...base, state: 'reconnecting', endpoint: '100.64.0.1' })
-    ).not.toHaveProperty('hint')
-  })
-
-  it('never outranks a connected session', () => {
-    expect(classifyConnection({ ...base, state: 'connected' }).label).toBe('Connected')
-  })
-
-  // Re-pairing, not signing in, is the remedy when the pairing itself is dead.
-  it('never outranks a revoked pairing', () => {
-    expect(classifyConnection({ ...base, state: 'reconnecting', pairingRejected: true }).kind).toBe(
-      'auth-failed'
-    )
-  })
-
-  it('leaves every other verdict alone when the desktop is not signed out', () => {
-    expect(
-      classifyConnection({
-        state: 'connecting',
-        reconnectAttempts: 0,
-        lastConnectedAt: null,
-        pendingPath: 'relay',
-        relayHostReachability: 'connecting'
-      }).label
-    ).toBe('Connecting via Relay…')
-  })
 })

@@ -183,7 +183,9 @@ function readCommandStdout(
   })
 }
 
-function readSelectedInputSourceIdFromJson(stdout: string): string | null {
+type SelectedKeyboardInputSource = { kind: 'inputSource'; id: string } | { kind: 'keyboardLayout' }
+
+function readSelectedInputSourceFromJson(stdout: string): SelectedKeyboardInputSource | null {
   let records: unknown
   try {
     records = JSON.parse(stdout)
@@ -194,54 +196,62 @@ function readSelectedInputSourceIdFromJson(stdout: string): string | null {
     return null
   }
 
+  let hasSelectedKeyboardLayout = false
   for (const record of records.slice().toReversed()) {
     if (!record || typeof record !== 'object') {
       continue
     }
-    const fields = record as Record<string, unknown>
-    const kind = typeof fields.InputSourceKind === 'string' ? fields.InputSourceKind : ''
-    if (kind.toLowerCase().includes('non keyboard')) {
+    const kind =
+      'InputSourceKind' in record && typeof record.InputSourceKind === 'string'
+        ? record.InputSourceKind.trim().toLowerCase()
+        : ''
+    if (kind === 'keyboard layout') {
+      hasSelectedKeyboardLayout = true
       continue
     }
-    const inputMode = fields['Input Mode']
-    if (typeof inputMode === 'string' && inputMode.trim()) {
-      return inputMode.trim()
+    if (kind.includes('non keyboard')) {
+      continue
     }
-    const bundleId = fields['Bundle ID']
-    if (typeof bundleId === 'string' && bundleId.trim()) {
-      return bundleId.trim()
+    if (kind !== 'input mode' && kind !== 'keyboard input method') {
+      return null
     }
+    const inputMode = 'Input Mode' in record ? record['Input Mode'] : undefined
+    const bundleId = 'Bundle ID' in record ? record['Bundle ID'] : undefined
+    const id = typeof inputMode === 'string' && inputMode.trim() ? inputMode : bundleId
+    if (typeof id === 'string' && id.trim()) {
+      return { kind: 'inputSource', id: id.trim() }
+    }
+    return null
   }
-  return null
+  return hasSelectedKeyboardLayout ? { kind: 'keyboardLayout' } : null
 }
 
-async function readSelectedKeyboardInputSourceId(): Promise<string | null> {
+async function readSelectedKeyboardInputSource(): Promise<SelectedKeyboardInputSource | null> {
   try {
     const stdout = await readCommandStdout(
       '/bin/sh',
       ['-c', MAC_SELECTED_INPUT_SOURCES_JSON_COMMAND],
       'Selected keyboard input source probe timed out'
     )
-    return readSelectedInputSourceIdFromJson(stdout)
+    return readSelectedInputSourceFromJson(stdout)
   } catch {
     return null
   }
 }
 
-function readKeyboardLayoutInputSourceId(): Promise<string> {
-  return readCommandStdout(
-    '/usr/bin/defaults',
-    ['read', MAC_HITOOLBOX_DOMAIN, 'AppleCurrentKeyboardLayoutInputSourceID'],
-    'Keyboard layout input source probe timed out'
-  )
-}
-
 async function readKeyboardInputSourceId(): Promise<string | null> {
-  const selectedInputSourceId = await readSelectedKeyboardInputSourceId()
-  if (selectedInputSourceId) {
-    return selectedInputSourceId
+  const selectedInputSource = await readSelectedKeyboardInputSource()
+  if (selectedInputSource?.kind === 'inputSource') {
+    return selectedInputSource.id
   }
-  return readKeyboardLayoutInputSourceId()
+  // An IME can use ABC underneath; the backing layout alone cannot identify the selected source.
+  return selectedInputSource?.kind === 'keyboardLayout'
+    ? readCommandStdout(
+        '/usr/bin/defaults',
+        ['read', MAC_HITOOLBOX_DOMAIN, 'AppleCurrentKeyboardLayoutInputSourceID'],
+        'Keyboard layout input source probe timed out'
+      )
+    : null
 }
 
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
@@ -270,7 +280,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('pwsh:isAvailable', (): Promise<boolean> => isPwshAvailableAsync())
   ipcMain.handle('gitBash:isAvailable', (): boolean => isGitBashAvailable())
 
-  // Why: renderer layout fingerprint tags ABC/CJK-Roman as 'us', breaking Option+letter (#1205); HIToolbox prefs override it.
+  // The selected IME identity must win over its US-shaped backing keyboard layout.
   ipcMain.handle('app:getKeyboardInputSourceId', async (): Promise<string | null> => {
     if (process.platform !== 'darwin') {
       return null
@@ -281,7 +291,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
       const trimmed = stdout?.trim() ?? ''
       return trimmed.length > 0 ? trimmed : null
     } catch {
-      // Why: probe can fail (missing keys on first boot, sandbox) — treat as "no signal" and fall back to the fingerprint.
+      // A failed probe must not promote an IME's backing layout into an Alt default.
       return null
     }
   })

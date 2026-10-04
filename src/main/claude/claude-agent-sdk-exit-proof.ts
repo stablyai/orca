@@ -26,7 +26,7 @@ import {
 /**
  * A later reap may only raise the latched verdict. An observed exit is final, and
  * a descendant seen alive at a deadline is never forgotten by a later look that
- * could not read the table: the lease gate discriminates on exactly that pair.
+ * could not read the table, so the report never calls a survivor gone.
  */
 const TREE_VERDICT_TRUST: Record<DescendantTreeVerdict, number> = {
   unverifiable: 0,
@@ -89,8 +89,8 @@ export type ClaudeChildTreeReaper = {
   reap(): Promise<DescendantTreeVerdict>
   /**
    * `unverifiable` until a reap observes otherwise. `exited` is the only verdict
-   * that lets a close release the lease; `live` names a descendant that was seen
-   * still running, which no later caller may collapse into "unknown".
+   * that proves a close; `live` names a descendant that was seen still running,
+   * which no later caller may collapse into "unknown".
    */
   readonly treeVerdict: DescendantTreeVerdict
 }

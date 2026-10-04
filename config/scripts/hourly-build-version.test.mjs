@@ -129,6 +129,7 @@ describe('getHourlyBuildIdentity', () => {
   // install it.
   it('stays on the already-shipped hourly base after a buggy main release is unpublished', () => {
     const identity = getHourlyBuildIdentity(new Date('2026-09-14T20:00:00Z'), {
+      packageVersion: '1.4.201',
       publishedVersions: [
         'v1.4.201',
         'v1.4.202',
@@ -142,5 +143,15 @@ describe('getHourlyBuildIdentity', () => {
     })
     expect(identity.version).toBe('1.4.203-hourly.202609142000')
     expect(identity.buildNumber).toBe(5)
+  })
+
+  it('keeps a newer package version as the hourly base floor', () => {
+    const identity = getHourlyBuildIdentity(new Date('2026-09-14T20:00:00Z'), {
+      packageVersion: '1.4.214',
+      publishedVersions: ['v1.4.202', 'v1.4.203-hourly.202609140417'],
+      releaseNames: ['1.4.203 • 04 • Sep 13, 9:17PM • 2ce252f']
+    })
+    expect(identity.version).toBe('1.4.214-hourly.202609142000')
+    expect(identity.buildNumber).toBe(1)
   })
 })

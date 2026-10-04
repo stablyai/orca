@@ -70,7 +70,7 @@ export function resolveWorkerLaunchPreferences(args: {
   if (!catalog?.supportsWorkerLaunchPreferences || !catalog.modelApply.launchArgs) {
     throw new OrchestrationError(
       'invalid_argument',
-      `Agent ${args.agent} does not support launch-time model selection.`
+      `Agent ${args.agent} does not support launch-time model selection. Omit --model to run the model from its own config.`
     )
   }
 

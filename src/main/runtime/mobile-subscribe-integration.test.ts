@@ -30,7 +30,8 @@ vi.mock('../ipc/worktree-logic', async (importOriginal) => {
 })
 
 vi.mock('../ipc/registered-worktree-roots-cache', () => ({
-  invalidateAuthorizedRootsCache: vi.fn()
+  invalidateAuthorizedRootsCache: vi.fn(),
+  invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
 
 vi.mock('../git/repo', async (importOriginal) => {
@@ -316,55 +317,6 @@ describe('mobile subscribe integration', () => {
     await vi.advanceTimersByTimeAsync(LEGACY_RESTORE_MS)
     // Restored to desktop dims — no sticky-phone retention.
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
-  })
-
-  // TODO: inline restore on re-subscribe not yet implemented
-  it.skip('re-subscribe within 300ms cancels debounce timer and inline-restores old PTY', async () => {
-    const { runtime, ptySizes } = createRuntime()
-    await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
-    runtime.handleMobileUnsubscribe('pty-1', 'client-a')
-
-    // Re-subscribe to a different terminal before the timer fires
-    await vi.advanceTimersByTimeAsync(100)
-    await runtime.handleMobileSubscribe('pty-2', 'client-a', { cols: 45, rows: 20 })
-
-    // pty-1 was inline-restored when pty-2 subscribed (timer cancelled + immediate restore)
-    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
-    expect(ptySizes.get('pty-2')).toEqual({ cols: 45, rows: 20 })
-
-    // Advancing past the 300ms debounce should not cause a second restore
-    await vi.advanceTimersByTimeAsync(300)
-    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
-  })
-
-  // TODO: inline restore on re-subscribe not yet implemented
-  it.skip('rapid A→B→C tab navigation: inline restore of A when B subscribes', async () => {
-    const { runtime, ptySizes } = createRuntime()
-
-    // Subscribe to A
-    await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
-    expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
-
-    // Unsubscribe A, subscribe B — A's pending timer is cancelled, A gets inline restore
-    runtime.handleMobileUnsubscribe('pty-1', 'client-a')
-    await runtime.handleMobileSubscribe('pty-2', 'client-a', { cols: 45, rows: 20 })
-
-    // pty-1 should be restored inline (not waiting for timer)
-    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
-    expect(ptySizes.get('pty-2')).toEqual({ cols: 45, rows: 20 })
-
-    // Unsubscribe B, subscribe C — B's pending timer cancelled, B gets inline restore
-    runtime.handleMobileUnsubscribe('pty-2', 'client-a')
-    await runtime.handleMobileSubscribe('pty-3', 'client-a', { cols: 45, rows: 20 })
-
-    expect(ptySizes.get('pty-2')).toEqual({ cols: 120, rows: 35 })
-    expect(ptySizes.get('pty-3')).toEqual({ cols: 45, rows: 20 })
-
-    // Verify final state
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
-    expect(ptySizes.get('pty-2')).toEqual({ cols: 120, rows: 35 })
-    expect(ptySizes.get('pty-3')).toEqual({ cols: 45, rows: 20 })
   })
 
   it('preserves previousDims across re-subscribes to same terminal', async () => {

@@ -1,3 +1,4 @@
+import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { toast } from 'sonner'
 import {
@@ -200,7 +201,8 @@ export default function AiVaultSessionDropLayer({
           sessionFilePath: payload.sessionFilePath ?? null,
           sessionExecutionHostId: payload.sessionExecutionHostId ?? null,
           targetStatus,
-          targetExecutionHostId
+          targetExecutionHostId,
+          targetWslDistro: getAiVaultResumeWorkspaceWslDistro(state, worktreeId)
         })
       ) {
         toast.error(

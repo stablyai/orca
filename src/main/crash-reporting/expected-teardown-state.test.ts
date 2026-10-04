@@ -35,11 +35,6 @@ afterEach(() => {
 })
 
 describe('expected teardown state', () => {
-  it('uses a product-chosen five-second harm bound, not a Windows lifetime guarantee', () => {
-    // Restart Manager may wait 30s; tree-kills after this bound remain reportable by design.
-    expect(WINDOWS_SESSION_END_CRASH_SUPPRESSION_WINDOW_MS).toBe(5_000)
-  })
-
   it('uses the production monotonic clock by default', () => {
     vi.spyOn(performance, 'now').mockReturnValueOnce(1_000).mockReturnValue(1_001)
     vi.spyOn(Date, 'now').mockReturnValueOnce(10_000).mockReturnValue(15_000)

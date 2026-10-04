@@ -347,7 +347,11 @@ describe('terminal output batching', () => {
       expect(runtime.sendTerminal).toHaveBeenCalledWith(
         'terminal-1',
         { text: 'ls\r', enter: false, interrupt: false },
-        { reserveWrite: expect.any(Function), afterWrite: expect.any(Function) }
+        {
+          inputKind: 'driving',
+          reserveWrite: expect.any(Function),
+          afterWrite: expect.any(Function)
+        }
       )
     )
     expect(beginMobileInputFloor).toHaveBeenCalledWith('pty-1', 'mobile-1')

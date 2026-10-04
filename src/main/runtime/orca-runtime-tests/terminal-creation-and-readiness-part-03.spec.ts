@@ -7,7 +7,6 @@ import {
   homedir,
   ipcMain,
   join,
-  markCodexProjectTrustedMock,
   mkdtemp,
   randomUUID,
   registerSshGitProvider,
@@ -241,10 +240,6 @@ describe('OrcaRuntimeService', () => {
           agentEnv: { CODEX_PROFILE: 'captured' }
         }
       })
-    )
-    expect(markCodexProjectTrustedMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
-    expect(markCodexProjectTrustedMock.mock.invocationCallOrder[0]).toBeLessThan(
-      webContents.send.mock.invocationCallOrder[0]!
     )
   })
 

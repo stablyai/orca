@@ -1,4 +1,4 @@
-type KeyboardRedirectEvent = {
+export type KeyboardRedirectEvent = {
   key: string
   ctrlKey: boolean
   metaKey: boolean
@@ -63,6 +63,22 @@ export function shouldFocusNativeChatComposerFromEditingKey(event: KeyboardRedir
     return false
   }
   return !isNativeChatInteractiveTarget(event.target)
+}
+
+/** The platform paste chord pressed outside any input: the caller focuses an
+ *  input first so the native paste that follows lands in it. */
+export function shouldFocusNativeChatInputForPaste(
+  event: KeyboardRedirectEvent,
+  isMac: boolean
+): boolean {
+  if (event.defaultPrevented || event.isComposing || event.altKey) {
+    return false
+  }
+  const chord = isMac
+    ? event.metaKey && !event.ctrlKey && event.key.toLowerCase() === 'v'
+    : (event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'v') ||
+      (event.shiftKey === true && !event.ctrlKey && !event.metaKey && event.key === 'Insert')
+  return chord && !isNativeChatInteractiveTarget(event.target)
 }
 
 function isNativeChatInteractiveTarget(target: EventTarget | null): boolean {

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -73,37 +73,5 @@ describe('the source files a census reads', () => {
     for (const entry of ignored) {
       expect(isGeneratedSource(entry), entry).toBe(true)
     }
-  })
-
-  it('is the only walk of its kind left in the tree', () => {
-    // The line every census used to hold a copy of. One spelling, so a tenth census cannot quietly
-    // reintroduce the cost by pasting the walk rather than importing it.
-    const copies: string[] = []
-    const walk = (directory: string): void => {
-      for (const entry of readdirSync(directory, { withFileTypes: true })) {
-        const path = join(directory, entry.name)
-        if (entry.isDirectory()) {
-          if (entry.name !== 'node_modules') {
-            walk(path)
-          }
-          continue
-        }
-        if (!/\.tsx?$/.test(entry.name) || isGeneratedSource(entry.name)) {
-          continue
-        }
-        if (readFileSync(path, 'utf8').includes("entry.name === 'node_modules' ? []")) {
-          copies.push(relative(mobileRoot, path))
-        }
-      }
-    }
-    walk(join(mobileRoot, 'src'))
-    walk(join(mobileRoot, 'app'))
-    // This file is in the list because it carries the line as the text it greps for; the module
-    // beside it is the walk itself. Named rather than filtered out, so a third entry is a failure
-    // that reads as one.
-    expect(copies.sort()).toEqual([
-      'src/test-support/census-source-files.test.ts',
-      'src/test-support/census-source-files.ts'
-    ])
   })
 })

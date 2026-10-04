@@ -6,7 +6,6 @@ const getTerminalHandleMock = vi.hoisted(() => vi.fn())
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
-import { printResult } from '../format'
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 
 describe('lightweight Run CLI handlers', () => {
@@ -170,48 +169,5 @@ describe('orchestration reset CLI handler', () => {
   ])('rejects multiple reset scopes before calling the runtime', async (flags) => {
     await expect(invoke(flags)).rejects.toMatchObject({ code: 'invalid_argument' })
     expect(callMock).not.toHaveBeenCalled()
-  })
-})
-
-describe('orchestration task-list brief output', () => {
-  it('requests server-side brief and falls back client-side for older runtimes', async () => {
-    callMock.mockReset().mockResolvedValue({
-      result: {
-        tasks: [{ id: 'task_1', spec: `First line\n${'detail '.repeat(40)}`, status: 'ready' }],
-        count: 1
-      }
-    })
-    vi.mocked(printResult).mockClear()
-    await ORCHESTRATION_HANDLERS['orchestration task-list']({
-      flags: new Map([['brief', true]]),
-      client: { call: callMock },
-      json: true
-    } as never)
-    expect(callMock).toHaveBeenCalledWith(
-      'orchestration.taskList',
-      expect.objectContaining({ brief: true })
-    )
-    const response = vi.mocked(printResult).mock.calls[0]?.[0] as {
-      result: { tasks: { spec: string; spec_truncated: boolean }[] }
-    }
-    expect(response.result.tasks[0].spec).toHaveLength(160)
-    expect(response.result.tasks[0].spec_truncated).toBe(true)
-  })
-
-  it('passes server-abbreviated rows through untouched', async () => {
-    const serverTasks = [
-      { id: 'task_1', spec: 'already brief…', status: 'ready', spec_truncated: true }
-    ]
-    callMock.mockReset().mockResolvedValue({ result: { tasks: serverTasks, count: 1 } })
-    vi.mocked(printResult).mockClear()
-    await ORCHESTRATION_HANDLERS['orchestration task-list']({
-      flags: new Map([['brief', true]]),
-      client: { call: callMock },
-      json: true
-    } as never)
-    const response = vi.mocked(printResult).mock.calls[0]?.[0] as {
-      result: { tasks: { spec: string; spec_truncated: boolean }[] }
-    }
-    expect(response.result.tasks).toBe(serverTasks)
   })
 })

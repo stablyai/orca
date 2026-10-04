@@ -54,12 +54,13 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
     )
     const rendererTab = this.tabs.get(tabId)
     const rendererLeaf = this.leaves.get(this.getLeafKey(tabId, leafId))
+    // A mounted pane can publish before its PTY binds; persisted identity fences that gap.
     const rendererMounted = Boolean(
       rendererTab &&
       rendererLeaf &&
       runtimeWorktreeIdsEqual(rendererTab.worktreeId, worktreeId) &&
       runtimeWorktreeIdsEqual(rendererLeaf.worktreeId, worktreeId) &&
-      rendererLeaf.ptyId === ptyId
+      (rendererLeaf.ptyId === ptyId || (persisted && rendererLeaf.ptyId === null))
     )
     if (persisted && persistedLayout) {
       return {
@@ -100,7 +101,7 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
     return await this.claudeAgentTeams.handleTmuxCompat(request, {
       splitTerminal: (handle, opts) => this.splitTerminal(handle, opts),
       readTerminal: (handle, opts) => this.readTerminal(handle, opts),
-      sendTerminal: (handle, action) => this.sendTerminal(handle, action),
+      sendTerminal: (handle, action, options) => this.sendTerminal(handle, action, options),
       focusTerminal: (handle) => this.focusTerminal(handle),
       closeTerminal: (handle) => this.closeTerminal(handle),
       showTerminal: (handle) => this.showTerminal(handle)

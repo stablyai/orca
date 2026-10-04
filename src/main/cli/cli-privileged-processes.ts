@@ -1,4 +1,5 @@
 import { runProcess } from '../../shared/child-process/run-process'
+import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 import { WINDOWS_PATH_WRITE_TIMEOUT_MS } from './cli-install-constants'
 
 export async function runMacPrivilegedCommand(command: string): Promise<void> {
@@ -21,7 +22,7 @@ export async function writeWindowsUserPath(value: string): Promise<void> {
   await runWindowsPathCommand([
     '-NoProfile',
     '-Command',
-    `[Environment]::SetEnvironmentVariable('Path', ${quotePowerShell(value)}, 'User')`
+    `[Environment]::SetEnvironmentVariable('Path', ${quotePowerShellLiteral(value)}, 'User')`
   ])
 }
 
@@ -48,8 +49,4 @@ function processFailure(
   const error = new Error(detail || `${program} exited with code ${result.code ?? 'unknown'}`)
   Object.assign(error, { code: result.code, stderr: result.stderr })
   return error
-}
-
-function quotePowerShell(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`
 }

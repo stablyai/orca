@@ -51,7 +51,7 @@ function readInheritedOrShellEnvVar(name: string, sourceName?: string): string |
 
 function prepareShellConfigDirEnv(agentId: string): { ok: true; env?: NodeJS.ProcessEnv } | null {
   const configVar =
-    agentId === 'opencode'
+    agentId === 'opencode' || agentId === 'opencode2'
       ? 'OPENCODE_CONFIG_DIR'
       : agentId === 'pi' || agentId === 'omp'
         ? 'PI_CODING_AGENT_DIR'
@@ -66,7 +66,7 @@ function prepareShellConfigDirEnv(agentId: string): { ok: true; env?: NodeJS.Pro
   // the Pi one (and vice versa). PI_CODING_AGENT_DIR is the binary-facing var
   // both kinds consume — see src/main/pi/titlebar-extension-service.ts.
   const sourceVar =
-    agentId === 'opencode'
+    agentId === 'opencode' || agentId === 'opencode2'
       ? 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
       : agentId === 'pi'
         ? 'ORCA_PI_SOURCE_AGENT_DIR'

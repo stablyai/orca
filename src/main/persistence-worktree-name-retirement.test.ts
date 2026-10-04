@@ -1,3 +1,4 @@
+import { closeTestStores, createSqliteTestStore } from './persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -50,7 +51,7 @@ async function reloadStore() {
   // file's temp dir rather than the global fake's shared one, after resetModules.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 async function createStore(persisted: Record<string, unknown> = {}) {
@@ -67,7 +68,8 @@ beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-worktree-name-retirement-'))
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTestStores()
   rmSync(testState.dir, { force: true, recursive: true })
 })
 

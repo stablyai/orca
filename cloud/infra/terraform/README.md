@@ -323,7 +323,8 @@ only additive regional resources; cells select the subnet from their declared
 region. Every cell also declares an explicit database pool maximum in startup
 metadata and deployment outputs. The initial Asia shape is `e2-standard-4`,
 3,000 physical connections, 60 unobserved connections, 6,000 request units,
-and a database pool maximum of 10.
+and a database pool maximum of 10. Production Asia pools now run at 16 and
+staging C4 stays at 10; the topology and director validators pin both.
 
 Provision the complete identical Asia wave in one `Deploy Relay Asia Topology`
 saved plan. Its validator permits only the additive subnet/router/NAT, reviewed
@@ -331,7 +332,14 @@ cell templates/MIGs/backends, and exact shared URL-map host additions. It
 rejects deletes, replacements, loss of an existing host route, US-resource
 changes, and unrelated drift. Do not add production C27-C29 until the
 compatible image has been published and each entry can pin its immutable
-digest.
+digest. A later cell, such as C30 or C31, is its own reviewed wave. The shared URL map
+pulls every live cell into its plan, so the workflow plans each live cell at the
+image its state template already serves, and the validator rejects any change
+to a cell outside the wave. US C32 and C33 use the same workflow at the same
+3,000-connection shape, as one wave because they are declared together: each
+wave's region comes from its reviewed zone, a
+`us-central1` wave targets no additional-region network, and its template
+carries no region label or line and the default pool of 10.
 
 Topology creation intentionally does not apply the director resource. Once all
 MIGs and backends are healthy, register every new cell atomically as

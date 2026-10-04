@@ -38,6 +38,10 @@ export type ProcessSpec = {
   input?: string
   /** Cap on captured stdout/stderr; output past it is discarded. */
   maxOutputBytes?: number
+  /** Capture stdout as bytes without decoding; stdout stays empty in this mode. */
+  captureStdoutAsBytes?: boolean
+  /** Stop a parser command as soon as captured output exceeds its cap. */
+  killOnOutputLimit?: boolean
   /** Kills the process when aborted; the result still reports the exit. */
   signal?: AbortSignal
   /** Keep the child in its own POSIX process group for tree termination. */
@@ -62,6 +66,7 @@ export type ProcessResult = {
   code: number | null
   signal: NodeJS.Signals | null
   stdout: string
+  stdoutBytes?: Buffer
   stderr: string
   /** True when the process was killed by `timeoutMs` rather than exiting. */
   timedOut: boolean

@@ -12,6 +12,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
@@ -108,10 +109,6 @@ export function getSharedManagedScriptPath(scriptFileName: string): string {
 
 export { wrapPosixHookCommand } from './posix-hook-command'
 
-export function quotePowerShellString(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`
-}
-
 export {
   wrapWindowsPowerShellEncodedCommand,
   WINDOWS_POWERSHELL_HOOK_SWITCHES
@@ -134,14 +131,14 @@ export function buildWindowsHookPowerShellCommand(
   options: { fallbackStdout?: string } = {}
 ): string {
   // Why: the encoded launcher protects paths across Windows shells and drains stdin when the config points at a missing script.
-  const quoted = quotePowerShellString(scriptPath)
+  const quoted = quotePowerShellLiteral(scriptPath)
   const envPrefix = Object.entries(env)
-    .map(([key, value]) => `$env:${key} = ${quotePowerShellString(value)}; `)
+    .map(([key, value]) => `$env:${key} = ${quotePowerShellLiteral(value)}; `)
     .join('')
   const fallback =
     options.fallbackStdout === undefined
       ? ''
-      : `Write-Output ${quotePowerShellString(options.fallbackStdout)}; `
+      : `Write-Output ${quotePowerShellLiteral(options.fallbackStdout)}; `
   // Why the order: answer first (a gate event reads silence as deny), then the shared
   // env guard, and only then own stdin — outside an Orca pane the caller may abandon the
   // pipe, and ReadToEnd would strand the launcher there forever (#11549).
@@ -318,10 +315,12 @@ function writeScriptWithAclRetry(scriptPath: string, content: string): void {
 
 export function writeHooksJson(
   configPath: string,
-  config: HooksConfig,
+  // Why: only used for the fallback serialization, so any JSON-shaped config qualifies —
+  // ZCode nests its hook block under `hooks.events`, not Claude's `hooks.<Event>`.
+  config: Record<string, unknown>,
   // Why: `serialized` lets a JSONC config (Devin) supply text edited in place, so the
   // atomic write + rolling backup below stay shared instead of being reimplemented.
-  options?: { preserveMode?: boolean; serialized?: string }
+  options?: { preserveMode?: boolean; defaultMode?: number; serialized?: string }
 ): void {
   const writePath = resolveHooksJsonWritePath(configPath)
   const dir = dirname(writePath)
@@ -332,7 +331,9 @@ export function writeHooksJson(
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   const serialized = options?.serialized ?? `${JSON.stringify(config, null, 2)}\n`
   const existingMode =
-    options?.preserveMode === true && existsSync(writePath) ? statSync(writePath).mode : undefined
+    options?.preserveMode === true && existsSync(writePath)
+      ? statSync(writePath).mode & 0o777
+      : options?.defaultMode
 
   // Why: skip the write (and therefore the .bak rotation) when the on-disk
   // content is already identical. Without this, every install() rewrites the
@@ -349,7 +350,11 @@ export function writeHooksJson(
   }
 
   try {
-    writeFileSync(tmpPath, serialized, { encoding: 'utf-8', mode: existingMode })
+    writeFileSync(tmpPath, serialized, { encoding: 'utf-8', mode: existingMode, flag: 'wx' })
+    if (existingMode !== undefined && process.platform !== 'win32') {
+      // Preserve requested permissions even with a stricter process umask.
+      chmodSync(tmpPath, existingMode)
+    }
     // Why: single rolling backup — one file, no accumulation in ~/.claude.
     // Protects against a merge-logic bug producing bad JSON; the original is
     // always recoverable from <configPath>.bak until the next write.

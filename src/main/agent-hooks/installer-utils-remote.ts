@@ -48,7 +48,8 @@ export async function readHooksJsonRemote(
 export async function writeHooksJsonRemote(
   sftp: SFTPWrapper,
   remotePath: string,
-  config: HooksConfig,
+  // Why: mirrors the local writer — the config is only the fallback serialization source.
+  config: Record<string, unknown>,
   // Why: mirrors the local writer — a JSONC config supplies text edited in place.
   options?: { serialized?: string }
 ): Promise<void> {

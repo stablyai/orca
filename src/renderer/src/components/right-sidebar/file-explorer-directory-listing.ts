@@ -1,4 +1,4 @@
-import { joinPath, normalizeRelativePath } from '@/lib/path'
+import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
 import type { DirEntry } from '../../../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../../../shared/file-name-sort'
 import { readRuntimeDirectory } from '@/runtime/runtime-file-client'
@@ -27,9 +27,7 @@ export function fileExplorerEntriesToTreeNodes(
     return {
       name: entry.name,
       path,
-      relativePath: worktreePath
-        ? normalizeRelativePath(path.slice(worktreePath.length + 1))
-        : entry.name,
+      relativePath: getRelativePathInsideRoot(path, worktreePath) ?? entry.name,
       isDirectory: entry.isDirectory,
       isSymlink: entry.isSymlink,
       depth: depth + 1,

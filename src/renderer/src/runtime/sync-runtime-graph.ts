@@ -82,8 +82,12 @@ export function focusRuntimeTerminalSurface(
     if (activePaneIsCoveredByNativeChat(manager)) {
       return true
     }
-    manager.getActivePane()?.terminal.focus()
-    return true
+    const pane = manager.getActivePane()
+    if (!pane) {
+      return false
+    }
+    pane.terminal.focus()
+    return !!pane.terminal.textarea && document.activeElement === pane.terminal.textarea
   }
   const resolution = resolveLeafIdForManager(tabId, leafId, manager)
   if (resolution.status !== 'resolved') {

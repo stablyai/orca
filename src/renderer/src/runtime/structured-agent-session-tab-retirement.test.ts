@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
     vi.fn<(target: RuntimeClientTarget, method: string, params?: unknown) => Promise<unknown>>(),
   discardOutbox: vi.fn<(sessionId: string) => void>(),
   hasTombstone: vi.fn<(worktreeId: string, sessionId: string) => boolean>(),
-  markCancelled: vi.fn<(worktreeId: string, sessionId: string) => boolean>()
+  markCancelled:
+    vi.fn<(worktreeId: string, sessionId: string, executionHostId: string) => boolean>()
 }))
 
 vi.mock('@/lib/structured-agent-session-launch-registry', () => ({
@@ -84,11 +85,10 @@ describe('structured agent session tab retirement', () => {
     beginStructuredAgentSessionTabClose({
       target,
       worktreeId: 'wt-1',
-      tabId: 'agent-tab-1',
       sessionId: 'session-1',
       provisional: true
     })
-    expect(mocks.markCancelled).toHaveBeenCalledWith('wt-1', 'session-1')
+    expect(mocks.markCancelled).toHaveBeenCalledWith('wt-1', 'session-1', 'local')
     expect(mocks.discardOutbox).toHaveBeenCalledWith('session-1')
     await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
     expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1')
@@ -119,13 +119,11 @@ describe('structured agent session tab retirement', () => {
     retireStructuredAgentSessionTab({
       target,
       worktreeId: 'wt-1',
-      tabId: 'agent-tab-1',
       sessionId: 'session-1'
     })
     retireStructuredAgentSessionTab({
       target,
       worktreeId: 'wt-1',
-      tabId: 'agent-tab-1',
       sessionId: 'session-1'
     })
     expect(mocks.closeSession).toHaveBeenCalledTimes(1)

@@ -214,6 +214,108 @@ describe('SourceControl pull request generation records', () => {
     ).toBe(true)
   })
 
+  it.each([
+    {
+      name: 'an untouched unchecked Draft takes the agent draft',
+      seedDraft: false,
+      revision: 0,
+      agentDraft: true,
+      draft: true
+    },
+    {
+      name: 'a checked Draft stays checked',
+      seedDraft: true,
+      revision: 0,
+      agentDraft: false,
+      draft: true
+    },
+    {
+      name: 'a Draft the user unchecked stays unchecked',
+      seedDraft: false,
+      revision: 1,
+      agentDraft: true,
+      draft: false
+    }
+  ])(
+    'a Create PR run never takes the generated base, and $name',
+    ({ seedDraft, revision, agentDraft, draft }) => {
+      const record = runningRecord({
+        autoSubmit: true,
+        seed: { ...seed, draft: seedDraft },
+        seedFieldRevisions: { ...fieldRevisions, draft: revision }
+      })
+
+      const completed = resolvePullRequestGenerationSuccess({
+        record,
+        requestId: 3,
+        result: {
+          base: 'develop',
+          title: 'Generated title',
+          body: 'Generated body',
+          draft: agentDraft
+        }
+      })
+
+      expect(completed?.result).toEqual({
+        base: 'main',
+        title: 'Generated title',
+        body: 'Generated body',
+        draft
+      })
+    }
+  )
+
+  it('a reviewed run keeps the agent base and title for the form', () => {
+    const generated = {
+      base: 'develop',
+      title: 'Generated title',
+      body: 'Generated body',
+      draft: true
+    }
+
+    const completed = resolvePullRequestGenerationSuccess({
+      record: runningRecord(),
+      requestId: 3,
+      result: generated
+    })
+
+    expect(completed?.result).toEqual(generated)
+  })
+
+  it.each([
+    {
+      name: 'a Draft checked before the run stays checked',
+      seedDraft: true,
+      revision: 0,
+      draft: true
+    },
+    {
+      name: 'a Draft the user unchecked before the run stays unchecked',
+      seedDraft: false,
+      revision: 1,
+      draft: false
+    }
+  ])(
+    'a reviewed run never reverts the user Draft choice: $name',
+    ({ seedDraft, revision, draft }) => {
+      const completed = resolvePullRequestGenerationSuccess({
+        record: runningRecord({
+          seed: { ...seed, draft: seedDraft },
+          seedFieldRevisions: { ...fieldRevisions, draft: revision }
+        }),
+        requestId: 3,
+        result: {
+          base: 'develop',
+          title: 'Generated title',
+          body: 'Generated body',
+          draft: !seedDraft
+        }
+      })
+
+      expect(completed?.result?.draft).toBe(draft)
+    }
+  )
+
   it('keeps PR generation results in the store after the composer unmounts', () => {
     const store = createPullRequestGenerationTestStore()
     const key = getPullRequestGenerationRecordKey({

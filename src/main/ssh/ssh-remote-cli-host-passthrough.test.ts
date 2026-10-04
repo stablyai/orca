@@ -129,6 +129,28 @@ describe('buildHostCliEnv', () => {
     expect(env.ORCA_CLI_COMMAND).toBe('orca')
   })
 
+  it('never lets a remote command claim a local agent session', () => {
+    // The host's env carries a session id when Orca was launched inside a structured session; the
+    // remote shell's own is from another machine. Session identity is same-host only.
+    const env = buildHostCliEnv({
+      hostEnv: {
+        ORCA_AGENT_SESSION_ID: 'f7a1c0de-1111-4222-8333-444455556666',
+        ORCA_STRUCTURED_SESSION: '1'
+      },
+      remoteEnv: {
+        ORCA_TERMINAL_HANDLE: 'term_remote',
+        ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd'
+      },
+      userDataPath: '/host/user-data',
+      remoteCwd: '/srv/repo'
+    })
+
+    expect(env.ORCA_AGENT_SESSION_ID).toBeUndefined()
+    expect(env.ORCA_STRUCTURED_SESSION).toBeUndefined()
+    // The remote command still speaks as its own terminal.
+    expect(env.ORCA_TERMINAL_HANDLE).toBe('term_remote')
+  })
+
   it('namespaces identical remote artifact paths by stable SSH target', () => {
     const artifactInput = {
       sourceKey: '/srv/repo/report.html',

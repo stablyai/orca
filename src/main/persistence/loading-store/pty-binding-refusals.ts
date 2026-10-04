@@ -1,3 +1,4 @@
+import { hasClosedTerminalTabRecord } from '../../../shared/closed-terminal-tab-tombstones'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
@@ -13,7 +14,7 @@ export type PtyBindingRefusalRequest = {
 }
 
 /**
- * The four fences a binding must clear before anything is mutated, so a refusal leaves nothing
+ * The five fences a binding must clear before anything is mutated, so a refusal leaves nothing
  * half-written. Order matters: every `false` here is returned before the write path or the
  * fast lane can run, which is what the relay's lease expiry and the stable-owner throw rely on.
  */
@@ -21,7 +22,10 @@ export function ptyBindingIsRefused(
   args: PtyBindingRefusalRequest,
   session: WorkspaceSessionState,
   bindingWorktreeId: string,
-  paneKey: string
+  paneKey: string,
+  /** Every host partition: a close is recorded where the tab lived, which need not be where this
+   *  binding lands (a relay reattach binds into `local`). */
+  partitions: readonly WorkspaceSessionState[] = [session]
 ): boolean {
   if (args.expectedSourceBinding) {
     const expected = args.expectedSourceBinding
@@ -56,6 +60,19 @@ export function ptyBindingIsRefused(
       return true
     }
   }
+  const existingTab = session.tabsByWorktree?.[bindingWorktreeId]?.find(
+    (candidate) => candidate.id === args.tabId
+  )
+  // Why: a closed tab's spawn can commit after the close, even after a crash and relaunch; tab
+  // ids are uuids, so a recorded id is never a new tab.
+  if (
+    !existingTab &&
+    partitions.some((partition) =>
+      hasClosedTerminalTabRecord(partition.closedTerminalTabTombstonesByTabId, args.tabId)
+    )
+  ) {
+    return true
+  }
   // Mirrors the four creating branches of the write path — mint a tab, mint a root leaf, split
   // the root and graft a leaf, mint a layout — each of which sets `terminalMembershipChanged`.
   if (
@@ -65,9 +82,6 @@ export function ptyBindingIsRefused(
     return true
   }
   if (args.mayCreate === false) {
-    const existingTab = session.tabsByWorktree?.[bindingWorktreeId]?.find(
-      (candidate) => candidate.id === args.tabId
-    )
     const existingLayout = session.terminalLayoutsByTabId?.[args.tabId]
     const wouldCreateTopology =
       !existingTab ||

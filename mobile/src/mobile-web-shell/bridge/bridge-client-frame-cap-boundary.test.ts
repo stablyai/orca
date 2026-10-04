@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { BRIDGE_MAX_MESSAGE_BYTES, parseBridgeMessage } from './bridge-caps'
 import { createFakeBridgePortPair } from './bridge-port-pair-test-harness'
 
@@ -94,19 +92,5 @@ describe('the page frame cap at its boundary', () => {
     const read = parseBridgeMessage(JSON.stringify({ pad: 'x'.repeat(overCap) }), 'page-to-shell')
     expect(read.ok).toBe(false)
     expect(read.ok ? null : read.refusal).toBe('oversized')
-  })
-
-  it('reaches the cap through the shared predicate and spells it nowhere else', () => {
-    // The census half. A copy of the bound inside the client is a second spelling that can only
-    // drift from the one the reader applies, and it would pass every case above on the day it was
-    // written. `isBridgeFrameWithinCap` is the one thing both sides call.
-    const client = readFileSync(join(import.meta.dirname, 'bridge-rpc-client.ts'), 'utf8')
-    expect(client).toContain('isBridgeFrameWithinCap(')
-    expect(client).not.toContain('BRIDGE_MAX_MESSAGE_BYTES')
-    // And the predicate is the reader's own, not a lookalike beside it: the module that parses
-    // inbound frames is the module that exports it.
-    const caps = readFileSync(join(import.meta.dirname, 'bridge-caps.ts'), 'utf8')
-    expect(caps).toContain('export function isBridgeFrameWithinCap')
-    expect(caps).toContain('if (!isBridgeFrameWithinCap(raw))')
   })
 })

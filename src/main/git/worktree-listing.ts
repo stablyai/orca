@@ -1,3 +1,4 @@
+import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { readFile, realpath, stat } from 'node:fs/promises'
 import { join, posix } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
@@ -128,6 +129,7 @@ export async function annotateSparseCheckoutStatus(
 
   async function detectNext(): Promise<void> {
     while (nextIndex < worktrees.length) {
+      throwIfSignalAborted(options.signal)
       const index = nextIndex
       nextIndex += 1
       const worktree = worktrees[index]
@@ -135,6 +137,7 @@ export async function annotateSparseCheckoutStatus(
         continue
       }
       const isSparse = await detectSparseCheckoutCached(repoPath, worktree.path, options)
+      throwIfSignalAborted(options.signal)
       if (isSparse) {
         annotated[index] = { ...worktree, isSparse }
       }
@@ -143,7 +146,11 @@ export async function annotateSparseCheckoutStatus(
 
   // Why: cap concurrency so status-poll refreshes don't fan out many sparse-checkout filesystem probes at once.
   const workerCount = Math.min(SPARSE_CHECKOUT_DETECTION_CONCURRENCY, worktrees.length)
-  await Promise.all(Array.from({ length: workerCount }, () => detectNext()))
+  await waitForPromiseWithSignal(
+    Promise.all(Array.from({ length: workerCount }, () => detectNext())),
+    options.signal
+  )
+  throwIfSignalAborted(options.signal)
   return annotated
 }
 

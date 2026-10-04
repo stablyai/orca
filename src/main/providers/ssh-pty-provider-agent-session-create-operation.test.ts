@@ -57,18 +57,30 @@ function requestPayloads(transport: ReturnType<typeof createTransport>): Record<
   })
 }
 
+// Why a macrotask yield: FrameDecoder stops after FRAME_DECODER_MAX_TURN_MS of decoding and
+// resumes the rest of the fed bytes from setImmediate, and feed() refuses to drain while that
+// continuation is pending. Under load a delivered response can therefore only be decoded a
+// macrotask later, which a microtask-only poll can never reach. Matches waitForRequestCount in
+// ssh-git-provider-test-harness.
+async function waitForValue<T>(produce: () => T | undefined, what: string): Promise<T> {
+  for (let turn = 0; turn < 20; turn += 1) {
+    const value = produce()
+    if (value !== undefined) {
+      return value
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  }
+  throw new Error(`never observed: ${what}`)
+}
+
 async function waitForRequest(
   transport: ReturnType<typeof createTransport>,
   method: string
 ): Promise<Record<string, unknown>> {
-  for (let turn = 0; turn < 10; turn += 1) {
-    const request = requestPayloads(transport).find((payload) => payload.method === method)
-    if (request) {
-      return request
-    }
-    await Promise.resolve()
-  }
-  throw new Error(`request not dispatched: ${method}`)
+  return waitForValue(
+    () => requestPayloads(transport).find((payload) => payload.method === method),
+    `request ${method}`
+  )
 }
 
 describe('SSH fresh agent-session create operations', () => {
@@ -377,6 +389,8 @@ describe('SSH fresh agent-session create operations', () => {
       ])
     )
     await expect(replacement).resolves.toMatchObject({ incarnationId: 'incarnation-new' })
+    // The same-buffer data frame can decode a decoder turn after the spawn response resolves.
+    await waitForValue(() => onData.mock.calls.at(0), 'replacement source data')
     expect(onData.mock.calls.map(([payload]) => payload.data)).toEqual(['new'])
 
     transport.deliver(

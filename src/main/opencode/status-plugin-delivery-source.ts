@@ -156,3 +156,27 @@ export function getStatusPluginDeliverySource(): string[] {
     '}'
   ]
 }
+
+export function getTuiStatusDeliverySource(): string[] {
+  return String.raw`
+// Why queued: levels derived before disposal still post, in order, before the identity retires.
+function releaseTuiStatusDelivery(factoryID, forgetUndelivered) {
+  return enqueueLifecycle(async () => {
+    disposingFactoryIDs.add(factoryID);
+    while (messagePartPostInFlight) await messagePartPostInFlight;
+    if (pendingAssistantPart?.factoryID === factoryID) {
+      if (assistantPartFlushTimer) clearTimeout(assistantPartFlushTimer);
+      assistantPartFlushTimer = null;
+      pendingAssistantPart = null;
+    }
+    if (desiredFactoryID === factoryID) {
+      if (statusDeliveryDirty) forgetUndelivered();
+      clearStatusRetry();
+      statusRevision += 1;
+    }
+    activeFactoryIDs.delete(factoryID);
+    disposingFactoryIDs.delete(factoryID);
+  });
+}
+`.split('\n')
+}

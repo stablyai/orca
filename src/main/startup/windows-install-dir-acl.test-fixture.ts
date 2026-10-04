@@ -1,64 +1,69 @@
 import { EventEmitter } from 'node:events'
+import { writeFileSync } from 'node:fs'
+import { basename } from 'node:path'
 import type { spawn } from 'node:child_process'
 
-/** Shared icacls doubles for the install-dir DACL probe, repair, and recovery tests. */
+/**
+ * Shared icacls doubles for the install-dir DACL probe, repair, and recovery tests.
+ * ACEs are SDDL, the shape `icacls <target> /save <file>` writes (captured on
+ * win32 10.0.26200: the leaf name, CRLF, then `D:AI(...)(...)`, UTF-16LE).
+ */
 
-export const ORPHAN_PACKAGE_ACE = 'S-1-15-2-999-999-999:(OI)(CI)(RX)'
-export const RESTRICTED_PACKAGES_ACE =
-  'APPLICATION PACKAGE AUTHORITY\\ALL RESTRICTED APPLICATION PACKAGES:(OI)(CI)(RX)'
-/** The Program Files default: present on healthy installs, which launch clean. */
-export const ALL_PACKAGES_ACE = 'APPLICATION PACKAGE AUTHORITY\\ALL APPLICATION PACKAGES:(RX)'
+export const ORPHAN_PACKAGE_ACE = '(A;OICI;0x1200a9;;;S-1-15-2-999-999-999)'
+/** ALL RESTRICTED APPLICATION PACKAGES; SDDL has no alias for it. */
+export const RESTRICTED_PACKAGES_ACE = '(A;OICI;0x1200a9;;;S-1-15-2-2)'
+/** ALL APPLICATION PACKAGES (`AC`), the Program Files default: healthy installs launch clean. */
+export const ALL_PACKAGES_ACE = '(A;;0x1200a9;;;AC)'
 
-export const ENGLISH_BASELINE_ACES = [
-  'NT AUTHORITY\\SYSTEM:(I)(OI)(CI)(F)',
-  'BUILTIN\\Administrators:(I)(OI)(CI)(F)',
-  'awin\\neil:(I)(OI)(CI)(F)'
+export const BASELINE_ACES = [
+  '(A;OICIID;FA;;;SY)',
+  '(A;OICIID;FA;;;BA)',
+  '(A;OICIID;FA;;;S-1-5-21-432636774-4279371817-3971399515-1001)'
 ]
-/** fr-FR icacls: no principal the English name check can recognize. */
-export const FRENCH_BASELINE_ACES = [
-  'AUTORITE NT\\Systeme:(I)(OI)(CI)(F)',
-  'BUILTIN\\Administrateurs:(I)(OI)(CI)(F)'
-]
-export const FRENCH_RESTRICTED_PACKAGES_ACE =
-  "AUTORITE DE PACKAGE D'APPLICATION\\TOUS LES PACKAGES D'APPLICATION RESTREINTS:(RX)"
 
-/** Real icacls shape: the echoed path is glued onto the first principal. */
-export function icaclsDacl(
-  target: string,
-  aces: string[],
-  baseline: string[] = ENGLISH_BASELINE_ACES
-): string {
-  const [first, ...rest] = [...aces, ...baseline]
-  return [
-    `${target} ${first}`,
-    ...rest.map((ace) => `                    ${ace}`),
-    '',
-    'Successfully processed 1 files'
-  ].join('\r\n')
+/** The file `icacls <target> /save` writes for a target carrying these ACEs. */
+export function icaclsSavedAcl(target: string, aces: string[]): Buffer {
+  const leaf = basename(target.replaceAll('\\', '/'))
+  return Buffer.from(`${leaf}\r\nD:AI${[...aces, ...BASELINE_ACES].join('')}\r\n`, 'utf16le')
 }
 
-/** `null` output makes the spawn fail, as an unreadable target does. */
-export function fakeIcaclsSpawn(output: (target: string) => string | null): {
+/**
+ * `saved` returns the target's extra ACEs, or the raw saved file; `null` makes the
+ * spawn fail, as an unreadable target does. `display` is what a bare
+ * `icacls <target>` prints.
+ */
+export function fakeIcaclsSpawn(
+  saved: (target: string) => string[] | Buffer | null,
+  display: (target: string) => string = () => '',
+  exitCode: number | null = 0
+): {
   spawnFn: typeof spawn
   calls: { file: string; args: string[] }[]
 } {
   const calls: { file: string; args: string[] }[] = []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; the probe only touches kill/stdout/on of the child.
   const spawnFn = ((file: string, args: string[]) => {
     calls.push({ file, args })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both fields are assigned on the next two lines.
     const child = new EventEmitter() as EventEmitter & {
       stdout: EventEmitter
       kill: () => void
     }
     child.stdout = new EventEmitter()
     child.kill = () => undefined
-    const out = output(args[0])
+    const [target, verb, saveFile] = args
+    const aces = saved(target)
     setImmediate(() => {
-      if (out === null) {
+      if (aces === null) {
         child.emit('error', new Error('ENOENT'))
         return
       }
-      child.stdout.emit('data', Buffer.from(out, 'utf-8'))
-      child.emit('close', 0)
+      if (verb === '/save') {
+        writeFileSync(saveFile, Buffer.isBuffer(aces) ? aces : icaclsSavedAcl(target, aces))
+      } else {
+        child.stdout.emit('data', Buffer.from(display(target), 'utf-8'))
+      }
+      child.emit('close', exitCode)
     })
     return child
   }) as unknown as typeof spawn

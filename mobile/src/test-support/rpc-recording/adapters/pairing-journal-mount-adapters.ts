@@ -51,7 +51,7 @@ export function pairingJournalMountAdapters(
               effect('bundle-written', { version: written.current.version })
             },
             loadHosts: async () => [],
-            saveHost: async () => {
+            savePairedHost: async () => {
               effect('host-saved', HOST_ID)
             },
             connectRelay: () => candidateClient(client, effect, 'relay'),
@@ -95,8 +95,8 @@ export function pairingJournalMountAdapters(
               connectRelay: () => candidateClient(client, effect, 'relay'),
               resolveInviteDirector: async () => pairingRelay(),
               resolveHostIdentity: async () => ({ id: HOST_ID, name: 'Fixture host' }),
-              saveHost: async (host: { relayHostId?: string }) => {
-                savedHost = host.relayHostId ?? 'direct-only'
+              savePairedHost: async (host: { relay?: { relayHostId: string } }) => {
+                savedHost = host.relay?.relayHostId ?? 'direct-only'
                 effect('host-saved', savedHost)
               },
               saveJournal: async () => {

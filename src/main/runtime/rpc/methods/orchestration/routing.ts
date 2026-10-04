@@ -1,6 +1,7 @@
 import type { MessageType } from '../../../orchestration/db'
 import type { RunRow } from '../../../orchestration/types'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import type { OrchestrationCallerIdentity } from '../../../orchestration/orchestration-caller-identity'
 import { MESSAGE_TYPES } from '../../../orchestration/types'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../../../orchestration/db'
@@ -20,8 +21,8 @@ export function parseMessageTypes(rawTypes: string | undefined): MessageType[] |
 export function resolveMessageRun(
   runtime: OrcaRuntimeService,
   params: {
-    from?: string
-    senderPaneKey?: string
+    /** The sender as Run binding and Dispatch identity see it. */
+    sender: OrchestrationCallerIdentity
     to?: string
     runId?: string
     payload?: string
@@ -50,9 +51,7 @@ export function resolveMessageRun(
 
   const dispatch = dispatchId
     ? db.getDispatchContextById(dispatchId)
-    : params.from
-      ? db.getActiveDispatchForIdentity(params.from, params.senderPaneKey)
-      : undefined
+    : db.getActiveDispatchForIdentity(params.sender.address, params.sender.paneKey ?? undefined)
   if (params.to?.startsWith('dispatch:') && !dispatch) {
     throw new OrchestrationError(
       'dispatch_not_found',
@@ -63,9 +62,8 @@ export function resolveMessageRun(
   const resolvedRunId = params.runId ?? targetRunId ?? dispatch?.run_id
   let run = resolvedRunId ? db.getRun(resolvedRunId) : undefined
 
-  if (!run && params.from) {
-    const paneKey = params.senderPaneKey ?? runtime.getTerminalPaneKey(params.from)
-    run = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
+  if (!run) {
+    run = db.getCurrentRunForCoordinator(params.sender)
   }
   if (resolvedRunId && (!run || run.legacy === 1)) {
     throw new OrchestrationError('run_not_found', `Run ${resolvedRunId} was not found.`)

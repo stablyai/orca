@@ -65,6 +65,7 @@ describe('createRemotePaneLayoutPusher', () => {
       tabId: 'tab-1',
       root: layout.root,
       expandedLeafId: layout.expandedLeafId,
+      chatLeafId: null,
       titlesByLeafId: layout.titlesByLeafId
     })
   })
@@ -77,6 +78,18 @@ describe('createRemotePaneLayoutPusher', () => {
       layout: makeLayout({ titlesByLeafId: undefined })
     })
     expect(updateWebRuntimePaneLayout.mock.calls[0][0]).not.toHaveProperty('titlesByLeafId')
+  })
+
+  it('publishes owner changes and an explicit clear without a geometry change', () => {
+    const pusher = createRemotePaneLayoutPusher()
+    for (const chatLeafId of ['leaf-a', 'leaf-b', undefined]) {
+      pusher.push({ worktreeId: 'wt-1', tabId: 'tab-1', layout: makeLayout({ chatLeafId }) })
+    }
+    expect(updateWebRuntimePaneLayout.mock.calls.map(([args]) => args.chatLeafId)).toEqual([
+      'leaf-a',
+      'leaf-b',
+      null
+    ])
   })
 
   it('pushes again for every host-visible change', () => {
