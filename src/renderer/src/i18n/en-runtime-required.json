@@ -2693,6 +2693,9 @@
             }
           },
           "browser": {
+            "annotateElement": {
+              "title": "Annotate Page Element"
+            },
             "back": {
               "title": "Go Back in Browser"
             },
@@ -2788,6 +2791,11 @@
             "checks": {
               "toggle": {
                 "title": "Show Checks"
+              }
+            },
+            "childWorkspaces": {
+              "toggle": {
+                "title": "Toggle Child Workspaces"
               }
             },
             "explorer": {

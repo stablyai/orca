@@ -38,6 +38,21 @@ describe('keybinding-catalog-labels', () => {
     await i18n.changeLanguage('en')
   })
 
+  it.each([
+    ['browser.annotateElement', 'Annotate Page Element', 'Sayfa Öğesine Açıklama Ekle'],
+    [
+      'sidebar.childWorkspaces.toggle',
+      'Toggle Child Workspaces',
+      'Alt Çalışma Alanlarını Göster/Gizle'
+    ]
+  ] as const)('translates the new %s shortcut', async (id, title, expected) => {
+    const definition = { id, title }
+    expect(translateKeybindingTitle(definition)).toBe(title)
+    await i18n.changeLanguage('tr')
+    expect(translateKeybindingTitle(definition)).toBe(expected)
+    await i18n.changeLanguage('en')
+  })
+
   it('falls back to the literal title for an unrecognized agent-tab id', () => {
     const definition = {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deliberately not a real TuiAgent, to exercise the fallback branch.

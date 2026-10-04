@@ -1185,6 +1185,11 @@
             },
             "focusWorktreeList": {
               "title": "Focus worktree list"
+            },
+            "childWorkspaces": {
+              "toggle": {
+                "title": "Toggle Child Workspaces"
+              }
             }
           },
           "floatingTerminal": {
@@ -1291,6 +1296,9 @@
             },
             "grabElement": {
               "title": "Grab Page Element"
+            },
+            "annotateElement": {
+              "title": "Annotate Page Element"
             }
           },
           "editor": {
