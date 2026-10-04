@@ -21,7 +21,9 @@ import type { WorkerStartInput } from './worker-start-schema'
 import {
   persistGatedSetupSpawnFailure,
   persistWorkerReadinessStage,
-  persistWorkerSetupWaitOutcome
+  persistWorkerSetupWaitOutcome,
+  setupErrorAtReadinessTimeout,
+  setupStillRunningError
 } from './worker-setup-gate'
 import { failWorkerStartWithReceipt } from './worker-start-receipt'
 import { parseTaskDeps } from './task-deps-argument'
@@ -202,23 +204,53 @@ export async function startLocalWorker(args: {
     // A structured session is ready the moment its attach returns ok: there is no boot-to-idle
     // gap and no terminal title to read an idle edge from. Only the repo's wait-for-setup policy
     // still holds it back, and that gate has to be waited on explicitly here.
-    const wait = structuredSession
-      ? await awaitStructuredWorkerSetupGate({
-          runtime,
-          setup: setupReceipt,
-          effects,
-          timeoutMs: params.timeoutMs ?? 60_000
-        })
-      : await waitForWorkerAgentReady(runtime, terminalHandle, {
-          agent,
-          reusesTerminal: Boolean(params.terminal),
-          timeoutMs: params.timeoutMs ?? 60_000
-        })
+    const readinessTimeoutMs = params.timeoutMs ?? 60_000
+    // Under wait-for-setup a readiness timeout may be setup's, not the agent's. The structured
+    // gate's timeout is its own setup-completion race; a terminal one asks the setup terminal.
+    const failIfSetupBlockedAgent = async (): Promise<void> => {
+      const setupError = structuredSession
+        ? setupStillRunningError(readinessTimeoutMs)
+        : await setupErrorAtReadinessTimeout({
+            ...setupStage,
+            runtime,
+            timeoutMs: readinessTimeoutMs
+          })
+      if (setupError) {
+        failedStage = 'setup_wait'
+        throw setupError
+      }
+    }
+    let wait:
+      | Awaited<ReturnType<typeof awaitStructuredWorkerSetupGate>>
+      | Awaited<ReturnType<typeof waitForWorkerAgentReady>>
+    try {
+      wait = structuredSession
+        ? await awaitStructuredWorkerSetupGate({
+            runtime,
+            setup: setupReceipt,
+            effects,
+            timeoutMs: readinessTimeoutMs
+          })
+        : await waitForWorkerAgentReady(runtime, terminalHandle, {
+            agent,
+            reusesTerminal: Boolean(params.terminal),
+            timeoutMs: readinessTimeoutMs
+          })
+    } catch (error) {
+      // A terminal readiness wait rejects with 'timeout' rather than returning a status.
+      if (error instanceof Error && error.message === 'timeout') {
+        await failIfSetupBlockedAgent()
+      }
+      throw error
+    }
     if (wait) {
       persistWorkerSetupWaitOutcome({ ...setupStage, wait })
       if (!wait.satisfied) {
         if (setupReceipt.state === 'failed') {
           failedStage = 'setup_wait'
+        }
+        if (wait.status === 'timeout') {
+          await failIfSetupBlockedAgent()
         }
         throw new Error(
           wait.blockedReason

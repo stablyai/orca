@@ -8,6 +8,12 @@ import { OrchestrationDb } from '../../../../orchestration/db'
 import { RpcDispatcher } from '../../../dispatcher'
 import type { RpcRequest } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { placeWorkerAgent } from './worker-start-agent-placement'
+
+vi.mock(import('./worker-start-agent-placement'), async (importOriginal) => {
+  const actual = await importOriginal()
+  return { ...actual, placeWorkerAgent: vi.fn(actual.placeWorkerAgent) }
+})
 
 describe('orchestration new-worktree workers', () => {
   type CreateWorktreeResult = Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>
@@ -130,6 +136,15 @@ describe('orchestration new-worktree workers', () => {
         truncated: false
       } as never)
     }
+  }
+
+  function mockGatedSetupReadinessTimeout(state: 'running' | 'skipped') {
+    mockCreatedWorktree({
+      startupPolicy: 'wait-for-setup',
+      state,
+      setupTerminalHandle: 'term_setup'
+    })
+    vi.mocked(runtime.waitForTerminal).mockRejectedValue(new Error('timeout'))
   }
 
   it('creates an independent top-level worktree and reuses its agent terminal', async () => {
@@ -453,6 +468,130 @@ describe('orchestration new-worktree workers', () => {
       setup: { state: 'running' }
     })
     expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
+  it('reports a readiness timeout while wait-for-setup is still running as a setup wait', async () => {
+    mockGatedSetupReadinessTimeout('running')
+
+    const { result } = await startWorker({ timeoutMs: 1_000 })
+
+    expect(result).toMatchObject({
+      state: 'failed',
+      failedStage: 'setup_wait',
+      setup: { startupPolicy: 'wait-for-setup', state: 'running' }
+    })
+    const lastError = (result as { lastError: string }).lastError
+    expect(lastError).toContain('Setup was still running after 1000 ms')
+    expect(lastError).toContain('--timeout-ms')
+    expect(runtime.waitForSetupTerminalCompletion).toHaveBeenCalledWith(
+      'term_setup',
+      expect.any(AbortSignal)
+    )
+    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
+  it('reports a wait-for-setup readiness timeout after setup failed as a setup failure', async () => {
+    // The gate skips the agent and the pane's shell stays alive, so readiness can only time out.
+    mockGatedSetupReadinessTimeout('running')
+    vi.mocked(runtime.waitForSetupTerminalCompletion).mockResolvedValue({ exitCode: 3 })
+
+    const { result } = await startWorker({ timeoutMs: 1_000 })
+
+    expect(result).toMatchObject({
+      state: 'failed',
+      failedStage: 'setup_wait',
+      setup: { startupPolicy: 'wait-for-setup', state: 'failed' },
+      effects: expect.arrayContaining([expect.objectContaining({ kind: 'setup', state: 'failed' })])
+    })
+    const lastError = (result as { lastError: string }).lastError
+    expect(lastError).toContain('Setup failed (exit 3)')
+    expect(lastError).not.toContain('still running')
+    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
+  it('keeps a wait-for-setup readiness timeout after setup succeeded at agent readiness', async () => {
+    mockGatedSetupReadinessTimeout('running')
+    vi.mocked(runtime.waitForSetupTerminalCompletion).mockResolvedValue({ exitCode: 0 })
+
+    const { result } = await startWorker({ timeoutMs: 1_000 })
+
+    expect(result).toMatchObject({
+      state: 'failed',
+      failedStage: 'agent_readiness',
+      lastError: 'timeout',
+      setup: { startupPolicy: 'wait-for-setup', state: 'succeeded' }
+    })
+  })
+
+  it('keeps a wait-for-setup readiness timeout with no running setup at agent readiness', async () => {
+    mockGatedSetupReadinessTimeout('skipped')
+
+    const { result } = await startWorker({ timeoutMs: 1_000 })
+
+    expect(result).toMatchObject({
+      state: 'failed',
+      failedStage: 'agent_readiness',
+      lastError: 'timeout',
+      setup: { state: 'skipped' }
+    })
+    expect(runtime.waitForSetupTerminalCompletion).not.toHaveBeenCalled()
+  })
+
+  it('reports a structured worker whose setup gate timed out as a setup wait', async () => {
+    vi.mocked(placeWorkerAgent).mockImplementationOnce(async (args) => {
+      args.effects.push({
+        kind: 'setup',
+        action: 'run',
+        startupPolicy: 'wait-for-setup',
+        state: 'running',
+        terminalId: 'term_setup'
+      })
+      return {
+        mode: args.mode,
+        worktree: { id: 'repo::created', repoId: 'repo' },
+        terminalHandle: 'structured_worker_1',
+        structuredSession: {
+          identity: { sessionId: 'session_1', handle: 'structured_worker_1' }
+        } as never,
+        setupReceipt: {
+          requested: 'run',
+          effective: 'run',
+          source: 'orchestration_default',
+          hookFound: true,
+          startupPolicy: 'wait-for-setup',
+          state: 'running'
+        }
+      }
+    })
+
+    const { result } = await startWorker({ timeoutMs: 50 })
+
+    expect(result).toMatchObject({
+      state: 'failed',
+      failedStage: 'setup_wait',
+      setup: { startupPolicy: 'wait-for-setup', state: 'running' }
+    })
+    expect((result as { lastError: string }).lastError).toContain(
+      'Setup was still running after 50 ms'
+    )
+    expect(runtime.waitForTerminal).not.toHaveBeenCalled()
+  })
+
+  it('keeps a start-immediately readiness timeout at agent readiness', async () => {
+    mockCreatedWorktree({
+      startupPolicy: 'start-immediately',
+      state: 'running',
+      setupTerminalHandle: 'term_setup'
+    })
+    vi.mocked(runtime.waitForTerminal).mockRejectedValue(new Error('timeout'))
+
+    const { result } = await startWorker({ timeoutMs: 1_000 })
+
+    expect(result).toMatchObject({
+      state: 'failed',
+      failedStage: 'agent_readiness',
+      lastError: 'timeout'
+    })
   })
 
   it('distinguishes no-effect failure, unknown acceptance, and durable residual effects', async () => {
