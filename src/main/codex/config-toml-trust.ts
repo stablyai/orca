@@ -14,12 +14,18 @@ import { writeTomlConfigAtomically } from './config-toml-atomic-write'
 import {
   moveHookTrustContent,
   removeHookTrustContent,
+  setHookTrustEnabledContent,
   upsertHookTrustContent
 } from './config-toml-hook-trust-edit'
 import { CodexHookTrustEntryMap, readHookTrustContent } from './config-toml-hook-trust-read'
 import { upsertProjectTrustContent } from './config-toml-project-trust'
 import { escapeTomlBasicString, parseProjectTomlHeaderPath } from './config-toml-syntax'
 import { observe } from './codex-path-observation'
+import { parseCodexConfigToml } from './codex-config-toml-document'
+import {
+  assertCodexConfigTomlParses,
+  CodexConfigTomlEditRefusedError
+} from './codex-config-toml-checked-edit'
 
 export type CodexEventLabel =
   | 'pre_tool_use'
@@ -109,9 +115,11 @@ export function upsertHookTrustEntries(
   entries: readonly CodexTrustEntry[]
 ): void {
   const existing = readTomlForMutation(configPath)
-  const updated = upsertHookTrustEntriesInContent(existing, entries)
+  const updated = withConfigPath(configPath, () =>
+    upsertHookTrustEntriesInContent(existing, entries)
+  )
   if (updated !== existing) {
-    writeConfigAtomically(configPath, updated)
+    writeTomlConfigAtomically(configPath, updated)
   }
 }
 
@@ -124,9 +132,9 @@ export function moveHookTrustEntries(
     return
   }
   const existing = readTomlForMutation(configPath)
-  const updated = moveHookTrustContent(existing, moves)
+  const updated = withConfigPath(configPath, () => moveHookTrustContent(existing, moves))
   if (updated !== existing) {
-    writeConfigAtomically(configPath, updated)
+    writeTomlConfigAtomically(configPath, updated)
   }
 }
 
@@ -137,15 +145,32 @@ export function upsertHookTrustEntriesInContent(
   return upsertHookTrustContent(existingContent, entries)
 }
 
+/** Mirrors the user's own enabled/disabled choice onto hooks.state tables that already exist. */
+export function setHookTrustEnabledStates(
+  configPath: string,
+  states: readonly { key: string; enabled: boolean }[]
+): void {
+  if (states.length === 0 || !existsSync(configPath)) {
+    return
+  }
+  const existing = readTomlFile(configPath)
+  const updated = withConfigPath(configPath, () => setHookTrustEnabledContent(existing, states))
+  if (updated !== existing) {
+    writeTomlConfigAtomically(configPath, updated)
+  }
+}
+
 export function upsertProjectTrustLevel(
   configPath: string,
   projectPath: string,
   trustLevel: CodexProjectTrustLevel
 ): void {
   const existing = readTomlForMutation(configPath)
-  const updated = upsertProjectTrustLevelInContent(existing, projectPath, trustLevel)
+  const updated = withConfigPath(configPath, () =>
+    upsertProjectTrustLevelInContent(existing, projectPath, trustLevel)
+  )
   if (updated !== existing) {
-    writeConfigAtomically(configPath, updated)
+    writeTomlConfigAtomically(configPath, updated)
   }
 }
 
@@ -170,8 +195,26 @@ export function parseCodexProjectHeaderPath(line: string): string | null {
   return parseProjectTomlHeaderPath(line)
 }
 
-export function writeConfigAtomically(configPath: string, contents: string): void {
+/** Writes a whole-file edit, refusing one that would turn a config Codex can read into one it cannot. */
+export function writeConfigAtomically(
+  configPath: string,
+  contents: string,
+  previousContents?: string
+): void {
+  if (previousContents === undefined || parseCodexConfigToml(previousContents).ok) {
+    withConfigPath(configPath, () => assertCodexConfigTomlParses(contents))
+  }
   writeTomlConfigAtomically(configPath, contents)
+}
+
+function withConfigPath<T>(configPath: string, run: () => T): T {
+  try {
+    return run()
+  } catch (error) {
+    throw error instanceof CodexConfigTomlEditRefusedError && error.configPath === null
+      ? error.forConfigPath(configPath)
+      : error
+  }
 }
 
 export function removeHookTrustEntries(configPath: string, keys: readonly string[]): void {
@@ -179,9 +222,11 @@ export function removeHookTrustEntries(configPath: string, keys: readonly string
     return
   }
   const existing = readTomlFile(configPath)
-  const updated = removeHookTrustEntriesFromContent(existing, keys)
+  const updated = withConfigPath(configPath, () =>
+    removeHookTrustEntriesFromContent(existing, keys)
+  )
   if (updated !== existing) {
-    writeConfigAtomically(configPath, updated)
+    writeTomlConfigAtomically(configPath, updated)
   }
 }
 

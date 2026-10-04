@@ -16,12 +16,10 @@ import {
 } from './codex-hook-definition'
 import { isRetiredCodexHookCommand } from './codex-hook-retired-commands'
 import { getSystemCodexHomePath } from './codex-home-paths'
-import {
-  collectManagedTrustEntries,
-  removeSelfComputedMatchingTrustEntries
-} from './codex-hook-trust-cleanup'
+import { collectManagedTrustEntries } from './codex-hook-trust-cleanup'
 import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation-queue'
-import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-moves'
+import { reportCodexConfigTomlEditRefusal } from './codex-config-toml-checked-edit'
+import { planRetiredHookSweepTrust } from './codex-retired-hook-sweep-trust'
 
 const LEGACY_ORCA_PROFILE_NAME = 'orca-agent-status'
 const LEGACY_ORCA_PROFILE_BLOCK_START = '# BEGIN ORCA AGENT STATUS HOOKS'
@@ -90,28 +88,43 @@ async function sweepLegacySystemManagedHooks(): Promise<void> {
   }
 
   // Why: Codex hooks moved to Orca's managed CODEX_HOME in #2350; hooks from before then would keep external Codex sessions reporting into Orca.
-  if (removedManagedHook) {
-    // Why: this is the user's system hooks file, not Orca's runtime copy.
-    // Remove only retired Orca hook entries and preserve other managers' metadata.
-    const hooksWritePath = resolveHooksJsonWritePath(legacyConfigPath)
-    mutateRealHomeHooksPreservingUserTrust({
-      sourcePath: legacyConfigPath,
-      tomlPath: getSystemCodexConfigTomlPath(),
-      beforeHooks: config.hooks,
-      afterHooks: nextHooks,
-      writeHooks: () => {
-        if (
-          readFileSync(legacyConfigPath, 'utf-8') !== previousRaw ||
-          resolveHooksJsonWritePath(legacyConfigPath) !== hooksWritePath
-        ) {
-          // Why: another process may have saved since the read; never replace
-          // that newer dotfiles generation with this stale parse.
-          throw new Error('System Codex hooks changed since Orca read them')
-        }
-        writeHooksJson(hooksWritePath, { ...config, hooks: nextHooks }, { preserveMode: true })
-      }
-    })
-    removeSelfComputedMatchingTrustEntries(getSystemCodexConfigTomlPath(), trustEntries)
+  if (!removedManagedHook) {
+    return
+  }
+  const tomlPath = getSystemCodexConfigTomlPath()
+  const trustPlan = planRetiredHookSweepTrust({
+    tomlPath,
+    hooksPath: legacyConfigPath,
+    beforeHooks: config.hooks,
+    afterHooks: nextHooks,
+    retiredTrustEntries: trustEntries
+  })
+  if (trustPlan.kind === 'refused' && trustPlan.error.reason === 'input-invalid') {
+    // Why: a retired entry is inert while Codex cannot read config.toml, but removing it
+    // now would strand the trust it shifts; the next launch re-derives the sweep from hooks.json.
+    reportCodexConfigTomlEditRefusal(
+      trustPlan.error,
+      'Waiting to remove retired Orca hook entries until config.toml can be read'
+    )
+    return
+  }
+  // Why: this is the user's system hooks file, not Orca's runtime copy.
+  // Remove only retired Orca hook entries and preserve other managers' metadata.
+  const hooksWritePath = resolveHooksJsonWritePath(legacyConfigPath)
+  if (
+    readFileSync(legacyConfigPath, 'utf-8') !== previousRaw ||
+    resolveHooksJsonWritePath(legacyConfigPath) !== hooksWritePath
+  ) {
+    // Why: another process may have saved since the read; never replace
+    // that newer dotfiles generation with this stale parse.
+    throw new Error('System Codex hooks changed since Orca read them')
+  }
+  writeHooksJson(hooksWritePath, { ...config, hooks: nextHooks }, { preserveMode: true })
+  if (trustPlan.kind === 'edit') {
+    writeConfigAtomically(tomlPath, trustPlan.next, trustPlan.previous)
+  } else if (trustPlan.kind === 'refused') {
+    // Why no rollback: Codex reads this file, so the retired entry must go; it lists the shifted hooks for review.
+    reportCodexConfigTomlEditRefusal(trustPlan.error, 'Skipped moving shifted user hook trust')
   }
 }
 
@@ -163,15 +176,20 @@ function cleanupLegacyCodexProfileHooks(): void {
   if (next.trim().length === 0) {
     unlinkSync(profilePath)
   } else {
-    writeConfigAtomically(profilePath, next)
+    writeConfigAtomically(profilePath, next, existing)
   }
 }
 
 export async function cleanupLegacyManagedHookRepresentations(): Promise<void> {
   try {
     await cleanupLegacySystemManagedHooks()
-    cleanupLegacyCodexProfileHooks()
   } catch (error) {
     console.warn('[codex-hook-service] failed to clean legacy Codex hooks', error)
+  }
+  // Why separate: the profile file is unrelated to ~/.codex/hooks.json, so its cleanup never waits on that sweep.
+  try {
+    cleanupLegacyCodexProfileHooks()
+  } catch (error) {
+    console.warn('[codex-hook-service] failed to clean the legacy Codex profile', error)
   }
 }

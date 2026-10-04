@@ -25,6 +25,7 @@ import {
 } from './codex-hook-trust-grant'
 import { removeSelfComputedTrustBeforeGrant } from './codex-managed-trust-grant-plan'
 import { getManagedScript } from './codex-hook-script'
+import { describeHookTrustWriteFailure } from './codex-config-toml-checked-edit'
 import {
   removeStaleWslRuntimeManagedHookTrustEntries,
   removeWslRuntimeManagedHookTrustEntries
@@ -134,7 +135,10 @@ async function installManagedHooksIntoWslRuntimeExclusively(
       state: 'error',
       configPath: plan.configPath,
       managedHooksPresent: true,
-      detail: `Hooks installed but trust entries could not be written: ${error instanceof Error ? error.message : String(error)}. Run /hooks in Codex to approve.`
+      detail: describeHookTrustWriteFailure(
+        'Hooks installed but trust entries could not be written',
+        error
+      )
     }
   }
 

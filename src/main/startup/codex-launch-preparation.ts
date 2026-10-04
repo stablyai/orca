@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import type { CodexHomeLaunchContext } from '../ipc/pty'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
+import { warnCodexConfigOnce } from '../codex/codex-config-toml-checked-edit'
 import { codexHookService } from '../codex/hook-service'
 import { getDefaultWslDistro } from '../wsl'
 import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
@@ -68,9 +69,10 @@ export async function prepareCodexRuntimeHomeForLaunch(
       hooksEnabled
     )
     if (status.state === 'error') {
-      console.warn(
-        `[codex-hook-service] failed to ${hooksEnabled ? 'refresh' : 'refresh user'} runtime hooks before launch`,
-        status.detail
+      // Why: a refused trust write returns the same detail on every launch until the user fixes the file.
+      warnCodexConfigOnce(
+        status.configPath,
+        `[codex-hook-service] failed to ${hooksEnabled ? 'refresh' : 'refresh user'} runtime hooks before launch: ${status.detail}`
       )
     }
   } catch (error) {

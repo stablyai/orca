@@ -21,6 +21,7 @@ import {
   wrapReadablePosixHookCommand
 } from './codex-hook-definition'
 import { getManagedScript } from './codex-hook-script'
+import { describeHookTrustWriteFailure } from './codex-config-toml-checked-edit'
 
 export async function installCodexHooksRemote(
   sftp: SFTPWrapper,
@@ -116,9 +117,11 @@ export async function installCodexHooksRemote(
         state: 'error',
         configPath: remoteConfigPath,
         managedHooksPresent: true,
-        detail: `Hooks installed but trust entries could not be written: ${
-          error instanceof Error ? error.message : String(error)
-        }. Run /hooks in Codex on the remote host to approve.`
+        detail: describeHookTrustWriteFailure(
+          'Hooks installed but trust entries could not be written',
+          error,
+          'Run /hooks in Codex on the remote host to approve.'
+        )
       }
     }
 

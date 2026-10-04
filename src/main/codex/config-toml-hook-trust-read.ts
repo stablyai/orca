@@ -1,12 +1,12 @@
 import type { CodexHookTrustState } from './config-toml-trust'
 import { normalizeCodexHookTrustLookupKey } from './codex-trust-identity'
 import { findAllHookTrustBlocks } from './config-toml-hook-trust-blocks'
+import { getTomlTable, parseCodexConfigToml } from './codex-config-toml-document'
 import {
-  createTomlLineScanState,
-  isTomlStructuralLine,
-  updateTomlLineScanState
-} from './config-toml-line-scan'
-import { unescapeTomlBasicString } from './config-toml-syntax'
+  readTomlAssignmentValue,
+  scanTomlStructure,
+  tomlKeyPathsEqual
+} from './codex-config-toml-structure'
 
 export class CodexHookTrustEntryMap extends Map<string, CodexHookTrustState> {
   override get(key: string): CodexHookTrustState | undefined {
@@ -26,12 +26,13 @@ export class CodexHookTrustEntryMap extends Map<string, CodexHookTrustState> {
   }
 }
 
+type HookTrustStateSource = { key: string; trustedHashes: Set<string>; enabled?: boolean }
+
 export function readHookTrustContent(content: string): Map<string, CodexHookTrustState> {
   const result = new CodexHookTrustEntryMap()
   const conflictingTrustedHashKeys = new Set<string>()
-  for (const block of findAllHookTrustBlocks(content)) {
-    const state = readHookTrustBlockState(content.slice(block.contentStart, block.end))
-    const normalizedKey = normalizeCodexHookTrustLookupKey(block.key)
+  for (const state of readHookTrustStateSources(content)) {
+    const normalizedKey = normalizeCodexHookTrustLookupKey(state.key)
     const existingState = result.get(normalizedKey)
     const trustedHash =
       state.trustedHashes.size === 1 ? state.trustedHashes.values().next().value : undefined
@@ -56,32 +57,52 @@ export function readHookTrustContent(content: string): Map<string, CodexHookTrus
   return result
 }
 
+/** Reads what Codex reads when the file parses (any spelling, inline or dotted); scans tables otherwise. */
+function readHookTrustStateSources(content: string): HookTrustStateSource[] {
+  const parsed = parseCodexConfigToml(content)
+  if (parsed.ok) {
+    const states = getTomlTable(getTomlTable(parsed.table.hooks)?.state) ?? {}
+    return Object.entries(states).flatMap(([key, value]) => {
+      const state = getTomlTable(value)
+      if (!state) {
+        return []
+      }
+      const trustedHashes = new Set<string>()
+      if (typeof state.trusted_hash === 'string') {
+        trustedHashes.add(state.trusted_hash)
+      }
+      return [
+        {
+          key,
+          trustedHashes,
+          enabled: typeof state.enabled === 'boolean' ? state.enabled : undefined
+        }
+      ]
+    })
+  }
+  return findAllHookTrustBlocks(content).map((block) => ({
+    key: block.key,
+    ...readHookTrustBlockState(content.slice(block.contentStart, block.end))
+  }))
+}
+
 function readHookTrustBlockState(block: string): {
   trustedHashes: Set<string>
   enabled?: boolean
 } {
   const trustedHashes = new Set<string>()
   let enabled: boolean | undefined
-  let cursor = 0
-  let scanState = createTomlLineScanState()
-  while (cursor < block.length) {
-    const newlineIndex = block.indexOf('\n', cursor)
-    const lineEnd = newlineIndex === -1 ? block.length : newlineIndex
-    const line = block.slice(cursor, lineEnd).replace(/\r$/, '')
-    if (isTomlStructuralLine(scanState)) {
-      const hashMatch = /^[ \t]*trusted_hash[ \t]*=[ \t]*"((?:[^"\\]|\\.)*)"[ \t]*(?:#.*)?$/.exec(
-        line
-      )
-      if (hashMatch) {
-        trustedHashes.add(unescapeTomlBasicString(hashMatch[1]!))
-      }
-      const enabledMatch = /^[ \t]*enabled[ \t]*=[ \t]*(true|false)[ \t]*(?:#.*)?$/.exec(line)
-      if (enabledMatch) {
-        enabled = enabled !== false && enabledMatch[1] === 'true'
-      }
+  for (const line of scanTomlStructure(block)) {
+    if (line.kind !== 'assignment' || line.table.segments.length > 0) {
+      continue
     }
-    scanState = updateTomlLineScanState(scanState, line)
-    cursor = newlineIndex === -1 ? block.length : newlineIndex + 1
+    const value = readTomlAssignmentValue(line)
+    if (tomlKeyPathsEqual(line.keySegments, ['trusted_hash']) && typeof value === 'string') {
+      trustedHashes.add(value)
+    }
+    if (tomlKeyPathsEqual(line.keySegments, ['enabled']) && typeof value === 'boolean') {
+      enabled = enabled !== false && value
+    }
   }
   return { trustedHashes, enabled }
 }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { chmodSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import * as trustApi from './config-toml-trust'
+import { CodexConfigTomlEditRefusedError } from './codex-config-toml-checked-edit'
 import {
   createTrustConfigFixture,
   removeTrustConfigFixture
@@ -15,19 +16,15 @@ afterEach(() => {
 })
 
 describe('config.toml partial and stale writes', () => {
-  it('preserves a truncated malformed prefix while appending trust', () => {
+  it('refuses to append trust to a truncated malformed file instead of editing it further', () => {
     const partial = ['model = "gpt-5"', '[mcp_servers.partial', 'command = "still-user-data'].join(
       '\n'
     )
-    const updated = trustApi.upsertProjectTrustLevelInContent(
-      partial,
-      'C:/Remote/Repo',
-      'trusted',
-      { alreadyCanonical: true }
-    )
-
-    expect(updated.startsWith(partial)).toBe(true)
-    expect(updated).toContain('[projects."C:/Remote/Repo"]')
+    expect(() =>
+      trustApi.upsertProjectTrustLevelInContent(partial, 'C:/Remote/Repo', 'trusted', {
+        alreadyCanonical: true
+      })
+    ).toThrow(CodexConfigTomlEditRefusedError)
   })
 
   it('pins the no-lock stale-writer policy to one complete last snapshot', () => {

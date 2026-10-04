@@ -431,6 +431,38 @@ describe('markCodexProjectTrusted', () => {
     }
   })
 
+  // Why both orders: the lock order writes the managed home first, so each home must survive the other refusing.
+  it.each([
+    ['the managed home', '~/.codex', 'system'],
+    ['~/.codex', 'the managed home', 'runtime']
+  ] as const)('still trusts %s when %s cannot be parsed', async (_trusted, _broken, brokenHome) => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
+    try {
+      const homes = {
+        system: join(testState.fakeHomeDir, '.codex'),
+        runtime: join(testState.userDataDir, 'codex-runtime-home', 'home')
+      }
+      const trustedHome = brokenHome === 'system' ? homes.runtime : homes.system
+      mkdirSync(homes[brokenHome], { recursive: true })
+      const brokenConfig = 'model = "o3"\nmodel_reasoning_effort = \n'
+      writeFileSync(join(homes[brokenHome], 'config.toml'), brokenConfig, 'utf-8')
+
+      await expect(
+        markCodexProjectTrusted(workspace, getLocalCodexTrustConfigFiles(testState.fakeHomeDir))
+      ).rejects.toMatchObject({
+        name: 'CodexConfigTomlEditRefusedError',
+        reason: 'input-invalid'
+      })
+
+      expect(readFileSync(join(homes[brokenHome], 'config.toml'), 'utf-8')).toBe(brokenConfig)
+      expect(readFileSync(join(trustedHome, 'config.toml'), 'utf-8')).toContain(
+        `[projects."${escapeTomlBasicString(realpathSync.native(workspace))}"]`
+      )
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
   it('preserves existing config keys and updates an existing project block', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
     const realpath = realpathSync.native(workspace)

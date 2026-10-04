@@ -1,4 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs'
 import {
   readHooksJsonWithRaw,
   removeManagedCommands,
@@ -6,10 +5,8 @@ import {
 } from '../agent-hooks/installer-utils'
 import {
   computeTrustKey,
-  escapeTomlString,
   getCodexExplicitHomeHookSourcePath,
-  parseTrustKey,
-  writeConfigAtomically,
+  setHookTrustEnabledStates,
   type CodexTrustEntry
 } from './config-toml-trust'
 import { createCodexHookTrustEntry, getCodexHookTrustSignature } from './codex-hook-identity'
@@ -158,52 +155,14 @@ export function moveMirroredRuntimeUserTrustAfterManagedStatusHook(
   })
 }
 
-function escapeRegex(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function buildHookTrustHeaderKeyPattern(key: string): string {
-  const keyVariants = [key]
-  const parsed = parseTrustKey(key)
-  if (parsed && /^[A-Za-z]:[\\/]|^\\\\/.test(parsed.sourcePath)) {
-    const suffix = `:${parsed.eventLabel}:${parsed.groupIndex}:${parsed.handlerIndex}`
-    keyVariants.push(
-      `${parsed.sourcePath.replace(/\\/g, '/')}${suffix}`,
-      `${parsed.sourcePath.replace(/\//g, '\\')}${suffix}`
-    )
-  }
-  const alternatives = [...new Set(keyVariants)].flatMap((variant) => {
-    const quoted = [`"${escapeRegex(escapeTomlString(variant))}"`]
-    if (!variant.includes("'")) {
-      // Why: tolerate raw-backslash literal keys from Codex/manual approval while repairing mirrored runtime trust across both Windows variants.
-      quoted.push(`'${escapeRegex(variant)}'`)
-    }
-    return quoted
-  })
-  return `(?:${alternatives.join('|')})`
-}
-
 export function applyMirroredRuntimeUserHookTrustStates(
   tomlPath: string,
   entries: readonly MirroredRuntimeUserHookTrustEntry[]
 ): void {
-  if (entries.length === 0 || !existsSync(tomlPath)) {
-    return
-  }
-
-  const existing = readFileSync(tomlPath, 'utf-8')
-  let updated = existing
-  for (const { entry, enabled } of entries) {
-    const headerKeyPattern = buildHookTrustHeaderKeyPattern(computeTrustKey(entry))
-    const pattern = new RegExp(
-      `(\\[hooks\\.state\\.${headerKeyPattern}\\]\\r?\\n[ \\t]*enabled[ \\t]*=[ \\t]*)(true|false)`,
-      'g'
-    )
-    updated = updated.replace(pattern, `$1${enabled}`)
-  }
-  if (updated !== existing) {
-    writeConfigAtomically(tomlPath, updated)
-  }
+  setHookTrustEnabledStates(
+    tomlPath,
+    entries.map(({ entry, enabled }) => ({ key: computeTrustKey(entry), enabled }))
+  )
 }
 
 function dedupeHookDefinitions(definitions: readonly HookDefinition[]): HookDefinition[] {

@@ -579,3 +579,29 @@ describe('CodexHookService', () => {
     expect(runtimeToml).not.toContain(':permission_request:0:0')
   })
 })
+
+describe('hook trust against a ~/.codex config the user broke by hand', () => {
+  function seedHandBrokenSystemConfig(): void {
+    const systemCodexHome = join(homes.tmpHome, '.codex')
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(
+      join(systemCodexHome, 'hooks.json'),
+      `${JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'user-hook' }] }] } })}\n`,
+      'utf-8'
+    )
+    writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "a"\nbroken = \n', 'utf-8')
+  }
+
+  it('refreshes user hooks with no trust to write without reporting an error', async () => {
+    seedHandBrokenSystemConfig()
+    const status = await new CodexHookService().refreshRuntimeUserHooks()
+    expect(status.state).not.toBe('error')
+  })
+
+  it('reports a refused managed trust write in the install status', async () => {
+    seedHandBrokenSystemConfig()
+    const status = await new CodexHookService().install()
+    expect(status.state).toBe('error')
+    expect(status.detail).toContain('config.toml unchanged')
+  })
+})

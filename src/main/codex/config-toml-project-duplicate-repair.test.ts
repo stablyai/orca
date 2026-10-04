@@ -4,11 +4,15 @@ import { findDuplicateTomlDeclarations } from './config-toml-duplicate-declarati
 import { repairOrcaDuplicateTrustTables } from './config-toml-project-duplicate-repair'
 import { upsertProjectTrustLevel, upsertProjectTrustLevelInContent } from './config-toml-trust'
 import {
+  CodexConfigTomlEditRefusedError,
+  reportCodexTrustWriteRefusals
+} from './codex-config-toml-checked-edit'
+import {
   createTrustConfigFixture,
   removeTrustConfigFixture
 } from './config-toml-trust-test-fixtures'
 
-// Why: each case uses its own path because refusals are logged once per process.
+// Why: each case uses its own path because refusals are logged once per file and message.
 let tmpDir: string
 let configPath: string
 let warn: ReturnType<typeof vi.spyOn>
@@ -45,12 +49,13 @@ describe('repairing configs broken by #22592', () => {
     upsertProjectTrustLevel(configPath, projectPath, 'trusted')
 
     const repaired = readFileSync(configPath, 'utf-8')
+    // Why: Codex's own line already says trusted, so it is left as Codex wrote it.
     expect(repaired).toBe(
       [
         'model = "gpt-5.5"',
         '',
         `["projects"."${projectPath}"]`,
-        'trust_level = "trusted"',
+        '"trust_level" = "trusted"',
         ''
       ].join('\n')
     )
@@ -142,15 +147,23 @@ describe('repairing configs broken by #22592', () => {
       ''
     ].join('\n')
 
-    const first = upsertProjectTrustLevelInContent(broken, '/repo-d', 'trusted', {
-      alreadyCanonical: true
-    })
-    const second = upsertProjectTrustLevelInContent(broken, '/repo-d', 'trusted', {
-      alreadyCanonical: true
-    })
+    const attempt = (): unknown => {
+      try {
+        return upsertProjectTrustLevelInContent(broken, '/repo-d', 'trusted', {
+          alreadyCanonical: true
+        })
+      } catch (error) {
+        return error
+      }
+    }
+    const first = attempt()
+    const second = attempt()
 
-    expect(first).toBe(broken)
-    expect(second).toBe(broken)
+    // Why: the checked writer refuses instead of writing; its callers log each refusal once.
+    expect(first).toBeInstanceOf(CodexConfigTomlEditRefusedError)
+    expect(second).toBeInstanceOf(CodexConfigTomlEditRefusedError)
+    expect(reportCodexTrustWriteRefusals(first)).toEqual([])
+    expect(reportCodexTrustWriteRefusals(second)).toEqual([])
     expect(warn).toHaveBeenCalledTimes(1)
   })
 
@@ -171,7 +184,9 @@ describe('repairing configs broken by #22592', () => {
     ].join('\n')
 
     expect(repairOrcaDuplicateTrustTables(broken)).toBe(broken)
-    expect(warn).toHaveBeenCalledTimes(1)
+    expect(() =>
+      upsertProjectTrustLevelInContent(broken, '/repo-e', 'trusted', { alreadyCanonical: true })
+    ).toThrow(CodexConfigTomlEditRefusedError)
   })
 
   it('does not touch a valid config', () => {

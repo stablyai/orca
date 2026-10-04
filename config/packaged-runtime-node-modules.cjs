@@ -26,6 +26,8 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'posthog-node',
   'proper-lockfile',
   'qrcode',
+  // smol-toml: Codex config.toml reads/validation in main and the CLI.
+  'smol-toml',
   'ssh2',
   'tweetnacl',
   'ws',

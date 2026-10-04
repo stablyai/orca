@@ -177,8 +177,23 @@ export function markCodexProjectTrusted(
   const write = configFiles.reduceRight<() => Promise<void>>(
     (inner, configFile) => () => runExclusivelyForCodexTrustConfig(configFile, inner),
     async () => {
+      // Why: a config.toml Orca refuses to edit must not also leave Codex's other homes untrusted.
+      const failures: unknown[] = []
       for (const configFile of configFiles) {
-        upsertProjectTrustLevel(configFile, absPath, 'trusted')
+        try {
+          upsertProjectTrustLevel(configFile, absPath, 'trusted')
+        } catch (error) {
+          failures.push(error)
+        }
+      }
+      if (failures.length === 1) {
+        throw failures[0]
+      }
+      if (failures.length > 1) {
+        throw new AggregateError(
+          failures,
+          'Orca could not mark the project trusted in several Codex homes'
+        )
       }
     }
   )
