@@ -9,6 +9,7 @@ import {
 } from '../storage/session-view-preferences'
 import {
   useMobileSessionViewMode,
+  type MobileSessionTabViewModeBridge,
   type MobileSessionViewModeController
 } from './use-mobile-session-view-mode'
 
@@ -379,5 +380,198 @@ describe('useMobileSessionViewMode', () => {
     })
 
     expect(controller?.isTabChatView('t1')).toBe(false)
+  })
+
+  async function mountShared(args: {
+    defaultView: MobileSessionView
+    overrides?: Map<string, MobileSessionView>
+    hostViews: Map<string, MobileSessionView>
+    writeHostViewMode: ((tabId: string, view: MobileSessionView) => Promise<void>) | null
+    onHostViewModeWriteError?: (error: unknown) => void
+  }): Promise<void> {
+    vi.mocked(loadDefaultSessionView).mockResolvedValue(args.defaultView)
+    vi.mocked(readSessionViewOverridesPreference).mockResolvedValue({
+      overrides: args.overrides ?? new Map(),
+      loaded: true
+    })
+    const bridge: MobileSessionTabViewModeBridge = {
+      readHostViewMode: (tabId) => args.hostViews.get(tabId),
+      writeHostViewMode: args.writeHostViewMode,
+      ...(args.onHostViewModeWriteError
+        ? { onHostViewModeWriteError: args.onHostViewModeWriteError }
+        : {})
+    }
+    function Harness(): null {
+      controller = useMobileSessionViewMode({
+        hostId: 'h',
+        worktreeId: 'w',
+        sessionTabViewMode: bridge
+      })
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
+
+  it('defers to a host that shares the view, and follows a change made elsewhere', async () => {
+    const hostViews = new Map<string, MobileSessionView>([['t1', 'terminal']])
+    await mountShared({
+      defaultView: 'terminal',
+      overrides: new Map<string, MobileSessionView>([['t1', 'chat']]),
+      hostViews,
+      writeHostViewMode: () => Promise.resolve()
+    })
+
+    // The host value wins over this device's own override.
+    expect(controller?.isTabChatView('t1')).toBe(false)
+
+    // A peer flips the host value; the local view follows with no local toggle.
+    hostViews.set('t1', 'chat')
+    expect(controller?.isTabChatView('t1')).toBe(true)
+  })
+
+  it('keeps the local fallback for a tab the shared host carries no value for', async () => {
+    await mountShared({
+      defaultView: 'chat',
+      hostViews: new Map<string, MobileSessionView>(),
+      writeHostViewMode: () => Promise.resolve()
+    })
+
+    expect(controller?.isTabChatView('t1')).toBe(true)
+  })
+
+  it('flips from the host value and writes the choice back', async () => {
+    const writes: Array<[string, MobileSessionView]> = []
+    const hostViews = new Map<string, MobileSessionView>([['t1', 'chat']])
+    await mountShared({
+      defaultView: 'terminal',
+      hostViews,
+      writeHostViewMode: (tabId, view) => {
+        writes.push([tabId, view])
+        return Promise.resolve()
+      }
+    })
+
+    expect(controller?.isTabChatView('t1')).toBe(true)
+    await act(async () => {
+      controller?.toggleTabChatView('t1')
+      await Promise.resolve()
+    })
+
+    expect(writes).toEqual([['t1', 'terminal']])
+    expect(updateSessionViewOverride).toHaveBeenLastCalledWith('h', 'w', 't1', 'terminal')
+  })
+
+  it('holds the toggled view while the shared host write is still in flight', async () => {
+    const hostWrite = deferred<void>()
+    const hostViews = new Map<string, MobileSessionView>([['t1', 'terminal']])
+    await mountShared({
+      defaultView: 'terminal',
+      hostViews,
+      writeHostViewMode: () => hostWrite.promise
+    })
+
+    expect(controller?.isTabChatView('t1')).toBe(false)
+    await act(async () => {
+      controller?.toggleTabChatView('t1')
+      await Promise.resolve()
+    })
+    // The host still reports 'terminal'; the pending write must win so the tap is not lost.
+    expect(controller?.isTabChatView('t1')).toBe(true)
+
+    await act(async () => {
+      hostWrite.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  })
+
+  it('flips a second tap from the queued view rather than the host echo it outranks', async () => {
+    const hostWrite = deferred<void>()
+    const writes: Array<[string, MobileSessionView]> = []
+    // The host keeps reporting 'terminal' for the whole sequence; both taps happen before either
+    // write lands, so only the queued value can tell the second tap where the tab stands.
+    await mountShared({
+      defaultView: 'terminal',
+      hostViews: new Map<string, MobileSessionView>([['t1', 'terminal']]),
+      writeHostViewMode: (tabId, view) => {
+        writes.push([tabId, view])
+        return hostWrite.promise
+      }
+    })
+
+    await act(async () => {
+      controller?.toggleTabChatView('t1')
+      await Promise.resolve()
+    })
+    expect(controller?.isTabChatView('t1')).toBe(true)
+
+    await act(async () => {
+      controller?.toggleTabChatView('t1')
+      await Promise.resolve()
+    })
+
+    expect(writes).toEqual([
+      ['t1', 'chat'],
+      ['t1', 'terminal']
+    ])
+    expect(controller?.isTabChatView('t1')).toBe(false)
+
+    await act(async () => {
+      hostWrite.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  })
+
+  it('reverts the override and reports the failure when the host rejects the write', async () => {
+    const hostWrite = deferred<void>()
+    const onError = vi.fn()
+    // A tab the host carries no value for, so the local override alone decides the view.
+    await mountShared({
+      defaultView: 'terminal',
+      hostViews: new Map<string, MobileSessionView>(),
+      writeHostViewMode: () => hostWrite.promise,
+      onHostViewModeWriteError: onError
+    })
+
+    await act(async () => {
+      controller?.toggleTabChatView('t1')
+      await Promise.resolve()
+    })
+    expect(controller?.isTabChatView('t1')).toBe(true)
+
+    await act(async () => {
+      hostWrite.reject(new Error('host refused'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(onError).toHaveBeenCalledWith(expect.any(Error))
+    // The optimistic override is gone, so the default decides the view again.
+    expect(controller?.isTabChatView('t1')).toBe(false)
+  })
+
+  it('never writes to a host that does not share the view', async () => {
+    const writes: Array<[string, MobileSessionView]> = []
+    const hostViews = new Map<string, MobileSessionView>([['t1', 'chat']])
+    await mountShared({
+      defaultView: 'terminal',
+      hostViews,
+      writeHostViewMode: null
+    })
+
+    // An incapable host's published value is not authoritative: the local default still decides.
+    expect(controller?.isTabChatView('t1')).toBe(false)
+    await act(async () => {
+      controller?.toggleTabChatView('t1')
+      await Promise.resolve()
+    })
+
+    expect(writes).toEqual([])
+    expect(controller?.isTabChatView('t1')).toBe(true)
   })
 })

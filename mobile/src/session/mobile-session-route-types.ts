@@ -29,6 +29,8 @@ export type MobileSessionTab =
       launchDraft?: string
       launchDraftCreatedAt?: number
       terminalTheme?: MobileTerminalTheme
+      /** Host-published terminal/chat view for this tab; absent on hosts that never set one. */
+      viewMode?: 'terminal' | 'chat'
       isActive: boolean
     }
   | {

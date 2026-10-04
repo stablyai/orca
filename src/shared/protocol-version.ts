@@ -155,6 +155,10 @@ export const SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY =
 // repeating the host's whole bounded list on every title tick.
 export const SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY =
   'session-tabs.retirement-proof-delta.v1' as const
+// Why: the host accepts a mobile `session.tabs.setTabProps` (viewMode) and republishes an adoptable
+// viewMode, so a phone may drive a shared tab's terminal/chat view for every paired client.
+export const SESSION_TABS_MOBILE_VIEW_MODE_RUNTIME_CAPABILITY =
+  'session-tabs.mobile-view-mode.v1' as const
 export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
   'agent-session.session-boundary.v1' as const
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
@@ -393,6 +397,7 @@ export const RUNTIME_CAPABILITIES = [
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
+  SESSION_TABS_MOBILE_VIEW_MODE_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   REMOTE_SERVER_UPDATE_CAPABILITY,
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,

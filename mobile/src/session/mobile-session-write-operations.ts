@@ -149,6 +149,21 @@ export const sessionTabActivate = bindDeferredRpcOperation(
 )
 
 /**
+ * Sharing a tab's terminal/chat view with the host and its paired clients. The reply body is
+ * unread: the caller's optimistic local override already stands, and a refusal leaves the next
+ * host snapshot to correct the view. Sent only to a host advertising the shared-view capability.
+ */
+export const sessionTabSetProps = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'session.tabs-set-props',
+    method: 'session.tabs.setTabProps',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('session-tab-props-set', sessionWriteUnreadReplySchema)
+  })
+)
+
+/**
  * Writing the review notes and the per-file review state onto the worktree record. Both call sites
  * raise the host's message on a refusal and roll their optimistic list back, so the message has to
  * survive; the reply body is never read.
