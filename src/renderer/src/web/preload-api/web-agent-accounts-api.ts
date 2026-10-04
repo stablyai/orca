@@ -1,5 +1,11 @@
 import { translate } from '@/i18n/i18n'
 import type { PreloadApi } from '../../../../preload/api-types'
+import type {
+  ClaudeRateLimitAccountsState,
+  CodexRateLimitAccountsState
+} from '../../../../shared/managed-account-types'
+import { callRuntimeResult } from './web-runtime-calls'
+import { fetchAccountsSnapshot, refreshAndPublishRateLimits } from './web-rate-limits-api'
 
 export function createMiniMaxCredentialsApi(): NonNullable<
   Partial<PreloadApi>['minimaxCredentials']
@@ -102,20 +108,36 @@ function createEmptyManagedAccountsState(): {
 
 export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
   const empty = createEmptyManagedAccountsState()
+  // Why: the paired server owns the Claude accounts; listing, switching and
+  // removing go through its accounts.* RPCs. Adding or re-authenticating needs
+  // the host's own login flow, so those stay unavailable here.
   return {
-    list: () => Promise.resolve(empty),
+    list: () =>
+      fetchAccountsSnapshot(false)
+        .then((snapshot) => snapshot.claude)
+        .catch(() => empty),
     add: () => Promise.resolve(empty),
     cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: () => Promise.resolve(empty),
-    remove: () => Promise.resolve(empty),
-    select: () => Promise.resolve(empty)
+    remove: ({ accountId }) =>
+      callRuntimeResult<ClaudeRateLimitAccountsState>('accounts.removeClaude', { accountId }),
+    select: async ({ accountId }) => {
+      const next = await callRuntimeResult<ClaudeRateLimitAccountsState>('accounts.selectClaude', {
+        accountId
+      })
+      void refreshAndPublishRateLimits()
+      return next
+    }
   }
 }
 
 export function createCodexAccountsApi(): PreloadApi['codexAccounts'] {
   const empty = createEmptyManagedAccountsState()
   return {
-    list: () => Promise.resolve(empty),
+    list: () =>
+      fetchAccountsSnapshot(false)
+        .then((snapshot) => snapshot.codex)
+        .catch(() => empty),
     add: () => Promise.resolve(empty),
     cancelPendingLogin: () => Promise.resolve(false),
     // Why: the login runs on the desktop host that owns the browser, so a web
@@ -123,8 +145,15 @@ export function createCodexAccountsApi(): PreloadApi['codexAccounts'] {
     getPendingLoginUrl: () => Promise.resolve(null),
     onPendingLoginUrlChanged: () => () => {},
     reauthenticate: () => Promise.resolve(empty),
-    remove: () => Promise.resolve(empty),
-    select: () => Promise.resolve(empty),
+    remove: ({ accountId }) =>
+      callRuntimeResult<CodexRateLimitAccountsState>('accounts.removeCodex', { accountId }),
+    select: async ({ accountId }) => {
+      const next = await callRuntimeResult<CodexRateLimitAccountsState>('accounts.selectCodex', {
+        accountId
+      })
+      void refreshAndPublishRateLimits()
+      return next
+    },
     // Why: launch accounts are recorded on the host that owns the PTY, which the
     // web client never is — report no stale panes rather than reject the sweep.
     listStalePanes: () => Promise.resolve([]),
