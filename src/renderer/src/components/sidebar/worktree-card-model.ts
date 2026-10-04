@@ -3,6 +3,7 @@ import type React from 'react'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import type { LineageHiddenDescendants } from './worktree-lineage-descendants'
 
 export type WorktreeRenameRequest = {
   worktreeId: string
@@ -31,6 +32,7 @@ export type WorktreeCardProps = {
   flushSurface?: boolean
   lineageChildCount?: number
   lineageCollapsed?: boolean
+  lineageHiddenDescendants?: LineageHiddenDescendants
   lineageChildren?: React.ReactNode
   lineageChildrenStyle?: React.CSSProperties
   onLineageToggle?: (event: React.MouseEvent<HTMLButtonElement>) => void

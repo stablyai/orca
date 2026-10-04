@@ -5410,6 +5410,14 @@
           "copied": "Comando copiado",
           "retry": "Reintentar ahora",
           "restored": "Git funciona de nuevo. Worktrees actualizados."
+        },
+        "WorktreeLineageHiddenActivity": {
+          "permission": "{{value0}} esperando permiso",
+          "working": "{{value0}} trabajando",
+          "monitoring": "{{value0}} supervisando tareas en segundo plano",
+          "unread": "{{value0}} sin leer",
+          "failed": "{{value0}} con error",
+          "interrupted": "{{value0}} interrumpido(s)"
         }
       },
       "shared": {

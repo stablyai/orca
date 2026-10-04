@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useId } from 'react'
 import { AlertTriangle, ChevronDown, Workflow } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -7,6 +7,10 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { LinearAgentSkillSetupPrompt } from './LinearAgentSkillSetupPrompt'
 import WorktreeCardAgents from './WorktreeCardAgents'
+import {
+  LineageHiddenActivityGlyph,
+  LineageHiddenActivityTooltipLabel
+} from './WorktreeLineageHiddenActivity'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
@@ -25,6 +29,7 @@ export function WorktreeCardSecondaryRows({
     newCardStyle,
     lineageChildren,
     lineageCollapsed,
+    lineageHiddenDescendants,
     onLineageToggle,
     remoteBranchConflict,
     showInlineAgentList,
@@ -36,6 +41,11 @@ export function WorktreeCardSecondaryRows({
     isDeleting
   } = card
   const { hasMetaRow } = presentation
+  const hiddenActivityDescriptionId = useId()
+  const hidden =
+    lineageCollapsed && lineageHiddenDescendants && lineageHiddenDescendants.worktreeIds.length > 0
+      ? lineageHiddenDescendants
+      : null
 
   return (
     <>
@@ -109,10 +119,19 @@ export function WorktreeCardSecondaryRows({
                 size="xs"
                 className="relative z-10 h-[18px] max-w-[8rem] gap-1 rounded-md border border-worktree-sidebar-border bg-worktree-sidebar px-1.5 text-[10px] font-medium leading-none text-muted-foreground shadow-none hover:bg-worktree-sidebar-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
                 aria-label={lineageChildAriaLabel}
+                // Why spread: an explicit undefined would override Radix's own tooltip describedby.
+                {...(hidden ? { 'aria-describedby': hiddenActivityDescriptionId } : {})}
                 aria-expanded={!lineageCollapsed}
                 onClick={onLineageToggle}
               >
-                <Workflow className="size-2.5" />
+                {hidden ? (
+                  <LineageHiddenActivityGlyph
+                    hidden={hidden}
+                    descriptionId={hiddenActivityDescriptionId}
+                  />
+                ) : (
+                  <Workflow className="size-2.5" />
+                )}
                 <span className="truncate">{childWorkspaceShortLabel}</span>
                 <ChevronDown
                   className={cn('size-2.5 transition-transform', lineageCollapsed && '-rotate-90')}
@@ -129,6 +148,7 @@ export function WorktreeCardSecondaryRows({
                     'auto.components.sidebar.WorktreeCard.57eaa61b55',
                     'Hide child workspaces'
                   )}
+              {hidden ? <LineageHiddenActivityTooltipLabel hidden={hidden} /> : null}
             </TooltipContent>
           </Tooltip>
         </div>
