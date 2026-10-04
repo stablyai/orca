@@ -63,18 +63,22 @@ export async function getFallbackPRListForBranch(
       '--repo',
       `${prRepo.owner}/${prRepo.repo}`,
       '--head',
-      `${headOwner}:${branchName}`,
+      branchName,
       '--state',
       'all',
       '--limit',
-      String(BRANCH_PR_LOOKUP_PAGE_SIZE),
+      '100',
       '--json',
       PR_BRANCH_LIST_JSON_FIELDS
     ],
     { ...ghOptions, ...githubHostExecOptions(prRepo) }
   )
-  const list = JSON.parse(stdout) as PullRequestLookupData[]
-  const pr = preferOpenPullRequest(list)
+  const list = JSON.parse(stdout) as (PullRequestLookupData & {
+    headRepositoryOwner?: { login?: string } | null
+  })[]
+  const pr = list.find(
+    (item) => item.headRepositoryOwner?.login?.toLowerCase() === headOwner.toLowerCase()
+  )
   // Branch lists paginate PRs, not their nested check contexts.
   return pr ? { ...pr, statusCheckRollup: [], checksUnavailable: true } : null
 }
@@ -145,12 +149,19 @@ export async function lookupPRByBranchName(args: {
             )
         if (!branchData && args.headRepo && args.headRepoInferred) {
           // Why: an inferred fork owner can return no REST match even when the branch already has a PR.
-          branchData = await getFallbackPRListForBranch(
-            candidate,
-            args.headRepo.owner,
-            args.branchName,
-            args.ghOptions
-          )
+          try {
+            branchData = await getFallbackPRListForBranch(
+              candidate,
+              args.headRepo.owner,
+              args.branchName,
+              args.ghOptions
+            )
+          } catch (err) {
+            if (!hasPendingError) {
+              pendingError = err
+              hasPendingError = true
+            }
+          }
         }
         // Cheap branch discovery needs exact hydration for review, queue and auto-merge metadata.
         const data = await hydrateBranchLookupWithExactPR(
