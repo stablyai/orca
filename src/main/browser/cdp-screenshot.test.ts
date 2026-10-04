@@ -18,11 +18,6 @@ function createMockWebContents() {
 }
 
 const noHold = (): (() => void) => () => {}
-const PROBE = {
-  format: 'jpeg',
-  quality: 1,
-  clip: { x: 0, y: 0, width: 1, height: 1, scale: 1 }
-}
 const TIMEOUT_MESSAGE = 'Screenshot timed out — the browser page did not draw a frame.'
 
 describe('captureScreenshot', () => {
@@ -92,8 +87,8 @@ describe('captureScreenshot', () => {
     await expect(capture).resolves.toEqual({ data: 'drawn-png' })
     expect(webContents.debugger.sendCommand.mock.calls).toEqual([
       ['Page.captureScreenshot', { format: 'png' }],
-      ['Page.captureScreenshot', PROBE],
-      ['Page.captureScreenshot', PROBE]
+      ['Page.captureScreenshot', { format: 'png' }],
+      ['Page.captureScreenshot', { format: 'png' }]
     ])
     expect(webContents.capturePage).not.toHaveBeenCalled()
   })
@@ -119,7 +114,38 @@ describe('captureScreenshot', () => {
     await expect(capture).resolves.toEqual({ data: 'slow-png' })
     expect(webContents.debugger.sendCommand.mock.calls).toEqual([
       ['Page.captureScreenshot', fullPage],
-      ['Page.captureScreenshot', PROBE]
+      ['Page.captureScreenshot', fullPage]
+    ])
+  })
+
+  it('preserves clipped JPEG parameters in draw-triggering probes', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    const params = {
+      format: 'jpeg',
+      quality: 73,
+      clip: { x: 8, y: 16, width: 320, height: 240, scale: 2 },
+      captureBeyondViewport: false,
+      fromSurface: false
+    }
+    let resolveCapture: ((value: { data: string }) => void) | undefined
+    webContents.debugger.sendCommand.mockImplementation(() => {
+      if (!resolveCapture) {
+        return new Promise<{ data: string }>((resolve) => {
+          resolveCapture = resolve
+        })
+      }
+      resolveCapture({ data: 'clipped-jpeg' })
+      return Promise.resolve({ data: 'probe' })
+    })
+
+    const capture = captureScreenshot(webContents.guest, params, noHold)
+    await vi.advanceTimersByTimeAsync(250)
+
+    await expect(capture).resolves.toEqual({ data: 'clipped-jpeg' })
+    expect(webContents.debugger.sendCommand.mock.calls).toEqual([
+      ['Page.captureScreenshot', params],
+      ['Page.captureScreenshot', params]
     ])
   })
 
@@ -137,10 +163,10 @@ describe('captureScreenshot', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(webContents.debugger.sendCommand.mock.calls).toEqual([
       ['Page.captureScreenshot', { format: 'png' }],
-      ['Page.captureScreenshot', PROBE],
-      ['Page.captureScreenshot', PROBE],
-      ['Page.captureScreenshot', PROBE],
-      ['Page.captureScreenshot', PROBE]
+      ['Page.captureScreenshot', { format: 'png' }],
+      ['Page.captureScreenshot', { format: 'png' }],
+      ['Page.captureScreenshot', { format: 'png' }],
+      ['Page.captureScreenshot', { format: 'png' }]
     ])
   })
 
@@ -333,6 +359,39 @@ describe('captureFullPageScreenshot', () => {
     ).rejects.toThrow('Target closed')
     expect(release).toHaveBeenCalledTimes(1)
   })
+
+  it.each(['png', 'jpeg'] as const)(
+    'preserves %s full-page geometry in draw-triggering probes',
+    async (format) => {
+      vi.useFakeTimers()
+      const webContents = createMockWebContents()
+      const clip = { x: 0, y: 0, width: 640, height: 1280, scale: 1 }
+      const params = { format, captureBeyondViewport: true, clip }
+      let resolveCapture: ((value: { data: string }) => void) | undefined
+      webContents.debugger.sendCommand.mockImplementation((method: string) => {
+        if (method === 'Page.getLayoutMetrics') {
+          return Promise.resolve({ cssContentSize: { width: 640, height: 1280 } })
+        }
+        if (!resolveCapture) {
+          return new Promise<{ data: string }>((resolve) => {
+            resolveCapture = resolve
+          })
+        }
+        resolveCapture({ data: `${format}-full-page` })
+        return Promise.resolve({ data: 'probe' })
+      })
+
+      const capture = captureFullPageScreenshot(webContents.guest, format, noHold)
+      await vi.advanceTimersByTimeAsync(250)
+
+      await expect(capture).resolves.toEqual({ data: `${format}-full-page`, format })
+      expect(webContents.debugger.sendCommand.mock.calls).toEqual([
+        ['Page.getLayoutMetrics', {}],
+        ['Page.captureScreenshot', params],
+        ['Page.captureScreenshot', params]
+      ])
+    }
+  )
 
   it('uses cssContentSize so HiDPI pages are captured at the real page size', async () => {
     const webContents = createMockWebContents()

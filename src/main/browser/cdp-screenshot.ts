@@ -6,12 +6,6 @@ export type CapturePaintHold = () => () => void
 const SCREENSHOT_TIMEOUT_MS = 8000
 // Why: offsets from the capture start; the last leaves a full-page capture (~0.5 s on a tall page) time before the deadline.
 const FRAME_PROBE_OFFSETS_MS = [250, 750, 1750, 3750]
-// Why: a 1x1 request is cheap; the frame it makes the page produce also answers the pending capture.
-const FRAME_PROBE_PARAMS = {
-  format: 'jpeg',
-  quality: 1,
-  clip: { x: 0, y: 0, width: 1, height: 1, scale: 1 }
-}
 const FALLBACK_CAPTURE_TIMEOUT_MS = 1000
 const SCREENSHOT_TIMEOUT_MESSAGE = 'Screenshot timed out — the browser page did not draw a frame.'
 
@@ -135,9 +129,9 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
 
 // Why: a request made before the held page is drawn never resolves, and an offscreen drawn page can
 // skip one; a later request makes the page produce a frame, which answers every pending request.
-// So the capture is sent once and cheap probes follow until it answers. Resolves null when no frame
-// arrives by the deadline; a CDP error is an answer. Unanswered probes settle on the next frame or
-// reject on detach.
+// So the capture is sent once and identical probes follow: they prompt a frame without changing the
+// pending capture's compositor geometry or encoding. Resolves null when no frame arrives by the
+// deadline; a CDP error is an answer. Unanswered probes settle on the next frame or reject on detach.
 function captureUntilDrawn(
   webContents: WebContents,
   params: Record<string, unknown>
@@ -173,7 +167,7 @@ function captureUntilDrawn(
     }
     const deadline = setTimeout(() => finish(() => resolve(null)), SCREENSHOT_TIMEOUT_MS)
     const probes = FRAME_PROBE_OFFSETS_MS.map((offsetMs) =>
-      setTimeout(() => send(FRAME_PROBE_PARAMS)?.catch(() => {}), offsetMs)
+      setTimeout(() => send(params)?.catch(() => {}), offsetMs)
     )
     send(params)?.then(
       (result) => finish(() => resolve(result?.data ? { data: result.data } : null)),
