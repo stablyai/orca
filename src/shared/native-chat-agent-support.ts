@@ -1,6 +1,12 @@
 import type { TuiAgent } from './tui-agent'
 
-export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp' | 'opencode'
+export type NativeChatTranscriptAgent =
+  | 'claude'
+  | 'codex'
+  | 'grok'
+  | 'omp'
+  | 'opencode'
+  | 'antigravity'
 
 /** Agents whose transcripts the native chat view can parse and render, in the
  *  order the settings pane advertises them. */
@@ -11,7 +17,8 @@ export const NATIVE_CHAT_SUPPORTED_AGENT_LIST: readonly TuiAgent[] = [
   'grok',
   'omp',
   'opencode',
-  'opencode2'
+  'opencode2',
+  'antigravity'
 ]
 
 export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set(
@@ -22,11 +29,16 @@ export function isNativeChatSupportedAgent(agent: string | null | undefined): bo
   return agent != null && NATIVE_CHAT_SUPPORTED_AGENTS.has(agent)
 }
 
-/** Agents whose Model-A SSH transcript reader is not supported. A hook path alone
- *  does not establish owning-host reads, so OMP remains gated even with metadata. */
+/** Agents whose chat reads require a filesystem owned by the selected runtime.
+ * Direct SSH has no transcript transport; a hook path alone is not a local file. */
 export function nativeChatRequiresLocalTranscript(agent: string | null | undefined): boolean {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  return transcriptAgent === 'grok' || transcriptAgent === 'omp' || transcriptAgent === 'opencode'
+  return (
+    transcriptAgent === 'grok' ||
+    transcriptAgent === 'omp' ||
+    transcriptAgent === 'opencode' ||
+    transcriptAgent === 'antigravity'
+  )
 }
 
 /** Selector TUIs require key steps rather than pasted option labels. */
@@ -48,7 +60,7 @@ export function resolveNativeChatTranscriptAgent(
   if (agent === 'opencode' || agent === 'opencode2') {
     return 'opencode'
   }
-  if (agent === 'codex' || agent === 'grok' || agent === 'omp') {
+  if (agent === 'codex' || agent === 'grok' || agent === 'omp' || agent === 'antigravity') {
     return agent
   }
   return null

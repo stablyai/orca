@@ -7,6 +7,7 @@ import type {
 } from '../../shared/runtime-types'
 import { recentTerminalOutputIncludesPath } from '../runtime/terminal-output-path-candidates'
 import { readNativeChatTranscriptTail } from './transcript-tail-reader'
+import { antigravitySessionWslDistro } from './native-chat-execution-namespace'
 
 // Match the largest transcript window mobile can render so any visible citation remains provable.
 const NATIVE_CHAT_FILE_PROVENANCE_WINDOW = 2000
@@ -15,6 +16,7 @@ type TranscriptRead = (args: {
   agent: AgentType
   sessionId: string
   transcriptPath?: string
+  wslDistro?: string
   limit: number
 }) => Promise<{ messages: NativeChatMessage[] } | { error: string }>
 
@@ -50,10 +52,15 @@ export async function nativeChatTranscriptIncludesPath(args: {
   }
 
   try {
+    const wslDistro =
+      agent === 'antigravity'
+        ? antigravitySessionWslDistro(providerSession.id, tab.agentStatus?.connectionId)
+        : undefined
     const result = await (args.readTranscript ?? readNativeChatTranscriptTail)({
       agent,
       sessionId: providerSession.id,
       ...(providerSession.transcriptPath ? { transcriptPath: providerSession.transcriptPath } : {}),
+      ...(wslDistro ? { wslDistro } : {}),
       limit: NATIVE_CHAT_FILE_PROVENANCE_WINDOW
     })
     if (!('messages' in result)) {

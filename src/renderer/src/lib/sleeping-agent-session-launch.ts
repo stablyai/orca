@@ -15,6 +15,9 @@ import {
 } from '../../../shared/tui-agent-launch-defaults'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { translate } from '@/i18n/i18n'
+import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
+import { getConnectionIdFromState } from '@/lib/connection-context'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 
 export type ResumeSleepingAgentSessionsOptions = {
   suppressNavigation?: boolean
@@ -100,6 +103,18 @@ export function launchSleepingAgentSession(
 
   const tab = state.createTab(record.worktreeId, undefined, undefined, {
     launchAgent: record.agent,
+    ...(record.agent === 'antigravity'
+      ? initialAgentTabViewModeProps(state.settings, {
+          agent: 'antigravity',
+          providerSessionId:
+            record.providerSession.key === 'conversation_id'
+              ? record.providerSession.id
+              : undefined,
+          nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+            getConnectionIdFromState(state, record.worktreeId)
+          )
+        })
+      : {}),
     pendingStartup: {
       command: startupPlan.launchCommand,
       ...(startupPlan.env ? { env: startupPlan.env } : {}),

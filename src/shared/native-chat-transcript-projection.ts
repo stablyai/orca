@@ -25,6 +25,12 @@ export function compareNativeChatMessagesByTime(
   if (at !== bt) {
     return at - bt
   }
+  if (a.transcriptPosition !== undefined && b.transcriptPosition !== undefined) {
+    const order = a.transcriptPosition - b.transcriptPosition
+    if (order !== 0) {
+      return order
+    }
+  }
   // Split reasoning shares its provider row's key, before that row's answer.
   const aId = nativeChatSemanticRowId(a)
   const bId = nativeChatSemanticRowId(b)

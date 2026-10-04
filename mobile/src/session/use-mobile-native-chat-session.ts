@@ -13,6 +13,10 @@ import {
   type MobileNativeChatStreamFrame
 } from './mobile-native-chat-stream-frame'
 import { structuredSessionRandomUuid } from './structured-session-operation-id'
+import {
+  requireMobileAntigravityChatCapability,
+  startMobileNativeChatAfterCapability
+} from './mobile-antigravity-chat-capability'
 
 export type MobileNativeChatStatus =
   | 'idle'
@@ -149,75 +153,84 @@ export function useMobileNativeChatSession(args: {
       return
     }
 
-    const unsubscribe = client.subscribe(
-      'nativeChat.subscribe',
-      {
-        agent,
-        sessionId,
-        limit: limitRef.current,
-        // Why: a token of its own, so another screen on this chat never evicts this feed on the host.
-        subscriptionId: buildNativeChatSubscriptionId(
-          agent,
-          sessionId,
-          structuredSessionRandomUuid()
+    const unsubscribe = startMobileNativeChatAfterCapability(
+      client,
+      agent,
+      () =>
+        client.subscribe(
+          'nativeChat.subscribe',
+          {
+            agent,
+            sessionId,
+            limit: limitRef.current,
+            // Why: a token of its own, so another screen on this chat never evicts this feed on the host.
+            subscriptionId: buildNativeChatSubscriptionId(
+              agent,
+              sessionId,
+              structuredSessionRandomUuid()
+            ),
+            capabilities: { transcriptPending: 1 },
+            ...(transcriptPath ? { transcriptPath } : {})
+          },
+          (raw) => {
+            if (cancelled) {
+              return
+            }
+            const frame = raw as MobileNativeChatStreamFrame
+            const applied = applyMobileNativeChatStreamFrame({
+              merger: mergerRef.current,
+              frame,
+              limit: limitRef.current,
+              replaceSnapshot: !snapshotSeenRef.current
+            })
+            if (applied.kind === 'ignored') {
+              return
+            }
+            if (applied.kind === 'error') {
+              setRead({ client, identity, status: 'error' })
+              setError(applied.error)
+              return
+            }
+            if (frame.type === 'snapshot' && !applied.pending) {
+              // A pending window has no transcript behind it, so the snapshot that
+              // follows is still this subscription's base, not a reconnect replay.
+              snapshotSeenRef.current = true
+            }
+            if (applied.windowReplaced || frame.type === 'snapshot') {
+              // Why: any authoritative window (and any replay merge) invalidates an
+              // in-flight older-page request; stale results must not land on it.
+              streamGenerationRef.current += 1
+              loadingEarlierRef.current = false
+              setLoadingEarlier(false)
+            }
+            if (applied.windowReplaced) {
+              // Only a genuinely fresh window resets the grown read window — an
+              // overlapping reconnect replay keeps the paged-in history and limit.
+              limitRef.current = INITIAL_LIMIT
+              beforeOffsetRef.current = applied.beforeOffset ?? null
+              setHasMore(applied.hasMore ?? applied.messages.length >= INITIAL_LIMIT)
+            }
+            setMessages(applied.messages)
+            if (!applied.windowReplaced && applied.hasMore != null) {
+              setHasMore(applied.hasMore)
+            }
+            if (!applied.windowReplaced && applied.beforeOffset != null) {
+              beforeOffsetRef.current = applied.beforeOffset
+            }
+            if (applied.cursorInvalidated) {
+              // Fall back to a growing-tail read so history trimmed by live appends
+              // cannot leave a gap between the retained window and the old cursor.
+              streamGenerationRef.current += 1
+              loadingEarlierRef.current = false
+              setLoadingEarlier(false)
+              beforeOffsetRef.current = null
+            }
+            setRead({ client, identity, status: applied.pending ? 'awaiting-transcript' : 'ready' })
+          }
         ),
-        capabilities: { transcriptPending: 1 },
-        ...(transcriptPath ? { transcriptPath } : {})
-      },
-      (raw) => {
-        if (cancelled) {
-          return
-        }
-        const frame = raw as MobileNativeChatStreamFrame
-        const applied = applyMobileNativeChatStreamFrame({
-          merger: mergerRef.current,
-          frame,
-          limit: limitRef.current,
-          replaceSnapshot: !snapshotSeenRef.current
-        })
-        if (applied.kind === 'ignored') {
-          return
-        }
-        if (applied.kind === 'error') {
-          setRead({ client, identity, status: 'error' })
-          setError(applied.error)
-          return
-        }
-        if (frame.type === 'snapshot' && !applied.pending) {
-          // A pending window has no transcript behind it, so the snapshot that
-          // follows is still this subscription's base, not a reconnect replay.
-          snapshotSeenRef.current = true
-        }
-        if (applied.windowReplaced || frame.type === 'snapshot') {
-          // Why: any authoritative window (and any replay merge) invalidates an
-          // in-flight older-page request; stale results must not land on it.
-          streamGenerationRef.current += 1
-          loadingEarlierRef.current = false
-          setLoadingEarlier(false)
-        }
-        if (applied.windowReplaced) {
-          // Only a genuinely fresh window resets the grown read window — an
-          // overlapping reconnect replay keeps the paged-in history and limit.
-          limitRef.current = INITIAL_LIMIT
-          beforeOffsetRef.current = applied.beforeOffset ?? null
-          setHasMore(applied.hasMore ?? applied.messages.length >= INITIAL_LIMIT)
-        }
-        setMessages(applied.messages)
-        if (!applied.windowReplaced && applied.hasMore != null) {
-          setHasMore(applied.hasMore)
-        }
-        if (!applied.windowReplaced && applied.beforeOffset != null) {
-          beforeOffsetRef.current = applied.beforeOffset
-        }
-        if (applied.cursorInvalidated) {
-          // Fall back to a growing-tail read so history trimmed by live appends
-          // cannot leave a gap between the retained window and the old cursor.
-          streamGenerationRef.current += 1
-          loadingEarlierRef.current = false
-          setLoadingEarlier(false)
-          beforeOffsetRef.current = null
-        }
-        setRead({ client, identity, status: applied.pending ? 'awaiting-transcript' : 'ready' })
+      (message) => {
+        setRead({ client, identity, status: 'error' })
+        setError(message)
       }
     )
 
@@ -246,6 +259,9 @@ export function useMobileNativeChatSession(args: {
     setLoadingEarlier(true)
     void (async () => {
       try {
+        if (agent === 'antigravity') {
+          await requireMobileAntigravityChatCapability(client, agent)
+        }
         const response = await nativeChatSessionPageRead.request(client, {
           agent,
           sessionId,

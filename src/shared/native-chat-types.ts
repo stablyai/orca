@@ -204,6 +204,10 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   /** Epoch ms when the message was produced, or null when the source could not
    *  supply one (e.g. some scrape segments). Null sorts before any timestamp. */
   timestamp: number | null
+  /** Producer-declared clock precision; absent means exact milliseconds. */
+  timestampPrecision?: 'second' | 'millisecond'
+  /** Provider step order breaks ties when its transcript clock has coarse precision. */
+  transcriptPosition?: number
   source: NativeChatSource
   /** Optional provider row cursor; split projections share it for whole-row paging. */
   transcriptOffset?: number

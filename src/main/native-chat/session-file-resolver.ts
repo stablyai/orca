@@ -9,7 +9,9 @@ import { isWslUncPath } from '../../shared/wsl-paths'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
 import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'
+import { resolveAntigravitySessionFile } from './antigravity-session-file-resolution'
 import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
+import { antigravitySessionWslDistro } from './native-chat-execution-namespace'
 import {
   findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir
@@ -74,6 +76,8 @@ export type ResolveSessionFileOptions = {
   grokSessionsDir?: string
   /** Override the omp sessions root (`~/.omp/agent/sessions`). */
   ompSessionsDir?: string
+  /** Antigravity CLI brain root on the execution host. */
+  antigravityBrainDir?: string
   /** Authoritative transcript path reported by the agent hook
    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
    *  directly — recent Claude Code names the transcript with a UUID that differs
@@ -104,12 +108,29 @@ export async function resolveSessionFilePath(
   if (!transcriptAgent || transcriptAgent === 'opencode') {
     return null
   }
+  if (transcriptAgent === 'antigravity') {
+    const canonicalDistro = antigravitySessionWslDistro(sessionId)
+    if (canonicalDistro && options.wslDistro && canonicalDistro !== options.wslDistro) {
+      throw new Error('Antigravity transcript execution namespace does not match')
+    }
+    if (canonicalDistro) {
+      options = { ...options, wslDistro: canonicalDistro }
+    }
+  }
   // Why: the hook's transcript_path is the exact file the agent is writing, so it
   // beats reconstructing a path from the session id. Route it through the host
   // readability check so a WSL guest path becomes an openable UNC on Windows;
   // stale/missing paths fall through to the id-based search.
   let unavailable: WslTranscriptFsError | undefined
   const hookPath = options.transcriptPath?.trim()
+  if (
+    transcriptAgent === 'antigravity' &&
+    options.wslDistro &&
+    hookPath &&
+    !needsWslHostResolution(hookPath)
+  ) {
+    throw new Error('Antigravity guest transcript path does not match its execution namespace')
+  }
   if (hookPath && extname(hookPath) === '.jsonl') {
     try {
       const hostReadable = await toHostReadableTranscriptPath(hookPath, {
@@ -144,7 +165,14 @@ export async function resolveSessionFilePath(
     if (unavailable) {
       throw unavailable
     }
-    return null
+    return transcriptAgent === 'antigravity' && !hookPath
+      ? resolveAntigravitySessionFile(
+          sessionId,
+          options.antigravityBrainDir,
+          signal,
+          options.wslDistro
+        )
+      : null
   }
 
   const resolved = await resolveSessionFileById(transcriptAgent, sessionId, options, signal)
@@ -187,6 +215,9 @@ async function resolveSessionFileById(
       overrideDirs ? undefined : wslCodexSessionsDirs,
       signal
     )
+  }
+  if (transcriptAgent === 'antigravity') {
+    return resolveAntigravitySessionFile(trimmedId, options.antigravityBrainDir, signal)
   }
   if (transcriptAgent === 'grok') {
     return resolveGrokSessionFile(trimmedId, options.grokSessionsDir ?? grokSessionsDir(), signal)

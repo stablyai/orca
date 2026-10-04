@@ -177,3 +177,25 @@ describe("a subagent's rows are not the conversation's", () => {
     ])
   })
 })
+
+it('keeps journal order ahead of a provider transcript position', () => {
+  const first = row('first', say('first'), {
+    transcriptPosition: 10,
+    journalPosition: { sequence: 1, index: 0 }
+  })
+  const second = row('second', say('second'), {
+    transcriptPosition: 9,
+    journalPosition: { sequence: 2, index: 0 }
+  })
+  expect(projectNativeChatTranscriptMessages([second, first]).map((message) => message.id)).toEqual(
+    ['first', 'second']
+  )
+})
+
+it('retains lexical ties for transcripts without provider order', () => {
+  const first = row('9', say('first'), { journalPosition: undefined })
+  const second = row('10', say('second'), { journalPosition: undefined })
+  expect(projectNativeChatTranscriptMessages([first, second]).map((message) => message.id)).toEqual(
+    ['10', '9']
+  )
+})

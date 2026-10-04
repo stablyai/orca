@@ -198,6 +198,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       // stale `mobile{X}` to any caller that hasn't yet seen the exit IPC.
       this.terminalDrivers.clear(ptyId)
       this.remoteDesktopFloor.clearPty(ptyId)
+      this.antigravityScreenPermissions.forget(ptyId)
       this.disposeHeadlessTerminal(ptyId)
       if (processDeathCertified) {
         // The bounded verdict register also fences late graphs after the PTY record was pruned.

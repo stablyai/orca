@@ -39,7 +39,7 @@ function startBuild(mode, options = {}) {
   writeFileSync(
     cli,
     `
-    import { appendFileSync, existsSync } from 'node:fs'
+    import { appendFileSync, existsSync, writeSync } from 'node:fs'
     import { spawn } from 'node:child_process'
     const name = process.argv.at(-1)
     const delay = name.includes('computer') ? 0 : name.includes('keyboard') ? 200 : 400
@@ -54,6 +54,7 @@ function startBuild(mode, options = {}) {
       spawn(process.execPath, ['-e', ${JSON.stringify("process.on('SIGTERM', () => {}); console.log('descendant ' + process.pid); setInterval(() => {}, 1000)")}], { stdio: 'inherit' })
     }
     let flooding = false
+    let exiting = false
     setInterval(() => {
       if (!existsSync(process.env.NATIVE_BUILD_GATE)) return
       if (process.env.NATIVE_BUILD_MODE.startsWith('output-closed-')) {
@@ -71,11 +72,24 @@ function startBuild(mode, options = {}) {
       }
       if (['success', 'descendant-success'].includes(process.env.NATIVE_BUILD_MODE)) { record('completed'); process.exit(0) }
       if (process.env.NATIVE_BUILD_MODE === 'stalled-consumer') {
-        if (!name.includes('computer') || existsSync(process.env.NATIVE_BUILD_GATE + '-exit')) { record('completed'); process.exit(0) }
+        if (!name.includes('computer')) { record('completed'); process.exit(0) }
+        if (existsSync(process.env.NATIVE_BUILD_GATE + '-exit')) {
+          if (!exiting) { exiting = true; setTimeout(() => { record('completed'); process.exit(0) }, Number(process.env.NATIVE_BUILD_COMPLETION_DELAY)) }
+          return
+        }
         if (flooding) return
         flooding = true
-        // Each callback means the kernel pipe accepted the line, so it survives our exit.
-        const pump = (line) => process.stdout.write('line ' + line + ' ' + 'x'.repeat(190) + '\\n', () => { record('accepted', { line }); pump(line + 1) })
+        // Synchronous byte counts remain authoritative when exit preempts writable callbacks.
+        const pump = (line, offset = 0) => {
+          const text = 'line ' + line + ' ' + 'x'.repeat(190) + '\\n'
+          let bytes
+          try { bytes = offset + writeSync(1, text.slice(offset)) }
+          catch (error) { if (error.code !== 'EAGAIN') throw error; setTimeout(() => pump(line, offset), 1); return }
+          record('accepted', { line, bytes })
+          const next = () => bytes === text.length ? pump(line + 1) : pump(line, bytes)
+          if (Number(process.env.NATIVE_BUILD_COMPLETION_DELAY) > 0) setTimeout(next, 1)
+          else setImmediate(next)
+        }
         pump(1)
         return
       }
@@ -102,6 +116,12 @@ function startBuild(mode, options = {}) {
             `data:text/javascript,${encodeURIComponent(`import { appendFileSync } from 'node:fs'; setInterval(() => appendFileSync(process.env.NATIVE_BUILD_JOURNAL, JSON.stringify({ name: 'launcher', event: 'buffered', bytes: process.stdout.writableLength }) + '\\n'), 50).unref()`)}`
           ]
         : []),
+      ...(options.lateResume
+        ? [
+            '--import',
+            `data:text/javascript,${encodeURIComponent(`import childProcess from 'node:child_process'; import { syncBuiltinESMExports } from 'node:module'; const spawn = childProcess.spawn; childProcess.spawn = (...args) => { const child = spawn(...args); child.once('close', () => { child.stdout.pause(); setImmediate(() => child.stdout.resume()) }); return child }; syncBuiltinESMExports()`)}`
+          ]
+        : []),
       ...(options.lateOutputError
         ? [
             '--import',
@@ -117,7 +137,8 @@ function startBuild(mode, options = {}) {
       npm_execpath: options.missingCli ? join(directory, 'missing-pnpm') : cli,
       NATIVE_BUILD_JOURNAL: journal,
       NATIVE_BUILD_GATE: join(directory, 'release'),
-      NATIVE_BUILD_MODE: mode
+      NATIVE_BUILD_MODE: mode,
+      NATIVE_BUILD_COMPLETION_DELAY: String(options.completionDelay ?? 0)
     },
     stdio: ['ignore', 'pipe', 'pipe']
   })
@@ -277,6 +298,16 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     }
   )
 
+  it('does not rearm descendant reaping when a closed compiler stream resumes', async () => {
+    const build = startBuild('success', { lateResume: true })
+    await build.ready
+    build.release()
+    const result = await build.closed
+    expect(result).toMatchObject({ code: 0, signal: null })
+    expect(result.stderr).not.toContain('reaping')
+    expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(3)
+  })
+
   it('reports a missing build command without waiting forever', async () => {
     const build = startBuild('success', { missingCli: true })
     expect(await build.closed).toMatchObject({ code: 1, signal: null })
@@ -317,35 +348,59 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     expect(Math.max(...buffered)).toBeLessThan(1_000_000)
   })
 
-  it('delivers every compiler line when its own stdout consumer stalls past the reap timeout', async () => {
-    const build = startBuild('stalled-consumer', { reportBuffered: true })
-    await build.ready
-    build.child.stdout.pause()
-    build.release()
-    // Launcher stops reading once its stdout hits the high-water mark; then let the compiler fill its pipe.
-    await waitFor(() =>
-      build.events().some(({ event, bytes }) => event === 'buffered' && bytes >= 16_384)
-    )
-    await sleep(300)
-    build.releaseExit()
-    await waitFor(() => build.events().some(({ event }) => event === 'completed'))
-    const accepted = Math.max(
-      ...build
+  it.each([0, 200])(
+    'delivers every accepted compiler byte after a stalled consumer and %ims completion delay',
+    async (completionDelay) => {
+      const build = startBuild('stalled-consumer', { reportBuffered: true, completionDelay })
+      await build.ready
+      build.child.stdout.pause()
+      build.release()
+      await waitFor(() =>
+        build.events().some(({ event, bytes }) => event === 'buffered' && bytes >= 16_384)
+      )
+      await sleep(300)
+      build.releaseExit()
+      // Quiet siblings finish first; only the output producer freezes the expected byte count.
+      await waitFor(() =>
+        build.events().some(({ name, event }) => name.includes('computer') && event === 'completed')
+      )
+      const compiler = build
         .events()
-        .filter(({ event }) => event === 'accepted')
-        .map(({ line }) => line)
-    )
-    expect(accepted).toBeGreaterThan(0)
-    await sleep(3_000)
-    build.child.stdout.resume()
+        .find(({ name, event }) => name.includes('computer') && event === 'started')
+      await waitFor(() => {
+        try {
+          process.kill(compiler.pid, 0)
+          return false
+        } catch (error) {
+          if (error.code === 'ESRCH') {
+            return true
+          }
+          throw error
+        }
+      })
+      const accepted = build.events().findLast(({ event }) => event === 'accepted')
+      expect(accepted.line).toBeGreaterThan(0)
+      await sleep(3_000)
+      build.child.stdout.resume()
 
-    const result = await build.closed
-    expect(result).toMatchObject({ code: 0, signal: null })
-    const delivered = [...result.output.matchAll(/^\[computer\] line (\d+) /gm)].map((match) =>
-      Number(match[1])
-    )
-    expect(delivered).toEqual(Array.from({ length: accepted }, (_, index) => index + 1))
-  })
+      const result = await build.closed
+      expect(result).toMatchObject({ code: 0, signal: null })
+      expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(3)
+      const lineText = (line) => `line ${line} ${'x'.repeat(190)}\n`
+      const expected = [
+        `[computer] ready ${compiler.pid}`,
+        ...Array.from(
+          { length: accepted.line - 1 },
+          (_, index) => `[computer] ${lineText(index + 1).trimEnd()}`
+        ),
+        `[computer] ${lineText(accepted.line).slice(0, accepted.bytes).replace(/\n$/, '')}`
+      ]
+      expect(result.output.split('\n').filter((line) => line.startsWith('[computer] '))).toEqual(
+        expected
+      )
+      expect(result.stderr).not.toContain('reaping')
+    }
+  )
 
   it.each(['linux', 'win32'])('keeps the %s entry point out of macOS builds', async (platform) => {
     const build = startBuild('success', { platform })

@@ -20,6 +20,9 @@ export function makeAgentStatusStoreWiring(): {
   statusStore: AgentHookServer
   deps: {
     onTerminalAgentStatus: (event: Parameters<AgentHookServer['ingestTerminalStatus']>[0]) => void
+    onTerminalScreenPermission: (
+      event: Parameters<AgentHookServer['ingestAntigravityScreenPermission']>[0]
+    ) => boolean
     getAgentStatusSnapshot: () => ReturnType<AgentHookServer['getStatusSnapshot']>
     getAgentProviderSessionSnapshot: () => ReturnType<AgentHookServer['getStatusSnapshot']>
     getAgentProviderSessionRowsForPane: (
@@ -37,6 +40,7 @@ export function makeAgentStatusStoreWiring(): {
     statusStore,
     deps: {
       onTerminalAgentStatus: (event) => statusStore.ingestTerminalStatus(event),
+      onTerminalScreenPermission: (event) => statusStore.ingestAntigravityScreenPermission(event),
       getAgentStatusSnapshot: () =>
         statusStore.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
       getAgentProviderSessionSnapshot: () => statusStore.getStatusSnapshot(),

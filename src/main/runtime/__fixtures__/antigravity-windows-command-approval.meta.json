@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-20T09:20:25.623Z",
+  "platform": "win32",
+  "command": ["C:\\Users\\user\\AppData\\Local\\agy\\bin\\agy.exe"],
+  "cols": 120,
+  "rows": 40,
+  "note": "Native Windows agy 1.2.7; authenticated profile; harmless command approval; 120x40.",
+  "exitCode": 1
+}

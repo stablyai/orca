@@ -72,6 +72,9 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
       forwardQueryReplies
     )
     captureModelReceipt?.(modelCompletion)
+    if (this.onTerminalScreenPermission) {
+      this.antigravityScreenPermissions.schedule(ptyId)
+    }
 
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     const ptyTailBefore = pty

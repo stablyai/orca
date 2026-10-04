@@ -130,9 +130,19 @@ function messageIsAfterPendingTimestamp(
   const boundary = nativeChatPendingMatchingAfter(pending)
   // A transcript-clock boundary describes an existing message, so exclude ties.
   // Local send time has no existing record and remains inclusive.
-  return pending.afterMessageTimestamp == null
-    ? message.timestamp >= boundary
-    : message.timestamp > boundary
+  if (pending.afterMessageTimestamp != null) {
+    return message.timestamp > boundary
+  }
+  return messageIsAtOrAfterSendTimestamp(message, boundary)
+}
+
+function messageIsAtOrAfterSendTimestamp(message: NativeChatMessage, sentAt: number): boolean {
+  // Only a producer-declared coarse clock may precede the local send within its second.
+  return (
+    message.timestamp === null ||
+    message.timestamp >=
+      (message.timestampPrecision === 'second' ? Math.floor(sentAt / 1000) * 1000 : sentAt)
+  )
 }
 
 /**
@@ -288,9 +298,7 @@ export function launchPromptAsMessage(
   // Why: a launch prompt seeds a brand-new session, so a matching user turn
   // with no timestamp (e.g. Grok transcripts) can only be its own delivery.
   const represented = matchingNativeChatUserContentCounts(
-    existingMessages.filter(
-      (message) => message.timestamp === null || message.timestamp >= entry.createdAt
-    )
+    existingMessages.filter((message) => messageIsAtOrAfterSendTimestamp(message, entry.createdAt))
   )
   if ((represented.get(nativeChatPendingContentKey(entry)) ?? 0) > 0) {
     return null
@@ -311,8 +319,8 @@ export function shouldPruneLaunchPrompt(
   entry: NativeChatLaunchPrompt,
   messages: NativeChatMessage[]
 ): boolean {
-  const relevant = messages.filter(
-    (message) => message.timestamp === null || message.timestamp >= entry.createdAt
+  const relevant = messages.filter((message) =>
+    messageIsAtOrAfterSendTimestamp(message, entry.createdAt)
   )
   return (
     (advancedNativeChatUserContentCounts(relevant).get(nativeChatPendingContentKey(entry)) ?? 0) > 0

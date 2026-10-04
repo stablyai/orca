@@ -4,6 +4,13 @@ const ANTIGRAVITY_TRANSCRIPT_FILE = 'transcript.jsonl'
 const ANTIGRAVITY_SYSTEM_DIR = '.system_generated'
 const ANTIGRAVITY_LOGS_DIR = 'logs'
 
+export const ANTIGRAVITY_BRAIN_HOME_SEGMENTS = ['.gemini', 'antigravity-cli', 'brain'] as const
+
+/** Segments from a brain root to one conversation's transcript. */
+export function antigravityTranscriptSegmentsInBrain(conversationId: string): string[] {
+  return [conversationId, ANTIGRAVITY_SYSTEM_DIR, ANTIGRAVITY_LOGS_DIR, ANTIGRAVITY_TRANSCRIPT_FILE]
+}
+
 export function antigravityConversationIdFromTranscriptPath(filePath: string): string | null {
   const segments = pathSegments(filePath)
   const transcriptIndex = segments.length - 1

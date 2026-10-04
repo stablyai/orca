@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import type { AntigravityScreenPermissionObservation } from '../agent-hooks/server/server-ingest-antigravity-screen'
 import { OrcaRuntimeWithTerminalDrivers } from './orca-runtime-terminal-drivers'
 import { RuntimePreservedBranchCleanup } from './runtime-preserved-branch-cleanup'
 import type { IPtyProvider } from '../providers/types'
@@ -54,6 +55,10 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
   protected readonly getSshProviderFn: ((connectionId: string) => IPtyProvider | undefined) | null
 
   protected readonly onPtyStopped: ((ptyId: string) => void) | null
+
+  protected readonly onTerminalScreenPermission:
+    | ((event: AntigravityScreenPermissionObservation) => boolean)
+    | null
 
   protected readonly onTerminalAgentStatus:
     | ((event: RuntimeTerminalAgentStatusEvent) => void)

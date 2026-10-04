@@ -10,6 +10,7 @@ import { removePaneKeys } from './agent-status-pane-keyed-records'
 import { recoveryRecordMatches } from './agent-status-recovery-equivalence'
 import type { AgentStatusLiveEntryBuild } from './agent-status-live-entry-builder'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
+import { antigravityInitialChatViewPatch } from './antigravity-initial-chat-view'
 
 export type AgentStatusLiveUpdateReduction = {
   patch: Partial<AppState>
@@ -110,6 +111,7 @@ export function reduceAgentStatusLiveUpdate(
     nextLaunchConfigs = removePaneKeys(nextLaunchConfigs, evicted)
   }
   const patch: Partial<AppState> = {
+    ...antigravityInitialChatViewPatch(state, entry),
     agentStatusByPaneKey: nextLive,
     retainedAgentsByPaneKey: nextRetainedAgents,
     sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions,

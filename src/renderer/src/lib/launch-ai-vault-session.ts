@@ -13,6 +13,9 @@ import type {
 } from '../../../shared/agent-session-resume'
 import type { TabSplitDirection } from '@/store/slices/tabs'
 import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-session'
+import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
+import { getConnectionIdFromState } from '@/lib/connection-context'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 
 export type LaunchAiVaultSessionInNewTabResult =
   | { tabId: string; groupId?: string }
@@ -31,6 +34,17 @@ export function launchAiVaultSessionInNewTab(args: {
   splitDirection?: TabSplitDirection
 }): LaunchAiVaultSessionInNewTabResult {
   const store = useAppStore.getState()
+  const antigravityViewModeProps =
+    args.agent === 'antigravity'
+      ? initialAgentTabViewModeProps(store.settings, {
+          agent: 'antigravity',
+          providerSessionId:
+            args.providerSession?.key === 'conversation_id' ? args.providerSession.id : undefined,
+          nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+            getConnectionIdFromState(store, args.worktreeId)
+          )
+        })
+      : {}
   let targetGroupId = args.targetGroupId
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, args.worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
@@ -46,6 +60,9 @@ export function launchAiVaultSessionInNewTab(args: {
       ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
       ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
       ...(args.providerSession ? { providerSession: args.providerSession } : {}),
+      ...(args.agent === 'antigravity'
+        ? { viewMode: antigravityViewModeProps.viewMode ?? 'terminal' }
+        : {}),
       ...(args.launchConfig ? { agentArgs: args.launchConfig.agentArgs } : {}),
       activate: true
     })
@@ -68,9 +85,15 @@ export function launchAiVaultSessionInNewTab(args: {
       targetGroupId
   }
 
-  const tab = args.cwd
-    ? store.createTab(args.worktreeId, targetGroupId, undefined, { startupCwd: args.cwd })
-    : store.createTab(args.worktreeId, targetGroupId)
+  const tab =
+    args.cwd || args.agent === 'antigravity'
+      ? store.createTab(args.worktreeId, targetGroupId, undefined, {
+          ...(args.cwd ? { startupCwd: args.cwd } : {}),
+          ...(args.agent === 'antigravity'
+            ? { launchAgent: 'antigravity', ...antigravityViewModeProps }
+            : {})
+        })
+      : store.createTab(args.worktreeId, targetGroupId)
   store.queueTabStartupCommand(tab.id, {
     command: args.command,
     ...(args.env ? { env: args.env } : {}),

@@ -22,6 +22,34 @@ function user(id: string, text: string): NativeChatMessage {
 }
 
 describe('mergeNativeChatLiveSession', () => {
+  it('keeps Antigravity working after an intermediate planner response', () => {
+    const planner: NativeChatMessage = {
+      ...assistant('planner', '> *Thinking:*\nI will run the command.'),
+      blocks: [
+        { type: 'text', text: '> *Thinking:*\nI will run the command.' },
+        { type: 'tool-call', name: 'run_command', input: { command: 'cat proof.txt' } }
+      ]
+    }
+    expect(
+      mergeNativeChatLiveSession({
+        messages: [user('request', 'read the proof'), planner],
+        sessionId: 'conversation',
+        agent: 'antigravity',
+        hookState: 'working',
+        stateStartedAt: 1
+      }).status
+    ).toBe('working')
+    expect(
+      mergeNativeChatLiveSession({
+        messages: [user('request', 'read the proof'), planner],
+        sessionId: 'conversation',
+        agent: 'antigravity',
+        hookState: 'done',
+        stateStartedAt: 3
+      }).status
+    ).toBe('ready')
+  })
+
   it("surfaces live 'working' before the assistant turn lands in the transcript", () => {
     const session = mergeNativeChatLiveSession({
       messages: [user('u-1', 'do a thing')],

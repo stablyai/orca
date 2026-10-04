@@ -1,0 +1,15 @@
+{
+  "description": "antigravity recording at 120x40 replayed on the unknown pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-158: now=pending:open edge=pending:open quiet=pending:open wait=ready@poll",
+      "159: now=ready-strong edge=ready-strong quiet=ready-strong wait=ready@start",
+      "160-231: now=pending:open edge=pending:open quiet=pending:open wait=ready@poll"
+    ],
+    "clockless": [
+      "0-158: verdict=pending:open wait=ready@poll",
+      "159: verdict=ready-strong wait=ready@start",
+      "160-231: verdict=pending:open wait=ready@poll"
+    ]
+  }
+}

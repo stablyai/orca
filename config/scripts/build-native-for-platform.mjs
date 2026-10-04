@@ -122,6 +122,10 @@ function runPnpmScript(scriptName) {
     // A descendant that inherited the pipes must not hold the launcher open forever.
     const armReap = () => {
       clearTimeout(closeTimer)
+      // A late drain can resume a stream after its child has relinquished group ownership.
+      if (!children.has(child)) {
+        return
+      }
       // A backpressure pause also delays 'close'; only count time spent actually draining.
       if (child.stdout.isPaused() || child.stderr.isPaused()) {
         return
