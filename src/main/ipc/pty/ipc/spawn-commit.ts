@@ -22,8 +22,13 @@ import { admitPtyReattachOwnership, registerPersistedPtySpawn } from '../pane/sp
 import { reflowHeadlessTerminalToCommittedGrid } from '../delivery/attached-pty-size'
 import { seedHeadlessTerminalFromSpawnResult } from '../pane/terminal-spawn-restore'
 import { markNativeWindowsConptyPty } from '../../../runtime/terminal-model-query-authority'
+import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
+  return commitPtyWithOpenCodePromptIntent(ctx, () => commitReservedPtyIpcSpawn(ctx))
+}
+
+async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   const args = ctx.args
   admitPtyReattachOwnership(ctx.deps.runtime, ctx.result, args.connectionId)
   if (ctx.nativeWindowsConptySpawn) {
@@ -100,6 +105,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
     ctx.pendingRegistrationPtyId = null
   }
   publishPtyIpcSpawnCommit(ctx, committedSize)
+
   // Admission must precede reflow: a replaced spawn cannot resize its successor's model.
   reflowHeadlessTerminalToCommittedGrid({
     result: ctx.result,

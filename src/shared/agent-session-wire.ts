@@ -430,7 +430,12 @@ export type AgentSessionFastModeSupport = {
  * surface: an older host simply lacks the method.
  */
 export type AgentSessionModelCatalogResult =
-  | { origin: 'unknown' }
+  | {
+      origin: 'unknown'
+      /** The host is running its first listing for this account; a `waitForListing` read answers
+       *  when it lands. Absent from a host that predates it. */
+      listingInProgress?: true
+    }
   | {
       /** What produced the listing; any age is served, `fetchedAt` carries it. */
       origin: 'live-session' | 'probe'

@@ -333,25 +333,14 @@ describe.skipIf(process.platform === 'win32')(
     })
 
     itWithZsh(
-      'degrades to an unwrapped pane, leaking nothing, when a config drops precmd_functions',
+      'still scopes history without leaking it when a config drops precmd_functions',
       withHome({ ...USER_FILES, '.zshrc': 'precmd_functions=()\n' }, async (home) => {
         const scoped = join(home, 'orca-history', 'zsh_history')
         const { env, launch } = launchPane(home, scoped)
 
         const report = ['HISTFILE', 'ORCA_HISTFILE', 'ZDOTDIR']
         const { values } = await runZshPty({ env, report })
-        // Why compared against an unwrapped run rather than asserted to differ
-        // from the scoped path: whether the scoped value survives at all is the
-        // host's call, not Orca's. macOS /etc/zshrc overwrites HISTFILE, so it
-        // does not; a host with no such assignment keeps whatever the spawn env
-        // set. The contract on both is the same — this pane is the pane the user
-        // would have had unwrapped.
-        const unwrapped = await runZshPty({
-          env: { PATH: '/usr/bin:/bin', HOME: home, HISTFILE: scoped },
-          report
-        })
-
-        expect(values.HISTFILE).toBe(unwrapped.values.HISTFILE)
+        expect(values.HISTFILE).toBe(scoped)
         expect(values.HISTFILE).not.toContain(launch.env.ZDOTDIR)
         // ORCA_HISTFILE was consumed in .zshenv precisely so a dropped hook
         // leaks nothing to the pane's children.

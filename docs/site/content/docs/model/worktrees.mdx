@@ -114,6 +114,8 @@ You can pin a worktree to the top of its project to keep long-running work in vi
 
 When a worktree has nested child worktrees (for example from orchestration or `worktree create` with a parent), the context menu can also offer **Sleep with Descendants (N)** and **Delete with Descendants…**. Sleep with descendants closes active panels on the selected workspace and every validated nested child in the same project, repo, and host — only workspaces with live terminals or browser tabs are targeted for sleep. Delete with descendants makes the existing cascading delete explicit. Stale lineage links, cycles, and children across host or repo boundaries are excluded.
 
+A parent worktree shows its nested children under an **N children** chip; click the chip to show or hide them. To do the same from the keyboard, assign **Toggle Child Workspaces** under [Settings → Shortcuts](/docs/settings). It acts on the worktree under the pointer, or on the active worktree when nothing is hovered, and does exactly what that card's chip does. On a card with no chip of its own (it has no children, or a sidebar filter hides all of them), it uses the chip on the card's parent instead, and does nothing if there is none.
+
 Double-click a worktree title in the sidebar to rename it inline. Double-clicking elsewhere on the card still opens the full edit dialog. In **Edit Worktree Details**, the issue field accepts **GitHub** or **Linear** (chip on the field; paste a URL to auto-detect). One linked issue per workspace — changing provider or clearing the field unlinks the previous one. For SSH workspaces whose host is disconnected, the card title row can show an inline reconnect control (see [SSH worktrees](/docs/ssh)).
 
 ## Resource Manager cleanup

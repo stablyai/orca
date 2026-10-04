@@ -63,7 +63,7 @@ import {
   journalStopEventRowBuilder
 } from './journal-stop-and-resume-rows'
 import type { AgentJournalEpochReason, JournalStopEvent } from './journal-row-schema'
-import type { JournalRowWriter } from './journal-row-writer'
+import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
 import type { JournalEpochController } from './journal-epoch-controller'
 import { JournalWriteQueue } from './journal-write-queue'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
@@ -340,11 +340,14 @@ export class AgentSessionJournal {
     input: JournalSubmissionInput,
     /** Present: this submission is a queued draft's conversion, and the draft's
      *  state transition commits in the SAME transaction — exactly-once consume. */
-    consume?: JournalSubmissionConsume
+    consume?: JournalSubmissionConsume,
+    /** The send's ledger answer, committed with this row. */
+    receipt?: JournalOperationReceipt
   ): Promise<AgentJournalCursor> {
     return this.rowWriter.append(
       journalSubmissionRowBuilder(() => this.state, this.identity.providerHandle, input, consume),
-      consume && queuedMessageConsumeHook(this.queuedMessages, input.clientMessageId, consume)
+      consume && queuedMessageConsumeHook(this.queuedMessages, input.clientMessageId, consume),
+      receipt
     )
   }
 

@@ -4,6 +4,7 @@
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import {
   structuredAgentSessionEntryIdExpired,
+  structuredAgentSessionEntryRejectedByHost,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
 import {
@@ -30,7 +31,7 @@ export function retryStructuredAgentSessionOutboxEntry(args: {
   // settled the message already rotated it. An expired id is refused for good; its row told the
   // user to check the chat first.
   const recordedRejection =
-    current?.state === 'rejected' && current.lastFailure?.kind === 'rejected'
+    current !== undefined && structuredAgentSessionEntryRejectedByHost(current)
   if (
     current &&
     (recordedRejection ||

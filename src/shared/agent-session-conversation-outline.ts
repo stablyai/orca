@@ -89,7 +89,8 @@ export function projectAgentSessionConversationOutline(
   }
   const entries: AgentSessionConversationOutlineEntry[] = []
   const transcript = projectNativeChatTranscriptMessages(
-    projectStructuredAgentSessionMessages(items, [], submissions)
+    // Unchanged on the wire: a desktop's rejected rows tick once their page is loaded.
+    projectStructuredAgentSessionMessages(items, [], submissions, { rejectedInPlace: false })
   )
   for (const message of transcript) {
     const sequence = sequences.get(message.id)

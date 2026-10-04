@@ -42,27 +42,18 @@ async function context(): Promise<AgentSessionTurnContext> {
   }
 }
 
-/** Longer than any bookkeeping bound: a refusal must already be answered by then. */
-const SETTLED_WAIT_MS = 2_000
-
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
-it('returns a pre-dispatch refusal without waiting on redundant uncertainty persistence', async () => {
+it('rethrows a throw from a plan answered by its write, writing nothing and leaving the row pending', async () => {
   const ctx = await context()
   const { store } = hostTestState()
-  const stalled = Promise.withResolvers<void>()
-  const refusing = Promise.withResolvers<void>()
-  const writes = vi
-    .spyOn(store, 'recordOperationOutcome')
-    .mockResolvedValueOnce()
-    .mockImplementation(() => stalled.promise)
+  const writes = vi.spyOn(store, 'recordOperationOutcome')
   const refusal = new AgentSessionPreDispatchError('agent_session_restart_work_superseded')
-  let returned = false
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  const result = runSettledAgentSessionMutation({
+  const result = await runSettledAgentSessionMutation({
     store,
     operationCallerKey: 'test',
     envelope: envelope('agentSession.send', {}),
@@ -70,42 +61,30 @@ it('returns a pre-dispatch refusal without waiting on redundant uncertainty pers
     plan: {
       method: 'agentSession.send',
       fields: {},
-      markUnknownBeforeRun: true,
+      settlesWithWrite: true,
       run: async () => {
-        refusing.resolve()
         throw refusal
       },
       replay: () => null
     }
-  }).catch((error: unknown) => {
-    returned = true
-    return error
-  })
-  try {
-    await refusing.promise
-    await vi.advanceTimersByTimeAsync(SETTLED_WAIT_MS)
-    expect(returned).toBe(true)
-    expect(writes).toHaveBeenCalledOnce()
-    expect(hostTestState().dispatch).not.toHaveBeenCalled()
-    expect(vi.getTimerCount()).toBe(0)
-  } finally {
-    stalled.resolve()
-    expect(await result).toBe(refusal)
-  }
+  }).catch((error: unknown) => error)
+  expect(result).toBe(refusal)
+  expect(writes).not.toHaveBeenCalled()
+  expect(hostTestState().dispatch).not.toHaveBeenCalled()
+  expect(vi.getTimerCount()).toBe(0)
 })
 
-it.each([1, 2])(
-  'preserves a proven refusal through %s failed bookkeeping writes',
-  async (failures) => {
+it.each([
+  { plan: 'answered by its write', settlesWithWrite: true as const, failures: 1 },
+  { plan: 'settled after its run', settlesWithWrite: undefined, failures: 2 }
+])(
+  'preserves a proven refusal of a plan $plan through $failures failed bookkeeping writes',
+  async ({ settlesWithWrite, failures }) => {
     const ctx = await context()
     const { store, dispatch } = hostTestState()
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    let writes = 0
-    vi.spyOn(store, 'recordOperationOutcome').mockImplementation(async () => {
-      writes += 1
-      if (writes > 1 && writes <= failures + 1) {
-        throw new Error('private unbounded disk detail')
-      }
+    const writes = vi.spyOn(store, 'recordOperationOutcome').mockImplementation(async () => {
+      throw new Error('private unbounded disk detail')
     })
     const refusal = {
       ok: false as const,
@@ -120,12 +99,13 @@ it.each([1, 2])(
       plan: {
         method: 'agentSession.send',
         fields: {},
-        markUnknownBeforeRun: true,
+        ...(settlesWithWrite ? { settlesWithWrite } : {}),
         run,
         replay: () => null
       }
     })
     expect(result).toEqual(refusal)
+    expect(writes).toHaveBeenCalledTimes(failures)
     expect(run).toHaveBeenCalledOnce()
     expect(dispatch).not.toHaveBeenCalled()
     expect(JSON.stringify(warning.mock.calls)).not.toContain('private unbounded disk detail')
@@ -160,7 +140,7 @@ it('accepts without touching the provider', async () => {
 it('refuses a superseded send at acceptance, recording and dispatching nothing', async () => {
   const ctx = await context()
   const { store } = hostTestState()
-  vi.spyOn(store, 'recordOperationOutcome').mockResolvedValue()
+  const writes = vi.spyOn(store, 'recordOperationOutcome').mockResolvedValue()
   const beforeRun = vi.fn(() => {
     throw new AgentSessionPreDispatchError('agent_session_restart_work_superseded')
   })
@@ -175,6 +155,7 @@ it('refuses a superseded send at acceptance, recording and dispatching nothing',
     plan: sendPlan({ envelope: operation, body, beforeRun })
   }).catch((error: unknown) => error)
   expect(result).toBeInstanceOf(AgentSessionPreDispatchError)
+  expect(writes).not.toHaveBeenCalled()
   expect(ctx.journal.submissions()).toEqual([])
   expect(hostTestState().dispatch).not.toHaveBeenCalled()
   expect(vi.getTimerCount()).toBe(0)

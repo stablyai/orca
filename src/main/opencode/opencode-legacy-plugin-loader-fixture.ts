@@ -44,3 +44,39 @@ export function readV1Plugin(
 
   return value
 }
+
+// OpenCode v1.18.30 (5cd8e68): packages/opencode/src/plugin/index.ts.
+type ServerPlugin = (...args: unknown[]) => unknown
+function isServerPlugin(value: unknown): value is ServerPlugin {
+  return typeof value === 'function'
+}
+
+function getServerPlugin(value: unknown) {
+  if (isServerPlugin(value)) {
+    return value
+  }
+  if (!value || typeof value !== 'object' || !('server' in value)) {
+    return
+  }
+  if (!isServerPlugin(value.server)) {
+    return
+  }
+  return value.server
+}
+
+export function getLegacyPlugins(mod: Record<string, unknown>) {
+  const seen = new Set<unknown>()
+  const result: ServerPlugin[] = []
+  for (const entry of Object.values(mod)) {
+    if (seen.has(entry)) {
+      continue
+    }
+    seen.add(entry)
+    const plugin = getServerPlugin(entry)
+    if (!plugin) {
+      throw new TypeError('Plugin export is not a function')
+    }
+    result.push(plugin)
+  }
+  return result
+}

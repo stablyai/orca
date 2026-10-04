@@ -196,6 +196,20 @@ export const AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY =
 // mobile client lacks the capability; mobile must first show a rejected message in place.
 export const AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY =
   'agent-session.accepted-send.v1' as const
+// Why: a host advertising this answers a resent send id from its record before anything else may
+// refuse it, so a refusal `agentSession.send` RETURNS is proof; a thrown error never is, a thrown
+// refusal included (host not installed, journal database won't open, host disabled). Reading a
+// returned `ok: false`: `agent_session_operation_unknown` with `outcomeUnknown` or `resultLost` —
+// the host cannot tell yet, resend the same id; with `rewindUnconfirmed` — settled, nothing was
+// written. `agent_session_operation_expired` — only the transcript can tell. An
+// `agent_session_operation_conflict` or `messageIdReused` — the id holds a different payload,
+// which proves nothing about this message; nor does `sessionNotAttached` (the chat's record is
+// gone or unreadable on this host). Any other — the chat holds no message under that id and none
+// is in flight, but a resend of that id may still run as a new send, so a client that hands the
+// text back must not resend the old id. An older host may refuse an id it recorded: none of this
+// holds there.
+export const AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY =
+  'agent-session.send-answers-proof.v1' as const
 // Why: `agentSession.send`'s params are strict, so an older host rejects `delivery`; and only a
 // capable client can render the `queued` result arm, the draft list, and returned cards. DARK ON
 // PURPOSE — not in RUNTIME_CAPABILITIES: advertising still requires the integrated Codex steer
@@ -400,6 +414,7 @@ export const RUNTIME_CAPABILITIES = [
   // The host side: it accepts a send before any agent has it, and a Stop with no writer before a
   // turn starts, so a client may gate on either.
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,

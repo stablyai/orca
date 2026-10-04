@@ -5,7 +5,11 @@ import {
   agentModelCatalogFingerprintForRecord
 } from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
-import { AgentModelCatalogStore, type AgentModelCatalogSuccess } from './agent-model-catalog-store'
+import {
+  AGENT_MODEL_CATALOG_FRESH_MS,
+  AgentModelCatalogStore,
+  type AgentModelCatalogSuccess
+} from './agent-model-catalog-store'
 
 function record(accountHomePath: string): AgentSessionRecord {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only provider, accountHome and location; the rest of the record is irrelevant here.
@@ -55,7 +59,8 @@ describe('agent model catalog service', () => {
       probes: { codex: probe }
     })
     expect(await service.read({ agent: 'codex', sessionId: 'session-1' })).toEqual({
-      origin: 'unknown'
+      origin: 'unknown',
+      listingInProgress: true
     })
     // A second read while the probe is in flight must not start another, and a
     // record-scoped read probes the RECORD's pinned home, not the selection.
@@ -81,7 +86,10 @@ describe('agent model catalog service', () => {
       probes: { codex: probe }
     })
     // The record-less read follows the CURRENT selection: unknown, never gpt-old.
-    expect(await service.read({ agent: 'codex' })).toEqual({ origin: 'unknown' })
+    expect(await service.read({ agent: 'codex' })).toEqual({
+      origin: 'unknown',
+      listingInProgress: true
+    })
     expect(probe).toHaveBeenCalledWith('/homes/new')
     await vi.waitFor(async () => {
       const result = await service.read({ agent: 'codex' })
@@ -139,7 +147,8 @@ describe('agent model catalog service', () => {
       probes: { codex: probe }
     })
     expect(await service.read({ agent: 'codex', sessionId: 'session-1' })).toEqual({
-      origin: 'unknown'
+      origin: 'unknown',
+      listingInProgress: true
     })
     await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(1))
     // Still a clean unknown — and the failure TTL suppresses a probe storm.
@@ -162,6 +171,94 @@ describe('agent model catalog service', () => {
     })
     expect(await service.read({ agent: 'codex' })).toEqual({ origin: 'unknown' })
     expect(probe).not.toHaveBeenCalled()
+  })
+
+  describe('a read that waits for the first listing', () => {
+    function deferredListing() {
+      let resolve!: (success: AgentModelCatalogSuccess) => void
+      let reject!: (error: Error) => void
+      const promise = new Promise<AgentModelCatalogSuccess>((res, rej) => {
+        resolve = res
+        reject = rej
+      })
+      return { promise, resolve, reject }
+    }
+
+    function coldService(probe: (home: string) => Promise<AgentModelCatalogSuccess>) {
+      const store = new AgentModelCatalogStore()
+      const service = createAgentModelCatalogService({
+        store,
+        getRecord: () => undefined,
+        resolveAccountHome: async () => CODEX_HOME('/homes/selected'),
+        probes: { codex: probe }
+      })
+      return { store, service }
+    }
+
+    it('joins the listing the first read started and answers with it', async () => {
+      const pending = deferredListing()
+      const probe = vi.fn(() => pending.promise)
+      const { service } = coldService(probe)
+      expect(await service.read({ agent: 'codex' })).toEqual({
+        origin: 'unknown',
+        listingInProgress: true
+      })
+      const waited = service.read({ agent: 'codex', waitForListing: true })
+      pending.resolve(listing('gpt-listed'))
+      const result = await waited
+      expect(result.origin === 'unknown' ? null : result.models[0]!.id).toBe('gpt-listed')
+      expect(probe).toHaveBeenCalledTimes(1)
+    })
+
+    it('answers a plain unknown when the listing fails', async () => {
+      const pending = deferredListing()
+      const { service } = coldService(() => pending.promise)
+      const waited = service.read({ agent: 'codex', waitForListing: true })
+      pending.reject(new Error('spawn failed'))
+      expect(await waited).toEqual({ origin: 'unknown' })
+    })
+
+    it('does not wait or report a listing while a failure is inside its TTL', async () => {
+      const probe = vi.fn(async (): Promise<AgentModelCatalogSuccess> => {
+        throw new Error('spawn failed')
+      })
+      const { store, service } = coldService(probe)
+      store.recordFailure(selectedHomeFingerprint('/homes/selected'), 'spawn failed')
+      expect(await service.read({ agent: 'codex', waitForListing: true })).toEqual({
+        origin: 'unknown'
+      })
+      expect(await service.read({ agent: 'codex' })).toEqual({ origin: 'unknown' })
+      expect(probe).not.toHaveBeenCalled()
+    })
+
+    it('reports no listing where the host has no lister for the account', async () => {
+      const store = new AgentModelCatalogStore()
+      const service = createAgentModelCatalogService({
+        store,
+        getRecord: () => undefined,
+        resolveAccountHome: async () => CODEX_HOME('/homes/selected')
+      })
+      expect(await service.read({ agent: 'codex', waitForListing: true })).toEqual({
+        origin: 'unknown'
+      })
+    })
+
+    it('serves an aged entry at once and refreshes it behind the answer', async () => {
+      let now = 0
+      const store = new AgentModelCatalogStore({ now: () => now })
+      store.recordSuccess(selectedHomeFingerprint('/homes/selected'), 'codex', listing('gpt-old'))
+      now = AGENT_MODEL_CATALOG_FRESH_MS
+      const probe = vi.fn(() => new Promise<AgentModelCatalogSuccess>(() => {}))
+      const service = createAgentModelCatalogService({
+        store,
+        getRecord: () => undefined,
+        resolveAccountHome: async () => CODEX_HOME('/homes/selected'),
+        probes: { codex: probe }
+      })
+      const result = await service.read({ agent: 'codex', waitForListing: true })
+      expect(result.origin === 'unknown' ? null : result.models[0]!.id).toBe('gpt-old')
+      expect(probe).toHaveBeenCalledTimes(1)
+    })
   })
 
   describe('a read for the workspace a new chat runs in', () => {

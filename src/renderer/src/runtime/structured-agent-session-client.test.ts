@@ -123,6 +123,30 @@ describe('callStructuredAgentSession rewind capability', () => {
   })
 })
 
+describe('callStructuredAgentSession timeouts', () => {
+  const target = { kind: 'environment', environmentId: 'env-1' } as const
+
+  beforeEach(() => {
+    vi.resetAllMocks()
+    mocks.call.mockResolvedValue({ origin: 'unknown' })
+  })
+
+  // A waiting read lasts as long as the host's listing, which outlasts the default 15 s.
+  it('gives a model catalog read longer than the slowest host listing', async () => {
+    const params = { agent: 'claude', sessionId: 'session-1', waitForListing: true }
+    await callStructuredAgentSession(target, 'agentSession.modelCatalog', params)
+    const [, , , options] = mocks.call.mock.calls[0]!
+    expect(options.timeoutMs).toBeGreaterThan(80_000)
+  })
+
+  it('leaves other reads on the default timeout', async () => {
+    await callStructuredAgentSession(target, 'agentSession.options', { sessionId: 'session-1' })
+    expect(mocks.call).toHaveBeenCalledExactlyOnceWith(target, 'agentSession.options', {
+      sessionId: 'session-1'
+    })
+  })
+})
+
 describe('subscribeStructuredAgentSession', () => {
   beforeEach(() => {
     vi.clearAllMocks()

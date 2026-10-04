@@ -13,7 +13,8 @@ import {
 import packageJson from './package.json' with { type: 'json' }
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
-  '@streamparser/json',
+  'stream-json',
+  'stream-chain',
   '@xterm/headless',
   '@xterm/addon-serialize',
   'tldts',

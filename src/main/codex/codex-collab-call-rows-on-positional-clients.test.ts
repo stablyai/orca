@@ -47,7 +47,9 @@ function positionalRuns(rows: AgentJournalRenderItem[]): {
     })
   })
   const transcript = projectNativeChatTranscript(
-    projectStructuredAgentSessionMessages(rows, [], []).map(withoutCallIds)
+    projectStructuredAgentSessionMessages(rows, [], [], { rejectedInPlace: true }).map(
+      withoutCallIds
+    )
   )
   // The conversation's runs, then each helper's section's.
   const runs = [

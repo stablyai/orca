@@ -13,6 +13,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { parseAgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { StructuredAgentSessionResumeAdmission } from './structured-agent-session-restart-resume-runner'
@@ -158,6 +159,21 @@ export async function interruptedRestart(
   )
   const marker = parseAgentSessionResumeMarker(capsule.entries[0]?.marker)
   return { ...hostTestState(), host, store, log, closeSession, marker, clock }
+}
+
+/** The continuation's submission commits, then its send throws: a send Orca may have taken. */
+export function throwAfterContinuationAccepted(): void {
+  const append = AgentSessionJournal.prototype.appendSubmission
+  vi.spyOn(AgentSessionJournal.prototype, 'appendSubmission').mockImplementation(async function (
+    this: AgentSessionJournal,
+    ...args: Parameters<AgentSessionJournal['appendSubmission']>
+  ) {
+    const cursor = await append.apply(this, args)
+    if (args[0].origin === 'host') {
+      throw new Error('the accepted continuation could not be answered')
+    }
+    return cursor
+  })
 }
 
 export async function statusNotes(host: StructuredAgentSessionHost) {

@@ -5,10 +5,10 @@ import {
   AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE
 } from '../../../shared/agent-session-restart-continuation'
 import { StructuredAgentSessionResumeAdmission } from './structured-agent-session-restart-resume-runner'
-import { STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER } from './structured-agent-session-restart-resume-wiring'
 import {
   interruptedRestart,
-  statusNotes
+  statusNotes,
+  throwAfterContinuationAccepted
 } from './structured-agent-session-restart-interruption-test-harness'
 import { CALLER, envelope } from './structured-agent-session-host-test-harness'
 import {
@@ -66,19 +66,10 @@ it('says so in the chat when the agent cannot start for the continuation', async
 // A send that throws after Orca may have taken it cannot be proven undelivered: filed unconfirmed,
 // and it stays on record while the agent that may be carrying on keeps running.
 it('keeps an unconfirmed failure while the agent the continuation started keeps running', async () => {
-  const { host, store } = await interruptedRestart()
+  const { host } = await interruptedRestart()
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   await host.restartResume.list()
-  const settle = store.recordOperationOutcome.bind(store)
-  vi.spyOn(store, 'recordOperationOutcome').mockImplementation(async (input) => {
-    if (
-      input.callerKey === STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER &&
-      input.outcome.status === 'succeeded'
-    ) {
-      throw new Error('operation outcome could not be persisted')
-    }
-    return settle(input)
-  })
+  throwAfterContinuationAccepted()
 
   const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
 

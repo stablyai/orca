@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { agentSessionPromptQuestions } from '../../../../shared/agent-session-question-answer'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
@@ -29,11 +29,7 @@ import { useAppStore } from '../../store'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { NativeChatThreadGoalBanner } from './NativeChatThreadGoalBanner'
 import { structuredAgentSessionReadFailureNotice } from './structured-agent-session-read-failure-notice'
-import { useStructuredAgentSessionStartFailureFacts } from './use-structured-agent-session-start-failure-facts'
-import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
-
-const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
+import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent-session-delivery-notices'
 
 export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
@@ -115,41 +111,16 @@ export function NativeChatStructuredSession(
     }),
     [controller, historyPhase, props.agent, props.sessionId]
   )
-  // Read at click time, so the notices stay put while the outbox's Retry is rebuilt each render.
-  const retryRef = useRef(controller.retry)
-  useEffect(() => {
-    retryRef.current = controller.retry
-  })
-  const retryDelivery = useCallback((clientMessageId: string) => {
-    retryRef.current(clientMessageId)
-  }, [])
   const agentLabel = structuredAgentLabel(props.agent === 'codex' ? 'codex' : 'claude')
-  // Only a rejected message reads the journal's rows, so a new batch of them re-renders no row else.
-  const hasRejected = controller.outbox.some((entry) => entry.state === 'rejected')
-  const rejectionRows = hasRejected ? controller.submissions : NO_SUBMISSIONS
-  const startFailures = useStructuredAgentSessionStartFailureFacts(
-    controller.journalItems,
-    hasRejected
-  )
-  const deliveryNotices = useMemo(
-    () =>
-      structuredAgentSessionDeliveryNotices(
-        controller.outbox,
-        agentLabel,
-        retryDelivery,
-        rejectionRows,
-        startFailures,
-        controller.failedHere
-      ),
-    [
-      controller.outbox,
-      agentLabel,
-      retryDelivery,
-      rejectionRows,
-      startFailures,
-      controller.failedHere
-    ]
-  )
+  const deliveryNotices = useStructuredAgentSessionDeliveryNotices({
+    outbox: controller.outbox,
+    submissions: controller.submissions,
+    journalItems: controller.journalItems,
+    failedHere: controller.failedHere,
+    queuedMessageIds: controller.queuedMessageIds,
+    retry: controller.retry,
+    agentName: agentLabel
+  })
   const viewState = selectNativeChatViewState(session, { readRetries: true })
   // Nothing reads an unread history, so its pane stays blank beside the Retry line.
   const loadingPane = historyPhase === 'unread' ? null : <NativeChatLoadingCue />

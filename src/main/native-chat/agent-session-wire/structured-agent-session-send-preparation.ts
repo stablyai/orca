@@ -22,7 +22,9 @@ import {
   AGENT_SESSION_NOT_ATTACHED,
   type AgentSessionMutationSessionPreparation
 } from './structured-agent-session-mutation-admission'
+import { agentSessionOperationOutcomeUnknown } from './structured-agent-session-replay-outcome'
 import { rewindRefusal } from './structured-rewind-refusal'
+import { conversationCommandInFlight } from './structured-conversation-command-admission'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
@@ -132,17 +134,29 @@ export function openWithAgent(
 }
 
 /** A rewind still in doubt once the conversation is open is one only its provider can settle —
- *  the open settles every other — so a send starts the agent, whose attach recovers it. */
+ *  the open settles every other — so a send starts the agent, whose attach recovers it. A resend
+ *  of a recorded id needs only the conversation, its answer's source: it starts nothing, and an
+ *  open that fails leaves that answer unknown, never refused. `clearInFlight`: a /clear was running
+ *  when this send arrived, which refuses only its first run. */
 export function sendPreparation(
   context: Pick<StructuredAgentSessionMutationContext, 'openConversation' | 'ensureAgent' | 'deps'>,
-  envelope: AgentSessionMutationEnvelope
-): () => Promise<AgentSessionMutationSessionPreparation> {
-  return async () => {
+  envelope: AgentSessionMutationEnvelope,
+  arrival: { clearInFlight?: boolean } = {}
+): (ledger: 'admit' | 'replay') => Promise<AgentSessionMutationSessionPreparation> {
+  return async (ledger) => {
+    if (ledger === 'admit' && arrival.clearInFlight) {
+      return { ok: false, refusal: conversationCommandInFlight() }
+    }
     const opened = await openConversationForWrite(
       context.openConversation,
       envelope,
       context.deps.logger
     )
+    if (ledger === 'replay') {
+      return opened.ok
+        ? opened
+        : { ok: false, refusal: agentSessionOperationOutcomeUnknown(envelope.clientOperationId) }
+    }
     const phase = context.deps.store.getRecord(envelope.sessionId)?.rewind?.phase
     return opened.ok && (phase === 'prepared' || phase === 'provider-succeeded')
       ? context.ensureAgent(envelope.sessionId)
