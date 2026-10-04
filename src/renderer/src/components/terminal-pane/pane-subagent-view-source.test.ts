@@ -1,9 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import {
   paneShownSubagentTranscriptPath,
+  paneSubagentTranscriptPath,
   subagentTranscriptPathForParent
 } from './pane-subagent-view-source'
+
+// 'wt-local' is on this machine; any other worktree is on an SSH host this renderer cannot read.
+vi.mock('@/lib/connection-context', () => ({
+  getConnectionIdFromState: (_state: unknown, worktreeId: string) =>
+    worktreeId === 'wt-local' ? null : 'ssh-host'
+}))
 
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
 const PARENT_TRANSCRIPT = '/home/u/.claude/projects/p/693d.jsonl'
@@ -83,6 +91,52 @@ describe('paneShownSubagentTranscriptPath', () => {
         { agentStatusByPaneKey: { [PANE]: CLAUDE_PARENT }, paneSubagentViewByPaneKey: {} },
         PANE,
         true
+      )
+    ).toBeNull()
+  })
+})
+
+describe('paneSubagentTranscriptPath', () => {
+  const SUBAGENT_TRANSCRIPT = '/home/u/.claude/projects/p/693d/subagents/agent-a1.jsonl'
+
+  function stateWith(entry: AgentStatusEntry, tabWorktreeId: string | null): AppState {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: paneSubagentTranscriptPath reads only these two maps; the connection lookup is mocked.
+    return {
+      agentStatusByPaneKey: { [PANE]: entry },
+      tabsByWorktree: tabWorktreeId ? { [tabWorktreeId]: [{ id: 'tab-1' }] } : {}
+    } as unknown as AppState
+  }
+
+  it("judges readability by the pane's tab worktree, as the cover does", () => {
+    const entry = { ...CLAUDE_PARENT, worktreeId: 'wt-remote' }
+    expect(paneSubagentTranscriptPath(stateWith(entry, 'wt-local'), PANE, 'a1')).toBe(
+      SUBAGENT_TRANSCRIPT
+    )
+    expect(
+      paneSubagentTranscriptPath(
+        stateWith({ ...CLAUDE_PARENT, worktreeId: 'wt-local' }, 'wt-remote'),
+        PANE,
+        'a1'
+      )
+    ).toBeNull()
+  })
+
+  it('falls back to the entry worktree when no tab owns the pane', () => {
+    expect(
+      paneSubagentTranscriptPath(
+        stateWith({ ...CLAUDE_PARENT, worktreeId: 'wt-local' }, null),
+        PANE,
+        'a1'
+      )
+    ).toBe(SUBAGENT_TRANSCRIPT)
+  })
+
+  it('refuses a pane whose worktree is unknown', () => {
+    expect(
+      paneSubagentTranscriptPath(
+        stateWith({ ...CLAUDE_PARENT, worktreeId: undefined }, null),
+        PANE,
+        'a1'
       )
     ).toBeNull()
   })

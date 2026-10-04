@@ -1,6 +1,7 @@
 import type { AppState } from '@/store/types'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { findAgentPaneWorktreeId } from '@/store/slices/agent-status-pane-key-tab-binding'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { claudeSubagentTranscriptPath } from '../../../../shared/claude-subagent-transcript-path'
 
@@ -11,8 +12,10 @@ export function paneSubagentTranscriptPath(
   agentId: string
 ): string | null {
   const entry = state.agentStatusByPaneKey[paneKey]
-  const transcriptIsLocalReadable = entry?.worktreeId
-    ? isNativeChatTranscriptLocalReadable(getConnectionIdFromState(state, entry.worktreeId))
+  // Why the tab's worktree first: the cover's render gate judges the pane by it, so both agree.
+  const worktreeId = findAgentPaneWorktreeId(state, paneKey) ?? entry?.worktreeId
+  const transcriptIsLocalReadable = worktreeId
+    ? isNativeChatTranscriptLocalReadable(getConnectionIdFromState(state, worktreeId))
     : false
   return subagentTranscriptPathForParent(entry, transcriptIsLocalReadable, agentId)
 }
