@@ -19,8 +19,17 @@ as an owned block in `$DSH_HOME/cordis.patch.yml`. User entries outside the bloc
 preserved. Local installation respects `DSH_HOME`; the existing SSH installer uses
 the execution host's default `~/.dsh` because SFTP cannot read its environment.
 Hooks report session start, prompt submission, tool start/end, and stopping through
-Orca's host status store. Approval has no dedicated hook; it is not inferred from
-an uncaptured screen. Subagent lifecycle events are ignored for parent-pane status.
+Orca's host status store. Startup, resume, and clear are idle session boundaries,
+not completed turns, so they do not trigger completion notifications. Compact and
+unknown session-start sources leave the ongoing turn untouched. Approval has no
+dedicated hook; it is not inferred from an uncaptured screen.
+
+Subagent lifecycle events are ignored for parent-pane status. The 0.2.0-rc.2 bridge
+also emits ordinary session, prompt, tool, and Stop hooks for children. Those hooks
+carry the child's `session_id`, but no parent identity; their startup/resume sources
+are identical to the lead's. Child SessionStart no longer triggers completion, but
+ordinary child hooks can still overwrite the lead row. Safe admission needs ordered
+root/child provenance from the producer, not a guessed session-id replacement rule.
 
 DSH 0.2 still emits an empty `transcript_path` in Claude-compatible hooks. Its
 session persistence defaults to compressed JSONL under `$DSH_HOME/sessions`.

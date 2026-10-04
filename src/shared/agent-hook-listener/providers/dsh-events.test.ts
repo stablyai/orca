@@ -33,14 +33,27 @@ describe('normalizeDshEvent', () => {
 
     const stopped = normalizeAndAccept(state, 'dsh', event('Stop', { stop_hook_active: false }))
     expect(stopped?.payload.state).toBe('done')
+    expect(stopped?.payload.sessionBoundary).toBeUndefined()
     // The prompt is carried across the turn so a finished row still names the work.
     expect(stopped?.payload.prompt).toBe('fix the flaky test')
   })
 
-  it('lands an idle row on SessionStart', () => {
-    const started = normalizeAndAccept(state, 'dsh', event('SessionStart', { source: 'startup' }))
-    expect(started?.payload.state).toBe('done')
-    expect(started?.payload.agentType).toBe('dsh')
+  it.each(['startup', 'resume', 'clear'])('lands %s as an idle session boundary', (source) => {
+    const started = normalizeAndAccept(state, 'dsh', event('SessionStart', { source }))
+    expect(started?.payload).toMatchObject({
+      state: 'done',
+      agentType: 'dsh',
+      sessionBoundary: true
+    })
+  })
+
+  it.each(['compact', 'unknown', undefined])('ignores a %s SessionStart mid-turn', (source) => {
+    normalizeAndAccept(state, 'dsh', event('UserPromptSubmit', { prompt: 'finish the task' }))
+    normalizeAndAccept(state, 'dsh', event('PreToolUse', { tool_name: 'read' }))
+
+    expect(normalizeAndAccept(state, 'dsh', event('SessionStart', { source }))).toBeNull()
+    const stopped = normalizeAndAccept(state, 'dsh', event('Stop'))
+    expect(stopped?.payload).toMatchObject({ prompt: 'finish the task', toolName: 'read' })
   })
 
   it('treats an ordinary tool as working and surfaces its name', () => {
