@@ -8,6 +8,7 @@ import { tableExists } from '../opencode-usage/schema-helpers'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { resolveOpenCodeDataDirectory } from '../opencode/opencode-data-directory'
 import Database from '../sqlite/sync-database'
+import { getManagedDataAccountService } from '../managed-data-accounts/service'
 import {
   detectOpenCodeCredentialBackend,
   type OpenCodeCredentialBackend
@@ -233,7 +234,12 @@ export async function resolveOpenCodeGoApiKey(input: {
   if (override) {
     return { status: 'found', key: override, tier: 'settings' }
   }
-  const environment = input.environment ?? process.env
+  const environment = input.environment ?? { ...process.env }
+  if (!input.environment) {
+    const accounts = getManagedDataAccountService()
+    accounts.restoreOriginalEnvironment(environment)
+    Object.assign(environment, accounts.launchEnvironment('opencode'))
+  }
   const backend = input.backend ?? (await detectOpenCodeCredentialBackend(environment, input.cwd))
   let databaseUnreadable = false
   if (backend === 'v2') {

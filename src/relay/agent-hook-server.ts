@@ -38,10 +38,10 @@ import {
   describeHookTransportInterference
 } from '../shared/agent-hook-transport-interference'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from '../shared/agent-hook-relay'
-import { drainAgentHookSpool, type SpoolRecord } from '../shared/agent-hook-spool'
+import type { SpoolRecord } from '../shared/agent-hook-spool'
 import { buildRelayHookPtyEnv, defaultEndpointDir } from './agent-hook-endpoint-coordinates'
 import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
-import { ingestRelayHookSpoolRecord } from './agent-hook-spool-ingest'
+import { drainRelayHookSpool, ingestRelayHookSpoolRecord } from './agent-hook-spool-ingest'
 import { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
 import { MAX_CACHED_PANES, selectReplayableCachedPanes } from './agent-hook-cached-pane-status'
 
@@ -65,6 +65,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   >()
   private forward: RelayHookForward
   private isPaneSurfaceRetired: (paneKey: string) => boolean
+  private getAgentLaunchToken: (paneKey: string) => string | undefined
   private fixedToken: string | undefined
   private preferredPort: number
   private portFallbackApplied = false
@@ -80,6 +81,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     this.preferredPort = options.preferredPort ?? 0
     this.forward = options.forward
     this.isPaneSurfaceRetired = options.isPaneSurfaceRetired ?? (() => false)
+    this.getAgentLaunchToken = options.getAgentLaunchToken ?? (() => undefined)
     this.configureCanonicalHooks(
       options,
       (paneKey) => this.clearPaneState(paneKey, true),
@@ -108,19 +110,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     this.token = this.fixedToken ?? randomUUID()
     this.endpointFileWritten = false
     this.portFallbackApplied = false
-    try {
-      drainAgentHookSpool({
-        endpointDir: this.endpointDir,
-        getPersistedLaunchTokenHash: () => undefined,
-        ingest: (record) => this.ingestSpoolRecord(record)
-      })
-    } catch (err) {
-      // Why: a downstream relay failure must not prevent the loopback listener from starting;
-      // the untruncated spool file remains available for retry on the next restart.
-      process.stderr.write(
-        `[relay-hook-server] spool replay failed: ${err instanceof Error ? err.message : String(err)}\n`
-      )
-    }
+    drainRelayHookSpool(this.endpointDir, (record) => this.ingestSpoolRecord(record))
     try {
       await this.listenOn(this.preferredPort)
     } catch (err) {
@@ -177,6 +167,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       token: this.token,
       env: this.env,
       version: ORCA_HOOK_PROTOCOL_VERSION,
+      openCodeTui: true,
       transport: ORCA_HOOK_RAW_JSON_TRANSPORT
     })
     return this.endpointFileWritten
@@ -261,6 +252,8 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       token: this.token,
       env: this.env,
       state: this.state,
+      isPaneSurfaceRetired: this.isPaneSurfaceRetired,
+      getAgentLaunchToken: this.getAgentLaunchToken,
       applyEvent: (event, source, env, version) => this.applyEvent(event, source, env, version),
       ingestTmuxHook: (source, body) => this.ingestCanonicalTmuxHook(source, body, this.env),
       retryScheduler: this.retryScheduler,
@@ -329,8 +322,10 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   }
 
   private ingestSpoolRecord(record: SpoolRecord): void {
-    ingestRelayHookSpoolRecord(record, this.state, this.env, (event, source, env, version) => {
-      this.applyEvent(event, source, env, version, { isReplay: true })
+    ingestRelayHookSpoolRecord(record, this.state, this.env, {
+      apply: (...args) => this.applyEvent(...args, { isReplay: true }),
+      isPaneSurfaceRetired: this.isPaneSurfaceRetired,
+      getAgentLaunchToken: this.getAgentLaunchToken
     })
   }
 }

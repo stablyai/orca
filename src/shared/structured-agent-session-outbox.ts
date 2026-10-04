@@ -10,8 +10,10 @@ import {
   agentSessionOwnerVerdictAllowsFreshOperationId,
   agentSessionRefusalOperationState
 } from './agent-session-refusal-retry'
-import type { AgentSessionMutationEnvelope } from './agent-session-wire'
-import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
+import {
+  structuredAgentSessionMessageSendMutation,
+  type StructuredAgentSessionSendMutation
+} from './structured-agent-session-send-mutation'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
 import { parseStructuredAgentSessionOutboxQueueFields } from './structured-agent-session-outbox-delivery'
 
@@ -301,34 +303,18 @@ export function parseStructuredAgentSessionOutboxEntry(
   }
 }
 
-export type StructuredAgentSessionSendMutation = {
-  envelope: AgentSessionMutationEnvelope
-  body: AgentJournalMessageItem
-  delivery?: 'queue-if-active'
-}
-
-/** The `agentSession.send` arguments an entry stands for. Typed rather than wire-shaped so a host
- *  calling its own send path builds the same envelope a client would, fingerprint included. */
+/** The `agentSession.send` arguments an entry stands for. */
 export function structuredAgentSessionSendMutation(
   entry: StructuredAgentSessionOutboxEntry,
   expectedRuntimeFence: number
 ): StructuredAgentSessionSendMutation {
-  // `delivery` joins the OPERATION fingerprint exactly as the host digests it; never the body's.
-  const delivery = entry.sentDelivery ?? undefined
-  const fields = { body: entry.body, ...(delivery ? { delivery } : {}) }
-  return {
-    envelope: {
-      sessionId: entry.sessionId,
-      clientOperationId: entry.clientMessageId,
-      expectedRuntimeFence,
-      payloadFingerprint: structuredAgentSessionPayloadFingerprint({
-        method: 'agentSession.send',
-        sessionId: entry.sessionId,
-        fields
-      })
-    },
-    ...fields
-  }
+  return structuredAgentSessionMessageSendMutation({
+    sessionId: entry.sessionId,
+    clientOperationId: entry.clientMessageId,
+    expectedRuntimeFence,
+    body: entry.body,
+    delivery: entry.sentDelivery ?? undefined
+  })
 }
 
 export function structuredAgentSessionSendRequest(

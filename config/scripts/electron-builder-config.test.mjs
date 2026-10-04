@@ -242,6 +242,23 @@ describe('electron-builder config', () => {
     ])
   })
 
+  // Why: serve-sim's addon is a Mach-O, and Windows signing rejects every *.node that is not PE.
+  it('keeps serve-sim out of the Windows and Linux runtime closures', () => {
+    const {
+      PACKAGED_RUNTIME_PACKAGE_ROOTS,
+      createPackagedRuntimeNodeModuleResources
+    } = require('../packaged-runtime-node-modules.cjs')
+    expect(PACKAGED_RUNTIME_PACKAGE_ROOTS).not.toContain('serve-sim')
+    const serveSimTarget = join('node_modules', 'serve-sim')
+    expect(createPackagedRuntimeNodeModuleResources('linux').map((r) => r.to)).not.toContain(
+      serveSimTarget
+    )
+    expect(electronBuilderConfig.linux.extraResources.map((r) => r.to)).not.toContain(
+      serveSimTarget
+    )
+    expect(electronBuilderConfig.win.extraResources.map((r) => r.to)).not.toContain(serveSimTarget)
+  })
+
   // Why: the Windows CLI shim is delivered only via extraResources to
   // resources/bin/orca.cmd (beside the native resources/bin/orca.exe). If the
   // source tree is also packed into app.asar it gets extracted by

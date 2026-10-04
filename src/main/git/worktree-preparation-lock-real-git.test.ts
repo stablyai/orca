@@ -10,6 +10,7 @@ import {
   prepareWorktreeCreateCheckout
 } from './worktree-create-preparation'
 import { unlockWorktreePreparation } from './worktree-preparation-lock'
+import { readWorktreeList } from './worktree-list-reader'
 import {
   _resetPreparationPoolForTests,
   listPreparations,
@@ -28,10 +29,12 @@ async function git(cwd: string, args: string[]): Promise<string> {
   return (await runner.gitExecFileAsync(args, { cwd })).stdout.trim()
 }
 
-async function fixture(): Promise<{ root: string; repo: string; prepared: string; final: string }> {
+async function fixture(
+  repoName = 'repo'
+): Promise<{ root: string; repo: string; prepared: string; final: string }> {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'orca-preparation-lock-')))
   roots.push(root)
-  const repo = join(root, 'repo')
+  const repo = join(root, repoName)
   await git(root, ['init', '--quiet', repo])
   await git(repo, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
   await writeFile(join(repo, 'tracked.txt'), 'original\n')
@@ -58,8 +61,11 @@ it('creates and consumes its marker without worktree lock or unlock inventory sc
   expect(await readFile(lock, 'utf8')).toBe(`${reason}\n`)
   spy.mockClear()
   await finalizePreparedWorktree(repo, prepared, final, 'feature', 'main', false, {}, reason)
-  expect(spy.mock.calls.filter(([args]) => args.includes('--git-path'))).toHaveLength(1)
-  expect(spy.mock.calls.filter(([args]) => args.includes('--git-common-dir'))).toHaveLength(1)
+  const lockQueries = spy.mock.calls.filter(
+    ([args]) => args.includes('--git-path') || args.includes('--git-common-dir')
+  )
+  expect(lockQueries).toHaveLength(1)
+  expect(lockQueries[0]?.[0]).toEqual(['rev-parse', '--git-path', 'locked', '--git-common-dir'])
   expect(await git(final, ['symbolic-ref', '--short', 'HEAD'])).toBe('feature')
   expect(await git(final, ['status', '--porcelain'])).toBe('')
   expect(await readFile(join(final, 'tracked.txt'), 'utf8')).toBe('original\n')
@@ -68,6 +74,29 @@ it('creates and consumes its marker without worktree lock or unlock inventory sc
     false
   )
 })
+
+it.runIf(process.platform !== 'win32')(
+  'unlocks an owned preparation whose repository path contains a newline',
+  async () => {
+    const { repo, prepared } = await fixture('repo\nnewline')
+    const reason = createWorktreePreparationLockReason('newline-path')
+    await prepareWorktreeCreateCheckout(repo, prepared, 'main', reason)
+    const lock = await git(prepared, ['rev-parse', '--git-path', 'locked'])
+    expect(lock).toContain('\n')
+    expect(await readFile(lock, 'utf8')).toBe(`${reason}\n`)
+    const spy = vi.spyOn(runner, 'gitExecFileAsync')
+
+    await unlockWorktreePreparation(prepared, reason, {})
+    expect(spy.mock.calls.map(([args]) => args)).toEqual([
+      ['rev-parse', '--git-path', 'locked', '--git-common-dir'],
+      ['rev-parse', '--git-path', 'locked'],
+      ['rev-parse', '--git-common-dir']
+    ])
+    await expect(readFile(lock, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readFile(join(prepared, 'tracked.txt'), 'utf8')).toBe('original\n')
+    expect(await git(prepared, ['status', '--porcelain'])).toBe('')
+  }
+)
 
 it('has its exact ownership marker before the atomic add returns', async () => {
   const { repo, prepared } = await fixture()
@@ -94,8 +123,14 @@ it('has its exact ownership marker before the atomic add returns', async () => {
   expect(observed).toBe(minor >= 33)
 })
 
-it('cleans only its newly registered marker when cancellation follows atomic add', async () => {
+it('cleans only its newly registered marker when cancellation follows atomic add', async ({
+  skip
+}) => {
   const { repo, prepared } = await fixture()
+  const version = (await git(repo, ['--version'])).match(/git version (\d+)\.(\d+)/)
+  if (Number(version?.[1]) === 2 && Number(version?.[2]) < 33) {
+    skip()
+  }
   const reason = createWorktreePreparationLockReason('atomic-cancellation')
   const controller = new AbortController()
   const run = runner.gitExecFileAsync
@@ -170,8 +205,12 @@ it('preserves a competing marker and registration through preparation failure an
   await _resetPreparationPoolForTests()
   expect(await readFile(lock, 'utf8')).toBe('manual competing preparation\n')
   expect(await readFile(join(prepared, 'tracked.txt'), 'utf8')).toBe('original\n')
-  expect(await git(repo, ['worktree', 'list', '--porcelain'])).toContain(
-    'manual competing preparation'
+  expect(await readWorktreeList(repo)).toContainEqual(
+    expect.objectContaining({
+      path: prepared,
+      locked: true,
+      lockReason: 'manual competing preparation'
+    })
   )
 })
 

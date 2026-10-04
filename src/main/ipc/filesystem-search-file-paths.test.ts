@@ -81,6 +81,64 @@ describe('searchQuickOpenFilePaths', () => {
     )
   })
 
+  it('preserves cancellation while an incomplete UTF-8 scalar is buffered', async () => {
+    const child = createMockProcess()
+    wslAwareSpawnMock.mockReturnValue(child)
+    const controller = new AbortController()
+    const promise = searchQuickOpenFilePaths('/repo', UNUSED_STORE, {
+      query: 'file',
+      limit: 2,
+      signal: controller.signal
+    })
+    await flushMicrotasks()
+    child.stdout?.emit('data', Buffer.from([0xf0, 0x9f]))
+    controller.abort()
+    await expect(promise).rejects.toSatisfy(isFileListingCancellation)
+  })
+
+  it.each(['invalid', 'incomplete'] as const)('rejects %s UTF-8 filename bytes', async (kind) => {
+    const child = createMockProcess()
+    wslAwareSpawnMock.mockReturnValue(child)
+    const promise = searchQuickOpenFilePaths('/repo', UNUSED_STORE, { query: 'file', limit: 2 })
+    await flushMicrotasks()
+    child.stdout?.emit('data', Buffer.from(kind === 'invalid' ? [0xff] : [0xe2, 0x82]))
+    if (kind === 'incomplete') {
+      child.emit('close', 0, null)
+    }
+    await expect(promise).rejects.toThrow('not valid UTF-8')
+    if (kind === 'invalid') {
+      expect(child.kill).toHaveBeenCalled()
+    }
+  })
+
+  it('preserves control characters within ranked paths', async () => {
+    const child = createMockProcess()
+    wslAwareSpawnMock.mockReturnValue(child)
+    const promise = searchQuickOpenFilePaths('/repo', UNUSED_STORE, {
+      query: 'target',
+      limit: 2
+    })
+    await flushMicrotasks()
+    child.stdout?.emit('data', 'first\ntarget.ts\0target.ts\r\0')
+    child.emit('close', 0, null)
+    expect((await promise).paths.sort()).toEqual(['first\ntarget.ts', 'target.ts\r'].sort())
+  })
+
+  it('rejects and stops an oversized path rather than ranking a truncated suffix', async () => {
+    const child = createMockProcess()
+    wslAwareSpawnMock.mockReturnValue(child)
+    const promise = searchQuickOpenFilePaths('/repo', UNUSED_STORE, {
+      query: 'target',
+      limit: 2
+    })
+    await flushMicrotasks()
+    child.stdout?.emit('data', 'x'.repeat(64 * 1024 + 1))
+    await expect(promise).rejects.toThrow('file path exceeds the listing limit')
+    expect(child.kill).toHaveBeenCalledTimes(1)
+    child.stdout?.emit('data', 'target.ts\0')
+    child.emit('close', 0, null)
+  })
+
   it('finds fuzzy matches after 100k paths without returning excluded worktrees', async () => {
     const child = createMockProcess()
     wslAwareSpawnMock.mockReturnValue(child)
@@ -94,14 +152,11 @@ describe('searchQuickOpenFilePaths', () => {
     expect(wslAwareSpawnMock).toHaveBeenCalledTimes(1)
     expect(wslAwareSpawnMock.mock.calls[0][0]).toBe('/bundled/rg')
     expect(wslAwareSpawnMock.mock.calls[0][1]).toContain('--no-ignore-vcs')
-    ;(child.stdout as unknown as EventEmitter).emit(
+    child.stdout?.emit(
       'data',
-      `${Array.from({ length: 100_100 }, (_, index) => `data/payload-${index}.bin`).join('\n')}\n`
+      `${Array.from({ length: 100_100 }, (_, index) => `data/payload-${index}.bin`).join('\0')}\0`
     )
-    ;(child.stdout as unknown as EventEmitter).emit(
-      'data',
-      'nested/src/sta-4354-target.ts\nsrc/sta-4354-target.ts\n'
-    )
+    child.stdout?.emit('data', 'nested/src/sta-4354-target.ts\0src/sta-4354-target.ts\0')
     child.emit('close', 0, null)
 
     await expect(promise).resolves.toEqual({
@@ -138,7 +193,7 @@ describe('searchQuickOpenFilePaths', () => {
       limit: 32
     })
     await flushMicrotasks()
-    ;(child.stdout as unknown as EventEmitter).emit('data', 'src/target.ts\n')
+    child.stdout?.emit('data', 'src/target.ts\0')
     child.emit('close', 0, null)
 
     await expect(promise).resolves.toMatchObject({ paths: ['src/target.ts'] })
@@ -164,10 +219,7 @@ describe('searchQuickOpenFilePaths', () => {
     await flushMicrotasks()
 
     expect(wslAwareSpawnMock).toHaveBeenCalledTimes(2)
-    ;(succeeded.stdout as unknown as EventEmitter).emit(
-      'data',
-      'data/chunk-077568/sta-4354-gitignored-target.bin\n'
-    )
+    succeeded.stdout?.emit('data', 'data/chunk-077568/sta-4354-gitignored-target.bin\0')
     succeeded.emit('close', 0, null)
 
     await expect(promise).resolves.toEqual({
@@ -189,7 +241,7 @@ describe('searchQuickOpenFilePaths', () => {
       limit: 32
     })
     await flushMicrotasks()
-    ;(succeeded.stdout as unknown as EventEmitter).emit('data', 'src/target.ts\n')
+    succeeded.stdout?.emit('data', 'src/target.ts\0')
     succeeded.emit('close', 0, null)
 
     await expect(promise).resolves.toMatchObject({ paths: ['src/target.ts'] })

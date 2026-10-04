@@ -1,4 +1,5 @@
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/legacy-shared-config-dir'
+import { restoreManagedDataAccountEnvironment } from '../../../shared/managed-data-account-environment'
 import { restoreOrStripOverlayEnv } from '../../../shared/agent-overlay-env'
 import { delimiter } from 'node:path'
 import { dropInheritedOrcaFishHistory } from '../../fish-history-session'
@@ -167,8 +168,10 @@ function removeInheritedDevAgentHookEndpoint(
 
 /** A persistent daemon's inherited environment cannot supply ownership for a new pane. */
 export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<string, string> {
+  const inheritedEnv = stripInheritedBuildModeEnv(process.env)
+  restoreManagedDataAccountEnvironment(inheritedEnv)
   const env: Record<string, string> = {
-    ...mergeGitConfigEnvProtocol(stripInheritedBuildModeEnv(process.env), opts.env),
+    ...mergeGitConfigEnvProtocol(inheritedEnv, opts.env),
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Orca',

@@ -1,3 +1,4 @@
+import { RipgrepSearchDiagnostics } from '../../../shared/ripgrep-search-diagnostics'
 import { SearchSubprocessLineAccumulator } from '../../../shared/search-subprocess-lines'
 import { ipcMain } from 'electron'
 import type { ChildProcess } from 'node:child_process'
@@ -65,7 +66,7 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
       const wslDistroForOutput = parseWslPath(rootPath)?.distro ?? localGitOptions.wslDistro
 
       return new Promise<SearchResult>((resolvePromise, rejectPromise) => {
-        const rgArgs = buildRgArgs(args.query, rootPath, args)
+        const rgArgs = buildRgArgs(args.query, '.', args)
         // Why: kill the prior rg so it stops parsing thousands of matches on the main thread (the large-repo freeze) after the UI moved on.
         const previousChild = activeTextSearches.get(searchKey)
         if (previousChild) {
@@ -73,7 +74,8 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
         }
 
         const acc = createAccumulator()
-        const lines = new SearchSubprocessLineAccumulator(Number.MAX_SAFE_INTEGER)
+        const lines = new SearchSubprocessLineAccumulator()
+        const diagnostics = new RipgrepSearchDiagnostics()
         let resolved = false
         let processErrorObserved = false
         let unavailableExitObserved = false
@@ -81,8 +83,12 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
         let killTimeout: ReturnType<typeof setTimeout>
 
         const transformAbsPath = wslDistroForOutput
-          ? (path: string): string =>
-              path.startsWith('/') ? toWindowsWslPath(path, wslDistroForOutput) : path
+          ? (path: string): string | null =>
+              path.includes('\\')
+                ? null
+                : path.startsWith('/')
+                  ? toWindowsWslPath(path, wslDistroForOutput)
+                  : path
           : undefined
 
         const finish = (result: SearchResult | PromiseLike<SearchResult>): void => {
@@ -108,7 +114,10 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
           }
           resolvePromise(result)
         }
-        const resolveOnce = (): void => finish(finalize(acc))
+        const resolveOnce = (code = 0, signal: NodeJS.Signals | null = null): void => {
+          const error = diagnostics.failure(code, signal, acc)
+          finish(error ? Promise.reject(error) : finalize(acc))
+        }
         const rejectUnavailable = (): void =>
           finish(Promise.reject(bundledRipgrepUnavailableError()))
         const processLine = (line: string): void => {
@@ -138,10 +147,16 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
         activeTextSearches.set(searchKey, nextChild)
 
         const handleStdoutData = (chunk: string): void => {
-          lines.push(chunk, processLine)
+          if (!lines.push(chunk, processLine)) {
+            acc.truncated = true
+            if (child) {
+              killSpawnedRipgrepProcess(child)
+            }
+            resolveOnce()
+          }
         }
-        const handleStderrData = (): void => {
-          // Drain stderr so rg cannot block on a full pipe.
+        const handleStderrData = (chunk: Buffer): void => {
+          diagnostics.append(chunk)
         }
         const handleError = (error: NodeJS.ErrnoException): void => {
           processErrorObserved = true
@@ -151,18 +166,12 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
             return
           }
           if (child && isRipgrepUnavailableExit(child, null, null)) {
-            // Why the cwd check first: spawn reports a missing cwd as ENOENT too, and blaming the
-            // binary for it tells the user to reinstall Orca over a workspace that simply moved.
-            // Why detach close first: a failed spawn emits error THEN close(code < 0), and
-            // close settles synchronously, so this probe would otherwise race it on a sub-ms
-            // margin -- two measurements disagreed on which wins. Detaching makes it deterministic.
+            // Distinguish a missing workspace from a missing binary before close can settle.
             child.off('close', handleClose)
-            // Why catch: a failed probe must not strand the search; fall back to the prior verdict.
             void isRipgrepSpawnCwdUsable(rootPath)
               .catch(() => true)
               .then((usable) => {
-                // Why re-check: finish() drops its argument once settled, so a rejected promise
-                // built after the close handler already won would go unhandled.
+                // A late rejected promise must not escape after close settles the search.
                 if (resolved) {
                   return
                 }
@@ -174,7 +183,10 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
               })
             return
           }
-          resolveOnce()
+          finish(Promise.reject(error))
+          if (child) {
+            killSpawnedRipgrepProcess(child)
+          }
         }
         const handleClose = (code: number | null, signal: NodeJS.Signals | null): void => {
           // Why first: this code is above rg's own 0/1/2, so the unavailable check would otherwise
@@ -193,11 +205,11 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
             rejectUnavailable()
             return
           }
-          const tail = lines.finish()
+          const tail = !signal && (code === 0 || code === 1) ? lines.finish() : null
           if (tail !== null) {
             processLine(tail)
           }
-          resolveOnce()
+          resolveOnce(code ?? -1, signal)
         }
 
         nextChild.stdout?.setEncoding('utf-8')

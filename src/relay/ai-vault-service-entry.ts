@@ -99,6 +99,9 @@ process.on('message', (raw: RelayAiVaultServiceParentMessage) => {
     return
   }
   if (raw?.type === 'cancel') {
+    if (!pending.has(raw.id)) {
+      return
+    }
     cancelled.add(raw.id)
     controllers.get(raw.id)?.abort()
     return

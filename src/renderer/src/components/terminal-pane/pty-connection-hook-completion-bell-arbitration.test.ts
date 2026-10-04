@@ -441,7 +441,8 @@ describe('connectPanePty', () => {
     expect(deps.dispatchNotification).toHaveBeenCalledWith({
       source: 'agent-task-complete',
       terminalTitle: '* Codex done',
-      paneKey: makePaneKey('tab-1', LEAF_1)
+      paneKey: makePaneKey('tab-1', LEAF_1),
+      ptyId: 'tab-pty'
     })
   })
 

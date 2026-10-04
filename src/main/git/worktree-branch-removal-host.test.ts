@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 const { detachedBranchUse } = vi.hoisted(() => ({ detachedBranchUse: vi.fn(async () => false) }))
 vi.mock('../../shared/git-worktree-admin', () => ({
-  isBranchInDetachedWorktree: detachedBranchUse
+  isBranchReservedByWorktreeOperation: detachedBranchUse
 }))
 vi.mock('./local-repo-ref-maintenance', () => ({
   withRepoRefMaintenancePaused: (_reason: string, run: () => unknown) => run()

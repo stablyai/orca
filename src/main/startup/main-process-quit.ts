@@ -67,7 +67,10 @@ function shutdownWatchersOnce(): Promise<void> {
 }
 
 function installBeforeQuitHandler(): void {
-  app.on('before-quit', () => {
+  app.on('before-quit', (event: Event) => {
+    if (event.defaultPrevented) {
+      return
+    }
     if (isQuittingForUpdate()) {
       recordUpdaterLifecycle('before_quit_allowed', undefined, {
         message: 'before-quit allowed for update install'

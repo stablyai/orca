@@ -162,7 +162,6 @@ src/relay/ai-vault-service-spawn.ts
 src/relay/external-automations-handler.ts
 src/relay/fs-handler-git-fallback.ts
 src/relay/fs-handler-list-files.ts
-src/relay/fs-list-files-fallback-chain.ts
 src/relay/preflight-handler.ts
 src/relay/pty-shell-utils.ts
 src/relay/subprocess-tree-termination.ts

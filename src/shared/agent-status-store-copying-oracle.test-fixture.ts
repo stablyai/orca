@@ -10,12 +10,15 @@ import {
 import { deserializeAgentChildWorkBindingKey } from './agent-status-child-work-binding'
 import { agentChildWorkBelongsTo, type AgentChildWorkRecord } from './agent-status-child-work'
 import { parseAgentStatusStoreMutation } from './agent-status-store-codec'
-import type { AgentStatusStoreSnapshot } from './agent-status-store-contract'
+import {
+  AGENT_STATUS_STORE_SNAPSHOT_VERSION,
+  type AgentStatusStoreSnapshot
+} from './agent-status-store-contract'
 import { applyAgentStatusStoreMutationSteps } from './agent-status-store-mutation'
 import {
   cloneAgentStatusStoreState,
   createEmptyAgentStatusStoreState,
-  snapshotFromAgentStatusStoreState,
+  deepFreezeAgentStatusStoreValue,
   validateAgentStatusStoreState,
   type AgentStatusStoreState
 } from './agent-status-store-state'
@@ -59,7 +62,7 @@ function applyByCopy(current: AgentStatusStoreState, value: unknown): AgentStatu
 export type CopyingAgentStatusStoreOracle = {
   applyMutation(mutation: unknown): boolean
   getSnapshot(): AgentStatusStoreSnapshot
-  /** The oracle's own state, for checking every invariant after each step. */
+  /** The oracle's own maps, for fixture coverage and diagnostics. */
   state(): AgentStatusStoreState
   getChildren(subject: AgentStatusSubject): AgentChildWorkRecord[]
   getAliasesForChild(childWorkId: string): AgentChildWorkAliasRecord[]
@@ -76,7 +79,18 @@ export function createCopyingAgentStatusStoreOracle(epoch: string): CopyingAgent
       }
       return next !== null
     },
-    getSnapshot: () => snapshotFromAgentStatusStoreState(current),
+    // Project the validated maps independently of the production snapshot parser.
+    getSnapshot: () =>
+      deepFreezeAgentStatusStoreValue({
+        version: AGENT_STATUS_STORE_SNAPSHOT_VERSION,
+        epoch: current.epoch,
+        revision: current.revision,
+        parents: [...current.parents.values()],
+        children: [...current.children.values()],
+        aliases: [...current.aliases.values()],
+        facts: [...current.facts.values()],
+        tombstones: [...current.tombstones.values()]
+      }),
     state: () => current,
     getChildren: (subject) =>
       [...current.children.values()].filter((child) => agentChildWorkBelongsTo(child, subject)),

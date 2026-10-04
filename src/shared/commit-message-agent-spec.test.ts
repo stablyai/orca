@@ -45,9 +45,10 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     ])
   })
 
-  it('uses the strongest available defaults for core agents', () => {
+  it('uses the expected defaults for core agents', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('sonnet')
-    expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.5')
+    expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.6-terra')
+    expect(getCommitMessageModel('codex', 'gpt-5.6-terra')?.defaultThinkingLevel).toBe('low')
     expect(COMMIT_MESSAGE_AGENT_SPECS.pi?.defaultModelId).toBe('default')
   })
 
@@ -189,6 +190,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
   it('orders Codex models by version descending to match the official picker', () => {
     const ids = COMMIT_MESSAGE_AGENT_SPECS.codex?.models.map((m) => m.id)
     expect(ids).toEqual([
+      'gpt-5.6-terra',
       'gpt-5.5',
       'gpt-5.4',
       'gpt-5.4-mini',
@@ -206,7 +208,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       id: 'codex',
       label: 'Codex',
       modelSource: 'dynamic',
-      defaultModelId: 'gpt-5.5'
+      defaultModelId: 'gpt-5.6-terra'
     })
     expect(codex).not.toHaveProperty('binary')
     expect(codex).not.toHaveProperty('buildArgs')

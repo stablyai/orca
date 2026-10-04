@@ -11,7 +11,7 @@ function matchesOption(token: string, aliases: readonly string[]): boolean {
 }
 
 export function findOptionOccurrence(
-  tokens: string[],
+  tokens: readonly string[],
   aliases: readonly string[],
   stopAtTerminator: boolean
 ): { index: number; consumed: number; value?: string } | null {

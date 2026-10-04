@@ -19,6 +19,10 @@ describe('startup ordering', () => {
     expect(beforeQuitStart).toBeGreaterThanOrEqual(0)
     expect(willQuitStart).toBeGreaterThan(beforeQuitStart)
     expect(windowAllClosedStart).toBeGreaterThan(willQuitStart)
+    expect(beforeQuit.indexOf('event.defaultPrevented')).toBeGreaterThanOrEqual(0)
+    expect(beforeQuit.indexOf('event.defaultPrevented')).toBeLessThan(
+      beforeQuit.indexOf('state.isQuitting = true')
+    )
     expect(beforeQuit).not.toContain('unsubscribeSystemResumeBroadcast')
     expect(commitIndex).toBeGreaterThanOrEqual(0)
     expect(disposeIndex).toBeGreaterThan(commitIndex)

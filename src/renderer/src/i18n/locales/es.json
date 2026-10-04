@@ -1777,7 +1777,8 @@
         "c679af7ad9": "Actualizar My Todos",
         "dfd72673e7": "No se pudo guardar la selección del proyecto.",
         "b797bdd7c3": "Borrar búsqueda",
-        "99c2755218": "Jira JQL, p. ej. project = ABC AND statusCategory != Done",
+        "jiraTextMatchesNotice": "Mostrando coincidencias de texto. Jira no pudo ejecutar esta búsqueda como JQL.",
+        "99c2755218": "Busca issues o escribe JQL, p. ej. project = ABC",
         "2ff9fd71fd": "Actualizar issues de Jira",
         "0b65d3fb2c": "Buscar proyectos de Linear...",
         "eec0c5c079": "Buscar issues de Linear...",
@@ -1896,7 +1897,7 @@
         "6edf402e11": "descripción general",
         "9ae151b26b": "lineal",
         "94d900518d": "Ningún issue coincide con el preset seleccionado.",
-        "f51e254d35": "Prueba con otra consulta JQL.",
+        "f51e254d35": "Prueba con otros términos de búsqueda o JQL.",
         "4645a7814f": "jira",
         "e224d76876": "MR",
         "bbec4717ee": "mr",
@@ -8868,7 +8869,13 @@
             "72539aede4": "sistema",
             "51ae2183e1": "escritorio",
             "0534c76311": "Interruptor maestro para notificaciones de escritorio de Orca.",
-            "4a210b2f72": "Habilitar notificaciones"
+            "4a210b2f72": "Habilitar notificaciones",
+            "machines": "Máquinas",
+            "machinesDescription": "Elige qué máquinas pueden mostrar notificaciones en este equipo, como máquinas SSH o servidores vinculados.",
+            "host": "host",
+            "remote": "remoto",
+            "ssh": "ssh",
+            "mute": "silenciar"
           }
         },
         "orchestration": {
@@ -10512,6 +10519,11 @@
           "usageDescription": "Cursor factura dos cuotas que se restablecen con tu ciclo de facturación, más gasto bajo demanda cuando se agotan.",
           "usageLabel": "Uso",
           "usageTitle": "Uso mensual del plan"
+        },
+        "NotificationHostToggles": {
+          "offCount": "{{count}} desactivadas",
+          "machines": "Máquinas",
+          "machinesDescription": "Elige qué máquinas pueden mostrar notificaciones en este equipo. El interruptor de un servidor vinculado también controla el trabajo al que se accede a través de él."
         }
       },
       "right": {
@@ -15557,6 +15569,22 @@
       "searching": "Buscando…",
       "searchFailed": "La búsqueda no pudo finalizar. Inténtalo de nuevo.",
       "refreshFailed": "No se pudo actualizar la vista previa. Se muestra la versión anterior; abre la vista de código para ver el contenido actual."
+    }
+  },
+  "accounts": {
+    "managedData": {
+      "description": "Añade cuentas ejecutando este comando en una terminal del host de Orca. La selección se aplica a nuevos inicios del agente en ese host; las conexiones SSH directas y WSL alojado en Windows usan sus propias credenciales.",
+      "copied": "Copiado",
+      "add": "Copiar comando para añadir cuenta",
+      "refresh": "Actualizar cuentas",
+      "upgrade": "Si las cuentas no aparecen, actualiza o reinicia el host de Orca.",
+      "system": "Predeterminada del sistema",
+      "active": "Activa",
+      "select": "Seleccionar",
+      "remove": "Eliminar",
+      "removeTitle": "¿Eliminar la cuenta administrada?",
+      "removeDescription": "Detén primero los agentes que usan este perfil. Al eliminarlo se borran sus credenciales y conversaciones guardadas. Tu inicio de sesión del sistema no cambia.",
+      "cancel": "Cancelar"
     }
   }
 }

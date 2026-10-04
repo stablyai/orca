@@ -783,6 +783,10 @@ describe('agentTypeToIconAgent', () => {
     expect(agentTypeToIconAgent('unknown')).toBeNull()
   })
 
+  it('keeps an icon identity for recognition-only DeepSeek Build', () => {
+    expect(agentTypeToIconAgent('dsb')).toBe('dsb')
+  })
+
   it('returns null for arbitrary non-iconable strings', () => {
     // Why: unknown agentTypes must return null so the caller falls back to a neutral glyph, not a broken icon.
     expect(agentTypeToIconAgent('totally-fake-agent')).toBeNull()

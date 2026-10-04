@@ -2,20 +2,25 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
   realpathSync,
-  statSync,
-  writeFileSync
+  statSync
 } from 'node:fs'
-import { createHash } from 'node:crypto'
-import { mirrorEntry, safeRemoveTree } from '../pty/overlay-mirror'
+import { isSafeDescendCandidate, mirrorEntry } from '../pty/overlay-mirror'
 import {
   getOpenCode2PluginSource,
   getOpenCodeFamilyPluginSource,
   getOpenCodePluginSource
 } from './status-plugin-module-source'
+import {
+  readOpenCodeOverlayManifest,
+  clearOpenCodeOverlayManifestEntries,
+  writeOpenCodeOverlayManifest,
+  type OpenCodeOverlayManifest
+} from './opencode-overlay-manifest'
 import { resolveOpenCodeConfigDirectory } from '../../shared/opencode-config-directory'
 import {
   getOpenCodeLegacySharedConfigDir,
@@ -23,30 +28,22 @@ import {
   OPENCODE_LEGACY_HOOKS_DIR
 } from './legacy-shared-config-dir'
 import {
-  isInstalledOpenCodePluginCurrent,
-  isOverlayOpenCodePluginCurrent
-} from '../../shared/opencode-installed-plugin'
-import {
   openCodeTuiPluginDirName,
   writeOpenCodeTuiPlugin
 } from '../../shared/opencode-tui-plugin-install'
 import { writeLegacyOpenCodePluginWithAclRetry } from './legacy-plugin-acl-retry'
+import {
+  OPENCODE_OVERLAY_DIR,
+  ORCA_OPENCODE_PLUGIN_FILE,
+  sourceOverlayDirName,
+  toSafeDirName
+} from './overlay-dir-names'
+import { OpenCodeDirGcLifecycle } from './overlay-dir-gc-lifecycle'
 
 export { getOpenCode2PluginSource, getOpenCodeFamilyPluginSource, getOpenCodePluginSource }
 
-import {
-  writeCanonicalOpenCodePluginAtomically,
-  writeOverlayOpenCodePluginAtomically
-} from '../../shared/opencode-plugin-atomic-write'
-
-const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
-const OPENCODE_OVERLAY_DIR = 'opencode-config-overlays'
-const OPENCODE_OVERLAY_MANIFEST_FILE = '.orca-opencode-overlay-manifest.json'
-
-type OpenCodeOverlayManifest = {
-  topLevelEntries: string[]
-  pluginEntries: string[]
-}
+import { writeCanonicalOpenCodePluginAtomically } from '../../shared/opencode-plugin-atomic-write'
+import { writeOpenCodePluginConfig } from './opencode-plugin-config-writer'
 
 type OpenCodeHookVariant = {
   pluginFileName: string
@@ -55,16 +52,12 @@ type OpenCodeHookVariant = {
   pluginSource: () => string
   /** Also install the module as an OpenCode 2 TUI plugin (never for forks without one). */
   installsTuiPlugin?: boolean
+  tuiOnlyDirectory?: string
 }
 
 // Why: session IDs may contain path separators and are hashed downstream; cap pathological input.
 function isUsableId(id: string): boolean {
   return typeof id === 'string' && id.length > 0 && id.length <= 1024
-}
-
-function toSafeDirName(id: string): string {
-  // Why: 32 hex chars (128 bits) makes collisions negligible and stays filesystem-portable (no base64 padding or `/`).
-  return createHash('sha256').update(id).digest('hex').slice(0, 32)
 }
 
 // Why: installs the plugin into OpenCode's config discovery path so it POSTs to the shared agent-hooks server, unifying OpenCode status with Claude/Codex/Gemini.
@@ -74,6 +67,8 @@ export class OpenCodeHookService {
   private readonly legacyHooksDir: string
   private readonly overlayDir: string
   private readonly installsTuiPlugin: boolean
+  private readonly tuiOnlyDirectory: string | undefined
+  readonly configDirGc: OpenCodeDirGcLifecycle
 
   constructor(variant?: OpenCodeHookVariant | (() => string)) {
     const config: OpenCodeHookVariant =
@@ -93,13 +88,37 @@ export class OpenCodeHookService {
           })
     this.pluginSource = config.pluginSource
     this.installsTuiPlugin = config.installsTuiPlugin === true
+    this.tuiOnlyDirectory = config.tuiOnlyDirectory
     this.pluginFileName = config.pluginFileName
     this.legacyHooksDir = config.legacyHooksDir
     this.overlayDir = config.overlayDir
+    this.configDirGc = new OpenCodeDirGcLifecycle(() => this.getOverlayRoot(), this.pluginFileName)
   }
 
   clearPty(_ptyId: string): void {
     // Why: no-op — config dirs are app/source-scoped now, and recursive delete on the main-process hot path could freeze on Windows.
+  }
+
+  installIntoSourceOverlay(
+    directory: string,
+    sourceConfigDir: string,
+    owner: OpenCodeHookService
+  ): 'unmatched' | 'installed' | 'failed' {
+    if (directory !== owner.getSourceOverlayDir(sourceConfigDir)) {
+      return 'unmatched'
+    }
+    try {
+      for (const path of [owner.getOverlayRoot(), directory, join(directory, 'plugins')]) {
+        if (!isSafeDescendCandidate(lstatSync(path))) {
+          return 'failed'
+        }
+      }
+      this.writePluginIntoOverlay(directory)
+      owner.configDirGc.reference(directory)
+      return 'installed'
+    } catch {
+      return 'failed'
+    }
   }
 
   buildPtyEnv(ptyId: string, existingConfigDir?: string | undefined): Record<string, string> {
@@ -118,14 +137,23 @@ export class OpenCodeHookService {
         return {}
       }
     }
-    if (!existsSync(existingConfigDir)) {
+    if (!existsSync(existingConfigDir) && !this.tuiOnlyDirectory) {
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
     const overlayDir = this.getSourceOverlayDir(existingConfigDir)
     try {
-      mkdirSync(overlayDir, { recursive: true })
-      this.mirrorUserConfig(existingConfigDir, overlayDir)
+      // Owned directories must stay real; a replaced parent redirects both cleanup and writes.
+      for (const directory of [this.getOverlayRoot(), overlayDir, join(overlayDir, 'plugins')]) {
+        mkdirSync(directory, { recursive: true })
+        if (!isSafeDescendCandidate(lstatSync(directory))) {
+          return { OPENCODE_CONFIG_DIR: existingConfigDir }
+        }
+      }
+      if (existsSync(existingConfigDir)) {
+        this.mirrorUserConfig(existingConfigDir, overlayDir)
+      }
       this.writePluginIntoOverlay(overlayDir)
+      this.configDirGc.reference(overlayDir)
       return { OPENCODE_CONFIG_DIR: overlayDir }
     } catch {
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
@@ -135,6 +163,9 @@ export class OpenCodeHookService {
   // Why: pre-1.4.209 Orca left a server()-only plugin here that OpenCode 2 rejects. Only helps
   // processes that load it later; a running OpenCode 2 service keeps its cached module until restarted.
   refreshLegacySharedPlugin(): void {
+    if (this.tuiOnlyDirectory) {
+      return
+    }
     const pluginsDir = join(this.getSharedConfigDir(), 'plugins')
     const pluginPath = join(pluginsDir, this.pluginFileName)
     try {
@@ -188,7 +219,7 @@ export class OpenCodeHookService {
   }
 
   private getSourceOverlayDir(sourceConfigDir: string): string {
-    return join(this.getOverlayRoot(), toSafeDirName(`source:${sourceConfigDir}`))
+    return join(this.getOverlayRoot(), sourceOverlayDirName(sourceConfigDir))
   }
 
   private getSharedConfigDir(): string {
@@ -198,48 +229,17 @@ export class OpenCodeHookService {
     )
   }
 
-  private readOverlayManifest(overlayDir: string): OpenCodeOverlayManifest {
-    try {
-      const parsed = JSON.parse(
-        readFileSync(join(overlayDir, OPENCODE_OVERLAY_MANIFEST_FILE), 'utf8')
-      ) as Partial<OpenCodeOverlayManifest>
-      return {
-        topLevelEntries: Array.isArray(parsed.topLevelEntries) ? parsed.topLevelEntries : [],
-        pluginEntries: Array.isArray(parsed.pluginEntries) ? parsed.pluginEntries : []
-      }
-    } catch {
-      return { topLevelEntries: [], pluginEntries: [] }
-    }
-  }
-
-  private writeOverlayManifest(overlayDir: string, manifest: OpenCodeOverlayManifest): void {
-    writeFileSync(
-      join(overlayDir, OPENCODE_OVERLAY_MANIFEST_FILE),
-      `${JSON.stringify(manifest, null, 2)}\n`
-    )
-  }
-
-  private clearManifestEntries(overlayDir: string, manifest: OpenCodeOverlayManifest): void {
-    for (const entryName of manifest.topLevelEntries) {
-      safeRemoveTree(join(overlayDir, entryName))
-    }
-
-    const overlayPluginsDir = join(overlayDir, 'plugins')
-    for (const entryName of manifest.pluginEntries) {
-      if (entryName === this.pluginFileName) {
-        continue
-      }
-      safeRemoveTree(join(overlayPluginsDir, entryName))
-    }
-  }
-
   // Why: mirror user config entries as symlinks so edits propagate live; only plugins/ becomes a real overlay dir so Orca can drop a sibling plugin file.
   private mirrorUserConfig(sourceDir: string, overlayDir: string): void {
-    const previousManifest = this.readOverlayManifest(overlayDir)
+    const previousManifest = readOpenCodeOverlayManifest(overlayDir)
     // Why: overlays persist across terminals; remove only Orca-mirrored paths so stale user config clears but OpenCode runtime dirs (node_modules) survive.
-    this.clearManifestEntries(overlayDir, previousManifest)
+    clearOpenCodeOverlayManifestEntries(overlayDir, previousManifest, this.pluginFileName)
 
-    const nextManifest: OpenCodeOverlayManifest = { topLevelEntries: [], pluginEntries: [] }
+    const nextManifest: OpenCodeOverlayManifest = {
+      topLevelEntries: [],
+      pluginEntries: [],
+      sourceConfigDir: sourceDir
+    }
 
     for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
       const sourcePath = join(sourceDir, entry.name)
@@ -266,6 +266,7 @@ export class OpenCodeHookService {
             // Why: skip a user plugin sharing Orca's filename; mirroring it would let writePluginIntoOverlay clobber the user's file.
             if (
               pluginEntry.name === this.pluginFileName ||
+              pluginEntry.name === this.tuiOnlyDirectory ||
               (this.installsTuiPlugin &&
                 pluginEntry.name === openCodeTuiPluginDirName(this.pluginFileName))
             ) {
@@ -285,30 +286,26 @@ export class OpenCodeHookService {
       nextManifest.topLevelEntries.push(entry.name)
     }
 
-    this.writeOverlayManifest(overlayDir, nextManifest)
+    writeOpenCodeOverlayManifest(overlayDir, nextManifest)
   }
 
-  // Atomic replacement detaches mirrored links without touching user plugins.
   private writePluginIntoOverlay(overlayDir: string): void {
-    const pluginsDir = join(overlayDir, 'plugins')
-    mkdirSync(pluginsDir, { recursive: true })
-    const pluginPath = join(pluginsDir, this.pluginFileName)
-    const source = this.pluginSource()
-    this.writeTuiPlugin(pluginsDir, source, 'overlay')
-    if (!isOverlayOpenCodePluginCurrent(pluginPath, source)) {
-      writeOverlayOpenCodePluginAtomically(pluginPath, source)
-    }
+    this.writePluginToDirectory(overlayDir, 'overlay')
   }
 
   private writePluginToConfigDir(configDir: string): void {
-    const pluginsDir = join(configDir, 'plugins')
-    mkdirSync(pluginsDir, { recursive: true })
-    const pluginPath = join(pluginsDir, this.pluginFileName)
-    const source = this.pluginSource()
-    this.writeTuiPlugin(pluginsDir, source)
-    if (!isInstalledOpenCodePluginCurrent(pluginPath, source)) {
-      writeCanonicalOpenCodePluginAtomically(pluginPath, source)
-    }
+    this.writePluginToDirectory(configDir, 'canonical')
+  }
+
+  private writePluginToDirectory(configDir: string, ownership: 'canonical' | 'overlay'): void {
+    writeOpenCodePluginConfig({
+      configDir,
+      ownership,
+      pluginFileName: this.pluginFileName,
+      getSource: () => this.pluginSource(),
+      installsTuiPlugin: this.installsTuiPlugin,
+      tuiOnlyDirectory: this.tuiOnlyDirectory
+    })
   }
 
   private writeTuiPlugin(

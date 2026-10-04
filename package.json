@@ -196,6 +196,7 @@
     "react-i18next": "17.0.15",
     "serve-sim": "0.1.47",
     "sherpa-onnx": "1.12.37",
+    "smol-toml": "1.8.0",
     "ssh2": "^1.17.0",
     "tldts": "7.4.16",
     "tweetnacl": "^1.0.3",

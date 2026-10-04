@@ -14,10 +14,30 @@ import { getRegisteredSshState } from '../ssh/ssh-target-registry'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalAgent } from '../../shared/terminal-agent'
 import type { AgentPromptActivity } from './agent-prompt-submission-verification'
 import { readTuiIdleHookTurn, type TuiIdleHookTurn } from './tui-idle-hook-lane'
 
 export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends OrcaRuntimeWithAgentPromptRequestCorrelation {
+  readOpenCodeStartupPromptOwner(ptyId: string, incarnationId: string, launchToken: string) {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty || pty.incarnationId !== incarnationId) {
+      return null
+    }
+    // The runtime launch route admits identity immediately after low-level spawn returns.
+    if (pty.launchToken === null && pty.launchAgent === null && pty.launchIncarnationId === null) {
+      return 'pending' as const
+    }
+    if (
+      pty.launchIncarnationId !== incarnationId ||
+      pty.launchToken !== launchToken ||
+      (pty.launchAgent !== 'opencode' && pty.launchAgent !== 'opencode2')
+    ) {
+      return null
+    }
+    return this.terminalRunFacts.read(ptyId, incarnationId)
+  }
+
   protected resolveAuthoritativeTerminalWaitPermission(
     terminal: RuntimeTerminalAgentStatusSnapshot,
     explicitStatus: { status: AgentStatus; updatedAt: number } | null,
@@ -165,7 +185,7 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
     return worktreePath && isWindowsAbsolutePathLike(worktreePath) ? 'win32' : 'linux'
   }
 
-  protected getPtyAgent(ptyId: string): TuiAgent | null {
+  protected getPtyAgent(ptyId: string): TerminalAgent | null {
     const pty = this.ptysById.get(ptyId)
     return pty?.launchAgent ?? pty?.foregroundAgent ?? null
   }

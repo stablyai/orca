@@ -147,8 +147,10 @@ describe('managed hook script refresh', () => {
     homedirMock.mockReturnValue(home)
     const previousGrokHome = process.env.GROK_HOME
     const previousKimiHome = process.env.KIMI_CODE_HOME
+    const previousXdgConfigHome = process.env.XDG_CONFIG_HOME
     delete process.env.GROK_HOME
     delete process.env.KIMI_CODE_HOME
+    delete process.env.XDG_CONFIG_HOME
     try {
       await withPlatform('win32', () => {
         for (const [, install] of MANAGED_AGENT_HOOK_INSTALLERS) {
@@ -186,6 +188,11 @@ describe('managed hook script refresh', () => {
         delete process.env.KIMI_CODE_HOME
       } else {
         process.env.KIMI_CODE_HOME = previousKimiHome
+      }
+      if (previousXdgConfigHome === undefined) {
+        delete process.env.XDG_CONFIG_HOME
+      } else {
+        process.env.XDG_CONFIG_HOME = previousXdgConfigHome
       }
       rmSync(home, { recursive: true, force: true })
     }

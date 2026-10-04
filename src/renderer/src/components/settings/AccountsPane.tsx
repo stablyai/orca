@@ -66,6 +66,7 @@ import {
   renderOpenCodeAccountsSection
 } from './accounts-pane-provider-setting-sections'
 import { renderMiniMaxAccountsSection } from './accounts-pane-minimax-section'
+import { ManagedDataAccountsSection } from './ManagedDataAccountsSection'
 import { renderAccountsRemovalDialogs } from './accounts-pane-removal-dialogs'
 
 export { getAccountsPaneSearchEntries }
@@ -375,6 +376,12 @@ export function AccountsPane({
     clearMiniMaxCookie
   }
   const visibleSections = [
+    !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
+      <div key={settings.activeRuntimeEnvironmentId ?? 'local'} className="space-y-8">
+        <ManagedDataAccountsSection provider="opencode" target={getActiveRuntimeTarget(settings)} />
+        <ManagedDataAccountsSection provider="devin" target={getActiveRuntimeTarget(settings)} />
+      </div>
+    ) : null,
     wslSupportedPlatform &&
     !isRemoteAccountScope &&
     matchesSettingsSearch(searchQuery, getAccountsLocationSearchEntries())

@@ -41,7 +41,8 @@ describe('GitHub source lookup routing', () => {
         repoId: 'renderer-repo',
         sourceContext: runtimeSourceContext,
         number: 42,
-        type: 'issue'
+        type: 'issue',
+        ownerRepo: { owner: 'fork-owner', repo: 'widgets', host: 'github.com' }
       })
     ).resolves.toBeNull()
 
@@ -98,6 +99,24 @@ describe('GitHub source lookup routing', () => {
       number: 42,
       type: 'issue'
     })
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
+  })
+
+  it('sends a local issue row repository to the repo-scoped details route', async () => {
+    const ownerRepo = { owner: 'fork-owner', repo: 'widgets', host: 'github.com' }
+    vi.mocked(window.api.gh.workItemDetails).mockResolvedValue(null)
+
+    await lookupGitHubWorkItemDetailsForSource({
+      repoPath: '/home/fixture/widgets',
+      repoId: 'local-repo',
+      number: 12,
+      type: 'issue',
+      ownerRepo
+    })
+
+    expect(window.api.gh.workItemDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ repoPath: '/home/fixture/widgets', ownerRepo })
+    )
     expect(callRuntimeRpc).not.toHaveBeenCalled()
   })
 })

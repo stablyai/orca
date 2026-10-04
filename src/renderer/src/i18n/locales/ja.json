@@ -2002,7 +2002,8 @@
         "c679af7ad9": "Todo を更新する",
         "dfd72673e7": "プロジェクトの選択を保存できませんでした。",
         "b797bdd7c3": "検索をクリア",
-        "99c2755218": "Jira JQL、例:プロジェクト = ABC AND statusCategory != 完了",
+        "jiraTextMatchesNotice": "テキスト一致を表示しています。Jira はこの検索を JQL として実行できませんでした。",
+        "99c2755218": "Issue を検索するか JQL を入力、例: project = ABC",
         "2ff9fd71fd": "Jira Issue を更新する",
         "0b65d3fb2c": "Linear プロジェクトを検索…",
         "eec0c5c079": "Linear Issue を検索…",
@@ -2121,7 +2122,7 @@
         "6edf402e11": "概要",
         "9ae151b26b": "Linear",
         "94d900518d": "選択したプリセットに一致する Issue はありません。",
-        "f51e254d35": "別の JQL クエリを試す。",
+        "f51e254d35": "別の検索語句または JQL をお試しください。",
         "4645a7814f": "Jira",
         "e224d76876": "MR",
         "bbec4717ee": "MR",
@@ -10073,7 +10074,13 @@
             "72539aede4": "システム",
             "51ae2183e1": "デスクトップ",
             "0534c76311": "Orca デスクトップ通知のマスタースイッチ。",
-            "4a210b2f72": "通知を有効にする"
+            "4a210b2f72": "通知を有効にする",
+            "machines": "マシン",
+            "machinesDescription": "このコンピューターに通知を表示できるマシン（SSH マシンやペアリングしたサーバーなど）を選択します。",
+            "host": "ホスト",
+            "remote": "リモート",
+            "ssh": "ssh",
+            "mute": "ミュート"
           }
         },
         "orchestration": {
@@ -12067,6 +12074,11 @@
           "usageDescription": "Cursor は請求サイクルとともにリセットされる 2 つのプールの利用に課金し、使い切るとオンデマンドの追加料金が発生します。",
           "usageLabel": "使用量",
           "usageTitle": "月間プラン使用状況"
+        },
+        "NotificationHostToggles": {
+          "offCount": "{{count}} 台オフ",
+          "machines": "マシン",
+          "machinesDescription": "このコンピューターに通知を表示できるマシンを選択します。ペアリングしたサーバーのスイッチは、そのサーバー経由の作業にも適用されます。"
         }
       },
       "right": {
@@ -18673,5 +18685,21 @@
     "addTypedPath": "Add",
     "noDirectories": "No folders added yet.",
     "removePath": "Remove {{name}}"
+  },
+  "accounts": {
+    "managedData": {
+      "description": "Orca ホストのターミナルでこのコマンドを実行してアカウントを追加します。選択はそのホストでの新規 Agent 起動に適用されます。直接 SSH 接続とWindows上の WSL は独自の認証情報を使用します。",
+      "copied": "コピーしました",
+      "add": "アカウント追加コマンドをコピー",
+      "refresh": "アカウントを更新",
+      "upgrade": "アカウントが表示されない場合はOrcaホストを更新または再起動してください。",
+      "system": "システムの既定",
+      "active": "使用中",
+      "select": "選択",
+      "remove": "削除",
+      "removeTitle": "管理アカウントを削除しますか？",
+      "removeDescription": "まずこのプロファイルを使う Agent を停止してください。削除すると保存済みの認証情報と会話データが消去されます。システムのログインには影響しません。",
+      "cancel": "キャンセル"
+    }
   }
 }

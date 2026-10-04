@@ -1,10 +1,16 @@
 import type { AgentType } from './agent-status-types'
 import { findCatalogModel, getAgentSessionOptionCatalog } from './agent-session-option-catalog'
+import type { CatalogOptionApply } from './agent-session-option-catalog-types'
 import type { SessionOptionValue } from './native-chat-session-options'
 
 export type ResolvedSessionOptionLaunch = {
   args: string[]
   appliedValues: Record<string, SessionOptionValue>
+}
+
+function isOverriddenByAgentArgs(apply: CatalogOptionApply, tokens: readonly string[]): boolean {
+  const kept = apply.removeAgentArgs?.(tokens)
+  return kept !== undefined && kept.length < tokens.length
 }
 
 export function removeOverriddenAgentSessionArgs(
@@ -63,7 +69,7 @@ export function resolveAgentSessionOptionLaunch(
   const composedModelId = catalog.composeModelValue
     ? catalog.composeModelValue(modelId, modelValues)
     : modelId
-  const modelOverridden = catalog.modelApply.agentArgsOverride?.(trailingAgentArgs) === true
+  const modelOverridden = isOverriddenByAgentArgs(catalog.modelApply, trailingAgentArgs)
 
   if (catalog.modelApply.launchArgs) {
     args.push(...catalog.modelApply.launchArgs(composedModelId))
@@ -86,7 +92,7 @@ export function resolveAgentSessionOptionLaunch(
       continue
     }
     args.push(...option.apply.launchArgs(value))
-    if (!modelOverridden && !option.apply.agentArgsOverride?.(trailingAgentArgs)) {
+    if (!modelOverridden && !isOverriddenByAgentArgs(option.apply, trailingAgentArgs)) {
       appliedValues[option.id] = value
     }
   }

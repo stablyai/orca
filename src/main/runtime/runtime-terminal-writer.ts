@@ -1,5 +1,5 @@
 import { resolveAgentPromptSubmitDelayForAgent } from '../../shared/agent-prompt-injection'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalAgent } from '../../shared/terminal-agent'
 import { iterateTerminalInputChunks } from '../../shared/terminal-input'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 
@@ -17,7 +17,7 @@ export class RuntimeTerminalWriter {
     private readonly write: (ptyId: string, data: string, inputKind: TerminalInputKind) => boolean,
     private readonly getWriteHostPlatform: (ptyId: string) => NodeJS.Platform = () =>
       process.platform,
-    private readonly getAgent: (ptyId: string) => TuiAgent | null = () => null
+    private readonly getAgent: (ptyId: string) => TerminalAgent | null = () => null
   ) {}
 
   async writeAction(

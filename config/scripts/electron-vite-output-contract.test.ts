@@ -146,8 +146,11 @@ describe('Electron Vite output contract', () => {
     expect(external('@xterm/addon-serialize', undefined, false)).toBe(false)
     expect(external('tldts', undefined, false)).toBe(false)
     expect(external('zod', undefined, false)).toBe(false)
+    expect(external('smol-toml', undefined, false)).toBe(false)
+    expect(external('smol-toml/package.json', undefined, false)).toBe(false)
     expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('tldts')
     expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('zod')
+    expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('smol-toml')
   })
 
   it('bundles validation dependencies used by the sandboxed preload', () => {

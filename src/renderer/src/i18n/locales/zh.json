@@ -2002,7 +2002,8 @@
         "c679af7ad9": "刷新我的待办事项",
         "dfd72673e7": "无法保存项目选择。",
         "b797bdd7c3": "清除搜索",
-        "99c2755218": "Jira JQL，例如 project = ABC AND statusCategory != Done",
+        "jiraTextMatchesNotice": "正在显示文本匹配结果。Jira 无法将此搜索作为 JQL 运行。",
+        "99c2755218": "搜索议题或输入 JQL，例如 project = ABC",
         "2ff9fd71fd": "刷新 Jira 议题",
         "0b65d3fb2c": "搜索 Linear 项目...",
         "eec0c5c079": "搜索 Linear 议题...",
@@ -2121,7 +2122,7 @@
         "6edf402e11": "概述",
         "9ae151b26b": "Linear",
         "94d900518d": "没有与所选预设匹配的议题。",
-        "f51e254d35": "尝试不同的 JQL 查询。",
+        "f51e254d35": "请尝试其他搜索词或 JQL。",
         "4645a7814f": "Jira",
         "e224d76876": "MR",
         "bbec4717ee": "mr",
@@ -10048,7 +10049,13 @@
             "72539aede4": "系统",
             "51ae2183e1": "桌面",
             "0534c76311": "Orca 桌面通知的主开关。",
-            "4a210b2f72": "启用通知"
+            "4a210b2f72": "启用通知",
+            "machines": "机器",
+            "machinesDescription": "选择哪些机器可以在此电脑上显示通知，例如 SSH 机器或已配对的服务器。",
+            "host": "主机",
+            "remote": "远程",
+            "ssh": "ssh",
+            "mute": "静音"
           }
         },
         "orchestration": {
@@ -12119,6 +12126,11 @@
           "usageDescription": "已关联 Coding Plan 的实时配额窗口，随状态栏用量周期刷新。",
           "planLevel": "套餐：{{value0}}",
           "hostOnly": "请在运行 Orca 的电脑上的桌面应用中更改套餐站点和 API 密钥。"
+        },
+        "NotificationHostToggles": {
+          "offCount": "{{count}} 台已关闭",
+          "machines": "机器",
+          "machinesDescription": "选择哪些机器可以在此电脑上显示通知。已配对服务器的开关也控制通过该服务器开展的工作。"
         }
       },
       "right": {
@@ -18725,5 +18737,21 @@
     "addTypedPath": "Add",
     "noDirectories": "No folders added yet.",
     "removePath": "Remove {{name}}"
+  },
+  "accounts": {
+    "managedData": {
+      "description": "在 Orca 主机的终端中运行此命令以添加账户。选择适用于该主机上新启动的代理；直接 SSH 连接和 Windows 托管的 WSL 使用各自的凭据。",
+      "copied": "已复制",
+      "add": "复制添加账户命令",
+      "refresh": "刷新账户",
+      "upgrade": "如果账户未显示，请更新或重启 Orca 主机。",
+      "system": "系统默认",
+      "active": "当前使用",
+      "select": "选择",
+      "remove": "移除",
+      "removeTitle": "移除托管账户？",
+      "removeDescription": "请先停止使用此配置的代理。移除将删除其保存的凭据和对话数据。系统登录不受影响。",
+      "cancel": "取消"
+    }
   }
 }

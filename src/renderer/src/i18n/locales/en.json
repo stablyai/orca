@@ -2187,7 +2187,8 @@
         "c679af7ad9": "Refresh My Todos",
         "dfd72673e7": "Failed to save project selection.",
         "b797bdd7c3": "Clear search",
-        "99c2755218": "Jira JQL, e.g. project = ABC AND statusCategory != Done",
+        "jiraTextMatchesNotice": "Showing text matches. Jira couldn't run this search as JQL.",
+        "99c2755218": "Search issues or enter JQL, e.g. project = ABC",
         "2ff9fd71fd": "Refresh Jira issues",
         "0b65d3fb2c": "Search Linear projects...",
         "eec0c5c079": "Search Linear issues...",
@@ -2306,7 +2307,7 @@
         "6edf402e11": "overview",
         "9ae151b26b": "linear",
         "94d900518d": "No issues match the selected preset.",
-        "f51e254d35": "Try a different JQL query.",
+        "f51e254d35": "Try different search terms or JQL.",
         "4645a7814f": "jira",
         "e224d76876": "MR",
         "bbec4717ee": "mr",
@@ -10316,7 +10317,13 @@
             "72539aede4": "system",
             "51ae2183e1": "desktop",
             "0534c76311": "Master switch for Orca desktop notifications.",
-            "4a210b2f72": "Enable Notifications"
+            "4a210b2f72": "Enable Notifications",
+            "machines": "Machines",
+            "machinesDescription": "Choose which machines can show notifications on this computer, such as SSH machines or paired servers.",
+            "host": "host",
+            "remote": "remote",
+            "ssh": "ssh",
+            "mute": "mute"
           }
         },
         "orchestration": {
@@ -12332,6 +12339,11 @@
           "hostOnly": "Change the plan site and API key in the desktop app on the computer running Orca.",
           "detailsUnavailable": "Plan credential details are only readable on the computer running Orca.",
           "siteUnavailable": "Host plan site unavailable"
+        },
+        "NotificationHostToggles": {
+          "offCount": "{{count}} off",
+          "machines": "Machines",
+          "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it."
         }
       },
       "right": {
@@ -15114,7 +15126,12 @@
         "CsvViewer": {
           "eedd0d37a7": "columns",
           "ac31d2cd60": "rows",
-          "a233d55b77": "Empty file"
+          "a233d55b77": "Empty file",
+          "delimiterComma": "Comma",
+          "delimiterSemicolon": "Semicolon",
+          "delimiterTab": "Tab",
+          "delimiterAuto": "Auto ({{delimiter}})",
+          "delimiter": "Delimiter"
         },
         "DiffNotesSendMenu": {
           "f1aa04b5cf": "This file",
@@ -18861,6 +18878,20 @@
         "google": "google",
         "accounts": "accounts"
       }
+    },
+    "managedData": {
+      "description": "Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.",
+      "copied": "Copied",
+      "add": "Copy add account command",
+      "refresh": "Refresh accounts",
+      "upgrade": "If accounts do not appear, update or restart the Orca host.",
+      "system": "System default",
+      "active": "Active",
+      "select": "Select",
+      "remove": "Remove",
+      "removeTitle": "Remove managed account?",
+      "removeDescription": "Stop agents using this profile first. Removal deletes its saved credentials and conversation data. Your system login stays unchanged.",
+      "cancel": "Cancel"
     }
   },
   "youtrack": {
@@ -19009,5 +19040,8 @@
     "store": {
       "desktopOnly": "YouTrack is only available in the desktop app."
     }
+  },
+  "fileSearch": {
+    "failed": "Search failed. Try again."
   }
 }

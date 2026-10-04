@@ -127,14 +127,14 @@ describe('Store with an injected SQLite profile-state authority', () => {
     store.updateSettings({ terminalFontSize: store.getSettings().terminalFontSize + 1 })
     await store.flushPendingOrThrowAsync()
 
-    expect(readFileSync(dataFile)).toEqual(legacyBytes)
+    expect(readFileSync(dataFile).equals(legacyBytes)).toBe(true)
     expect(existsSync(databaseFile)).toBe(true)
 
     const reloaded = new Store({ dataFile, profileStateAuthority: authority })
     expect(reloaded.getSettings().theme).toBe('dark')
     expect(reloaded.getSettings().terminalFontSize).toBe(store.getSettings().terminalFontSize)
     expect(reloaded.getSettings().opencodeSessionCookie).toBe('authority-secret')
-    expect(readFileSync(dataFile)).toEqual(legacyBytes)
+    expect(readFileSync(dataFile).equals(legacyBytes)).toBe(true)
     reloaded.freezeWrites()
   })
 
@@ -848,7 +848,7 @@ describe('Store with an injected SQLite profile-state authority', () => {
       'store-recovery-test'
     )
 
-    expect(readFileSync(join(result.directory, 'profile-state.db'))).toEqual(sourceBytes)
+    expect(readFileSync(join(result.directory, 'profile-state.db')).equals(sourceBytes)).toBe(true)
     expect(readFileSync(join(result.directory, 'profile-state.db-wal'), 'utf8')).toBe(
       'wal-preservation-sentinel'
     )
@@ -856,7 +856,7 @@ describe('Store with an injected SQLite profile-state authority', () => {
       profileId: 'profile-authority-test',
       reason: 'store-recovery-test'
     })
-    expect(readFileSync(databasePath)).toEqual(sourceBytes)
+    expect(readFileSync(databasePath).equals(sourceBytes)).toBe(true)
   })
 
   it('prepares frozen JSON imports without permitting file publication', () => {

@@ -23,6 +23,7 @@ export const UNIT_EXCLUDE = [
   'src/main/pty/omp-shell-wrapper-alias-safety.test.ts',
   'src/main/pty/omp-shell-wrapper.node-pty.test.ts',
   'src/main/shell-startup-feature-channel.test.ts',
+  'src/main/zsh-deferred-startup-line-init.live-shell.test.ts',
   'src/main/terminal-history-fish-session.node-pty.test.ts',
   'src/main/zsh-scoped-histfile.live-shell.test.ts',
   'src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts',

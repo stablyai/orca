@@ -1,5 +1,6 @@
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { AgentStatusState, AgentType } from '../../../shared/agent-status-types'
 import { tabHasLivePty } from './tab-has-live-pty'
@@ -96,8 +97,8 @@ export function getWorkingAgentsPerWorktree({
 // Re-export: shared so mobile shows the same agent labels; kept here for existing importers.
 export { formatAgentTypeLabel } from '../../../shared/agent-type-label'
 
-// Why: Record<TuiAgent, true> (not a Set) forces a build error if a TuiAgent member is added without being listed here.
-const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
+// Why: the record requires every recognized terminal agent to have an icon.
+const ICONABLE_AGENT_TYPES: Record<TerminalAgent, true> = {
   claude: true,
   'claude-agent-teams': true,
   codebuddy: true,
@@ -142,21 +143,27 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   muse: true,
   zcode: true,
   dsh: true,
+  dsb: true,
   jcode: true
 }
 
 // Why: return null (not a 'claude' fallback) for unknown so Codex panes don't flash the Claude icon before the hook fires.
-export function agentTypeToIconAgent(agentType: AgentType | null | undefined): TuiAgent | null {
+export function agentTypeToIconAgent(
+  agentType: AgentType | null | undefined
+): TerminalAgent | null {
   if (!agentType || agentType === 'unknown') {
     return null
   }
-  return Object.hasOwn(ICONABLE_AGENT_TYPES, agentType) ? (agentType as TuiAgent) : null
+  if (agentType === 'dsb') {
+    return 'dsb'
+  }
+  return isTuiAgent(agentType) && Object.hasOwn(ICONABLE_AGENT_TYPES, agentType) ? agentType : null
 }
 
 // Why: shared resolver so all send paths stamp identical agent_kind on agent_prompt_sent telemetry.
 export function agentKindForAgentType(agentType: AgentType | null | undefined): AgentKind {
   const tuiAgent = agentTypeToIconAgent(agentType)
-  return tuiAgent ? tuiAgentToAgentKind(tuiAgent) : 'other'
+  return isTuiAgent(tuiAgent) ? tuiAgentToAgentKind(tuiAgent) : 'other'
 }
 
 // Re-export: freshness gate moved into pane-agent-evidence; keeps existing importers unchanged.

@@ -4,7 +4,10 @@ import {
   buildAgentSessionContinuationPrompt,
   hasFullAgentSessionContext
 } from '@/lib/agent-session-continuation'
-import { prepareAgentSessionContinuationFromPane } from './terminal-agent-session-continuation'
+import {
+  canContinueAgentSessionInNewSession,
+  prepareAgentSessionContinuationFromPane
+} from './terminal-agent-session-continuation'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const store = {
@@ -94,6 +97,10 @@ describe('buildAgentSessionContinuationPrompt', () => {
 })
 
 describe('prepareAgentSessionContinuationFromPane', () => {
+  it('does not enable session continuation for recognition-only DeepSeek Build', () => {
+    expect(canContinueAgentSessionInNewSession('dsb')).toBe(false)
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     store.agentStatusByPaneKey = {

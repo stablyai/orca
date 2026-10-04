@@ -195,6 +195,7 @@ describe('connectPanePty', () => {
     expect(deps.dispatchNotification).toHaveBeenCalledWith({
       source: 'agent-task-complete',
       terminalTitle: 'experimental-agent-observability',
+      ptyId: 'tab-pty',
       paneKey: makePaneKey('tab-1', LEAF_1)
     })
     expect(window.api.pty.inspectProcess).toHaveBeenCalledWith('pty-codex')

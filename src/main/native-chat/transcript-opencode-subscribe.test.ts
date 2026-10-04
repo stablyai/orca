@@ -82,9 +82,21 @@ function watchFixture(
       db.prepare('DELETE FROM session_message WHERE id = ?').run(String(index))
     }
   }
-  for (let index = 1; index <= messageCount; index++) {
-    insert(index, hiddenFirst && index === 1 ? '' : undefined)
+  const batch = (mutate: () => void) => {
+    db.exec('BEGIN')
+    try {
+      mutate()
+      db.exec('COMMIT')
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
   }
+  batch(() => {
+    for (let index = 1; index <= messageCount; index++) {
+      insert(index, hiddenFirst && index === 1 ? '' : undefined)
+    }
+  })
   let displayed: NativeChatMessage[] = []
   const onReplace = vi.fn((messages: NativeChatMessage[]) => {
     displayed = messages
@@ -115,7 +127,17 @@ function watchFixture(
     }
   )
   fixtures.push({ db, root, stop: subscription.unsubscribe })
-  return { db, insert, update, remove, displayed: () => displayed, onReplace, onAppend, readPage }
+  return {
+    db,
+    insert,
+    update,
+    remove,
+    batch,
+    displayed: () => displayed,
+    onReplace,
+    onAppend,
+    readPage
+  }
 }
 
 describe.each(['v1', 'v2'] as const)('OpenCode %s watch reconciliation', (version) => {
@@ -123,8 +145,10 @@ describe.each(['v1', 'v2'] as const)('OpenCode %s watch reconciliation', (versio
     const f = watchFixture(version, false, 1000)
     await vi.advanceTimersByTimeAsync(0)
     expect(f.displayed()).toHaveLength(300)
-    f.remove(701)
-    f.insert(1001)
+    f.batch(() => {
+      f.remove(701)
+      f.insert(1001)
+    })
     await vi.advanceTimersByTimeAsync(10)
     expect(f.displayed()).toHaveLength(300)
     expect(f.displayed()[0]?.blocks).toEqual([{ type: 'text', text: 'message 702' }])
@@ -170,9 +194,11 @@ describe.each(['v1', 'v2'] as const)('OpenCode %s watch reconciliation', (versio
   it('replaces an empty session and permits a reused provider cursor to append', async () => {
     const f = watchFixture(version)
     await vi.advanceTimersByTimeAsync(0)
-    for (let index = 1; index <= 300; index++) {
-      f.remove(index)
-    }
+    f.batch(() => {
+      for (let index = 1; index <= 300; index++) {
+        f.remove(index)
+      }
+    })
     await vi.advanceTimersByTimeAsync(10)
     expect(f.displayed()).toEqual([])
     f.insert(1, 'after revert')
@@ -194,9 +220,11 @@ describe.each(['v1', 'v2'] as const)('OpenCode %s watch reconciliation', (versio
   it('continues checking previously appended history and bounds every read', async () => {
     const f = watchFixture(version)
     await vi.advanceTimersByTimeAsync(0)
-    for (let index = 301; index <= 450; index++) {
-      f.insert(index)
-    }
+    f.batch(() => {
+      for (let index = 301; index <= 450; index++) {
+        f.insert(index)
+      }
+    })
     await vi.advanceTimersByTimeAsync(10)
     f.update(1, 'edited after append')
     await vi.advanceTimersByTimeAsync(10)
@@ -210,9 +238,11 @@ describe.each(['v1', 'v2'] as const)('OpenCode %s watch reconciliation', (versio
   it('holds the frontier and retries when a burst cannot bridge within the read cap', async () => {
     const f = watchFixture(version)
     await vi.advanceTimersByTimeAsync(0)
-    for (let index = 301; index <= 2800; index++) {
-      f.insert(index)
-    }
+    f.batch(() => {
+      for (let index = 301; index <= 2800; index++) {
+        f.insert(index)
+      }
+    })
     await vi.advanceTimersByTimeAsync(10)
     expect(f.displayed()).toHaveLength(300)
     expect(f.onReplace).not.toHaveBeenCalled()
@@ -220,10 +250,12 @@ describe.each(['v1', 'v2'] as const)('OpenCode %s watch reconciliation', (versio
     await vi.advanceTimersByTimeAsync(10)
     expect(f.readPage.mock.calls.length).toBeGreaterThan(reads)
     expect(f.readPage.mock.calls.every(([args]) => args.limit <= 2400)).toBe(true)
-    for (let index = 301; index <= 2800; index++) {
-      f.remove(index)
-    }
-    f.insert(301, 'after discarded burst')
+    f.batch(() => {
+      for (let index = 301; index <= 2800; index++) {
+        f.remove(index)
+      }
+      f.insert(301, 'after discarded burst')
+    })
     await vi.advanceTimersByTimeAsync(10)
     expect(f.displayed()).toHaveLength(301)
     expect(f.displayed().at(-1)?.blocks).toEqual([{ type: 'text', text: 'after discarded burst' }])
@@ -233,9 +265,11 @@ describe.each(['v1', 'v2'] as const)('OpenCode %s watch reconciliation', (versio
     const f = watchFixture(version)
     await vi.advanceTimersByTimeAsync(0)
     for (let start = 301; start <= 2400; start += 300) {
-      for (let index = start; index < start + 300; index++) {
-        f.insert(index)
-      }
+      f.batch(() => {
+        for (let index = start; index < start + 300; index++) {
+          f.insert(index)
+        }
+      })
       await vi.advanceTimersByTimeAsync(10)
     }
     f.onReplace.mockClear()
@@ -253,9 +287,11 @@ describe.each(['v1', 'v2'] as const)('OpenCode %s watch reconciliation', (versio
   it('keeps appending after a bridged burst fills the cap', async () => {
     const f = watchFixture(version)
     await vi.advanceTimersByTimeAsync(0)
-    for (let index = 301; index <= 2600; index++) {
-      f.insert(index)
-    }
+    f.batch(() => {
+      for (let index = 301; index <= 2600; index++) {
+        f.insert(index)
+      }
+    })
     await vi.advanceTimersByTimeAsync(10)
     expect(f.onReplace).toHaveBeenCalledOnce()
     expect(f.displayed()).toHaveLength(2400)
@@ -272,13 +308,15 @@ describe.each(['v1', 'v2'] as const)('OpenCode %s watch reconciliation', (versio
     async (operation) => {
       const f = watchFixture(version, false, 2500, 2400)
       await vi.advanceTimersByTimeAsync(0)
-      if (operation === 'delete') {
-        f.remove(101)
-      } else {
-        f.update(101, operation === 'hide' ? '' : 'edited first tail row')
-      }
-      f.insert(2501)
-      f.insert(2502)
+      f.batch(() => {
+        if (operation === 'delete') {
+          f.remove(101)
+        } else {
+          f.update(101, operation === 'hide' ? '' : 'edited first tail row')
+        }
+        f.insert(2501)
+        f.insert(2502)
+      })
       await vi.advanceTimersByTimeAsync(10)
       expect(f.onReplace).toHaveBeenCalledOnce()
       expect(f.onAppend).not.toHaveBeenCalled()

@@ -108,7 +108,9 @@ describe('WSL network Git SSH policy startup', () => {
     expect(probeScript.indexOf('core.sshCommand=')).toBeLessThan(probeScript.indexOf("'config'"))
     expect(calls[0].script).toContain('__ORCA_WSL_CAPTURE_BEGIN_')
     expect(calls[0].env.GIT_SSH_COMMAND).toBeUndefined()
-    expect(networkCalls(calls)[0].env.GIT_SSH_COMMAND).toBe(`${SSH_COMMAND} -o BatchMode=yes`)
+    expect(networkCalls(calls)[0].env.GIT_SSH_COMMAND).toBe(
+      SSH_COMMAND.replace('ssh', 'ssh -o BatchMode=yes')
+    )
     expect(networkCalls(calls)[0].env.WSLENV?.split(':')).toContain('GIT_SSH_COMMAND')
   })
 

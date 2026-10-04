@@ -1,3 +1,4 @@
+import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { attachIpcPty } from './ipc-pty-attach'
 import { connectIpcPty } from './ipc-pty-connect'
 import { createIpcPtySessionHandlers } from './ipc-pty-session-handlers'
@@ -287,6 +288,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     isConnected: () => connected,
     getPtyId: () => ptyId,
     getConnectionId: () => connectionId ?? null,
+    getExecutionHostId: () => (connectionId ? toSshExecutionHostId(connectionId) : 'local'),
+    getRuntimeEnvironmentId: () => null,
     getLocalSessionMetadata: () =>
       connectionId
         ? null

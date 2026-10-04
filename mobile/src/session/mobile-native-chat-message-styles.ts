@@ -29,6 +29,11 @@ export const styles = StyleSheet.create({
     lineHeight: TEXT_SIZE + 6,
     fontWeight: '500'
   },
+  hostNotice: {
+    color: colors.textMuted,
+    fontSize: TEXT_SIZE,
+    lineHeight: TEXT_SIZE + 6
+  },
   reasoning: {
     opacity: 0.7
   },

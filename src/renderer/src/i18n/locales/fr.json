@@ -2104,7 +2104,8 @@
         "c679af7ad9": "Actualiser mes todos",
         "dfd72673e7": "Échec de l'enregistrement de la sélection de projets.",
         "b797bdd7c3": "Effacer la recherche",
-        "99c2755218": "JQL Jira, ex. project = ABC AND statusCategory != Done",
+        "jiraTextMatchesNotice": "Résultats textuels affichés. Jira n'a pas pu exécuter cette recherche en JQL.",
+        "99c2755218": "Recherchez des issues ou saisissez du JQL, ex. project = ABC",
         "2ff9fd71fd": "Actualiser les tickets Jira",
         "0b65d3fb2c": "Rechercher des projets Linear...",
         "eec0c5c079": "Rechercher des tickets Linear...",
@@ -2223,7 +2224,7 @@
         "6edf402e11": "vue d'ensemble",
         "9ae151b26b": "linear",
         "94d900518d": "Aucune issue ne correspond au préréglage sélectionné.",
-        "f51e254d35": "Essayez une requête JQL différente.",
+        "f51e254d35": "Essayez d'autres termes de recherche ou du JQL.",
         "4645a7814f": "jira",
         "e224d76876": "MR",
         "bbec4717ee": "mr",
@@ -10195,7 +10196,13 @@
             "72539aede4": "système",
             "51ae2183e1": "bureau",
             "0534c76311": "Interrupteur principal des notifications de bureau d'Orca.",
-            "4a210b2f72": "Activer les notifications"
+            "4a210b2f72": "Activer les notifications",
+            "machines": "Machines",
+            "machinesDescription": "Choisissez les machines autorisées à afficher des notifications sur cet ordinateur, comme les machines SSH ou les serveurs associés.",
+            "host": "hôte",
+            "remote": "distant",
+            "ssh": "ssh",
+            "mute": "muet"
           }
         },
         "orchestration": {
@@ -12169,6 +12176,11 @@
           "usageDescription": "Cursor facture deux enveloppes qui se réinitialisent avec votre cycle de facturation, plus des dépenses à la demande une fois épuisées.",
           "usageLabel": "Utilisation",
           "usageTitle": "Utilisation mensuelle du forfait"
+        },
+        "NotificationHostToggles": {
+          "offCount": "{{count}} désactivées",
+          "machines": "Machines",
+          "machinesDescription": "Choisissez les machines autorisées à afficher des notifications sur cet ordinateur. Le réglage d’un serveur associé couvre aussi le travail effectué par son intermédiaire."
         }
       },
       "right": {
@@ -18672,5 +18684,21 @@
     "addTypedPath": "Add",
     "noDirectories": "No folders added yet.",
     "removePath": "Remove {{name}}"
+  },
+  "accounts": {
+    "managedData": {
+      "description": "Ajoutez des comptes en exécutant cette commande dans un terminal sur l’hôte Orca. La sélection s’applique aux nouveaux lancements sur cet hôte ; les connexions SSH directes et WSL sous Windows utilisent leurs propres identifiants.",
+      "copied": "Copié",
+      "add": "Copier la commande d’ajout de compte",
+      "refresh": "Actualiser les comptes",
+      "upgrade": "Si les comptes n’apparaissent pas, mettez à jour ou redémarrez l’hôte Orca.",
+      "system": "Compte système par défaut",
+      "active": "Actif",
+      "select": "Sélectionner",
+      "remove": "Supprimer",
+      "removeTitle": "Supprimer le compte géré ?",
+      "removeDescription": "Arrêtez d’abord les agents utilisant ce profil. Sa suppression efface les identifiants et conversations enregistrés. Votre connexion système reste inchangée.",
+      "cancel": "Annuler"
+    }
   }
 }

@@ -171,9 +171,6 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
     // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from live server state, so the renderer awaits this before restored terminals reconnect.
     startAgentHookServer: async () => {
       const settings = state.store?.getSettings()
-      if (!isAgentStatusHooksEnabled(settings)) {
-        return
-      }
       logStartupMilestone('startup-service-start', { service: 'agent-hook-server' })
       // Why (#11217): the hook listener fails open on every request error, so an IDS resetting
       // loopback POSTs mid-body stops agent status for every runtime with no symptom but staleness.
@@ -182,6 +179,7 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
         track('agent_hook_transport_blocked', { count: report.count })
       })
       await agentHookServer.start({
+        statusHooksEnabled: isAgentStatusHooksEnabled(settings),
         env: app.isPackaged ? 'production' : 'development',
         // Why: hooks source this endpoint file at invocation time so old PTY env reaches the current process after restart; dev namespaces it (worktrees share `orca-dev`).
         userDataPath: app.getPath('userData'),
