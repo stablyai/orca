@@ -60,6 +60,7 @@ export type RuntimeRepositoryCommandSurface = {
   saveSparsePreset: RuntimeRepositorySparsePresets['save']
   addRepo: RuntimeRepositoryRegistrationController['add']
   createRepo: RuntimeRepositoryRegistrationController['create']
+  convertRepoToGit: RuntimeRepositoryRegistrationController['convertToGit']
   cloneRepo: RuntimeRepositoryCloneController['clone']
   showRepo: RuntimeRepositorySettingsController['show']
   setRepoBaseRef: RuntimeRepositorySettingsController['setBaseRef']
@@ -135,6 +136,7 @@ export function installRuntimeRepositoryCommandSurface(
     saveSparsePreset: sparse.save.bind(sparse),
     addRepo: registrations.add.bind(registrations),
     createRepo: registrations.create.bind(registrations),
+    convertRepoToGit: registrations.convertToGit.bind(registrations),
     cloneRepo: clones.clone.bind(clones),
     showRepo: settings.show.bind(settings),
     setRepoBaseRef: settings.setBaseRef.bind(settings),

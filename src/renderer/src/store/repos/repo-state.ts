@@ -180,6 +180,11 @@ export type RepoSlice = {
   ) => Promise<ProjectHostSetupDeleteResult | null>
   setupProjectClone: (args: ProjectHostSetupCloneArgs) => Promise<ProjectHostSetupResult | null>
   addNonGitFolder: (path: string, options?: AddRepoPathOptions) => Promise<Repo | null>
+  convertNonGitFolderToGit: (args: {
+    path: string
+    connectionId?: string
+    runtimeEnvironmentId?: string | null
+  }) => Promise<Repo | null>
   scanNestedRepos: (
     path: string,
     connectionId?: string,

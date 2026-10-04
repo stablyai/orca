@@ -11,6 +11,7 @@ import { createNestedRepositoryActions } from '../project-groups/nested-reposito
 import { createProjectGroupMutationActions } from '../project-groups/project-group-mutations'
 import { createFolderWorkspaceMutationActions } from '../folder-workspaces/folder-workspace-mutations'
 import { createRepoAddActions } from '../repos/repo-add-actions'
+import { createFolderGitConversionActions } from '../repos/folder-git-conversion-actions'
 import { createProjectHostSetupActions } from '../projects/project-host-setup-actions'
 import { createRepoRemovalActions } from '../repos/repo-removal'
 import { createProjectUpdateActions } from '../projects/project-update'
@@ -28,6 +29,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   const projectGroupMutations = createProjectGroupMutationActions(set, get)
   const folderWorkspaceMutations = createFolderWorkspaceMutationActions(set, get)
   const repoAddActions = createRepoAddActions(set, get)
+  const folderGitConversionActions = createFolderGitConversionActions(set, get)
   const projectHostSetupActions = createProjectHostSetupActions(set, get)
   const repoRemoval = createRepoRemovalActions(set, get)
   const projectUpdate = createProjectUpdateActions(set, get)
@@ -77,6 +79,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     setupProjectClone: projectHostSetupActions.setupProjectClone,
     addRepo: repoAddActions.addRepo,
     addNonGitFolder: repoAddActions.addNonGitFolder,
+    convertNonGitFolderToGit: folderGitConversionActions.convertNonGitFolderToGit,
     removeProject: repoRemoval.removeProject,
     updateProject: projectUpdate.updateProject,
     updateRepo: repoUpdate.updateRepo,

@@ -110,6 +110,7 @@ describe('repos:add with git worktrees', () => {
     removeHandlerMock.mockReset()
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
+    mockStore.updateRepo.mockReset()
     isGitRepoMock.mockReset().mockReturnValue(true)
     // A linked worktree is its own toplevel — this is exactly why path dedupe alone misses it.
     getGitRepoRootMock.mockReset().mockImplementation((path: string) => path)
@@ -149,6 +150,41 @@ describe('repos:add with git worktrees', () => {
 
     expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
     expect(result).toEqual({ repo: expect.objectContaining({ path: '/Users/dev/projects/other' }) })
+  })
+
+  it('upgrades a tracked folder in place after the registration probe finds Git', async () => {
+    const folder: Repo = { ...trackedMainRepo(), kind: 'folder' }
+    const converted: Repo = { ...folder, kind: 'git' }
+    mockStore.getRepos.mockReturnValue([folder])
+    mockStore.updateRepo.mockReturnValue(converted)
+
+    const result = await callAdd({ path: MAIN_CHECKOUT })
+
+    expect(result).toEqual({ repo: converted })
+    expect(mockStore.updateRepo).toHaveBeenCalledWith(
+      folder.id,
+      expect.objectContaining({ kind: 'git', externalWorktreeVisibility: 'hide' }),
+      'local'
+    )
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, converted)
+  })
+
+  it('returns the canonical Git repo without upgrading a nested tracked folder', async () => {
+    const nestedPath = `${MAIN_CHECKOUT}/docs`
+    const nested: Repo = {
+      ...trackedMainRepo(),
+      id: 'nested-folder',
+      path: nestedPath,
+      kind: 'folder'
+    }
+    const main = trackedMainRepo()
+    mockStore.getRepos.mockReturnValue([nested, main])
+    getGitRepoRootMock.mockReturnValue(MAIN_CHECKOUT)
+
+    expect(await callAdd({ path: nestedPath })).toEqual({ repo: main })
+    expect(mockStore.updateRepo).not.toHaveBeenCalled()
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
   it('does not consult worktree detection for folder projects', async () => {
