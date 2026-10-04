@@ -465,7 +465,38 @@ describe('buildRows workspace lineage nesting', () => {
       type: 'item',
       worktree: { id: parent.id },
       lineageChildCount: 1,
-      lineageCollapsed: true
+      lineageCollapsed: true,
+      lineageHiddenDescendants: { worktreeIds: [child.id, grandchild.id], unreadCount: 0 }
+    })
+  })
+
+  it('lists hidden descendants and their unread count only on the collapsed lineage row', () => {
+    const unreadGrandchild = { ...grandchild, isUnread: true }
+    const rows = buildRows(
+      'none',
+      [unreadGrandchild, child, parent],
+      repoMap,
+      null,
+      new Set([getLineageGroupKey(child.id)]),
+      undefined,
+      undefined,
+      undefined,
+      { [child.id]: lineage, [grandchild.id]: grandchildLineage },
+      new Map([
+        [parent.id, parent],
+        [child.id, child],
+        [grandchild.id, unreadGrandchild]
+      ]),
+      true
+    )
+
+    const items = rows.filter((row) => row.type === 'item')
+    expect(items.map((row) => row.worktree.id)).toEqual([parent.id, child.id])
+    expect(items[0]).not.toHaveProperty('lineageHiddenDescendants')
+    expect(items[1]).toMatchObject({
+      worktree: { id: child.id },
+      lineageCollapsed: true,
+      lineageHiddenDescendants: { worktreeIds: [grandchild.id], unreadCount: 1 }
     })
   })
 

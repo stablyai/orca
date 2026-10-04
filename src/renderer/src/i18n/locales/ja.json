@@ -11,6 +11,11 @@
     "retrying": "再試行中…"
   },
   "settings": {
+    "notifications": {
+      "childUnreadKeywords": "子 子ワークスペース ワークスペース 未読 バッジ Dock サイドバー",
+      "showChildWorktreeUnread": "子ワークスペースの未読バッジを表示",
+      "showChildWorktreeUnreadDescription": "子ワークスペースをDockの未読数とサイドバーの未読表示に含めます。親ワークスペースで進捗を確認する場合はオフにしてください。アクティビティの状態とシステム通知は変更されません。"
+    },
     "terminal": {
       "optionLayoutAlt": "ABCまたはU.S. — OptionはAlt/Escシーケンスを送信します",
       "optionLayoutCompose": "この配列ではOptionで@、€、[、]などの文字を入力します",
@@ -6318,6 +6323,14 @@
           "copied": "コマンドをコピーしました",
           "retry": "今すぐ再試行",
           "restored": "Git が再び動作しています。ワークツリーを更新しました。"
+        },
+        "WorktreeLineageHiddenActivity": {
+          "permission": "{{value0}} 件が権限待ち",
+          "working": "{{value0}} 件が作業中",
+          "monitoring": "{{value0}} 件がバックグラウンドタスクを監視中",
+          "unread": "{{value0}} 件未読",
+          "failed": "{{value0}} 件が失敗",
+          "interrupted": "{{value0}} 件が中断"
         }
       },
       "shared": {

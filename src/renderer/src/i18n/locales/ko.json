@@ -11,6 +11,11 @@
     "retrying": "재시도 중…"
   },
   "settings": {
+    "notifications": {
+      "childUnreadKeywords": "하위 자식 워크스페이스 읽지 않음 배지 Dock 사이드바",
+      "showChildWorktreeUnread": "하위 워크스페이스의 읽지 않음 배지 표시",
+      "showChildWorktreeUnreadDescription": "하위 워크스페이스를 Dock의 읽지 않음 수와 사이드바 표시기에 포함합니다. 상위 워크스페이스에서 진행 상황을 확인한다면 끄세요. 활동 상태와 시스템 알림은 변경되지 않습니다."
+    },
     "terminal": {
       "optionLayoutAlt": "ABC 또는 U.S. — Option 키가 Alt/Esc 시퀀스를 전송합니다",
       "optionLayoutCompose": "이 배열에서는 Option 키로 @, €, [, ] 같은 문자를 입력합니다",
@@ -6318,6 +6323,14 @@
           "copied": "명령이 복사됨",
           "retry": "지금 다시 시도",
           "restored": "Git이 다시 작동합니다. 워크트리를 새로고침했습니다."
+        },
+        "WorktreeLineageHiddenActivity": {
+          "permission": "{{value0}}개 권한 대기 중",
+          "working": "{{value0}}개 작업 중",
+          "monitoring": "{{value0}}개 백그라운드 작업 모니터링 중",
+          "unread": "{{value0}}개 읽지 않음",
+          "failed": "{{value0}}개 실패",
+          "interrupted": "{{value0}}개 중단됨"
         }
       },
       "shared": {

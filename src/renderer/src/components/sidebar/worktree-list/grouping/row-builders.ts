@@ -4,6 +4,10 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isValidResolvedWorktreeLineageEdge } from '../../../../../../shared/resolved-worktree-lineage'
 import { getProjectedWorktreeLineage } from '../../worktree-lineage-projection'
+import {
+  collectLineageHiddenDescendants,
+  type LineageHiddenDescendants
+} from '../../worktree-lineage-descendants'
 import { getWorktreeLineageGroupKey } from './group-keys'
 import type { NoticeHostContext } from './host-labels'
 import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
@@ -75,6 +79,7 @@ function buildWorktreeRow(
     isLastLineageChild: boolean
     lineageChildCount: number
     lineageCollapsed: boolean
+    lineageHiddenDescendants?: LineageHiddenDescendants
     hostContextLabel?: string
   }
 ): WorktreeRow {
@@ -93,7 +98,10 @@ function buildWorktreeRow(
     ...(options.lineageChildCount > 0
       ? { lineageGroupKey: getWorktreeLineageGroupKey(worktree) }
       : {}),
-    ...(options.lineageChildCount > 0 ? { lineageCollapsed: options.lineageCollapsed } : {})
+    ...(options.lineageChildCount > 0 ? { lineageCollapsed: options.lineageCollapsed } : {}),
+    ...(options.lineageHiddenDescendants
+      ? { lineageHiddenDescendants: options.lineageHiddenDescendants }
+      : {})
   }
 }
 
@@ -204,6 +212,13 @@ export function appendWorktreeRows(
           isLastLineageChild: isLastChild,
           lineageChildCount: children.length,
           lineageCollapsed,
+          lineageHiddenDescendants:
+            lineageCollapsed && children.length > 0
+              ? collectLineageHiddenDescendants(
+                  children,
+                  (child) => childrenByParentIdentity.get(getWorktreeHostIdentity(child)) ?? []
+                )
+              : undefined,
           hostContextLabel:
             hostContextLabelByWorktreeIdentity?.get(worktreeIdentity) ??
             hostContextLabelByRepoId?.get(worktree.repoId)

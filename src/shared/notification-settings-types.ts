@@ -7,6 +7,7 @@ export type NotificationSettings = {
   agentTaskComplete: boolean
   terminalBell: boolean
   suppressWhenFocused: boolean
+  showChildWorktreeUnread?: boolean
   customSoundId:
     | 'system'
     | 'two-tone'

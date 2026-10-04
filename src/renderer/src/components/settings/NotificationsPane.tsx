@@ -214,6 +214,26 @@ export function NotificationsPane({
         }
       />
 
+      <Separator />
+
+      <NotificationSettingToggle
+        label={translate(
+          'settings.notifications.showChildWorktreeUnread',
+          'Show unread badges for child workspaces'
+        )}
+        description={translate(
+          'settings.notifications.showChildWorktreeUnreadDescription',
+          'Include child workspaces in Dock counts and sidebar unread indicators. Turn off when following progress through their parent. Activity statuses and native notifications are unchanged.'
+        )}
+        checked={notificationSettings.showChildWorktreeUnread !== false}
+        onToggle={() =>
+          void updateNotificationSettings({
+            showChildWorktreeUnread:
+              notificationSettingsRef.current.showChildWorktreeUnread === false
+          })
+        }
+      />
+
       <div className="flex flex-wrap items-center gap-2 pt-3">
         <Button
           variant="outline"

@@ -15,6 +15,7 @@ import {
   runtimeHostConnectionStateForEntry
 } from '@/runtime/runtime-host-connection-state'
 import { useAppStore } from '@/store'
+import { shouldShowWorktreeUnread } from '@/lib/child-worktree-unread-policy'
 import {
   selectRuntimeAwareSshStatus,
   selectRuntimeAwareSshTargetLabel,
@@ -38,6 +39,7 @@ export function useWorktreeCardFoundation({
   const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const settings = useAppStore((s) => s.settings)
+  const showWorktreeUnread = useAppStore((s) => shouldShowWorktreeUnread(s, worktree))
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
@@ -212,6 +214,7 @@ export function useWorktreeCardFoundation({
     setRenamingWorktreeId,
     fetchHostedReviewForBranch,
     settings,
+    showWorktreeUnread,
     fetchIssue,
     fetchLinearIssue,
     cardProps,

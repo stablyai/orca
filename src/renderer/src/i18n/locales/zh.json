@@ -11,6 +11,11 @@
     "retrying": "正在重试..."
   },
   "settings": {
+    "notifications": {
+      "childUnreadKeywords": "子 子工作区 工作区 未读 标记 Dock 侧边栏",
+      "showChildWorktreeUnread": "显示子工作区的未读标记",
+      "showChildWorktreeUnreadDescription": "将子工作区计入 Dock 未读数量和侧边栏未读标记。如果通过父工作区关注进度，请关闭此选项。活动状态和系统通知保持不变。"
+    },
     "terminal": {
       "optionLayoutAlt": "ABC 或 U.S. — Option 键发送 Alt/Esc 序列",
       "optionLayoutCompose": "此布局使用 Option 键输入 @、€、[、] 等字符",
@@ -6318,6 +6323,14 @@
           "copied": "命令已复制",
           "retry": "立即重试",
           "restored": "Git 已恢复正常。工作树已刷新。"
+        },
+        "WorktreeLineageHiddenActivity": {
+          "permission": "{{value0}} 个等待权限",
+          "working": "{{value0}} 个工作中",
+          "monitoring": "{{value0}} 个监控后台任务中",
+          "unread": "{{value0}} 个未读",
+          "failed": "{{value0}} 个已失败",
+          "interrupted": "{{value0}} 个已中断"
         }
       },
       "shared": {

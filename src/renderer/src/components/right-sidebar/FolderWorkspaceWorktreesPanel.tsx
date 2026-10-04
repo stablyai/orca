@@ -1,5 +1,6 @@
 import WorktreeCard from '@/components/sidebar/WorktreeCard'
 import { stopNestedWorktreeCardBubble } from '@/components/sidebar/worktree-list/rows/header-event-guards'
+import { collectLineageHiddenDescendants } from '@/components/sidebar/worktree-lineage-descendants'
 import {
   getLineageChildrenInlineStyle,
   getLineageNestedRowGeometry
@@ -75,6 +76,15 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
         affiliateListMode
         lineageChildCount={safeLineageChildren.length}
         lineageCollapsed={lineageCollapsed}
+        lineageHiddenDescendants={
+          lineageCollapsed && hasSafeLineageChildren
+            ? collectLineageHiddenDescendants(safeLineageChildren, (child) =>
+                (lineageChildrenByParentId.get(child.id) ?? []).filter(
+                  (grandchild) => !nextAncestorIds.has(grandchild.id)
+                )
+              )
+            : undefined
+        }
         lineageChildren={
           !lineageCollapsed && hasSafeLineageChildren
             ? safeLineageChildren.map((child) => (

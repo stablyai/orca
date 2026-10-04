@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { getUnreadBadgeCount } from './unread-badge-count'
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+import type { UnreadBadgeCountSources } from './unread-badge-count'
 
 function worktree(id: string, isUnread: boolean): Worktree {
   return { id, isUnread } as Worktree
@@ -11,7 +13,114 @@ function tab(id: string): TerminalTab {
   return { id } as TerminalTab
 }
 
+function createHiddenChildSources(includeTerminalTabs: boolean): UnreadBadgeCountSources {
+  const child = { id: 'same-id', hostId: 'local', isUnread: false } as const
+  return {
+    worktreesByRepo: { repo: [child] },
+    tabsByWorktree: includeTerminalTabs ? { 'same-id': [{ id: 'tab-1' }] } : {},
+    unreadTerminalTabs: { 'tab-1': true },
+    hiddenChildUnreadIdentities: new Set([getWorktreeHostIdentity(child)])
+  }
+}
+
+describe.each([true, false])('child unread with terminal records: %s', (includeTerminalTabs) => {
+  const hiddenChildSources = (): UnreadBadgeCountSources =>
+    createHiddenChildSources(includeTerminalTabs)
+
+  it('counts unread tabs until their execution-host ownership is known', () => {
+    expect(getUnreadBadgeCount(hiddenChildSources())).toBe(1)
+  })
+  it.each(['ssh:remote', 'runtime:remote'] as const)(
+    'counts %s tab unread before its same-id worktree row hydrates',
+    (executionHostId) => {
+      const sources = hiddenChildSources()
+      sources.unifiedTabsByWorktree = {
+        'same-id': [{ id: 'tab-1', worktreeId: 'same-id', executionHostId }]
+      }
+      expect(getUnreadBadgeCount(sources)).toBe(1)
+    }
+  )
+
+  it('suppresses tab unread only with explicit hidden-child ownership', () => {
+    const sources = hiddenChildSources()
+    sources.unifiedTabsByWorktree = {
+      'same-id': [{ id: 'tab-1', worktreeId: 'same-id', executionHostId: 'local' }]
+    }
+    expect(getUnreadBadgeCount(sources)).toBe(0)
+    sources.worktreesByRepo = {
+      repo: [
+        ...sources.worktreesByRepo.repo,
+        { id: 'same-id', hostId: 'ssh:remote', isUnread: false }
+      ]
+    }
+    expect(getUnreadBadgeCount(sources)).toBe(0)
+  })
+
+  it('counts tab unread with missing, mismatched or duplicate host ownership', () => {
+    const sources = hiddenChildSources()
+    for (const owners of [
+      [{ id: 'tab-1', worktreeId: 'same-id' }],
+      [{ id: 'tab-1', worktreeId: 'other-id', executionHostId: 'local' } as const],
+      [
+        { id: 'tab-1', worktreeId: 'same-id', executionHostId: 'local' } as const,
+        { id: 'tab-1', worktreeId: 'same-id', executionHostId: 'ssh:remote' } as const
+      ]
+    ]) {
+      expect(
+        getUnreadBadgeCount({ ...sources, unifiedTabsByWorktree: { 'same-id': owners } })
+      ).toBe(1)
+    }
+  })
+
+  it.each([true, false])(
+    'keeps a shared unread tab ID visible regardless of child-first order (%s)',
+    (childFirst) => {
+      const sources = hiddenChildSources()
+      sources.unifiedTabsByWorktree = {
+        'same-id': [{ id: 'tab-1', worktreeId: 'same-id', executionHostId: 'local' }],
+        visible: [{ id: 'tab-1', worktreeId: 'visible', executionHostId: 'ssh:remote' }]
+      }
+      const visibleTabs = [{ id: 'tab-1' }]
+      if (includeTerminalTabs) {
+        sources.tabsByWorktree = childFirst
+          ? { ...sources.tabsByWorktree, visible: visibleTabs }
+          : { visible: visibleTabs, ...sources.tabsByWorktree }
+      } else if (!childFirst) {
+        sources.unifiedTabsByWorktree = {
+          visible: sources.unifiedTabsByWorktree.visible,
+          'same-id': sources.unifiedTabsByWorktree['same-id']
+        }
+      }
+      expect(getUnreadBadgeCount(sources)).toBe(1)
+    }
+  )
+
+  it('counts unmatched unread entries during hydration', () => {
+    const sources = hiddenChildSources()
+    sources.tabsByWorktree = {}
+    expect(getUnreadBadgeCount(sources)).toBe(1)
+  })
+})
+
 describe('getUnreadBadgeCount', () => {
+  it('dedupes unified-only unread tabs against terminal tabs and worktree unread', () => {
+    const sources: UnreadBadgeCountSources = {
+      worktreesByRepo: { repo: [{ id: 'parent', isUnread: false }] },
+      tabsByWorktree: { parent: [{ id: 'terminal' }] },
+      unifiedTabsByWorktree: {
+        parent: ['terminal', 'chat-1', 'chat-2'].map((id) => ({
+          id,
+          worktreeId: 'parent',
+          executionHostId: 'local'
+        }))
+      },
+      unreadTerminalTabs: { terminal: true, 'chat-1': true, 'chat-2': true }
+    }
+    expect(getUnreadBadgeCount(sources)).toBe(1)
+    sources.worktreesByRepo = { repo: [{ id: 'parent', isUnread: true }] }
+    expect(getUnreadBadgeCount(sources)).toBe(1)
+  })
+
   it('counts unread worktrees', () => {
     expect(
       getUnreadBadgeCount({
