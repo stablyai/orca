@@ -15,6 +15,7 @@ import {
   START_FAILURE_COOLDOWN_MS
 } from './desktop-script-runtime-availability'
 import { RuntimeClientError } from './runtime-client-error'
+import { assertDesktopBridgeGuardSupport } from './desktop-script-snapshot-guard'
 import {
   isExecutionPolicyBlocked,
   windowsPowerShellRuntimeArgs
@@ -65,6 +66,7 @@ export function isRuntimeHostUnavailable(error: unknown): boolean {
  */
 export class DesktopScriptRuntimeHost {
   private channel: DesktopScriptServeChannel | null = null
+  private guardedChannel: DesktopScriptServeChannel | null = null
   private pending: PendingRequest | null = null
   private idleTimer: NodeJS.Timeout | null = null
   private childReady = false
@@ -126,6 +128,11 @@ export class DesktopScriptRuntimeHost {
     let lastError: unknown
     for (let attempt = 1; attempt <= MAX_START_ATTEMPTS; attempt++) {
       try {
+        if (request.if_snapshot_id !== undefined) {
+          const handshake = await this.sendOnce({ tool: 'handshake' })
+          assertDesktopBridgeGuardSupport(handshake.capabilities, request)
+          this.guardedChannel = this.channel
+        }
         const response = await this.sendOnce(request)
         this.availability.recordSuccess()
         return response
@@ -165,6 +172,11 @@ export class DesktopScriptRuntimeHost {
     } catch (error) {
       this.availability.recordFailure()
       return Promise.reject(this.unavailableError(errorText(error)))
+    }
+    if (request.if_snapshot_id !== undefined && channel !== this.guardedChannel) {
+      return Promise.reject(
+        new RuntimeClientError('precondition_failed', 'Snapshot precondition did not match')
+      )
     }
     const id = this.nextRequestId++
     return new Promise((resolve, reject) => {

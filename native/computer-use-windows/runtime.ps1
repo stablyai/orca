@@ -7,6 +7,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "snapshot-guard.ps1")
 # Progress records render to the host, which in serve mode is a pipe carrying
 # one JSON response per line; a stray record would desynchronise the stream.
 $ProgressPreference = "SilentlyContinue"
@@ -775,16 +776,18 @@ function Get-OrcaScreenshot([bool]$IncludeScreenshot, $WindowFrame) {
     }
 }
 
-function New-OrcaSnapshot([string]$Query, [bool]$IncludeScreenshot, $WindowId = $null, $WindowIndex = $null, [bool]$RestoreWindow = $false) {
+function New-OrcaSnapshot([string]$Query, [bool]$IncludeScreenshot, $WindowId = $null, $WindowIndex = $null, [bool]$RestoreWindow = $false, [string]$GuardScope = "default") {
     $process = Find-OrcaProcess $Query
     if ($RestoreWindow) { Restore-OrcaWindow $process }
     Assert-OrcaWindowTarget $process $WindowId $WindowIndex
     $root = Get-OrcaRootElement $process
     $windowFrame = Get-OrcaWindowFrame $process $root
+    $guardBefore = $null
+    try { $guardBefore = Read-OrcaGuardState $process $root } catch {}
     $tree = Render-OrcaTree $root $windowFrame (Test-OrcaBrowserProcess $process)
     $screenshot = Get-OrcaScreenshot $IncludeScreenshot $windowFrame
 
-    [pscustomobject]@{
+    $snapshot = [pscustomobject]@{
         snapshotId = [guid]::NewGuid().ToString()
         app = New-OrcaAppRecord $process
         windowTitle = $process.MainWindowTitle
@@ -803,6 +806,10 @@ function New-OrcaSnapshot([string]$Query, [bool]$IncludeScreenshot, $WindowId = 
         selectedText = $null
         elements = @($tree.elements)
     }
+    $guardAfter = $null
+    try { $guardAfter = Read-OrcaGuardState $process $root } catch {}
+    Save-OrcaSnapshotGuard $snapshot $guardBefore $guardAfter $GuardScope
+    $snapshot
 }
 
 function Get-OrcaAppList {
@@ -851,6 +858,13 @@ function Get-OrcaHandshake {
         provider = "orca-computer-use-windows"
         providerVersion = "1.0.0"
         protocolVersion = 1
+        guardedActions = [pscustomobject]@{
+            version = 1
+            actions = @("click", "performSecondaryAction", "setValue")
+            physicalClick = $false
+            guarantee = "serialized_detected_mismatch"
+            humanInputAtomic = $false
+        }
         supports = [pscustomobject]@{
             apps = [pscustomobject]@{ list = $true; bundleIds = $false; pids = $true }
             windows = [pscustomobject]@{ list = $true; targetById = $true; targetByIndex = $true; focus = $false; moveResize = $false }
@@ -1184,6 +1198,21 @@ function Send-OrcaPasteText([IntPtr]$WindowHandle, [string]$Text) {
 }
 
 function Invoke-OrcaOperation($Operation) {
+    $guarded = $null -ne $Operation.if_snapshot_id
+    if ($guarded) {
+        try {
+            if ($Operation.tool -notin @("click", "perform_secondary_action", "set_value") -or $Operation.restoreWindow) { throw "precondition_failed" }
+            $process = Find-OrcaProcess $Operation.app
+            Assert-OrcaWindowTarget $process $Operation.windowId $Operation.windowIndex
+            $root = Get-OrcaRootElement $process
+            $plan = Assert-OrcaSnapshotGuard $Operation $process $root
+        } catch {
+            throw "precondition_failed"
+        }
+        $action = Invoke-OrcaGuardedEffect $Operation $plan
+        $action | Add-Member -NotePropertyName precondition -NotePropertyValue ([pscustomobject]@{ state = "matched"; snapshotId = $Operation.if_snapshot_id })
+        return [pscustomobject]@{ ok = $true; action = $action }
+    }
     $includeScreenshot = -not [bool]$Operation.noScreenshot
     if ($Operation.tool -eq "handshake") {
         return [pscustomobject]@{ ok = $true; capabilities = Get-OrcaHandshake }
@@ -1196,7 +1225,8 @@ function Invoke-OrcaOperation($Operation) {
         return [pscustomobject]@{ ok = $true; app = $list.app; windows = @($list.windows) }
     }
     if ($Operation.tool -eq "get_app_state") {
-        return [pscustomobject]@{ ok = $true; snapshot = New-OrcaSnapshot $Operation.app $includeScreenshot $Operation.windowId $Operation.windowIndex ([bool]$Operation.restoreWindow) }
+        $scope = if ($null -eq $Operation.guard_scope) { "default" } else { [string]$Operation.guard_scope }
+        return [pscustomobject]@{ ok = $true; snapshot = New-OrcaSnapshot $Operation.app $includeScreenshot $Operation.windowId $Operation.windowIndex ([bool]$Operation.restoreWindow) $scope }
     }
 
     $process = Find-OrcaProcess $Operation.app
@@ -1340,6 +1370,9 @@ function Invoke-OrcaServeLoop {
             $response = Invoke-OrcaOperation $operation
         } catch {
             $response = [pscustomobject]@{ ok = $false; error = [string]$_.Exception.Message }
+            if ($_.Exception.Message -eq "precondition_failed") {
+                $response | Add-Member -NotePropertyName errorCode -NotePropertyValue "precondition_failed"
+            }
             # ConvertFrom-Json throws before the id is read, so recover it from the
             # raw line. An error the caller can match is delivered to the request
             # that caused it; an unmatched one only trips the caller's desync
@@ -1369,6 +1402,10 @@ if ($Serve) {
         $operation = Read-OrcaOperation $OperationPath
         Write-OrcaJson (Invoke-OrcaOperation $operation)
     } catch {
-        Write-OrcaJson ([pscustomobject]@{ ok = $false; error = [string]$_.Exception.Message })
+        $response = [pscustomobject]@{ ok = $false; error = [string]$_.Exception.Message }
+        if ($_.Exception.Message -eq "precondition_failed") {
+            $response | Add-Member -NotePropertyName errorCode -NotePropertyValue "precondition_failed"
+        }
+        Write-OrcaJson $response
     }
 }

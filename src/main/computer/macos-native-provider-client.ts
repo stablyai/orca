@@ -62,6 +62,17 @@ export class MacOSNativeProviderClient {
       method,
       params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
     )
+    if (
+      params &&
+      typeof params === 'object' &&
+      'ifSnapshotId' in params &&
+      params.ifSnapshotId !== undefined
+    ) {
+      throw new RuntimeClientError(
+        'unsupported_capability',
+        'This provider does not support guarded actions'
+      )
+    }
     await this.ensureActionSupported(method)
     return normalizeComputerActionResult((await this.call(method, params)) as ComputerActionResult)
   }

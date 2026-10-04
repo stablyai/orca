@@ -1,3 +1,4 @@
+import { negotiateComputerGuard } from './computer-guard-negotiation'
 import type {
   ComputerActionResult,
   ComputerListAppsResult,
@@ -90,6 +91,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const observeFlags = getComputerActionObserveFlags(flags)
     const actionParams = getComputerClickActionFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+    await negotiateComputerGuard(client, 'click', actionParams.ifSnapshotId)
     const result = await client.call<ComputerActionResult>('computer.click', {
       ...target,
       ...actionParams,
@@ -104,6 +106,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const observeFlags = getComputerActionObserveFlags(flags)
     const actionParams = getComputerSecondaryActionFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+    await negotiateComputerGuard(client, 'performSecondaryAction', actionParams.ifSnapshotId)
     const result = await client.call<ComputerActionResult>('computer.performSecondaryAction', {
       ...target,
       ...actionParams,
@@ -202,6 +205,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const observeFlags = getComputerActionObserveFlags(flags)
     const actionParams = await getComputerSetValueActionFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+    await negotiateComputerGuard(client, 'setValue', actionParams.ifSnapshotId)
     const result = await client.call<ComputerActionResult>('computer.setValue', {
       ...target,
       ...actionParams,

@@ -1,3 +1,4 @@
+import type { BridgeResponse } from './desktop-script-provider-types'
 import { execFile } from 'node:child_process'
 import { windowsPowerShellPath } from '../../shared/child-process/windows-system-binary'
 import { reportComputerDiagnostic } from './computer-sidecar-diagnostics'
@@ -173,6 +174,9 @@ function runBridgeProcess(
 }
 
 export function mapBridgeError(message: string): RuntimeClientError {
+  if (message.startsWith('precondition_failed')) {
+    return new RuntimeClientError('precondition_failed', 'Snapshot precondition did not match')
+  }
   const text = message.trim() || 'desktop provider failed'
   if (/appNotFound|app not found/i.test(text)) {
     return new RuntimeClientError('app_not_found', text)
@@ -238,4 +242,14 @@ export function mapBridgeError(message: string): RuntimeClientError {
     return new RuntimeClientError('element_not_found', text)
   }
   return new RuntimeClientError('accessibility_error', text)
+}
+
+export function checkedBridgeResponse(response: BridgeResponse, stderr: string): BridgeResponse {
+  if (!response.ok) {
+    if (response.errorCode === 'precondition_failed') {
+      throw new RuntimeClientError('precondition_failed', 'Snapshot precondition did not match')
+    }
+    throw mapBridgeError(response.error ?? stderr)
+  }
+  return response
 }

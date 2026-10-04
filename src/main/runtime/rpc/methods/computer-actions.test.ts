@@ -43,6 +43,49 @@ describe('computer action RPC methods', () => {
     computerMocks.resetComputerSidecarForTest.mockClear()
   })
 
+  it('proves runtime forwarding capability separately from provider support', async () => {
+    computerMocks.callComputerSidecarCapabilities.mockResolvedValue({
+      guardedActions: { version: 1, actions: ['click'] }
+    })
+    expect(await call('computer.capabilities', {})).toMatchObject({
+      guardedActions: { rpcVersion: 1 }
+    })
+  })
+
+  it.each([
+    { method: 'click', extra: { elementIndex: 0 } },
+    { method: 'performSecondaryAction', extra: { elementIndex: 0, action: 'invoke' } },
+    { method: 'setValue', extra: { elementIndex: 0, value: '' } }
+  ])('preserves and gates guards for %s', async ({ method, extra }) => {
+    const params = { app: 'Editor', ...extra, ifSnapshotId: 'id' }
+    computerMocks.callComputerSidecarCapabilities.mockResolvedValue({})
+    await expect(call(`computer.${method}`, params)).rejects.toMatchObject({
+      code: 'unsupported_capability'
+    })
+    expect(computerMocks.callComputerSidecarAction).not.toHaveBeenCalled()
+    computerMocks.callComputerSidecarCapabilities.mockResolvedValue({
+      guardedActions: { version: 1, actions: [method] }
+    })
+    await call(`computer.${method}`, params)
+    expect(computerMocks.callComputerSidecarAction).toHaveBeenCalledWith(method, params)
+    expect(
+      findMethod(`computer.${method}`).params!.parse({ app: 'Editor', ...extra })
+    ).not.toHaveProperty('ifSnapshotId')
+  })
+
+  it('rejects guards on unsupported actions instead of stripping them', () => {
+    expect(() =>
+      findMethod('computer.typeText').params!.parse({
+        app: 'Editor',
+        text: 'draft',
+        ifSnapshotId: 'id'
+      })
+    ).toThrow()
+    expect(() =>
+      findMethod('computer.click').params!.parse({ app: 'Editor', x: 1, y: 2, ifSnapshotId: 'id' })
+    ).toThrow(/element index/)
+  })
+
   it('rejects incomplete pointer action coordinates', () => {
     expect(() => findMethod('computer.click').params!.parse({ app: 'Finder' })).toThrow(
       /Click requires/

@@ -36,7 +36,13 @@ export const COMPUTER_METHODS = [
     name: 'computer.capabilities',
     params: ComputerCapabilitiesParams,
     handler: async () => {
-      return await callComputerSidecarCapabilities()
+      const capabilities = await callComputerSidecarCapabilities()
+      return capabilities.guardedActions
+        ? {
+            ...capabilities,
+            guardedActions: { ...capabilities.guardedActions, rpcVersion: 1 as const }
+          }
+        : capabilities
     }
   }),
   defineMethod({
@@ -82,6 +88,7 @@ export const COMPUTER_METHODS = [
     name: 'computer.click',
     params: Click,
     handler: async (params) => {
+      await ensureComputerGuardSupported('click', params.ifSnapshotId)
       return await callComputerSidecarAction('click', params)
     }
   }),
@@ -89,6 +96,7 @@ export const COMPUTER_METHODS = [
     name: 'computer.performSecondaryAction',
     params: PerformSecondaryAction,
     handler: async (params) => {
+      await ensureComputerGuardSupported('performSecondaryAction', params.ifSnapshotId)
       return await callComputerSidecarAction('performSecondaryAction', params)
     }
   }),
@@ -138,7 +146,26 @@ export const COMPUTER_METHODS = [
     name: 'computer.setValue',
     params: SetValue,
     handler: async (params) => {
+      await ensureComputerGuardSupported('setValue', params.ifSnapshotId)
       return await callComputerSidecarAction('setValue', params)
     }
   })
 ]
+
+async function ensureComputerGuardSupported(
+  method: string,
+  ifSnapshotId: string | undefined
+): Promise<void> {
+  if (ifSnapshotId === undefined) {
+    return
+  }
+  const capabilities = await callComputerSidecarCapabilities()
+  const guards = capabilities.guardedActions
+  if (guards?.version !== 1 || !guards.actions.some((action) => action === method)) {
+    throw new RuntimeClientError(
+      'unsupported_capability',
+      'This provider does not support guarded actions'
+    )
+  }
+}
+import { RuntimeClientError } from '../../../computer/runtime-client-error'

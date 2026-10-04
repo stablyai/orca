@@ -98,6 +98,20 @@ printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index
 - Some actions work in background apps, but this is app-dependent. If success does not change the UI, refresh state and choose a more semantic action or restore/focus the window.
 - Coordinates are window-local; use coordinates from the latest screenshot/state for the same target window.
 
+## Guarded actions (Windows)
+
+For `click`, `perform-secondary-action`, and `set-value`, pass `--if-snapshot-id <snapshot.id>` with an element index from that exact snapshot. Guarded clicks require a supported semantic action; modified, multiple, right/middle and physical clicks are rejected. Coordinates and `--restore-window` are rejected with a guard. Unguarded calls keep their existing behavior.
+
+First read `computer capabilities --json`. Require `guardedActions.version = 1`, `guardedActions.rpcVersion = 1`, and the requested RPC action in `guardedActions.actions` (`click`, `performSecondaryAction`, or `setValue`). `guardedActions.physicalClick = false` limits this contract to semantic actions. The RPC marker proves the runtime forwards guards; provider support alone is insufficient on an older host. macOS/Linux and older providers/runtimes have no supported guard capability and reject guarded calls before the action. Never retry by removing a guard.
+
+The persistent Windows provider retains up to 32 process-local guard IDs for two minutes. It compares the session/worktree namespace, app PID, native window handle, window title, and a fingerprint of the full raw accessibility tree, including runtime IDs, topology, names, control types, available patterns, selection, enabled/offscreen state, full values and document text. Guard capture samples before and after snapshot rendering and requires both fingerprints to match. A bounded, truncated, inaccessible, sensitive or otherwise unusable tree cannot supply a guard. Snapshot screenshots do not form part of the precondition.
+
+The action request revalidates this fingerprint and the exact runtime element before any effect. `set-value` also compares the prior value hash with the live value, including an empty value. Guarded clicks never fall back to mouse input. A missing, expired, evicted, foreign, changed or unusable snapshot fails with `precondition_failed` and no success receipt or UI effect. Provider restart loses guard authority. Successful actions include `action.precondition = { state: "matched", snapshotId: "..." }`; this means the sampled precondition matched, not that the effect was verified. Guard errors and success results contain no raw document, tree, label or draft content. The legacy snapshot envelope is empty, carries the prior snapshot ID, and is not a new observation; screenshots are omitted. Capture a separate observation when needed.
+
+The capability is `guarantee = "serialized_detected_mismatch"`, `humanInputAtomic = false`. Orca requests share one serialized provider queue, including per-process capability negotiation, validation and effect. UI Automation does not offer an atomic compare-and-act transaction with arbitrary human input or independent application updates. A change after a property was sampled, including after the final validation and before `Invoke`/`SetValue`, may still affect another document. No input lock, clipboard or app-specific mechanism is used.
+
+A relay that requires zero wrong-document effects under simultaneous human interaction remains production NO-GO with this capability alone. It needs an independently enforced exclusive interaction surface for the entire observe/act sequence, or an application-side transactional target API. Post-action inspection cannot undo an effect. If a guarded effect fails, its outcome is unknown; inspect before any retry.
+
 ## Screenshots
 
 `get-app-state` and actions request screenshots by default unless `--no-screenshot` is
@@ -135,6 +149,8 @@ Spotify: refresh after playback clicks; the UI often changes asynchronously.
 Slack: the accessibility tree may be shallow while the screenshot contains useful information. Reading visible Slack UI is fine when requested; sending messages or triggering workflows still needs explicit permission.
 
 ## Errors
+
+- `precondition_failed`: no guarded effect was attempted because the prior state could not be matched; refresh, inspect and explicitly choose a new guard.
 
 - `app_not_found`: run `list-apps` and retry with the bundle ID. If the target is a web app such as Gmail, choose the desktop browser app/window that contains it; do not retry `ORCA computer ... --app Gmail` unchanged because `orca computer` app selectors refer to desktop apps, not website names.
 - `app_blocked`: stop; the target is intentionally blocked from computer-use.

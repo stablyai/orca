@@ -1,3 +1,4 @@
+import { RuntimeClientError } from './runtime-client-error'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
@@ -36,4 +37,23 @@ export function resolveDesktopScriptProviderPath(
   const candidates = process.resourcesPath ? [...packaged, ...dev] : dev
 
   return candidates.find((candidate) => candidate && existsSync(candidate)) ?? null
+}
+
+export function requireDesktopScriptPlatform(): DesktopScriptPlatform {
+  const platform = desktopScriptPlatform()
+  if (!platform) {
+    throw new RuntimeClientError('accessibility_error', 'desktop script provider is not available')
+  }
+  return platform
+}
+
+export function requireDesktopScriptProviderPath(): string {
+  const scriptPath = resolveDesktopScriptProviderPath()
+  if (!scriptPath) {
+    throw new RuntimeClientError(
+      'accessibility_error',
+      'desktop script provider script was not found'
+    )
+  }
+  return scriptPath
 }

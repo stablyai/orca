@@ -7,6 +7,11 @@ export function computerUseErrorRecoveryData(
   message?: string
 ): ComputerUseErrorRecoveryData | undefined {
   switch (code) {
+    case 'precondition_failed':
+      return recoverWith(
+        'Run `orca computer get-app-state --app <app> --json`, inspect the new state and explicitly choose a new snapshot guard.',
+        'Do not remove --if-snapshot-id or substitute the latest snapshot alias to retry a failed guard.'
+      )
     case 'app_not_found':
       return recoverWith(
         'Run `orca computer list-apps --json` and retry with the exact app name or bundle ID.',

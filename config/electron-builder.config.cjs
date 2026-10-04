@@ -495,6 +495,10 @@ module.exports = {
         from: 'native/computer-use-windows/runtime.ps1',
         to: 'computer-use-windows/runtime.ps1'
       },
+      {
+        from: 'native/computer-use-windows/snapshot-guard.ps1',
+        to: 'computer-use-windows/snapshot-guard.ps1'
+      },
       featureWallResources
     ]
   },

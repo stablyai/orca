@@ -5,6 +5,7 @@ import {
   MAX_CACHED_DESKTOP_SNAPSHOT_AGE_MS,
   MAX_CACHED_DESKTOP_SNAPSHOTS,
   snapshotCacheKeys,
+  snapshotNamespace,
   type CachedSnapshotEntry,
   staleWindowTargetKeys
 } from './desktop-script-snapshot-cache'
@@ -28,7 +29,12 @@ export class DesktopScriptSnapshotStore {
     // Why: cached snapshots only supply element identity for follow-up actions;
     // retaining PNG base64 across agent loops grows the long-lived sidecar.
     const cachedSnapshot = snapshotWithoutScreenshot(snapshot)
-    const entry = { snapshot: cachedSnapshot, keys, createdAtMs: Date.now() }
+    const entry = {
+      snapshot: cachedSnapshot,
+      keys,
+      namespace: snapshotNamespace(params),
+      createdAtMs: Date.now()
+    }
     this.snapshotEntries.push(entry)
     for (const key of keys) {
       this.snapshots.set(key, cachedSnapshot)
@@ -60,6 +66,16 @@ export class DesktopScriptSnapshotStore {
       }
     }
     return null
+  }
+
+  exact(id: string, params: Record<string, unknown> = {}): BridgeSnapshot | null {
+    this.prune()
+    const namespace = snapshotNamespace(params)
+    return (
+      this.snapshotEntries.find(
+        (entry) => entry.snapshot.snapshotId === id && entry.namespace === namespace
+      )?.snapshot ?? null
+    )
   }
 
   forgetWindowTarget(

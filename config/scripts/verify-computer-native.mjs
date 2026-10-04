@@ -89,6 +89,12 @@ const checks = [
     enabled: process.platform === 'win32'
   },
   {
+    name: 'Windows snapshot guard runtime tests',
+    command: 'powershell.exe',
+    args: ['-NoLogo', '-NoProfile', '-File', 'native/computer-use-windows/runtime-guard.test.ps1'],
+    enabled: process.platform === 'win32'
+  },
+  {
     name: 'macOS helper app bundle and signature',
     run: verifyMacOSHelperApp,
     enabled: process.platform === 'darwin'

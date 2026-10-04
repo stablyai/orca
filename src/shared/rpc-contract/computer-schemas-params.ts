@@ -23,6 +23,7 @@ export const ComputerTarget = z.object({
 })
 
 export const ComputerObserveTargetBase = ComputerTarget.extend({
+  ifSnapshotId: z.never().optional(),
   noScreenshot: OptionalBoolean,
   restoreWindow: OptionalBoolean,
   windowId: OptionalNonNegativeInt,
@@ -65,6 +66,7 @@ export const ListWindows = z
   .strict()
 
 export const Click = ComputerObserveTargetBase.extend({
+  ifSnapshotId: requiredString('Missing snapshot precondition').optional(),
   elementIndex: OptionalNonNegativeInt,
   x: OptionalFiniteNumber,
   y: OptionalFiniteNumber,
@@ -73,6 +75,9 @@ export const Click = ComputerObserveTargetBase.extend({
   modifiers: z.string().optional()
 }).superRefine((value, ctx) => {
   validateComputerTarget(value, ctx)
+  if (value.ifSnapshotId !== undefined && value.elementIndex === undefined) {
+    ctx.addIssue({ code: 'custom', message: 'Guarded click requires an element index' })
+  }
   const hasElement = value.elementIndex !== undefined
   const hasX = value.x !== undefined
   const hasY = value.y !== undefined
@@ -103,6 +108,7 @@ export const Click = ComputerObserveTargetBase.extend({
 })
 
 export const PerformSecondaryAction = ComputerObserveTargetBase.extend({
+  ifSnapshotId: requiredString('Missing snapshot precondition').optional(),
   elementIndex: OptionalNonNegativeInt,
   action: requiredString('Missing action')
 }).superRefine((value, ctx) => {
@@ -217,6 +223,7 @@ export const PasteText = ComputerObserveTargetBase.extend({
 }).superRefine(validateComputerTarget)
 
 export const SetValue = ComputerObserveTargetBase.extend({
+  ifSnapshotId: requiredString('Missing snapshot precondition').optional(),
   elementIndex: OptionalNonNegativeInt,
   value: requiredStringAllowingEmpty('Missing value')
 }).superRefine((value, ctx) => {
