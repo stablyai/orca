@@ -85,6 +85,49 @@ describe('openAiVaultSessionLogInOrca', () => {
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
+  it('opens canonical DSH logs through the matching SSH owner without a local grant', async () => {
+    const state = {
+      ...makeState(),
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', hostId: 'ssh:dev-box', repoId: 'repo-1' }] },
+      repos: [],
+      projectGroups: []
+    }
+    getStateMock.mockReturnValue(state)
+    const filePath = '/host/.dsh/sessions/project/session-proof/session.v4.jsonl.zstd'
+    await openAiVaultSessionLogInOrca({ filePath, executionHostId: 'ssh:dev-box' })
+    expect(authorizeMock).not.toHaveBeenCalled()
+    expect(state.openFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath,
+        externalSshTargetId: 'dev-box',
+        runtimeEnvironmentId: null,
+        readOnly: true,
+        liveTail: false,
+        language: 'json'
+      }),
+      expect.anything()
+    )
+  })
+
+  it('refuses an SSH log in a workspace on a different host', async () => {
+    const state = {
+      ...makeState(),
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', hostId: 'local', repoId: 'repo-1' }] },
+      repos: [],
+      projectGroups: []
+    }
+    getStateMock.mockReturnValue(state)
+    await openAiVaultSessionLogInOrca({
+      filePath: '/host/.dsh/sessions/project/session-proof/session.v4.jsonl.zstd',
+      executionHostId: 'ssh:dev-box'
+    })
+    expect(state.openFile).not.toHaveBeenCalled()
+    expect(authorizeMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      expect.stringContaining('transcript-owning SSH host')
+    )
+  })
+
   it('withholds blank, remote, and synthetic paths without authorizing', async () => {
     const state = makeState()
     getStateMock.mockReturnValue(state)

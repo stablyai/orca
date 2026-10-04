@@ -1,10 +1,14 @@
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchResponseSchema,
   AiVaultSearchStatusRequestSchema,
   AiVaultSearchStatusSchema
 } from '../../shared/ai-vault-search-contract'
-import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
+import {
+  emptySessionSearchResults,
+  unavailableSessionSearchStatus
+} from '../../shared/ai-vault-search-client'
 import { sessionSearchScopeCatalog } from './session-search-scope-catalog'
 import { resolveSessionSearchScope } from './session-search-scope-resolution'
 import type { AiVaultSearchResponse, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
@@ -14,7 +18,6 @@ import {
   type SessionSearchTransport
 } from '../../shared/ai-vault-search-transport'
 import type { SessionSearchService } from './session-search-service'
-import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 import { compatibleSearchAgents } from '../../shared/ai-vault-search-agent-compatibility'
 
 let service: SessionSearchService | null = null
@@ -36,7 +39,14 @@ export async function searchSessionService(
   // The choke point every entry point funnels through, so every host kind
   // resolves alike; the verdict goes to the service, which answers off and
   // not-ready first.
-  const { within, supportedAgents, supportsQoderHistory, supportsJcodeHistory, ...request } = parsed
+  const {
+    within,
+    includeDshHistory,
+    supportedAgents,
+    supportsQoderHistory,
+    supportsJcodeHistory,
+    ...request
+  } = parsed
   // Older clients reject the whole page when a hit has an unknown agent tag.
   const requestedAgents = request.filters?.agents
   const agents = requestedAgents?.length ? requestedAgents : AI_VAULT_AGENTS
@@ -45,13 +55,20 @@ export async function searchSessionService(
     transport === 'ipc'
       ? { supportedAgents: [...AI_VAULT_AGENTS] }
       : {
-          // An explicit tag also proves the requesting parser understands that agent.
-          supportedAgents:
-            supportedAgents ?? (requestedAgents?.length ? requestedAgents : undefined),
+          supportedAgents,
           supportsQoderHistory,
-          supportsJcodeHistory
-        }
+          supportsJcodeHistory,
+          dshHistory: includeDshHistory
+        },
+    requestedAgents
   )
+  if (
+    compatibleAgents.length === 0 &&
+    supportedAgents === undefined &&
+    requestedAgents?.every((agent) => agent === 'dsh')
+  ) {
+    return emptySessionSearchResults((await current.status()).generation)
+  }
   const compatibleRequest =
     compatibleAgents.length === 0 || compatibleAgents.length === agents.length
       ? request
@@ -99,6 +116,7 @@ export async function sessionSearchServiceStatus(
   return redactStatusForTransport(
     AiVaultSearchStatusSchema.parse({
       ...(service ? await service.status() : unavailableSessionSearchStatus()),
+      dshHistory: true,
       supportedAgents: [...AI_VAULT_AGENTS],
       supportsQoderHistory: true,
       supportsJcodeHistory: true

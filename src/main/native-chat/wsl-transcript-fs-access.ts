@@ -1,8 +1,10 @@
 import { createReadStream, type Dirent, type Stats } from 'node:fs'
-import { access, lstat, open, readdir, readFile, stat, type FileHandle } from 'node:fs/promises'
+import { access, lstat, readdir, readFile, stat, type FileHandle } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
 import { isWslUncPath } from '../../shared/wsl-paths'
+import { dshHomeFromSessionPath } from '../../shared/dsh-session-paths'
+import { openNodeFileForRead } from '../../shared/node-bounded-file-reader'
 import { runWslTranscriptFsTask, type WslTranscriptFsTaskPriority } from './wsl-transcript-fs-gate'
 import {
   closeWslTranscriptFsProcess,
@@ -99,7 +101,10 @@ export function wslGatedOpen(
   signal?: AbortSignal
 ): Promise<TranscriptFileHandle> {
   if (!isWslUncPath(path)) {
-    return open(path, 'r')
+    return openNodeFileForRead(path, {
+      regularFileOnly: dshHomeFromSessionPath(path) !== null,
+      signal
+    })
   }
   return runWslTranscriptFsTask<TranscriptFileHandle>(
     {
@@ -219,6 +224,7 @@ async function* gatedChunks(
   try {
     let position = options.start ?? 0
     for (;;) {
+      signal?.throwIfAborted()
       const length =
         options.end === undefined
           ? WSL_TRANSCRIPT_READ_CHUNK_BYTES
@@ -237,6 +243,7 @@ async function* gatedChunks(
         priority,
         signal
       )
+      signal?.throwIfAborted()
       if (bytesRead <= 0) {
         break
       }
@@ -275,10 +282,10 @@ export function openTranscriptReadStream(
   priority: WslTranscriptFsTaskPriority,
   signal?: AbortSignal
 ): Readable {
-  if (!isWslUncPath(path)) {
+  if (!isWslUncPath(path) && dshHomeFromSessionPath(path) === null) {
     // Node destroys the stream with an AbortError on abort, matching how the
     // gated branch surfaces cancellation to the same consumers.
     return createReadStream(path, { ...options, signal })
   }
-  return Readable.from(gatedChunks(path, options, priority, signal))
+  return Readable.from(gatedChunks(path, options, priority, signal), { signal })
 }

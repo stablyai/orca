@@ -20,7 +20,7 @@ import { importReleaseCheckoutModule, materializeReleaseCheckout } from './relea
 const PRE_QODER_HOSTS = ['v1.4.211', 'b49abdb1f4da6b3d62dfa9ccf3c74dc9e74d291c']
 const QODER_HOST = 'f97ca2a49d9c711dab54a656a7f8a47ae6c6749c'
 const LEGACY_AGENTS = AI_VAULT_AGENTS.filter(
-  (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode'].includes(agent)
+  (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode', 'dsh'].includes(agent)
 )
 afterEach(() => setSessionSearchService(null))
 
@@ -181,6 +181,21 @@ test.each(PRE_QODER_HOSTS)(
       await client.searchSessions({ query: 'proof', filters: { agents: ['codex'] }, within })
     ).toMatchObject({ hits: [{ agent: 'codex' }] })
     expect(call).toHaveBeenCalledTimes(2)
+    if (ref.startsWith('b49')) {
+      expect(
+        await client.searchSessions({ query: 'proof', filters: { agents: [...AI_VAULT_AGENTS] } })
+      ).toMatchObject({ hits: [{ agent: 'codex' }] })
+      expect(call).toHaveBeenLastCalledWith(
+        'aiVault.searchSessions',
+        expect.objectContaining({
+          filters: {
+            agents: AI_VAULT_AGENTS.filter(
+              (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode', 'dsh'].includes(agent)
+            )
+          }
+        })
+      )
+    }
   }
 )
 
@@ -250,7 +265,7 @@ test('the shipped Qoder capability proves its historical trio while withholding 
   expect(call).toHaveBeenLastCalledWith(
     'aiVault.searchSessions',
     expect.objectContaining({
-      filters: { agents: AI_VAULT_AGENTS.filter((agent) => agent !== 'jcode') }
+      filters: { agents: AI_VAULT_AGENTS.filter((agent) => agent !== 'jcode' && agent !== 'dsh') }
     })
   )
 })

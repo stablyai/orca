@@ -58,7 +58,7 @@ describe('session search runtime RPC', () => {
           limit: 20,
           filters: {
             agents: AI_VAULT_AGENTS.filter(
-              (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode'].includes(agent)
+              (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode', 'dsh'].includes(agent)
             )
           }
         },
@@ -69,6 +69,27 @@ describe('session search runtime RPC', () => {
         { clientKind }
       )
       expect(status).toMatchObject({ ok: true, result: { enabled: true, generation: 7 } })
+    }
+  )
+  it.each([undefined, 'runtime', 'mobile'] as const)(
+    'preserves explicitly supported DSH filters for client kind %s',
+    async (clientKind) => {
+      const service = fakeSearchService()
+      setSessionSearchService(service)
+      expect(
+        await dispatcher().dispatch(
+          request({
+            query: 'needle',
+            includeDshHistory: true,
+            filters: { agents: ['dsh', 'codex'] }
+          }),
+          { clientKind }
+        )
+      ).toMatchObject({ ok: true })
+      expect(service.search).toHaveBeenCalledExactlyOnceWith(
+        { query: 'needle', limit: 20, filters: { agents: ['dsh', 'codex'] } },
+        undefined
+      )
     }
   )
   it.each([undefined, 'runtime', 'mobile'] as const)(

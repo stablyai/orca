@@ -13759,7 +13759,8 @@
           "aiVaultSessionLogOpen": {
             "workspaceGone": "Couldn't open log — workspace is no longer available.",
             "notAuthorized": "Couldn't open log — path not authorized.",
-            "alreadyEditable": "Log is already open for editing."
+            "alreadyEditable": "Log is already open for editing.",
+            "openTranscriptHost": "Open a workspace on the transcript-owning SSH host to view this log."
           },
           "github": {
             "refresh": {
@@ -15189,7 +15190,8 @@
           "631dab0df3": "Next change",
           "revealInFinder": "Reveal in Finder",
           "openContainingFolder": "Open Containing Folder",
-          "revealInFileExplorer": "Reveal in File Explorer"
+          "revealInFileExplorer": "Reveal in File Explorer",
+          "exportDecodedDshLog": "Export decoded DSH log…"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Export as PDF",
@@ -15764,6 +15766,10 @@
           "a0af0198aa": "Large diffs are not rendered by default.",
           "c3d9f4a712": "This diff's size isn't known yet, so it loads on request.",
           "f7fa7a40d0": "Load diff"
+        },
+        "dshDecodedLogExport": {
+          "updateHost": "Update the transcript-owning Orca host to export decoded DSH logs",
+          "failed": "Could not export decoded DSH log"
         }
       },
       "diff": {

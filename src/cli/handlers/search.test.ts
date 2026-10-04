@@ -116,6 +116,7 @@ describe('orca search over the runtime RPC', () => {
     expect(call).toHaveBeenCalledWith('aiVault.searchSessions', {
       query: 'resize race',
       limit: 20,
+      includeDshHistory: true,
       supportedAgents: [...AI_VAULT_AGENTS],
       supportsQoderHistory: true,
       supportsJcodeHistory: true
@@ -180,6 +181,7 @@ describe('orca search over the runtime RPC', () => {
     }
     expect(call).toHaveBeenCalledWith('aiVault.searchSessions', {
       ...params,
+      includeDshHistory: true,
       supportedAgents: [...AI_VAULT_AGENTS],
       supportsQoderHistory: true,
       supportsJcodeHistory: true

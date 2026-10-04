@@ -83,6 +83,31 @@ describe('SshFilesystemProvider readFile streaming', () => {
     vi.useRealTimers()
   })
 
+  it('requests host-decoded DSH text without downloading compressed bytes', async () => {
+    mux._response.mockResolvedValue({
+      content: '{"type":"session"}\n',
+      isBinary: false,
+      decodedDshHistory: true
+    })
+    expect(
+      await provider.readFile('/remote/.dsh/sessions/p/s/session.v4.jsonl.zstd', {
+        decodeDshHistory: true
+      })
+    ).toMatchObject({ decodedDshHistory: true })
+    expect(mux.request).toHaveBeenCalledExactlyOnceWith('fs.readFile', {
+      filePath: '/remote/.dsh/sessions/p/s/session.v4.jsonl.zstd',
+      decodeDshHistory: true
+    })
+  })
+
+  it('refuses an old host response rather than treating raw compressed bytes as decoded text', async () => {
+    mux._response.mockResolvedValue({ content: '', isBinary: true })
+    await expect(provider.readFile('/remote/log.zstd', { decodeDshHistory: true })).rejects.toThrow(
+      'transcript-owning'
+    )
+    expect(mux.request).toHaveBeenCalledTimes(1)
+  })
+
   it('returns empty metadata and releases its stream listeners', async () => {
     mux._response.mockResolvedValue({ totalSize: 0, isBinary: false, empty: true })
     const result = await provider.readFile('/home/user/empty.txt')

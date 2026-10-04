@@ -31,11 +31,10 @@ function validateSize(size: number, maxBytes: number): void {
   }
 }
 
-export async function readNodeFileWithinLimit(
+export async function openNodeFileForRead(
   filePath: string,
-  maxBytes: number,
   options: NodeFileReadOptions = {}
-): Promise<BoundedNodeFileRead> {
+): Promise<FileHandle> {
   options.signal?.throwIfAborted()
   if (options.regularFileOnly && !(await stat(filePath)).isFile()) {
     throw new Error('Expected a regular file')
@@ -46,6 +45,25 @@ export async function readNodeFileWithinLimit(
     ? constants.O_RDONLY | (process.platform === 'win32' ? 0 : constants.O_NONBLOCK)
     : 'r'
   const handle = await open(filePath, flags)
+  try {
+    options.signal?.throwIfAborted()
+    if (options.regularFileOnly && !(await handle.stat()).isFile()) {
+      throw new Error('Expected a regular file')
+    }
+    options.signal?.throwIfAborted()
+    return handle
+  } catch (error) {
+    await handle.close()
+    throw error
+  }
+}
+
+export async function readNodeFileWithinLimit(
+  filePath: string,
+  maxBytes: number,
+  options: NodeFileReadOptions = {}
+): Promise<BoundedNodeFileRead> {
+  const handle = await openNodeFileForRead(filePath, options)
   try {
     return await readNodeFileHandleWithinLimit(handle, maxBytes, options)
   } finally {

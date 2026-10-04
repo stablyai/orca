@@ -1,3 +1,5 @@
+import { readFile, mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import {
   isolatedScanRoots,
   writeJcodeSessionFixture,
@@ -35,6 +37,12 @@ export async function writeEveryAgentVault(root: string): Promise<EveryAgentVaul
   const { ompSessionFile, primeAgentSessionFile } = await writeLogAgentFixtures(roots)
   await writeDocumentAgentFixtures(root, roots, antigravitySessionId)
   await writeMuseScannerFixture(roots.museSessionsDir)
+  const dshDir = join(roots.dshSessionsDir, 'project', 'session-dsh-history-proof')
+  await mkdir(dshDir, { recursive: true })
+  await writeFile(
+    join(dshDir, 'session.v4.jsonl'),
+    await readFile(new URL('./__fixtures__/dsh-v4-auth-rejected.jsonl', import.meta.url))
+  )
   await writeJcodeSessionFixture(roots)
   roots.opencodeDbPaths = [await writeOpenCode2SqliteFixture(root)]
   writeOpenCodeSqliteDatabase(roots.zcodeDbPath, [

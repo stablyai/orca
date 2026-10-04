@@ -12,6 +12,24 @@ export async function parseRemoteSessionTranscript(
   if (candidate.source.parseCandidate) {
     return candidate.source.parseCandidate(candidate.file, context)
   }
+  if (candidate.source.readAsBytes) {
+    if (!context.provider.readTranscriptBytes || !candidate.source.parseDocument) {
+      throw new Error(
+        'DSH history requires streaming reads on the transcript-owning host; update the remote Orca host.'
+      )
+    }
+    return candidate.source.parseDocument(
+      candidate.file,
+      context.provider.readTranscriptBytes(
+        candidate.file.path,
+        context.signal,
+        candidate.source.agent === 'dsh' && candidate.file.path.endsWith('.zstd')
+          ? 'dsh-zstd'
+          : undefined
+      ),
+      context
+    )
+  }
   const sidecar = candidate.file.sidecar
   const exceedsWholeReadLimit =
     (candidate.file.sizeBytes ?? 0) > LEGACY_SESSION_TEXT_LIMIT_BYTES ||

@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 import { AiVaultHandler } from '../../relay/ai-vault-handler'
 import type { RelayDispatcher } from '../../relay/dispatcher'
 import { createSessionSearchClient } from '../../shared/ai-vault-search-client'
 import { fakeSearchService } from '../../shared/ai-vault-search-test-fixture'
-import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { AI_VAULT_METHODS } from '../runtime/rpc/methods/ai-vault'
@@ -97,16 +97,34 @@ describe('every search entry point carries the scope identity through', () => {
     setSessionSearchService(service)
     await relayHandler()({
       query: 'needle',
-      supportedAgents: [...AI_VAULT_AGENTS],
       supportsQoderHistory: true,
       supportsJcodeHistory: true,
       within: WITHIN
     })
     expect(service.search).toHaveBeenCalledWith(
-      { query: 'needle', limit: 20 },
+      {
+        query: 'needle',
+        limit: 20,
+        filters: { agents: AI_VAULT_AGENTS.filter((agent) => agent !== 'dsh') }
+      },
       {
         kind: 'unknown'
       }
+    )
+  })
+
+  it('keeps opted-in DSH filters with the relay host’s unknown scope verdict', async () => {
+    const service = fakeSearchService()
+    setSessionSearchService(service)
+    await relayHandler()({
+      query: 'needle',
+      within: WITHIN,
+      includeDshHistory: true,
+      filters: { agents: ['dsh', 'codex'] }
+    })
+    expect(service.search).toHaveBeenCalledExactlyOnceWith(
+      { query: 'needle', limit: 20, filters: { agents: ['dsh', 'codex'] } },
+      { kind: 'unknown' }
     )
   })
 })

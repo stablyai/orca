@@ -89,6 +89,7 @@ describe.each(['qoder', 'jcode'] as const)('%s search negotiation', (agent) => {
         query: 'q',
         limit: 20,
         filters: { agents: [agent] },
+        includeDshHistory: true,
         supportedAgents: [...AI_VAULT_AGENTS],
         supportsQoderHistory: true,
         supportsJcodeHistory: true
@@ -112,6 +113,7 @@ describe.each(['qoder', 'jcode'] as const)('%s search negotiation', (agent) => {
       query: 'q',
       limit: 20,
       filters: { agents: ['codex'] },
+      includeDshHistory: true,
       supportedAgents: [...AI_VAULT_AGENTS],
       supportsQoderHistory: true,
       supportsJcodeHistory: true
@@ -128,6 +130,7 @@ describe.each(['qoder', 'jcode'] as const)('%s search negotiation', (agent) => {
       query: 'q',
       limit: 20,
       filters: { agents: [agent] },
+      includeDshHistory: true,
       supportedAgents: [...AI_VAULT_AGENTS],
       supportsQoderHistory: true,
       supportsJcodeHistory: true
@@ -186,6 +189,7 @@ describe.each(['qoder', 'jcode'] as const)('%s search negotiation', (agent) => {
         query: 'q',
         limit: 20,
         filters: { agents: ['jcode'] },
+        includeDshHistory: true,
         supportedAgents: [...AI_VAULT_AGENTS],
         supportsQoderHistory: true,
         supportsJcodeHistory: true

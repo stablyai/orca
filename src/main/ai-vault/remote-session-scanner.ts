@@ -55,6 +55,7 @@ const REMOTE_SCOPE_PARSE_CANDIDATE_LIMIT = 1000
 export async function scanRemoteAiVaultSessions(args: {
   provider: RemoteSessionFilesystemProvider
   executionHostId: ExecutionHostId
+  dshSessionsDir?: string
   remoteHome: string
   hostPlatform: RemoteHostPlatform
   includeAntigravityIdeSessions?: boolean
@@ -83,11 +84,10 @@ export async function scanRemoteAiVaultSessions(args: {
     (
       await mapRemoteScanBatches(
         [
-          ...remoteSessionSources(
-            args.remoteHome,
-            args.hostPlatform,
-            args.includeAntigravityIdeSessions
-          ),
+          ...remoteSessionSources(args.remoteHome, args.hostPlatform, {
+            dshSessionsDir: args.dshSessionsDir,
+            includeAntigravityIdeSessions: args.includeAntigravityIdeSessions
+          }),
           ...remoteOpenCodeSources(
             provider.openCode,
             limit * REMOTE_PARSE_CANDIDATE_MULTIPLIER +

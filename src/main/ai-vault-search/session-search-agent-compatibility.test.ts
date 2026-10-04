@@ -19,6 +19,138 @@ import {
 
 afterEach(() => setSessionSearchService(null))
 
+test('keeps omitted Qoder decoder support when an unrelated DSH flag is false', async () => {
+  const service = fakeSearchService()
+  setSessionSearchService(service)
+  const request = { query: 'proof', filters: { agents: ['qoder', 'codex'] } }
+  await searchSessionService(request, 'relay')
+  expect(service.search).toHaveBeenLastCalledWith({ ...request, limit: 20 }, undefined)
+  await searchSessionService({ ...request, includeDshHistory: false }, 'relay')
+  expect(service.search).toHaveBeenLastCalledWith({ ...request, limit: 20 }, undefined)
+})
+
+test.each(['runtime', 'relay'] as const)(
+  'constrains only the explicitly supplied legacy provider on %s',
+  async (transport) => {
+    const cases = [
+      {
+        flags: { includeDshHistory: false },
+        expected: ['codebuddy', 'zcode', 'qoder', 'jcode', 'codex']
+      },
+      {
+        flags: { includeDshHistory: true },
+        expected: ['codebuddy', 'zcode', 'qoder', 'jcode', 'codex', 'dsh']
+      },
+      { flags: { supportsQoderHistory: false }, expected: ['jcode', 'codex'] },
+      {
+        flags: { supportsQoderHistory: true },
+        expected: ['codebuddy', 'zcode', 'qoder', 'jcode', 'codex']
+      },
+      {
+        flags: { supportsJcodeHistory: false },
+        expected: ['codebuddy', 'zcode', 'qoder', 'codex']
+      },
+      {
+        flags: { supportsJcodeHistory: true },
+        expected: ['codebuddy', 'zcode', 'qoder', 'jcode', 'codex']
+      },
+      {
+        flags: { includeDshHistory: true, supportsQoderHistory: false },
+        expected: ['jcode', 'codex', 'dsh']
+      },
+      {
+        flags: { includeDshHistory: true, supportsJcodeHistory: false },
+        expected: ['codebuddy', 'zcode', 'qoder', 'codex', 'dsh']
+      }
+    ]
+    for (const { flags, expected } of cases) {
+      const service = fakeSearchService()
+      setSessionSearchService(service)
+      await searchSessionService(
+        {
+          query: 'proof',
+          filters: { agents: ['codebuddy', 'zcode', 'qoder', 'jcode', 'codex', 'dsh'] },
+          ...flags
+        },
+        transport
+      )
+      expect(service.search, JSON.stringify(flags)).toHaveBeenCalledExactlyOnceWith(
+        { query: 'proof', limit: 20, filters: { agents: expected } },
+        undefined
+      )
+    }
+  }
+)
+
+test.each(['runtime', 'relay'] as const)(
+  'keeps explicit own-provider opt-outs authoritative for sole filters on %s',
+  async (transport) => {
+    for (const agent of ['codebuddy', 'zcode', 'qoder', 'jcode'] as const) {
+      const service = fakeSearchService()
+      setSessionSearchService(service)
+      const field = agent === 'jcode' ? 'supportsJcodeHistory' : 'supportsQoderHistory'
+      expect(
+        await searchSessionService(
+          { query: 'proof', filters: { agents: [agent] }, [field]: false },
+          transport
+        )
+      ).toMatchObject({ kind: 'results', hits: [], page: { cursor: null, hasMore: false } })
+      expect(service.search).toHaveBeenCalledExactlyOnceWith(
+        { query: 'proof', limit: 20, filters: { agents: [agent] } },
+        { kind: 'resolved', paths: [''] }
+      )
+      service.search.mockClear()
+      await searchSessionService(
+        { query: 'proof', filters: { agents: [agent] }, includeDshHistory: false },
+        transport
+      )
+      expect(service.search).toHaveBeenCalledExactlyOnceWith(
+        { query: 'proof', limit: 20, filters: { agents: [agent] } },
+        undefined
+      )
+    }
+  }
+)
+
+test.each([
+  { supportedAgents: [] },
+  { supportedAgents: ['codex'] },
+  { supportedAgents: ['qoder', 'jcode'] }
+] as const)(
+  'uses an explicit modern catalog %j before flags or requested decoder tags',
+  async ({ supportedAgents }) => {
+    const service = fakeSearchService()
+    setSessionSearchService(service)
+    const result = await searchSessionService(
+      {
+        query: 'proof',
+        filters: { agents: ['qoder', 'jcode', 'codex', 'dsh'] },
+        supportedAgents: [...supportedAgents],
+        includeDshHistory: true,
+        supportsQoderHistory: false,
+        supportsJcodeHistory: false
+      },
+      'relay'
+    )
+    if (supportedAgents.length === 0) {
+      expect(result).toMatchObject({
+        kind: 'results',
+        hits: [],
+        page: { cursor: null, hasMore: false }
+      })
+      expect(service.search).toHaveBeenCalledExactlyOnceWith(
+        { query: 'proof', limit: 20, filters: { agents: ['qoder', 'jcode', 'codex', 'dsh'] } },
+        { kind: 'resolved', paths: [''] }
+      )
+    } else {
+      expect(service.search).toHaveBeenCalledExactlyOnceWith(
+        { query: 'proof', limit: 20, filters: { agents: [...supportedAgents] } },
+        undefined
+      )
+    }
+  }
+)
+
 test.each(['runtime', 'relay'] as const)(
   'publishes the current supported catalog independently of indexed data on %s',
   async (transport) => {
@@ -74,10 +206,12 @@ test.each(['qoder', 'jcode'] as const)(
         query: 'proof',
         limit: 20,
         filters: {
-          agents: AI_VAULT_AGENTS.filter((candidate) =>
-            agent === 'qoder'
-              ? candidate !== 'jcode'
-              : !['codebuddy', 'zcode', 'qoder'].includes(candidate)
+          agents: AI_VAULT_AGENTS.filter(
+            (candidate) =>
+              candidate !== 'dsh' &&
+              (agent === 'qoder'
+                ? candidate !== 'jcode'
+                : !['codebuddy', 'zcode', 'qoder'].includes(candidate))
           )
         }
       },

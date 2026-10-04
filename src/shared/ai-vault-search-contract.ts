@@ -18,6 +18,7 @@ export const AiVaultSearchFiltersSchema = z.object({
 export const AiVaultSearchRequestSchema = z
   .object({
     query: z.string(),
+    includeDshHistory: z.boolean().optional(),
     scope: z.enum(['conversation', 'all']).optional(),
     freshness: z.enum(['indexed', 'wait-until-current']).optional(),
     limit: z.number().optional().transform(resolveSessionSearchLimit),
@@ -141,6 +142,7 @@ export const AiVaultSearchStatusSchema = z.object({
   supportsQoderHistory: z.boolean().optional(),
   supportsJcodeHistory: z.boolean().optional(),
   enabled: z.boolean(),
+  dshHistory: z.boolean().optional(),
   phase: z.enum(['idle', 'indexing', 'current', 'degraded', 'closed']),
   filesIndexed: z.number().int().nonnegative(),
   filesDue: z.number().int().nonnegative(),

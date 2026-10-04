@@ -87,6 +87,7 @@ describe('desktop IPC and preload search boundary', () => {
     expect(sshSearch).toHaveBeenCalledWith('ssh-host', 'aiVault.searchSessions', {
       query: 'needle',
       limit: 20,
+      includeDshHistory: true,
       supportedAgents: [...AI_VAULT_AGENTS],
       supportsQoderHistory: true,
       supportsJcodeHistory: true
@@ -110,6 +111,7 @@ describe('desktop IPC and preload search boundary', () => {
     expect(runtimeSearch).toHaveBeenCalledWith('env-1', 'aiVault.searchSessions', {
       query: 'needle',
       limit: 20,
+      includeDshHistory: true,
       supportedAgents: [...AI_VAULT_AGENTS],
       supportsQoderHistory: true,
       supportsJcodeHistory: true

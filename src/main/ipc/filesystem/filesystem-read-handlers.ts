@@ -3,6 +3,7 @@ import {
   validatePathExistenceBatch,
   type PathExistenceResult
 } from '../../../shared/path-existence-batch'
+import { readDshDecodedLogSnapshot } from '../../ai-vault/dsh-decoded-log-snapshot'
 import { ipcMain } from 'electron'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { extname } from 'node:path'
@@ -71,19 +72,31 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
     'fs:readFile',
     async (
       _event,
-      args: { filePath: string; connectionId?: string; includeLocalLogMetadata?: boolean }
+      args: {
+        filePath: string
+        connectionId?: string
+        includeLocalLogMetadata?: boolean
+        decodeDshHistory?: boolean
+      }
     ): Promise<{
       content: string
       isBinary: boolean
       isImage?: boolean
       mimeType?: string
       fileIdentity?: string
+      decodedDshHistory?: boolean
     }> => {
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.readFile(args.filePath)
+        return provider.readFile(
+          args.filePath,
+          args.decodeDshHistory ? { decodeDshHistory: true } : undefined
+        )
       }
       const filePath = await resolveAuthorizedPath(args.filePath, store)
+      if (args.decodeDshHistory === true) {
+        return readDshDecodedLogSnapshot(filePath)
+      }
       if (args.includeLocalLogMetadata === true) {
         return readLocalLogSnapshot(filePath)
       }

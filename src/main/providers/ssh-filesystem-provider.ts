@@ -1,7 +1,8 @@
+import { readSshFileWithDshDecoding } from './ssh-filesystem-dsh-log'
 import { readSshPathExistenceBatch } from './ssh-filesystem-path-existence'
 import type { PathExistenceResult } from '../../shared/path-existence-batch'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import { isMethodNotFoundError, readFileViaStream } from '../ssh/ssh-filesystem-stream-reader'
+import { isMethodNotFoundError } from '../ssh/ssh-filesystem-stream-reader'
 import { uploadBuffer } from '../ssh/sftp-upload'
 import { requestGitStreamable } from '../ssh/ssh-git-response-stream-reader'
 import { lstatViaSftp } from './ssh-filesystem-provider-sftp'
@@ -109,7 +110,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     // back to the legacy single-shot fs.readFile (which retains the old 10 MB
     // cap on those hosts).
     try {
-      return await readFileViaStream(this.mux, filePath, limits)
+      return await readSshFileWithDshDecoding(this.mux, filePath, limits)
     } catch (err) {
       if (isMethodNotFoundError(err)) {
         if (!this.loggedStreamFallback) {

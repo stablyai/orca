@@ -1,3 +1,5 @@
+import { resolveRemoteSessionSourceOptions } from './remote-session-scanner-source-options'
+import { remoteDshSource } from './remote-session-scanner-dsh-source'
 import {
   ANTIGRAVITY_HISTORY_ROOTS,
   type AntigravitySessionOrigin
@@ -53,10 +55,13 @@ type RemoteContentParser<T = string> = (
 export function remoteSessionSources(
   remoteHome: string,
   hostPlatform: RemoteHostPlatform,
-  includeAntigravityIdeSessions = false
+  options?: Parameters<typeof resolveRemoteSessionSourceOptions>[0]
 ): RemoteSessionSource[] {
+  const { dshSessionsDir, includeAntigravityIdeSessions = false } =
+    resolveRemoteSessionSourceOptions(options)
   return [
     ...remoteCodexSources(remoteHome, hostPlatform),
+    remoteDshSource(remoteHome, hostPlatform, dshSessionsDir),
     {
       ...jsonlSource(
         'claude',

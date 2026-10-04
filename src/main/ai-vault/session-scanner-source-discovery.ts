@@ -64,7 +64,8 @@ function agentDiscoveries(
       extensions: [...source.extensions],
       filePredicate: source.filePredicate,
       contentDependencyPath: source.contentDependencyPath,
-      directoryPredicate: source.directoryPredicate
+      directoryPredicate: source.directoryPredicate,
+      selectDirectoryEntries: source.selectDirectoryEntries
     })
   return source.mergeRootDiscoveries
     ? [mergedDiscovery(agent, rootDirs, limit, discover)]
