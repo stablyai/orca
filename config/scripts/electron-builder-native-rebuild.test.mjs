@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 const require = createRequire(import.meta.url)
 const {
@@ -76,7 +76,8 @@ describe('electron-builder native rebuild hook', () => {
         platform: { nodeName: 'win32' },
         arch: 'x64'
       },
-      (...args) => calls.push(args)
+      (...args) => calls.push(args),
+      { environment: {} }
     )
 
     expect(result).toBe(false)
@@ -92,6 +93,45 @@ describe('electron-builder native rebuild hook', () => {
         expect.objectContaining({ stdio: 'inherit' })
       ]
     ])
+  })
+
+  it('rebuilds patched native modules for Windows ARM64 packages', () => {
+    const calls = []
+    const result = runElectronBuilderNativeRebuild(
+      {
+        platform: { nodeName: 'win32' },
+        arch: 'arm64'
+      },
+      (...args) => calls.push(args),
+      { environment: { ORCA_WINDOWS_ARM64_BUILD: '1' } }
+    )
+
+    expect(result).toBe(false)
+    expect(calls).toEqual([
+      [
+        process.execPath,
+        ['config/scripts/build-windows-cli-launcher.mjs'],
+        expect.objectContaining({ stdio: 'inherit' })
+      ],
+      [
+        process.execPath,
+        ['config/scripts/rebuild-native-deps.mjs', '--platform=win32', '--arch=arm64', '--force'],
+        expect.objectContaining({ stdio: 'inherit' })
+      ]
+    ])
+  })
+
+  it('rejects Windows target and resource architecture mismatches', () => {
+    expect(() =>
+      runElectronBuilderNativeRebuild({ platform: { nodeName: 'win32' }, arch: 'arm64' }, vi.fn(), {
+        environment: {}
+      })
+    ).toThrow(/ORCA_WINDOWS_ARM64_BUILD/)
+    expect(() =>
+      runElectronBuilderNativeRebuild({ platform: { nodeName: 'win32' }, arch: 'x64' }, vi.fn(), {
+        environment: { ORCA_WINDOWS_ARM64_BUILD: '1' }
+      })
+    ).toThrow(/ORCA_WINDOWS_ARM64_BUILD/)
   })
 
   it('rejects incomplete electron-builder contexts', () => {

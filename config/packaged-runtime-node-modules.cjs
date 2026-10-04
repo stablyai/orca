@@ -10,6 +10,7 @@ const {
 const { dirname, join, resolve } = require('node:path')
 const { builtinModules, createRequire } = require('node:module')
 const { PE_MACHINE, readPeMachine } = require('./scripts/windows-pe-machine.cjs')
+const { getWindowsSpeechNativePackage } = require('./windows-package-architecture.cjs')
 
 const projectDir = resolve(__dirname, '..')
 const requireFromProject = createRequire(join(projectDir, 'package.json'))
@@ -534,13 +535,12 @@ function assertPackagedNativeVariantsInstalled(electronPlatformName, electronArc
 
   const rootOptionalDependencies =
     JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8')).optionalDependencies ?? {}
-  // Why win32 is always x64: winSpeechNativeResource packages sherpa-onnx-win-x64 for every
-  // Windows target (there is no sherpa-onnx-win-arm64; it runs under emulation).
+  // Why: native Windows ARM64 cannot load the x64-only speech addon.
   const sherpaName =
     electronPlatformName === 'win32'
-      ? 'sherpa-onnx-win-x64'
+      ? getWindowsSpeechNativePackage(architecture)
       : `sherpa-onnx-${electronPlatformName}-${architecture}`
-  if (sherpaName in rootOptionalDependencies && !isInstalled(sherpaName)) {
+  if (sherpaName && sherpaName in rootOptionalDependencies && !isInstalled(sherpaName)) {
     missing.push(sherpaName)
   }
 

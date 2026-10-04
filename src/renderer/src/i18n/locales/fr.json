@@ -15630,6 +15630,7 @@
           "55127a3706": "Échec de la dictée : {{value0}}",
           "bb7f599ee7": "Ouvrir les paramètres",
           "2d5b9fabf9": "Accès au micro refusé. Accordez l'autorisation dans les réglages système, puis redémarrez Orca.",
+          "f2c6b6d4aa": "La transcription vocale hors ligne n’est pas disponible sur Windows ARM64. Sélectionnez un modèle de transcription OpenAI dans les paramètres vocaux.",
           "5d2c3e7ae3": "Aucune parole détectée.",
           "micFallback": "Micro sélectionné indisponible. Utilisation du micro par défaut du système.",
           "micDisconnected": "Micro déconnecté. Dictée arrêtée."

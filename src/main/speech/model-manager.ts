@@ -10,6 +10,10 @@ import type {
 import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
 import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
 import {
+  assertLocalSpeechRecognitionSupported,
+  getSupportedSpeechModels
+} from './speech-platform-support'
+import {
   getSpeechModelCacheDirCandidates,
   migrateSpeechModelCacheIfNeeded,
   type SpeechModelCacheDir
@@ -76,9 +80,9 @@ export class ModelManager extends SpeechModelDownloadTransport {
     throw lastError instanceof Error ? lastError : new Error(String(lastError))
   }
 
-  async getModelStates(): Promise<SpeechModelState[]> {
+  async getModelStates(os = process.platform, cpu = process.arch): Promise<SpeechModelState[]> {
     const states: SpeechModelState[] = []
-    for (const manifest of SPEECH_MODEL_CATALOG) {
+    for (const manifest of getSupportedSpeechModels(SPEECH_MODEL_CATALOG, os, cpu)) {
       const state = await this.getModelState(manifest.id)
       states.push(state)
     }
@@ -145,7 +149,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
     })
   }
 
-  async downloadModel(modelId: string): Promise<void> {
+  async downloadModel(modelId: string, os = process.platform, cpu = process.arch): Promise<void> {
     // Why: no migration await — it never races a download, and awaiting would defer setup cancelDownload relies on.
     if (this.activeDownloads.has(modelId)) {
       return
@@ -158,6 +162,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
     if (!isLocalSpeechModel(manifest)) {
       throw new Error(`Model does not support downloads: ${modelId}`)
     }
+    assertLocalSpeechRecognitionSupported(os, cpu)
     if (!manifest.downloadFiles?.length || !manifest.sizeBytes) {
       throw new Error(`Model download metadata missing: ${modelId}`)
     }

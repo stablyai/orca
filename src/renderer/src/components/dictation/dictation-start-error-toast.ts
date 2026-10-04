@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { LOCAL_SPEECH_UNAVAILABLE_ERROR_CODE } from '../../../../shared/speech-types'
 
 function openVoiceSettings(): void {
   useAppStore.getState().openSettingsTarget({ pane: 'voice', repoId: null })
@@ -8,7 +9,23 @@ function openVoiceSettings(): void {
 }
 
 export function showDictationStartErrorToast(message: string): void {
-  if (message.includes('Permission') || message.includes('NotAllowed')) {
+  if (message.includes(LOCAL_SPEECH_UNAVAILABLE_ERROR_CODE)) {
+    toast.error(
+      translate(
+        'auto.components.dictation.DictationController.f2c6b6d4aa',
+        'Offline speech transcription is unavailable on Windows ARM64. Select an OpenAI transcription model in Voice settings.'
+      ),
+      {
+        action: {
+          label: translate(
+            'auto.components.dictation.DictationController.bb7f599ee7',
+            'Open Settings'
+          ),
+          onClick: openVoiceSettings
+        }
+      }
+    )
+  } else if (message.includes('Permission') || message.includes('NotAllowed')) {
     toast.error(
       translate(
         'auto.components.dictation.DictationController.2d5b9fabf9',

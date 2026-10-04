@@ -1,5 +1,6 @@
 const { execFileSync } = require('node:child_process')
 const { resolve } = require('node:path')
+const { validateWindowsPackageArchitecture } = require('../windows-package-architecture.cjs')
 
 const projectDir = resolve(__dirname, '../..')
 
@@ -8,13 +9,16 @@ function electronBuilderNativeRebuild(context) {
 }
 
 function runElectronBuilderNativeRebuild(context, runner = execFileSync, runtime = {}) {
-  const args = buildNativeRebuildArgs(context, runtime)
-  if (readPlatformName(context?.platform) === 'win32') {
+  const platform = readPlatformName(context?.platform)
+  const arch = readArchName(context?.arch)
+  validateWindowsPackageArchitecture(platform, arch, runtime.environment ?? process.env)
+  if (platform === 'win32') {
     runner(process.execPath, ['config/scripts/build-windows-cli-launcher.mjs'], {
       cwd: projectDir,
       stdio: 'inherit'
     })
   }
+  const args = buildNativeRebuildArgs(context, runtime)
   runner(process.execPath, args, {
     cwd: projectDir,
     stdio: 'inherit'

@@ -589,7 +589,10 @@ describe('arch-aware packaging guard', () => {
       (resource) => resource.to === join('node_modules', '@vscode', 'windows-process-tree')
     )
     const packWindows = () =>
-      electronBuilderConfig.beforePack({ electronPlatformName: 'win32', arch: 1 }, bundleDir)
+      electronBuilderConfig.beforePack(
+        { electronPlatformName: 'win32', arch: process.platform === 'win32' ? HOST_ARCH : 1 },
+        bundleDir
+      )
     if (process.platform === 'win32' || windowsAddon) {
       expect(packWindows).not.toThrow()
     } else {

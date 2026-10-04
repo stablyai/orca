@@ -30,7 +30,10 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../speech/model-catalog', () => ({
-  SPEECH_MODEL_CATALOG: [],
+  SPEECH_MODEL_CATALOG: [
+    { id: 'local-model', provider: 'local' },
+    { id: 'cloud-model', provider: 'openai' }
+  ],
   getCatalogModel: vi.fn(() => ({ id: 'model-1' }))
 }))
 
@@ -43,7 +46,7 @@ vi.mock('../speech/speech-model-deletion', () => ({
   deleteLocalSpeechModel: deleteLocalSpeechModelMock
 }))
 
-import { registerSpeechHandlers } from './speech'
+import { reconcileUnsupportedSpeechSettings, registerSpeechHandlers } from './speech'
 
 type SpeechDownloadHandler = (event: { sender: { id: number } }, modelId: string) => Promise<void>
 
@@ -53,6 +56,14 @@ function getHandler(channel: string): SpeechDownloadHandler {
     throw new Error(`${channel} handler not registered`)
   }
   return call[1] as SpeechDownloadHandler
+}
+
+function makeStore(sttModel = '') {
+  const voice = { sttModel }
+  return {
+    getSettings: vi.fn(() => ({ voice })),
+    updateSettings: vi.fn()
+  }
 }
 
 describe('registerSpeechHandlers', () => {
@@ -89,7 +100,7 @@ describe('registerSpeechHandlers', () => {
     }
     getSpeechModelManagerMock.mockReturnValue(manager)
     fromWebContentsMock.mockReturnValue(window)
-    registerSpeechHandlers({} as never)
+    registerSpeechHandlers(makeStore() as never)
 
     const pending = getHandler('speech:downloadModel')({ sender: { id: 7 } }, 'model-1')
     progressCallbacks[0]?.('model-1', 0.5)
@@ -127,7 +138,7 @@ describe('registerSpeechHandlers', () => {
     }
     getSpeechModelManagerMock.mockReturnValue(manager)
     fromWebContentsMock.mockReturnValue(window)
-    registerSpeechHandlers({} as never)
+    registerSpeechHandlers(makeStore() as never)
 
     const pending = getHandler('speech:downloadModel')({ sender: { id: 7 } }, 'model-1')
     closeHandlers[0]?.()
@@ -139,7 +150,7 @@ describe('registerSpeechHandlers', () => {
   })
 
   it('routes desktop model deletion through the shared deletion helper', async () => {
-    const store = {} as never
+    const store = makeStore() as never
     const manager = { deleteModel: vi.fn() }
     const sttService = { prepareModelForDeletion: vi.fn() }
     getSpeechModelManagerMock.mockReturnValue(manager)
@@ -155,5 +166,22 @@ describe('registerSpeechHandlers', () => {
       sttService,
       modelId: 'model-1'
     })
+  })
+
+  it('clears a persisted local model selection on Windows ARM64', () => {
+    const store = makeStore('local-model')
+
+    expect(reconcileUnsupportedSpeechSettings(store as never, 'win32', 'arm64')).toBe(true)
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { voice: { sttModel: '' } },
+      { notifyListeners: true }
+    )
+  })
+
+  it('preserves a supported cloud model selection on Windows ARM64', () => {
+    const store = makeStore('cloud-model')
+
+    expect(reconcileUnsupportedSpeechSettings(store as never, 'win32', 'arm64')).toBe(false)
+    expect(store.updateSettings).not.toHaveBeenCalled()
   })
 })
