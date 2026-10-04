@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc/runtime-rpc-mobile-method-allowlist'
 import { ALL_RPC_METHODS } from './rpc/methods'
 
 const MOBILE_DYNAMIC_RPC_METHODS = [
@@ -101,15 +102,7 @@ function mobileRpcMethods(): string[] {
 }
 
 function mobileRpcAllowlist(): Set<string> {
-  const source = readFileSync(
-    join(process.cwd(), 'src/main/runtime/runtime-rpc/runtime-rpc-mobile-method-allowlist.ts'),
-    'utf8'
-  )
-  const allowlist = source.match(/const MOBILE_RPC_METHOD_ALLOWLIST = new Set\(\[([\s\S]*?)\]\)/)
-  if (!allowlist) {
-    throw new Error('MOBILE_RPC_METHOD_ALLOWLIST not found')
-  }
-  return new Set([...allowlist[1]!.matchAll(/'([^']+)'/g)].map((match) => match[1]!))
+  return MOBILE_RPC_METHOD_ALLOWLIST
 }
 
 function registeredRuntimeMethods(): Set<string> {

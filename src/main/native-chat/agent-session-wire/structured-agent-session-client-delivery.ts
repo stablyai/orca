@@ -4,6 +4,7 @@ import type { AgentChildWorkView } from '../../../shared/agent-status-child-work
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { tryReadQueuePublication } from './structured-agent-session-queued-publication'
+import { structuredAgentSessionProviderSessionMetadata } from './structured-agent-session-history-result'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -57,6 +58,8 @@ export class StructuredAgentSessionClientDelivery {
       readCommands: (sessionId) => this.readCommands(sessionId),
       readQueuePublication: (sessionId) =>
         tryReadQueuePublication(sessions.get(sessionId)?.journal),
+      readProviderSession: (sessionId) =>
+        structuredAgentSessionProviderSessionMetadata(this.deps().store.getRecord(sessionId)),
       onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal)
     })
   }

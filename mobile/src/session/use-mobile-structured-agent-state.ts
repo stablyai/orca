@@ -8,6 +8,7 @@ import type {
 } from '../../../src/shared/agent-session-wire'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../src/shared/agent-session-wire'
 import { structuredAgentSessionHolderId } from '../../../src/shared/structured-agent-session-holder'
+import type { AgentProviderSessionMetadata } from '../../../src/shared/agent-session-resume'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   oldestStructuredAgentSessionCursor,
@@ -26,6 +27,11 @@ import {
   type MobileQueuedMessageFeed,
   type MobileQueuePause
 } from './mobile-structured-queued-message-feed'
+import {
+  NO_MOBILE_PROVIDER_SESSIONS,
+  rememberMobileProviderSession,
+  type MobileProviderSessions
+} from './mobile-structured-provider-session'
 
 type QueuedFeed = { messages: MobileQueuedMessageFeed; pause: MobileQueuePause }
 const NO_QUEUED_FEED: QueuedFeed = { messages: null, pause: null }
@@ -86,6 +92,8 @@ export function useMobileStructuredAgentState(args: {
   queuedMessages: MobileQueuedMessageFeed
   /** The whole queue's pause, published with the drafts. */
   queuePause: MobileQueuePause
+  /** Provider sessions a history read named, by chat id; what a terminal resume needs. */
+  providerSessions: MobileProviderSessions
   loadingOlder: boolean
   loadEarlier: () => void
 } {
@@ -96,6 +104,11 @@ export function useMobileStructuredAgentState(args: {
     () => new Map()
   )
   const [queuedBySession, setQueuedBySession] = useState<Map<string, QueuedFeed>>(() => new Map())
+  // Keyed by the chat's own session id rather than this hook's transcript key: a resume targets
+  // the chat, and the id is what the tab long-press holds.
+  const [providerSessions, setProviderSessions] = useState<MobileProviderSessions>(
+    () => NO_MOBILE_PROVIDER_SESSIONS
+  )
   const state =
     enabled && sessionKey
       ? (sessionStates.get(sessionKey) ?? EMPTY_STRUCTURED_AGENT_SESSION)
@@ -167,6 +180,13 @@ export function useMobileStructuredAgentState(args: {
     [sessionKey]
   )
 
+  const keepProviderSession = useCallback(
+    (sid: string, reported: AgentProviderSessionMetadata | undefined) => {
+      setProviderSessions((current) => rememberMobileProviderSession(current, sid, reported))
+    },
+    []
+  )
+
   useEffect(() => {
     streamGenerationRef.current += 1
     sessionKeyRef.current = sessionKey
@@ -191,6 +211,9 @@ export function useMobileStructuredAgentState(args: {
         return
       }
       if (isSubscribeEvent(raw)) {
+        // The opening snapshot names the provider session, so a terminal resume is offered
+        // before any history read; other frames pass none, which keeps the previous value.
+        keepProviderSession(sessionId, raw.type === 'snapshot' ? raw.providerSession : undefined)
         apply({ type: 'event', event: raw })
         applyQueued(raw)
       }
@@ -212,7 +235,7 @@ export function useMobileStructuredAgentState(args: {
         )
         .catch(() => undefined)
     }
-  }, [apply, applyQueued, client, connected, enabled, sessionId, sessionKey])
+  }, [apply, applyQueued, client, connected, enabled, keepProviderSession, sessionId, sessionKey])
 
   const loadEarlier = useCallback(() => {
     const current = stateRef.current
@@ -252,6 +275,8 @@ export function useMobileStructuredAgentState(args: {
               limit: AGENT_SESSION_HISTORY_MAX_LIMIT
             }
           )
+          // Every arm names it, a reset included; the page alone cannot be resumed.
+          keepProviderSession(sessionId, result.providerSession)
           if (!result.ok || !isCurrentRead()) {
             break
           }
@@ -288,7 +313,7 @@ export function useMobileStructuredAgentState(args: {
           setLoadingOlder(false)
         }
       })
-  }, [apply, client, loadingOlder, sessionId, sessionKey])
+  }, [apply, client, keepProviderSession, loadingOlder, sessionId, sessionKey])
 
   // A window of only a subagent's rows draws nothing, and an empty list cannot be scrolled
   // to ask for more, so it reads back once from each such head. A first page can be one: an
@@ -306,5 +331,13 @@ export function useMobileStructuredAgentState(args: {
     loadEarlier()
   }, [drawsNothingFrom, loadEarlier, loadingOlder])
 
-  return { state, stateRef, queuedMessages, queuePause: queued.pause, loadingOlder, loadEarlier }
+  return {
+    state,
+    stateRef,
+    queuedMessages,
+    queuePause: queued.pause,
+    providerSessions,
+    loadingOlder,
+    loadEarlier
+  }
 }

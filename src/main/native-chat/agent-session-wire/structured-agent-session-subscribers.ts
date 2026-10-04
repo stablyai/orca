@@ -14,6 +14,7 @@ import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from '../../../shared/agent-session-wire'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
 import { buildSubscriberFrame } from './agent-session-subscriber-frame-fields'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
 import { deliverToSubscriber } from './agent-session-subscriber-catch-up'
@@ -47,6 +48,9 @@ export type AgentSessionSubscribersHooks = {
   /** Revision-stable per emit: an unchanged list keeps its reference, so token
    *  streams never re-serialize it; any draft-table write changes it. */
   readQueuePublication?: (sessionId: string) => QueuePublication | undefined
+  /** The chat's provider conversation, so an opening snapshot carries it. Synchronous:
+   *  the opening frame is emitted inline. */
+  readProviderSession?: (sessionId: string) => AgentProviderSessionMetadata | undefined
   /** Fires after publications that can change journal content. */
   onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
   now?: () => number
@@ -92,6 +96,7 @@ export class AgentSessionSubscribers {
       this.deliver(subscriber, input.journal, hostNow, true, input.backgroundTasks)
     } else {
       const page = readAgentSessionHydrationPage(input.journal, input.fence)
+      const providerSession = this.hooks.readProviderSession?.(input.sessionId)
       this.emit(subscriber, {
         type: 'snapshot',
         sessionId: input.sessionId,
@@ -99,6 +104,7 @@ export class AgentSessionSubscribers {
         fence: input.fence,
         hostNow,
         ...(input.backgroundTasks !== undefined ? { backgroundTasks: input.backgroundTasks } : {}),
+        ...(providerSession ? { providerSession } : {}),
         ...this.activityField(input.sessionId)
       })
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
