@@ -169,6 +169,7 @@ export type FolderWorkspacesApi = {
         | 'isArchived'
         | 'isUnread'
         | 'isPinned'
+        | 'snooze'
         | 'sortOrder'
         | 'manualOrder'
         | 'workspaceStatus'

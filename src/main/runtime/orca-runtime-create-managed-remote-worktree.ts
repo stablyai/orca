@@ -12,7 +12,8 @@ import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GitHubPrStartPoint, GitPushTarget } from '../../shared/worktree/types'
 import {
   persistRuntimeManagedWorktreeSortOrder,
-  updateRuntimeManagedWorktreeMetadata
+  updateRuntimeManagedWorktreeMetadata,
+  type WorktreeMetaPrecondition
 } from './runtime-managed-worktree-metadata'
 import { resolveRuntimeGitHubWorktreeBase } from './runtime-github-worktree-base'
 import { resolveRuntimeGitLabWorktreeBase } from './runtime-gitlab-worktree-base'
@@ -150,7 +151,8 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
         parentWorktree?: string
         noParent?: boolean
       }
-    }
+    },
+    precondition?: WorktreeMetaPrecondition
   ) {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -159,6 +161,7 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
       selector: worktreeSelector,
       updates,
       store: this.store,
+      precondition,
       ports: {
         resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
         validateParent: (worktree, parent) => this.worktreeLineage.validateParent(worktree, parent),

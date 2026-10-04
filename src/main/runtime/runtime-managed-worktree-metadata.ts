@@ -22,17 +22,35 @@ type Ports = {
   showWorktree: (selector: string) => Promise<Worktree>
 }
 
+/** Thrown when the caller's precondition rejects the stored metadata read after the last await. */
+export class WorktreeMetaPreconditionError extends Error {
+  constructor(worktreeId: string) {
+    super(`Worktree metadata changed before the update for ${worktreeId}`)
+    this.name = 'WorktreeMetaPreconditionError'
+  }
+}
+
+export type WorktreeMetaPrecondition = (current: WorktreeMeta | undefined) => boolean
+
 export async function updateRuntimeManagedWorktreeMetadata(args: {
   selector: string
   updates: Updates
   store: RuntimeStore
   ports: Ports
+  precondition?: WorktreeMetaPrecondition
 }): Promise<Worktree> {
   const worktree = await args.ports.resolveWorktree(args.selector)
   const { lineage, ...metaUpdates } = args.updates
   if (lineage?.parentWorktree) {
     args.ports.invalidateResolved()
     args.ports.invalidateScan(worktree.repoId)
+  }
+  const parent = lineage?.parentWorktree
+    ? await args.ports.resolveWorktree(lineage.parentWorktree)
+    : null
+  // Why after every await: a check before one would let a concurrent write slip in before ours.
+  if (args.precondition && !args.precondition(args.store.getWorktreeMeta(worktree.id))) {
+    throw new WorktreeMetaPreconditionError(worktree.id)
   }
   const clearPushTarget =
     Object.hasOwn(metaUpdates, 'pushTarget') && metaUpdates.pushTarget === null
@@ -54,8 +72,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   if (lineage?.noParent === true) {
     args.store.removeWorktreeLineage?.(worktree.id)
     args.store.removeWorkspaceLineage?.(worktreeWorkspaceKey(worktree.id))
-  } else if (lineage?.parentWorktree) {
-    const parent = await args.ports.resolveWorktree(lineage.parentWorktree)
+  } else if (parent) {
     args.ports.validateParent(worktree, parent)
     if (!worktree.instanceId || !parent.instanceId) {
       throw new RuntimeLineageError(

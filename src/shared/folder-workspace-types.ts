@@ -2,6 +2,7 @@ import type { ExecutionHostId } from './execution-host'
 import type { TaskSourceContext } from './task-source-context'
 import type { TuiAgent } from './tui-agent'
 import type { DiffComment } from './diff-comment-types'
+import type { WorkspaceSnooze } from './workspace-snooze'
 import type {
   WorkspaceCreatorProvenance,
   WorkspaceLinkedItem,
@@ -31,6 +32,8 @@ export type FolderWorkspace = {
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean
+  /** Hidden until a wake condition fires. `null` in an update wakes the workspace. */
+  snooze?: WorkspaceSnooze | null
   sortOrder: number
   /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
   manualOrder?: number

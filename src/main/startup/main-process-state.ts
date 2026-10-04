@@ -1,6 +1,7 @@
 import type { BrowserWindow, Tray } from 'electron'
 import { app } from 'electron'
 import type { Store } from '../persistence'
+import type { WorkspaceSnoozeWakeService } from '../workspace-snooze/workspace-snooze-wake-service'
 import type { StatsCollector } from '../stats/collector'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
@@ -94,6 +95,8 @@ export const mainProcessState = {
   // Why: gates whether headless serve installs the offscreen browser backend (and advertises browser pane support).
   headlessBrowserDisplayAvailable: false,
   starNag: null as StarNagService | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the service started in main-process-ready-runtime.
+  workspaceSnoozeWake: null as WorkspaceSnoozeWakeService | null,
   agentAwakeService: null as AgentAwakeService | null,
   uninstallRepoMaintenanceIdleGate: null as (() => Promise<void>) | null,
   repoMaintenanceShutdown: Promise.resolve() as Promise<void>,

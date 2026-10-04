@@ -64,6 +64,10 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     showSleepingWorkspaces: DEFAULT_SHOW_SLEEPING_WORKSPACES,
     setShowSleepingWorkspaces: (v) => set({ showSleepingWorkspaces: v }),
 
+    // Why not persisted: a peek that survived restart would quietly undo every snooze.
+    showSnoozedWorkspaces: false,
+    setShowSnoozedWorkspaces: (v) => set({ showSnoozedWorkspaces: v }),
+
     workspaceHostScope: 'all',
     // Why: host scope is presentation/filtering only — must never trigger resource teardown (terminals, browser pages).
     setWorkspaceHostScope: (scope) => {

@@ -23,6 +23,7 @@ export function buildVisibleWorktreeOptionsFromState(
   return {
     filterRepoIds: state.filterRepoIds,
     showSleepingWorkspaces: state.showSleepingWorkspaces,
+    showSnoozedWorkspaces: state.showSnoozedWorkspaces,
     tabsByWorktree: state.tabsByWorktree,
     ptyIdsByTabId: state.ptyIdsByTabId,
     browserTabsByWorktree: state.browserTabsByWorktree,

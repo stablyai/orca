@@ -31,6 +31,7 @@ import {
 } from './main-process-runtime-service'
 import { initializeMainProcessAutomations } from './main-process-automations'
 import { initializeMainProcessPlugins } from './main-process-plugins'
+import { createWorkspaceSnoozeWakeService } from '../workspace-snooze/workspace-snooze-wake-runtime'
 import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from '../worktree-trash'
 import { loadWorktreeRemovalRecordsForStore } from './worktree-removal-records-load'
 import { runAfterFirstWindowShown } from './first-window-deferral'
@@ -56,6 +57,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   state.starNag = new StarNagService(store, state.stats!)
   state.starNag.start()
   state.starNag.registerIpcHandlers()
+  state.workspaceSnoozeWake = createWorkspaceSnoozeWakeService(store, runtime)
+  state.workspaceSnoozeWake.start()
   state.agentBrowserBridge = new AgentBrowserBridge(browserManager, {
     onTabsChanged: (worktreeId) => runtime.notifyMobileSessionTabsChanged(worktreeId)
   })

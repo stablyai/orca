@@ -837,6 +837,25 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([child.id])
   })
 
+  it('nests a child under its snoozed parent only while the snooze peek is on', () => {
+    const parent = { ...makeWorktree('parent'), snooze: { snoozedAt: 1, wakeAt: 2 } }
+    const child = makeWorktree('child')
+    const worktreesByRepo = { repo1: [parent, child] }
+    const sortedIds = [child.id, parent.id]
+    const worktreeLineageById = { [child.id]: makeWorktreeLineage(child, parent) }
+    const compute = (showSnoozedWorkspaces: boolean) =>
+      computeVisibleWorktreeIds(
+        worktreesByRepo,
+        sortedIds,
+        visibleOptions({ showSnoozedWorkspaces, worktreeLineageById })
+      )
+
+    // Alternating on one input proves each peek value reads its own cached index.
+    expect(compute(true)).toEqual([parent.id, child.id])
+    expect(compute(false)).toEqual([child.id])
+    expect(compute(true)).toEqual([parent.id, child.id])
+  })
+
   it('includes default-branch parents hidden by the explicit setting when a visible child needs them', () => {
     const parent = makeWorktree('parent')
     parent.isMainWorktree = true

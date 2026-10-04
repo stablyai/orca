@@ -34,6 +34,7 @@ type FolderWorkspaceUpdates = Partial<
     | 'isArchived'
     | 'isUnread'
     | 'isPinned'
+    | 'snooze'
     | 'sortOrder'
     | 'manualOrder'
     | 'workspaceStatus'

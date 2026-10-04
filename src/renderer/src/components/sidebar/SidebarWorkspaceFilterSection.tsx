@@ -1,5 +1,6 @@
 import React from 'react'
 import {
+  AlarmClock,
   CalendarClock,
   GitBranch,
   GitCommitHorizontal,
@@ -14,6 +15,8 @@ import { FilterToggleRow } from './FilterToggleRow'
 const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilterSection() {
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const setShowSleepingWorkspaces = useAppStore((s) => s.setShowSleepingWorkspaces)
+  const showSnoozedWorkspaces = useAppStore((s) => s.showSnoozedWorkspaces)
+  const setShowSnoozedWorkspaces = useAppStore((s) => s.setShowSnoozedWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
@@ -71,6 +74,15 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
           onChange={setAlwaysShowDefaultBranchWorkspace}
         />
       )}
+      <FilterToggleRow
+        icon={<AlarmClock className="size-3.5" />}
+        label={translate(
+          'auto.components.sidebar.SidebarWorkspaceFilterSection.hideSnoozed',
+          'Hide snoozed'
+        )}
+        checked={!showSnoozedWorkspaces}
+        onChange={(hideSnoozed) => setShowSnoozedWorkspaces(!hideSnoozed)}
+      />
       <FilterToggleRow
         icon={<GitBranch className="size-3.5" />}
         label={translate(

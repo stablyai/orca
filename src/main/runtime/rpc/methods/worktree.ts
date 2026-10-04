@@ -139,6 +139,7 @@ export const WORKTREE_METHODS = [
     name: 'worktree.set',
     params: WorktreeSet,
     handler: async (params, { runtime }) => ({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pre-existing pass-through; the schema types diffComments and mobileDiffReview as unknown.
       worktree: await runtime.updateManagedWorktreeMeta(params.worktree, {
         displayName: params.displayName,
         ...(params.displayName !== undefined
@@ -161,6 +162,7 @@ export const WORKTREE_METHODS = [
         isArchived: params.isArchived,
         isUnread: params.isUnread,
         isPinned: params.isPinned,
+        snooze: params.snooze,
         sortOrder: params.sortOrder,
         manualOrder: params.manualOrder,
         lastActivityAt: params.lastActivityAt,

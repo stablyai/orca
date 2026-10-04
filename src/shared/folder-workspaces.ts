@@ -5,6 +5,7 @@ import { normalizeStoredTaskSourceContext } from './task-source-context'
 import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
+import { parseStoredWorkspaceSnooze } from './workspace-snooze'
 
 export function normalizeFolderWorkspaceName(
   name: string | null | undefined,
@@ -56,6 +57,7 @@ export function normalizeFolderWorkspaces(
     const linkedTask = normalizeWorkspaceLinkedItem(raw.linkedTask)
     const linkedTaskSourceContext = normalizeStoredTaskSourceContext(raw.linkedTaskSourceContext)
     const creatorProvenance = normalizeWorkspaceCreatorProvenance(raw.creatorProvenance)
+    const snooze = parseStoredWorkspaceSnooze(raw.snooze)
     seen.add(raw.id)
     // Why: `executionHostId` is deliberately NOT persisted. It is a fetch-time renderer
     // stamp that can name a `runtime:*` authority the desktop store does not own, and it
@@ -83,6 +85,7 @@ export function normalizeFolderWorkspaces(
       isArchived: raw.isArchived === true,
       isUnread: raw.isUnread === true,
       isPinned: raw.isPinned === true,
+      ...(snooze ? { snooze } : {}),
       sortOrder:
         typeof raw.sortOrder === 'number' && Number.isFinite(raw.sortOrder) ? raw.sortOrder : now,
       ...(typeof raw.manualOrder === 'number' && Number.isFinite(raw.manualOrder)

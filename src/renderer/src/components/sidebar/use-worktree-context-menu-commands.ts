@@ -7,6 +7,8 @@ import {
   deferWorktreeContextMenuDeleteIntent
 } from './worktree-context-menu-delete-intent'
 import { runSleepWorktrees } from './sleep-worktree-flow'
+import { snoozeWorkspaces, wakeSnoozedWorkspaces } from './workspace-snooze-flow'
+import { isWorkspaceSnoozed } from '../../../../shared/workspace-snooze'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
@@ -135,13 +137,36 @@ export function useWorktreeContextMenuCommands(args: {
       focus: 'displayName'
     })
   }, [args])
-  const sleepWorktreesAfterMenuClose = useCallback(
-    (worktreeIds: string[]) => {
+  const runAfterMenuClose = useCallback(
+    (task: () => Promise<void>) => {
       args.setMenuOpenState(false)
-      window.setTimeout(() => void runSleepWorktrees(worktreeIds), 50)
+      window.setTimeout(() => void task(), 50)
     },
     [args]
   )
+  const sleepWorktreesAfterMenuClose = useCallback(
+    (worktreeIds: string[]) => runAfterMenuClose(() => runSleepWorktrees(worktreeIds)),
+    [runAfterMenuClose]
+  )
+  const handleSnooze = useCallback(
+    (wakeAt: number) => {
+      // Why skip snoozed rows: re-snoozing them would overwrite the wake time they already have.
+      const targets = args.activeContextWorktrees.filter((row) => !isWorkspaceSnoozed(row))
+      runAfterMenuClose(() => snoozeWorkspaces(targets, wakeAt))
+    },
+    [args.activeContextWorktrees, runAfterMenuClose]
+  )
+  const handlePickSnoozeTime = useCallback(() => {
+    args.openModal('snooze-workspace', {
+      targets: args.activeContextWorktrees
+        .filter((row) => !isWorkspaceSnoozed(row))
+        .map(({ id, hostId }) => ({ id, hostId }))
+    })
+  }, [args])
+  const handleWakeSnoozed = useCallback(() => {
+    const targets = args.activeContextWorktrees.filter(isWorkspaceSnoozed)
+    runAfterMenuClose(() => wakeSnoozedWorkspaces(targets))
+  }, [args.activeContextWorktrees, runAfterMenuClose])
   const handleCloseTerminals = useCallback(() => {
     sleepWorktreesAfterMenuClose(args.sleepableWorktrees.map((item) => item.id))
   }, [args.sleepableWorktrees, sleepWorktreesAfterMenuClose])
@@ -177,11 +202,14 @@ export function useWorktreeContextMenuCommands(args: {
     handleDelete,
     handleMoveProjectToGroup,
     handleOpenParent,
+    handlePickSnoozeTime,
     handleRemoveProjectFromGroup,
     handleRename,
     handleSleepSubtree,
+    handleSnooze,
     handleSubmitNewProjectGroup,
     handleTogglePin,
-    handleToggleRead
+    handleToggleRead,
+    handleWakeSnoozed
   }
 }

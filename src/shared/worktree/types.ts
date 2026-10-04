@@ -8,6 +8,7 @@ import type { EphemeralVmCheckoutMode } from '../orca-yaml-hook-types'
 import type { BuiltInWorktreeVisibilitySourceId } from '../repo-types'
 import type { WorktreeIdentity } from './identity'
 import type { WorktreeScanFailureKind } from '../worktree-scan-failure'
+import type { WorkspaceSnooze } from '../workspace-snooze'
 
 export type WorkspaceLinkedItem = {
   provider: 'github' | 'gitlab' | 'linear' | 'jira'
@@ -110,6 +111,8 @@ export type Worktree = {
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean
+  /** See {@link WorktreeMeta.snooze}. */
+  snooze?: WorkspaceSnooze | null
   sortOrder: number
   /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
   manualOrder?: number

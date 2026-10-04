@@ -14,6 +14,7 @@ import process from 'node:process'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import type { ServeReadiness } from '../server/serve-readiness'
+import type { WorkspaceSnoozeWakeService } from '../workspace-snooze/workspace-snooze-wake-service'
 import { resolveOrcadInstallRoot, resolveOrcadPath, resolveUserDataPath } from './orcad-app-paths'
 import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
 import {
@@ -144,6 +145,8 @@ async function startOrcadRuntime(
     await import('../agent-hooks/hook-status-session-tabs-republish')
   const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =
     await import('../runtime/agent-status-observed-pane-identity')
+  const { createWorkspaceSnoozeWakeService } =
+    await import('../workspace-snooze/workspace-snooze-wake-runtime')
 
   let rpc: InstanceType<typeof OrcaRuntimeRpcServer> | null = null
   let profileStoreForShutdown:
@@ -151,7 +154,10 @@ async function startOrcadRuntime(
     | undefined
   let uninstallHookStatusRepublish = (): void => {}
   let uninstallObservedStatusIdentity = (): void => {}
+  let snoozeWake: WorkspaceSnoozeWakeService | null = null
   registerCleanup(async () => {
+    // Why first: a wake landing after the persistence barrier would be lost.
+    snoozeWake?.stop()
     try {
       await rpc?.stop()
     } finally {
@@ -305,6 +311,10 @@ async function startOrcadRuntime(
 
   // Recovery binds terminal and dispatch identities; only now can startup observations be fenced.
   observedStatusCapture.attach(runtime)
+
+  // Why here too and not only on the desktop: a headless host has no other process to wake its snoozes.
+  snoozeWake = createWorkspaceSnoozeWakeService(profileStore, runtime)
+  snoozeWake.start()
 
   const bindHost = resolveOrcadBindHost(options.bind)
   rpc = new OrcaRuntimeRpcServer({

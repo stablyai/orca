@@ -48,6 +48,8 @@ function areWorktreesEqual(left: Worktree, right: Worktree): boolean {
     left.unread === right.unread &&
     (left.lastOutputAt ?? null) === (right.lastOutputAt ?? null) &&
     left.isPinned === right.isPinned &&
+    (left.snooze?.snoozedAt ?? null) === (right.snooze?.snoozedAt ?? null) &&
+    (left.snooze?.wakeAt ?? null) === (right.snooze?.wakeAt ?? null) &&
     (left.isActive ?? false) === (right.isActive ?? false) &&
     (left.linkedIssue ?? null) === (right.linkedIssue ?? null) &&
     (left.linkedLinearIssue ?? null) === (right.linkedLinearIssue ?? null) &&

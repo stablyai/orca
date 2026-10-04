@@ -31,4 +31,14 @@ describe('worktree metadata write normalization', () => {
     expect(mergeWorktreeMetaForWrite(existingMeta, { linkedPR: null }).suppressedGitHubPR).toBe(42)
     expect(mergeWorktreeMetaForWrite(existingMeta, { comment: 'note' }).suppressedGitHubPR).toBe(42)
   })
+
+  it('deletes the snooze when an update sends null', () => {
+    const snoozed = mergeWorktreeMetaForWrite(existingMeta, {
+      snooze: { snoozedAt: 1, wakeAt: 2 }
+    })
+    expect(snoozed.snooze).toEqual({ snoozedAt: 1, wakeAt: 2 })
+
+    const woken = mergeWorktreeMetaForWrite(snoozed, { snooze: null })
+    expect(Object.keys(woken)).not.toContain('snooze')
+  })
 })

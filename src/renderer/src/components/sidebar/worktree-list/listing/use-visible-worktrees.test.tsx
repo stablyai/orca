@@ -45,6 +45,7 @@ describe('useVisibleSidebarWorktrees', () => {
       useVisibleSidebarWorktrees({
         filterState: {
           showSleepingWorkspaces: true,
+          showSnoozedWorkspaces: false,
           filterRepoIds: [],
           hideDefaultBranchWorkspace: false,
           hideAutomationGeneratedWorkspaces: false,
@@ -70,6 +71,43 @@ describe('useVisibleSidebarWorktrees', () => {
     ])
   })
 
+  it('hides snoozed rows unless the session peek is on', () => {
+    const awake = makeWorktree('awake', 'Awake workspace', { hostId: 'local' })
+    const snoozed = makeWorktree('snoozed', 'Snoozed workspace', {
+      hostId: 'local',
+      snooze: { snoozedAt: 1, wakeAt: 2 }
+    })
+    const repo = makeRepo()
+    useAppStore.setState({ worktreesByRepo: { [repo.id]: [awake, snoozed] } })
+    const render = (showSnoozedWorkspaces: boolean) =>
+      renderHook(() =>
+        useVisibleSidebarWorktrees({
+          filterState: {
+            showSleepingWorkspaces: true,
+            showSnoozedWorkspaces,
+            filterRepoIds: [],
+            hideDefaultBranchWorkspace: false,
+            hideAutomationGeneratedWorkspaces: false,
+            hideCliCreatedWorkspaces: false,
+            hideDetachedHeadWorkspaces: false,
+            hideWorkspacesFromOtherDevices: false,
+            alwaysShowDefaultBranchWorkspace: true,
+            visibleWorkspaceHostIds: null,
+            workspaceHostScope: 'all'
+          },
+          sortBy: 'recent',
+          sortedIds: [awake.id, snoozed.id],
+          repoMap: new Map([[repo.id, repo]]),
+          worktreeLineageById: {},
+          defaultHostId: LOCAL_EXECUTION_HOST_ID,
+          agentSendTargetWorktreeId: null
+        })
+      ).result.current.visibleWorktrees.map((worktree) => worktree.id)
+
+    expect(render(false)).toEqual([awake.id])
+    expect(render(true)).toEqual([awake.id, snoozed.id])
+  })
+
   it('does not expand one host-filtered collision into both rows', () => {
     const local = makeWorktree('shared', 'Local workspace', { hostId: 'local' })
     const ssh = makeWorktree('shared', 'SSH workspace', { hostId: 'ssh:box' })
@@ -80,6 +118,7 @@ describe('useVisibleSidebarWorktrees', () => {
       useVisibleSidebarWorktrees({
         filterState: {
           showSleepingWorkspaces: true,
+          showSnoozedWorkspaces: false,
           filterRepoIds: [],
           hideDefaultBranchWorkspace: false,
           hideAutomationGeneratedWorkspaces: false,
@@ -108,9 +147,10 @@ describe('useVisibleSidebarWorktrees', () => {
     const worktree = makeWorktree('alpha', 'Alpha workspace', { hostId: 'local' })
     useAppStore.setState({ worktreesByRepo: { [repo.id]: [worktree] } })
 
-    const baseArgs = {
+    const baseArgs: Parameters<typeof useVisibleSidebarWorktrees>[0] = {
       filterState: {
         showSleepingWorkspaces: true,
+        showSnoozedWorkspaces: false,
         filterRepoIds: [],
         hideDefaultBranchWorkspace: false,
         hideAutomationGeneratedWorkspaces: false,
@@ -127,7 +167,7 @@ describe('useVisibleSidebarWorktrees', () => {
       worktreeLineageById: {},
       defaultHostId: LOCAL_EXECUTION_HOST_ID,
       agentSendTargetWorktreeId: null
-    } as Parameters<typeof useVisibleSidebarWorktrees>[0]
+    }
     // Why the extra `settings`: it is the pre-fix memo key. Passing it keeps
     // this test red against the old hook, which re-keyed the whole scan on the
     // settings object identity.
@@ -170,6 +210,7 @@ describe('useVisibleSidebarWorktrees', () => {
       useVisibleSidebarWorktrees({
         filterState: {
           showSleepingWorkspaces: true,
+          showSnoozedWorkspaces: false,
           filterRepoIds: [],
           hideDefaultBranchWorkspace: false,
           hideAutomationGeneratedWorkspaces: false,

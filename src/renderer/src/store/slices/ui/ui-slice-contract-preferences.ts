@@ -37,6 +37,8 @@ export type UISlicePreferences = {
   setShowActiveOnly: (v: boolean) => void
   showSleepingWorkspaces: boolean
   setShowSleepingWorkspaces: (v: boolean) => void
+  showSnoozedWorkspaces: boolean
+  setShowSnoozedWorkspaces: (v: boolean) => void
   workspaceHostScope: WorkspaceHostScope
   setWorkspaceHostScope: (scope: WorkspaceHostScope) => void
   visibleWorkspaceHostIds: VisibleWorkspaceHostIds
