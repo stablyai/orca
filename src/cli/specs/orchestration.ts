@@ -161,7 +161,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'orca orchestration task-list [--status <status>] [--ready] [--brief] [--run <run_id>] [--from <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'status', 'ready', 'brief', 'run', 'from'],
     identityFlagRoles: { from: 'caller' },
-    notes: ['--brief collapses whitespace and caps each spec at 160 characters.']
+    notes: ['--brief collapses whitespace and caps each spec and result at 160 characters.']
   },
   {
     path: ['orchestration', 'task-update'],

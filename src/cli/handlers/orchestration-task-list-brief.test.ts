@@ -42,9 +42,47 @@ describe('orchestration task-list brief output', () => {
     expect(response.result.tasks[0].spec_truncated).toBe(true)
   })
 
+  it('caps full results from runtimes that abbreviate only specs', async () => {
+    callMock.mockReset().mockResolvedValue({
+      result: {
+        // spec_truncated without result_truncated — a spec-only brief runtime.
+        tasks: [
+          {
+            id: 'task_1',
+            spec: 'already brief…',
+            status: 'completed',
+            spec_truncated: true,
+            result: 'finding '.repeat(1300)
+          }
+        ],
+        count: 1
+      }
+    })
+
+    const response = await runTaskListBrief()
+    const [task] = response.result.tasks as {
+      spec: string
+      spec_truncated: boolean
+      result: string
+      result_truncated: boolean
+    }[]
+
+    expect(task.spec).toBe('already brief…')
+    expect(task.spec_truncated).toBe(true)
+    expect(task.result).toHaveLength(160)
+    expect(task.result_truncated).toBe(true)
+  })
+
   it('passes server-abbreviated rows through untouched', async () => {
     const serverTasks = [
-      { id: 'task_1', spec: 'already brief…', status: 'ready', spec_truncated: true }
+      {
+        id: 'task_1',
+        spec: 'already brief…',
+        status: 'ready',
+        spec_truncated: true,
+        result: null,
+        result_truncated: false
+      }
     ]
     callMock.mockReset().mockResolvedValue({ result: { tasks: serverTasks, count: 1 } })
 

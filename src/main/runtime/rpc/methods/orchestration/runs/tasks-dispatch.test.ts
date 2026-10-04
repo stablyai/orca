@@ -171,6 +171,28 @@ describe('orchestration RPC methods', () => {
       expect(short.spec).toBe('Short task')
       expect(short.spec_truncated).toBe(false)
     })
+
+    it('bounds completed-task results under brief and keeps them whole otherwise', async () => {
+      setup()
+      const report = `Report\n${'0123456789'.repeat(1000)}`
+      const done = db.createTask({ spec: 'Long report' })
+      db.updateTaskStatus(done.id, 'completed', report)
+      db.createTask({ spec: 'Not started' })
+
+      const brief = (await call('orchestration.taskList', { brief: true })) as {
+        tasks: { result: string | null; result_truncated: boolean }[]
+      }
+      const full = (await call('orchestration.taskList', {})) as {
+        tasks: { result: string | null; result_truncated?: boolean }[]
+      }
+
+      expect(brief.tasks[0].result).toHaveLength(160)
+      expect(brief.tasks[0].result_truncated).toBe(true)
+      expect(brief.tasks[1].result).toBeNull()
+      expect(brief.tasks[1].result_truncated).toBe(false)
+      expect(full.tasks[0].result).toBe(report)
+      expect(full.tasks[0]).not.toHaveProperty('result_truncated')
+    })
   })
 
   describe('orchestration.taskUpdate', () => {
