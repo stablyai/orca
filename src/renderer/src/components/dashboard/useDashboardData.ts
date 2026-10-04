@@ -15,6 +15,8 @@ export type DashboardAgentRow = {
   /** Pane to focus when the row is activated, when it differs from paneKey.
    *  Subagent rows have no pane of their own and activate their parent's. */
   activationPaneKey?: string
+  /** Subagent rows only: which child of that pane's agent the row names, for a view of its own. */
+  activationSubagent?: { id: string; name: string }
   /** When this agent first began reporting status. Derived from the oldest
    *  stateHistory entry, falling back to updatedAt when no history exists yet.
    *  Used to sort agents by when they started. */

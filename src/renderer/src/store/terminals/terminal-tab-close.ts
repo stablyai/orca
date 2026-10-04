@@ -228,6 +228,7 @@ export function createTerminalTabCloseActions(
           pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
           pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
           cacheTimerByKey: nextCacheTimer,
+          paneSubagentViewByPaneKey: removePaneKeysByTabPrefix(s.paneSubagentViewByPaneKey, tabId),
           tabBarOrderByWorktree: nextTabBarOrderByWorktree,
           pendingSnapshotByPtyId: nextSnapshots,
           pendingColdRestoreByPtyId: nextColdRestores,

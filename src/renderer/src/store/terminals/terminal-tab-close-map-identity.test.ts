@@ -41,6 +41,7 @@ const UNTOUCHED_FIELDS = [
   'expandedPaneByTabId',
   'canExpandPaneByTabId',
   'cacheTimerByKey',
+  'paneSubagentViewByPaneKey',
   'lastTerminalInputAtByPaneKey',
   'unreadTerminalTabs',
   'unreadTerminalPanes',
@@ -90,11 +91,16 @@ describe('closeTab map identity', () => {
 
   it('still drops the closing tab from a map that did hold it', () => {
     const store = storeWithTwoTabs()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial seed of only the maps closeTab sweeps.
     store.setState({
       expandedPaneByTabId: { 'tab-a': true, 'tab-b': false },
       pendingStartupByTabId: { 'tab-a': true },
       cacheTimerByKey: { 'tab-a:leaf': 1, 'tab-b:leaf': 2 },
-      unreadTerminalPanes: { 'tab-a:leaf': true }
+      unreadTerminalPanes: { 'tab-a:leaf': true },
+      paneSubagentViewByPaneKey: {
+        'tab-a:leaf': { agentId: 'a1', name: 'Explore', parentTranscriptPath: '/p/a.jsonl' },
+        'tab-b:leaf': { agentId: 'a2', name: 'Plan', parentTranscriptPath: '/p/b.jsonl' }
+      }
     } as never)
     const before = store.getState()
 
@@ -106,5 +112,6 @@ describe('closeTab map identity', () => {
     expect(after.pendingStartupByTabId).toEqual({})
     expect(after.cacheTimerByKey).toEqual({ 'tab-b:leaf': 2 })
     expect(after.unreadTerminalPanes).toEqual({})
+    expect(Object.keys(after.paneSubagentViewByPaneKey)).toEqual(['tab-b:leaf'])
   })
 })

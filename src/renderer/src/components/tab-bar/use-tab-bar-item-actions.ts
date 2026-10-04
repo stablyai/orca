@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { clearClientHostedBrowserRowSelection } from '@/lib/pane-manager/client-hosted-browser-row-state'
+import { useAppStore } from '@/store'
 import type { TabBarItem } from './tab-bar-item-model'
 import type { TabBarProps } from './tab-bar-props'
 
@@ -64,7 +65,11 @@ export function useTabBarItemActions(source: TabBarItemActionSource): TabBarItem
       activate()
     }
     return {
-      activateTerminal: (tabId) => activateRealTab(() => latest.current.props.onActivate(tabId)),
+      activateTerminal: (tabId) => {
+        // Why: clicking the tab itself always returns its panes to their own agents.
+        useAppStore.getState().showTabMainAgents(tabId)
+        activateRealTab(() => latest.current.props.onActivate(tabId))
+      },
       activateFile: (fileId) =>
         activateRealTab(() => latest.current.props.onActivateFile?.(fileId)),
       activateBrowserTab: (tabId) =>

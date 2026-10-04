@@ -18,9 +18,9 @@ import { sessionIdFromFileName, sessionSortTime } from './session-scanner-accumu
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import {
   isSubagentTranscriptFileName,
-  subagentTranscriptsDirFor,
-  SUBAGENT_TRANSCRIPT_PREFIX
+  subagentTranscriptsDirFor
 } from './session-scanner-subagent-transcripts'
+import { CLAUDE_SUBAGENT_TRANSCRIPT_PREFIX } from '../../shared/claude-subagent-transcript-path'
 import {
   asRecord,
   errorMessage,
@@ -132,7 +132,7 @@ export async function listClaudeSubagentSessions(args: {
 }
 
 function subagentIdFromFileName(name: string): string {
-  return basename(name, extname(name)).slice(SUBAGENT_TRANSCRIPT_PREFIX.length)
+  return basename(name, extname(name)).slice(CLAUDE_SUBAGENT_TRANSCRIPT_PREFIX.length)
 }
 
 async function parseSubagentTranscript(args: {

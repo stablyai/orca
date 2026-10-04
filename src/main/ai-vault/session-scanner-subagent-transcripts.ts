@@ -1,21 +1,19 @@
 import { wslGatedReaddir } from '../native-chat/wsl-transcript-fs-access'
 import { basename, dirname, extname, join } from 'node:path'
-
-// Exported so discovery can prune these subtrees using the same literal that
-// locates them here — the pruning comment and behavior can't drift.
-export const SUBAGENT_DIR_NAME = 'subagents'
+import {
+  CLAUDE_SUBAGENT_DIR_NAME,
+  CLAUDE_SUBAGENT_TRANSCRIPT_PREFIX
+} from '../../shared/claude-subagent-transcript-path'
 
 // Claude names every Task subagent transcript `agent-<id>.jsonl`. The row-badge
 // count, the recoverable-empty signal, and the on-demand lister all key off this
 // one predicate so the "N subagents" badge can never disagree with the expanded
 // list (a stray non-transcript `.jsonl` or a dir named `x.jsonl` would otherwise
 // inflate the count).
-export const SUBAGENT_TRANSCRIPT_PREFIX = 'agent-'
-
 export function isSubagentTranscriptFileName(name: string, isFile: boolean): boolean {
   return (
     isFile &&
-    name.startsWith(SUBAGENT_TRANSCRIPT_PREFIX) &&
+    name.startsWith(CLAUDE_SUBAGENT_TRANSCRIPT_PREFIX) &&
     extname(name).toLowerCase() === '.jsonl'
   )
 }
@@ -26,7 +24,7 @@ export function isSubagentTranscriptFileName(name: string, isFile: boolean): boo
 // so they are the recoverable signal that keeps such a session from being hidden.
 export function subagentTranscriptsDirFor(transcriptFilePath: string): string {
   const stem = basename(transcriptFilePath, extname(transcriptFilePath))
-  return join(dirname(transcriptFilePath), stem, SUBAGENT_DIR_NAME)
+  return join(dirname(transcriptFilePath), stem, CLAUDE_SUBAGENT_DIR_NAME)
 }
 
 /**

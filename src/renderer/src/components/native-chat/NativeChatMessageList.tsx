@@ -1,7 +1,5 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown } from 'lucide-react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
-import { translate } from '@/i18n/i18n'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { useNativeChatTranscriptProjection } from './use-native-chat-transcript-projection'
 import { structuredQuestionTranscript } from './structured-agent-question-projection'
@@ -44,6 +42,8 @@ import type {
 } from './native-chat-message-rail-items'
 import { useNativeChatRailHistoryJump } from './use-native-chat-rail-history-jump'
 import { nativeChatReaderScrollInputHandlers } from './native-chat-reader-scroll-input'
+import { useNativeChatSubagentRevealRequest } from './use-native-chat-subagent-reveal-request'
+import { NativeChatJumpToLatestButton } from './NativeChatJumpToLatestButton'
 
 import type {
   AgentJournalRenderItem,
@@ -68,6 +68,7 @@ type NativeChatNavigationRequest =
 
 export function NativeChatMessageList({
   session,
+  paneKey,
   journalItems,
   journalSubmissions,
   subagentRoster,
@@ -86,6 +87,8 @@ export function NativeChatMessageList({
   runtimeContext
 }: {
   session: NativeChatLiveSession
+  /** This chat's agent-status pane key: what a sidebar subagent row's reveal names. */
+  paneKey?: string
   journalItems?: readonly AgentJournalRenderItem[]
   /** With the items, what places each row in its turn (structured lane). */
   journalSubmissions?: readonly AgentJournalSubmission[]
@@ -254,7 +257,7 @@ export function NativeChatMessageList({
     outline: railOutline
   })
   const servicedRailJumpRef = useRef(0)
-  const requestRailJump = useCallback((item: NativeChatRailItem) => {
+  const requestRailJump = useCallback((item: Pick<NativeChatRailItem, 'id'>) => {
     navigationSequence.current += 1
     setNavigationRequest({
       kind: 'rail',
@@ -297,6 +300,14 @@ export function NativeChatMessageList({
     },
     [beginNavigation, openSubagentSections]
   )
+  useNativeChatSubagentRevealRequest({
+    paneKey,
+    ready: isVisible && session.readPhase === 'ready',
+    sections: subagentSections,
+    openSubagentSections,
+    beginNavigation,
+    requestJump: requestRailJump
+  })
   const jumpToLatest = useCallback(() => {
     beginNavigation()
     scrollToBottom()
@@ -416,17 +427,7 @@ export function NativeChatMessageList({
             onReaderScroll={beginNavigation}
             pendingId={railHistoryJump.pendingId}
           />
-          {showJump ? (
-            <button
-              type="button"
-              onClick={jumpToLatest}
-              aria-label={translate('components.native-chat.jumpToLatest', 'Jump to latest')}
-              className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ArrowDown className="size-3.5" />
-              <span>{translate('components.native-chat.jumpToLatest', 'Jump to latest')}</span>
-            </button>
-          ) : null}
+          {showJump ? <NativeChatJumpToLatestButton onClick={jumpToLatest} /> : null}
         </div>
         {taskListState.list && taskListState.list.tasks.length > 0 ? (
           <div className="shrink-0 px-3 pb-2 sm:px-4">

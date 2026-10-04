@@ -283,6 +283,7 @@ export function NativeChatStructuredSession(
         ) : (
           <NativeChatMessageList
             session={session}
+            paneKey={paneKey}
             journalItems={controller.journalItems}
             journalSubmissions={controller.submissions}
             subagentRoster={controller.subagentRoster}

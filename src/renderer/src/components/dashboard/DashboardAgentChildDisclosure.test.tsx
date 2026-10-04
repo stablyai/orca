@@ -6,6 +6,7 @@ import { TooltipProvider } from '../ui/tooltip'
 import DashboardAgentRow from './DashboardAgentRow'
 import type { DashboardAgentRow as AgentRow } from './useDashboardData'
 import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
+import { buildSubagentChildRows } from '../sidebar/worktree-subagent-child-rows'
 
 vi.mock('./use-agent-row-conversation-name', () => ({ useAgentRowConversationName: () => null }))
 vi.mock('../sidebar/CacheTimer', () => ({
@@ -145,7 +146,8 @@ describe.each(['compact', 'full'] as const)('%s row disclosure actions', (mode) 
         expect(onSendTargetClick).toHaveBeenCalledWith(agent.paneKey)
         expect(onActivate).not.toHaveBeenCalled()
       } else {
-        expect(onActivate).toHaveBeenCalledWith(agent.tab.id, agent.paneKey)
+        // A parent row names no subagent.
+        expect(onActivate).toHaveBeenCalledWith(agent.tab.id, agent.paneKey, undefined)
         if (mode === 'full') {
           fireEvent.click(screen.getByRole('button', { name: 'Dismiss agent' }))
           expect(onDismiss).toHaveBeenCalledWith(agent.paneKey)
@@ -154,4 +156,31 @@ describe.each(['compact', 'full'] as const)('%s row disclosure actions', (mode) 
       }
     }
   )
+
+  it('activates the parent pane and names the subagent when a subagent row is clicked', () => {
+    const onActivate = vi.fn()
+    const [child] = buildSubagentChildRows({
+      parentEntry: {
+        ...agent.entry,
+        subagents: [{ id: 'task-1', state: 'working', description: 'Map call sites', startedAt: 1 }]
+      },
+      tab: agent.tab,
+      parentIsFresh: true
+    })
+    const props = { agent: child, now: 120000, onActivate }
+    render(
+      <TooltipProvider>
+        {mode === 'compact' ? (
+          <CompactAgentRow {...props} />
+        ) : (
+          <DashboardAgentRow {...props} onDismiss={vi.fn()} hideExpand />
+        )}
+      </TooltipProvider>
+    )
+    fireEvent.click(screen.getByText('Map call sites'))
+    expect(onActivate).toHaveBeenCalledWith(agent.tab.id, agent.paneKey, {
+      id: 'task-1',
+      name: 'Map call sites'
+    })
+  })
 })

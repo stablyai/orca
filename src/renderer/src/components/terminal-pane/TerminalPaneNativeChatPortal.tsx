@@ -6,6 +6,7 @@ import type { TerminalPaneController } from './use-terminal-pane-controller'
 import { useAppStore } from '@/store'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { NativeChatPaneCover } from './NativeChatPaneCover'
+import { paneShownSubagentTranscriptPath } from './pane-subagent-view-source'
 
 export function TerminalPaneNativeChatPortal({
   controller
@@ -25,6 +26,7 @@ export function TerminalPaneNativeChatPortal({
     isActive,
     isRendererVisible,
     managedPanes,
+    nativeChatTranscriptIsLocalReadable,
     readNativeChatTerminalScreen,
     resolveAgentForLeaf,
     switchNativeChatToTerminal,
@@ -35,7 +37,18 @@ export function TerminalPaneNativeChatPortal({
       ? resolvePaneAgentSessionId(state, makePaneKey(tabId, chatPane.leafId))
       : null
   )
-  if (!effectiveChatViewMode || !chatPane?.container) {
+  // Why: one cover per pane — a parent chat left under a subagent's cover would still take
+  // focus and pastes for an agent the user cannot see.
+  const showsSubagent = useAppStore((state) =>
+    chatPane
+      ? paneShownSubagentTranscriptPath(
+          state,
+          makePaneKey(tabId, chatPane.leafId),
+          nativeChatTranscriptIsLocalReadable
+        ) !== null
+      : false
+  )
+  if (!effectiveChatViewMode || !chatPane?.container || showsSubagent) {
     return null
   }
 

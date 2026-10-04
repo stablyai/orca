@@ -76,9 +76,22 @@ function childDashboardRow(
     rowSource: 'subagent',
     state,
     activationPaneKey: parentEntry.paneKey,
+    activationSubagent: subagentActivationTarget(row),
     startedAt,
     childRow: row
   }
+}
+
+/** What a click on a subagent row names: the provider id its transcripts carry, and a label. */
+export type SubagentActivationTarget = NonNullable<DashboardAgentRow['activationSubagent']>
+
+export function subagentActivationTarget(
+  row: AgentChildRowModel | undefined
+): SubagentActivationTarget | undefined {
+  if (!row?.providerId) {
+    return undefined
+  }
+  return { id: row.providerId, name: row.name || row.agentType || row.providerId }
 }
 
 /** Whether any work a child owns, at any depth, still runs. */
@@ -101,19 +114,26 @@ export function buildSubagentChildRows(args: {
    *  states are equally unverifiable. */
   parentIsFresh: boolean
 }): DashboardAgentRow[] {
-  const { parentEntry } = args
-  const context = agentChildRowContextForParent(parentEntry, args.parentIsFresh)
+  return runningSubagentChildRowModels(args.parentEntry, args.parentIsFresh).map((row) =>
+    childDashboardRow(row, args.parentEntry, args.tab)
+  )
+}
+
+/** The running subagents a parent's sidebar rows list, in host order. */
+export function runningSubagentChildRowModels(
+  parentEntry: AgentStatusEntry,
+  parentIsFresh: boolean
+): AgentChildRowModel[] {
+  const context = agentChildRowContextForParent(parentEntry, parentIsFresh)
   const rows =
     parentEntry.children !== undefined
       ? buildAgentChildRowModels(parentEntry.children, context)
       : buildLegacyAgentChildRowModels(parentEntry.subagents ?? [], context)
   // Shells and monitors show through their owner's dot; the sidebar lists running agents only, from
   // every source, by the same rule as the chat's strip.
-  return flattenAgentChildRowModels(rows)
-    .filter(
-      (row) =>
-        row.kind === 'agent' &&
-        agentChildWorkIsRunning({ settled: row.settled, ownsLiveWork: ownsLiveWork(row) })
-    )
-    .map((row) => childDashboardRow(row, parentEntry, args.tab))
+  return flattenAgentChildRowModels(rows).filter(
+    (row) =>
+      row.kind === 'agent' &&
+      agentChildWorkIsRunning({ settled: row.settled, ownsLiveWork: ownsLiveWork(row) })
+  )
 }

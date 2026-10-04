@@ -70,7 +70,11 @@ function getCompactAgentTime(agent: DashboardAgentRowData, now: number): string 
 type CompactAgentRowProps = {
   agent: DashboardAgentRowData
   now: number
-  onActivate: (tabId: string, paneKey: string) => void
+  onActivate: (
+    tabId: string,
+    paneKey: string,
+    subagent?: DashboardAgentRowData['activationSubagent']
+  ) => void
   // Why: send-popover target mode temporarily turns compact sidebar rows into
   // the picker surface, matching the full DashboardAgentRow behavior.
   sendTargetStatus?: 'eligible' | 'disabled' | 'sending'
@@ -146,9 +150,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       e.stopPropagation()
       // Why: subagent child rows have no pane of their own; they focus the
       // parent pane whose session spawned them.
-      onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
+      onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey, agent.activationSubagent)
     },
-    [agent.activationPaneKey, agent.paneKey, agent.tab.id, onActivate]
+    [agent.activationPaneKey, agent.activationSubagent, agent.paneKey, agent.tab.id, onActivate]
   )
   const handleSendTargetClickCapture = useCallback(
     (e: React.MouseEvent) => {
