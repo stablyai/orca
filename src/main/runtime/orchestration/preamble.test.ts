@@ -351,6 +351,36 @@ describe('buildDispatchPreamble', () => {
   })
 })
 
+describe('review posting opt-in', () => {
+  const NO_POSTING =
+    "Don't post to Slack, GitHub, or other channels during the run; report through these commands."
+  const REVIEW_POSTING =
+    "You may push this task's branch and open, update, or comment on its pull request (merge request on GitLab).\nDon't post to Slack, other repositories, or other channels during the run; report through these commands."
+
+  it('forbids all outside posting by default', () => {
+    const preamble = buildDispatchPreamble(baseParams())
+    expect(preamble).toContain(NO_POSTING)
+    expect(preamble).not.toContain('You may push')
+  })
+
+  it("allows the task's review posting when the spec opts in, and strips the flag line", () => {
+    const preamble = buildDispatchPreamble(
+      baseParams({ taskSpec: 'allow-review-posting: true\nShip the login form' })
+    )
+    expect(preamble).toContain(REVIEW_POSTING)
+    expect(preamble).not.toContain(NO_POSTING)
+    expect(preamble.endsWith('=== TASK ===\nShip the login form')).toBe(true)
+  })
+
+  it('keeps the default for a misspelled or false flag', () => {
+    for (const taskSpec of ['allow-review-posting: false\nx', 'allow-review-post: true\nx']) {
+      const preamble = buildDispatchPreamble(baseParams({ taskSpec }))
+      expect(preamble).toContain(NO_POSTING)
+      expect(preamble.endsWith(`=== TASK ===\n${taskSpec}`)).toBe(true)
+    }
+  })
+})
+
 describe('sub-dispatch section', () => {
   const base = {
     taskId: 'task_1',
