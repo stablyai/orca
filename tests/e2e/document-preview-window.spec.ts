@@ -98,6 +98,7 @@ test('Markdown keeps following its file after the source tab closes and preserve
   try {
     await openMarkdownFixture(orcaPage, context, filePath)
     await waitForRichMarkdownEditor(orcaPage)
+    await orcaPage.screenshot({ path: testInfo.outputPath('markdown-before-main-window.png') })
     const opened = electronApp.waitForEvent('window')
     await orcaPage
       .getByRole('button', { name: /^(More actions|更多操作)$/ })
@@ -106,6 +107,7 @@ test('Markdown keeps following its file after the source tab closes and preserve
     await orcaPage.getByRole('menuitem', { name: 'Open preview in window' }).click()
     const viewer = await opened
     await expect(viewer.getByRole('heading', { name: 'Before', exact: true })).toBeVisible()
+    await viewer.screenshot({ path: testInfo.outputPath('markdown-after-independent-window.png') })
     const top = await viewer.evaluate(() => {
       window.scrollTo(0, 600)
       return window.scrollY
@@ -124,6 +126,7 @@ test('Markdown keeps following its file after the source tab closes and preserve
       timeout: 15000
     })
     expect(await viewer.evaluate(() => window.scrollY)).toBe(top)
+    await viewer.evaluate(() => window.scrollTo(0, 0))
     await viewer.screenshot({ path: testInfo.outputPath('live-markdown-window.png') })
     expect(
       await electronApp.evaluate(({ BrowserWindow }) =>
