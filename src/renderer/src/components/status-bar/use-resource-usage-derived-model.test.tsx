@@ -2,6 +2,7 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { MemorySnapshot, WorktreeMemory } from '../../../../shared/process-stats-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
@@ -31,7 +32,9 @@ function derive(
   sessions: DaemonSession[] = [],
   row = sampled,
   projectGroups = [group],
-  browserTabsByWorktree: Record<string, BrowserWorkspace[]> = {}
+  browserTabsByWorktree: Record<string, BrowserWorkspace[]> = {},
+  activeHostId: ExecutionHostId = 'local',
+  viewingRemoteHost = false
 ) {
   const snapshot = {
     worktrees: [row],
@@ -43,6 +46,8 @@ function derive(
   return renderHook(() =>
     useResourceUsageDerivedModel({
       open: true,
+      activeHostId,
+      viewingRemoteHost,
       resourceSnapshot: snapshot,
       sessions,
       resourceSessionBindings: {
@@ -111,6 +116,35 @@ describe('Resource Manager folder ownership', () => {
       }
     }
   )
+
+  it('uses the selected host metadata when a workspace id exists on two hosts', () => {
+    const worktreeId = 'repo::/shared'
+    const localTwin: Worktree = {
+      ...local,
+      id: worktreeId,
+      repoId: 'repo',
+      displayName: 'Local collision'
+    }
+    const remoteTwin: Worktree = {
+      ...localTwin,
+      displayName: 'Remote collision',
+      hostId: 'ssh:runtime-owned',
+      runtimeOwnerEnvironmentId: 'paired'
+    }
+    const remoteRow = { ...sampled, worktreeId, repoId: 'repo', worktreeName: 'Remote collision' }
+
+    const groups = derive(
+      [localTwin, remoteTwin],
+      [],
+      remoteRow,
+      [group],
+      {},
+      'runtime:paired',
+      true
+    )
+
+    expect(groups[0].worktrees[0].worktreeName).toBe('Remote collision')
+  })
 
   it.each([false, true])(
     'preserves sampled ownership with duplicate folder ids (reverse=%s)',
