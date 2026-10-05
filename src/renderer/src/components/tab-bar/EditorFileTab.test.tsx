@@ -49,6 +49,10 @@ vi.mock('react', async () => {
   }
 })
 
+vi.mock('./use-tab-strip-slot-props', () => ({
+  useTabStripSlotProps: () => ({ className: '', 'data-tab-strip-slot': '' })
+}))
+
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: () => ({
     attributes: {},
@@ -256,7 +260,7 @@ async function renderEditorFileTab(
     hasTabsToRight: false,
     hasTabsToLeft: false,
     tabCount: 1,
-    statusByRelativePath: new Map(),
+    gitStatus: null,
     onActivate,
     onClose: () => {},
     onCloseOthers: () => {},
@@ -458,7 +462,8 @@ describe('EditorFileTab rename menu', () => {
       oldPath: '/repo/untitled-5.md',
       newName: '日本語.md',
       worktreeId: 'wt-1',
-      worktreePath: '/repo'
+      worktreePath: '/repo',
+      documentScoped: false
     })
   })
 

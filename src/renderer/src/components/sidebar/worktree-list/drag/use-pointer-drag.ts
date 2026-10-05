@@ -136,6 +136,7 @@ export function useWorktreePointerDrag(args: {
       setWorktreeDragState({
         draggingWorktreeId: drag.worktreeId,
         sourceGroupKey: drag.sourceGroupKey,
+        lineageDropTargetId: null,
         dropIndex: null,
         dropIndicatorY: null,
         previewOffsetsByWorktreeId: EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS,
@@ -207,6 +208,7 @@ export function useWorktreePointerDrag(args: {
         previewOffsetY: 0,
         workspaceBoardDragPreviewRequested: false,
         frameId: null,
+        reorderIntent: null,
         latestBoardDropTarget: null,
         latestStatusDropTarget: null
       }

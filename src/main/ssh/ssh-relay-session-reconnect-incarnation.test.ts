@@ -3,7 +3,11 @@ import { randomUUID } from 'node:crypto'
 import type * as NodeCrypto from 'node:crypto'
 import { SshRelaySession } from './ssh-relay-session'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
-import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
+import {
+  createMockDeps,
+  mockDeploySuccess,
+  recordedPtyBindings
+} from './ssh-relay-session-test-fixtures'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { SshRemotePtyLease } from '../../shared/ssh-types'
 
@@ -439,13 +443,14 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       incarnationId
     })
     expect(runtime.onPtySpawned).not.toHaveBeenCalled()
-    expect(mockStore.persistPtyBinding).toHaveBeenCalledWith({
+    expect(recordedPtyBindings(mockStore)).toContainEqual({
       worktreeId: 'worktree-1',
       tabId: 'tab-1',
       leafId: INCARNATION_LEAF_ID,
       ptyId: APP_PTY_ID,
       incarnationId,
-      mayReviveRetiredSurface: false
+      mayReviveRetiredSurface: false,
+      origin: 'relay_reattach'
     })
     expect(vi.mocked(mockStore.persistPtyBinding).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(mockStore.markSshRemotePtyLeasesAttachedAsync).mock.invocationCallOrder[0]!
@@ -453,13 +458,21 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
   })
 
   it.each([
-    { relay: 'current', incarnationId: 'inc-1', tombstonePartition: 'local' },
-    { relay: 'current', incarnationId: 'inc-1', tombstonePartition: 'host' },
-    { relay: 'legacy', incarnationId: undefined, tombstonePartition: 'local' },
-    { relay: 'legacy', incarnationId: undefined, tombstonePartition: 'host' }
+    { relay: 'current', incarnationId: 'inc-1', tombstonePartition: 'local', retiredBy: 'surface' },
+    { relay: 'current', incarnationId: 'inc-1', tombstonePartition: 'host', retiredBy: 'surface' },
+    {
+      relay: 'legacy',
+      incarnationId: undefined,
+      tombstonePartition: 'local',
+      retiredBy: 'surface'
+    },
+    { relay: 'legacy', incarnationId: undefined, tombstonePartition: 'host', retiredBy: 'surface' },
+    // A closed tab whose pane is in no tab: the close record is the backstop.
+    { relay: 'current', incarnationId: 'inc-1', tombstonePartition: 'local', retiredBy: 'close' },
+    { relay: 'current', incarnationId: 'inc-1', tombstonePartition: 'host', retiredBy: 'close' }
   ])(
-    'suppresses a $tombstonePartition-partition retired surface from a $relay relay',
-    async ({ incarnationId, tombstonePartition }) => {
+    'suppresses a $tombstonePartition-partition $retiredBy retirement from a $relay relay',
+    async ({ incarnationId, tombstonePartition, retiredBy }) => {
       const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
       const attachForReconnect = vi.fn().mockResolvedValue({
         ...(incarnationId ? { incarnationId } : {}),
@@ -509,10 +522,16 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
           }
         }
       }
+      const closedTab: ReturnType<typeof getDefaultWorkspaceSession> = {
+        ...getDefaultWorkspaceSession(),
+        closedTerminalTabTombstonesByTabId: { [tabId]: { closedAt: Date.now(), worktreeId } }
+      }
       vi.mocked(mockStore.getWorkspaceSession).mockImplementation((hostId) =>
-        (hostId ? 'host' : 'local') === tombstonePartition
-          ? sessionWithTombstone
-          : getDefaultWorkspaceSession()
+        (hostId ? 'host' : 'local') !== tombstonePartition
+          ? getDefaultWorkspaceSession()
+          : retiredBy === 'close'
+            ? closedTab
+            : sessionWithTombstone
       )
       const runtime = { registerPty: vi.fn(), onPtySpawned: vi.fn() }
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -642,7 +661,7 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       leafId: INCARNATION_LEAF_ID,
       incarnationId
     })
-    expect(mockStore.persistPtyBinding).toHaveBeenCalledWith(
+    expect(recordedPtyBindings(mockStore)).toContainEqual(
       expect.objectContaining({ tabId: movedTabId, ptyId: APP_PTY_ID, incarnationId })
     )
     expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
@@ -762,7 +781,7 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       incarnationId: currentIncarnationId
     })
     expect(setPtyOwnership).toHaveBeenCalledWith(APP_PTY_ID, 'target-1')
-    expect(mockStore.persistPtyBinding).toHaveBeenCalledWith(
+    expect(recordedPtyBindings(mockStore)).toContainEqual(
       expect.objectContaining({ ptyId: APP_PTY_ID, incarnationId: currentIncarnationId })
     )
     expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:replay', {

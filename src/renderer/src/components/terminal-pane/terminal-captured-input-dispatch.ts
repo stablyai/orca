@@ -1,3 +1,4 @@
+import type { IDisposable } from '@xterm/xterm'
 import type { PtyTransport } from './pty-transport'
 
 type CapturedTerminalInputDispatch = {
@@ -31,15 +32,16 @@ export function sendCapturedTerminalInput({
   ) {
     return false
   }
-  const sent = capturedTransport.sendInput(data)
+  const sent = capturedTransport.sendInput(data, 'driving')
   if (sent) {
     onAccepted?.()
   }
   return sent
 }
 
+/** currentBinding arrives as the pane's raw xterm binding; only its identity is read. */
 export function requestCapturedTerminalReconfirmation(
-  currentBinding: object | undefined,
+  currentBinding: IDisposable | TerminalCapturedInputBinding | undefined,
   capturedBinding: TerminalCapturedInputBinding | undefined
 ): void {
   if (currentBinding === capturedBinding) {

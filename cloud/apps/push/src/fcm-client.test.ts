@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { fcmCollapseKey, FcmClient, type FcmRequest, type FcmResponse } from './fcm-client.js'
+import { FcmClient, type FcmRequest, type FcmResponse } from './fcm-client.js'
 import { buildPushDelivery } from './push-delivery-message.js'
 
 const NOW = 1_700_000_000_000
@@ -20,6 +20,7 @@ function delivery(agentState: 'needs-input' | null = 'needs-input') {
       agentState,
       title: 'Agent needs input',
       body: 'Waiting on your answer',
+      paneKey: 'tab-b:pane-1',
       worktreeId: 'wt-1'
     }
   })
@@ -59,27 +60,14 @@ describe('fcm client', () => {
     expect(JSON.parse(request.body)).toEqual({
       message: {
         token: TOKEN,
-        notification: { title: 'Agent needs input', body: 'Waiting on your answer' },
-        android: {
-          priority: 'HIGH',
-          ttl: '300s',
-          collapse_key: createHash('sha256')
-            .update(
-              createHash('sha256')
-                .update(JSON.stringify([HOST, 'note-1']))
-                .digest('hex')
-            )
-            .digest('hex')
-            .slice(0, 32),
-          notification: {
-            channel_id: 'orca-desktop',
-            tag: createHash('sha256')
-              .update(JSON.stringify([HOST, 'note-1']))
-              .digest('hex')
-          }
-        },
+        android: { priority: 'HIGH', ttl: '300s' },
         data: {
+          title: 'Agent needs input',
+          message: 'Waiting on your answer',
+          tag: delivery().collapseId,
+          channelId: 'orca-desktop',
           hostFingerprint: HOST,
+          paneKey: 'tab-b:pane-1',
           worktreeId: 'wt-1',
           notificationId: 'note-1',
           notificationSeq: '7',
@@ -96,7 +84,7 @@ describe('fcm client', () => {
     await fcm.send(delivery(null), { token: TOKEN })
     const message = JSON.parse(fake.requests[0]!.body) as {
       message: {
-        android: { collapse_key: string; notification: { tag: string } }
+        android: Record<string, unknown>
         data: Record<string, string>
       }
     }
@@ -108,9 +96,10 @@ describe('fcm client', () => {
       .update(JSON.stringify([HOST, 'note-1']))
       .digest('hex')
     expect(message.message.data.coalescedCount).toBeUndefined()
-    expect(message.message.android.notification.tag).toBe(tag)
-    expect(message.message.android.collapse_key).toBe(fcmCollapseKey(tag))
-    expect(message.message.android.collapse_key).toHaveLength(32)
+    expect(message.message.data.tag).toBe(tag)
+    expect(message.message.android).not.toHaveProperty('collapse_key')
+    expect(message.message).not.toHaveProperty('notification')
+    expect(message.message.data).not.toHaveProperty('body')
   })
 
   it('marks an unregistered token dead from the status or the error detail', async () => {

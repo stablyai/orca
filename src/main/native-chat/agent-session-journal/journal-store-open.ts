@@ -1,4 +1,3 @@
-import { mkdir } from 'node:fs/promises'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
@@ -16,10 +15,6 @@ import { staleSubagentRosterRevisions } from './journal-subagent-liveness'
  *  pre-SQLite notice's. Same shape, and neither is only a repair. */
 type JournalDisclosure = JournalRepairDisclosure
 
-export async function ensureJournalDir(journalDir: string): Promise<void> {
-  await mkdir(journalDir, { recursive: true })
-}
-
 export function journalStoreLoadedFields(loaded: JournalLoad) {
   return {
     state: loaded.state,
@@ -29,8 +24,7 @@ export function journalStoreLoadedFields(loaded: JournalLoad) {
 }
 
 export async function openJournalStoreState(input: {
-  journalDir: string
-  loaded: JournalLoad | null | undefined
+  legacyDirectory: string
   replay: () => JournalLoad | null
   /** Drops the rejected suffix and records the rebuild it owes, in ONE
    *  transaction. Corruption is not preserved; replay keeps reporting `corrupt`
@@ -52,7 +46,7 @@ export async function openJournalStoreState(input: {
   setMalformedRows: (count: number) => void
   readOnly: () => boolean
 }): Promise<void> {
-  const loaded = input.loaded !== undefined ? input.loaded : input.replay()
+  const loaded = input.replay()
   if (!loaded) {
     input.start()
     await discloseFileFormatRemnant(input)
@@ -72,7 +66,7 @@ export async function openJournalStoreState(input: {
     input.setMalformedRows(loaded.malformedRows)
   }
   if (input.malformedRows() > 0 && !input.readOnly()) {
-    const disclosure = journalRepairDisclosure({ malformedRows: input.malformedRows() })
+    const disclosure = journalRepairDisclosure()
     await input.appendItem(disclosure.identity, disclosure.body, input.highestFence())
   }
   await settleStaleSubagentRosters(input, loaded)
@@ -96,7 +90,7 @@ export async function openJournalStoreState(input: {
  *  Upserts by a constant identity, so the offer above is exactly-once in effect:
  *  once the row exists the epoch is no longer empty. */
 async function discloseFileFormatRemnant(input: {
-  journalDir: string
+  legacyDirectory: string
   agent: AgentType
   appendItem: (
     identity: JournalDisclosure['identity'],
@@ -109,7 +103,7 @@ async function discloseFileFormatRemnant(input: {
   if (input.readOnly()) {
     return
   }
-  const transcriptPath = findJournalFileFormatRemnant(input.journalDir)
+  const transcriptPath = findJournalFileFormatRemnant(input.legacyDirectory)
   if (!transcriptPath) {
     return
   }

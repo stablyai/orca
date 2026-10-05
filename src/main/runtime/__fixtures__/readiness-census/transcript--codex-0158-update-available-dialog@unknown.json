@@ -1,0 +1,15 @@
+{
+  "description": "codex recording at 120x40 replayed on the unknown pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-153: now=pending:open edge=pending:open quiet=pending:open wait=ready@poll",
+      "154: now=pending:open edge=pending:open quiet=pending:open wait=blocked:agent-update-prompt@poll",
+      "155-165: now=blocked:agent-update-prompt edge=blocked:agent-update-prompt quiet=blocked:agent-update-prompt wait=blocked:agent-update-prompt@start"
+    ],
+    "clockless": [
+      "0-153: verdict=pending:open wait=ready@poll",
+      "154: verdict=pending:open wait=blocked:agent-update-prompt@poll",
+      "155-165: verdict=blocked:agent-update-prompt wait=blocked:agent-update-prompt@start"
+    ]
+  }
+}

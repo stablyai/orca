@@ -1,5 +1,4 @@
 import { powerMonitor, powerSaveBlocker } from 'electron'
-import type { AgentStatusState } from '../shared/agent-status-types'
 import {
   normalizeComputerAwakeMode,
   type ComputerAwakeMode,
@@ -7,14 +6,12 @@ import {
 } from '../shared/computer-awake-mode'
 import { LinuxLidSleepAssertion } from './linux-lid-sleep-assertion'
 import { MacosSystemSleepAssertion } from './macos-system-sleep-assertion'
+import { AgentAwakeStatusLease, type AgentAwakeStatus } from './agent-awake-status-lease'
 
-export const AGENT_AWAKE_STATUS_STALE_AFTER_MS = 2 * 60 * 60 * 1000
-
-export type AgentAwakeStatus = {
-  state: AgentStatusState
-  receivedAt: number
-  observedInCurrentRuntime: boolean
-}
+export {
+  AGENT_AWAKE_STATUS_STALE_AFTER_MS,
+  type AgentAwakeStatus
+} from './agent-awake-status-lease'
 
 type PowerSaveBlocker = {
   start: (type: 'prevent-app-suspension' | 'prevent-display-sleep') => number
@@ -47,9 +44,7 @@ type AgentAwakeServiceOptions = {
 
 export class AgentAwakeService {
   private mode: ComputerAwakeMode = 'off'
-  private statuses: AgentAwakeStatus[] = []
   private blockerId: number | null = null
-  private staleTimer: ReturnType<typeof setTimeout> | null = null
   private readonly statusListeners = new Set<(status: ComputerAwakeStatus) => void>()
   private lastPublishedStatus: ComputerAwakeStatus | null = null
   private readonly blocker: PowerSaveBlocker
@@ -58,12 +53,14 @@ export class AgentAwakeService {
   private readonly macosAssertion: PlatformAwakeAssertion
   private readonly platform: NodeJS.Platform
   private readonly now: () => number
+  private readonly statusLease: AgentAwakeStatusLease
   private readonly unsubscribeResume: (() => void) | null
 
   constructor(options: AgentAwakeServiceOptions = {}) {
     this.blocker = options.blocker ?? powerSaveBlocker
     this.logger = options.logger ?? console
     this.now = options.now ?? Date.now
+    this.statusLease = new AgentAwakeStatusLease(this.now, () => this.refresh('stale-expiry'))
     // Windows lid close is intentionally not modeled as an assertion here:
     // keeping it awake requires mutating the user's global power plan.
     this.linuxAssertion =
@@ -105,9 +102,18 @@ export class AgentAwakeService {
   }
 
   setStatuses(statuses: AgentAwakeStatus[]): void {
-    // Copy the array, not every row: the hook server allocates each row fresh per event.
-    this.statuses = [...statuses]
+    this.statusLease.replace(statuses)
     this.refresh('status-change')
+  }
+
+  /** Renew one accepted observation without rescanning every active agent. */
+  observeStatusFreshness(status: AgentAwakeStatus): void {
+    if (!this.statusLease.renew(status)) {
+      return
+    }
+    if (this.mode === 'auto' && this.lastPublishedStatus?.active !== true) {
+      this.applyAwakeDecision('status-freshness', 1)
+    }
   }
 
   getStatus(): ComputerAwakeStatus {
@@ -129,7 +135,7 @@ export class AgentAwakeService {
   }
 
   dispose(): void {
-    this.clearStaleTimer()
+    this.statusLease.dispose()
     this.unsubscribeResume?.()
     this.stopBlocker('dispose')
     this.macosAssertion.dispose()
@@ -137,8 +143,11 @@ export class AgentAwakeService {
   }
 
   private refresh(reason: string): void {
-    this.scheduleStaleTimer()
     const runningStatusCount = this.getEligibleRunningStatusCount()
+    this.applyAwakeDecision(reason, runningStatusCount)
+  }
+
+  private applyAwakeDecision(reason: string, runningStatusCount: number): void {
     const shouldBlock = this.mode === 'on' || (this.mode === 'auto' && runningStatusCount > 0)
     if (shouldBlock) {
       const macosAssertionActive = this.startMacosAssertion(reason)
@@ -171,56 +180,7 @@ export class AgentAwakeService {
   }
 
   private getEligibleRunningStatusCount(): number {
-    const now = this.now()
-    // Counted in place: the filtered array was only ever measured, and this runs per hook event.
-    return this.statuses.reduce((count, s) => count + (this.isWakeEligible(s, now) ? 1 : 0), 0)
-  }
-
-  private isWakeEligible(status: AgentAwakeStatus, now: number): boolean {
-    return (
-      status.observedInCurrentRuntime &&
-      status.state === 'working' &&
-      Number.isFinite(status.receivedAt) &&
-      now - status.receivedAt <= AGENT_AWAKE_STATUS_STALE_AFTER_MS
-    )
-  }
-
-  private scheduleStaleTimer(): void {
-    this.clearStaleTimer()
-    const now = this.now()
-    let earliestExpiry: number | null = null
-    for (const status of this.statuses) {
-      if (
-        !status.observedInCurrentRuntime ||
-        status.state !== 'working' ||
-        !Number.isFinite(status.receivedAt)
-      ) {
-        continue
-      }
-      const expiry = status.receivedAt + AGENT_AWAKE_STATUS_STALE_AFTER_MS
-      if (expiry <= now) {
-        continue
-      }
-      earliestExpiry = earliestExpiry === null ? expiry : Math.min(earliestExpiry, expiry)
-    }
-    if (earliestExpiry === null) {
-      return
-    }
-    this.staleTimer = setTimeout(() => {
-      this.staleTimer = null
-      this.refresh('stale-expiry')
-    }, earliestExpiry - now)
-    if (typeof this.staleTimer.unref === 'function') {
-      this.staleTimer.unref()
-    }
-  }
-
-  private clearStaleTimer(): void {
-    if (!this.staleTimer) {
-      return
-    }
-    clearTimeout(this.staleTimer)
-    this.staleTimer = null
+    return this.statusLease.countEligible()
   }
 
   private startBlocker(reason: string, runningStatusCount: number): void {

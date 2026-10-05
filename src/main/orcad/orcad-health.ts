@@ -17,6 +17,7 @@ import {
   getDaemonEndpointFacts,
   readDaemonPidRecord
 } from '../daemon/daemon-init'
+import type { OrcadProfileStateAuthoritySelection } from './orcad-profile-state-telemetry'
 
 /**
  * How much a green self-test actually proves.
@@ -47,6 +48,9 @@ export type TerminalDaemonHealth = {
   buildVersion: string | null
   entryPath: string | null
   protocolVersion: number | null
+  /** The systemd scope unit the daemon self-detected landing in (see daemon-cgroup-scope.ts),
+   *  or null when it ran unscoped — the case a combined-unit `systemctl restart` still reaps. */
+  cgroupUnit: string | null
   selfTest: PtySelfTest
 }
 
@@ -61,6 +65,8 @@ export type OrcadHealth = {
   arch: string
   pid: number
   terminalDaemon: TerminalDaemonHealth
+  /** The low-cardinality profile-state authority selected during startup, when available. */
+  profileStateAuthority?: OrcadProfileStateAuthoritySelection
 }
 
 /**
@@ -116,6 +122,7 @@ export async function collectTerminalDaemonHealth(): Promise<TerminalDaemonHealt
       buildVersion: null,
       entryPath: null,
       protocolVersion: null,
+      cgroupUnit: null,
       selfTest
     }
   }
@@ -137,11 +144,15 @@ export async function collectTerminalDaemonHealth(): Promise<TerminalDaemonHealt
     buildVersion: record?.appVersion ?? null,
     entryPath: record?.entryPath ?? null,
     protocolVersion: facts.protocolVersion,
+    cgroupUnit: record?.cgroupUnit ?? null,
     selfTest
   }
 }
 
-export async function collectOrcadHealth(buildVersion: string): Promise<OrcadHealth> {
+export async function collectOrcadHealth(
+  buildVersion: string,
+  profileStateAuthority?: OrcadProfileStateAuthoritySelection
+): Promise<OrcadHealth> {
   return {
     buildHash: computeOrcadBuildHash(),
     buildVersion,
@@ -150,6 +161,7 @@ export async function collectOrcadHealth(buildVersion: string): Promise<OrcadHea
     platform: process.platform,
     arch: process.arch,
     pid: process.pid,
-    terminalDaemon: await collectTerminalDaemonHealth()
+    terminalDaemon: await collectTerminalDaemonHealth(),
+    ...(profileStateAuthority ? { profileStateAuthority } : {})
   }
 }

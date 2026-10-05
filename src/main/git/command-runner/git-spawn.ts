@@ -7,6 +7,8 @@ import { untranslatedGitOutputEnv } from './git-process-env'
 import { prepareWindowsHostGitEnvironment } from './windows-host-git-environment'
 import type { GitAdmissionTier } from './git-exec-options'
 import { acquireGitAdmission } from './git-subprocess-admission'
+import { classifyGitCommand } from '../../../shared/git-command-classification'
+import { buildNetworkSshPolicyEnv } from './git-ssh-policy-env'
 
 /**
  * Spawn a git child process. Drop-in replacement for
@@ -35,7 +37,14 @@ export async function gitSpawnAfterWindowsEnvironmentReady(
   if (options.signal?.aborted) {
     throw createAbortError()
   }
-  return withGitAdmission(args, env === options.env ? options : { ...options, env })
+  const policyEnv =
+    classifyGitCommand(args) === 'network'
+      ? (await buildNetworkSshPolicyEnv({ ...options, env }, args)).env
+      : env
+  return withGitAdmission(
+    args,
+    policyEnv === options.env ? options : { ...options, env: policyEnv }
+  )
 }
 
 export async function withGitAdmission(

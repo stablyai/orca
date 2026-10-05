@@ -9,6 +9,7 @@ import {
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
+import { getWorktreeDeleteErrorToShow } from './worktree-delete-error-display'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
@@ -21,7 +22,11 @@ import { DeleteWorktreeDialogDescription } from './DeleteWorktreeDialogDescripti
 import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
 import { DeleteWorktreeWarningPanels } from './DeleteWorktreeWarningPanels'
 import { persistDeleteWorktreeConfirmSkipPreference } from './delete-worktree-preference-toast'
-import { getDeleteWorktreeDirtyChangeCounts } from './delete-worktree-dirty-change-counts'
+import {
+  getDeleteWorktreeChangeCheckStates,
+  getDeleteWorktreeDirtyChangeCounts,
+  getDeleteWorktreeDirtyChangePreviews
+} from './delete-worktree-dirty-change-counts'
 import {
   countFolderWorkspaceDeletes,
   getDeleteWorktreeDialogCopy,
@@ -113,15 +118,11 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const repoMap = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
   const isBatchDelete = worktreeIds.length > 1
   const isFolderWorkspaceDelete = !isBatchDelete && getIsFolderWorkspaceDelete(repoMap, worktree)
-  const folderWorkspaceDeleteCount = useMemo(
-    () => countFolderWorkspaceDeletes(repoMap, worktrees),
-    [repoMap, worktrees]
-  )
   const deleteCopy = getDeleteWorktreeDialogCopy({
     isBatchDelete,
     worktree,
     worktreeCount: worktrees.length,
-    folderWorkspaceDeleteCount,
+    folderWorkspaceDeleteCount: countFolderWorkspaceDeletes(repoMap, worktrees),
     isFolderWorkspaceDelete
   })
   const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
@@ -168,7 +169,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     ? getDeleteStateForWorktreeHost(worktree, deleteStateByWorktreeId)
     : undefined
   const isDeleting = deleteStates.some((state) => state.isDeleting)
-  const deleteError = !isBatchDelete ? (deleteState?.error ?? null) : null
+  const deleteError = !isBatchDelete ? getWorktreeDeleteErrorToShow(worktree, deleteState) : null
   const canForceDelete = !isBatchDelete && (deleteState?.canForceDelete ?? false)
   const gitStatusByWorktreeIdentity = useDeleteWorktreeStatusHydration({
     isOpen,
@@ -176,14 +177,13 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     visibleTargets: worktrees,
     repoMap
   })
-  const dirtyChangeCountsByWorktreeId = useMemo(() => {
-    return getDeleteWorktreeDirtyChangeCounts({
-      deleteTargets,
-      deleteStateByWorktreeId,
-      gitStatusByWorktree,
-      gitStatusByWorktreeIdentity,
-      repoMap
-    })
+  const dirtyChanges = useMemo(() => {
+    const statusInput = { deleteTargets, gitStatusByWorktree, gitStatusByWorktreeIdentity, repoMap }
+    return {
+      checkStates: getDeleteWorktreeChangeCheckStates(statusInput),
+      counts: getDeleteWorktreeDirtyChangeCounts({ ...statusInput, deleteStateByWorktreeId }),
+      previews: getDeleteWorktreeDirtyChangePreviews(statusInput)
+    }
   }, [
     deleteStateByWorktreeId,
     deleteTargets,
@@ -363,6 +363,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
                 )}
           </DialogTitle>
           <DeleteWorktreeDialogDescription
+            showChangeLossWarning={dirtyChanges.checkStates.size > 0}
             targetClassName={deleteCopy.targetClassName}
             targetLabel={deleteCopy.targetLabel}
             canDeleteAllLineage={canDeleteAllLineage}
@@ -375,22 +376,28 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           />
         </DialogHeader>
 
-        <DeleteWorktreeTargetPreview
-          isBatchDelete={isBatchDelete}
-          worktree={worktree}
-          worktrees={worktrees}
-          collisionWorktrees={allWorktrees}
-          hostLabelById={hostLabelById}
-          deleteStateByWorktreeId={deleteStateByWorktreeId}
-          dirtyChangeCountsByWorktreeId={dirtyChangeCountsByWorktreeId}
-        />
-
-        {hasLineageChildren && (
-          <DeleteWorktreeLineageNotice
-            descendants={lineageDelete.descendants}
-            dirtyChangeCountsByWorktreeId={dirtyChangeCountsByWorktreeId}
+        <div className="scrollbar-sleek max-h-[50vh] min-w-0 space-y-4 overflow-y-auto">
+          <DeleteWorktreeTargetPreview
+            isBatchDelete={isBatchDelete}
+            worktree={worktree}
+            worktrees={worktrees}
+            collisionWorktrees={allWorktrees}
+            hostLabelById={hostLabelById}
+            deleteStateByWorktreeId={deleteStateByWorktreeId}
+            changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
+            dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
+            dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
           />
-        )}
+
+          {hasLineageChildren && (
+            <DeleteWorktreeLineageNotice
+              descendants={lineageDelete.descendants}
+              changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
+              dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
+              dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
+            />
+          )}
+        </div>
 
         <DeleteWorktreeWarningPanels
           isMainWorktree={isMainWorktree}

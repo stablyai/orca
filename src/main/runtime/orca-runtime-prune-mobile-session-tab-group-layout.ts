@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { selectFreshAgentRowForMobileTab } from './runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from './orca-runtime-schedule-mobile-session-tabs-changed'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type {
@@ -22,8 +23,6 @@ import type {
 import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
 import { FIRST_PANE_ID } from '../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
-import { copySleepingAgentLaunchConfig } from './runtime-agent-launch-resolution'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
@@ -93,12 +92,14 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
       getLiveBrowserTabs: (worktreeId) => this.getLiveBrowserTabsByPageId(worktreeId),
       getProviderSessionRows: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey),
       getProviderSessionSnapshot: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
+      getStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
       getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
       findPty: (worktreeId, tab, options) =>
         this.findPtyForMobileTerminalTab(worktreeId, tab, options),
-      getRetainedStatus: (paneKey, pty, tab) =>
-        this.getFreshRetainedAgentStatusForMobileTab(paneKey, pty, tab),
+      getRetainedStatus: (paneKey, pty, tab, getRows) =>
+        this.getFreshRetainedAgentStatusForMobileTab(paneKey, pty, tab, getRows),
       getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId),
+      getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId),
       issuePtyHandle: (pty) => this.issuePtyHandle(pty),
       recordPty: (ptyId, worktreeId, state) => this.recordPtyWorktree(ptyId, worktreeId, state),
       buildPtyStatus: (pty, tab, terminalHandle, retained, getRows) =>
@@ -117,20 +118,52 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
     retained: RuntimeAgentRowSnapshot | null,
     getHookRowsForPane: (paneKey: string) => AgentStatusIpcPayload[]
   ): { agentStatus: AgentStatusEntry } | Record<string, never> {
-    return buildRuntimeMobileAgentStatus(pty, tab, terminalHandle, retained, getHookRowsForPane, {
-      getPaneKey: (candidate) => this.getMobileTerminalPaneKey(candidate),
-      getLeaf: (candidate) =>
-        this.leaves.get(this.getLeafKey(candidate.parentTabId, candidate.leafId)) ?? null,
-      getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId)
-    })
+    // Why display records: a phone status is presentation, so it shows the stale-working clear.
+    const displayPty = pty ? this.getPtyDisplayRecord(pty) : null
+    return buildRuntimeMobileAgentStatus(
+      displayPty,
+      tab,
+      terminalHandle,
+      retained,
+      getHookRowsForPane,
+      {
+        getPaneKey: (candidate) => this.getMobileTerminalPaneKey(candidate),
+        getLeaf: (candidate) => {
+          const leaf = this.leaves.get(this.getLeafKey(candidate.parentTabId, candidate.leafId))
+          return leaf ? this.getLeafDisplayRecord(leaf) : null
+        },
+        getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId)
+      }
+    )
   }
 
   protected getFreshRetainedAgentStatusForMobileTab(
     paneKey: string,
     pty: RuntimePtyWorktreeRecord | null,
-    tab: RuntimeMobileSessionTerminalTab
+    _tab: RuntimeMobileSessionTerminalTab,
+    getRows: (paneKey: string, terminalHandle: string | null) => AgentStatusIpcPayload[]
   ): RuntimeAgentRowSnapshot | null {
-    return this.agentRows.getFreshForMobile(paneKey, pty, tab)
+    const paneMatch = selectFreshAgentRowForMobileTab({
+      paneKey,
+      terminalHandle: null,
+      hookRows: getRows(paneKey, null)
+    })
+    if (paneMatch || !pty) {
+      return paneMatch
+    }
+    // Why: the OSC producer can stamp a leaf or incarnation handle; use the same non-minting
+    // inventory as worktree.ps so a tab-id remint can rejoin the still-live central row.
+    for (const terminalHandle of this.getExistingTerminalHandlesForPtyId(pty.ptyId)) {
+      const handleMatch = selectFreshAgentRowForMobileTab({
+        paneKey,
+        terminalHandle,
+        hookRows: getRows(paneKey, terminalHandle)
+      })
+      if (handleMatch) {
+        return handleMatch
+      }
+    }
+    return null
   }
 
   protected findPtyForMobileTerminalTab(
@@ -195,9 +228,10 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
   }
 
   // Why: group address resolution (Section 4.5) queries per-handle status and must not throw on stale handles; return null on any error.
-  getAgentStatusForHandle(handle: string): string | null {
+  async getAgentStatusForHandle(handle: string): Promise<string | null> {
     // A structured worker has no pane and no title, so every PTY probe below answers null and
-    // `@idle` would enumerate it and then silently drop it. Its status is the journal's.
+    // `@idle` would enumerate it and then silently drop it. Its status is the journal's, read
+    // through a conversation the idle sweep may have closed.
     const structured = resolveStructuredWorkerAuthority(handle, this._orchestrationDb)
     if (structured) {
       return structuredWorkerAgentStatus(structured.identity.sessionId)
@@ -222,20 +256,6 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
 
   getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined {
     return this.getTerminalHandleForPaneKey(paneKey) ?? undefined
-  }
-
-  getAgentStatusLaunchConfigForPaneKey(
-    paneKey: string,
-    args?: { launchToken?: string }
-  ): SleepingAgentLaunchConfig | undefined {
-    const pty = this.getPtyRecordForPaneKey(paneKey)
-    if (!pty?.launchConfig) {
-      return undefined
-    }
-    if (pty.launchToken === null || pty.launchToken !== args?.launchToken) {
-      return undefined
-    }
-    return copySleepingAgentLaunchConfig(pty.launchConfig)
   }
 
   getTerminalHandleForPaneKey(paneKey: string): string | null {

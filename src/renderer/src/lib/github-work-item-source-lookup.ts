@@ -1,5 +1,6 @@
 import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   getGitHubRuntimeRepoId,
@@ -28,6 +29,7 @@ type GitHubWorkItemDetailsLookupArgs = {
   sourceContext?: TaskSourceContext | null
   number: number
   type: 'issue' | 'pr'
+  ownerRepo?: GitHubOwnerRepo | null
 }
 
 function runtimeRepoId(args: Pick<GitHubWorkItemLookupArgs, 'repoId' | 'sourceContext'>): string {
@@ -112,6 +114,7 @@ export function lookupGitHubWorkItemDetailsForSource(
     repoId: args.repoId,
     sourceContext,
     number: args.number,
-    type: args.type
+    type: args.type,
+    ...(args.ownerRepo ? { ownerRepo: args.ownerRepo } : {})
   })
 }

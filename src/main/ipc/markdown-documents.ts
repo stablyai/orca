@@ -1,51 +1,65 @@
-import { readdir } from 'node:fs/promises'
-import { basename as pathBasename, extname, isAbsolute, join, relative, resolve } from 'node:path'
-import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
-
-function normalizeRelativePath(path: string): string {
-  return path.replace(/[\\/]+/g, '/').replace(/^\/+/, '')
-}
+import { RipgrepFilenameDecoder } from '../../shared/ripgrep-filename-decoder'
+import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+import { normalizeRelativePath } from '../../shared/text-search-paths'
+import {
+  basename as pathBasename,
+  extname,
+  isAbsolute,
+  join,
+  posix,
+  relative,
+  resolve
+} from 'node:path'
+import type { FileDocument, MarkdownDocument } from '../../shared/filesystem-entry-types'
+import { spawnBundledRipgrep } from '../ripgrep/bundled-ripgrep-spawn'
+import { parseWslPath } from '../wsl'
+import {
+  isRipgrepMissingCwdExit,
+  ripgrepMissingCwdError
+} from '../../shared/ripgrep-process-availability'
 
 export function isMarkdownDocumentName(name: string): boolean {
-  const extension = extname(name).toLowerCase()
-  return extension === '.md' || extension === '.mdx' || extension === '.markdown'
+  return isMarkdownExtension(extname(name))
+}
+
+function isMarkdownExtension(extension: string): boolean {
+  const normalized = extension.toLowerCase()
+  return normalized === '.md' || normalized === '.mdx' || normalized === '.markdown'
 }
 
 function basenameFromRelativePath(relativePath: string): string {
-  const normalizedPath = relativePath.replaceAll('\\', '/')
-  return normalizedPath.slice(normalizedPath.lastIndexOf('/') + 1)
+  return relativePath.slice(relativePath.lastIndexOf('/') + 1)
 }
 
 function isSafeRelativePath(relativePath: string): boolean {
   return !relativePath.split('/').includes('..')
 }
 
-function hasParentTraversalSegment(relativePath: string): boolean {
-  return relativePath.split(/[\\/]+/).includes('..')
-}
-
 function rootRelativePath(rootPath: string, filePath: string): string | null {
   const resolvedRoot = resolve(rootPath)
   const resolvedFile = resolve(filePath)
   const relativePath = relative(resolvedRoot, resolvedFile)
-  if (hasParentTraversalSegment(relativePath) || isAbsolute(relativePath)) {
+  if (
+    !isSafeRelativePath(normalizeRelativePath(relativePath, rootPath)) ||
+    isAbsolute(relativePath)
+  ) {
     return null
   }
-  return normalizeRelativePath(relativePath)
+  return normalizeRelativePath(relativePath, rootPath)
 }
 
-export function markdownDocumentFromFilePath(
+export function fileDocumentFromFilePath(
   rootPath: string,
   filePath: string,
   options: { outsideRootRelativePath?: 'basename' | 'relative' } = {}
-): MarkdownDocument {
+): FileDocument {
   const basename = pathBasename(filePath)
   const extension = extname(basename)
   const relativePath =
     rootRelativePath(rootPath, filePath) ??
     (options.outsideRootRelativePath === 'basename'
       ? basename
-      : normalizeRelativePath(relative(rootPath, filePath)))
+      : normalizeRelativePath(relative(rootPath, filePath), rootPath))
   return {
     filePath,
     relativePath,
@@ -54,22 +68,28 @@ export function markdownDocumentFromFilePath(
   }
 }
 
+export const markdownDocumentFromFilePath = fileDocumentFromFilePath
+
 export function markdownDocumentFromRelativePath(
   rootPath: string,
   relativePath: string
 ): MarkdownDocument | null {
-  const normalizedRelativePath = normalizeRelativePath(relativePath)
+  const normalizedRelativePath = normalizeRelativePath(relativePath, rootPath)
   // Why: SSH providers should return root-relative paths; reject escape
   // segments before building a synthetic absolute path for renderer use.
   if (!isSafeRelativePath(normalizedRelativePath)) {
     return null
   }
   const basename = basenameFromRelativePath(normalizedRelativePath)
-  if (!isMarkdownDocumentName(basename)) {
+  // Remote separators are already normalized; a POSIX backslash stays part of the name.
+  const extension = posix.extname(basename)
+  if (!isMarkdownExtension(extension)) {
     return null
   }
-  const extension = extname(basename)
-  const normalizedRoot = rootPath.replace(/[\\/]+$/, '')
+  const normalizedRoot = rootPath.replace(
+    isWindowsAbsolutePathLike(rootPath) ? /[\\/]+$/ : /\/+$/,
+    ''
+  )
   return {
     filePath: `${normalizedRoot}/${normalizedRelativePath}`,
     relativePath: normalizedRelativePath,
@@ -88,34 +108,140 @@ export function markdownDocumentsFromRelativePaths(
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
 }
 
-export async function listMarkdownDocuments(rootPath: string): Promise<MarkdownDocument[]> {
-  const documents: MarkdownDocument[] = []
+const MARKDOWN_LISTING_TIMEOUT_MS = 15_000
+const MAX_MARKDOWN_PATH_BYTES = 1024 * 1024
 
-  async function visitDirectory(dirPath: string): Promise<void> {
-    const entries = await readdir(dirPath, { withFileTypes: true })
-    for (const entry of entries) {
-      if (entry.isSymbolicLink()) {
-        continue
+export async function listMarkdownDocuments(
+  rootPath: string,
+  options: { wslDistro?: string } = {}
+): Promise<MarkdownDocument[]> {
+  const child = spawnBundledRipgrep(
+    [
+      '--files',
+      '--hidden',
+      '--no-ignore',
+      '--no-config',
+      '--null',
+      '--path-separator',
+      '/',
+      // Keep case variants in --glob: --iglob is applied after exclusions and can reopen hidden folders.
+      '--glob',
+      '*.{[mM][dD],[mM][dD][xX],[mM][aA][rR][kK][dD][oO][wW][nN]}',
+      '--glob',
+      '!**/.*/',
+      '--glob',
+      '**/.github/',
+      '--glob',
+      '!**/node_modules/',
+      '.'
+    ],
+    {
+      cwd: rootPath,
+      wslDistro: options.wslDistro,
+      wslDistroForOutput: parseWslPath(rootPath)?.distro ?? options.wslDistro,
+      stdio: ['ignore', 'pipe', 'pipe']
+    }
+  )
+
+  return new Promise((resolveListing, reject) => {
+    const filenameDecoder = new RipgrepFilenameDecoder(
+      (error) => finish(error),
+      Boolean(parseWslPath(rootPath)?.distro ?? options.wslDistro)
+    )
+    const documents: MarkdownDocument[] = []
+    let carry = ''
+    let stderr = ''
+    let settled = false
+    const finish = (error?: Error): void => {
+      if (settled) {
+        return
       }
-
-      const entryPath = join(dirPath, entry.name)
-      if (entry.isDirectory()) {
-        if (entry.name === '.git' || entry.name === 'node_modules') {
-          continue
+      settled = true
+      clearTimeout(timer)
+      child.stdout?.off('data', onData)
+      child.stderr?.off('data', onStderr)
+      child.stdout?.off('error', onError)
+      child.stderr?.off('error', onError)
+      child.off('close', onClose)
+      child.off('error', onError)
+      // A spawn or pipe error can arrive after a timeout has already settled the listing.
+      child.on('error', ignoreLateError)
+      child.stdout?.on('error', ignoreLateError)
+      child.stderr?.on('error', ignoreLateError)
+      carry = ''
+      if (error) {
+        if (child.pid !== undefined) {
+          try {
+            child.kill('SIGKILL')
+          } catch {
+            // The process may have exited before the timeout or stream error arrived.
+          }
         }
-        if (entry.name.startsWith('.') && entry.name !== '.github') {
-          continue
-        }
-        await visitDirectory(entryPath)
-        continue
-      }
-
-      if (entry.isFile() && isMarkdownDocumentName(entry.name)) {
-        documents.push(markdownDocumentFromFilePath(rootPath, entryPath))
+        documents.length = 0
+        child.stdout?.resume()
+        child.stderr?.resume()
+        reject(error)
+      } else {
+        resolveListing(documents.sort((a, b) => a.relativePath.localeCompare(b.relativePath)))
       }
     }
-  }
-
-  await visitDirectory(rootPath)
-  return documents.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+    const onError = (error: Error): void => finish(error)
+    const onStderr = (chunk: string): void => {
+      stderr = (stderr + chunk).slice(0, 4096)
+    }
+    const onData = (chunk: Buffer | string): void => {
+      const decoded = filenameDecoder.decode(chunk)
+      if (decoded === null) {
+        return
+      }
+      carry += decoded
+      let start = 0
+      let end: number
+      while ((end = carry.indexOf('\0', start)) !== -1) {
+        const path = carry.slice(start, end)
+        if (Buffer.byteLength(path) > MAX_MARKDOWN_PATH_BYTES) {
+          finish(new Error('Markdown document path exceeds the listing limit'))
+          return
+        }
+        if (!path.startsWith('./') || path.split('/').includes('..')) {
+          finish(new Error('Invalid path in Markdown document listing'))
+          return
+        }
+        if (isMarkdownDocumentName(path)) {
+          documents.push(markdownDocumentFromFilePath(rootPath, join(rootPath, path.slice(2))))
+        }
+        start = end + 1
+      }
+      carry = carry.slice(start)
+      if (Buffer.byteLength(carry) > MAX_MARKDOWN_PATH_BYTES) {
+        finish(new Error('Markdown document path exceeds the listing limit'))
+      }
+    }
+    const onClose = (code: number | null, signal: NodeJS.Signals | null): void => {
+      if (isRipgrepMissingCwdExit(code)) {
+        finish(ripgrepMissingCwdError(rootPath))
+      } else if (signal || (code !== 0 && code !== 1)) {
+        finish(new Error(`Markdown document listing failed (${signal ?? code}): ${stderr.trim()}`))
+      } else {
+        if (!filenameDecoder.finish()) {
+          return
+        }
+        finish(carry ? new Error('Incomplete path in Markdown document listing') : undefined)
+      }
+    }
+    const timer = setTimeout(
+      () => finish(new Error('Markdown document listing timed out')),
+      MARKDOWN_LISTING_TIMEOUT_MS
+    )
+    timer.unref?.()
+    child.stderr?.setEncoding('utf8')
+    child.stdout?.on('data', onData)
+    child.stderr?.on('data', onStderr)
+    child.stdout?.on('error', onError)
+    child.stderr?.on('error', onError)
+    child.once('error', onError)
+    child.once('close', onClose)
+  })
 }
+
+function ignoreLateError(): void {}

@@ -33,8 +33,10 @@ const deniedMicrophonePermission: PermissionResponse = {
 const noop = () => undefined
 
 const ExpoTwoWayAudioModule: ExpoTwoWayAudioWebModule = {
-  // Why: the mobile app can be run on web for QA, but dictation depends on
-  // native audio engines that are only available in the iOS/Android builds.
+  // Why: this is what a browser outside the Orca shell can honestly say. Dictation on the page no
+  // longer comes through here — `src/platform/dictation-capture.web.ts` asks the shell for the
+  // microphone over `native.audio.start|read|stop`, so the only importer of this package is the
+  // native half of that seam. What is left is the QA web build, which has no shell to ask.
   initialize: async () => false,
   playPCMData: noop,
   bypassVoiceProcessing: noop,

@@ -53,6 +53,7 @@ export function buildRelayHookPtyEnv(coordinates: {
     ORCA_AGENT_HOOK_TOKEN: coordinates.token,
     ORCA_AGENT_HOOK_ENV: coordinates.env,
     ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION,
+    ORCA_AGENT_HOOK_OPENCODE_TUI: '1',
     ORCA_AGENT_HOOK_TRANSPORT: ORCA_HOOK_RAW_JSON_TRANSPORT
   }
   if (coordinates.endpointFileWritten) {

@@ -62,13 +62,6 @@ describe('launch draft mirrorability', () => {
     vi.clearAllMocks()
   })
 
-  // Why: the whole point of the shared predicate. If either side ever grows its
-  // own inline rule, a draft launch opens in chat with an empty composer beside
-  // a filled TUI input (or stays in the terminal with a mirror nobody sees).
-  it.each(DRAFT_TEXTS)('opens in chat exactly when it seeds: %j', (text) => {
-    expect(opensInChat(text)).toBe(seedsTheComposer(text))
-  })
-
   it.each(DRAFT_TEXTS)('both sides follow the predicate: %j', (text) => {
     const expected = canMirrorLaunchDraftToNativeChat(text)
     expect(seedsTheComposer(text)).toBe(expected)

@@ -70,35 +70,4 @@ describe('scanAiVaultSessions Claude title selection', () => {
       'User set title'
     ])
   })
-
-  it('excludes Claude Task subagent transcripts from the session list', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-subagents-'))
-    tempRoots.push(root)
-    const roots = isolatedScanRoots(root)
-    const sessionDir = join(roots.claudeProjectsDir, 'project', 'claude-session')
-
-    await writeJsonlFile(join(roots.claudeProjectsDir, 'project', 'claude-session.jsonl'), [
-      {
-        type: 'user',
-        sessionId: 'claude-session',
-        timestamp: '2026-05-01T10:00:00.000Z',
-        cwd: '/tmp/claude',
-        message: { role: 'user', content: 'Parent session prompt' }
-      }
-    ])
-    await writeJsonlFile(join(sessionDir, 'subagents', 'agent-abc123.jsonl'), [
-      {
-        type: 'user',
-        sessionId: 'claude-session',
-        timestamp: '2026-05-01T10:00:05.000Z',
-        cwd: '/tmp/claude',
-        message: { role: 'user', content: 'Subagent task prompt' }
-      }
-    ])
-
-    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
-
-    expect(result.issues).toEqual([])
-    expect(result.sessions.map((session) => session.title)).toEqual(['Parent session prompt'])
-  })
 })

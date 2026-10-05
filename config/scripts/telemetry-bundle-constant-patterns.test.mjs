@@ -22,4 +22,16 @@ describe('telemetry bundle constant patterns', () => {
     const bundle = 'var dde=`stable`,fde=`phc_example-key_123`,pde=(dde===`stable`)'
     expect(bundle).toMatch(MINIFIED_TELEMETRY_RE)
   })
+
+  it('accepts the identity as a later declarator in a shared declaration', () => {
+    const bundle = 'var wpe=!0,Tpe=`stable`,Epe=`phc_example-key_123`,Dpe=(Tpe===`stable`)'
+    expect(MINIFIED_TELEMETRY_RE.exec(bundle)?.slice(1, 3)).toEqual([
+      'stable',
+      'phc_example-key_123'
+    ])
+  })
+
+  it('rejects a minified identity with no adjacent write key', () => {
+    expect('var a=!0,b=`stable`,c=null').not.toMatch(MINIFIED_TELEMETRY_RE)
+  })
 })

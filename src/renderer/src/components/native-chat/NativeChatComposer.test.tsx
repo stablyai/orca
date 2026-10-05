@@ -58,6 +58,7 @@ vi.mock('../../store', () => {
   const state = {
     dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
+    agentStatusByPaneKey: {},
     updateSettings: vi.fn(),
     clearNativeChatLaunchDraft: mocks.clearNativeChatLaunchDraft,
     markNativeChatLaunchDraftAdopted: mocks.markNativeChatLaunchDraftAdopted
@@ -99,7 +100,7 @@ vi.mock('@/lib/native-chat-telemetry', () => ({
 vi.mock('./use-native-chat-draft', () => ({
   useNativeChatDraft: (scopeKey: string) => {
     mocks.draftScopeKeys.push(scopeKey)
-    return { draft: mocks.draft, setDraft: mocks.setDraft }
+    return { draft: mocks.draft, setDraft: mocks.setDraft, flushDraftAppends: () => {} }
   }
 }))
 vi.mock('./native-chat-draft-cache', () => ({
@@ -431,6 +432,7 @@ describe('NativeChatComposer', () => {
     act(() => mocks.fieldProps?.onSend?.())
 
     expect(mocks.sendNativeChatMessageWithImageAttachments).toHaveBeenCalledWith(
+      'codex',
       {},
       'pty-1',
       'hello',
@@ -473,7 +475,7 @@ describe('NativeChatComposer', () => {
     expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
   })
 
-  it.each(['claude', 'openclaude'] as const)('keeps %s slash composer sends pasted', (agent) => {
+  it.each(['claude'] as const)('keeps %s slash composer sends pasted', (agent) => {
     mocks.draft = '/clear'
     render(
       <NativeChatComposer

@@ -13,6 +13,8 @@ export type WorktreeActivationSurfaceSelection = {
   agent?: TuiAgent | null
   /** A navigation caller is about to open its own editor, diff, or other non-terminal surface. */
   providesInitialSurface?: boolean
+  /** Set only where the user deliberately opened this existing workspace; absent keeps the shell seed. */
+  navigationIntent?: 'user-open'
 }
 
 export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {
@@ -32,8 +34,20 @@ export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {
   clearSidebarFilters?: boolean
 }
 
+/** Create-time only: an agent selection suppresses the shell its own surface will replace. */
 export function activationProvidesInitialSurface(
   selection?: WorktreeActivationSurfaceSelection
 ): boolean {
   return selection?.providesInitialSurface === true || selection?.agent != null
+}
+
+/** A deliberate user open with no surface choice: an empty workspace gets the user's default surface. */
+export function activationSeedsUserDefaultSurface(
+  selection?: WorktreeActivationSurfaceSelection
+): boolean {
+  return (
+    selection?.navigationIntent === 'user-open' &&
+    selection.agent === undefined &&
+    selection.providesInitialSurface !== true
+  )
 }

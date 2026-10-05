@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { normalizeRepoSourceControlAiOverrides } from '../source-control-ai'
 import { normalizeRepoBadgeColor } from '../repo-badge-color'
 import { sanitizeRepoIcon } from '../repo-icon'
+import { normalizeGhAccountBinding } from '../github/account-binding'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
@@ -34,12 +35,14 @@ export const RepoUpstream = z
   .nullable()
   .optional()
 
-// The return type is inferred on purpose: an explicit z.ZodObject<...z.ZodRawShape>
-// annotation widened `updates` to an open record, which erased all 24 named fields
-// from RpcParams<'repo.update'> for every typed caller.
-export function createRepoUpdateSchema<T extends z.ZodRawShape>(selectorShape: T) {
+// The return type is inferred on purpose: an explicit z.ZodObject<...> annotation
+// widened `updates` to an open record, which erased all 24 named fields from
+// RpcParams<'repo.update'> for every typed caller.
+export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodType>>>(
+  selectorFields: T
+) {
   return z.object({
-    ...selectorShape,
+    ...selectorFields,
     updates: z.object({
       displayName: OptionalString,
       badgeColor: RepoBadgeColor,
@@ -54,6 +57,19 @@ export function createRepoUpdateSchema<T extends z.ZodRawShape>(selectorShape: T
       kind: z.enum(['git', 'folder']).optional(),
       symlinkPaths: z.array(z.string()).optional(),
       issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional(),
+      ghAccount: z
+        .unknown()
+        .optional()
+        .transform((value) => {
+          if (value === undefined) {
+            return undefined
+          }
+          if (value === null) {
+            return null
+          }
+          // Why: malformed bindings must omit the key (IPC deletes); never clear via undefined.
+          return normalizeGhAccountBinding(value) ?? undefined
+        }),
       forkSyncMode: z.enum(['ask', 'safe-auto', 'off']).optional(),
       externalWorktreeVisibility: z.enum(['hide', 'show']).nullable().optional(),
       externalWorktreeVisibilityPromptDismissedAt: z.number().finite().optional(),

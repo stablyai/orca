@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
-
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentType } from '../../../../shared/agent-status-types'
+import type { NativeChatSendClassification } from '../../../../shared/native-chat-slash-commands'
 
 const mocks = vi.hoisted(() => ({
   sendNativeChatMessage: vi.fn(),
@@ -73,13 +74,44 @@ function composerArgs(overrides: Partial<ComposerSendArgs> = {}): ComposerSendAr
   }
 }
 
-describe('useNativeChatPtyComposerSend submit gesture wiring', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.sendNativeChatMessage.mockReturnValue({ cancel: vi.fn() })
-    mocks.sendNativeChatMessageWithImageAttachments.mockReturnValue({ cancel: vi.fn() })
-  })
+function send(
+  agent: AgentType,
+  classification: NativeChatSendClassification,
+  draft: string,
+  imagePaths: string[] = []
+) {
+  const callbacks = { rejected: vi.fn(), unconfirmed: vi.fn() }
+  const { result } = renderHook(() =>
+    useNativeChatPtyComposerSend(
+      composerArgs({
+        agent,
+        draft,
+        imageAttachments: imagePaths.map((path) => ({ path })),
+        launchDraftResolved: true,
+        classifySend: (() => classification) as ComposerSendArgs['classifySend'],
+        onOptimisticSend: () => 'pending-1',
+        optimisticSendOutcome: {
+          reject: callbacks.rejected,
+          holdUnconfirmed: callbacks.unconfirmed
+        }
+      })
+    )
+  )
+  act(() => result.current())
+  return callbacks
+}
 
+beforeEach(() => {
+  vi.clearAllMocks()
+  mocks.sendNativeChatMessage.mockReturnValue({ cancel: vi.fn(), settleAfterMs: 0 })
+  mocks.sendNativeChatTypedCommand.mockReturnValue({ cancel: vi.fn(), settleAfterMs: 0 })
+  mocks.sendNativeChatMessageWithImageAttachments.mockReturnValue({
+    cancel: vi.fn(),
+    settleAfterMs: 0
+  })
+})
+
+describe('useNativeChatPtyComposerSend submit gesture wiring', () => {
   it('carries the resolved submit gesture into an image-attachment send', () => {
     mocks.resolveComposerSubmitBytes.mockReturnValue('\x1b\r')
     const { result } = renderHook(() =>
@@ -87,6 +119,7 @@ describe('useNativeChatPtyComposerSend submit gesture wiring', () => {
     )
     act(() => result.current())
     expect(mocks.sendNativeChatMessageWithImageAttachments).toHaveBeenCalledWith(
+      'claude',
       {},
       'pty-1',
       'hello',
@@ -104,6 +137,7 @@ describe('useNativeChatPtyComposerSend submit gesture wiring', () => {
     )
     act(() => result.current())
     expect(mocks.sendNativeChatMessageWithImageAttachments).toHaveBeenCalledWith(
+      'claude',
       {},
       'pty-1',
       'hello',
@@ -124,18 +158,51 @@ describe('useNativeChatPtyComposerSend submit gesture wiring', () => {
     )
   })
 
-  it('leaves the send options untouched when no gesture resolves (default CR)', () => {
+  it('leaves submit bytes unset when no gesture resolves (default CR)', () => {
     mocks.resolveComposerSubmitBytes.mockReturnValue(undefined)
     const { result } = renderHook(() =>
       useNativeChatPtyComposerSend(composerArgs({ imageAttachments: [{ path: '/tmp/img.png' }] }))
     )
     act(() => result.current())
-    expect(mocks.sendNativeChatMessageWithImageAttachments).toHaveBeenCalledWith(
-      {},
-      'pty-1',
-      'hello',
-      ['/tmp/img.png'],
-      undefined
-    )
+    const options = mocks.sendNativeChatMessageWithImageAttachments.mock.calls[0]?.[5] as
+      | { submitBytes?: string }
+      | undefined
+    expect(options?.submitBytes).toBeUndefined()
   })
+})
+
+describe('useNativeChatPtyComposerSend optimistic send outcome routing', () => {
+  it('routes a Claude chat send outcome to its own pending echo', () => {
+    const callbacks = send('claude', 'chat', 'hello')
+    const options = mocks.sendNativeChatMessage.mock.calls[0]?.[3] as
+      | { onWriteRejected?: () => void; onWriteUnconfirmed?: () => void }
+      | undefined
+    options?.onWriteRejected?.()
+    options?.onWriteUnconfirmed?.()
+    expect(callbacks.rejected).toHaveBeenCalledWith('pending-1')
+    expect(callbacks.unconfirmed).toHaveBeenCalledWith('pending-1')
+  })
+
+  it('routes a Claude image send outcome to its own pending echo', () => {
+    const callbacks = send('claude', 'chat', 'look', ['/tmp/shot.png'])
+    const options = mocks.sendNativeChatMessageWithImageAttachments.mock.calls[0]?.[5] as
+      | { onWriteRejected?: () => void }
+      | undefined
+    options?.onWriteRejected?.()
+    expect(callbacks.rejected).toHaveBeenCalledWith('pending-1')
+  })
+
+  it.each([
+    ['codex', 'chat', 'hello'],
+    ['claude', 'command', '/compact']
+  ] as const)(
+    'leaves a %s %s send on the unobserved write path',
+    (agent, classification, draft) => {
+      send(agent, classification, draft)
+      const options = mocks.sendNativeChatMessage.mock.calls[0]?.[3] as
+        | { onWriteRejected?: () => void }
+        | undefined
+      expect(options?.onWriteRejected).toBeUndefined()
+    }
+  )
 })

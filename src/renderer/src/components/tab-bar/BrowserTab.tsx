@@ -33,7 +33,8 @@ import {
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { translate } from '@/i18n/i18n'
-import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
@@ -148,6 +149,7 @@ export default function BrowserTab({
   // Why: defer activation to pointer-up so dragging the tab (reorder / move into
   // another pane / split) does not switch the active tab mid-gesture.
   const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({ onActivate })
+  const slotProps = useTabStripSlotProps(tab.id, isActive)
 
   const tabRoot = (
     <div
@@ -219,7 +221,7 @@ export default function BrowserTab({
   return (
     <>
       <div
-        className={TAB_CONTAINER_WIDTH_CLASSES}
+        {...slotProps}
         onContextMenuCapture={(event) => {
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))

@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  GROK_ENCODED_CWD_DIR_MAX_BYTES,
   GROK_SESSION_SCAN_ACTIVE_ROOT_MAX,
   GROK_SESSION_SCAN_QUEUE_MAX_ENTRIES,
   buildGrokChatHistoryPathCandidates,
@@ -11,7 +10,6 @@ import {
   findGrokChatHistoryBySessionId,
   getCachedGrokChatHistoryBySessionId,
   grokEncodedCwdDirName,
-  isGrokChatHistoryPath,
   isSafeGrokSessionId,
   resolveGrokChatHistoryPathSync,
   resolveGrokHomeDir,
@@ -57,11 +55,25 @@ describe('grok-session-paths', () => {
     expect(resolveGrokHomeDir({}, '/home/ada')).toBe(join('/home/ada', '.grok'))
   })
 
+  // Why: Grok itself accepts a relative GROK_HOME, but resolves it against *its own* cwd — a
+  // different directory per terminal. Orca's readers (main at `/` when Finder-launched, the
+  // daemon at the user data dir, the scan service inheriting main) would each resolve the same
+  // value somewhere else and walk it with no depth, entry or time cap (#13082). `~/…` is in the
+  // list because Grok 1.0.30 does not expand a tilde — it creates a literal `~` dir under its cwd.
+  it.each(['.', '..', 'rel/path', '~/grok', '~', 'C:foo', 'C:'])(
+    'ignores the non-absolute GROK_HOME %j',
+    (relativeHome) => {
+      expect(resolveGrokHomeDir({ GROK_HOME: relativeHome }, '/home/ada')).toBe(
+        join('/home/ada', '.grok')
+      )
+      expect(resolveGrokSessionsDir({ GROK_HOME: relativeHome }, '/home/ada')).toBe(
+        join('/home/ada', '.grok', 'sessions')
+      )
+    }
+  )
+
   it('refuses to invent encodeURIComponent names longer than 255 bytes', () => {
     const longCwd = `/${'a'.repeat(200)}/${'b'.repeat(200)}`
-    expect(Buffer.byteLength(encodeURIComponent(longCwd), 'utf8')).toBeGreaterThan(
-      GROK_ENCODED_CWD_DIR_MAX_BYTES
-    )
     expect(grokEncodedCwdDirName(longCwd)).toBeNull()
     expect(
       buildGrokChatHistoryPathCandidates({
@@ -83,7 +95,6 @@ describe('grok-session-paths', () => {
         []
       )
       await expect(findGrokChatHistoryBySessionId(sessionsDir, sessionId)).resolves.toBeNull()
-      expect(isGrokChatHistoryPath('/repo/chat_history.jsonl', sessionId)).toBe(false)
     }
 
     expect(isSafeGrokSessionId('019e37f4-5135-7b63-a4ab-6d13aa6bf528')).toBe(true)

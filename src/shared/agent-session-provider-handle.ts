@@ -5,6 +5,8 @@
  * identifies a conversation. Claude's session id is the identity root and its leaf uuid is a
  * branch cursor; Codex's thread id is the whole key. Resumes extend the chain, forks start a new
  * identity root, and the chain records which is which so a fork is never presented as a resume.
+ * A creation the provider never saved can be superseded by a new creation, which takes its place
+ * instead of standing beside it: the unsaved handle was never a conversation to continue.
  */
 
 export const AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS = ['claude', 'codex'] as const
@@ -32,6 +34,8 @@ export type AgentSessionProviderHandleLink = {
   observedAt: number
   /** Key of the link a fork was seeded from. Only set when `origin` is `forked`. */
   forkedFromKey?: string
+  /** Key of the unsaved creation this creation replaced. Only set when `origin` is `created`. */
+  supersedesKey?: string
 }
 
 export type AgentSessionProviderHandleChain = readonly AgentSessionProviderHandleLink[]
@@ -124,7 +128,9 @@ export function isAgentSessionProviderHandleLink(
     Number.isSafeInteger(link.observedAt) &&
     (link.origin === 'forked'
       ? isHandleField(link.forkedFromKey)
-      : link.forkedFromKey === undefined)
+      : link.forkedFromKey === undefined) &&
+    (link.supersedesKey === undefined ||
+      (link.origin === 'created' && isHandleField(link.supersedesKey)))
   )
 }
 
@@ -177,6 +183,9 @@ export function appendAgentSessionProviderHandleLink(
   if (link.mintedAtFence < head.mintedAtFence) {
     throw new Error('agent_session_provider_handle_stale_fence')
   }
+  if (link.origin === 'created' && link.supersedesKey !== undefined) {
+    return supersedeUnsavedCreation(head, link)
+  }
   if (link.origin === 'created' || link.origin === 'adopted') {
     throw new Error('agent_session_provider_handle_invalid')
   }
@@ -213,4 +222,26 @@ export function appendAgentSessionProviderHandleLink(
     throw new Error('agent_session_provider_handle_chain_overflow')
   }
   return [...chain, link]
+}
+
+/**
+ * Replace the chain's only link, a creation the provider proved it never saved, with the creation
+ * that took its place. Every other head names a conversation the provider held (a resume or fork
+ * proved it, an adoption imported it), so only a `created` head can be superseded, and only by a
+ * new identity root that names it.
+ */
+function supersedeUnsavedCreation(
+  head: AgentSessionProviderHandleLink,
+  link: AgentSessionProviderHandleLink
+): AgentSessionProviderHandleLink[] {
+  if (
+    head.origin !== 'created' ||
+    link.supersedesKey !== agentSessionProviderHandleKey(head.handle) ||
+    agentSessionProviderHandleRoot(link.handle) === agentSessionProviderHandleRoot(head.handle) ||
+    link.linkId === head.linkId
+  ) {
+    throw new Error('agent_session_provider_handle_invalid')
+  }
+  // Why: in place, so a chat reopened unused across many restarts never grows toward the cap.
+  return [link]
 }

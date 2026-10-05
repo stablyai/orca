@@ -143,7 +143,10 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
           `Worker Dispatch ${params.dispatch} no longer resolves to its exact process.`
         )
       }
-      const structured = readStructuredWorkerOutput({
+      // Read via the handle inspectWorkerTerminal proved live: the durable one, or a handle
+      // re-minted from the recorded incarnation after the durable handle went stale.
+      const liveHandle = observation.terminalHandle ?? terminalHandle
+      const structured = await readStructuredWorkerOutput({
         db,
         dispatchId: params.dispatch,
         workerState: worker?.state ?? 'unsupervised',
@@ -163,7 +166,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       const output = await readExactWorkerOutput({
         runtime,
         dispatchId: params.dispatch,
-        terminalHandle,
+        terminalHandle: liveHandle,
         workerState: worker?.state ?? 'unsupervised',
         terminalStatus:
           observation.status === 'exited'
@@ -196,13 +199,17 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   defineMethod({
     name: 'orchestration.workerAbandon',
     params: WorkerDispatchParams,
-    handler: (params, { runtime }) => {
-      const abandoned = runtime.getOrchestrationDb().abandonWorkerDispatch(params.dispatch)
+    handler: (params, { runtime, orchestrationCaller }) => {
+      const abandoned = runtime.getOrchestrationDb().abandonWorkerDispatch(
+        params.dispatch,
+        runtime.getRuntimeId(),
+        // Why: only a session caller is verified; terminal env could name anyone.
+        orchestrationCaller?.address
+      )
       if (abandoned.disposition === 'context_only') {
         if (!abandoned.alreadySettled) {
-          // Abandon settles the Dispatch, so it owes the same hold release stop and release do.
-          // A surviving hold pins the provider child for the life of the app and makes host crash
-          // recovery respawn a worker nobody is waiting on.
+          // Abandon settles the Dispatch, so it owes the same binding release stop and release do:
+          // a surviving redrive subscription keeps nudging a worker nobody is waiting on.
           releaseStructuredWorkerSession(params.dispatch, runtime)
           runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
         }
@@ -225,12 +232,13 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         dispatchId: params.dispatch,
         state: worker.state,
         alreadySettled: abandoned.disposition !== 'abandoned',
-        stale: abandoned.disposition === 'stale',
+        // Kept for --json readers: this attempt was no longer current, as main reported it.
+        stale: abandoned.superseded || abandoned.disposition === 'already_settled',
         processAction: 'none',
         warning:
-          abandoned.disposition === 'stale'
-            ? 'The Dispatch is no longer current; no state or process changed.'
-            : 'Possibly-live resources were retained; no process was stopped or deleted.',
+          abandoned.disposition === 'abandoned'
+            ? 'Possibly-live resources were retained; no process was stopped or deleted.'
+            : `The worker was already ${worker.state}; its terminal was left open and no process changed.`,
         residualResources: JSON.parse(worker.residual_resources) as unknown[]
       }
     }

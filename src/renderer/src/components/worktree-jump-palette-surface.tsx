@@ -40,7 +40,7 @@ export function WorktreeJumpPaletteSurface({
         loop: true,
         value: controller.commandSelectedItemId,
         onValueChange: controller.handleCommandSelectionChange,
-        className: 'bg-transparent',
+        className: 'jump-palette-command bg-transparent',
         onKeyDownCapture: (event: React.KeyboardEvent) => {
           if (
             controller.selectionMovedByUserRef &&

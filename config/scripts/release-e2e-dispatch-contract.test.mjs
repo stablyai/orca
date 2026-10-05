@@ -19,6 +19,7 @@ describe('release E2E dispatch contract', () => {
     expect(restoreStep.run).toContain('git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"')
     expect(restoreStep.run).toContain('golden-source-control-open-diff.spec.ts')
     expect(restoreStep.run).toContain('golden-terminal-file-link.spec.ts')
+    expect(restoreStep.run).toContain('golden-worktree-create-switch.spec.ts')
   })
 
   it('dispatches tag-scoped E2E only after publication', () => {
@@ -27,7 +28,9 @@ describe('release E2E dispatch contract', () => {
 
     expect(releaseWorkflow.jobs.e2e).toBeUndefined()
     expect(dispatchJob.needs).toEqual(['cut', 'publish-release'])
-    expect(dispatchJob.if).toBe("${{ needs.cut.outputs.tag != '' }}")
+    expect(dispatchJob.if).toBe(
+      "${{ !cancelled() && needs.publish-release.result == 'success' && needs.cut.outputs.tag != '' }}"
+    )
     expect(dispatchJob.permissions.actions).toBe('write')
     expect(dispatchStep.env.TAG).toBe('${{ needs.cut.outputs.tag }}')
     expect(dispatchStep.run).toContain('gh workflow run e2e.yml')
@@ -52,7 +55,6 @@ describe('release E2E dispatch contract', () => {
     expect(buildStep.run).toContain('pnpm run build:relay &')
     expect(buildStep.run).toContain('relay_pid=$!')
     expect(buildStep.run).toContain('wait "$relay_pid"')
-    expect(buildStep.run).toContain('pnpm run build:web-from-renderer')
   })
 
   it('primes the Electron native cache before every E2E consumer', () => {
@@ -71,10 +73,27 @@ describe('release E2E dispatch contract', () => {
   it('includes the paired-runtime web client in the shared E2E build artifact', () => {
     const buildStep = e2eWorkflow.jobs.build.steps.find((step) => step.name === 'Build E2E outputs')
 
-    expect(buildStep.run).toContain('electron-vite build --mode e2e')
+    expect(buildStep.run).toContain('pnpm run build:electron-vite:parallel --mode e2e')
     expect(buildStep.env.VITE_EXPOSE_STORE).toBe('true')
-    expect(buildStep.run).toContain('pnpm run build:web-from-renderer')
     expect(buildStep.run).toContain('pnpm run build:relay')
+  })
+
+  it('joins the shared CLI and web builds before uploading complete E2E output', () => {
+    const steps = e2eWorkflow.jobs.build.steps
+    const electron = steps.findIndex((step) => step.name === 'Build E2E outputs')
+    const cli = steps.findIndex((step) => step.id === 'e2e-cli')
+    const web = steps.findIndex((step) => step.name === 'Project shared E2E web client')
+    const join = steps.findIndex((step) => step.wait === 'e2e-cli')
+    const upload = steps.findIndex((step) => step.name === 'Upload E2E build output')
+    expect(cli).toBeGreaterThan(electron)
+    expect(steps[cli].background).toBe(true)
+    expect(steps[cli].run).toContain('pnpm run build:cli')
+    expect(steps[cli].run).toContain('scripts["prepare:cli-output"]')
+    expect(web).toBeGreaterThan(cli)
+    expect(steps[web].run).toBe('pnpm run build:web-from-renderer')
+    expect(join).toBeGreaterThan(web)
+    expect(upload).toBeGreaterThan(join)
+    expect(steps[upload].with.path).toBe('out/')
   })
 
   it('hands the built relay artifact to every E2E run command', () => {

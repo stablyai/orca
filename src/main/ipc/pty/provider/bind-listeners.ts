@@ -28,6 +28,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
   setLocalWriteUnavailableUnsub(
     localProvider.onWriteUnavailable?.((payload) => {
       if (
+        !session.mainWindow ||
         session.mainWindow.isDestroyed() ||
         (typeof session.mainWindow.webContents.isDestroyed === 'function' &&
           session.mainWindow.webContents.isDestroyed())
@@ -87,17 +88,22 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       if (!isCurrentPtyExit(payload)) {
         return
       }
-      if (session.consumeSyntheticKillExit(payload.id)) {
-        return
-      }
+      const syntheticExit = session.consumeSyntheticKillExit(payload.id, payload.incarnationId)
       if (!isLocalProvider) {
         clearProviderPtyState(payload.id)
         ptyOwnership.delete(payload.id)
         markClaudePtyExited(payload.id)
+        if (syntheticExit) {
+          session.runtime?.markPtyStopRequested(payload.id)
+        }
         session.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId, {
           providerExitObserved: true,
           ...(payload.cause ? { cause: payload.cause } : {})
         })
+      }
+      // The control reply can overtake stream data; the physical exit must retire that late output.
+      if (syntheticExit) {
+        return
       }
       // Why not the whole payload: the exit cause is a main-process fact for the
       // runtime's records; the renderer's pty:exit contract stays as it was.

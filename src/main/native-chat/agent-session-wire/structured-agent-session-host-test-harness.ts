@@ -1,19 +1,26 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { TrackedTestRecoveryCapsule } from './structured-agent-session-host-test-recovery-capsule'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -22,6 +29,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { recordingProductionStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 const journals = createTrackedJournalOpener()
 
@@ -52,8 +60,10 @@ const attachParams = (
 const ensureParams = (fence: number): AgentSessionAttachParams => hostTestAttachParams(fence)
 
 let root: string
+let recoveryCapsule: TrackedTestRecoveryCapsule
 let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
+let log: ReturnType<typeof recordingProductionStructuredAgentSessionLogger>
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let releaseAcquisition: Mock<NonNullable<StructuredAgentSessionAdapter['releaseAcquisition']>>
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
@@ -74,7 +84,10 @@ function adapter(): StructuredAgentSessionAdapter {
   return {
     acquire,
     releaseAcquisition,
-    dispatch,
+    dispatch: async (input) => {
+      await input.beforeDispatch?.()
+      return dispatch(input)
+    },
     cancelTurn,
     answerPrompt,
     setOption
@@ -87,22 +100,14 @@ async function attach(): Promise<AgentSessionRecord | null> {
   return store.getRecord(SESSION)
 }
 
-/** Puts a pending approval in the journal BEFORE attach, which is the only way
- *  1d can stage one: the adapter that would emit it is phase 2's. */
+/** Emits a pending approval through the acquired provider sink. */
 async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revision: number }> {
   const identity = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1', ordinal: 99 }
-  const journalDir = journalDirectoryFor(root, { workspaceId: 'workspace-1', sessionId: SESSION })
-  const journal = await journals.open({
-    identity: {
-      sessionId: SESSION,
-      workspaceId: 'workspace-1',
-      hostId: 'local',
-      agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: THREAD }
-    },
-    journalDir
-  })
-  const appended = await journal.appendItem(
+  const events = acquire.mock.calls.at(-1)?.[0].events
+  if (!events) {
+    throw new Error('seedApproval requires an acquired session')
+  }
+  events.appendItem(
     identity,
     {
       kind: 'approval',
@@ -111,9 +116,16 @@ async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revis
       options: [{ id: optionId, label: 'Allow' }],
       resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
     },
-    { fence: 1 }
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
-  return { itemId: appended.itemId, revision: appended.revision }
+  await host.flushStreamedEvents(SESSION)
+  const itemId = agentJournalItemKey(identity)
+  const page = await host.history({ sessionId: SESSION, direction: 'tail' })
+  const appended = page.ok ? page.page.items.find((item) => item.itemId === itemId) : null
+  if (!appended) {
+    throw new Error('provider approval was not written to the journal')
+  }
+  return { itemId, revision: appended.revision }
 }
 
 beforeEach(async () => {
@@ -138,13 +150,17 @@ beforeEach(async () => {
   releaseAcquisition = vi.fn(async () => true)
   dispatch = vi.fn(async () => accepted())
   cancelTurn = vi.fn(async () => ({ cancelled: true }))
-  answerPrompt = vi.fn(async () => undefined)
+  answerPrompt = vi.fn(async ({ commit }) => commit())
   setOption = vi.fn(async () => undefined)
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
+  recoveryCapsule = new TrackedTestRecoveryCapsule(root)
+  log = recordingProductionStructuredAgentSessionLogger()
   host = new StructuredAgentSessionHost({
+    logger: log.logger,
     store,
     adapter: adapter(),
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
+    recoveryCapsule,
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
@@ -152,10 +168,17 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await journals.closeAll()
   await host.flushAllStreamedEvents()
+  await journals.closeAll()
+  // A host a test replaced can still hold the capsule's lock directory under `root`.
+  await recoveryCapsule.settled()
   await rm(root, { recursive: true, force: true })
 })
+
+/** Waits out every recovery-capsule operation a host of this test started, replaced ones too. */
+function hostTestRecoveryCapsuleSettled(): Promise<void> {
+  return recoveryCapsule.settled()
+}
 
 /** A restarted process swaps the store and the host under the same directories.
  *  The helpers here close over both, so they have to be told. */
@@ -167,6 +190,12 @@ export function replaceHostTestState(next: {
   host = next.host
 }
 
+/** Serves `records` as the session's child records through the status sink, as the host's store
+ *  does. Call before `attach`: only the attach's publish carries the address a row lands under. */
+export function serveHostTestChildWork(records: () => AgentChildWorkView[]): void {
+  host.deps.statusSink = { publish: () => {}, forget: () => {}, readChildWork: records }
+}
+
 /** The live per-test state. Read it in a `beforeEach` so a suite's test bodies
  *  keep using bare `host` / `store` / `dispatch` exactly as they did when this
  *  setup was inline. */
@@ -175,6 +204,8 @@ export function hostTestState() {
     root,
     store,
     host,
+    /** Every entry the beforeEach host logged; a host a test builds itself logs elsewhere. */
+    log,
     acquire,
     releaseAcquisition,
     dispatch,
@@ -192,6 +223,7 @@ export {
   attachParams,
   ensureParams,
   envelope,
+  hostTestRecoveryCapsuleSettled,
   journals,
   seedApproval
 }

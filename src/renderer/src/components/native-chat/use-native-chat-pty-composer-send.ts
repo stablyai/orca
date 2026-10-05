@@ -22,6 +22,7 @@ import { isSlashCommandDraft } from '../../../../shared/native-chat-slash-comman
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
+import type { NativeChatOptimisticSendOutcome } from './native-chat-composer-types'
 
 export function useNativeChatPtyComposerSend(args: {
   agent: AgentType
@@ -35,6 +36,7 @@ export function useNativeChatPtyComposerSend(args: {
   resolveTarget: () => NativeChatResolvedTarget | null
   classifySend: NativeChatPickerState['classifySend']
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
+  optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   onSlashCommand?: (command: string) => void
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
   terminalTabId: string
@@ -64,16 +66,33 @@ export function useNativeChatPtyComposerSend(args: {
       return
     }
     const classification = args.classifySend(text)
-    const { sendOptions } = resolveNativeChatLaunchDraftSend({
+    const { sendOptions: launchSendOptions } = resolveNativeChatLaunchDraftSend({
       launchDraft: args.launchDraft,
       launchDraftResolved: args.launchDraftResolved,
       agent: args.agent,
       readScreen: () => args.readTerminalScreen?.()
     })
+    let pendingId: string | undefined
+    const sendOptions =
+      args.agent === 'claude' && classification === 'chat'
+        ? {
+            ...launchSendOptions,
+            onWriteRejected: () => {
+              if (pendingId) {
+                args.optimisticSendOutcome?.reject(pendingId)
+              }
+            },
+            onWriteUnconfirmed: () => {
+              if (pendingId) {
+                args.optimisticSendOutcome?.holdUnconfirmed(pendingId)
+              }
+            }
+          }
+        : launchSendOptions
     // Submit with the gesture the user bound to chat:submit (from their Claude
     // keybindings) so a remapped Enter doesn't leave the message unsent. Only for
     // LOCAL Claude: Codex/others have their own config, and a remote pane's
-    // keybindings live on its host — both keep the default CR.
+    // keybindings live on its host, both keep the default CR.
     const submitBytes = resolveComposerSubmitBytes(
       args.agent,
       nativeChatComposerTargetIsRemote(target.ptyId)
@@ -88,6 +107,7 @@ export function useNativeChatPtyComposerSend(args: {
           : sendNativeChatMessage(target.settings, target.ptyId, text, messageOptions)
     } else if (imagePaths.length > 0) {
       pendingHandle = sendNativeChatMessageWithImageAttachments(
+        args.agent,
         target.settings,
         target.ptyId,
         text,
@@ -108,7 +128,7 @@ export function useNativeChatPtyComposerSend(args: {
         args.sessionOptionsSurface?.recordOutgoingCommand(text.trim())
       }
     } else {
-      const pendingId = args.onOptimisticSend?.(text, imagePaths)
+      pendingId = args.onOptimisticSend?.(text, imagePaths)
       if (pendingHandle) {
         args.trackPendingSend(pendingHandle, pendingId)
       }

@@ -15,6 +15,7 @@ import {
 } from '@/components/editor/useLocalImageSrc'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
+import { chatImageAccess } from '@/lib/local-file-access'
 
 type VisibilityListener = (isVisible: boolean) => void
 
@@ -70,6 +71,10 @@ function transcriptImageIdentity(
   }`
 }
 
+// Why one access kind for every role: a turn's role says who sent it, not who chose the path, and these
+// load on scroll with no click, so main only serves local image files by their real type.
+const TRANSCRIPT_IMAGE_ACCESS = chatImageAccess()
+
 function TranscriptImagePreview({
   block,
   runtimeContext
@@ -90,7 +95,8 @@ function TranscriptImagePreview({
     leaseActive && !external && runtimeContext !== undefined ? source : undefined,
     filePath,
     runtimeContext?.connectionId,
-    runtimeContext
+    runtimeContext,
+    TRANSCRIPT_IMAGE_ACCESS
   )
   const displaySrc = external && leaseActive ? source : localSrc
   const label =
@@ -124,9 +130,10 @@ function TranscriptImagePreview({
       return
     }
     if (!leaseActive) {
-      releaseLocalImageSrc(source, filePath, context.connectionId, context)
+      releaseLocalImageSrc(source, filePath, context.connectionId, context, TRANSCRIPT_IMAGE_ACCESS)
     }
-    return () => releaseLocalImageSrc(source, filePath, context.connectionId, context)
+    return () =>
+      releaseLocalImageSrc(source, filePath, context.connectionId, context, TRANSCRIPT_IMAGE_ACCESS)
   }, [external, filePath, leaseActive, runtimeContext, source])
 
   const showPreview =

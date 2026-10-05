@@ -8,17 +8,24 @@ import type { TuiAgent } from './tui-agent'
 export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   claude: 'Claude',
   'claude-agent-teams': 'Claude Agent Teams',
+  codebuddy: 'CodeBuddy',
   openclaude: 'OpenClaude',
   codex: 'Codex',
   devin: 'Devin',
   ante: 'Ante',
   trae: 'Trae',
+  muse: 'Muse',
+  dsh: 'DeepSeek Harness',
+  zcode: 'ZCode',
   autohand: 'Autohand Code',
   opencode: 'OpenCode',
+  opencode2: 'OpenCode 2',
   'mimo-code': 'MiMo Code',
   pi: 'Pi',
   omp: 'OMP',
   'prime-agent': 'Prime Agent',
+  qoder: 'Qoder CLI',
+  'qoder-cn': 'Qoder CLI China',
   gemini: 'Gemini',
   antigravity: 'Antigravity',
   aider: 'Aider',
@@ -30,6 +37,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   aug: 'Auggie',
   cline: 'Cline',
   codebuff: 'Codebuff',
+  freebuff: 'Freebuff',
   'command-code': 'Command Code',
   continue: 'Continue',
   cursor: 'Cursor',
@@ -41,7 +49,8 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   hermes: 'Hermes',
   openclaw: 'OpenClaw',
   copilot: 'GitHub Copilot',
-  grok: 'Grok'
+  grok: 'Grok',
+  jcode: 'Jcode'
 }
 
 /** Canonical agent id list derived from the exhaustive display-name record,

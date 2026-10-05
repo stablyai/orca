@@ -6,12 +6,19 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import type { Automation } from '../../shared/automations-types'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import type { Store } from '../persistence'
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson,
+  writePersistedStateJson
+} from '../persistence-test-harness'
 import { AutomationService } from './service'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
@@ -33,7 +40,7 @@ async function createStore(): Promise<Store> {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store: StoreClass, initDataPath } = await import('../persistence')
   initDataPath()
-  return new StoreClass()
+  return createSqliteTestStore(StoreClass, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 const makeRepo = (): Repo => ({
@@ -66,8 +73,10 @@ async function seedUnresolvableAutomation(): Promise<{ store: Store; automation:
     rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
     dtstart: new Date('2026-05-12T00:00:00').getTime()
   })
+  seed.flushOrThrow()
+  await seed.freezeWritesAsync()
   const file = join(testState.dir, 'orca-data.json')
-  const state = JSON.parse(readFileSync(file, 'utf-8'))
+  const state = JSON.parse(readPersistedStateJson(file))
   state.automations[0].runContext = {
     kind: 'workspace-run',
     projectId: 'project-1',
@@ -76,7 +85,7 @@ async function seedUnresolvableAutomation(): Promise<{ store: Store; automation:
     repoId: 'r1',
     path: '/repo'
   }
-  writeFileSync(file, JSON.stringify(state, null, 2), 'utf-8')
+  writePersistedStateJson(file, JSON.stringify(state))
   return { store: await createStore(), automation }
 }
 
@@ -132,9 +141,10 @@ describe('repeated skipped_unavailable coalescing', () => {
     vi.useFakeTimers()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     vi.useRealTimers()
-    rmSync(testState.dir, { recursive: true, force: true })
+    removeTreeSync(testState.dir)
   })
 
   it('folds every later refusal into the first record instead of writing a row each', async () => {
@@ -288,10 +298,10 @@ describe('repeated skipped_unavailable coalescing', () => {
     const scheduledFor = Date.now()
     seedSkip(store, automation, scheduledFor, SETUP_GONE)
     store.recordRepeatedAutomationSkip(automation.id, SETUP_GONE, scheduledFor + 1000)
-    store.flush()
+    store.flushOrThrow()
+    await store.freezeWritesAsync()
 
-    const { Store: StoreClass } = await import('../persistence')
-    const reloaded = new StoreClass()
+    const reloaded = await createStore()
 
     expect(reloaded.listAutomationRuns(automation.id)[0]?.occurrenceCount).toBe(2)
     expect(

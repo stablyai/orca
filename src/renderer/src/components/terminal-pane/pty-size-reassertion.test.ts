@@ -119,8 +119,9 @@ describe('createPtySizeReassertion', () => {
     expect(forwardResize).toHaveBeenCalledWith(82, 30)
   })
 
-  it('skips remote and suppressed PTYs', async () => {
+  it('reasserts remote PTYs without pretending to have applied-size readback', async () => {
     const getAppliedSize = vi.fn(async () => ({ cols: 120, rows: 30 }))
+    const remoteForwardResize = vi.fn()
     const remote = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'remote:terminal-1',
@@ -129,8 +130,18 @@ describe('createPtySizeReassertion', () => {
       fitAndRun: (continuation) => continuation(),
       getTerminalDimensions: () => ({ cols: 82, rows: 30 }),
       getAppliedSize,
-      forwardResize: vi.fn()
+      forwardResize: remoteForwardResize
     })
+    remote.request()
+    await flushAsyncTicks()
+
+    expect(remoteForwardResize).toHaveBeenCalledWith(82, 30)
+    expect(getAppliedSize).not.toHaveBeenCalled()
+  })
+
+  it('skips suppressed PTYs', async () => {
+    const getAppliedSize = vi.fn(async () => ({ cols: 120, rows: 30 }))
+    const suppressedForwardResize = vi.fn()
     const suppressed = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'pty-1',
@@ -139,13 +150,13 @@ describe('createPtySizeReassertion', () => {
       fitAndRun: (continuation) => continuation(),
       getTerminalDimensions: () => ({ cols: 82, rows: 30 }),
       getAppliedSize,
-      forwardResize: vi.fn()
+      forwardResize: suppressedForwardResize
     })
 
-    remote.request()
     suppressed.request()
     await flushAsyncTicks()
 
+    expect(suppressedForwardResize).not.toHaveBeenCalled()
     expect(getAppliedSize).not.toHaveBeenCalled()
   })
 

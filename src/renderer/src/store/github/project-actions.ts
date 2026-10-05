@@ -18,6 +18,8 @@ import { withBoundedCacheEntry, WORK_ITEMS_CACHE_TTL } from './cache-policy'
 import {
   acquireProviderRequestSlot as acquireWorkItemSlot,
   inflightProjectViewRequests,
+  nextProviderRequestId,
+  ownsInflightRequest,
   releaseProviderRequestSlot as releaseWorkItemSlot
 } from './request-coordination'
 import {
@@ -57,16 +59,25 @@ export const createProjectActions = (
       }
     }
 
-    const existing = inflightProjectViewRequests.get(requestKey)
-    if (existing) {
+    let waitedForUpgrade = false
+    for (;;) {
+      const existing = inflightProjectViewRequests.get(requestKey)
+      if (!existing) {
+        break
+      }
       // Why: a forcing caller must not dedupe to a non-forcing in-flight request; wait for it to settle, then issue a fresh forced call (mirrors fetchWorkItems).
-      if (options?.force && !existing.force) {
-        await existing.promise.catch(() => {})
-      } else {
+      if (!options?.force || existing.force) {
         return existing.promise
       }
+      // Why: wait out one weaker request so peers can share the upgrade, but never twice — a steady stream of weaker callers would otherwise starve this one forever.
+      if (waitedForUpgrade) {
+        break
+      }
+      waitedForUpgrade = true
+      await existing.promise.catch(() => {})
     }
 
+    const requestId = nextProviderRequestId()
     const request = (async (): Promise<GetProjectViewTableResult> => {
       await acquireWorkItemSlot()
       try {
@@ -79,6 +90,12 @@ export const createProjectActions = (
                 { timeoutMs: 60_000 }
               )
             : await window.api.gh.getProjectViewTable(args)
+        // Why: the bounded upgrade wait can leave us running beside a stronger request for this
+        // key, so neither write below may land once it owns the key — a late non-OK reply would
+        // otherwise stamp its error over the fresher table (or over a newer error) at the known key.
+        if (!ownsInflightRequest(inflightProjectViewRequests, requestKey, requestId)) {
+          return envelope
+        }
         if (envelope.ok) {
           const table = envelope.data
           const key = projectViewCacheKey(
@@ -119,12 +136,16 @@ export const createProjectActions = (
         }
       } finally {
         releaseWorkItemSlot()
+      }
+    })().finally(() => {
+      if (ownsInflightRequest(inflightProjectViewRequests, requestKey, requestId)) {
         inflightProjectViewRequests.delete(requestKey)
       }
-    })()
+    })
 
     inflightProjectViewRequests.set(requestKey, {
       promise: request,
+      requestId,
       force: Boolean(options?.force)
     })
     return request

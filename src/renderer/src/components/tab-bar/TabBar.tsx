@@ -7,6 +7,7 @@ import { useTabBarRuntimeModel } from './use-tab-bar-runtime-model'
 import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
 import { useTabBarItemProjection } from './use-tab-bar-item-projection'
 import { renderTabBarSurface } from './tab-bar-surface'
+import { useTabBarItemActions } from './use-tab-bar-item-actions'
 import { useActiveClientHostedBrowserRowId } from '@/lib/pane-manager/client-hosted-browser-row-state'
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
@@ -64,21 +65,29 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     }
     runtime.pinTab(item.unifiedTabId)
   }
-  const tabStripNavigation = useTabStripOverflowNavigation({
-    activeVisibleTabId: itemProjection.activeVisibleTabId,
-    layoutKey: itemProjection.tabStripLayoutKey,
-    tabCount: itemProjection.orderedItems.length,
-    worktreeId
-  })
-  const tabStripDragScroll = useTabStripDragScrollHandlers(tabStripNavigation.scrollTabStrip, {
-    start: tabStripNavigation.tabStripOverflowState.canScrollStart,
-    end: tabStripNavigation.tabStripOverflowState.canScrollEnd
+  const itemActions = useTabBarItemActions({
+    props,
+    togglePinned,
+    toggleTabViewMode: runtime.toggleTabViewMode
   })
   // Read here, not just where the rows render: the real tabs have to know when a row took over.
   const activeClientHostedBrowserRowId = useActiveClientHostedBrowserRowId({
     worktreeId,
     groupId: runtime.resolvedGroupId,
     groupActiveTabId: props.groupActiveTabId ?? null
+  })
+  const tabStripNavigation = useTabStripOverflowNavigation({
+    activeVisibleTabId: itemProjection.activeVisibleTabId,
+    activeDockSlotId: activeClientHostedBrowserRowId ?? itemProjection.activeVisibleTabId,
+    layoutKey: [
+      itemProjection.tabStripLayoutKey,
+      ...(props.clientHostedBrowserRows ?? []).map((row) => row.browserPageId)
+    ].join('|'),
+    worktreeId
+  })
+  const tabStripDragScroll = useTabStripDragScrollHandlers(tabStripNavigation.scrollTabStrip, {
+    start: tabStripNavigation.tabStripOverflowState.canScrollStart,
+    end: tabStripNavigation.tabStripOverflowState.canScrollEnd
   })
 
   return renderTabBarSurface({
@@ -89,7 +98,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     tabStripNavigation,
     tabStripDragScroll,
     activeClientHostedBrowserRowId,
-    togglePinned
+    itemActions
   })
 }
 

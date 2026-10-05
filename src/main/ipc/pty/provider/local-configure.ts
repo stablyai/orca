@@ -1,3 +1,4 @@
+import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -13,13 +14,14 @@ import { markClaudePtyExited } from '../../../claude-accounts/live-pty-gate'
 import { buildPtyHostEnv } from '../host-env/assembly'
 import {
   getCompatibleSelectedCodexHomePath,
-  isCodexStatusHooksEnabled,
   shouldStripInheritedOrcaCodexHome
 } from '../host-env/codex-home'
 import type { GetSelectedCodexHomePath } from '../host-env/types'
 import { isCurrentPtyExit, ptyOwnership } from './ownership-state'
 import { localProvider } from './registry'
 import { clearProviderPtyState } from './state-cleanup'
+import { awaitExplicitPiOmpGuestReadiness } from '../../../agent-hooks/wsl-pi-omp-guest-readiness'
+import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 
 export function configureLocalPtyProvider(args: {
   runtime?: OrcaRuntimeService
@@ -35,10 +37,18 @@ export function configureLocalPtyProvider(args: {
   localProvider.configure({
     isHistoryEnabled: () => getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
     getWindowsShell: () => getSettings?.()?.terminalWindowsShell,
+    getDefaultShell: () => getSettings?.()?.terminalDefaultShell,
     getWindowsPowerShellImplementation: () =>
       getSettings ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto') : undefined,
     pwshAvailable: () => isPwshAvailableAsync(),
     buildSpawnEnv: async (id, baseEnv, ctx) => {
+      await prepareAntigravityAccountForLaunch({
+        launchAgent: ctx?.launchAgent,
+        command: ctx?.command,
+        isWsl: ctx?.isWsl,
+        env: baseEnv,
+        envIsComplete: true
+      })
       const codexSelectionTarget: CodexAccountSelectionTarget =
         ctx?.isWsl === true
           ? { runtime: 'wsl', wslDistro: ctx.wslDistro ?? null }
@@ -47,13 +57,24 @@ export function configureLocalPtyProvider(args: {
         codexSelectionTarget,
         ctx?.codexHomePathOverride
           ? ctx.codexHomePathOverride.value
-          : ((await getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
-              workspacePath: ctx?.cwd,
-              launchAgent: ctx?.launchAgent
-            })) ?? null)
+          : ((await getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv)) ?? null)
       )
       const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
       const ptySettings = getSettings?.()
+      await inheritOmpLaunchEnvironment(baseEnv, {
+        shellPath: ctx?.shellPath,
+        explicitEnv: ctx?.explicitEnv,
+        isWsl: ctx?.isWsl,
+        launchAgent: ctx?.launchAgent,
+        launchCommand: ctx?.command
+      })
+      await awaitExplicitPiOmpGuestReadiness({
+        isWsl: ctx?.isWsl === true,
+        distro: ctx?.wslDistro,
+        codexHomePath: selectedCodexHomePath,
+        launchAgent: ctx?.launchAgent,
+        launchCommand: ctx?.command
+      })
       const env = buildPtyHostEnv(id, baseEnv, {
         isPackaged: getAppEnvironment().isPackaged(),
         resourcesPath: process.resourcesPath,
@@ -68,10 +89,11 @@ export function configureLocalPtyProvider(args: {
         }),
         launchCommand: ctx?.command,
         launchAgent: ctx?.launchAgent,
+        shellPath: ctx?.shellPath,
         isWsl: ctx?.isWsl,
         wslDistro: ctx?.wslDistro ?? null,
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
-        codexStatusHooksEnabled: isCodexStatusHooksEnabled(ptySettings),
+        disabledTuiAgents: ptySettings?.disabledTuiAgents,
         networkProxySettings: ptySettings,
         routeBrowserOpensToClient: runtime?.shouldRelayTerminalBrowserOpens?.()
       })

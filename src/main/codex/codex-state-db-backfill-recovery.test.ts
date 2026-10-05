@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as ownerIdentity from '../agent-hooks/managed-hook-owner-identity'
 import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
-import { getCmdExePath } from '../win32-utils'
 import {
   _internals,
   resolveCodexBackfillSupervisorLockRoot,
@@ -71,6 +70,22 @@ describe('Codex state DB backfill recovery', () => {
     expect(dependencies.isPending).toHaveBeenCalledTimes(1)
     expect(withLock).toHaveBeenCalledTimes(1)
     expect(run).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not start a supervisor for an unreadable index', async () => {
+    const home = await createTemporaryRoot()
+    await writeFile(join(home, 'state_5.sqlite'), 'not a sqlite database')
+    const run = vi.fn()
+    const withLock = vi.fn()
+
+    await expect(
+      startCodexStateDbBackfillRecoveryInBackground(home, {
+        run,
+        withLock: withLock as never
+      })
+    ).resolves.toBeNull()
+    expect(withLock).not.toHaveBeenCalled()
+    expect(run).not.toHaveBeenCalled()
   })
 
   it('releases a completed supervisor entry', async () => {
@@ -365,7 +380,7 @@ describe('Codex state DB backfill recovery', () => {
     expect(terminate).toHaveBeenCalledWith(child)
   })
 
-  it('uses batch-safe read-only arguments for native Windows recovery', async () => {
+  it('hands the Codex shim itself to the spawn chokepoint for native Windows recovery', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const child = createFakeChild()
     const spawnProcess = vi.fn(() => child)
@@ -393,11 +408,9 @@ describe('Codex state DB backfill recovery', () => {
       string[],
       { cwd?: string; env?: NodeJS.ProcessEnv }
     ]
-    expect(spawnFile).toBe(getCmdExePath())
+    // Why: spawnProcess resolves a recognised npm shim past cmd.exe; pre-wrapping hides the shim.
+    expect(spawnFile).toBe(codexCommand)
     expect(spawnArgs).toEqual([
-      '/d',
-      '/c',
-      codexCommand,
       '-c',
       'approval_policy=never',
       '-s',

@@ -24,7 +24,11 @@ vi.mock('electron', () => ({
 }))
 
 import { browserManager } from './browser-manager'
-import { resetGrabTestEnvironment } from './browser-manager-grab-test-harness'
+import {
+  GRAB_GUEST_WEB_CONTENTS_ID,
+  GRAB_RENDERER_WEB_CONTENTS_ID,
+  resetGrabTestEnvironment
+} from './browser-manager-grab-test-harness'
 
 const { guestExecuteJavaScriptMock, guestOnMock, rendererSendMock } = grabMocks
 
@@ -61,7 +65,30 @@ describe('browserManager grab operations', () => {
       await Promise.resolve()
 
       expect(preventDefault).toHaveBeenCalledTimes(1)
-      expect(rendererSendMock).toHaveBeenCalledWith('browser:grabModeToggle', 'tab-1')
+      expect(rendererSendMock).toHaveBeenCalledWith('browser:grabModeToggle', 'tab-1', 'copy')
+    })
+
+    it('ignores a held cmd/ctrl+c so the picker is toggled once', async () => {
+      const handler = guestOnMock.mock.calls.find(
+        ([eventName]) => eventName === 'before-input-event'
+      )?.[1]
+
+      handler?.(
+        { preventDefault: vi.fn() },
+        {
+          type: 'keyDown',
+          ...primaryModifier,
+          shift: false,
+          alt: false,
+          key: 'c',
+          isAutoRepeat: true
+        }
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(guestExecuteJavaScriptMock).not.toHaveBeenCalled()
+      expect(rendererSendMock).not.toHaveBeenCalled()
     })
 
     it('does not forward cmd/ctrl+c when the guest reports native copy should win', async () => {
@@ -144,6 +171,46 @@ describe('browserManager grab operations', () => {
 
       expect(preventDefault).toHaveBeenCalledTimes(1)
       expect(rendererSendMock).toHaveBeenCalledWith('ui:newBrowserTab')
+    })
+
+    // Default annotate chord: Cmd+Shift+C on macOS, Alt+Shift+N elsewhere.
+    const annotateChord =
+      process.platform === 'darwin'
+        ? { meta: true, control: false, alt: false, shift: true, code: 'KeyC', key: 'C' }
+        : { meta: false, control: false, alt: true, shift: true, code: 'KeyN', key: 'N' }
+
+    function pressAnnotateChord(): ReturnType<typeof vi.fn> {
+      const preventDefault = vi.fn()
+      for (const [eventName, handler] of guestOnMock.mock.calls) {
+        if (eventName === 'before-input-event') {
+          handler({ preventDefault }, { type: 'keyDown', ...annotateChord })
+        }
+      }
+      return preventDefault
+    }
+
+    it('forwards the annotate chord once, skipping the copy-only page probe', () => {
+      guestOnMock.mockClear()
+      browserManager.registerGuest({
+        browserPageId: 'tab-1',
+        workspaceId: 'workspace-1',
+        webContentsId: GRAB_GUEST_WEB_CONTENTS_ID,
+        rendererWebContentsId: GRAB_RENDERER_WEB_CONTENTS_ID
+      })
+
+      const preventDefault = pressAnnotateChord()
+
+      expect(guestExecuteJavaScriptMock).not.toHaveBeenCalled()
+      expect(preventDefault).toHaveBeenCalledTimes(1)
+      expect(rendererSendMock.mock.calls).toEqual([['browser:grabModeToggle', 'tab-1', 'annotate']])
+    })
+
+    // A client-hosted guest registers no workspace, and its pane has no annotate to arm.
+    it('leaves the annotate chord to a page with no local workspace', () => {
+      const preventDefault = pressAnnotateChord()
+
+      expect(preventDefault).not.toHaveBeenCalled()
+      expect(rendererSendMock).not.toHaveBeenCalled()
     })
   })
 })

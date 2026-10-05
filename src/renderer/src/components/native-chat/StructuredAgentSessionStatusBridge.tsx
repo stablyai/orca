@@ -1,61 +1,47 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
-import type {
-  AgentSessionBackgroundTask,
-  AgentSessionStatusSummary
-} from '../../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
 import {
-  AGENT_STATUS_MAX_SUBAGENTS,
+  agentChildWorkProjectionCandidateFromBackgroundTask,
+  projectAgentChildWorkLegacySubagents
+} from '../../../../shared/agent-status-child-work-projection'
+import {
+  continueMainAgentStatus,
+  isAgentStatusHeldOpenByChildWork,
+  mainAgentTurnInterrupted
+} from '../../../../shared/agent-lead-status-fold'
+import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
+import {
+  agentChildWorkViewsEqual,
+  decodeAgentChildWorkViews
+} from '../../../../shared/agent-status-child-work-view-wire'
+import {
   agentSubagentsEqual,
-  type AgentSubagentSnapshot,
-  type AgentSubagentState
+  mainAgentStatusEqual,
+  type AgentSubagentSnapshot
 } from '../../../../shared/agent-status-types'
+import { structuredChildWorkLegacySubagents } from '../../../../shared/structured-agent-session-child-work-legacy'
+import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionAgentStatus } from '../../../../shared/structured-agent-session-agent-status'
 import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionStatusState
-} from '../../../../shared/structured-agent-session-projection'
-import type { Tab } from '../../../../shared/tab-types'
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+  structuredAgentSessionDatedMainAgent,
+  structuredAgentSessionRowStateStartedAt
+} from '../../../../shared/structured-agent-session-status-started-at'
 import { useAppStore } from '@/store'
-import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import {
+  structuredAgentSessionOwnerForTab,
+  structuredAgentSessionTargetForHost
+} from '@/runtime/structured-agent-session-owner'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
+import { getStructuredAgentSessionTabs, type StructuredTab } from './structured-agent-session-tabs'
 
-type StructuredTab = Tab & { contentType: 'agent-session' }
-
-function isStructuredTab(tab: Tab): tab is StructuredTab {
-  return tab.contentType === 'agent-session' && isAgentSessionHandleProvider(tab.agentSessionAgent)
-}
-
-const structuredTabsByUnifiedTabsSnapshot = new WeakMap<
-  Record<string, Tab[]>,
-  readonly StructuredTab[]
->()
-
-/** Project structured-session tabs once per immutable tab-map snapshot. */
-export function getStructuredAgentSessionTabs(
-  unifiedTabsByWorktree: Record<string, Tab[]>
-): readonly StructuredTab[] {
-  const cached = structuredTabsByUnifiedTabsSnapshot.get(unifiedTabsByWorktree)
-  if (cached) {
-    return cached
-  }
-
-  const tabs: StructuredTab[] = []
-  for (const worktreeTabs of Object.values(unifiedTabsByWorktree)) {
-    for (const tab of worktreeTabs) {
-      if (isStructuredTab(tab)) {
-        tabs.push(tab)
-      }
-    }
-  }
-  structuredTabsByUnifiedTabsSnapshot.set(unifiedTabsByWorktree, tabs)
-  return tabs
-}
+// Re-exported so the bridge stays the one import site its consumers already know.
+export { getStructuredAgentSessionTabs } from './structured-agent-session-tabs'
 
 /** The host's projected status for one session, live while the caller is mounted. */
-function useStructuredAgentSessionStatusSummary(
+export function useStructuredAgentSessionStatusSummary(
   sessionId: string,
   target: RuntimeClientTarget
 ): { summary: AgentSessionStatusSummary | null; observation: 'live' | 'unverifiable' } {
@@ -74,56 +60,37 @@ function useStructuredAgentSessionStatusSummary(
   return { summary, observation }
 }
 
-/** Matches the wire-parse bound in `normalizeSubagentSnapshot`. */
-const SUBAGENT_ID_MAX_LENGTH = 64
-
-function subagentStateFromTask(task: AgentSessionBackgroundTask): AgentSubagentState {
-  switch (task.state) {
-    case 'waiting':
-      return 'waiting'
-    case 'blocked':
-      return 'blocked'
-    case 'done':
-    case 'idle':
-      return 'idle'
-    case 'unverifiable':
-      return 'unverifiable'
-    // Absent state is an old host's live task; live means working here.
-    case 'working':
-    case 'monitoring':
-    case undefined:
-      return 'working'
-  }
+/** Only the host's startup phase, so a chat re-renders when that changes, not on every status. */
+export function useStructuredAgentSessionHostExecutionPhase(
+  sessionId: string,
+  target: RuntimeClientTarget
+): NonNullable<AgentSessionStatusSummary['hostExecutionPhase']> | null {
+  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
+  useEffect(() => feed.activate(), [feed])
+  return useSyncExternalStore(
+    feed.subscribe,
+    () => feed.getSnapshot().get(sessionId)?.hostExecutionPhase ?? null,
+    () => null
+  )
 }
 
-/** Sidebar children for a structured session: the agent-kind background tasks
- *  the host publishes, mapped to the sidebar's own subagent vocabulary rather
- *  than widening it. Kinds stay distinct — a backgrounded shell never counts
- *  as a subagent. */
-function subagentSnapshotsFromTasks(
-  tasks: AgentSessionBackgroundTask[] | undefined
-): AgentSubagentSnapshot[] | undefined {
-  if (!tasks) {
-    return undefined
+/** The host's child records for the row, and the legacy roster readers of `subagents` keep. A host
+ *  that publishes views is copied verbatim; only an older host's task list is converted here. */
+function childWorkFor(summary: AgentSessionStatusSummary): {
+  children?: AgentChildWorkView[]
+  subagents?: AgentSubagentSnapshot[]
+} {
+  const children = decodeAgentChildWorkViews(summary.children)
+  if (children) {
+    const subagents = structuredChildWorkLegacySubagents(children, summary.agent)
+    return { children, ...(subagents ? { subagents } : {}) }
   }
-  const snapshots: AgentSubagentSnapshot[] = []
-  for (const task of tasks) {
-    const id = task.id.trim()
-    if (task.kind !== 'agent' || id.length === 0 || id.length > SUBAGENT_ID_MAX_LENGTH) {
-      continue
-    }
-    snapshots.push({
-      id,
-      state: subagentStateFromTask(task),
-      startedAt: task.startedAt ?? 0,
-      ...(task.name ? { agentType: task.name } : {}),
-      ...(task.description ? { description: task.description } : {})
-    })
-    if (snapshots.length >= AGENT_STATUS_MAX_SUBAGENTS) {
-      break
-    }
-  }
-  return snapshots.length > 0 ? snapshots : undefined
+  const subagents = summary.backgroundTasks
+    ? projectAgentChildWorkLegacySubagents(
+        summary.backgroundTasks.map(agentChildWorkProjectionCandidateFromBackgroundTask)
+      )
+    : undefined
+  return subagents ? { subagents } : {}
 }
 
 function projectStatus(
@@ -140,24 +107,43 @@ function projectStatus(
     }
     return
   }
-  const subagents = subagentSnapshotsFromTasks(summary.backgroundTasks)
+  const { children, subagents } = childWorkFor(summary)
+  // Shared with `worktree ps`, so the CLI and this row cannot disagree about one session.
+  const agentStatus = structuredAgentSessionAgentStatus({
+    status: summary.status,
+    childWork: children ?? summary.backgroundTasks,
+    turnOutcome: summary.turnOutcome
+  })
+  const current = store.agentStatusByPaneKey?.[paneKey]
+  // Same continuity rule as the host ingest, on the main agent's own clock.
+  const mainAgent = continueMainAgentStatus(
+    current?.mainAgent,
+    structuredAgentSessionDatedMainAgent(agentStatus.mainAgent, summary),
+    summary.updatedAt
+  )
   const desired = {
-    // Shared with `worktree ps`, so the CLI and this row cannot disagree about one session.
-    state: structuredAgentSessionStatusState(summary.status),
+    state: agentStatus.state,
+    ...(agentStatus.workingMode ? { workingMode: agentStatus.workingMode } : {}),
+    mainAgent,
+    // Derived from `mainAgent`, so the equality below needs no second check of it.
+    interrupted: mainAgentTurnInterrupted(mainAgent),
     prompt: summary.latestPrompt,
     agentType: tab.agentSessionAgent,
     // The host projects these from the journal so the row reads like a hook-reported one:
-    // the running tool while a turn is live, the agent's last words once it settles.
+    // the turn's running or latest tool while it is live, the agent's last words once it settles.
     ...(summary.model ? { model: summary.model } : {}),
     ...(summary.toolName ? { toolName: summary.toolName } : {}),
     ...(summary.toolInput ? { toolInput: summary.toolInput } : {}),
     ...(summary.lastAssistantMessage ? { lastAssistantMessage: summary.lastAssistantMessage } : {}),
-    ...(subagents ? { subagents, subagentObservation: observation } : {}),
+    ...(subagents ? { subagents } : {}),
+    ...(children ? { children } : {}),
+    ...(subagents || children ? { subagentObservation: observation } : {}),
     sessionBoundary: false
   } as const
-  const current = store.agentStatusByPaneKey?.[paneKey]
   if (
     current?.state === desired.state &&
+    current.workingMode === desired.workingMode &&
+    mainAgentStatusEqual(current.mainAgent, desired.mainAgent) &&
     current.prompt === desired.prompt &&
     current.agentType === desired.agentType &&
     // A row keeps the last model it was told about, so only a reported one can differ.
@@ -166,6 +152,7 @@ function projectStatus(
     current.toolInput === summary.toolInput &&
     current.lastAssistantMessage === summary.lastAssistantMessage &&
     agentSubagentsEqual(current.subagents, subagents) &&
+    agentChildWorkViewsEqual(current.children, children) &&
     current.subagentObservation === desired.subagentObservation &&
     current.sessionBoundary === desired.sessionBoundary &&
     current.updatedAt === summary.updatedAt &&
@@ -190,11 +177,18 @@ function projectStatus(
       updatedAt: summary.updatedAt,
       // This ordered host feed can correct a legacy publication clock after upgrade.
       allowOlderTimestamp: true,
+      // Same continuity key as the host ingest: monitoring and working are distinct published
+      // states, so the timer beside the label must restart when the label changes.
       stateStartedAt:
-        desired.state !== 'done' && current?.state === desired.state
+        structuredAgentSessionRowStateStartedAt(desired, summary) ??
+        (desired.state !== 'done' &&
+        current?.state === desired.state &&
+        current.workingMode === desired.workingMode
           ? current.stateStartedAt
-          : summary.updatedAt,
-      evidenceObservedAt: summary.updatedAt
+          : summary.updatedAt),
+      // Same rule as the host ingest: the journal clock stopped when the lead's turn did, so a
+      // row held open by child work alone is dated by when this client saw it instead.
+      evidenceObservedAt: isAgentStatusHeldOpenByChildWork(desired) ? Date.now() : summary.updatedAt
     },
     { tabId: tab.id, worktreeId: tab.worktreeId },
     {
@@ -205,14 +199,25 @@ function projectStatus(
   )
 }
 
-function StructuredAgentSessionStatusProjection({ tab }: { tab: StructuredTab }): null {
-  const environmentId = useAppStore((state) =>
-    getRuntimeEnvironmentIdForWorktree(state, tab.worktreeId)
-  )
-  const target = useMemo(
-    () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId }),
-    [environmentId]
-  )
+/** Reads the chat's status from the host recorded on its tab; a chat no host can be named for has
+ *  none to read. */
+function StructuredAgentSessionStatusProjection({
+  tab
+}: {
+  tab: StructuredTab
+}): React.JSX.Element | null {
+  const owner = useAppStore((state) => structuredAgentSessionOwnerForTab(state, tab))
+  const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
+  return target ? <StructuredAgentSessionOwnedStatusProjection tab={tab} target={target} /> : null
+}
+
+function StructuredAgentSessionOwnedStatusProjection({
+  tab,
+  target
+}: {
+  tab: StructuredTab
+  target: RuntimeClientTarget
+}): null {
   const { summary, observation } = useStructuredAgentSessionStatusSummary(tab.entityId, target)
   useEffect(() => {
     projectStatus(tab, summary, observation)

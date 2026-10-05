@@ -1,4 +1,5 @@
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
+import type { StructuredAgentContextUsage } from '../../../../shared/structured-agent-session-context-usage'
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session-wire'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { StructuredAgentSessionCommandOutcome } from '../../../../shared/structured-agent-session-composer'
@@ -24,13 +25,24 @@ export type NativeChatStructuredComposerTransport = {
   /** The `/` surface the running session reports. Absent keeps the curated
    *  per-agent catalog, which is what an older host leaves the client with. */
   sessionCommands?: readonly AgentSessionSlashCommand[]
+  /** The session's context usage; null until the journal can state it. */
+  contextUsage?: StructuredAgentContextUsage | null
   worktreeId?: string
+  /** Present only where the host can set this session's goal. */
+  threadGoal?: { setObjective: (objective: string) => Promise<boolean> }
   onError: (message: string | null) => void
   runtime: 'local' | 'remote'
   /** The session behind this composer; a real user send relinquishes orchestration ownership. */
   sessionId: string
   /** Owning runtime for that report; null is the local runtime. */
   runtimeEnvironmentId: string | null
+}
+
+export type NativeChatOptimisticSendOutcome = {
+  /** The host refused the write: mark the echo "Message not sent". */
+  reject: (pendingId: string) => void
+  /** The write acknowledgment was lost: hold the echo, then flag it unconfirmed. */
+  holdUnconfirmed: (pendingId: string) => void
 }
 
 export type NativeChatComposerProps = {
@@ -49,6 +61,8 @@ export type NativeChatComposerProps = {
   onStop?: () => void
   /** Render an optimistic echo until the real transcript turn lands. */
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
+  /** Settle an optimistic echo whose write was refused or never acknowledged. */
+  optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   /** Remove an optimistic echo when its delayed submit is canceled. */
   onOptimisticSendCanceled?: (pendingId: string) => void
   /** Record a dispatched slash command that does not create a chat turn. */
@@ -61,6 +75,9 @@ export type NativeChatComposerProps = {
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */
   structuredTransport?: NativeChatStructuredComposerTransport
+  /** Cmd/Ctrl+Enter from an empty composer: send the newest queued draft now.
+   *  False = nothing queued, and the chord falls through to a plain send. */
+  steerQueued?: () => boolean
 }
 
 /** Launch context prefilled into the TUI input as an unsent draft, plus the two
@@ -84,4 +101,6 @@ export type NativeChatComposerHandle = {
   }) => void
   /** Pastes clipboard content when no DOM paste event is available. */
   pasteFromClipboard: () => void
+  /** Whether a node is inside the composer's own input, not merely the chat pane. */
+  contains: (node: Node | null) => boolean
 }

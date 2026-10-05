@@ -98,10 +98,15 @@ describe('host system default session migration pass preparation', () => {
   it('does not demand a full scan when the same history home is spelled differently', async () => {
     writeBaselineMarker(CUSTOM_HISTORY_HOME)
     const store = createStore(
-      createSettings({ codexSessionSourceHome: { host: CUSTOM_HISTORY_HOME, wsl: {} } })
+      createSettings({
+        codexSessionSourceHome: { host: CUSTOM_HISTORY_HOME, wsl: {} },
+        realHomeRoutable: true
+      })
     )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
+    // Why: an unusable hook lane is the migration-eligible route onto the mirror.
+    service.setRealHomeLaneGate(() => false)
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
       false
     )
@@ -132,10 +137,15 @@ describe('host system default session migration pass preparation', () => {
   it('still demands a full scan when the history home really moves', async () => {
     writeBaselineMarker(CUSTOM_HISTORY_HOME)
     const store = createStore(
-      createSettings({ codexSessionSourceHome: { host: CUSTOM_HISTORY_HOME, wsl: {} } })
+      createSettings({
+        codexSessionSourceHome: { host: CUSTOM_HISTORY_HOME, wsl: {} },
+        realHomeRoutable: true
+      })
     )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
+    // Why: an unusable hook lane is the migration-eligible route onto the mirror.
+    service.setRealHomeLaneGate(() => false)
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
       false
     )

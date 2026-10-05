@@ -68,6 +68,20 @@ const StateSchema = z.object({
     observed: z.number().optional(),
     threshold: z.number().optional()
   })),
+  // Pre-2026-09-17 state files predate cell-probe tolerance; a resumed run that
+  // carries no streak is one that also restarts its window, so it earns nothing.
+  probeStreaks: z.record(z.string(), z.number().int().nonnegative()).default({}),
+  toleratedProbeEvents: z.array(z.object({
+    recordedAt: z.string(),
+    windowSequence: z.number().int().nonnegative(),
+    failures: z.array(z.object({
+      code: z.string(),
+      source: z.enum(['active-probe', 'cloud-monitoring', 'relay-logs', 'director-admin']),
+      signal: z.string().optional(),
+      observed: z.number().optional(),
+      threshold: z.number().optional()
+    }))
+  })).default([]),
   completedAt: z.string().nullable()
 })
 
@@ -463,6 +477,7 @@ export async function runIncidentMonitorCli(
         await wait(ms)
       },
       collect: segmentedCollect,
+      warn: (message) => console.warn(message),
       persist: async (nextState) => await persistState(options.stateFile, nextState),
       checkpoint: async (checkpoint) => {
         await appendCheckpoint(options.summaryFile, checkpoint)

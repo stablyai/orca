@@ -33,7 +33,7 @@ export function MarkdownPreviewSingleNoteSendMenu({
           id: 'note',
           label: translate('auto.components.editor.MarkdownPreview.f37b98999e', 'This note'),
           notes: note.sentAt ? [] : [note],
-          prompt: formatMarkdownReviewNotes([note], content)
+          formatPrompt: (notes) => formatMarkdownReviewNotes(notes, content)
         }
       ]}
       targetModeLabel="This note"

@@ -82,11 +82,17 @@ export function resolveNativeChatAttachmentOwnerForWorktree(
   if (!worktreePath) {
     return { kind: 'not-ready' }
   }
-  return {
-    kind: 'ssh',
-    connectionId,
-    worktreePath,
-    ...captureDirectSshMutationExpectation(state, connectionId)
+  try {
+    return {
+      kind: 'ssh',
+      connectionId,
+      worktreePath,
+      ...captureDirectSshMutationExpectation(state, connectionId)
+    }
+  } catch {
+    // The connection's generation is gone (disconnect mid-attach). That is an
+    // unknown owner, not a reason to throw out of the drop/IME handler.
+    return { kind: 'not-ready' }
   }
 }
 
@@ -94,6 +100,20 @@ export function nativeChatWorktreeNotReadyNotice(): string {
   return translate(
     'components.native-chat.composer.worktreeNotReady',
     'Worktree not ready — try again in a moment.'
+  )
+}
+
+export function nativeChatAttachmentOwnerChangedNotice(): string {
+  return translate(
+    'components.native-chat.composer.attachmentOwnerChanged',
+    'This workspace changed hosts while attaching — drop the files again.'
+  )
+}
+
+export function nativeChatAttachmentUnreadableNotice(): string {
+  return translate(
+    'components.native-chat.composer.attachmentUnreadable',
+    "Couldn't read the dropped files."
   )
 }
 

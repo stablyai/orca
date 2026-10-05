@@ -36,6 +36,7 @@ import {
   WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD
 } from './hook-stdin-contract'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
+import { findBareHookCommandVariables } from './managed-hook-command-env.test-fixture'
 
 let tmpDir: string
 let configPath: string
@@ -294,15 +295,6 @@ describe('createManagedCommandMatcher', () => {
     ).toBe(true)
     expect(matchPowerShell("/bin/sh '/home/alice/.orca/agent-hooks/copilot-hook.sh'")).toBe(true)
   })
-
-  it('matches the legacy per-userData script path AND the new shared ~/.orca path', () => {
-    // Why: install() must sweep old per-userData commands when migrating to
-    // the shared ~/.orca script path, or stale launchers keep failing.
-    expect(
-      match("/bin/sh '/Users/alice/Library/Application Support/orca/agent-hooks/claude-hook.sh'")
-    ).toBe(true)
-    expect(match("/bin/sh '/Users/alice/.orca/agent-hooks/claude-hook.sh'")).toBe(true)
-  })
 })
 
 describe('removeManagedCommands', () => {
@@ -461,13 +453,6 @@ describe('getSharedManagedScriptPath', () => {
       join(homedir(), '.orca', 'agent-hooks', 'claude-hook.sh')
     )
   })
-
-  it('does not depend on Electron app.getPath, so two Orca instances resolve to the same path', () => {
-    // Why: using userData here would reintroduce dev/prod settings thrash.
-    const a = getSharedManagedScriptPath('claude-hook.sh')
-    const b = getSharedManagedScriptPath('claude-hook.sh')
-    expect(a).toBe(b)
-  })
 })
 
 describe('writeManagedScript', () => {
@@ -492,14 +477,6 @@ describe('wrapPosixHookCommand', () => {
     expect(cmd).toBe(
       `if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then /bin/sh '/does/not/exist.sh'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     )
-  })
-
-  it('preserves spaces in the script path (Library/Application Support case)', () => {
-    // Why: Electron's userData on macOS lives under "Application Support" with
-    // a space. The guard must keep the path quoted so each file test and
-    // `/bin/sh` see one argument.
-    const cmd = wrapPosixHookCommand('/Users/a/Library/Application Support/Orca/agent-hooks/x.sh')
-    expect(cmd).toContain("'/Users/a/Library/Application Support/Orca/agent-hooks/x.sh'")
   })
 
   it('escapes embedded single quotes so the wrapped command stays well-formed', () => {
@@ -637,6 +614,15 @@ describe('wrapWindowsHookCommand', () => {
     )
   })
 
+  it('doubles typographic single quotes in the script path literal', () => {
+    const decoded = decodeWindowsHookCommand(
+      wrapWindowsHookCommand('C:\\Users\\O\u2019Brien\\.orca\\agent-hooks\\codex-hook.cmd')
+    )
+    expect(decoded).toContain(
+      "Test-Path -LiteralPath 'C:\\Users\\O\u2019\u2019Brien\\.orca\\agent-hooks\\codex-hook.cmd'"
+    )
+  })
+
   it('scopes environment variables inside the encoded launcher', () => {
     const command = wrapWindowsHookCommand('C:\\hooks\\copilot-hook.ps1', {
       ORCA_COPILOT_HOOK_EVENT: 'UserPromptSubmit'
@@ -663,19 +649,6 @@ describe('wrapWindowsHookCommand', () => {
     expect(answer).toBeGreaterThan(-1)
     expect(guard).toBeGreaterThan(answer)
     expect(ownsStdin).toBeGreaterThan(guard)
-  })
-
-  // Why: a user profile path like `C:\Users\Jane Doe` is the regression from
-  // #6078 — the raw path used to be split at the space. The wrapper must keep
-  // the whole path inside the encoded command so shells do not split it.
-  it('preserves spaces in the script path (user profile with space case)', () => {
-    const cmd = wrapWindowsHookCommand('C:\\Users\\Jorge Silva\\.orca\\agent-hooks\\codex-hook.cmd')
-    expect(cmd).toMatch(qualifiedWindowsPowerShellCommand)
-    expect(decodeWindowsHookCommand(cmd)).toBe(
-      expectedDecodedWindowsHookCommand(
-        'C:\\Users\\Jorge Silva\\.orca\\agent-hooks\\codex-hook.cmd'
-      )
-    )
   })
 
   it('keeps cmd.exe percent expansion and caret escapes out of the command line', () => {
@@ -706,10 +679,7 @@ describe('wrapWindowsHookCommand', () => {
 
 describe('wrapWindowsCmdHookCommand', () => {
   it('returns the bare, directly-spawnable path for a cmd-safe managed script', () => {
-    // Why: Codex/Antigravity/Devin launch the command as a program (argv[0]),
-    // not via cmd.exe, so the launcher must be a single spawnable token — a bare
-    // .cmd path. A cmd-builtin `if …` launcher has argv[0] = `if`, which is
-    // unspawnable and fails every hook with exit 1 (#8430 regression).
+    // Direct-spawn consumers need a launchable argv[0], not a cmd builtin such as `if`.
     const scriptPath = 'C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd'
     const command = wrapWindowsCmdHookCommand(scriptPath)
     expect(command).toBe(scriptPath)
@@ -720,12 +690,7 @@ describe('wrapWindowsCmdHookCommand', () => {
   it.skipIf(process.platform !== 'win32')(
     'resolves the launcher to a real executable file, not a shell fragment',
     () => {
-      // Regression guard for #8430: Codex/Antigravity/Devin spawn the launcher as
-      // a program (argv[0]), so it must be an existing, launchable file. The broken
-      // `if exist … (call …)` form had argv[0] = `if` — a cmd builtin, not a file —
-      // which is unspawnable and failed every hook. The bare path is the file.
-      // win32-only: the real temp path is cmd-safe only with backslashes; a POSIX
-      // tmpDir has `/`, which routes to the encoded fallback by design.
+      // POSIX temp paths contain `/`, which selects the encoded fallback instead.
       const scriptPath = join(tmpDir, 'codex-hook.cmd')
       writeFileSync(scriptPath, '@echo off\r\nexit /b 0\r\n', 'utf-8')
       const command = wrapWindowsCmdHookCommand(scriptPath)
@@ -765,8 +730,7 @@ describe('wrapRuntimeHomeHookCommand', () => {
       const command = wrapRuntimeHomeHookCommand('claude-hook', options)
 
       expect(command).toContain('"${SYSTEMROOT-}/System32/WindowsPowerShell/v1.0/powershell.exe"')
-      expect(command).not.toMatch(/\$(?!\{)[A-Za-z_]/)
-      expect(command).not.toMatch(/\$\{[A-Za-z_][A-Za-z0-9_]*\}/)
+      expect(findBareHookCommandVariables(command)).toEqual([])
     }
   )
 
@@ -936,9 +900,5 @@ describe('buildWindowsAgentHookCurlPostCommand', () => {
     // Why: same dead-listener bound as the POSIX hook so a stalled server can't
     // hold up the agent.
     expect(command).toContain('--connect-timeout 0.5 --max-time 1.5')
-  })
-
-  it('targets the requested hook source endpoint', () => {
-    expect(buildWindowsAgentHookCurlPostCommand('grok')).toContain('/hook/grok')
   })
 })

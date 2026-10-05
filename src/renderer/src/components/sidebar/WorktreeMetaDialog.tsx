@@ -34,11 +34,11 @@ import {
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { WorktreeDisplayNameField } from './WorktreeDisplayNameField'
 import { WorktreeReviewLinkField } from './WorktreeReviewLinkField'
-
-function resizeCommentTextarea(textarea: HTMLTextAreaElement): void {
-  textarea.style.height = 'auto'
-  textarea.style.height = `${textarea.scrollHeight}px`
-}
+import { resizeCommentTextarea } from './worktree-comment-textarea-sizing'
+import {
+  isImeOwnedKeyboardEvent,
+  useImeEnterGestureOwnership
+} from '@/lib/ime-composition-keyboard-event'
 
 /** Only read before the first open, when nothing can be saved yet. */
 const EMPTY_SNAPSHOT: WorktreeMetaSnapshot = {
@@ -54,10 +54,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
-  const submitShortcutLabel = getScreenSubmitShortcutLabel()
+  const commentIme = useImeEnterGestureOwnership()
 
-  const isEditMeta = activeModal === 'edit-meta'
-  const isOpen = isEditMeta
+  const isOpen = activeModal === 'edit-meta'
 
   const worktreeId = typeof modalData.worktreeId === 'string' ? modalData.worktreeId : ''
   const executionHostId =
@@ -172,11 +171,14 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const setCommentTextareaRef = useCallback(
     (textarea: HTMLTextAreaElement | null) => {
       textareaRef.current = textarea
-      if (textarea && isEditMeta) {
+      if (!textarea) {
+        commentIme.reset()
+      }
+      if (textarea && isOpen) {
         resizeCommentTextarea(textarea)
       }
     },
-    [isEditMeta]
+    [commentIme, isOpen]
   )
 
   const handleCommentChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -290,6 +292,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
 
   const handleCommentKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (commentIme.ownsKeyDown(e) || commentIme.isComposing() || isImeOwnedKeyboardEvent(e)) {
+        return
+      }
       const isPlainEnter = e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey
       if (isPlainEnter || isScreenSubmitShortcut(e)) {
         e.preventDefault()
@@ -297,7 +302,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
         handleSave()
       }
     },
-    [handleSave]
+    [commentIme, handleSave]
   )
 
   const handleIssueKeyDown = useCallback(
@@ -390,6 +395,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
               ref={setCommentTextareaRef}
               value={commentInput}
               onChange={handleCommentChange}
+              onCompositionStart={() => commentIme.setComposing(true)}
+              onCompositionEnd={() => commentIme.setComposing(false)}
+              onKeyUp={commentIme.onKeyUp}
+              onBlur={commentIme.reset}
               onKeyDown={handleCommentKeyDown}
               placeholder={translate(
                 'auto.components.sidebar.WorktreeMetaDialog.030d484fc0',
@@ -403,7 +412,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
                 'auto.components.sidebar.WorktreeMetaDialog.7f0be5e9a6',
                 'Supports **markdown** — bold, lists, `code`, links. Press Enter or'
               )}{' '}
-              {submitShortcutLabel}{' '}
+              {getScreenSubmitShortcutLabel()}{' '}
               {translate(
                 'auto.components.sidebar.WorktreeMetaDialog.b48c271d39',
                 'to save, Shift+Enter for a new line.'

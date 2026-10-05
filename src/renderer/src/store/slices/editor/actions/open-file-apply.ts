@@ -5,6 +5,7 @@ import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../r
 import type { AppState } from '../../../types'
 import {
   type ClosedEditorTabSnapshot,
+  type EditorTabSelection,
   MAX_RECENT_CLOSED_EDITOR_TABS,
   type OpenFile
 } from '../types/open-file'
@@ -20,6 +21,7 @@ import {
   buildEditorActiveResult,
   resolveEditorOpenTargetGroupId
 } from '../tabs/editor-open-target-group'
+import { resolveEditorPreviewIntent } from '../tabs/editor-preview-tab-setting'
 import {
   getReplaceablePreviewFileId,
   removeEditorStateForReplacedPreview
@@ -28,6 +30,8 @@ import {
 export type OpenFileApplyScratch = {
   editorItemFileId: string
   editorItemTargetGroupId: string | undefined
+  /** Resolved against the setting inside the reducer so the tab can't disagree with its OpenFile. */
+  editorItemIsPreview: boolean
 }
 
 export function applyOpenFileToState(
@@ -42,6 +46,7 @@ export function applyOpenFileToState(
         forceContentReload?: boolean
         focusEditor?: boolean
         reopenId?: string
+        selection?: EditorTabSelection
       }
     | undefined,
   scratch: OpenFileApplyScratch
@@ -89,13 +94,15 @@ export function applyOpenFileToState(
           reusableOpenFileModes
         )
   scratch.editorItemFileId = id
-  const isPreview = options?.preview ?? false
+  const isPreview = resolveEditorPreviewIntent(s, options?.preview)
+  scratch.editorItemIsPreview = isPreview
   const recordReplacedPreview = options?.recordReplacedPreview ?? false
   // Why: resolve the target group up-front so preview replacement is scoped to it (group B open must not evict group A's preview).
   const targetGroupId =
     resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
   scratch.editorItemTargetGroupId = targetGroupId
-  const activeResult = buildEditorActiveResult(s, worktreeId, id)
+  const activeResult =
+    options?.selection === 'none' ? {} : buildEditorActiveResult(s, worktreeId, id)
   if (existing) {
     // If opening as non-preview, also pin the existing tab
     const updatedPreview = isPreview ? existing.isPreview : false
@@ -108,6 +115,11 @@ export function applyOpenFileToState(
     )
       ? (existing.fileContentReloadNonce ?? 0) + 1
       : existing.fileContentReloadNonce
+    // View Log is the only read-only open path. A normal open of the same path
+    // is an explicit request to edit it, so drop the log-only restrictions while
+    // keeping View Log from downgrading an already writable tab.
+    const nextReadOnly = existing.readOnly === true && file.readOnly === true ? true : undefined
+    const nextLiveTail = file.liveTail === true && nextReadOnly === true ? true : undefined
     const needsExistingUpdate =
       existing.mode !== file.mode ||
       existing.diffSource !== file.diffSource ||
@@ -124,11 +136,12 @@ export function applyOpenFileToState(
       existing.runtimeEnvironmentId !== runtimeEnvironmentId ||
       existing.externalSshTargetId !== nextExternalSshTargetId ||
       refreshExternalSshProvenance ||
-      existing.fileContentReloadNonce !== fileContentReloadNonce
+      existing.fileContentReloadNonce !== fileContentReloadNonce ||
+      existing.readOnly !== nextReadOnly ||
+      existing.liveTail !== nextLiveTail
     if (!needsExistingUpdate) {
       return activeResult
     }
-    // Why: `readOnly` is intentionally NOT in this override map — it's sticky, so `...f` preserves the tab's own read-only state.
     return {
       openFiles: s.openFiles.map((f) =>
         f.id === id
@@ -154,7 +167,9 @@ export function applyOpenFileToState(
               skippedConflicts: file.skippedConflicts,
               conflictReview: file.conflictReview,
               isPreview: updatedPreview,
-              fileContentReloadNonce
+              fileContentReloadNonce,
+              readOnly: nextReadOnly,
+              liveTail: nextLiveTail
             }
           : f
       ),

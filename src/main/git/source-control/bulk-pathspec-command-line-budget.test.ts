@@ -5,11 +5,13 @@ import {
 } from '../../../shared/windows-command-line-budget'
 import { resolveGitCommandWithoutProbe } from '../command-runner/git-command-resolution'
 
-const gitExecFileAsync = vi.fn(async () => ({ stdout: '', stderr: '' }))
+const gitExecFileAsync = vi.fn(async (_args: string[], _options: { stdin?: string }) => ({
+  stdout: '',
+  stderr: ''
+}))
 
 vi.mock('../runner', () => ({
-  gitExecFileAsync: (...args: unknown[]) =>
-    (gitExecFileAsync as unknown as (...a: unknown[]) => Promise<{ stdout: string }>)(...args)
+  gitExecFileAsync: (args: string[], options: { stdin?: string }) => gitExecFileAsync(args, options)
 }))
 vi.mock('./git-read-cache-invalidation', () => ({ invalidateGitReadCaches: vi.fn() }))
 vi.mock('../../../shared/git-discard-path-safety', () => ({
@@ -49,7 +51,7 @@ function realisticChangedPaths(count: number): string[] {
 }
 
 function capturedInvocations(): string[][] {
-  return gitExecFileAsync.mock.calls.map((call) => (call as unknown as [string[]])[0])
+  return gitExecFileAsync.mock.calls.map(([args]) => args)
 }
 
 describe('bulk pathspec command-line budget', () => {
@@ -78,13 +80,15 @@ describe('bulk pathspec command-line budget', () => {
     expect(Math.max(...lengths)).toBeLessThanOrEqual(MAX_COMMAND_LINE_CHARS)
   })
 
-  it('stages every path exactly once, in order, across the chunks', async () => {
+  it('stages every path exactly once, in order, through stdin', async () => {
     const { bulkStageFiles } = await import('./staging')
     const filePaths = realisticChangedPaths(250)
 
     await bulkStageFiles(WSL_WORKTREE, filePaths, { wslDistro: WSL_DISTRO })
 
-    const staged = capturedInvocations().flatMap((args) => args.slice(args.indexOf('--') + 1))
+    const staged = gitExecFileAsync.mock.calls.flatMap(
+      ([, options]) => options.stdin?.split('\0').filter(Boolean) ?? []
+    )
     expect(staged).toEqual(filePaths.map((filePath) => `:(literal)${filePath}`))
   })
 
@@ -97,17 +101,14 @@ describe('bulk pathspec command-line budget', () => {
     expect(Math.max(...lengths)).toBeLessThanOrEqual(MAX_COMMAND_LINE_CHARS)
   })
 
-  it('never emits a pathspec-free chunk, which would widen `clean -ffdx` to the worktree', async () => {
+  it('does not spawn an empty WSL bulk stage', async () => {
     const { bulkStageFiles } = await import('./staging')
 
-    await bulkStageFiles(WSL_WORKTREE, realisticChangedPaths(300), { wslDistro: WSL_DISTRO })
-
-    for (const args of capturedInvocations()) {
-      expect(args.slice(args.indexOf('--') + 1).length).toBeGreaterThan(0)
-    }
+    await bulkStageFiles(WSL_WORKTREE, [], { wslDistro: WSL_DISTRO })
+    expect(capturedInvocations()).toEqual([])
   })
 
-  it('splits a WSL bulk discard of tracked paths into spawnable restores', async () => {
+  it('discards tracked paths with one spawnable WSL restore', async () => {
     const filePaths = realisticChangedPaths(120)
     gitExecFileAsync.mockImplementation(async () => ({ stdout: filePaths.join('\0'), stderr: '' }))
     const { bulkDiscardChanges } = await import('./discard-changes')
@@ -115,7 +116,7 @@ describe('bulk pathspec command-line budget', () => {
     await bulkDiscardChanges(WSL_WORKTREE, filePaths, { wslDistro: WSL_DISTRO })
 
     const restores = capturedInvocations().filter((args) => args[0] === 'restore')
-    expect(restores.length).toBeGreaterThan(1)
+    expect(restores).toHaveLength(1)
     for (const args of restores) {
       expect(finishedCommandLineLength(args, WSL_DISTRO)).toBeLessThanOrEqual(
         MAX_COMMAND_LINE_CHARS
@@ -141,24 +142,28 @@ describe('bulk pathspec command-line budget', () => {
     }
   })
 
-  it('ships a single over-budget pathspec alone rather than dropping it', async () => {
+  it('keeps an over-budget pathspec off argv without dropping it', async () => {
     const { bulkStageFiles } = await import('./staging')
     const hugePath = `src/${'nested-directory/'.repeat(700)}Component.tsx`
 
     await bulkStageFiles(WSL_WORKTREE, [hugePath, 'src/app.tsx'], { wslDistro: WSL_DISTRO })
 
     const invocations = capturedInvocations()
-    expect(invocations).toHaveLength(2)
-    expect(invocations[0]).toEqual(['add', '--', `:(literal)${hugePath}`])
-    expect(invocations[1]).toEqual(['add', '--', ':(literal)src/app.tsx'])
+    expect(invocations).toEqual([['add', '--pathspec-from-file=-', '--pathspec-file-nul']])
+    expect(gitExecFileAsync.mock.calls[0][1].stdin).toBe(
+      `:(literal)${hugePath}\0:(literal)src/app.tsx\0`
+    )
   })
 
   it('packs chunks to the budget instead of splitting timidly', async () => {
-    const { bulkStageFiles } = await import('./staging')
-
-    await bulkStageFiles(WSL_WORKTREE, realisticChangedPaths(100), { wslDistro: WSL_DISTRO })
-
-    const lengths = capturedInvocations().map((args) => finishedCommandLineLength(args, WSL_DISTRO))
+    const { bulkPathspecCommands } = await import('./git-pathspec')
+    const commands = bulkPathspecCommands(
+      ['ls-files', '-z', '--'],
+      realisticChangedPaths(100),
+      WSL_WORKTREE,
+      { wslDistro: WSL_DISTRO }
+    )
+    const lengths = commands.map((args) => finishedCommandLineLength(args, WSL_DISTRO))
     // Every chunk but the last is filled to within one pathspec of the cap.
     expect(Math.min(...lengths.slice(0, -1))).toBeGreaterThan(MAX_COMMAND_LINE_CHARS * 0.9)
   })

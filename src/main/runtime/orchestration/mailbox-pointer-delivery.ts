@@ -70,6 +70,16 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     if (db.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
       return
     }
+    // Why the gate lives HERE and not at each caller: this method is the single point at
+    // which this subsystem commits to typing the pointer into the pane, and it has four
+    // callers (handle delivery, post-probe redelivery, flight settle, and the notification
+    // coordinator's per-leaf path). Gating callers meant each new one silently bypassed the
+    // check; gating the commit point cannot be bypassed. Refusal parks and re-offers rather
+    // than dropping — `isAgentSettledForDelivery` arms the re-check.
+    if (!this.deps.isAgentSettledForDelivery(leaf)) {
+      this.parkRedelivery(mailboxHandle, options.reservedTypes)
+      return
+    }
     if (leaf.ptyId) {
       const deferredEnter = this.state.takeDeferredEnter(leaf.ptyId)
       if (deferredEnter) {

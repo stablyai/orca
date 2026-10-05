@@ -1,18 +1,26 @@
 import { readAgentJournalTurn } from './agent-session-turn-record'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import type { AgentSessionTurnActivity } from './agent-session-wire'
+import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { normalizePromptField } from './agent-status-field-normalization'
 import { describeActiveToolCall, formatActiveToolLabel } from './native-chat-tool-activity'
 
 export type NativeChatTurnActivity = { kind: 'description'; text: string }
 
 function activityLine(text: string): string | null {
-  const lines = text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-  const latest = lines.at(-1)
-  return latest ? normalizePromptField(latest) || null : null
+  let end = text.length
+  while (end > 0) {
+    const start = text.lastIndexOf('\n', end - 1) + 1
+    const latest = text.slice(start, end).trim()
+    if (latest) {
+      return normalizePromptField(latest) || null
+    }
+    if (start === 0) {
+      break
+    }
+    end = start - 1
+  }
+  return null
 }
 
 function recentToolActivityLabels(items: readonly AgentJournalRenderItem[]): Set<string> {
@@ -66,36 +74,27 @@ function repeatsRecentToolLabel(text: string, labels: ReadonlySet<string>): bool
   return false
 }
 
-/** Prefer provider-authored activity copy; callers provide the broad fallback. */
+/** The live provider activity for this turn; callers provide the broad fallback.
+ *  Journal rows are history, not the present, so none of them ever becomes this line. */
 export function selectStructuredAgentTurnActivity(
   items: readonly AgentJournalRenderItem[],
   turnId: string | null,
   providerActivity?: AgentSessionTurnActivity | null
 ): NativeChatTurnActivity | null {
-  if (!turnId) {
+  if (!turnId || providerActivity?.turnId !== turnId) {
+    return null
+  }
+  const text = activityLine(providerActivity.text)
+  if (!text) {
     return null
   }
   const turnStartIndex = items.findLastIndex((item) => {
     const turn = readAgentJournalTurn(item.body)
     return turn?.turnId === turnId && turn.state === 'running'
   })
-  const turnItems = items.slice(Math.max(0, turnStartIndex))
-  const toolLabels = recentToolActivityLabels(turnItems)
-  if (providerActivity?.turnId === turnId) {
-    const text = activityLine(providerActivity.text)
-    if (text && !repeatsRecentToolLabel(text, toolLabels)) {
-      return { kind: 'description', text }
-    }
-  }
-  for (let index = turnItems.length - 1; index >= 0; index -= 1) {
-    const body = turnItems[index]?.body
-    if (body?.kind !== 'status' || readAgentJournalTurn(body) || body.providerFrame) {
-      continue
-    }
-    const text = activityLine(body.text)
-    if (text && !repeatsRecentToolLabel(text, toolLabels)) {
-      return { kind: 'description', text }
-    }
-  }
-  return null
+  // Root-scoped: a subagent's tool label must not suppress the parent's own line.
+  const turnItems = items.slice(Math.max(0, turnStartIndex)).filter(isRootAgentJournalItem)
+  return repeatsRecentToolLabel(text, recentToolActivityLabels(turnItems))
+    ? null
+    : { kind: 'description', text }
 }

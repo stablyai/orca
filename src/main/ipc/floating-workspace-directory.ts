@@ -5,7 +5,6 @@ import { app } from 'electron'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { Store } from '../persistence'
-import { authorizeExternalPath } from './filesystem-auth'
 
 const FLOATING_WORKSPACE_DIRNAME = 'floating-workspace'
 
@@ -68,12 +67,14 @@ function isTrustedFloatingWorkspaceDirectory(
   return getTrustedFloatingWorkspaceDirectories(settings).has(path.resolve(canonicalDirPath))
 }
 
+/** The app-owned folder floating markdown documents are created in; a desktop-only root. */
+export function getDefaultFloatingWorkspacePath(): string {
+  return path.join(app.getPath('userData'), FLOATING_WORKSPACE_DIRNAME)
+}
+
 export async function ensureDefaultFloatingWorkspacePath(): Promise<string> {
-  const cwd = path.join(app.getPath('userData'), FLOATING_WORKSPACE_DIRNAME)
+  const cwd = getDefaultFloatingWorkspacePath()
   await mkdir(cwd, { recursive: true })
-  // Why: the default floating workspace lives outside repo roots by design;
-  // authorize only this app-owned directory instead of widening access to ~.
-  authorizeExternalPath(cwd)
   return cwd
 }
 
@@ -94,18 +95,16 @@ export async function resolveFloatingTerminalCwd(
     return ensureDefaultFloatingWorkspacePath()
   }
 
+  // Why: only picker-approved directories may become the cwd, so arbitrary settings text can't.
   if (isTrustedFloatingWorkspaceDirectory(canonicalCwd, store.getSettings())) {
-    // Why: picker-approved directories are persisted as explicit grants, so a
-    // restart can restore file creation access without trusting arbitrary text.
-    authorizeExternalPath(canonicalCwd)
     return canonicalCwd
   }
 
   return args?.requireTrusted === true ? ensureDefaultFloatingWorkspacePath() : cwd
 }
 
-export async function grantFloatingWorkspaceDirectory(
-  store: Store,
+export async function trustFloatingWorkspaceDirectory(
+  store: Pick<Store, 'getSettings' | 'updateSettings'>,
   dirPath: string
 ): Promise<void> {
   const resolvedDir = resolveFloatingWorkspaceInput(dirPath)
@@ -113,7 +112,6 @@ export async function grantFloatingWorkspaceDirectory(
   if (!canonicalDir) {
     return
   }
-  authorizeExternalPath(canonicalDir)
   const trustedDirectories = await getPreservedTrustedFloatingWorkspaceDirectories(
     store.getSettings()
   )

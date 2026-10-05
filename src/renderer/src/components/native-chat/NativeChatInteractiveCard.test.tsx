@@ -33,17 +33,21 @@ vi.mock('../../store', () => ({
 }))
 
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
+import { useNativeChatInteractivePromptCard } from './use-native-chat-interactive-prompt-card'
 
 const mocks = {
   sendAnswer: vi.fn<NativeChatInteractiveSend['sendAnswer']>(),
   sendRaw: vi.fn<NativeChatInteractiveSend['sendRaw']>(),
   cancelPending: vi.fn<NativeChatInteractiveSend['cancelPending']>(),
-  cancel: vi.fn<NativeChatInteractiveSend['cancel']>()
+  cancel: vi.fn<NativeChatInteractiveSend['cancel']>(),
+  cancelAsk: vi.fn<NativeChatInteractiveSend['cancelAsk']>()
 }
 
 function renderCard(canSend = true): ReturnType<typeof render> {
   return render(cardElement(canSend))
 }
+
+const NO_MESSAGES: readonly NativeChatMessage[] = []
 
 function cardElement(
   canSend = true,
@@ -52,17 +56,43 @@ function cardElement(
   transcriptSettled = true
 ): React.JSX.Element {
   return (
-    <NativeChatInteractiveCard
-      paneKey="tab-1:leaf-1"
+    <CardHarness
       canSend={canSend}
       messages={messages}
+      onShowingQuestionChange={onShowingQuestionChange}
       transcriptSettled={transcriptSettled}
+    />
+  )
+}
+
+// The view derives the card and hands it over; this stands in for that view.
+function CardHarness({
+  canSend,
+  messages,
+  onShowingQuestionChange,
+  transcriptSettled
+}: {
+  canSend: boolean
+  messages?: readonly NativeChatMessage[]
+  onShowingQuestionChange?: (showing: boolean) => void
+  transcriptSettled: boolean
+}): React.JSX.Element | null {
+  const card = useNativeChatInteractivePromptCard({
+    paneKey: 'tab-1:leaf-1',
+    messages: messages ?? NO_MESSAGES,
+    transcriptSettled: transcriptSettled && messages !== undefined
+  })
+  return (
+    <NativeChatInteractiveCard
+      card={card}
+      canSend={canSend}
       onShowingQuestionChange={onShowingQuestionChange}
       send={{
         sendAnswer: mocks.sendAnswer,
         sendRaw: mocks.sendRaw,
         cancelPending: mocks.cancelPending,
-        cancel: mocks.cancel
+        cancel: mocks.cancel,
+        cancelAsk: mocks.cancelAsk
       }}
     />
   )
@@ -107,6 +137,16 @@ function chooseSpacesAndSubmit(): void {
 }
 
 describe('NativeChatInteractiveCard answer lifecycle', () => {
+  it('routes question Cancel to rejection and releases the composer slot without Stop', () => {
+    const onShowingQuestionChange = vi.fn()
+    render(cardElement(true, undefined, onShowingQuestionChange))
+    expect(screen.getByTestId('native-chat-question-card-title')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(mocks.cancelAsk).toHaveBeenCalledOnce()
+    expect(mocks.cancel).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('native-chat-question-card-title')).not.toBeInTheDocument()
+    expect(onShowingQuestionChange).toHaveBeenLastCalledWith(false)
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = INITIAL_PROMPT

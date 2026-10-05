@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createDraftPasteReadyScanner } from './draft-paste-ready-scanner'
 
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
+const DECRST_BRACKETED_PASTE = '\x1b[?2004l'
 const SHOW_CURSOR = '\x1b[?25h'
 const HIDE_CURSOR = '\x1b[?25l'
 const CODEX_PROMPT = '\x1b[1m›\x1b[0m Ask Codex to do anything'
@@ -83,6 +84,27 @@ describe('createDraftPasteReadyScanner', () => {
       // \x1b[?25l (hide) must not be mistaken for \x1b[?25h (show).
       expect(scanner.observe(`${DECSET_BRACKETED_PASTE}${HIDE_CURSOR}`)).toEqual({
         ready: false,
+        armQuietTimer: false
+      })
+    })
+
+    it('never joins a show-cursor across a chunk seam from bytes it already scanned', () => {
+      // Why: the stream holds only a hide-cursor; re-reading carried chars used to assemble a show.
+      const scanner = createDraftPasteReadyScanner('render-cursor-after-bracketed-paste')
+      expect(scanner.observe(DECSET_BRACKETED_PASTE).ready).toBe(false)
+      expect(scanner.observe('Search \x1b[?25').ready).toBe(false)
+      expect(scanner.observe('l more text').ready).toBe(false)
+    })
+
+    it('ignores a show-cursor after the shell turns bracketed paste back off to run a command', () => {
+      // zsh's prompt enables bracketed paste and disables it on accept-line, before the launcher
+      // runs; the launcher's cursor toggle stands in for any spinner (synthetic).
+      const scanner = createDraftPasteReadyScanner('render-cursor-after-bracketed-paste')
+      expect(scanner.observe(`${DECSET_BRACKETED_PASTE}% opencode`).ready).toBe(false)
+      expect(scanner.observe(`${DECRST_BRACKETED_PASTE}\r\n`).ready).toBe(false)
+      expect(scanner.observe(`${HIDE_CURSOR}resolving${SHOW_CURSOR}`).ready).toBe(false)
+      expect(scanner.observe(`${DECSET_BRACKETED_PASTE}${SHOW_CURSOR}`)).toEqual({
+        ready: true,
         armQuietTimer: false
       })
     })
@@ -269,6 +291,39 @@ describe('createDraftPasteReadyScanner', () => {
       expect(scanner.observe('\x1b[?10')).toEqual({ ready: false, armQuietTimer: false })
       expect(scanner.observe('49h')).toEqual({ ready: false, armQuietTimer: false })
       expect(scanner.observe(GROK_COMPOSER_FRAME)).toEqual({ ready: true, armQuietTimer: false })
+    })
+  })
+
+  describe('a stream that never carries DECSET 2004', () => {
+    // Why: every signal below is anchored on `\x1b[?2004h`, so without it readiness cannot resolve
+    // and delivery falls through to the caller's hard timeout. A transport that loses the sequence
+    // lands here; terminal-agent-paste-bracketing.ts names remote replay and ConPTY as possible.
+    const ANCHORLESS_OPENCODE_FRAME = `${HIDE_CURSOR}\x1b[2J\x1b[H opencode ${SHOW_CURSOR}`
+
+    it('never reports opencode ready from show-cursor frames alone', () => {
+      const scanner = createDraftPasteReadyScanner('render-cursor-after-bracketed-paste')
+      for (let frame = 0; frame < 5; frame += 1) {
+        expect(scanner.observe(ANCHORLESS_OPENCODE_FRAME)).toEqual({
+          ready: false,
+          armQuietTimer: false
+        })
+      }
+    })
+
+    it('never arms the default quiet window either', () => {
+      const scanner = createDraftPasteReadyScanner('render-quiet-after-bracketed-paste')
+      expect(scanner.observe(ANCHORLESS_OPENCODE_FRAME)).toEqual({
+        ready: false,
+        armQuietTimer: false
+      })
+    })
+
+    it('never reports the Codex composer glyph ready without its anchor', () => {
+      const scanner = createDraftPasteReadyScanner('codex-composer-prompt')
+      expect(scanner.observe(`${ALT_SCREEN_ENTER}${CODEX_PROMPT}`)).toEqual({
+        ready: false,
+        armQuietTimer: false
+      })
     })
   })
 

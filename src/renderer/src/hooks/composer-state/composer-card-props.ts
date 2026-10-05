@@ -111,6 +111,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     shouldWaitForSetupCheck,
     workspaceSeedName,
     smartNameJiraSourceContext,
+    smartNameMode,
     smartNameSelection,
     sparsePresets,
     sparseSelectedPresetId,
@@ -174,6 +175,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     onOpenJiraSettings: handleOpenJiraSettings,
     smartNameGitHubSourceContext: selectedRepoGitHubSourceContext,
     smartNameJiraSourceContext,
+    smartNameMode,
     smartNameSelection,
     onClearSmartNameSelection: handleClearSmartNameSelection,
     canReuseSelectedBranch:

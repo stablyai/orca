@@ -1,6 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
 import { normalizeRightSidebarRoute } from '../../right-sidebar-route'
 import {
   applyManualRepoOrder,
@@ -38,7 +37,6 @@ import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-us
 import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser-page-zoom'
 import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
 import { isReleaseChannel } from '../../../../../shared/release-channel'
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   sanitizeSetupScriptPromptDismissals
@@ -57,47 +55,21 @@ import {
   preserveStringArrayIdentity,
   sanitizeHydratedActiveView,
   sanitizePersistedRepoIds,
-  sanitizeShowDotfilesByWorktree,
+  sanitizeExplorerPreferences,
   sanitizeWorkspaceCleanupDismissals,
   sanitizePersistedSidebarWidth,
   hydratedUIPartialMatchesState,
-  migrateStatusBarItems,
   clampPetSize
 } from './ui-slice-hydration-sanitizers'
 import { hydrateAgentReadState, sanitizeTaskResumeState } from './ui-slice-hydration-values'
+import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
-const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
-const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
-const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
-const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
-const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
-
-function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
-  let items = migrateStatusBarItems(ui.statusBarItems)
-  const defaults = [
-    ['_portsStatusBarDefaultAdded', DEFAULT_ON_PORTS_STATUS_BAR_ITEM],
-    ['_kimiStatusBarDefaultAdded', DEFAULT_ON_KIMI_STATUS_BAR_ITEM],
-    ['_minimaxStatusBarDefaultAdded', DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM],
-    ['_antigravityStatusBarDefaultAdded', DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM],
-    ['_grokStatusBarDefaultAdded', DEFAULT_ON_GROK_STATUS_BAR_ITEM]
-  ] as const
-  for (const [flag, item] of defaults) {
-    if (!ui[flag] && !items.includes(item)) {
-      items = [...items, item]
-    }
-  }
-  if (typeof window !== 'undefined' && defaults.some(([flag]) => !ui[flag])) {
-    window.api.ui
-      .set({ statusBarItems: items, ...Object.fromEntries(defaults.map(([flag]) => [flag, true])) })
-      .catch(console.error)
-  }
-  return items
-}
-
+/** Builds hydration actions that reconcile authoritative UI state without discarding pending local edits. */
 export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Partial<UISlice> {
   return {
+    /** Captures the incoming write baseline before overlaying dirty or in-flight local fields. */
     hydratePersistedUI: (ui, source = 'sync') =>
       set((s) => {
         const manualRepoOrder = normalizeManualRepoOrder(ui.manualRepoOrder)
@@ -169,7 +141,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           // Why !== false: profiles written before #8873 have no key, and they are
           // precisely the ones showing the bug, so absence must mean "exempt".
           alwaysShowDefaultBranchWorkspace: ui.alwaysShowDefaultBranchWorkspace !== false,
-          showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
+          ...sanitizeExplorerPreferences(ui),
           // Why: startup hydrates UI before repo catalogs, so defer repo-filter validation to the all-host refresh.
           filterRepoIds:
             validRepoIds.size === 0
@@ -270,6 +242,9 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             ui.usagePercentageDisplayChangeNoticeDismissed === true,
           // Why: default false so existing users still see the CTA; only explicit dismissal persists true.
           usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
+          codexTerminalServerIsolationNoticeSeen:
+            ui.codexTerminalServerIsolationNoticeSeen === true,
+          codexSharedSettingsNoticeSeen: ui.codexSharedSettingsNoticeSeen === true,
           ...hydrateAgentReadState(ui),
           workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
             ui.workspaceCleanup?.dismissals

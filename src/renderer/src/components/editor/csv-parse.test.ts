@@ -80,6 +80,130 @@ describe('detectCsvDelimiter', () => {
     expect(detectCsvDelimiter('data.csv', 'a,b,c\n1,2,3')).toBe(',')
   })
 
+  it('sniffs semicolon exports that use commas as the decimal mark', () => {
+    const content = 'amount;label\n1,50;"Roe, John"\n2,75;lunch\n'
+
+    expect(detectCsvDelimiter('expenses.csv', content)).toBe(';')
+    expect(parseCsv(content, detectCsvDelimiter('expenses.csv', content)).rows).toEqual([
+      ['amount', 'label'],
+      ['1,50', 'Roe, John'],
+      ['2,75', 'lunch']
+    ])
+  })
+
+  it('keeps comma when semicolons only appear inside quoted fields', () => {
+    expect(detectCsvDelimiter('x.csv', '"a"";b;c",d,e\n1,2,3\n')).toBe(',')
+  })
+
+  it('prefers tab over semicolon when tabs dominate the first line', () => {
+    expect(detectCsvDelimiter('x.csv', 'a\tb;c\td\n')).toBe('\t')
+  })
+
+  it('uses tab for .tsv files that contain semicolons', () => {
+    expect(detectCsvDelimiter('data.TSV', 'a;b;c')).toBe('\t')
+  })
+
+  it.each([
+    ['a;b,c', ','],
+    ['a;b,c\td', ','],
+    ['a;b\tc', '\t'],
+    ['a,b\tc', ','],
+    ['', ','],
+    ['single', ',']
+  ])('preserves existing delimiter precedence for %j', (content, delimiter) => {
+    expect(detectCsvDelimiter('x.csv', content)).toBe(delimiter)
+  })
+
+  it('sniffs semicolons after a BOM and leading whitespace-only lines', () => {
+    expect(detectCsvDelimiter('x.csv', '\uFEFF\n \t \r\na;b\n1;2')).toBe(';')
+  })
+
+  it('parses semicolon fields with quoted separators, escaped quotes and newlines', () => {
+    const content = '\uFEFFnote;amount\r\n"she said ""hi"";\nnext";1,50\r\n'
+
+    expect(parseCsv(content, detectCsvDelimiter('x.csv', content))).toEqual({
+      rows: [
+        ['note', 'amount'],
+        ['she said "hi";\nnext', '1,50']
+      ],
+      maxColumns: 2
+    })
+  })
+
+  it('keeps consistent comma columns when only the header has extra semicolons', () => {
+    const content = 'notes;one;two,value\nplain,1\nother,2'
+
+    expect(detectCsvDelimiter('x.csv', content)).toBe(',')
+    expect(parseCsv(content, detectCsvDelimiter('x.csv', content)).rows).toEqual([
+      ['notes;one;two', 'value'],
+      ['plain', '1'],
+      ['other', '2']
+    ])
+  })
+
+  it.each([',', '\t'])('keeps literal quotes inside unquoted %j fields', (delimiter) => {
+    const content = `notes;one;two${delimiter}value\n6" bolts${delimiter}1\nplain${delimiter}2`
+
+    expect(detectCsvDelimiter('x.csv', content)).toBe(delimiter)
+    expect(parseCsv(content, detectCsvDelimiter('x.csv', content)).rows).toEqual([
+      ['notes;one;two', 'value'],
+      ['6" bolts', '1'],
+      ['plain', '2']
+    ])
+  })
+
+  it('keeps consistent tab columns when a header contains extra semicolons', () => {
+    expect(detectCsvDelimiter('x.csv', 'notes;one;two\tvalue\nplain\t1')).toBe('\t')
+  })
+
+  it('keeps a semicolon export whose unquoted comma counts vary between rows', () => {
+    expect(detectCsvDelimiter('x.csv', 'name;amount;note\nAda;1,50;lunch\nBo;2;plain')).toBe(';')
+  })
+
+  it('ignores separator-like punctuation in a multiline quoted field', () => {
+    const content = 'notes;one;two,value\n"line one\nline;two",1'
+    expect(detectCsvDelimiter('x.csv', content)).toBe(',')
+  })
+
+  it('keeps first-line inference when the rows are ambiguous or ragged', () => {
+    expect(detectCsvDelimiter('x.csv', 'a;b;c,value\nx;y;z,1')).toBe(';')
+    expect(detectCsvDelimiter('x.csv', 'a;b;c\nx;y\nz')).toBe(';')
+    expect(detectCsvDelimiter('x.csv', '1,50;coffee\n2,75;lunch')).toBe(',')
+  })
+
+  it('uses at most eight logical records to corroborate the existing delimiter', () => {
+    const firstEight = ['notes;one;two,value', ...Array.from({ length: 7 }, () => 'plain,1')]
+    const content = [...firstEight, 'ragged,one,two,three'].join('\n')
+    expect(detectCsvDelimiter('x.csv', content)).toBe(',')
+  })
+
+  it('does not use an unfinished quoted record at the scan boundary as corroboration', () => {
+    const prefix = 'notes;one;two,value\nplain,"'
+    const content = `${prefix}${'x'.repeat(CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS)}",1`
+    expect(detectCsvDelimiter('x.csv', content)).toBe(';')
+  })
+
+  it('does not use a partial unquoted record at the scan boundary as corroboration', () => {
+    const prefix = 'notes;one;two,value\nplain,'
+    const content = `${prefix}${'x'.repeat(CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS)}\nother,2`
+    expect(detectCsvDelimiter('x.csv', content)).toBe(';')
+  })
+
+  it('does not corroborate an unfinished quoted record at EOF', () => {
+    expect(detectCsvDelimiter('x.csv', 'notes;one;two,value\nplain,"unfinished')).toBe(';')
+  })
+
+  it('corroborates complete records with CRLF, escaped quotes and a quoted newline', () => {
+    const content = 'notes;one;two,value\r\n"say ""hi"";\r\nnext",1\r\nplain,2\r\n'
+    expect(detectCsvDelimiter('x.csv', content)).toBe(',')
+  })
+
+  it('does not sniff semicolons beyond the first-line scan limit', () => {
+    const content = `${'a'.repeat(CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS)};b;c`
+
+    expect(detectCsvDelimiter('x.csv', content)).toBe(',')
+  })
+
   it('skips leading blank lines when sniffing', () => {
     expect(detectCsvDelimiter('x.csv', '\n\na\tb\tc')).toBe('\t')
   })

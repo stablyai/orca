@@ -1,4 +1,3 @@
-import type { AgentSessionPtyWriteRefusal } from './agent-session-pty-write-admission'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -11,13 +10,19 @@ import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
-import type { TuiAgent } from './tui-agent'
+import type { TerminalAgent, TuiAgent } from './terminal-agent'
 
 export type RuntimeTerminalSummary = {
   handle: string
   ptyId: string | null
   incarnationId?: string | null
   orphaned?: boolean
+  /**
+   * Orphaned only: the pane the host last recorded for this PTY, which the renderer owning it can
+   * still hold even when its graph omitted that pane. Absent when none was recorded or the host
+   * predates the field.
+   */
+  recordedPaneKey?: string
   worktreeId: string
   worktreePath: string
   branch: string
@@ -28,8 +33,8 @@ export type RuntimeTerminalSummary = {
   writable: boolean
   lastOutputAt: number | null
   preview: string
-  /** Host-resolved agent identity for action consumers; absent when unknown or unsupported. */
-  agentIdentity?: TuiAgent
+  /** Host-resolved observed agent identity; absent when unknown. Does not imply launch support. */
+  agentIdentity?: TerminalAgent
   /** Absent while running or when the host predates the field; never infer a clean finish. */
   exitCause?: TerminalExitCause
   /** Absent when the host predates the field or could not name the execution host. */
@@ -210,11 +215,6 @@ export type RuntimeTerminalSend = {
   accepted: boolean
   bytesWritten: number
   refusedReason?: 'no-agent' | 'permission'
-  /**
-   * Present only when a durable agent-session lease refused the write. Additive and optional: an
-   * old client sees the `accepted: false` it already handles and ignores this field.
-   */
-  agentSessionRefusal?: AgentSessionPtyWriteRefusal
   prompt?: RuntimeTerminalPromptDelivery
 }
 
@@ -263,6 +263,8 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   activate?: boolean
   presentation?: RuntimeTerminalPresentation
   surfaceOwner?: false
+  /** Windows shell the created tab spawns AS, instead of the host default. */
+  shellOverride?: string
 }
 
 export type RuntimeTerminalCreateRequestPayload =
@@ -326,6 +328,9 @@ export type RuntimeTerminalClose = {
   ptyKilled: boolean
   ptyStopVerdict?: 'live' | 'unverifiable'
   ptyStopReason?: string
+  /** The host durably recorded a kill order it replays when the PTY's SSH host reconnects.
+   *  Older hosts never send it, so a client promises no retry without it. */
+  pendingKillRecorded?: true
 }
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'

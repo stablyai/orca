@@ -19,16 +19,17 @@ export function hasFeatureWallProviderUsageTracking(provider: ProviderRateLimits
 }
 
 export function getFeatureWallUsageProviderConnection(args: {
-  managedAccountCount: number
+  managedAccountCount: number | undefined
   provider: ProviderRateLimits | null
 }): FeatureWallUsageProviderConnection {
-  if (args.managedAccountCount > 0) {
+  const { managedAccountCount } = args
+  if (managedAccountCount !== undefined && managedAccountCount > 0) {
     return {
       connected: true,
       label: translate(
         'auto.components.feature.wall.feature.wall.usage.tracking.00087eecb2',
         'Connected · {{value0}}',
-        { value0: args.managedAccountCount }
+        { value0: managedAccountCount }
       )
     }
   }
@@ -38,6 +39,15 @@ export function getFeatureWallUsageProviderConnection(args: {
       label: translate(
         'auto.components.feature.wall.feature.wall.usage.tracking.cc39a87288',
         'Connected · System default'
+      )
+    }
+  }
+  if (managedAccountCount === undefined) {
+    return {
+      connected: false,
+      label: translate(
+        'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.accountStatusUnknown',
+        'Account status unknown'
       )
     }
   }

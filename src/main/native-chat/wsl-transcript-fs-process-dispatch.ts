@@ -86,7 +86,7 @@ export function closeWslTranscriptFsProcess(handle: WslTranscriptFsProcessHandle
 }
 
 export function isWslTranscriptFsProcessHandle(
-  value: object
+  value: FileHandle | WslTranscriptFsProcessHandle
 ): value is WslTranscriptFsProcessHandle {
   return 'wslTranscriptFsProcessHandle' in value
 }

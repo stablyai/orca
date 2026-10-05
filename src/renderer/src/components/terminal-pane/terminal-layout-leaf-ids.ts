@@ -182,6 +182,7 @@ function normalizeTerminalLayoutLeafIds(snapshot: TerminalLayoutSnapshot | null 
   // selection ids must not strand focus on a missing pane.
   const remappedActiveLeafId = getRemappedLeafId(activeLeafId, rewrite) ?? firstLeafId(root)
   const remappedExpandedLeafId = getRemappedLeafId(expandedLeafId, rewrite)
+  const remappedChatLeafId = getRemappedLeafId(snapshot.chatLeafId, rewrite)
   const ptyIdsByLeafId = remapLeafRecord(snapshot.ptyIdsByLeafId, rewrite)
   const buffersByLeafId = remapLeafRecord(snapshot.buffersByLeafId, rewrite)
   const scrollbackRefsByLeafId = remapLeafRecord(snapshot.scrollbackRefsByLeafId, rewrite)
@@ -191,6 +192,7 @@ function normalizeTerminalLayoutLeafIds(snapshot: TerminalLayoutSnapshot | null 
     buffersByLeafId: _oldBuffersByLeafId,
     scrollbackRefsByLeafId: _oldScrollbackRefsByLeafId,
     titlesByLeafId: _oldTitlesByLeafId,
+    chatLeafId: _oldChatLeafId,
     ...snapshotWithoutLeafRecords
   } = snapshot
   return {
@@ -203,6 +205,7 @@ function normalizeTerminalLayoutLeafIds(snapshot: TerminalLayoutSnapshot | null 
         ptyIdsByLeafId
       }),
       expandedLeafId: remappedExpandedLeafId,
+      ...(remappedChatLeafId ? { chatLeafId: remappedChatLeafId } : {}),
       ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
       ...(buffersByLeafId ? { buffersByLeafId } : {}),
       ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),

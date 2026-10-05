@@ -3,7 +3,8 @@ import {
   ensureNotificationPermissions,
   getNotificationPermissionState
 } from '../notifications/notification-permissions'
-import { loadPushNotificationsEnabled, savePushNotificationsEnabled } from '../storage/preferences'
+import { loadPushNotificationsEnabled } from '../storage/preferences'
+import { setRemotePushEnabled } from '../notifications/push-registration'
 import type { NotificationSettingsOperations } from './notification-settings-operations'
 
 export const nativeNotificationSettingsOperations: NotificationSettingsOperations = {
@@ -15,7 +16,7 @@ export const nativeNotificationSettingsOperations: NotificationSettingsOperation
   },
   async preference(enabled) {
     if (enabled !== undefined) {
-      await savePushNotificationsEnabled(enabled)
+      await setRemotePushEnabled(enabled)
     }
     return { enabled: await loadPushNotificationsEnabled() }
   },

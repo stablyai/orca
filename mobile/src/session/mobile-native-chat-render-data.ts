@@ -3,6 +3,7 @@ import {
   formatNativeChatEmptyStateCopy,
   type NativeChatEmptyStateCopy
 } from '../../../src/shared/native-chat-empty-state'
+import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
 import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -52,9 +53,13 @@ export type MobileNativeChatPendingItem = {
 }
 
 export function foldMobileNativeChatMessages(messages: NativeChatMessage[]): NativeChatMessage[] {
+  // The conversation only: a subagent's rows are that subagent's, and mobile shows
+  // each spawn as its roster's one line rather than the child's own rows.
   // Normalize first (desktop assembler parity): image marker turns fold into
   // image-ref blocks instead of rendering as raw `[Image: …]` text.
-  return stripNoiseMessages(foldToolMessages(normalizeImageTranscriptMessages(messages)))
+  return stripNoiseMessages(
+    foldToolMessages(normalizeImageTranscriptMessages(messages.filter(isRootAgentJournalItem)))
+  )
 }
 
 /** Assemble the folded transcript, streaming text, and optimistic user echoes. */

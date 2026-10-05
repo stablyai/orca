@@ -66,7 +66,7 @@ test('remounting a slept hidden pane does not respawn its PTY', async ({ orcaPag
   expect(sample.tabPtyHints[0], 'sleep must keep the session id as a wake hint').toBeTruthy()
 
   const remounted = await orcaPage.evaluate(
-    (tabId) => window.__store?.getState().remountTerminalTabForRecovery(tabId) ?? false,
+    (tabId) => window.__store?.getState().remountTerminalTabForRecovery(tabId).remounted ?? false,
     sleptTabId
   )
   expect(remounted, 'remountTerminalTabForRecovery did not find the slept tab').toBe(true)

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type * as ConnectionOwnerResolutionModule from './connection-owner-resolution'
 
@@ -9,7 +12,8 @@ const mocks = vi.hoisted(() => ({
   getConnectionIdFromState: vi.fn(),
   getLocalProjectExecutionRuntimeContext: vi.fn(),
   getLocalRepoProjectExecutionRuntimeContext: vi.fn(),
-  readLocalRuntimeCapabilitiesOrUnknown: vi.fn()
+  readLocalRuntimeCapabilitiesOrUnknown: vi.fn(),
+  isWebClientLocation: vi.fn(() => false)
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
@@ -25,6 +29,9 @@ vi.mock('@/lib/local-preflight-context', () => ({
   getLocalProjectExecutionRuntimeContext: mocks.getLocalProjectExecutionRuntimeContext,
   getLocalRepoProjectExecutionRuntimeContext: mocks.getLocalRepoProjectExecutionRuntimeContext
 }))
+vi.mock('@/lib/web-client-location', () => ({
+  isWebClientLocation: mocks.isWebClientLocation
+}))
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: mocks.readLocalRuntimeCapabilitiesOrUnknown
 }))
@@ -33,6 +40,7 @@ vi.mock('@/lib/structured-agent-launch-settlement', () => ({
   settleStructuredAgentLaunch: vi.fn()
 }))
 
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   buildAgentLaunchRouteInput,
   workspaceKindForWorktreeId,
@@ -45,7 +53,7 @@ import {
 } from './agent-session-launch-plan'
 
 const routeFor = (appStore: AgentLaunchRouteStore, args: AgentLaunchRouteArgs) =>
-  planAgentSessionLaunch(appStore, args).route
+  planAgentSessionLaunch(appStore, { ...args, requestId: 'route-check' }).route
 const structuredFeasibleFor = (appStore: AgentLaunchRouteStore, args: AgentLaunchRouteArgs) =>
   structuredAgentSessionLaunchFeasible(appStore, { ...args, settings: STRUCTURED_SETTINGS })
 
@@ -74,17 +82,19 @@ function store(settings: Record<string, unknown> = STRUCTURED_SETTINGS): AgentLa
   return { settings } as unknown as AgentLaunchRouteStore
 }
 
+function stageLocalStructuredHost(): void {
+  vi.clearAllMocks()
+  mocks.getExecutionHostIdForWorktree.mockReturnValue('local')
+  mocks.getConnectionIdFromState.mockReturnValue(null)
+  mocks.getLocalProjectExecutionRuntimeContext.mockReturnValue(undefined)
+  mocks.getLocalRepoProjectExecutionRuntimeContext.mockReturnValue(undefined)
+  mocks.readLocalRuntimeCapabilitiesOrUnknown.mockReturnValue([
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+  ])
+}
+
 describe('buildAgentLaunchRouteInput', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.getExecutionHostIdForWorktree.mockReturnValue('local')
-    mocks.getConnectionIdFromState.mockReturnValue(null)
-    mocks.getLocalProjectExecutionRuntimeContext.mockReturnValue(undefined)
-    mocks.getLocalRepoProjectExecutionRuntimeContext.mockReturnValue(undefined)
-    mocks.readLocalRuntimeCapabilitiesOrUnknown.mockReturnValue([
-      STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-    ])
-  })
+  beforeEach(stageLocalStructuredHost)
 
   it('gathers the full input set for an existing local git worktree', () => {
     mocks.getLocalProjectExecutionRuntimeContext.mockReturnValue(WSL_RUNTIME)
@@ -106,7 +116,7 @@ describe('buildAgentLaunchRouteInput', () => {
       promptDelivery: 'auto-submit',
       launchText: 'fix the flaky test',
       nativeChatTranscriptIsLocalReadable: true,
-      requiresTuiLaunchCustomization: false,
+      requiresTuiLaunchCommand: false,
       initialSessionOptions: { model: 'gpt-5.4' }
     })
     expect(mocks.getExecutionHostIdForWorktree).toHaveBeenCalledWith(appStore, 'wt-1')
@@ -240,7 +250,6 @@ describe('buildAgentLaunchRouteInput', () => {
 
   it.each([
     ['a cwd', { cwd: '/repo/sub' }, {}],
-    ['explicit agent args', { agentArgs: '--model gpt-5.4' }, {}],
     ['a settings command override', {}, { agentCmdOverrides: { codex: 'codex-nightly' } }]
   ] as const)('requires a terminal for %s', (_name, tuiCustomization, settingsOverride) => {
     const input = buildAgentLaunchRouteInput(
@@ -251,7 +260,28 @@ describe('buildAgentLaunchRouteInput', () => {
         tuiCustomization
       }
     )
-    expect(input.requiresTuiLaunchCustomization).toBe(true)
+    expect(input.requiresTuiLaunchCommand).toBe(true)
+  })
+
+  // The reported P0: `--dangerously-skip-permissions --model Opus` matched no blessed string, so
+  // every new Claude tab was silently demoted to the terminal-backed chat. The Arguments field is
+  // a terminal concern and no longer reaches this decision.
+  it.each([
+    ['claude', '--dangerously-skip-permissions --model Opus'],
+    ['codex', '--dangerously-bypass-approvals-and-sandbox --model gpt-5.6-sol'],
+    ['claude', '--append-system-prompt "be brief"']
+  ] as const)('keeps %s structured with configured arguments %s', (agent, agentArgs) => {
+    const appStore = store({
+      ...STRUCTURED_SETTINGS,
+      agentDefaultArgs: { [agent]: agentArgs },
+      agentDefaultEnv: { [agent]: { ORCA_QA: '1' } }
+    })
+    const args = {
+      agent,
+      workspace: { kind: 'git-worktree' as const, worktreeId: 'wt-1' }
+    }
+    expect(routeFor(appStore, args)).toBe('structured-native-chat')
+    expect(buildAgentLaunchRouteInput(appStore, args).requiresTuiLaunchCommand).toBe(false)
   })
 
   // Grok reads its transcript off local disk, so it is the agent the readability answer routes on.
@@ -312,6 +342,98 @@ describe('buildAgentLaunchRouteInput', () => {
     })
     expect(input.hostCapabilities).toBeNull()
   })
+
+  describe('a workspace on a paired server', () => {
+    const CURRENT_SERVER = [
+      STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+      STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
+    ]
+    const args: AgentLaunchRouteArgs = {
+      agent: 'claude',
+      workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
+    }
+    // The store's host status is what a paired server last reported about itself.
+    const pairedStore = (
+      capabilities: readonly string[],
+      settings: Record<string, unknown> = STRUCTURED_SETTINGS
+    ): AgentLaunchRouteStore =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the slices the input reads are staged.
+      ({
+        settings,
+        runtimeStatusByEnvironmentId: new Map([['server-1', { status: { capabilities } }]])
+      }) as unknown as AgentLaunchRouteStore
+
+    beforeEach(() => {
+      mocks.getExecutionHostIdForWorktree.mockReturnValue('runtime:server-1')
+      mocks.readLocalRuntimeCapabilitiesOrUnknown.mockReturnValue([])
+    })
+
+    it("reads the server's own capabilities from its host status, not this machine's", () => {
+      expect(
+        buildAgentLaunchRouteInput(pairedStore(CURRENT_SERVER), args).hostCapabilities
+      ).toEqual(CURRENT_SERVER)
+      expect(routeFor(pairedStore(CURRENT_SERVER), args)).toBe('structured-native-chat')
+    })
+
+    it('treats a server that has not reported its status as unknown', () => {
+      expect(buildAgentLaunchRouteInput(store(), args).hostCapabilities).toBeNull()
+      expect(routeFor(store(), args)).toBe('legacy-native-chat')
+    })
+
+    // A released server advertises structured sessions but admits them only with its own chat
+    // setting on; a chat opened there could never start.
+    it('keeps the terminal on a server that predates client-chosen launch modes', () => {
+      expect(routeFor(pairedStore([STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]), args)).toBe(
+        'legacy-native-chat'
+      )
+    })
+
+    // The browser client's handshake never says it reads structured sessions, so the server
+    // would refuse its chat.
+    it('keeps the host terminal for a browser client', () => {
+      mocks.isWebClientLocation.mockReturnValue(true)
+      try {
+        expect(routeFor(pairedStore(CURRENT_SERVER), args)).toBe('legacy-native-chat')
+      } finally {
+        mocks.isWebClientLocation.mockReturnValue(false)
+      }
+    })
+
+    // The override is this machine's; the server's createSupport applies its own.
+    it("does not apply this machine's launch command override to the server", () => {
+      const settings = { ...STRUCTURED_SETTINGS, agentCmdOverrides: { claude: 'claude-wrapper' } }
+      expect(
+        buildAgentLaunchRouteInput(pairedStore(CURRENT_SERVER, settings), args)
+          .requiresTuiLaunchCommand
+      ).toBe(false)
+      expect(routeFor(pairedStore(CURRENT_SERVER, settings), args)).toBe('structured-native-chat')
+    })
+  })
+
+  it('does not name a host for a workspace id two hosts publish', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the slices the input reads are staged.
+    const colliding = {
+      settings: STRUCTURED_SETTINGS,
+      activeWorktreeId: 'other',
+      worktreesByRepo: {
+        'repo-1': [
+          { id: 'wt-1', repoId: 'repo-1', hostId: 'local' },
+          { id: 'wt-1', repoId: 'repo-1', hostId: 'runtime:server-1' }
+        ]
+      }
+    } as unknown as AgentLaunchRouteStore
+    const input = buildAgentLaunchRouteInput(colliding, {
+      agent: 'claude',
+      workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
+    })
+    expect(input.hostCapabilities).toBeNull()
+    expect(
+      routeFor(colliding, {
+        agent: 'claude',
+        workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
+      })
+    ).toBe('legacy-native-chat')
+  })
 })
 
 describe('workspaceKindForWorktreeId', () => {
@@ -321,5 +443,53 @@ describe('workspaceKindForWorktreeId', () => {
     ['repo-1::/repo/orca', 'git-worktree']
   ])('classifies %s as %s', (worktreeId, kind) => {
     expect(workspaceKindForWorktreeId(worktreeId)).toBe(kind)
+  })
+})
+
+describe('a cwd that names the workspace root', () => {
+  // "Continue in New Session…" always names a cwd; at the root it must not force a terminal.
+  beforeEach(stageLocalStructuredHost)
+
+  const withRoot = (): AgentLaunchRouteStore =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the route store is the app state narrowed to the slices the input reads; only those are staged.
+    ({
+      settings: STRUCTURED_SETTINGS,
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', path: '/repo/app' }] },
+      folderWorkspaces: [{ id: 'folder-1', folderPath: '/srv/notes' }]
+    }) as unknown as AgentLaunchRouteStore
+
+  it.each(['/repo/app', '/repo/app/', '.'])(
+    'routes structured under the chat default for cwd %s',
+    (cwd) => {
+      const args = {
+        agent: 'codex' as const,
+        workspace: { kind: 'git-worktree' as const, worktreeId: 'wt-1' },
+        tuiCustomization: { cwd }
+      }
+      expect(buildAgentLaunchRouteInput(withRoot(), args).requiresTuiLaunchCommand).toBe(false)
+      expect(routeFor(withRoot(), args)).toBe('structured-native-chat')
+    }
+  )
+
+  it('still requires a terminal for a subdirectory, which a structured session cannot start in', () => {
+    const args = {
+      agent: 'codex' as const,
+      workspace: { kind: 'git-worktree' as const, worktreeId: 'wt-1' },
+      tuiCustomization: { cwd: '/repo/app/packages/web' }
+    }
+    expect(buildAgentLaunchRouteInput(withRoot(), args).requiresTuiLaunchCommand).toBe(true)
+    expect(routeFor(withRoot(), args)).not.toBe('structured-native-chat')
+  })
+
+  it('reads a folder workspace root the same way', () => {
+    const workspaceId = folderWorkspaceKey('folder-1')
+    const at = (cwd: string) =>
+      buildAgentLaunchRouteInput(withRoot(), {
+        agent: 'codex',
+        workspace: { kind: 'folder', worktreeId: workspaceId },
+        tuiCustomization: { cwd }
+      }).requiresTuiLaunchCommand
+    expect(at('/srv/notes/')).toBe(false)
+    expect(at('/srv/notes/drafts')).toBe(true)
   })
 })

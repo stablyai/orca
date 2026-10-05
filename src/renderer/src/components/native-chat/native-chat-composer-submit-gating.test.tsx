@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../store', () => {
   const state = {
     settings: { nativeChatSessionOptions: {} },
+    agentStatusByPaneKey: {},
     clearNativeChatLaunchDraft: vi.fn(),
     markNativeChatLaunchDraftAdopted: vi.fn()
   }

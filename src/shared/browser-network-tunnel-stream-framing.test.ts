@@ -82,12 +82,14 @@ describe('browser network tunnel stream framing', () => {
     )
     const originalSet = Uint8Array.prototype.set
     let copiedBytes = 0
-    const set = vi
-      .spyOn(Uint8Array.prototype, 'set')
-      .mockImplementation(function (this: Uint8Array, source, offset) {
-        copiedBytes += source.length
-        originalSet.call(this, source, offset)
-      })
+    const set = vi.spyOn(Uint8Array.prototype, 'set').mockImplementation(function (
+      this: Uint8Array,
+      source,
+      offset
+    ) {
+      copiedBytes += source.length
+      originalSet.call(this, source, offset)
+    })
     try {
       for (const byte of encoded) {
         decoder.feed(new Uint8Array([byte]))

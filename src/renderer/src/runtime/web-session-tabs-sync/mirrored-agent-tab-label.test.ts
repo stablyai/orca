@@ -33,6 +33,7 @@ function build(
 ): Tab {
   const [mirrored] = buildMirroredAgentTabs(
     snapshot,
+    'runtime:env-1',
     new Map(),
     GROUP,
     0,
@@ -65,6 +66,24 @@ describe('buildMirroredAgentTabs', () => {
     const tab = build(snapshotWith('codex', 'Codex Chat'))
     expect(tab.label).toBe('Codex Chat')
     expect(tab.customLabel).toBeNull()
+  })
+
+  it('keeps the provisional tab group when the host publishes a different group', () => {
+    const snapshot = snapshotWith('codex', 'Codex Chat')
+    const provisional = build(snapshot)
+    const existing: Tab = { ...provisional, groupId: 'local-group' }
+    const [mirrored] = buildMirroredAgentTabs(
+      snapshot,
+      'runtime:env-1',
+      new Map([['host-tab-1', 'host-group']]),
+      GROUP,
+      0,
+      [existing],
+      1_000
+    )
+
+    expect(mirrored?.unifiedTab.id).toBe(existing.id)
+    expect(mirrored?.unifiedTab.groupId).toBe('local-group')
   })
 
   it('degrades to the placeholder when the host violates the string contract', () => {

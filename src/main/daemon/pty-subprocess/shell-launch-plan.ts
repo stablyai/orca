@@ -198,6 +198,7 @@ export function createPtyShellLaunchPlan(
           shellPath
         }))
     delete env.ORCA_SHELL_FEATURES
+    const userShellArgs = !opts.command && !opts.launchAgent ? opts.terminalShellArgs : undefined
     const shellLaunch = getShellLaunchConfig(
       shellPath,
       selectShellStartupFeatures({
@@ -206,10 +207,15 @@ export function createPtyShellLaunchPlan(
         hasStartupCommand: Boolean(opts.command),
         waitsForShellReady,
         emitsStartupIdentity: waitsForShellReady
-      })
+      }),
+      {
+        hasStartupCommand: Boolean(opts.command),
+        inheritedXdgDataDirs: env.XDG_DATA_DIRS,
+        shellArgs: userShellArgs
+      }
     )
     Object.assign(env, shellLaunch.env)
-    shellArgs = shellLaunch.args ?? ['-l']
+    shellArgs = userShellArgs ?? shellLaunch.args ?? ['-l']
   }
 
   seedPowerlevel10kWizardEnv(env, { envToDelete: opts.envToDelete })

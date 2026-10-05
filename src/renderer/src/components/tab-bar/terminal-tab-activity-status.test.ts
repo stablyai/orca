@@ -152,19 +152,74 @@ describe('resolveTerminalTabActivityStatus', () => {
     ).toBe('done')
   })
 
-  it('reports an interrupted done as interrupted, matching the worktree card', () => {
-    const interrupted = entry(FIRST_LEAF_ID, 'done', { interrupted: true })
+  it.each([
+    ['success', 'done'],
+    ['failure', 'failed'],
+    // A user's Stop reads interrupted; a turn anything else cut short is a fault, like a failure.
+    ['cancellation', 'interrupted'],
+    ['interruption', 'failed'],
+    ['unconfirmed', 'unconfirmed']
+  ] as const)('reports a %s done as %s, matching the worktree card', (outcome, status) => {
+    const ended = entry(FIRST_LEAF_ID, 'done', {
+      mainAgent: { state: 'done', outcome, stateStartedAt: NOW }
+    })
     expect(
       resolveTerminalTabActivityStatus({
         tab: TAB,
-        agentStatusByPaneKey: { [interrupted.paneKey]: interrupted },
+        agentStatusByPaneKey: { [ended.paneKey]: ended },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe(status)
+  })
+
+  it("reads an old host's user-stop flag as interrupted", () => {
+    const stopped = entry(FIRST_LEAF_ID, 'done', { interrupted: true })
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: { [stopped.paneKey]: stopped },
         ptyIdsByTabId: LIVE_PTY
       })
     ).toBe('interrupted')
   })
 
-  it('does not let a finished sibling mask an interrupted outcome', () => {
-    const interrupted = entry(FIRST_LEAF_ID, 'done', { interrupted: true })
+  it('reports a failed done as failed, and not as a clean finish', () => {
+    const failed = entry(FIRST_LEAF_ID, 'done', {
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW }
+    })
+    const finished = entry(SECOND_LEAF_ID, 'done')
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: { [failed.paneKey]: failed, [finished.paneKey]: finished },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('failed')
+  })
+
+  it('reads a main agent that failed while its subagent works as failed; success or stop as working', () => {
+    const status = (outcome: 'failure' | 'success' | 'cancellation') => {
+      const held = entry(FIRST_LEAF_ID, 'working', {
+        mainAgent: { state: 'done', outcome, stateStartedAt: NOW }
+      })
+      return resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: { [held.paneKey]: held },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    }
+    expect(status('failure')).toBe('failed')
+    expect(resolveTerminalTabAttentionBadge({ status: status('failure'), hasUnread: false })).toBe(
+      'failed'
+    )
+    expect(status('success')).toBe('working')
+    expect(status('cancellation')).toBe('working')
+  })
+
+  it("does not let a finished sibling mask a user's Stop", () => {
+    const interrupted = entry(FIRST_LEAF_ID, 'done', {
+      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: NOW }
+    })
     const finished = entry(SECOND_LEAF_ID, 'done')
     expect(
       resolveTerminalTabActivityStatus({
@@ -336,7 +391,7 @@ describe('hasUnreadAgentCompletionForTerminalTab', () => {
   it('changes only the owning tab when immutable marker snapshots add and clear unread', () => {
     const before = { [`tab-2:${SECOND_LEAF_ID}`]: true }
     const added = { ...before, [`${TAB_ID}:${FIRST_LEAF_ID}`]: true }
-    const cleared = { ...added, [`${TAB_ID}:${FIRST_LEAF_ID}`]: false }
+    const cleared = { ...added, [`${TAB_ID}:${FIRST_LEAF_ID}`]: undefined }
 
     expect(hasUnreadAgentCompletionForTerminalTab(before, TAB_ID)).toBe(false)
     expect(hasUnreadAgentCompletionForTerminalTab(added, TAB_ID)).toBe(true)
@@ -356,6 +411,7 @@ describe('hasUnreadAgentCompletionForTerminalTab', () => {
       ownKeys,
       get: (target, property, receiver) => {
         valueReads += 1
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
         return Reflect.get(target, property, receiver)
       }
     })
@@ -390,6 +446,29 @@ describe('resolveTerminalTabAttentionBadge', () => {
 })
 
 describe('terminalTabHasUnreadActivity', () => {
+  it.each(['terminal-bell', 'agent-completion', 'manual-mark-unread', 'legacy'] as const)(
+    'recognizes a classified %s tab marker without a completion pane',
+    (reason) => {
+      expect(
+        terminalTabHasUnreadActivity({
+          terminalTabId: TAB_ID,
+          unreadTerminalTabs: { [TAB_ID]: reason },
+          unreadAgentCompletionPanes: {}
+        })
+      ).toBe(true)
+    }
+  )
+
+  it.each([false, undefined])('ignores a cleared tab marker (%s)', (marker) => {
+    expect(
+      terminalTabHasUnreadActivity({
+        terminalTabId: TAB_ID,
+        unreadTerminalTabs: { [TAB_ID]: marker },
+        unreadAgentCompletionPanes: {}
+      })
+    ).toBe(false)
+  })
+
   it('is true for a tab bell or completion pane', () => {
     expect(
       terminalTabHasUnreadActivity({

@@ -15,10 +15,7 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from './setup-agent-sequencing'
-import {
-  DEFAULT_SETUP_AGENT_STARTUP_POLICY,
-  shouldWaitForSetupBeforeAgentStartup
-} from './setup-agent-startup-policy'
+import { shouldWaitForSetupBeforeAgentStartup } from './setup-agent-startup-policy'
 
 const TEMP_DIRS: string[] = []
 const WINDOWS_PROCESS_TEST_TIMEOUT_MS = 30_000
@@ -31,7 +28,6 @@ afterEach(() => {
 
 describe('createSequencedSetupAgentCommands', () => {
   it('defaults agent startup to immediate unless the wait policy is explicit', () => {
-    expect(DEFAULT_SETUP_AGENT_STARTUP_POLICY).toBe('start-immediately')
     expect(getDefaultRepoHookSettings().setupAgentStartupPolicy).toBe('start-immediately')
     expect(shouldWaitForSetupBeforeAgentStartup(undefined)).toBe(false)
     expect(shouldWaitForSetupBeforeAgentStartup('start-immediately')).toBe(false)
@@ -120,6 +116,20 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(decoded.indexOf(SETUP_COMPLETE_MESSAGE)).toBeLessThan(
       decoded.indexOf('Invoke-Expression $startup')
     )
+  })
+
+  it('doubles typographic single quotes in native Windows gate literals', () => {
+    const commands = createSequencedSetupAgentCommands({
+      runnerScriptPath: 'C:\\O\u2019Brien\\.git\\orca\\setup-runner.cmd',
+      platform: 'windows',
+      startupCommand: 'codex',
+      nonce: 'nonce-3'
+    })
+    const decoded = Buffer.from(
+      commands.setupCommand.split('-EncodedCommand ')[1] ?? '',
+      'base64'
+    ).toString('utf16le')
+    expect(decoded).toContain("$runner = 'C:\\O\u2019\u2019Brien\\.git\\orca\\setup-runner.cmd'")
   })
 
   it('leaves the failure and timeout messages as the only other outcomes', () => {

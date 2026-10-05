@@ -46,7 +46,7 @@ import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-c
 import { buildQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
-import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
+import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session-launch-plan'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -197,7 +197,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       const promptDelivery = quickDraftPrompt ? 'draft' : 'auto-submit'
       // Why: the verdict is persisted on the request as data and re-entered once the worktree exists.
       const agentLaunchRoute = agent
-        ? planAgentSessionLaunch(useAppStore.getState(), {
+        ? resolveAgentSessionLaunchRoute(useAppStore.getState(), {
             agent,
             workspace: {
               kind: selectedRepoIsGit ? 'git-worktree' : 'folder',
@@ -209,7 +209,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
             prompt: quickDraftPrompt ?? quickPrompt,
             promptDelivery,
             initialSessionOptions: startupPlan?.sessionOptions
-          }).route
+          })
         : 'terminal-tui'
       const structuredLaunch = agentLaunchRoute === 'structured-native-chat'
 

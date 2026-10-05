@@ -55,6 +55,7 @@ function makeEventFor(entry: AgentStatusEntry): ActivityEvent {
     id: `event-${entry.paneKey}`,
     state: 'done',
     timestamp: 1000,
+    observedAt: 1000,
     unread: false,
     worktree,
     repo: null,

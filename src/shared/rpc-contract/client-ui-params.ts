@@ -69,6 +69,8 @@ export const StatusBarItem = z.enum([
   'kimi',
   'minimax',
   'grok',
+  'cursor',
+  'zcode',
   'ssh',
   'resource-usage',
   'ports'
@@ -161,6 +163,7 @@ export const UiUpdateFields = z
     ...ClientUiWorkspaceFilterFields,
     // Why: rides App.tsx's debounced writer, so omitting it rejected that entire
     // payload (sidebar widths, filters, agent acks) for every paired client.
+    explorerDisplayRootByWorktree: z.record(z.string(), z.string()).optional(),
     showDotfilesByWorktree: z.record(z.string(), z.boolean()).optional(),
     collapsedGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),
@@ -182,6 +185,8 @@ export const UiUpdateFields = z
     _minimaxStatusBarDefaultAdded: z.boolean().optional(),
     _antigravityStatusBarDefaultAdded: z.boolean().optional(),
     _grokStatusBarDefaultAdded: z.boolean().optional(),
+    _cursorStatusBarDefaultAdded: z.boolean().optional(),
+    _zcodeStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),
@@ -233,6 +238,8 @@ export const UiUpdateFields = z
     projectOrderManualDefaultNoticeDismissed: z.boolean().optional(),
     usagePercentageDisplayChangeNoticeDismissed: z.boolean().optional(),
     usageEmptyStateDismissed: z.boolean().optional(),
+    codexTerminalServerIsolationNoticeSeen: z.boolean().optional(),
+    codexSharedSettingsNoticeSeen: z.boolean().optional(),
     petVisible: z.boolean().optional(),
     petId: z.string().optional(),
     customPets: UnknownRecordArray.optional(),

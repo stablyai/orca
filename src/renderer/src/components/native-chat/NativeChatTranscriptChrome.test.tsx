@@ -206,4 +206,27 @@ describe('NativeChatImageAttachments', () => {
     expect(container.firstElementChild).toBe(observedElement)
     root.unmount()
   })
+
+  it.each([
+    ['a pasted screenshot in the temp folder', '/tmp/orca-paste-1.png'],
+    ['an agent image outside the project', '/Users/me/.codex/generated/plot.png']
+  ])('reads %s as a chat image, whoever sent it', async (_label, path) => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(
+        createElement(NativeChatImageAttachments, {
+          blocks: [{ type: 'image-ref' as const, path }],
+          runtimeContext: runtimeContext('wt-1')
+        })
+      )
+      await flushPromises()
+    })
+
+    expect(vi.mocked(window.api.fs.readFile).mock.calls[0]?.[0]).toMatchObject({
+      filePath: path,
+      access: { kind: 'chat-image' }
+    })
+    root.unmount()
+  })
 })

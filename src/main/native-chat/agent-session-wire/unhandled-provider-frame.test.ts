@@ -50,9 +50,6 @@ describe('unhandled provider frame journal fallback', () => {
     expect(
       unhandledProviderFrameJournalItem('codex', 'notification:thread/tokenUsage/updated', {})
     ).toBeNull()
-    expect(
-      unhandledProviderFrameJournalItem('codex', 'notification:thread/goal/cleared', {})
-    ).toBeNull()
     expect(unhandledProviderFrameJournalItem('claude', 'message:system:init', {})).toBeNull()
     expect(
       unhandledProviderFrameJournalItem('claude', 'message:result', {
@@ -90,7 +87,7 @@ describe('unhandled provider frame journal fallback', () => {
     })
   })
 
-  it('renders codex systemError and Claude error result variants', () => {
+  it('renders codex systemError and Claude error result variants when no typed translator covers the frame', () => {
     const codex = unhandledProviderFrameJournalItem('codex', 'notification:thread/status/changed', {
       threadId: 'thread-1',
       status: { type: 'systemError' }

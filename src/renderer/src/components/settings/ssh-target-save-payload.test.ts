@@ -75,6 +75,23 @@ describe('buildSshTargetSavePayload', () => {
     })
   })
 
+  it('stores the runtime choice, and Auto stores nothing so the default can move', () => {
+    const pinned = buildSshTargetSavePayload({
+      ...EMPTY_FORM,
+      host: 'old.example.com',
+      remoteRuntime: 'pinned-node'
+    })
+    const auto = buildSshTargetSavePayload({ ...EMPTY_FORM, host: 'old.example.com' })
+    if (!pinned.ok || !auto.ok) {
+      throw new Error('expected valid payloads')
+    }
+    expect(pinned.payload.target.remoteRuntime).toBe('pinned-node')
+    expect(pinned.payload.updates.remoteRuntime).toBe('pinned-node')
+    expect(auto.payload.target).not.toHaveProperty('remoteRuntime')
+    // Why explicit undefined: updateTarget merges, so Auto must clear an earlier choice.
+    expect(auto.payload.updates).toHaveProperty('remoteRuntime', undefined)
+  })
+
   it('rejects invalid bounded relay timeouts', () => {
     const result = buildSshTargetSavePayload({
       ...EMPTY_FORM,

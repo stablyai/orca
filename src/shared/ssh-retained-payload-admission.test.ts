@@ -42,6 +42,16 @@ describe('SSH retained payload admission', () => {
     })
   })
 
+  it('admits the plain SSH mode and drops a malformed one without dropping the state', () => {
+    const state = { targetId: 'ssh-a', status: 'connected', error: null, reconnectAttempt: 0 }
+    const plainSsh = { reason: 'home_noexec', message: 'Home is noexec.' }
+
+    expect(admitSshConnectionState({ ...state, plainSsh }, 'ssh-a')?.plainSsh).toEqual(plainSsh)
+    const malformed = admitSshConnectionState({ ...state, plainSsh: { reason: 7 } }, 'ssh-a')
+    expect(malformed).not.toBeNull()
+    expect(malformed).not.toHaveProperty('plainSsh')
+  })
+
   it('rejects partial and malformed provider authority', () => {
     const state = {
       targetId: 'ssh-a',

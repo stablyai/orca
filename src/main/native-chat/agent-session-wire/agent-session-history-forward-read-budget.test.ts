@@ -8,15 +8,16 @@ import {
   type AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
-import { openJournalDatabase } from '../agent-session-journal/journal-database'
-import { journalDatabaseFile } from '../agent-session-journal/journal-paths'
-import {
-  insertJournalRow,
-  upsertJournalSessionRow
-} from '../agent-session-journal/journal-row-table'
 import * as journalReducer from '../agent-session-journal/journal-reducer'
 import * as rowSchema from '../agent-session-journal/journal-row-schema'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase,
+  insertTestJournalRow,
+  publishTestJournalEpoch,
+  deleteTestJournalRow,
+  updateTestJournalRowJson
+} from '../agent-session-journal/journal-host-database-test-support'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { readAgentSessionHistory } from './agent-session-history-page'
 
@@ -40,42 +41,38 @@ afterEach(async () => {
 
 async function seedJournal(count: number) {
   root = await mkdtemp(join(tmpdir(), 'orca-history-read-budget-'))
-  const { db } = openJournalDatabase(journalDatabaseFile(root))
+  const { db } = openTestJournalHostDatabase(root)
   const base = {
     v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
     epoch: 'epoch-1',
     fence: 1,
     ts: 1_000
   }
-  try {
-    db.exec('BEGIN IMMEDIATE')
-    upsertJournalSessionRow(db, identity.sessionId, base.epoch, base.ts)
-    insertJournalRow(db, identity.sessionId, {
+  db.exec('BEGIN IMMEDIATE')
+  publishTestJournalEpoch(db, identity.sessionId, base.epoch)
+  insertTestJournalRow(db, identity.sessionId, {
+    ...base,
+    kind: 'epoch',
+    seq: 1,
+    reason: 'session_created',
+    providerHandle: identity.providerHandle
+  })
+  for (let index = 0; index < count; index += 1) {
+    insertTestJournalRow(db, identity.sessionId, {
       ...base,
-      kind: 'epoch',
-      seq: 1,
-      reason: 'session_created',
-      providerHandle: identity.providerHandle
+      kind: 'item',
+      seq: index + 2,
+      itemId: `item-${index}`,
+      revision: 1,
+      body: {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: `${index}:${'x'.repeat(4096)}` }]
+      }
     })
-    for (let index = 0; index < count; index += 1) {
-      insertJournalRow(db, identity.sessionId, {
-        ...base,
-        kind: 'item',
-        seq: index + 2,
-        itemId: `item-${index}`,
-        revision: 1,
-        body: {
-          kind: 'message',
-          role: 'assistant',
-          blocks: [{ type: 'text', text: `${index}:${'x'.repeat(4096)}` }]
-        }
-      })
-    }
-    db.exec('COMMIT')
-  } finally {
-    db.close()
   }
-  return journals.open({ identity, journalDir: root })
+  db.exec('COMMIT')
+  return journals.open({ identity, stateDirectory: root })
 }
 
 function observeForwardReads() {
@@ -166,15 +163,8 @@ describe('forward history SQL read budget', () => {
 
   it('reports a sequence gap when the next page reaches it', async () => {
     const journal = await seedJournal(6)
-    const { db } = openJournalDatabase(journalDatabaseFile(root!))
-    try {
-      db.prepare('DELETE FROM journal_rows WHERE session_id = ? AND seq = ?').run(
-        identity.sessionId,
-        4
-      )
-    } finally {
-      db.close()
-    }
+    const { db } = openTestJournalHostDatabase(root!)
+    deleteTestJournalRow(db, identity.sessionId, 4)
     const first = readAgentSessionHistory(journal, {
       sessionId: identity.sessionId,
       direction: 'after',
@@ -199,16 +189,8 @@ describe('forward history SQL read budget', () => {
     'preserves parse-stop behavior at lookahead: %s',
     async (rowJson) => {
       const journal = await seedJournal(6)
-      const { db } = openJournalDatabase(journalDatabaseFile(root!))
-      try {
-        db.prepare('UPDATE journal_rows SET row_json = ? WHERE session_id = ? AND seq = ?').run(
-          rowJson,
-          identity.sessionId,
-          4
-        )
-      } finally {
-        db.close()
-      }
+      const { db } = openTestJournalHostDatabase(root!)
+      updateTestJournalRowJson(db, identity.sessionId, 4, rowJson)
       const page = readAgentSessionHistory(journal, {
         sessionId: identity.sessionId,
         direction: 'after',

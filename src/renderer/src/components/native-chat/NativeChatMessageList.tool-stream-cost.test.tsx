@@ -30,9 +30,9 @@ afterAll(() => restoreViewport())
 afterEach(cleanup)
 
 const EMPTY: never[] = []
-const loadEarlier = () => {}
+const loadEarlier = () => Promise.resolve('exhausted' as const)
 function Transcript({ items }: { items: AgentJournalRenderItem[] }) {
-  const messages = useStructuredAgentSessionMessages(items, EMPTY, EMPTY)
+  const messages = useStructuredAgentSessionMessages(items, EMPTY, EMPTY, EMPTY)
   const session: NativeChatLiveSession = {
     messages,
     status: 'working',
@@ -40,18 +40,11 @@ function Transcript({ items }: { items: AgentJournalRenderItem[] }) {
     agent: 'claude',
     hasMore: false,
     loadingEarlier: false,
+    olderHistoryGeneration: 0,
     loadEarlier,
     readPhase: 'ready'
   }
-  return (
-    <NativeChatMessageList
-      session={session}
-      isWorking
-      expandSignal
-      fontScale={1}
-      showTurnStatus={false}
-    />
-  )
+  return <NativeChatMessageList session={session} isWorking expandSignal fontScale={1} />
 }
 
 function row(index: number, body: AgentJournalRenderItem['body']): AgentJournalRenderItem {

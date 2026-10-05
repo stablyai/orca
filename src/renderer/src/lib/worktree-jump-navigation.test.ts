@@ -57,7 +57,9 @@ describe('worktree jump navigation', () => {
 
     expect(mocks.worktreePassesSidebarFilters).not.toHaveBeenCalled()
     expect(mocks.warning).not.toHaveBeenCalled()
-    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('repo::/deleted', {})
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('repo::/deleted', {
+      navigationIntent: 'user-open'
+    })
   })
 
   it('switches the left sidebar to Spaces and warns when filters hide the target', () => {
@@ -67,6 +69,7 @@ describe('worktree jump navigation', () => {
 
     expect(state.setSidebarBody).toHaveBeenCalledWith('workspaces')
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('repo::/target', {
+      navigationIntent: 'user-open',
       revealInSidebar: false,
       clearSidebarFilters: false
     })
@@ -98,7 +101,9 @@ describe('worktree jump navigation', () => {
 
     expect(jumpToWorktreeFromSidebar('wt-collapsed')).toBe(true)
 
-    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-collapsed', {})
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-collapsed', {
+      navigationIntent: 'user-open'
+    })
     expect(mocks.warning).not.toHaveBeenCalled()
   })
 
@@ -121,6 +126,7 @@ describe('worktree jump navigation', () => {
     expect(jumpToWorktreeFromSidebar('repo::/target', { executionHostId: 'ssh:beta' })).toBe(true)
 
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('repo::/target', {
+      navigationIntent: 'user-open',
       revealInSidebar: false,
       clearSidebarFilters: false,
       executionHostId: 'ssh:beta'
@@ -134,6 +140,7 @@ describe('worktree jump navigation', () => {
     expect(jumpToWorktreeFromSidebar('folder:folder-1', { executionHostId: 'local' })).toBe(true)
 
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('folder:folder-1', {
+      navigationIntent: 'user-open',
       executionHostId: 'local'
     })
     // Folder workspaces never get the filter-hidden treatment.

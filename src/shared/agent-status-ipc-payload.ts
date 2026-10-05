@@ -7,6 +7,11 @@ import type { StructuredHostStatus } from './agent-hook-listener/listener-event'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { WithAgentStatusObservation } from './agent-status-observation'
 import type {
+  AgentStatusExecutionId,
+  AgentStatusProviderAlias,
+  AgentStatusRunId
+} from './agent-status-run'
+import type {
   AgentStatusOrchestrationContext,
   ParsedAgentStatusPayload
 } from './agent-status-types'
@@ -25,7 +30,15 @@ export type MigrationUnsupportedPtyEntry = {
 }
 
 export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
+  /** Optional run-aware identity; absent on legacy hosts and compatibility projections. */
+  runId?: AgentStatusRunId
+  /** Host-owned process-incarnation attachment for the run-aware row. */
+  executionId?: AgentStatusExecutionId
+  /** Fully qualified provider identity; never a credential or mailbox lookup key. */
+  providerAlias?: AgentStatusProviderAlias
   paneKey: string
+  /** Live host acknowledgement of this renderer’s exact pane retirement. */
+  authorityRestartId?: string
   launchToken?: string
   terminalHandle?: string
   tabId?: string
@@ -42,6 +55,10 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   evidenceObservedAt?: number
   /** Timestamp (ms) when the current state first appeared for this pane. */
   stateStartedAt: number
+  /** When the main agent's current turn began, stamped by the hook server from the main agent's
+   *  own turn-opening event. Optional: old hosts and turns opened unseen omit it, and readers fall
+   *  back to `stateStartedAt`. */
+  turnStartedAt?: number
   orchestration?: AgentStatusOrchestrationContext
   providerSession?: AgentProviderSessionMetadata
   /** Resume identity update only; the status-shaped fields are transport placeholders. */
@@ -67,7 +84,7 @@ export type AgentStatusCacheIdentity = {
 
 /** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */
 export type AgentStatusClearIpcPayload =
-  | { paneKey: string }
+  | { paneKey: string; statusUnavailable?: true }
   | {
       transient: true
       connectionId: string

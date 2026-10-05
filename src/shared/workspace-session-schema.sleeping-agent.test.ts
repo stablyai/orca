@@ -457,7 +457,13 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
-  it('preserves legacy live sleeping agent origins across hydration', () => {
+  // A record written by a newer build can carry a verdict arm this reader does not know; the same
+  // path an older reader takes for the host-observed arms must drop only the verdict.
+  it.each([
+    ['interruption', { state: 'done', outcome: 'interruption', stateStartedAt: 9 }],
+    ['unconfirmed', { state: 'done', outcome: 'unconfirmed', stateStartedAt: 9 }],
+    ['from-a-newer-host', { state: 'done', stateStartedAt: 9 }]
+  ])('keeps a sleeping agent record whose main agent verdict is %s', (outcome, mainAgent) => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: null,
@@ -472,9 +478,10 @@ describe('parseWorkspaceSession sleeping agents', () => {
           agent: 'codex',
           providerSession: { key: 'session_id', id: 'codex-session' },
           prompt: 'continue',
-          state: 'working',
+          state: 'done',
           capturedAt: 10,
           updatedAt: 9,
+          mainAgent: { state: 'done', outcome, stateStartedAt: 9 },
           origin: 'live'
         }
       }
@@ -482,7 +489,9 @@ describe('parseWorkspaceSession sleeping agents', () => {
 
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.origin).toBe('live')
+      const record = result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']
+      expect(record).toMatchObject({ prompt: 'continue' })
+      expect(record?.mainAgent).toEqual(mainAgent)
     }
   })
 

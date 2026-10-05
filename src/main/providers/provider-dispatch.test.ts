@@ -1,3 +1,4 @@
+import { openCodeHookServiceModuleMock } from '../ipc/pty-ipc-mock-registry'
 import { settledWriteStub } from './settled-pty-write-stub'
 import { describe, expect, it, vi } from 'vitest'
 import { setPtyHostBindings } from '../ipc/pty-host-bindings'
@@ -48,9 +49,7 @@ vi.mock('node-pty', () => ({
   })
 }))
 
-vi.mock('../opencode/hook-service', () => ({
-  openCodeHookService: { buildPtyEnv: () => ({}), clearPty: vi.fn() }
-}))
+vi.mock('../opencode/hook-service', () => openCodeHookServiceModuleMock())
 
 vi.mock('../pi/titlebar-extension-service', () => ({
   piTitlebarExtensionService: { buildPtyEnv: () => ({}), clearPty: vi.fn() }
@@ -109,6 +108,7 @@ describe('PTY provider dispatch', () => {
       getCwd: vi.fn(),
       getInitialCwd: vi.fn(),
       clearBuffer: vi.fn(),
+      resetInputModes: vi.fn(),
       acknowledgeDataEvent: vi.fn(),
       hasChildProcesses: vi.fn(),
       getForegroundProcess: vi.fn(),
@@ -155,8 +155,8 @@ describe('PTY provider dispatch', () => {
     })) as { id: string }
 
     expect(result.id).toBe('ssh-pty-1')
-    // Why: the relay host can be launched from a Claude session too, so the stamps are
-    // stripped on the SSH path as well. Compared as a set — envToDelete is consumed by
+    // Why: the relay host can be launched from a Claude or structured session too, so the
+    // stamps are stripped on the SSH path as well; a remote pane never names a local session. Compared as a set — envToDelete is consumed by
     // membership only, so a reordering of the merge sources must not fail this.
     const sshSpawnArgs = vi.mocked(mockSshProvider.spawn).mock.calls.at(-1)![0]
     expect([...(sshSpawnArgs.envToDelete ?? [])].sort()).toEqual(
@@ -164,7 +164,18 @@ describe('PTY provider dispatch', () => {
         ...LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS,
         'CLAUDE_CODE_CHILD_SESSION',
         'CLAUDE_CODE_SESSION_ID',
-        'CLAUDE_CODE_BRIDGE_SESSION_ID'
+        'CLAUDE_CODE_BRIDGE_SESSION_ID',
+        'ORCA_OPENCODE_PLUGIN_API',
+        'ORCA_OPENCODE_STARTUP_PROMPT_BODY',
+        'ORCA_OPENCODE_STARTUP_PROMPT_ENDPOINT',
+        'ORCA_OPENCODE_STARTUP_PROMPT_NONCE',
+        'ORCA_OPENCODE_STARTUP_PROMPT_SHA256',
+        'ORCA_OPENCODE_STARTUP_PROMPT_SHELL',
+        'ORCA_PI_STATUS_OWNED',
+        'ORCA_PRIME_AGENT_STATUS_OWNED',
+        'ORCA_PI_TITLE_MARKER_OWNED',
+        'ORCA_AGENT_SESSION_ID',
+        'ORCA_STRUCTURED_SESSION'
       ].sort()
     )
     expect(mockSshProvider.spawn).toHaveBeenCalledWith(

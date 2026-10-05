@@ -64,6 +64,7 @@ export function createAccumulator(args: {
     lastUserPrompt: null,
     queuedMessageCount: 0,
     subagentTranscriptCount: 0,
+    earliestTimestampMs: 0,
     latestTimestampMs: 0
   }
 }
@@ -160,6 +161,9 @@ export function finalizeSession(
     totalTokens: accumulator.totalTokens,
     previewMessages: accumulator.previewMessages,
     ...(accumulator.previewMessagesTruncated ? { previewMessagesTruncated: true } : {}),
+    ...(accumulator.antigravityOpeningPrompt
+      ? { antigravityOpeningPrompt: accumulator.antigravityOpeningPrompt }
+      : {}),
     ...(accumulator.firstUserPrompt ? { firstUserPrompt: accumulator.firstUserPrompt } : {}),
     ...(accumulator.lastUserPrompt ? { lastUserPrompt: accumulator.lastUserPrompt } : {}),
     queuedMessageCount: accumulator.queuedMessageCount,
@@ -191,10 +195,12 @@ export function updateTimeline(accumulator: SessionAccumulator, timestamp: unkno
     return
   }
   const iso = new Date(parsed).toISOString()
-  if (!accumulator.createdAt || parsed < Date.parse(accumulator.createdAt)) {
+  if (!accumulator.createdAt || parsed < accumulator.earliestTimestampMs) {
     accumulator.createdAt = iso
+    accumulator.earliestTimestampMs = Math.trunc(parsed)
   }
-  if (!accumulator.updatedAt || parsed >= Date.parse(accumulator.updatedAt)) {
+  // ISO serialization truncates fractional milliseconds; latestTimestampMs retains them.
+  if (!accumulator.updatedAt || parsed >= Math.trunc(accumulator.latestTimestampMs)) {
     accumulator.updatedAt = iso
     accumulator.latestTimestampMs = parsed
   }

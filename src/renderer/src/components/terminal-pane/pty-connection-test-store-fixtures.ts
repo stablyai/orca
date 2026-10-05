@@ -54,13 +54,6 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     getAgentLaunchConfigForStatusEntry: vi.fn((entry: { paneKey: string }) => {
       return getState().agentLaunchConfigByPaneKey[entry.paneKey]?.launchConfig
     }),
-    getAgentLaunchConfigForStatusMetadata: vi.fn(
-      (metadata: { paneKey: string; launchToken?: string }) => {
-        return metadata.launchToken
-          ? getState().agentLaunchConfigByPaneKey[metadata.paneKey]?.launchConfig
-          : undefined
-      }
-    ),
     clearSleepingAgentSession: vi.fn((paneKey: string) => {
       delete getState().sleepingAgentSessionsByPaneKey[paneKey]
     }),

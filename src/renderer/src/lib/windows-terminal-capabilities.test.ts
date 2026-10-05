@@ -10,7 +10,6 @@ import {
   hasCachedWindowsTerminalCapabilities,
   isWindowsTerminalCapabilityHost,
   loadWindowsTerminalCapabilities,
-  refreshWindowsTerminalCapabilities,
   resetWindowsTerminalCapabilitiesForTests,
   selectWindowsTerminalCapabilitiesForOwner,
   useLocalWindowsTerminalCapabilities,
@@ -197,7 +196,7 @@ describe('windows terminal capabilities', () => {
     await expect(loadWindowsTerminalCapabilities()).resolves.toMatchObject({
       wslAvailable: false
     })
-    await expect(refreshWindowsTerminalCapabilities()).resolves.toMatchObject({
+    await expect(loadWindowsTerminalCapabilities({ force: true })).resolves.toMatchObject({
       wslAvailable: true
     })
 
@@ -438,7 +437,11 @@ describe('windows terminal capabilities', () => {
     })
 
     await expect(
-      refreshWindowsTerminalCapabilities(undefined, { kind: 'local' }, 'ssh-1')
+      loadWindowsTerminalCapabilities({
+        force: true,
+        target: { kind: 'local' },
+        sshConnectionId: 'ssh-1'
+      })
     ).resolves.toEqual({
       wslAvailable: true,
       wslDistros: ['Ubuntu', 'Debian'],

@@ -3,6 +3,12 @@ import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/cre
 import { callRuntimeRpc, type getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
 import type { RemoveWorktreeOptions } from '../../worktree-removal-options'
+import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
+import {
+  isWorktreeRemovalReplyLost,
+  settleLostWorktreeRemovalReply
+} from './host-worktree-removal-state'
+import { worktreeRemovalReplyTimeoutMs } from '../../../../../../shared/worktree/archive-hook-removal-gate'
 
 /**
  * Sends the destructive removal over whichever transport owns this workspace.
@@ -16,13 +22,33 @@ export async function dispatchWorktreeRemoval(args: {
   hostId: ExecutionHostId | undefined
   force: boolean | undefined
   skipArchive: boolean
-  forgetLocalOnly: boolean
+  get: WorktreeSliceGet
   target: ReturnType<typeof getActiveRuntimeTarget>
   options: RemoveWorktreeOptions | undefined
   /** Re-checks mid-flight ownership immediately before the destructive call. */
   assertCurrent: () => void
 }): Promise<RemoveWorktreeResult> {
-  const { worktreeId, hostId, force, skipArchive, forgetLocalOnly, target, options } = args
+  try {
+    return await requestWorktreeRemoval(args)
+  } catch (error) {
+    if (args.options?.mode === 'forget-local' || !isWorktreeRemovalReplyLost(error)) {
+      throw error
+    }
+    // Why: the host may still be deleting; its listing answers what the lost reply would have.
+    await settleLostWorktreeRemovalReply(args.get, {
+      worktreeId: args.worktreeId,
+      hostId: args.hostId,
+      replyError: error
+    })
+    return {}
+  }
+}
+
+async function requestWorktreeRemoval(
+  args: Parameters<typeof dispatchWorktreeRemoval>[0]
+): Promise<RemoveWorktreeResult> {
+  const { worktreeId, hostId, force, skipArchive, target, options } = args
+  const forgetLocalOnly = options?.mode === 'forget-local'
   const snapshotPruneBatch = options?.snapshotPruneBatchId
     ? { snapshotPruneBatchId: options.snapshotPruneBatchId }
     : {}
@@ -36,6 +62,7 @@ export async function dispatchWorktreeRemoval(args: {
       hostId,
       force,
       allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
+      allowFailedArchiveHook: options?.allowFailedArchiveHook === true,
       skipArchive,
       ...snapshotPruneBatch
     })
@@ -50,9 +77,16 @@ export async function dispatchWorktreeRemoval(args: {
       ...(effectiveHostId ? { hostId: effectiveHostId } : {}),
       force,
       allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
+      // Why only when set, unlike the IPC branch: this crosses a version boundary, and a host
+      // that predates the gate drops unknown params silently. Send it when it means something.
+      ...(options?.allowFailedArchiveHook === true ? { allowFailedArchiveHook: true } : {}),
       runHooks: !skipArchive
     },
-    { timeoutMs: 60_000 }
+    {
+      // Why (#19334): the host may run an archive hook before it decides anything, then waits for
+      // Git's delete before it replies; outlast both when a hook can run.
+      timeoutMs: worktreeRemovalReplyTimeoutMs(!skipArchive)
+    }
   )
 }
 

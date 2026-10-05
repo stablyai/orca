@@ -8,8 +8,6 @@ import { joinPath } from '@/lib/path'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   importExternalPathsToRuntime,
-  isRemoteRuntimeFileOperation,
-  statRuntimePath,
   type RuntimeFileOperationArgs
 } from '@/runtime/runtime-file-client'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
@@ -20,6 +18,8 @@ import {
   type NativeFileDropRejectedPayload
 } from '../../../shared/native-file-drop'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
+import { describeDropTempCopyFailure } from '@/lib/drop-temp-copy-failure-copy'
+import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 
 export function getEditorFileDropSettingsForWorktree(
   store: WorktreeRuntimeOwnerState,
@@ -120,7 +120,7 @@ export function useGlobalFileDrop(): void {
                 continue
               }
               const maybeRelative = toWorktreeRelativePath(result.destPath, worktreePath)
-              store.setActiveTabType('editor')
+              store.setActiveTabType('editor', activeWorktreeId)
               store.openFile(
                 {
                   filePath: result.destPath,
@@ -159,18 +159,19 @@ export function useGlobalFileDrop(): void {
       for (const filePath of data.paths) {
         void (async () => {
           try {
-            const isRemoteRuntimePath = isRemoteRuntimeFileOperation(fileContext, filePath)
-            // Why: remote paths don't need local auth — the relay/runtime is the security boundary.
-            if (!connectionId && !isRemoteRuntimePath) {
-              await window.api.fs.authorizeExternalPath({ targetPath: filePath })
-            }
-            const stat = await statRuntimePath(fileContext, filePath)
+            const stat = await statUserOpenedPath(fileContext, filePath)
             if (stat.isDirectory) {
               return
             }
 
             let relativePath = filePath
-            if (worktreePath && isPathInsideWorktree(filePath, worktreePath)) {
+            // Why: a project link out of the project keeps its absolute path, so it reads as
+            // user-named instead of being refused as a project file.
+            if (
+              worktreePath &&
+              !stat.escapesWorktree &&
+              isPathInsideWorktree(filePath, worktreePath)
+            ) {
               const maybeRelative = toWorktreeRelativePath(filePath, worktreePath)
               if (maybeRelative !== null && maybeRelative.length > 0) {
                 relativePath = maybeRelative
@@ -181,7 +182,7 @@ export function useGlobalFileDrop(): void {
             // tab-strip editor target. Keeping the editor-open path centralized
             // here avoids the regression where CLI drops were all coerced into
             // editor tabs once the renderer lost the original drop surface.
-            store.setActiveTabType('editor')
+            store.setActiveTabType('editor', activeWorktreeId)
             store.openFile({
               filePath,
               relativePath,
@@ -190,7 +191,7 @@ export function useGlobalFileDrop(): void {
               mode: 'edit'
             })
           } catch {
-            // Ignore files that cannot be authorized or stat'd.
+            // Ignore files that cannot be stat'd.
           }
         })()
       }
@@ -207,6 +208,30 @@ export function getNativeFileDropRejectionMessage(data: NativeFileDropRejectedPa
   description: string
   title: string
 } {
+  if (data.reason === 'temp-copy-failed') {
+    return {
+      description: describeDropTempCopyFailure(data.commonReason),
+      title: translate(
+        'auto.hooks.useGlobalFileDrop.nativeDropTempCopyFailed',
+        "Orca couldn't copy {{count}} dropped files.",
+        { count: data.pathCount }
+      )
+    }
+  }
+
+  if (data.reason === 'unresolved-paths') {
+    return {
+      description: translate(
+        'auto.hooks.useGlobalFileDrop.nativeDropUnresolvedPathsDescription',
+        'Save them to disk first, then drop the saved files.'
+      ),
+      title: translate(
+        'auto.hooks.useGlobalFileDrop.nativeDropUnresolvedPaths',
+        "Orca couldn't read a path for the dropped files."
+      )
+    }
+  }
+
   if (data.reason === 'too-many-paths') {
     return {
       description: translate(

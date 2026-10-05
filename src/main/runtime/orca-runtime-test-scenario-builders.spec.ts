@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import * as mocks from './orca-runtime-test-mocks.spec'
 import type { Mock } from 'vitest'
 
@@ -34,7 +35,7 @@ type MobileCreateTestNotifier = {
   revealTerminalSession: TestMock
   splitTerminal: TestMock
   renameTerminal: TestMock
-  closeTerminal: (tabId: string, paneRuntimeId?: number) => void
+  closeTerminal: (tabId: string, leafId?: string) => void
   closeSessionTab: TestMock
   sleepWorktree: TestMock
   terminalFitOverrideChanged: TestMock
@@ -211,7 +212,7 @@ function makePostRevealWorkerRecoveryHarness(
   }
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
   const runtime = new OrcaRuntimeService(
-    { ...runtimeStore, flushOrThrow: vi.fn() } as never,
+    withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() }),
     undefined,
     { canRecoverPersistentLocalPtys: () => true }
   )
@@ -326,7 +327,7 @@ function makePendingAgentTabActivationRuntime(opts: { disabledTuiAgents?: string
 
 // Why: the five #7587 mobile-create tests share one notifier factory so interface changes live in one place.
 function createMobileCreateTestNotifier(
-  closeTerminal: (tabId: string, paneRuntimeId?: number) => void
+  closeTerminal: (tabId: string, leafId?: string) => void
 ): MobileCreateTestNotifier {
   return {
     focusTerminal: vi.fn(),
@@ -436,13 +437,16 @@ async function reconcileWithToken(runtime: RuntimeService, token: string): Promi
     fetchPromise: Promise.resolve({ ok: true })
   })
 }
-function createSideEffectRuntime(): {
+function createSideEffectRuntime(
+  checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
+): {
   runtime: RuntimeService
   batches: TerminalSideEffectBatch[]
 } {
   const batches: TerminalSideEffectBatch[] = []
   const runtime = new OrcaRuntimeService(store, undefined, {
-    onTerminalSideEffects: (batch) => batches.push(batch)
+    onTerminalSideEffects: (batch) => batches.push(batch),
+    checkHookAgentPresence
   })
   return { runtime, batches }
 }

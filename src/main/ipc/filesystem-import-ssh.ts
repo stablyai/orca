@@ -1,11 +1,10 @@
 import { lstat } from 'node:fs/promises'
 import { basename, posix, resolve } from 'node:path'
-import { authorizeExternalPath } from './filesystem-auth'
 import { isENOENT } from './filesystem-path-containment'
 import { getSshConnectionManager } from './ssh'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { FileUploadSession, IFilesystemProvider } from '../providers/types'
-import type { ImportItemResult } from './filesystem-import-result-types'
+import type { ImportItemResult } from '../../shared/filesystem-import-result-types'
 import { assertSafeRemotePathSegment, type RemotePathFlavor } from '../ssh/ssh-remote-platform'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import {
@@ -96,8 +95,6 @@ async function importOneSourceSsh(
   assertCurrent?: () => void
 ): Promise<ImportItemResult> {
   const resolvedSource = resolve(sourcePath)
-
-  authorizeExternalPath(resolvedSource)
 
   const originalName = basename(resolvedSource)
   try {

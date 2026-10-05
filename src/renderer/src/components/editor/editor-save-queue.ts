@@ -19,6 +19,7 @@ import {
 } from './editor-self-write-registry'
 import { getDiskBaselineSignature } from './diff-content-signature'
 import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
+import { editorTabFileAccess } from '@/lib/local-file-access'
 
 export type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
 
@@ -76,6 +77,9 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         if (!liveFile) {
           return
         }
+        if (liveFile.csvPreviewOnly === true) {
+          throw new Error('Large CSV previews are read-only.')
+        }
 
         // Why: read-only tabs (AI Vault View Log) must never write the agent-owned artifact through editor paths.
         if (liveFile.readOnly === true) {
@@ -110,7 +114,12 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
             : undefined
         )
         try {
-          await writeRuntimeFile(fileContext, liveFile.filePath, contentToSave)
+          await writeRuntimeFile(
+            fileContext,
+            liveFile.filePath,
+            contentToSave,
+            editorTabFileAccess(state, liveFile)
+          )
         } catch (error) {
           // Why: the self-write stamp is only valid after a real write; clear on failure so it can't suppress a real update.
           clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)

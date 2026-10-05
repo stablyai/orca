@@ -9,6 +9,7 @@ import {
   subscribeClaudeSubmitResolved
 } from './native-chat-claude-submit-cache'
 import { claudeSubmitGestureMatchesKeyboardEvent } from './native-chat-claude-submit-keybinding'
+import { nativeChatComposerTargetIsRemote } from './native-chat-composer-target'
 
 export type SubmitKeyEvent = {
   key: string
@@ -71,8 +72,9 @@ export function useClaudeSubmitGesturePending(agent: AgentType, isRemotePane: bo
  *  send must hold until the keybinding resolves. */
 export function useComposerSubmitGesture(
   agent: AgentType,
-  isRemotePane: boolean
+  targetPtyId: string | null
 ): { matchesSubmitKey: (event: SubmitKeyEvent) => boolean; submitGesturePending: boolean } {
+  const isRemotePane = nativeChatComposerTargetIsRemote(targetPtyId)
   return {
     matchesSubmitKey: useComposerSubmitKeyMatch(agent, isRemotePane),
     submitGesturePending: useClaudeSubmitGesturePending(agent, isRemotePane)

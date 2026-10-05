@@ -24,6 +24,7 @@ export function applyRuntimeHostStatusSnapshot(
     snapshot,
     checkedAt: snapshot.checkedAt,
     connectionGeneration: previous?.connectionGeneration,
+    hostContactEpoch: previous?.hostContactEpoch,
     status: snapshot.verification === 'verified' && !snapshot.retired ? snapshot.status : null,
     remoteControl: snapshot.remoteControl
   }
@@ -34,7 +35,11 @@ export function applyRuntimeHostStatusSnapshot(
     state.setRuntimeEnvironmentStatus(snapshot.environmentId, entry)
     if (previous?.status == null) {
       void ensureBrowserClientHostsForRestoredPages(state)
-      void replayClientHostedBrowserCloseIntents(snapshot.environmentId, state)
+      void replayClientHostedBrowserCloseIntents(snapshot.environmentId, {
+        clientHostedBrowserCloseIntentsByEnvironment:
+          state.clientHostedBrowserCloseIntentsByEnvironment,
+        clearClientHostedBrowserCloseIntents: state.clearClientHostedBrowserCloseIntents
+      })
     }
   } else {
     // Lost contact or a failed method observes no runtime session ending.

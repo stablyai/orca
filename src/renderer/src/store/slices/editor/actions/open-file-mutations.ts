@@ -76,7 +76,7 @@ export function createOpenFileMutations(
           return s
         }
         // Why: read-only tabs can never become dirty; hard no-op any stray change/save callback that reached here.
-        if (file.readOnly === true) {
+        if (file.readOnly === true || file.csvPreviewOnly === true) {
           return s
         }
         const needsPreviewClear = dirty && file.isPreview

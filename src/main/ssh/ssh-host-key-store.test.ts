@@ -303,7 +303,7 @@ describe('a host key store written by a newer version', () => {
     const storeFile = join(dir, 'ssh-host-keys.json')
     const future = JSON.stringify({
       version: 99,
-      hostKeys: [{ shape: 'we do not understand' }]
+      hostKeys: [{ unrecognized: 'we do not understand' }]
     })
     await writeFile(storeFile, future, 'utf-8')
 

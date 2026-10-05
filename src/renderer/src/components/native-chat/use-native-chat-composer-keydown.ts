@@ -6,12 +6,15 @@ import {
   type HistoryState,
   type NativeChatPickerItem
 } from './native-chat-composer-state'
+import { isMacPlatform } from './native-chat-shortcut'
 import type { SubmitKeyEvent } from './use-claude-submit-gesture'
 
 export type UseNativeChatComposerKeyDownArgs = {
   autocomplete: ComposerAutocomplete
   activeSuggestion: number
   draft: string
+  /** Image chips count as composer content, like typed text. */
+  hasAttachments?: boolean
   history: HistoryState
   isComposing: () => boolean
   matchesSubmitKey: (event: SubmitKeyEvent) => boolean
@@ -20,6 +23,9 @@ export type UseNativeChatComposerKeyDownArgs = {
   dismissPicker: (triggerKey: string) => void
   interrupt: () => void
   send: () => void
+  /** Cmd/Ctrl+Enter from an empty composer: send the newest queued draft now; false falls
+   *  through to send. */
+  steerQueued?: (() => boolean) | undefined
   setActiveSuggestion: Dispatch<SetStateAction<number>>
   setDraft: Dispatch<SetStateAction<string>>
   setCaret: Dispatch<SetStateAction<number>>
@@ -30,6 +36,7 @@ export function useNativeChatComposerKeyDown({
   autocomplete,
   activeSuggestion,
   draft,
+  hasAttachments = false,
   history,
   isComposing,
   matchesSubmitKey,
@@ -38,6 +45,7 @@ export function useNativeChatComposerKeyDown({
   dismissPicker,
   interrupt,
   send,
+  steerQueued,
   setActiveSuggestion,
   setDraft,
   setCaret,
@@ -51,6 +59,10 @@ export function useNativeChatComposerKeyDown({
         if (event.key === 'Enter') {
           event.preventDefault()
         }
+        return
+      }
+      // An open layer that keeps focus here, like the context card, already spent this Escape closing itself.
+      if (event.key === 'Escape' && event.defaultPrevented) {
         return
       }
 
@@ -90,6 +102,17 @@ export function useNativeChatComposerKeyDown({
         interrupt()
         return
       }
+      // Cmd/Ctrl+Enter from an empty composer steers the newest queued draft
+      // before any submit. Platform primary modifier only (AGENTS.md): ⌘ on Mac,
+      // Ctrl elsewhere.
+      if (event.key === 'Enter' && !event.shiftKey) {
+        const steerChord = isMacPlatform() ? event.metaKey : event.ctrlKey
+        const composerEmpty = draft.trim() === '' && !hasAttachments
+        if (steerChord && composerEmpty && steerQueued?.()) {
+          event.preventDefault()
+          return
+        }
+      }
       if (matchesSubmitKey(event)) {
         event.preventDefault()
         send()
@@ -122,11 +145,13 @@ export function useNativeChatComposerKeyDown({
       dismissPicker,
       dispatchPickerCommand,
       draft,
+      hasAttachments,
       history,
       interrupt,
       isComposing,
       matchesSubmitKey,
       send,
+      steerQueued,
       setActiveSuggestion,
       setCaret,
       setDraft,

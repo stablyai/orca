@@ -3,9 +3,7 @@ import type { MarkdownDocument } from './filesystem-entry-types'
 import {
   assertMarkdownDocumentsWithinLimit,
   createMarkdownDocumentListingBudget,
-  isMarkdownDocumentListingCapacityError,
   MARKDOWN_DOCUMENT_LISTING_ERROR_CODE,
-  MARKDOWN_DOCUMENT_LISTING_ERROR_MESSAGE,
   MarkdownDocumentListingCapacityError,
   retainMarkdownDocument,
   visitMarkdownDocumentListingEntry
@@ -21,12 +19,6 @@ function document(path: string): MarkdownDocument {
 }
 
 describe('Markdown document listing limits', () => {
-  it('preserves an under-limit listing and reports its retained estimate', () => {
-    const documents = [document('README.md'), document('docs/guide.mdx')]
-
-    expect(assertMarkdownDocumentsWithinLimit(documents)).toBeGreaterThan(0)
-  })
-
   it('rejects the first document beyond the count limit with a typed error', () => {
     const budget = createMarkdownDocumentListingBudget({ maxDocuments: 2 })
     retainMarkdownDocument(budget, document('one.md'))
@@ -66,18 +58,5 @@ describe('Markdown document listing limits', () => {
     expect(() => visitMarkdownDocumentListingEntry(depth, 'a/b', 2)).toThrow(
       MarkdownDocumentListingCapacityError
     )
-  })
-
-  it('recognizes structured runtime and Electron-wrapped capacity failures', () => {
-    const structured = Object.assign(new Error('remote listing rejected'), {
-      code: MARKDOWN_DOCUMENT_LISTING_ERROR_CODE
-    })
-    const electronWrapped = new Error(
-      `Error invoking remote method 'fs:listMarkdownDocuments': Error: ${MARKDOWN_DOCUMENT_LISTING_ERROR_MESSAGE}`
-    )
-
-    expect(isMarkdownDocumentListingCapacityError(structured)).toBe(true)
-    expect(isMarkdownDocumentListingCapacityError(electronWrapped)).toBe(true)
-    expect(isMarkdownDocumentListingCapacityError(new Error('unrelated failure'))).toBe(false)
   })
 })

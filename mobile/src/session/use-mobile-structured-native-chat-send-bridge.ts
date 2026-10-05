@@ -8,6 +8,7 @@ type StructuredNativeChatAttachment = {
   id?: string
   path: string
   previewUri: string
+  contentFingerprint?: string
 }
 
 export function useMobileStructuredNativeChatSendBridge(args: {
@@ -74,6 +75,11 @@ export function useMobileStructuredNativeChatSendBridge(args: {
           acceptSend(origin, text.trimEnd(), images)
         }
         return 'accepted'
+      }
+      if (outcome === 'queued') {
+        // The host holds the draft and publishes it as a card above the
+        // composer — never an optimistic transcript bubble.
+        return 'queued'
       }
       if (outcome === 'unknown') {
         if (isHostCommand) {

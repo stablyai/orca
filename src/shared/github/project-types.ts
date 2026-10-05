@@ -81,9 +81,10 @@ export type GitHubProjectView = {
   number: number
   name: string
   layout: GitHubProjectViewLayout
-  /** Normalized to '' when GitHub returns null. Why: passing null through as
-   *  `$q` in the items query would change the query shape between filtered
-   *  and unfiltered views; the empty string keeps the GraphQL shape stable. */
+  /** Normalized to '' when GitHub returns null. `ProjectV2.items(query:)` is
+   *  declared `String = ""`, so sending '' and omitting the argument are the
+   *  same request — there is no non-search item field to fall back to. '' is
+   *  therefore only a UI signal: it means "this view is unfiltered". */
   filter: string
   fields: GitHubProjectField[]
   groupByFields: GitHubProjectField[]

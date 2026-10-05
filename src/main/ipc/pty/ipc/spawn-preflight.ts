@@ -204,7 +204,12 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
           projectRuntime: args.projectRuntime,
           fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
         })
-      : { shellOverride: args.shellOverride, terminalWindowsWslDistro: null }
+      : {
+          shellOverride:
+            args.shellOverride ??
+            (ctx.deps.getSettings?.()?.terminalDefaultShell?.trim() || undefined),
+          terminalWindowsWslDistro: null
+        }
   const initialShellOverride = ctx.terminalRuntimeOptions.shellOverride
   // Why: daemon host-env setup needs a stable id BEFORE provider.spawn so buildPtyHostEnv hooks/Pi cleanup can run; daemon still honors opts.sessionId ?? mint().
   // Note: sessionId is STABLE across daemon restarts by design — do NOT simplify to a fresh UUID per spawn; that orphans reconnectable state.

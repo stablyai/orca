@@ -5,7 +5,10 @@ export const RUNTIME_FILE_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
 
 export function isValidRuntimeFileBase64(value: unknown): value is string {
   return (
-    typeof value === 'string' && value.length % 4 !== 1 && RUNTIME_FILE_BASE64_PATTERN.test(value)
+    typeof value === 'string' &&
+    value.length % 4 !== 1 &&
+    (!value.includes('=') || value.length % 4 === 0) &&
+    RUNTIME_FILE_BASE64_PATTERN.test(value)
   )
 }
 

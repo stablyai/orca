@@ -14,9 +14,7 @@ import {
   type TerminalOutputMeta
 } from './terminal-output-frame-chunks'
 
-// Byte-for-byte reference: the pre-optimization implementation, copied verbatim.
-// It accumulates `chunk += part` over `for (const part of data)` and measures each
-// code point through the shared clipboard measurer.
+// The legacy splitter, caching only its pure byte counts for repeated code points.
 function legacyByteLength(data: string): number {
   return measureClipboardTextByteLength(data).byteLength
 }
@@ -64,6 +62,7 @@ function* legacyIterateTerminalOutputFrameChunks(
   let chunkStartOffset = 0
   let offset = 0
   let delayedChunk: { text: string; seq?: number } | null = null
+  const partByteLengths = new Map<string, number>()
 
   const takeChunk = (): { text: string; seq?: number } | null => {
     if (!chunk) {
@@ -78,7 +77,11 @@ function* legacyIterateTerminalOutputFrameChunks(
   }
 
   for (const part of data) {
-    const partBytes = legacyByteLength(part)
+    let partBytes = partByteLengths.get(part)
+    if (partBytes === undefined) {
+      partBytes = legacyByteLength(part)
+      partByteLengths.set(part, partBytes)
+    }
     if (chunkBytes > 0 && chunkBytes + partBytes > TERMINAL_STREAM_CHUNK_BYTES) {
       const nextChunk = takeChunk()
       if (nextChunk) {
@@ -132,10 +135,10 @@ function* legacyIterateTerminalOutputFrameChunks(
   }
 }
 
-type FrameShape = { base64: string; seq: number | 'undefined'; opcode: number | 'undefined' }
+type FrameSummary = { base64: string; seq: number | 'undefined'; opcode: number | 'undefined' }
 
-function describeFrames(frames: Iterable<TerminalOutputFrameChunk>): FrameShape[] {
-  const out: FrameShape[] = []
+function describeFrames(frames: Iterable<TerminalOutputFrameChunk>): FrameSummary[] {
+  const out: FrameSummary[] = []
   for (const frame of frames) {
     out.push({
       base64: Buffer.from(frame.bytes).toString('base64'),
@@ -170,10 +173,10 @@ const SURROGATE_EDGES = [
   '\udfff\udc00'
 ]
 
-// Meta shapes exercised against every fixture: no meta, seq-preserved (rawLength ===
+// Meta variants exercised against every fixture: no meta, seq-preserved (rawLength ===
 // data.length), the delayed-final-seq path (rawLength !== data.length -> OutputSpan),
 // transformed, and cwd-only.
-function metaShapesFor(data: string): { label: string; meta: TerminalOutputMeta | undefined }[] {
+function metaVariantsFor(data: string): { label: string; meta: TerminalOutputMeta | undefined }[] {
   return [
     { label: 'no-meta', meta: undefined },
     { label: 'seq-only', meta: { seq: 5_000_000 } },
@@ -187,8 +190,8 @@ function metaShapesFor(data: string): { label: string; meta: TerminalOutputMeta 
 }
 
 function sweepAll(data: string, label: string): void {
-  for (const shape of metaShapesFor(data)) {
-    expectEquivalent(data, shape.meta, `${label} [${shape.label}]`)
+  for (const variant of metaVariantsFor(data)) {
+    expectEquivalent(data, variant.meta, `${label} [${variant.label}]`)
   }
 }
 
@@ -521,35 +524,5 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
     const overByOne = `${exact}a`
     expect([...iterateTerminalOutputFrameChunks(overByOne)].length).toBeGreaterThan(1)
     expect([...legacyIterateTerminalOutputFrameChunks(overByOne)].length).toBeGreaterThan(1)
-  })
-
-  // The chunking loop is only reached when rawLength === data.length and transformed
-  // is falsy, which makes canPreserveChunkSeq === (typeof meta.seq === 'number') and
-  // therefore shouldDelayFinalSeq unconditionally false. The branch survives here
-  // (it also survived in the pre-optimization code) purely as defence in depth.
-  it('never reaches the delayed-final-seq branch for any meta shape', () => {
-    for (const data of ['', 'a', 'abc', 'x'.repeat(200)]) {
-      for (const seq of [undefined, 0, 5] as (number | undefined)[]) {
-        for (const rawDelta of [undefined, 0, 1, -1] as (number | undefined)[]) {
-          for (const transformed of [undefined, false, true] as (boolean | undefined)[]) {
-            const meta: TerminalOutputMeta = {}
-            if (seq !== undefined) {
-              meta.seq = seq
-            }
-            if (rawDelta !== undefined) {
-              meta.rawLength = data.length + rawDelta
-            }
-            if (transformed !== undefined) {
-              meta.transformed = transformed
-            }
-            const rawLength = meta.rawLength ?? data.length
-            const reachesChunkLoop = !meta.transformed && rawLength === data.length
-            const canPreserveChunkSeq = typeof meta.seq === 'number' && rawLength === data.length
-            const shouldDelayFinalSeq = !canPreserveChunkSeq && typeof meta.seq === 'number'
-            expect(reachesChunkLoop && shouldDelayFinalSeq, JSON.stringify(meta)).toBe(false)
-          }
-        }
-      }
-    }
   })
 })

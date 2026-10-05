@@ -3,7 +3,9 @@ import {
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots
 } from '../../../shared/claude-subagent-roster'
+import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
 import { reapRestoredClaudeSubagentsForDeadPane } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
+import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status-legacy-adapter'
 import { AgentHookServerTabCleanup } from './server-tab-cleanup'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
@@ -113,7 +115,13 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
           subagents
         }
       }
-      this.state.lastStatusByPaneKey.set(paneKey, reconciled)
+      admitLegacyAgentStatus(
+        this.state,
+        'main-restored-status-reaping',
+        reconciled,
+        AGENT_STATUS_PERSISTED_HYDRATION_MODE
+      )
+      this.commitStatusRowMutation(enriched, reconciled)
     }
     if (changedPanes > 0) {
       this.scheduleStatusPersist()

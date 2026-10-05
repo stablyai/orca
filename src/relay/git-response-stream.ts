@@ -198,6 +198,8 @@ export class GitResponseStreamRegistry {
             clientId
           }
         )
+        // Sent chunks are never retried; ACK waits must not retain their encoded copies.
+        chunks[seq] = ''
       }
       if (endReason === 'end') {
         await dispatcher.notifyBulk('git.responseEnd', { streamId }, { clientId })

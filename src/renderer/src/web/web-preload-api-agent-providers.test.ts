@@ -155,25 +155,45 @@ describe('web MiniMax preload API', () => {
     vi.unstubAllGlobals()
   })
 
+  it('keeps OpenCode Go credential operations local to the desktop', async () => {
+    const { api } = await installApi('Linux')
+    await expect(api.opencodeGoCredentials.getStatus()).resolves.toEqual({
+      apiKeyConfigured: false
+    })
+    await expect(api.opencodeGoCredentials.saveApiKey('fake-key')).rejects.toThrow(/desktop app/i)
+    await expect(api.opencodeGoCredentials.clearApiKey()).resolves.toEqual({
+      apiKeyConfigured: false
+    })
+  })
+
   it('exposes desktop-only MiniMax credential reads as unconfigured and rejects saves', async () => {
     const { api } = await installApi('Linux')
 
     await expect(api.minimaxCredentials.getStatus()).resolves.toEqual({
       configured: false,
       cookieConfigured: false,
-      apiKeyConfigured: false
+      apiKeyConfigured: false,
+      // Null, not 'sealed': this bridge stores nothing, so it has no protection to claim.
+      cookieProtection: null,
+      apiKeyProtection: null
     })
     await expect(api.minimaxCredentials.saveCookie('_token=abc')).rejects.toThrow(/desktop app/i)
     await expect(api.minimaxCredentials.clearCookie()).resolves.toEqual({
       configured: false,
       cookieConfigured: false,
-      apiKeyConfigured: false
+      apiKeyConfigured: false,
+      // Null, not 'sealed': this bridge stores nothing, so it has no protection to claim.
+      cookieProtection: null,
+      apiKeyProtection: null
     })
     await expect(api.minimaxCredentials.saveApiKey('sk-test')).rejects.toThrow(/desktop app/i)
     await expect(api.minimaxCredentials.clearApiKey()).resolves.toEqual({
       configured: false,
       cookieConfigured: false,
-      apiKeyConfigured: false
+      apiKeyConfigured: false,
+      // Null, not 'sealed': this bridge stores nothing, so it has no protection to claim.
+      cookieProtection: null,
+      apiKeyProtection: null
     })
   })
 })

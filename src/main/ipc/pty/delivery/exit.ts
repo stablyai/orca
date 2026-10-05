@@ -9,17 +9,21 @@ import { getRendererInFlightCharsForPty } from './accounting'
 import { clearFlushTimerIfIdle } from './flush'
 import type { PtyIpcSession } from '../session'
 
-export function rememberSyntheticKillExit(session: PtyIpcSession, id: string): void {
+export function rememberSyntheticKillExit(
+  session: PtyIpcSession,
+  id: string,
+  incarnationId?: string
+): void {
   const existing = session.syntheticKillExitPtyIds.get(id)
   if (existing) {
-    clearTimeout(existing)
+    clearTimeout(existing.cleanupTimer)
   }
-  // Why a timed window: providers may report the real exit after kill completes; skip only that late duplicate, not a future reused id forever.
+  // Only the same incarnation's late exit duplicates the synthetic renderer notification.
   const cleanupTimer = setTimeout(() => {
     session.syntheticKillExitPtyIds.delete(id)
   }, SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS)
   cleanupTimer.unref?.()
-  session.syntheticKillExitPtyIds.set(id, cleanupTimer)
+  session.syntheticKillExitPtyIds.set(id, { cleanupTimer, incarnationId })
 }
 
 export function rememberRetiredRejectedPty(session: PtyIpcSession, id: string): void {
@@ -34,12 +38,16 @@ export function rememberRetiredRejectedPty(session: PtyIpcSession, id: string): 
   session.retiredRejectedPtyIds.set(id, cleanupTimer)
 }
 
-export function consumeSyntheticKillExit(session: PtyIpcSession, id: string): boolean {
-  const cleanupTimer = session.syntheticKillExitPtyIds.get(id)
-  if (!cleanupTimer) {
+export function consumeSyntheticKillExit(
+  session: PtyIpcSession,
+  id: string,
+  incarnationId?: string
+): boolean {
+  const pending = session.syntheticKillExitPtyIds.get(id)
+  if (!pending || pending.incarnationId !== incarnationId) {
     return false
   }
-  clearTimeout(cleanupTimer)
+  clearTimeout(pending.cleanupTimer)
   session.syntheticKillExitPtyIds.delete(id)
   return true
 }
@@ -48,7 +56,7 @@ export function preparePtyExitForRenderer(
   session: PtyIpcSession,
   payload: { id: string; code: number; incarnationId?: string }
 ): (() => void) | null {
-  if (session.mainWindow.isDestroyed()) {
+  if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     session.sshOutputIntake?.transferPtyProjections(payload.id, 'renderer-destroyed')
     return () => {}
   }
@@ -114,7 +122,7 @@ export function finalizePtyExitForRenderer(
   session: PtyIpcSession,
   payload: { id: string; code: number; incarnationId?: string }
 ): void {
-  if (session.mainWindow.isDestroyed()) {
+  if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     session.rendererCreditBeforeExitByPty.delete(payload.id)
     return
   }
@@ -145,11 +153,12 @@ export function finalizePtyExitForRenderer(
       session.schedulePendingDataAfterCreditReport(true)
     }
   }
+  const intentionalStops =
+    session.runtime?.intentionalPtyStops?.claimExit(payload.id, payload.incarnationId) ?? []
   session.mainWindow.webContents.send('pty:exit', {
     ...payload,
-    ...(session.reversibleStopOwnersByPtyId.has(payload.id)
-      ? { preserveRendererBinding: true }
-      : {})
+    ...(intentionalStops.includes('reversible') ? { preserveRendererBinding: true } : {}),
+    ...(intentionalStops.includes('replaced') ? { replacedByRestart: true } : {})
   })
 }
 
@@ -171,7 +180,7 @@ export function sendPtyExitToRenderer(
 }
 
 export function sendPtySpawnedToRenderer(session: PtyIpcSession, id: string): void {
-  if (!session.mainWindow.isDestroyed()) {
+  if (session.mainWindow && !session.mainWindow.isDestroyed()) {
     session.mainWindow.webContents.send('pty:spawned', { id })
   }
 }

@@ -8,7 +8,6 @@ import {
   searchBrowserPages,
   formatBrowserPaletteUrl,
   isBlankBrowserUrl,
-  isBrowserPaletteQueryTooLarge,
   type SearchableBrowserPage
 } from './browser-palette-search'
 
@@ -480,7 +479,6 @@ describe('browser-palette-search', () => {
       })
     } as SearchableBrowserPage
 
-    expect(isBrowserPaletteQueryTooLarge(oversizedQuery)).toBe(true)
     expect(searchBrowserPages([entry], oversizedQuery)).toEqual([])
   })
 

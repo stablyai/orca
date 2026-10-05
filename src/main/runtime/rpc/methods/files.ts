@@ -7,9 +7,11 @@ import { limitQuickOpenSearchReplyBySerializedBytes } from '../../../../shared/q
 import { FileOpen, WorktreeSelector } from './files-target-schemas'
 import { FILE_TERMINAL_ARTIFACT_METHODS } from './files-terminal-artifact-methods'
 import {
+  FilePathsExist,
   DocPreviewFileRead,
   FileListAll,
   FileOpenDiff,
+  FileOpenTab,
   FilePathSearch,
   FileReadChunk,
   FileSearch,
@@ -55,15 +57,20 @@ export const FILE_METHODS = [
   }),
   defineMethod({
     name: 'files.open',
-    params: FileOpen,
+    params: FileOpenTab,
     handler: async (params, { runtime }) =>
-      runtime.openMobileFile(params.worktree, params.relativePath)
+      runtime.openMobileFile(params.worktree, params.relativePath, params.navigation)
   }),
   defineMethod({
     name: 'files.openDiff',
     params: FileOpenDiff,
     handler: async (params, { runtime }) =>
-      runtime.openMobileDiff(params.worktree, params.relativePath, params.staged === true)
+      runtime.openMobileDiff(
+        params.worktree,
+        params.relativePath,
+        params.staged === true,
+        params.navigation
+      )
   }),
   defineMethod({
     name: 'files.read',
@@ -163,6 +170,12 @@ export const FILE_METHODS = [
     name: 'files.listMarkdownDocuments',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.listRuntimeMarkdownDocuments(params.worktree)
+  }),
+  defineMethod({
+    name: 'files.pathsExist',
+    params: FilePathsExist,
+    handler: async (params, { runtime }) =>
+      runtime.pathsExistRuntimeFiles(params.worktree, params.relativePaths)
   }),
   defineMethod({
     name: 'files.stat',

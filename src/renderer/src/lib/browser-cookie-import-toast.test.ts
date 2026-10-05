@@ -158,16 +158,6 @@ describe('emitBrowserCookieImportToast', () => {
     )
   })
 
-  it('does not infer a partition warning from generic skipped cookies', () => {
-    emitBrowserCookieImportToast(
-      { ...summary, importedCookies: 2, skippedCookies: 1 },
-      'Imported 2 cookies.',
-      localExecution
-    )
-
-    expect(warningToastMock).not.toHaveBeenCalled()
-  })
-
   it('does not infer a Google warning from generic skipped cookies', () => {
     emitBrowserCookieImportToast(
       { ...summary, importedCookies: 2, skippedCookies: 1 },

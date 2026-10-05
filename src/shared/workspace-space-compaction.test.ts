@@ -19,7 +19,7 @@ it('sums omitted sizes without constructing a replacement object per omitted ite
     if (initial && typeof initial === 'object' && 'name' in initial && initial.name === 'Other') {
       objectAccumulators += this.length
     }
-    return Reflect.apply(original, this, [callback, initial])
+    return original.call(this, callback, initial)
   })
   let result: ReturnType<typeof compactWorkspaceSpaceItems>
   try {

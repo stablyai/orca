@@ -188,27 +188,3 @@ export function getGitHubPRReviewerRows(item: ReviewDisplayItem): GitHubPRReview
   }
   return Array.from(byLogin.values())
 }
-
-export function appendGitHubPRRequestedReviewers(
-  current: readonly GitHubAssignableUser[],
-  logins: readonly string[]
-): GitHubAssignableUser[] {
-  const byLogin = new Map<string, GitHubAssignableUser>()
-  for (const user of current) {
-    const login = user.login.trim()
-    if (login) {
-      byLogin.set(login.toLowerCase(), user)
-    }
-  }
-  for (const rawLogin of logins) {
-    const login = rawLogin.trim().replace(/^@/, '')
-    if (!login) {
-      continue
-    }
-    const key = login.toLowerCase()
-    if (!byLogin.has(key)) {
-      byLogin.set(key, { login, name: null, avatarUrl: '' })
-    }
-  }
-  return Array.from(byLogin.values())
-}

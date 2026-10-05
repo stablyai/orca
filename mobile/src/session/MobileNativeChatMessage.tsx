@@ -4,6 +4,10 @@ import { Image, Text as NativeText, View } from 'react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
 import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
+import {
+  AGENT_SESSION_HOST_STATUS_COPY,
+  isAgentSessionHostStatusPresentation
+} from '../../../src/shared/agent-session-host-status-rows'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
@@ -24,6 +28,13 @@ function Prose({
   onOpenFile?: (relativePath: string) => void
 }): React.JSX.Element | null {
   if (isTextBlock(block)) {
+    if (isAgentSessionHostStatusPresentation(block.presentation)) {
+      return (
+        <Text selectable style={[styles.hostNotice, { fontSize: TEXT_SIZE * fontScale }]}>
+          {AGENT_SESSION_HOST_STATUS_COPY[block.presentation]}
+        </Text>
+      )
+    }
     // Inverted (user) bubbles use a fixed dark-on-light text rather than the
     // markdown renderer's light-on-dark palette.
     if (invert) {
@@ -71,6 +82,7 @@ function MobileNativeChatMessageImpl({
   fontScale = 1,
   onOpenFile,
   turnStatus,
+  turnStatusAbove = false,
   turnExpanded,
   turnKey,
   onToggleTurn,
@@ -82,8 +94,10 @@ function MobileNativeChatMessageImpl({
   /** Multiplies all chat text sizes for pinch-to-zoom (1 = no change). */
   fontScale?: number
   onOpenFile?: (relativePath: string) => void
-  /** This settled turn's status row, rendered under its user message. */
+  /** This turn's status row, rendered under its opening user message. */
   turnStatus?: NativeChatTurnStatus | null
+  /** Render the status above the row: its turn has no user bubble of its own. */
+  turnStatusAbove?: boolean
   /** Whether the turn caret has disclosed this turn's activity. */
   turnExpanded?: boolean
   /** Set only when this row's turn has settled and can disclose its activity. */
@@ -116,8 +130,19 @@ function MobileNativeChatMessageImpl({
     !toolsExpanded
   const showToolRun = tools.length > 0 && !settledToolsHidden
 
+  const statusRow = turnStatus ? (
+    <MobileNativeChatTurnStatus
+      startedAt={turnStatus.startedAt}
+      workedSeconds={turnStatus.workedSeconds}
+      verdict={turnStatus.verdict}
+      expanded={turnExpanded ?? false}
+      onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
+    />
+  ) : null
   return (
     <>
+      {/* A turn with no user bubble carries its bar above its first row. */}
+      {turnStatusAbove ? statusRow : null}
       <View style={[styles.row, isUser && styles.rowUser]}>
         <View
           style={[styles.content, isUser && styles.userBubble, isReasoning && styles.reasoning]}
@@ -145,15 +170,7 @@ function MobileNativeChatMessageImpl({
           ) : null}
         </View>
       </View>
-      {turnStatus ? (
-        <MobileNativeChatTurnStatus
-          startedAt={turnStatus.startedAt}
-          thinking={turnStatus.thinking}
-          workedSeconds={turnStatus.workedSeconds}
-          expanded={turnExpanded ?? false}
-          onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
-        />
-      ) : null}
+      {turnStatusAbove ? null : statusRow}
     </>
   )
 }
