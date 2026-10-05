@@ -1,7 +1,9 @@
 // A Stop's or a send's wait for the turn Codex answered a send into to open, or provably not
 // to: it ended, the thread stopped running, or the child is gone. Held in memory only.
 
+import type { StructuredAgentSessionLiveWork } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
+import type { CodexJournalTranslator } from './codex-structured-journal-contracts'
 import {
   codexThreadStoppedRunning,
   readCodexThreadId,
@@ -59,6 +61,27 @@ export function createCodexTurnOpenWaits(): CodexTurnOpenWaits {
     },
     releaseAll: () => release()
   }
+}
+
+/** What Codex has in flight (`liveWork`), with no wait: the turn it reports running, by the journal
+ *  id of the command it carries when it carries one; or none yet for a send it has not answered, or
+ *  answered into a turn that has not opened (`codexRunningOrOpeningTurn` waits that one out). */
+export function codexLiveWork(session: {
+  threadId: string
+  activeTurnIds?: ReadonlySet<string>
+  dispatchPending?: boolean
+  dispatchEchoes: Pick<CodexDispatchEchoes, 'answeredUnopenedTurn'>
+  translator: Pick<CodexJournalTranslator, 'commandJournalTurnId'> | null
+}): StructuredAgentSessionLiveWork | undefined {
+  const open = session.activeTurnIds ?? new Set<string>()
+  const running = [...open].at(-1)
+  if (running) {
+    return { turnId: session.translator?.commandJournalTurnId(running) ?? running }
+  }
+  return session.dispatchPending === true ||
+    session.dispatchEchoes.answeredUnopenedTurn(session.threadId, open) !== null
+    ? { turnId: null }
+    : undefined
 }
 
 /**

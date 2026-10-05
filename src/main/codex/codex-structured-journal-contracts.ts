@@ -44,6 +44,9 @@ export type CodexJournalTranslator = {
   forgetCommand: (turnId: string) => void
   /** The provider turn a Stop naming `turnId` interrupts; undefined while a command has none. */
   commandProviderTurnId: (turnId: string) => string | undefined
+  /** The journal turn provider turn `providerTurnId` writes to: the command's it carries, or its
+   *  own. */
+  commandJournalTurnId: (providerTurnId: string) => string
   cancelPrompt: (journalItemId: string) => CodexJournalTranslationAdmission
   restoreThread: (
     threadId: string,

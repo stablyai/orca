@@ -27,7 +27,7 @@ import {
   type ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
 import { closeAllClaudeSessions, closeClaudeSession } from './claude-structured-session-close'
-import { claudeStoppedRequestEndWait } from './claude-request-end-wait'
+import { claudeLiveWork, claudeStoppedRequestEndWait } from './claude-request-end-wait'
 import {
   drainClaudeObservedExits,
   observeClaudeSessionExit,
@@ -259,6 +259,10 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   holdsDispatch = (sessionId: string): boolean => {
     const session = this.sessions.get(sessionId)
     return session ? claudeHoldsDispatch(session) : false
+  }
+  liveWork: NonNullable<StructuredAgentSessionAdapter['liveWork']> = (sessionId) => {
+    const session = this.sessions.get(sessionId)
+    return session ? claudeLiveWork(session) : undefined
   }
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
     this.freeingAsker(request, (freeing) =>

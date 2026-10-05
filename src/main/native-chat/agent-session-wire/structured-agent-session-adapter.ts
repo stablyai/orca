@@ -240,6 +240,8 @@ export type StructuredAgentSessionSetOptionInput = {
   fence: number
 }
 
+export type StructuredAgentSessionLiveWork = { turnId: string | null }
+
 export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & {
   /** Provider-aware capability check for hosts that route more than one adapter. */
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
@@ -335,6 +337,10 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   /** The provider reported taking a send it has neither answered nor ended, as a queued follow-up
    *  or a silent retry does. Derived from the live child; false with none. */
   holdsDispatch?(sessionId: string): boolean
+  /** What the live child has in flight, read off the provider's own frames as they arrive, ahead
+   *  of the journal rows they become: the turn it has open, by its journal id, or null for a send
+   *  it has not answered with no turn open yet. Undefined with nothing in flight. */
+  liveWork?(sessionId: string): StructuredAgentSessionLiveWork | undefined
   /** The `/` surface the running provider reports for itself. Undefined when the
    *  provider never reports one, which is what keeps the client on its catalog. */
   readCommands?(sessionId: string): AgentSessionSlashCommand[] | undefined

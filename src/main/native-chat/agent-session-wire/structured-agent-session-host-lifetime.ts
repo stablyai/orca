@@ -37,7 +37,7 @@ import type { StructuredAgentSessionStopCause } from './structured-agent-session
 export type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-stop-event'
 import {
   recordStopEvent,
-  stopEndsWork,
+  workStopEnds,
   type StructuredAgentSessionStopEnding
 } from './structured-agent-session-host-stop-event'
 
@@ -138,8 +138,9 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
     return
   }
   // Judged before the kill: a stop that ends nothing writes nothing.
-  const recorded = (await stopEndsWork(context, sessionId, session, ending))
-    ? recordStopEvent(context, sessionId, session, ending)
+  const stopped = workStopEnds(context, sessionId, session, ending)
+  const recorded = stopped
+    ? recordStopEvent(context, sessionId, session, stopped)
     : Promise.resolve()
   // The obligation OUTLIVES the child. `child` is ended the instant the adapter proves the exit,
   // so a step that aborts after that point would otherwise leave the retry reading "no child

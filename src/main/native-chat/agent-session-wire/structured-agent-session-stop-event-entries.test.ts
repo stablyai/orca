@@ -3,9 +3,8 @@
 // nothing, quit writes nothing (its resume marker records why), and any later Stop event ends a
 // person's Stop pause.
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { JournalStopEvent } from '../agent-session-journal/journal-row-schema'
 import { HOST_TEST_SESSION } from './structured-agent-session-host-test-data'
@@ -158,132 +157,6 @@ describe('every Stop entry writes its event, with its reason, before it ends the
       state: 'interrupted',
       outcome: 'cancellation'
     })
-  })
-
-  // A drain still running after its bound may hold the turn's row: the agent reads working.
-  it("writes a person's close while the running turn's row waits behind a slow sink", async () => {
-    rig = await createQueuedMessageTestRig()
-    const sent = await rig.workingSend()
-    const open = journal()
-    const append = open.appendItem.bind(open)
-    let held = false
-    vi.spyOn(open, 'appendItem').mockImplementation(async (...args: Parameters<typeof append>) => {
-      if (!held && args[1].kind === 'turn' && args[1].state === 'running') {
-        held = true
-        await new Promise((resolve) => setTimeout(resolve, 1_500))
-      }
-      return append(...args)
-    })
-    rig.host['runtimeState'].eventSinkFor(HOST_TEST_SESSION).sink.appendItem(
-      { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 999 },
-      {
-        kind: 'turn',
-        turnId: 'turn-1',
-        state: 'running',
-        startedAt: Date.now(),
-        userItemId: agentJournalSubmissionKey(sent)
-      },
-      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    // The echo's acceptance lands straight in the journal, ahead of the turn row.
-    await rig.settleAccepted(sent, 'turn-1')
-    const atClose = stopEventsAtClose()
-
-    await rig.host.close(HOST_TEST_SESSION, 'user-close')
-
-    expect(atClose.events?.map((event) => event.reason)).toEqual(['user-close'])
-  }, 20_000)
-
-  // A slow drain counts as working only for a send accepted with no turn row yet.
-  // A steer delivered into the running turn opens no turn of its own, so it is never owed one.
-  it.each([
-    ['', false],
-    [', its last send a steer into the stopped turn', true]
-  ])(
-    'writes nothing when the drain runs long as it evicts a chat at rest%s',
-    async (_label, steered) => {
-      rig = await createQueuedMessageTestRig()
-      const working = await rig.workingSend()
-      const opener = agentJournalSubmissionKey(working)
-      const identity = {
-        provider: 'codex' as const,
-        threadId: 'thread-1',
-        turnId: 'turn-1',
-        ordinal: 999
-      }
-      const scope = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-      await journal().appendItem(
-        identity,
-        { kind: 'turn', turnId: 'turn-1', state: 'running', startedAt: 1, userItemId: opener },
-        scope
-      )
-      if (steered) {
-        const steer = rig.send('steer the running turn')
-        await steer.result
-        await eventually(async () =>
-          expect((await rig.submission(steer.id))?.handedOverAt).toBeDefined()
-        )
-        await rig.settleAccepted(steer.id, 'turn-1')
-        expect(
-          journal()
-            .snapshot()
-            .items.find((item) => item.itemId === agentJournalSubmissionKey(steer.id))?.turnScope
-        ).toMatchObject({ kind: 'turn' })
-      }
-      await queuedDraft('queued behind the turn')
-      expect(await rig.stop()).toMatchObject({ ok: true })
-      await rig.settleAccepted(working, 'turn-1')
-      await journal().appendItem(
-        identity,
-        {
-          kind: 'turn',
-          turnId: 'turn-1',
-          state: 'interrupted',
-          completedAt: Date.now(),
-          userItemId: opener
-        },
-        scope
-      )
-      expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-      const sink = rig.host['runtimeState'].eventSinkFor(HOST_TEST_SESSION)
-      const drained = sink.drained.bind(sink)
-      vi.spyOn(sink, 'drained')
-        .mockImplementationOnce(
-          () => new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 1_500))
-        )
-        .mockImplementation(drained)
-      const atClose = stopEventsAtClose()
-
-      await rig.host.close(HOST_TEST_SESSION, 'evict')
-
-      expect(atClose.events?.map((event) => event.reason)).toEqual(['user-stop'])
-      expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-    },
-    20_000
-  )
-
-  // The drain is best effort: when it fails, the journal as it stands says the agent rests.
-  it('writes nothing when the drain fails as it evicts a chat at rest', async () => {
-    rig = await createQueuedMessageTestRig()
-    const working = await runningTurn()
-    expect(await rig.stop()).toMatchObject({ ok: true })
-    await rig.settleAccepted(working, 'stopped')
-    await journal().appendItem(
-      { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 999 },
-      { kind: 'turn', turnId: 'turn-1', state: 'interrupted', completedAt: Date.now() },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    expect(journal().activeTurnId()).toBeNull()
-    const sink = rig.host['runtimeState'].eventSinkFor(HOST_TEST_SESSION)
-    const drained = sink.drained.bind(sink)
-    vi.spyOn(sink, 'drained')
-      .mockResolvedValueOnce({ ok: false, error: new Error('drain lost once') })
-      .mockImplementation(drained)
-    const atClose = stopEventsAtClose()
-
-    await rig.host.close(HOST_TEST_SESSION, 'evict')
-
-    expect(atClose.events?.map((event) => event.reason)).toEqual(['user-stop'])
   })
 
   // The idle sweep finishes a stop whose exit was unproven: the same stop, so its event stands alone.

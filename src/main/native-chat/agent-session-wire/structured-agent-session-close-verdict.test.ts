@@ -41,18 +41,22 @@ let providerEnd:
   | null
 /** The provider already saw its own exit when the close arrived. */
 let exitObservedFirst: boolean
+/** The provider's live view of its child: the cut turn open, whatever rows the journal holds yet. */
+let providerInFlight: boolean
 let closeCalls = 0
 
 beforeEach(() => {
   const state = hostTestState()
   providerEnd = 'mapped'
   exitObservedFirst = false
+  providerInFlight = true
   closeCalls = 0
   host = new StructuredAgentSessionHost({
     logger: createStructuredAgentSessionLogger(),
     store: state.store,
     adapter: {
       ...adapter(),
+      liveWork: () => (providerInFlight ? { turnId: 'cut-turn' } : undefined),
       closeSession: async () => {
         closeCalls += 1
         const events = state.acquire.mock.calls.at(-1)?.[0].events
@@ -205,6 +209,7 @@ describe('a turn cut short by closing its provider', () => {
 
   it('leaves a turn cut off before the close as news', async () => {
     providerEnd = null
+    providerInFlight = false
     await attach()
     const events = hostTestState().acquire.mock.calls[0]?.[0].events
     // An earlier death the user already saw as Interrupted, then closed.

@@ -145,14 +145,12 @@ function waitOutSeveralSweeps(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, SWEEP_MS * 20))
 }
 
-/** Fails the next eviction at `drain-published`, which leaves the session indexed for a retry. The
- *  stop drains once before it, to judge whether it ends work. */
+/** Fails the next eviction at `drain-published`, which leaves the session indexed for a retry. */
 function failEvictionDrain(): void {
-  const sink = host['runtimeState'].eventSinkFor(SESSION)
-  const drained = sink.drained.bind(sink)
-  vi.spyOn(sink, 'drained')
-    .mockImplementationOnce(drained)
-    .mockResolvedValueOnce({ ok: false, error: new Error('drain barrier lost') })
+  vi.spyOn(host['runtimeState'].eventSinkFor(SESSION), 'drained').mockResolvedValueOnce({
+    ok: false,
+    error: new Error('drain barrier lost')
+  })
 }
 
 /** The submissions as they stood when the session was forgotten; its journal is gone after that. */

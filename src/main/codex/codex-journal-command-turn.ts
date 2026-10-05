@@ -78,6 +78,12 @@ export class CodexJournalCommandTurn {
     return turnId
   }
 
+  /** The journal turn provider turn `providerTurnId` writes to: the command's it carries, or its
+   *  own. */
+  journalTurnId(providerTurnId: string): string {
+    return this.carried.get(providerTurnId)?.command.turnId ?? providerTurnId
+  }
+
   /** Codex reported the compaction, in the turn carrying the command. */
   compacted(providerTurnId: string): void {
     const carried = this.carried.get(providerTurnId)

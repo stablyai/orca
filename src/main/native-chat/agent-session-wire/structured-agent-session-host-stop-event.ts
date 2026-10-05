@@ -1,8 +1,7 @@
 // The Stop event a host stop writes (`JournalStopEvent`): whether it ends work its event must
 // record, and the write itself, issued before the kill.
 
-import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-unanswered-dispatch'
 import type { StructuredAgentSessionStopCause } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -26,48 +25,48 @@ export type StructuredAgentSessionStopEnding = (
   retry?: true
 }
 
-/** How long a host stop waits for the session's sink before it judges whether the stop ends work. */
-const STOP_EVENT_DRAIN_TIMEOUT_MS = 1_000
+/** The work a host stop ends, as its event records it: why, and the turn it cuts (none for a send). */
+export type StructuredAgentSessionStoppedWork = {
+  reason: Exclude<StructuredAgentSessionStopCause, 'user-stop'>
+  turnId: string | null
+}
 
 /**
- * Whether this stop ends work its event must record: a running turn or an unanswered send, a start's
- * own included, read once the sink drained what the provider already said. A start that carries
- * no send ends nothing. A person's Stop wrote its own event, and quit, the idle sweep's rest and a
- * retry of a stop already owed write none.
+ * The work this stop ends, which its event must record, read from the host's live view in this
+ * serialized step, with no wait: a turn or send the provider's child has in flight, or a send the
+ * journal holds unanswered, a start's own included. Null when it ends none: a start that carries no
+ * send, or work a person's Stop is already ending. A person's Stop wrote its own event, and quit,
+ * the idle sweep's rest and a retry of a stop already owed write none.
  */
-export async function stopEndsWork(
+export function workStopEnds(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string,
   session: StructuredAgentSessionHostSession,
   ending: StructuredAgentSessionStopEnding
-): Promise<boolean> {
+): StructuredAgentSessionStoppedWork | null {
   const { child, journal } = session
   if ('recorded' in ending || ending.quit || ending.resting || ending.retry || !child) {
-    return false
+    return null
   }
-  // A failed drain has nothing more to deliver, so the journal's read as it stands holds. One
-  // still running past its bound may hold the turn row of a send already accepted: that reads
-  // working.
-  const drain = await withTimeout(
-    context.runtimeState.flushEventSink(sessionId).then(
-      () => 'drained' as const,
-      () => 'failed' as const
-    ),
-    STOP_EVENT_DRAIN_TIMEOUT_MS,
-    'slow' as const
-  )
-  const working =
-    (drain === 'slow' && journal.stopMarks.latestAcceptedSendUnopened()) ||
-    isStructuredAgentSessionMainAgentWorking(
-      journal.activeTurnId(),
-      journal.submissions(),
-      child.fence
-    )
+  const { adapter } = context.deps
+  const journalTurnId = journal.activeTurnId()
+  // The child's frames lead the rows they become; a provider with no live view has only the rows.
+  const live = adapter.liveWork
+    ? adapter.liveWork(sessionId)
+    : journalTurnId === null
+      ? undefined
+      : { turnId: journalTurnId }
+  if (
+    live === undefined &&
+    !hasUnansweredStructuredAgentSessionDispatch(journal.submissions(), child.fence)
+  ) {
+    return null
+  }
   // A host stop of work a person's Stop is already ending must not supersede that Stop's reason.
-  return (
-    working &&
-    (ending.cause === 'user-close' || !journal.stopMarks.personStopDecides(journal.activeTurnId()))
-  )
+  if (ending.cause !== 'user-close' && journal.stopMarks.personStopDecides(journalTurnId)) {
+    return null
+  }
+  return { reason: ending.cause, turnId: journalTurnId ?? live?.turnId ?? null }
 }
 
 /** Writes this stop's event (`JournalStopEvent`). Issued before the kill and never awaited by it:
@@ -76,15 +75,11 @@ export function recordStopEvent(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string,
   session: StructuredAgentSessionHostSession,
-  ending: StructuredAgentSessionStopEnding
+  { reason, turnId }: StructuredAgentSessionStoppedWork
 ): Promise<void> {
-  if ('recorded' in ending) {
-    return Promise.resolve()
-  }
-  const turnId = session.journal.activeTurnId()
   return session.journal
     .appendStopEvent(
-      { reason: ending.cause, ...(turnId !== null ? { turnId } : {}) },
+      { reason, ...(turnId !== null ? { turnId } : {}) },
       structuredAgentSessionConversationFence(context.deps.store, sessionId)
     )
     .then(

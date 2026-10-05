@@ -54,10 +54,10 @@ function openingSubmission(
     : undefined
 }
 
-/** Whether the latest send the agent accepted to open a turn has opened none the journal holds: its
- *  turn's row may still be on its way. A send delivered into a running turn (a steer, a fold)
+/** The latest send the agent accepted to open a turn, while the journal holds no turn it opened:
+ *  that turn's row may still be on its way. A send delivered into a running turn (a steer, a fold)
  *  opens none, and its item carries that turn's scope (`placeHandedOverMessage`). */
-export function latestAcceptedSendUnopened(state: TurnEndState): boolean {
+function latestAcceptedSendUnopened(state: TurnEndState): AgentJournalSubmission | undefined {
   let latest: { submission: AgentJournalSubmission; sequence: number } | undefined
   for (const submission of state.submissions.values()) {
     const item = state.items.get(agentJournalSubmissionKey(submission.clientMessageId))
@@ -71,16 +71,16 @@ export function latestAcceptedSendUnopened(state: TurnEndState): boolean {
     }
   }
   if (!latest) {
-    return false
+    return undefined
   }
   for (const item of state.items.values()) {
     if (
       openingSubmission(state, readAgentJournalTurn(item.body)?.userItemId) === latest.submission
     ) {
-      return false
+      return undefined
     }
   }
-  return true
+  return latest.submission
 }
 
 /** A send a Stop that named no turn stopped: one already handed to the agent at the Stop's
@@ -136,14 +136,18 @@ function stopEndsTurnAsCancellation(
   )
 }
 
-/** With no turn running, the work in flight is the person's Stop's: every send still unanswered is
- *  one it stopped. */
-function unansweredSendsAreStopTargets(state: TurnEndState, stop: JournalLatestStop): boolean {
-  const unanswered = [...state.submissions.values()].filter((submission) =>
+/** With no turn row running, the work in flight is the person's Stop's: every send still
+ *  unanswered, and one accepted whose turn's row has yet to land, is one it stopped. */
+function sendsInFlightAreStopTargets(state: TurnEndState, stop: JournalLatestStop): boolean {
+  const inFlight = [...state.submissions.values()].filter((submission) =>
     isUnansweredStructuredAgentSessionDispatch(submission)
   )
+  const unopened = latestAcceptedSendUnopened(state)
+  if (unopened) {
+    inFlight.push(unopened)
+  }
   return (
-    unanswered.length > 0 && unanswered.every((submission) => isStopTarget(state, stop, submission))
+    inFlight.length > 0 && inFlight.every((submission) => isStopTarget(state, stop, submission))
   )
 }
 
@@ -165,7 +169,7 @@ export function personStopDecidesTurn(
     return false
   }
   if (turnId === null) {
-    return stop.event.turnId === undefined && unansweredSendsAreStopTargets(state, stop)
+    return stop.event.turnId === undefined && sendsInFlightAreStopTargets(state, stop)
   }
   const turn = [...state.items.values()]
     .map((item) => readAgentJournalTurn(item.body))
