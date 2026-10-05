@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/react'
+import { escapeRegex } from '../../../../shared/string-utils'
 
 type ClipboardAnchor = {
   href: string
@@ -33,17 +34,16 @@ function getHttpHostname(href: string): string | null {
   }
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^$(){}|[\]\\]/g, '\\$&')
-}
-
 function containsWindowsPathWithBasename(plainText: string, basename: string): boolean {
   if (!basename) {
     return false
   }
 
   const pattern = new RegExp(
-    WINDOWS_ABSOLUTE_PATH_PREFIX + escapeRegExp(basename) + WINDOWS_PATH_TRAILING_BOUNDARY,
+    WINDOWS_ABSOLUTE_PATH_PREFIX +
+      escapeRegex(basename) +
+      String.raw`\.?` +
+      WINDOWS_PATH_TRAILING_BOUNDARY,
     'i'
   )
   return pattern.test(plainText)

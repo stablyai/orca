@@ -109,6 +109,15 @@ describe('rich markdown terminal path paste', () => {
     ).toBe(false)
   })
 
+  it('allows a sentence-ending period after the linked basename', () => {
+    expect(
+      shouldPasteTerminalWindowsPathAsPlainText({
+        plainText: 'Open C:\\Users\\README.md.',
+        htmlText: '<a href="http://README.md">README.md</a>'
+      })
+    ).toBe(true)
+  })
+
   it('does not treat valid filename punctuation as the end of a basename', () => {
     expect(
       shouldPasteTerminalWindowsPathAsPlainText({
