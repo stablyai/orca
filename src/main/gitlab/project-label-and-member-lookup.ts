@@ -36,18 +36,38 @@ export async function listLabels(
         'api',
         ...glabHostnameArgs(projectRef, connectionId),
         '--paginate',
-        `projects/${encodedProject(projectRef.path)}/labels`,
-        '--jq',
-        '.[].name'
+        '--output',
+        'ndjson',
+        `projects/${encodedProject(projectRef.path)}/labels?per_page=100`
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
-    return stdout
-      .trim()
-      .split('\n')
-      .filter((l) => l.length > 0)
-  } catch {
-    return []
+    const labels: string[] = []
+    for (const line of stdout.split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed) {
+        continue
+      }
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(trimmed)
+      } catch {
+        throw new Error('Invalid GitLab label response')
+      }
+      const entries = Array.isArray(parsed) ? parsed : [parsed]
+      for (const entry of entries) {
+        if (
+          typeof entry !== 'object' ||
+          entry === null ||
+          !('name' in entry) ||
+          typeof entry.name !== 'string'
+        ) {
+          throw new Error('Invalid GitLab label response')
+        }
+        labels.push(entry.name)
+      }
+    }
+    return labels
   } finally {
     release()
   }

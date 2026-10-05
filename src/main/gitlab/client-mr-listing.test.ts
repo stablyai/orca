@@ -177,6 +177,20 @@ describe('gitlab client — MR operations', () => {
       expect(callArgs[0]).toContain('&search=fix%20login')
     })
 
+    it('forwards the selected label while preserving the MR page', async () => {
+      glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
+
+      await listMergeRequests('/repo', 'opened', 2, 50, undefined, undefined, undefined, {}, [
+        'bug',
+        'needs review'
+      ])
+
+      const callArgs = glabApiWithHeadersMock.mock.calls[0][0] as string[]
+      expect(callArgs[0]).toContain('page=2')
+      expect(callArgs[0]).toContain('&per_page=50')
+      expect(callArgs[0]).toContain('&labels=bug%2Cneeds%20review')
+    })
+
     it('omits &search= for an empty or whitespace-only query', async () => {
       glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
       await listMergeRequests('/repo', 'opened', 1, 20, undefined, '   ')

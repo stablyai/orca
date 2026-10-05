@@ -286,6 +286,9 @@ export const GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY =
   'gitlab.updateMR.readyForReview.v1' as const
 export const GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE =
   'Marking a merge request ready requires a newer Orca server. Update the server and try again.'
+export const GITLAB_LABEL_FILTER_RUNTIME_CAPABILITY = 'gitlab.list.label-filter.v1' as const
+export const GITLAB_LABEL_FILTER_UPDATE_REQUIRED_MESSAGE =
+  'Filtering GitLab work items by label requires a newer Orca server. Update the server and try again.'
 export const WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY =
   'worktree.visibility-defaults.v1' as const
 export const WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY =
@@ -433,6 +436,7 @@ export const RUNTIME_CAPABILITIES = [
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
+  GITLAB_LABEL_FILTER_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,

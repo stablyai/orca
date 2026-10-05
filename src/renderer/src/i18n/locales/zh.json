@@ -2120,6 +2120,8 @@
         "3b11c8e8fc": "数组",
         "e178c0a953": "在创建议题之前选择一个 Jira 项目。",
         "0f7b0d964a": "在 {{value0}} 中创建一个新议题。",
+        "gitlabSelectedLabelCount_other": "{{count}} 个标签",
+        "gitlabLabelUnsupported": "不支持",
         "eff9800d4b": "{{value0}} 标签{{value1}}",
         "d7f16d0e32": "选择团队",
         "5301ca0f20": "创建项目",

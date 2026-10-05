@@ -2120,6 +2120,8 @@
         "3b11c8e8fc": "配列",
         "e178c0a953": "Issue を作成する前に Jira プロジェクトを選択します。",
         "0f7b0d964a": "{{value0}} で新規 Issue を作成します。",
+        "gitlabSelectedLabelCount_other": "{{count}} 個のラベル",
+        "gitlabLabelUnsupported": "非対応",
         "eff9800d4b": "{{value0}} ラベル{{value1}}",
         "d7f16d0e32": "チームを選択",
         "5301ca0f20": "プロジェクトの作成",

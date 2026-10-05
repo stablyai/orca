@@ -2120,6 +2120,8 @@
         "3b11c8e8fc": "배열",
         "e178c0a953": "이슈를 생성하기 전에 Jira 프로젝트를 선택하세요.",
         "0f7b0d964a": "{{value0}}에 새로운 이슈를 생성합니다.",
+        "gitlabSelectedLabelCount_other": "라벨 {{count}}개",
+        "gitlabLabelUnsupported": "지원되지 않음",
         "eff9800d4b": "{{value0}} 라벨{{value1}}",
         "d7f16d0e32": "팀 선택",
         "5301ca0f20": "프로젝트 생성",

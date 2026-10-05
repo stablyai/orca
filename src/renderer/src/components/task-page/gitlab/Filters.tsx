@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
+import { TaskPageGitLabLabelFilter } from './LabelFilter'
 import { LoaderCircle, RefreshCw } from 'lucide-react'
 export function TaskPageGitLabFilters({
   model
@@ -28,7 +29,11 @@ export function TaskPageGitLabFilters({
     gitlabView,
     setGitlabView,
     gitlabTodosLoading,
-    activeGitlabFilter
+    activeGitlabFilter,
+    gitlabLabels,
+    gitlabLabelsError,
+    selectedGitlabLabels,
+    setSelectedGitlabLabels
   } = model
   return (
     <>
@@ -125,6 +130,14 @@ export function TaskPageGitLabFilters({
                 : null}
             </div>
           </div>
+          {gitlabView === 'issues' || gitlabView === 'mrs' ? (
+            <TaskPageGitLabLabelFilter
+              labels={gitlabLabels}
+              loadFailed={gitlabLabelsError}
+              selected={selectedGitlabLabels}
+              onChange={setSelectedGitlabLabels}
+            />
+          ) : null}
           <div
             className="flex shrink-0 items-center gap-2"
             data-contextual-tour-target="tasks-actions"

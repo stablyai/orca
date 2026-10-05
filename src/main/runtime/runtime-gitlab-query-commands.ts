@@ -34,9 +34,11 @@ export class RuntimeGitLabQueryCommands {
     state?: MRListState,
     page?: number,
     perPage?: number,
-    query?: string
+    query?: string,
+    labels?: string[]
   ): Promise<Awaited<ReturnType<typeof listWorkItems>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+    const localArgs = this.deps.getLocalGitArgs(repo)
     return listWorkItems(
       repo.path,
       state ?? 'opened',
@@ -45,7 +47,8 @@ export class RuntimeGitLabQueryCommands {
       repo.issueSourcePreference,
       query,
       repo.connectionId ?? null,
-      ...this.deps.getLocalGitArgs(repo)
+      localArgs[0] ?? {},
+      labels
     )
   }
 
@@ -54,9 +57,11 @@ export class RuntimeGitLabQueryCommands {
     state?: MRListState,
     page?: number,
     perPage?: number,
-    query?: string
+    query?: string,
+    labels?: string[]
   ): Promise<Awaited<ReturnType<typeof listMergeRequests>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+    const localArgs = this.deps.getLocalGitArgs(repo)
     return listMergeRequests(
       repo.path,
       normalizeGitLabMRListState(state),
@@ -65,7 +70,8 @@ export class RuntimeGitLabQueryCommands {
       repo.issueSourcePreference,
       query,
       repo.connectionId ?? null,
-      ...this.deps.getLocalGitArgs(repo)
+      localArgs[0] ?? {},
+      labels
     )
   }
 
@@ -74,7 +80,8 @@ export class RuntimeGitLabQueryCommands {
     state?: GitLabIssueListState,
     assignee?: string,
     limit?: number,
-    page?: number
+    page?: number,
+    labels?: string[]
   ): Promise<{
     items: GitLabWorkItem[]
     totalPages: number
@@ -91,7 +98,8 @@ export class RuntimeGitLabQueryCommands {
       normalized.assignee,
       repo.connectionId ?? null,
       this.deps.getLocalGitArgs(repo)[0] ?? {},
-      normalized.page
+      normalized.page,
+      labels
     )
     // Why: web runtime mirrors the desktop preload contract used by TaskPage.
     const items: GitLabWorkItem[] = result.items.map((issue) => ({

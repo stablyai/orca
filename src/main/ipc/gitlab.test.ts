@@ -209,7 +209,9 @@ describe('GitLab IPC handlers', () => {
       20,
       undefined,
       undefined,
-      'builder'
+      'builder',
+      {},
+      undefined
     )
   })
 
@@ -242,7 +244,9 @@ describe('GitLab IPC handlers', () => {
       20,
       undefined,
       'fix login',
-      null
+      null,
+      {},
+      undefined
     )
     expect(listWorkItemsMock).toHaveBeenCalledWith(
       '/local/orca',
@@ -251,7 +255,42 @@ describe('GitLab IPC handlers', () => {
       20,
       undefined,
       'fix login',
-      null
+      null,
+      {},
+      undefined
+    )
+  })
+
+  it('forwards label filters after local Git options for desktop MRs and combined items', async () => {
+    listMergeRequestsMock.mockResolvedValueOnce({ items: [] })
+    listWorkItemsMock.mockResolvedValueOnce({ items: [] })
+    registerGitLabHandlers(storeWithRepos([repo()]) as Store)
+    const args = { repoPath: '/local/orca', labels: ['needs review'] }
+
+    await ipcHandlers.get('gitlab:listMRs')?.(null, args)
+    await ipcHandlers.get('gitlab:listWorkItems')?.(null, args)
+
+    expect(listMergeRequestsMock).toHaveBeenCalledWith(
+      '/local/orca',
+      'opened',
+      1,
+      20,
+      undefined,
+      undefined,
+      null,
+      {},
+      ['needs review']
+    )
+    expect(listWorkItemsMock).toHaveBeenCalledWith(
+      '/local/orca',
+      'opened',
+      1,
+      20,
+      undefined,
+      undefined,
+      null,
+      {},
+      ['needs review']
     )
   })
 
@@ -271,7 +310,9 @@ describe('GitLab IPC handlers', () => {
       20,
       undefined,
       undefined,
-      null
+      null,
+      {},
+      undefined
     )
   })
 
@@ -429,7 +470,8 @@ describe('GitLab IPC handlers', () => {
       undefined,
       undefined,
       null,
-      localGitOptions
+      localGitOptions,
+      undefined
     )
     expect(issueListResult).toMatchObject({ totalPages: 3 })
     expect(listWorkItemsMock).toHaveBeenCalledWith(
@@ -440,7 +482,8 @@ describe('GitLab IPC handlers', () => {
       undefined,
       undefined,
       null,
-      localGitOptions
+      localGitOptions,
+      undefined
     )
     expect(listIssuesMock).toHaveBeenCalledWith(
       '/local/orca',
@@ -450,7 +493,8 @@ describe('GitLab IPC handlers', () => {
       undefined,
       null,
       localGitOptions,
-      3
+      3,
+      undefined
     )
     expect(getIssueMock).toHaveBeenCalledWith('/local/orca', 7, null, localGitOptions)
     expect(createIssueMock).toHaveBeenCalledWith(

@@ -181,7 +181,9 @@
         "d6d08c1650": "Select a project to see GitLab work items.",
         "duplicateIssueNumberPlaceholder": "Issue number",
         "f294c500ef": "No GitLab work matches this filter.",
-        "fe28c9821f": "view"
+        "fe28c9821f": "view",
+        "gitlabSelectedLabelCount_one": "{{count}} label",
+        "gitlabSelectedLabelCount_other": "{{count}} labels"
       },
       "Terminal": {
         "cdc9ac4b2d": "editor"

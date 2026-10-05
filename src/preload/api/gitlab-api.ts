@@ -51,6 +51,7 @@ export type GitLabApi = {
       page?: number
       perPage?: number
       query?: string
+      labels?: string[]
     }
   ) => Promise<ListMergeRequestsResult>
   /** Combined MR + issue list filtered by state. Issues are skipped
@@ -61,6 +62,7 @@ export type GitLabApi = {
       page?: number
       perPage?: number
       query?: string
+      labels?: string[]
     }
   ) => Promise<ListMergeRequestsResult>
   issue: (args: GitLabRepoSelectorArgs & { number: number }) => Promise<GitLabIssueInfo | null>
@@ -70,6 +72,7 @@ export type GitLabApi = {
       assignee?: string
       limit?: number
       page?: number
+      labels?: string[]
     }
   ) => Promise<{
     items: GitLabWorkItem[]
