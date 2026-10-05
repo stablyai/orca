@@ -150,6 +150,8 @@ export class RuntimeProjectHostSetupController {
     if (!result) {
       throw new Error(`Project host setup not found: ${args.setupId}`)
     }
+    // Why: like the IPC delete, tell the window; a CLI setup-delete otherwise stays in the sidebar.
+    this.deps.notifyReposChanged()
     return result
   }
 

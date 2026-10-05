@@ -8,12 +8,13 @@ import type { SshRepoReconciliation } from '../slices/superseded-ssh-repo-rows'
 import { reconcileReadoptedSshWorktreesByRepo } from '../slices/readopted-ssh-worktree-rows'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import type { getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
 import { repoWithFetchedOwner } from './owner-routing'
 import { getRuntimeTargetHostId } from '../runtime-target-host'
 import { fetchProjectHostSetupCompatibility } from '../projects/project-host-routing'
 import { mergeFetchedReposForHost } from './repo-catalog-identity'
+import { worktreeMatchesHost } from '../slices/worktrees/listing/worktree-host-ownership'
 import {
   mergeProjectHostSetupCompatibility,
   projectCompatibilityFromRepos
@@ -117,6 +118,74 @@ export function reconcileReadoptedSshWorktreeState(
     worktreesByRepo,
     detectedWorktreesByRepo,
     sortEpoch: worktreesByRepo === state.worktreesByRepo ? state.sortEpoch : state.sortEpoch + 1
+  }
+}
+
+function splitRowsByHost<
+  T extends { id: string; hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }
+>(rows: readonly T[], hostId: ExecutionHostId): { kept: T[]; droppedIds: string[] } {
+  const kept: T[] = []
+  const droppedIds: string[] = []
+  for (const row of rows) {
+    if (worktreeMatchesHost(row, hostId)) {
+      droppedIds.push(row.id)
+    } else {
+      kept.push(row)
+    }
+  }
+  return { kept, droppedIds }
+}
+
+// Why: a repo removed outside this window leaves only via refetch, and its rows would linger as "Unknown". Ids the store never had may still be hydrating; other hosts' rows (restored placeholders) stay.
+export function dropWorktreeRowsForRemovedRepos(
+  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'>,
+  previousRepos: readonly Repo[],
+  validRepoIds: ReadonlySet<string>,
+  hostId: ExecutionHostId
+): {
+  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'>
+  droppedWorktreeIds: string[]
+} {
+  const worktreesByRepo = { ...state.worktreesByRepo }
+  const detectedWorktreesByRepo = { ...state.detectedWorktreesByRepo }
+  const droppedWorktreeIds = new Set<string>()
+  // Why: tabs and the active selection are keyed by raw id, which a surviving host's twin row may share.
+  const keptWorktreeIds = new Set<string>()
+  let rowsDropped = false
+  for (const id of new Set(previousRepos.map((repo) => repo.id))) {
+    if (validRepoIds.has(id)) {
+      continue
+    }
+    const listed = splitRowsByHost(worktreesByRepo[id] ?? [], hostId)
+    listed.kept.forEach((row) => keptWorktreeIds.add(row.id))
+    if (listed.droppedIds.length > 0) {
+      rowsDropped = true
+      listed.droppedIds.forEach((worktreeId) => droppedWorktreeIds.add(worktreeId))
+      if (listed.kept.length > 0) {
+        worktreesByRepo[id] = listed.kept
+      } else {
+        delete worktreesByRepo[id]
+      }
+    }
+    const detected = detectedWorktreesByRepo[id]
+    const detectedRows = splitRowsByHost(detected?.worktrees ?? [], hostId)
+    detectedRows.kept.forEach((row) => keptWorktreeIds.add(row.id))
+    if (detected && detectedRows.droppedIds.length > 0) {
+      rowsDropped = true
+      detectedRows.droppedIds.forEach((worktreeId) => droppedWorktreeIds.add(worktreeId))
+      if (detectedRows.kept.length > 0) {
+        detectedWorktreesByRepo[id] = { ...detected, worktrees: detectedRows.kept }
+      } else {
+        delete detectedWorktreesByRepo[id]
+      }
+    }
+  }
+  if (!rowsDropped) {
+    return { state, droppedWorktreeIds: [] }
+  }
+  return {
+    state: { worktreesByRepo, detectedWorktreesByRepo, sortEpoch: state.sortEpoch + 1 },
+    droppedWorktreeIds: [...droppedWorktreeIds].filter((id) => !keptWorktreeIds.has(id))
   }
 }
 
