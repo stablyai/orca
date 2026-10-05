@@ -4,7 +4,7 @@ import { clearWebSessionCloseIntentsForOwner } from '../web-session-close-intent
 import { clearWebSessionFocusIntentsForOwner } from '../web-session-focus-intent'
 import { clearWebSessionReorderIntentsForOwner } from '../web-session-reorder-intent'
 import {
-  installWindowVisibilitySubscriptionParking,
+  createWindowVisibilitySubscriptionParking,
   type WindowVisibilitySubscriptionSpec
 } from '../window-visibility-subscription-parking'
 import { shouldSyncAllRuntimeSessionTabs } from './tracking-decisions'
@@ -54,8 +54,23 @@ export type GlobalSubscriptionRefs = {
 
 export type GlobalSubscriptionInstallArgs = {
   runtimeSessionMirrorEnvironmentKey: string | null
+  resubscribeSignal: string
   workspaceSessionReady: boolean
   refs: GlobalSubscriptionRefs
+}
+
+export type GlobalSessionTabsSubscriptions = {
+  dispose: () => void
+  syncHostContact: (signal: string) => void
+}
+
+function hostContactEpochs(signal: string): Map<string, string> {
+  return new Map(
+    signal.split('\u0000').map((entry) => {
+      const [environmentId = '', epoch = ''] = entry.split('\u0001')
+      return [environmentId, epoch]
+    })
+  )
 }
 
 function parseEnvironments(value: string | null): MirroredRuntimeEnvironment[] {
@@ -78,9 +93,10 @@ function parseEnvironments(value: string | null): MirroredRuntimeEnvironment[] {
 /** Install all-worktree subscriptions and their visibility-resume coordinator. */
 export function installGlobalSessionTabsSubscriptions({
   runtimeSessionMirrorEnvironmentKey,
+  resubscribeSignal,
   workspaceSessionReady,
   refs
-}: GlobalSubscriptionInstallArgs): (() => void) | undefined {
+}: GlobalSubscriptionInstallArgs): GlobalSessionTabsSubscriptions | undefined {
   const environments = parseEnvironments(runtimeSessionMirrorEnvironmentKey)
   const ownerRevisions = new Map(
     (workspaceSessionReady ? environments : []).map(
@@ -142,6 +158,11 @@ export function installGlobalSessionTabsSubscriptions({
     const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
     environmentIdBySpec.push(environmentId)
     subscriptionSpecs.push({
+      onRestart: ({ visibilityGeneration }) => {
+        if (!coordinator.hasPendingVisibilityResume(environmentId, visibilityGeneration)) {
+          requestedInitialLoad = false
+        }
+      },
       subscribe: (isCurrent, { visibilityGeneration }) => {
         const awaitingVisibilityResumeInventory = { value: visibilityGeneration > 0 }
         if (!requestedInitialLoad) {
@@ -205,18 +226,27 @@ export function installGlobalSessionTabsSubscriptions({
     })
   }
 
-  const dispose = installWindowVisibilitySubscriptionParking(subscriptionSpecs, {
+  const parking = createWindowVisibilitySubscriptionParking(subscriptionSpecs, {
     getVisibilityResumePriority: (index) =>
       environmentIdBySpec[index] === refs.activeRuntimeEnvironmentId.current ? 0 : 1,
     visibilityResumeStaggerMs: WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS,
     onVisibilityResume: ({ visibilityGeneration, restartingSpecIndexes }) =>
       coordinator.beginVisibilityResume(visibilityGeneration, restartingSpecIndexes)
   })
-  return () => {
+  let previousHostContactEpochs = hostContactEpochs(resubscribeSignal)
+  const syncHostContact = (signal: string): void => {
+    const next = hostContactEpochs(signal)
+    const changed = environmentIdBySpec.flatMap((environmentId, index) =>
+      next.get(environmentId) !== previousHostContactEpochs.get(environmentId) ? [index] : []
+    )
+    previousHostContactEpochs = next
+    parking.restart(changed)
+  }
+  const dispose = (): void => {
     refs.snapshotReceipt.current = () => {}
     refs.snapshotApply.current = () => true
     refs.snapshotAccepted.current = () => {}
-    dispose()
+    parking.dispose()
     for (const { environmentId, expectedEnvironmentPairingRevision } of environments) {
       const owner = { environmentId, pairingRevision: expectedEnvironmentPairingRevision }
       clearWebSessionCloseIntentsForOwner(owner)
@@ -224,4 +254,5 @@ export function installGlobalSessionTabsSubscriptions({
       clearWebSessionReorderIntentsForOwner(owner)
     }
   }
+  return { dispose, syncHostContact }
 }

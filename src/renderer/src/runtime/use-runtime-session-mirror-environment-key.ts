@@ -39,9 +39,8 @@ export type RuntimeSessionMirrorEnvironmentKeys = {
    */
   environmentKey: string
   /**
-   * Advances when a mirrored host answers again after contact was lost. Purely an effect
-   * dependency: it reinstalls the subscriptions the dead transport took with it, and is
-   * deliberately absent from `environmentKey` so no frame can be stamped with it.
+   * Restarts only the hosts that answer again after lost contact. Excluded from
+   * `environmentKey` so refilled frames keep their existing connection identity.
    */
   resubscribeSignal: string
 }

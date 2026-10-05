@@ -3,6 +3,9 @@ import type { Page } from '@stablyai/playwright-test'
 export type CodexEchoLatencySample = {
   index: number
   char: string
+  keyDownAtMs: number
+  parsedAtMs: number
+  renderedAtMs: number | null
   /** keydown -> xterm finished parsing the echoed glyph (real echo latency). */
   keyToParseMs: number
   /** keydown -> xterm renderer painted the row carrying that glyph. */
@@ -14,6 +17,9 @@ export type CodexEchoProbeReport = {
   keysObserved: number
   parseEvents: number
   renderEvents: number
+  synchronizedFramesStarted: number
+  synchronizedFramesEnded: number
+  parsedWhileSynchronized: number
   cols: number
   rows: number
 }
@@ -65,31 +71,47 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
     }
 
     const samples: CodexEchoLatencySample[] = []
-    const awaitingRender: { sample: CodexEchoLatencySample; startedAt: number }[] = []
+    const awaitingRender: {
+      sample: CodexEchoLatencySample
+      startedAt: number
+      expected: string
+    }[] = []
     // Why a queue, not one slot: a slow echo can still be outstanding when the
     // next key is pressed, and a single slot silently discards that sample.
     const pending: PendingSample[] = []
     let keysObserved = 0
     let parseEvents = 0
     let renderEvents = 0
+    let synchronizedFramesStarted = 0
+    let synchronizedFramesEnded = 0
+    let parsedWhileSynchronized = 0
 
     // Why concatenated without a separator: a composer line that wraps splits the
     // token across rows, and trailing-trimmed rows rejoin exactly at the break.
-    const viewportText = (): string => {
+    const viewport = (): { text: string; rowEnds: number[] } => {
       const buffer = terminal.buffer.active
       let text = ''
+      const rowEnds: number[] = []
       for (let row = 0; row < terminal.rows; row += 1) {
-        text += buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? ''
+        text +=
+          buffer
+            .getLine(buffer.viewportY + row)
+            ?.translateToString(true)
+            .trim() ?? ''
+        rowEnds.push(text.length)
       }
-      return text
+      return { text, rowEnds }
     }
 
     const observeParse = (): void => {
       parseEvents += 1
+      if (terminal.modes.synchronizedOutputMode) {
+        parsedWhileSynchronized += 1
+      }
       if (pending.length === 0) {
         return
       }
-      const text = viewportText()
+      const { text } = viewport()
       // Why drain in order: one parse can land several queued keystrokes at
       // once, and each still gets credited against its own keydown timestamp.
       while (pending.length > 0 && text.includes(pending[0].expected)) {
@@ -101,19 +123,30 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
         const sample: CodexEchoLatencySample = {
           index: entry.index,
           char: entry.char,
+          keyDownAtMs: performance.timeOrigin + entry.startedAt,
+          parsedAtMs: performance.timeOrigin + entry.parsedAt,
+          renderedAtMs: null,
           keyToParseMs: entry.parsedAt - entry.startedAt,
           keyToRenderMs: null
         }
         samples.push(sample)
-        awaitingRender.push({ sample, startedAt: entry.startedAt })
+        awaitingRender.push({ sample, startedAt: entry.startedAt, expected: entry.expected })
       }
     }
 
-    const observeRender = (): void => {
+    const observeRender = ({ start, end }: { start: number; end: number }): void => {
       renderEvents += 1
       const paintedAt = performance.now()
+      const { text, rowEnds } = viewport()
       for (const entry of awaitingRender.splice(0)) {
+        const match = text.indexOf(entry.expected)
+        const row = rowEnds.findIndex((offset) => offset > match + entry.expected.length - 1)
+        if (match === -1 || row < start || row > end) {
+          awaitingRender.push(entry)
+          continue
+        }
         entry.sample.keyToRenderMs = paintedAt - entry.startedAt
+        entry.sample.renderedAtMs = performance.timeOrigin + paintedAt
       }
     }
 
@@ -128,7 +161,7 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
       keysObserved += 1
       pending.push({
         index,
-        char: target[index],
+        char: event.key,
         expected: target.slice(0, index + 1),
         startedAt: performance.now(),
         parsedAt: null
@@ -138,6 +171,28 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     const parsedDisposable = terminal.onWriteParsed(observeParse)
     const renderDisposable = terminal.onRender(observeRender)
+    const syncStartDisposable = terminal.parser.registerCsiHandler(
+      { prefix: '?', final: 'h' },
+      (params) => {
+        if (
+          params.some((param) => (Array.isArray(param) ? param.includes(2026) : param === 2026))
+        ) {
+          synchronizedFramesStarted += 1
+        }
+        return false
+      }
+    )
+    const syncEndDisposable = terminal.parser.registerCsiHandler(
+      { prefix: '?', final: 'l' },
+      (params) => {
+        if (
+          params.some((param) => (Array.isArray(param) ? param.includes(2026) : param === 2026))
+        ) {
+          synchronizedFramesEnded += 1
+        }
+        return false
+      }
+    )
 
     window.__codexEchoProbe = {
       report: () => ({
@@ -145,6 +200,9 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
         keysObserved,
         parseEvents,
         renderEvents,
+        synchronizedFramesStarted,
+        synchronizedFramesEnded,
+        parsedWhileSynchronized,
         cols: terminal.cols,
         rows: terminal.rows
       }),
@@ -152,6 +210,8 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
         window.removeEventListener('keydown', onKeyDown, { capture: true })
         parsedDisposable.dispose()
         renderDisposable.dispose()
+        syncStartDisposable.dispose()
+        syncEndDisposable.dispose()
       }
     }
   }, target)

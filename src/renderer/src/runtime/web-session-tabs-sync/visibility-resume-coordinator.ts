@@ -37,6 +37,11 @@ export class VisibilityResumeCoordinator {
 
   constructor(private readonly options: VisibilityResumeCoordinatorOptions) {}
 
+  hasPendingVisibilityResume = (environmentId: string, visibilityGeneration: number): boolean =>
+    this.batch?.visibilityGeneration === visibilityGeneration &&
+    this.batch.environments.has(environmentId) &&
+    (this.batch.pendingInventoryCount > 0 || this.batch.pendingMissingByWorktree.size > 0)
+
   recordSnapshotReceipt(
     environmentId: string,
     snapshot: RuntimeMobileSessionTabsResult,

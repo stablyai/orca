@@ -3,6 +3,17 @@ import {
   subscribeWindowParkVisibility,
   WINDOW_HIDE_PARK_GRACE_MS
 } from '@/lib/window-park-visibility'
+import type {
+  WindowVisibilitySubscriptionSpec,
+  WindowVisibilitySubscriptionParkingOptions,
+  WindowVisibilitySubscriptionParking
+} from './window-visibility-subscription-contract'
+export type {
+  WindowVisibilitySubscriptionContext,
+  WindowVisibilitySubscriptionSpec,
+  WindowVisibilitySubscriptionParkingOptions,
+  WindowVisibilitySubscriptionParking
+} from './window-visibility-subscription-contract'
 
 // Why: the same app-switch grace every park site uses; the backoff below is what makes this one adaptive.
 export const WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS = WINDOW_HIDE_PARK_GRACE_MS
@@ -12,29 +23,6 @@ export const WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_INITIAL_MS = 1_000
 const WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_MAX_MS = 30_000
 const WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_JITTER_MS = 250
 
-export type WindowVisibilitySubscriptionContext = {
-  visibilityGeneration: number
-}
-
-export type WindowVisibilitySubscriptionSpec = {
-  subscribe: (
-    isCurrent: () => boolean,
-    context: WindowVisibilitySubscriptionContext
-  ) => Promise<{ unsubscribe: () => void }>
-  onSubscribeError?: (error: unknown) => void
-  onUnsubscribeError?: (error: unknown) => void
-}
-
-export type WindowVisibilitySubscriptionParkingOptions = {
-  getVisibilityResumePriority?: (specIndex: number) => number
-  parkDelayMs?: number
-  visibilityResumeStaggerMs?: number
-  onVisibilityResume?: (args: {
-    visibilityGeneration: number
-    restartingSpecIndexes: readonly number[]
-  }) => void
-}
-
 type SubscriptionEntry = {
   desired: boolean
   generation: number
@@ -43,13 +31,14 @@ type SubscriptionEntry = {
   retryAttempt: number
   retryTimer: ReturnType<typeof setTimeout> | null
   startTimer: ReturnType<typeof setTimeout> | null
+  startQueued: boolean
   unsubscribe: (() => void) | null
 }
 
-export function installWindowVisibilitySubscriptionParking(
+export function createWindowVisibilitySubscriptionParking(
   specs: readonly WindowVisibilitySubscriptionSpec[],
   options: WindowVisibilitySubscriptionParkingOptions = {}
-): () => void {
+): WindowVisibilitySubscriptionParking {
   const parkDelayMs = options.parkDelayMs ?? WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS
   const maxParkDelayMs = parkDelayMs * WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_BACKOFF_LIMIT
   let disposed = false
@@ -66,6 +55,7 @@ export function installWindowVisibilitySubscriptionParking(
     retryAttempt: 0,
     retryTimer: null,
     startTimer: null,
+    startQueued: false,
     unsubscribe: null
   }))
 
@@ -119,6 +109,7 @@ export function installWindowVisibilitySubscriptionParking(
       entry.pending ||
       entry.retryTimer !== null ||
       entry.startTimer !== null ||
+      entry.startQueued ||
       entry.unsubscribe
     ) {
       return
@@ -203,6 +194,9 @@ export function installWindowVisibilitySubscriptionParking(
       }
       return
     }
+    for (const index of startOrder) {
+      entries[index].startQueued = true
+    }
     const startNext = (position: number): void => {
       const index = startOrder[position]
       if (index === undefined) {
@@ -210,6 +204,7 @@ export function installWindowVisibilitySubscriptionParking(
       }
       const entry = entries[index]
       entry.startTimer = null
+      entry.startQueued = false
       if (disposed || !entry.desired) {
         return
       }
@@ -228,6 +223,7 @@ export function installWindowVisibilitySubscriptionParking(
       entry.desired = false
       entry.generation += 1
       entry.retryAttempt = 0
+      entry.startQueued = false
       clearStart(entry)
       clearRetry(entry)
       unsubscribeEntry(entry, specs[index])
@@ -278,11 +274,39 @@ export function installWindowVisibilitySubscriptionParking(
   }
   const unsubscribeVisibility = subscribeWindowParkVisibility(reconcileVisibility)
 
-  return () => {
+  const dispose = (): void => {
     disposed = true
     cancelPark()
     unsubscribeVisibility()
     effectiveVisible = false
     stopAll()
   }
+  const restart = (specIndexes: readonly number[]): void => {
+    if (disposed) {
+      return
+    }
+    for (const index of new Set(specIndexes)) {
+      const entry = entries[index]
+      const spec = specs[index]
+      if (!entry || !spec) {
+        continue
+      }
+      entry.generation += 1
+      entry.pending = null
+      entry.retryAttempt = 0
+      clearRetry(entry)
+      unsubscribeEntry(entry, spec)
+      spec.onRestart?.({ visibilityGeneration: entry.visibilityGeneration })
+      // Keep a queued visibility-resume start: its timer also advances the remaining stagger.
+      startEntry(entry, spec)
+    }
+  }
+  return { dispose, restart }
+}
+
+export function installWindowVisibilitySubscriptionParking(
+  specs: readonly WindowVisibilitySubscriptionSpec[],
+  options: WindowVisibilitySubscriptionParkingOptions = {}
+): () => void {
+  return createWindowVisibilitySubscriptionParking(specs, options).dispose
 }
