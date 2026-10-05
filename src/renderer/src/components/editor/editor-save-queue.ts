@@ -29,7 +29,7 @@ export type EditorSaveQueue = {
     fallbackContent: string,
     trigger?: 'autosave' | 'user'
   ) => Promise<void>
-  quiesceFileSave: (fileId: string) => Promise<void>
+  quiesceFileSave: (fileId: string, resumeAutoSave?: Promise<void>) => Promise<void>
   clearAutoSaveTimer: (fileId: string) => void
   bumpSaveGeneration: (fileId: string) => void
   syncAutoSave: () => void
@@ -42,6 +42,8 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
   const autoSaveScheduledContent = new Map<string, string>()
   const saveQueue = new Map<string, Promise<void>>()
   const saveGeneration = new Map<string, number>()
+  const autoSaveHolds = new Map<string, number>()
+  let disposed = false
 
   const clearAutoSaveTimer = (fileId: string): void => {
     const timerId = autoSaveTimers.get(fileId)
@@ -94,7 +96,10 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         }
 
         // Why: only autosave is blocked while suspended; explicit user saves proceed (the banner warned).
-        if (trigger === 'autosave' && isAutosaveSuspendedForFile(liveFile)) {
+        if (
+          trigger === 'autosave' &&
+          (autoSaveHolds.has(file.id) || isAutosaveSuspendedForFile(liveFile))
+        ) {
           return
         }
 
@@ -174,7 +179,22 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     return trackedSave
   }
 
-  const quiesceFileSave = async (fileId: string): Promise<void> => {
+  const quiesceFileSave = async (fileId: string, resumeAutoSave?: Promise<void>): Promise<void> => {
+    if (resumeAutoSave) {
+      autoSaveHolds.set(fileId, (autoSaveHolds.get(fileId) ?? 0) + 1)
+      const release = (): void => {
+        const remaining = (autoSaveHolds.get(fileId) ?? 1) - 1
+        if (remaining > 0) {
+          autoSaveHolds.set(fileId, remaining)
+        } else {
+          autoSaveHolds.delete(fileId)
+        }
+        if (!disposed) {
+          syncAutoSave()
+        }
+      }
+      void resumeAutoSave.then(release, release)
+    }
     // Why: rich markdown debounces serialization, so force the pending draft out before we cancel timers.
     flushPendingEditorChange(fileId)
     const pendingSave = saveQueue.get(fileId)
@@ -196,6 +216,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         file.isDirty &&
         canAutoSaveOpenFile(file) &&
         // Why: suspension holds until the user picks a side via the banner (or saves manually).
+        !autoSaveHolds.has(fileId) &&
         !isAutosaveSuspendedForFile(file) &&
         draft !== undefined
       if (!shouldKeepTimer) {
@@ -214,6 +235,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         !file.isDirty ||
         draft === undefined ||
         !canAutoSaveOpenFile(file) ||
+        autoSaveHolds.has(file.id) ||
         isAutosaveSuspendedForFile(file)
       ) {
         clearAutoSaveTimer(file.id)
@@ -238,6 +260,8 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
   }
 
   const dispose = (): void => {
+    disposed = true
+    autoSaveHolds.clear()
     for (const timerId of autoSaveTimers.values()) {
       window.clearTimeout(timerId)
     }

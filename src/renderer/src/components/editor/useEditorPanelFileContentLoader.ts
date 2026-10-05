@@ -213,6 +213,15 @@ export function useEditorPanelFileContentLoader({
             'CSV grew too large for editing. Your draft has been kept; reopen the file to preview it.'
           )
         }
+        if (options?.beforeApply) {
+          if (result.isBinary || result.loadError) {
+            options.onError?.(new Error(result.loadError ?? 'The file is no longer a text file.'))
+            return
+          }
+          if (!options.beforeApply()) {
+            return
+          }
+        }
         if (result.csvPreview || restoredOpenFile?.csvPreviewOnly) {
           useAppStore.getState().setCsvPreviewOnly(id, Boolean(result.csvPreview))
         }
@@ -221,6 +230,10 @@ export function useEditorPanelFileContentLoader({
         stampCleanTabDiskBaseline(id, result)
       } catch (err) {
         if (fileReadGenerationRef.current[id] !== generation) {
+          return
+        }
+        if (options?.onError) {
+          options.onError(err)
           return
         }
         const hostConnection = selectWorktreeHostConnectionPhase(
@@ -252,6 +265,7 @@ export function useEditorPanelFileContentLoader({
           }
         }))
       } finally {
+        options?.onSettled?.()
         if (outstandingFileReadsRef.current[id] === generation) {
           delete outstandingFileReadsRef.current[id]
         }

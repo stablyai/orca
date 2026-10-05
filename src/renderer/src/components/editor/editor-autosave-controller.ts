@@ -101,7 +101,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         ? store.getState().openFiles.filter((file) => file.id === detail.fileId)
         : getOpenFilesForExternalFileChange(store.getState().openFiles, detail)
 
-    await Promise.all(matchingFiles.map((file) => quiesceFileSave(file.id)))
+    await Promise.all(matchingFiles.map((file) => quiesceFileSave(file.id, detail.resumeAutoSave)))
     detail.resolve()
   }
 

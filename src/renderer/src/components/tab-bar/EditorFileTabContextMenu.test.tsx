@@ -84,6 +84,9 @@ vi.mock('lucide-react', () => ({
   PinOff: function PinOff(props: Record<string, unknown>) {
     return { type: 'PinOff', props }
   },
+  RefreshCw: function RefreshCw(props: Record<string, unknown>) {
+    return { type: 'RefreshCw', props }
+  },
   X: function X(props: Record<string, unknown>) {
     return { type: 'X', props }
   }

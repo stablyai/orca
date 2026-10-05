@@ -18234,6 +18234,9 @@
       "structuredSessionHostUnreachable": "Could not reach {{value0}}",
       "structuredSessionHostUnreachableDescription": "Orca did not open a {{value0}} chat. Check the connection to the server and try again."
     },
+    "editor": {
+      "reloadFailed": "Could not reload from disk"
+    },
     "tab": {
       "bar": {
         "SortableTabContextMenu": {
@@ -18247,7 +18250,8 @@
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "Close Others",
-          "closeTabsToLeft": "Close Tabs To The Left"
+          "closeTabsToLeft": "Close Tabs To The Left",
+          "reloadFromDisk": "Reload from Disk"
         }
       }
     },
