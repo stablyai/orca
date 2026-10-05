@@ -14,6 +14,8 @@ export type MobileNativeChatTailFollow<TItem> = {
   listRef: RefObject<FlatList<TItem> | null>
   /** Render flag for the jump-to-latest control. */
   showJumpToTail: boolean
+  /** Measured geometry, independent of whether the user has detached from following. */
+  atTail: boolean
   /** Passive maintenance: re-pin after the viewport resizes. */
   pinToTail: () => void
   /** Content-size maintenance using the list's authoritative measured height. */
@@ -171,6 +173,7 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
   return {
     listRef,
     showJumpToTail: !following && !atTail,
+    atTail,
     pinToTail,
     pinToTailAfterContentResize,
     jumpToTail,

@@ -6,13 +6,14 @@ import { MobileNativeChatView } from './MobileNativeChatView'
 
 const scrollToEnd = vi.hoisted(() => vi.fn())
 const scrollToOffset = vi.hoisted(() => vi.fn())
+const scrollToIndex = vi.hoisted(() => vi.fn())
 
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
     ActivityIndicator: 'ActivityIndicator',
     FlatList: React.forwardRef((props, ref) => {
-      React.useImperativeHandle(ref, () => ({ scrollToEnd, scrollToOffset }), [])
+      React.useImperativeHandle(ref, () => ({ scrollToEnd, scrollToOffset, scrollToIndex }), [])
       return React.createElement('FlatList', props)
     }),
     Pressable: 'Pressable',
@@ -43,6 +44,7 @@ vi.mock('lucide-react-native', () => ({
   ArrowDown: 'ArrowDown',
   ChevronsDownUp: 'ChevronsDownUp',
   ChevronsUpDown: 'ChevronsUpDown',
+  CornerLeftUp: 'CornerLeftUp',
   Square: 'Square'
 }))
 
@@ -108,6 +110,7 @@ function chatViewElement(overrides: Overrides): ReturnType<typeof createElement>
     onSend: vi.fn().mockResolvedValue(true),
     sendSurfaceId: 'tab-a',
     getSendCompletionGeneration: () => 0,
+    getComposerEditGeneration: () => 0,
     pending: [],
     composerText: '',
     onComposerTextChange: vi.fn(),
@@ -132,6 +135,7 @@ describe('MobileNativeChatView', () => {
     renderer = null
     scrollToEnd.mockReset()
     scrollToOffset.mockReset()
+    scrollToIndex.mockReset()
     vi.unstubAllGlobals()
   })
 
@@ -676,5 +680,167 @@ describe('MobileNativeChatView', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  describe('floating jump control', () => {
+    const prompt: NativeChatMessage = {
+      id: 'u1',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'explain' }],
+      timestamp: 0,
+      source: 'transcript'
+    }
+
+    function list(): ReactTestInstance {
+      return renderer!.root.find((node) => node.type === 'FlatList')
+    }
+
+    function jumpControls(): string[] {
+      return renderer!.root
+        .findAll(
+          (node) =>
+            node.type === 'Pressable' &&
+            ['Scroll to latest', 'Scroll to prompt'].includes(node.props.accessibilityLabel)
+        )
+        .map((node) => String(node.props.accessibilityLabel))
+    }
+
+    async function reportViewable(...keys: string[]): Promise<void> {
+      await act(async () => {
+        list().props.onViewableItemsChanged({
+          viewableItems: keys.map((key) => ({ key, index: null, isViewable: true, item: null })),
+          changed: []
+        })
+      })
+    }
+
+    async function scrollAwayFromBottom(): Promise<void> {
+      await act(async () => {
+        list().props.onScrollBeginDrag()
+        list().props.onScroll({
+          nativeEvent: {
+            contentOffset: { y: 400 },
+            contentSize: { height: 2000 },
+            layoutMeasurement: { height: 600 }
+          }
+        })
+        list().props.onMomentumScrollEnd({
+          nativeEvent: {
+            contentOffset: { y: 400 },
+            contentSize: { height: 2000 },
+            layoutMeasurement: { height: 600 }
+          }
+        })
+      })
+    }
+
+    it('offers the prompt at the bottom of a reply taller than the screen', async () => {
+      const folded = [prompt, assistantTurn('a1', 'long answer')]
+      await render({ messages: folded, folded })
+      expect(jumpControls()).toEqual([])
+
+      await reportViewable('a1')
+      expect(jumpControls()).toEqual(['Scroll to prompt'])
+
+      await reportViewable('u1', 'a1')
+      expect(jumpControls()).toEqual([])
+    })
+
+    it('swaps to Scroll to latest away from the bottom, never showing both', async () => {
+      const folded = [prompt, assistantTurn('a1', 'long answer')]
+      await render({ messages: folded, folded })
+      await reportViewable('a1')
+
+      await scrollAwayFromBottom()
+
+      expect(jumpControls()).toEqual(['Scroll to latest'])
+    })
+
+    it('stays hidden when the loaded transcript has no prompt', async () => {
+      const folded = [assistantTurn('a1', 'paged in mid-session')]
+      await render({ messages: folded, folded })
+
+      await reportViewable('a1')
+
+      expect(jumpControls()).toEqual([])
+    })
+
+    it('does not offer a pending echo when the loaded transcript has no prompt', async () => {
+      const folded = [assistantTurn('a1', 'paged in mid-session')]
+      await render({ messages: folded, folded, pending: [{ id: 'pending-1', text: 'new send' }] })
+
+      await reportViewable('a1')
+
+      expect(jumpControls()).toEqual([])
+    })
+
+    it.each([0, 120])(
+      'cancels prompt retries when the reader drags after %dms',
+      async (elapsed) => {
+        vi.useFakeTimers()
+        try {
+          const folded = [
+            assistantTurn('earlier', 'earlier'),
+            prompt,
+            assistantTurn('a1', 'long answer')
+          ]
+          await render({ messages: folded, folded })
+          await reportViewable('a1')
+          scrollToIndex.mockImplementation(() => {
+            list().props.onScrollToIndexFailed({
+              index: 1,
+              highestMeasuredFrameIndex: 0,
+              averageItemLength: 100
+            })
+          })
+          await act(async () => {
+            renderer!.root.findByProps({ accessibilityLabel: 'Scroll to prompt' }).props.onPress()
+            vi.advanceTimersByTime(elapsed)
+          })
+          await scrollAwayFromBottom()
+          scrollToIndex.mockClear()
+          scrollToOffset.mockClear()
+          scrollToEnd.mockClear()
+
+          await act(async () => vi.runAllTimers())
+
+          expect(scrollToIndex).not.toHaveBeenCalled()
+          expect(scrollToOffset).not.toHaveBeenCalled()
+          expect(scrollToEnd).not.toHaveBeenCalled()
+          expect(jumpControls()).toEqual(['Scroll to latest'])
+        } finally {
+          scrollToIndex.mockReset()
+          vi.useRealTimers()
+        }
+      }
+    )
+
+    it('detaches before jumping so streaming cannot pull the reader back to the tail', async () => {
+      const folded = [prompt, assistantTurn('a1', 'long answer')]
+      await render({ messages: folded, folded })
+      await reportViewable('a1')
+
+      await act(async () => {
+        renderer!.root.findByProps({ accessibilityLabel: 'Scroll to prompt' }).props.onPress()
+      })
+      expect(scrollToIndex).toHaveBeenCalledWith({ index: 0, viewPosition: 0, animated: true })
+      expect(jumpControls()).toEqual(['Scroll to latest'])
+      scrollToOffset.mockClear()
+      scrollToEnd.mockClear()
+
+      await update({ messages: folded, folded, streaming: 'more tokens' })
+      await act(async () => {
+        list().props.onContentSizeChange(400, 3000)
+        list().props.onLayout()
+      })
+      expect(scrollToOffset).not.toHaveBeenCalled()
+      expect(scrollToEnd).not.toHaveBeenCalled()
+
+      await act(async () => {
+        renderer!.root.findByProps({ accessibilityLabel: 'Scroll to latest' }).props.onPress()
+      })
+      expect(scrollToEnd).toHaveBeenCalledWith({ animated: false })
+      expect(jumpControls()).toEqual(['Scroll to prompt'])
+    })
   })
 })
