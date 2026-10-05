@@ -7,6 +7,10 @@ import {
 } from '../restoring-sessions/terminal-layout-normalization'
 import { createMinimalPersistedTerminalTab } from '../restoring-sessions/session-owner-fields'
 import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
+import {
+  pinTerminalChatOwnerOnGrowth,
+  resolveTerminalTabViewMode
+} from '../../../shared/terminal-tab-view-mode'
 import type { PersistPtyBindingArgs } from './pty-binding-persistence'
 
 export function applyPtyBinding(
@@ -114,11 +118,27 @@ export function applyPtyBinding(
     } else if (!layoutContainsLeafId(layout.root, args.leafId)) {
       terminalMembershipChanged = true
       // Why: splitPane spawns before its snapshot reaches main; add a minimal leaf so a crash can't strand the pane's binding.
+      const priorRoot = layout.root
       layout.root = {
         type: 'split',
         direction: 'vertical',
-        first: cloneLayoutNode(layout.root),
+        first: cloneLayoutNode(priorRoot),
         second: { type: 'leaf', leafId: args.leafId }
+      }
+      // Why here: this is the split's first durable write, so the pre-split pane keeps chat now.
+      const chatLeafId = pinTerminalChatOwnerOnGrowth({
+        viewMode: resolveTerminalTabViewMode(
+          session.unifiedTabs?.[bindingWorktreeId]?.find(
+            (unified) => unified.contentType === 'terminal' && unified.entityId === args.tabId
+          ),
+          tab
+        ),
+        chatLeafId: layout.chatLeafId,
+        priorRoot,
+        nextRoot: layout.root
+      })
+      if (chatLeafId) {
+        layout.chatLeafId = chatLeafId
       }
       layout.activeLeafId = args.leafId
       if (layout.expandedLeafId && !layoutContainsLeafId(layout.root, layout.expandedLeafId)) {

@@ -19,6 +19,7 @@ import {
   cloneTerminalLayoutSnapshot
 } from './mobile-session-layout-projection'
 import { buildHeadlessTerminalSplitLayout } from './headless-terminal-split-layout'
+import { resolveTerminalTabViewMode } from '../../shared/terminal-tab-view-mode'
 
 export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh {
   protected applyMobileSessionTabNavigation(
@@ -189,9 +190,15 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
       return false
     }
     const existing = session.terminalLayoutsByTabId?.[args.tabId]
+    const chatViewMode = resolveTerminalTabViewMode(
+      session.unifiedTabs?.[args.worktreeId]?.find(
+        (unified) => unified.contentType === 'terminal' && unified.entityId === args.tabId
+      ),
+      session.tabsByWorktree[args.worktreeId]?.find((tab) => tab.id === args.tabId)
+    )
     const nextLayout = buildHeadlessTerminalSplitLayout(
       existing ? cloneTerminalLayoutSnapshot(existing) : undefined,
-      args
+      { ...args, ...(chatViewMode ? { chatViewMode } : {}) }
     )
     this.setWorkspaceSessionForWorktree(args.worktreeId, {
       ...session,

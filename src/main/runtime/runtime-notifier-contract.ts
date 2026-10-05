@@ -103,7 +103,8 @@ export type RuntimeNotifier = {
     worktreeId: string,
     tabId: string,
     leafId: string | null,
-    viewMode: 'terminal' | 'chat'
+    viewMode: 'terminal' | 'chat',
+    ownerPickLeafId?: string | null
   ): Promise<RuntimeSessionTabChatView>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
   /**

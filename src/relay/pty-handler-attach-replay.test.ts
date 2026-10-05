@@ -424,6 +424,18 @@ describe('PtyHandler', () => {
     })
   })
 
+  it('returns the launch agent the PTY was spawned with on every attach (R1-SSH)', async () => {
+    const agentSpawn = await spawnPty({ launchAgent: 'claude' })
+    expect(await attachPty({ id: agentSpawn.id, suppressReplayNotification: true })).toEqual({
+      incarnationId: agentSpawn.incarnationId,
+      launchAgent: 'claude'
+    })
+    const shellSpawn = await spawnPty()
+    expect(
+      await attachPty({ id: shellSpawn.id, suppressReplayNotification: true })
+    ).not.toHaveProperty('launchAgent')
+  })
+
   it('throws for attach on nonexistent PTY', async () => {
     await expect(dispatcher.callRequest('pty.attach', { id: 'pty-999' })).rejects.toThrow(
       'PTY "pty-999" not found'

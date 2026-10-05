@@ -10,12 +10,14 @@ import {
   chatViewLeafId,
   chatViewLeafIds,
   chatViewParentTabId,
-  ownerlessChatDisplayLeaf,
   type ChatViewProcessFence,
   type MobileChatViewRow,
-  type MobileNativeChatReadability,
-  type OwnerlessChatPlacement
+  type MobileNativeChatReadability
 } from './mobile-session-chat-view'
+import {
+  ownerlessChatDisplayLeaf,
+  type OwnerlessChatPlacement
+} from '../../../src/shared/native-chat-owner-pick'
 
 export type RetainedChatViewRow = {
   fence: ChatViewProcessFence

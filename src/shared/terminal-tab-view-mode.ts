@@ -1,4 +1,7 @@
-import { terminalLayoutNodeContainsLeaf } from './native-chat-leaf-ownership'
+import {
+  terminalLayoutNodeContainsLeaf,
+  terminalLayoutNodeLeafIds
+} from './native-chat-leaf-ownership'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 
 export type TerminalTabViewMode = 'terminal' | 'chat'
@@ -19,15 +22,18 @@ export function resolveTerminalTabViewMode(
 
 /**
  * The absolute pair a `viewMode` write produces. `leafId` is the addressed leaf, or null when
- * the write named the parent tab. Returns null when the addressed leaf is not in the tree.
+ * the write named the parent tab. Returns null when the addressed leaf is not in the tree, or when
+ * a host's `pickOwner` finds no pane of a split that may own a parent-addressed chat.
  */
 export function resolveTerminalChatPairWrite(args: {
   current: TerminalChatPair
   root: TerminalPaneLayoutNode | null | undefined
   viewMode: TerminalTabViewMode
   leafId: string | null
+  /** Hosts only: the owner for a parent-addressed chat with no valid owner. */
+  pickOwner?: () => string | null
 }): TerminalChatPair | null {
-  const { current, root, viewMode, leafId } = args
+  const { current, root, viewMode, leafId, pickOwner } = args
   if (leafId !== null && !terminalLayoutNodeContainsLeaf(root, leafId)) {
     return null
   }
@@ -45,7 +51,38 @@ export function resolveTerminalChatPairWrite(args: {
     terminalLayoutNodeContainsLeaf(root, current.chatLeafId)
       ? current.chatLeafId
       : undefined
-  return owner ? { viewMode: 'chat', chatLeafId: owner } : { viewMode: 'chat' }
+  if (owner) {
+    return { viewMode: 'chat', chatLeafId: owner }
+  }
+  if (!pickOwner) {
+    return { viewMode: 'chat' }
+  }
+  const picked = pickOwner()
+  if (picked && terminalLayoutNodeContainsLeaf(root, picked)) {
+    return { viewMode: 'chat', chatLeafId: picked }
+  }
+  // Why: only a split can put chat on the wrong pane; a tree with no pane yet takes the write.
+  return terminalLayoutNodeLeafIds(root).length < 2 ? { viewMode: 'chat' } : null
+}
+
+/**
+ * The owner a tab stores after its tree grows. A chat that never got an owner was unambiguous on
+ * its single pane, so that pane keeps it before a new pane exists. A stored owner is never moved,
+ * not even an invalid one: that still reads as terminal.
+ */
+export function pinTerminalChatOwnerOnGrowth(args: {
+  viewMode: TerminalTabViewMode | undefined
+  chatLeafId: string | undefined
+  priorRoot: TerminalPaneLayoutNode | null | undefined
+  nextRoot: TerminalPaneLayoutNode | null | undefined
+}): string | undefined {
+  const { viewMode, chatLeafId, priorRoot, nextRoot } = args
+  if (chatLeafId || viewMode !== 'chat' || priorRoot?.type !== 'leaf') {
+    return chatLeafId
+  }
+  return nextRoot?.type === 'split' && terminalLayoutNodeContainsLeaf(nextRoot, priorRoot.leafId)
+    ? priorRoot.leafId
+    : undefined
 }
 
 /**

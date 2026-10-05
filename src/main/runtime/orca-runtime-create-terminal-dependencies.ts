@@ -7,6 +7,7 @@ export {
   resolveTerminalPresentation
 } from './orca-runtime-core'
 export { makePaneKey } from '../../shared/stable-pane-id'
+export { settleFreshSpawnLaunchIdentity } from './runtime-terminal-state-records'
 export { randomUUID } from 'node:crypto'
 export {
   admitStablePaneAdoption,

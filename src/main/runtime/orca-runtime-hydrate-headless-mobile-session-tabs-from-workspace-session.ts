@@ -1,6 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithWaitForSessionTabsInventoryPublication } from './orca-runtime-wait-for-session-tabs-inventory-publication'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { buildHeadlessMobileSessionTerminalTabs } from './mobile-session-terminal-projection'
@@ -26,6 +27,9 @@ import {
   collectBrowserGroupAssignment
 } from './mobile-session-browser-group-projection'
 import { headlessMobileSnapshotContentUnchanged } from './mobile-session-snapshot-equality'
+import { normalizeOwnerlessSplitChats } from './headless-chat-owner-hydration'
+import { pickSessionTabChatOwnerFromKnownEvidence } from './session-tab-chat-pair'
+import { settledPtyLaunchAgent } from './runtime-terminal-state-records'
 
 export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession extends OrcaRuntimeWithWaitForSessionTabsInventoryPublication {
   protected hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
@@ -111,10 +115,11 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
         reconciledWorktreeIds.add(entryWorktreeId)
         continue
       }
+      const entrySession = this.normalizeHeadlessOwnerlessChats(entryWorktreeId, session) ?? session
       const terminalTabs = buildHeadlessMobileSessionTerminalTabs(
         entryWorktreeId,
-        persistedTabs,
-        session
+        entrySession.tabsByWorktree[entryWorktreeId] ?? persistedTabs,
+        entrySession
       ).filter(
         (tab) =>
           options.onlyRuntimeOwnedTerminals !== true ||
@@ -239,5 +244,38 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
       this.storeMobileSessionSnapshot(entryWorktreeId, nextSnapshot)
     }
     return reconciledWorktreeIds
+  }
+
+  /** Persists the owner repair before the rebuild publishes; a desktop host's renderer owns its tabs. */
+  private normalizeHeadlessOwnerlessChats(
+    worktreeId: string,
+    hydratedSession: WorkspaceSessionState
+  ): WorkspaceSessionState | null {
+    const pickOwner = (layout: TerminalLayoutSnapshot): string | null | undefined =>
+      pickSessionTabChatOwnerFromKnownEvidence(layout, (ptyId) => {
+        const pty = this.ptysById.get(ptyId)
+        return pty ? settledPtyLaunchAgent(pty) : undefined
+      })
+    // Why the in-hand session first: this runs on every rebuild, so only a repair reads the store.
+    if (
+      !this.store?.setWorkspaceSession ||
+      this.getAvailableAuthoritativeWindow() ||
+      !normalizeOwnerlessSplitChats(hydratedSession, worktreeId, pickOwner)
+    ) {
+      return null
+    }
+    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    const normalized = session && normalizeOwnerlessSplitChats(session, worktreeId, pickOwner)
+    if (!normalized) {
+      return null
+    }
+    try {
+      this.setWorkspaceSessionForWorktree(worktreeId, normalized)
+    } catch (error) {
+      // Why: housekeeping must never fail the read; the next rebuild re-derives the repair.
+      console.warn('[session-tabs] chat owner repair not saved:', error)
+      return null
+    }
+    return this.getWorkspaceSessionForWorktree(worktreeId) ?? normalized
   }
 }

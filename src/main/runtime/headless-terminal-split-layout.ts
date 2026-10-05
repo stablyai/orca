@@ -2,6 +2,10 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
 } from '../../shared/terminal-tab-types'
+import {
+  pinTerminalChatOwnerOnGrowth,
+  type TerminalTabViewMode
+} from '../../shared/terminal-tab-view-mode'
 
 export function terminalLayoutContainsLeaf(
   node: TerminalPaneLayoutNode | null | undefined,
@@ -31,6 +35,8 @@ export function buildHeadlessTerminalSplitLayout(
     ptyId: string
     splitFromLeafId: string
     direction: 'horizontal' | 'vertical'
+    /** The tab's view: an ownerless chat keeps its pre-split pane. */
+    chatViewMode?: TerminalTabViewMode
   }
 ): TerminalLayoutSnapshot {
   const removeProvisionalLeaf = (node: TerminalPaneLayoutNode): TerminalPaneLayoutNode | null => {
@@ -69,9 +75,17 @@ export function buildHeadlessTerminalSplitLayout(
   }
   const ptyIdsByLeafId = { ...existing?.ptyIdsByLeafId }
   delete ptyIdsByLeafId[args.leafId]
+  const root = insertSplit(existingRoot)
+  const chatLeafId = pinTerminalChatOwnerOnGrowth({
+    viewMode: args.chatViewMode,
+    chatLeafId: existing?.chatLeafId,
+    priorRoot: existingRoot,
+    nextRoot: root
+  })
   return {
     ...existing,
-    root: insertSplit(existingRoot),
+    root,
+    ...(chatLeafId ? { chatLeafId } : {}),
     activeLeafId: args.leafId,
     expandedLeafId: existing?.expandedLeafId ?? null,
     ptyIdsByLeafId: {

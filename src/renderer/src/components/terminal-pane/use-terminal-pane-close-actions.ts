@@ -8,6 +8,7 @@ import { resolveLeafCloseCopyKind } from '../terminal/terminal-close-copy-kind'
 import { RUNNING_CLOSE_PROBE_TIMEOUT_MS } from '../terminal/running-terminal-close-guard'
 import { probePtyRunningWork } from '../terminal/pty-running-work-probe'
 import {
+  canDetachTerminalPaneToTab,
   detachTerminalPaneToTab,
   isTerminalTabStripDropTarget,
   resolveTerminalTabStripDropTarget
@@ -218,10 +219,14 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       if (panes.length <= 1 || !panes.some((pane) => pane.id === sourcePaneId)) {
         return null
       }
+      const state = useAppStore.getState()
+      if (!canDetachTerminalPaneToTab(state, worktreeId)) {
+        return null
+      }
       return resolveTerminalTabStripDropTarget({
         clientX,
         clientY,
-        groupsByWorktree: useAppStore.getState().groupsByWorktree,
+        groupsByWorktree: state.groupsByWorktree,
         worktreeId
       })
     },

@@ -22,7 +22,7 @@ function sourceLayout(): TerminalLayoutSnapshot {
   }
 }
 
-function persistedSession(includeSource = true): WorkspaceSessionState {
+function persistedSession(includeSource = true, viewMode?: 'chat'): WorkspaceSessionState {
   return {
     ...getDefaultWorkspaceSession(),
     tabsByWorktree: includeSource
@@ -36,7 +36,8 @@ function persistedSession(includeSource = true): WorkspaceSessionState {
               customTitle: null,
               color: null,
               sortOrder: 0,
-              createdAt: 1
+              createdAt: 1,
+              ...(viewMode ? { viewMode } : {})
             }
           ]
         }
@@ -45,7 +46,7 @@ function persistedSession(includeSource = true): WorkspaceSessionState {
   }
 }
 
-function remoteSnapshot(): RuntimeMobileSessionTabsSnapshot {
+function remoteSnapshot(viewMode?: 'chat'): RuntimeMobileSessionTabsSnapshot {
   const layout = sourceLayout()
   return {
     worktree: WORKTREE_ID,
@@ -64,7 +65,8 @@ function remoteSnapshot(): RuntimeMobileSessionTabsSnapshot {
         ptyId: SOURCE_PTY_ID,
         title: 'Remote terminal',
         parentLayout: layout,
-        isActive: true
+        isActive: true,
+        ...(viewMode ? { viewMode } : {})
       }
     ]
   }
@@ -82,9 +84,10 @@ function createHarness(
     graphOnlySource?: boolean
     sourceIncarnationId?: string
     stopAndWaitResult?: boolean
+    viewMode?: 'chat'
   } = {}
 ) {
-  let session = persistedSession(includeSource)
+  let session = persistedSession(includeSource, options.viewMode)
   const connectionId = options.connectionId ?? null
   const ownerHostId = connectionId ? `ssh:${connectionId}` : 'local'
   const requestedSessionHostIds: (string | undefined)[] = []
@@ -174,7 +177,8 @@ function createHarness(
             }
           ]
         : [],
-    mobileSessionTabs: (options.includePairedSnapshot ?? includeSource) ? [remoteSnapshot()] : []
+    mobileSessionTabs:
+      (options.includePairedSnapshot ?? includeSource) ? [remoteSnapshot(options.viewMode)] : []
   })
   if (!options.graphOnlySource) {
     runtime.registerPty(SOURCE_PTY_ID, WORKTREE_ID, connectionId, {
@@ -328,6 +332,28 @@ describe('remote runtime terminal split authority', () => {
       )
     expect(siblingSurfaces).toHaveLength(2)
     expect(siblingSurfaces.every((tab) => tab.parentLayout?.root?.type === 'split')).toBe(true)
+  })
+
+  it('keeps an ownerless chat on the source pane in persistence and on every published sibling', async () => {
+    const harness = createHarness(true, { viewMode: 'chat' })
+
+    const split = await harness.runtime.splitTerminal(harness.handle, { direction: 'vertical' })
+
+    expect(split.leafId).not.toBe(SOURCE_LEAF_ID)
+    expect(harness.getSession().terminalLayoutsByTabId[TAB_ID]).toMatchObject({
+      activeLeafId: split.leafId,
+      chatLeafId: SOURCE_LEAF_ID
+    })
+    const siblings = harness
+      .getSnapshot()!
+      .tabs.filter(
+        (tab): tab is Extract<typeof tab, { type: 'terminal' }> =>
+          tab.type === 'terminal' && tab.parentTabId === TAB_ID
+      )
+    expect(siblings.map((tab) => [tab.viewMode, tab.parentLayout?.chatLeafId])).toEqual([
+      ['chat', SOURCE_LEAF_ID],
+      ['chat', SOURCE_LEAF_ID]
+    ])
   })
 
   it('rejects an unowned split source before spawning a PTY', async () => {

@@ -80,6 +80,94 @@ describe('renderer side of the desktop chat-view relay', () => {
     })
   })
 
+  it("uses the host's owner pick for a parent-addressed chat only when the tab has no owner (F1)", () => {
+    const split = {
+      root: {
+        type: 'split' as const,
+        direction: 'vertical' as const,
+        first: { type: 'leaf' as const, leafId: A },
+        second: { type: 'leaf' as const, leafId: B }
+      },
+      activeLeafId: B,
+      expandedLeafId: null
+    }
+    const ownerless = useAppStore.getState().createTab(WT, undefined, undefined, {})
+    useAppStore.getState().setTabLayout(ownerless.id, split)
+    onRequest!({
+      requestId: 'r-pick',
+      worktreeId: WT,
+      tabId: ownerless.id,
+      leafId: null,
+      viewMode: 'chat',
+      ownerPickLeafId: A
+    })
+    expect(respond).toHaveBeenCalledWith({
+      requestId: 'r-pick',
+      chatView: { viewMode: 'chat', chatLeafId: A }
+    })
+
+    // An owner the desktop already holds is never moved by a host pick that raced it.
+    const owned = useAppStore.getState().createTab(WT, undefined, undefined, {})
+    useAppStore.getState().setTabLayout(owned.id, split)
+    useAppStore.getState().applyTerminalChatPair(owned.id, B, 'chat')
+    onRequest!({
+      requestId: 'r-raced',
+      worktreeId: WT,
+      tabId: owned.id,
+      leafId: null,
+      viewMode: 'chat',
+      ownerPickLeafId: A
+    })
+    expect(respond).toHaveBeenCalledWith({
+      requestId: 'r-raced',
+      chatView: { viewMode: 'chat', chatLeafId: B }
+    })
+  })
+
+  it("refuses on its own store when the host found no agent pane, even if the host's snapshot showed an owner (R1A-2)", () => {
+    // The host's published pair can lag this store: it sends its pick (null) and the store decides.
+    const split = useAppStore.getState().createTab(WT, undefined, undefined, {})
+    useAppStore.getState().setTabLayout(split.id, {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: A },
+        second: { type: 'leaf', leafId: B }
+      },
+      activeLeafId: B,
+      expandedLeafId: null
+    })
+    onRequest!({
+      requestId: 'r-none',
+      worktreeId: WT,
+      tabId: split.id,
+      leafId: null,
+      viewMode: 'chat',
+      ownerPickLeafId: null
+    })
+    const reply = respond.mock.calls.at(-1)?.[0]
+    expect(reply?.requestId).toBe('r-none')
+    expect(reply?.chatView?.viewMode).not.toBe('chat')
+    expect(useAppStore.getState().terminalLayoutsByTabId[split.id]?.chatLeafId).toBeUndefined()
+
+    // A single pane needs no pick: the write applies there as before.
+    const single = useAppStore.getState().createTab(WT, undefined, undefined, {})
+    useAppStore.getState().setTabLayout(single.id, {
+      root: { type: 'leaf', leafId: A },
+      activeLeafId: A,
+      expandedLeafId: null
+    })
+    onRequest!({
+      requestId: 'r-single',
+      worktreeId: WT,
+      tabId: single.id,
+      leafId: null,
+      viewMode: 'chat',
+      ownerPickLeafId: null
+    })
+    expect(respond.mock.calls.at(-1)?.[0]?.chatView?.viewMode).toBe('chat')
+  })
+
   it('reports an unknown tab', () => {
     onRequest!({
       requestId: 'r-2',

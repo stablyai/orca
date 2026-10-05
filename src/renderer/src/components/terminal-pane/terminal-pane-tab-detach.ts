@@ -2,6 +2,10 @@ import type { AppState } from '@/store'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { PaneCwdEntry } from './resolve-split-cwd'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
+import {
+  resolveChatPairAuthority,
+  type ChatPairAuthorityState
+} from '@/store/slices/tabs/terminal-chat-pair-authority'
 export {
   isTerminalTabStripDropTarget,
   resolveTerminalTabStripDropTarget
@@ -34,6 +38,17 @@ export type DetachedTerminalPaneTab = {
   tab: TerminalTab
   leafId: string
   ptyId: string | null
+}
+
+/**
+ * Whether a pane may be dragged out to its own tab. Not on a paired host's mirrored worktree: the
+ * host owns those panes and has no detach operation, so a local tab would be a copy it never sees.
+ */
+export function canDetachTerminalPaneToTab(
+  state: ChatPairAuthorityState,
+  worktreeId: string
+): boolean {
+  return resolveChatPairAuthority(state, worktreeId) !== 'host'
 }
 
 function withDetachedPtyFallback(args: {

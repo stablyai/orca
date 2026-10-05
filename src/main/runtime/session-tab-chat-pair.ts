@@ -1,13 +1,21 @@
 import type { RuntimeSessionTabChatView } from '../../shared/runtime-session-contracts'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
-import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode
+} from '../../shared/terminal-tab-types'
 import {
   normalizeTerminalChatPair,
+  pinTerminalChatOwnerOnGrowth,
   resolveTerminalTabViewMode,
   type TerminalChatPair
 } from '../../shared/terminal-tab-view-mode'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { terminalLayoutNodeContainsLeaf } from '../../shared/native-chat-leaf-ownership'
+import {
+  terminalLayoutNodeContainsLeaf,
+  terminalLayoutNodeLeafIds
+} from '../../shared/native-chat-leaf-ownership'
+import { pickChatOwnerLeaf } from '../../shared/native-chat-owner-pick'
 
 /** Resolves a `setTabProps` id to its parent tab and, for a leaf surface id, that leaf. */
 export function resolveSessionTabChatPairTarget(
@@ -32,6 +40,7 @@ export type HeadlessChatPairState = {
   pair: TerminalChatPair
   root: TerminalPaneLayoutNode | null | undefined
   hasLayout: boolean
+  layout: TerminalLayoutSnapshot | undefined
 }
 
 /** The persisted pair of a headless tab, or its published row when persistence lacks it. */
@@ -54,7 +63,8 @@ export function readHeadlessChatPairState(
         ...(layout?.chatLeafId ? { chatLeafId: layout.chatLeafId } : {})
       },
       root: layout?.root,
-      hasLayout: Boolean(layout)
+      hasLayout: Boolean(layout),
+      layout
     }
   }
   return readPublishedChatPairState(snapshot, parentTabId)
@@ -77,8 +87,39 @@ export function readPublishedChatPairState(
       ...(layout?.chatLeafId ? { chatLeafId: layout.chatLeafId } : {})
     },
     root: layout?.root,
-    hasLayout: Boolean(layout)
+    hasLayout: Boolean(layout),
+    layout
   }
+}
+
+/** The host's owner for a chat with none, from the launch record of each pane's bound PTY. */
+export function pickSessionTabChatOwner(
+  layout: TerminalLayoutSnapshot | undefined,
+  launchAgentForPty: (ptyId: string) => string | null | undefined
+): string | null {
+  return pickChatOwnerLeaf({
+    leafIds: terminalLayoutNodeLeafIds(layout?.root),
+    activeLeafId: layout?.activeLeafId,
+    leafLaunchAgent: (leafId) => {
+      const ptyId = layout?.ptyIdsByLeafId?.[leafId]
+      return ptyId ? launchAgentForPty(ptyId) : null
+    }
+  })
+}
+
+/**
+ * The repair's owner from complete evidence only: undefined while any pane has no bound PTY whose
+ * launch identity is known (`knownLaunchAgentForPty` returns undefined), since unknown is not "none".
+ */
+export function pickSessionTabChatOwnerFromKnownEvidence(
+  layout: TerminalLayoutSnapshot,
+  knownLaunchAgentForPty: (ptyId: string) => string | null | undefined
+): string | null | undefined {
+  const complete = terminalLayoutNodeLeafIds(layout.root).every((leafId) => {
+    const ptyId = layout.ptyIdsByLeafId?.[leafId]
+    return ptyId !== undefined && knownLaunchAgentForPty(ptyId) !== undefined
+  })
+  return complete ? pickSessionTabChatOwner(layout, knownLaunchAgentForPty) : undefined
 }
 
 export function toSessionTabChatView(
@@ -89,14 +130,24 @@ export function toSessionTabChatView(
 }
 
 /**
- * The owner a layout push may write: only a chat tab with no valid owner accepts one, and only
- * for a leaf in the pushed tree. Undefined leaves the stored owner untouched.
+ * The owner a layout push may write: a push that grows an ownerless single-pane chat pins that
+ * pane; otherwise only a chat tab with no valid owner accepts the client's owner, and only for a
+ * leaf in the pushed tree. Undefined leaves the stored owner untouched.
  */
 export function resolvePaneLayoutChatOwnerFillIn(
   state: HeadlessChatPairState | null,
   incomingRoot: TerminalPaneLayoutNode | null,
   chatLeafId: string | null | undefined
 ): string | undefined {
+  const pinned = pinTerminalChatOwnerOnGrowth({
+    viewMode: state?.pair.viewMode,
+    chatLeafId: state?.pair.chatLeafId,
+    priorRoot: state?.root,
+    nextRoot: incomingRoot
+  })
+  if (pinned && pinned !== state?.pair.chatLeafId) {
+    return pinned
+  }
   if (!chatLeafId || state?.pair.viewMode !== 'chat') {
     return undefined
   }

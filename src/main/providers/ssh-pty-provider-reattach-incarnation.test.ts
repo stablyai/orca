@@ -50,4 +50,28 @@ describe('SSH PTY provider session reattach incarnation', () => {
       new RegExp(`^${SSH_PTY_SOURCE_RESTORE_REQUIRED_ERROR}: pty-old`)
     )
   })
+
+  it('carries the relay-held launch agent so the reattach can be re-admitted (R1-SSH)', async () => {
+    const reattach = async (reply: Record<string, unknown>) => {
+      const mux = {
+        request: vi.fn().mockResolvedValue(reply),
+        notify: vi.fn(),
+        onNotification: vi.fn().mockReturnValue(vi.fn())
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the provider only calls request/notify/onNotification, which this stub implements.
+      return new SshPtyProvider('conn-1', mux as never).spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'pty-old'
+      })
+    }
+
+    const agent = await reattach({ incarnationId: 'incarnation-reattached', launchAgent: 'claude' })
+    expect(agent).toMatchObject({ isReattach: true, launchAgent: 'claude' })
+    // An older relay omits the field and an unknown value is not evidence: both stay unadmitted.
+    const legacy = await reattach({ incarnationId: 'incarnation-reattached' })
+    expect(legacy).not.toHaveProperty('launchAgent')
+    const unknown = await reattach({ incarnationId: 'incarnation-reattached', launchAgent: 'nope' })
+    expect(unknown).not.toHaveProperty('launchAgent')
+  })
 })

@@ -64,12 +64,6 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
             candidate.leafId === args.split!.splitFromLeafId
         )?.parentLayout ?? existingTab?.parentLayout)
       : existingTab?.parentLayout
-    const parentLayout = buildMaterializedHeadlessParentLayout(
-      args.leafId,
-      pty.ptyId,
-      baseLayout,
-      args.split
-    )
     // Why: a main-side PTY rescue or split publication must not erase the
     // host's explicit tab mode before the renderer graph catches up.
     const viewMode =
@@ -81,6 +75,12 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
           candidate.parentTabId === args.tabId &&
           candidate.viewMode !== undefined
       )?.viewMode
+    const parentLayout = buildMaterializedHeadlessParentLayout(
+      args.leafId,
+      pty.ptyId,
+      baseLayout,
+      args.split && viewMode ? { ...args.split, chatViewMode: viewMode } : args.split
+    )
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${args.tabId}::${args.leafId}`,

@@ -74,6 +74,7 @@ async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpaw
             ...(ctx.preAllocatedHandle ? { terminalHandle: ctx.preAllocatedHandle } : {}),
             ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
             ...(agentLaunchAuthority ? { agentLaunchAuthority } : {}),
+            isReattach: ctx.result.isReattach === true,
             ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
           }
         : undefined,

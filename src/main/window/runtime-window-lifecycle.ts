@@ -168,8 +168,14 @@ export function registerRuntimeWindowLifecycle(
     focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),
     closeSessionTab: (tabId, worktreeId) =>
       requestSessionTabCloseFromRenderer(mainWindow, tabId, worktreeId),
-    setTerminalChatView: (worktreeId, tabId, leafId, viewMode) =>
-      requestTerminalChatViewFromRenderer(mainWindow, { worktreeId, tabId, leafId, viewMode }),
+    setTerminalChatView: (worktreeId, tabId, leafId, viewMode, ownerPickLeafId) =>
+      requestTerminalChatViewFromRenderer(mainWindow, {
+        worktreeId,
+        tabId,
+        leafId,
+        viewMode,
+        ...(ownerPickLeafId !== undefined ? { ownerPickLeafId } : {})
+      }),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
       send('ui:moveSessionTab', { worktreeId, ...move }),
     openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId?, navigation?) =>

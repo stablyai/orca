@@ -15,6 +15,7 @@ import {
   type HeadlessSessionTabProps
 } from './headless-session-tab-props-patch'
 import {
+  pickSessionTabChatOwner,
   readHeadlessChatPairState,
   readPublishedChatPairState,
   toSessionTabChatView
@@ -94,7 +95,8 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
       current: state.pair,
       root: state.root,
       viewMode,
-      leafId: state.hasLayout ? leafId : null
+      leafId: state.hasLayout ? leafId : null,
+      ...(state.hasLayout ? { pickOwner: () => this.pickChatOwnerLeafForLayout(state.layout) } : {})
     })
     if (!next) {
       if (props.color !== undefined || props.isPinned !== undefined) {
@@ -110,6 +112,47 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
     }
     this.persistHeadlessSessionTabProps(worktreeId, parentTabId, pairProps)
     this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, parentTabId, pairProps)
+  }
+
+  /** A desktop host's fenced pair write, relayed to the renderer that owns the tab. */
+  protected async relayChatPairWrite(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot | undefined,
+    target: { parentTabId: string; leafId: string | null },
+    viewMode: 'terminal' | 'chat',
+    write: RuntimeSessionTabChatViewWrite
+  ): Promise<RuntimeSessionTabPropsResult> {
+    const notifier = this.notifier
+    if (!notifier?.setTerminalChatView) {
+      throw new Error('runtime_unavailable')
+    }
+    const refused = this.admitChatViewWrite(worktreeId, target.parentTabId, write)
+    if (refused) {
+      return refused
+    }
+    // Why always send the pick (null = no agent pane): the renderer decides once, on its own store.
+    const ownerPick =
+      viewMode === 'chat' && target.leafId === null
+        ? [
+            this.pickChatOwnerLeafForLayout(
+              readPublishedChatPairState(snapshot, target.parentTabId)?.layout
+            )
+          ]
+        : []
+    // Why confirm only on success: a resend after a failed or still-pending relay must apply.
+    const chatView = await notifier.setTerminalChatView(
+      worktreeId,
+      target.parentTabId,
+      target.leafId,
+      viewMode,
+      ...ownerPick
+    )
+    this.chatViewWriteFence.confirm(worktreeId, target.parentTabId, write.writerId, write.seq)
+    return { updated: true, chatView }
+  }
+
+  protected pickChatOwnerLeafForLayout(layout: TerminalLayoutSnapshot | undefined): string | null {
+    return pickSessionTabChatOwner(layout, (ptyId) => this.ptysById.get(ptyId)?.launchAgent)
   }
 
   /** The reply for a write the fence refuses, or null when it applies. */

@@ -226,7 +226,7 @@ describe('registerPtyHandlers', () => {
       expect.any(String),
       'wt-1',
       null,
-      { tabId: 'tab-1', leafId, incarnationId: expect.any(String) },
+      { tabId: 'tab-1', leafId, incarnationId: expect.any(String), isReattach: false },
       false
     )
   })

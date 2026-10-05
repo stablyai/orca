@@ -1,6 +1,7 @@
 import type { AppState } from '../types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { terminalLayoutNodeContainsLeaf } from '../../../../shared/native-chat-leaf-ownership'
+import { pinTerminalChatOwnerOnGrowth } from '../../../../shared/terminal-tab-view-mode'
 import { resolveChatPairAuthority } from '../slices/tabs/terminal-chat-pair-authority'
 import {
   patchTerminalChatViewMode,
@@ -21,9 +22,10 @@ function ownerIsSettled(layout: TerminalLayoutSnapshot, owner: string | undefine
 
 /**
  * The layout lane never chooses the owner of a tab whose pair the store holds. On `'local'` it
- * keeps the stored owner, and may only seed a first layout or fill in an owner for a chat that has
- * none. On `'host'` it keeps the host's owner verbatim: moves and removals arrive as host
- * snapshots. Null means the incoming owner is stored as before (a `'legacy'` or unknown tab).
+ * keeps the stored owner, pins an ownerless single-pane chat to that pane when the tree grows, and
+ * otherwise may only seed a first layout or fill in an owner for a chat that has none. On `'host'`
+ * it keeps the host's owner verbatim: moves and removals arrive as host snapshots. Null means the
+ * incoming owner is stored as before (a `'legacy'` or unknown tab).
  */
 export function resolveStoreOwnedLayoutChatOwner(
   state: LayoutOwnerState,
@@ -31,8 +33,11 @@ export function resolveStoreOwnedLayoutChatOwner(
   incoming: TerminalLayoutSnapshot
 ): { layout: TerminalLayoutSnapshot; authority: 'local' | 'host' } | null {
   const existing = state.terminalLayoutsByTabId[tabId]
+  const growsOwnerless =
+    !existing?.chatLeafId && existing?.root?.type === 'leaf' && incoming.root?.type === 'split'
   // Why the fast path: title and geometry churn re-persist the stored owner on every write.
   if (
+    !growsOwnerless &&
     incoming.chatLeafId === existing?.chatLeafId &&
     ownerIsSettled(incoming, incoming.chatLeafId)
   ) {
@@ -51,9 +56,17 @@ export function resolveStoreOwnedLayoutChatOwner(
     incoming.chatLeafId && terminalLayoutNodeContainsLeaf(incoming.root, incoming.chatLeafId)
       ? incoming.chatLeafId
       : undefined
-  const canSeed = !existing || readTerminalChatViewMode(state, tabId) === 'chat'
+  const viewMode = readTerminalChatViewMode(state, tabId)
+  // Why before the seed: after a split the pane may stamp the new active leaf, a fresh shell.
+  const pinned = pinTerminalChatOwnerOnGrowth({
+    viewMode,
+    chatLeafId: existing?.chatLeafId,
+    priorRoot: existing?.root,
+    nextRoot: incoming.root
+  })
+  const canSeed = !existing || viewMode === 'chat'
   return {
-    layout: withTerminalChatOwner(incoming, existing?.chatLeafId ?? (canSeed ? seed : undefined)),
+    layout: withTerminalChatOwner(incoming, pinned ?? (canSeed ? seed : undefined)),
     authority
   }
 }

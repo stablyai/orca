@@ -13,6 +13,9 @@ export type TerminalChatViewRequest = {
   /** The addressed leaf, or null when the write named the parent tab. */
   leafId: string | null
   viewMode: 'terminal' | 'chat'
+  /** The host's owner for a parent-addressed chat, used only when the tab holds no valid owner;
+   *  null: no pane of a split may own chat. */
+  ownerPickLeafId?: string | null
 }
 
 export type TerminalChatViewResponse = {

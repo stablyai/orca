@@ -16,6 +16,7 @@ import type { RuntimeTerminalSummary } from '../../shared/runtime-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { pinSessionChatOwnersOnGrowth } from './session-chat-owner-growth-pin'
 
 export class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity {
   getRuntimeId(): string {
@@ -188,7 +189,9 @@ export class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersiste
     worktreeId: string,
     session: WorkspaceSessionState
   ): void {
-    this.workspaceSessions.set(worktreeId, session)
+    // Why here: every runtime writer commits through this, so none can grow a chat tab ownerless.
+    const prior = this.workspaceSessions.get(worktreeId)
+    this.workspaceSessions.set(worktreeId, pinSessionChatOwnersOnGrowth(prior, session))
   }
 
   protected getKnownWorkspaceSessionWorktreeIds(): Set<string> {

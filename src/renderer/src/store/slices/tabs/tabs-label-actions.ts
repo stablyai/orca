@@ -85,7 +85,11 @@ export function createTabsLabelActions(
         committed: null
       }
       set((state) => {
-        const applied = applyChatPairToState(state, terminalTabId, { leafId, viewMode: mode })
+        const applied = applyChatPairToState(state, terminalTabId, {
+          leafId,
+          viewMode: mode,
+          ownerPickLeafId: options?.ownerPickLeafId
+        })
         if (!applied) {
           return state
         }

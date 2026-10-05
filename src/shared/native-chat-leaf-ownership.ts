@@ -17,6 +17,18 @@ export function terminalLayoutNodeContainsLeaf(
   )
 }
 
+/** The tree's leaf ids in tree order (first before second). */
+export function terminalLayoutNodeLeafIds(
+  node: TerminalPaneLayoutNode | null | undefined
+): string[] {
+  if (!node) {
+    return []
+  }
+  return node.type === 'leaf'
+    ? [node.leafId]
+    : [...terminalLayoutNodeLeafIds(node.first), ...terminalLayoutNodeLeafIds(node.second)]
+}
+
 export function resolveNativeChatActiveLayoutLeafId(
   layout: TerminalLayoutSnapshot | null | undefined
 ): string | null {

@@ -5,7 +5,6 @@ import {
   chatPairTargetForView,
   chatViewLeafIds,
   hostChatPairForRow,
-  ownerlessChatDisplayLeaf,
   resolveMobileLeafView,
   type MobileChatViewInputs,
   type MobileChatViewRow
@@ -125,35 +124,6 @@ describe('resolveMobileLeafView (A1c-1)', () => {
     expect(chatViewLeafIds(a, [a, b])).toEqual(['A', 'B'])
     expect(view(a, chatDefault, [a, b])).toBe('terminal')
     expect(view(a, chatDefault, [a])).toBe('chat')
-  })
-})
-
-describe('ownerlessChatDisplayLeaf (R1-F1)', () => {
-  const canShow = (leaves: string[]) => (leafId: string) => leaves.includes(leafId)
-  const settledOn = (leafId: string) => ({ leafId, settled: true })
-
-  it('takes the sole or active leaf only when that leaf can show chat now', () => {
-    const at = (args: Partial<Parameters<typeof ownerlessChatDisplayLeaf>[0]>) =>
-      ownerlessChatDisplayLeaf({
-        shown: null,
-        leafIds: ['A', 'B'],
-        activeLeafId: 'B',
-        canShowChat: canShow(['A', 'B']),
-        ...args
-      })
-    expect(at({ leafIds: ['A'], activeLeafId: null })).toEqual(settledOn('A'))
-    expect(at({})).toEqual(settledOn('B'))
-    expect(at({ canShowChat: canShow(['A']) })).toBeNull()
-    expect(at({ activeLeafId: null })).toBeNull()
-    expect(at({ activeLeafId: 'gone' })).toBeNull()
-    // R2a-F2: a gated agent waiting on readability holds the leaf, unsettled.
-    expect(at({ canShowChat: () => 'unknown' })).toEqual({ leafId: 'B', settled: false })
-  })
-
-  it('stays on the leaf it shows while that leaf exists, whatever is active or eligible now', () => {
-    const shownOnA = { shown: 'A', activeLeafId: 'B', canShowChat: canShow([]) }
-    expect(ownerlessChatDisplayLeaf({ ...shownOnA, leafIds: ['A', 'B'] })).toEqual(settledOn('A'))
-    expect(ownerlessChatDisplayLeaf({ ...shownOnA, leafIds: ['B'] })).toBeNull()
   })
 })
 

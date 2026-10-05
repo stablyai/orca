@@ -257,6 +257,8 @@ type ManagedPty = {
   attachIdentity?: PtyIdentity
   worktreeId?: string
   terminalHandle?: string
+  /** Agent this PTY was spawned to run; returned on attach so a restarted client re-admits it. */
+  launchAgent?: TuiAgent
   explicitTerm?: string
   shellPath?: string
   /** The raw client-requested shell override, kept so revive can re-resolve it on this host. */
@@ -2213,6 +2215,7 @@ export class PtyHandler {
       }),
       ...(startupIngressIntent ? { startupIngressIntent } : {}),
       ...(terminalHandle ? { terminalHandle } : {}),
+      ...(launchAgent ? { launchAgent } : {}),
       shellReadyArmed: rendererShellReadySupported,
       ...(managedStartupCommand && (shouldProviderDeliverCommand || rendererShellReadySupported)
         ? {
@@ -2266,6 +2269,7 @@ export class PtyHandler {
     context?: RequestContext
   ): Promise<{
     incarnationId: string
+    launchAgent?: TuiAgent
     replay?: string
     sourceRecovery?: PtySourceRecoveryResult
     sourceActivation?: PtySourceReceivingActivation
@@ -2309,6 +2313,7 @@ export class PtyHandler {
     }
 
     managed.startupIngress?.snapshotBarrier()
+    const launchIdentity = managed.launchAgent ? { launchAgent: managed.launchAgent } : {}
     let sourceRecovery = parseSourceRecoveryRequest(params.sourceRecovery)
     if (
       sourceRecovery?.status === 'checkpoint' &&
@@ -2332,6 +2337,7 @@ export class PtyHandler {
     if (typeof activation === 'object') {
       return {
         incarnationId: managed.incarnationId,
+        ...launchIdentity,
         sourceRecovery: activation,
         ...(sourceActivation ? { sourceActivation } : {})
       }
@@ -2355,6 +2361,7 @@ export class PtyHandler {
     ) {
       return {
         incarnationId: managed.incarnationId,
+        ...launchIdentity,
         ...(sourceActivation ? { sourceActivation } : {})
       }
     }
@@ -2370,6 +2377,7 @@ export class PtyHandler {
       if (params.suppressReplayNotification) {
         return {
           incarnationId: managed.incarnationId,
+          ...launchIdentity,
           replay,
           ...(sourceActivation ? { sourceActivation } : {})
         }
@@ -2378,6 +2386,7 @@ export class PtyHandler {
     }
     return {
       incarnationId: managed.incarnationId,
+      ...launchIdentity,
       ...(sourceActivation ? { sourceActivation } : {})
     }
   }

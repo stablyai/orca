@@ -102,33 +102,6 @@ export function hostChatPairForRow(row: MobileChatViewRow): TerminalChatPair {
   }
 }
 
-/** Where an ownerless host chat shows; `settled` false waits on transcript readability. */
-export type OwnerlessChatPlacement = { leafId: string; settled: boolean }
-
-/**
- * Where an ownerless host chat shows, as on the paired desktop: on the leaf it already shows on
- * while that leaf exists, else on the active (or sole) leaf only when that leaf can show chat now.
- * Null means every leaf shows terminal.
- */
-export function ownerlessChatDisplayLeaf(args: {
-  shown: string | null
-  leafIds: readonly string[]
-  activeLeafId: string | null | undefined
-  /** `unknown`: the leaf's agent can show chat once its transcript is known to be readable. */
-  canShowChat: (leafId: string) => boolean | 'unknown'
-}): OwnerlessChatPlacement | null {
-  const { shown, leafIds } = args
-  if (shown && leafIds.includes(shown)) {
-    return { leafId: shown, settled: true }
-  }
-  const candidate = leafIds.length === 1 ? leafIds[0] : args.activeLeafId
-  if (!candidate || !leafIds.includes(candidate)) {
-    return null
-  }
-  const canShow = args.canShowChat(candidate)
-  return canShow === false ? null : { leafId: candidate, settled: canShow === true }
-}
-
 /**
  * The view of one terminal leaf. `pair` is the pending click, else the accepted host pair, with an
  * ownerless chat already resolved to its display leaf (`ownerlessChatDisplayLeaf`).

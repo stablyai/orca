@@ -183,6 +183,8 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
             leafId: ctx.metadataLeafId,
             ...(args.preAllocatedHandle ? { terminalHandle: args.preAllocatedHandle } : {}),
             ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
+            // Why: an agent spawn is settled by its creator once it assigns the agent, never as none.
+            ...(args.launchAgent ? {} : { isReattach: ctx.result.isReattach === true }),
             ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
           }
         : undefined,

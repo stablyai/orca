@@ -1,5 +1,7 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { isPtyIncarnationId, type PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { TuiAgent } from '../../shared/tui-agent'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import {
   SSH_PTY_IDENTITY_MISMATCH_ERROR,
   SSH_PTY_SOURCE_RESTORE_REQUIRED_ERROR,
@@ -26,6 +28,7 @@ import type { SshPtyReceivingActivationLease } from './ssh-pty-notification-rout
 export type SshPtyAttachResult = {
   replay?: string
   incarnationId?: PtyIncarnationId
+  launchAgent?: TuiAgent
   sourceRecovery?: PtySourceRecoveryResult
   sourceActivation?: PtySourceReceivingActivation
   sourceActivationLease?: SshPtyReceivingActivationLease
@@ -71,6 +74,10 @@ export function parseSshPtyAttachResult(value: unknown): SshPtyAttachResult {
   return {
     ...(typeof result.replay === 'string' ? { replay: result.replay } : {}),
     ...(isPtyIncarnationId(result.incarnationId) ? { incarnationId: result.incarnationId } : {}),
+    // Why optional: relays predating it omit the field, which keeps the reattach unadmitted as before.
+    ...('launchAgent' in value && isTuiAgent(value.launchAgent)
+      ? { launchAgent: value.launchAgent }
+      : {}),
     ...(sourceRecovery ? { sourceRecovery } : {}),
     ...(activation ? { sourceActivation: activation } : {})
   }
@@ -221,6 +228,7 @@ export async function reattachSshPtySession(args: {
       isReattach: true,
       ...(attachResult.replay ? { replay: attachResult.replay } : {}),
       ...(attachResult.incarnationId ? { incarnationId: attachResult.incarnationId } : {}),
+      ...(attachResult.launchAgent ? { launchAgent: attachResult.launchAgent } : {}),
       ...(attachResult.sourceRecovery ? { sourceRecovery: attachResult.sourceRecovery } : {}),
       ...(attachResult.sourceActivation ? { sourceActivation: attachResult.sourceActivation } : {}),
       ...(attachResult.sourceActivationLease

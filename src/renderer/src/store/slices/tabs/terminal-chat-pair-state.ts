@@ -94,7 +94,11 @@ export function withTerminalChatOwner(
 export function applyChatPairToState(
   state: ChatPairState,
   terminalTabId: string,
-  request: { leafId: string | null; viewMode: TerminalTabViewMode }
+  request: {
+    leafId: string | null
+    viewMode: TerminalTabViewMode
+    ownerPickLeafId?: string | null
+  }
 ): { patch: ChatPairPatch; from: TerminalTabViewMode; to: TerminalTabViewMode } | null {
   const indices = findTerminalTabIndices(state, terminalTabId)
   if (!indices) {
@@ -109,7 +113,10 @@ export function applyChatPairToState(
     },
     root: layout?.root,
     viewMode: request.viewMode,
-    leafId: request.leafId
+    leafId: request.leafId,
+    ...(request.ownerPickLeafId !== undefined
+      ? { pickOwner: () => request.ownerPickLeafId ?? null }
+      : {})
   })
   if (!next?.viewMode) {
     return null

@@ -292,24 +292,13 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       if (!args.chatViewWrite) {
         return { updated: true }
       }
-      const notifier = this.notifier
-      if (!notifier?.setTerminalChatView) {
-        throw new Error('runtime_unavailable')
-      }
-      const refused = this.admitChatViewWrite(worktreeId, target.parentTabId, args.chatViewWrite)
-      if (refused) {
-        return refused
-      }
-      const { writerId, seq } = args.chatViewWrite
-      // Why confirm only on success: a resend after a failed or still-pending relay must apply.
-      const chatView = await notifier.setTerminalChatView(
+      return this.relayChatPairWrite(
         worktreeId,
-        target.parentTabId,
-        target.leafId,
-        args.viewMode
+        snapshot,
+        target,
+        args.viewMode,
+        args.chatViewWrite
       )
-      this.chatViewWriteFence.confirm(worktreeId, target.parentTabId, writerId, seq)
-      return { updated: true, chatView }
     }
     if (args.chatViewWrite) {
       const refused = this.admitChatViewWrite(worktreeId, target.parentTabId, args.chatViewWrite)

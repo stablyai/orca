@@ -128,6 +128,37 @@ describe('setTabLayout chat owner rule', () => {
     expect(pairOf(terminalTab.id).owner).toBeUndefined()
   })
 
+  it('pins an ownerless single-pane chat to that pane when it splits, in the same update (F1)', () => {
+    const chatTab = store.getState().createTab(LOCAL_WT, undefined, undefined, {
+      viewMode: 'chat'
+    })
+    store.getState().setTabLayout(chatTab.id, soleLayout(A))
+    expect(pairOf(chatTab.id).owner).toBeUndefined()
+    const listener = vi.fn()
+    const unsubscribe = store.subscribe(listener)
+
+    // The pane stamps its new active leaf, a fresh shell; the pre-split pane keeps chat.
+    store.getState().setTabLayout(chatTab.id, { ...splitLayout(B), activeLeafId: B })
+
+    unsubscribe()
+    expect(listener).toHaveBeenCalledOnce()
+    expect(pairOf(chatTab.id)).toEqual({ row: 'chat', unified: 'chat', owner: A })
+  })
+
+  it('never pins a terminal tab or a tree that does not grow', () => {
+    const terminalTab = store.getState().createTab(LOCAL_WT, undefined, undefined, {})
+    store.getState().setTabLayout(terminalTab.id, soleLayout(A))
+    store.getState().setTabLayout(terminalTab.id, splitLayout())
+    expect(pairOf(terminalTab.id).owner).toBeUndefined()
+
+    const chatTab = store.getState().createTab(LOCAL_WT, undefined, undefined, {
+      viewMode: 'chat'
+    })
+    store.getState().setTabLayout(chatTab.id, soleLayout(A))
+    store.getState().setTabLayout(chatTab.id, { ...soleLayout(A), expandedLeafId: A })
+    expect(pairOf(chatTab.id).owner).toBeUndefined()
+  })
+
   it('keeps the incoming owner on a paired worktree', () => {
     const tabId = createSplitTab(PAIRED_WT, { viewMode: 'chat', owner: B })
     store.getState().setTabLayout(tabId, splitLayout(A))

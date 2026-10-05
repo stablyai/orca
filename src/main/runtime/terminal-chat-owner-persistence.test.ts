@@ -12,7 +12,7 @@ import { UpdatePaneLayout } from '../../shared/rpc-contract/session-tabs-schemas
 import type { RuntimeStore } from './runtime-store-contract'
 
 function makeSplitRuntime() {
-  const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+  const { runtimeStore, getSession, setSession } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal({
       terminalLayoutsByTabId: {
         'host-tab': makeHeadlessTerminalLayout({
@@ -40,17 +40,31 @@ function makeSplitRuntime() {
   const setView = (tabId: string, viewMode: 'terminal' | 'chat') =>
     runtime.setMobileSessionTabProps(`id:${TEST_WORKTREE_ID}`, { tabId, viewMode })
   const owner = () => getSession().terminalLayoutsByTabId['host-tab']?.chatLeafId
-  return { runtime, getSession, update, setView, owner }
+  // An older host's record: chat on a split with no owner (F1 hosts never write this shape).
+  const persistOwnerlessChat = () => {
+    const session = getSession()
+    setSession({
+      ...session,
+      tabsByWorktree: {
+        ...session.tabsByWorktree,
+        [TEST_WORKTREE_ID]: session.tabsByWorktree[TEST_WORKTREE_ID]!.map((tab) => ({
+          ...tab,
+          viewMode: 'chat' as const
+        }))
+      }
+    })
+  }
+  return { runtime, getSession, update, setView, owner, persistOwnerlessChat }
 }
 
 describe('remote terminal chat ownership', () => {
   it('lets a layout push only fill in a missing owner on a chat tab', async () => {
-    const { update, setView, owner } = makeSplitRuntime()
+    const { update, owner, persistOwnerlessChat } = makeSplitRuntime()
     // A terminal tab takes no owner from the layout lane.
     await update(HEADLESS_LEAF_ID)
     expect(owner()).toBeUndefined()
-    // A parent-addressed chat with no owner accepts the pushed claim.
-    await setView('host-tab', 'chat')
+    // A chat with no owner accepts the pushed claim.
+    persistOwnerlessChat()
     await update(HEADLESS_LEAF_ID)
     expect(owner()).toBe(HEADLESS_LEAF_ID)
     // Stale pushes from any client version can neither move nor clear it.
@@ -63,8 +77,8 @@ describe('remote terminal chat ownership', () => {
   })
 
   it('keeps the owner across a restart and clears it only through the pair writer', async () => {
-    const { runtime, update, setView, owner, getSession } = makeSplitRuntime()
-    await setView('host-tab', 'chat')
+    const { runtime, update, setView, owner, getSession, persistOwnerlessChat } = makeSplitRuntime()
+    persistOwnerlessChat()
     await update(HEADLESS_LEAF_ID)
     runtime['mobileSessionTabsByWorktree'].delete(TEST_WORKTREE_ID)
     runtime['hydrateHeadlessMobileSessionTabsFromWorkspaceSession'](TEST_WORKTREE_ID)

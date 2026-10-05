@@ -144,7 +144,49 @@ describe('registerPtyHandlers', () => {
           expect.any(String),
           'wt-runtime',
           null,
-          { tabId: 'tab-1', leafId },
+          { tabId: 'tab-1', leafId, isReattach: false },
+          false
+        )
+      })
+      it('leaves a runtime-created agent spawn for its creator to settle with the agent', async () => {
+        const leafId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+        setupDaemonAdapter()
+        const runtime = {
+          setPtyController: vi.fn(),
+          registerPty: vi.fn(),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registerPtyHandlers installs the runtime PTY controller through setPtyController.
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          spawn(args: {
+            cols: number
+            rows: number
+            worktreeId: string
+            tabId: string
+            leafId: string
+            launchAgent: 'claude'
+          }): Promise<{ id: string }>
+        }
+
+        await controller.spawn({
+          cols: 80,
+          rows: 24,
+          worktreeId: 'wt-runtime-agent',
+          tabId: 'tab-agent',
+          leafId,
+          launchAgent: 'claude'
+        })
+
+        // Why: settling here would publish "no agent" until create-terminal assigns the agent.
+        expect(runtime.registerPty).toHaveBeenCalledWith(
+          expect.any(String),
+          'wt-runtime-agent',
+          null,
+          { tabId: 'tab-agent', leafId },
           false
         )
       })
@@ -195,6 +237,7 @@ describe('registerPtyHandlers', () => {
             tabId: 'tab-runtime-reattach',
             leafId,
             incarnationId,
+            isReattach: true,
             providerReattachLaunchIdentity: { incarnationId, launchAgent: 'codex' }
           },
           false

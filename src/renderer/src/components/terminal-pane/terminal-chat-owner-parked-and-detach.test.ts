@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '@/store'
 import { collapseParkedTerminalLeaf } from './terminal-parked-pty-watcher'
-import { detachTerminalPaneToTab } from './terminal-pane-tab-detach'
+import { canDetachTerminalPaneToTab, detachTerminalPaneToTab } from './terminal-pane-tab-detach'
+import type * as WorktreeRuntimeOwner from '@/lib/worktree-runtime-owner'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/store', async () => {
@@ -11,6 +12,21 @@ vi.mock('@/store', async () => {
 })
 
 const WT = 'repo1::/tmp/local'
+const PAIRED_WT = 'repo1::/tmp/paired'
+
+vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => {
+  const actual = await importOriginal<typeof WorktreeRuntimeOwner>()
+  return {
+    ...actual,
+    getRuntimeEnvironmentIdForWorktree: (
+      state: Parameters<typeof actual.getRuntimeEnvironmentIdForWorktree>[0],
+      worktreeId: string | null | undefined
+    ) =>
+      worktreeId === PAIRED_WT
+        ? 'env-1'
+        : actual.getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  }
+})
 const A = '11111111-1111-4111-8111-111111111111'
 const B = '22222222-2222-4222-8222-222222222222'
 
@@ -95,5 +111,20 @@ describe('detaching the owning pane into a new tab', () => {
 
     expect(pairOf(sourceTabId)).toEqual({ row: 'terminal', unified: 'terminal', owner: undefined })
     expect(pairOf(detached!.tab.id)).toEqual({ row: 'chat', unified: 'chat', owner: B })
+  })
+})
+
+describe('pane drag-out on a mirrored worktree (F1, PL-5)', () => {
+  it('is unavailable only where the paired host owns the panes', () => {
+    const state = useAppStore.getState()
+    expect(canDetachTerminalPaneToTab(state, WT)).toBe(true)
+    // An older paired host keeps today's behaviour.
+    expect(canDetachTerminalPaneToTab(state, PAIRED_WT)).toBe(true)
+    expect(
+      canDetachTerminalPaneToTab(
+        { ...state, chatViewHostOwnedByWorktree: { [PAIRED_WT]: true } },
+        PAIRED_WT
+      )
+    ).toBe(false)
   })
 })

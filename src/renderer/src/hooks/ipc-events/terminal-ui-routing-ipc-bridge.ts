@@ -120,7 +120,7 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
 
   unsubs.push(
     window.api.ui.onTerminalChatViewRequest(
-      ({ requestId, worktreeId, tabId, leafId, viewMode }) => {
+      ({ requestId, worktreeId, tabId, leafId, viewMode, ownerPickLeafId }) => {
         const state = useAppStore.getState()
         // Why: a worktree another Orca host owns is only mirrored here; its pair is not ours to write.
         if (resolveChatPairAuthority(state, worktreeId) !== 'local') {
@@ -131,7 +131,12 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
           return
         }
         // Why synchronous: IPC arrival order is the host's admit order, so apply before replying.
-        const chatView = state.applyTerminalChatPair(tabId, leafId, viewMode)
+        const chatView = state.applyTerminalChatPair(
+          tabId,
+          leafId,
+          viewMode,
+          ownerPickLeafId !== undefined ? { ownerPickLeafId } : undefined
+        )
         window.api.ui.respondTerminalChatView(
           chatView
             ? { requestId, chatView }

@@ -253,7 +253,11 @@ export function buildMaterializedHeadlessParentLayout(
   leafId: string,
   ptyId: string,
   existingLayout: TerminalLayoutSnapshot | undefined,
-  split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
+  split?: {
+    splitFromLeafId: string
+    direction: 'horizontal' | 'vertical'
+    chatViewMode?: 'terminal' | 'chat'
+  }
 ): TerminalLayoutSnapshot {
   if (!existingLayout) {
     return {
@@ -272,7 +276,8 @@ export function buildMaterializedHeadlessParentLayout(
       leafId,
       ptyId,
       splitFromLeafId: split.splitFromLeafId,
-      direction: split.direction
+      direction: split.direction,
+      ...(split.chatViewMode ? { chatViewMode: split.chatViewMode } : {})
     })
   }
   return {
