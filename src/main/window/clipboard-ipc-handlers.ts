@@ -44,6 +44,7 @@ import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
+import { registerNativeScreenshotDropHandler } from './native-screenshot-drop'
 
 let trustedClipboardRendererWebContentsId: number | null = null
 
@@ -90,6 +91,7 @@ function runCommand(command: string, args: string[], stdin?: string): Promise<vo
 }
 
 export function registerClipboardHandlers(store: Store): void {
+  registerNativeScreenshotDropHandler(assertTrustedClipboardSender)
   ipcMain.removeHandler('clipboard:readText')
   ipcMain.removeHandler('clipboard:readSelectionText')
   ipcMain.removeHandler('clipboard:writeText')

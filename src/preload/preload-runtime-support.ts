@@ -4,6 +4,7 @@ import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
 import { registerRendererRestartIpcRelays } from './renderer-restart-wiring'
 import { createUpdaterQuitAbortRelay } from '../shared/renderer-restart-preparation'
 import { ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT } from '../shared/updater-renderer-events'
+import { preserveNativeScreenshotDrop } from './native-screenshot-drop'
 import {
   ORCA_INTERNAL_FILE_DRAG_TYPE,
   createNativeFileDropPayload,
@@ -134,10 +135,12 @@ export function installNativeFileDropHandlers(): void {
         return
       }
       const paths: string[] = []
+      const droppedFiles = new Map<string, File>()
       for (let index = 0; index < files.length; index += 1) {
         const filePath = webUtils.getPathForFile(files[index])
         if (filePath) {
           paths.push(filePath)
+          droppedFiles.set(filePath, files[index])
         }
       }
       if (resolution?.target === 'rejected') {
@@ -156,7 +159,11 @@ export function installNativeFileDropHandlers(): void {
       }
       const payload = createNativeFileDropPayload(resolution, paths)
       if (payload) {
-        ipcRenderer.send('terminal:file-dropped-from-preload', payload)
+        void preserveNativeScreenshotDrop(payload, droppedFiles, process.platform, (bytes) =>
+          ipcRenderer.invoke('terminal:saveDroppedScreenshot', bytes)
+        )
+          .then((prepared) => ipcRenderer.send('terminal:file-dropped-from-preload', prepared))
+          .catch((error: unknown) => console.error('Failed to preserve dropped screenshot:', error))
       }
     },
     true
