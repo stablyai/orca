@@ -12,7 +12,11 @@ import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import { RECENT_PTY_OUTPUT_LIMIT, RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 import { appendRecentPtyPathCandidates } from './terminal-output-path-candidates'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
-import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
+import {
+  resolveLocalProjectRuntimeForRepo,
+  resolveLocalProjectRuntimeForWorktreeId
+} from '../local-project-runtime-resolution'
+import { predictSpawnOrchestrationCliCommand } from './orchestration/spawn-cli-command-prediction'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import {
   resolveTerminalOrchestrationCliCommand,
@@ -268,6 +272,32 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       projectRuntime: this.store
         ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
         : undefined
+    })
+  }
+
+  /** `getTerminalOrchestrationCliCommand` for a terminal not yet spawned in this worktree, or in a
+   *  worktree not yet created for this repo (which starts on the repo's host and distro). */
+  async predictOrchestrationCliCommandForSpawn(
+    target: { worktreeId: string } | { repoSelector: string }
+  ): Promise<OrchestrationCliCommand> {
+    const settings = this.store?.getSettings() ?? {}
+    if ('worktreeId' in target) {
+      const scope = await this.showTerminalWorkspaceLaunchScope(`id:${target.worktreeId}`)
+      return predictSpawnOrchestrationCliCommand({
+        connectionId: scope.connectionId,
+        cwd: scope.path,
+        projectRuntime: this.resolveProjectRuntimeForWorktree(target.worktreeId),
+        settings
+      })
+    }
+    const repo = await this.resolveRepoSelector(target.repoSelector)
+    return predictSpawnOrchestrationCliCommand({
+      connectionId: repo.connectionId ?? null,
+      cwd: repo.path,
+      projectRuntime: this.store
+        ? resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
+        : undefined,
+      settings
     })
   }
   /**

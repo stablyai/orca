@@ -122,15 +122,15 @@ it('the report is reachable from a mobile-scoped device token', async () => {
 // takeover was suppressed and `worker-release` closed the pane. #19608 writes custody at terminal
 // creation, so the boot-wait key itself takes the pane.
 it('a phone report during the boot wait takes the pane and fences the later release', async () => {
-  const gate = h.deferred<unknown>()
-  vi.spyOn(h.runtime, 'waitForTerminal').mockReturnValue(gate.promise as never)
+  const gate = h.deferred<'observed'>()
+  vi.spyOn(h.runtime, 'observeTerminalLaunchTurnStart').mockReturnValue(gate.promise)
   const task = h.db.createTask({ spec: 'mid-boot phone takeover', runId: h.activeRunId })
   const start = h.call('orchestration.workerStart', {
     task: task.id,
     from: 'term_coord',
     agent: 'codex'
   })
-  await vi.waitFor(() => expect(h.runtime.waitForTerminal).toHaveBeenCalled())
+  await vi.waitFor(() => expect(h.runtime.observeTerminalLaunchTurnStart).toHaveBeenCalled())
   const dispatchId = (
     h.db.db.prepare("SELECT dispatch_id FROM worker_dispatches WHERE state = 'starting'").get() as {
       dispatch_id: string
@@ -147,13 +147,7 @@ it('a phone report during the boot wait takes the pane and fences the later rele
     h.call('orchestration.workerTerminalUserInput', { terminal: 'term_worker' })
   ).resolves.toEqual({ changed: 1 })
 
-  gate.resolve({
-    handle: 'term_worker',
-    condition: 'tui-idle',
-    satisfied: true,
-    status: 'running',
-    exitCode: null
-  })
+  gate.resolve('observed')
   await expect(start).resolves.toMatchObject({ state: 'ready' })
   expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.ownership_state).toBe('user_owned')
 

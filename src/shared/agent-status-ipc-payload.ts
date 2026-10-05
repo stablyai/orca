@@ -59,6 +59,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
    *  own turn-opening event. Optional: old hosts and turns opened unseen omit it, and readers fall
    *  back to `stateStartedAt`. */
   turnStartedAt?: number
+  /** When the current `working` run first carried an explicit user prompt; see the hook row. */
+  explicitPromptStartedAt?: number
   orchestration?: AgentStatusOrchestrationContext
   providerSession?: AgentProviderSessionMetadata
   /** Resume identity update only; the status-shaped fields are transport placeholders. */

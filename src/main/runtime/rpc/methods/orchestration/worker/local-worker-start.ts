@@ -1,5 +1,3 @@
-import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
-import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
 import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
@@ -16,13 +14,14 @@ import {
   type WorkerStartModeReceipt
 } from '../../orchestration-worker-start-mode'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './worker-start-agent-placement'
-import { awaitStructuredWorkerSetupGate } from './worker-start-structured-setup-gate'
+import { awaitWorkerSetupGate } from './worker-start-setup-gate'
 import { assertOrchestrationWorktreeCreationSupported } from './folder-worktree-placement'
 import type { WorkerStartInput } from './worker-start-schema'
 import {
   persistGatedSetupSpawnFailure,
   persistWorkerReadinessStage,
-  persistWorkerSetupWaitOutcome
+  persistWorkerSetupWaitOutcome,
+  remainingLaunchObservationMs
 } from './worker-setup-gate'
 import { failWorkerStartWithReceipt } from './worker-start-receipt'
 import { parseTaskDeps } from './task-deps-argument'
@@ -30,8 +29,9 @@ import { assertExplicitWorkerTerminalUsable } from './explicit-worker-terminal-v
 import { recordCreatedWorkerTerminalCustody } from './created-worker-terminal-custody'
 import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
-import { prepareLocalWorkerStart } from './worker-start-validation'
+import { prepareLocalWorkerAgentLaunch } from './local-worker-agent-launch'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
+import { createWorkerLaunchBriefFactory } from './worker-launch-brief'
 
 type WorkerStartMutation = {
   callerFingerprint: string
@@ -57,40 +57,12 @@ export async function startLocalWorker(args: {
   const coordinatorPane = coordinator?.paneKey ?? null
   const requestedWorktree = params.worktree ?? 'current'
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
-  const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () => {
-    const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
-      runtime,
-      params.from,
-      callerSession
-    )
-    const parent = createsWorktree
-      ? await runtime.showManagedWorktree(`id:${callerWorkspaceId}`)
-      : undefined
-    return createsWorktree
-      ? { repo: params.repo ?? parent?.repoId }
-      : {
-          worktree: requestedWorktree === 'current' ? `id:${callerWorkspaceId}` : requestedWorktree
-        }
-  })
-  let openCodeModelLaunchSupported = false
-  if (!createsWorktree && launchParams.agent === 'opencode' && launchParams.model) {
-    const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
-      runtime,
-      params.from,
-      callerSession
-    )
-    openCodeModelLaunchSupported = await probeWorkerOpenCodeModelLaunchSupport(
-      runtime,
-      launchParams,
-      { worktree: requestedWorktree === 'current' ? `id:${callerWorkspaceId}` : requestedWorktree }
-    )
-  }
-
-  const { agent, launch } = prepareLocalWorkerStart({
-    params: launchParams,
-    createsWorktree,
+  const { agent, launch } = await prepareLocalWorkerAgentLaunch({
     runtime,
-    openCodeModelLaunchSupported
+    params,
+    callerSession,
+    createsWorktree,
+    requestedWorktree
   })
 
   const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
@@ -174,6 +146,7 @@ export async function startLocalWorker(args: {
   let terminalHandle = params.terminal
   let placed: Awaited<ReturnType<typeof placeWorkerAgent>> | undefined
   let failedStage = 'terminal_create'
+  const timeoutMs = params.timeoutMs ?? 60_000
   try {
     placed = await placeWorkerAgent({
       runtime,
@@ -190,7 +163,22 @@ export async function startLocalWorker(args: {
       effects,
       onStage: (stage) => {
         failedStage = stage
-      }
+      },
+      ...(params.terminal
+        ? {}
+        : {
+            launchBrief: createWorkerLaunchBriefFactory({
+              runtime,
+              db,
+              agent,
+              dispatchId: started.dispatch.id,
+              dispatchDepth: started.dispatch.depth,
+              taskId: task.id,
+              taskSpec: task.spec,
+              coordinatorHandle: params.from,
+              devMode: params.devMode
+            })
+          })
     })
     // A created worktree settles its mode only once the host can be asked about it, so the
     // receipt the caller decided is not always the one that ran.
@@ -215,21 +203,23 @@ export async function startLocalWorker(args: {
     persistWorkerReadinessStage(setupStage)
 
     failedStage = 'agent_readiness'
-    // A structured session is ready the moment its attach returns ok: there is no boot-to-idle
-    // gap and no terminal title to read an idle edge from. Only the repo's wait-for-setup policy
-    // still holds it back, and that gate has to be waited on explicitly here.
-    const wait = structuredSession
-      ? await awaitStructuredWorkerSetupGate({
-          runtime,
-          setup: setupReceipt,
-          effects,
-          timeoutMs: params.timeoutMs ?? 60_000
-        })
-      : await waitForWorkerAgentReady(runtime, terminalHandle, {
-          agent,
-          reusesTerminal: Boolean(params.terminal),
-          timeoutMs: params.timeoutMs ?? 60_000
-        })
+    const launchBrief = placed.launchBrief?.carried ? placed.launchBrief : null
+    // A structured session is ready the moment its attach returns ok, and a brief that rode the
+    // launch line needs no idle agent to paste into (its dialogs are watched while its turn is
+    // observed). Only the repo's wait-for-setup policy still holds either back, waited on here.
+    const wait =
+      structuredSession || launchBrief
+        ? await awaitWorkerSetupGate({
+            runtime,
+            setup: setupReceipt,
+            effects,
+            timeoutMs
+          })
+        : await waitForWorkerAgentReady(runtime, terminalHandle, {
+            agent,
+            reusesTerminal: Boolean(params.terminal),
+            timeoutMs
+          })
     if (wait) {
       persistWorkerSetupWaitOutcome({ ...setupStage, wait })
       if (!wait.satisfied) {
@@ -241,7 +231,9 @@ export async function startLocalWorker(args: {
             ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
             : structuredSession
               ? `Setup did not finish before the structured worker started (${wait.status}).`
-              : `Agent did not become ready (${wait.status}).`
+              : launchBrief
+                ? `Setup did not finish before the worker's agent started (${wait.status}).`
+                : `Agent did not become ready (${wait.status}).`
         )
       }
     }
@@ -276,6 +268,10 @@ export async function startLocalWorker(args: {
       timeoutMs: params.timeoutMs ?? 60_000,
       effects,
       terminalRevealWarning: placed.warning,
+      launchBrief,
+      launchObservationTimeoutMs: launchBrief
+        ? remainingLaunchObservationMs(timeoutMs, launchBrief.launchStartedAt)
+        : timeoutMs,
       onStage: (stage) => {
         failedStage = stage
       }

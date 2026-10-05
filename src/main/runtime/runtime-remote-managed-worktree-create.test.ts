@@ -52,7 +52,10 @@ function createDeps() {
 const TAB_ID = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
 const LEAF_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301'
 
-async function startupTerminalOptions(startupPaneKey?: string): Promise<Record<string, unknown>> {
+async function startupTerminalOptions(
+  startupPaneKey?: string,
+  startupTerminalHandle?: string
+): Promise<Record<string, unknown>> {
   const { createTerminal, deps } = createDeps()
   await createRuntimeRemoteManagedWorktree(
     repo,
@@ -60,7 +63,8 @@ async function startupTerminalOptions(startupPaneKey?: string): Promise<Record<s
       name: 'task',
       createdWithAgent: 'codex',
       startup: { command: 'codex' },
-      ...(startupPaneKey ? { startupPaneKey } : {})
+      ...(startupPaneKey ? { startupPaneKey } : {}),
+      ...(startupTerminalHandle ? { startupTerminalHandle } : {})
     },
     deps
   )
@@ -79,5 +83,13 @@ describe('a remote managed create with a startup agent', () => {
     const options = await startupTerminalOptions()
     expect(options).not.toHaveProperty('tabId')
     expect(options).not.toHaveProperty('leafId')
+    expect(options).not.toHaveProperty('preAllocatedHandle')
+  })
+
+  // Why: a worker's brief names its terminal's handle before the startup terminal exists.
+  it('creates the startup terminal under the handle the caller minted', async () => {
+    expect(await startupTerminalOptions(undefined, 'term_worker')).toMatchObject({
+      preAllocatedHandle: 'term_worker'
+    })
   })
 })

@@ -97,6 +97,9 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         command: sequencedStartup.command,
         ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
         ...paneIdentity(request.startupPaneKey),
+        ...(request.startupTerminalHandle
+          ? { preAllocatedHandle: request.startupTerminalHandle }
+          : {}),
         ...(setup && startup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
         env: sequencedStartup.env,
         ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),

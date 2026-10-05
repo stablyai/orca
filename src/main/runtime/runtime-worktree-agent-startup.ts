@@ -15,6 +15,7 @@ import {
   type AgentStartupPlan
 } from '../../shared/tui-agent-startup'
 import type { LaunchFile } from '../../shared/launch-prompt-file'
+import type { LaunchPromptPaste } from '../../shared/launch-prompt-carry'
 import { thisOrcaLaunchHost } from './this-orca-launch-host'
 import {
   detectInstalledAgentsWithShellPathHydration,
@@ -138,6 +139,8 @@ export function buildWorktreeStartupForAgent(
     /** Set by a caller that pastes an uncarried prompt itself; reports whether it rode the command,
      *  and no follow-up is returned for it to paste twice. */
     onPromptCarry?: (carried: boolean) => void
+    /** The caller's paste for what the line leaves; #24257's guarded paste by default. */
+    promptPaste?: LaunchPromptPaste
   }
 ): {
   agent: TuiAgent
@@ -166,7 +169,7 @@ export function buildWorktreeStartupForAgent(
       workspacePath: repo.path
     }),
     // The caller, or else the host's follow-up, pastes what the line leaves once the agent runs.
-    paste: 'when-host-proves-agent'
+    paste: environment.promptPaste ?? 'when-host-proves-agent'
   })
   if (!planned) {
     throw new Error(`Could not build launch command for ${agent}.`)
@@ -219,6 +222,7 @@ export function resolveWorktreeCreateAgentStartup(
       agentArgs?: string | null
       launchSource?: string
       onPromptCarry?: (carried: boolean) => void
+      promptPaste?: LaunchPromptPaste
     }
   ) => Promise<{
     agent: TuiAgent
@@ -232,6 +236,7 @@ export function resolveWorktreeCreateAgentStartup(
   return build(args.startupAgent, args.startupPrompt, args.startupLaunchPreferences, {
     ...(args.startupAgentArgs !== undefined ? { agentArgs: args.startupAgentArgs } : {}),
     ...(args.startupLaunchSource ? { launchSource: args.startupLaunchSource } : {}),
-    ...(args.onStartupPromptCarry ? { onPromptCarry: args.onStartupPromptCarry } : {})
+    ...(args.onStartupPromptCarry ? { onPromptCarry: args.onStartupPromptCarry } : {}),
+    ...(args.startupPromptPaste ? { promptPaste: args.startupPromptPaste } : {})
   })
 }

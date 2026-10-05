@@ -160,6 +160,24 @@ describe('buildWorktreeStartupForAgent prompt carry', () => {
     expect(result.followup?.prompt).toBe(prompt)
   })
 
+  it('leaves a Windows prompt the line would damage to a caller whose paste is main’s, not a file', () => {
+    const onPromptCarry = vi.fn()
+    const long = Array.from({ length: 20 }, (_, i) => `step ${i} `.padEnd(500, 'x')).join('\n')
+    const result = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings,
+      agent: 'claude',
+      prompt: long,
+      getLaunchPlatform: () => 'win32',
+      toSessionOptions: () => undefined,
+      onPromptCarry,
+      promptPaste: 'once-agent-runs'
+    })
+    expect(onPromptCarry).toHaveBeenCalledExactlyOnceWith(false)
+    expect(result.startup.launchFile).toBeUndefined()
+    expect(result.startup.command).not.toContain('step 1 ')
+  })
+
   it('reports that prompt uncarried, with no follow-up, to a caller that pastes it itself', () => {
     const onPromptCarry = vi.fn()
     const result = buildWorktreeStartupForAgent({

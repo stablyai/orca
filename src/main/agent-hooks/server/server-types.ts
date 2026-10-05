@@ -22,6 +22,11 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   /** When the main agent's current turn began, on this server's clock. Stamped only here, from the
    *  main agent's own turn-opening event; absent when no such event was seen. */
   turnStartedAt?: number
+  /** When the current `working` run first carried an explicit user prompt. Unlike
+   *  `stateStartedAt`, a prompt-less start (a SessionStart, a status refresh) never sets it, so it
+   *  is the only proof a submitted prompt began a turn. Live-only: launch observers do not outlive
+   *  main. */
+  explicitPromptStartedAt?: number
   /** Provenance/ordering stamped by this server as the pane authority (STA-4293). Read by nothing yet. */
   observation?: AgentStatusObservation
   /** Stamped at hydrate for nonterminal states; never persisted (hydrate re-stamps) and cleared by any accepted live event replacing the entry. */
@@ -44,6 +49,8 @@ export type PersistedAgentHookEventPayload = Omit<
   | 'observation'
   // Same: a terminal handle is issued by one runtime and means nothing to the next.
   | 'terminalHandle'
+  // Same: only an in-memory launch observer reads it.
+  | 'explicitPromptStartedAt'
 > & {
   launchTokenHash?: string
 }

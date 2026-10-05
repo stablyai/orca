@@ -10,6 +10,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../../../../orchestration/db'
+import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 
 const READY_WAIT = {
@@ -25,13 +26,24 @@ describe('worker terminal custody is recorded at terminal creation', () => {
 
   afterEach(() => h.cleanup())
 
-  /** Holds the agent boot wait open so the mid-start database state can be read. */
+  /** Holds the agent boot open (a paste's readiness wait, a launch brief's turn) mid-start. */
   function holdBootWait(): { finish: (satisfied?: boolean) => void } {
     const gate = h.deferred<unknown>()
+    const turn = h.deferred<'observed'>()
     vi.spyOn(h.runtime, 'waitForTerminal').mockReturnValue(gate.promise as never)
+    vi.spyOn(h.runtime, 'observeTerminalLaunchTurnStart').mockReturnValue(turn.promise)
     return {
-      finish: (satisfied = true) =>
-        gate.resolve({ ...READY_WAIT, satisfied, status: satisfied ? 'running' : 'exited' })
+      finish: (satisfied = true) => {
+        // A startup dialog fails a paste's readiness wait and a launch brief's turn watch alike.
+        gate.resolve(
+          satisfied
+            ? READY_WAIT
+            : { ...READY_WAIT, satisfied: false, blockedReason: 'codex-update-prompt' }
+        )
+        if (satisfied) {
+          turn.resolve('observed')
+        }
+      }
     }
   }
 
@@ -43,7 +55,9 @@ describe('worker terminal custody is recorded at terminal creation', () => {
     ).dispatch_id
   }
 
-  async function startHeldAtBootWait(options: { terminal?: string } = {}): Promise<{
+  async function startHeldAtBootWait(
+    options: { terminal?: string; agent?: TuiAgent } = {}
+  ): Promise<{
     dispatchId: string
     taskId: string
     start: Promise<unknown>
@@ -54,33 +68,41 @@ describe('worker terminal custody is recorded at terminal creation', () => {
     const start = h.call('orchestration.workerStart', {
       task: task.id,
       from: 'term_coord',
-      ...(options.terminal ? { terminal: options.terminal } : { agent: 'codex' })
+      ...(options.terminal ? { terminal: options.terminal } : { agent: options.agent ?? 'codex' })
     })
+    // Both a paste's readiness wait and a launch brief's dialog watch call it.
     await vi.waitFor(() => expect(h.runtime.waitForTerminal).toHaveBeenCalled())
     return { dispatchId: startingDispatchId(), taskId: task.id, start, finish }
   }
 
-  it('owns the created terminal before the boot wait resolves', async () => {
-    h.setup()
-    const held = await startHeldAtBootWait()
+  // codex carries its brief on the launch line; aider takes it only as a paste after start.
+  it.each(['codex', 'aider'] as const)(
+    'owns the created %s terminal before its boot resolves',
+    async (agent) => {
+      h.setup()
+      const held = await startHeldAtBootWait({ agent })
 
-    expect(h.db.getWorkerTerminalResourceByOwner(held.dispatchId)).toMatchObject({
-      ownership_state: 'owned',
-      release_state: 'not_requested',
-      terminal_handle: 'term_worker',
-      pane_key: h.workerPaneKey,
-      process_incarnation: 'runtime_test:term_worker:1',
-      host_scope: JSON.stringify({ kind: 'local', hostId: 'local' })
-    })
-    // worker-list reads the same row: a booting worker now says `active`, not `retained`.
-    expect(h.db.listWorkerTerminalResources({ dispatchIds: [held.dispatchId] })[0]).toMatchObject({
-      agentTerminalHandle: 'term_worker',
-      terminalState: 'active'
-    })
+      expect(h.db.getWorkerTerminalResourceByOwner(held.dispatchId)).toMatchObject({
+        ownership_state: 'owned',
+        release_state: 'not_requested',
+        terminal_handle: 'term_worker',
+        pane_key: h.workerPaneKey,
+        process_incarnation: 'runtime_test:term_worker:1',
+        host_scope: JSON.stringify({ kind: 'local', hostId: 'local' })
+      })
+      // worker-list reads the same row: a booting worker now says `active`, not `retained`.
+      expect(h.db.listWorkerTerminalResources({ dispatchIds: [held.dispatchId] })[0]).toMatchObject(
+        {
+          agentTerminalHandle: 'term_worker',
+          terminalState: 'active'
+        }
+      )
 
-    held.finish()
-    await expect(held.start).resolves.toMatchObject({ state: 'ready' })
-  })
+      held.finish()
+      await expect(held.start).resolves.toMatchObject({ state: 'ready' })
+      expect(h.runtime.sendTerminalAgentPrompt).toHaveBeenCalledTimes(agent === 'aider' ? 1 : 0)
+    }
+  )
 
   it('claims nothing for an explicitly reused terminal until authority transfers it', async () => {
     h.setup()
@@ -130,49 +152,81 @@ describe('worker terminal custody is recorded at terminal creation', () => {
     await held.start
   })
 
-  it('leaves a start that died on the boot wait a terminal worker-release can close', async () => {
+  // Why codex differs: its brief is already on its launch line, so answering the dialog runs it.
+  it('keeps a codex start blocked at boot unknown, still owning the terminal the brief runs in', async () => {
     h.setup()
-    const held = await startHeldAtBootWait()
+    const held = await startHeldAtBootWait({ agent: 'codex' })
     held.finish(false)
 
     await expect(held.start).resolves.toMatchObject({
-      state: 'failed',
-      failedStage: 'agent_readiness',
-      recovery: expect.stringContaining('worker-release')
+      state: 'outcome_unknown',
+      stage: 'turn_start_blocked'
     })
     expect(h.db.getWorkerTerminalResourceByOwner(held.dispatchId)).toMatchObject({
       ownership_state: 'owned',
       terminal_handle: 'term_worker'
     })
-
-    await expect(
-      h.call('orchestration.workerRelease', { dispatch: held.dispatchId })
-    ).resolves.toMatchObject({ state: 'released', processAction: 'closed_agent_terminal' })
-    expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
   })
 
-  it('promises no cleanup while the start outcome is still unknown', async () => {
-    h.setup()
-    const task = h.db.createTask({ spec: 'unknown outcome', runId: h.activeRunId })
-    const unknown = Object.assign(new Error('the execution host went away'), {
-      code: 'operation_unknown'
-    })
-    vi.spyOn(h.runtime, 'waitForTerminal').mockRejectedValue(unknown)
+  it.each([['aider', 'agent_readiness']] as const)(
+    'leaves a %s start that died at boot a terminal worker-release can close',
+    async (agent, failedStage) => {
+      h.setup()
+      const held = await startHeldAtBootWait({ agent })
+      held.finish(false)
 
-    const receipt = (await h.call('orchestration.workerStart', {
-      task: task.id,
-      from: 'term_coord',
-      agent: 'codex'
-    })) as { state: string; dispatchId: string; nextCommands?: string[] }
+      await expect(held.start).resolves.toMatchObject({
+        state: 'failed',
+        failedStage,
+        recovery: expect.stringContaining('worker-release')
+      })
+      expect(h.db.getWorkerTerminalResourceByOwner(held.dispatchId)).toMatchObject({
+        ownership_state: 'owned',
+        terminal_handle: 'term_worker'
+      })
 
-    expect(receipt).toMatchObject({ state: 'outcome_unknown' })
-    // worker-release refuses an unsettled worker, so the receipt must not name it.
-    expect(receipt).not.toHaveProperty('recovery')
-    expect(receipt.nextCommands?.join(' ')).toContain('worker-abandon')
-    expect(h.db.getWorkerTerminalResourceByOwner(receipt.dispatchId)).toMatchObject({
-      ownership_state: 'owned'
-    })
-  })
+      await expect(
+        h.call('orchestration.workerRelease', { dispatch: held.dispatchId })
+      ).resolves.toMatchObject({ state: 'released', processAction: 'closed_agent_terminal' })
+      expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
+    }
+  )
+
+  // The host drops out of codex's launch-turn watch, or out of aider's pre-paste readiness wait.
+  it.each([
+    ['codex', 'observeTerminalLaunchTurnStart'],
+    ['aider', 'waitForTerminal']
+  ] as const)(
+    'promises no cleanup while a %s start outcome is still unknown',
+    async (agent, wait) => {
+      h.setup()
+      const task = h.db.createTask({ spec: 'unknown outcome', runId: h.activeRunId })
+      const unknown = Object.assign(new Error('the execution host went away'), {
+        code: 'operation_unknown'
+      })
+      vi.spyOn(h.runtime, wait).mockRejectedValue(unknown)
+
+      const receipt = await h.call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent
+      })
+
+      expect(receipt).toMatchObject({
+        state: 'outcome_unknown',
+        nextCommands: expect.arrayContaining([expect.stringContaining('worker-abandon')])
+      })
+      // worker-release refuses an unsettled worker, so the receipt must not name it.
+      expect(receipt).not.toHaveProperty('recovery')
+      const dispatchId =
+        typeof receipt === 'object' && receipt !== null && 'dispatchId' in receipt
+          ? String(receipt.dispatchId)
+          : ''
+      expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+        ownership_state: 'owned'
+      })
+    }
+  )
 
   it('promises no cleanup for a reused terminal whose start died', async () => {
     h.setup()

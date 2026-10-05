@@ -4,6 +4,7 @@ import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { workerLaunchBriefCreateOptions, type WorkerLaunchBrief } from './worker-launch-brief'
 import { createStructuredWorkerSession } from '../../orchestration-structured-worker-session'
 
 export type WorkerEffect = {
@@ -63,7 +64,9 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   launchPreferences?: AgentLaunchPreferences
   taskId: string
   effects: WorkerEffect[]
+  launchBrief?: WorkerLaunchBrief | null
 }): Promise<{ handle: string; warning?: string }> {
+  const brief = args.launchBrief
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
     // Why: the agent id is not a shell command — `cursor` resolves to the Cursor
     // desktop app while its CLI is `cursor-agent`. Let the runtime build the
@@ -74,7 +77,8 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     title: `worker-${args.taskId}`,
     // Why: dispatching a worker is background work; it must not pull the sidebar
     // to the worker's workspace while the user is reading somewhere else.
-    surfaceOwner: false
+    surfaceOwner: false,
+    ...(brief ? { preAllocatedHandle: brief.handle, ...workerLaunchBriefCreateOptions(brief) } : {})
   })
   args.effects.push({
     kind: 'terminal',
@@ -84,7 +88,28 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     surface: terminal.surface,
     warning: terminal.warning
   })
+  if (brief && terminal.handle !== brief.handle) {
+    await refuseWorkerTerminalHandleMismatch(args.runtime, terminal.handle)
+  }
   return { handle: terminal.handle, warning: terminal.warning }
+}
+
+/**
+ * Fails a start whose terminal came back under another handle than the one its brief names. The
+ * brief would teach the worker the wrong identity, and it may already be on that terminal's line,
+ * so the terminal is closed first: a retry must not run the task a second time.
+ */
+export async function refuseWorkerTerminalHandleMismatch(
+  runtime: Pick<OrcaRuntimeService, 'closeTerminal'>,
+  handle: string
+): Promise<never> {
+  const closed = await runtime.closeTerminal(handle).then(
+    () => true,
+    () => false
+  )
+  throw new Error(
+    `Worker terminal did not keep its pre-allocated handle${closed ? '' : `; close ${handle} by hand`}.`
+  )
 }
 
 /**

@@ -4,7 +4,6 @@ import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { dispatchPreambleSendOptions } from '../../../../orchestration/preamble'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -44,11 +43,15 @@ describe('orchestration RPC methods', () => {
       vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
         id: 'repo::worktree'
       } as never)
-      vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-        handle: 'term_worker',
-        worktreeId: 'repo::worktree',
-        title: 'worker'
+      // The carry rule's answer on a POSIX host: the brief rides the worker's launch line.
+      vi.spyOn(runtime, 'createTerminal').mockImplementation(async (_selector, options) => {
+        options?.onStartupPromptCarry?.(true)
+        return { handle: 'term_worker', worktreeId: 'repo::worktree', title: 'worker' }
       })
+      // The brief names the worker's handle and CLI command, so both are settled before the spawn.
+      vi.spyOn(runtime, 'createPreAllocatedTerminalHandle').mockReturnValue('term_worker')
+      vi.spyOn(runtime, 'predictOrchestrationCliCommandForSpawn').mockResolvedValue('orca')
+      vi.spyOn(runtime, 'observeTerminalLaunchTurnStart').mockResolvedValue('observed')
       vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
         handle: 'term_worker',
         condition: 'tui-idle',
@@ -153,17 +156,24 @@ describe('orchestration RPC methods', () => {
       expect(db.getWorkerDispatch(result.dispatchId)?.state).toBe('ready')
       // Why: dispatching a worker is background work — surfaceOwner:false adopts
       // the tab without scrolling the sidebar to the worker's workspace.
+      // The brief is offered to the launch line through the one carry rule, as main's paste caller.
       expect(runtime.createTerminal).toHaveBeenCalledWith('id:repo::worktree', {
         startupAgent: 'codex',
         launchSource: 'orchestration',
         title: `worker-${task.id}`,
-        surfaceOwner: false
+        surfaceOwner: false,
+        preAllocatedHandle: 'term_worker',
+        startupPrompt: expect.stringContaining('implement worker start'),
+        startupPromptPaste: 'once-agent-runs',
+        onStartupPromptCarry: expect.any(Function)
       })
-      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
+      expect(runtime.observeTerminalLaunchTurnStart).toHaveBeenCalledWith(
         'term_worker',
-        expect.any(String),
-        expect.objectContaining(dispatchPreambleSendOptions(expect.any(String)))
+        expect.objectContaining({ agent: 'codex', launchStartedAt: expect.any(Number) }),
+        expect.any(Number),
+        expect.any(AbortSignal)
       )
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
     })
 
     it('applies and reports opaque per-invocation model preferences', async () => {
@@ -418,14 +428,18 @@ describe('orchestration RPC methods', () => {
       mockCurrentWorkerStart({ ready: false })
       const task = db.createTask({ spec: 'worker timeout' })
 
-      const result = (await call('orchestration.workerStart', {
+      // aider takes its brief only after start, so it still waits for readiness before a paste.
+      const result = await call('orchestration.workerStart', {
         task: task.id,
         from: 'term_coord',
-        agent: 'codex'
-      })) as { state: string; failedStage: string; residualResources: { id: string }[] }
+        agent: 'aider'
+      })
 
-      expect(result).toMatchObject({ state: 'failed', failedStage: 'agent_readiness' })
-      expect(result.residualResources).toEqual([expect.objectContaining({ id: 'term_worker' })])
+      expect(result).toMatchObject({
+        state: 'failed',
+        failedStage: 'agent_readiness',
+        residualResources: [expect.objectContaining({ id: 'term_worker' })]
+      })
       expect(db.getTask(task.id)?.status).toBe('failed')
       expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
     })
@@ -458,20 +472,20 @@ describe('orchestration RPC methods', () => {
       )
       const task = db.createTask({ spec: 'input failure' })
 
-      const result = (await call('orchestration.workerStart', {
+      // Only a paste can be rejected; aider takes its brief after start.
+      const result = await call('orchestration.workerStart', {
         task: task.id,
         from: 'term_coord',
-        agent: 'codex'
-      })) as {
-        state: string
-        failedStage: string
-        residualResources: { kind: string; id: string }[]
-      }
+        agent: 'aider'
+      })
 
-      expect(result).toMatchObject({ state: 'failed', failedStage: 'dispatch_input' })
-      expect(result.residualResources).toEqual(
-        expect.arrayContaining([expect.objectContaining({ kind: 'terminal', id: 'term_worker' })])
-      )
+      expect(result).toMatchObject({
+        state: 'failed',
+        failedStage: 'dispatch_input',
+        residualResources: expect.arrayContaining([
+          expect.objectContaining({ kind: 'terminal', id: 'term_worker' })
+        ])
+      })
     })
 
     // Why the second column: an older host still publishes the codex-* token, and this receipt
@@ -481,10 +495,13 @@ describe('orchestration RPC methods', () => {
       ['codex-trust-workspace', 'codex-trust-workspace (agent-trust-workspace)'],
       ['agent-trust-workspace', 'agent-trust-workspace']
     ] as const)(
-      'returns a truthful readiness failure for %s',
+      // Why not failed: the brief already rode the launch line, so answering the dialog runs it.
+      'reports a start blocked on %s as unknown, not failed',
       async (blockedReason, expectedReason) => {
         setup()
         mockCurrentWorkerStart()
+        // The dialog holds the launch turn, so only the watch beside it can settle the start.
+        vi.mocked(runtime.observeTerminalLaunchTurnStart).mockReturnValue(new Promise(() => {}))
         vi.mocked(runtime.waitForTerminal).mockResolvedValueOnce({
           handle: 'term_worker',
           condition: 'tui-idle',
@@ -495,17 +512,19 @@ describe('orchestration RPC methods', () => {
         })
         const task = db.createTask({ spec: 'blocked startup prompt' })
 
-        const result = (await call('orchestration.workerStart', {
+        const result = await call('orchestration.workerStart', {
           task: task.id,
           from: 'term_coord',
           agent: 'codex'
-        })) as { state: string; failedStage: string; lastError: string }
+        })
 
         expect(result).toMatchObject({
-          state: 'failed',
-          failedStage: 'agent_readiness',
-          lastError: `Agent startup blocked: ${expectedReason}`
+          state: 'outcome_unknown',
+          stage: 'turn_start_blocked',
+          lastError: expect.stringContaining(`Agent startup blocked: ${expectedReason}.`),
+          residualResources: [expect.objectContaining({ id: 'term_worker' })]
         })
+        expect(result).not.toHaveProperty('recovery')
         expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
       }
     )
@@ -570,6 +589,8 @@ describe('orchestration RPC methods', () => {
           runHooks: false,
           setupDecision: 'run',
           startupAgent: 'codex',
+          startupTerminalHandle: 'term_worker',
+          startupPrompt: expect.stringContaining('child worker'),
           activate: false,
           lineage: expect.objectContaining({ parentWorktree: 'repo::parent', noParent: false })
         })

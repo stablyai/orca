@@ -1,3 +1,4 @@
+import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../../../../../shared/orchestration-timing-budgets'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import {
   applyWaitForSetupOutcome,
@@ -66,4 +67,13 @@ export function persistWorkerSetupWaitOutcome(
     effects: args.effects,
     residualResources: residualWorkerEffects(args.effects)
   })
+}
+
+/**
+ * What a launched brief's turn start may still wait: the agent's launch, any setup it waits behind
+ * and its turn share one start budget, as setup and boot did when the brief was pasted. The floor
+ * keeps the turn the window a pasted brief always had.
+ */
+export function remainingLaunchObservationMs(timeoutMs: number, launchStartedAt: number): number {
+  return Math.max(launchStartedAt + timeoutMs - Date.now(), AGENT_PROMPT_EFFECT_TIMEOUT_MS)
 }

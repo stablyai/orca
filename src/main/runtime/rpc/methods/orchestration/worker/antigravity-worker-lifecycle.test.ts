@@ -18,6 +18,8 @@ describe('Antigravity orchestration worker lifecycle', () => {
 
   it('owns the terminal immediately and delays prompt delivery until AGY is ready', async () => {
     h.setup()
+    // The paste path: a host whose line cannot carry the brief leaves it for after readiness.
+    h.leaveBriefForPaste()
     const readiness = h.deferred<RuntimeTerminalWait>()
     vi.spyOn(h.runtime, 'waitForTerminal').mockReturnValue(readiness.promise)
 

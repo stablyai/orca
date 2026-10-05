@@ -63,7 +63,8 @@ export async function buildRuntimeAgentTerminalStartupOptions(
       // A caller's own launch file already carries the prompt, so no line needs staging.
       ...(opts.launchFile ? {} : { prompt: opts.startupPrompt })
     }),
-    paste: opts.onStartupPromptCarry ? 'when-host-proves-agent' : 'never'
+    paste:
+      opts.startupPromptPaste ?? (opts.onStartupPromptCarry ? 'when-host-proves-agent' : 'never')
   })
   if (!planned) {
     // Why: an explicit agent that yields no plan would otherwise spawn a bare

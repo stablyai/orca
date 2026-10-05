@@ -6,8 +6,18 @@ import type {
   AgentPromptTurnStartEvidence,
   AgentPromptWaitTextCache
 } from './agent-prompt-submission-verification'
-import { verifyAgentPromptSubmission } from './agent-prompt-submission-verification'
+import {
+  isTerminalSendSettlementAgent,
+  verifyAgentPromptSubmission
+} from './agent-prompt-submission-verification'
+import type { TuiAgent } from '../../shared/tui-agent'
 import { AgentPromptRequestCorrelation } from './agent-prompt-request-correlation'
+import type { LaunchedAgentForeground } from './launched-agent-foreground'
+import {
+  observeLaunchTurnStart,
+  type LaunchTurnStartVerdict
+} from './launch-turn-start-observation'
+import { readFreshComposerHold } from './launched-agent-composer-readiness'
 
 export class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWithSerializeAgentPromptSubmission {
   private readonly agentPromptCorrelation = new AgentPromptRequestCorrelation()
@@ -19,6 +29,10 @@ export class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWit
     record: TerminalHandleRecord
     leaf: RuntimeLeafRecord
   }
+  declare readLaunchedAgentForeground: (
+    ptyId: string,
+    agent: TuiAgent
+  ) => Promise<LaunchedAgentForeground>
 
   getTerminalPromptRequestBinding(handle: string): {
     ptyId: string
@@ -93,6 +107,72 @@ export class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWit
         return { ...prompt, observation: 'permission' }
       }
       throw error
+    }
+  }
+
+  /**
+   * Whether a prompt that rode an agent's launch command line started a turn. The hook proof counts
+   * only an event that carried an explicit prompt after `launchStartedAt`: a spinner title, a
+   * prompt-less SessionStart or output bytes prove nothing about the prompt. Where hooks cannot give
+   * that proof, or never reach the pane, the launch's own evidence decides (`observeLaunchTurnStart`).
+   */
+  async observeTerminalLaunchTurnStart(
+    handle: string,
+    launch: { launchStartedAt: number; agent: TuiAgent | null },
+    timeoutMs: number,
+    signal?: AbortSignal
+  ): Promise<LaunchTurnStartVerdict> {
+    const { ptyId } = this.getTerminalPromptRequestBinding(handle)
+    const agent = launch.agent
+    const hooksProveTurn =
+      isTerminalSendSettlementAgent(agent) &&
+      this.store?.getSettings().agentStatusHooksEnabled !== false
+    return observeLaunchTurnStart(
+      {
+        ...(hooksProveTurn
+          ? {
+              observeHookTurn: (stop) =>
+                this.observeLaunchHookTurn(handle, ptyId, launch.launchStartedAt, timeoutMs, stop)
+            }
+          : {}),
+        hookReachedPane: () => this.getFreshExplicitAgentStatusForPty(handle, ptyId) !== null,
+        readWorkingSequence: () => this.getAgentPromptActivity(handle, ptyId).workingSequence,
+        dialogOnScreen: () =>
+          readFreshComposerHold(
+            this.getTerminalAgentStatusSnapshot(handle, ptyId).waitText,
+            this.readLiveTerminalScreenLines(ptyId)
+          ) === 'dialog',
+        launchRecorded: () => Boolean(this.ptysById.get(ptyId)?.launchAgent),
+        readForeground: async () =>
+          agent ? await this.readLaunchedAgentForeground(ptyId, agent) : 'unknown'
+      },
+      { launchStartedAt: launch.launchStartedAt, timeoutMs, ...(signal ? { signal } : {}) }
+    )
+  }
+
+  private async observeLaunchHookTurn(
+    handle: string,
+    ptyId: string,
+    launchStartedAt: number,
+    timeoutMs: number,
+    signal: AbortSignal
+  ): Promise<'observed' | 'permission' | 'unobserved'> {
+    try {
+      await verifyAgentPromptSubmission({
+        baseline: {
+          ...this.getAgentPromptActivity(handle, ptyId),
+          explicitPromptStartedAt: launchStartedAt
+        },
+        readActivity: () => this.getAgentPromptActivity(handle, ptyId),
+        explicitPromptOnly: true,
+        signal,
+        timeoutMs
+      })
+      return 'observed'
+    } catch (error) {
+      return error instanceof Error && error.message === 'agent_prompt_blocked'
+        ? 'permission'
+        : 'unobserved'
     }
   }
 

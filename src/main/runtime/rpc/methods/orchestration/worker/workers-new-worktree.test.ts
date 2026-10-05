@@ -9,6 +9,10 @@ import { OrchestrationDb } from '../../../../orchestration/db'
 import { RpcDispatcher } from '../../../dispatcher'
 import type { RpcRequest } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
+import {
+  createNewWorktreeWorkerFixture,
+  type NewWorktreeWorkerFixture
+} from './workers-new-worktree.test-support'
 import { prepareFederationWorkerLaunchOnHost } from './worker-opencode-model-preflight'
 import { FederationAttachStartParams } from '../federation/federation-start-schema'
 
@@ -18,63 +22,11 @@ describe('orchestration new-worktree workers', () => {
   let db: OrchestrationDb
   let runtime: OrcaRuntimeService
   let runId: string
+  let startWorker: NewWorktreeWorkerFixture['startWorker']
   const paths: string[] = []
 
   beforeEach(() => {
-    db = new OrchestrationDb(':memory:')
-    runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    runId = db.createRun({
-      objective: 'Test new-worktree workers',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey
-    }).id
-    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
-      handle === 'term_coord'
-        ? coordinatorPaneKey
-        : handle === 'term_worker'
-          ? 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-          : null
-    )
-    vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
-      handle === 'term_worker' ? 'runtime_test:term_worker:1' : null
-    )
-    vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-      handle: 'term_coord',
-      worktreeId: 'repo::parent',
-      status: 'running'
-    } as never)
-    vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
-      id: 'repo::parent',
-      repoId: 'repo'
-    } as never)
-    vi.spyOn(runtime, 'showRepo').mockResolvedValue({
-      id: 'repo',
-      kind: 'git'
-    } as never)
-    vi.spyOn(runtime, 'createTerminal')
-    vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
-      terminals: [{ handle: 'term_worker', title: 'Codex' }],
-      totalCount: 1,
-      truncated: false
-    } as never)
-    vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      condition: 'tui-idle',
-      satisfied: true,
-      status: 'running',
-      exitCode: null
-    })
-    vi.spyOn(runtime, 'waitForSetupTerminalCompletion').mockReturnValue(
-      new Promise(() => undefined)
-    )
-    vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
-    vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
-      handle: 'term_worker',
-      accepted: true,
-      bytesWritten: 1
-    })
+    ;({ db, runtime, runId, startWorker } = createNewWorktreeWorkerFixture(coordinatorPaneKey))
   })
 
   afterEach(() => {
@@ -83,26 +35,6 @@ describe('orchestration new-worktree workers', () => {
       rmSync(path, { recursive: true, force: true })
     }
   })
-
-  async function startWorker(overrides: Record<string, unknown> = {}) {
-    const task = db.createTask({ spec: 'new-worktree task', runId })
-    const method = ORCHESTRATION_METHODS.find(
-      (candidate) => candidate.name === 'orchestration.workerStart'
-    )
-    if (!method) {
-      throw new Error('workerStart method is not registered')
-    }
-    const params = method.params!.parse({
-      task: task.id,
-      from: 'term_coord',
-      worktree: 'new-child',
-      name: 'new-worker',
-      agent: 'codex',
-      ...overrides
-    })
-    const result = await method.handler(params, { runtime })
-    return { result, task }
-  }
 
   function mockCreatedWorktree(options?: {
     hookFound?: boolean

@@ -2,9 +2,10 @@
  * Creating the worktree a `--worktree new-child` / `new-top-level` dispatch asks for.
  *
  * `withAgentTerminal` is the whole difference between the two worker modes: a PTY worker's
- * worktree is created agent-first, so the startup terminal IS the worker, while a structured
- * worker's worktree is created with no agent at all and its session is created for the worktree
- * afterwards. Setup, default tabs and lineage are identical either way.
+ * worktree is created agent-first, so the startup terminal IS the worker and its launch line is
+ * offered the brief, while a structured worker's worktree is created with no agent at all and its
+ * session is created for the worktree afterwards. Setup, default tabs and lineage are identical
+ * either way.
  */
 
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
@@ -12,6 +13,7 @@ import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { WorkerEffect, WorkerSetupReceipt } from './worker-topology'
+import { workerLaunchBriefCreateOptions, type WorkerLaunchBrief } from './worker-launch-brief'
 
 export async function createWorkerWorktree(args: {
   runtime: OrcaRuntimeService
@@ -36,6 +38,8 @@ export async function createWorkerWorktree(args: {
    *  bracketed paste. The renderer's own structured worktree create skips both the same way. */
   withAgentTerminal: boolean
   launchPreferences?: AgentLaunchPreferences
+  /** Offered to the startup terminal's launch line; it names that terminal's handle. */
+  launchBrief?: WorkerLaunchBrief | null
   effects: WorkerEffect[]
 }): Promise<{
   worktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
@@ -62,7 +66,13 @@ export async function createWorkerWorktree(args: {
       ? {
           startupAgent: args.agent,
           startupLaunchSource: 'orchestration',
-          ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {})
+          ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
+          ...(args.launchBrief
+            ? {
+                startupTerminalHandle: args.launchBrief.handle,
+                ...workerLaunchBriefCreateOptions(args.launchBrief)
+              }
+            : {})
         }
       : {}),
     activate: false,

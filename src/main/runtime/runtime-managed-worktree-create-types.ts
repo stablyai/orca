@@ -8,6 +8,7 @@ import type {
   Worktree
 } from '../../shared/worktree/types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { LaunchPromptPaste } from '../../shared/launch-prompt-carry'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../shared/workspace-source'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
@@ -54,6 +55,9 @@ export type RuntimeManagedWorktreeCreateArgs = {
   /** Main-internal: set by a caller that delivers an uncarried `startupPrompt` itself (one
    *  `carryLaunchPrompt` leaves for the paste); reports whether the prompt rode the command. */
   onStartupPromptCarry?: (carried: boolean) => void
+  /** Main-internal: the caller's paste for an uncarried `startupPrompt` (`startupPromptPaste` on a
+   *  terminal create). */
+  startupPromptPaste?: LaunchPromptPaste
   /** Per-launch inputs used when `startupAgent` is the created terminal surface. */
   startupAgentArgs?: string | null
   startupCwd?: string
@@ -61,6 +65,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupLaunchSource?: string
   /** A caller-minted `tabId:leafId` for the startup terminal's pane. */
   startupPaneKey?: string
+  /** A caller-minted handle for the startup terminal, when the startup prompt names it. */
+  startupTerminalHandle?: string
   pendingFirstAgentMessageRename?: boolean
   automationProvenance?: AutomationWorkspaceProvenance
   cliProvenance?: CliWorkspaceProvenance

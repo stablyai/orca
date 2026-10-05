@@ -5,7 +5,8 @@ import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-s
 const PTY_ID = 'pty_worker'
 
 // Why: a shell back at its prompt after the agent exits reads as ready too, so the brief needs the
-// launched agent found in front, or the shell runs it.
+// launched agent found in front, or the shell runs it. Amp takes its brief only after it starts, so
+// it is pasted rather than carried on the launch line.
 describe('a worker start writes its brief only into the agent it launched', () => {
   const h = createOrchestrationWorkerReleaseHarness()
   afterEach(() => h.cleanup())
@@ -29,14 +30,14 @@ describe('a worker start writes its brief only into the agent it launched', () =
   it('types nothing when the agent exited and its shell is in front', async () => {
     const writes = launchedPane('shell')
 
-    await expect(h.startWorker({ agent: 'claude' })).rejects.toThrow()
+    await expect(h.startWorker({ agent: 'amp' })).rejects.toThrow()
     expect(writes).toEqual([])
   })
 
   it('writes the brief once into the agent found in front', async () => {
     const writes = launchedPane('agent')
 
-    await h.startWorker({ agent: 'claude' })
+    await h.startWorker({ agent: 'amp' })
     expect(writes).toHaveLength(1)
   })
 
