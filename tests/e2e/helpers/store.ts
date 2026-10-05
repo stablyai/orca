@@ -8,7 +8,7 @@
 
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
-import type { BrowserTabSummary, ExplorerFileSummary, TerminalTabSummary } from './runtime-types'
+import type { BrowserTabSummary, ExplorerFileSummary } from './runtime-types'
 
 /** Read a value from the Zustand store. Returns the raw JS value. */
 export async function getStoreState<T>(page: Page, selector: string): Promise<T> {
@@ -57,7 +57,7 @@ export async function getWorktreeTabs(
     }
 
     const state = store.getState()
-    return (state.tabsByWorktree[worktreeId] ?? []).map((tab): TerminalTabSummary => ({
+    return (state.tabsByWorktree[worktreeId] ?? []).map((tab) => ({
       id: tab.id,
       title: tab.customTitle || tab.title
     }))
@@ -86,7 +86,7 @@ export async function getTabBarOrder(page: Page, worktreeId: string): Promise<st
     const activeGroup = activeGroupId
       ? groups.find((g: { id: string }) => g.id === activeGroupId)
       : groups[0]
-    if (activeGroup?.tabOrder?.length > 0) {
+    if (activeGroup && activeGroup.tabOrder && activeGroup.tabOrder.length > 0) {
       const unifiedTabs = state.unifiedTabsByWorktree?.[worktreeId] ?? []
       return activeGroup.tabOrder.map((itemId: string) => {
         const tab = unifiedTabs.find((t: { id: string }) => t.id === itemId)
