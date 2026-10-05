@@ -139,4 +139,33 @@ describe('notebook document editing lifecycle', () => {
     expect(cancelAnimationFrame).toHaveBeenCalled()
     expect(animationFrames.size).toBe(0)
   })
+
+  it('materializes current notebook text throughout continuous cell typing', () => {
+    const onContentChange = vi.fn<(content: string) => void>()
+    const content = notebookContent()
+    const hook = renderHook(() =>
+      useIpynbDocumentEditing({
+        content,
+        fileId: 'continuous-notebook',
+        notebook: parseIpynb(content),
+        onContentChange,
+        onDirtyStateHint: vi.fn(),
+        onDeactivateEditor: vi.fn()
+      })
+    )
+    for (let index = 0; index < 20; index++) {
+      act(() => {
+        hook.result.current.updateCellSource(0, `typing-${index}`)
+        vi.advanceTimersByTime(100)
+      })
+    }
+    expect(onContentChange.mock.calls.length).toBeGreaterThanOrEqual(4)
+    const latest = onContentChange.mock.calls.at(-1)?.[0]
+    if (latest === undefined) {
+      throw new Error('Notebook draft was not materialized')
+    }
+    expect(parseIpynb(latest).cells[0]?.source).toBe('typing-19')
+    expect(parseIpynb(latest).cells[1]?.source).toBe('b')
+    hook.unmount()
+  })
 })

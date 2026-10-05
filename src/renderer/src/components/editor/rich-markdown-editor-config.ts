@@ -23,6 +23,7 @@ import {
 } from './rich-markdown-editor-click-routing'
 import { createRichMarkdownKeyHandler } from './rich-markdown-key-handler'
 import { commitRichMarkdownSerialization } from './rich-markdown-serialization-commit'
+import { scheduleEditorSerialization } from './editor-serialization-deadline'
 import {
   createRichMarkdownImageResolverContext,
   setRichMarkdownImageResolverContext
@@ -244,25 +245,25 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
         return
       }
       onDirtyStateHintRef.current(true)
-      if (serializeTimerRef.current !== null) {
-        window.clearTimeout(serializeTimerRef.current)
-      }
-      serializeTimerRef.current = window.setTimeout(() => {
-        serializeTimerRef.current = null
-        try {
-          const { markdown, didSerialize } = commitRichMarkdownSerialization(
-            nextEditor,
-            { originalSourceRef, baseCanonicalRef, lastCommittedMarkdownRef },
-            reconcileRoundTripRef.current
-          )
-          if (didSerialize) {
-            onContentChangeRef.current(markdown)
+      scheduleEditorSerialization(
+        serializeTimerRef,
+        () => {
+          try {
+            const { markdown, didSerialize } = commitRichMarkdownSerialization(
+              nextEditor,
+              { originalSourceRef, baseCanonicalRef, lastCommittedMarkdownRef },
+              reconcileRoundTripRef.current
+            )
+            if (didSerialize) {
+              onContentChangeRef.current(markdown)
+            }
+          } catch (error) {
+            // Why: teardown and reconcile failures are handled above; other failures must stay observable.
+            console.error('[editor] rich markdown serialize (debounced) failed', error)
           }
-        } catch (error) {
-          // Why: teardown and reconcile failures are handled above; other failures must stay observable.
-          console.error('[editor] rich markdown serialize (debounced) failed', error)
-        }
-      }, 300)
+        },
+        300
+      )
     },
     onSelectionUpdate: ({ editor: nextEditor }) => {
       syncSlashMenu(nextEditor, rootRef.current, setSlashMenu)

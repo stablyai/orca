@@ -124,6 +124,10 @@ export type OpenFile = {
   externalMutation?: 'deleted' | 'renamed' | 'changed'
   /** Signature of the disk content this tab's edits are based on; persisted so a restore detects a changed-on-disk conflict before autosave clobbers an agent write. */
   lastKnownDiskSignature?: string
+  /** Journal identity survives hydration; it is independent of tab membership. */
+  recoveryId?: string
+  recoveryRevision?: number
+  recoveryBufferKind?: string
   /** Why: gates autosave for restored dirty tabs until the conflict scan compares disk vs baseline, else a slow SSH read loses the race. Not persisted. */
   pendingDiskBaselineVerification?: boolean
   /** Why: gates autosave during a live self-move echo's disk verification; separate flag from the restored scan's so the two can't clear each other's gate. Not persisted. */

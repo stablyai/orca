@@ -82,11 +82,15 @@ export function useHostModelCatalogUpgrade(args: {
       )
     let leave: (() => void) | null = null
     const waitForListing = (): void => {
-      leave = joinHostModelListingWait(waitKey, () => read(true), (catalog) => {
-        if (catalog) {
-          apply(catalog)
+      leave = joinHostModelListingWait(
+        waitKey,
+        () => read(true),
+        (catalog) => {
+          if (catalog) {
+            apply(catalog)
+          }
         }
-      })
+      )
     }
     if (isHostModelListingWaitInFlight(waitKey)) {
       waitForListing()

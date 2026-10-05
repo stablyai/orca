@@ -1,5 +1,7 @@
 import type { OpenFile } from '@/store/slices/editor'
 import { shouldPersistWorkspaceSession } from '@/lib/workspace-session'
+import { canRecoverEditorBuffer } from '@/lib/editor-recovery-metadata'
+import { flushEditorRecovery } from '@/lib/editor-recovery-checkpoints'
 import { canAutoSaveOpenFile } from './editor-autosave'
 import { flushPendingEditorChange } from './editor-pending-flush'
 import { getDuplicateDirtySavePaths } from './editor-autosave-state-projections'
@@ -86,7 +88,7 @@ export function createEditorRestartSaveHandlers({
 
       const state = store.getState()
       const dirtyFiles = state.openFiles.filter((file) => file.isDirty)
-      const unsupportedDirtyFiles = dirtyFiles.filter((file) => file.mode !== 'edit')
+      const unsupportedDirtyFiles = dirtyFiles.filter((file) => !canRecoverEditorBuffer(file))
       if (unsupportedDirtyFiles.length > 0) {
         detail.reject('Some unsaved editor changes cannot be backed up before restart.')
         return
@@ -107,6 +109,7 @@ export function createEditorRestartSaveHandlers({
 
       // Why: preload dispatches beforeunload immediately after this resolves;
       // App owns the one combined session/UI checkpoint for restart and update.
+      await flushEditorRecovery()
       detail.resolve()
     } catch (error) {
       detail.reject(String((error as Error)?.message ?? error))

@@ -39,6 +39,7 @@ import { useCombinedDiffNotesActions } from './review-controls/use-combined-diff
 import { useCombinedDiffSectionActions } from './review-controls/use-combined-diff-section-actions'
 import { useCombinedDiffViewPreferences } from './review-controls/use-combined-diff-view-preferences'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useCombinedDiffDraftRecovery } from './remember-view/use-combined-diff-draft-recovery'
 
 export default function CombinedDiffViewer({
   file,
@@ -195,6 +196,7 @@ export default function CombinedDiffViewer({
     shouldAutoReloadFromGitStatus: entrySet.shouldAutoReloadFromGitStatus,
     treeMode: entrySet.treeMode
   })
+  const recovery = useCombinedDiffDraftRecovery(file, sections)
   const { handleSectionSaveRef, modifiedEditorsRef, openSection, openSectionPreview } =
     useCombinedDiffSectionActions({
       activeGroupId,
@@ -208,7 +210,8 @@ export default function CombinedDiffViewer({
       sections,
       sectionsRef: registry.sectionsRef,
       setSectionHeights,
-      setSections
+      setSections,
+      retireSection: recovery.retireSection
     })
 
   useCombinedDiffViewPersist({
@@ -370,6 +373,7 @@ export default function CombinedDiffViewer({
             loadDeferredSection={loadDeferredSection}
             markDirectScrollInput={markDirectScrollInput}
             modifiedEditorsRef={modifiedEditorsRef}
+            onDraftChange={recovery.onDraftChange}
             onScrollbarPointerDown={handleScrollbarPointerDown}
             openSection={openSection}
             openSectionPreview={openSectionPreview}

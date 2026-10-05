@@ -1,4 +1,6 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
 import { ORCA_EDITOR_SAVE_AND_CLOSE_EVENT } from '@/components/editor/editor-autosave'
 import { discardEditorFileChangesAndClose } from '@/components/editor/discard-editor-file-changes'
@@ -22,6 +24,7 @@ export function useTerminalSaveDialog({
   closeFile
 }: UseTerminalSaveDialogParams): UseTerminalSaveDialogResult {
   const [saveDialogFileId, setSaveDialogFileId] = useState<string | null>(null)
+  const discarding = useRef(false)
 
   const saveDialogFile = saveDialogFileId
     ? (openFiles.find((f) => f.id === saveDialogFileId) ?? null)
@@ -51,12 +54,21 @@ export function useTerminalSaveDialog({
   }, [saveDialogFileId])
 
   const handleSaveDialogDiscard = useCallback(async () => {
-    if (!saveDialogFileId) {
+    if (!saveDialogFileId || discarding.current) {
       return
     }
-
-    await discardEditorFileChangesAndClose(saveDialogFileId)
-    setSaveDialogFileId(null)
+    discarding.current = true
+    try {
+      await discardEditorFileChangesAndClose(saveDialogFileId)
+      setSaveDialogFileId(null)
+    } catch (error) {
+      console.error('[editor-recovery] Could not discard unsaved changes:', error)
+      toast.error(
+        translate('editorRecovery.discardFailed', 'Could not discard unsaved changes. Try again.')
+      )
+    } finally {
+      discarding.current = false
+    }
   }, [saveDialogFileId])
 
   const handleSaveDialogCancel = useCallback(() => {

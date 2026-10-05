@@ -7,6 +7,7 @@ import {
   type MutableRefObject
 } from 'react'
 import { registerPendingEditorFlush } from './editor-pending-flush'
+import { scheduleEditorSerialization } from './editor-serialization-deadline'
 import {
   deleteIpynbCell,
   insertIpynbCell,
@@ -75,7 +76,7 @@ export function useIpynbDocumentEditing({
   const notebookRef = useRef(notebook)
   const onContentChangeRef = useRef(onContentChange)
   const onDirtyStateHintRef = useRef(onDirtyStateHint)
-  const sourceCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sourceCommitTimerRef = useRef<number | null>(null)
   const structuralFrameIdsRef = useRef<number[]>([])
   useLayoutEffect(() => {
     contentRef.current = content
@@ -113,12 +114,13 @@ export function useIpynbDocumentEditing({
   }, [materializeSourceDrafts])
 
   const queueSourceDraftCommit = useCallback((): void => {
-    if (sourceCommitTimerRef.current !== null) {
-      clearTimeout(sourceCommitTimerRef.current)
-    }
-    sourceCommitTimerRef.current = setTimeout(() => {
-      void flushSourceDrafts()
-    }, NOTEBOOK_SOURCE_COMMIT_DELAY_MS)
+    scheduleEditorSerialization(
+      sourceCommitTimerRef,
+      () => {
+        void flushSourceDrafts()
+      },
+      NOTEBOOK_SOURCE_COMMIT_DELAY_MS
+    )
   }, [flushSourceDrafts])
 
   useEffect(

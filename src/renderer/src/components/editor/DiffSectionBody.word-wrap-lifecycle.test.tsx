@@ -8,6 +8,7 @@ const { mountedEditors, syncWordWrap, cleanupShiftWheel, createEditor } = vi.hoi
   function createEditor() {
     const listeners = new Set<() => void>()
     const modified = {
+      getModel: () => null,
       onDidDispose: (listener: () => void) => {
         listeners.add(listener)
         return { dispose: () => listeners.delete(listener) }

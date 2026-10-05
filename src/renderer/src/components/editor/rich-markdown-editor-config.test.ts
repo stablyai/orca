@@ -1,5 +1,8 @@
+// @vitest-environment happy-dom
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { Editor } from '@tiptap/react'
+import { Editor } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import { Markdown } from '@tiptap/markdown'
 import type { DocLinkMenuState } from './rich-markdown-commands'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
@@ -122,5 +125,35 @@ describe('createRichMarkdownEditorConfig', () => {
     expect(setMarkdownEditorFocused).toHaveBeenCalledWith(false)
     expect(clearAnnotationTarget).toHaveBeenCalledOnce()
     expect(flushPendingSerialization).toHaveBeenCalledOnce()
+  })
+
+  it('serializes actual rich document edits throughout continuous typing', async () => {
+    vi.useFakeTimers()
+    const changed = vi.fn<(content: string) => void>()
+    const params = createConfigParams({
+      onContentChangeRef: ref(changed),
+      reconcileRoundTripRef: ref((markdown: string) => markdown)
+    })
+    const editor = new Editor({
+      ...createRichMarkdownEditorConfig(params),
+      extensions: [StarterKit, Markdown]
+    })
+    params.editorRef.current = editor
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      for (let index = 0; index < 20; index++) {
+        editor.commands.insertContent('x')
+        await vi.advanceTimersByTimeAsync(100)
+      }
+      expect(changed.mock.calls.length).toBeGreaterThanOrEqual(4)
+      expect(changed.mock.calls.at(-1)?.[0]).toBe(editor.getMarkdown())
+      expect(editor.getMarkdown()).toContain('x'.repeat(20))
+    } finally {
+      editor.destroy()
+      if (params.serializeTimerRef.current !== null) {
+        window.clearTimeout(params.serializeTimerRef.current)
+      }
+      vi.useRealTimers()
+    }
   })
 })

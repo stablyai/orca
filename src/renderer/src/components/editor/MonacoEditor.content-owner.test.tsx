@@ -93,6 +93,7 @@ describe('MonacoEditor content ownership', () => {
 
     expect(editorProps.current?.defaultValue).toBe('initial content')
     expect(editorProps.current).not.toHaveProperty('value')
+    expect(editorProps.current).not.toHaveProperty('onChange')
   })
 
   it('isolates same-path files on different hosts while sharing split panes', () => {

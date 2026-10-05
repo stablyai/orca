@@ -9,6 +9,7 @@ import {
   shouldDeleteUntouchedUntitledFile
 } from '../tabs/untitled-file-cleanup'
 import { unifiedTabsKeepWorktreeSelected } from './unified-tabs-keep-worktree-selected'
+import { flushPendingEditorChange } from '@/components/editor/editor-pending-flush'
 
 export function createCloseFileAction(
   set: EditorSet,
@@ -16,6 +17,7 @@ export function createCloseFileAction(
 ): Pick<EditorSlice, 'closeFile'> {
   return {
     closeFile: (fileId) => {
+      flushPendingEditorChange(fileId)
       // Why: capture untitled+dirty state before set() mutates the store, so cleanup of throwaway untitled files can decide after removal.
       const preClose = get().openFiles.find((f) => f.id === fileId)
       // Why: also check editorDrafts — isDirty is set by a debounced callback, so a draft can exist before isDirty flushes; a draft means the user typed something.

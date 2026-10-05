@@ -4,6 +4,12 @@ import type { WorkspaceSessionPatch } from '../../../shared/workspace-session-st
 import { SESSION_RELEVANT_FIELDS, shouldPersistWorkspaceSession } from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
 import { createWorktreeTabBucketProjection } from './worktree-tab-bucket-projection'
+import { createDeadlineDebouncer } from './deadline-debouncer'
+import {
+  flushPendingEditorChanges,
+  subscribePendingEditorChanges
+} from '@/components/editor/editor-pending-flush'
+import { isPublishingEditorModelContent } from '@/components/editor/editor-model-content-checkpoint'
 
 type SessionRelevantField = (typeof SESSION_RELEVANT_FIELDS)[number]
 type TabsByWorktree = AppState['tabsByWorktree']
@@ -103,6 +109,7 @@ export type SessionWriteSubscriberDeps = {
   }
   persist: (payload: WorkspaceSessionWrite) => void
   debounceMs?: number
+  maxWaitMs?: number
 } & SessionWritePersistGate
 
 /**
@@ -116,9 +123,9 @@ export function createSessionWriteSubscriber({
   persist,
   shouldSchedulePersist,
   subscribeToPersistGateOpen,
-  debounceMs = 150
+  debounceMs = 150,
+  maxWaitMs = 1_000
 }: SessionWriteSubscriberDeps): () => void {
-  let timer: ReturnType<typeof setTimeout> | null = null
   // Why: the subscriber fires on every store update (agent status, usage
   // refreshes, runtime title ticks, …). Without this gate each fire reset
   // the debounce, and when it finally expired buildWorkspaceSessionPayload
@@ -136,11 +143,11 @@ export function createSessionWriteSubscriber({
   // never be re-detected. It is retired only by a flush that reached `persist` (or found nothing
   // left to write), and by unsubscribe. A closed gate never retires it.
   const pendingChangedFields = new Set<SessionRelevantField>()
+  let flushingModels = false
   const terminalTabsProjection = createTerminalSessionTabsProjection()
   const unifiedTabsProjection = createUnifiedSessionTabsProjection()
 
-  const flushPendingWrite = (): void => {
-    timer = null
+  const flushPendingWrite = (): void | false => {
     // Why: rebuild from the freshest store state rather than the snapshot
     // captured when this timer was scheduled. Today this is equivalent
     // because buildWorkspaceSessionPayload reads only SESSION_RELEVANT_FIELDS
@@ -149,16 +156,23 @@ export function createSessionWriteSubscriber({
     // future refactor that adds a non-relevant field read to the payload
     // builder — without this, such a change would silently start emitting
     // stale values for that field.
-    const fresh = store.getState()
+    const state = store.getState()
     // Why: a closed gate defers, it never discards. Returning with the pending set intact leaves
     // the write owed; the next store update or gate-open wake-up re-arms it. Nothing re-arms from
     // here, so a gate that never reopens costs no timer.
-    if (!shouldPersistWorkspaceSession(fresh)) {
-      return
+    if (!shouldPersistWorkspaceSession(state)) {
+      return false
     }
     if (shouldSchedulePersist && !shouldSchedulePersist()) {
-      return
+      return false
     }
+    flushingModels = true
+    try {
+      flushPendingEditorChanges()
+    } finally {
+      flushingModels = false
+    }
+    const fresh = store.getState()
     const changed = new Set(pendingChangedFields)
     pendingChangedFields.clear()
     const patch = buildWorkspaceSessionPatch(fresh, changed)
@@ -168,11 +182,11 @@ export function createSessionWriteSubscriber({
     persist({ patch })
   }
 
+  const debouncer = createDeadlineDebouncer(flushPendingWrite, debounceMs, maxWaitMs)
   const armFlushTimer = (): void => {
-    if (timer !== null) {
-      clearTimeout(timer)
+    if (!flushingModels) {
+      debouncer.schedule()
     }
-    timer = setTimeout(flushPendingWrite, debounceMs)
   }
 
   /**
@@ -216,7 +230,7 @@ export function createSessionWriteSubscriber({
         return
       }
       // An unrelated update may wake a deferred write but must never reset an armed debounce.
-      if (timer !== null) {
+      if (debouncer.isScheduled) {
         return
       }
       armFlushTimer()
@@ -251,7 +265,7 @@ export function createSessionWriteSubscriber({
     }
     // Why: an unrelated update may wake a deferred write but must never reset an armed debounce —
     // that reset storm is exactly what the changed-field gate above exists to prevent.
-    if (timer !== null && changedFields.length === 0) {
+    if (debouncer.isScheduled && (changedFields.length === 0 || isPublishingEditorModelContent())) {
       return
     }
     armFlushTimer()
@@ -263,9 +277,18 @@ export function createSessionWriteSubscriber({
   // that incidental wake-up is not guaranteed; seed from the current state instead.
   evaluateSessionState(store.getState())
   const unsub = store.subscribe(evaluateSessionState)
+  const unsubInput = subscribePendingEditorChanges(() => {
+    pendingChangedFields.add('editorDrafts')
+    if (
+      shouldPersistWorkspaceSession(store.getState()) &&
+      (!shouldSchedulePersist || shouldSchedulePersist())
+    ) {
+      armFlushTimer()
+    }
+  })
 
   const unsubGateOpen = subscribeToPersistGateOpen?.(() => {
-    if (pendingChangedFields.size === 0 || timer !== null) {
+    if (pendingChangedFields.size === 0 || debouncer.isScheduled) {
       return
     }
     armFlushTimer()
@@ -273,10 +296,9 @@ export function createSessionWriteSubscriber({
 
   return () => {
     unsub()
+    unsubInput()
     unsubGateOpen?.()
-    if (timer !== null) {
-      clearTimeout(timer)
-    }
+    debouncer.cancel()
     pendingChangedFields.clear()
   }
 }

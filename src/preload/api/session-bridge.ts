@@ -2,6 +2,12 @@ import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
 
 export const sessionApi = {
+  recovery: {
+    list: () => ipcRenderer.invoke('editor-recovery:list'),
+    read: (id) => ipcRenderer.invoke('editor-recovery:read', id),
+    apply: (changes) => ipcRenderer.invoke('editor-recovery:apply', changes),
+    export: (args) => ipcRenderer.invoke('editor-recovery:export', args)
+  },
   // hostId is optional; main defaults it to 'local' so existing omitting call sites keep the local session partition.
   get: (hostId) => ipcRenderer.invoke('session:get', hostId),
   listHostIds: () => ipcRenderer.invoke('session:list-host-ids'),

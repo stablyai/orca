@@ -83,15 +83,13 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
       // Verification resolved: lift autosave suspension regardless of outcome; wasPending flags a save that already re-baselined.
       const wasPending = liveFile.pendingDiskBaselineVerification === true
       store.getState().clearPendingDiskBaselineVerification(file.id)
-      if (
-        !wasPending ||
-        result.isBinary ||
-        !liveFile.isDirty ||
-        liveFile.externalMutation === 'changed'
-      ) {
+      if (!wasPending || !liveFile.isDirty || liveFile.externalMutation === 'changed') {
         return
       }
-      if (getDiskBaselineSignature(result.content) !== file.lastKnownDiskSignature) {
+      if (
+        result.isBinary ||
+        getDiskBaselineSignature(result.content) !== file.lastKnownDiskSignature
+      ) {
         markFileChangedOnDisk(store.getState(), liveFile, {
           connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
           origin: 'restore'
@@ -148,7 +146,6 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
         !file ||
         !file.pendingDiskBaselineVerification ||
         !file.isDirty ||
-        !file.lastKnownDiskSignature ||
         file.externalMutation === 'changed' ||
         !canAutoSaveOpenFile(file)
       ) {
@@ -173,7 +170,6 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
       if (
         !file.pendingDiskBaselineVerification ||
         !file.isDirty ||
-        !file.lastKnownDiskSignature ||
         file.externalMutation === 'changed' ||
         !canAutoSaveOpenFile(file) ||
         inFlightFileIds.has(file.id)

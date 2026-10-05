@@ -9,6 +9,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getNativeChatSplitQuickActions } from './native-chat-split-quick-actions'
+import { openEditorRecovery } from '@/lib/editor-recovery-checkpoints'
 
 export type CmdJQuickActionRunResult =
   | { status: 'ok' }
@@ -65,6 +66,22 @@ async function runWorkspaceAction(
 // Context-heavy setup flows such as Ghostty import and browser cookie import
 // stay inside their Settings panes where explanatory UI and failure states fit.
 export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] => [
+  {
+    id: 'recover-unsaved-changes',
+    kind: 'action',
+    title: translate('editorRecovery.title', 'Recover unsaved changes'),
+    description: translate(
+      'editorRecovery.actionDescription',
+      'Find and export draft copies from this client.'
+    ),
+    icon: FileText,
+    verbKeywords: ['recover', 'restore', 'backup', 'draft', 'unsaved'],
+    isAvailable: () => ({ available: true }),
+    run: async () => {
+      openEditorRecovery()
+      return { status: 'ok' }
+    }
+  },
   {
     id: 'new-browser-tab',
     kind: 'action',

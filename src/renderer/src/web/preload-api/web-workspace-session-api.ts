@@ -13,6 +13,7 @@ import { sanitizeWebRuntimeWorkspaceSession } from '../web-workspace-session'
 import { readLocalWebUIState } from './web-preferences-store'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { SESSION_STORAGE_KEY, readJson, writeJson } from './web-storage'
+import { createWebEditorRecoveryApi } from './web-editor-recovery-api'
 
 export function sessionStorageKeyForHost(hostId?: string | null): string {
   const resolved = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
@@ -64,10 +65,27 @@ export function getStoredWorkspaceSession(hostId?: string | null): WorkspaceSess
 }
 
 export function createWebWorkspaceSessionApi(): Partial<PreloadApi> {
+  const recovery = createWebEditorRecoveryApi(() =>
+    listStoredWorkspaceSessionHostIds().map((hostId) => ({
+      hostId,
+      session: sanitizeWebRuntimeWorkspaceSession(
+        readJson(sessionStorageKeyForHost(hostId), getDefaultWorkspaceSession())
+      )
+    }))
+  )
   return {
     session: {
+      recovery: recovery.api,
       // Mirrors desktop bridge: non-local hosts persist under a host-suffixed key so their sessions stay isolated from local.
-      get: (hostId) => Promise.resolve(getStoredWorkspaceSession(hostId)),
+      get: async (hostId) => {
+        const session = getStoredWorkspaceSession(hostId)
+        try {
+          return await recovery.restoreSession(session, hostId)
+        } catch (error) {
+          console.error('[editor-recovery] Could not restore browser drafts:', error)
+          return session
+        }
+      },
       listHostIds: () => Promise.resolve(listStoredWorkspaceSessionHostIds()),
       set: async (session, hostId) => {
         writeJson(sessionStorageKeyForHost(hostId), sanitizeWebRuntimeWorkspaceSession(session))

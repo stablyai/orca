@@ -2,6 +2,7 @@ import type { LargeDiffRenderLimit } from './large-diff-render-limit'
 
 export type DiffViewerProps = {
   modelKey: string
+  fileId?: string
   originalModelKey?: string
   modifiedModelKey?: string
   originalContent: string

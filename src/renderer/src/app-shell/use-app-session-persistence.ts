@@ -1,4 +1,6 @@
 import { useEffect } from 'react'
+import { useAppEditorRecovery } from './use-app-editor-recovery'
+import { flushPendingEditorChange } from '../components/editor/editor-pending-flush'
 import { useAppStore } from '../store'
 import {
   isDirectSshRemoteWorkspaceApplyInProgress,
@@ -117,6 +119,7 @@ function captureUploadedDirectSshLayoutEdits(
  * workspace upload chain, and the synchronous shutdown checkpoint.
  */
 export function useAppSessionPersistence(): void {
+  useAppEditorRecovery()
   useEffect(() => registerUpdaterBeforeUnloadBypass(), [])
 
   // Why: session persistence only writes to disk; a Zustand subscribe() outside React drops ~15 render-cycle subscriptions and their re-renders on every tab/file/browser change.
@@ -210,6 +213,11 @@ export function useAppSessionPersistence(): void {
     const shutdownCheckpointPersist = createShutdownCheckpointPersist({
       shouldCaptureSession: () => shouldPersistWorkspaceSession(useAppStore.getState()),
       captureTerminalBuffers: () => {
+        for (const file of useAppStore.getState().openFiles) {
+          if (file.isDirty) {
+            flushPendingEditorChange(file.id)
+          }
+        }
         for (const capture of shutdownBufferCaptures.values()) {
           try {
             capture({ includeLocalBuffers: false })

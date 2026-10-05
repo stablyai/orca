@@ -61,7 +61,8 @@ const WORKER_THREAD_ENTRY_NAMES = [
   'port-scan-command-worker-entry',
   'usage-scan-worker-entry',
   'profile-state-backup-worker-entry',
-  'profile-state-writer-worker-entry'
+  'profile-state-writer-worker-entry',
+  'editor-recovery-worker-entry'
 ] as const
 
 export const GUARDED_ENTRY_NAMES = [

@@ -2,17 +2,27 @@ import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { parseTerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
+import { EditorRecoveryService } from '../editor-recovery/editor-recovery-service'
+import { registerEditorRecoveryHandlers } from './editor-recovery'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../shared/workspace-session-state-types'
 
 export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeService): void {
+  const recovery = new EditorRecoveryService(store)
+  registerEditorRecoveryHandlers(recovery)
   // Why: hostId is an optional second arg so an older renderer that invokes
   // these channels without it keeps reading/writing the 'local' partition
   // exactly as before. Channel names stay stable.
-  ipcMain.handle('session:get', (_event, hostId?: string | null) => {
-    return store.getWorkspaceSession(hostId)
+  ipcMain.handle('session:get', async (_event, hostId?: string | null) => {
+    const session = store.getWorkspaceSession(hostId)
+    try {
+      return await recovery.restoreSession(session, hostId)
+    } catch (error) {
+      console.error('[editor-recovery] Could not restore the draft journal:', error)
+      return session
+    }
   })
 
   // Why a census channel: boot used to infer which partitions exist from the repo catalog, which

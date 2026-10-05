@@ -25,6 +25,7 @@ export function CombinedDiffSectionList({
   loadDeferredSection,
   markDirectScrollInput,
   modifiedEditorsRef,
+  onDraftChange,
   onScrollbarPointerDown,
   openSection,
   openSectionPreview,
@@ -54,6 +55,7 @@ export function CombinedDiffSectionList({
   loadDeferredSection: (index: number) => void
   markDirectScrollInput: () => void
   modifiedEditorsRef: DiffSectionItemProps['modifiedEditorsRef']
+  onDraftChange: DiffSectionItemProps['onDraftChange']
   onScrollbarPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void
   openSection: (index: number) => void
   openSectionPreview: (section: DiffSection) => void
@@ -107,6 +109,8 @@ export function CombinedDiffSectionList({
               >
                 <DiffSectionItem
                   section={section}
+                  pendingFileId={file.id}
+                  onDraftChange={onDraftChange}
                   index={virtualItem.index}
                   isBranchMode={isBranchMode}
                   sideBySide={sideBySide}

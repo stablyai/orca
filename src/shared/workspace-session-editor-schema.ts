@@ -13,6 +13,9 @@ export const persistedOpenFileSchema = z.object({
   externalSshTargetId: z.string().trim().min(1).optional(),
   dirtyDraftContent: z.string().optional(),
   lastKnownDiskSignature: z.string().optional(),
+  recoveryId: z.string().optional(),
+  recoveryRevision: z.number().int().positive().optional(),
+  recoveryBufferKind: z.string().optional(),
   readOnly: z.boolean().optional(),
   liveTail: z.boolean().optional()
 })

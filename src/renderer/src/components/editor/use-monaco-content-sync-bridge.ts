@@ -6,6 +6,11 @@ import {
   endProgrammaticContentSync,
   shouldIgnoreMonacoContentChange
 } from './monaco-programmatic-sync'
+import {
+  flushEditorModelContentCheckpoint,
+  isCurrentEditorModelContent,
+  isStaleEditorModelContent
+} from './editor-model-content-checkpoint'
 
 export type MonacoContentSyncBridge = {
   contentRef: MutableRefObject<string>
@@ -16,9 +21,7 @@ export type MonacoContentSyncBridge = {
   handleChange: (value: string | undefined) => void
 }
 
-/** Why the caller owns `contentRef`/`contentSyncModeRef`: both are latest-value refs
- *  assigned during render, which must happen in the component body so the mount
- *  handler and any handler firing before commit already read the current props. */
+/** Mount and reconciliation read the latest committed content and sync mode. */
 export function useMonacoContentSyncBridge(params: {
   editorRef: MutableRefObject<editor.IStandaloneCodeEditor | null>
   content: string
@@ -38,9 +41,6 @@ export function useMonacoContentSyncBridge(params: {
   const handleChange = useCallback(
     (value: string | undefined) => {
       if (value !== undefined) {
-        if (editorRef.current?.getModel()?.uri.toString() !== modelKey) {
-          return
-        }
         // Why: split panes share one retained model, so a sibling must ignore the echoed programmatic-sync onChange or it marks the file dirty.
         if (isApplyingLargePasteRef.current) {
           lastSyncedContentRef.current = value
@@ -70,6 +70,17 @@ export function useMonacoContentSyncBridge(params: {
       lastSyncedContentRef.current === content
     ) {
       return
+    }
+    const model = ed.getModel()
+    if (model) {
+      if (
+        isStaleEditorModelContent(model, content) ||
+        isCurrentEditorModelContent(model, content)
+      ) {
+        lastSyncedContentRef.current = content
+        return
+      }
+      flushEditorModelContentCheckpoint(model)
     }
     beginProgrammaticContentSync(modelKey)
     isApplyingProgrammaticContentRef.current = true

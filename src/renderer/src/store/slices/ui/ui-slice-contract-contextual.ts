@@ -43,6 +43,7 @@ export type UISliceContextual = {
     | 'quick-open'
     | 'worktree-palette'
     | 'workspace-cleanup'
+    | 'editor-recovery'
     | 'project-added'
     | 'worktree-visibility'
     | 'setup-guide'

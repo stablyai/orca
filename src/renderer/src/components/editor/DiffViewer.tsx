@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
+import type { DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
@@ -30,9 +30,12 @@ import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
 import { monacoFindOptions } from './monaco-find-options'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { CheckpointedDiffEditor } from './CheckpointedDiffEditor'
+import { useEditorModelContentCheckpoint } from './use-editor-model-content-checkpoint'
 
 export default function DiffViewer({
   modelKey,
+  fileId,
   originalModelKey,
   modifiedModelKey,
   originalContent,
@@ -82,6 +85,18 @@ export default function DiffViewer({
     diffWordWrapRef.current = diffWordWrap
   }, [diffWordWrap])
   const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
+  useEditorModelContentCheckpoint({
+    editor: modifiedEditor,
+    enabled: Boolean(editable),
+    fileId,
+    ownerKey: modifiedModelKey ?? modelKey,
+    publish: (content) => onContentChange?.(content),
+    onPending: () => {
+      if (fileId) {
+        useAppStore.getState().markFileDirty(fileId, true)
+      }
+    }
+  })
 
   const renderLimit = useMemo(
     () => largeDiffRenderLimit ?? getLargeDiffRenderLimit({ originalContent, modifiedContent }),
@@ -185,9 +200,9 @@ export default function DiffViewer({
 
   // Keep refs to latest callbacks so the mounted editor always calls current versions
   const onSaveRef = useRef(onSave)
-  onSaveRef.current = onSave
-  const onContentChangeRef = useRef(onContentChange)
-  onContentChangeRef.current = onContentChange
+  useLayoutEffect(() => {
+    onSaveRef.current = onSave
+  }, [onSave])
 
   const { setupCopy, toastNode } = useContextualCopySetup()
 
@@ -258,16 +273,11 @@ export default function DiffViewer({
         const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(originalEditor)
         const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modifiedEditor)
 
-        // Track changes
-        const modelContentSub = modifiedEditor.onDidChangeModelContent(() => {
-          onContentChangeRef.current?.(modifiedEditor.getValue())
-        })
         modifiedEditor.onDidDispose(() => {
-          // Why: this diff instance owns both panes' shortcut bridges + the model sub, so dispose them with it.
+          // Why: this diff instance owns both panes' shortcut bridges.
           cleanupSaveShortcut()
           cleanupOriginalFindShortcut()
           cleanupModifiedFindShortcut()
-          modelContentSub.dispose()
         })
 
         modifiedEditor.focus()
@@ -327,13 +337,20 @@ export default function DiffViewer({
             })}
           />
         ) : (
-          <DiffEditor
+          <CheckpointedDiffEditor
+            key={currentDiffModelPaths.modifiedModelPath}
             height="100%"
             language={language}
             original={originalContent}
             modified={modifiedContent}
             theme={isDark ? 'vs-dark' : 'vs'}
             onMount={handleMount}
+            onBeforeUnmount={(diffEditor) => {
+              const viewState = diffEditor.saveViewState()
+              if (viewState) {
+                setWithLRU(diffViewStateCache, modelKey, viewState)
+              }
+            }}
             // Why: key models by tab identity and preserve the modified undo stack across Changes-mode HEAD rotations.
             originalModelPath={currentDiffModelPaths.originalModelPath}
             modifiedModelPath={currentDiffModelPaths.modifiedModelPath}

@@ -13,14 +13,15 @@ import { isDiffComment } from '@/lib/diff-comment-compat'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { DiffSectionBody } from './DiffSectionBody'
 import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
-import { getLiveDiffSectionRenderLimit } from './diff-section-live-render-limit'
 import { useDiffSectionFallbackCleanup } from './useDiffSectionFallbackCleanup'
 import { submitDiffSectionComment } from './diff-section-comment-submit'
 import type { DiffSectionItemProps } from './diff-section-item-props'
 import { useDiffSectionModelLifecycle } from './use-diff-section-model-lifecycle'
+import { useDiffSectionContentCheckpoint } from './use-diff-section-content-checkpoint'
 
 export function DiffSectionItem({
   section,
+  pendingFileId,
   index,
   isBranchMode,
   sideBySide,
@@ -35,6 +36,7 @@ export function DiffSectionItem({
   openSection,
   openSectionTitle,
   onOpenPreview,
+  onDraftChange,
   renderHeaderTrailingContent,
   onAddLineComment,
   addLineCommentLabel,
@@ -76,6 +78,14 @@ export function DiffSectionItem({
   )
 
   const [modifiedEditor, setModifiedEditor] = useState<monacoEditor.ICodeEditor | null>(null)
+  useDiffSectionContentCheckpoint({
+    modifiedEditor,
+    section,
+    pendingFileId,
+    onDraftChange,
+    setSections,
+    enabled: isEditable && !section.collapsed
+  })
   const diffEditorRef = useRef<monacoEditor.IStandaloneDiffEditor | null>(null)
   const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
   const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
@@ -241,46 +251,11 @@ export function DiffSectionItem({
     )
     const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(original)
     const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modified)
-    const modelContentSub = modified.onDidChangeModelContent(() => {
-      const current = modified.getValue()
-      setSections((prev) => {
-        let changed = false
-        const next = prev.map((s, i) => {
-          if (i !== index) {
-            return s
-          }
-
-          const savedModifiedContent =
-            s.diffResult?.kind === 'text' ? s.diffResult.modifiedContent : s.modifiedContent
-          const dirty = current !== savedModifiedContent
-          if (s.modifiedContent === current && s.dirty === dirty) {
-            return s
-          }
-
-          changed = true
-          // Why: virtualized rows unmount when scrolled away, so the draft must
-          // live in section state instead of only in Monaco's mounted model.
-          return {
-            ...s,
-            modifiedContent: current,
-            dirty,
-            largeDiffRenderLimit: getLiveDiffSectionRenderLimit({
-              section: s,
-              modifiedEditor: modified,
-              modifiedContent: current
-            })
-          }
-        })
-        return changed ? next : prev
-      })
-    })
     modified.onDidDispose(() => {
-      // Why: editable diff sections own both panes' shortcut bridges and the
-      // model subscription for the lifetime of this Monaco diff instance.
+      // Why: editable diff sections own both panes' shortcut bridges.
       cleanupSaveShortcut()
       cleanupOriginalFindShortcut()
       cleanupModifiedFindShortcut()
-      modelContentSub.dispose()
     })
   }
 

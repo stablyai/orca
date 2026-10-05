@@ -5,6 +5,7 @@ import type { DiffSection } from './diff-section-types'
 
 export type DiffSectionItemProps = {
   section: DiffSection
+  pendingFileId?: string
   index: number
   isBranchMode: boolean
   sideBySide: boolean
@@ -24,6 +25,7 @@ export type DiffSectionItemProps = {
   openSection: (index: number) => void
   openSectionTitle: string
   onOpenPreview?: (section: DiffSection, index: number) => void
+  onDraftChange?: (section: DiffSection, content: string) => void
   renderHeaderTrailingContent?: (section: DiffSection, index: number) => ReactNode
   onAddLineComment?: (
     section: DiffSection,

@@ -31,27 +31,37 @@ export function addEditorFileIdMigration(
 
 export type LegacyHydratedEditorFile = Pick<
   OpenFile,
-  'id' | 'filePath' | 'worktreeId' | 'runtimeEnvironmentId' | 'markdownPreviewSourceFileId'
+  | 'id'
+  | 'filePath'
+  | 'worktreeId'
+  | 'runtimeEnvironmentId'
+  | 'markdownPreviewSourceFileId'
+  | 'recoveryBufferKind'
 >
 
 export class LegacyHydratedEditorFileIndex {
   private readonly filesByPath = new Map<string, Map<string, string>>()
   private readonly ownersById = new Map<string, Set<string>>()
 
-  private ownerKey(worktreeId: string, runtimeEnvironmentId: string | null | undefined): string {
-    return JSON.stringify([worktreeId, runtimeOwnerKey(runtimeEnvironmentId)])
+  private ownerKey(
+    worktreeId: string,
+    runtimeEnvironmentId: string | null | undefined,
+    bufferKind = 'edit'
+  ): string {
+    return JSON.stringify([worktreeId, runtimeOwnerKey(runtimeEnvironmentId), bufferKind])
   }
 
   hasOwner(file: PersistedOpenFile, worktreeId: string): boolean {
     return (
       this.filesByPath
         .get(file.filePath)
-        ?.has(this.ownerKey(worktreeId, file.runtimeEnvironmentId)) ?? false
+        ?.has(this.ownerKey(worktreeId, file.runtimeEnvironmentId, file.recoveryBufferKind)) ??
+      false
     )
   }
 
   resolve(file: PersistedOpenFile, worktreeId: string): string {
-    const owner = this.ownerKey(worktreeId, file.runtimeEnvironmentId)
+    const owner = this.ownerKey(worktreeId, file.runtimeEnvironmentId, file.recoveryBufferKind)
     const existing = this.filesByPath.get(file.filePath)?.get(owner)
     if (existing !== undefined) {
       return existing
@@ -63,7 +73,7 @@ export class LegacyHydratedEditorFileIndex {
   }
 
   add(file: LegacyHydratedEditorFile): void {
-    const owner = this.ownerKey(file.worktreeId, file.runtimeEnvironmentId)
+    const owner = this.ownerKey(file.worktreeId, file.runtimeEnvironmentId, file.recoveryBufferKind)
     let files = this.filesByPath.get(file.filePath)
     if (!files) {
       files = new Map()

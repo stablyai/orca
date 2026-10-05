@@ -26,6 +26,9 @@ export type PersistedOpenFile = {
   /** Signature of the disk content the dirty draft is based on; lets restore
    *  re-derive a changed-on-disk conflict from ground truth. */
   lastKnownDiskSignature?: string
+  recoveryId?: string
+  recoveryRevision?: number
+  recoveryBufferKind?: string
   /** Why: a read-only tab (AI Vault View Log) must survive restart still
    *  read-only; persisted only when true so old sessions stay writable. */
   readOnly?: boolean
@@ -68,9 +71,7 @@ export type WorkspaceSessionState = {
    *  Used on startup to eagerly re-spawn PTY processes so the Active filter
    *  works immediately after restart. */
   activeWorktreeIdsOnShutdown?: string[]
-  /** Editor files that were open at shutdown, keyed by worktree ID.
-   *  Only edit-mode files are persisted — diffs and conflict views are
-   *  transient and not restored. */
+  /** Editor files and edited unstaged diffs, keyed by worktree ID. */
   openFilesByWorktree?: Record<string, PersistedOpenFile[]>
   /** Per-worktree active editor file ID (filePath) at shutdown. */
   activeFileIdByWorktree?: Record<string, string | null>

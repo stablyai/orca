@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { editor } from 'monaco-editor'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
-import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
+import type { DiffOnMount } from '@monaco-editor/react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-options'
@@ -18,6 +18,7 @@ import {
 } from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
 import { installDiffEditorShiftWheelScroll } from './diff-editor-shift-wheel-scroll'
+import { CheckpointedDiffEditor } from './CheckpointedDiffEditor'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -202,7 +203,8 @@ export function DiffSectionBody({
           }
         />
       ) : (
-        <DiffEditor
+        <CheckpointedDiffEditor
+          key={modelPathBase}
           height="100%"
           language={language}
           original={section.originalContent}

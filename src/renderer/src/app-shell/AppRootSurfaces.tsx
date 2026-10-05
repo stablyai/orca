@@ -31,6 +31,7 @@ const WorktreeJumpPalette = lazy(() => import('../components/WorktreeJumpPalette
 const WorkspaceCleanupDialog = lazy(
   () => import('../components/workspace-cleanup/WorkspaceCleanupDialog')
 )
+const EditorRecoveryDialog = lazy(() => import('../components/editor/EditorRecoveryDialog'))
 const StatusBar = lazy(() =>
   import('../components/status-bar/StatusBar').then((module) => ({ default: module.StatusBar }))
 )
@@ -223,6 +224,14 @@ export function AppRootSurfaces(props: {
       </Suspense>
       {/* Why: root overlays can render Radix <Tooltip>s; keep inside the shared provider so lazy surfaces mount from any entry point. */}
       <Suspense fallback={null}>
+        {mountedLazyModalIds.has('editor-recovery') ? (
+          <ModalBoundary
+            boundaryId="modal.editor-recovery"
+            resetKey={activeModal === 'editor-recovery'}
+          >
+            <EditorRecoveryDialog />
+          </ModalBoundary>
+        ) : null}
         {mountedLazyModalIds.has('workspace-cleanup') ? (
           <ModalBoundary
             boundaryId="modal.workspace-cleanup"

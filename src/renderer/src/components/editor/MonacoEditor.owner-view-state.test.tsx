@@ -157,5 +157,5 @@ it('preserves a draft, selected range and scroll when the same tab gains a known
   act(() => {
     after.executeEdits('user-edit', [{ range: new monaco.Range(301, 14, 301, 14), text: '!' }])
   })
-  expect(props.onContentChange).toHaveBeenCalledExactlyOnceWith(`${draft}!`)
+  await waitFor(() => expect(props.onContentChange).toHaveBeenCalledExactlyOnceWith(`${draft}!`))
 })

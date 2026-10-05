@@ -5,6 +5,7 @@ import type {
 } from '../../shared/workspace-session-state-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
+import type { EditorRecoveryApi } from '../../shared/editor-recovery'
 import type {
   RemoteWorkspaceChangedEvent,
   RemoteWorkspaceConnectedClient,
@@ -14,6 +15,8 @@ import type {
 
 export type WorkspaceSessionApi = {
   session: {
+    /** Optional for clients connected to earlier runtimes. */
+    recovery?: EditorRecoveryApi
     // hostId defaults to the 'local' partition on main, so omitting it stays backward-compatible.
     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
     /** Partitions persistence holds, so boot reads them all instead of guessing from the catalog. */

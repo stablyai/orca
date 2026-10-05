@@ -12,6 +12,9 @@ import {
 import { discardEditorFileChangesAndClose } from './discard-editor-file-changes'
 import { __clearSelfWriteRegistryForTests } from './editor-self-write-registry'
 import { getDiskBaselineSignature } from './diff-content-signature'
+import { createEditorRecoverySubscriber } from '@/lib/editor-recovery-subscriber'
+import { registerPendingEditorFlush } from './editor-pending-flush'
+import type { EditorRecoveryApi } from '../../../../shared/editor-recovery'
 
 const storeHolder = vi.hoisted((): { store: StoreApi<AppState> | null } => ({ store: null }))
 
@@ -188,4 +191,51 @@ describe('untitled note save lifecycle', () => {
     expect(store.getState().openFiles).toHaveLength(0)
     await vi.waitFor(() => expect(disk.files.has(FILE_ID)).toBe(false))
   })
+
+  it.each([false, true])(
+    'retires pending serialized text before discard, keeping the buffer on journal failure=%s',
+    async (fails) => {
+      store.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+      typeInto(store, 'earlier draft')
+      const apply = vi.fn<EditorRecoveryApi['apply']>(async (changes) => {
+        if (fails) {
+          throw new Error('Journal unavailable')
+        }
+        return changes.map((change) => ({ id: change.id, revision: change.expectedRevision + 1 }))
+      })
+      const recovery = createEditorRecoverySubscriber({
+        store,
+        api: { apply, list: async () => [], read: async () => null, export: async () => null },
+        flushPendingChanges: () => {},
+        onError: vi.fn()
+      })
+      let pending = true
+      const unregister = registerPendingEditorFlush(FILE_ID, () => {
+        if (pending) {
+          pending = false
+          typeInto(store, 'last serialized text')
+        }
+      })
+      try {
+        const discard = discardEditorFileChangesAndClose(FILE_ID)
+        if (fails) {
+          await expect(discard).rejects.toThrow('Journal unavailable')
+          expect(store.getState().openFiles[0]?.isDirty).toBe(true)
+          expect(store.getState().editorDrafts[FILE_ID]).toBe('last serialized text')
+          expect(disk.files.has(FILE_ID)).toBe(true)
+        } else {
+          await discard
+          await recovery.flush()
+          expect(store.getState().openFiles).toHaveLength(0)
+          expect(apply.mock.calls.flatMap(([changes]) => changes)).toEqual([
+            expect.objectContaining({ kind: 'resolve', expectedRevision: 0 })
+          ])
+          await vi.waitFor(() => expect(disk.files.has(FILE_ID)).toBe(false))
+        }
+      } finally {
+        unregister()
+        recovery.dispose()
+      }
+    }
+  )
 })

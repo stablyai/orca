@@ -137,6 +137,26 @@ describe('attachRestoredTabConflictScan', () => {
     }
   })
 
+  it('requires a manual conflict decision for a restored draft whose baseline is unknown', async () => {
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'disk text', isBinary: false })
+    const store = createEditorStore()
+    openRestoredDirtyTab(store, '/repo/file.ts', 'old baseline')
+    store.setState({
+      openFiles: store
+        .getState()
+        .openFiles.map((file) => ({ ...file, lastKnownDiskSignature: undefined }))
+    })
+    const detach = attachRestoredTabConflictScan(store)
+    try {
+      await vi.advanceTimersByTimeAsync(10)
+      expect(store.getState().openFiles[0]?.externalMutation).toBe('changed')
+      expect(store.getState().editorDrafts['/repo/file.ts']).toBe('restored draft')
+      expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(1)
+    } finally {
+      detach()
+    }
+  })
+
   it('retries a failed read and marks once the file becomes readable', async () => {
     // Why: SSH/runtime connections come up after launch; the first reads fail.
     mocks.readRuntimeFileContent

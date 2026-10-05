@@ -7,7 +7,7 @@ import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
 import type { OpenFile } from '../types/open-file'
 import { buildValidWorktreeIdsForSessionHydration } from '../../degraded-repo-worktree-validity'
-import { buildOwnedEditorFileId } from '../file-ids/editor-file-ids'
+import { buildDiffEditorFileId, buildOwnedEditorFileId } from '../file-ids/editor-file-ids'
 import { resolveHydratedEditorFileSelection } from '../file-ids/hydrated-editor-file-selection'
 import { resolveHydratedEditorFrontmatter } from '../file-ids/hydrated-editor-frontmatter'
 import {
@@ -53,12 +53,21 @@ export function createHydrateEditorSession(
             if (legacyFileIndex.hasOwner(pf, worktreeId)) {
               continue
             }
-            const legacyId = legacyFileIndex.resolve(pf, worktreeId)
+            const isRecoveredDiff = pf.recoveryBufferKind === 'diff'
+            const legacyId = isRecoveredDiff
+              ? buildDiffEditorFileId(
+                  worktreeId,
+                  'unstaged',
+                  pf.relativePath,
+                  pf.runtimeEnvironmentId
+                )
+              : legacyFileIndex.resolve(pf, worktreeId)
             // Why: floating/runtime-owned files need IDs that survive peers disappearing between restarts; collision-based IDs drift when the path is no longer open elsewhere.
             const ownedId = buildOwnedEditorFileId(pf.filePath, worktreeId, pf.runtimeEnvironmentId)
-            const id =
-              shouldHydrateWithOwnedEditorFileId(worktreeId, pf.runtimeEnvironmentId) ||
-              usedOpenFileIds.has(pf.filePath)
+            const id = isRecoveredDiff
+              ? legacyId
+              : shouldHydrateWithOwnedEditorFileId(worktreeId, pf.runtimeEnvironmentId) ||
+                  usedOpenFileIds.has(pf.filePath)
                 ? ownedId
                 : pf.filePath
             // Why: the persisted schema allows repeated (path, worktree, runtime) tuples, and an owned id repeats verbatim — restoring both would put two files under one id.
@@ -72,7 +81,8 @@ export function createHydrateEditorSession(
               id: legacyId,
               filePath: pf.filePath,
               worktreeId,
-              runtimeEnvironmentId: pf.runtimeEnvironmentId
+              runtimeEnvironmentId: pf.runtimeEnvironmentId,
+              recoveryBufferKind: pf.recoveryBufferKind
             })
             // Why: read-only tabs (AI Vault View Log) must restore clean — ignore any persisted dirty draft/baseline so they can't come back writable.
             const isReadOnly = pf.readOnly === true
@@ -93,14 +103,14 @@ export function createHydrateEditorSession(
               ...(isReadOnly ? { readOnly: true } : {}),
               ...(isReadOnly && pf.liveTail === true ? { liveTail: true } : {}),
               lastKnownDiskSignature: isReadOnly ? undefined : pf.lastKnownDiskSignature,
+              recoveryId: isReadOnly ? undefined : pf.recoveryId,
+              recoveryRevision: isReadOnly ? undefined : pf.recoveryRevision,
+              recoveryBufferKind: isReadOnly ? undefined : pf.recoveryBufferKind,
               // Why: suspend autosave until the conflict scan verifies disk vs baseline, else a slow remote read clobbers an offline write.
               pendingDiskBaselineVerification:
-                !isReadOnly &&
-                pf.dirtyDraftContent !== undefined &&
-                pf.lastKnownDiskSignature !== undefined
-                  ? true
-                  : undefined,
-              mode: 'edit'
+                !isReadOnly && pf.dirtyDraftContent !== undefined ? true : undefined,
+              mode: isRecoveredDiff ? 'diff' : 'edit',
+              ...(isRecoveredDiff ? { diffSource: 'unstaged' as const } : {})
             })
           }
         }

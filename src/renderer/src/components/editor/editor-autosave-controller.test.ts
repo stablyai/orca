@@ -604,50 +604,57 @@ describe('attachEditorAutosaveController', () => {
     }
   })
 
-  it('rejects hot exit for dirty non-edit files that cannot be restored', async () => {
-    const writeFile = vi.fn().mockResolvedValue(undefined)
-    const setSync = vi.fn()
-    const eventTarget = new EventTarget()
-    vi.stubGlobal('window', {
-      addEventListener: eventTarget.addEventListener.bind(eventTarget),
-      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
-      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
-      setTimeout: globalThis.setTimeout.bind(globalThis),
-      clearTimeout: globalThis.clearTimeout.bind(globalThis),
-      api: {
-        fs: {
-          writeFile
-        },
-        session: {
-          setSync
+  it.each(['unstaged', 'staged'] as const)(
+    'checks hot exit support for a dirty %s diff',
+    async (diffSource) => {
+      const writeFile = vi.fn().mockResolvedValue(undefined)
+      const setSync = vi.fn()
+      const eventTarget = new EventTarget()
+      vi.stubGlobal('window', {
+        addEventListener: eventTarget.addEventListener.bind(eventTarget),
+        removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+        dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+        setTimeout: globalThis.setTimeout.bind(globalThis),
+        clearTimeout: globalThis.clearTimeout.bind(globalThis),
+        api: {
+          fs: {
+            writeFile
+          },
+          session: {
+            setSync
+          }
         }
+      } satisfies WindowStub)
+
+      const store = createEditorStore()
+      store.setState(makeSessionReadyState())
+      store.getState().openFile({
+        filePath: '/repo/file.md',
+        relativePath: 'file.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'diff'
+      })
+      store.setState({
+        openFiles: store.getState().openFiles.map((file) => ({ ...file, diffSource }))
+      })
+      store.getState().setEditorDraft('/repo/file.md', 'diff edit')
+      store.getState().markFileDirty('/repo/file.md', true)
+
+      const cleanup = attachEditorAutosaveController(store)
+      try {
+        await (diffSource === 'unstaged'
+          ? expect(requestEditorHotExitBackup()).resolves.toBeUndefined()
+          : expect(requestEditorHotExitBackup()).rejects.toThrow(
+              'Some unsaved editor changes cannot be backed up before restart.'
+            ))
+        expect(setSync).not.toHaveBeenCalled()
+        expect(writeFile).not.toHaveBeenCalled()
+      } finally {
+        cleanup()
       }
-    } satisfies WindowStub)
-
-    const store = createEditorStore()
-    store.setState(makeSessionReadyState())
-    store.getState().openFile({
-      filePath: '/repo/file.md',
-      relativePath: 'file.md',
-      worktreeId: 'wt-1',
-      language: 'markdown',
-      mode: 'diff',
-      diffSource: 'unstaged'
-    } as never)
-    store.getState().setEditorDraft('/repo/file.md', 'diff edit')
-    store.getState().markFileDirty('/repo/file.md', true)
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      await expect(requestEditorHotExitBackup()).rejects.toThrow(
-        'Some unsaved editor changes cannot be backed up before restart.'
-      )
-      expect(setSync).not.toHaveBeenCalled()
-      expect(writeFile).not.toHaveBeenCalled()
-    } finally {
-      cleanup()
     }
-  })
+  )
 
   it('skips the open-file scan for unrelated store mutations', () => {
     const writeFile = vi.fn().mockResolvedValue(undefined)

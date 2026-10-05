@@ -18922,6 +18922,36 @@
       "cancel": "Cancel"
     }
   },
+  "editorRecovery": {
+    "discardFailed": "Could not discard unsaved changes. Try again.",
+    "checkpointFailed": "Unsaved changes could not be backed up.",
+    "retry": "Retry",
+    "available": "Unsaved drafts are available to recover.",
+    "review": "Review",
+    "title": "Recover unsaved changes",
+    "actionDescription": "Find and export draft copies from this client.",
+    "changed": "The draft changed. Refresh and retry.",
+    "description": "Preview draft copies saved on this client and recover them to a separate file.",
+    "search": "Search drafts",
+    "searchPlaceholder": "Search by file or host…",
+    "refresh": "Refresh drafts",
+    "unavailable": "Recovery is unavailable in this client.",
+    "loading": "Loading drafts…",
+    "empty": "No recovery drafts found.",
+    "drafts": "Recovery drafts",
+    "imported": "Imported from a saved session",
+    "more": "Show more drafts",
+    "previewLoading": "Loading preview…",
+    "preview": "Draft preview",
+    "previewLimited": "The preview is shortened. Recovery includes the complete draft.",
+    "openInEditor": "This draft is open in the editor.",
+    "exported": "Recovered copy:",
+    "confirmDiscard": "Discard this recovery copy?",
+    "keep": "Keep",
+    "discard": "Discard",
+    "recoverCopy": "Recover copy…",
+    "saveTitle": "Recover unsaved changes to a new file"
+  },
   "fileSearch": {
     "failed": "Search failed. Try again."
   }

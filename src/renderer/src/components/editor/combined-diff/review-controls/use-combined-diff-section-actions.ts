@@ -16,6 +16,7 @@ import { getStoredTextDiffContent, getStoredTextDiffResult } from '../../large-d
 import { removeDiffSectionMeasuredHeight } from '../../diff-section-height-cache'
 import type { DiffSection } from '../../diff-section-types'
 import type { DiffSectionItemProps } from '../../diff-section-item-props'
+import { flushPendingEditorChange } from '../../editor-pending-flush'
 
 export type CombinedDiffSectionActions = {
   handleSectionSaveRef: DiffSectionItemProps['handleSectionSaveRef']
@@ -36,7 +37,8 @@ export function useCombinedDiffSectionActions({
   sections,
   sectionsRef,
   setSectionHeights,
-  setSections
+  setSections,
+  retireSection
 }: {
   activeGroupId: string | undefined
   branchCompare: NonNullable<OpenFile['branchCompare']> | null
@@ -50,6 +52,7 @@ export function useCombinedDiffSectionActions({
   sectionsRef: React.RefObject<DiffSection[]>
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
+  retireSection: (key: string, savedContent: string) => Promise<void>
 }): CombinedDiffSectionActions {
   const openFile = useAppStore((s) => s.openFile)
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
@@ -154,6 +157,7 @@ export function useCombinedDiffSectionActions({
 
   const handleSectionSave = useCallback(
     async (index: number) => {
+      flushPendingEditorChange(file.id)
       const section = sections[index]
       if (!section) {
         return
@@ -184,6 +188,11 @@ export function useCombinedDiffSectionActions({
           absolutePath,
           content
         )
+        flushPendingEditorChange(file.id)
+        await retireSection(sectionKey, content).catch((error) =>
+          console.error('[editor-recovery] Could not retire saved section:', error)
+        )
+        flushPendingEditorChange(file.id)
         // Why: the section list can be rebuilt while the write is pending, so re-resolve
         // by key — the captured index may now point at a different file.
         const savedIndex = sectionsRef.current.findIndex((s) => s.key === sectionKey)
@@ -195,6 +204,16 @@ export function useCombinedDiffSectionActions({
           prev.map((s) => {
             if (s.key !== sectionKey) {
               return s
+            }
+            if (s.modifiedContent !== content) {
+              return {
+                ...s,
+                dirty: true,
+                diffResult:
+                  s.diffResult?.kind === 'text'
+                    ? { ...s.diffResult, modifiedContent: content }
+                    : s.diffResult
+              }
             }
 
             if (s.diffResult?.kind !== 'text') {
@@ -229,11 +248,13 @@ export function useCombinedDiffSectionActions({
     },
     [
       file.filePath,
+      file.id,
       file.operationProvenance,
       file.runtimeEnvironmentId,
       file.worktreeId,
       sections,
       sectionsRef,
+      retireSection,
       setSectionHeights,
       setSections
     ]

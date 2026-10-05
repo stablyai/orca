@@ -105,7 +105,17 @@ export function useTerminalEditorCloseDialogActions(
     isClosingRef.current = true
     const fileId = saveDialogFileId
     setSaveDialogFileId(null)
-    await discardEditorFileChangesAndClose(fileId)
+    try {
+      await discardEditorFileChangesAndClose(fileId)
+    } catch (error) {
+      console.error('[editor-recovery] Could not discard unsaved changes:', error)
+      toast.error(
+        translate('editorRecovery.discardFailed', 'Could not discard unsaved changes. Try again.')
+      )
+      setSaveDialogFileId(fileId)
+      isClosingRef.current = false
+      return
+    }
     pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
       (id) => id !== fileId
     )

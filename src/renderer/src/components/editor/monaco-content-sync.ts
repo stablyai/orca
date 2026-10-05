@@ -13,7 +13,7 @@ function normalizeToModelEol(content: string, model: editor.ITextModel): string 
 }
 
 function applyModelEdit(
-  editorInstance: editor.IStandaloneCodeEditor,
+  editorInstance: editor.ICodeEditor,
   model: editor.ITextModel,
   edit: editor.IIdentifiedSingleEditOperation,
   mode: MonacoContentSyncMode,
@@ -35,7 +35,7 @@ function applyModelEdit(
 }
 
 function replaceModelContent(
-  editorInstance: editor.IStandaloneCodeEditor,
+  editorInstance: editor.ICodeEditor,
   model: editor.ITextModel,
   currentContent: string,
   content: string,
@@ -60,7 +60,7 @@ function replaceModelContent(
  * until we explicitly push them into the model here.
  */
 export function syncContentOnMount(
-  editorInstance: editor.IStandaloneCodeEditor,
+  editorInstance: editor.ICodeEditor,
   content: string,
   mode: MonacoContentSyncMode = 'undoable'
 ): boolean {
@@ -89,7 +89,7 @@ export function syncContentOnMount(
  * is done at the call site before invoking this.
  */
 export function syncContentUpdate(
-  editorInstance: editor.IStandaloneCodeEditor,
+  editorInstance: editor.ICodeEditor,
   content: string,
   mode: MonacoContentSyncMode = 'undoable'
 ): void {
