@@ -71,17 +71,25 @@ export default function MermaidBlock({
         // and render().
         mermaid.initialize(getMermaidConfig(isDark, htmlLabels))
         const { svg } = await mermaid.render(`mermaid-${id}`, content)
-        if (!cancelled && containerRef.current) {
-          // Keep a second sanitization pass that preserves safe HTML labels.
-          containerRef.current.innerHTML = sanitizeMermaidSvg(svg)
-          setError(null)
+        if (cancelled) {
+          return
         }
+        // Keep a second sanitization pass that preserves safe HTML labels.
+        const sanitized = sanitizeMermaidSvg(svg)
+        if (containerRef.current) {
+          containerRef.current.innerHTML = sanitized
+        }
+        setError(null)
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Invalid mermaid syntax')
           // Mermaid leaves an error element in the DOM on failure — clean it up.
           const errorEl = document.getElementById(`d${`mermaid-${id}`}`)
           errorEl?.remove()
+          // Clear the retained host so the previous diagram cannot linger during an error.
+          if (containerRef.current) {
+            containerRef.current.innerHTML = ''
+          }
         }
       }
     }
@@ -94,18 +102,20 @@ export default function MermaidBlock({
     }
   }, [content, htmlLabels, isDark, id])
 
-  if (error) {
-    return (
-      <div className="mermaid-block">
-        <div className="mermaid-error">
-          {translate('auto.components.editor.MermaidBlock.dcc132e691', 'Diagram error:')} {error}
-        </div>
-        <pre>
-          <code>{content}</code>
-        </pre>
-      </div>
-    )
-  }
-
-  return <div className="mermaid-block" ref={containerRef} />
+  return (
+    <div className="mermaid-block">
+      {error !== null ? (
+        <>
+          <div className="mermaid-error">
+            {translate('auto.components.editor.MermaidBlock.dcc132e691', 'Diagram error:')} {error}
+          </div>
+          <pre>
+            <code>{content}</code>
+          </pre>
+        </>
+      ) : null}
+      {/* Keep the SVG host mounted so a corrected diagram can replace the error. */}
+      <div ref={containerRef} hidden={error !== null} />
+    </div>
+  )
 }
