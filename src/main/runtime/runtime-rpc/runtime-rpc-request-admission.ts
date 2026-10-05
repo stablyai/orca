@@ -29,8 +29,8 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     if (rejection) {
       return this.buildError(request.id, 'runtime_busy', rejection)
     }
-    if (longPoll) {
-      // Why: arm keepalive only for long-polls; short RPCs never create the setInterval. See §3.1.
+    if (longPoll || request.method === 'terminal.send') {
+      // Queued terminal sends can outlive socket idle timeouts without taking a long-poll slot.
       context?.startKeepalive()
     }
 

@@ -179,16 +179,20 @@ export class OrcaRuntimeWithAttachRemoteTerminalSourceRangeConsumer extends Orca
     if (data.length === 0 || this.getDriver(ptyId).kind === 'mobile') {
       return false
     }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
     try {
-      await assertTerminalInputWithinLimitWithYield(data)
-      await this.writeTerminalInputChunks(ptyId, data, {
-        inputKind: 'driving',
-        // Why: a phone can claim the floor while a paste yields between chunks.
-        beforeWrite: () => {
-          if (this.getDriver(ptyId).kind === 'mobile') {
-            throw new Error('terminal_mobile_driver_active')
+      await this.serializeTerminalInput(ptyId, generation, async () => {
+        await assertTerminalInputWithinLimitWithYield(data)
+        await this.writeTerminalInputChunks(ptyId, data, {
+          inputKind: 'driving',
+          beforeWrite: () => {
+            this.assertAgentPromptGeneration(ptyId, generation)
+            // A phone can claim the floor while a paste yields between chunks.
+            if (this.getDriver(ptyId).kind === 'mobile') {
+              throw new Error('terminal_mobile_driver_active')
+            }
           }
-        }
+        })
       })
       return true
     } catch {
