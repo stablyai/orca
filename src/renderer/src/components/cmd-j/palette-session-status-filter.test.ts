@@ -45,9 +45,14 @@ describe('matchesPaletteSessionStatus', () => {
   )
 
   it.each(['failed', 'interrupted', 'unconfirmed'] as const)(
-    'does not mislabel a %s outcome without unread output as Finished or Idle',
+    'keeps a quiet %s outcome outside all categories but includes its unread result',
     (status) => {
-      expect(matchesPaletteSessionStatus(['finished', 'idle'], status, false)).toBe(false)
+      expect(
+        matchesPaletteSessionStatus(['waiting', 'finished', 'working', 'idle'], status, false)
+      ).toBe(false)
+      expect(matchesPaletteSessionStatus(['finished'], status, true)).toBe(true)
+      expect(matchesPaletteSessionStatus(['waiting', 'working', 'idle'], status, true)).toBe(false)
+      expect(matchesPaletteSessionStatus([], status, false)).toBe(true)
     }
   )
 

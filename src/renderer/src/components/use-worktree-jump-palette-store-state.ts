@@ -12,6 +12,7 @@ import {
 import { selectWorktreePaletteCacheInputs } from '@/components/cmd-j/worktree-palette-cache-inputs'
 import type { PaletteFilterState } from './cmd-j/palette-filter'
 
+/** Reads palette state with a snapshot freshness clock separate from the live badge clock. */
 export function useWorktreeJumpPaletteStoreState({
   visible,
   lingering,
@@ -25,6 +26,8 @@ export function useWorktreeJumpPaletteStoreState({
   // Freeze age labels for one palette session; live status dots own their clock separately.
   // oxlint-disable-next-line react-hooks/exhaustive-deps -- visibility intentionally starts a new session clock.
   const paletteNowMs = useMemo(() => Date.now(), [visible])
+  // Freeze status matching too: badge expiry must not move numbered rows under the cursor.
+  // Explicit filter changes refresh both the status inputs and their freshness clock.
   // oxlint-disable-next-line react-hooks/exhaustive-deps -- explicit filter changes refresh the status snapshot.
   const paletteSessionNowMs = useMemo(() => Date.now(), [visible, filter])
   const closeModal = useAppStore((state) => state.closeModal)

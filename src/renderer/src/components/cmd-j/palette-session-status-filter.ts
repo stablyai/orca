@@ -9,6 +9,11 @@ import type { SearchableWorkspaceTab } from '@/lib/workspace-tab-palette-search'
 import type { WorktreeStatus } from '@/lib/worktree-status'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
+/**
+ * Matches attention categories, not an exhaustive partition of session outcomes.
+ * Quiet failed/interrupted/unconfirmed outcomes match none; clearing includes them.
+ * Unread activity follows the shared badge precedence, below active work/input requests.
+ */
 export function matchesPaletteSessionStatus(
   statusIds: readonly string[],
   status: WorktreeStatus | null,
@@ -46,6 +51,10 @@ type PaletteSessionFilterInput = {
   now: number
 }
 
+/**
+ * Filters terminal-backed candidates before palette caps using the caller's snapshot clock.
+ * An inactive filter preserves the original array; ambiguous terminal identities fail closed.
+ */
 export function filterPaletteSessionEntries(
   entries: SearchableWorkspaceTab[],
   input: PaletteSessionFilterInput

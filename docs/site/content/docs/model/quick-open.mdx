@@ -25,6 +25,10 @@ Press **Tab** in the palette for a host, project, and session-status filter menu
 
 Under **Statuses**, choose **Waiting for input**, **Finished / unread result**, **Working**, or **Idle**. Multiple statuses match any selected choice; host and project choices further narrow that set. With a status selected, only matching chats and terminals appear, both in recents and in typed searches. Statuses reuse the tab's agent-attention and unread state: running or permission-waiting sessions do not become finished just because they have unread output, and a plain shell is not inferred to have finished a task. Explicit filter changes refresh the recent-session snapshot.
 
+These choices are attention categories, not an exhaustive list of outcomes. A failed, interrupted, or unconfirmed session without unread output matches none of them; it is not labeled successfully finished or idle. With unread output it follows the tab bar's unread badge and matches **Finished / unread result**. **Select all** selects the four categories; **Clear all** removes the restriction so those other outcomes are reachable too.
+
+Status matching uses the snapshot taken when the palette opens or you change a filter, while row badges continue updating live. A completion badge can expire while its row stays in the finished snapshot, keeping membership and numbered shortcuts stable. Change a filter or reopen the palette to refresh status matching.
+
 Results include:
 
 - **Recent Chats & Terminals** — with an empty query, up to six recent agent/terminal sessions ranked by activity (needs-you first, then done, then idle). The idle tab you're already viewing is omitted so the list stays actionable; a current tab still appears when it is working, waiting on you, or has unread activity. Rows use the same live attention badges as the tab bar (spinner, question mark, bell, check). Digit shortcuts (`Cmd-1`–`Cmd-6` on macOS, `Ctrl-1`–`Ctrl-6` on Windows / Linux) jump straight to those rows; membership and order freeze when the palette opens so rows don't shuffle under the cursor.

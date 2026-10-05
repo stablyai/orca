@@ -2,6 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { fireEvent } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import { useAppStore } from '@/store'
@@ -10,6 +11,7 @@ import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 import {
   LEAF_ID,
   makeAgentEntry,
@@ -90,20 +92,25 @@ vi.mock('@/components/ui/command', async () => {
     CommandInput: ({
       value,
       onValueChange,
-      placeholder
+      placeholder,
+      trailing
     }: {
       value?: string
       onValueChange?: (next: string) => void
       placeholder?: string
+      trailing?: React.ReactNode
     }) => {
       setCommandQuery = onValueChange ?? null
       return (
-        <input
-          data-command-input="true"
-          placeholder={placeholder}
-          value={value}
-          onChange={(event) => onValueChange?.(event.currentTarget.value)}
-        />
+        <>
+          <input
+            data-command-input="true"
+            placeholder={placeholder}
+            value={value}
+            onChange={(event) => onValueChange?.(event.currentTarget.value)}
+          />
+          {trailing}
+        </>
       )
     },
     CommandList: React.forwardRef(function CommandList(
@@ -358,6 +365,68 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     // Why: completion changes the frozen row's badge without removing its reserved slot.
     expect(getTabRowIds()).toContain('tab-alpha')
     expect(document.querySelector('[data-slot=tooltip-trigger]')?.textContent).toContain('Done')
+  })
+
+  it('keeps a finished row when its live badge expires until the filter snapshot refreshes', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    try {
+      await renderPalette(
+        makeRecentTabState({
+          agentStatusByPaneKey: {
+            [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry(
+              'term-alpha',
+              'done',
+              Date.now() - AGENT_STATUS_STALE_AFTER_MS + 15_000
+            ),
+            [makePaneKey('term-beta', LEAF_ID)]: makeAgentEntry('term-beta', 'working', Date.now())
+          }
+        })
+      )
+
+      const toggleFinished = async (): Promise<void> => {
+        const trigger = testContainer.querySelector<HTMLButtonElement>(
+          '[aria-label="Filter results"]'
+        )
+        if (!trigger) {
+          throw new Error('Filter results trigger not found')
+        }
+        await act(async () => fireEvent.click(trigger))
+        const category = [
+          ...document.querySelectorAll<HTMLButtonElement>('[data-command-item]')
+        ].find((candidate) => candidate.textContent?.startsWith('Status'))
+        if (category) {
+          await act(async () => fireEvent.click(category))
+        }
+        const input = document.querySelector<HTMLInputElement>('input[aria-label^="Filter"]')
+        if (!input) {
+          throw new Error('Status filter search input not found')
+        }
+        await act(async () => fireEvent.change(input, { target: { value: 'Finished' } }))
+        await act(async () => fireEvent.keyDown(input, { key: 'Enter' }))
+        await act(async () => fireEvent.click(trigger))
+        await flushEffects()
+      }
+
+      await toggleFinished()
+      expect(getTabRowIds()).toEqual(['tab-alpha'])
+      const row = testContainer.querySelector<HTMLElement>(
+        `[data-command-item="${encodePaletteIdentity(['workspace-tab', '', 'wt-alpha', 'tab-alpha'])}"]`
+      )
+      expect(row).not.toBeNull()
+      expect(row?.querySelector('[data-slot="tooltip-trigger"] .sr-only')).not.toBeNull()
+
+      await act(async () => vi.advanceTimersByTime(30_000))
+      expect(row?.querySelector('[data-slot="tooltip-trigger"] .sr-only')).toBeNull()
+      expect(getTabRowIds()).toEqual(['tab-alpha'])
+
+      // Off/on explicitly refreshes membership against the current freshness clock.
+      await toggleFinished()
+      await toggleFinished()
+      expect(getTabRowIds()).toEqual([])
+    } finally {
+      await act(async () => testRoot.render(null))
+      vi.useRealTimers()
+    }
   })
 
   it('activates the row a digit chord addresses while open', async () => {
