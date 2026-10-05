@@ -25,6 +25,7 @@ import { useWorktreeMetaWorkspace } from './use-worktree-meta-workspace'
 import { WorktreeIssueLinkField } from './WorktreeIssueLinkField'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { useOpenRisingEdge } from '@/hooks/use-open-rising-edge'
 import { translate } from '@/i18n/i18n'
 import { isWorkItemLinkQueryTooLarge } from '../../../../shared/new-workspace/work-item-link-query-bounds'
 import {
@@ -46,6 +47,7 @@ const EMPTY_SNAPSHOT: WorktreeMetaSnapshot = {
   prInput: ''
 }
 
+/** Edits a worktree's display name, linked issue/review and comment, reseeding the drafts on each open. */
 const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
@@ -121,10 +123,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const issueInputRef = useRef<HTMLInputElement>(null)
   const reviewInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const prevIsOpenRef = useRef(false)
   const displayNameInputRef = useRef<HTMLInputElement>(null)
   const mountedRef = useMountedRef()
-  if (isOpen && !prevIsOpenRef.current) {
+  const isOpening = useOpenRisingEdge(isOpen)
+  if (isOpening) {
     setDisplayNameInput(currentDisplayName)
     setIssueInput(currentIssue)
     setIssueProvider(currentProvider)
@@ -145,7 +147,6 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     setSaveError(null)
     resetOpeningIssue()
   }
-  prevIsOpenRef.current = isOpen
 
   const draft = useMemo<WorktreeMetaDraft>(
     () => ({ displayNameInput, issueInput, issueProvider, reviewInput, commentInput }),

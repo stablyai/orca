@@ -12,6 +12,7 @@ import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
+/** Clone step state for the add-repo dialog, auto-filling the local destination once per entry. */
 export function useAddRepoCloneFlow({
   step,
   activeRuntimeEnvironmentId,
@@ -59,8 +60,9 @@ export function useAddRepoCloneFlow({
   // Why: monotonic ID so stale clone callbacks can detect they were superseded.
   const cloneGenRef = useRef(0)
   // Why: track whether we've already auto-filled for this entry into the clone step,
-  // so a late settings hydration still gets a chance to set the default.
-  const cloneStepAutoFilledRef = useRef(false)
+  // so a late settings hydration still gets a chance to set the default. State, not a
+  // ref, so a discarded render reverts it together with the setCloneDestination it gates.
+  const [cloneStepAutoFilled, setCloneStepAutoFilled] = useState(false)
 
   useEffect(() => {
     if (!isCloning) {
@@ -75,14 +77,16 @@ export function useAddRepoCloneFlow({
     activeRuntimeEnvironmentId,
     sshTargetId,
     workspaceDir,
-    cloneStepAutoFilled: cloneStepAutoFilledRef.current
+    cloneStepAutoFilled
   })
   if (step !== 'clone') {
-    cloneStepAutoFilledRef.current = false
+    if (cloneStepAutoFilled) {
+      setCloneStepAutoFilled(false)
+    }
   } else if (cloneDestinationAutoFill) {
     // Why: late settings hydration should still seed the local clone path,
     // but runtime/server clone flows must keep their destination user-entered.
-    cloneStepAutoFilledRef.current = true
+    setCloneStepAutoFilled(true)
     setCloneDestination(cloneDestinationAutoFill.destination)
   }
 

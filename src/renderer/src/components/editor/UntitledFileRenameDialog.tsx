@@ -24,6 +24,7 @@ type UntitledFileRenameDialogProps = {
   onConfirm: (newRelativePath: string) => void
 }
 
+/** Prompts for a name and folder to save an untitled file under, reseeding the drafts on each open. */
 export function UntitledFileRenameDialog({
   open,
   currentName,
@@ -39,7 +40,8 @@ export function UntitledFileRenameDialog({
   const [error, setError] = useState<string | null>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const focusFrameRef = useRef<number | null>(null)
-  const seededOpenStateRef = useRef({ open: false, baseName, worktreePath })
+  // Why: state, not a ref, so a discarded render reverts the marker with the drafts it seeds.
+  const [seededOpenState, setSeededOpenState] = useState({ open: false, baseName, worktreePath })
   const mountedRef = useMountedRef()
 
   const displayError = externalError ?? error
@@ -66,15 +68,15 @@ export function UntitledFileRenameDialog({
   // Why: seed the drafts before the open dialog paints; focus is handled by
   // Radix's open lifecycle below so this does not need a post-render Effect.
   if (open) {
-    const seeded = seededOpenStateRef.current
+    const seeded = seededOpenState
     if (!seeded.open || seeded.baseName !== baseName || seeded.worktreePath !== worktreePath) {
-      seededOpenStateRef.current = { open: true, baseName, worktreePath }
+      setSeededOpenState({ open: true, baseName, worktreePath })
       setName(baseName)
       setDir(worktreePath)
       setError(null)
     }
-  } else if (seededOpenStateRef.current.open) {
-    seededOpenStateRef.current = { open: false, baseName, worktreePath }
+  } else if (seededOpenState.open) {
+    setSeededOpenState({ open: false, baseName, worktreePath })
   }
 
   const handleBrowse = useCallback(async () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import { getTerminalQuickCommandScope } from '../../../../shared/terminal-quick-commands'
@@ -83,6 +83,7 @@ export function shouldShowQuickCommandsRefreshError(
   return commandsAreCurrent && runtimeCommands?.ready === true && Boolean(runtimeCommands.error)
 }
 
+/** Settings pane for terminal quick commands; a deep-link signal opens the add dialog once. */
 export function QuickCommandsPane({
   settings,
   addCommandIntentSignal
@@ -124,7 +125,8 @@ export function QuickCommandsPane({
   const hostOptions = getTerminalQuickCommandHostOptions(settings, runtimeEnvironments)
 
   const [editor, setEditor] = useState<EditorState>(null)
-  const consumedAddIntentSignalRef = useRef(0)
+  // Why: state, not a ref, so a discarded render un-consumes the signal with the setEditor it gates.
+  const [consumedAddIntentSignal, setConsumedAddIntentSignal] = useState(0)
   // Why: `null` means "show all" (sticky-all), independent of the current repo
   // list — mirrors the tasks-page repo combobox so newly added repos appear
   // automatically rather than being silently excluded.
@@ -200,11 +202,11 @@ export function QuickCommandsPane({
   const intentSignal = addCommandIntentSignal
   if (
     typeof intentSignal === 'number' &&
-    shouldOpenQuickCommandAddIntent(intentSignal, consumedAddIntentSignalRef.current)
+    shouldOpenQuickCommandAddIntent(intentSignal, consumedAddIntentSignal)
   ) {
     // Why: Settings deep-links use this one-shot signal to open the add dialog;
     // consume it before paint so the pane never flashes without the editor.
-    consumedAddIntentSignalRef.current = intentSignal
+    setConsumedAddIntentSignal(intentSignal)
     setEditor({
       mode: 'add',
       command: createDraftForCurrentFilter(),

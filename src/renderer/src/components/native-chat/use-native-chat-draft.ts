@@ -28,9 +28,10 @@ export function useNativeChatDraft(
   // Reload the cached draft when reused for a different pane (scope change),
   // adjusting state during render rather than in an effect so the restored draft
   // is visible on the first paint after the switch.
-  const lastScopeKey = useRef(scopeKey)
-  if (lastScopeKey.current !== scopeKey) {
-    lastScopeKey.current = scopeKey
+  // State, not a ref, so a discarded render reverts it with the reload it gates.
+  const [lastScopeKey, setLastScopeKey] = useState(scopeKey)
+  if (lastScopeKey !== scopeKey) {
+    setLastScopeKey(scopeKey)
     setDraftState(readNativeChatDraftCache(scopeKey))
   }
 
