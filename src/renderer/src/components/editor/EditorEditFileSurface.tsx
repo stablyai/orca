@@ -4,13 +4,7 @@ import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { ChangesModeView } from './ChangesModeView'
 import { ConflictBanner, ConflictPlaceholderView } from './ConflictComponents'
-import {
-  CsvViewer,
-  ImageViewer,
-  IpynbViewer,
-  MermaidViewer,
-  MonacoEditor
-} from './editor-lazy-views'
+import { CsvViewer, IpynbViewer, MermaidViewer, MonacoEditor } from './editor-lazy-views'
 import type { EditorConflictNavigation } from './useEditorConflictNavigation'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
@@ -18,6 +12,7 @@ import type { FileContent } from './editor-panel-content-types'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
 import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
+import { EditorPreviewableFileViewer } from './EditorPreviewableFileViewer'
 import type { MarkdownRenderState } from './markdown-render-mode'
 
 const noopEditorContentChange = (_content: string): void => {}
@@ -112,9 +107,9 @@ export function EditorEditFileSurface({
   if (fileContent.isBinary) {
     if (fileContent.isImage) {
       return (
-        <ImageViewer
+        <EditorPreviewableFileViewer
+          file={activeFile}
           content={fileContent.content}
-          filePath={activeFile.filePath}
           mimeType={fileContent.mimeType}
           preferenceKey={pdfPreferenceKey}
           scrollCacheKey={pdfViewStateKey}

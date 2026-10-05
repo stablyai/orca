@@ -30,6 +30,12 @@ import {
   clampPdfViewPosition,
   createPdfViewPositionRecorder
 } from './pdf-view-position'
+import { usePdfAnnotateMode, type PdfAnnotationContext } from './use-pdf-annotate-mode'
+import {
+  PdfAnnotateButton,
+  PdfAnnotationPageLayer,
+  PdfAnnotationTray
+} from './PdfAnnotationOverlay'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -51,13 +57,16 @@ type PdfViewerProps = {
   // Why: absent means "no scroll memory" — the diff and conflict-review callers
   // mount several viewers on one path, so a shared key would cross-write.
   scrollCacheKey?: string | null
+  /** Enables annotate mode; absent in diff/conflict panes. */
+  annotation?: PdfAnnotationContext | null
 }
 
 export default function PdfViewer({
   content,
   filePath,
   preferenceKey = null,
-  scrollCacheKey = null
+  scrollCacheKey = null,
+  annotation = null
 }: PdfViewerProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerDivRef = useRef<HTMLDivElement>(null)
@@ -69,6 +78,12 @@ export default function PdfViewer({
   const eventBusRef = useRef<InstanceType<typeof EventBus> | null>(null)
   const findControllerRef = useRef<InstanceType<typeof PDFFindController> | null>(null)
   const pdfViewerRef = useRef<InstanceType<typeof PdfJsViewer> | null>(null)
+  const annotate = usePdfAnnotateMode({
+    context: annotation,
+    containerRef,
+    viewerDivRef,
+    pdfViewerRef
+  })
   // Why: content reloads rebuild the pdf.js viewer; keep zoom across updates of
   // the same file and restore the durable preference after a remount or restart.
   const scalePreferenceRef = useRef<PdfScalePreference>('page-width')
@@ -389,7 +404,7 @@ export default function PdfViewer({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="relative flex flex-1 flex-col overflow-hidden">
+      <div ref={annotate.setSurface} className="relative flex flex-1 flex-col overflow-hidden">
         <PdfFind isOpen={findOpen} onClose={closeFindBar} eventBusRef={eventBusRef} />
         {/* Why: PDFViewer requires its container to be position:absolute.
             The outer div uses all:revert to prevent Tailwind Preflight from
@@ -402,13 +417,16 @@ export default function PdfViewer({
               position: 'absolute',
               inset: '0',
               overflow: 'auto',
-              background: 'var(--pdf-viewer-bg, #e4e4e7)'
+              background: 'var(--pdf-viewer-bg, #e4e4e7)',
+              cursor: annotate.active ? 'crosshair' : undefined
             }}
             className="scrollbar-editor dark:[--pdf-viewer-bg:#18181b]"
           >
             <div ref={viewerDivRef} className="pdfViewer" />
+            {annotation ? <PdfAnnotationPageLayer mode={annotate} context={annotation} /> : null}
           </div>
         </div>
+        {annotation ? <PdfAnnotationTray mode={annotate} context={annotation} /> : null}
       </div>
       <div className="flex items-center gap-4 border-t px-4 py-2 text-xs text-muted-foreground">
         <div className="flex items-center gap-1">
@@ -440,6 +458,7 @@ export default function PdfViewer({
           </button>
           <span className="ml-1 tabular-nums">{zoomPercent}%</span>
         </div>
+        {annotation ? <PdfAnnotateButton mode={annotate} /> : null}
         <button
           type="button"
           className="rounded p-1 hover:bg-accent hover:text-foreground"

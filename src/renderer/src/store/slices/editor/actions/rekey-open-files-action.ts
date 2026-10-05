@@ -2,6 +2,7 @@ import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFilePathRekey, RekeyOpenFilesResult } from '../types/open-file-path-rekey'
 import { rekeyFileIdRecord } from '../file-ids/open-file-path-rekey'
+import { rekeyPdfAnnotationState } from '../../pdf-annotations'
 import { migrateHydratedEditorTabsAndGroups } from '../file-ids/hydrated-editor-file-ids'
 
 export function createRekeyOpenFilesAction(
@@ -122,6 +123,7 @@ export function createRekeyOpenFilesAction(
             migrations
           ),
           editorViewMode: rekeyFileIdRecord(s.editorViewMode, migrations),
+          ...rekeyPdfAnnotationState(s, migrations),
           markdownFrontmatterVisible: rekeyFileIdRecord(s.markdownFrontmatterVisible, migrations),
           markdownTableOfContentsVisible: rekeyFileIdRecord(
             s.markdownTableOfContentsVisible,

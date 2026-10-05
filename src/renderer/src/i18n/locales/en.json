@@ -15374,7 +15374,11 @@
           "069ff59932": "Find in PDF ({{value0}})",
           "2b6eb1ccd6": "Zoom in",
           "c0119616d6": "Fit to width",
-          "fa5d096b00": "Zoom out"
+          "fa5d096b00": "Zoom out",
+          "addPdfAnnotation": "Add PDF annotation",
+          "pdfAnnotateAddRegionHint": "Shift+click a paragraph or Shift+drag to add another area to this comment.",
+          "annotatePdf": "Annotate PDF",
+          "pdfAnnotationsLabel": "PDF annotations"
         },
         "ReviewNotesSendMenuContent": {
           "a49800405b": "New agent",

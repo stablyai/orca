@@ -5,27 +5,36 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import {
-  GRAB_BUDGET,
-  type BrowserAnnotationIntent,
-  type BrowserGrabPayload
-} from '../../../../../shared/browser-grab-types'
+import { GRAB_BUDGET, type BrowserAnnotationIntent } from '../../../../../shared/browser-grab-types'
 import { translate } from '@/i18n/i18n'
 import {
   BROWSER_ANNOTATION_INTENT_OPTIONS,
   type BrowserOverlayAnchor
 } from '../describe-page/browser-annotation-geometry'
 
+/** Design Mode's pending-annotation comment card; the PDF annotate mode reuses it. */
 export function PendingBrowserAnnotationCard({
-  payload,
+  title,
+  subtitle,
   anchor,
   portalContainer,
+  ariaLabel,
+  hint,
+  beside = false,
+  onPointerDownOutside,
   onAdd,
   onCancel
 }: {
-  payload: BrowserGrabPayload
+  title: string
+  subtitle?: string
   anchor: BrowserOverlayAnchor
   portalContainer: HTMLElement | null
+  ariaLabel?: string
+  hint?: string
+  /** Opens to the right of the anchor (flipping left when cramped) instead of above/below. */
+  beside?: boolean
+  /** Lets a surface keep the card open for presses that extend the selection. */
+  onPointerDownOutside?: (event: CustomEvent<{ originalEvent: PointerEvent }>) => void
   onAdd: (comment: string, intent: BrowserAnnotationIntent) => void
   onCancel: () => void
 }): React.JSX.Element {
@@ -50,31 +59,30 @@ export function PendingBrowserAnnotationCard({
         />
       </PopoverAnchor>
       <PopoverContent
-        side={anchor.below ? 'bottom' : 'top'}
-        align="center"
+        side={beside ? 'right' : anchor.below ? 'bottom' : 'top'}
+        align={beside ? 'start' : 'center'}
         sideOffset={10}
         collisionBoundary={portalContainer ?? undefined}
         collisionPadding={12}
         portalContainer={portalContainer}
         className="z-40 w-[22rem] max-w-[calc(var(--radix-popover-content-available-width)-1rem)] p-3 shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
-        aria-label={translate(
-          'auto.components.browser.pane.BrowserPane.b472c5fe03',
-          'Add browser annotation'
-        )}
+        aria-label={
+          ariaLabel ??
+          translate('auto.components.browser.pane.BrowserPane.b472c5fe03', 'Add browser annotation')
+        }
+        onPointerDownOutside={onPointerDownOutside}
         onEscapeKeyDown={(event) => {
           event.preventDefault()
           onCancel()
         }}
       >
         <div className="mb-2 min-w-0">
-          <div className="truncate text-xs font-medium text-foreground">
-            {payload.target.accessibility.accessibleName ||
-              payload.target.textSnippet ||
-              payload.target.tagName}
-          </div>
-          <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-            {payload.target.selector}
-          </div>
+          <div className="truncate text-xs font-medium text-foreground">{title}</div>
+          {subtitle ? (
+            <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+              {subtitle}
+            </div>
+          ) : null}
         </div>
         <Label htmlFor="browser-annotation-comment" className="sr-only">
           {translate('auto.components.browser.pane.BrowserPane.d2a7092e6e', 'Annotation comment')}
@@ -142,6 +150,7 @@ export function PendingBrowserAnnotationCard({
             })}
           </ToggleGroup>
         </div>
+        {hint ? <p className="mt-2 text-[11px] text-muted-foreground">{hint}</p> : null}
         <div className="mt-3 flex justify-end gap-2">
           <Button size="sm" variant="ghost" className="h-8" onClick={onCancel}>
             {translate('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}

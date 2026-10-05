@@ -18,6 +18,8 @@ import {
   type BrowserOverlayViewport
 } from '../describe-page/browser-annotation-geometry'
 import { BrowserPageAnnotationTray } from './browser-page-annotation-tray'
+import { browserAnnotationMatchesPageUrl } from './browser-annotation-page-url'
+import { browserAnnotationTitle } from './browser-annotation-output'
 import { BrowserPageGrabToast } from './browser-page-grab-toast'
 import { PendingBrowserAnnotationCard } from './pending-browser-annotation-card'
 import type { useBrowserPageAnnotationSend } from './use-browser-page-annotation-send'
@@ -97,7 +99,8 @@ export function BrowserGuestAnnotateOverlays({
         : null}
       {pendingAnnotationPayload ? (
         <PendingBrowserAnnotationCard
-          payload={pendingAnnotationPayload}
+          title={browserAnnotationTitle(pendingAnnotationPayload)}
+          subtitle={pendingAnnotationPayload.target.selector}
           anchor={getBrowserOverlayAnchor(
             pendingAnnotationPayload,
             containerRef.current,
@@ -112,7 +115,13 @@ export function BrowserGuestAnnotateOverlays({
       {browserAnnotations.length > 0 && browserAnnotationTrayOpen ? (
         <BrowserPageAnnotationTray
           browserAnnotations={browserAnnotations}
-          currentUrl={currentUrl}
+          getAnnotationTitle={(annotation) => browserAnnotationTitle(annotation.payload)}
+          getAnnotationElsewhereLabel={(annotation) =>
+            currentUrl !== undefined &&
+            !browserAnnotationMatchesPageUrl(annotation.payload.page.sanitizedUrl, currentUrl)
+              ? annotation.payload.page.sanitizedUrl
+              : undefined
+          }
           annotationTraySendOpen={annotationTraySendOpen}
           handleAnnotationTraySendOpenChange={handleAnnotationTraySendOpenChange}
           worktreeId={worktreeId}

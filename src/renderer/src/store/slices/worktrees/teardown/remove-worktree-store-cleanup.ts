@@ -109,6 +109,9 @@ export function applyRemoveWorktreeSuccessState(
       markdownViewMode: omitByFileId(s.markdownViewMode),
       markdownRichModeSizeOverride: omitByFileId(s.markdownRichModeSizeOverride),
       editorViewMode: omitByFileId(s.editorViewMode),
+      // Why: PDF annotations and their annotate session (armed mode + draft) are keyed by fileId too.
+      pdfAnnotationsByFileKey: omitByFileId(s.pdfAnnotationsByFileKey),
+      pdfAnnotateSessions: omitByFileId(s.pdfAnnotateSessions),
       markdownFrontmatterVisible: omitByFileId(s.markdownFrontmatterVisible),
       // Why: editorCursorLine is keyed by fileId; clear it with the other per-file state so it doesn't leak.
       editorCursorLine: omitByFileId(s.editorCursorLine),
