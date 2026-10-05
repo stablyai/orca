@@ -1,8 +1,10 @@
 import { Table } from '@tiptap/extension-table'
+import { renderTableToCompactMarkdown } from './rich-markdown-table-markdown'
 
 const tokenizer = Table.config.markdownTokenizer
 
 export const RichMarkdownTable = Table.extend({
+  renderMarkdown: renderTableToCompactMarkdown,
   markdownTokenizer:
     tokenizer && typeof tokenizer !== 'function'
       ? {
