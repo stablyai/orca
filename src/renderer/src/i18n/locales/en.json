@@ -1096,6 +1096,12 @@
         "tooLarge": "Too large to copy, so Orca couldn't hand it to the agent.",
         "storageFull": "Orca's storage for dropped files is full, so Orca couldn't hand it to the agent.",
         "generic": "Try the drop again."
+      },
+      "activeAgentNoteSendResult": {
+        "noAgent": {
+          "selectedTerminal": "No running agent was found in the selected terminal. Start or resume its agent, then send again.",
+          "activeTerminal": "No running agent was found in the active terminal. Focus the agent running in this worktree, then send the notes again."
+        }
       }
     },
     "hooks": {

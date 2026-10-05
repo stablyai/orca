@@ -704,6 +704,76 @@ describe('notes send agent targets', () => {
     ])
   })
 
+  it('skips a manual pane whose only title evidence is a lone quarter-circle spinner', () => {
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        tabsByWorktree: { [WORKTREE_ID]: [tab(MANUAL_TAB_ID, { title: 'Terminal 2' })] },
+        terminalLayoutsByTabId: { [MANUAL_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: {
+          [MANUAL_TAB_ID]: { 1: '\u25d1 Check package version in package.json' }
+        }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([])
+  })
+
+  it('lists a pane whose quarter-circle title also carries the agent identity', () => {
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        tabsByWorktree: { [WORKTREE_ID]: [tab(MANUAL_TAB_ID, { title: 'Terminal 2' })] },
+        terminalLayoutsByTabId: { [MANUAL_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [MANUAL_TAB_ID]: { 1: '\u25d0 Claude Code' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey: makePaneKey(MANUAL_TAB_ID, LEAF_B),
+        status: 'eligible'
+      })
+    ])
+  })
+
+  it('does not offer a launched pane whose only title evidence is a lone quarter-circle spinner', () => {
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Terminal 2', launchAgent: 'claude' })]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: {
+          [LAUNCH_TAB_ID]: { 1: '\u25d1 Check package version in package.json' }
+        }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([])
+  })
+
+  it('keeps a fresh host status target with a spinner-only title', () => {
+    const paneKey = makePaneKey(STATUS_TAB_ID, LEAF_A)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'working') },
+        tabsByWorktree: { [WORKTREE_ID]: [tab(STATUS_TAB_ID)] },
+        terminalLayoutsByTabId: { [STATUS_TAB_ID]: leafLayout(LEAF_A, 'pty-a') },
+        runtimePaneTitlesByTabId: {
+          [STATUS_TAB_ID]: { 1: '\u25d1 Check package version in package.json' }
+        }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+    expect(targets).toEqual([expect.objectContaining({ paneKey, status: 'eligible' })])
+  })
+
   it('lists a chat before its first turn, which the shared sidebar targets leave out', () => {
     const chatTabId = 'structured-agent-session-claude_1'
     const targets = deriveNotesSendAgentTargets(

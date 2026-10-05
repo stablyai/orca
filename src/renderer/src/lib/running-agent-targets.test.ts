@@ -294,6 +294,38 @@ describe('running agent send targets', () => {
     expect(target).not.toHaveProperty('disabledReason')
   })
 
+  it('does not promote a stale status row from a lone quarter-circle spinner title', () => {
+    const paneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+    const target = resolveRunningAgentSendTarget(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: entry(paneKey, 'done', NOW - 31 * 60 * 1000)
+        },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: { type: 'leaf', leafId: RIGHT_LEAF_ID },
+            activeLeafId: RIGHT_LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [RIGHT_LEAF_ID]: 'pty-right' }
+          }
+        },
+        runtimePaneTitlesByTabId: {
+          [TAB_ID]: { 1: '\u25d1 Check package version in package.json' }
+        }
+      }),
+      WORKTREE_ID,
+      paneKey,
+      NOW
+    )
+
+    expect(target).toMatchObject({
+      paneKey,
+      ptyId: 'pty-right',
+      status: 'disabled',
+      disabledReason: 'Agent status is stale'
+    })
+  })
+
   it('does not promote an unconfirmed restored row from its preserved title', () => {
     const paneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
     const target = resolveRunningAgentSendTarget(

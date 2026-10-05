@@ -1,5 +1,6 @@
 import type { AgentStatus } from './agent-status'
 import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
+import { isQuarterCircleSpinnerOnlyAgentTitle } from '../../../shared/agent-title-status'
 import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
 
 const EXPLICIT_IDLE_SEND_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
@@ -14,7 +15,8 @@ export function detectAgentSendTitleStatus(title: string | null | undefined): Ag
 
   const status = classifyTitleActivity(title)
   if (status !== 'idle') {
-    return status
+    // Generic progress needs identity evidence the renderer does not have.
+    return isQuarterCircleSpinnerOnlyAgentTitle(title) ? null : status
   }
 
   // Why: selected-target sends are immediate. A bare agent name proves identity,

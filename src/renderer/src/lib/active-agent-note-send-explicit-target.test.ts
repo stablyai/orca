@@ -653,6 +653,12 @@ describe('active agent note send', () => {
         code: 'no-inventory-match'
       })
     ).toBe('The selected terminal is no longer available. (no-inventory-match)')
+    expect(activeAgentNotesSendFailureMessage('no-agent', { explicitTarget: true })).toBe(
+      'No running agent was found in the selected terminal. Start or resume its agent, then send again.'
+    )
+    expect(activeAgentNotesSendFailureMessage('no-agent')).toBe(
+      'No running agent was found in the active terminal. Focus the agent running in this worktree, then send the notes again.'
+    )
   })
 
   it.each(['terminal_handle_stale', 'terminal_exited', 'terminal_gone'] as const)(

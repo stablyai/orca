@@ -1,3 +1,5 @@
+import { translate } from '@/i18n/i18n'
+
 export type ActiveAgentNotesSendStatus =
   | 'sent'
   | 'empty'
@@ -56,7 +58,15 @@ export function activeAgentNotesSendFailureMessage(
         : 'Open the agent terminal in this worktree, then send the notes again.'
       break
     case 'no-agent':
-      message = `The ${target} terminal is not a recognized agent session.`
+      message = options.explicitTarget
+        ? translate(
+            'auto.lib.activeAgentNoteSendResult.noAgent.selectedTerminal',
+            'No running agent was found in the selected terminal. Start or resume its agent, then send again.'
+          )
+        : translate(
+            'auto.lib.activeAgentNoteSendResult.noAgent.activeTerminal',
+            'No running agent was found in the active terminal. Focus the agent running in this worktree, then send the notes again.'
+          )
       break
     case 'permission':
       message = options.explicitTarget
