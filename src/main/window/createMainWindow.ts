@@ -136,7 +136,10 @@ export function createMainWindow(
       // Why an argument and not an IPC read: this is the window whose webviews host browser guests,
       // and it has to know that before it interprets its first session snapshot — earlier than any
       // handler registration it could wait on.
-      additionalArguments: [formatBrowserClientHostIdArgument(getBrowserClientHostId())]
+      additionalArguments: [
+        formatBrowserClientHostIdArgument(getBrowserClientHostId()),
+        ...(opts?.initialWorktreeId ? [`--orca-initial-worktree-id=${opts.initialWorktreeId}`] : [])
+      ]
     }
   })
   const rendererWebContentsId = mainWindow.webContents.id

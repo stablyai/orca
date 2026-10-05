@@ -21,6 +21,7 @@ import {
   createWorktreeRemovalRegistry,
   type WorktreeIpcContext
 } from './worktrees/worktree-ipc-context'
+import { openMainWindowForWorktree } from '../startup/main-window-controller'
 
 registerDetectedWorktreeScanInvalidation()
 
@@ -50,6 +51,7 @@ const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:updateLineage',
   'worktrees:persistSortOrder',
   'worktrees:getBranchRenameFailureOutput',
+  'worktree:open-in-new-window',
   'hooks:check',
   'hooks:inspectSetupScriptImports',
   'hooks:createIssueCommandRunner',
@@ -96,4 +98,20 @@ export function registerWorktreeHandlers(
   registerWorktreeHookRunnerHandler(context)
   registerWorktreeHookInspectionHandler(context)
   registerWorktreeHookFileHandlers(context)
+
+  ipcMain.handle('worktree:open-in-new-window', async (event, args) => {
+    const { worktreeId, workspaceKey } = args
+
+    // Validate
+    if (!worktreeId) return { success: false, error: 'worktreeId is required' }
+    if (!workspaceKey) return { success: false, error: 'workspaceKey is required' }
+
+    // Open new window
+    try {
+      const windowId = await openMainWindowForWorktree(worktreeId, workspaceKey, store)
+      return { success: true, windowId }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
 }
