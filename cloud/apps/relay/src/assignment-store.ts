@@ -69,6 +69,7 @@ import {
   REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS
 } from './database.js'
 import type { RelayCellConfig } from './config.js'
+import type { CellLockHoldSite } from './cell-inventory-hold-samples.js'
 import type {
   RelayDatabase,
   RelayLockOptions,
@@ -7374,7 +7375,7 @@ export class RelayAssignmentStore {
     targetCellId: string
   ): Promise<void> {
     const now = this.now()
-    await this.database.transaction(async (transaction) => {
+    const drift = await this.database.transaction(async (transaction) => {
       // Reconciliation takes the same assignment→activity→cell order as live
       // mutations so correcting drift never races a credential or socket lease.
       const assignments = await transaction.queryLocked(
@@ -7484,6 +7485,7 @@ export class RelayAssignmentStore {
         )
       }
 
+      const corrected: { cellId: string; reservedRequests: number; leaseUnits: number }[] = []
       for (const row of cells) {
         const cellId = text(row, 'cell_id')
         const expected = cellUnits.get(cellId) ?? 0
@@ -7495,8 +7497,18 @@ export class RelayAssignmentStore {
           `UPDATE relay_cells SET reserved_requests = ?, updated_at = ? WHERE cell_id = ?`,
           [expected, now, cellId]
         )
+        corrected.push({
+          cellId,
+          reservedRequests: integer(row, 'reserved_requests'),
+          leaseUnits: expected
+        })
       }
+      return corrected
     })
+    // Logged after COMMIT so a retried transaction reports each correction once.
+    for (const sample of drift) {
+      console.warn(JSON.stringify({ event: 'orca_relay_reservation_drift', ...sample }))
+    }
   }
 
   private async lockCellInventory(
@@ -7518,12 +7530,13 @@ export class RelayAssignmentStore {
   // row-lock order), keeps them off the fleet-wide lock without a cycle.
   // The wait policy follows the caller for the same reason the inventory lock's
   // does: a sweep must not fail terminally on ordinary contention. Hold time is
-  // deliberately not sampled here — the metric tracks the fleet-wide lock these
-  // rows replace, and mixing in short single-row holds would flatter it.
+  // sampled only for a caller that names its site: short single-row holds under
+  // the inventory label would flatter the fleet-wide lock they replace.
   private async lockCellRows(
     database: RelayDatabase,
     cellIds: string[],
-    mode: CellInventoryLockMode = 'request'
+    mode: CellInventoryLockMode = 'request',
+    holdSite?: CellLockHoldSite
   ): Promise<SqlRow[]> {
     const distinct = [...new Set(cellIds)]
     const { measureHoldMs: _sampled, ...wait } = cellInventoryLockOptions(mode)
@@ -7531,7 +7544,7 @@ export class RelayAssignmentStore {
       `SELECT * FROM relay_cells WHERE cell_id IN (${distinct.map(() => '?').join(', ')})
        ORDER BY cell_id ASC`,
       distinct,
-      wait
+      holdSite ? { ...wait, measureHoldMs: true, holdSite } : wait
     )
   }
 
@@ -7608,7 +7621,8 @@ export class RelayAssignmentStore {
     return await this.lockCellRows(
       database,
       candidates.map((row) => text(row, 'cell_id')),
-      mode
+      mode,
+      'isolated-replacement'
     )
   }
 

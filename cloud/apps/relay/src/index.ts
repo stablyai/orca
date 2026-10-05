@@ -18,6 +18,7 @@ import {
 } from './database.js'
 import { runAssignmentCleanup } from './assignment-cleanup-steps.js'
 import { runRelayBackgroundOperation } from './relay-background-operation.js'
+import { readPostgresLockWaitSample } from './postgres-lock-wait-sample.js'
 import { jitteredSweepIntervalMs } from './relay-sweep-schedule.js'
 import { observedRelayRequests } from './relay-observability.js'
 import { startRegionalRehomeWorker } from './regional-rehome-worker.js'
@@ -87,8 +88,18 @@ const migrationInventoryTimer = roleOwnsAssignmentMaintenance(config.role)
       }, '[orca-relay] migration inventory failed')
     }, 5 * 60_000)
   : null
+// Directors only: one role's view covers every backend, and cells roll separately.
+const lockWaitSampleTimer = roleOwnsAssignmentMaintenance(config.role)
+  ? setInterval(() => {
+      if (database.dialect !== 'postgres') return
+      void runRelayBackgroundOperation(async () => {
+        observability.recordDatabaseLockWaitSample(await readPostgresLockWaitSample(database))
+      }, '[orca-relay] lock wait sample failed')
+    }, 5_000)
+  : null
 cleanupTimer?.unref()
 assignmentCleanupTimer?.unref()
+lockWaitSampleTimer?.unref()
 inventorySnapshotTimer?.unref()
 migrationInventoryTimer?.unref()
 observability.start(() => ({
@@ -137,6 +148,7 @@ const shutdown = (): void => {
   if (assignmentCleanupTimer) clearInterval(assignmentCleanupTimer)
   if (inventorySnapshotTimer) clearInterval(inventorySnapshotTimer)
   if (migrationInventoryTimer) clearInterval(migrationInventoryTimer)
+  if (lockWaitSampleTimer) clearInterval(lockWaitSampleTimer)
   observability.stop()
   heartbeat?.stop()
   regionalRehomeWorker?.stop()
