@@ -425,9 +425,30 @@ describe('registerFilesystemHandlers', () => {
       handlers.get('fs:readFile')!(null, { filePath: path.resolve('/workspace/repo/huge.json') })
     ).rejects.toThrow('exceeds 50MB limit')
 
-    expect(handle.read).not.toHaveBeenCalled()
+    expect(handle.read).toHaveBeenCalledExactlyOnceWith(expect.any(Buffer), 0, 8192, 0)
     expect(handle.close).toHaveBeenCalled()
   })
+
+  it.each([0, 8191])(
+    'probes an oversized binary at offset %i without buffering it',
+    async (offset) => {
+      const prefix = Buffer.alloc(8192, 0x61)
+      prefix[offset] = 0
+      const handle = localFileHandleMock(prefix, { size: 10 * 1024 * 1024 * 1024 })
+      openMock.mockResolvedValue(handle)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The shared IPC fixture implements the Store methods used by these handlers.
+      registerFilesystemHandlers(store as never)
+
+      await expect(
+        handlers.get('fs:readFile')!(null, {
+          filePath: path.resolve('/workspace/repo/archive.zip')
+        })
+      ).resolves.toEqual({ content: '', isBinary: true })
+      expect(handle.read).toHaveBeenCalledExactlyOnceWith(expect.any(Buffer), 0, 8192, 0)
+      expect(handle.close).toHaveBeenCalledTimes(1)
+      expect(readFileMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('probes large unknown binaries without reading the full file', async () => {
     const handle = localFileHandleMock(Buffer.alloc(6 * 1024 * 1024))

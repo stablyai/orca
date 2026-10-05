@@ -16,6 +16,10 @@ import {
 export async function readRelayFileContent(filePath: string) {
   const stats = await stat(filePath)
   const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
+  if (!mimeType && stats.size > BINARY_PROBE_BYTES && (await isBinaryFilePrefix(filePath))) {
+    return { content: '', isBinary: true }
+  }
+
   const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
   if (stats.size > sizeLimit) {
     throw new Error(
@@ -26,10 +30,6 @@ export async function readRelayFileContent(filePath: string) {
   if (mimeType) {
     const buffer = await readFile(filePath)
     return { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType }
-  }
-
-  if (stats.size > BINARY_PROBE_BYTES && (await isBinaryFilePrefix(filePath))) {
-    return { content: '', isBinary: true }
   }
 
   const buffer = await readFile(filePath)
@@ -80,6 +80,11 @@ export async function readRelayFileStreamMetadata(
 ): Promise<StreamMetadata> {
   const stats = await stat(filePath)
   const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
+  // Binary placeholders transfer no content, so classify before applying the text budget.
+  if (stats.size > 0 && !mimeType && (await isBinaryFilePrefix(filePath))) {
+    return { totalSize: 0, isBinary: true, empty: true }
+  }
+
   const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
   if (stats.size > sizeLimit) {
     throw new Error(
@@ -96,13 +101,6 @@ export async function readRelayFileStreamMetadata(
       empty: true
     }
   }
-  // Why: unlike the legacy single-shot path, streaming does not read the full
-  // buffer before classifying content. Probe every unknown file so small binary
-  // files do not get decoded as UTF-8 text over SSH.
-  if (!mimeType && (await isBinaryFilePrefix(filePath))) {
-    return { totalSize: 0, isBinary: true, empty: true }
-  }
-
   // Why: reserved before the fd opens so a refusal costs nothing, and released only
   // once the terminal frame settles — see reserveTerminalFrameSlot.
   const releaseTerminalFrameSlot = reserveTerminalFrameSlot(registry, context.clientId)

@@ -38,6 +38,14 @@ export async function readLocalFileContent(filePath: string): Promise<LocalFileC
   const { handle, stats } = await openLocalRegularFile(filePath)
   try {
     const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
+    // Why: probe large unknown files first so the text budget does not reject a binary placeholder.
+    if (
+      !mimeType &&
+      stats.size > BINARY_PROBE_BYTES &&
+      isBinaryBuffer(await readLocalFilePrefix(handle, BINARY_PROBE_BYTES))
+    ) {
+      return { content: '', isBinary: true }
+    }
     const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
     if (stats.size > sizeLimit) {
       throw fileTooLargeError(stats.size, sizeLimit)
@@ -51,13 +59,6 @@ export async function readLocalFileContent(filePath: string): Promise<LocalFileC
         isImage: true,
         mimeType
       }
-    }
-    // Why: probe large unknown files first so archives aren't fully buffered only to discover they aren't editable text.
-    if (
-      stats.size > BINARY_PROBE_BYTES &&
-      isBinaryBuffer(await readLocalFilePrefix(handle, BINARY_PROBE_BYTES))
-    ) {
-      return { content: '', isBinary: true }
     }
     const buffer = await readLocalFileBounded(handle, sizeLimit, stats.size)
     if (isBinaryBuffer(buffer)) {
