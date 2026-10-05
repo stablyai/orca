@@ -527,6 +527,15 @@ const MUSE_READY_SCREEN_META = [
   '  muse-spark-1.3 · max · ~/Downloads/interview-coach · YOLO'
 ]
 
+// Linux ready screen (Muse Code 1.4.3): same `❯` composer and status line, but Linux builds
+// never paint the "Voice input" ruler above the composer.
+const MUSE_READY_SCREEN_LINUX = [
+  '  Muse Code 1.4.3',
+  '─────────────────────────────────────────────────────────────────────────',
+  '❯ ───────────────────────────────────────────────────────────────────────',
+  '  muse-spark-1.3 · high · ~/projects/demo · YOLO'
+]
+
 const MUSE_TRUST_DIALOG = [
   'Do you trust this workspace?',
   'Workspace: /private/tmp',
@@ -541,6 +550,41 @@ describe('isMuseReadyPromptPreview', () => {
   it('recognizes a Muse ready screen across providers', () => {
     expect(isMuseReadyPromptPreview(waitTextFor(MUSE_READY_SCREEN_ECHO))).toBe(true)
     expect(isMuseReadyPromptPreview(waitTextFor(MUSE_READY_SCREEN_META))).toBe(true)
+  })
+
+  it('recognizes the Linux ready screen, which has no voice-input ruler', () => {
+    expect(isMuseReadyPromptPreview(waitTextFor(MUSE_READY_SCREEN_LINUX))).toBe(true)
+  })
+
+  it('recognizes the Windows ready screen and its voice-input shortcut label', () => {
+    expect(
+      isMuseReadyPromptPreview(
+        waitTextFor([
+          '  Muse Code 1.4.1',
+          '── Voice input (Alt+V to start) ──────────────────────────────────────────',
+          '❯ ────────────────────────────────────────────────────────────────────',
+          '  muse-spark-1.3 · high · C:\\projects\\demo · YOLO'
+        ])
+      )
+    ).toBe(true)
+  })
+
+  it('refuses a Muse banner that has not painted its composer yet', () => {
+    expect(
+      isMuseReadyPromptPreview(
+        waitTextFor([
+          '  Muse Code 1.4.3',
+          '  Skills: 77 loaded · 1 warning · 28 details hidden (ctrl+o to expand)'
+        ])
+      )
+    ).toBe(false)
+  })
+
+  it('anchors the composer to the latest Muse banner', () => {
+    // A relaunch repaints the banner below the previous session's composer.
+    expect(
+      isMuseReadyPromptPreview(waitTextFor([...MUSE_READY_SCREEN_LINUX, '  Muse Code 1.4.3']))
+    ).toBe(false)
   })
 
   it('tolerates ANSI styling around the ready markers', () => {
