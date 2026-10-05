@@ -7,7 +7,7 @@ import { supportsStructuredAgentSessions } from './structured-agent-session-poli
  *  of each chat, and gating on capability left it with nothing to project after a desktop restart —
  *  no chat and no prompt. Restoring spawns no provider child for a cleanly closed session, and a
  *  host with no saved sessions returns before building anything. */
-export function restoreStructuredTabsIfSupported(
+function restoreStructuredTabsIfSupported(
   context: Pick<RpcContext, 'runtime' | 'clientKind' | 'clientCapabilities'>
 ): Promise<void> | undefined {
   const shouldRestore = context.clientKind === 'mobile' || supportsStructuredAgentSessions(context)
@@ -16,4 +16,23 @@ export function restoreStructuredTabsIfSupported(
   }
   // Nothing to restore: callers skip the await, so a stream's setup keeps its timing.
   return undefined
+}
+
+/** The tab restore, then the caller's answer. The chat history restore the tab restore owes starts
+ *  only once that answer has settled (sent, failed or abandoned), so the answer's own work, such as
+ *  the PTY census, never waits behind it. The first caller to settle starts it. */
+export async function answerAfterStructuredTabRestore<T>(
+  context: Pick<RpcContext, 'runtime' | 'clientKind' | 'clientCapabilities'>,
+  answer: () => Promise<T>
+): Promise<T> {
+  const restoring = restoreStructuredTabsIfSupported(context)
+  if (!restoring) {
+    return answer()
+  }
+  try {
+    await restoring
+    return await answer()
+  } finally {
+    context.runtime.startStructuredAgentSessionHistoryRestore?.()
+  }
 }

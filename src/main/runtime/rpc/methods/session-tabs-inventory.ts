@@ -5,7 +5,7 @@ import type { RpcContext } from '../core'
 import { projectSessionTabAgentStatus } from './session-tab-agent-status-projection'
 import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
-import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
+import { answerAfterStructuredTabRestore } from './structured-session-tab-restore'
 
 type SessionTabsInventory = {
   snapshots: RuntimeMobileSessionTabsResult[]
@@ -230,37 +230,30 @@ export async function subscribeSessionTabsInventory(
   }
   let collected: Awaited<ReturnType<typeof collectSessionTabsInventory>> | undefined
   try {
-    // Why: restore after registering, so an unsubscribe or socket close while it runs still finds the stream.
-    const restoring = restoreStructuredTabsIfSupported(context)
-    if (restoring) {
-      await restoring
-      if (closed) {
-        return
-      }
-    }
-    for (let attempt = 1; !collected; attempt += 1) {
-      censusInvalidated = false
-      const candidate = await collectSessionTabsInventory(
-        { ...context, signal: inventoryController.signal },
-        true
-      )
-      if (closed) {
-        return
-      }
-      if (censusInvalidated) {
+    // Why: restore after registering, so an unsubscribe or socket close while it runs still finds the
+    // stream. The snapshots emit right after this settles, before the history restore it starts.
+    collected = await answerAfterStructuredTabRestore(context, async () => {
+      for (let attempt = 1; !closed; attempt += 1) {
+        censusInvalidated = false
+        const candidate = await collectSessionTabsInventory(
+          { ...context, signal: inventoryController.signal },
+          true
+        )
+        if (!censusInvalidated || closed) {
+          return candidate
+        }
         clearBufferedChanges()
         if (attempt === MAX_CENSUS_COLLECTION_ATTEMPTS) {
           throw new Error('session_tabs_inventory_unstable')
         }
-      } else {
-        collected = candidate
       }
-    }
+      return undefined
+    })
   } catch (error) {
     runtime.cleanupSubscription(subscriptionId)
     throw error
   }
-  if (closed) {
+  if (closed || !collected) {
     return
   }
   const { inventory, changeSequence } = collected

@@ -244,6 +244,8 @@ async function restore(sessionIds: readonly string[]) {
     resolveRecovery: async () => true,
     serialize: async (_sessionId, task) => task(),
     hasSession: (sessionId) => sessions.has(sessionId),
+    isDisposed: () => false,
+    isListed: () => true,
     onReadable: (sessionId, opened) => {
       sessions.set(sessionId, opened.session)
     }

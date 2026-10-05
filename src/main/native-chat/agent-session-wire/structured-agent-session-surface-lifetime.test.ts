@@ -431,7 +431,7 @@ describe('startup', () => {
 
     // The record is readable — the tab comes back, history answers — and nothing is running.
     expect(acquire).not.toHaveBeenCalled()
-    expect(host.listSessionTabs()).toEqual([
+    expect(host.listSessionTabs([SESSION])).toEqual([
       { sessionId: SESSION, workspaceId: 'workspace-1', agent: 'codex' }
     ])
     expect((await host.history({ sessionId: SESSION, direction: 'tail' })).ok).toBe(true)

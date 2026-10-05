@@ -1,6 +1,7 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { adapterSupportsRecord } from './structured-agent-session-provider-support'
 
 /**
  * Chat-tab visibility is the deletion funnel: every path that removes a chat as a user-facing
@@ -37,37 +38,52 @@ export function setStructuredAgentSessionTabVisibility(
   return host.deps.store.setSessionTabVisibility(sessionId, visible, tabId)
 }
 
+/** Whether the chat still has its tab. A legacy store with no tab index cannot say, so yes. */
+export function sessionTabListed(
+  store: { getVisibleSessionTabIndex: () => { present: boolean; sessionIds: string[] } },
+  sessionId: string
+): boolean {
+  const tabs = store.getVisibleSessionTabIndex()
+  return !tabs.present || tabs.sessionIds.includes(sessionId)
+}
+
 export type StructuredAgentSessionTab = {
   sessionId: string
   workspaceId: string
   agent: AgentSessionRecord['provider']
 }
 
-export function listStructuredAgentSessionTabs(
-  sessions: ReadonlyMap<
-    string,
-    { params: { location: { workspaceId: string }; provider: AgentSessionRecord['provider'] } }
-  >
+/** Tabs from durable state alone: each requested id, once, in the order given, that has a record
+ *  this host serves. Opens nothing: a chat whose history is unreadable keeps its tab and its read
+ *  says why; one whose history is missing keeps its tab and reads empty. */
+export function listPersistedSessionTabs(
+  deps: {
+    store: { getRecord: (sessionId: string) => AgentSessionRecord | null }
+    adapter: Parameters<typeof adapterSupportsRecord>[0]
+  },
+  sessionIds: readonly string[]
 ): StructuredAgentSessionTab[] {
-  return [...sessions.entries()].map(([sessionId, session]) => ({
-    sessionId,
-    workspaceId: session.params.location.workspaceId,
-    agent: session.params.provider
-  }))
+  const tabs = new Map<string, StructuredAgentSessionTab>()
+  for (const sessionId of sessionIds) {
+    const record = deps.store.getRecord(sessionId)
+    if (!record || tabs.has(sessionId) || !adapterSupportsRecord(deps.adapter, record)) {
+      continue
+    }
+    tabs.set(sessionId, {
+      sessionId,
+      workspaceId: record.location.workspaceId,
+      agent: record.provider
+    })
+  }
+  return [...tabs.values()]
 }
 
-type TabSessions = ReadonlyMap<
-  string,
-  {
-    child?: unknown
-    params: { location: { workspaceId: string }; provider: AgentSessionRecord['provider'] }
-  }
->
+type TabSessions = ReadonlyMap<string, { child?: unknown }>
 
 /** The host's chat-tab surface; reads `host.deps` per call, so it sees the host's wrapped deps. */
 export function createStructuredAgentSessionTabSurface(
   host: Parameters<typeof setStructuredAgentSessionTabVisibility>[0] & {
-    deps: {
+    deps: Parameters<typeof listPersistedSessionTabs>[0] & {
       store: Pick<
         AgentSessionRecordStore,
         'getVisibleSessionTabIndex' | 'getSessionTabId' | 'showSessionTabs'
@@ -78,7 +94,8 @@ export function createStructuredAgentSessionTabSurface(
   forgetStatus: (sessionId: string) => void
 ) {
   return {
-    listSessionTabs: () => listStructuredAgentSessionTabs(sessions),
+    /** From the record store and the given tab ids; opens no conversation. */
+    listSessionTabs: (ids: readonly string[]) => listPersistedSessionTabs(host.deps, ids),
     getPersistedVisibleSessionTabIndex: () => host.deps.store.getVisibleSessionTabIndex(),
     getSessionTabId: (sessionId: string): string | null =>
       host.deps.store.getSessionTabId(sessionId),

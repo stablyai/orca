@@ -116,12 +116,32 @@ async function runningTurn(): Promise<AgentSessionStatusEvent[]> {
 }
 
 /** What the settle wrote, read back from the journal the next reader opens. */
-async function settledTurn() {
-  await host.restoreReadableSessions([SESSION])
-  const { items } = await host.journalSnapshot(SESSION)
+async function settledTurn(reader = host) {
+  await reader.restoreReadableSessions([SESSION])
+  const { items } = await reader.journalSnapshot(SESSION)
   const turn = items.map((item) => readAgentJournalTurn(item.body)).find(Boolean)
   const [settled] = [...selectStructuredAgentSettledTurns(items).values()]
   return { turn, settled }
+}
+
+/** What the next launch reads: a host that has begun quitting opens no chat. */
+async function settledTurnAfterQuit() {
+  const state = hostTestState()
+  const reader = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
+    store: state.store,
+    adapter: adapter(),
+    journalDatabase: openTestJournalHostDatabase(state.root),
+    recoveryCapsule: new AgentSessionRecoveryCapsule(state.root),
+    claimKeyId: 'key-1',
+    mintSpawnToken: () => 'spawn-a',
+    now: () => HOST_TEST_NOW
+  })
+  try {
+    return await settledTurn(reader)
+  } finally {
+    await reader.flushAllStreamedEvents()
+  }
 }
 
 function lastSummary(statuses: AgentSessionStatusEvent[]) {
@@ -247,7 +267,7 @@ describe('a turn cut short by closing its provider', () => {
     expect(statuses.findLast((event) => event.type === 'status')).toMatchObject({
       session: { status: 'idle', turnOutcome: 'interruption' }
     })
-    const { settled } = await settledTurn()
+    const { settled } = await settledTurnAfterQuit()
     expect(
       settled && describeNativeChatTurnStatus({ elapsedSeconds: 0, ...settled })
     ).toMatchObject({ key: 'failedAfter' })
@@ -309,7 +329,7 @@ describe('a turn cut short by closing its provider', () => {
 
     await host.flushAllStreamedEvents({ trigger: 'quit' })
 
-    const { turn } = await settledTurn()
+    const { turn } = await settledTurnAfterQuit()
     expect(turn).toMatchObject({ state: 'interrupted' })
     expect(turn).not.toHaveProperty('outcome')
   })

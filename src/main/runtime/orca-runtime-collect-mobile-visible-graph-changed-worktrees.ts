@@ -4,6 +4,7 @@ import type { RuntimeMobileSessionTabsResult, RuntimeSyncedTab } from '../../sha
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { parseExecutionHostId } from '../../shared/execution-host'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
 export class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees extends OrcaRuntimeWithSyncWindowGraph {
   // Why: toMobileSessionTabsResult resolves handles/titles from this.tabs and
@@ -100,9 +101,11 @@ export class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees extends Or
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
     const ptyInventory = await this.refreshMobileSessionPtyInventory()
     this.restoreLivePairedRendererSessionOwnedMobileTerminals(null)
+    // Once for every worktree's answer, after the census's await, so a change made during it counts.
+    const replacements = getStructuredAgentSessionHost()?.conversationReplacements?.() ?? []
     const snapshots = [...this.mobileSessionTabsByWorktree.values()].map((snapshot) =>
       this.projectMobileSessionTabsForClient(
-        this.toMobileSessionTabsResult(snapshot),
+        this.toMobileSessionTabsResult(snapshot, replacements),
         clientNavigationId
       )
     )

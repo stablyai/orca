@@ -12,6 +12,7 @@
 
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import { sessionTabListed } from './structured-agent-session-host-tabs'
 import { adapterSupportsRecord } from './structured-agent-session-provider-support'
 import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
 import { StructuredAgentSessionRestartRestoreGate } from './structured-agent-session-restart-restore-gate'
@@ -62,7 +63,7 @@ export function createStructuredAgentSessionHostRestore(
   deps: StructuredAgentSessionHostDeps,
   wiring: Omit<
     ConstructorParameters<typeof StructuredAgentSessionReadableRestorer>[0],
-    'openDeps' | 'supportsRecord' | 'reconcile' | 'resolveRecovery'
+    'openDeps' | 'supportsRecord' | 'reconcile' | 'resolveRecovery' | 'isListed'
   > & {
     reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
     resolveRecovery: (sessionId: string) => Promise<unknown>
@@ -77,6 +78,7 @@ export function createStructuredAgentSessionHostRestore(
   const restorer = new StructuredAgentSessionReadableRestorer({
     openDeps: deps,
     supportsRecord: (record) => adapterSupportsRecord(deps.adapter, record),
+    isListed: (sessionId) => sessionTabListed(deps.store, sessionId),
     reconcile,
     // The next attach or send resolves recovery again, strictly, before it acts.
     resolveRecovery: (sessionId) =>

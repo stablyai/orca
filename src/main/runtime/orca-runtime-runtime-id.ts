@@ -101,12 +101,13 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
 
-  /** Single host writer for mobile session snapshots; versions are total-order stamps. */
+  /** Single host writer for mobile snapshots; total-order versions; a loop passes `replacements`. */
   protected storeMobileSessionSnapshot(
     worktreeId: string,
-    snapshot: RuntimeMobileSessionTabsSnapshot
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    replacements = getStructuredAgentSessionHost()?.conversationReplacements?.() ?? []
   ): RuntimeMobileSessionTabsSnapshot {
-    for (const replacement of getStructuredAgentSessionHost()?.conversationReplacements?.() ?? []) {
+    for (const replacement of replacements) {
       snapshot = replaceConversationInSnapshot(snapshot, replacement)
     }
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)

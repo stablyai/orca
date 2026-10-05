@@ -101,7 +101,7 @@ describe('structured session provider restore', () => {
 
     await restarted.restoreReadableSessions()
 
-    expect(restarted.listSessionTabs()).toEqual([
+    expect(restarted.listSessionTabs([HOST_TEST_SESSION])).toEqual([
       { sessionId: HOST_TEST_SESSION, workspaceId: 'workspace-1', agent: 'claude' }
     ])
   })
