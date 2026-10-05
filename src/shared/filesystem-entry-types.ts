@@ -25,6 +25,8 @@ export type FsChangeEvent = {
 }
 
 export type FsChangedPayload = {
+  /** Local desktop document watches never recurse into child directories. */
+  shallow?: true
   // Desktop SSH events identify their host; client-local events omit this field.
   connectionId?: string
   worktreePath: string

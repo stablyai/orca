@@ -15,7 +15,7 @@ function getWatchSubscriptionKey(target: EditorExternalWatchTarget): string {
   // Local IPC watches share a host/root; runtime subscriptions retain their workspace selector.
   return target.runtimeEnvironmentId
     ? getEditorExternalWatchTargetKey(target)
-    : `${normalizeRuntimePathForComparison(target.worktreePath)}::${target.connectionId ?? 'local'}`
+    : `${normalizeRuntimePathForComparison(target.worktreePath)}::${target.connectionId ?? 'local'}${target.shallow ? '::shallow' : ''}`
 }
 
 function uniqueWatchSubscriptions(
@@ -72,7 +72,8 @@ export function useEditorExternalWatch(): void {
       } else {
         void window.api.fs.unwatchWorktree({
           worktreePath: target.worktreePath,
-          connectionId: target.connectionId
+          connectionId: target.connectionId,
+          ...(target.shallow ? { shallow: true } : {})
         })
       }
     }
@@ -84,7 +85,8 @@ export function useEditorExternalWatch(): void {
       void window.api.fs
         .watchWorktree({
           worktreePath: target.worktreePath,
-          connectionId: target.connectionId
+          connectionId: target.connectionId,
+          ...(target.shallow ? { shallow: true } : {})
         })
         .catch((err) => {
           // Why: SSH providers can disappear while tabs still reference the worktree; report the failure without an uncaught renderer promise.
@@ -99,13 +101,14 @@ export function useEditorExternalWatch(): void {
   useEffect(() => {
     const remoteWatchUnsubs = remoteWatchUnsubsRef.current
     const { handleFsChanged, dispose } = buildEditorExternalWatchEventHandler(
-      (worktreePath, runtimeEnvironmentId, connectionId, worktreeId) =>
+      (worktreePath, runtimeEnvironmentId, connectionId, worktreeId, shallow) =>
         targetsRef.current.filter(
           (target) =>
             normalizeRuntimePathForComparison(target.worktreePath) ===
               normalizeRuntimePathForComparison(worktreePath) &&
             target.runtimeEnvironmentId === runtimeEnvironmentId &&
             target.connectionId === connectionId &&
+            target.shallow === shallow &&
             (worktreeId === undefined || target.worktreeId === worktreeId)
         )
     )
@@ -124,7 +127,8 @@ export function useEditorExternalWatch(): void {
         } else {
           void window.api.fs.unwatchWorktree({
             worktreePath: target.worktreePath,
-            connectionId: target.connectionId
+            connectionId: target.connectionId,
+            ...(target.shallow ? { shallow: true } : {})
           })
         }
       }

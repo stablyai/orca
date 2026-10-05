@@ -10,6 +10,7 @@ type TestWatchTarget = {
   connectionId: string | undefined
   runtimeEnvironmentId: string | null
   allowLocalWindowsWslAliases?: true
+  shallow?: true
 }
 
 const subscriptionState = vi.hoisted(() => ({
@@ -134,6 +135,35 @@ describe('useEditorExternalWatch subscriptions', () => {
     })
     expect(unsubscribeFsEvents).toHaveBeenCalledTimes(1)
     expect(subscriptionState.disposeEventHandler).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps local shallow and recursive subscriptions at the same path isolated', async () => {
+    const recursive: TestWatchTarget = {
+      worktreeId: 'workspace',
+      worktreePath: '/shared',
+      connectionId: undefined,
+      runtimeEnvironmentId: null
+    }
+    const shallow: TestWatchTarget = { ...recursive, worktreeId: 'floating', shallow: true }
+    subscriptionState.snapshot = { targets: [recursive, shallow], targetsKey: 'two-scopes' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    expect(watchWorktree).toHaveBeenCalledTimes(2)
+    expect(watchWorktree).toHaveBeenCalledWith({
+      worktreePath: '/shared',
+      connectionId: undefined,
+      shallow: true
+    })
+    const findTargets = vi.mocked(buildEditorExternalWatchEventHandler).mock.calls[0]?.[0]
+    expect(findTargets?.('/shared', null, undefined, undefined, true)).toEqual([shallow])
+    expect(findTargets?.('/shared', null)).toEqual([recursive])
+    subscriptionState.snapshot = { targets: [recursive], targetsKey: 'recursive-only' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    expect(unwatchWorktree).toHaveBeenCalledExactlyOnceWith({
+      worktreePath: '/shared',
+      connectionId: undefined,
+      shallow: true
+    })
+    expect(watchWorktree).toHaveBeenCalledTimes(2)
   })
 
   it.each(['first', 'second'])(

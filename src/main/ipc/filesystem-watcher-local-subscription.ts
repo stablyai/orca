@@ -26,7 +26,8 @@ export async function subscribeLocalWatcher(
   worktreePath: string,
   sender: WebContents,
   generation = watcherLifecycleState.localWatcherLifecycleGeneration,
-  senderSignal = registerWatcherSenderCleanup(sender)
+  senderSignal = registerWatcherSenderCleanup(sender),
+  shallow = false
 ): Promise<void> {
   if (
     !isCurrentWatcherSender(sender, senderSignal) ||
@@ -37,7 +38,7 @@ export async function subscribeLocalWatcher(
   }
   const finishInstall = beginWatcherInstall(worktreePath)
   try {
-    await subscribeWhileRemovalAllowed(worktreePath, sender, generation, senderSignal)
+    await subscribeWhileRemovalAllowed(worktreePath, sender, generation, senderSignal, shallow)
   } finally {
     finishInstall()
   }
@@ -47,7 +48,8 @@ async function subscribeWhileRemovalAllowed(
   worktreePath: string,
   sender: WebContents,
   generation: number,
-  senderSignal: AbortSignal
+  senderSignal: AbortSignal,
+  shallow: boolean
 ): Promise<void> {
   if (
     !isCurrentWatcherSender(sender, senderSignal) ||
@@ -56,7 +58,9 @@ async function subscribeWhileRemovalAllowed(
   ) {
     return
   }
-  const { key: rootKey, path: rootPath } = getLocalWatcherRoot(worktreePath)
+  const { key: rootKey, path: rootPath } = getLocalWatcherRoot(worktreePath, shallow)
+  const retrySubscribe: typeof subscribeLocalWatcher = (path, listener) =>
+    subscribeLocalWatcher(path, listener, undefined, undefined, shallow)
   if (sender.isDestroyed()) {
     return
   }
@@ -126,7 +130,8 @@ async function subscribeWhileRemovalAllowed(
             worktreePath,
             listener,
             generation,
-            listener === sender ? senderSignal : retrySignals.get(listener.id)!
+            listener === sender ? senderSignal : retrySignals.get(listener.id)!,
+            shallow
           )
         }
       }
@@ -144,7 +149,7 @@ async function subscribeWhileRemovalAllowed(
         if (senderIsCurrent) {
           retryListeners.set(sender.id, sender)
         }
-        scheduleLocalCapacityRetry(rootKey, worktreePath, retryListeners, subscribeLocalWatcher)
+        scheduleLocalCapacityRetry(rootKey, worktreePath, retryListeners, retrySubscribe)
       }
     }
     if (
@@ -173,8 +178,8 @@ async function subscribeWhileRemovalAllowed(
     rootPath,
     worktreePath,
     cancelToken,
-    (listeners) =>
-      scheduleLocalCapacityRetry(rootKey, worktreePath, listeners, subscribeLocalWatcher)
+    (listeners) => scheduleLocalCapacityRetry(rootKey, worktreePath, listeners, retrySubscribe),
+    shallow
   )
   watcherLifecycleState.pendingLocalInstallPromises.set(rootKey, installPromise)
   try {
@@ -186,8 +191,12 @@ async function subscribeWhileRemovalAllowed(
   }
 }
 
-export function unsubscribeLocalWatcher(worktreePath: string, senderId: number): void {
-  const { key: rootKey } = getLocalWatcherRoot(worktreePath)
+export function unsubscribeLocalWatcher(
+  worktreePath: string,
+  senderId: number,
+  shallow = false
+): void {
+  const { key: rootKey } = getLocalWatcherRoot(worktreePath, shallow)
   const suspended = watcherLifecycleState.suspendedLocalWatcherListeners.get(rootKey)
   suspended?.listeners.delete(senderId)
   if (suspended?.listeners.size === 0) {

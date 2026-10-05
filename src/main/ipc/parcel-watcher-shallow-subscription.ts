@@ -33,6 +33,10 @@ export function startShallowWatcher(
   onError: (error: Error) => void
 ): ShallowWatcherSubscription {
   const pathsByDirectory = new Map<string, Set<string>>()
+  const allDirectEntries = relativePaths.length === 0
+  if (allDirectEntries) {
+    pathsByDirectory.set('', new Set())
+  }
   for (const relativePath of relativePaths) {
     const parts = relativePath
       .split(process.platform === 'win32' ? /[\\/]+/ : /\/+/)
@@ -61,6 +65,10 @@ export function startShallowWatcher(
   }
 
   const emitUpdates = (parent: string, fileNames: Iterable<string>): void => {
+    if (allDirectEntries) {
+      onEvents([{ type: 'update', path: rootPath }])
+      return
+    }
     onEvents(
       [...fileNames].map((fileName) => ({
         type: 'update' as const,
@@ -88,6 +96,22 @@ export function startShallowWatcher(
         const name = fileName?.toString()
         if (!name) {
           emitUpdates(parent, fileNames)
+          return
+        }
+        if (allDirectEntries) {
+          const path = join(directoryPath, name)
+          let type: ParcelWatcherEvent['type'] = 'update'
+          if (eventType === 'rename') {
+            try {
+              statSync(path)
+              type = 'create'
+            } catch (error) {
+              if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+                type = 'delete'
+              }
+            }
+          }
+          onEvents([{ type, path }])
           return
         }
         if (parent === '' && pathsByDirectory.has(name)) {

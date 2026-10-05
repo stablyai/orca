@@ -1,5 +1,4 @@
 import type { AppState } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
@@ -9,6 +8,17 @@ import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { appendLocalDocumentDirectoryWatchTargets } from './editor-document-directory-watch-targets'
+import {
+  getEditorExternalWatchTargetKey,
+  getOpenFileRuntimeOwner
+} from './editor-external-watch-target-identity'
+
+export {
+  getEditorExternalWatchTargetKey,
+  getOpenFileRuntimeOwner
+} from './editor-external-watch-target-identity'
 
 export type EditorExternalWatchTarget = {
   worktreeId: string
@@ -16,6 +26,7 @@ export type EditorExternalWatchTarget = {
   connectionId: string | undefined
   runtimeEnvironmentId: string | null
   allowLocalWindowsWslAliases?: true
+  shallow?: true
 }
 
 export type EditorExternalWatchTargetState = Pick<
@@ -53,17 +64,6 @@ let cachedFolderWorkspaces: AppState['folderWorkspaces'] | null = null
 let cachedProjectGroups: AppState['projectGroups'] | null = null
 let cachedWatchedTargetsSnapshot: WatchedTargetsSnapshot = { targets: [], targetsKey: '' }
 
-export function getEditorExternalWatchTargetKey(target: EditorExternalWatchTarget): string {
-  // Why: include connectionId so a local placeholder watch is replaced by the real SSH watch once an SSH worktree's provider metadata hydrates.
-  return `${target.worktreeId}::${target.worktreePath}::${target.connectionId ?? 'local'}::${target.runtimeEnvironmentId ?? 'client'}::${target.allowLocalWindowsWslAliases === true ? 'wsl-aliases' : 'literal'}`
-}
-
-export function getOpenFileRuntimeOwner(
-  file: Pick<OpenFile, 'runtimeEnvironmentId'>
-): string | null {
-  return file.runtimeEnvironmentId?.trim() || null
-}
-
 export function getLocalWindowsWslAliasOption(
   target: Pick<EditorExternalWatchTarget, 'allowLocalWindowsWslAliases'>
 ): Pick<EditorExternalWatchTarget, 'allowLocalWindowsWslAliases'> {
@@ -76,7 +76,7 @@ function isLocalHostStamp(value: string | null | undefined): boolean {
   return parseExecutionHostId(value)?.kind === 'local'
 }
 
-function canWatchLocalWindowsWslAliases(args: {
+function canWatchNativeLocalOwner(args: {
   worktreePath: string
   runtimeEnvironmentId: string | null
   connectionId: string | null | undefined
@@ -85,11 +85,7 @@ function canWatchLocalWindowsWslAliases(args: {
   folderWorkspace: AppState['folderWorkspaces'][number] | undefined
   projectGroup: AppState['projectGroups'][number] | undefined
 }): boolean {
-  if (
-    args.runtimeEnvironmentId !== null ||
-    args.connectionId !== null ||
-    !isWindowsAbsolutePathLike(args.worktreePath)
-  ) {
+  if (args.runtimeEnvironmentId !== null || args.connectionId !== null) {
     return false
   }
   if (args.worktree) {
@@ -175,7 +171,7 @@ export function selectEditorExternalWatchTargets(
   }
 
   const nextTargets: EditorExternalWatchTarget[] = []
-  const parts: string[] = []
+  const localDocumentOwners = new Set([FLOATING_TERMINAL_WORKTREE_ID])
   const sortedWorktreeIds = Array.from(targetOwnersByWorktreeId.keys()).sort()
   for (const id of sortedWorktreeIds) {
     const worktree = findWorktreeById(state.worktreesByRepo, id)
@@ -215,29 +211,34 @@ export function selectEditorExternalWatchTargets(
       (left ?? '').localeCompare(right ?? '')
     )
     for (const owner of owners) {
+      const isNativeLocalOwner = canWatchNativeLocalOwner({
+        worktreePath: worktree?.path ?? folderWorkspace!.folderPath,
+        runtimeEnvironmentId: owner,
+        connectionId,
+        worktree,
+        repo,
+        folderWorkspace,
+        projectGroup
+      })
+      if (isNativeLocalOwner) {
+        localDocumentOwners.add(id)
+      }
       const target = {
         worktreeId: id,
         worktreePath: worktree?.path ?? folderWorkspace!.folderPath,
         connectionId: connectionId ?? undefined,
         runtimeEnvironmentId: owner,
-        ...(canWatchLocalWindowsWslAliases({
-          worktreePath: worktree?.path ?? folderWorkspace!.folderPath,
-          runtimeEnvironmentId: owner,
-          connectionId,
-          worktree,
-          repo,
-          folderWorkspace,
-          projectGroup
-        })
+        ...(isNativeLocalOwner &&
+        isWindowsAbsolutePathLike(worktree?.path ?? folderWorkspace!.folderPath)
           ? { allowLocalWindowsWslAliases: true as const }
           : {})
       }
       nextTargets.push(target)
-      parts.push(getEditorExternalWatchTargetKey(target))
     }
   }
 
-  const targetsKey = parts.join('|')
+  appendLocalDocumentDirectoryWatchTargets(state.openFiles, nextTargets, localDocumentOwners)
+  const targetsKey = nextTargets.map(getEditorExternalWatchTargetKey).join('|')
   cachedOpenFiles = state.openFiles
   cachedWorktreesByRepo = state.worktreesByRepo
   cachedRepos = state.repos

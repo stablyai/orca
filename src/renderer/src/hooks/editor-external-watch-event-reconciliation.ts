@@ -43,7 +43,8 @@ export function buildEditorExternalWatchEventHandler(
     worktreePath: string,
     runtimeEnvironmentId: string | null,
     connectionId?: string,
-    worktreeId?: string
+    worktreeId?: string,
+    shallow?: true
   ) => EditorExternalWatchTarget | readonly EditorExternalWatchTarget[] | undefined
 ): {
   handleFsChanged: (
@@ -228,7 +229,8 @@ export function buildEditorExternalWatchEventHandler(
       payload.worktreePath,
       runtimeEnvironmentId,
       payload.connectionId,
-      worktreeId
+      worktreeId,
+      payload.shallow
     )
     const targets = !found ? [] : 'worktreeId' in found ? [found] : found
     if (targets.length === 0) {

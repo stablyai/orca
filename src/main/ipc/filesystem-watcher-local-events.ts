@@ -89,6 +89,7 @@ function emitOverflowPayload(root: WatchedRoot): void {
   const { rootPath } = root
   const payload: FsChangedPayload = {
     worktreePath: rootPath,
+    ...(root.shallow ? { shallow: true as const } : {}),
     events: [{ kind: 'overflow', absolutePath: rootPath }]
   }
   for (const [, wc] of root.listeners) {
@@ -158,6 +159,7 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
 
     const payload: FsChangedPayload = {
       worktreePath: root.rootPath,
+      ...(root.shallow ? { shallow: true as const } : {}),
       events
     }
 
@@ -225,9 +227,11 @@ export function scheduleLocalBatchFlush(root: WatchedRoot): void {
 export async function createLocalWatcher(
   rootKey: string,
   rootPath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  shallow = false
 ): Promise<WatchedRoot> {
   const root: WatchedRoot = {
+    ...(shallow ? { shallow: true as const } : {}),
     subscription: null!,
     listeners: new Map(),
     batch: createDebouncedBatch(),
@@ -241,7 +245,8 @@ export async function createLocalWatcher(
     const watcherOptions = {
       ...buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS),
       // Why: Parcel probes Watchman first, which prints a shell-level "watchman not recognized" error on Windows; pin the backend to suppress it.
-      ...(process.platform === 'win32' ? { backend: 'windows' as const } : {})
+      ...(process.platform === 'win32' ? { backend: 'windows' as const } : {}),
+      ...(shallow ? { mode: 'shallow' as const } : {})
     }
 
     const markWatcherInterrupted = (): void => {
@@ -272,7 +277,11 @@ export async function createLocalWatcher(
         if (root.batch.cancelled) {
           return
         }
-        queueWatcherEvents(root.batch, events)
+        if (shallow && events.some((event) => event.path === rootPath)) {
+          root.batch.overflowed = true
+        } else {
+          queueWatcherEvents(root.batch, events)
+        }
         scheduleLocalBatchFlush(root)
       },
       watcherOptions,

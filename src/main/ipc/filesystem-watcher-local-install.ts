@@ -1,5 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { isWslPath } from '../wsl'
+import { isWslUncPath } from '../../shared/wsl-paths'
 import { WATCHER_IGNORE_DIRS } from './filesystem-watcher-ignore'
 import { createWslWatcher, type WatchedRoot } from './filesystem-watcher-wsl'
 import { WatcherChildCapacityError } from './parcel-watcher-child-registry'
@@ -23,10 +24,14 @@ export async function installLocalWatcher(
   rootPath: string,
   worktreePath: string,
   cancelToken: LocalWatcherInstallToken,
-  scheduleCapacityRetry: (listeners: Map<number, Electron.WebContents>) => void
+  scheduleCapacityRetry: (listeners: Map<number, Electron.WebContents>) => void,
+  shallow = false
 ): Promise<LocalWatcherInstallResult> {
   let root: WatchedRoot
   try {
+    if (shallow && isWslUncPath(worktreePath)) {
+      throw new Error('Shallow filesystem watches are unavailable for WSL paths')
+    }
     try {
       const s = await stat(rootPath)
       if (!s.isDirectory()) {
@@ -53,7 +58,7 @@ export async function installLocalWatcher(
             },
             cancelToken.abortController.signal
           )
-        : await createLocalWatcher(rootKey, rootPath, cancelToken.abortController.signal)
+        : await createLocalWatcher(rootKey, rootPath, cancelToken.abortController.signal, shallow)
     } catch (error) {
       // Why: setup can fail after its child misses the exit deadline; retain that owner even when the renderer-facing error is swallowed.
       retainLocalWatcherPhysicalFailure(rootKey, error)

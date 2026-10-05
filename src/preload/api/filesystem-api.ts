@@ -179,8 +179,16 @@ export type FilesystemApi = {
         connectionId?: string
       } & SshMutationExpectation
     ) => Promise<ResolveDroppedPathsResult>
-    watchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
-    unwatchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
+    watchWorktree: (args: {
+      worktreePath: string
+      connectionId?: string
+      shallow?: boolean
+    }) => Promise<void>
+    unwatchWorktree: (args: {
+      worktreePath: string
+      connectionId?: string
+      shallow?: boolean
+    }) => Promise<void>
     onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void
   }
   notebook: {

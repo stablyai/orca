@@ -21,6 +21,12 @@ import {
   unsubscribeLocalWatcher
 } from './filesystem-watcher-local-subscription'
 
+function assertLocalShallowWatch(args: { connectionId?: string; shallow?: boolean }): void {
+  if (args.shallow && args.connectionId) {
+    throw new Error('Shallow filesystem watches are only supported on the local desktop')
+  }
+}
+
 export function registerFilesystemWatcherHandlers(): void {
   // Why: re-registration replaces the handler set, so drop the previous subscription instead of
   // stacking a second re-arm on every provider registration.
@@ -31,7 +37,11 @@ export function registerFilesystemWatcherHandlers(): void {
 
   ipcMain.handle(
     'fs:watchWorktree',
-    async (event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+    async (
+      event,
+      args: { worktreePath: string; connectionId?: string; shallow?: boolean }
+    ): Promise<void> => {
+      assertLocalShallowWatch(args)
       const senderSignal = registerWatcherSenderCleanup(event.sender)
       if (args.connectionId) {
         // Why: a real new watch reopens the subsystem after closeAllWatchers latched it shut (also resets tests between cases).
@@ -68,13 +78,20 @@ export function registerFilesystemWatcherHandlers(): void {
       }
       // Why: reopen the local subsystem for tests and post-shutdown reattachment; stale callers keep the prior generation.
       watcherLifecycleState.localWatchersClosed = false
-      await subscribeLocalWatcher(args.worktreePath, event.sender)
+      await subscribeLocalWatcher(
+        args.worktreePath,
+        event.sender,
+        undefined,
+        undefined,
+        args.shallow
+      )
     }
   )
 
   ipcMain.handle(
     'fs:unwatchWorktree',
-    (_event, args: { worktreePath: string; connectionId?: string }): void => {
+    (_event, args: { worktreePath: string; connectionId?: string; shallow?: boolean }): void => {
+      assertLocalShallowWatch(args)
       if (args.connectionId) {
         const key = getRemoteWatcherKey(args.connectionId, args.worktreePath)
         // Why: the caller stopped watching on purpose — drop the intent or a later provider
@@ -104,7 +121,7 @@ export function registerFilesystemWatcherHandlers(): void {
         return
       }
       const senderId = _event.sender.id
-      unsubscribeLocalWatcher(args.worktreePath, senderId)
+      unsubscribeLocalWatcher(args.worktreePath, senderId, args.shallow)
     }
   )
 }

@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
 import type * as EditorAutosaveModule from '@/components/editor/editor-autosave'
+import type { AppState } from '@/store'
 import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 
+const getStateMock = vi.hoisted(() => vi.fn<() => Partial<AppState>>())
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: vi.fn()
+    getState: getStateMock
   }
 }))
 // Why: editor-autosave calls window.dispatchEvent at module scope paths; the
@@ -81,12 +83,13 @@ describe('getOverflowExternalReloadTargets', () => {
   })
 
   it('clears tombstones and reloads clean edit tabs on overflow', () => {
-    vi.mocked(useAppStore.getState).mockReturnValue({
+    getStateMock.mockReturnValue({
       openFiles: [
         {
           id: 'file-1',
+          filePath: '/repo/notes.md',
           worktreeId: 'wt-1',
-          worktreePath: '/repo',
+          language: 'markdown',
           relativePath: 'notes.md',
           mode: 'edit',
           isDirty: false,
@@ -94,16 +97,18 @@ describe('getOverflowExternalReloadTargets', () => {
         },
         {
           id: 'file-2',
+          filePath: '/repo/dirty.md',
           worktreeId: 'wt-1',
-          worktreePath: '/repo',
+          language: 'markdown',
           relativePath: 'dirty.md',
           mode: 'edit',
           isDirty: true
         },
         {
           id: 'file-3',
+          filePath: '/repo/staged.ts',
           worktreeId: 'wt-1',
-          worktreePath: '/repo',
+          language: 'typescript',
           relativePath: 'staged.ts',
           mode: 'diff',
           diffSource: 'staged',
@@ -111,7 +116,7 @@ describe('getOverflowExternalReloadTargets', () => {
         }
       ],
       setExternalMutation
-    } as never)
+    })
 
     expect(
       getOverflowExternalReloadTargets({
@@ -136,12 +141,13 @@ describe('getOverflowExternalReloadTargets', () => {
   })
 
   it('limits overflow reload targets to the matching runtime owner', () => {
-    vi.mocked(useAppStore.getState).mockReturnValue({
+    getStateMock.mockReturnValue({
       openFiles: [
         {
           id: 'local-file',
+          filePath: '/repo/local.md',
           worktreeId: 'wt-1',
-          worktreePath: '/repo',
+          language: 'markdown',
           relativePath: 'local.md',
           mode: 'edit',
           isDirty: false,
@@ -150,8 +156,9 @@ describe('getOverflowExternalReloadTargets', () => {
         },
         {
           id: 'runtime-file',
+          filePath: '/repo/runtime.md',
           worktreeId: 'wt-1',
-          worktreePath: '/repo',
+          language: 'markdown',
           relativePath: 'runtime.md',
           mode: 'edit',
           isDirty: false,
@@ -160,7 +167,7 @@ describe('getOverflowExternalReloadTargets', () => {
         }
       ],
       setExternalMutation
-    } as never)
+    })
 
     expect(
       getOverflowExternalReloadTargets({

@@ -66,23 +66,31 @@ describe('native filesystem watcher capacity recovery', () => {
     resetWatcherChildRegistryForTest()
   })
 
-  it('automatically retries a native root when a child slot is released', async () => {
-    const releases = fillWatcherChildCapacity()
-    const unsubscribe = vi.fn().mockResolvedValue(undefined)
-    subscribeViaWatcherProcessMock
-      .mockRejectedValueOnce(new WatcherChildCapacityError())
-      .mockResolvedValueOnce({ unsubscribe })
-    const sender = createWatcherSender(1)
-    const args = { worktreePath: '/tmp/native-capacity-root' }
+  it.each([false, true])(
+    'automatically retries a root with shallow=%s when a child slot is released',
+    async (shallow) => {
+      const releases = fillWatcherChildCapacity()
+      const unsubscribe = vi.fn().mockResolvedValue(undefined)
+      subscribeViaWatcherProcessMock
+        .mockRejectedValueOnce(new WatcherChildCapacityError())
+        .mockResolvedValueOnce({ unsubscribe })
+      const sender = createWatcherSender(1)
+      const args = { worktreePath: '/tmp/native-capacity-root', shallow }
 
-    await handlers['fs:watchWorktree']({ sender }, args)
-    expect(subscribeViaWatcherProcessMock).toHaveBeenCalledOnce()
+      await handlers['fs:watchWorktree']({ sender }, args)
+      expect(subscribeViaWatcherProcessMock).toHaveBeenCalledOnce()
 
-    releases.pop()?.()
-    await vi.waitFor(() => expect(subscribeViaWatcherProcessMock).toHaveBeenCalledTimes(2))
+      releases.pop()?.()
+      await vi.waitFor(() => expect(subscribeViaWatcherProcessMock).toHaveBeenCalledTimes(2))
+      expect(
+        subscribeViaWatcherProcessMock.mock.calls.every(
+          ([, , options]) => options.mode === (shallow ? 'shallow' : undefined)
+        )
+      ).toBe(true)
 
-    releases.forEach((release) => release())
-  })
+      releases.forEach((release) => release())
+    }
+  )
 
   it('cancels the native capacity wait when its renderer unwatches', async () => {
     const releases = fillWatcherChildCapacity()

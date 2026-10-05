@@ -109,7 +109,11 @@ describe('getEditorExternalWatchTargets', () => {
     const worktree = makeWorktree(repo.id, 'wt-local-drive')
     worktree.path = 'C:\\repo'
     worktree.hostId = 'local'
-    const state = makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id)] })
+    const state = makeState({
+      repo,
+      worktree,
+      openFiles: [{ ...makeOpenFile(worktree.id), filePath: 'C:\\repo\\notes.md' }]
+    })
     state.repos = [makeRepo(repo.id, 'ssh-1', 'ssh:ssh-1'), repo]
 
     expect(getEditorExternalWatchTargets(state).targets).toEqual([
@@ -192,7 +196,7 @@ describe('getEditorExternalWatchTargets', () => {
     const state = makeState({
       repo,
       worktree,
-      openFiles: [makeOpenFile(workspaceKey)]
+      openFiles: [{ ...makeOpenFile(workspaceKey), filePath: 'C:\\folder\\notes.md' }]
     })
     state.folderWorkspaces = [
       {

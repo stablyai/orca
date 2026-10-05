@@ -17,11 +17,16 @@ function normalizeWatcherRootPath(rootPath: string): string {
   return resolved
 }
 
-export function getLocalWatcherRoot(rootPath: string): { key: string; path: string } {
+export function getLocalWatcherRoot(
+  rootPath: string,
+  shallow = false
+): { key: string; path: string } {
   const normalizedPath = normalizeWatcherRootPath(rootPath)
   return {
     // Why: Windows drive/UNC paths are case-insensitive; cleanup must match the owner even when Git returns a different spelling.
-    key: normalizeRuntimePathForComparison(normalizedPath),
+    key: shallow
+      ? JSON.stringify(['shallow', normalizeRuntimePathForComparison(normalizedPath)])
+      : normalizeRuntimePathForComparison(normalizedPath),
     path: normalizedPath
   }
 }

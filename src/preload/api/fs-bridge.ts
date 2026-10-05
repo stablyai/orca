@@ -192,10 +192,16 @@ export const fsApi = {
     } & SshMutationExpectation
   ): Promise<ResolveDroppedPathsResult> =>
     ipcRenderer.invoke('fs:resolveDroppedPathsForAgent', args),
-  watchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
-    ipcRenderer.invoke('fs:watchWorktree', args),
-  unwatchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
-    ipcRenderer.invoke('fs:unwatchWorktree', args),
+  watchWorktree: (args: {
+    worktreePath: string
+    connectionId?: string
+    shallow?: boolean
+  }): Promise<void> => ipcRenderer.invoke('fs:watchWorktree', args),
+  unwatchWorktree: (args: {
+    worktreePath: string
+    connectionId?: string
+    shallow?: boolean
+  }): Promise<void> => ipcRenderer.invoke('fs:unwatchWorktree', args),
   onFsChanged: (callback: (payload: FsChangedPayload) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: FsChangedPayload) =>
       callback(payload)

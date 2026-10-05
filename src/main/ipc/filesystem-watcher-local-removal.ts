@@ -22,7 +22,28 @@ export async function closeLocalWatcherForWorktreePath(
   worktreePath: string,
   deadline: WatcherRemovalDeadline = createWatcherRemovalDeadline()
 ): Promise<void> {
-  const { key: rootKey } = getLocalWatcherRoot(worktreePath)
+  await reconcileLocalWatchModes((shallow) =>
+    closeLocalWatcherRoot(worktreePath, deadline, shallow)
+  )
+}
+
+async function reconcileLocalWatchModes(
+  action: (shallow: boolean) => Promise<void>
+): Promise<void> {
+  const results = await Promise.allSettled([action(false), action(true)])
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      throw result.reason
+    }
+  }
+}
+
+async function closeLocalWatcherRoot(
+  worktreePath: string,
+  deadline: WatcherRemovalDeadline,
+  shallow: boolean
+): Promise<void> {
+  const { key: rootKey } = getLocalWatcherRoot(worktreePath, shallow)
   const suspended = watcherLifecycleState.suspendedLocalWatcherListeners.get(rootKey) ?? {
     worktreePath,
     listeners: new Map<number, WebContents>()
@@ -120,7 +141,11 @@ export async function closeLocalWatcherForWorktreePath(
 }
 
 export async function restoreLocalWatcherAfterFailedRemoval(worktreePath: string): Promise<void> {
-  const { key: rootKey } = getLocalWatcherRoot(worktreePath)
+  await reconcileLocalWatchModes((shallow) => restoreLocalWatcherRoot(worktreePath, shallow))
+}
+
+async function restoreLocalWatcherRoot(worktreePath: string, shallow: boolean): Promise<void> {
+  const { key: rootKey } = getLocalWatcherRoot(worktreePath, shallow)
   const suspended = watcherLifecycleState.suspendedLocalWatcherListeners.get(rootKey)
   if (!suspended) {
     return
@@ -136,12 +161,13 @@ export async function restoreLocalWatcherAfterFailedRemoval(worktreePath: string
       continue
     }
     try {
-      await subscribeLocalWatcher(suspended.worktreePath, sender, undefined, signal)
+      await subscribeLocalWatcher(suspended.worktreePath, sender, undefined, signal, shallow)
       if (!isCurrentWatcherSender(sender, signal)) {
         continue
       }
       sender.send('fs:changed', {
         worktreePath: suspended.worktreePath,
+        ...(shallow ? { shallow: true as const } : {}),
         events: [{ kind: 'overflow', absolutePath: suspended.worktreePath }]
       } satisfies FsChangedPayload)
     } catch (error) {
@@ -165,4 +191,7 @@ export async function restoreLocalWatcherAfterFailedRemoval(worktreePath: string
 
 export function forgetLocalWatcherRemovalSnapshot(worktreePath: string): void {
   watcherLifecycleState.suspendedLocalWatcherListeners.delete(getLocalWatcherRoot(worktreePath).key)
+  watcherLifecycleState.suspendedLocalWatcherListeners.delete(
+    getLocalWatcherRoot(worktreePath, true).key
+  )
 }

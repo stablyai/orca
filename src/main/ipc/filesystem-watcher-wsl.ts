@@ -27,6 +27,7 @@ export type WatchedRoot = {
   // Why: the real on-disk path. Never substitute the watcher's rootKey — that is
   // a comparison key (case/Unicode folded) and would reach the renderer as a path.
   rootPath: string
+  shallow?: true
 }
 
 export type WslWatcherDeps = {

@@ -520,7 +520,21 @@ describe('restored editor owner reparent', () => {
     expect(result.ok).toBe(true)
     const after = getEditorExternalWatchTargets(useAppStore.getState())
 
-    expect(before.targets.map((target) => target.worktreeId)).toEqual([SOURCE])
+    expect(before.targets).toEqual([
+      {
+        worktreeId: SOURCE,
+        worktreePath: '/repo-a',
+        connectionId: undefined,
+        runtimeEnvironmentId: null
+      },
+      {
+        worktreeId: SOURCE,
+        worktreePath: '/repo-b/docs',
+        connectionId: undefined,
+        runtimeEnvironmentId: null,
+        shallow: true
+      }
+    ])
     expect(after.targets).toEqual([
       {
         worktreeId: TARGET,
@@ -531,7 +545,7 @@ describe('restored editor owner reparent', () => {
     ])
   })
 
-  it('unsubscribes the source watch once and subscribes the destination once', async () => {
+  it('replaces the source and external-directory watches with the destination watch', async () => {
     const watchWorktree = vi.fn().mockResolvedValue(undefined)
     const unwatchWorktree = vi.fn().mockResolvedValue(undefined)
     const previousApi = (window as unknown as { api?: unknown }).api
@@ -546,29 +560,34 @@ describe('restored editor owner reparent', () => {
     const container = document.body.appendChild(document.createElement('div'))
     const root = createRoot(container)
     await act(async () => root.render(createElement(WatchProbe)))
-    await vi.waitFor(() => expect(watchWorktree).toHaveBeenCalledTimes(1))
-    expect(watchWorktree).toHaveBeenLastCalledWith({
-      worktreePath: '/repo-a',
-      connectionId: undefined
-    })
+    await vi.waitFor(() => expect(watchWorktree).toHaveBeenCalledTimes(2))
+    expect(watchWorktree.mock.calls).toEqual([
+      [{ worktreePath: '/repo-a', connectionId: undefined }],
+      [{ worktreePath: '/repo-b/docs', connectionId: undefined, shallow: true }]
+    ])
 
     await act(async () => {
       expect(reparent(oldId).ok).toBe(true)
     })
     await vi.waitFor(() => {
-      expect(unwatchWorktree).toHaveBeenCalledTimes(1)
-      expect(watchWorktree).toHaveBeenCalledTimes(2)
+      expect(unwatchWorktree).toHaveBeenCalledTimes(2)
+      expect(watchWorktree).toHaveBeenCalledTimes(3)
     })
-    expect(unwatchWorktree).toHaveBeenLastCalledWith({
-      worktreePath: '/repo-a',
-      connectionId: undefined
-    })
+    expect(unwatchWorktree.mock.calls).toEqual([
+      [{ worktreePath: '/repo-a', connectionId: undefined }],
+      [{ worktreePath: '/repo-b/docs', connectionId: undefined, shallow: true }]
+    ])
     expect(watchWorktree).toHaveBeenLastCalledWith({
       worktreePath: '/repo-b',
       connectionId: undefined
     })
 
     await act(async () => root.unmount())
+    expect(unwatchWorktree).toHaveBeenCalledTimes(3)
+    expect(unwatchWorktree).toHaveBeenLastCalledWith({
+      worktreePath: '/repo-b',
+      connectionId: undefined
+    })
     container.remove()
     ;(window as unknown as { api?: unknown }).api = previousApi
   })
