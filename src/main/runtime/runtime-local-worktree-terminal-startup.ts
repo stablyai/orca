@@ -48,6 +48,7 @@ export type RuntimeLocalWorktreeTerminalStartupResult = {
   startupTerminalTabId: string | null
   startupTerminalPaneKey: string | null
   startupTerminalPtyId: string | null
+  startupTerminalTitle: string | null
 }
 
 export async function startRuntimeLocalWorktreeTerminals(args: {
@@ -73,6 +74,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   let startupTerminalTabId: string | null = null
   let startupTerminalPaneKey: string | null = null
   let startupTerminalPtyId: string | null = null
+  let startupTerminalTitle: string | null = null
   let sequencedStartup = startup
   let wrappedSetupCommand: string | undefined
   if (startup && setup?.waitForAgentStartup === true) {
@@ -95,6 +97,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     try {
       const terminal = await ports.createTerminal(`id:${worktree.id}`, {
         command: sequencedStartup.command,
+        ...(request.startupTitle !== undefined ? { title: request.startupTitle } : {}),
         ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
         ...paneIdentity(request.startupPaneKey),
         ...(setup && startup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
@@ -117,6 +120,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       startupTerminalTabId = terminal.tabId ?? null
       startupTerminalPaneKey = terminal.paneKey ?? null
       startupTerminalPtyId = terminal.ptyId ?? null
+      startupTerminalTitle = terminal.title
     } catch (error) {
       warning = appendFailure(warning, worktree.path, 'startup', error)
     }
@@ -185,7 +189,8 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     startupTerminalHandle,
     startupTerminalTabId,
     startupTerminalPaneKey,
-    startupTerminalPtyId
+    startupTerminalPtyId,
+    startupTerminalTitle
   }
 }
 

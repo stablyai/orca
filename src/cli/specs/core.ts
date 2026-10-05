@@ -1,7 +1,6 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
-import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
-import { WORKTREE_SET_COMMAND_SPEC } from './worktree-set'
+import { WORKTREE_COMMAND_SPECS } from './worktree'
 import { SERVE_COMMAND_SPECS } from './serve'
 import { REPO_COMMAND_SPECS } from './repo'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
@@ -39,112 +38,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca claude-teams', 'orca claude-teams --resume <session-id>']
   },
   ...REPO_COMMAND_SPECS,
-  {
-    path: ['worktree', 'list'],
-    summary: 'List Orca-managed worktrees',
-    usage: 'orca worktree list [--repo <selector>] [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'limit'],
-    notes: [...WORKTREE_LISTING_SCOPE_NOTES]
-  },
-  {
-    path: ['worktree', 'show'],
-    summary: 'Show one worktree',
-    usage: 'orca worktree show --worktree <selector> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree']
-  },
-  {
-    path: ['worktree', 'current'],
-    summary: 'Show the Orca-managed worktree for the current directory',
-    usage: 'orca worktree current [--json]',
-    allowedFlags: [...GLOBAL_FLAGS],
-    notes: [
-      'Resolves the current shell directory to a path: selector so agents can target the enclosing Orca worktree without spelling out $PWD.'
-    ],
-    examples: ['orca worktree current', 'orca worktree current --json']
-  },
-  {
-    path: ['worktree', 'create'],
-    summary: 'Create a new Orca-managed worktree',
-    usage:
-      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]',
-    allowedFlags: [
-      ...GLOBAL_FLAGS,
-      'repo',
-      'project',
-      'host',
-      'project-host-setup',
-      'name',
-      'agent',
-      'prompt',
-      'base-branch',
-      'issue',
-      'pr',
-      'linear-issue',
-      'gitlab-issue',
-      'gitlab-mr',
-      'comment',
-      'setup',
-      'parent-worktree',
-      'no-parent',
-      'run-hooks',
-      'activate'
-    ],
-    notes: [
-      'This creates a new checkout. For a fresh agent in an existing worktree, use `orca terminal create --worktree active --command "codex"` instead.',
-      'By default, Orca records the new worktree as a child of the caller context when it can infer one from the Orca terminal or current directory.',
-      'If --repo is omitted, Orca infers the repo from the current Orca-managed worktree.',
-      'Use --project with --host to create on a ready project host setup without spelling the backing repo id.',
-      '--host runtime:<environment-id> creates on that paired Orca server; use the id from `orca environment list`, not the environment name.',
-      'For related work, use the inferred parent or pass --parent-worktree active, folder:<id>, or worktree:<worktreeId> to make the relationship explicit. Worktree ids are the full <repo-id>::<path> values returned by `orca worktree list --json`.',
-      'Use --no-parent when the new worktree should be independent of the current context.',
-      '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
-      'By default this creates the worktree and its first terminal without switching the active Orca view.',
-      'Pass --agent to launch an agent in the first terminal; --prompt sends initial work to that agent.',
-      'With --agent --json, read the new agent handle from result.agentTerminalHandle; older runtimes return only result.startupTerminal.handle, and may return neither for folder-based repos.',
-      'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',
-      'Pass --activate when the CLI caller intentionally wants to reveal the new worktree in the app.',
-      'Passing --run-hooks is kept as a legacy alias for --setup run and reveals the worktree.',
-      'Use --pr for GitHub pull requests; --gitlab-issue and --gitlab-mr write separate GitLab links. GitLab URLs must match the stored source project or remote; they cannot select a foreign project.'
-    ],
-    examples: [
-      'orca worktree create --name agent-task --agent codex --prompt "hi" --json',
-      'orca worktree create --repo id:<repoId> --name related-task --json',
-      'orca worktree create --project github:stablyai/orca --host runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3 --name benchmark --json',
-      'orca worktree create --repo id:<repoId> --name linear-task --linear-issue https://linear.app/stably/issue/STA-335/test-issue --json',
-      'orca worktree create --repo id:<repoId> --name agent-task --agent codex --prompt "hi" --json',
-      'orca worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json',
-      'orca worktree create --repo id:<repoId> --name related-task --parent-worktree active --json',
-      'orca worktree create --repo id:<repoId> --name independent-task --no-parent --json'
-    ]
-  },
-  WORKTREE_SET_COMMAND_SPEC,
-  {
-    path: ['worktree', 'rm'],
-    // Why: agents reach for git's `remove`/`delete` verbs; accept them as
-    // aliases so a conventional guess resolves instead of dead-ending.
-    aliases: [
-      ['worktree', 'remove'],
-      ['worktree', 'delete']
-    ],
-    destructive: true,
-    summary: 'Remove a worktree from Orca and git',
-    usage:
-      'orca worktree rm --worktree <selector> [--force] [--run-hooks] [--allow-failed-archive-hook] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'force', 'run-hooks', 'allow-failed-archive-hook'],
-    notes: [
-      'Repo-defined orca.yaml archive hooks are skipped unless --run-hooks is passed.',
-      'With --run-hooks, a failed archive hook blocks the removal: nothing is stopped, deleted or deregistered, and the command exits non-zero with error code worktree_archive_hook_failed. --force does not waive this.',
-      'Pass --allow-failed-archive-hook to delete anyway after the hook has run and failed; the waived failure is reported back on result.archiveHookOverride. It requires --run-hooks and is rejected without it, because with no hook running there is no failure to waive.',
-      'For Git worktrees, removal also attempts to delete the checked-out local branch, with or without --force. Orca retains branches it knows predated the worktree and any branch whose changes it cannot prove are already merged.'
-    ]
-  },
-  {
-    path: ['worktree', 'ps'],
-    summary: 'Show a compact orchestration summary across worktrees',
-    usage: 'orca worktree ps [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit'],
-    notes: [...WORKTREE_LISTING_SCOPE_NOTES]
-  },
+  ...WORKTREE_COMMAND_SPECS,
   {
     path: ['terminal', 'list'],
     summary: 'List live Orca-managed terminals',

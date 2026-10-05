@@ -58,6 +58,34 @@ async function startupTerminalOptions(startupPaneKey?: string): Promise<Record<s
 }
 
 describe('a folder workspace create with a startup agent', () => {
+  it('passes the startup title directly to terminal creation and reports its result', async () => {
+    const { createTerminal, deps } = createDeps()
+    createTerminal.mockResolvedValue({
+      handle: 'term-1',
+      worktreeId: 'folder-1',
+      title: 'Applied title'
+    })
+
+    const result = await createRuntimeFolderWorktree({
+      request: {
+        repoSelector: `id:${repo.id}`,
+        name: 'task',
+        startupAgent: 'claude',
+        startupTitle: 'Review tests'
+      },
+      repo,
+      createdWithAgent: 'claude',
+      startup: { command: 'claude' },
+      deps
+    })
+
+    expect(createTerminal).toHaveBeenCalledTimes(1)
+    expect(createTerminal).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ title: 'Review tests', command: 'claude', surfaceOwner: false })
+    )
+    expect(result.startupTerminal).toMatchObject({ handle: 'term-1', title: 'Applied title' })
+  })
   it('creates the startup terminal under the pane the caller reserved', async () => {
     expect(await startupTerminalOptions(`${TAB_ID}:${LEAF_ID}`)).toMatchObject({
       tabId: TAB_ID,
@@ -69,5 +97,6 @@ describe('a folder workspace create with a startup agent', () => {
     const options = await startupTerminalOptions()
     expect(options).not.toHaveProperty('tabId')
     expect(options).not.toHaveProperty('leafId')
+    expect(options).not.toHaveProperty('title')
   })
 })

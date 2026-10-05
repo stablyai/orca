@@ -12,6 +12,15 @@ const build = (params: Record<string, unknown>) =>
   buildManagedWorktreeCreateArgs(WorktreeCreate.parse(params), PROVENANCE)
 
 describe('buildManagedWorktreeCreateArgs', () => {
+  it('forwards an optional agent terminal title without changing the launch', () => {
+    expect(
+      build({ repo: 'id:repo-1', startupAgent: 'claude', startupTitle: 'Review tests' })
+    ).toMatchObject({
+      startupAgent: 'claude',
+      startupTitle: 'Review tests'
+    })
+    expect(build({ repo: 'id:repo-1', startupAgent: 'claude' })).not.toHaveProperty('startupTitle')
+  })
   it('omits name provenance when the client did not claim a generated name', () => {
     // Why: absent must mean user-typed. A truthy default would let the host permanently retire
     // names people chose on purpose — the pool contains ordinary words like "orca" and "molly".

@@ -119,6 +119,7 @@ Agent/setup flags:
 
 ```text
 ORCA worktree create --name task --agent codex --prompt "hi" --json
+ORCA worktree create --name task --agent claude --title "Review tests" --json
 ORCA worktree create --name task --agent claude --setup run --json
 ORCA worktree create --name task --setup skip --json
 ORCA worktree create --name task --run-hooks --json
@@ -126,6 +127,7 @@ ORCA worktree create --name task --run-hooks --json
 
 - `--agent <id>` launches that agent **in the first terminal** (Orca docs: _"`--agent` launches the selected agent in the first terminal"_); `--prompt <text>` sends initial work to it. Known ids include `claude`, `codex`, `omp`, `pi`, `grok`, and other installed TUI agents.
 - **Prefer agent-first create for agent workers.** `ORCA worktree create --agent <id> --prompt "..."` puts the agent in the first terminal with no extra fallback shell. Repo setup or default-terminal settings may still add tabs or splits. A bare create's fallback shell plus a later `terminal create --command <agent>` is the anti-pattern; use `--agent`. Configured default tabs are intentional; never close one without verifying it is an unused shell.
+- **Name the agent tab at launch.** Add `--title "Review tests"` with `--agent` to set the same persistent custom tab title as `terminal create --title`. Omit it or pass an empty string for the automatic title. `result.startupTerminal.title` reports the terminal creation title (`null` for automatic); older runtimes may ignore the flag and omit this field. The CLI reports an unconfirmed requested title in `result.warning` after creation; inspect the returned terminal and do not repeat `worktree create` to retry a title.
 - Address the agent through exactly one handle. Use `startupTerminal.handle` as the sole agent handle when create returns it; otherwise take the match from `ORCA terminal list --worktree id:<repoId>::<newWorktreePath> --json`. Handles are runtime-scoped: after an Orca restart or a `terminal_handle_stale` error, re-list and continue with the replacement only; never dual-send to old and replacement handles. `--agent` already owns the first terminal, so do not `terminal create` that agent again.
 - `--setup run|skip|inherit` controls repo setup hooks. Default is `inherit`, which follows the repo's setup policy.
 - `--run-hooks` is a legacy alias for `--setup run`; it also reveals/activates the new worktree.

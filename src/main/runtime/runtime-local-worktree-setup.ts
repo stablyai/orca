@@ -6,6 +6,42 @@ import { getDefaultTabsLaunch, shouldRunSetupForCreate } from '../effective-hook
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RuntimeStore } from './runtime-store-contract'
 
+export function runtimeLocalWorktreeSetupReceipt(args: {
+  effectiveDecision: 'run' | 'skip' | 'inherit'
+  hookFound: boolean
+  shouldRunSetup: boolean
+  didSpawnSetup: boolean
+  didStartInProcessSetupHook: boolean
+  setup: CreateWorktreeResult['setup']
+  setupTerminalHandle: string | null
+}): NonNullable<CreateWorktreeResult['setupReceipt']> {
+  const {
+    effectiveDecision,
+    hookFound,
+    shouldRunSetup,
+    didSpawnSetup,
+    didStartInProcessSetupHook,
+    setup,
+    setupTerminalHandle
+  } = args
+  return {
+    requested: effectiveDecision,
+    hookFound,
+    startupPolicy: setup?.waitForAgentStartup
+      ? ('wait-for-setup' as const)
+      : ('start-immediately' as const),
+    state: !hookFound
+      ? ('not_configured' as const)
+      : effectiveDecision === 'skip' || !shouldRunSetup
+        ? ('skipped' as const)
+        : // The in-process hook is already executing, so callers must not retry it.
+          didSpawnSetup || didStartInProcessSetupHook
+          ? ('running' as const)
+          : ('spawn_failed' as const),
+    ...(setupTerminalHandle ? { terminalHandle: setupTerminalHandle } : {})
+  }
+}
+
 export async function prepareRuntimeLocalWorktreeSetup(args: {
   request: RuntimeManagedWorktreeCreateArgs
   repo: Repo

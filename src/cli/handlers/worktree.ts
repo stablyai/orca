@@ -7,6 +7,7 @@ import type {
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
 import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
+import { annotateStartupTitleReceipt } from './worktree-startup-title-receipt'
 import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult } from '../format'
 import {
   annotateOmittedHostScope,
@@ -72,6 +73,9 @@ function getOptionalStartupAgent(flags: Map<string, string | boolean>): string |
   if (agent === undefined) {
     if (flags.has('prompt')) {
       throw new RuntimeClientError('invalid_argument', '--prompt requires --agent')
+    }
+    if (flags.has('title')) {
+      throw new RuntimeClientError('invalid_argument', '--title requires --agent')
     }
     return undefined
   }
@@ -204,6 +208,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
     const activate = flags.get('activate') === true || flags.get('run-hooks') === true
     const name = getRequiredStringFlag(flags, 'name')
+    const startupTitle = getOptionalStringFlag(flags, 'title')
     const repo = await getCreateRepoSelector(flags, cwdParentWorktree, client)
     await assertGitLabLinkFlagProjectsMatch(flags, client, { repo })
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
@@ -234,10 +239,12 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         ? {
             startupAgent,
             startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? '',
+            ...(flags.has('title') ? { startupTitle } : {}),
             launchSource: 'cli'
           }
         : {})
     })
+    annotateStartupTitleReceipt(result.result, startupTitle)
     printHookWarning(result.result, json)
     printLineageSummary(result.result, json)
     printResult(result, json, formatWorktreeShow)

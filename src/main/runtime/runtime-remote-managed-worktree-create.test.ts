@@ -68,6 +68,29 @@ async function startupTerminalOptions(startupPaneKey?: string): Promise<Record<s
 }
 
 describe('a remote managed create with a startup agent', () => {
+  it('preserves optional startup title metadata through the existing terminal adapter', async () => {
+    const { createTerminal, deps } = createDeps()
+    createTerminal.mockResolvedValue({ handle: 'term-1', title: 'Applied title' })
+
+    const result = await createRuntimeRemoteManagedWorktree(
+      repo,
+      {
+        name: 'task',
+        startupAgent: 'claude',
+        startupTitle: 'Review tests',
+        createdWithAgent: 'claude',
+        startup: { command: 'claude' }
+      },
+      deps
+    )
+
+    expect(createTerminal).toHaveBeenCalledTimes(1)
+    expect(createTerminal).toHaveBeenCalledWith(
+      'path:/remote/wt',
+      expect.objectContaining({ title: 'Review tests', command: 'claude', surfaceOwner: false })
+    )
+    expect(result.startupTerminal).toMatchObject({ handle: 'term-1', title: 'Applied title' })
+  })
   it('creates the startup terminal under the pane the caller reserved', async () => {
     expect(await startupTerminalOptions(`${TAB_ID}:${LEAF_ID}`)).toMatchObject({
       tabId: TAB_ID,
@@ -79,5 +102,6 @@ describe('a remote managed create with a startup agent', () => {
     const options = await startupTerminalOptions()
     expect(options).not.toHaveProperty('tabId')
     expect(options).not.toHaveProperty('leafId')
+    expect(options).not.toHaveProperty('title')
   })
 })

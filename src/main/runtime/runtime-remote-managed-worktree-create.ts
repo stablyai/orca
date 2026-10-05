@@ -27,6 +27,7 @@ type Dependencies = {
     tabId?: string | null
     paneKey?: string | null
     ptyId?: string | null
+    title?: string | null
   }>
   pasteDraft(handle: string, draft: WorktreeStartupDraftPaste): void
   sendFollowup(handle: string, followup: WorktreeStartupFollowup): void
@@ -79,6 +80,7 @@ export async function createRuntimeRemoteManagedWorktree(
   let startupTerminalTabId: string | null = null
   let startupTerminalPaneKey: string | null = null
   let startupTerminalPtyId: string | null = null
+  let startupTerminalTitle: string | null = null
 
   let sequencedStartup = args.startup
   let wrappedSetupCommandStr: string | undefined
@@ -102,6 +104,7 @@ export async function createRuntimeRemoteManagedWorktree(
     try {
       const terminal = await deps.createTerminal(`path:${result.worktree.path}`, {
         command: sequencedStartup.command,
+        ...(args.startupTitle !== undefined ? { title: args.startupTitle } : {}),
         ...(args.startupCwd ? { cwd: args.startupCwd } : {}),
         ...paneIdentity(args.startupPaneKey),
         ...(result.setup && args.startup
@@ -126,6 +129,7 @@ export async function createRuntimeRemoteManagedWorktree(
       startupTerminalTabId = terminal.tabId ?? null
       startupTerminalPaneKey = terminal.paneKey ?? null
       startupTerminalPtyId = terminal.ptyId ?? null
+      startupTerminalTitle = terminal.title ?? null
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       warning = warning
@@ -238,6 +242,7 @@ export async function createRuntimeRemoteManagedWorktree(
     startupTerminalHandle,
     startupTerminalTabId,
     startupTerminalPaneKey,
-    startupTerminalPtyId
+    startupTerminalPtyId,
+    startupTerminalTitle
   })
 }
