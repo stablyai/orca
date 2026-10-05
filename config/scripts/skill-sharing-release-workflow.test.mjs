@@ -76,37 +76,25 @@ describe('skill-sharing release workflow', () => {
   it('trusts only the checked-out workspace before container git operations', () => {
     const linux = workflow.jobs['skill-sharing-linux-floor-release-gate']
     const trustWorkspace = stepNamed(linux, 'Trust the checked-out workspace in the job container')
-    const restoreHarness = stepNamed(
-      linux,
-      'Restore skill-sharing test harness from the workflow ref'
-    )
+    const runSuites = stepNamed(linux, 'Run skill package, transaction, and compatibility suites')
     const safeDirectoryCommands = linux.steps
       .filter((step) => typeof step.run === 'string' && step.run.includes('safe.directory'))
       .map((step) => step.run)
 
     expect(trustWorkspace.run).toBe('git config --global --add safe.directory "$GITHUB_WORKSPACE"')
-    expect(linux.steps.indexOf(trustWorkspace)).toBeLessThan(linux.steps.indexOf(restoreHarness))
+    expect(linux.steps.indexOf(trustWorkspace)).toBeLessThan(linux.steps.indexOf(runSuites))
     expect(safeDirectoryCommands).toEqual([
       'git config --global --add safe.directory "$GITHUB_WORKSPACE"'
     ])
   })
 
-  it('validates immutable tags with the current skill-sharing test harness', () => {
+  it("judges the tag with the tag's own skill-sharing tests", () => {
     for (const jobName of [
       'skill-sharing-release-gate',
       'skill-sharing-linux-floor-release-gate'
     ]) {
-      const restore = stepNamed(
-        workflow.jobs[jobName],
-        'Restore skill-sharing test harness from the workflow ref'
-      )
-
-      expect(restore.env.WORKFLOW_SHA).toBe('${{ github.workflow_sha }}')
-      expect(restore.run).toContain('git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"')
-      expect(restore.run.split('git checkout')[1]).not.toContain(
-        'skill-freshness-inventory.test.ts'
-      )
-      expect(restore.run).toContain('skill-provider-runtime-roots.test.ts')
+      expect(JSON.stringify(workflow.jobs[jobName])).not.toContain('workflow_sha')
+      expect(JSON.stringify(workflow.jobs[jobName])).not.toContain('WORKFLOW_SHA')
     }
   })
 
