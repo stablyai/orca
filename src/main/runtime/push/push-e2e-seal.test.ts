@@ -81,6 +81,34 @@ describe('sealPushNotification', () => {
     expect(mine.notificationId).not.toBe(theirs.notificationId)
   })
 
+  it('restores the same id on an alert and its dismissal when the alert body fills the budget', () => {
+    const notificationId = `agent:${'%D0%BF'.repeat(100)}`
+    const full = alert({
+      notificationId,
+      title: 'Ж'.repeat(80),
+      body: '🙂'.repeat(90),
+      worktreeId: `repo::${'п'.repeat(300)}`
+    })
+    const opened = openSealedPushNotification(sealPushNotification(full, TOKEN), TOKEN)
+    const dismissed = openSealedPushNotification(
+      sealPushNotification({ ...full, kind: 'dismiss', notificationSeq: 4 }, TOKEN),
+      TOKEN
+    )
+    expect(opened.notificationId).toBe(notificationId)
+    expect(dismissed.notificationId).toBe(notificationId)
+  })
+
+  it('keeps an id too long to seal opaque on both an alert and its dismissal', () => {
+    const full = alert({ notificationId: `agent:${'%D0%BF'.repeat(300)}` })
+    const opened = openSealedPushNotification(sealPushNotification(full, TOKEN), TOKEN)
+    const dismissed = openSealedPushNotification(
+      sealPushNotification({ ...full, kind: 'dismiss', notificationSeq: 4 }, TOKEN),
+      TOKEN
+    )
+    expect(opened.notificationId).toMatch(/^e2e1\./)
+    expect(dismissed.notificationId).toBe(opened.notificationId)
+  })
+
   it('stays inside the gateway budgets with maximal multibyte text', () => {
     const wire = sealPushNotification(
       alert({
