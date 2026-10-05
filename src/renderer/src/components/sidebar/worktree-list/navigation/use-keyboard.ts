@@ -7,7 +7,12 @@ import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
+import {
+  keybindingMatchesAction,
+  type KeybindingMatchOptions
+} from '../../../../../../shared/keybindings'
+import { resolveKeyboardShortcutSurface } from '@/lib/keyboard-shortcut-surface'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import type { HostSectionRow } from '../../host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
 import type { RenderRow } from '../listing/render-row'
@@ -18,26 +23,6 @@ import {
   resolveCycledWorktreeId
 } from '../../worktree-keyboard-cycle'
 import { findPreferredRenderRowIndexForWorktreeIdentity } from './render-row-lookup'
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false
-  }
-
-  // xterm's hidden input textarea isn't a real text field; treating it as one would block sidebar shortcuts.
-  if (target.classList.contains('xterm-helper-textarea')) {
-    return false
-  }
-
-  if (target.isContentEditable) {
-    return true
-  }
-
-  return (
-    target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]') !==
-    null
-  )
-}
 
 export function useWorktreeListKeyboardNavigation(args: {
   rows: HostSectionRow[]
@@ -114,13 +99,20 @@ export function useWorktreeListKeyboardNavigation(args: {
       scrollRef.current?.removeAttribute('data-keyboard-navigation')
     }
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (activeModal !== 'none' || isEditableTarget(e.target)) {
+      if (activeModal !== 'none') {
         return
+      }
+      const surface = resolveKeyboardShortcutSurface(e.target)
+      if (surface === 'blocked' || (surface === 'search-field' && isImeOwnedKeyboardEvent(e))) {
+        return
+      }
+      const options: KeybindingMatchOptions = {
+        context: surface
       }
 
       const platform = getShortcutPlatform()
       if (
-        keybindingMatchesAction('sidebar.focusWorktreeList', e, platform, keybindings) &&
+        keybindingMatchesAction('sidebar.focusWorktreeList', e, platform, keybindings, options) &&
         !hasVisibleOverlay()
       ) {
         scrollRef.current?.focus()
@@ -128,9 +120,15 @@ export function useWorktreeListKeyboardNavigation(args: {
         return
       }
 
-      const direction = keybindingMatchesAction('worktree.navigateUp', e, platform, keybindings)
+      const direction = keybindingMatchesAction(
+        'worktree.navigateUp',
+        e,
+        platform,
+        keybindings,
+        options
+      )
         ? 'up'
-        : keybindingMatchesAction('worktree.navigateDown', e, platform, keybindings)
+        : keybindingMatchesAction('worktree.navigateDown', e, platform, keybindings, options)
           ? 'down'
           : null
       if (direction && !hasVisibleOverlay()) {

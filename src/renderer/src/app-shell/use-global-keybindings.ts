@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
-import { isEditableTarget } from '../lib/editable-target'
 import { getSelectedTextForFileSearch } from '../lib/file-search-selection'
 import { registerAppCommandDispatcher } from '@/lib/app-command-dispatch'
 import { executePluginCommand } from '@/lib/plugin-command-execution'
@@ -31,9 +30,10 @@ import {
   toModifierDoubleTapEvent
 } from '../../../shared/modifier-double-tap-detector'
 import { shortcutPlatform } from './app-window-chrome'
+import { resolveKeyboardShortcutSurface } from '@/lib/keyboard-shortcut-surface'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import {
   createAppCommandHandlers,
-  getKeybindingContext,
   useAppShortcutActions,
   type AppShortcutState,
   type ShortcutDispatchInput
@@ -115,7 +115,8 @@ export function useGlobalKeybindings(args: {
       ) {
         return
       }
-      const context = getKeybindingContext(input.target)
+      const surface = resolveKeyboardShortcutSurface(input.target)
+      const context = surface === 'blocked' ? 'app' : surface
 
       // Note: some shortcuts are also intercepted in createMainWindow.ts before-input-event (for browser-guest focus); the renderer keeps handlers for local focus.
 
@@ -187,8 +188,8 @@ export function useGlobalKeybindings(args: {
         return
       }
 
-      // Skip editable surfaces so TipTap's Cmd+B bold works; this renderer-side fallback covers the blur→press IPC race (docs/markdown-cmd-b-bold-design.md).
-      if (isEditableTarget(input.target)) {
+      // Undeclared editors retain shortcut ownership (docs/markdown-cmd-b-bold-design.md).
+      if (surface === 'blocked') {
         return
       }
 
@@ -199,7 +200,10 @@ export function useGlobalKeybindings(args: {
 
       // Only short-circuit chords the floating panel itself claims; suppressing others here would silently no-op them when focus is in the panel.
       if (isFloatingWorkspacePanelFocused()) {
-        const floatingMatchOptions: KeybindingMatchOptions = { context, terminalShortcutPolicy }
+        const floatingMatchOptions: KeybindingMatchOptions = {
+          context,
+          terminalShortcutPolicy
+        }
         if (
           matchFloatingWorkspacePanelChord(
             input,
@@ -261,6 +265,12 @@ export function useGlobalKeybindings(args: {
     }
 
     const onKeyDown = (e: KeyboardEvent): void => {
+      if (
+        resolveKeyboardShortcutSurface(e.target) === 'search-field' &&
+        isImeOwnedKeyboardEvent(e)
+      ) {
+        return
+      }
       const detected = doubleTapDetector.process(
         toModifierDoubleTapEvent({
           type: 'keyDown',

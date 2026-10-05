@@ -1,10 +1,12 @@
 import type {
   KeybindingActionId,
   KeybindingDefinition,
+  KeybindingInput,
   KeybindingMatchOptions,
   KeybindingOverrides,
   TerminalShortcutPolicy
 } from './types'
+import { isChordReservedForSearchField } from './search-field-key-reservation'
 import { DEFINITIONS_BY_ID, getKeybindingPlatform, isDigitIndexActionId } from './definitions'
 import {
   normalizeKeybindingWithOptions,
@@ -98,8 +100,16 @@ export function isKeybindingPotentialTerminalConflict(definition: KeybindingDefi
 
 export function keybindingIsActiveInContext(
   definition: KeybindingDefinition,
-  options: KeybindingMatchOptions = {}
+  options: KeybindingMatchOptions = {},
+  input?: KeybindingInput,
+  platform?: NodeJS.Platform
 ): boolean {
+  if (options.context === 'search-field') {
+    return (
+      definition.scope === 'global' &&
+      Boolean(input && platform && !isChordReservedForSearchField(input, platform))
+    )
+  }
   if (options.context !== 'terminal') {
     return true
   }

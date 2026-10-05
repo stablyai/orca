@@ -10,7 +10,7 @@ export type KeybindingScope =
   | 'composer'
   | 'settings'
 
-export type KeybindingContext = 'app' | 'terminal' | 'browser'
+export type KeybindingContext = 'app' | 'terminal' | 'browser' | 'search-field'
 
 export type KeybindingPlatform = 'darwin' | 'linux' | 'win32'
 
