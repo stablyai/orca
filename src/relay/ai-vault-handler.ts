@@ -97,6 +97,7 @@ export class AiVaultHandler {
     try {
       result = await this.scanCoordinator.run({
         key: JSON.stringify({
+          includeAntigravityIdeSessions: params.includeAntigravityIdeSessions,
           limit: params.limit,
           unlimited: params.unlimited,
           scopePaths: params.scopePaths,
@@ -194,6 +195,9 @@ export function normalizeSshAiVaultRelayListParams(
     params.scopePathsTruncated === true ||
     (Array.isArray(params.scopePaths) && params.scopePaths.length > AI_VAULT_SCOPE_PATHS_MAX_COUNT)
   return {
+    ...(params.includeAntigravityIdeSessions === true
+      ? { includeAntigravityIdeSessions: true }
+      : {}),
     ...(unlimited ? { unlimited: true } : {}),
     ...(limit === undefined ? {} : { limit }),
     ...(params.force === true ? { force: true } : {}),

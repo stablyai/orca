@@ -1,8 +1,5 @@
 import * as codexRewind from './codex-structured-rewind'
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { isCodexAppServerRequestError } from './codex-app-server-connection'
 import type {
@@ -10,8 +7,7 @@ import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionAdapter,
-  StructuredAgentSessionSetOptionInput,
-  StructuredAgentSessionStopCause
+  StructuredAgentSessionSetOptionInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-translation'
 import { dispatchCodexTurn, isCodexTurnOptionKey } from './codex-structured-turn-start'
@@ -77,6 +73,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       sessions: this.sessions,
       acquisitions: this.acquisitions,
       ...(deps.onEvent ? { onEvent: deps.onEvent } : {}),
+      ...(deps.logger ? { logger: deps.logger } : {}),
       forgetNotificationRetries: (sessionId) => this.notificationRetries.clear(sessionId, null)
     })
   }
@@ -285,15 +282,9 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   readOptions = (input: { sessionId: string; fence: number }) =>
     readLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
 
-  historyFilePath = async (input: {
-    identity: AgentSessionJournalIdentity
-  }): Promise<string | null> => this.sessions.get(input.identity.sessionId)?.historyPath ?? null
-
-  closeSession = (sessionId: string, cause?: StructuredAgentSessionStopCause): Promise<boolean> =>
-    this.teardown.close(sessionId, cause)
+  closeSession = (sessionId: string): Promise<boolean> => this.teardown.close(sessionId)
   forceCloseSession = (sessionId: string): Promise<boolean> => this.teardown.forceClose(sessionId)
-  disposeSession = (sessionId: string, cause?: StructuredAgentSessionStopCause): Promise<boolean> =>
-    this.teardown.close(sessionId, cause)
+  disposeSession = (sessionId: string): Promise<boolean> => this.teardown.close(sessionId)
   closeAll = (): Promise<void> => this.teardown.closeAll()
   releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
     this.teardown.close(input.sessionId)

@@ -12,6 +12,10 @@ const FILE_SCHEME = /^file:/i
  * re-parses to itself, so a consumer that can only take a string (the `path` prop of
  * `@monaco-editor/react`, which calls `Uri.parse` internally) lands on the same key.
  */
-export function toEditorModelUri(filePath: string): string {
-  return URI.file(FILE_SCHEME.test(filePath) ? URI.parse(filePath).fsPath : filePath).toString()
+export function toEditorModelUri(filePath: string, ownerKey = ''): string {
+  const parsed = FILE_SCHEME.test(filePath) ? URI.parse(filePath) : URI.file(filePath)
+  // Equal paths on different owners must not share text or undo history.
+  return URI.file(parsed.fsPath)
+    .with({ fragment: ownerKey || parsed.fragment })
+    .toString()
 }

@@ -5,8 +5,26 @@ import CommentMarkdown, {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import {
+  AGENT_SESSION_HOST_STATUS_COPY as HOST_STATUS_COPY,
+  isAgentSessionHostStatusPresentation,
+  type AgentSessionHostStatusPresentation
+} from '../../../../shared/agent-session-host-status-rows'
 import type { NativeChatTextBlock } from '../../../../shared/native-chat-types'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
+
+const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
+  'history-repaired': () =>
+    translate(
+      'components.native-chat.notices.historyRepaired',
+      HOST_STATUS_COPY['history-repaired']
+    ),
+  'history-item-too-large': () =>
+    translate(
+      'components.native-chat.notices.historyItemTooLarge',
+      HOST_STATUS_COPY['history-item-too-large']
+    )
+}
 
 export function NativeChatNoticeRow({
   block,
@@ -29,6 +47,22 @@ export function NativeChatNoticeRow({
         <span>{label}</span>
         <span className="h-px flex-1 bg-border" />
       </div>
+    )
+  }
+  if (block.presentation === 'command-output') {
+    // Why: command output is laid out in columns; proportional type breaks its grid.
+    return (
+      <pre className="whitespace-pre-wrap break-words font-mono text-xs text-foreground">
+        {block.text}
+      </pre>
+    )
+  }
+  if (isAgentSessionHostStatusPresentation(block.presentation)) {
+    // The look of any other host status line; only the words are the reader's.
+    return (
+      <p className="min-w-0 max-w-full select-text text-sm text-muted-foreground [overflow-wrap:anywhere]">
+        {HOST_STATUS_WORDS[block.presentation]()}
+      </p>
     )
   }
   if (block.presentation === 'plan-document') {

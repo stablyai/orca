@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => {
         displayName: string
         isMainWorktree: boolean
         hostId?: ExecutionHostId
+        removalError?: string
       }
     >(),
     repos: [] as { id: string; displayName: string; connectionId?: string }[],
@@ -104,6 +105,7 @@ function setWorktrees(
     displayName?: string
     isMainWorktree?: boolean
     hostId?: ExecutionHostId
+    removalError?: string
   }[]
 ): void {
   mocks.state.worktreeMap = new Map(
@@ -116,7 +118,8 @@ function setWorktrees(
         path: worktree.path ?? `/workspaces/${worktree.id}`,
         displayName: worktree.displayName ?? worktree.id,
         isMainWorktree: worktree.isMainWorktree ?? false,
-        ...(worktree.hostId ? { hostId: worktree.hostId } : {})
+        ...(worktree.hostId ? { hostId: worktree.hostId } : {}),
+        ...(worktree.removalError ? { removalError: worktree.removalError } : {})
       }
     ])
   )
@@ -168,6 +171,29 @@ describe('delete worktree flow', () => {
       worktreeId: 'wt-1',
       worktreeDeleteIdentities: [{ id: 'wt-1', instanceId: 'wt-1-instance' }]
     })
+  })
+
+  it('clears stale delete errors for a mixed batch before its dialog opens', () => {
+    setWorktrees([{ id: 'wt-failed', removalError: 'Operation not permitted' }, { id: 'wt-dirty' }])
+    mocks.state.deleteStateByWorktreeId['wt-failed'] = {
+      isDeleting: false,
+      error: 'Request timed out',
+      canForceDelete: false
+    }
+    mocks.state.deleteStateByWorktreeId['wt-dirty'] = {
+      isDeleting: false,
+      error: 'Worktree has uncommitted changes',
+      canForceDelete: true
+    }
+
+    expect(runWorktreeBatchDelete(['wt-failed', 'wt-dirty'])).toBe(true)
+
+    expect(mocks.state.openModal).toHaveBeenCalledWith(
+      'delete-worktree',
+      expect.objectContaining({ worktreeIds: ['wt-failed', 'wt-dirty'] })
+    )
+    // The failed row's own error still shows in the dialog: it comes from the row.
+    expect(mocks.state.deleteStateByWorktreeId).toEqual({})
   })
 
   it('treats duplicate selected ids as one delete target', () => {

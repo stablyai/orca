@@ -38,6 +38,12 @@ export type ClaudeSubagentLinkageSource = {
   ) => Exclude<ClaudeSubagentLinkageVerdict, { kind: 'pending' }>
 }
 
+/** The linkage of an agent the provider names by its own task id rather than by a frame's
+ *  `parent_tool_use_id`, as a permission request does. */
+export type ClaudeAgentLinkageSource = {
+  linkageForAgent: (agentId: string) => AgentJournalProducerLinkage
+}
+
 /** What the roster knows about one child, reduced to what attribution needs. */
 export type ClaudeSubagentLinkageEntry = { attempt: number }
 
@@ -54,6 +60,8 @@ export type ClaudeSubagentLinkageDeps = {
    *  `parent_tool_use_id` is one of those ids, and this is the only route from
    *  it to the agent that actually spawned the grandchild. */
   childOwnerRefOf?: (toolUseId: string) => string | null
+  /** The spawn call the roster tracked a child under, by its canonical id. */
+  spawnRefOf?: (canonicalId: string) => string | null
 }
 
 /** How far a sidechain is followed when naming a row's parent. Depth beyond
@@ -66,7 +74,9 @@ const MAX_PARENT_RESOLUTION_DEPTH = 8
  *  parent, which is what an unrecorded owner also means. */
 type ParentAgentVerdict = { kind: 'known'; agentId?: string } | { kind: 'pending' }
 
-export class ClaudeSubagentLinkage implements ClaudeSubagentLinkageSource {
+export class ClaudeSubagentLinkage
+  implements ClaudeSubagentLinkageSource, ClaudeAgentLinkageSource
+{
   constructor(private readonly deps: ClaudeSubagentLinkageDeps) {}
 
   linkageFor = (parentToolUseId: string): ClaudeSubagentLinkageVerdict =>
@@ -83,6 +93,22 @@ export class ClaudeSubagentLinkage implements ClaudeSubagentLinkageSource {
     return verdict.kind === 'pending'
       ? linked(parentToolUseId, parentToolUseId, 'agent', null, undefined)
       : verdict
+  }
+
+  /** Resolved through the agent's spawn call, so it states what that agent's own rows state; the
+   *  provider's id stays the agent's id. Before the roster tracks the agent, its id alone. */
+  linkageForAgent = (agentId: string): AgentJournalProducerLinkage => {
+    const spawnRef = this.deps.spawnRefOf?.(agentId) ?? null
+    if (spawnRef === null) {
+      return { agentId, producerKind: 'agent' }
+    }
+    const { linkage } = this.settledLinkageFor(spawnRef)
+    const { parentAgentId, ...rest } = linkage
+    return {
+      ...rest,
+      agentId,
+      ...(parentAgentId === undefined || parentAgentId === agentId ? {} : { parentAgentId })
+    }
   }
 
   private resolve(

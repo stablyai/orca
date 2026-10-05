@@ -20,7 +20,12 @@ import type { Repo } from '../../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
-import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../shared/execution-host'
+import { withUnregisteredRemovalCheckouts } from '../worktree-removal-listing'
 import type { RuntimeWorktreeScanCache } from './orca-runtime-core'
 import { resolveWorktreeScanCacheTtlMs } from './runtime-worktree-scan-cache'
 
@@ -116,7 +121,7 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
     return {
       store,
       scanRepo: (repo, projectRuntimeByRepoId) =>
-        this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId),
+        this.listRepoWorktreesForListing(repo, projectRuntimeByRepoId),
       listFolderWorkspaces: (repo, repoOwnerCount) =>
         listRuntimeFolderWorkspaces(store, repo, repoOwnerCount)
     }
@@ -130,6 +135,17 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
       return null
     }
     return await resolveScopedWorktreeIdRow(this.repoWorktreeRowDeps(), worktreeId, requiredHostId)
+  }
+
+  /** The resolution scan plus the checkouts this host's removals own that Git no longer lists. */
+  protected async listRepoWorktreesForListing(
+    repo: Repo,
+    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
+  ): Promise<RuntimeWorktreeScanResult> {
+    const scan = await this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
+    return scan.ok && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+      ? { ok: true, worktrees: await withUnregisteredRemovalCheckouts(repo.id, scan.worktrees) }
+      : scan
   }
 
   protected async listRepoWorktreesForResolution(

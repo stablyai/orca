@@ -1,3 +1,8 @@
+import {
+  ANTIGRAVITY_HISTORY_ROOTS,
+  type AntigravitySessionOrigin
+} from '../../shared/antigravity-session-origin'
+import { parseQoderSessionContent } from './session-scanner-qoder-parser'
 import { remoteSessionDocumentParsers } from './remote-session-document-parsers'
 import type { RemoteSessionContent } from './remote-session-content-lines'
 import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
@@ -5,7 +10,6 @@ import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { parseAntigravitySessionContent } from './session-scanner-antigravity-parser'
 import { isAntigravityTranscriptPath } from './session-scanner-antigravity-paths'
-import { parseCodexSessionContent } from './session-scanner-codex-parser'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
 import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
 import { parseCodebuddySessionContent } from './session-scanner-codebuddy-parser'
@@ -13,6 +17,7 @@ import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
 import { parseCopilotSessionContent } from './session-scanner-copilot-parser'
 import { parseCursorSessionContent } from './session-scanner-cursor-parser'
 import { parseHermesSessionContent } from './session-scanner-hermes-parser'
+import { parseJcodeSessionContent } from './session-scanner-jcode-parser'
 import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-transcripts'
 import { partitionOmpSubagentTranscriptPaths } from './session-scanner-omp-subagent-transcripts'
 import {
@@ -29,7 +34,7 @@ import {
   remotePrimeAgentSessionsSegments
 } from './remote-session-scanner-source-parsers'
 import type { FileWithMtime } from './session-scanner-types'
-import { remoteCodexIndexedTitleReader } from './remote-session-scanner-codex-index'
+import { remoteCodexSources } from './remote-session-scanner-codex-sources'
 import { remoteClineSource } from './remote-session-scanner-cline-source'
 import { remoteDevinSource } from './remote-session-scanner-devin-source'
 import type {
@@ -50,8 +55,11 @@ type RemoteContentParser<T = string> = (
 export function remoteSessionSources(
   remoteHome: string,
   hostPlatform: RemoteHostPlatform,
-  options?: { omoSessionsDir?: string }
+  options?: { omoSessionsDir?: string; includeAntigravityIdeSessions?: boolean } | boolean
 ): RemoteSessionSource[] {
+  const includeAntigravityIdeSessions =
+    typeof options === 'boolean' ? options : options?.includeAntigravityIdeSessions === true
+  const omoSessionsDir = typeof options === 'object' ? options?.omoSessionsDir : undefined
   return [
     ...remoteCodexSources(remoteHome, hostPlatform),
     {
@@ -80,7 +88,20 @@ export function remoteSessionSources(
       ),
       partitionSubagentTranscripts: partitionSubagentTranscriptPaths
     },
-    remoteAntigravitySource(remoteHome, hostPlatform),
+    {
+      ...jsonlSource(
+        'qoder',
+        remoteHome,
+        hostPlatform,
+        ['.qoder', 'projects'],
+        parseQoderSessionContent
+      ),
+      partitionSubagentTranscripts: partitionSubagentTranscriptPaths
+    },
+    ...(includeAntigravityIdeSessions
+      ? ANTIGRAVITY_HISTORY_ROOTS
+      : (['antigravity-cli'] as const)
+    ).map((origin) => remoteAntigravitySource(remoteHome, hostPlatform, origin)),
     source(
       'gemini',
       remoteHome,
@@ -115,6 +136,15 @@ export function remoteSessionSources(
     ),
     remoteDevinSource(remoteHome, hostPlatform),
     remoteDevinSource(remoteHome, hostPlatform, 'agent_logs'),
+    source(
+      'jcode',
+      remoteHome,
+      hostPlatform,
+      ['.jcode', 'sessions'],
+      ['.json'],
+      parseJcodeSessionContent,
+      (path) => remotePathSegments(path).pop()?.startsWith('session_') === true
+    ),
     jsonlSource('pi', remoteHome, hostPlatform, remotePiSessionsSegments(), piParser),
     {
       ...jsonlSource('omp', remoteHome, hostPlatform, remoteOmpSessionsSegments(), ompParser),
@@ -130,7 +160,7 @@ export function remoteSessionSources(
       remotePrimeAgentSessionsSegments(),
       primeAgentParser
     ),
-    omoRemoteSource(remoteHome, hostPlatform, options?.omoSessionsDir),
+    omoRemoteSource(remoteHome, hostPlatform, omoSessionsDir),
     jsonlSource(
       'muse',
       remoteHome,
@@ -161,9 +191,10 @@ export function remoteSessionSources(
 
 function remoteAntigravitySource(
   remoteHome: string,
-  hostPlatform: RemoteHostPlatform
+  hostPlatform: RemoteHostPlatform,
+  origin: AntigravitySessionOrigin
 ): RemoteSessionSource {
-  const cliRoot = joinRemotePath(hostPlatform, remoteHome, '.gemini', 'antigravity-cli')
+  const cliRoot = joinRemotePath(hostPlatform, remoteHome, '.gemini', origin)
   const historyPath = joinRemotePath(hostPlatform, cliRoot, 'history.jsonl')
   const parse = async (
     file: FileWithMtime,
@@ -185,6 +216,7 @@ function remoteAntigravitySource(
     extensions: ['.jsonl'],
     filePredicate: isAntigravityTranscriptPath,
     fixedChildFileSegments: ['.system_generated', 'logs', 'transcript.jsonl'],
+    additionalFixedChildFileSegments: [['.system_generated', 'logs', 'transcript_full.jsonl']],
     parse,
     parseLines: parse
   }
@@ -245,48 +277,6 @@ function jsonlSource(
         parseContent(file, lines, context.hostPlatform.os, parserOptions(context), context.signal)
       )
   }
-}
-
-function remoteCodexSources(
-  remoteHome: string,
-  hostPlatform: RemoteHostPlatform
-): RemoteSessionSource[] {
-  return [
-    joinRemotePath(hostPlatform, remoteHome, '.codex'),
-    joinRemotePath(
-      hostPlatform,
-      remoteHome,
-      '.local',
-      'share',
-      'orca',
-      'codex-runtime-home',
-      'home'
-    )
-  ].map((codexHome) => {
-    const parse = (
-      file: FileWithMtime,
-      content: RemoteSessionContent,
-      context: RemoteScannerContext
-    ) =>
-      parseCodexSessionContent({
-        file,
-        content,
-        platform: context.hostPlatform.os,
-        codexHome,
-        executionHostId: context.executionHostId,
-        executionHostPlatform: context.hostPlatform.os,
-        signal: context.signal,
-        readIndexedTitle: remoteCodexIndexedTitleReader(codexHome, context)
-      })
-    return {
-      agent: 'codex',
-      rootDir: joinRemotePath(hostPlatform, codexHome, 'sessions'),
-      codexHome,
-      extensions: ['.jsonl'],
-      parse,
-      parseLines: parse
-    }
-  })
 }
 
 function remoteOpenClawSources(

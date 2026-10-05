@@ -39,11 +39,15 @@ export const MessageType = {
 // stale daemon.
 export type HandshakeMessage =
   | { type: 'orca-relay-handshake'; version: string; endpointCredential?: string }
-  | { type: 'orca-relay-handshake-ok'; version: string }
+  // Why optional and informational: bridge and daemon already match exactly on `version`;
+  // this only names the runtime executing the daemon (design D8.1).
+  | { type: 'orca-relay-handshake-ok'; version: string; runtime?: RelayHandshakeRuntime }
   | { type: 'orca-relay-handshake-mismatch'; expected: string; got: string }
   // Why a distinct reply: the bridge exits with its own code so the client can tell a refused
   // credential from a crashed relay. Old bridges reject the unknown type and exit 1 pre-sentinel.
   | { type: 'orca-relay-handshake-credential-mismatch' }
+
+export type RelayHandshakeRuntime = { kind: string; version: string }
 
 export function encodeHandshakeFrame(msg: HandshakeMessage): Buffer {
   const payload = Buffer.from(JSON.stringify(msg), 'utf-8')
@@ -102,6 +106,19 @@ export function parseHandshakeMessage(payload: Buffer): HandshakeMessage {
   for (const field of HANDSHAKE_OPTIONAL_STRING_FIELDS[t as HandshakeMessage['type']]) {
     if (msg[field] !== undefined && typeof msg[field] !== 'string') {
       throw new Error(`Handshake field ${field} is not a string`)
+    }
+  }
+  if (t === 'orca-relay-handshake-ok' && msg.runtime !== undefined) {
+    const runtime = msg.runtime
+    if (
+      typeof runtime !== 'object' ||
+      runtime === null ||
+      !('kind' in runtime) ||
+      typeof runtime.kind !== 'string' ||
+      !('version' in runtime) ||
+      typeof runtime.version !== 'string'
+    ) {
+      throw new Error('Handshake field runtime is not a {kind, version} object')
     }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this is the one place the shape is proved: the type is one of the four literals and every field the union declares has been checked to be a string.

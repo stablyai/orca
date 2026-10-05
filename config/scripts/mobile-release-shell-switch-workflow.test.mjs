@@ -120,9 +120,10 @@ const BUNDLER_CACHE_PATHS = ['metro-cache', '.expo', 'node_modules/.cache']
 const REVIEWED_COMPUTED_PATHS = [
   '${{ steps.electron-package-cache.outputs.cache-root }}',
   '${{ steps.pnpm-store.outputs.path }}',
+  '${{ env.ORCA_PNPM_STORE_CACHE_PATH }}',
   // Only pnpm's lockfile-verified.jsonl record, never Metro transforms.
   '${{ steps.verification-cache.outputs.path }}',
-  "${{ github.event_name != 'pull_request' && 'pnpm' || '' }} store"
+  "${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && 'pnpm' || '' }} store"
 ]
 
 /** Every step a workflow runs, descending into the repository's own composite actions. */
@@ -171,7 +172,7 @@ describe('what the mobile jobs restore from cache', () => {
     expect(names).toEqual(
       expect.arrayContaining([
         './.github/actions/install-node-dependencies: Cache Electron package archive',
-        './.github/actions/install-node-dependencies: Restore compiled native modules',
+        './.github/actions/prepare-native-runtime: Restore compiled native modules',
         './.github/actions/install-node-dependencies: Setup Node.js',
         'ios-build: Setup Ruby and fastlane'
       ])

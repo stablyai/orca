@@ -8,7 +8,7 @@ import {
 } from '@/lib/windows-terminal-capabilities'
 import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
 import { getRepoHostIdentity } from '../../store/slices/repo-host-identity'
-import { getSettingsProjectHostRepo } from './settings-project-list'
+import { getSettingsEntryHostSelection, getSettingsProjectHostRepo } from './settings-project-list'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsNavigationModel } from './use-settings-navigation-model'
 
@@ -84,11 +84,16 @@ export function useSettingsTerminalModel(
       if (!navigation.neededSectionIds.has(`repo-${settingsProject.representativeRepoId}`)) {
         continue
       }
+      const hostSelection = getSettingsEntryHostSelection(
+        settingsProject,
+        model.settingsProjectHostSelection,
+        model.settingsProjectSetupSelection
+      )
       const repo = getSettingsProjectHostRepo(
         settingsProject,
         model.repos,
-        model.settingsProjectHostSelection[settingsProject.projectId],
-        model.settingsProjectSetupSelection[settingsProject.projectId]
+        hostSelection.hostId,
+        hostSelection.setupId
       )
       if (repo) {
         reposByHostIdentity.set(getRepoHostIdentity(repo), repo)

@@ -368,15 +368,21 @@ function runtimeQuiescent(runtime, config) {
   const quiescent = counts.every((value) => integer(value, 'runtime connection count') === 0)
   // Total and pre-auth connections also count unauthenticated redials, which never stop while
   // hosts have nowhere else to go and lose nothing on a restart.
-  const restartSafe = config.activity !== 'restart-safe' ||
-    [
-      runtime.runtime?.inFlightConnections,
-      runtime.runtime?.reservedConnectionUnits,
+  const liveIdle = (values) =>
+    values.every((value) => integer(value, 'live runtime count') === 0)
+  // Draining refuses every control and host proof, so with no session left an in-flight or
+  // reserved unit can only belong to a handshake the cell is about to refuse.
+  const restartSafe = config.activity !== 'restart-safe' || (
+    liveIdle([
       runtime.runtime?.controls,
       runtime.runtime?.splices,
       runtime.runtime?.pendingSplices,
       runtime.runtime?.queuedBytes
-    ].every((value) => integer(value, 'live runtime count') === 0)
+    ]) &&
+    // Still validated on a draining cell so a malformed runtime fails closed.
+    (liveIdle([runtime.runtime?.inFlightConnections, runtime.runtime?.reservedConnectionUnits]) ||
+      runtime.draining === true)
+  )
   if (
     config.heartbeat === 'fresh' &&
     !capacityMatches({ connectionCapacity: runtime.connectionCapacity }, config)
@@ -496,6 +502,12 @@ export async function verifyCapacityTransition(config, overrides = {}) {
         requiredRestartSafeSamples,
         totalConnections: lastObservation.runtime?.totalConnections ?? null,
         preAuthConnections: lastObservation.runtime?.preAuthConnections ?? null,
+        runtimeAvailable: lastObservation.runtimeAvailable,
+        admissionState: lastObservation.admissionState ?? null,
+        draining: lastObservation.draining ?? null,
+        runtime: lastObservation.runtime ?? null,
+        directorHeartbeatFresh: lastObservation.directorCapacity?.heartbeatFresh ??
+          lastObservation.runtimeHeartbeatFresh ?? null,
         stranded: strandedObservation(lastObservation)
       })
     }

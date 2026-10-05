@@ -71,6 +71,12 @@ export type UISlicePreferences = {
   setAgentsVisibleHostIds: (ids: VisibleWorkspaceHostIds) => void
   agentsFilterRepoIds: readonly string[]
   setAgentsFilterRepoIds: (ids: readonly string[]) => void
+  agentsHideWorkspacesFromOtherDevices: boolean
+  setAgentsHideWorkspacesFromOtherDevices: (v: boolean) => void
+  agentsHideAutomationGeneratedWorkspaces: boolean
+  setAgentsHideAutomationGeneratedWorkspaces: (v: boolean) => void
+  agentsHideCliCreatedWorkspaces: boolean
+  setAgentsHideCliCreatedWorkspaces: (v: boolean) => void
   agentsShowChildAgents: boolean
   setAgentsShowChildAgents: (v: boolean) => void
   agentsCompactMode: boolean

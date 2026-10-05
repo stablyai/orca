@@ -143,7 +143,9 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
     }
     const view = (items: AgentJournalRenderItem[]) => (
       <NativeChatMessageList
-        session={sessionWith(projectStructuredAgentSessionMessages(items, [], []))}
+        session={sessionWith(
+          projectStructuredAgentSessionMessages(items, [], [], { rejectedInPlace: true })
+        )}
         journalItems={items}
         isWorking={false}
         expandSignal={false}

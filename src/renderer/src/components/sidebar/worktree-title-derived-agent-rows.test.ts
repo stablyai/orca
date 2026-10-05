@@ -49,6 +49,26 @@ function processRead(agent: TuiAgent): TitleDerivedPaneForeground {
 }
 
 describe('buildTitleDerivedAgentRows', () => {
+  it('labels a working DeepSeek Build title as dsb and does not claim a Claude mention', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: '⠼ - Review Codex integration - DeepSeek Build',
+          2: '⠋ Review DeepSeek Build integration'
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-left', 'pty-right'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
+      now: 2000
+    })
+
+    // Why: a task mention does not establish the pane's owner.
+    expect(rows.map((row) => [row.agentType, row.state])).toEqual([['dsb', 'working']])
+  })
+
   it('adds title-derived rows for live agent panes that have no hook status yet', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],

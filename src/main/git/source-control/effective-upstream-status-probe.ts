@@ -4,7 +4,6 @@ import {
   getGitUpstreamStatusForUpstreamName,
   splitRemoteBranchName
 } from '../../../shared/git-effective-upstream'
-import { createGitConfigSnapshotRunner } from '../../../shared/git-config-snapshot-runner'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'
@@ -126,14 +125,11 @@ async function probeEffectiveUpstreamStatus(
   options: GitRuntimeOptions = {}
 ): Promise<{ status: GitUpstreamStatus; probedSameNameOriginRef: boolean }> {
   let probedSameNameOriginRef = false
-  const snapshotRunner = createGitConfigSnapshotRunner((args) =>
-    gitExecFileAsync(args, gitReadOptionsForWorktree(worktreePath, options))
-  )
   const status = await getEffectiveGitUpstreamStatus((args) => {
     if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${branchName}`)) {
       probedSameNameOriginRef = true
     }
-    return snapshotRunner(args)
+    return gitExecFileAsync(args, gitReadOptionsForWorktree(worktreePath, options))
   })
   return { status, probedSameNameOriginRef }
 }

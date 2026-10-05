@@ -23,7 +23,7 @@ import { readNewWorktreeRuntimeCapabilities } from './worktree-create-capability
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY
-} from '../../../src/shared/protocol-version'
+} from '../../../src/shared/agent-launch-runtime-capability'
 
 const createStructuredSession = vi.fn()
 vi.mock('../../../src/main/runtime/rpc/methods/structured-agent-session-create', () => ({

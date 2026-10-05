@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, message: vi.fn() } }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
+  callStructuredAgentSession: mocks.call,
+  supportsStructuredAgentSessionQuietRepeatedStop: vi.fn(async () => false)
 }))
 
 vi.mock('./use-structured-agent-session-read', () => ({
@@ -34,7 +35,6 @@ vi.mock('./use-structured-agent-session-outbox', () => ({
   structuredSessionOperationId: () => 'operation-1',
   useStructuredAgentSessionOutbox: () => ({
     outbox: [],
-    blockedClientMessageId: null,
     error: null,
     send: vi.fn(),
     retry: vi.fn()

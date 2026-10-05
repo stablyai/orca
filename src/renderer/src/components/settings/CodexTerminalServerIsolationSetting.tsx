@@ -1,7 +1,12 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { isCodexTerminalServerIsolationEnabled } from '../../../../shared/codex-terminal-server-isolation'
+import {
+  isCodexSharedServerWarningEnabled,
+  isCodexTerminalServerIsolationEnabled
+} from '../../../../shared/codex-terminal-server-isolation'
 import { CODEX_TERMINAL_SERVER_ISOLATION_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import {
+  getCodexSharedServerWarningDescription,
+  getCodexSharedServerWarningTitle,
   getCodexTerminalServerIsolationDescription,
   getCodexTerminalServerIsolationSearchKeywords,
   getCodexTerminalServerIsolationTitle
@@ -35,6 +40,19 @@ export function CodexTerminalServerIsolationSetting({
           checked={enabled}
           onChange={() => void updateSettings({ codexTerminalServerIsolation: !enabled })}
         />
+        {/* Why only with isolation on: off means sharing the server is what the user chose. */}
+        {enabled ? (
+          <SettingsSwitchRow
+            label={getCodexSharedServerWarningTitle()}
+            description={getCodexSharedServerWarningDescription()}
+            checked={isCodexSharedServerWarningEnabled(settings)}
+            onChange={() =>
+              void updateSettings({
+                codexSharedServerWarning: !isCodexSharedServerWarningEnabled(settings)
+              })
+            }
+          />
+        ) : null}
       </SearchableSetting>
     </section>
   )

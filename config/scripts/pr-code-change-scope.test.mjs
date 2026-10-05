@@ -212,6 +212,7 @@ describe('per-job path classification', () => {
   it('runs Linux packaging when an artifact contract changes', () => {
     for (const file of [
       'config/scripts/package-linux-formats.mjs',
+      'config/scripts/package-linux-formats-appimage.mjs',
       'config/scripts/script-child-process.mjs',
       'config/scripts/space-sharing-copy.mjs',
       '.github/actions/prepare-linux-package-fixture/action.yml',
@@ -283,6 +284,23 @@ describe('per-job path classification', () => {
       package: true,
       package_windows: true
     })
+  })
+
+  it('runs shell contracts for the structured-session login-shell test, its harness and its subject', () => {
+    expectClassification(
+      ['src/main/runtime/structured-session-cli-login-shell.live-shell.test.ts'],
+      { shell_contracts: true }
+    )
+    for (const file of [
+      'src/main/runtime/structured-session-login-shell-test-harness.ts',
+      'src/main/runtime/structured-session-child-identity-env.ts'
+    ]) {
+      expectClassification([file], {
+        shell_contracts: true,
+        package: true,
+        package_windows: true
+      })
+    }
   })
 
   it('runs orcad browser when Chrome launch, session, or tab modules change', () => {
@@ -366,7 +384,11 @@ describe('per-job path classification', () => {
       'src/main/runtime/runtime-worktree-agent-rows.ts',
       'src/main/runtime/runtime-worktree-pty-agent-sources.ts',
       'src/shared/runtime-worktree-contracts.ts',
-      'src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts'
+      'src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts',
+      'src/shared/structured-agent-session-projection.ts',
+      'src/shared/agent-turn-outcome.ts',
+      'src/main/runtime/orchestration/db.ts',
+      'src/main/runtime/orchestration/orchestration-schema-version-skew.ts'
     ]) {
       expectClassification([file], {
         'cross-version-wire': true,
@@ -397,6 +419,7 @@ describe('per-job path classification', () => {
       'package.json',
       'pnpm-lock.yaml',
       '.github/actions/install-node-dependencies/action.yml',
+      '.github/actions/prepare-native-runtime/action.yml',
       'config/scripts/ensure-native-runtime.mjs',
       'config/scripts/rebuild-native-deps.mjs',
       'config/patches/node-pty@1.1.0.patch'
@@ -553,7 +576,7 @@ describe('PR Checks skip wiring', () => {
     expect(prWorkflow.jobs.code_paths.outputs.should_run).toBe(
       '${{ steps.filter.outputs.should_run }}'
     )
-    for (const jobName of ['native_cache_changed', ...expensiveJobs]) {
+    for (const jobName of expensiveJobs) {
       expect(prWorkflow.jobs.code_paths.outputs[jobName], jobName).toBe(
         `\${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.${jobName} }}`
       )
@@ -564,14 +587,16 @@ describe('PR Checks skip wiring', () => {
     expect(prWorkflow.jobs.code_paths.outputs.mobile_dependencies).toBe(
       '${{ steps.filter.outputs.mobile_dependencies }}'
     )
-    const steps = prWorkflow.jobs.static_analysis.steps
+    const steps = prWorkflow.jobs.preflight.steps
     const install = steps.findIndex(
       (step) => step.uses === './.github/actions/install-mobile-dependencies'
     )
     const gate = steps.findIndex((step) => step.name === 'Enforce changed-code quality')
     expect(install).toBeGreaterThan(-1)
     expect(install).toBeLessThan(gate)
-    expect(steps[install].if).toBe("needs.code_paths.outputs.mobile_dependencies == 'true'")
+    expect(steps[install].if).toBe(
+      "needs.code_paths.outputs.static_analysis == 'true' && needs.code_paths.outputs.mobile_dependencies == 'true'"
+    )
     // The install itself moved into the action the packaging jobs share; assert it there so
     // this job cannot keep the step while the action stops installing anything.
     const action = parse(
@@ -598,41 +623,19 @@ describe('PR Checks skip wiring', () => {
   })
 
   it('gates each expensive job on its classifier and cache prerequisite', () => {
-    for (const jobName of expensiveJobs.filter((jobName) => jobName !== 'test')) {
-      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(
-        ['package', 'package_windows'].includes(jobName)
-          ? ['code_paths', 'static_analysis', 'typecheck']
-          : ['code_paths']
-      )
-      expect(prWorkflow.jobs[jobName].if, jobName).toBe(
+    for (const jobName of expensiveJobs.filter(
+      (jobName) => !['test', 'static_analysis', 'typecheck'].includes(jobName)
+    )) {
+      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(['code_paths', 'preflight'])
+      expect(prWorkflow.jobs[jobName].if, jobName).toContain(
         `needs.code_paths.outputs.${jobName} == 'true'`
       )
     }
-    expect(prWorkflow.jobs.test.needs).toEqual([
-      'code_paths',
-      'unit_plan',
-      'test_native_cache',
-      'static_analysis',
-      'typecheck'
-    ])
-    // Planning is deliberately NOT behind the static-analysis gate: it consumes nothing those
-    // jobs produce, so gating it only made the shards queue behind it. It still has to succeed
-    // before the shards run, or the matrix would expand from an empty assignment.
-    expect(prWorkflow.jobs.unit_plan.needs).toEqual(['code_paths'])
-    expect(prWorkflow.jobs.unit_plan.if).toBe("needs.code_paths.outputs.test == 'true'")
-    expect(prWorkflow.jobs.test.if).toContain("needs.unit_plan.result == 'success'")
+    expect(prWorkflow.jobs.test.if).toContain("needs.preflight.result == 'success'")
     expect(prWorkflow.jobs.test.if).toContain("needs.code_paths.outputs.test == 'true'")
-    expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'success'")
-    expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'skipped'")
-    expect(prWorkflow.jobs.test_native_cache.needs).toEqual(['code_paths'])
-    expect(prWorkflow.jobs.test_native_cache.if).toBe(
-      "needs.code_paths.outputs.native_cache_changed == 'true'"
-    )
-    expect(prWorkflow.jobs.test_native_cache.strategy).toBeUndefined()
-    const primerInstall = prWorkflow.jobs.test_native_cache.steps.find(
-      (step) => step.uses === './.github/actions/install-node-dependencies'
-    )
-    expect(primerInstall.with['node-version']).toBe('24')
+    expect(prWorkflow.jobs.test.with.shards).toBe('${{ needs.preflight.outputs.shards }}')
+    expect(prWorkflow.jobs.unit_plan).toBeUndefined()
+    expect(prWorkflow.jobs.test_native_cache).toBeUndefined()
   })
 
   it('skips e2e detection on docs-only PRs without dropping the draft gate', () => {
@@ -654,7 +657,7 @@ describe('PR Checks skip wiring', () => {
     expect(verifyStep.run).toContain('expected skipped')
     expect(verifyStep.run).toContain('expected success')
     for (const job of prWorkflow.jobs.verify.needs) {
-      if (job === 'code_paths') {
+      if (job === 'code_paths' || job === 'preflight') {
         continue
       }
       const envVar = `${job.replaceAll('-', '_').toUpperCase()}_SHOULD_RUN`

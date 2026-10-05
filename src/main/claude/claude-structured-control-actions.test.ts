@@ -197,7 +197,7 @@ describe('cancelClaudeTurn', () => {
 })
 
 describe('answerClaudePrompt', () => {
-  it('resolves cancellation observation when teardown clears the prompt registry', async () => {
+  it('forgets a pending prompt and its claim when teardown clears the registry', () => {
     const prompts = new ClaudePromptRegistry()
     const settle = vi.fn()
     const prompt = prompts.register({
@@ -213,19 +213,8 @@ describe('answerClaudePrompt', () => {
     if (!claim) {
       throw new Error('expected prompt claim')
     }
-    const observed = prompts.observeCancellation(claim)
-    if (!observed) {
-      throw new Error('expected cancellation observation')
-    }
-    let observedCancellation = false
-    void observed.then(() => {
-      observedCancellation = true
-    })
 
     expect(prompts.clear()).toEqual([prompt])
-    await Promise.resolve()
-
-    expect(observedCancellation).toBe(true)
     expect(prompts.find('journal-clear')).toBeNull()
     expect(prompts.ownsClaim(claim)).toBe(false)
     expect(settle).not.toHaveBeenCalled()
@@ -249,12 +238,13 @@ describe('answerClaudePrompt', () => {
       handle: vi.fn(),
       openTurnInLiveProviderCycle: false,
       journalPrompts: {
-        cancel: vi.fn(() => ({ accepted: true as const })),
-        resolve: resolvePrompt
+        resolve: resolvePrompt,
+        handOver: () => () => {},
+        cancel: () => ({ accepted: true }),
+        openCards: () => [][Symbol.iterator](),
+        whenWritten: () => undefined
       },
       currentTurnId: null,
-      recordTurnStop: () => true,
-      withdrawTurnStop: () => {},
       commandTurnId: null,
       beginCommand: vi.fn(),
       forgetCommand: vi.fn(),

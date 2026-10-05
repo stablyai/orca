@@ -25,6 +25,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       opencodeGeneration,
       miniMaxConfigChanged,
       miniMaxGeneration,
+      zcodeConfigChanged,
+      zcodeGeneration,
       claudeFetchGated,
       results: [
         claudeResult,
@@ -201,6 +203,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const grok = settleSiblingProviderResult('grok', grokSettled)
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
     const zcode = settleSiblingProviderResult('zcode', zcodeSettled)
+    const shouldApplyZcode = zcodeGeneration === this.zcodeFetchGeneration
     const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
     // Why: the stale policy keeps a recent snapshot through a failed refresh, but
     // a snapshot belonging to a different Cursor account must not survive the
@@ -221,16 +224,21 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       previousZcodeAccount === zcodeAccount
     this.trackActiveFailureStreak('grok', grok)
     this.trackActiveFailureStreak('cursor', cursor)
-    this.trackActiveFailureStreak('zcode', zcode)
+    if (shouldApplyZcode) {
+      this.trackActiveFailureStreak('zcode', zcode)
+    }
     this.trackActiveFailureStreak('antigravity', antigravity)
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
       cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor),
-      zcode:
-        zcode.status === 'error' && !sameZcodeAccount
+      zcode: !shouldApplyZcode
+        ? this.state.zcode
+        : zcodeConfigChanged
           ? zcode
-          : this.applyStalePolicy(zcode, previousState.zcode),
+          : zcode.status === 'error' && !sameZcodeAccount
+            ? zcode
+            : this.applyStalePolicy(zcode, previousState.zcode),
       antigravity: this.applyStalePolicy(antigravity, previousState.antigravity)
     })
   }

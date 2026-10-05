@@ -1,4 +1,4 @@
-import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { resolveCommittedTitleAgentType } from '../../lib/pane-agent-evidence'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
@@ -7,7 +7,7 @@ type CtrlEnterPaneState = {
 }
 
 function agentAcceptsCtrlEnterCsiU(agent: PaneForegroundAgentEntry['agent']): boolean {
-  return agent !== null && TUI_AGENT_CONFIG[agent].ctrlEnterEncoding === 'csi-u'
+  return isTuiAgent(agent) && TUI_AGENT_CONFIG[agent].ctrlEnterEncoding === 'csi-u'
 }
 
 /** Resolves pane-scoped authority for query-only CSI-u consumers such as Droid and Grok. */

@@ -15,7 +15,7 @@ import { sshRemotePtyLeaseAllowsReattach } from '../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { RuntimeStore } from './runtime-store-contract'
 import { SSH_PANE_RECOVERY_GRACE_MS } from './orca-runtime-core'
-import { findTerminalTabIdForLeaf } from './workspace-session-terminal-membership-authority'
+import { findTerminalTabIdForLeaf } from '../persistence/terminal-topology/terminal-topology-membership'
 
 export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession {
   // Why: keep an existing snapshot's browser tabs in sync with the live bridge

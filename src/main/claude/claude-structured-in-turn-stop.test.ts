@@ -1,10 +1,15 @@
-// A user's Stop inside a live Claude chat interrupts the turn and keeps the session. The turn's end
-// then comes from the CLI's result frame, which CLIs before 2.1.91 send with no terminal_reason.
+// A user's Stop inside a live Claude chat interrupts the turn before the host ends its child. The
+// turn's end then comes from the CLI's result frame, which CLIs before 2.1.91 send with no
+// terminal_reason. The translator then writes an interrupted end with no verdict and no error row,
+// and the host's Stop event, written before the interrupt, decides whose end it was as the journal
+// writes it (`turnEndAfterStop`).
 
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { personStopDecidesTurn } from '../native-chat/agent-session-journal/journal-stop-turn-end'
+import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
 import {
   PROVIDER_SESSION_ID,
@@ -28,8 +33,11 @@ async function runningChat(claude: ReturnType<typeof fakeClaude>): Promise<{
   bodies: Map<string, AgentJournalItemBody>
   connection: FakeConnection
   turnId: string
+  /** What the host's Stop writes before the interrupt. */
+  stopEvent: (turnId: string) => void
 }> {
   const bodies = new Map<string, AgentJournalItemBody>()
+  const journal = createJournalReducerState('session-1', 'epoch-1')
   const adapter = adapterFor(claude)
   await adapter.acquire({
     identity: identityFor(),
@@ -38,7 +46,8 @@ async function runningChat(claude: ReturnType<typeof fakeClaude>): Promise<{
     events: {
       appendItem: (identity, body) => bodies.set(agentJournalItemKey(identity), body),
       appendTombstone: (identity) => bodies.delete(agentJournalItemKey(identity)),
-      publish: vi.fn()
+      publish: vi.fn(),
+      journalStopDecidesTurn: (turnId, endedAt) => personStopDecidesTurn(journal, turnId, endedAt)
     }
   })
   await adapter.dispatch({
@@ -56,7 +65,13 @@ async function runningChat(claude: ReturnType<typeof fakeClaude>): Promise<{
   if (!turnId) {
     throw new Error('expected a running turn')
   }
-  return { adapter, bodies, connection, turnId }
+  const stopEvent = (stoppedTurnId: string) => {
+    journal.queuePauseMarks.latestStop = {
+      sequence: 9,
+      event: { reason: 'user-stop', turnId: stoppedTurnId, at: 1 }
+    }
+  }
+  return { adapter, bodies, connection, turnId, stopEvent }
 }
 
 function settled(bodies: Map<string, AgentJournalItemBody>, turnId: string) {
@@ -70,7 +85,7 @@ function providerRows(bodies: Map<string, AgentJournalItemBody>): string[] {
 }
 
 describe("a user's Stop inside a live Claude chat", () => {
-  it('records the turn the interrupt cut as their cancellation when the CLI names no reason', async () => {
+  it('leaves the turn the interrupt cut to the Stop when the CLI names no reason', async () => {
     const claude = fakeClaude({
       routes: {
         // The CLI aborts the turn, then acknowledges the interrupt.
@@ -80,21 +95,20 @@ describe("a user's Stop inside a live Claude chat", () => {
         }
       }
     })
-    const { adapter, bodies, turnId } = await runningChat(claude)
+    const { adapter, bodies, turnId, stopEvent } = await runningChat(claude)
+    stopEvent(turnId)
 
     await expect(adapter.cancelTurn({ sessionId: 'session-1', turnId, fence: 7 })).resolves.toEqual(
       { cancelled: true }
     )
 
-    expect(settled(bodies, turnId)).toMatchObject({
-      state: 'interrupted',
-      outcome: 'cancellation'
-    })
+    expect(settled(bodies, turnId)).toMatchObject({ state: 'interrupted' })
+    expect(settled(bodies, turnId)).not.toHaveProperty('outcome')
     expect(providerRows(bodies)).toEqual([])
   })
 
   // The chat's Stop button names no turn: it stops whatever the conversation has open.
-  it('records the open turn a Stop naming no turn cut as their cancellation', async () => {
+  it('leaves the open turn a Stop naming no turn cut to that Stop', async () => {
     const claude = fakeClaude({
       routes: {
         interrupt: () => {
@@ -103,16 +117,16 @@ describe("a user's Stop inside a live Claude chat", () => {
         }
       }
     })
-    const { adapter, bodies, turnId } = await runningChat(claude)
+    const { adapter, bodies, turnId, stopEvent } = await runningChat(claude)
+    // The host names the open turn on the Stop's event.
+    stopEvent(turnId)
 
     await expect(adapter.cancelTurn({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
       cancelled: true
     })
 
-    expect(settled(bodies, turnId)).toMatchObject({
-      state: 'interrupted',
-      outcome: 'cancellation'
-    })
+    expect(settled(bodies, turnId)).toMatchObject({ state: 'interrupted' })
+    expect(settled(bodies, turnId)).not.toHaveProperty('outcome')
     expect(providerRows(bodies)).toEqual([])
   })
 
@@ -127,6 +141,8 @@ describe("a user's Stop inside a live Claude chat", () => {
 
   it('keeps a Stop naming no turn off the turn after it', async () => {
     const claude = fakeClaude({
+      // Each turn is its own uuid, as Claude's are: the Stop names the first.
+      replayUuids: ['user-uuid-0', 'user-uuid-1'],
       routes: {
         interrupt: () => {
           claude.connections[0]!.handlers.onMessage?.(CUT_SHORT)
@@ -134,7 +150,8 @@ describe("a user's Stop inside a live Claude chat", () => {
         }
       }
     })
-    const { adapter, bodies, connection } = await runningChat(claude)
+    const { adapter, bodies, connection, turnId, stopEvent } = await runningChat(claude)
+    stopEvent(turnId)
     await adapter.cancelTurn({ sessionId: 'session-1', fence: 7 })
 
     await adapter.dispatch({
@@ -155,11 +172,12 @@ describe("a user's Stop inside a live Claude chat", () => {
     expect(settled(bodies, nextTurnId)).toMatchObject({ state: 'completed', outcome: 'failure' })
   })
 
+  // The Stop ends the child next, so the turn it was asked for is the Stop's however it ends.
   it.each([
     ['naming the turn', true],
     ['naming no turn', false]
   ] as const)(
-    'keeps a failure the turn reaches after the CLI refused the interrupt, %s',
+    'leaves a turn the CLI refused to interrupt to the Stop, %s',
     async (_label, named) => {
       const claude = fakeClaude({
         routes: {
@@ -168,15 +186,17 @@ describe("a user's Stop inside a live Claude chat", () => {
           }
         }
       })
-      const { adapter, bodies, connection, turnId } = await runningChat(claude)
+      const { adapter, bodies, connection, turnId, stopEvent } = await runningChat(claude)
+      stopEvent(turnId)
 
       await expect(
         adapter.cancelTurn({ sessionId: 'session-1', ...(named ? { turnId } : {}), fence: 7 })
       ).resolves.toEqual({ cancelled: false })
       connection.handlers.onMessage?.(CUT_SHORT)
 
-      expect(settled(bodies, turnId)).toMatchObject({ state: 'completed', outcome: 'failure' })
-      expect(providerRows(bodies)).toHaveLength(1)
+      expect(settled(bodies, turnId)).toMatchObject({ state: 'interrupted' })
+      expect(settled(bodies, turnId)).not.toHaveProperty('outcome')
+      expect(providerRows(bodies)).toHaveLength(0)
     }
   )
 })

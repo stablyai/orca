@@ -52,6 +52,8 @@ export type AgentHookEventPayload = {
    *  Lets a reader rejoin the row to its terminal after the pane key moved. Never persisted:
    *  a handle belongs to the runtime that issued it. */
   terminalHandle?: string
+  /** Execution-host clock retained for age-preserving projection replay; never sent verbatim. */
+  hostEvidenceObservedAt?: number
   payload: ParsedAgentStatusPayload
 }
 

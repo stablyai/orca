@@ -86,8 +86,6 @@ export function createMarkdownLinkAction(
             showLocalPathOpenBlockedToast()
             return
           }
-          // Why: markdown file:// links need the same user-gesture authorization terminal links get, so external paths (e.g. /tmp screenshots) can open in Orca.
-          await window.api.fs.authorizeExternalPath({ targetPath: target.absolutePath })
         } else {
           let stats: { isDirectory: boolean }
           try {

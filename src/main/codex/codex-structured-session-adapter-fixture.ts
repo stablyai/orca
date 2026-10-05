@@ -13,6 +13,7 @@ import {
   type CodexStructuredLaunch,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
 
 export const THREAD_ID = 'thread-abc'
 
@@ -49,7 +50,7 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
   routes: Record<string, Route>
 } {
   const connections: FakeConnection[] = []
-  const openConnection = (async (launch, handlers = {}) => {
+  const openConnection: typeof openCodexAppServerConnection = async (launch, handlers = {}) => {
     const connection: FakeConnection = {
       launch,
       handlers,
@@ -66,15 +67,21 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
       notify: () => {},
       respond: (id, result) => connection.replies.push({ id, result }),
       respondWithError: (id, code, message) => connection.replies.push({ id, code, message }),
+      // As the real connection: the root's exit is reported, once, inside the close that ends it.
       close: async () => {
         connection.closeCount += 1
-        connection.closed = true
+        if (!connection.closed) {
+          connection.closed = true
+          handlers.onExit?.(new Error('codex app-server connection ended: killed'), {
+            expected: true
+          })
+        }
         return true
       }
     }
     connections.push(connection)
     return connection
-  }) as typeof openCodexAppServerConnection
+  }
   routes['thread/start'] ??= () => ({
     thread: { id: THREAD_ID, path: '/rollouts/abc.jsonl' },
     model: 'gpt-live',
@@ -104,7 +111,9 @@ export function answerWithOpenedTurn(
 export function adapterFor(
   codex: ReturnType<typeof fakeCodex>,
   launch: Partial<CodexStructuredLaunch> = {},
-  events: CodexStructuredSessionEvent[] = []
+  events: CodexStructuredSessionEvent[] = [],
+  /** Host wiring the runtime adds, such as the late dispatch settlement. */
+  deps: Partial<CodexStructuredSessionAdapterDeps> = {}
 ): CodexStructuredSessionAdapter {
   let acquisitionGeneration = 0
   return new CodexStructuredSessionAdapter({
@@ -120,7 +129,8 @@ export function adapterFor(
     openConnection: codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => 1_700_000_000_500,
-    mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`
+    mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`,
+    ...deps
   })
 }
 

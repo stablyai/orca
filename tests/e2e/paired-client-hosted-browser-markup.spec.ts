@@ -35,7 +35,13 @@ test('draws and copies a screenshot from a client-hosted browser without replaci
     const target = { urlPrefix: fixture.origin, remotePageId: browser.remotePageId }
     await waitForRenderedClientWebview(client.page, target, 'client-hosted fixture never rendered')
 
-    await client.page.getByRole('button', { name: 'Got it', exact: true }).click()
+    // The markup hint also says "Got it" and can appear before the browser tour.
+    const browserTour = client.page.getByRole('dialog', {
+      name: 'This page renders on your desktop',
+      exact: true
+    })
+    await browserTour.getByRole('button', { name: 'Got it', exact: true }).click()
+    await expect(browserTour).toBeHidden()
     await testInfo.attach('client-hosted-toolbar', {
       body: await client.page.screenshot({ path: testInfo.outputPath('toolbar.png') }),
       contentType: 'image/png'

@@ -1,11 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  enoent,
-  openMock,
-  resolveAuthorizedPathMock,
-  statMock
-} from './orca-runtime-files-mock-registry'
+import { enoent, openMock, resolveAuthorizedPathMock } from './orca-runtime-files-mock-registry'
 import {
   createRuntimeFileCommands,
   useRuntimeFileCommandsLifecycle
@@ -313,9 +308,9 @@ describe('RuntimeFileCommands.readFileExplorerChunk over SSH', () => {
     const contents = remoteFileBytes(2048)
     const { commands } = createRuntimeFileCommands()
     resolveAuthorizedPathMock.mockResolvedValue('/repo/local.bin')
-    statMock.mockResolvedValue({ isDirectory: () => false, size: contents.byteLength })
     const close = vi.fn(async () => undefined)
     openMock.mockResolvedValue({
+      stat: vi.fn(async () => ({ isFile: () => true, size: contents.byteLength })),
       read: vi.fn(
         async (buffer: Buffer, bufferOffset: number, length: number, position: number) => {
           const bytesRead = contents.copy(buffer, bufferOffset, position, position + length)

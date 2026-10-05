@@ -18,6 +18,7 @@ import type { TerminalViewAttributes } from '../../shared/terminal-view-attribut
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyManagementApi } from './pty-management-api'
 import type { TerminalProcessInspection } from '../../shared/terminal-process-inspection'
+import type { CodexSharedServerStatus } from '../../shared/codex-shared-server-command'
 
 export type PtyApi = {
   spawn: (opts: {
@@ -126,6 +127,11 @@ export type PtyApi = {
     }
   ) => Promise<TerminalProcessInspection>
   confirmForegroundProcess: (id: string) => Promise<string | null>
+  /** Local panes only; never joined for any other pane. */
+  isCodexOnSharedServer: (id: string) => Promise<CodexSharedServerStatus>
+  /** Runs the fix with the pane's own Codex; true only once verified. Local panes only. */
+  disableCodexSharedServerAutoStart: (id: string) => Promise<boolean>
+  stopCodexSharedServer: (id: string) => Promise<boolean>
   getCwd: (id: string) => Promise<string>
   getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
   listSessions: (scope?: PtySessionListScope) => Promise<PtyListedSession[]>

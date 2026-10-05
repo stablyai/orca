@@ -11,6 +11,7 @@ import {
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 
 // Why bounded: detection only decides chat vs shell, so a slow host must not hold the workspace empty.
@@ -91,7 +92,9 @@ export function openDefaultAgentChatInEmptyWorkspace(
   if (!agent) {
     return null
   }
+  // No user gesture: opening this empty workspace is the one action this chat serves.
   const agentSessionLaunchPlan = planAgentSessionLaunch(state, {
+    requestId: newAgentLaunchRequestId(),
     agent,
     workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId }
   })

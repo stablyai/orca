@@ -150,6 +150,12 @@ export function forwardGuestShortcutInput(
     const browserWorkspaceId = resolveWorkspaceId?.(browserTabId) || undefined
     const target: BrowserFindTarget = { browserPageId: browserTabId, browserWorkspaceId }
     renderer.send('ui:findInBrowserPage', target)
+  } else if (
+    // Why: client-hosted guests register no workspace and their pane has no annotate listener, so leave the chord to the page.
+    resolveWorkspaceId?.(browserTabId) &&
+    keybindingMatchesAction('browser.annotateElement', input, process.platform, keybindings)
+  ) {
+    renderer.send('browser:grabModeToggle', browserTabId, 'annotate')
   } else if (keybindingMatchesAction('browser.back', input, process.platform, keybindings)) {
     // Why: macOS Logitech side-button remaps arrive as history keystrokes, not mouse events; forward so the renderer can goBack().
     renderer.send('ui:browserHistoryNavigate', { browserPageId: browserTabId, direction: 'back' })

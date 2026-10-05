@@ -10,6 +10,7 @@ import type {
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import type { AgentSessionSubscribers } from './structured-agent-session-subscribers'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 const child: AgentChildWorkView = {
   id: 'child-1',
@@ -31,7 +32,7 @@ function channelOver(
 ) {
   const sessions = new StructuredAgentSessionConversations({
     deliver: () => {},
-    onDeliveryError: () => {},
+    logger: recordingStructuredAgentSessionLogger().logger,
     now: () => 1
   })
   const sent = vi.fn()

@@ -15,6 +15,7 @@ import {
 import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
 import { performAttach } from './structured-agent-session-attach-flow'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -82,6 +83,7 @@ describe('processless structured session reservation', () => {
 
     await expect(
       performAttach({
+        logger: createStructuredAgentSessionLogger(),
         store,
         adapter,
         openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
@@ -126,6 +128,7 @@ describe('processless structured session reservation', () => {
       }))
     } as unknown as StructuredAgentSessionAdapter
     const input = {
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter,
       journalDatabase: openTestJournalHostDatabase(root),
@@ -163,6 +166,7 @@ describe('processless structured session reservation', () => {
     const acquire = vi.fn<StructuredAgentSessionAdapter['acquire']>()
     const adapter = { supportsCreate, acquire } as unknown as StructuredAgentSessionAdapter
     const input = {
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter,
       journalDatabase: openTestJournalHostDatabase(root),
@@ -215,6 +219,7 @@ describe('processless structured session reservation', () => {
 
     await expect(
       performAttach({
+        logger: createStructuredAgentSessionLogger(),
         store,
         adapter,
         openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
@@ -280,6 +285,7 @@ describe('processless structured session reservation', () => {
       releaseAcquisition: vi.fn(async () => true)
     } as unknown as StructuredAgentSessionAdapter
     const input = {
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter,
       journalDatabase: openTestJournalHostDatabase(root),

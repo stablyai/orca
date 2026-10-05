@@ -509,7 +509,7 @@ describe('Codex live prompt ownership', () => {
 
     await expect(
       adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
-    ).resolves.toEqual({ cancelled: true })
+    ).resolves.toEqual({ cancelled: true, turnId: 'turn-1' })
     expect(completionThreads(events)).toEqual([])
   })
 

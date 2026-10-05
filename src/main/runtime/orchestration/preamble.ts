@@ -1,6 +1,7 @@
 import type { OrchestrationCliCommand } from './cli-command'
 import type { RuntimeAgentPromptWriteOptions } from '../runtime-terminal-contracts'
 import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../shared/orca-dispatch-status-prompt'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address-prefix'
 
 export type PreambleParams = {
   taskId: string
@@ -11,6 +12,7 @@ export type PreambleParams = {
   // or refreshing the retry.
   dispatchId: string
   taskSpec: string
+  /** A terminal handle, or a session's `orca_session_id:<id>`; each is labelled by its kind. */
   coordinatorHandle: string
   workerHandle: string
   devMode?: boolean
@@ -42,6 +44,18 @@ export type PreambleParams = {
 // cadence tuning is a single-line change (Q1 in DESIGN_DOC_PREAMBLE_FIX.md).
 const HEARTBEAT_INTERVAL_MIN = 5
 
+/** Terminal agents keep their handle's wording; only a session is named by its Orca session ID. */
+function dispatchIdentityLines(params: PreambleParams): string {
+  const isSession = (handle: string) => handle.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
+  return [
+    isSession(params.coordinatorHandle)
+      ? `Your coordinator's Orca session ID is: ${params.coordinatorHandle}`
+      : `Your coordinator's terminal handle is: ${params.coordinatorHandle}`,
+    `Your task ID is: ${params.taskId}`,
+    ...(isSession(params.workerHandle) ? [`Your Orca session ID is: ${params.workerHandle}`] : [])
+  ].join('\n')
+}
+
 // Why: the dispatch preamble teaches agents about Orca's CLI commands for
 // structured communication. Behavioral rules (body summary, heartbeat cadence,
 // no-AskUserQuestion) live as inline comments above the relevant CLI example,
@@ -62,8 +76,7 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   // Why plain-reason wording: Claude Code tells the model pasted text may carry instructions
   // the user did not write, and shouted rules read as prompt injection (STA-8200).
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-Your coordinator's terminal handle is: ${params.coordinatorHandle}
-Your task ID is: ${params.taskId}
+${dispatchIdentityLines(params)}
 
 The coordinator cannot see this terminal, so reach it with the \`${cli} orchestration\`
 commands below; a question or result left only in this terminal never gets to it.
@@ -143,7 +156,7 @@ ${params.taskSpec}`
 
 export type DispatchPreambleSendOptions = Pick<
   RuntimeAgentPromptWriteOptions,
-  'leadLine' | 'acceptQueued' | 'observationTimeoutMs' | 'requestId' | 'inputKind'
+  'leadLine' | 'acceptQueued' | 'observationTimeoutMs' | 'requestId' | 'inputKind' | 'beforeWrite'
 >
 
 export function dispatchPreambleSendOptions(requestId: string): DispatchPreambleSendOptions {

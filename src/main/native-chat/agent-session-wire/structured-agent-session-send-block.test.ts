@@ -5,6 +5,7 @@ import {
   openConversationForWrite,
   structuredAgentSessionSendBlock
 } from './structured-agent-session-send-preparation'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 function withCommand(command: AgentSessionConversationCommandRecord) {
   return { ...agentSessionRecordFixture(), conversationCommand: command }
@@ -76,9 +77,13 @@ describe('a write whose conversation the host could not open', () => {
 
   function refusedBy(error: unknown) {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    return openConversationForWrite(async () => {
-      throw error
-    }, ENVELOPE)
+    return openConversationForWrite(
+      async () => {
+        throw error
+      },
+      ENVELOPE,
+      createStructuredAgentSessionLogger()
+    )
   }
 
   it('says a corrupt history is final, in words and not the error', async () => {

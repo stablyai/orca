@@ -75,6 +75,15 @@ import {
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 
+/** What these hooks render with: the journal's submissions, and the rows loaded so far. */
+type OutboxProps = { submissions: AgentJournalSubmission[]; rows?: AgentJournalRenderItem[] }
+
+function outboxProps(submissions: AgentJournalSubmission[]): OutboxProps {
+  return { submissions }
+}
+
+const NO_JOURNAL_ITEMS: readonly AgentJournalRenderItem[] = []
+
 const SESSION = 'session-1'
 const PANE = 'tab-1::session-1'
 const OTHER_PANE = 'tab-2::session-1'
@@ -129,15 +138,16 @@ function answerSendsPending(): void {
 
 function renderOutbox(composerScopeKey: string | null = PANE) {
   return renderHook(
-    (props: { submissions: AgentJournalSubmission[] }) =>
+    (props: OutboxProps) =>
       useStructuredAgentSessionOutbox({
+        journalItems: props.rows ?? NO_JOURNAL_ITEMS,
         sessionId: SESSION,
         target,
         fence: 1,
         submissions: props.submissions,
         ...(composerScopeKey ? { composerScopeKey } : {})
       }),
-    { initialProps: { submissions: NONE } }
+    { initialProps: outboxProps(NONE) }
   )
 }
 
@@ -252,14 +262,16 @@ describe('a message the host withdrew at a Stop', () => {
     unsubscribe()
 
     expect(storedAtRestore).toEqual([id])
-    // The drop never reached storage: the next mount gives the text back again rather than losing it.
+    // The drop never reached storage: after a crash, which loses the in-memory draft, the next mount
+    // gives the text back again rather than losing it.
     cleanup()
+    writeNativeChatDraftCache(PANE, '')
     writeOutbox(SESSION, beforeDrop)
     renderOutbox().rerender({ submissions: [withdrawn(id)] })
-    expect(readNativeChatDraftCache(PANE)).toBe('hello\n\nhello')
+    expect(readNativeChatDraftCache(PANE)).toBe('hello')
   })
 
-  it('keeps a message refused for any other reason on its Retry, and gives nothing back', async () => {
+  it("leaves a message rejected for any other reason to the host's row, and gives nothing back", async () => {
     answerSendsPending()
     const { result, rerender } = renderOutbox()
     const id = await sendToHost(result, 'hello')
@@ -267,10 +279,19 @@ describe('a message the host withdrew at a Stop', () => {
     rerender({
       submissions: [
         submission(id, { dispatchState: 'rejected', reason: DISPATCH_REJECTED_WRITE_FAILED })
+      ],
+      rows: [
+        {
+          itemId: `orca:${id}`,
+          revision: 1,
+          sequence: 1,
+          observedAt: 1,
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }
+        }
       ]
     })
 
-    await waitFor(() => expect(result.current.outbox[0]?.state).toBe('rejected'))
+    await waitFor(() => expect(result.current.outbox).toEqual([]))
     expect(readNativeChatDraftCache(PANE)).toBe('')
   })
 

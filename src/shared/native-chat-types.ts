@@ -10,6 +10,7 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
 } from './agent-session-background-task-wire'
+import type { AgentSessionTokenUsage } from './agent-session-context-usage'
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import type {
   AgentJournalMessageSendMode,
@@ -205,19 +206,55 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
    *  supply one (e.g. some scrape segments). Null sorts before any timestamp. */
   timestamp: number | null
   source: NativeChatSource
+  /** Optional provider row cursor; split projections share it for whole-row paging. */
+  transcriptOffset?: number
+  /** Model id that produced an assistant response, as the provider API names it. */
+  model?: string
+  /** The agent's provider that served `model`, where the agent records one. */
+  provider?: string
+  /** On assistant responses whose accounting reflects the prompt the model read. */
+  usage?: AgentSessionTokenUsage
   /** Optional explicit turn key. When present, two messages with the same
    *  `turnId` are treated as the same turn for dedup regardless of `id`. */
   turnId?: string
+  /** `id` of the transcript row this one follows in the agent's own conversation
+   *  tree, where the decoder carries the agent's link. Absent from older hosts. */
+  parentId?: string
   /** How a user message was delivered when it was not an ordinary prompt. */
   sentAs?: AgentJournalMessageSendMode
   /** Accepted but not yet handed to the agent: drawn after everything the agent has done. */
   queued?: true
+  /** Shown as not sent: in no turn, so a newer turn's bar and clock never land on it. Drawn where
+   *  the journal recorded it, or after the conversation when it holds no place there. */
+  unsent?: true
   /** Set only by the structured projection, on rows the journal holds, and ranks
    *  them ahead of time. Terminal-backed messages never carry it, and worker reads strip it. */
   journalPosition?: AgentJournalPosition
   /** Set only by the tool fold, on a row that absorbed later tool rows: the newest
    *  absorbed row's journal position. The row still sorts by its own. */
   foldedJournalPosition?: AgentJournalPosition
+}
+
+/** Split reasoning and its answer share the provider's row identity. */
+export function nativeChatSemanticRowId(message: NativeChatMessage): string {
+  return message.role === 'reasoning' && message.id.endsWith(':reasoning')
+    ? message.id.slice(0, -':reasoning'.length)
+    : message.id
+}
+
+/** New hosts expose the cursor; older messages retain their reasoning/answer id convention. */
+export function nativeChatMessagesShareTranscriptRow(
+  first: NativeChatMessage,
+  second: NativeChatMessage
+): boolean {
+  if (typeof first.transcriptOffset === 'number' && typeof second.transcriptOffset === 'number') {
+    return first.transcriptOffset === second.transcriptOffset
+  }
+  return (
+    first.role === 'reasoning' &&
+    second.role === 'assistant' &&
+    nativeChatSemanticRowId(first) === second.id
+  )
 }
 
 export const NATIVE_CHAT_TURN_LIFECYCLE_STATES = ['working', 'completed', 'interrupted'] as const

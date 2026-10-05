@@ -48,7 +48,7 @@ function subagentStateLabel(
       case 'stopped':
         return translate('components.native-chat.subagents.state.stopped', 'stopped')
       case 'unverifiable':
-        return translate('components.native-chat.subagents.state.unverifiable', 'unverifiable')
+        return translate('components.native-chat.subagents.state.unverifiable', 'no recent update')
     }
   }
   switch (state) {
@@ -79,7 +79,7 @@ function subagentStateLabel(
     case 'unverifiable':
       return translate(
         'components.native-chat.subagents.state.unverifiableCount',
-        '{{value0}} unverifiable',
+        '{{value0}} with no recent update',
         { value0: count }
       )
   }

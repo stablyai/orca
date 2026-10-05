@@ -23,6 +23,8 @@ afterEach(() => vi.restoreAllMocks())
  *  mimo-code's boundary is an explicit-prompt MessagePart, which the gate handles separately. */
 const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   qoder: 'SessionStart',
+  'qoder-cn': 'SessionStart',
+  'qwen-code': 'SessionStart',
   claude: 'SessionStart',
   kimi: 'UserPromptSubmit',
   codebuddy: 'UserPromptSubmit',
@@ -46,7 +48,8 @@ const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   'command-code': null,
   muse: 'UserPromptSubmit',
   zcode: 'SessionStart',
-  dsh: 'SessionStart'
+  dsh: 'SessionStart',
+  jcode: 'turn_start'
 }
 
 function reviveRetiredPane(source: unknown, hookEventName: string): boolean {

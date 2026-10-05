@@ -51,12 +51,12 @@ describe('the actual terminal smoke dependency graph', () => {
     'src/main/worker-thread-entry-path.ts',
     'src/cli/index.ts',
     'config/scripts/runtime-serve-terminal-smoke.mjs',
-    'config/scripts/build-orcad-bun.mjs',
+    'config/scripts/build-orcad-node.mjs',
     'config/scripts/build-orcad.mjs',
     'config/scripts/profile-state-worker-smoke.mjs',
     'config/scripts/install-dev-cli.mjs',
     'config/scripts/verify-cli-bin.mjs',
-    'config/scripts/bun-profile-change-scope.mjs'
+    'config/scripts/node-server-change-scope.mjs'
   ])('retains the runtime, CLI, build or smoke dependency: %s', async (file) => {
     expect(inputs.has(file)).toBe(true)
     expect((await classifyOrcadTerminalSmokeChanges([file], async () => inputs)).shouldRun).toBe(
@@ -92,7 +92,7 @@ it('only skips the unchanged smoke after a successful diff and dependency analys
   const workflow = parse(
     readFileSync(new URL('../../.github/workflows/pr.yml', import.meta.url), 'utf8')
   )
-  const step = workflow.jobs.static_analysis.steps.find(
+  const step = workflow.jobs.preflight.steps.find(
     (candidate) => candidate.name === 'Boot orcad and round-trip a terminal'
   )
   expect(step.env).toEqual({

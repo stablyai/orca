@@ -9,6 +9,10 @@ const { gitExecFileAsyncMock, gitExecFileSyncMock, translateWslOutputPathsMock }
   })
 )
 
+vi.mock('../../shared/git-worktree-admin', () => ({
+  annotateWorktreeLocksFromAdmin: async (_repoPath: string, rows: unknown[]) => rows
+}))
+
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
   gitExecFileSync: gitExecFileSyncMock,

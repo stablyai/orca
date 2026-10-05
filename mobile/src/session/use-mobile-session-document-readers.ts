@@ -84,14 +84,18 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
       if (!client) {
         return
       }
-      setFileDocs((prev) => new Map(prev).set(tab.id, { status: 'loading' }))
+      const loading = { status: 'loading' } as const
+      setFileDocs((prev) => new Map(prev).set(tab.id, loading))
       try {
         const doc = await resolveMobileFileTabDoc(client, {
           worktreeId,
           relativePath: tab.relativePath,
           diffSource: tab.diffSource
         })
-        setFileDocs((prev) => new Map(prev).set(tab.id, doc))
+        // Closed tabs and newer reads release ownership of this reply.
+        setFileDocs((prev) =>
+          prev.get(tab.id) === loading ? new Map(prev).set(tab.id, doc) : prev
+        )
       } catch (err) {
         const previewMessage = documentReadErrorMessage(
           err,
@@ -100,10 +104,9 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
             : "Couldn't load file preview"
         )
         setFileDocs((prev) =>
-          new Map(prev).set(tab.id, {
-            status: 'error',
-            message: previewMessage
-          })
+          prev.get(tab.id) === loading
+            ? new Map(prev).set(tab.id, { status: 'error', message: previewMessage })
+            : prev
         )
       }
     },

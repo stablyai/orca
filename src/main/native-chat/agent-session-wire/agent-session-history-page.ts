@@ -80,9 +80,6 @@ export function readAgentSessionHistory(
   snapshot: AgentJournalSnapshot = journal.snapshot(),
   scope: AgentSessionHistoryScope = 'every-agent'
 ): AgentSessionHistoryResult {
-  if (journal.isReadOnly) {
-    return historyReset(snapshot, 'schema_unreadable')
-  }
   const limit = resolveHistoryLimit(request.limit)
   if (request.direction === 'after') {
     return readForward(journal, snapshot, request.cursor, limit)
@@ -248,7 +245,7 @@ function readForward(
   if (contentBytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES) {
     items = items.map((item) => {
       const bytes = historyEntryBytes(item, submissionBytes)
-      return bytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES ? oversizedHistoryItem(item, bytes) : item
+      return bytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES ? oversizedHistoryItem(item) : item
     })
     contentBytes = pageContentBytes(items, projected.batch.removedItemIds)
   }

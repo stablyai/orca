@@ -4,6 +4,7 @@ import type {
   AgentSessionOptionsResult
 } from '../../shared/agent-session-wire'
 import type { CodexAppServerConnection } from './codex-app-server-connection'
+import { structuredAgentSessionOptionModels } from '../native-chat/agent-session-wire/structured-agent-session-option-models'
 import { codexFastModeSupport, readCodexFastModeTier } from './codex-structured-fast-mode'
 import {
   applyCodexConfiguredLaunchDefaults,
@@ -141,15 +142,11 @@ export function composeCodexSessionOptionCatalog(
     reportedServiceTierKnown?: boolean
   }
 ): CodexSessionOptionCatalog {
-  const models = listing.models.map((entry) => ({ ...entry }))
-  if (input.current.model && !models.some((model) => model.id === input.current.model)) {
-    models.push({
-      id: input.current.model,
-      label: input.current.model,
-      isDefault: false,
-      efforts: []
-    })
-  }
+  const models = structuredAgentSessionOptionModels(
+    listing.models.map((entry) => ({ ...entry })),
+    input.current.model,
+    (row) => row
+  )
   const model = input.current.model ?? models.find((entry) => entry.isDefault)?.id ?? models[0]?.id
   if (!model) {
     throw new Error('codex app-server returned no available models')

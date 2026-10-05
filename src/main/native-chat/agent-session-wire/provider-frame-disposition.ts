@@ -133,7 +133,8 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
     'message:system:permission_denied': 'error-surface',
     'message:prompt_suggestion': 'status-chrome',
     'message:system:mirror_error': 'error-surface',
-    'message:system:informational': 'timeline-substantive',
+    // Written by its own row (`claude-informational-row`): a warning in its words, else nothing.
+    'message:system:informational': 'status-chrome',
     'message:conversation_reset': 'status-chrome',
     // A `started`/`completed`/`cancelled` state for one queued command uuid and
     // nothing else; the CLI keeps it out of its own transcript too. A state that

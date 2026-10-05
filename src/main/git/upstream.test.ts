@@ -222,9 +222,7 @@ describe('getUpstreamStatus', () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'feature\n' })
       .mockResolvedValueOnce({ stdout: '\n' })
-      .mockRejectedValueOnce(new Error('missing branch remote'))
-      .mockRejectedValueOnce(new Error('missing branch merge'))
-      .mockRejectedValueOnce(new Error('missing branch base'))
+      .mockResolvedValueOnce({ stdout: '' })
       .mockRejectedValueOnce(new Error('missing remote branch'))
 
     const result = await getUpstreamStatus('/repo')
@@ -240,9 +238,7 @@ describe('getUpstreamStatus', () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'feature\n' })
       .mockRejectedValueOnce(new Error('fatal: no upstream configured'))
-      .mockRejectedValueOnce(new Error('missing branch remote'))
-      .mockRejectedValueOnce(new Error('missing branch merge'))
-      .mockRejectedValueOnce(new Error('missing branch base'))
+      .mockResolvedValueOnce({ stdout: '' })
       .mockRejectedValueOnce(new Error('missing remote branch'))
 
     const result = await getUpstreamStatus('/repo')
@@ -258,9 +254,7 @@ describe('getUpstreamStatus', () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'feature\n' })
       .mockRejectedValueOnce(missingTrackingRefError)
-      .mockRejectedValueOnce(new Error('missing branch remote'))
-      .mockRejectedValueOnce(new Error('missing branch merge'))
-      .mockRejectedValueOnce(new Error('missing branch base'))
+      .mockResolvedValueOnce({ stdout: '' })
       .mockRejectedValueOnce(new Error('missing remote branch'))
 
     const result = await getUpstreamStatus('/repo')
@@ -613,6 +607,8 @@ describe('getUpstreamStatus', () => {
       [
         [
           'log',
+          '--no-show-signature',
+          '--no-color',
           '--oneline',
           '--cherry-mark',
           '--right-only',

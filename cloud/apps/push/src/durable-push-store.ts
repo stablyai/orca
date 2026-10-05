@@ -153,15 +153,15 @@ export class DurablePushStore {
       'UPDATE push_delivery_batches SET lease_token = ?, lease_until = ?, attempts = attempts + 1 WHERE batch_id = ?',
       [lease, now + DELIVERY_LEASE_MS, row.batch_id]
     )
-    return this.delivery(row, lease)
+    return this.delivery(row, lease, notification)
   }
 
-  private delivery(row: SqlRow, lease: string): QueuedPushDelivery {
+  private delivery(row: SqlRow, lease: string, notification: PushNotification): QueuedPushDelivery {
     return {
       id: String(row.batch_id),
       registrationId: String(row.registration_id),
       hostFingerprint: String(row.host_fingerprint),
-      notification: parsePushDeliveryPayload(String(row.payload_json)),
+      notification,
       expiresAt: Number(row.expires_at),
       lease,
       attempts: Number(row.attempts) + 1

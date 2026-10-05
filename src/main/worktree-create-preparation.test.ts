@@ -1,102 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as WorktreeLogic from './ipc/worktree-logic'
-import type { Store } from './persistence'
-import { hasPendingStalePreparationCleanup } from './worktree-create-preparation-stale-cleanup'
+import { mocks, repo, store, flushBackgroundWork } from './__mocks__/worktree-create-preparation'
+import { describe, expect, it } from 'vitest'
 import type { Repo } from '../shared/repo-types'
+import { hasPendingStalePreparationCleanup } from './worktree-create-preparation-stale-cleanup'
 import { WORKTREE_CREATE_PREPARATION_DIRECTORY } from '../shared/worktree/create-preparation'
-import { resolveWorktreeAddBaseRef } from '../shared/worktree/base-ref'
-
-const mocks = vi.hoisted(() => ({
-  mkdir: vi.fn(),
-  listWorktreeGraph: vi.fn(),
-  prepareCheckout: vi.fn(),
-  finalize: vi.fn(),
-  discard: vi.fn(),
-  unlock: vi.fn(),
-  getWorktreeOptions: vi.fn(),
-  computeWorkspaceRoot: vi.fn(),
-  computeWorkspaceRootAsync: vi.fn(),
-  resolveBaseRef: vi.fn(),
-  measureDivergence: vi.fn()
-}))
-
-vi.mock('node:fs/promises', () => ({ mkdir: mocks.mkdir }))
-vi.mock('./git/worktree', () => ({ listWorktreeGraph: mocks.listWorktreeGraph }))
-vi.mock('./git/worktree-create-preparation', () => ({
-  prepareWorktreeCreateCheckout: mocks.prepareCheckout,
-  finalizePreparedWorktree: mocks.finalize,
-  discardPreparedWorktree: mocks.discard,
-  unlockPreparedWorktree: mocks.unlock
-}))
-vi.mock('./git/worktree-base-ref-probe', () => ({
-  resolveLocalWorktreeBaseRef: mocks.resolveBaseRef
-}))
-vi.mock('./git/worktree-base-divergence', () => ({
-  measureRetargetDivergence: mocks.measureDivergence
-}))
-vi.mock('./project-runtime-git-options', () => ({
-  getLocalProjectWorktreeGitOptions: mocks.getWorktreeOptions,
-  getWorktreeMirrorDistro: () => undefined
-}))
-vi.mock('./ipc/worktree-logic', async (importOriginal) => ({
-  isOrphanedWorktreeError: (await importOriginal<typeof WorktreeLogic>()).isOrphanedWorktreeError,
-  computeWorkspaceRoot: mocks.computeWorkspaceRoot,
-  computeWorkspaceRootAsync: mocks.computeWorkspaceRootAsync,
-  getWorktreePathSettings: () => ({
-    workspaceDir: process.platform === 'win32' ? 'C:\\workspace' : '/workspace',
-    nestWorkspaces: false
-  })
-}))
-
+import { WorktreePreparationLockOwnershipError } from './git/worktree-preparation-lock'
 import {
   _resetWorktreeCreatePreparationsForTests,
   consumePreparedWorktreeCreate,
   hasPendingWorktreeCreatePreparations,
   prepareWorktreeCreateForRepo
 } from './worktree-create-preparation'
-
-// Evictions and retries are fire-and-forget, so let them settle before asserting.
-function flushBackgroundWork(ms = 0): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-const EXISTING_REFS = new Set([
-  'refs/heads/main',
-  'refs/remotes/origin/main',
-  'refs/remotes/origin/release'
-])
-const repo = { id: 'repo-1', path: '/repo' } as Repo
-const store = { getSettings: () => ({}) } as unknown as Store
-
-beforeEach(() => {
-  mocks.mkdir.mockReset().mockResolvedValue(undefined)
-  mocks.listWorktreeGraph.mockReset().mockResolvedValue([])
-  mocks.prepareCheckout.mockReset().mockResolvedValue(undefined)
-  mocks.finalize.mockReset().mockResolvedValue({})
-  mocks.discard.mockReset().mockResolvedValue(undefined)
-  mocks.unlock.mockReset().mockResolvedValue(undefined)
-  mocks.getWorktreeOptions.mockReset().mockReturnValue({})
-  mocks.measureDivergence.mockReset().mockResolvedValue('within')
-  mocks.resolveBaseRef
-    .mockReset()
-    .mockImplementation((_repoPath: string, baseRef: string) =>
-      resolveWorktreeAddBaseRef(baseRef, async (candidate) => EXISTING_REFS.has(candidate))
-    )
-  mocks.computeWorkspaceRoot.mockReset().mockImplementation(() => {
-    throw new Error('synchronous workspace-root lookup must not run on the main thread')
-  })
-  mocks.computeWorkspaceRootAsync
-    .mockReset()
-    .mockImplementation(async (repoPath: string) =>
-      process.platform === 'win32' && /^[A-Za-z]:[\\/]/.test(repoPath)
-        ? 'C:\\workspace'
-        : '/workspace'
-    )
-})
-
-afterEach(async () => {
-  await _resetWorktreeCreatePreparationsForTests()
-})
 
 describe('worktree create preparation registry', () => {
   it.each([undefined, 'Ubuntu'])(
@@ -218,6 +131,11 @@ describe('worktree create preparation registry', () => {
     ).resolves.toEqual({
       status: 'hit',
       retargeted: true,
+      // The mocked finalize found the checkout already at the requested commit.
+      reset: 'none',
+      buildMs: expect.any(Number),
+      idleMs: expect.any(Number),
+      origin: 'prefetch',
       result: {},
       rearm: expect.any(Function)
     })
@@ -229,7 +147,8 @@ describe('worktree create preparation registry', () => {
       'feature/test',
       'main',
       undefined,
-      {}
+      {},
+      mocks.prepareCheckout.mock.calls[0]?.[3]
     )
   })
 
@@ -299,6 +218,10 @@ describe('worktree create preparation registry', () => {
     ).resolves.toEqual({
       status: 'hit',
       retargeted: false,
+      reset: 'none',
+      buildMs: expect.any(Number),
+      idleMs: expect.any(Number),
+      origin: 'prefetch',
       result: {},
       rearm: expect.any(Function)
     })
@@ -407,7 +330,8 @@ describe('worktree create preparation registry', () => {
       expect.any(String),
       'refs/remotes/origin/main',
       expect.any(String),
-      { ...options, signal: expect.any(AbortSignal) }
+      { ...options, signal: expect.any(AbortSignal) },
+      undefined
     )
     expect(mocks.finalize).toHaveBeenCalledWith(
       repo.path,
@@ -416,7 +340,8 @@ describe('worktree create preparation registry', () => {
       'feature/test',
       'origin/main',
       undefined,
-      options
+      options,
+      mocks.prepareCheckout.mock.calls[0]?.[3]
     )
   })
 
@@ -454,9 +379,14 @@ describe('worktree create preparation registry', () => {
     })
     try {
       await flushBackgroundWork()
-      expect(mocks.discard).toHaveBeenCalledWith(repo.path, stalePath, {
-        admissionTier: 'background'
-      })
+      expect(mocks.discard).toHaveBeenCalledWith(
+        repo.path,
+        stalePath,
+        {
+          admissionTier: 'background'
+        },
+        'orca-create-preparation:v1:999999999:stale'
+      )
       expect(ready).toBe(true)
       await prepareWorktreeCreateForRepo(store, repo, 'origin/release')
       expect(mocks.prepareCheckout).toHaveBeenCalledTimes(2)
@@ -498,9 +428,12 @@ describe('worktree create preparation registry', () => {
 
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
 
-    expect(mocks.unlock).toHaveBeenCalledWith(repo.path, '/workspace/final', {
-      admissionTier: 'background'
-    })
+    expect(mocks.unlock).toHaveBeenCalledWith(
+      repo.path,
+      '/workspace/final',
+      { admissionTier: 'background' },
+      'orca-create-preparation:v1:999999999:stale'
+    )
     expect(mocks.discard).not.toHaveBeenCalledWith(repo.path, '/workspace/final', expect.anything())
   })
 
@@ -560,6 +493,21 @@ describe('worktree create preparation registry', () => {
     expect(mocks.discard).toHaveBeenCalledTimes(1)
   })
 
+  it('preserves another owner’s checkout when finalization loses its lock', async () => {
+    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    mocks.finalize.mockRejectedValueOnce(new WorktreePreparationLockOwnershipError())
+    await expect(
+      consumePreparedWorktreeCreate({
+        repoPath: repo.path,
+        workspaceRoot: '/workspace',
+        worktreePath: '/workspace/final',
+        branch: 'feature/test',
+        baseBranch: 'origin/main'
+      })
+    ).resolves.toMatchObject({ status: 'miss', reason: 'finalize_failed' })
+    expect(mocks.discard).not.toHaveBeenCalled()
+  })
+
   /** Mirrors a real create: consume, then run the deferred re-arm once the create has returned. */
   async function consumeOnce(name: string): Promise<void> {
     const attempt = await consumePreparedWorktreeCreate({
@@ -604,6 +552,11 @@ describe('worktree create preparation registry', () => {
     ).resolves.toEqual({
       status: 'hit',
       retargeted: false,
+      reset: 'none',
+      buildMs: expect.any(Number),
+      idleMs: expect.any(Number),
+      // Built by the burst re-arm after the second create; the prefetch after it asked for it too.
+      origin: 'rearm_then_prefetch',
       result: {},
       rearm: expect.any(Function)
     })
@@ -674,218 +627,6 @@ describe('worktree create preparation registry', () => {
     await consumeOnce('second')
 
     expect(mocks.prepareCheckout).not.toHaveBeenCalled()
-  })
-
-  it('retries a discard that failed while this process is still alive', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    const leakedPath = mocks.prepareCheckout.mock.calls[0][1] as string
-    mocks.discard.mockRejectedValueOnce(new Error('EBUSY'))
-
-    // Fill the registry so the first preparation is evicted while its owner pid is still alive.
-    for (const base of ['origin/one', 'origin/two', 'origin/three']) {
-      await prepareWorktreeCreateForRepo(store, repo, base)
-    }
-    await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedPath, {})
-
-    mocks.discard.mockClear()
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/four')
-    await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedPath, {})
-
-    mocks.discard.mockClear()
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/five')
-    await flushBackgroundWork()
-    expect(mocks.discard).not.toHaveBeenCalledWith(repo.path, leakedPath, {})
-  })
-
-  it('retries only the leaked paths belonging to the host being prepared', async () => {
-    const otherRepo = { ...repo, id: 'repo-2', path: '/other-repo' } as Repo
-    const unremovable = new Set<string>()
-    mocks.discard.mockImplementation(async (_repoPath: string, path: string) => {
-      if (unremovable.has(path)) {
-        throw new Error('EBUSY')
-      }
-    })
-
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    const leakedHere = mocks.prepareCheckout.mock.calls[0][1] as string
-    await prepareWorktreeCreateForRepo(store, otherRepo, 'origin/main')
-    const leakedElsewhere = mocks.prepareCheckout.mock.calls[1][1] as string
-    unremovable.add(leakedHere)
-    unremovable.add(leakedElsewhere)
-
-    // Evict through each host's own arming: eviction prefers the incoming workspace's oldest
-    // entry, so preparing for `repo` no longer reaches across and takes `otherRepo`'s.
-    for (const base of ['origin/one', 'origin/two']) {
-      await prepareWorktreeCreateForRepo(store, repo, base)
-    }
-    for (const base of ['origin/one', 'origin/two']) {
-      await prepareWorktreeCreateForRepo(store, otherRepo, base)
-    }
-    await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedHere, {})
-    expect(mocks.discard).toHaveBeenCalledWith(otherRepo.path, leakedElsewhere, {})
-
-    mocks.discard.mockClear()
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/four')
-    await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedHere, {})
-    expect(mocks.discard.mock.calls.some((call) => call[1] === leakedElsewhere)).toBe(false)
-  })
-
-  it('stops retrying a preparation that never becomes removable', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-      const leakedPath = mocks.prepareCheckout.mock.calls[0][1] as string
-      mocks.discard.mockImplementation(async (_repoPath: string, path: string) => {
-        if (path === leakedPath) {
-          throw new Error('EBUSY')
-        }
-      })
-      const leakedDiscards = (): number =>
-        mocks.discard.mock.calls.filter((call) => call[1] === leakedPath).length
-
-      for (const base of ['origin/one', 'origin/two', 'origin/three']) {
-        await prepareWorktreeCreateForRepo(store, repo, base)
-      }
-      await flushBackgroundWork()
-      expect(leakedDiscards()).toBe(1)
-
-      for (const base of ['origin/four', 'origin/five', 'origin/six']) {
-        await prepareWorktreeCreateForRepo(store, repo, base)
-        await flushBackgroundWork()
-      }
-      expect(leakedDiscards()).toBe(3)
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining(`could not be discarded in 3 attempts; ${leakedPath}`),
-        expect.any(Error)
-      )
-    } finally {
-      warn.mockRestore()
-    }
-  })
-
-  it('retries a failed checkout whose own self-discard also left the path registered', async () => {
-    let failCheckout!: (error: Error) => void
-    mocks.prepareCheckout.mockImplementationOnce(
-      () =>
-        new Promise<void>((_resolve, reject) => {
-          failCheckout = reject
-        })
-    )
-    const failing = prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    await flushBackgroundWork()
-    const leakedPath = mocks.prepareCheckout.mock.calls[0][1] as string
-
-    // Evict it while its checkout is still in flight, so discardEntry runs on a failed preparation.
-    for (const base of ['origin/one', 'origin/two', 'origin/three']) {
-      await prepareWorktreeCreateForRepo(store, repo, base)
-    }
-    mocks.discard.mockRejectedValueOnce(new Error('EBUSY'))
-    failCheckout(new Error('worktree add failed'))
-    await failing.catch(() => {})
-    await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedPath, {})
-
-    mocks.discard.mockClear()
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/four')
-    await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedPath, {})
-  })
-
-  it('scopes retries to the WSL distro whose preparation leaked', async () => {
-    const unremovable = new Set<string>()
-    mocks.discard.mockImplementation(async (_repoPath: string, path: string) => {
-      if (unremovable.has(path)) {
-        throw new Error('EBUSY')
-      }
-    })
-
-    mocks.getWorktreeOptions.mockReturnValue({ wslDistro: 'Ubuntu' })
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    const leakedOnUbuntu = mocks.prepareCheckout.mock.calls[0][1] as string
-    mocks.getWorktreeOptions.mockReturnValue({ wslDistro: 'Debian' })
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    const leakedOnDebian = mocks.prepareCheckout.mock.calls[1][1] as string
-    unremovable.add(leakedOnUbuntu)
-    unremovable.add(leakedOnDebian)
-
-    // Evict through each distro's own arming: the eviction scope includes the distro, so arming
-    // under Ubuntu no longer reaches across and takes the Debian entry.
-    mocks.getWorktreeOptions.mockReturnValue({ wslDistro: 'Ubuntu' })
-    for (const base of ['origin/one', 'origin/two']) {
-      await prepareWorktreeCreateForRepo(store, repo, base)
-    }
-    mocks.getWorktreeOptions.mockReturnValue({ wslDistro: 'Debian' })
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/one')
-    mocks.getWorktreeOptions.mockReturnValue({ wslDistro: 'Ubuntu' })
-    await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedOnUbuntu, { wslDistro: 'Ubuntu' })
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedOnDebian, { wslDistro: 'Debian' })
-
-    mocks.discard.mockClear()
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/four')
-    await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedOnUbuntu, { wslDistro: 'Ubuntu' })
-    expect(mocks.discard.mock.calls.some((call) => call[1] === leakedOnDebian)).toBe(false)
-  })
-
-  it('drops recorded discards when the registry is reset for tests', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    const leakedPath = mocks.prepareCheckout.mock.calls[0][1] as string
-    // Reject on a real timer so the fire-and-forget discard is still in flight at reset.
-    mocks.discard.mockImplementationOnce(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 5))
-      throw new Error('EBUSY')
-    })
-
-    for (const base of ['origin/one', 'origin/two', 'origin/three']) {
-      await prepareWorktreeCreateForRepo(store, repo, base)
-    }
-    await _resetWorktreeCreatePreparationsForTests()
-    // Past the rejection timer: the reset must have absorbed the failure, not raced ahead of it.
-    await flushBackgroundWork(20)
-
-    mocks.discard.mockClear()
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/four')
-    await flushBackgroundWork()
-    expect(mocks.discard).not.toHaveBeenCalledWith(repo.path, leakedPath, {})
-  })
-
-  it("settles an evicted preparation's discard before the reset drops the registry", async () => {
-    let failCheckout!: (error: Error) => void
-    mocks.prepareCheckout.mockImplementationOnce(
-      () =>
-        new Promise<void>((_resolve, reject) => {
-          failCheckout = reject
-        })
-    )
-    const failing = prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    await flushBackgroundWork()
-    const leakedPath = mocks.prepareCheckout.mock.calls[0][1] as string
-    mocks.discard.mockImplementation(async (_repoPath: string, path: string) => {
-      if (path === leakedPath) {
-        throw new Error('EBUSY')
-      }
-    })
-
-    for (const base of ['origin/one', 'origin/two', 'origin/three']) {
-      await prepareWorktreeCreateForRepo(store, repo, base)
-    }
-    // The eviction's discard is still parked on the checkout, so the reset has to wait for it.
-    const reset = _resetWorktreeCreatePreparationsForTests()
-    await flushBackgroundWork(5)
-    failCheckout(new Error('worktree add failed'))
-    await failing.catch(() => {})
-    await reset
-    await flushBackgroundWork(5)
-
-    mocks.discard.mockClear()
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/four')
-    await flushBackgroundWork()
-    expect(mocks.discard).not.toHaveBeenCalledWith(repo.path, leakedPath, {})
   })
 
   it('reports a pending create while a stale-cleanup scan is running', async () => {

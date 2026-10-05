@@ -9,10 +9,11 @@ import { projectStructuredAgentSessionMessages } from './structured-agent-sessio
 export function useStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
   outbox: readonly StructuredAgentSessionOutboxEntry[],
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmission[],
+  queuedMessageIds: readonly string[]
 ) {
   return useMemo(
-    () => projectStructuredAgentSessionMessages(items, outbox, submissions),
-    [items, outbox, submissions]
+    () => projectStructuredAgentSessionMessages(items, outbox, submissions, queuedMessageIds),
+    [items, outbox, submissions, queuedMessageIds]
   )
 }

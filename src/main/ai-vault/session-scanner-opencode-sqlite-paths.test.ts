@@ -16,6 +16,17 @@ describe('splitOpenCodeSqliteCandidate', () => {
     expect(result).toEqual({ dbPath: '/data/opencode-stable.db', sessionId: 'ses_xyz' })
   })
 
+  it('preserves Windows host paths including hashes in directory names', () => {
+    const dbPath = String.raw`C:\Users\reader\project#one\opencode.db`
+    expect(splitOpenCodeSqliteCandidate(`${dbPath}#ses_abc`)).toEqual({
+      dbPath,
+      sessionId: 'ses_abc'
+    })
+    expect(
+      splitOpenCodeSqliteCandidate(String.raw`C:\Users\opencode.db\notes.txt#ses_abc`)
+    ).toBeNull()
+  })
+
   it('rejects a path whose db basename is not opencode*.db', () => {
     expect(splitOpenCodeSqliteCandidate('/data/random.db#ses_abc')).toBeNull()
     expect(splitOpenCodeSqliteCandidate('/data/notes.txt#ses_abc')).toBeNull()

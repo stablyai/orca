@@ -260,7 +260,7 @@ async function renderEditorFileTab(
     hasTabsToRight: false,
     hasTabsToLeft: false,
     tabCount: 1,
-    statusByRelativePath: new Map(),
+    gitStatus: null,
     onActivate,
     onClose: () => {},
     onCloseOthers: () => {},
@@ -462,7 +462,8 @@ describe('EditorFileTab rename menu', () => {
       oldPath: '/repo/untitled-5.md',
       newName: '日本語.md',
       worktreeId: 'wt-1',
-      worktreePath: '/repo'
+      worktreePath: '/repo',
+      documentScoped: false
     })
   })
 

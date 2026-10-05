@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react'
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -88,11 +88,7 @@ export function useWorktreeListKeyboardNavigation(args: {
         return
       }
 
-      // Why: keyboard cycling is real navigation; route through the activation helper that records history.
-      activateAndRevealWorktree(nextWorktree.id, {
-        navigationIntent: 'user-open',
-        ...(nextWorktree.hostId ? { executionHostId: nextWorktree.hostId } : {})
-      })
+      void activateWorktreeFromSidebar(nextWorktree.id, nextWorktree.hostId)
 
       const rowIndex = findPreferredRenderRowIndexForWorktreeIdentity(
         renderRows,

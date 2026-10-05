@@ -17,7 +17,7 @@ import type { StructuredAgentSessionHost } from './structured-agent-session-host
 import {
   mutateStructuredAgentSession,
   type StructuredAgentSessionMutationContext
-} from './structured-agent-session-host-mutations'
+} from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import {
   conversationCommandPlan,

@@ -46,6 +46,25 @@ describe('resolveRealClaudeCliGate', () => {
     expect(runClaude.mock.calls).toEqual([[['--version']], [['auth', 'status', '--json']]])
   })
 
+  it('reads the final account report after the CLI configuration warning', () => {
+    const warning = [
+      'Claude configuration file not found at: /home/dev/.claude/.claude.json',
+      'A backup file exists at: /home/dev/.claude/backups/.claude.json.backup.123',
+      'You can manually restore it by running: cp /home/dev/.claude/backups/.claude.json.backup.123 /home/dev/.claude/.claude.json',
+      ''
+    ].join('\n')
+    const runClaude = vi.fn((args: readonly string[]): ClaudeCliProbeResult =>
+      args[0] === '--version'
+        ? { status: 0, stdout: '2.1.0\n' }
+        : { status: 0, stdout: warning + warning + JSON.stringify({ loggedIn: true }) }
+    )
+
+    expect(resolveRealClaudeCliGate({ [REAL_CLAUDE_CLI_TEST_ENV]: '1' }, runClaude)).toEqual({
+      skipReason: null,
+      authStatus: { loggedIn: true }
+    })
+  })
+
   it('still skips when opted in but no claude binary answers', () => {
     const runClaude = vi.fn((): ClaudeCliProbeResult => ({ status: null, stdout: '' }))
 
@@ -57,7 +76,14 @@ describe('resolveRealClaudeCliGate', () => {
 
   it.each([
     ['a failed auth probe', { status: 1, stdout: '' }],
-    ['unparseable auth output', { status: 0, stdout: 'not json' }]
+    ['unparseable auth output', { status: 0, stdout: 'not json' }],
+    ['malformed JSON', { status: 0, stdout: '{"loggedIn":' }],
+    ['trailing output', { status: 0, stdout: '{"loggedIn":true}\nnot json' }],
+    ['two JSON objects', { status: 0, stdout: '{"loggedIn":false}\n{"loggedIn":true}' }],
+    ['another JSON value before an object', { status: 0, stdout: 'true\n{"loggedIn":true}' }],
+    ['an array before an object', { status: 0, stdout: '[]\n{"loggedIn":true}' }],
+    ['a JSON array', { status: 0, stdout: '[{"loggedIn":true}]' }],
+    ['an unrelated JSON value', { status: 0, stdout: 'true' }]
   ])('runs with no account report after %s', (_label, authResult) => {
     const runClaude = vi.fn((args: readonly string[]): ClaudeCliProbeResult =>
       args[0] === '--version' ? { status: 0, stdout: '2.1.0\n' } : authResult

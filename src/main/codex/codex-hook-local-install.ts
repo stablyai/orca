@@ -1,8 +1,6 @@
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
-  buildManagedCommandHook,
   createManagedCommandMatcher,
-  MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJson,
   removeManagedCommands,
   writeManagedScript,
@@ -17,6 +15,7 @@ import {
 import {
   CODEX_EVENTS,
   CODEX_EVENT_LABEL,
+  buildCodexManagedHook,
   getCodexConfigTomlPath,
   getConfigPath,
   getManagedCommand,
@@ -111,22 +110,19 @@ export async function installCodexHooksExclusively(
   for (const eventName of CODEX_EVENTS) {
     const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
-    const definition: HookDefinition = {
-      hooks: [buildManagedCommandHook(command)]
-    }
+    const hook = buildCodexManagedHook(command, eventName)
+    const definition: HookDefinition = { hooks: [hook] }
     nextHooks[eventName] = [definition, ...cleaned]
     // Why: the status hook must run before user hooks so a slow
     // PostToolUse/Stop hook cannot leave the sidebar stuck on the previous
     // state while Codex visibly reports that hooks are still running.
-    // timeoutSec mirrors the hook's `timeout` so the trust hash matches the
-    // entry actually written to hooks.json.
     managedTrustEntries.push({
       sourcePath: trustSourcePath,
       eventLabel: CODEX_EVENT_LABEL[eventName],
       groupIndex: 0,
       handlerIndex: 0,
       command,
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+      timeoutSec: hook.timeout
     })
   }
   const trustEntries: CodexTrustEntry[] = [...mirroredTrustEntries, ...managedTrustEntries]

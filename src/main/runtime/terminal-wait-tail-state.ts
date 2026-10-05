@@ -1,10 +1,8 @@
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 import { buildTailLines } from './terminal-tail-state'
 import { tailMayContainBlockedSignal } from './terminal-tail-sentinel-index'
-import {
-  findActionableTerminalWaitBlockedSignal,
-  TERMINAL_WAIT_BLOCKED_SENTINEL_RE
-} from './terminal-wait-detection'
+import { findActionableTerminalWaitBlockedSignal } from './terminal-wait-detection'
+import { terminalWaitBlockedSentinelRe } from './agent-state-rules/blocked-text-layer'
 
 export function buildTerminalWaitText(
   lines: string[],
@@ -66,7 +64,7 @@ function inspectTerminalWaitTail(
     // Why the index: proving a signal is ABSENT can't early-exit, so a full re-test of the
     // 2000-line tail ran per scan; the index tests only the lines each append produced.
     mayContainBlockedSignal:
-      tailMayContainBlockedSignal(lines) || TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(partialLine)
+      tailMayContainBlockedSignal(lines) || terminalWaitBlockedSentinelRe().test(partialLine)
   }
 }
 

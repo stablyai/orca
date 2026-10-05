@@ -160,19 +160,24 @@ function canonicalResourcePaths(change, paths) {
   )
 }
 
-function bootstrapRestartNormalizationPaths(change, mode) {
-  if (!['bootstrap-cell', 'same-cap-cell', 'same-cap-image'].includes(mode)) return []
-  const policyMatches =
-    valueAtPath(change.change.before, 'update_policy.0.minimal_action') === 'RESTART' &&
-    valueAtPath(change.change.after, 'update_policy.0.minimal_action') === 'REPLACE'
-  const priorVersion = valueAtPath(change.change.before, 'version.0.name')
-  const versionMatches =
-    typeof priorVersion === 'string' &&
-    /^0\/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{6}\+00:00$/.test(priorVersion) &&
-    valueAtPath(change.change.after, 'version.0.name') === 'primary'
-  return policyMatches && versionMatches
-    ? ['update_policy.0.minimal_action', 'version.0.name']
-    : []
+// What relay-gce-cells.tf declares for these MIG fields (a test pins the two together). A gcloud
+// rolling action, like the stranded recovery's old one, rewrites the version label and persists
+// its flags into the update policy outside Terraform; a later plan then reverts them. Moving back
+// to the declared value is reconciliation, never a capacity change, so it is the only move allowed.
+export const DECLARED_MANAGER_FIELDS = Object.freeze({
+  'version.0.name': 'primary',
+  'update_policy.0.type': 'PROACTIVE',
+  'update_policy.0.minimal_action': 'REPLACE',
+  'update_policy.0.most_disruptive_allowed_action': 'REPLACE',
+  'update_policy.0.replacement_method': 'RECREATE',
+  'update_policy.0.max_surge_fixed': 0,
+  'update_policy.0.max_unavailable_fixed': 1
+})
+
+function declaredManagerReconciliationPaths(change) {
+  return Object.entries(DECLARED_MANAGER_FIELDS)
+    .filter(([path, declared]) => valueAtPath(change.change.after, path) === declared)
+    .map(([path]) => path)
 }
 
 function requireOnlyPaths(change, allowed, required = [], allowedUnknown = new Set()) {
@@ -381,7 +386,7 @@ function requireDesiredPlannedCell(plan, config) {
   }
 }
 
-function validateManagerUpdate(manager, config) {
+function validateManagerUpdate(manager) {
   if (!sameActions(manager, ['update'])) {
     throw new Error('cell plan has unexpected MIG actions')
   }
@@ -392,14 +397,18 @@ function validateManagerUpdate(manager, config) {
     'version.0.instance_template'
   ])
   const managerUnknown = unknownPaths(manager.change.after_unknown)
+  const moved = changedPaths(manager.change.before, manager.change.after)
+  const reconciled = declaredManagerReconciliationPaths(manager).filter((path) =>
+    moved.includes(path))
+  // A plan that only reconciles declared fields leaves the template where it is.
   requireOnlyPaths(
     manager,
     new Set([
       'version.0.instance_template',
-      ...bootstrapRestartNormalizationPaths(manager, config.mode),
+      ...reconciled,
       ...managerUnknown.filter((path) => managerComputed.has(path))
     ]),
-    ['version.0.instance_template'],
+    reconciled.length > 0 ? [] : ['version.0.instance_template'],
     managerComputed
   )
 }
@@ -514,7 +523,7 @@ function cellPlan(plan, changes, config) {
     ['metadata_startup_script'],
     templateComputed
   )
-  validateManagerUpdate(manager, config)
+  validateManagerUpdate(manager)
   requireReplacementTemplateDependency(plan, template, manager)
   const beforeScript = template.change.before?.metadata_startup_script
   const script = template.change.after?.metadata_startup_script
@@ -561,7 +570,7 @@ function convergenceCellPlan(plan, changes, config) {
   ) {
     throw new Error('cell convergence plan changes outside the exact template and MIG')
   }
-  if (manager) validateManagerUpdate(manager, config)
+  if (manager) validateManagerUpdate(manager)
   if (obsoleteTemplates.some((change) => !sameActions(change, ['delete']))) {
     throw new Error('cell convergence plan has unexpected obsolete-template actions')
   }

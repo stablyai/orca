@@ -18,6 +18,7 @@ import {
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import { restoreStructuredAgentSessionRead } from './structured-agent-session-read-restore'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 const SESSION_ID = 'codex_read_restore_fixture'
 const WORKSPACE_ID = 'repo-1::/tmp/workspace'
@@ -55,7 +56,7 @@ let journalRoot: string
 const openDeps = () => ({
   store,
   journalDatabase: openTestJournalHostDatabase(journalRoot),
-  adapter: {}
+  logger: recordingStructuredAgentSessionLogger().logger
 })
 const opened: AgentSessionJournal[] = []
 

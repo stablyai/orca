@@ -10,6 +10,7 @@ import {
   startStructuredAgentSessionContinuation,
   type StructuredAgentSessionContinuationDeps
 } from './structured-agent-session-restart-continuation'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 /** The whole continuation: handed over, then its verdict. */
 async function continueStructuredAgentSessionAfterRestart(
@@ -45,7 +46,7 @@ function dependencies(
         : undefined
     ),
     note: vi.fn(async () => undefined),
-    onNoteFailed: vi.fn()
+    logger: createStructuredAgentSessionLogger()
   }
 }
 
@@ -104,10 +105,30 @@ it.each([
   ).resolves.toEqual({
     sessionId: SESSION,
     outcome: 'refused',
-    reason: code
+    reason: code,
+    refusal: { code }
   })
   expect(deps.awaitSettlement).not.toHaveBeenCalled()
   expect(deps.note).toHaveBeenCalledExactlyOnceWith(...note)
+})
+
+// A newer Orca's refusal keeps its reason, as a reference without the wire prose.
+it('reports a newer-Orca send refusal with its reason', async () => {
+  const deps = dependencies('accepted')
+  const refusal = {
+    code: 'agent_session_journal_unreadable',
+    details: { reason: 'journalWrittenByNewerOrca' }
+  } as const
+  deps.send.mockResolvedValue({ ok: false, refusal: { ...refusal, message: 'Update Orca.' } })
+
+  await expect(
+    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker(), 'operation-1')
+  ).resolves.toEqual({
+    sessionId: SESSION,
+    outcome: 'refused',
+    reason: 'agent_session_journal_unreadable',
+    refusal
+  })
 })
 
 it('reports an unattached chat without sending', async () => {

@@ -38,6 +38,7 @@ import {
 } from './structured-agent-session-adapter'
 import { resettleOpenStructuredAgentSessionConversation } from './structured-agent-session-conversation-open'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
 import { STRUCTURED_AGENT_SESSION_IDLE_MS } from './structured-agent-session-idle-sweep'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
@@ -45,6 +46,8 @@ import {
   HOST_TEST_LOCATION as LOCATION,
   HOST_TEST_SESSION as SESSION
 } from './structured-agent-session-host-test-data'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
 const PROVIDER_SESSION = 'provider-session-alpha-1'
 /** The tool call's row: the last thing the provider wrote before the crash. */
@@ -155,6 +158,7 @@ async function seedClaudeToolTurn(): Promise<void> {
 
 function openHost(overrides: Partial<StructuredAgentSessionHostDeps>): void {
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
       acquire: vi.fn(),
@@ -211,6 +215,34 @@ describe('a turn a crash cut short mid-tool', () => {
       (await host.journalSnapshot(SESSION)).items
     ).values()
     expect(completedStructuredAgentTurnSeconds(timing)).toBe(27)
+  })
+
+  // The turn bar reads like a finished turn, so this row is the one place the chat says why.
+  it('explains the cut once, with one notice row and a turn bar that does not repeat it', async () => {
+    openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
+
+    await host.restoreReadableSessions()
+
+    const { items } = await host.journalSnapshot(SESSION)
+    // As a reader's transcript shows it: the stored row is the explanation, so none is derived.
+    const statusRows = withNativeChatCutTurnNotices(items, { agentName: 'Claude' }).flatMap(
+      (item) => (item.body.kind === 'status' ? [item.body] : [])
+    )
+    expect(statusRows).toEqual([
+      expect.objectContaining({
+        text: 'Claude stopped while this response was in progress. You can continue in this conversation.',
+        failure: expect.objectContaining({ kind: 'providerExited' }),
+        tone: 'error'
+      })
+    ])
+    const [timing] = selectStructuredAgentTurnTimings(items).values()
+    expect(
+      describeNativeChatTurnStatus({
+        elapsedSeconds: 0,
+        workedSeconds: completedStructuredAgentTurnSeconds(timing),
+        verdict: timing?.verdict
+      })
+    ).toEqual({ key: 'workedFor', duration: '27s' })
   })
 
   it('ends at the pre-crash renewal when the child outlived Orca and recovery stopped it', async () => {
@@ -295,7 +327,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     unsubscribe()
   })
 
-  it('reports the revision to the status feed as an interruption, which the chat folds as failed', async () => {
+  it('reports the revision to the status feed as an interruption, which the chat folds as worked', async () => {
     const published: AgentSessionStatusSummary[] = []
     openHost({
       probeOwner: async () => ({ outcome: 'pid-absent' }),
@@ -311,7 +343,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     await host.reconcileRestartLeases()
     await drainSession()
 
-    // The sidebar's red Failed, then the folded "Failed after 27s".
+    // The sidebar's red Failed until seen; the turn folds as "Worked for 27s" beside its notice row.
     await vi.waitFor(() => expect(outcomes().at(-1)).toBe('interruption'))
     const [timing] = selectStructuredAgentTurnTimings(
       (await host.journalSnapshot(SESSION)).items
@@ -322,7 +354,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
         workedSeconds: completedStructuredAgentTurnSeconds(timing),
         verdict: timing?.verdict
       })
-    ).toEqual({ key: 'failedAfter', duration: '27s' })
+    ).toEqual({ key: 'workedFor', duration: '27s' })
   })
 
   it('revises nothing twice, whoever re-runs the settle', async () => {
@@ -440,11 +472,11 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
 
   it('stays unverifiable when the revision cannot be written, and a later open revises it', async () => {
     let now = RELAUNCHED_AT
-    const onEventSinkError = vi.fn()
+    const log = recordingStructuredAgentSessionLogger()
     openHost({
       probeOwner: async () => ({ outcome: 'pid-absent' }),
       now: () => now,
-      onEventSinkError
+      logger: log.logger
     })
     await host.history({ sessionId: SESSION, direction: 'tail' })
     const { journal } = host.collaboratorsForTests().sessions.get(SESSION)!
@@ -453,7 +485,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     await host.reconcileRestartLeases()
     await drainSession()
 
-    expect(onEventSinkError).toHaveBeenCalledOnce()
+    expect(log.scopes()).toEqual(['open-dead-generation'])
     expect(await settledTurn()).toEqual(UNVERIFIABLE_TURN)
     // The proof is durable on the record, so the next open converges.
     now += STRUCTURED_AGENT_SESSION_IDLE_MS + 1

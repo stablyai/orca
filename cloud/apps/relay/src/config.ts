@@ -109,6 +109,17 @@ const EnvSchema = z.object({
     .positive()
     .max(60)
     .default(2),
+  // Borrowed from placement concurrency, which always keeps at least one permit.
+  ORCA_RELAY_DRAIN_RETURN_CONCURRENCY: z.coerce.number().int().positive().max(4).default(1),
+  ORCA_RELAY_DRAIN_RETURN_QUEUE_MAX: z.coerce.number().int().positive().max(64).default(4),
+  ORCA_RELAY_DRAIN_RETURN_WAIT_MS: z.coerce.number().int().positive().max(10_000).default(3_000),
+  // The desktop parser caps a Retry-After at 5 minutes; a larger value is truncated there.
+  ORCA_RELAY_DRAIN_RETURN_MAX_RETRY_AFTER_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(2)
+    .max(300)
+    .default(300),
   ORCA_RELAY_PUBLIC_ASSIGNMENT_QUEUE_MAX: z.coerce
     .number()
     .int()
@@ -217,6 +228,10 @@ export type RelayConfig = {
   publicStickyQueueMax?: number
   publicStickyWaitMs?: number
   publicStickyRetryAfterSeconds?: number
+  drainReturnConcurrency?: number
+  drainReturnQueueMax?: number
+  drainReturnWaitMs?: number
+  drainReturnMaxRetryAfterSeconds?: number
   databaseUrl?: string
   dataDir: string
 }
@@ -367,6 +382,10 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
     publicStickyQueueMax: parsed.ORCA_RELAY_PUBLIC_STICKY_QUEUE_MAX,
     publicStickyWaitMs: parsed.ORCA_RELAY_PUBLIC_STICKY_WAIT_MS,
     publicStickyRetryAfterSeconds: parsed.ORCA_RELAY_PUBLIC_STICKY_RETRY_AFTER_SECONDS,
+    drainReturnConcurrency: parsed.ORCA_RELAY_DRAIN_RETURN_CONCURRENCY,
+    drainReturnQueueMax: parsed.ORCA_RELAY_DRAIN_RETURN_QUEUE_MAX,
+    drainReturnWaitMs: parsed.ORCA_RELAY_DRAIN_RETURN_WAIT_MS,
+    drainReturnMaxRetryAfterSeconds: parsed.ORCA_RELAY_DRAIN_RETURN_MAX_RETRY_AFTER_SECONDS,
     databaseUrl: parsed.DATABASE_URL,
     dataDir: parsed.ORCA_RELAY_DATA_DIR
   }

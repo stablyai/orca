@@ -38,6 +38,9 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       ORCA_AGENT_SESSION_ID: 'session-1',
       ORCA_STRUCTURED_SESSION: '1',
       ORCA_CLI_COMMAND: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/),
+      ...(process.platform !== 'win32'
+        ? { ORCA_CLI_BIN_DIR: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin$/) }
+        : {}),
       ORCA_USER_DATA_PATH: expect.any(String),
       // The test host is unpackaged, so this app's CLI is the dev launcher dir, first on PATH.
       PATH: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[:;]/)
@@ -286,18 +289,6 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       message: 'workspace no longer exists'
     })
     expect(codex.connections).toHaveLength(0)
-  })
-
-  it('reports the rollout path Codex named, and null when it named none', async () => {
-    const withPath = fakeCodex()
-    const adapter = await acquired(withPath)
-    expect(await adapter.historyFilePath({ identity: identityFor('session-1') })).toBe(
-      '/rollouts/abc.jsonl'
-    )
-
-    const withoutPath = fakeCodex({ 'thread/start': () => ({ thread: { id: THREAD_ID } }) })
-    const bare = await acquired(withoutPath)
-    expect(await bare.historyFilePath({ identity: identityFor('session-1') })).toBeNull()
   })
 
   it('lets closeAll cancel and reap an acquisition still opening', async () => {

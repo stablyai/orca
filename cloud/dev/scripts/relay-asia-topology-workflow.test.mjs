@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { relayWorkflowUrl } from './relay-repository.mjs'
 
@@ -40,13 +43,76 @@ test('accepts only the reviewed Asia topology waves', () => {
     .exec(workflow)?.[1]
   assert.ok(cases)
   assert.deepEqual(
-    [...cases.matchAll(/^\s*([a-z]+:[a-z0-9,-]+)\) ;;$/gm)].map((match) => match[1]),
+    [...cases.matchAll(/^\s*([a-z]+:[a-z0-9,-]+)\)(?: target_region=[a-z0-9-]+)? ;;$/gm)]
+      .map((match) => match[1]),
     [
       'staging:staging-gce-c4',
       'production:production-gce-c27,production-gce-c28,production-gce-c29',
-      'production:production-gce-c30'
+      'production:production-gce-c30',
+      'production:production-gce-c31',
+      'production:production-gce-c32,production-gce-c33',
+      'production:production-gce-c34'
     ]
   )
+})
+
+// Runs the workflow's own region and target blocks, so an Asia wave's targets stay byte-identical.
+function waveTargets(environment, cellIds) {
+  const block = (first, last) => {
+    const start = workflow.indexOf(first)
+    const end = workflow.indexOf(last, start)
+    assert.ok(start !== -1 && end !== -1, first)
+    return workflow.slice(start, end + last.length).replace(/^ {10}/gm, '')
+  }
+  const region = block('target_region=asia-east2\n', '\n          esac')
+  const targets = block('file="${RUNNER_TEMP}/relay-asia-targets"', '\n          done')
+  const temp = mkdtempSync(join(tmpdir(), 'relay-topology-targets-'))
+  try {
+    const result = spawnSync('bash', ['-euo', 'pipefail', '-c',
+      `${region}\nTARGET_REGION="\${target_region}"\n${targets}\n` +
+      'echo "${TARGET_REGION}"; cat "${file}"'], {
+      env: { ...process.env, TARGET_ENVIRONMENT: environment, TARGET_CELL_IDS: cellIds, RUNNER_TEMP: temp },
+      encoding: 'utf8'
+    })
+    assert.equal(result.status, 0, result.stderr)
+    const [waveRegion, ...lines] = result.stdout.trim().split('\n')
+    return { region: waveRegion, targets: lines }
+  } finally {
+    rmSync(temp, { recursive: true, force: true })
+  }
+}
+
+const cellTargets = (cellId) => ['instance_template', 'instance_group_manager', 'backend_service']
+  .map((kind) => `-target=google_compute_${kind}.relay_gce_cell["${cellId}"]`)
+
+test('targets the asia-east2 network for Asia waves and only the cell and URL map for US waves', () => {
+  const asiaNetwork = ['subnetwork', 'router', 'router_nat']
+    .map((kind) => `-target=google_compute_${kind}.relay_gce_additional["asia-east2"]`)
+  const urlMap = '-target=google_compute_url_map.relay_gce[0]'
+  for (const [environment, cellIds] of [
+    ['staging', 'staging-gce-c4'],
+    ['production', 'production-gce-c27,production-gce-c28,production-gce-c29'],
+    ['production', 'production-gce-c30'],
+    ['production', 'production-gce-c31']
+  ]) {
+    assert.deepEqual(waveTargets(environment, cellIds), {
+      region: 'asia-east2',
+      targets: [...asiaNetwork, urlMap, ...cellIds.split(',').flatMap(cellTargets)]
+    }, cellIds)
+  }
+  const usWave = 'production-gce-c32,production-gce-c33'
+  assert.deepEqual(waveTargets('production', usWave), {
+    region: 'us-central1',
+    targets: [urlMap, ...usWave.split(',').flatMap(cellTargets)]
+  })
+})
+
+// The live-image overlay refuses a declared non-target cell with no template, so the two US cells
+// declared together must also plan together; a lone C32 or C33 plan is not a reviewed wave.
+test('plans the two declared US cells as one wave', () => {
+  const cases = /case "\$\{TARGET_ENVIRONMENT\}:\$\{TARGET_CELL_IDS\}" in\n([\s\S]*?)\n\s*esac/
+    .exec(workflow)?.[1]
+  assert.doesNotMatch(cases, /production:production-gce-c3[23]\)/)
 })
 
 test('plans only additive Asia topology and applies the saved plan', () => {

@@ -47,6 +47,24 @@ describe('Markdown document ripgrep lifecycle', () => {
     expect(child.listenerCount('close')).toBe(0)
   })
 
+  it('preserves timeout when an incomplete UTF-8 scalar is abandoned', async () => {
+    vi.useFakeTimers()
+    const result = listMarkdownDocuments(root)
+    const outcome = expect(result).rejects.toThrow('timed out')
+    child.stdout.write(Buffer.from([0xf0, 0x9f]))
+    await vi.advanceTimersByTimeAsync(15_000)
+    await outcome
+  })
+
+  it.each(['invalid', 'incomplete'] as const)('rejects %s UTF-8 filename bytes', async (kind) => {
+    const result = listMarkdownDocuments(root)
+    child.stdout.write(Buffer.from(kind === 'invalid' ? [0xff] : [0xe2, 0x82]))
+    if (kind === 'incomplete') {
+      child.emit('close', 0, null)
+    }
+    await expect(result).rejects.toThrow('not valid UTF-8')
+  })
+
   it('accepts an empty listing', async () => {
     const result = listMarkdownDocuments(root)
     child.emit('close', 1, null)

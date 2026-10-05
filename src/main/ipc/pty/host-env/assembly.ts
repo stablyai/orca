@@ -1,15 +1,10 @@
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
-import { selectOpenCodeHookAgent } from '../../../../shared/opencode-launch-command'
 import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType
 } from '../../../../shared/pi-agent-kind'
 import { applyTerminalGitCredentialPromptGuard } from '../../terminal-git-credential-guard'
-import { openCode2HookService, openCodeHookService } from '../../../opencode/hook-service'
-import {
-  OPENCODE_CONFIG_DIR_ENV_KEYS,
-  isOpenCodeLegacySharedConfigDir
-} from '../../../opencode/legacy-shared-config-dir'
+import { ensureOpenCodeStartupPromptForLaunch } from '../../../opencode/opencode-startup-prompt-installer'
 import { mimoCodeHookService } from '../../../mimo/hook-service'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager'
@@ -28,12 +23,13 @@ import {
   exposePiManagedExtensionEnv,
   isMimoLaunchCommand,
   resolveMimocodeSourceHome,
-  resolveOpenCodeSourceConfigDir,
   resolvePiAgentSourceDir,
   resolveScopedPiAgentSourceDir,
   restoreOrStripOverlayEnv
 } from './pi-agent'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
+import { applyManagedDataAccountEnvironment } from '../../../managed-data-accounts/launch-environment'
+import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'
 import { applyWslGuestAgentSourceEnv } from './wsl-guest-agent-env'
 
 /**
@@ -50,31 +46,9 @@ export function buildPtyHostEnv(
   mergePersistedWindowsPath(baseEnv)
   Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
 
-  // Why: pre-1.4.209 panes exported Orca's retired shared hooks dir; inheriting it hides the user's global OpenCode config.
-  const isLegacyOpenCodeHooksDir = (dir: string | undefined): boolean =>
-    isOpenCodeLegacySharedConfigDir(dir, opts.userDataPath)
-  const inheritedOpenCodeEnv: NodeJS.ProcessEnv = {}
-  for (const key of OPENCODE_CONFIG_DIR_ENV_KEYS) {
-    if (isLegacyOpenCodeHooksDir(baseEnv[key])) {
-      delete baseEnv[key]
-    }
-    if (!isLegacyOpenCodeHooksDir(process.env[key])) {
-      inheritedOpenCodeEnv[key] = process.env[key]
-    }
-  }
-  // A daemon or sibling shell can retain a retired path that main no longer sees.
-  openCodeHookService.refreshLegacySharedPlugin()
-  openCode2HookService.refreshLegacySharedPlugin()
-  const resolvedOpenCodeConfigDir = resolveOpenCodeSourceConfigDir(baseEnv, inheritedOpenCodeEnv)
-  const preexistingOpenCodeConfigDir = isLegacyOpenCodeHooksDir(resolvedOpenCodeConfigDir)
-    ? undefined
-    : resolvedOpenCodeConfigDir
+  const openCodeConfig = captureOpenCodeSourceConfig(baseEnv, opts.userDataPath)
   const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(baseEnv, opts.launchCommand)
-  const openCodeAgent = selectOpenCodeHookAgent(
-    opts.launchAgent,
-    launchCommandHint,
-    (agent) => opts.agentStatusHooksEnabled && isTuiAgentEnabled(agent, opts.disabledTuiAgents)
-  )
+  applyManagedDataAccountEnvironment(baseEnv, { ...opts, launchCommand: launchCommandHint })
   const explicitPiAgentKind = isPiCompatibleAgentType(opts.launchAgent)
     ? opts.launchAgent
     : opts.launchAgent === undefined
@@ -115,37 +89,13 @@ export function buildPtyHostEnv(
       ? resolvePiAgentSourceDir(baseEnv, 'omo')
       : resolveScopedPiAgentSourceDir(baseEnv, 'omo')
 
-  restoreOrStripOverlayEnv(
+  const openCodeAgent = applyOpenCodeStatusPluginEnv(
+    id,
     baseEnv,
-    {
-      primary: 'OPENCODE_CONFIG_DIR',
-      overlay: 'ORCA_OPENCODE_CONFIG_DIR',
-      source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR',
-      preserveExplicitPrimary: true
-    },
-    inheritedOpenCodeEnv
+    openCodeConfig,
+    opts,
+    launchCommandHint
   )
-  delete baseEnv.ORCA_OPENCODE_AGENT
-  if (openCodeAgent) {
-    // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Orca's status plugin coexist. See docs/opencode-config-dir-collision.md.
-    const openCodeStatusService =
-      openCodeAgent === 'opencode2' ? openCode2HookService : openCodeHookService
-    baseEnv.ORCA_OPENCODE_AGENT = openCodeAgent
-    // WSL owns its config writes; only the guest overlay may enter a WSL pane.
-    if (!opts.isWsl) {
-      Object.assign(baseEnv, openCodeStatusService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
-    }
-    if (baseEnv.OPENCODE_CONFIG_DIR) {
-      // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready wrappers restore this PTY-scoped value.
-      baseEnv.ORCA_OPENCODE_CONFIG_DIR = baseEnv.OPENCODE_CONFIG_DIR
-      if (preexistingOpenCodeConfigDir) {
-        // Why: nested Orca terminals inherit the overlay as OPENCODE_CONFIG_DIR; keep the real source so overlays don't mirror overlays.
-        baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR = preexistingOpenCodeConfigDir
-      } else {
-        delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
-      }
-    }
-  }
   if (opts.agentStatusHooksEnabled) {
     if (isMimoLaunchCommand(launchCommandHint)) {
       const preexistingMimocodeHome = resolveMimocodeSourceHome(baseEnv)
@@ -350,5 +300,8 @@ export function buildPtyHostEnv(
   // process.env when baseEnv carries none, which is the daemon path's normal shape.
   stripLegacyTerminalShimEnv(baseEnv, process.platform)
 
+  if (!opts.isWsl) {
+    ensureOpenCodeStartupPromptForLaunch(baseEnv)
+  }
   return baseEnv
 }

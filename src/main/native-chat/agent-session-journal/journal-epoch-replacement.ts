@@ -1,8 +1,7 @@
 // Republishing a live item set into a fresh epoch.
 //
 // One transaction: discard the old epoch's rows, insert the epoch row plus the
-// replacement items, move the session projection, and retire any repair marker
-// — this republished history is exactly what the marker was holding out for.
+// replacement items, and move the session projection.
 
 import type {
   AgentJournalItemBody,
@@ -13,9 +12,13 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLoad } from './journal-open'
-import { clearJournalRepairMarker } from './journal-repair-marker'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import { buildJournalItemRow, journalRowBase } from './journal-row-builders'
+import {
+  buildJournalQueueResumeRow,
+  buildJournalStopEventRow
+} from './journal-stop-and-resume-rows'
+import type { JournalQueuePauseRestatement } from './queued-message-pause'
 import {
   deleteJournalEpochRows,
   insertJournalRow,
@@ -40,6 +43,9 @@ export function replaceJournalEpoch(input: {
   reason: AgentJournalEpochReason
   fence: number
   items: readonly JournalReplacementItem[]
+  /** Restated in the new epoch, or the rewind would release cards the person stopped, or bring
+   *  back a /clear pause they already lifted. */
+  queuePause: JournalQueuePauseRestatement
   now: () => number
   mintEpoch: () => string
   /** Called the instant the transaction commits, before any fallible follow-up. */
@@ -70,6 +76,18 @@ export function replaceJournalEpoch(input: {
     applyJournalRow(state, row)
     rows.push(row)
   }
+  const { lifted, liveStop } = input.queuePause
+  const place = () => ({ state, seq: state.lastSequence + 1, fence: input.fence, ts: input.now() })
+  if (lifted) {
+    const row = buildJournalQueueResumeRow(place())
+    applyJournalRow(state, row)
+    rows.push(row)
+  }
+  if (liveStop) {
+    const row = buildJournalStopEventRow({ ...place(), event: liveStop })
+    applyJournalRow(state, row)
+    rows.push(row)
+  }
 
   const { sessionId } = input.identity
   input.database.transaction((db) => {
@@ -77,7 +95,6 @@ export function replaceJournalEpoch(input: {
     if (retired !== null) {
       deleteJournalEpochRows(db, sessionId, retired)
     }
-    clearJournalRepairMarker(db, sessionId)
     for (const row of rows) {
       insertJournalRow(db, sessionId, row)
     }
@@ -88,5 +105,5 @@ export function replaceJournalEpoch(input: {
   // live one. The caller adopts that immediately, or a later failure leaves the
   // live store writing into an epoch whose rows were just deleted.
   state.oldestSequence = 1
-  input.onPublished({ state, readOnly: false, corrupt: false, malformedRows: 0 })
+  input.onPublished({ state, newer: null, damage: null })
 }

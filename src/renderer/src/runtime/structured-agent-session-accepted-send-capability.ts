@@ -19,11 +19,11 @@ export function useStructuredAgentSessionHostAcceptsSend(target: RuntimeClientTa
 }
 
 /**
- * When an outbox treats its owner as changed: resending a send in flight under the same id,
- * dropping that send's answer, and unblocking a refused head. An older host restarts the agent
- * inside the send and refuses it, unrecorded, when that fails, so a new fence is its only word that
- * another try may land. A host that accepts first records every send before it starts anything,
- * so a moved fence means nothing there, and only a Retry or a new send goes out.
+ * When an outbox treats its owner as changed: resending a send in flight under the same id and
+ * dropping that send's answer. An older host restarts the agent inside the send, so a new fence is
+ * its only word that a send it never answered may land with the new owner. A send it refused was
+ * shown as not sent and waits for its Retry, as on every host. A host that accepts first records
+ * every send before it starts anything, so a moved fence means nothing there.
  */
 export function useStructuredAgentSessionOutboxOwnerChange(
   target: RuntimeClientTarget,

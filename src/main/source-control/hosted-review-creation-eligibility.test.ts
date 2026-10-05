@@ -546,7 +546,9 @@ describe('getHostedReviewCreationEligibility', () => {
       if (args[0] === 'status') {
         return { stdout: '', stderr: '' }
       }
-      // symbolic-ref / for-each-ref resolve the base on the remote.
+      if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+        return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n', stderr: '' }
+      }
       return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
     })
 
@@ -582,23 +584,25 @@ describe('getHostedReviewCreationEligibility', () => {
   })
 
   const mockRefs = (opts: {
-    symbolicRef?: string
-    forEachRef?: string
-    forEachThrows?: boolean
-    revParseThrows?: boolean
+    defaultRef?: string
+    remoteRefs?: string
+    remoteProbeFails?: boolean
   }): void => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: opts.symbolicRef ?? '', stderr: '' }
+      if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+        return {
+          stdout: opts.defaultRef ? `refs/remotes/origin/HEAD\0${opts.defaultRef}\n` : '',
+          stderr: ''
+        }
       }
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
       if (args[0] === 'show-ref') {
-        if (opts.forEachThrows) {
+        if (opts.remoteProbeFails) {
           throw new Error('ssh: connect: connection refused')
         }
-        const availableRefs = (opts.forEachRef ?? '')
+        const availableRefs = (opts.remoteRefs ?? '')
           .split(/\r?\n/)
           .map((ref) => ref.trim())
           .filter(Boolean)
@@ -611,15 +615,12 @@ describe('getHostedReviewCreationEligibility', () => {
         }
         throw Object.assign(new Error('missing ref'), { code: 1 })
       }
-      if (args[0] === 'rev-parse' && opts.revParseThrows) {
-        throw new Error('unknown revision')
-      }
       return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
     })
   }
 
   it('falls back to the repo default when a stacked parent base is local-only', async () => {
-    mockRefs({ symbolicRef: 'refs/remotes/origin/main\n' })
+    mockRefs({ defaultRef: 'refs/remotes/origin/main' })
     await expect(getHostedReviewCreationEligibility(stackedArgs())).resolves.toMatchObject({
       canCreate: true,
       blockedReason: null,
@@ -628,7 +629,7 @@ describe('getHostedReviewCreationEligibility', () => {
   })
 
   it('preserves a stacked parent base that exists on the remote', async () => {
-    mockRefs({ forEachRef: 'refs/remotes/origin/parent-pushed\n' })
+    mockRefs({ remoteRefs: 'refs/remotes/origin/parent-pushed\n' })
     await expect(
       getHostedReviewCreationEligibility(stackedArgs({ base: 'parent-pushed' }))
     ).resolves.toMatchObject({
@@ -639,7 +640,7 @@ describe('getHostedReviewCreationEligibility', () => {
   })
 
   it('keeps the candidate base when no repo default can be resolved', async () => {
-    mockRefs({ revParseThrows: true })
+    mockRefs({})
     await expect(getHostedReviewCreationEligibility(stackedArgs())).resolves.toMatchObject({
       canCreate: true,
       blockedReason: null,
@@ -650,7 +651,7 @@ describe('getHostedReviewCreationEligibility', () => {
   it('preserves the candidate base when the remote probe cannot reach the host', async () => {
     // Transport failure must not be read as "absent" — that would demote a
     // legitimately-pushed parent to the repo default on a transient SSH blip.
-    mockRefs({ forEachThrows: true })
+    mockRefs({ remoteProbeFails: true })
     await expect(
       getHostedReviewCreationEligibility(stackedArgs({ base: 'parent-pushed' }))
     ).resolves.toMatchObject({ canCreate: true, defaultBaseRef: 'parent-pushed' })

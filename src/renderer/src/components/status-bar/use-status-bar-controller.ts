@@ -96,7 +96,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
   // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
-  // Why: Antigravity visibility also requires geminiCliOAuthEnabled because its usage snapshot mirrors the Gemini fetch.
   const antigravityUsageConfigured =
     statusBarItems.includes('antigravity') &&
     isStatusBarItemAvailable('antigravity', detectedAgentIds)
@@ -108,7 +107,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     minimaxApiKeyConfigured: rateLimits.minimaxApiKeyConfigured,
     opencodeGoApiKeyConfigured: rateLimits.opencodeGoApiKeyConfigured,
     grokAuthConfigured: rateLimits.grokAuthConfigured,
-    cursorAuthConfigured: rateLimits.cursorAuthConfigured
+    cursorAuthConfigured: rateLimits.cursorAuthConfigured,
+    zcodePlanApiKeyConfigured: rateLimits.zcodePlanApiKeyConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
@@ -148,10 +148,12 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   // Why: a Cursor session can come from the IDE alone, so PATH detection of
   // cursor-agent would hide a real meter from IDE-only users.
   const showCursor = visibleCursor !== null && statusBarItems.includes('cursor')
+  // Why: a saved Coding Plan key is site-auth, not a CLI on PATH — a subscriber
+  // without the ZCode CLI must still earn the meter (same exemption as MiniMax/Cursor).
   const showZcode =
     visibleZcode !== null &&
     statusBarItems.includes('zcode') &&
-    isStatusBarItemAvailable('zcode', detectedAgentIds)
+    (rateLimits.zcodePlanApiKeyConfigured || isStatusBarItemAvailable('zcode', detectedAgentIds))
   // Why: OpenCode Go is web/cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')

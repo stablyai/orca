@@ -27,6 +27,19 @@ afterEach(() => {
 })
 
 describe('Cursor hook normalization', () => {
+  it('publishes the conversation identity through the owning hook store', () => {
+    const result = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({
+        hook_event_name: 'beforeSubmitPrompt',
+        prompt: 'remember the codeword',
+        conversation_id: 'conversation-742'
+      }),
+      'production'
+    )
+    expect(result?.providerSession).toEqual({ key: 'conversation_id', id: 'conversation-742' })
+  })
+
   it('beforeSubmitPrompt maps to working and captures the prompt', () => {
     const result = _internals.normalizeHookPayload(
       'cursor',

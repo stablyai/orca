@@ -1,11 +1,12 @@
 import * as React from 'react'
 
 import { cn } from '@/lib/utils'
+import { ImeInput } from '@/lib/ime-text-field'
 
 const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<'input'>>(
   ({ className, type, ...props }, ref) => {
     return (
-      <input
+      <ImeInput
         ref={ref}
         type={type}
         data-slot="input"

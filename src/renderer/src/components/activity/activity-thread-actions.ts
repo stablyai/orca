@@ -1,6 +1,5 @@
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
-import { isFloatingWorkspacePanelVisible } from '@/lib/floating-workspace-terminal-actions'
+import { revealFloatingWorkspacePanel } from '@/lib/floating-workspace-panel-reveal'
 import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
@@ -46,25 +45,6 @@ export function hasActivityThreadWorkspace(
       getActivityThreadExecutionHostId(thread, catalog.defaultHostId)
     )
   )
-}
-
-function toggleFloatingWorkspacePanelIfHidden(): void {
-  if (!isFloatingWorkspacePanelVisible()) {
-    window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
-  }
-}
-
-// Why enable first: floating tabs outlive a feature disable, and the panel ignores the toggle
-// while disabled, so a live floating agent row would otherwise be a silent no-op.
-function revealFloatingWorkspacePanel(state: AppState): void {
-  if (state.settings?.floatingTerminalEnabled === true) {
-    toggleFloatingWorkspacePanelIfHidden()
-    return
-  }
-  void state.updateSettings({ floatingTerminalEnabled: true }).then(() => {
-    // Why deferred a frame: the panel only honors the toggle once the enabled flag has reached React.
-    requestAnimationFrame(toggleFloatingWorkspacePanelIfHidden)
-  })
 }
 
 export function createActivityThreadActions({

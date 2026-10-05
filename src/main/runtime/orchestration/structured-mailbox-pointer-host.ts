@@ -6,8 +6,6 @@
  * the send and reports what the host said.
  */
 
-import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestration-timing-budgets'
-import { agentSessionSendSubmission } from '../../../shared/agent-session-wire'
 import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type {
@@ -19,6 +17,7 @@ import {
   structuredSessionGateFacts,
   type StructuredSessionGateFacts
 } from './structured-session-pointer-delivery'
+import { sendAgentTurn } from './send-agent-turn'
 
 /** Per-dispatch so one worker's nudges cannot exhaust the shared runtime operation-ledger budget. */
 export function structuredPointerCallerKey(dispatchId: string): string {
@@ -93,46 +92,38 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       if (!host) {
         return { kind: 'unattached' }
       }
-      const result = await host.send(
-        {
-          callerKey: input.dispatchId
-            ? structuredPointerCallerKey(input.dispatchId)
-            : structuredSessionPointerCallerKey(input.sessionId)
-        },
-        {
-          envelope: {
-            sessionId: input.sessionId,
-            clientOperationId: input.operationId,
-            expectedRuntimeFence: input.expectedRuntimeFence,
-            payloadFingerprint: input.payloadFingerprint
-          },
-          body: input.body
+      const outcome = await sendAgentTurn({
+        kind: 'structured-session',
+        host,
+        sessionId: input.sessionId,
+        callerKey: input.dispatchId
+          ? structuredPointerCallerKey(input.dispatchId)
+          : structuredSessionPointerCallerKey(input.sessionId),
+        turn: {
+          body: input.body,
+          delivery: 'now',
+          operationId: input.operationId,
+          expectedRuntimeFence: input.expectedRuntimeFence
         }
-      )
-      if (!result.ok) {
-        return result.refusal.code === AGENT_SESSION_NOT_ATTACHED.code
-          ? { kind: 'unattached' }
-          : { kind: 'sent', state: 'rejected' }
-      }
-      // `pending` is not yet an acknowledgement; only `accepted` may consume mail. Accepted is not
-      // delivered, so wait out a start; a wait that runs out parks for the next journal edge.
-      const answered = agentSessionSendSubmission(result.value)
-      const submission =
-        answered?.dispatchState === 'pending'
-          ? (agentSessionSendSubmission(
-              (
-                await host
-                  .waitForSendSettlement(input.sessionId, result.value.clientMessageId, {
-                    budgetMs: ORCHESTRATION_READINESS_TIMEOUT_MS
-                  })
-                  .catch(() => undefined)
-              )?.value
-            ) ?? answered)
-          : answered
-      const state = submission?.dispatchState
-      return {
-        kind: 'sent',
-        state: state === 'accepted' ? 'accepted' : state === 'rejected' ? 'rejected' : 'unknown'
+      })
+      switch (outcome.kind) {
+        case 'refused':
+          return outcome.refusal.code === AGENT_SESSION_NOT_ATTACHED.code
+            ? { kind: 'unattached' }
+            : { kind: 'sent', state: 'rejected' }
+        case 'queued':
+          // Never for a `now` send. A draft would hand off under a fresh id, which this lane's
+          // operation row cannot see, so reading it needs its own rule before this lane queues.
+          return { kind: 'sent', state: 'unknown' }
+        case 'sent': {
+          // `pending` is not yet an acknowledgement; only `accepted` may consume mail. A send still
+          // pending after the wait parks for the next journal edge.
+          const state = outcome.submission?.dispatchState
+          return {
+            kind: 'sent',
+            state: state === 'accepted' ? 'accepted' : state === 'rejected' ? 'rejected' : 'unknown'
+          }
+        }
       }
     }
   }

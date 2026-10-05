@@ -71,6 +71,9 @@ export function mergeHostWebUIState(
     workspaceHostOrder: local.workspaceHostOrder,
     agentsVisibleHostIds: local.agentsVisibleHostIds,
     agentsFilterRepoIds: local.agentsFilterRepoIds,
+    agentsHideWorkspacesFromOtherDevices: local.agentsHideWorkspacesFromOtherDevices === true,
+    agentsHideAutomationGeneratedWorkspaces: local.agentsHideAutomationGeneratedWorkspaces === true,
+    agentsHideCliCreatedWorkspaces: local.agentsHideCliCreatedWorkspaces === true,
     agentsShowChildAgents: local.agentsShowChildAgents,
     agentsCompactMode: local.agentsCompactMode,
     agentsShowSearch: local.agentsShowSearch,
@@ -139,6 +142,8 @@ export function mergeSettings(
     ...base,
     ...updates,
     notifications: {
+      // Why: browser-stored settings can predate a newer notification field.
+      ...defaults.notifications,
       ...base.notifications,
       ...updates.notifications
     },

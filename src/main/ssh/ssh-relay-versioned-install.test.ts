@@ -15,6 +15,11 @@ vi.mock('./ssh-connection-utils', () => ({
   shellEscape: (s: string) => `'${s}'`
 }))
 
+// The previous-build pin has its own tests; here it names a build that is never a candidate.
+vi.mock('./remote-install-previous-version', () => ({
+  findPreviousRemoteInstall: vi.fn().mockResolvedValue({ state: 'ok', dirName: 'relay-0.1.0+fff' })
+}))
+
 import { existsSync, readFileSync } from 'node:fs'
 import {
   readLocalFullVersion,

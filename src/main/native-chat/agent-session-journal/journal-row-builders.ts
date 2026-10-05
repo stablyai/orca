@@ -28,6 +28,7 @@ import {
 } from './journal-row-schema'
 import { boundInlineText, DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
 import { assertSubmissionIdUnused } from './journal-write-guards'
+import { turnEndAfterStop } from './journal-stop-turn-end'
 import type { ResolveDispatchInput } from './journal-store-contracts'
 
 type RowBuilder<T> = (seq: number, ts: number) => T
@@ -200,7 +201,13 @@ export function journalLifecycleBatchRowBuilder(
             current.tombstones.get(resolved) ?? 0
           )) + 1
       revisions.set(resolved, revision)
-      return journalLifecycleMutationRow(mutation, itemId, revision)
+      return journalLifecycleMutationRow(
+        mutation.kind === 'item'
+          ? { ...mutation, body: turnEndAfterStop(current, resolved, mutation.body) }
+          : mutation,
+        itemId,
+        revision
+      )
     })
     const row: JournalLifecycleBatchRow = {
       kind: 'lifecycle-batch',
@@ -252,12 +259,13 @@ export function buildJournalItemRow(input: {
       input.state.items.get(resolved)?.revision ?? 0,
       input.state.tombstones.get(resolved) ?? 0
     ) + 1
+  const body = turnEndAfterStop(input.state, resolved, input.body)
   return {
     kind: 'item',
     itemId,
     revision,
-    body: input.body,
-    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts, [input.body]),
+    body,
+    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts, [body]),
     ...(input.recovered ? { recovered: input.recovered } : {}),
     turnScope: input.turnScope,
     ...agentJournalLinkageFields(input.linkage)

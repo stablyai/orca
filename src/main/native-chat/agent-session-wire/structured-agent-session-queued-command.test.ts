@@ -98,21 +98,26 @@ describe('a /compact in flight', () => {
 
 describe('/clear', () => {
   it('in flight, refuses a capable send as today: no card lands on the source it supersedes', async () => {
-    const attach = rig.host.attach.bind(rig.host)
+    const commit = rig.store.commitConversationClear
     let release: (() => void) | undefined
     const released = new Promise<void>((resolve) => {
       release = resolve
     })
-    const spy = vi.spyOn(rig.host, 'attach').mockImplementationOnce(async (...args) => {
-      await released
-      return attach(...args)
-    })
+    const committing = vi.fn()
+    const spy = vi
+      .spyOn(rig.store, 'commitConversationClear')
+      .mockImplementationOnce(async (clear) => {
+        committing()
+        await released
+        return commit(clear)
+      })
     try {
       const cleared = command('clear')
-      // Nothing is recorded before the clear commits; wait until it is starting the replacement.
-      await eventually(() => expect(spy).toHaveBeenCalled())
-      expect(await rig.send('sent while clearing', 'queue-if-active').result).toEqual(WAIT_REFUSAL)
+      await eventually(() => expect(committing).toHaveBeenCalledOnce())
+      // Judged on arrival, answered on its turn: behind the clear.
+      const sent = rig.send('sent while clearing', 'queue-if-active').result
       release?.()
+      expect(await sent).toEqual(WAIT_REFUSAL)
       const done = await cleared
       const replacementId = done.ok ? done.value.replacementSessionId : undefined
       if (!replacementId) {
@@ -123,6 +128,58 @@ describe('/clear', () => {
     } finally {
       spy.mockRestore()
     }
+  })
+
+  it('carries drafts to a replacement no agent has started, before it answers; the first send starts the agent ahead of them', async () => {
+    const working = await rig.workingSend()
+    const firstId = await queuedId(rig.send('first draft', 'queue-if-active').result)
+    const secondId = await queuedId(rig.send('second draft', 'queue-if-active').result)
+    await rig.stop()
+    await rig.settleAccepted(working, 'a')
+    const cleared = await command('clear')
+    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
+    if (!replacementId) {
+      throw new Error('expected a replacement session')
+    }
+    // The clear started nothing, yet the drafts had already moved when it answered.
+    expect(rig.store.getRecord(replacementId)).toMatchObject({
+      providerHandleChain: [],
+      lease: { claimStatus: 'released' }
+    })
+    expect(rig.host.collaboratorsForTests().sessions.get(replacementId)?.child ?? null).toBeNull()
+    expect(await rig.drafts()).toHaveLength(0)
+    expect(await rig.drafts(replacementId)).toEqual([
+      { messageId: firstId, state: 'waiting' },
+      { messageId: secondId, state: 'waiting' }
+    ])
+    expect(await rig.queuePause(replacementId)).toEqual({ reason: 'cleared' })
+
+    const body = hostTestMessage('first in the new chat')
+    const fields = { body, delivery: 'queue-if-active' as const }
+    const sentId = hostTestOperationId()
+    expect(
+      await rig.host.send(CALLER, {
+        envelope: rig.envelope(fields, 'agentSession.send', sentId, replacementId),
+        ...fields,
+        userSend: true
+      })
+    ).toMatchObject({ ok: true, value: { submission: expect.anything() } })
+    await eventually(() =>
+      expect(rig.store.getRecord(replacementId)?.providerHandleChain).toHaveLength(1)
+    )
+    await rig.host.settleLateDispatch({
+      sessionId: replacementId,
+      clientMessageId: sentId,
+      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-first', ordinal: 0 }
+    })
+    await eventually(async () =>
+      expect(
+        (await rig.host.journalSnapshot(replacementId)).submissions.map((entry) =>
+          entry.clientMessageId === sentId ? 'sent' : entry.queuedMessageId
+        )
+      ).toEqual(['sent', firstId])
+    )
+    expect(await rig.queuePause(replacementId)).toBeNull()
   })
 
   it("a carried draft sent on the replacement: the provider's echo folds into its one bubble", async () => {

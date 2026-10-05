@@ -112,9 +112,8 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // src/notifications/ — push registration and delivery. Nothing is left here. Registration and
   // unregistration migrated in step 4; see mobile-push-registration-operations.ts. Tray
   // reconciliation followed once a scenario could declare the notification tray and the stored host
-  // list it resolves against; see push-dismissal-operations.ts. The stream unsubscribe inside the
-  // `notifications.subscribe` callback migrated in step 6 once the recorder could script the
-  // `ready` frame that hands it a subscription id; see desktop-notification-stream-operations.ts.
+  // list it resolves against; see push-dismissal-operations.ts. The stream's `notifications.unsubscribe`
+  // is no longer a request here: the stream transport sends it with the id from the current `ready`.
 
   // src/session/ — session screen: chat, diff review, PR actions, tabs. The github.* PR surface,
   // the diff-review loaders and the rest of the screen migrated in step 4; see

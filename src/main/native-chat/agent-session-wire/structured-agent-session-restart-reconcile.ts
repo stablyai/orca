@@ -8,6 +8,7 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { classifyStoreFailure } from './structured-agent-session-attach'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const MAX_RECONCILIATION_PASSES = 8
 
@@ -53,8 +54,10 @@ export type ReaderBookkeepingFailures = {
   clear: () => void
 }
 
+/** Startup and the read carry on past a failure: the next attach or send reconciles and resolves
+ *  recovery again before it acts. */
 export function reportEachFailureOnce(
-  onFailure: ((failure: unknown) => void) | undefined
+  logger: StructuredAgentSessionLogger
 ): ReaderBookkeepingFailures {
   let reported: string | null = null
   return {
@@ -62,15 +65,10 @@ export function reportEachFailureOnce(
       const key = failureKey(failure)
       if (key !== reported) {
         reported = key
-        try {
-          onFailure?.(failure)
-        } catch (sinkError) {
-          // A throwing sink must not turn the reported failure back into a failed read.
-          console.warn('[structured-agent-session] reporting a lease bookkeeping failure failed', {
-            failure,
-            sinkError
-          })
-        }
+        logger.warn('chat lease bookkeeping for a read failed', {
+          scope: 'lease-reconcile',
+          error: failure
+        })
       }
     },
     clear: () => {

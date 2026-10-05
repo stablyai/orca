@@ -13,25 +13,25 @@ import type { AgentJournalSubmission } from '../../../shared/agent-session-journ
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import {
-  evictStructuredAgentSession,
-  STRUCTURED_AGENT_SESSION_EVICTION_STEPS,
-  type StructuredAgentSessionEvictionContext
+  snapshotBeforeStructuredAgentSessionStop,
+  StructuredAgentSessionEvictionError
 } from './structured-agent-session-eviction'
-import { withStructuredAgentSessionEvictionDeadline } from './structured-agent-session-eviction-deadline'
+import { joinStructuredAgentSessionChildClose } from './structured-agent-session-child-close'
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession,
-  StructuredAgentSessionProviderChildIdentity
+  StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
-import {
-  endProviderChild,
-  structuredAgentSessionConversationFence
-} from './structured-agent-session-provider-child'
-import { releaseStoredStructuredAgentSessionOwner } from './structured-agent-session-lease-release'
-import { settleStructuredAgentSessionDeadGeneration } from './structured-agent-session-dead-generation-settlement'
-import { turnVerdictForChildEnd } from './structured-agent-session-stale-turn-verdict'
+import type { StructuredAgentSessionChildExit } from './structured-agent-session-child-exit'
+import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import type { StructuredAgentSessionStopCause } from './structured-agent-session-adapter'
+export type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-stop-event'
+import {
+  recordStopEvent,
+  stopEndsWork,
+  type StructuredAgentSessionStopEnding
+} from './structured-agent-session-host-stop-event'
 
 export type StructuredAgentSessionLifetimeContext = {
   deps: StructuredAgentSessionHostDeps
@@ -40,6 +40,15 @@ export type StructuredAgentSessionLifetimeContext = {
   now: () => number
   /** Re-projects the session's status after its agent stopped and the chat stays. */
   publishStatus?: (sessionId: string) => void
+  /** Hands the delivery loop what is queued; for a caller inside the session's serialize. */
+  wakeDelivery?: (sessionId: string) => void
+  /** The one exit handler (`structured-agent-session-child-exit`), for a caller inside the
+   *  session's serialize that proved its child's exit. */
+  endExitedChild: (
+    sessionId: string,
+    child: StructuredAgentSessionProviderChild,
+    exit: StructuredAgentSessionChildExit
+  ) => Promise<void>
   /** Quit-only snapshot taken immediately before the provider child is stopped. */
   restartWitness?: {
     beforeStop: (sessionId: string) => void
@@ -47,7 +56,7 @@ export type StructuredAgentSessionLifetimeContext = {
   }
 }
 
-type ConversationCloseDeps = Pick<StructuredAgentSessionHostDeps, 'onEventSinkError'> & {
+type ConversationCloseDeps = Pick<StructuredAgentSessionHostDeps, 'logger'> & {
   store: Pick<StructuredAgentSessionHostDeps['store'], 'getRecord'>
 }
 
@@ -70,120 +79,77 @@ export async function abandonQueuedStructuredAgentSessionMessages(
     .then(
       () => true,
       (error: unknown) => {
-        deps.onEventSinkError?.({ sessionId, error })
+        deps.logger.warn('rejecting queued messages of a closed chat failed', {
+          scope: 'queued-abandon',
+          sessionId,
+          error
+        })
         return false
       }
     )
 }
 
-/** The wind-down this host owes for the session's child. A live child always owes one, whatever a
- *  previous childless eviction recorded: a remembered tombstone must never outrank the child in
- *  front of it. */
-function owedProviderChildWindDown(
-  session: StructuredAgentSessionHostSession
-): StructuredAgentSessionProviderChildIdentity | undefined {
-  return session.child
-    ? { generation: session.child.generation, fence: session.child.fence }
-    : session.owesProviderChildWindDown
-}
-
 /**
- * The agent goes to rest; the conversation stays. Runs the eviction steps under a deadline. A step
- * that fails — or runs out of time — aborts the rest and leaves the wind-down owed, so the next
- * stop is a real retry. `ending` is how the child's end is told: a user's Stop, the host stopping it
- * for a cause (with its text), or an eviction the conversation's close follows.
+ * The agent goes to rest; the conversation stays. Begins the child's close, or joins the one
+ * already begun, and waits for the exit's proof as long as a caller may. Still unproven, it throws
+ * and the close keeps running: a later proof, or the next asker's attempt, ends the record.
+ * `ending` is how the child's end is told: a user's Stop, the host stopping it for a cause (with
+ * its text), or an eviction the conversation's close follows. The first stop's ending decides.
  */
 export async function stopStructuredAgentSessionAgentUnderSerialize(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string,
-  // Required: an omitted cause must not default to the user's cancellation.
-  ending: { cause: StructuredAgentSessionStopCause; reason?: string }
+  ending: StructuredAgentSessionStopEnding
 ): Promise<void> {
   const session = context.sessions.get(sessionId)
-  if (!session) {
+  const child = session?.child
+  if (!session || !child) {
     return
   }
-  // A retry finishes the stop that ended the child, so the turn that stop cut keeps its cause.
-  const cause = session.child
-    ? ending.cause
-    : (session.owesProviderChildWindDown?.cause ?? ending.cause)
-  // The obligation OUTLIVES the child. `child` is ended the instant the adapter proves the exit,
-  // so a step that aborts after that point would otherwise leave the retry reading "no child
-  // here" and skipping the settlement and the lease release it still owes.
-  const owed = owedProviderChildWindDown(session)
-  session.owesProviderChildWindDown = owed ? { ...owed, cause } : undefined
-  const stopping = session.child
-  let settlementError: unknown
-  const eviction: StructuredAgentSessionEvictionContext = {
-    sessionId,
-    // The retry must not re-stop a child the adapter already proved gone, so this stays honest.
-    hasProviderChild: stopping !== null,
-    owesProviderChildWindDown: owed !== undefined,
-    eventSink: context.runtimeState.eventSinkFor(sessionId),
-    adapter: context.deps.adapter,
-    // The adapter settles its own open turn with this, so who asked travels with the stop.
-    stopCause: cause,
-    ...(context.restartWitness
-      ? { beforeProviderChildStop: () => context.restartWitness?.beforeStop(sessionId) }
-      : {}),
-    // Host state must not disagree with the adapter for the steps in between.
-    onProviderChildStopped: (verdict) => {
-      if (stopping) {
-        endProviderChild(session, {
-          generation: stopping.generation,
-          fence: stopping.fence,
-          cause,
-          reason: ending.reason ?? null,
-          duringStartup: stopping.phase === 'starting',
-          ...verdict
-        })
-      }
-      context.restartWitness?.stopped(sessionId)
-    },
-    acknowledgeRelease: () => context.deps.adapter.acknowledgeSessionRelease?.(sessionId),
-    discardSink: () => context.runtimeState.discardEventSink(sessionId),
-    settleWork: async () => {
-      const fence =
-        owed?.fence ?? structuredAgentSessionConversationFence(context.deps.store, sessionId)
-      const settled = await settleStructuredAgentSessionDeadGeneration({
-        journal: session.journal,
-        sessionId,
-        fence,
-        settlementId: `expected-close:${sessionId}:${fence}:${owed?.generation ?? 'unknown'}`,
-        pendingSubmissionReason: 'provider_closed_before_acknowledgement',
-        // Only a turn no adapter settled: one with no close, or whose settle threw.
-        verdict: turnVerdictForChildEnd(cause, context.now()),
-        showUnexpectedExitOutcome: false,
-        onError: (id, error) => {
-          settlementError = error
-          context.deps.onEventSinkError?.({ sessionId: id, error })
-        }
-      })
-      if (!settled) {
-        // Without the cause the log names the step and nothing else.
-        throw new Error('dead generation work settlement failed', { cause: settlementError })
-      }
-    },
-    releaseLease: async () => {
-      if (owed) {
-        await releaseStoredStructuredAgentSessionOwner({
-          store: context.deps.store,
-          sessionId,
-          hasProviderChild: true,
-          expectedFence: owed.fence,
-          now: context.now()
-        })
-      }
-      session.owesProviderChildWindDown = undefined
-      // Whatever ended the child, the row belongs to the conversation: it shows not-running, and
-      // only the conversation's close forgets it.
-      context.publishStatus?.(sessionId)
+  const cause = 'recorded' in ending ? ending.recorded : ending.cause
+  if (!child.close) {
+    // Judged before the kill: a stop that ends nothing writes nothing. Its event is issued before
+    // the kill and never awaited by it; the journal writes rows in order.
+    const recorded = (await stopEndsWork(context, sessionId, session, ending))
+      ? recordStopEvent(context, sessionId, session, ending)
+      : Promise.resolve(null)
+    child.close = {
+      cause,
+      reason: ('reason' in ending ? ending.reason : undefined) ?? null,
+      recorded,
+      requestedAt: session.journal.cursor()
     }
+  } else if (child.close.cause === cause) {
+    // The same stop asked again, such as a second close of the chat, closes what came since, and
+    // binds again what its child's end cuts.
+    child.close.requestedAt = session.journal.cursor()
+    child.close.recorded = child.close.recorded.then((settle) =>
+      settle ? session.journal.stopMarks.beginSettle() : null
+    )
   }
-  await evictStructuredAgentSession(
-    eviction,
-    withStructuredAgentSessionEvictionDeadline(STRUCTURED_AGENT_SESSION_EVICTION_STEPS)
-  )
+  const { close } = child
+  try {
+    if (context.restartWitness) {
+      await snapshotBeforeStructuredAgentSessionStop(
+        {
+          sessionId,
+          eventSink: context.runtimeState.eventSinkFor(sessionId),
+          logger: context.deps.logger
+        },
+        () => context.restartWitness?.beforeStop(sessionId)
+      )
+    }
+    if ((await joinStructuredAgentSessionChildClose(context, sessionId, child)) !== 'exited') {
+      throw new StructuredAgentSessionEvictionError(
+        'stop-provider-child',
+        sessionId,
+        new Error('provider child exit was not proven')
+      )
+    }
+  } finally {
+    // A person's close binds what its child's end cut; done, proven or not, it binds no more.
+    void close?.recorded.then((settle) => session.journal.stopMarks.settled(settle))
+  }
 }
 
 /** A close's cause: the user closing this chat, or the host evicting it (quit, idle, teardown). */
@@ -192,13 +158,13 @@ export type StructuredAgentSessionCloseCause = Extract<
   'user-close' | 'evict'
 >
 
-/** Whether the conversation's handle is only a cache now: no child, no wind-down owed, and nothing
- *  queued or waiting on the provider. */
+/** Whether the conversation's handle is only a cache now: no child, and nothing queued or waiting
+ *  on the provider. */
 export function structuredAgentSessionConversationClosable(
   session: StructuredAgentSessionHostSession
 ): boolean {
   return (
-    owedProviderChildWindDown(session) === undefined &&
+    session.child === null &&
     !session.journal.submissions().some(isQueuedAgentJournalSubmission) &&
     session.journal.pendingSubmissions().length === 0
   )
@@ -227,9 +193,7 @@ export async function closeStructuredAgentSessionConversationUnderSerialize(
   return true
 }
 
-/** Stops every provider child owned by this host while keeping failed evictions reachable. A
- *  session whose child is already stopped but whose wind-down aborted is still in scope — that is
- *  the retry. */
+/** Stops every provider child owned by this host while keeping failed evictions reachable. */
 export async function evictOwnedStructuredAgentSessions(
   context: StructuredAgentSessionLifetimeContext & {
     serialize: (sessionId: string, task: () => Promise<void>) => Promise<void>
@@ -237,7 +201,7 @@ export async function evictOwnedStructuredAgentSessions(
   retainOnFailure: Set<string>
 ): Promise<void> {
   const ownedSessionIds = [...context.sessions]
-    .filter(([, session]) => owedProviderChildWindDown(session) !== undefined)
+    .filter(([, session]) => session.child !== null)
     .map(([sessionId]) => sessionId)
   // Retained up front and cleared only once a stop settles: the quit phase is bounded, and a
   // timeout leaves these still running. Closing their journals underneath them is the one outcome
@@ -250,7 +214,10 @@ export async function evictOwnedStructuredAgentSessions(
     ownedSessionIds.map(async (sessionId) => {
       try {
         await context.serialize(sessionId, () =>
-          stopStructuredAgentSessionAgentUnderSerialize(context, sessionId, { cause: 'evict' })
+          stopStructuredAgentSessionAgentUnderSerialize(context, sessionId, {
+            cause: 'evict',
+            quit: true
+          })
         )
         retainOnFailure.delete(sessionId)
       } catch (error) {

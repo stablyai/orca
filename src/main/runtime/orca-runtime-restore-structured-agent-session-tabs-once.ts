@@ -125,7 +125,11 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       await host
         .setSessionTabVisibility(input.sessionId, true, ...(input.tabId ? [input.tabId] : []))
         .catch((error: unknown) => {
-          console.warn('[structured-agent-session] recording an opened chat tab failed', error)
+          host.deps.logger.warn('recording an opened chat tab failed', {
+            scope: 'tab-visibility-open',
+            sessionId: input.sessionId,
+            error
+          })
         })
     }
     this.projectStructuredAgentSessionTab(input)

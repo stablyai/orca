@@ -35,7 +35,11 @@ export function applyRuntimeHostStatusSnapshot(
     state.setRuntimeEnvironmentStatus(snapshot.environmentId, entry)
     if (previous?.status == null) {
       void ensureBrowserClientHostsForRestoredPages(state)
-      void replayClientHostedBrowserCloseIntents(snapshot.environmentId, state)
+      void replayClientHostedBrowserCloseIntents(snapshot.environmentId, {
+        clientHostedBrowserCloseIntentsByEnvironment:
+          state.clientHostedBrowserCloseIntentsByEnvironment,
+        clearClientHostedBrowserCloseIntents: state.clearClientHostedBrowserCloseIntents
+      })
     }
   } else {
     // Lost contact or a failed method observes no runtime session ending.

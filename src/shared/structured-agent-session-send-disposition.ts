@@ -33,16 +33,19 @@ import {
 export type StructuredAgentSessionSendDisposition = {
   entries: StructuredAgentSessionOutboxEntry[]
   /** Only for an outcome with no entry left to carry it; a kept entry holds its own failure. */
-  error: string | null
-  /** The entry the queue is stuck on, or null when nothing blocks it. Always the
-   *  next value, never "unchanged": the caller assigns it verbatim. */
-  blockedClientMessageId: string | null
+  error: AgentSessionWriteNoticePart[] | null
 }
+
+/** A message this client couldn't store to send; the composer's draft or the row's Retry still
+ *  has it. */
+export const STRUCTURED_AGENT_SESSION_OUTBOX_NOT_SAVED: readonly AgentSessionWriteNoticePart[] = [
+  'messageNotSaved',
+  'tryAgain'
+]
 
 type SendDispositionInput = {
   entries: readonly StructuredAgentSessionOutboxEntry[]
   entry: StructuredAgentSessionOutboxEntry
-  blockedClientMessageId: string | null
 }
 
 function replaceEntryState(
@@ -80,8 +83,8 @@ function dropEntry(input: SendDispositionInput): StructuredAgentSessionOutboxEnt
  * the outbox. Nothing is lost from the conversation: the durable submission row
  * already renders the message.
  *
- * A `rejected` submission takes the other path — the message provably did not
- * happen, so Retry rotates the id and sends it as a genuinely new message.
+ * A `rejected` submission is the host's to show, with no Retry: the reconcile
+ * drops its entry once the journal carries it.
  */
 function refusedRedelivery(
   entry: StructuredAgentSessionOutboxEntry,
@@ -200,10 +203,8 @@ export function disposeStructuredAgentSessionSendRefusal(
     createOperationId: () => string
   }
 ): StructuredAgentSessionSendDisposition {
-  const refusedIndex = input.entries.findIndex(
-    (candidate) => candidate.clientMessageId === input.entry.clientMessageId
-  )
-  const entries = input.entries.map((candidate) =>
+  // The refusal saved on a message it keeps `queued` is what holds it for the user's Retry.
+  const entries: StructuredAgentSessionOutboxEntry[] = input.entries.map((candidate) =>
     candidate.clientMessageId === input.entry.clientMessageId
       ? withLastFailure(
           requeueStructuredAgentSessionSendRefusal(
@@ -216,18 +217,7 @@ export function disposeStructuredAgentSessionSendRefusal(
         )
       : candidate
   )
-  const refused = entries[refusedIndex]
-  return {
-    entries,
-    error: null,
-    // Read back by index rather than from the input: a refusal can rotate the id, and the
-    // refused entry is not always the head now that an admitted one no longer holds the queue.
-    // A rejected one holds nothing: it can no longer land, and it keeps its own Retry.
-    blockedClientMessageId:
-      !refused || refused.state === 'rejected'
-        ? input.blockedClientMessageId
-        : refused.clientMessageId
-  }
+  return { entries, error: null }
 }
 
 export function disposeStructuredAgentSessionSendResult(
@@ -249,8 +239,7 @@ export function disposeStructuredAgentSessionSendResult(
     // and the draft card — not this queue — carries any later refusal.
     return {
       entries: dropEntry(input),
-      error: null,
-      blockedClientMessageId: input.blockedClientMessageId
+      error: null
     }
   }
   const submission = result.value.submission
@@ -259,22 +248,19 @@ export function disposeStructuredAgentSessionSendResult(
   if (submission.queuedMessageId === input.entry.clientMessageId) {
     return {
       entries: dropEntry(input),
-      error: null,
-      blockedClientMessageId: input.blockedClientMessageId
+      error: null
     }
   }
   if (refusedRedelivery(input.entry, submission)) {
     return {
       entries: dropEntry(input),
-      error: 'Message delivery is unconfirmed and Orca will not send it again',
-      blockedClientMessageId: input.blockedClientMessageId
+      error: ['sendOutcomeLost']
     }
   }
   if (submission.dispatchState === 'accepted') {
     return {
       entries: dropEntry(input),
-      error: null,
-      blockedClientMessageId: input.blockedClientMessageId
+      error: null
     }
   }
   // A Stop's withdrawal failed nothing, first reply or replay: the entry leaves as the reconcile
@@ -285,10 +271,11 @@ export function disposeStructuredAgentSessionSendResult(
   ) {
     return {
       entries: dropEntry(input),
-      error: null,
-      blockedClientMessageId: input.blockedClientMessageId
+      error: null
     }
   }
+  // Recorded, so the journal's row shows it once it arrives; until then the entry draws it, saying
+  // why and offering no Retry.
   if (submission.dispatchState === 'rejected') {
     return {
       entries: replaceEntryState(
@@ -296,8 +283,7 @@ export function disposeStructuredAgentSessionSendResult(
         'rejected',
         structuredAgentSessionRejectedFailure(submission)
       ),
-      error: null,
-      blockedClientMessageId: input.blockedClientMessageId
+      error: null
     }
   }
   if (submission.dispatchState === 'unknown' && submission.recovered) {
@@ -307,8 +293,7 @@ export function disposeStructuredAgentSessionSendResult(
           ? { ...candidate, state: 'unconfirmed', retryAfterUnknownSubmittedAt: -1 }
           : candidate
       ),
-      error: null,
-      blockedClientMessageId: input.blockedClientMessageId
+      error: null
     }
   }
   // `pending` is the host saying the message was written and is awaiting the
@@ -322,8 +307,7 @@ export function disposeStructuredAgentSessionSendResult(
       input,
       submission.dispatchState === 'unknown' ? 'unconfirmed' : 'dispatching'
     ),
-    error: null,
-    blockedClientMessageId: input.blockedClientMessageId
+    error: null
   }
 }
 
@@ -336,13 +320,11 @@ export function disposeStructuredAgentSessionSendFailure(
   const failure = classifyStructuredAgentSessionSendFailure(input.cause, input.isDeliveryUnknown)
   const deliveryUnknown = failure === 'delivery-unknown'
   return {
-    // An unconfirmed entry's Retry row already says delivery is unconfirmed.
+    // An unconfirmed entry's Retry row already says delivery is unconfirmed; the saved failure
+    // holds the other for its Retry.
     entries: deliveryUnknown
       ? replaceEntryState(input, 'unconfirmed')
       : replaceEntryState(input, 'queued', { kind: 'failed' }),
-    error: null,
-    blockedClientMessageId: deliveryUnknown
-      ? input.blockedClientMessageId
-      : input.entry.clientMessageId
+    error: null
   }
 }

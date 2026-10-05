@@ -1,7 +1,10 @@
 import type { AgentChildRowModel } from '../../../shared/agent-child-row-model'
 import { formatAgentTypeLabel } from '../../../shared/agent-type-label'
 import { agentStateLabel } from '@/components/AgentStateDot'
-import { backgroundTaskStateReason } from '@/components/native-chat/background-task-roster'
+import {
+  backgroundTaskStateReason,
+  backgroundTaskStateWord
+} from '@/components/native-chat/background-task-roster'
 import { translate } from '@/i18n/i18n'
 import { agentNoUpdateLabel } from '@/lib/agent-row-decay-state'
 import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
@@ -41,7 +44,7 @@ export function agentChildRowDetailText(row: AgentChildRowModel, now: number): s
     case 'role':
       return formatAgentTypeLabel(detail.agentType)
     case 'reason':
-      return backgroundTaskStateReason(detail.state) ?? ''
+      return backgroundTaskStateReason(detail.state) ?? backgroundTaskStateWord(detail.state)
   }
 }
 

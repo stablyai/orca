@@ -1,9 +1,7 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import {
-  buildDispatchPreamble,
-  dispatchPreambleSendOptions
-} from '../../../../orchestration/preamble'
+import { buildDispatchPreamble } from '../../../../orchestration/preamble'
+import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
 import { resolveDispatchCreator } from './dispatch-creator'
 import {
   injectRejectedError,
@@ -12,7 +10,10 @@ import {
 } from '../../../../orchestration/task-dispatch-refusal'
 import { resolveRunScope } from './run-scope'
 import { DispatchParams, DispatchShowParams } from '../schemas'
-import { resolveDispatchAssigneeParty } from '../../../../orchestration/orchestration-party'
+import {
+  orcaSessionIdOrHandle,
+  resolveDispatchAssigneeParty
+} from '../../../../orchestration/orchestration-party'
 
 export const ORCHESTRATION_DISPATCH_METHODS = [
   defineMethod({
@@ -62,8 +63,8 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           dispatchId: 'ctx_dryrun',
           canDispatchSubWorkers: previewDepth < maxDepth,
           taskSpec: task.spec,
-          coordinatorHandle: params.from ?? 'coordinator',
-          workerHandle: assignee ?? 'worker',
+          coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
+          workerHandle: assignee ? orcaSessionIdOrHandle(assignee, db) : 'worker',
           devMode: params.devMode,
           ...(assignee ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(assignee) } : {})
         })
@@ -143,8 +144,8 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         dispatchId: ctx.id,
         canDispatchSubWorkers: ctx.depth < runtime.getNestedWorkerMaxDepth(),
         taskSpec: task.spec,
-        coordinatorHandle: params.from ?? 'coordinator',
-        workerHandle: to,
+        coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
+        workerHandle: orcaSessionIdOrHandle(to, db),
         devMode: params.devMode,
         cliCommand: runtime.getTerminalOrchestrationCliCommand(to)
       })
@@ -153,11 +154,16 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
       let prompt
       if (params.inject) {
         try {
-          prompt = await runtime.sendTerminalAgentPrompt(
-            to,
-            preamble,
-            dispatchPreambleSendOptions(orchestrationMutation?.requestId ?? ctx.id)
-          )
+          prompt = await sendAgentTurn({
+            kind: 'terminal',
+            runtime,
+            handle: to,
+            turn: {
+              purpose: 'dispatch-preamble',
+              body: preamble,
+              operationId: orchestrationMutation?.requestId ?? ctx.id
+            }
+          })
           injected = true
         } catch (err) {
           db.failDispatch(ctx.id, err instanceof Error ? err.message : String(err))
@@ -201,8 +207,8 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           dispatchId: ctx?.id ?? 'ctx_preview',
           canDispatchSubWorkers: (ctx?.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
           taskSpec: task.spec,
-          coordinatorHandle: params.from ?? 'coordinator',
-          workerHandle,
+          coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
+          workerHandle: orcaSessionIdOrHandle(workerHandle, db),
           devMode: params.devMode,
           ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})
         })

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { detectAgentCommandsOnHost } from '../../preflight/agent-detection'
 import {
   FLOATING_TERMINAL_WORKTREE_ID,
   OrcaRuntimeService,
@@ -28,6 +29,29 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
+  it.each(['qoder', 'qodercli'] as const)(
+    'spawns the available Qoder command for a captured same-session resume: %s',
+    async (command) => {
+      vi.mocked(detectAgentCommandsOnHost).mockResolvedValueOnce(new Set([command]))
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-qoder-resume' })
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn,
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        launchAgent: 'qoder',
+        command: "qodercli --resume 'existing-qoder-session'",
+        launchConfig: { agentCommand: 'qodercli', agentArgs: '', agentEnv: {} }
+      })
+      expect(spawn).toHaveBeenCalledWith(
+        expect.objectContaining({ command: `${command} --resume 'existing-qoder-session'` })
+      )
+    }
+  )
+
   it('does not use the local Windows shell setting for remote Windows bare agent creates', async () => {
     const remoteRepo = {
       id: TEST_REPO_ID,

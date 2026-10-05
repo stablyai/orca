@@ -195,7 +195,7 @@ describe('Claude structured child-work producer', () => {
       step.check?.()
     }
     await adapter.closeSession('session-1')
-    // The session is gone: what still ran settles unreported, and every record stays.
+    // Orca ended the session: what still ran is stopped with it, and every record stays.
     const summary = records().map((record) => ({
       description: record.description,
       membership: record.membership,
@@ -210,7 +210,7 @@ describe('Claude structured child-work producer', () => {
         generation: 1
       },
       { description: 'npm test', membership: 'settled', outcome: 'cancelled', generation: 1 },
-      { description: 'Audit the build', membership: 'settled', outcome: 'unknown', generation: 2 }
+      { description: 'Audit the build', membership: 'settled', outcome: 'cancelled', generation: 2 }
     ])
     expect(adapter.backgroundTaskState('session-1')).toBeUndefined()
   })

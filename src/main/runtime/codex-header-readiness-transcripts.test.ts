@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID,
+  waitForTranscriptIdle
+} from './agent-transcript-pane-test-harness'
 import {
   readRuntimeFixture,
   replayTranscript,
@@ -200,13 +204,15 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
 
   describe('through the runtime', () => {
     async function codexPane(name: string, size?: { cols: number; rows: number }) {
-      return createTranscriptPane({
+      const created = await createTranscriptPane({
         paneTitle: 'Terminal',
         foregroundProcess: 'codex',
         launchAgent: 'codex',
         data: readRuntimeFixture(name),
         size
       })
+      await created.runtime.readTerminal(created.handle, { screen: true })
+      return created
     }
 
     it.each(ALL_FIXTURES)(
@@ -214,9 +220,10 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
       async (name) => {
         const { runtime, handle } = await codexPane(name, { cols: 120, rows: 40 })
         // Why 8s: quiescence (3s) plus the 2s poll re-reading the grid.
-        await expect(
-          runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 8_000 })
-        ).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
+        await expect(waitForTranscriptIdle({ runtime, handle }, 8_000)).resolves.toMatchObject({
+          condition: 'tui-idle',
+          satisfied: true
+        })
       },
       15_000
     )
@@ -235,10 +242,9 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
         data: provisional,
         size: { cols: 120, rows: 40 }
       })
+      await runtime.readTerminal(handle, { screen: true })
       // Why 6s: past the 3s quiescence, so the quiet lane's provisional veto is what holds.
-      await expect(
-        runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 6_000 })
-      ).rejects.toThrow(/timeout/)
+      await expect(waitForTranscriptIdle({ runtime, handle }, 6_000)).rejects.toThrow(/timeout/)
     }, 15_000)
 
     // Why no bytes: worker-start waits on a pane that has printed nothing yet, which is when the
@@ -251,6 +257,7 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
         data: '',
         size: { cols: 120, rows: 40 }
       })
+      await runtime.readTerminal(handle, { screen: true })
       const readVisibleScreen = vi.spyOn(runtime, 'readTerminal').mockResolvedValue({
         handle,
         status: 'running',
@@ -267,9 +274,7 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
         nextCursor: null,
         source: 'screen'
       })
-      await expect(
-        runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 2_500 })
-      ).rejects.toThrow(/timeout/)
+      await expect(waitForTranscriptIdle({ runtime, handle }, 2_500)).rejects.toThrow(/timeout/)
       // Presence precondition: the visible-screen probe actually ran.
       expect(readVisibleScreen).toHaveBeenCalled()
     }, 15_000)
@@ -282,6 +287,7 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
         launchAgent: 'codex',
         data: ''
       })
+      await runtime.readTerminal(handle, { screen: true })
       runtime.seedTerminalRestoreTail(TRANSCRIPT_PANE_PTY_ID, {
         text: [
           '╭──────────────────────────────────────────╮',
@@ -302,16 +308,15 @@ describe('Codex 0.157 header readiness from captured bytes', () => {
         nextCursor: null,
         source: 'screen-unavailable'
       })
-      await expect(
-        runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 2_500 })
-      ).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
+      await expect(waitForTranscriptIdle({ runtime, handle }, 2_500)).resolves.toMatchObject({
+        condition: 'tui-idle',
+        satisfied: true
+      })
     }, 15_000)
 
     it('keeps timing out on the garbled 80x24 default grid, as before', async () => {
       const { runtime, handle } = await codexPane(EFFORT_OVERRIDE)
-      await expect(
-        runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 6_000 })
-      ).rejects.toThrow(/timeout/)
+      await expect(waitForTranscriptIdle({ runtime, handle }, 6_000)).rejects.toThrow(/timeout/)
     }, 15_000)
   })
 })

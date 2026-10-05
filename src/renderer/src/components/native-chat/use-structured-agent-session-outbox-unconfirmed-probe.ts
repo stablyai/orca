@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+import { structuredAgentSessionEntryResendsUnconfirmed } from '../../../../shared/structured-agent-session-outbox-unconfirmed-resend'
 import {
   commitStructuredAgentSessionOutbox,
   getStructuredAgentSessionOutbox
@@ -9,8 +10,7 @@ import {
 const UNCONFIRMED_PROBE_BASE_DELAY_MS = 1_000
 /** No attempt ceiling: a transport outage outlives any fixed budget, and giving up
  *  restores the wedge this fixes. Growth caps the rate at one status query per 16s.
- *  A refusal that blocks the head still ends probing until a manual Retry (or, on an older
- *  host, a fence change), because the entry leaves `unconfirmed`. */
+ *  A refusal still ends probing until a manual Retry, because the entry leaves `unconfirmed`. */
 const UNCONFIRMED_PROBE_MAX_DELAY_MS = 16_000
 
 /** Re-queues the entry holding the outbox in `unconfirmed`, with backoff, until the journal answers it. */
@@ -41,30 +41,33 @@ export function useStructuredAgentSessionOutboxUnconfirmedProbe(args: {
   // A non-null `retryAfterUnknownSubmittedAt` means the user already retried, so
   // another request would repeat that explicit action. Only entries that have
   // never been retried, and that no Stop outlived, are safe to probe automatically.
+  // The delivery notices read the same rule: while it is resent here, its row says it is sending.
   const probeId =
     blocker &&
     blocker.sessionId === sessionId &&
-    blocker.retryAfterUnknownSubmittedAt === null &&
-    blocker.outlivedStop !== true
+    structuredAgentSessionEntryResendsUnconfirmed(blocker, submissions)
       ? blocker.clientMessageId
       : null
-  const probeSettled =
-    probeId !== null && submissions.some((submission) => submission.clientMessageId === probeId)
   useEffect(() => {
-    if (probeId === null || probeSettled || !owner.attached) {
+    if (probeId === null || !owner.attached) {
       return
     }
     const attempts = probeAttemptsRef.current.id === probeId ? probeAttemptsRef.current.attempts : 0
     const timer = setTimeout(
       () => {
         probeAttemptsRef.current = { id: probeId, attempts: attempts + 1 }
-        const next = getStructuredAgentSessionOutbox(sessionId).map((entry) =>
-          entry.clientMessageId === probeId ? { ...entry, state: 'queued' as const } : entry
-        )
+        const next = getStructuredAgentSessionOutbox(sessionId).map((entry) => {
+          if (entry.clientMessageId !== probeId) {
+            return entry
+          }
+          // A saved failure would hold it for a Retry instead of resending it.
+          const { lastFailure: _probed, ...probed } = entry
+          return { ...probed, state: 'queued' as const }
+        })
         commitStructuredAgentSessionOutbox(sessionId, next)
       },
       Math.min(UNCONFIRMED_PROBE_BASE_DELAY_MS * 2 ** attempts, UNCONFIRMED_PROBE_MAX_DELAY_MS)
     )
     return () => clearTimeout(timer)
-  }, [owner.attached, owner.ownerChange, owner.targetKey, probeId, probeSettled, sessionId])
+  }, [owner.attached, owner.ownerChange, owner.targetKey, probeId, sessionId])
 }

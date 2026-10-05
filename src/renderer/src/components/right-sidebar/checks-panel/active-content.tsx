@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import React from 'react'
 import { Check, LoaderCircle, Pencil, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -152,7 +153,7 @@ export function ChecksPanelActiveContent({
         {/* Review title */}
         {editingTitle ? (
           <div className="flex items-center gap-1">
-            <input
+            <ImeInput
               ref={titleInputRef}
               className="flex-1 text-[12px] bg-background border border-border rounded px-2 py-1 text-foreground outline-none focus:ring-1 focus:ring-ring"
               value={titleDraft}

@@ -106,6 +106,9 @@ export const childProcessModuleMock = (original: Record<string, unknown>) => ({
 })
 
 export const openCodeHookServiceModuleMock = () => ({
+  OpenCodeHookService: class {
+    buildPtyEnv = vi.fn(() => ({}))
+  },
   openCodeHookService: {
     buildPtyEnv: openCodeBuildPtyEnvMock,
     refreshLegacySharedPlugin: vi.fn<() => void>(),

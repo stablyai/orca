@@ -95,13 +95,16 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     ).sessions.get('session-1')
     const disposeTranslator = vi.spyOn(session!.translator!, 'dispose')
 
-    await expect(adapter.closeSession('session-1')).rejects.toBe(callbackError)
-    expect(events.filter((event) => event.type === 'handle')).toHaveLength(1)
+    // The handle follows the proven close as bookkeeping; its callback's failure is reported.
+    await expect(adapter.closeSession('session-1')).resolves.toBe(true)
+    await vi.waitFor(() =>
+      expect(events.filter((event) => event.type === 'handle')).toHaveLength(1)
+    )
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
     expect(disposeTranslator).toHaveBeenCalledOnce()
   })
 
-  it('retains a closed session until its durable cursor persistence succeeds', async () => {
+  it('does not keep a dead child indexed over a failed resume-point write', async () => {
     const claude = fakeClaude()
     const persistenceError = new Error('store unavailable')
     const persistHandle = vi
@@ -111,10 +114,11 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     const adapter = adapterFor(claude, {}, [], [], undefined, persistHandle)
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
 
-    await expect(adapter.closeSession('session-1')).rejects.toBe(persistenceError)
-    expect(persistHandle).toHaveBeenCalledTimes(1)
+    // The exit is proven, so the close ends the session; the write after it is bookkeeping.
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
-    expect(persistHandle).toHaveBeenCalledTimes(2)
+    await vi.waitFor(() => expect(persistHandle).toHaveBeenCalledOnce())
+    await expect(adapter.closeSession('session-1')).resolves.toBe(true)
+    expect(persistHandle).toHaveBeenCalledOnce()
   })
 
   it('persists the last completed turn message before graceful close', async () => {
@@ -141,6 +145,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
 
     await adapter.closeSession('session-1')
 
+    await vi.waitFor(() => expect(persistedHandles).toHaveLength(1))
     expect(persistedHandles).toEqual([
       {
         sessionId: 'session-1',
@@ -149,7 +154,9 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
         fence: 7
       }
     ])
-    expect(events.at(-2)).toEqual({
+    // Written after the close already ended the session: its end comes first.
+    expect(events.at(-2)).toMatchObject({ type: 'ended', cause: 'requested-close' })
+    expect(events.at(-1)).toEqual({
       type: 'handle',
       sessionId: 'session-1',
       providerSessionId: PROVIDER_SESSION_ID,

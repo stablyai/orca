@@ -44,6 +44,7 @@ import {
   stopSyntheticTitleSpinnerTimer
 } from './synthetic-title-runtime'
 import { requireMainWindowServices } from './main-window-service-readiness'
+import { recordRendererLaunchFailureProbe } from '../window/renderer-launch-failure-probe'
 
 const TRAY_CREATE_FALLBACK_MS = 12_000
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
@@ -100,7 +101,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       state.isQuitting = false
       clearExpectedRendererReload()
     },
-    onRendererProcessGone: (details, webContentsId) =>
+    onRendererProcessGone: (details, webContentsId) => {
       recordProcessGoneCrash(
         'renderer',
         'renderer',
@@ -108,25 +109,40 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
         details.exitCode ?? null,
         { processType: 'renderer' },
         webContentsId
-      ),
+      )
+      // Why: launch-failed only says a spawn failed; the probe's errno (EAGAIN = process limit) names the cause.
+      if (details.reason === 'launch-failed' && !state.isQuitting) {
+        void recordRendererLaunchFailureProbe(details)
+      }
+    },
     shouldRecoverRenderer: (details, webContentsId) =>
       shouldRecoverRendererAfterProcessGone({
         reason: details.reason,
         expectedTeardown: getExpectedTeardownScope(webContentsId, false)
       }),
-    onRendererRecoveryExhausted: ({ details, recentRecoveryCount, cause, retry }) => {
-      // Why two names: a stalled reload never opened the breaker, and a bundle that says it did misreads the failure.
+    onRendererRecoveryExhausted: ({ details, recentRecoveryCount, cause, lowCommit, retry }) => {
+      // Why distinct names: a stalled reload or a low-commit hold never opened the breaker, and a bundle that says it did misreads the failure.
       recordDurableCrashBreadcrumb(
         cause === 'reload-stalled'
           ? 'renderer_recovery_reload_exhausted'
-          : 'renderer_recovery_circuit_breaker_open',
+          : cause === 'launch-failed'
+            ? 'renderer_recovery_launch_backoff_exhausted'
+            : cause === 'low-commit'
+              ? 'renderer_recovery_low_commit_prompt'
+              : 'renderer_recovery_circuit_breaker_open',
         {
           reason: details.reason,
           exitCode: details.exitCode ?? null,
-          recentRecoveryCount
+          recentRecoveryCount,
+          ...lowCommit
         }
       )
-      void showRendererRecoveryPrompt(recentRecoveryCount, cause, retry)
+      void showRendererRecoveryPrompt(
+        recentRecoveryCount,
+        cause,
+        retry,
+        lowCommit?.availableCommitMB
+      )
     },
     deferLoad: true,
     ...(options.revealOnDidFinishLoad === true ? { revealOnDidFinishLoad: true } : {}),
@@ -170,7 +186,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
     logStartupMilestone('did-finish-load')
     // Why cleared here: a reload drops the old ui:openMarkdownFiles listener, and the fresh
     // renderer re-attaches by pulling. Pushing into the gap between would be silently lost.
-    state.markdownFileOpenListenerReady = false
+    state.osDocumentOpenListenerReady = false
     const currentStore = state.store
     if (currentStore && resolveConsent(currentStore.getSettings()).effective === 'enabled') {
       trackAppOpenedOnce()

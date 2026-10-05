@@ -683,8 +683,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
         {
           ptyId: 'pty-1',
           launchAccountId: 'account-a',
-          activeAccountId: 'account-b',
-          reason: 'account-change'
+          activeAccountId: 'account-b'
         }
       ])
 
@@ -734,8 +733,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
         {
           ptyId: 'pty-stale',
           launchAccountId: 'account-a',
-          activeAccountId: 'account-b',
-          reason: 'account-change'
+          activeAccountId: 'account-b'
         }
       ])
 
@@ -894,27 +892,6 @@ describe('markRestoredStaleCodexSessionsForRestart', () => {
       nextAccountLabel: ACCOUNT_B,
       previousAccountId: 'account-a',
       nextAccountId: 'account-b'
-    })
-  })
-
-  it('keeps a system-default home-route change as a restart notice', async () => {
-    vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([
-      {
-        ptyId: 'pty-1',
-        launchAccountId: null,
-        activeAccountId: null,
-        reason: 'home-route-change'
-      }
-    ])
-
-    await markRestoredStaleCodexSessionsForRestart()
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
-      previousAccountLabel: 'System default',
-      nextAccountLabel: 'System default',
-      previousAccountId: null,
-      nextAccountId: null,
-      homeRouteChanged: true
     })
   })
 

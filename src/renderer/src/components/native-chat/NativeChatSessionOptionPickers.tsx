@@ -18,7 +18,6 @@ import { translate } from '@/i18n/i18n'
 import { sortNativeChatSessionOptions } from '../../../../shared/native-chat-session-option-snapshot'
 import {
   sessionOptionDispatchUnconfirmed,
-  sessionOptionValueMarker,
   type SessionOptionDescriptor,
   type SessionOptionsSurface,
   type SessionOptionValue
@@ -147,22 +146,14 @@ function DescriptorMenuRows(props: {
   }
   // Why one switch row and not On/Off: the option is binary, so a single control
   // carries it. The row owns the label, which is why the caller drops its header.
-  // The value always renders; the marker is what keeps an unpicked one from
-  // reading as confirmed, since the switch itself cannot say "nobody said".
   if (descriptor.kind.type === 'boolean') {
     const checked = descriptor.kind.currentValue
     const label = nativeChatSessionOptionLabel(descriptor)
-    const marker = sessionOptionValueMarker(descriptor)
-    const markerId = `session-option-marker-${descriptor.id}`
     return (
       <DropdownMenuItem
         role="switch"
         aria-checked={checked}
-        // Named explicitly so the marker does not read as part of the control's
-        // label, and described by it so assistive tech still gets the provenance —
-        // hiding it would drop that distinction for screen readers alone.
         aria-label={label}
-        {...(marker ? { 'aria-describedby': markerId } : {})}
         disabled={!descriptor.settable || pending}
         // Keep the menu open: the write is async and its result lands in this row.
         onSelect={(event) => {
@@ -172,16 +163,7 @@ function DescriptorMenuRows(props: {
         className="justify-between gap-2"
       >
         <span>{label}</span>
-        <span className="flex items-center gap-1.5">
-          {marker ? (
-            <span id={markerId} className="text-[11px] text-muted-foreground">
-              {marker === 'default'
-                ? translate('components.native-chat.composer.valueIsDefault', 'Default')
-                : translate('components.native-chat.composer.valueNotReported', 'Not reported')}
-            </span>
-          ) : null}
-          <SwitchIndicator checked={checked} />
-        </span>
+        <SwitchIndicator checked={checked} />
       </DropdownMenuItem>
     )
   }
@@ -244,6 +226,8 @@ function NativeChatSessionOptionPickersInner({
   if (!surface || !model) {
     return null
   }
+  // Still listed by the host: the pill shows its value and does not open, even on request.
+  const modelChoicesPending = model.choicesPending === true
   const requestedModelSequence = pickerRequest?.id === model.id ? pickerRequest.sequence : null
   const requestedOptionsSequence = options.some((descriptor) => descriptor.id === pickerRequest?.id)
     ? (pickerRequest?.sequence ?? null)
@@ -268,12 +252,13 @@ function NativeChatSessionOptionPickersInner({
     <div className="flex min-w-0 items-center gap-0.5">
       <DropdownMenu
         key={`model:${requestedModelSequence ?? 'idle'}`}
-        defaultOpen={requestedModelSequence !== null}
+        // Read only when a request remounts the menu: one made while pending is spent shut.
+        defaultOpen={requestedModelSequence !== null && !modelChoicesPending}
       >
         <PickerTrigger
           label={nativeChatModelPillLabel(model)}
           tooltipLabel={modelTooltip}
-          disabled={isWorking || pendingId !== null}
+          disabled={isWorking || pendingId !== null || modelChoicesPending}
           disabledReason={modelReason}
           dispatched={sessionOptionDispatchUnconfirmed(model)}
         />

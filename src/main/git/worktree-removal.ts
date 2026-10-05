@@ -2,7 +2,6 @@ import { lstat } from 'node:fs/promises'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
-import { isSubmoduleWorktreeRemovalRefusal } from '../../shared/worktree/submodule-removal'
 import { removeHostTree } from '../host-tree-removal'
 import { withSpan } from '../observability/tracer'
 import { parseWslPath } from '../wsl'
@@ -13,7 +12,6 @@ import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git
 import type { RemoveWorktreeOptions } from './worktree-operation-options'
 import { getErrorCode, gitExecOptions, normalizeLocalBranchRef } from './worktree-operation-options'
 import { areWorktreePathsEqual } from './worktree-path-comparison'
-import { assertWorktreeCleanForRemoval } from './worktree-removal-preflight'
 import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { bumpWorktreeScanGeneration, listWorktrees } from './worktree-scan-cache'
 import { invalidateSparseCheckoutState } from './worktree-sparse-checkout-cache'
@@ -82,19 +80,7 @@ async function performRemoveWorktree(
   }
   args.push(worktreePath)
   await runUnderWorktreeDeleteLimit(async () => {
-    try {
-      await gitExecFileAsync(args, execOptions)
-    } catch (error) {
-      if (force || !isSubmoduleWorktreeRemovalRefusal(error)) {
-        throw error
-      }
-      // Why: Git refuses non-force removal of a worktree with an initialised submodule even when clean; re-prove cleanliness, then --force.
-      await assertWorktreeCleanForRemoval(worktreePath, false, options)
-      await gitExecFileAsync(
-        [...longPathArgs, 'worktree', 'remove', '--force', worktreePath],
-        execOptions
-      )
-    }
+    await gitExecFileAsync(args, execOptions)
     await removeCheckoutLeftByGit(worktreePath, options)
   })
 
@@ -128,15 +114,21 @@ function deleteBranchOfRemovedWorktree(
 /**
  * Finishes a removal whose checkout Git no longer registers (it finished deleting, or an earlier
  * run did): leftover files, stale admin records, then the branch. Already-gone parts are done.
+ * `assertLeftover` refuses unless the path still holds the removed checkout's own leftover.
  */
 export async function finishUnregisteredWorktreeRemoval(
   repoPath: string,
   worktreePath: string,
   branch: { name: string; head: string } | null,
+  assertLeftover: () => Promise<void>,
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
   try {
-    await runUnderWorktreeDeleteLimit(() => removeCheckoutLeftByGit(worktreePath, options))
+    await runUnderWorktreeDeleteLimit(async () => {
+      // Why in the slot: the wait can outlast two large deletes, and the path may change meanwhile.
+      await assertLeftover()
+      await removeCheckoutLeftByGit(worktreePath, options)
+    })
     await gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, options)).catch(
       (error: unknown) => console.warn(`[git] worktree prune failed in ${repoPath}`, error)
     )

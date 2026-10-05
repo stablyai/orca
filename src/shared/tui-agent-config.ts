@@ -98,7 +98,12 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // composer is not ready until ~10s — so the 8s default expired first and the draft
     // was pasted blind, mid-startup (#22479). The signal itself fired every time in
     // those runs, so the budget was the problem, not a dropped escape.
-    draftPasteReadyTimeoutMs: 20_000
+    draftPasteReadyTimeoutMs: 20_000,
+    composerReadyCaptures: [
+      'opencode-1-18-32-timed-boot-slow',
+      'opencode-1-18-32-timed-boot-hidden-pane',
+      'opencode-1-18-32-timed-first-launch'
+    ]
   },
   // Why: opencode2 installs as a separate binary and uses the same prompt flags.
   // Its @opentui composer keeps the same cursor-gated paste signal.
@@ -108,7 +113,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     launchCmd: 'opencode2 --standalone',
     promptInjectionMode: 'flag-prompt',
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste',
-    draftPasteReadyTimeoutMs: 20_000
+    draftPasteReadyTimeoutMs: 20_000,
+    composerReadyCaptures: ['opencode-2-0-18-timed-boot-hidden-pane']
   },
   'mimo-code': {
     detectCmd: 'mimo',
@@ -151,8 +157,16 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   },
   qoder: {
     detectCmd: 'qodercli',
+    // The documented `qoder` dispatcher still launches the legacy CLI binary.
+    detectCmdAliases: ['qoder'],
     promptInjectionMode: 'flag-prompt-interactive',
     preflightTrust: 'qoder'
+  },
+  'qoder-cn': {
+    detectCmd: 'qoderclicn',
+    detectCmdAliases: ['qodercn'],
+    promptInjectionMode: 'flag-prompt-interactive',
+    preflightTrust: 'qoder-cn'
   },
   gemini: {
     detectCmd: 'gemini',
@@ -255,7 +269,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   'qwen-code': {
     // Why: package is qwen-code but its installed CLI binary on PATH is `qwen`.
     detectCmd: 'qwen',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    // Why: on Windows (and Node < 20) Qwen ignores Enter until 500 ms after a paste (0.24.7
+    // `pasteWorkaround`), so the Enter 50 ms after it is dropped; on an empty composer it is a no-op.
+    submitRetryDelayMs: 1200
   },
   rovo: {
     detectCmd: 'rovo',
@@ -298,21 +315,14 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'stdin-after-start'
   },
   dsh: {
-    // Why: DeepSeek Harness publishes one binary (`dsh`) that boots a profile, and only the
-    // `dsh-tui` profile paints a composer. `dsh-tui` (alias `dst`) is the launcher that
-    // selects it, so detect that and require `dsh` too — the launcher delegates to it and
-    // fails without it.
     detectCmd: 'dsh-tui',
     detectCmdAliases: ['dst'],
     detectRequiredCommands: ['dsh'],
-    // Why: the launcher re-execs `dsh --profile dsh-tui`, so the pane's foreground process
-    // is `dsh`, never `dsh-tui`. Readiness and follow-up delivery key off this name.
+    // A first bare launch opens the session browser instead of the composer.
+    launchCmd: 'dsh-tui .',
     expectedProcess: 'dsh',
-    // Why: the terminal app parses only `--resume`/`--continue` and a workspace target; it
-    // has no prompt flag, so the first prompt is pasted into the composer after startup.
     promptInjectionMode: 'stdin-after-start',
-    // Why: DSH-TUI animates a whale intro continuously behind its composer, so the default
-    // quiet window never settles (the grok failure mode). See dsh-tui-ready-no-key.txt.
+    // The whale intro keeps repainting behind the ready composer.
     draftPasteReadySignal: 'dsh-composer-prompt'
   },
   zcode: {
@@ -326,13 +336,16 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'stdin-after-start',
     // Why: ZCode repaints an animated ASCII banner indefinitely, so the default quiet-render
     // window never settles; its composer box corner is the real "input is live" signal.
-    draftPasteReadySignal: 'zcode-composer-prompt'
+    draftPasteReadySignal: 'zcode-composer-prompt',
+    composerReadyCaptures: ['zcode-composer-ready']
   },
   devin: {
     detectCmd: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
     promptInjectionMode: 'stdin-after-start'
-  }
+  },
+  // prettier-ignore
+  jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' }
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = Object.fromEntries(

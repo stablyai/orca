@@ -2,6 +2,7 @@ import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult
 } from '../../../../shared/runtime-types'
+import { markStructuredAgentSessionLaunchesPublished } from '../../lib/structured-agent-session-launch-publication'
 import type { WorktreeRuntimeOwnerState } from '../../lib/worktree-runtime-owner'
 import { getExecutionHostIdForWorktree } from '../../lib/worktree-runtime-owner'
 import {
@@ -15,16 +16,10 @@ import {
   reviveRetiredValue,
   sameSessionTabsPublicationLineage
 } from '../web-session-tabs-sync/publisher-identity-fences'
+import { knownStructuredSessionWorktreeIds } from '../local-structured-session-tab-retirement'
 import {
-  knownStructuredSessionWorktreeIds,
-  removeStructuredSessionTabsForVersions
-} from '../local-structured-session-tab-retirement'
-import {
-  dropLocalStructuredSessionRestoreLatch,
-  forgetLocalStructuredSessionPublicationCursors,
   localStructuredSessionEpochHistoryByWorktree,
-  localStructuredSessionVersionByWorktree,
-  supersedeLocalStructuredSessionGeneration
+  localStructuredSessionVersionByWorktree
 } from './inventory-generation-fence'
 import { forgetRetiredEpochRepairsOutside } from './retired-epoch-repair'
 import { projectLocalStructuredSessionTabs } from './snapshot-projection'
@@ -32,11 +27,8 @@ import {
   hostSnapshotAffirmsAgentSessions,
   hostSnapshotAffirmsWorktreeContents
 } from '../host-session-snapshot-authority'
-import {
-  hasStructuredAgentSessionLaunchCancellationTombstone,
-  markStructuredAgentSessionLaunchPublished,
-  retireAbsentStructuredAgentSessionLaunchCancellationTombstones
-} from '../../lib/structured-agent-session-launch-registry'
+import { retireAbsentStructuredAgentSessionLaunchCancellationTombstones } from '../../lib/structured-agent-session-launch-registry'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   beginStructuredAgentSessionAuthoritativeInventory,
   startStructuredAgentLaunchCancellationCleanup
@@ -73,26 +65,22 @@ export function applyStructuredSessionTabSnapshots(
   owner = LOCAL_STRUCTURED_SESSION_OWNER,
   options: StructuredSessionSnapshotApplyOptions = {}
 ): void {
-  const acceptedAgentSessions = new Map<string, string>()
+  const acceptedAgentSessions: { worktreeId: string; sessionId: string }[] = []
   const settleStructuredSessionMirror = applyWebSessionTabsStorePatch(
     (state) =>
       applyLocalStructuredSessionTabSnapshots(state, snapshots, owner, undefined, {
         ...options,
         onAcceptedAgentSession: (worktreeId, sessionId) => {
-          acceptedAgentSessions.set(sessionId, worktreeId)
+          acceptedAgentSessions.push({ worktreeId, sessionId })
           options.onAcceptedAgentSession?.(worktreeId, sessionId)
         }
       }),
     { frames: [] }
   )
   settleStructuredSessionMirror()
-  for (const [sessionId, worktreeId] of acceptedAgentSessions) {
-    if (!hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, sessionId)) {
-      markStructuredAgentSessionLaunchPublished(worktreeId, sessionId)
-    }
-  }
+  markStructuredAgentSessionLaunchesPublished(LOCAL_EXECUTION_HOST_ID, acceptedAgentSessions)
   if (options.authoritative) {
-    startStructuredAgentLaunchCancellationCleanup((sessionId) =>
+    startStructuredAgentLaunchCancellationCleanup(LOCAL_EXECUTION_HOST_ID, (sessionId) =>
       closeStructuredAgentSession({ kind: 'local' }, sessionId)
     )
   }
@@ -104,32 +92,10 @@ export function applyStructuredSessionTabSnapshots(
           snapshot.tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.sessionId)
         )
       ),
-      options.authoritativeInventory ?? beginStructuredAgentSessionAuthoritativeInventory()
+      options.authoritativeInventory ?? beginStructuredAgentSessionAuthoritativeInventory(),
+      LOCAL_EXECUTION_HOST_ID
     )
   }
-}
-
-export function removeLocalStructuredSessionTabs<
-  State extends WebSessionTabsSyncState & WorktreeRuntimeOwnerState
->(state: State, owner = LOCAL_STRUCTURED_SESSION_OWNER, now = Date.now()): State {
-  return removeStructuredSessionTabsForVersions(
-    state,
-    localStructuredSessionVersionByWorktree,
-    owner,
-    now
-  )
-}
-
-export function clearLocalStructuredSessionTabs(): void {
-  // Fence responses from the previous enabled instance before clearing its mirror.
-  supersedeLocalStructuredSessionGeneration()
-  const settleStructuredSessionClear = applyWebSessionTabsStorePatch(
-    (state) => removeLocalStructuredSessionTabs(state),
-    { frames: [] }
-  )
-  settleStructuredSessionClear()
-  dropLocalStructuredSessionRestoreLatch()
-  forgetLocalStructuredSessionPublicationCursors()
 }
 
 export function applyLocalStructuredSessionTabSnapshots<

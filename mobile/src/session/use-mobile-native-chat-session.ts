@@ -35,6 +35,9 @@ export type MobileNativeChatSession = {
    *  wait for this to clear. */
   transcriptLoading: boolean
   error?: string
+  /** The read failed for good (damage, or a newer Orca's chat): the error says why, once, and
+   *  there is nothing to send into. */
+  readFailedFinally?: boolean
   /** True when an older page may exist (the last read filled the window). */
   hasMore: boolean
   /** Whether an older-history page is currently loading. */

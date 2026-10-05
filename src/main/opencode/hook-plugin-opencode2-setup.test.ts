@@ -49,6 +49,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
   const ENV_KEYS = [
     'ORCA_PANE_KEY',
     'ORCA_OPENCODE_AGENT',
+    'ORCA_OPENCODE_PLUGIN_API',
     'ORCA_AGENT_HOOK_ENDPOINT',
     'ORCA_AGENT_HOOK_PORT',
     'ORCA_AGENT_HOOK_TOKEN'
@@ -66,6 +67,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
       savedEnv[key] = process.env[key]
     }
     process.env.ORCA_OPENCODE_AGENT = agent
+    process.env.ORCA_OPENCODE_PLUGIN_API = 'v2'
     delete process.env.ORCA_AGENT_HOOK_ENDPOINT
     process.env.ORCA_AGENT_HOOK_PORT = '59999'
     process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'

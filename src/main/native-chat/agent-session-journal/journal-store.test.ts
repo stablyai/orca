@@ -294,7 +294,7 @@ describe('replay', () => {
     expect(reopened.snapshot().items).toHaveLength(0)
   })
 
-  it('keeps the intact prefix and drops the rejected suffix', async () => {
+  it('refuses a journal with a gap and keeps every row', async () => {
     const journal = await open()
     for (let index = 0; index < 4; index += 1) {
       await journal.appendItem(item(index), body(`m${index}`), {
@@ -302,22 +302,18 @@ describe('replay', () => {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
     }
-    const before = journal.epoch
     await journal.close()
     await withJournalDatabase(root, (db) => {
       deleteTestJournalRow(db, IDENTITY.sessionId, 3)
     })
 
-    const reopened = await open()
-    expect(reopened.epoch).toBe(before)
-    expect(reopened.snapshot().items.map((entry) => entry.body)).toEqual([body('m0')])
-    // Sequences 4 and 5 are VALID rows that the gap at 3 made unreplayable.
-    // Nothing preserves them; recovery rebuilds the epoch from provider history.
+    await expect(open()).rejects.toMatchObject({
+      refusal: { details: { reason: 'journalCorrupt' } }
+    })
     await withJournalDatabase(root, (db) => {
       const rows = liveTestJournalRows(db, IDENTITY.sessionId)
-      expect(rows.map((row) => row.seq)).toEqual([1, 2])
+      expect(rows.map((row) => row.seq)).toEqual([1, 2, 4, 5])
     })
-    expect(reopened.repair).toEqual({ malformedRows: 0 })
   })
 })
 

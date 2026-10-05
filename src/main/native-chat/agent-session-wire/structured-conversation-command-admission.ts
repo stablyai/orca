@@ -2,6 +2,7 @@ import {
   agentChildWorkViewOffersStop,
   type AgentSessionBackgroundTaskStops
 } from '../../../shared/agent-child-work-stop-targets'
+import type { AgentSessionConversationCommandRecord } from '../../../shared/agent-session-conversation-command'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
@@ -31,6 +32,26 @@ function blocked(
   message: string
 ): AgentSessionWireRefusal {
   return refuse('agent_session_operation_invalid', { reason }, message)
+}
+
+/**
+ * The /clear this caller committed on a conversation whose tab has since moved to its replacement.
+ * A /clear it presses there again asks for what that one already did; any other caller, or a
+ * cleared conversation opened again from history, reads `conversationCleared` instead.
+ */
+export function committedClearOfCaller(
+  record: AgentSessionRecord | null,
+  callerKey: string,
+  tabId: string | null
+): AgentSessionConversationCommandRecord | null {
+  const command = record?.conversationCommand
+  return command?.command === 'clear' &&
+    command.phase === 'committed' &&
+    command.replacementSessionId &&
+    command.callerKey === callerKey &&
+    tabId === null
+    ? command
+    : null
 }
 
 export function conversationCommandInFlight(): AgentSessionWireRefusal {

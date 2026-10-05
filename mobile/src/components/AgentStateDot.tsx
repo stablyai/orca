@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react'
 import { Activity } from 'lucide-react-native'
-import { Animated, Easing, StyleSheet, View } from 'react-native'
+import { Animated, StyleSheet, View } from 'react-native'
 import type { AgentDotState } from '../worktree/agent-row-display'
 import { colors } from '../theme/mobile-theme'
+import { useWorkingRingRotation } from './use-working-ring-rotation'
 
 // Per-agent state indicator, 1:1 with desktop AgentStateDot
 // (src/renderer/src/components/AgentStateDot.tsx): yellow spinner for 'working',
@@ -22,27 +22,9 @@ const DOT_COLORS: Record<Exclude<AgentDotState, 'working' | 'monitoring'>, strin
 const WORKING_COLOR = '#eab308'
 
 export function AgentStateDot({ state }: { state: AgentDotState }) {
-  const spinValue = useRef(new Animated.Value(0)).current
-
-  useEffect(() => {
-    if (state === 'working') {
-      const animation = Animated.loop(
-        Animated.timing(spinValue, {
-          toValue: 1,
-          duration: 1000,
-          easing: Easing.linear,
-          useNativeDriver: true
-        })
-      )
-      animation.start()
-      return () => animation.stop()
-    }
-    spinValue.setValue(0)
-    return undefined
-  }, [state, spinValue])
+  const rotate = useWorkingRingRotation(state === 'working')
 
   if (state === 'working') {
-    const rotate = spinValue.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] })
     return (
       <View style={styles.wrapper}>
         <Animated.View style={[styles.spinner, { transform: [{ rotate }] }]} />

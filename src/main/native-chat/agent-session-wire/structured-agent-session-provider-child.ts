@@ -5,6 +5,7 @@
 // an exit, a failed re-attach, a Stop and an eviction. Each is matched on the child's generation
 // and fence, so an ending that arrives late for an older child cannot end a newer one.
 
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
@@ -46,9 +47,12 @@ export function markProviderChildStarted(
   return child !== null
 }
 
+/** `endedAt` is a close's ask; an exit of the child's own ends where the journal stands. */
 export function endProviderChild(
   session: ChildBearer,
-  ended: Omit<StructuredAgentSessionEndedChild, 'endedAt' | 'startedFor'>
+  ended: Omit<StructuredAgentSessionEndedChild, 'endedAt' | 'startedFor'> & {
+    endedAt?: AgentJournalCursor
+  }
 ): boolean {
   const child = matchingChild(session, ended)
   if (!child) {
@@ -58,7 +62,7 @@ export function endProviderChild(
   session.lastEndedChild = {
     ...ended,
     ...(child.startedFor === undefined ? {} : { startedFor: child.startedFor }),
-    endedAt: session.journal.cursor()
+    endedAt: ended.endedAt ?? session.journal.cursor()
   }
   return true
 }
@@ -72,12 +76,17 @@ export function failedProviderChildStart(
   return !session.child && ended?.duringStartup && ended.cause !== 'user-stop' ? ended : null
 }
 
+export function sameProviderChild(
+  a: StructuredAgentSessionProviderChildIdentity,
+  b: StructuredAgentSessionProviderChildIdentity
+): boolean {
+  return a.generation === b.generation && a.fence === b.fence
+}
+
 function matchingChild(
   session: ChildBearer,
   identity: StructuredAgentSessionProviderChildIdentity
 ): StructuredAgentSessionProviderChild | null {
   const { child } = session
-  return child && child.generation === identity.generation && child.fence === identity.fence
-    ? child
-    : null
+  return child && sameProviderChild(child, identity) ? child : null
 }

@@ -19,7 +19,7 @@
  * harmless, and does nothing to reunite a caller with a surface a dead attempt left behind.
  */
 
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
 import type {
   AgentLaunchIntent,
@@ -31,6 +31,7 @@ import {
   WorktreeCreateCollisionError,
   WORKTREE_CREATE_COLLISION_CODE
 } from '../../../../shared/new-workspace/worktree-create-collision'
+import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
 import { executeAgentLaunch } from '../../../agent-launch/agent-launch-executor'
 import {
   trackTerminalSpawnDispatch,
@@ -137,6 +138,9 @@ async function resolveUnlaunchedIntent(
   params: AgentLaunchParams,
   runtime: OrcaRuntimeService
 ): Promise<AgentLaunchIntent> {
+  if (params.reuseTerminal || params.target.kind === 'create-worktree') {
+    assertOpenCodeModelLaunchPreferencesAbsent(params.agent, params.sessionOptions)
+  }
   const intent = await agentLaunchIntent(params, runtime)
   await validateReusedTerminal(intent, runtime)
   return intent
@@ -150,22 +154,25 @@ async function runAgentLaunch(
   terminalSpawn?: TerminalSpawnDispatch
 ): Promise<AgentLaunchResult> {
   const callerNavigationId = agentLaunchCallerNavigationId(intent.target, context)
-  const result = await executeAgentLaunch({
+  return executeAgentLaunch({
     runtime: context.runtime,
     intent,
     surfaces: agentLaunchSurfaceFactory(
       context,
       attachOperationId,
       operationCallerKey,
-      callerNavigationId === null,
+      callerNavigationId !== null,
       terminalSpawn
     ),
-    workspaces: agentLaunchWorkspaceFactory(context, intent.agent)
+    workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
+    // The tab is shown as it is published, not after a prompt that can take a minute to land.
+    ...(callerNavigationId !== null
+      ? {
+          onSurfacePublished: (surface) =>
+            selectAgentLaunchTabForCaller(context.runtime, surface, callerNavigationId)
+        }
+      : {})
   })
-  if (callerNavigationId !== null) {
-    selectAgentLaunchTabForCaller(context.runtime, result, callerNavigationId)
-  }
-  return result
 }
 
 /**
@@ -237,7 +244,7 @@ async function executeReplaySafeAgentLaunch(
 ): Promise<AgentLaunchResult> {
   const admission = await admitAgentLaunchOperation(context, params, fingerprint)
   if (admission.decision === 'refuse') {
-    throw new Error(admission.refusal.code)
+    throw Object.assign(new Error(admission.refusal.code), { code: admission.refusal.code })
   }
   if (admission.decision === 'replay') {
     return admission.result

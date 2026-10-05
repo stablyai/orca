@@ -1,5 +1,16 @@
-import { basename as pathBasename, extname, isAbsolute, join, relative, resolve } from 'node:path'
-import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import { RipgrepFilenameDecoder } from '../../shared/ripgrep-filename-decoder'
+import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+import { normalizeRelativePath } from '../../shared/text-search-paths'
+import {
+  basename as pathBasename,
+  extname,
+  isAbsolute,
+  join,
+  posix,
+  relative,
+  resolve
+} from 'node:path'
+import type { FileDocument, MarkdownDocument } from '../../shared/filesystem-entry-types'
 import { spawnBundledRipgrep } from '../ripgrep/bundled-ripgrep-spawn'
 import { parseWslPath } from '../wsl'
 import {
@@ -7,50 +18,48 @@ import {
   ripgrepMissingCwdError
 } from '../../shared/ripgrep-process-availability'
 
-function normalizeRelativePath(path: string): string {
-  return path.replace(/[\\/]+/g, '/').replace(/^\/+/, '')
+export function isMarkdownDocumentName(name: string): boolean {
+  return isMarkdownExtension(extname(name))
 }
 
-export function isMarkdownDocumentName(name: string): boolean {
-  const extension = extname(name).toLowerCase()
-  return extension === '.md' || extension === '.mdx' || extension === '.markdown'
+function isMarkdownExtension(extension: string): boolean {
+  const normalized = extension.toLowerCase()
+  return normalized === '.md' || normalized === '.mdx' || normalized === '.markdown'
 }
 
 function basenameFromRelativePath(relativePath: string): string {
-  const normalizedPath = relativePath.replaceAll('\\', '/')
-  return normalizedPath.slice(normalizedPath.lastIndexOf('/') + 1)
+  return relativePath.slice(relativePath.lastIndexOf('/') + 1)
 }
 
 function isSafeRelativePath(relativePath: string): boolean {
   return !relativePath.split('/').includes('..')
 }
 
-function hasParentTraversalSegment(relativePath: string): boolean {
-  return relativePath.split(/[\\/]+/).includes('..')
-}
-
 function rootRelativePath(rootPath: string, filePath: string): string | null {
   const resolvedRoot = resolve(rootPath)
   const resolvedFile = resolve(filePath)
   const relativePath = relative(resolvedRoot, resolvedFile)
-  if (hasParentTraversalSegment(relativePath) || isAbsolute(relativePath)) {
+  if (
+    !isSafeRelativePath(normalizeRelativePath(relativePath, rootPath)) ||
+    isAbsolute(relativePath)
+  ) {
     return null
   }
-  return normalizeRelativePath(relativePath)
+  return normalizeRelativePath(relativePath, rootPath)
 }
 
-export function markdownDocumentFromFilePath(
+export function fileDocumentFromFilePath(
   rootPath: string,
   filePath: string,
   options: { outsideRootRelativePath?: 'basename' | 'relative' } = {}
-): MarkdownDocument {
+): FileDocument {
   const basename = pathBasename(filePath)
   const extension = extname(basename)
   const relativePath =
     rootRelativePath(rootPath, filePath) ??
     (options.outsideRootRelativePath === 'basename'
       ? basename
-      : normalizeRelativePath(relative(rootPath, filePath)))
+      : normalizeRelativePath(relative(rootPath, filePath), rootPath))
   return {
     filePath,
     relativePath,
@@ -59,22 +68,28 @@ export function markdownDocumentFromFilePath(
   }
 }
 
+export const markdownDocumentFromFilePath = fileDocumentFromFilePath
+
 export function markdownDocumentFromRelativePath(
   rootPath: string,
   relativePath: string
 ): MarkdownDocument | null {
-  const normalizedRelativePath = normalizeRelativePath(relativePath)
+  const normalizedRelativePath = normalizeRelativePath(relativePath, rootPath)
   // Why: SSH providers should return root-relative paths; reject escape
   // segments before building a synthetic absolute path for renderer use.
   if (!isSafeRelativePath(normalizedRelativePath)) {
     return null
   }
   const basename = basenameFromRelativePath(normalizedRelativePath)
-  if (!isMarkdownDocumentName(basename)) {
+  // Remote separators are already normalized; a POSIX backslash stays part of the name.
+  const extension = posix.extname(basename)
+  if (!isMarkdownExtension(extension)) {
     return null
   }
-  const extension = extname(basename)
-  const normalizedRoot = rootPath.replace(/[\\/]+$/, '')
+  const normalizedRoot = rootPath.replace(
+    isWindowsAbsolutePathLike(rootPath) ? /[\\/]+$/ : /\/+$/,
+    ''
+  )
   return {
     filePath: `${normalizedRoot}/${normalizedRelativePath}`,
     relativePath: normalizedRelativePath,
@@ -109,9 +124,9 @@ export async function listMarkdownDocuments(
       '--null',
       '--path-separator',
       '/',
-      // Directory-only globs preserve hidden Markdown files without traversing hidden folders.
+      // Keep case variants in --glob: --iglob is applied after exclusions and can reopen hidden folders.
       '--glob',
-      '**',
+      '*.{[mM][dD],[mM][dD][xX],[mM][aA][rR][kK][dD][oO][wW][nN]}',
       '--glob',
       '!**/.*/',
       '--glob',
@@ -129,6 +144,10 @@ export async function listMarkdownDocuments(
   )
 
   return new Promise((resolveListing, reject) => {
+    const filenameDecoder = new RipgrepFilenameDecoder(
+      (error) => finish(error),
+      Boolean(parseWslPath(rootPath)?.distro ?? options.wslDistro)
+    )
     const documents: MarkdownDocument[] = []
     let carry = ''
     let stderr = ''
@@ -170,8 +189,12 @@ export async function listMarkdownDocuments(
     const onStderr = (chunk: string): void => {
       stderr = (stderr + chunk).slice(0, 4096)
     }
-    const onData = (chunk: string): void => {
-      carry += chunk
+    const onData = (chunk: Buffer | string): void => {
+      const decoded = filenameDecoder.decode(chunk)
+      if (decoded === null) {
+        return
+      }
+      carry += decoded
       let start = 0
       let end: number
       while ((end = carry.indexOf('\0', start)) !== -1) {
@@ -199,10 +222,11 @@ export async function listMarkdownDocuments(
         finish(ripgrepMissingCwdError(rootPath))
       } else if (signal || (code !== 0 && code !== 1)) {
         finish(new Error(`Markdown document listing failed (${signal ?? code}): ${stderr.trim()}`))
-      } else if (carry) {
-        finish(new Error('Incomplete path in Markdown document listing'))
       } else {
-        finish()
+        if (!filenameDecoder.finish()) {
+          return
+        }
+        finish(carry ? new Error('Incomplete path in Markdown document listing') : undefined)
       }
     }
     const timer = setTimeout(
@@ -210,7 +234,6 @@ export async function listMarkdownDocuments(
       MARKDOWN_LISTING_TIMEOUT_MS
     )
     timer.unref?.()
-    child.stdout?.setEncoding('utf8')
     child.stderr?.setEncoding('utf8')
     child.stdout?.on('data', onData)
     child.stderr?.on('data', onStderr)

@@ -639,7 +639,7 @@
       "protection": "partial",
       "owner": "agent-session-runtime",
       "layer": "runtime-unit",
-      "surfaces": ["structured chat journal replay", "structured chat recovery"],
+      "surfaces": ["structured chat journal replay", "structured chat damaged history"],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "remote-runtime"],
       "coveredPlatforms": ["macos"],
@@ -648,15 +648,17 @@
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/main/src/main/native-chat/agent-session-journal/journal-open.ts"
       ],
-      "invariant": "Replay preserves latest revisions, original item order, fences, aliases, submissions, repair precedence, read-only schema latching and cursor cleanup while retaining live items rather than all historical bodies.",
-      "oracle": "Replay 2,048 16 KiB revisions into one latest item with less than 8 MiB sampled live heap growth; preserve prefix and future-schema latching after a gap, malformed suffix repair precedence, and hold no SQLite read snapshot across reduction (a mid-replay checkpoint is not busy). Existing journal and subscriber tests cover replayed content and recovery.",
+      "invariant": "Replay preserves latest revisions, original item order, fences, aliases, submissions, a newer schema winning over damage and cursor cleanup while retaining live items rather than all historical bodies; damage fails the load and deletes nothing.",
+      "oracle": "Replay 2,048 16 KiB revisions into one latest item with less than 8 MiB sampled live heap growth; name a future-schema row read past a gap, name the first damage, fail a damaged load with every row kept, and hold no SQLite read snapshot across reduction (a mid-replay checkpoint is not busy). Existing journal and subscriber tests cover replayed content.",
       "commands": [
+        // As the 2026-09-11 evidence run ran it; the recovery test it names went with the read-time repair.
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts src/main/native-chat/agent-session-wire/agent-session-journal-recovery.test.ts",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts src/main/native-chat/agent-session-journal/journal-corruption-repair.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts src/main/native-chat/agent-session-journal/journal-damage.test.ts"
       ],
       "testFiles": [
         "src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts",
-        "src/main/native-chat/agent-session-journal/journal-corruption-repair.test.ts"
+        "src/main/native-chat/agent-session-journal/journal-damage.test.ts"
       ],
       "assertionRefs": [
         {
@@ -664,9 +666,18 @@
           "assertions": [
             "releases superseded revision bodies while reducing a long journal",
             "holds no read snapshot while reducing, so a checkpoint can pass mid-replay",
-            "keeps the prefix but latches read-only for a future row beyond a gap",
-            "keeps gap repair precedence when a later row is malformed",
-            "rejects an unanchored prefix before a later gap"
+            "reads past a gap to a future row, which names the newer row and no damage",
+            "names the first damage when a later row is malformed too",
+            "names a missing epoch row before a later gap"
+          ]
+        },
+        {
+          "file": "src/main/native-chat/agent-session-journal/journal-damage.test.ts",
+          "assertions": [
+            "fails to load and keeps every row: %s",
+            "reads past damage to a newer build's row, which fails the load as a newer Orca's instead",
+            "is refused when it is written, and the chat still loads with every other row",
+            "is founded afresh on open, with nothing deleted, and takes writes"
           ]
         }
       ],
@@ -679,6 +690,15 @@
           "result": "passed",
           "durationSeconds": 7.71,
           "summary": "245 tests passed across 22 files. Retained-heap oracle fails on baseline at 68.6 MB and passes under 8 MiB with streaming; gap/schema and cursor-cleanup assertions passed."
+        },
+        {
+          "date": "2026-10-02",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts",
+          "result": "passed",
+          "durationSeconds": 5.56,
+          "summary": "450 tests passed across 42 files, run as the vitest invocation the test script makes. Damage fails the load with every row kept; the retained-heap, newer-row-past-a-gap and cursor-cleanup assertions passed."
         }
       ],
       "runtimeBudget": {
@@ -948,8 +968,8 @@
       "invariant": "One structured-send operation id causes at most one provider dispatch. A recorded or transport-ambiguous send reuses that id across retry, caller reconnect, client remount, and journal recovery; only a terminal rejection may rotate to a first delivery.",
       "oracle": "Inject adapter acknowledgement loss, RPC response loss, caller replacement, logical-client close after response, auth recovery with a written request, missing journal submissions, legacy pending rows, stale fences, operation expiry, mobile remount, and durable-journal capacity. Assert one provider dispatch or one operation id for every ambiguous retry, fresh identity only after rejection, and no eviction of ambiguous mobile ids.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-disposition.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/mobile-structured-send-operation-journal.test.ts ../mobile/src/session/mobile-structured-session-operation-retention.test.ts ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-disposition.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.probe.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/mobile-structured-send-operation-journal.test.ts ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts"
       ],
       "testFiles": [
         "src/shared/agent-session-operation-ledger.test.ts",
@@ -963,11 +983,11 @@
         "src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx",
         "src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx",
         "src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx",
+        "src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.probe.test.tsx",
         "src/renderer/src/lib/launch-structured-agent-session.test.ts",
         "mobile/src/session/mobile-native-chat-image-attachment.test.ts",
         "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
         "mobile/src/session/mobile-structured-send-operation-journal.test.ts",
-        "mobile/src/session/mobile-structured-session-operation-retention.test.ts",
         "mobile/src/session/mobile-structured-send-delivery.test.ts",
         "mobile/src/session/use-mobile-structured-agent-session-send.test.tsx",
         "mobile/src/session/use-mobile-structured-agent-session.test.tsx",
@@ -1034,19 +1054,19 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-09-12",
+          "date": "2026-10-04",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-disposition.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-disposition.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.probe.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
           "result": "passed",
-          "durationSeconds": 22.1,
-          "summary": "Thirteen focused host, shared, renderer, and orchestration files passed 148 tests."
+          "durationSeconds": 42.3,
+          "summary": "Thirteen focused host, shared, renderer, and orchestration files passed 197 tests after the delivery probe tests moved to their own file."
         },
         {
           "date": "2026-09-12",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/mobile-structured-send-operation-journal.test.ts ../mobile/src/session/mobile-structured-session-operation-retention.test.ts ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/mobile-structured-send-operation-journal.test.ts ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts",
           "result": "passed",
           "durationSeconds": 2.37,
           "summary": "Ten focused mobile session, attachment, and transport files passed 113 tests."
@@ -12108,10 +12128,10 @@
         "https://github.com/stablyai/orca/pull/12778"
       ],
       "invariant": "Typing, focus, terminal switch, workspace switch, visibility resume, resize, render, per-pane liveness, and tab-title synchronization must not call global pty:listSessions or aiVault.listSessions; they must use targeted APIs or cached provider-owned state.",
-      "oracle": "The current executable slice asserts targeted visibility/first-input liveness, resize re-assertion after visibility resume, light tab/active-state resume, SSH/remote skip behavior, and a closed Resource Manager budget of one readiness seed plus one coalesced inventory read only for unknown spawn IDs. AI Vault title sync deterministically accepts only resolveSessionTitles, batches at most 64 exact identities, serializes worker work, routes requests to the transcript-owning local/SSH/runtime host, and proves zero broad scans for unsupported hosts. The full hot-path oracle still needs instrumentation around raw focus, split focus, workspace switch, render ticks, and high-session PTY fixtures.",
+      "oracle": "The current executable slice asserts targeted visibility/first-input liveness, resize re-assertion after visibility resume, light tab/active-state resume, SSH/remote skip behavior, and a closed Resource Manager budget of one readiness seed plus one coalesced inventory read only for unknown spawn IDs. AI Vault title sync deterministically accepts only resolveSessionTitles, batches at most 64 exact identities, bounds scanner-service calls at sixteen, routes requests to the transcript-owning local/SSH/runtime host, and proves zero broad scans for unsupported hosts. The full hot-path oracle still needs instrumentation around raw focus, split focus, workspace switch, render ticks, and high-session PTY fixtures.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-startup-barrier-and-listing.test.ts src/renderer/src/components/status-bar/use-resource-session-inventory.test.tsx src/renderer/src/components/status-bar/resource-session-inventory.test.ts src/renderer/src/components/status-bar/ResourceUsageStatusSegment.session-polling.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/session-scanner-worker-client.test.ts src/main/ai-vault/session-title-file-reader.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts src/relay/ai-vault-handler.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/session-scanner-service-client.test.ts src/main/ai-vault/session-title-file-reader.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts src/relay/ai-vault-handler.test.ts"
       ],
       "testFiles": [
         "src/main/ipc/pty-startup-barrier-and-listing.test.ts",
@@ -12119,7 +12139,7 @@
         "src/renderer/src/components/status-bar/resource-session-inventory.test.ts",
         "src/renderer/src/components/status-bar/ResourceUsageStatusSegment.session-polling.test.ts",
         "src/renderer/src/lib/ai-vault-tab-title-sync.test.ts",
-        "src/main/ai-vault/session-scanner-worker-client.test.ts",
+        "src/main/ai-vault/session-scanner-service-client.test.ts",
         "src/main/ai-vault/session-title-file-reader.test.ts",
         "src/main/ai-vault/session-parse-cache-persistence.test.ts",
         "src/main/ipc/ai-vault.test.ts",
@@ -12169,12 +12189,12 @@
           ]
         },
         {
-          "file": "src/main/ai-vault/session-scanner-worker-client.test.ts",
+          "file": "src/main/ai-vault/session-scanner-service-client.test.ts",
           "assertions": [
-            "full scans and exact-title reads share one serial FIFO worker",
-            "active cancellation stays serialized and queued work remains bounded",
-            "worker faults restart queued work and idle time preserves incremental parse state",
-            "worker disposal rejects retained work and terminates the worker"
+            "the service waits for ready and runs the cache and interactive lanes independently",
+            "active and queued calls are bounded together at sixteen",
+            "cancellation reaches active work and kills a service that ignores it",
+            "service faults restart queued work under a restart circuit that a forced refresh reopens"
           ]
         },
         {
@@ -12203,13 +12223,13 @@
           "summary": "4 files and 358 tests passed, covering readiness seed/recovery, zero interval polling, bounded unknown-spawn reconciliation, concurrent provider starts, exit fencing, cleanup, and out-of-order refresh fencing."
         },
         {
-          "date": "2026-08-09",
+          "date": "2026-10-02",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/session-scanner-worker-client.test.ts src/main/ai-vault/session-title-file-reader.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts src/relay/ai-vault-handler.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/session-scanner-service-client.test.ts src/main/ai-vault/session-title-file-reader.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts src/relay/ai-vault-handler.test.ts",
           "result": "passed",
-          "durationSeconds": 3.1,
-          "summary": "The focused run passed 112 tests across 7 files, proving exact-title-only renderer requests, provider-isolated batching, persistent serial worker lifecycle and fault recovery, exact transcript identity, host routing, mixed-version degradation, and zero broad-scan fallback."
+          "durationSeconds": 5.3,
+          "summary": "The focused run passed 138 tests across 7 files, proving exact-title-only renderer requests, provider-isolated batching, per-lane scanner-service lifecycle and fault recovery, exact transcript identity, host routing, mixed-version degradation, and zero broad-scan fallback."
         }
       ],
       "runtimeBudget": {
@@ -12222,11 +12242,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Tests assert visibility resume prefers targeted hasPty over listSessions, first input after visibility resume calls targeted hasPty once, resize re-assertion after visibility resume uses getSize/resize without listSessions, light tab switches and visible active-state resume avoid listSessions/hasPty/getSize fanout, and the closed Resource Manager performs one readiness seed while known reattach signals and steady time perform no additional reads. For the #12778 regression, title sync no longer receives a listSessions dependency at all: it sends at most 64 exact identities per batch to one serial worker or transcript-owning remote host, and old hosts degrade without broad fallback. Needs broader raw focus/workspace-switch/render/high-session PTY count coverage before promotion."
+        "evidence": "Tests assert visibility resume prefers targeted hasPty over listSessions, first input after visibility resume calls targeted hasPty once, resize re-assertion after visibility resume uses getSize/resize without listSessions, light tab switches and visible active-state resume avoid listSessions/hasPty/getSize fanout, and the closed Resource Manager performs one readiness seed while known reattach signals and steady time perform no additional reads. For the #12778 regression, title sync no longer receives a listSessions dependency at all: it sends at most 64 exact identities per batch to the local scanner service or transcript-owning remote host, and old hosts degrade without broad fallback. Needs broader raw focus/workspace-switch/render/high-session PTY count coverage before promotion."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "This gate is the performance budget for global session listing in hot paths. AI Vault title sync permits zero global scans, at most 64 exact identities per request, one active worker operation, 16 queued operations, four concurrent transcript parses inside the worker, a 4,096-title index, and no worktree-path-triggered refresh. The worker emits the aiVault.scan.worker span with duration and session count for full scans."
+        "evidence": "This gate is the performance budget for global session listing in hot paths. AI Vault title sync permits zero global scans, at most 64 exact identities per request, one active scanner-service call per lane (cache, interactive), 16 active plus queued calls, four concurrent transcript parses inside the service, a 4,096-title index, and no worktree-path-triggered refresh. The service emits the aiVault.scan.service span with duration and session count for full scans."
       },
       "promotionCriteria": [
         "Add deterministic call-count instrumentation.",
@@ -16959,15 +16979,38 @@
       "invariant": "Hidden-output restore, snapshot replay, metadata-only replay, and clear-before-replay must preserve order and never overlay stale bytes on newer live terminal output; restoring a snapshot onto an already-dirty pane must yield a buffer exactly equal to the snapshot frame.",
       "oracle": "Apply snapshots onto adversarially dirty pane states (already on the alternate screen, stale content occupying cells the new frame leaves blank, scrollback present, wide glyphs, revived sessions with restarted PTY seq counters) and assert exact buffer equality with the snapshot frame; fault injection interleaves hidden chunks, live output, metadata-only replay, and clear-before-replay, then asserts ordered terminal buffer content, clear decisions, and replay diagnostics. Marker-presence checks are not acceptable evidence on restore paths.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-output-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-stalled-hidden-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-replay-payload-handling.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-output-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-stalled-hidden-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-replay-payload-handling.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-replay.test.ts src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-output-restore.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-stalled-hidden-restore.test.ts",
-        "src/renderer/src/components/terminal-pane/pty-connection-replay-payload-handling.test.ts"
+        "src/renderer/src/components/terminal-pane/pty-connection-replay-payload-handling.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-replay.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-replay.test.ts",
+          "assertions": [
+            "repaints a pushed image exactly and keeps the history the TUI covers",
+            "keeps the pane's history when the host screen has another grid",
+            "keeps history unduplicated when a pushed image also carries history",
+            "paints the whole image when the TUI started while hidden",
+            "reads the pane buffer after a queued alt-screen entry parses",
+            "repaints from the normal buffer once the host TUI has exited",
+            "clears a raw byte replay in place on the alt screen",
+            "paints a requested image from an exited TUI exactly over an alt screen"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts",
+          "assertions": [
+            "keeps the covered history for a live TUI exactly as the host holds it",
+            "repaints from the normal buffer once the host TUI has exited"
+          ]
+        },
         {
           "file": "src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts",
           "assertions": [
@@ -21412,6 +21455,90 @@
         "A tombstone that exhausts its retries stays on disk until the next startup, unchanged from before."
       ],
       "demotionRule": "Keep experimental or demote if the reused listing strands a displaced root, crosses the admission cap, rearms an exhausted retry through another root, hands one tombstone to removal twice, or touches a recreated live history path."
+    },
+    {
+      "id": "terminal-performance.consumed-side-effect-retention",
+      "title": "Terminal side-effect queues release successfully applied and evicted effects",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-unit",
+      "surfaces": ["terminal output side effects", "renderer memory census"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Provider-independent queue and mocked IPC output contracts run on macOS. Remote-runtime uses this processor but has no live session run. Native mobile uses another processor and is unaffected; host ownership, ACKs, wire, paths, folder/git identity, PTY lifecycle and output bytes are unchanged. Linux, Windows, WSL and live remote execution are gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/terminal-pane/pty-output-side-effect-queue.ts"
+      ],
+      "invariant": "Release consumed title/payload objects after successful apply or overflow carry, preserving callback order, 64-effect drains, the 512-effect pending cap, bell and payload carry, empty-tail coalescing, reentrant clear/flush/enqueue, thrown-apply behavior and output delivery.",
+      "oracle": "Forced GC collects all 64 applied effects from a 100-effect bounded drain while the remaining 36 stay alive and deliver in order; it also collects the first evicted effect in a 513-effect burst while all 512 survivors remain alive. Clearing during apply immediately releases all 99 other pending effects, as the original queue did. Census reports 36 retained objects after the bounded drain. Explicit reentrant and error cases produce the same observations against the original queue.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/terminal-pane/pty-output-side-effect-queue-retention.test.ts src/renderer/src/components/terminal-pane/pty-output-side-effect-queue-reentrancy.test.ts src/renderer/src/components/terminal-pane/pty-side-effect-pending-census.test.ts src/renderer/src/components/terminal-pane/pty-transport-output-side-effects.test.ts src/renderer/src/components/terminal-pane/pty-transport-eager-buffer-replay.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/pty-output-side-effect-queue-retention.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-output-side-effect-queue-reentrancy.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-side-effect-pending-census.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-transport-output-side-effects.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-transport-eager-buffer-replay.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-output-side-effect-queue-retention.test.ts",
+          "assertions": [
+            "releases applied effects while preserving every pending effect and its delivery order",
+            "releases an evicted effect before the compaction threshold",
+            "releases every pending effect immediately when clear is called during apply"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-output-side-effect-queue-reentrancy.test.ts",
+          "assertions": [
+            "keeps empty-tail coalescing observable during the apply callback",
+            "delivers the same effect requeued after clear without releasing its new slot",
+            "preserves nested flush order and effects enqueued after the inner compaction",
+            "preserves thrown apply errors and their existing empty-tail coalescing"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-01",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/terminal-pane/pty-output-side-effect-queue-retention.test.ts src/renderer/src/components/terminal-pane/pty-output-side-effect-queue-reentrancy.test.ts src/renderer/src/components/terminal-pane/pty-side-effect-pending-census.test.ts src/renderer/src/components/terminal-pane/pty-transport-output-side-effects.test.ts src/renderer/src/components/terminal-pane/pty-transport-eager-buffer-replay.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.66,
+          "summary": "46 tests across five files passed. Four reentrant/error cases also pass against an isolated original-queue copy; stock and candidate both release 99 pending effects when clear runs during apply."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Focused renderer queue/output tests, including forced GC; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local author and independent review validation; no CI soak. Reference-lifetime tests require the test runner's existing --expose-gc."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Original queue fails both WeakRef collection assertions: all 64 applied effects and the evicted effect remain reachable. Clearing only consumed slots passes while all pending effects stay live. Baseline and candidate both pass all four reentrant/error observations."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Retained objects fall from 100 to 36 after one bounded drain and from 513 to 512 after one overflow eviction before compaction. Release is constant work per consumed effect; no changed drain limit, timer, polling, batching, cache, transport call or subprocess. Existing compaction cadence remains; clear truncates then replaces its backing array to preserve immediate release and protect reentrant same-object requeue."
+      },
+      "knownGaps": [
+        "No real renderer heap-byte or input-latency measurement; references and complete delivery are the deterministic oracle.",
+        "No live Linux, Windows, WSL, SSH or paired-runtime session run; these use provider-independent queue code.",
+        "Thrown apply callbacks keep their consumed reference until the original compaction boundary to preserve exception/coalescing behavior."
+      ],
+      "promotionCriteria": [
+        "Collect CI soak with zero unexplained GC flakes and retain callback-order, overflow-carry and reentrancy assertions."
+      ],
+      "demotionRule": "Keep experimental; investigate delivery, coalescing, error-path or pending-reference regressions without weakening the retention or fidelity oracle."
     }
   ]
 }

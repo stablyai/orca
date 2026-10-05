@@ -36,7 +36,7 @@ export function NativeChatInteractiveCard({
    *  a target while the composer is unmounted. */
   answerInputRef?: React.RefObject<HTMLInputElement | null>
 }): React.JSX.Element | null {
-  const { sendAnswer, sendRaw, cancelPending, cancel } = send
+  const { sendAnswer, sendRaw, cancelPending, cancelAsk } = send
   const cardKey = useMemo(() => nativeChatCardDismissKey(card), [card])
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
   // A question answer is a paced multi-step write (body→Enter per question); keep
@@ -135,7 +135,7 @@ export function NativeChatInteractiveCard({
         onCancel={() => {
           clearDismissTimer()
           setDismissedKey(cardKey)
-          cancel()
+          cancelAsk()
         }}
       />
     )

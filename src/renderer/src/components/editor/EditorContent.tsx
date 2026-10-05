@@ -8,6 +8,7 @@ import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
 import { EditorDiffFileSurface } from './EditorDiffFileSurface'
 import { EditorEditFileSurface } from './EditorEditFileSurface'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
+import { MarkdownPreviewSizeGate } from './MarkdownPreviewSizeGate'
 import type { FileContent } from './editor-panel-content-types'
 import { buildPdfScalePreferenceKey } from './pdf-scale-preference-storage'
 import { translate } from '@/i18n/i18n'
@@ -208,22 +209,25 @@ export function EditorContent({
       )
     }
     const previewSourceFileId = activeFile.markdownPreviewSourceFileId ?? activeFile.filePath
+    const previewContent = editBuffers[previewSourceFileId] ?? fileContent.content
     return (
       <div className="min-h-0 flex-1">
-        <MarkdownPreview
-          key={viewStateScopeId}
-          content={editBuffers[previewSourceFileId] ?? fileContent.content}
-          filePath={activeFile.filePath}
-          sourceFileId={previewSourceFileId}
-          sourceWorktreeId={activeFile.worktreeId}
-          sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
-          scrollCacheKey={markdownPreviewViewStateKey}
-          initialAnchor={activeFile.markdownPreviewAnchor ?? null}
-          showTableOfContents={showMarkdownTableOfContents}
-          onCloseTableOfContents={onCloseMarkdownTableOfContents}
-          markdownAnnotationsEnabled={markdownAnnotationsEnabled}
-          {...markdownDocuments.previewProps}
-        />
+        <MarkdownPreviewSizeGate content={previewContent}>
+          <MarkdownPreview
+            key={`${viewStateScopeId}:${markdownPreviewViewStateKey}`}
+            content={previewContent}
+            filePath={activeFile.filePath}
+            sourceFileId={previewSourceFileId}
+            sourceWorktreeId={activeFile.worktreeId}
+            sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
+            scrollCacheKey={markdownPreviewViewStateKey}
+            initialAnchor={activeFile.markdownPreviewAnchor ?? null}
+            showTableOfContents={showMarkdownTableOfContents}
+            onCloseTableOfContents={onCloseMarkdownTableOfContents}
+            markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+            {...markdownDocuments.previewProps}
+          />
+        </MarkdownPreviewSizeGate>
       </div>
     )
   }

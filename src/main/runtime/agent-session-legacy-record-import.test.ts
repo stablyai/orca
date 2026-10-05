@@ -17,10 +17,10 @@ import {
 } from '../../shared/agent-session-record.test-fixture'
 import { journalPragmaNumber } from '../native-chat/agent-session-journal/journal-database'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
-import type { LegacyAgentSessionRecordImportReport } from './agent-session-legacy-record-import'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import { legacyAgentSessionStorePath } from './agent-session-record-store-file'
 import { openStructuredAgentSessionJournalDatabase } from './structured-agent-session-journal-open'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const NOW = 1_800_000_000_000
 const ALPHA = 'session-alpha'
@@ -96,15 +96,19 @@ async function writeLegacy(file: unknown, backup?: unknown): Promise<void> {
 async function install(): Promise<{
   database: JournalHostDatabase
   store: AgentSessionRecordStore
-  reports: LegacyAgentSessionRecordImportReport[]
+  reports: unknown[]
 }> {
-  const reports: LegacyAgentSessionRecordImportReport[] = []
+  const log = recordingStructuredAgentSessionLogger()
   const database = await openStructuredAgentSessionJournalDatabase({
+    logger: log.logger,
     stateDirectory: root,
-    hostId: 'local',
-    onLegacyRecordImportReport: (report) => reports.push(report)
+    hostId: 'local'
   })
   opened.push(database)
+  // Each report reaches the log as one entry under its scope, its kind as the outcome.
+  const reports = log.entries
+    .filter((entry) => entry.fields.scope === 'legacy-record-import')
+    .map(({ fields: { scope: _scope, outcome, ...rest } }) => ({ kind: outcome, ...rest }))
   return {
     database,
     store: AgentSessionRecordStore.open({ journalDatabase: database, hostId: 'local' }),

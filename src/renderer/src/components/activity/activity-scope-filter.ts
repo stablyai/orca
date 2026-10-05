@@ -1,14 +1,34 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
+import {
+  isAutomationGeneratedWorkspace,
+  isCliCreatedWorkspace
+} from '@/components/sidebar/visible-worktree-kinds'
+import { isWorkspaceFromOtherDevice } from '@/components/sidebar/workspace-creator-visibility'
 import type { AgentPaneThread } from './activity-thread-types'
 
-/** Host/project scope for the Agents activity surfaces. Persisted and separate
+/** Host/project/workspace-origin scope for the Agents activity surfaces. Persisted and separate
  *  from the workspace-nav filters; hosts `null` = all, repoIds empty = all. */
 export type ActivityScopeFilter = {
   visibleHostIds: readonly ExecutionHostId[] | null
   filterRepoIds: readonly string[]
   defaultHostId: ExecutionHostId
+  hideWorkspacesFromOtherDevices: boolean
+  /** Only read when hideWorkspacesFromOtherDevices is on. */
+  pairedDeviceIdsByEnvironment: ReadonlyMap<string, string>
+  hideAutomationGeneratedWorkspaces: boolean
+  hideCliCreatedWorkspaces: boolean
+}
+
+function isActivityScopeActive(scope: ActivityScopeFilter): boolean {
+  return (
+    scope.visibleHostIds !== null ||
+    scope.filterRepoIds.length > 0 ||
+    scope.hideWorkspacesFromOtherDevices ||
+    scope.hideAutomationGeneratedWorkspaces ||
+    scope.hideCliCreatedWorkspaces
+  )
 }
 
 /** Repo ids that still exist; stale persisted ids must not count as an active filter. */
@@ -36,7 +56,7 @@ export function filterThreadsByActivityScope(args: {
   hiddenCount: number
 } {
   const { threads, scope, exemptPaneKey } = args
-  if (!scope.visibleHostIds && scope.filterRepoIds.length === 0) {
+  if (!isActivityScopeActive(scope)) {
     return { threads, matchingThreads: threads, hiddenCount: 0 }
   }
   const matchingThreads: AgentPaneThread[] = []
@@ -75,6 +95,19 @@ export function threadMatchesActivityScope(
     if (!thread.repo || !scope.filterRepoIds.includes(thread.repo.id)) {
       return false
     }
+  }
+  // Synthetic floating/standalone worktrees carry no provenance, so these never hide them.
+  if (scope.hideAutomationGeneratedWorkspaces && isAutomationGeneratedWorkspace(thread.worktree)) {
+    return false
+  }
+  if (scope.hideCliCreatedWorkspaces && isCliCreatedWorkspace(thread.worktree)) {
+    return false
+  }
+  if (
+    scope.hideWorkspacesFromOtherDevices &&
+    isWorkspaceFromOtherDevice(thread.worktree, scope.pairedDeviceIdsByEnvironment)
+  ) {
+    return false
   }
   return true
 }

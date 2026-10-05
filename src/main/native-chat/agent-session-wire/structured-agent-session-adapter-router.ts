@@ -1,13 +1,11 @@
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
+import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionAccountHome,
   AgentSessionExecutionLocation
 } from '../../../shared/agent-session-record'
-import type {
-  StructuredAgentSessionAdapter,
-  StructuredAgentSessionStopCause
-} from './structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 
 type RoutedAgent = 'claude' | 'codex'
 type SessionRoute = { adapter: StructuredAgentSessionAdapter; state: 'live' | 'stopped' }
@@ -118,8 +116,30 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   holdsDispatch = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsDispatch?.(sessionId) ?? false
 
+  stopEndsSession = (sessionId: string): boolean =>
+    this.liveOwnerOrNull(sessionId)?.stopEndsSession?.(sessionId) ?? false
+
+  awaitStoppedRequestEnd = async (sessionId: string, stoppedAt: number) =>
+    this.liveOwnerOrNull(sessionId)?.awaitStoppedRequestEnd?.(sessionId, stoppedAt)
+
+  routePromptCancel: NonNullable<StructuredAgentSessionAdapter['routePromptCancel']> = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.routePromptCancel?.(input)
+
+  dismissPrompt: NonNullable<StructuredAgentSessionAdapter['dismissPrompt']> = async (input) =>
+    this.owner(input.sessionId).dismissPrompt?.(input)
+
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
     this.liveOwnerOrNull(sessionId)?.readCommands?.(sessionId)
+
+  atRestCommands: StructuredAgentSessionAtRestCommands = {
+    read: (record) => this.adapters[record.provider].atRestCommands?.read(record),
+    onChange: (listener) => {
+      const stops = Object.values(this.adapters).flatMap((adapter) =>
+        adapter.atRestCommands ? [adapter.atRestCommands.onChange(listener)] : []
+      )
+      return () => stops.forEach((stop) => stop())
+    }
+  }
 
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (input) =>
     this.owner(input.sessionId).answerPrompt(input)
@@ -143,29 +163,25 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   readOptionRestoreFailures = (sessionId: string): readonly string[] =>
     this.owner(sessionId).readOptionRestoreFailures?.(sessionId) ?? []
 
-  historyFilePath = (input: { identity: AgentSessionJournalIdentity }) =>
-    this.requireAgent(input.identity).historyFilePath?.(input) ?? Promise.resolve(null)
-
   providerHistoryWindow = (input: {
     identity: AgentSessionJournalIdentity
     accountHome: AgentSessionAccountHome
   }) => this.requireAgent(input.identity).providerHistoryWindow?.(input) ?? Promise.resolve(null)
 
-  closeSession = (sessionId: string, cause?: StructuredAgentSessionStopCause): Promise<boolean> =>
-    this.stopSession(sessionId, (adapter) => adapter.closeSession, cause)
+  closeSession = (sessionId: string): Promise<boolean> =>
+    this.stopSession(sessionId, (adapter) => adapter.closeSession)
 
   forceCloseSession = (sessionId: string): Promise<boolean> =>
     this.stopSession(sessionId, (adapter) => adapter.forceCloseSession ?? adapter.closeSession)
 
-  disposeSession = (sessionId: string, cause?: StructuredAgentSessionStopCause): Promise<boolean> =>
-    this.stopSession(sessionId, (adapter) => adapter.disposeSession ?? adapter.closeSession, cause)
+  disposeSession = (sessionId: string): Promise<boolean> =>
+    this.stopSession(sessionId, (adapter) => adapter.disposeSession ?? adapter.closeSession)
 
   private async stopSession(
     sessionId: string,
     selectStop: (
       adapter: StructuredAgentSessionAdapter
-    ) => NonNullable<StructuredAgentSessionAdapter['closeSession']> | undefined,
-    cause?: StructuredAgentSessionStopCause
+    ) => NonNullable<StructuredAgentSessionAdapter['closeSession']> | undefined
   ): Promise<boolean> {
     const route = this.routes.get(sessionId)
     if (!route) {
@@ -178,7 +194,7 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
       return true
     }
     const stop = selectStop(route.adapter)
-    const stopped = await stop?.call(route.adapter, sessionId, cause)
+    const stopped = await stop?.call(route.adapter, sessionId)
     if (stopped === true) {
       route.state = 'stopped'
       return true

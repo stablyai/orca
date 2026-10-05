@@ -50,6 +50,8 @@ describe('NativeChatImageAttachmentPreview', () => {
     mocks.useLocalImageSrc.mockReturnValue(undefined)
     renderPreview({ id: 'a1', path: '', previewUrl: 'blob:clipboard-1', pending: true })
 
-    expect(mocks.useLocalImageSrc).toHaveBeenCalledWith(undefined, '', undefined)
+    expect(mocks.useLocalImageSrc).toHaveBeenCalledWith(undefined, '', undefined, undefined, {
+      kind: 'chat-image'
+    })
   })
 })

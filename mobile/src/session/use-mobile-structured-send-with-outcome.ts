@@ -1,10 +1,11 @@
 // The structured composer's one send seam: a slash command dispatches as a
 // conversation command, and everything else goes out as an
 // `agentSession.send` — carrying `delivery: 'queue-if-active'` only when the
-// host advertises the queue.
+// host advertises the queue and no pending prompt is one this build cannot answer.
 
 import { useCallback } from 'react'
 import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
+import { pendingPromptsAllUnanswerableHere } from '../../../src/shared/agent-session-approval-subject'
 import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
@@ -36,7 +37,6 @@ export function useMobileStructuredSendWithOutcome(args: {
   queueCapable: boolean
   stateRef: { readonly current: StructuredAgentSessionState }
   commandPending: { current: boolean }
-  operationIds: Map<string, string>
   controller: Pick<
     StructuredAgentSessionComposerOptions,
     'snapshot' | 'setOption' | 'invokeAction' | 'conversationCommands'
@@ -56,7 +56,6 @@ export function useMobileStructuredSendWithOutcome(args: {
     controller,
     enabled,
     onSendError,
-    operationIds,
     queueCapable,
     sessionId,
     sessionKey,
@@ -90,9 +89,7 @@ export function useMobileStructuredSendWithOutcome(args: {
         client,
         sessionId,
         fence: currentFence,
-        sessionKey,
         pending: commandPending,
-        operationIds,
         controller: {
           agent: agent === 'claude' ? 'claude' : 'codex',
           ...controller
@@ -120,7 +117,11 @@ export function useMobileStructuredSendWithOutcome(args: {
         expectedRuntimeFence: currentFence,
         text,
         attachments: sendAttachments,
-        ...(queueCapable ? { delivery: 'queue-if-active' as const } : {}),
+        // The host's queue waits on any pending prompt; one this build cannot answer would hold
+        // the send forever, so it starts a turn, whose card cancel then works.
+        ...(queueCapable && !pendingPromptsAllUnanswerableHere(stateRef.current.items)
+          ? { delivery: 'queue-if-active' as const }
+          : {}),
         deadline,
         onError: onSendError
       })
@@ -133,7 +134,6 @@ export function useMobileStructuredSendWithOutcome(args: {
       controller,
       enabled,
       onSendError,
-      operationIds,
       queueCapable,
       sessionId,
       sessionKey,

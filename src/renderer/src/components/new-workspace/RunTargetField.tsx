@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import React from 'react'
 import { ChevronDown, Cloud } from 'lucide-react'
 import { PopoverAnchor } from '@/components/ui/popover'
@@ -63,7 +64,7 @@ export default function RunTargetField({
           ) : null}
         </span>
         <div className="relative min-w-0 flex-1 overflow-hidden">
-          <input
+          <ImeInput
             ref={inputRef}
             type="text"
             role="combobox"

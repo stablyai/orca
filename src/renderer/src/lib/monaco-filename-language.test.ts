@@ -24,6 +24,45 @@ describe('Monaco filename detection', () => {
     expect(detectLanguage(path)).toBe(language)
   })
 
+  it.each([
+    'lib/tasks/devise.rake',
+    'config.ru',
+    'app/views/posts/index.json.jbuilder',
+    'lib/tasks/install.thor',
+    'rails/Guardfile',
+    'deploy/Capfile',
+    'ios/Podfile',
+    'homebrew/Brewfile',
+    'vms/Vagrantfile',
+    'C:\\repo\\lib\\tasks\\DEVISE.RAKE',
+    'C:\\repo\\CONFIG.RU',
+    'C:\\repo\\INDEX.JSON.JBUILDER',
+    'C:\\repo\\INSTALL.THOR',
+    'C:\\vms\\VAGRANTFILE',
+    '/home/user/folder workspace/tasks/Daily.RaKe',
+    'main.rb',
+    'main.rbx',
+    'main.rjs',
+    'package.gemspec',
+    'script.pp',
+    'Rakefile',
+    'Gemfile'
+  ])('recognizes Ruby source %s', (path) => {
+    expect(detectLanguage(path)).toBe('ruby')
+    expect(detectMonacoFilenameLanguage(path.split(/[\\/]/).at(-1)!)).toBe('ruby')
+  })
+
+  it.each([
+    'report.rake.bak',
+    'ruby.rakex',
+    'Guardfile.bak',
+    'Guardfilex',
+    'tasks.rake/README',
+    'tasks.rake\\README'
+  ])('keeps non-Ruby file %s on plaintext', (path) => {
+    expect(detectLanguage(path)).toBe('plaintext')
+  })
+
   it('recognizes every unambiguous upstream extension and filename', () => {
     for (const language of associations) {
       for (const extension of language.extensions) {

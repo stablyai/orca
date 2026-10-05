@@ -1,0 +1,49 @@
+name: macOS updater regression tests
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/macos-updater-tests.yml'
+      - 'src/main/macos-update-running-instances*'
+      - 'src/main/updater*'
+      - 'src/main/updater/**'
+      - 'src/main/startup/main-process-quit*'
+      - 'src/main/window/main-window-state-lifecycle*'
+      - 'src/main/window/dashboard-popout-window*'
+      - 'src/shared/child-process/**'
+      - 'src/shared/update-status-types.ts'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-updater-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  updater:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+      - name: Exercise native application registry and update shutdown
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: >-
+          pnpm exec vitest run --config config/vitest.config.ts
+          src/main/macos-update-running-instances.test.ts
+          src/main/macos-update-running-instances.integration.test.ts
+          src/main/updater.mac-install.test.ts
+          src/main/updater.headless-serve-install.test.ts
+          src/main/updater-mac-quit-guard.test.ts
+          src/main/startup/desktop-startup-ordering.test.ts
+          src/main/startup/main-process-quit-update-veto.test.ts
+          src/main/window/main-window-state-lifecycle.test.ts
+          src/main/window/dashboard-popout-window.test.ts

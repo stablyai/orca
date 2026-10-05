@@ -66,8 +66,11 @@ export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
           if (next !== session) {
             setWorkspaceSession(next, hostId)
           }
-          staged.set(hostId, cloneWorkspaceSessionState(getWorkspaceSession(hostId)))
           dispatchIds.add(candidate.dispatchId)
+        }
+        // Rollback needs the final stored state, not a full-session copy after every worker.
+        for (const hostId of originals.keys()) {
+          staged.set(hostId, cloneWorkspaceSessionState(getWorkspaceSession(hostId)))
         }
         return {
           value: dispatchIds,

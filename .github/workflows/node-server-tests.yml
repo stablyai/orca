@@ -1,0 +1,486 @@
+name: Headless Node server
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/**'
+      - 'config/**'
+      - 'native/**'
+      - 'tests/**'
+      - 'resources/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig.json'
+      - '.npmrc'
+      - '.pnpmfile.cjs'
+      - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/restore-pnpm-verification/**'
+      - '.github/actions/prepare-headless-compiler/**'
+      - '.github/actions/prepare-native-runtime/**'
+      - '.github/actions/prepare-orcad-prebuilds/**'
+      - '.github/workflows/node-server-tests.yml'
+  # Relevant main pushes qualify every platform after the dependency check.
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'config/**'
+      - 'native/**'
+      - 'tests/**'
+      - 'resources/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig.json'
+      - '.npmrc'
+      - '.pnpmfile.cjs'
+      - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/restore-pnpm-verification/**'
+      - '.github/actions/prepare-headless-compiler/**'
+      - '.github/actions/prepare-native-runtime/**'
+      - '.github/actions/prepare-orcad-prebuilds/**'
+      - '.github/workflows/node-server-tests.yml'
+  workflow_dispatch:
+    inputs:
+      build_template:
+        description: Also merge every lane's slot into the desktop orcad template artifact
+        type: boolean
+        default: false
+  # Release packaging calls this to build the orcad template it ships (design D2).
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref every lane checks out, e.g. the release tag
+        type: string
+        default: ''
+      build_template:
+        description: Upload each lane's release slot and merge them into the orcad-template artifact
+        type: boolean
+        default: false
+  schedule:
+    - cron: '30 11 * * *'
+
+permissions:
+  contents: read
+
+# Main pushes must finish detection before they can supersede relevant qualification.
+concurrency:
+  group: node-server-${{ (inputs.build_template || github.event_name == 'push') && format('run-{0}', github.run_id) || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ !inputs.build_template && github.event_name != 'push' }}
+
+jobs:
+  changes:
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft != true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      should_run: ${{ steps.scope.outputs.should_run || steps.graph.outputs.should_run }}
+      qualification: ${{ steps.scope.outputs.qualification || steps.graph.outputs.qualification }}
+      runners: ${{ steps.scope.outputs.runners || steps.graph.outputs.runners }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+      - name: Detect headless-server build and test inputs
+        id: scope
+        shell: bash
+        env:
+          PUSH_BASE: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = push ]; then
+            # Compare the entire push, including multi-commit pushes and removed files.
+            if git fetch --no-tags --depth=1 origin "$PUSH_BASE" &&
+               git diff --name-only --no-renames -z "$PUSH_BASE" HEAD > "$RUNNER_TEMP/node-server-changes"; then
+              node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --defer-graph --full-qualification
+            else
+              echo 'should_run=true' >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+          # Compare the tested merge with its base, retaining both sides of renames.
+          if git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/node-server-changes"; then
+            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --defer-graph
+          else
+            echo 'should_run=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: ./.github/actions/prepare-headless-compiler
+        id: compiler
+        if: steps.scope.outputs.graph_required == 'true'
+        continue-on-error: true
+      - uses: ./.github/actions/install-node-dependencies
+        if: steps.scope.outputs.graph_required == 'true' && steps.compiler.outputs.available != 'true'
+      - name: Check the headless import graph
+        id: graph
+        if: steps.scope.outputs.graph_required == 'true'
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = push ]; then
+            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --full-qualification
+          else
+            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes"
+          fi
+
+  persistence:
+    needs: changes
+    concurrency:
+      group: node-server-persistence-${{ matrix.os }}-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
+    # Missing/failed detection runs the full matrix; manual runs remain unconditional.
+    # A draft carries no platform verdict; readiness re-triggers this workflow. Spelled against
+    # the event name so the push and schedule paths do not rest on a null property comparison.
+    if: >-
+      ${{ !cancelled() && needs.changes.outputs.should_run != 'false' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.changes.outputs.runners || '["ubuntu-22.04","ubuntu-24.04-arm","macos-15","macos-15-intel","windows-2022","windows-11-arm"]') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: ${{ runner.os == 'Windows' && 'node' || 'none' }}
+          cache-pnpm-store: ${{ runner.os != 'Windows' }}
+          cache-pnpm-store-lookup-only: 'true'
+      # Design D7 upgrade and rollback: the last Bun orcad, built from a main commit that shipped
+      # it, beside this checkout's Node slot; the live-terminal hand-over skips once PROTOCOL_VERSION
+      # moves past the Bun daemon's. Install its pinned dependencies independently of this checkout.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        if: runner.os == 'Linux'
+        with:
+          bun-version: 1.4.2
+      - name: Build the last Bun orcad for the cross-runtime tests
+        id: bun-orcad
+        background: true
+        shell: bash
+        env:
+          BUN_ORCAD_COMMIT: f4092c06d639ee13ad446261dcabc78b27a21fbc
+        run: |
+          if [ "$RUNNER_OS" != Linux ]; then exit 0; fi
+          git fetch --no-tags --depth=1 origin "$BUN_ORCAD_COMMIT"
+          git worktree add --detach "$RUNNER_TEMP/bun-orcad-source" "$BUN_ORCAD_COMMIT"
+          pnpm --dir "$RUNNER_TEMP/bun-orcad-source" install --frozen-lockfile --ignore-scripts
+          node "$RUNNER_TEMP/bun-orcad-source/config/scripts/build-orcad-bun.mjs" --out-dir "$RUNNER_TEMP/bun-orcad"
+          echo "slot=$RUNNER_TEMP/bun-orcad" >> "$GITHUB_OUTPUT"
+          echo "executable=$(command -v bun)" >> "$GITHUB_OUTPUT"
+      # Linux release slots come from the floor and Alpine lanes; this slot serves local tests.
+      - uses: ./.github/actions/prepare-orcad-prebuilds
+        id: orcad-prebuild
+        with:
+          resolve-windows-cache: >-
+            ${{ !inputs.build_template && inputs.ref == '' &&
+            (github.event_name == 'pull_request' ||
+            (github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name))) }}
+          restore-windows-cache: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+      - run: pnpm build:orcad
+      - wait: bun-orcad
+      - run: pnpm test:node-server --artifact ${{ runner.os == 'Linux' && '--cross-runtime' || '' }}
+        env:
+          ORCA_BUN_ORCAD_SLOT: ${{ steps.bun-orcad.outputs.slot }}
+          BUN_EXECUTABLE: ${{ steps.bun-orcad.outputs.executable }}
+      # Only a Windows runner compiles it; arm64 cross-compiles here, as release-cut does for the relay.
+      # Before the Node 18 check below: the build script imports TypeScript, which Node 18 cannot load.
+      - name: Build the Windows process-table addons for the desktop template
+        if: inputs.build_template && matrix.os == 'windows-2022'
+        shell: bash
+        run: |
+          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
+          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
+      - name: Keep the Windows process-table addons for the desktop template
+        if: inputs.build_template && matrix.os == 'windows-2022'
+        uses: actions/upload-artifact@v7
+        with:
+          name: orcad-windows-process-tree
+          path: .build/windows-process-tree/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+      - uses: actions/setup-node@v6
+        if: runner.arch == 'X64'
+        with:
+          node-version: '18'
+      - name: Verify Node 18 loads and hands off to the pinned Node
+        if: runner.arch == 'X64'
+        shell: bash
+        run: |
+          node out/orcad/orcad.js --orcad-smoke-load-check
+          node out/orcad/orcad.js --orcad-profile-state-preflight 00000000-0000-4000-8000-000000000018 | tee "$RUNNER_TEMP/preflight.json"
+          node -e "const r=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));if(r.runtime!=='node'||!/^24\./.test(r.runtimeVersion))process.exit(1)" "$RUNNER_TEMP/preflight.json"
+      - name: Save the freshly qualified Windows server prebuild on main
+        if: >-
+          success() && runner.os == 'Windows' && (runner.arch == 'X64' || runner.arch == 'ARM64') &&
+          !inputs.build_template && inputs.ref == '' && github.ref == 'refs/heads/main' &&
+          contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) &&
+          steps.orcad-prebuild.outputs.cache-identity-outcome == 'success' &&
+          steps.orcad-prebuild.outputs.cache-key != ''
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ steps.orcad-prebuild.outputs.cache-path }}
+          key: ${{ steps.orcad-prebuild.outputs.cache-key }}
+      # Linux release slots come from the floor and Alpine lanes; these runners own the rest.
+      - name: Keep this runner's qualified slot for the desktop template
+        if: inputs.build_template && runner.os != 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: orcad-prebuild-${{ matrix.os }}
+          path: out/orcad-prebuilds/
+          if-no-files-found: error
+          retention-days: 7
+          # A rerun attempt re-uploads under the same name, which v4 otherwise refuses.
+          overwrite: true
+
+  linux_glibc_floor:
+    needs: [changes, persistence]
+    concurrency:
+      group: node-server-linux_glibc_floor-${{ matrix.os }}-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
+    # A failed smoke already blocks qualification; missing scope still selects every platform.
+    if: >-
+      ${{ !cancelled() && needs.persistence.result == 'success' &&
+      needs.changes.outputs.should_run != 'false' &&
+      needs.changes.outputs.qualification != 'false' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04-arm]
+        # Design D6: server glibc slots are built and gated on glibc 2.28, where the pinned Node's
+        # own floor is; the desktop keeps its Ubuntu 20.04 gate. gcc-toolset-14 supplies C++20 and
+        # links newer libstdc++ symbols statically, so the slot needs only RHEL 8's GLIBCXX_3.4.25.
+        include:
+          - os: ubuntu-22.04
+            image: quay.io/pypa/manylinux_2_28_x86_64@sha256:407f771c51a2c3e83ebe5a7970b4289ead3a6db21d9b9c089168775cad11d328
+          - os: ubuntu-24.04-arm
+            image: quay.io/pypa/manylinux_2_28_aarch64@sha256:c22ffd129ac99a8a42d1f2c2f4e88a9089288dd9ee987a7092da1c7dc48f27a9
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.image }}
+    timeout-minutes: 25
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+      # The image puts /opt/clang first on PATH; the slot is built with its gcc-toolset.
+      CC: gcc
+      CXX: g++
+      PYTHON: /opt/python/cp312-cp312/bin/python3
+    steps:
+      - name: Install glibc 2.28 prerequisites
+        run: |
+          missing_tool=false
+          for tool in git ps unzip which xz; do
+            if ! command -v "$tool" >/dev/null 2>&1; then
+              missing_tool=true
+            fi
+          done
+          if [ "$missing_tool" = true ]; then
+            # The image's source-built Git needs no RPM; missing tools come from AlmaLinux.
+            dnf --disablerepo='epel*' install -y git procps-ng unzip which xz
+          fi
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - name: Trust the checked-out workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: ./.github/actions/install-node-dependencies
+      - name: Build and smoke this runner's node-pty prebuild slot under the pinned Node
+        run: |
+          pnpm build:orcad-prebuilds
+          pnpm build:orcad-prebuilds --require-slots "$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
+          pnpm build:orcad-prebuilds --smoke
+      - run: pnpm build:orcad
+      - run: pnpm test:node-server --artifact
+      - name: Keep this runner's glibc 2.28 slot for the desktop template
+        if: inputs.build_template
+        uses: actions/upload-artifact@v7
+        with:
+          name: orcad-prebuild-glibc-${{ matrix.os }}
+          path: out/orcad-prebuilds/
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+  linux_glibc217_compat:
+    needs: [changes, persistence]
+    concurrency:
+      group: node-server-linux_glibc217_compat-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
+    # A failed smoke already blocks qualification; missing scope still selects every platform.
+    if: >-
+      ${{ !cancelled() && needs.persistence.result == 'success' &&
+      needs.changes.outputs.should_run != 'false' &&
+      needs.changes.outputs.qualification != 'false' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      # Design D6 rung B: the opt-in linux-x64-glibc217 slot beside the unofficial glibc-217 Node.
+      # Why docker run and not container: the runner's own Node for JS actions needs glibc 2.28,
+      # so the host installs and fetches the pinned Node, and the glibc 2.17 image only builds and
+      # smokes with that Node. devtoolset-10 supplies C++20; the slot links libstdc++ statically.
+      - name: Build and smoke the glibc 2.17 compat slot under the glibc-217 Node
+        run: |
+          compat_node="$(node config/scripts/build-orcad-prebuilds.mjs --slot=linux-x64-glibc217 --print-runtime)"
+          case "$compat_node" in
+            "$GITHUB_WORKSPACE"/*) ;;
+            *) echo "glibc-217 Node cached outside the workspace: $compat_node" >&2; exit 1 ;;
+          esac
+          docker run --rm --init -i \
+            -e ORCA_BACKGROUND_LAUNCH=1 \
+            -e COMPAT_NODE="/work/${compat_node#"$GITHUB_WORKSPACE"/}" \
+            -e CC=gcc -e CXX=g++ \
+            -e PYTHON=/opt/python/cp312-cp312/bin/python3 \
+            -v "$GITHUB_WORKSPACE:/work" -w /work \
+            quay.io/pypa/manylinux2014_x86_64@sha256:6f74cabeac2432570aa4bfdb29f7c1f30313d4d6654d764c44e574b6ffdd4ed5 bash -s <<'GLIBC217_COMPAT_SLOT'
+          set -eu
+          export PATH="$(dirname "$COMPAT_NODE"):$PATH"
+          node config/scripts/build-orcad-prebuilds.mjs --slot=linux-x64-glibc217
+          node config/scripts/build-orcad-prebuilds.mjs --require-slots linux-x64-glibc217
+          # The image's devtoolset LD_LIBRARY_PATH must not stand in for a host C++ runtime.
+          env -u LD_LIBRARY_PATH node config/scripts/build-orcad-prebuilds.mjs --slot=linux-x64-glibc217 --smoke
+          GLIBC217_COMPAT_SLOT
+      - name: Keep the glibc 2.17 compat slot for the desktop template
+        if: inputs.build_template
+        uses: actions/upload-artifact@v7
+        with:
+          name: orcad-prebuild-glibc217
+          path: out/orcad-prebuilds/
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+  linux_musl:
+    needs: [changes, persistence]
+    concurrency:
+      group: node-server-linux_musl-${{ matrix.os }}-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
+    # A failed smoke already blocks qualification; missing scope still selects every platform.
+    if: >-
+      ${{ !cancelled() && needs.persistence.result == 'success' &&
+      needs.changes.outputs.should_run != 'false' &&
+      needs.changes.outputs.qualification != 'false' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: ./.github/actions/restore-pnpm-verification
+        id: pnpm-verification
+        with:
+          container-toolchain: 'true'
+      - name: Verify native Alpine artifact and persistence
+        env:
+          VERIFICATION_CACHE_PATH: ${{ steps.pnpm-verification.outputs.path }}
+        run: |
+          touch "$VERIFICATION_CACHE_PATH"
+          # Multi-arch index digest of the tag; re-resolve it whenever NODE_RUNTIME_PIN moves.
+          docker run --rm --init -i \
+            -e ORCA_BACKGROUND_LAUNCH=1 \
+            -v "$VERIFICATION_CACHE_PATH:/root/.cache/pnpm/lockfile-verified.jsonl" \
+            -v "$GITHUB_WORKSPACE:/work" -w /work \
+            node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 sh -s <<'NODE_SERVER_QUALIFICATION'
+          set -eu
+          apk add --no-cache bash git libstdc++ python3 make g++
+          git config --global --add safe.directory /work
+          npm install -g "$(node -p "require('./package.json').packageManager.split('+')[0]")"
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm build:orcad-prebuilds
+          pnpm build:orcad-prebuilds --require-slots "$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
+          pnpm build:orcad-prebuilds --smoke
+          pnpm build:orcad
+          pnpm test:node-server --artifact
+          NODE_SERVER_QUALIFICATION
+      - name: Keep this runner's musl slot for the desktop template
+        if: inputs.build_template
+        uses: actions/upload-artifact@v7
+        with:
+          name: orcad-prebuild-musl-${{ matrix.os }}
+          path: out/orcad-prebuilds/
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+  # Design D2: the desktop ships every target's addons, merged from the lanes that qualified them.
+  desktop_template:
+    needs: [persistence, linux_glibc_floor, linux_glibc217_compat, linux_musl]
+    if: >-
+      ${{ !cancelled() && inputs.build_template &&
+      needs.persistence.result == 'success' && needs.linux_glibc_floor.result == 'success' &&
+      needs.linux_glibc217_compat.result == 'success' && needs.linux_musl.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - name: Collect every lane's slot
+        uses: actions/download-artifact@v8
+        with:
+          pattern: orcad-prebuild-*
+          path: ${{ runner.temp }}/orcad-prebuild-lanes
+      - name: Collect the Windows process-table addons
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-windows-process-tree
+          path: .build/windows-process-tree
+      - name: Merge the lanes and gate the full slot matrix
+        shell: bash
+        run: |
+          node config/scripts/merge-orcad-prebuilds.mjs "$RUNNER_TEMP"/orcad-prebuild-lanes/*
+          pnpm build:orcad-prebuilds --require-slots
+          pnpm build:orcad-prebuilds --require-slots linux-x64-glibc217
+      - run: pnpm build:orcad-template
+      - name: Report the template size
+        shell: bash
+        run: |
+          {
+            echo '### orcad template'
+            echo '```'
+            du -sh out/orcad-template
+            du -sh out/orcad-template/targets/*
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: orcad-template
+          path: out/orcad-template/
+          # The per-target .server-target and .runtime-node markers are dotfiles.
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true

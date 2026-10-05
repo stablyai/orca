@@ -63,6 +63,9 @@ async function scanOneSshHost(
   const relayTimeoutMs = options.relayTimeoutMs ?? options.timeoutMs
   try {
     const params = {
+      ...(args?.includeAntigravityIdeSessions === true
+        ? { includeAntigravityIdeSessions: true }
+        : {}),
       limit: args?.limit,
       ...(args?.unlimited === true ? { unlimited: true } : {}),
       ...(args?.force === true ? { force: true } : {}),
@@ -108,9 +111,13 @@ async function scanOneSshHost(
       scanRemoteAiVaultSessions({
         provider,
         executionHostId,
+        includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions,
         remoteHome: hostInfo.remoteHome,
         hostPlatform: hostInfo.hostPlatform,
         omoSessionsDir: hostInfo.omoSessionsDir,
+        ...(args?.includeAntigravityIdeSessions === true
+          ? { includeAntigravityIdeSessions: true }
+          : {}),
         limit: args?.limit,
         unlimited: args?.unlimited,
         scopePaths,

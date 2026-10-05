@@ -7,6 +7,7 @@ import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
+import type { DeclinedStructuredLaunchTerminalOptions } from '@/lib/structured-agent-session-paired-admission'
 
 export function buildDirectWorkItemStartup(args: {
   agent: TuiAgent | null
@@ -81,7 +82,9 @@ export async function resolveDirectWorkItemAgent(args: {
 export function beginDirectWorkItemStructuredLaunch(args: {
   plan: AgentSessionLaunchPlan | null
   primaryTabId: string | null
-  beforeOpen: (sessionId: string) => boolean | void
+  beforeOpen: (sessionId?: string) => boolean | void
+  /** The terminal launch a paired server's "no" falls back to, carrying the caller's own CLI args. */
+  declinedTerminal?: DeclinedStructuredLaunchTerminalOptions
 }): {
   completed: boolean
   structuredLaunch: boolean
@@ -99,7 +102,8 @@ export function beginDirectWorkItemStructuredLaunch(args: {
   const launch = beginStructuredAgentSessionProvisionalLaunch({
     plan,
     hooks: {},
-    beforeOpen: args.beforeOpen
+    beforeOpen: args.beforeOpen,
+    ...(args.declinedTerminal ? { declinedTerminal: args.declinedTerminal } : {})
   })
   if (!launch) {
     return notLaunched(true)
@@ -107,6 +111,6 @@ export function beginDirectWorkItemStructuredLaunch(args: {
   return {
     completed: true,
     structuredLaunch: true,
-    primaryTabId: launch.tab.id
+    primaryTabId: launch.tab?.id ?? args.primaryTabId
   }
 }

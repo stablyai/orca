@@ -288,7 +288,7 @@ describe('deriving what was working at teardown', () => {
         [
           SESSION,
           {
-            journal: journal([], false, [submission('msg-1', 'pending')]),
+            journal: journal([], [submission('msg-1', 'pending')]),
             child: { fence: 1 }
           }
         ]
@@ -311,9 +311,7 @@ describe('deriving what was working at teardown', () => {
         [
           SESSION,
           {
-            journal: journal([turnItem('turn-0', 'completed')], false, [
-              submission('msg-1', 'pending')
-            ]),
+            journal: journal([turnItem('turn-0', 'completed')], [submission('msg-1', 'pending')]),
             child: { fence: 1 }
           }
         ]
@@ -338,7 +336,7 @@ describe('deriving what was working at teardown', () => {
           [
             SESSION,
             {
-              journal: journal([turnItem('turn-0', 'completed')], false, [queued]),
+              journal: journal([turnItem('turn-0', 'completed')], [queued]),
               child: { fence: 1 }
             }
           ]
@@ -364,14 +362,14 @@ describe('deriving what was working at teardown', () => {
         [
           SESSION,
           {
-            journal: journal([turnItem('turn-0', 'completed')], false, [handedOver, queued]),
+            journal: journal([turnItem('turn-0', 'completed')], [handedOver, queued]),
             child: { fence: 1 }
           }
         ],
         [
           'session-running',
           {
-            journal: journal([turnItem('turn-1', 'running')], false, [queued]),
+            journal: journal([turnItem('turn-1', 'running')], [queued]),
             child: { fence: 1 }
           }
         ]
@@ -397,9 +395,7 @@ describe('deriving what was working at teardown', () => {
         [
           SESSION,
           {
-            journal: journal([turnItem('turn-1', 'running')], false, [
-              submission('msg-1', 'accepted')
-            ]),
+            journal: journal([turnItem('turn-1', 'running')], [submission('msg-1', 'accepted')]),
             child: { fence: 1 }
           }
         ]
@@ -455,7 +451,8 @@ describe('the resumable set', () => {
       getRecord: () => claudeRecord('5aed93d6-advanced-leaf'),
       supportsRecord: () => true,
       latestPrompt: () => '',
-      movedOn: () => false
+      movedOn: () => false,
+      savedByNewerOrca: () => false
     })
 
     expect(candidates).toHaveLength(1)
@@ -470,11 +467,31 @@ describe('the resumable set', () => {
       getRecord: () => claudeRecord(null, 'prov-session-2'),
       supportsRecord: () => true,
       latestPrompt: () => '',
-      movedOn: () => false
+      movedOn: () => false,
+      savedByNewerOrca: () => false
     })
 
     expect(set.candidates).toEqual([])
     expect(set.superseded).toEqual([forked])
+  })
+
+  // Nothing here can continue a chat a newer Orca saved: it is not offered, and its offer is kept
+  // for the Orca that can act on it.
+  it("neither offers nor spends a newer Orca's chat, and offers it once this build can open it", () => {
+    const offer = marker()
+    expect(resumableSet({ markers: [offer], savedByNewerOrca: [SESSION] })).toEqual({
+      candidates: [],
+      superseded: []
+    })
+    expect(resumableSet({ markers: [offer] }).candidates).toHaveLength(1)
+  })
+
+  // Being a newer Orca's chat does not keep a forked chat's offer alive: the fork still ends it.
+  it('still withdraws a forked chat a newer Orca saved', () => {
+    const forked = marker({ providerHandleRoot: 'codex:"other-thread"' })
+    expect(resumableSet({ markers: [forked], savedByNewerOrca: [SESSION] }).superseded).toEqual([
+      forked
+    ])
   })
 
   // An offer has no expiry, however old it is.

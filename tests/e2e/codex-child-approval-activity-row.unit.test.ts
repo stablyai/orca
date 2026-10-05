@@ -20,6 +20,7 @@ import type { AgentJournalItemBody } from '../../src/shared/agent-session-journa
 import { parseAgentJournalItemKey } from '../../src/shared/agent-session-journal-item-key'
 import type { Tab } from '../../src/shared/tab-types'
 import type { AppState } from '../../src/renderer/src/store/types'
+import type * as WorktreeRuntimeOwnerModule from '../../src/renderer/src/lib/worktree-runtime-owner'
 import { createCodexJournalTranslator } from '../../src/main/codex/codex-structured-journal-translation'
 import { CODEX_COMMAND_APPROVAL_METHOD } from '../../src/main/codex/codex-structured-prompt-replies'
 import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
@@ -58,7 +59,9 @@ vi.mock('@/store', async () => {
   return { useAppStore }
 })
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+// Partial: the status projection also resolves each chat's owner from the worktree.
+vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeRuntimeOwnerModule>()),
   getRuntimeEnvironmentIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
     state.testRuntimeOwner ?? null
 }))
@@ -71,6 +74,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 import { StructuredAgentSessionStatusBridge } from '../../src/renderer/src/components/native-chat/StructuredAgentSessionStatusBridge'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '../../src/renderer/src/runtime/structured-agent-session-status-feed'
+import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
+import { testEventSinkLogging } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const SESSION = 'codex-child-approval'
 const CODEX_THREAD = 'thread-parent'
@@ -143,6 +148,7 @@ async function openHost() {
     stateDirectory: join(root, SESSION)
   })
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions: new Map([
       [SESSION, indexedStatusFeedSession({ journal, child: { phase: 'ready' } })]
     ]),
@@ -151,7 +157,7 @@ async function openHost() {
   })
   const events: AgentSessionStatusEvent[] = []
   feed.subscribe({ id: 'renderer', emit: (event) => events.push(event) })
-  const deferred = createDeferredStructuredAgentSessionEventSink()
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const publish = (): void => feed.publish(SESSION, journal)
   deferred.bind({ journal, fence: 1, publish })
   const prompts: string[] = []

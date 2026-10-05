@@ -33,8 +33,13 @@ export function useNativeChatInteractivePromptCard({
     const entry = s.agentStatusByPaneKey[paneKey]
     return entry?.interactivePrompt ? (entry.toolName ?? null) : null
   })
+  const agent = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.agentType)
   return useMemo(() => {
-    const statusCard = parseInteractivePrompt(interactivePrompt, interactiveToolName ?? undefined)
+    const statusCard = parseInteractivePrompt(
+      interactivePrompt,
+      interactiveToolName ?? undefined,
+      agent
+    )
     if (statusCard?.kind === 'approval') {
       return statusCard
     }
@@ -44,5 +49,5 @@ export function useNativeChatInteractivePromptCard({
       transcriptSettled
     })
     return prompt ? { kind: 'question' as const, prompt } : null
-  }, [interactivePrompt, interactiveToolName, messages, transcriptSettled])
+  }, [interactivePrompt, interactiveToolName, agent, messages, transcriptSettled])
 }

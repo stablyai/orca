@@ -5,7 +5,7 @@ const HOST = 'host-1'
 
 /**
  * The desktop notification socket: one subscribe, the catch-up read its `ready` arms, the tray
- * dismissals its events drive, and the server unsubscribe the disposer sends.
+ * dismissals its events drive, and the server unsubscribe the transport sends once it is disposed.
  *
  * The disposer is the whole output — it is what a host connection calls when the client goes away —
  * so the recording drives `start` and `stop` and observes what each put on the wire. Everything the

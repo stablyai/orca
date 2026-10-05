@@ -2,7 +2,6 @@
 
 import type { AgentSessionContextReport } from '../../shared/agent-session-context-usage'
 import type { StructuredAgentSessionSinkAdmission } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionStopCause } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeChildToolQueries } from './claude-child-tool-queries'
 import type { ClaudeContextReportPart, ClaudeContextReportTarget } from './claude-context-facts'
 import type { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
@@ -11,15 +10,13 @@ import type { ClaudeCommandStart } from './claude-command-turn'
 
 export type ClaudeJournalTranslator = {
   handle: (event: ClaudeStructuredSessionEvent) => void
-  journalPrompts: Pick<ClaudeJournalPrompts, 'cancel' | 'resolve'>
+  journalPrompts: Pick<
+    ClaudeJournalPrompts,
+    'resolve' | 'handOver' | 'cancel' | 'openCards' | 'whenWritten'
+  >
   /** The open turn's provider id — the same id its journal row carries, and the one
    *  a client's Stop names. Sole owner: no reader keeps a copy to disagree with. */
   readonly currentTurnId: string | null
-  /** Orca is stopping this turn; its error end reads as the user's cancellation when they asked.
-   *  False when the turn is no longer open. */
-  recordTurnStop: (turnId: string, cause: StructuredAgentSessionStopCause) => boolean
-  /** The provider refused the stop. */
-  withdrawTurnStop: (turnId: string) => void
   /** The open turn's id while it is a conversation command's. */
   readonly commandTurnId: string | null
   /** Makes the host's command turn the open one until the command's result ends it. */

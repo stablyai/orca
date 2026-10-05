@@ -71,9 +71,22 @@ function serializedLifecycleBatchFits(
   return Buffer.byteLength(JSON.stringify(row), 'utf8') + 1 <= MAX_JOURNAL_LIFECYCLE_BATCH_BYTES
 }
 
+/** Sized as a Stop may write it (`turnEndAfterStop`), so the chunk built from it still fits. */
+function sizedAsStopped(mutation: JournalLifecycleMutationInput): JournalLifecycleMutationInput {
+  if (
+    mutation.kind !== 'item' ||
+    mutation.body.kind !== 'turn' ||
+    mutation.body.state !== 'interrupted' ||
+    mutation.body.outcome !== undefined
+  ) {
+    return mutation
+  }
+  return { ...mutation, body: { ...mutation.body, outcome: 'cancellation' } }
+}
+
 function toLifecycleMutationRow(mutation: JournalLifecycleMutationInput): JournalLifecycleMutation {
   return journalLifecycleMutationRow(
-    mutation,
+    sizedAsStopped(mutation),
     agentJournalItemKey(mutation.identity),
     Number.MAX_SAFE_INTEGER
   )

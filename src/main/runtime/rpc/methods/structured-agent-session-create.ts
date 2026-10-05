@@ -142,7 +142,11 @@ export async function commitStructuredAgentSessionCreate(args: {
       ...(surfaceTabId ? { tabId: surfaceTabId } : {})
     })
   } catch (error) {
-    console.warn('[agent-session] create committed before tab publication failed', error)
+    prepared.host.deps.logger.warn('publishing the tab of a created chat failed', {
+      scope: 'create-tab-publication',
+      sessionId: result.value.sessionId,
+      error
+    })
     return {
       ok: false,
       refusal: refuse(

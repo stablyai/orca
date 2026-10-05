@@ -141,7 +141,7 @@ describe('profile state Store authority factory', () => {
   it('uses a capability probe that remains false on a Node 18-style host', () => {
     const original = process.getBuiltinModule
     vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) => {
-      if (id === 'node:sqlite' || id === 'bun:sqlite') {
+      if (id === 'node:sqlite') {
         return undefined
       }
       return original(id)
@@ -358,7 +358,7 @@ describe('profile state Store authority factory', () => {
       }
       const original = process.getBuiltinModule
       vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) =>
-        id === 'node:sqlite' || id === 'bun:sqlite' ? undefined : original(id)
+        id === 'node:sqlite' ? undefined : original(id)
       )
       expect(() => createProfileStateStore(options)).toThrow('Writable profiles require SQLite')
       expect(existsSync(options.databaseFile)).toBe(false)

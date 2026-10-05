@@ -21,6 +21,7 @@ import { useRemoteRuntimeRecoveryTriggers } from '../runtime/use-remote-runtime-
 import { useTerminalViewerColorPublication } from './use-terminal-viewer-color-publication'
 import { useBrowserIdentityMigrationNotice } from '../components/browser-pane/browser-user-agent-migration-notice'
 import { useCodexTerminalServerIsolationNotice } from '../components/terminal-pane/codex-terminal-server-isolation-notice'
+import { useCodexSharedSettingsNotice } from '../components/terminal-pane/codex-shared-settings-notice'
 
 /**
  * App-level subscriptions that must outlive any individual surface. Each one is here because
@@ -56,4 +57,5 @@ export function useAppShellServices(options: { floatingPanelVisible: boolean }):
   useOsc52ClipboardDefaultOnNotice(persistedUIReady)
   useBrowserIdentityMigrationNotice()
   useCodexTerminalServerIsolationNotice()
+  useCodexSharedSettingsNotice()
 }

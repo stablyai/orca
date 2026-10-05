@@ -55,7 +55,7 @@ export function useWorkspaceKanbanSelection(
     if (selectionAnchorId !== null) {
       setSelectionAnchorId(null)
     }
-  } else {
+  } else if (selectedWorktreeIds.size > 0 || selectionAnchorId !== null) {
     const pruned = pruneWorktreeSelection(selectedWorktreeIds, selectionAnchorId, boardWorktreeIds)
     // Why: the drawer can keep rendering while rows are filtered/reordered.
     // Prune stale local selection before children see ids that no longer exist.

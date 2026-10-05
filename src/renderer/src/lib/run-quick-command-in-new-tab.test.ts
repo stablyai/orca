@@ -141,6 +141,7 @@ describe('runQuickCommandInNewTab', () => {
 
     expect(result).toEqual({ tabId: 'tab-agent' })
     expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith({
+      requestId: expect.any(String),
       agent: 'codex',
       prompt: 'Review this diff',
       worktreeId: 'repo::worktree',
@@ -173,6 +174,7 @@ describe('runQuickCommandInNewTab', () => {
     })
 
     expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith({
+      requestId: expect.any(String),
       agent: 'opencode2',
       prompt: 'Review this diff',
       promptDelivery: 'submit-after-ready',
@@ -228,6 +230,7 @@ describe('runQuickCommandInNewTab', () => {
 
     expect(result).toEqual({ tabId: 'tab-agent' })
     expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith({
+      requestId: expect.any(String),
       agent: 'codex',
       prompt: 'Review this diff',
       worktreeId: 'repo::worktree',

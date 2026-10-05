@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { findDynamicVcRuntimeImports, readPeImportedDllNames } from './windows-pe-imports.mjs'
 
 export function windowsCliLauncherFingerprint(inputPaths, version) {
   const hash = createHash('sha256').update(version)
@@ -66,6 +67,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       join(crateRoot, 'build.rs'),
       manifestPath,
       join(crateRoot, 'app.manifest'),
+      join(crateRoot, '.cargo', 'config.toml'),
       iconPath,
       join(repoRoot, 'config/scripts/build-windows-cli-launcher.mjs')
     ],
@@ -117,6 +119,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exit(result.status ?? 1)
   }
 
-  copyFileSync(join(targetDirectory, 'release', 'orca.exe'), outputPath)
+  const builtPath = join(targetDirectory, 'release', 'orca.exe')
+  const vcRuntimeImports = findDynamicVcRuntimeImports(
+    readPeImportedDllNames(readFileSync(builtPath))
+  )
+  if (vcRuntimeImports.length > 0) {
+    // Why fatal: those DLLs ship with the Visual C++ Redistributable, so the CLI would fail to start on a clean Windows install.
+    throw new Error(
+      `orca.exe imports ${vcRuntimeImports.join(', ')}; the C runtime must be linked statically (native/windows-cli-launcher/.cargo/config.toml).`
+    )
+  }
+  copyFileSync(builtPath, outputPath)
   writeFileSync(`${outputPath}.sha256`, fingerprint)
 }

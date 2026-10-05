@@ -27,6 +27,7 @@ import {
   userFrame
 } from './claude-context-usage-test-support'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const SESSION = 'orca-session'
 const journals = createTrackedJournalOpener()
@@ -56,7 +57,7 @@ async function openJournal(): Promise<AgentSessionJournal> {
 }
 
 function translate(journal: AgentSessionJournal) {
-  const deferred = createDeferredStructuredAgentSessionEventSink()
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const translator = createClaudeJournalTranslator({ sink: deferred.sink, coalesceMs: 0 })
   deferred.bind({ journal, fence: 1, publish: () => {} })
   const settle = async (): Promise<void> => {

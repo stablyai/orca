@@ -78,14 +78,28 @@ describe('headless PTY registry hydration ordering', () => {
     const runtime = source.indexOf('const runtime = new OrcaRuntimeService(')
     const identityReader = source.indexOf('readObservedAgentStatusPaneIdentity:', runtime)
     const identitySubscription = source.indexOf('agentHookServer.subscribeEnrichedStatus(')
-    const hooksEnabled = source.indexOf('if (isAgentStatusHooksEnabled(', identitySubscription)
+    const hookStart = source.indexOf('await agentHookServer.start(', identitySubscription)
+    const settingsListener = source.indexOf('profileStore.onSettingsChanged(', hookStart)
+    const daemon = source.indexOf('await startOrcadDaemon()', hookStart)
     const identityFlush = source.indexOf('observedStatusCapture.attach(runtime)', runtime)
 
     expect(runtime).toBeGreaterThanOrEqual(0)
     expect(identityReader).toBeGreaterThan(runtime)
     expect(identitySubscription).toBeGreaterThanOrEqual(0)
     expect(identitySubscription).toBeLessThan(runtime)
-    expect(hooksEnabled).toBeGreaterThan(identitySubscription)
+    expect(hookStart).toBeGreaterThan(identitySubscription)
+    expect(settingsListener).toBeGreaterThan(hookStart)
+    expect(daemon).toBeGreaterThan(settingsListener)
+    expect(runtime).toBeGreaterThan(daemon)
+    expect(source.slice(identitySubscription, hookStart)).not.toContain(
+      'if (isAgentStatusHooksEnabled('
+    )
+    expect(source.slice(hookStart, settingsListener)).toContain(
+      'statusHooksEnabled: isAgentStatusHooksEnabled(profileStore.getSettings())'
+    )
+    expect(source.slice(settingsListener, daemon)).toContain(
+      'agentHookServer.setStatusHooksEnabled(isAgentStatusHooksEnabled(settings))'
+    )
     expect(identityFlush).toBeGreaterThan(runtime)
     expect(source.slice(identitySubscription, runtime)).toContain(
       'observedStatusCapture.observe(enriched)'

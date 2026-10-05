@@ -8,16 +8,17 @@ import type { AgentChildWorkInput } from './agent-status-child-work'
 import { createAgentStatusStore } from './agent-status-store'
 import { parseAgentStatusStoreMutation } from './agent-status-store-codec'
 import { commitAgentStatusStoreMutation } from './agent-status-store-commit'
-import type { AgentStatusStoreMutation } from './agent-status-store-contract'
+import {
+  AGENT_STATUS_STORE_LIMITS,
+  AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS,
+  type AgentStatusStoreMutation
+} from './agent-status-store-contract'
 import { createCopyingAgentStatusStoreOracle } from './agent-status-store-copying-oracle.test-fixture'
 import {
   indexAgentStatusStoreState,
   type AgentStatusStoreIndexes
 } from './agent-status-store-indexes'
-import {
-  createEmptyAgentStatusStoreState,
-  validateAgentStatusStoreState
-} from './agent-status-store-state'
+import { createEmptyAgentStatusStoreState } from './agent-status-store-state'
 import {
   makeStructuredAgentStatusSubject,
   serializeAgentStatusSubject,
@@ -163,7 +164,6 @@ describe('AgentStatusStore applied in place', () => {
           accepted += 1
           expect(replica.applyTransportEnvelope(envelope)).toBe(true)
         }
-        expect(validateAgentStatusStoreState(oracle.state())).toBe(true)
         expect(JSON.stringify(store.getSnapshot())).toBe(JSON.stringify(oracle.getSnapshot()))
         for (const parent of parents) {
           expect(store.getChildren(parent)).toEqual(oracle.getChildren(parent))
@@ -206,18 +206,51 @@ describe('AgentStatusStore applied in place', () => {
     60_000
   )
 
-  it('compacts tombstones exactly as the copying store does past the retention window', () => {
+  it('retires tombstones exactly at the retention revision boundary', () => {
     const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
     const oracle = createCopyingAgentStatusStoreOracle('epoch-a')
     const parent = parents[0]!
-    for (let step = 0; step < 5_000; step += 1) {
-      const mutation: AgentStatusStoreMutation =
-        step % 2 === 0
-          ? { parent: { subject: parent }, facts: [{ subject: parent, key: `k${step}`, value: 1 }] }
-          : { removeFacts: [{ subject: parent, key: `k${step - 1}` }] }
+    for (const childWorkId of ['oldest', 'newer']) {
+      const mutation = { removeChildren: [childWorkId] }
       expect(store.applyMutation(mutation) !== null).toBe(oracle.applyMutation(mutation))
     }
-    expect(oracle.getSnapshot().tombstones.length).toBeGreaterThan(1_000)
+    const advance = { parent: { subject: parent } }
+    for (
+      let revision = 3;
+      revision <= AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS;
+      revision += 1
+    ) {
+      expect(store.applyMutation(advance) !== null).toBe(oracle.applyMutation(advance))
+    }
+    expect(store.getSnapshot().revision).toBe(AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS)
+    expect(store.getSnapshot().tombstones).toEqual([
+      { entity: 'child', key: 'oldest', revision: 1 },
+      { entity: 'child', key: 'newer', revision: 2 }
+    ])
+    expect(JSON.stringify(store.getSnapshot())).toBe(JSON.stringify(oracle.getSnapshot()))
+
+    expect(store.applyMutation(advance) !== null).toBe(oracle.applyMutation(advance))
+    expect(store.getSnapshot().tombstones).toEqual([{ entity: 'child', key: 'newer', revision: 2 }])
+    expect(JSON.stringify(store.getSnapshot())).toBe(JSON.stringify(oracle.getSnapshot()))
+
+    expect(store.applyMutation(advance) !== null).toBe(oracle.applyMutation(advance))
+    expect(store.getSnapshot().tombstones).toEqual([])
+    expect(JSON.stringify(store.getSnapshot())).toBe(JSON.stringify(oracle.getSnapshot()))
+  }, 60_000)
+
+  it('keeps the newest tombstones in order when their count overflows', () => {
+    const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
+    const oracle = createCopyingAgentStatusStoreOracle('epoch-a')
+    const childWorkIds = Array.from(
+      { length: AGENT_STATUS_STORE_LIMITS.tombstones },
+      (_, index) => `removed-${index}`
+    )
+    for (const mutation of [{ removeChildren: ['oldest'] }, { removeChildren: childWorkIds }]) {
+      expect(store.applyMutation(mutation) !== null).toBe(oracle.applyMutation(mutation))
+    }
+    expect(store.getSnapshot().tombstones).toEqual(
+      childWorkIds.map((key) => ({ entity: 'child', key, revision: 2 }))
+    )
     expect(JSON.stringify(store.getSnapshot())).toBe(JSON.stringify(oracle.getSnapshot()))
   }, 60_000)
 })

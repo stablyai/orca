@@ -259,6 +259,7 @@ describe('activity thread host routing', () => {
     expect(acknowledgeAgents).toHaveBeenCalledWith([thread.paneKey])
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith(thread.worktree.id, {
       navigationIntent: 'user-open',
+      showWorkspaceList: true,
       executionHostId: REMOTE_HOST
     })
   })

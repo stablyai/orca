@@ -121,7 +121,11 @@ async function listRemoteFixedChildFiles(
   // serialized SSH readDir round trips for every conversation directory.
   return entries
     .filter((entry) => entry.isDirectory && !entry.isSymlink)
-    .map((entry) => joinRemotePath(context.hostPlatform, source.rootDir, entry.name, ...segments))
+    .flatMap((entry) =>
+      [segments, ...(source.additionalFixedChildFileSegments ?? [])].map((fileSegments) =>
+        joinRemotePath(context.hostPlatform, source.rootDir, entry.name, ...fileSegments)
+      )
+    )
     .filter((path) => source.filePredicate?.(path) ?? true)
 }
 

@@ -764,3 +764,61 @@ describe('re-placing a host off a cell isolated for a roll', () => {
     expect(counter.count('SELECT * FROM relay_cells ORDER BY cell_id ASC')).toBe(0)
   })
 })
+
+describe('classifying a reconnect whose home is isolated for a roll', () => {
+  const classify = { classifyHomeRollIsolation: true }
+
+  it('marks the host only while the roll stamp is current', async () => {
+    const { store, heartbeat, isolateForRoll, restore, setNow } = await setup()
+    const first = await store.assign(IDENTITY, 'us-central1')
+
+    expect(await store.resolve(IDENTITY, classify)).not.toHaveProperty('homeCellRollIsolated')
+    await isolateForRoll(first.cellId)
+    expect(await store.resolve(IDENTITY, classify)).toMatchObject({
+      cellId: first.cellId,
+      homeCellRollIsolated: true
+    })
+    // The cell's own callers do not ask, and their read is unchanged.
+    expect(await store.resolve(IDENTITY)).not.toHaveProperty('homeCellRollIsolated')
+
+    const stale = START_MS + 2 * 60 * 60_000 + 1
+    setNow(stale)
+    for (const cell of CELLS) await heartbeat(cell, stale)
+    expect(await store.resolve(IDENTITY, classify)).not.toHaveProperty('homeCellRollIsolated')
+
+    setNow(START_MS)
+    await restore(first.cellId)
+    expect(await store.resolve(IDENTITY, classify)).not.toHaveProperty('homeCellRollIsolated')
+  })
+
+  it('does not mark a host parked without a stamp or held by a migration', async () => {
+    const { store, database, isolateForRoll, park } = await setup()
+    const first = await store.assign(IDENTITY, 'us-central1')
+    await park(first.cellId, 'migration-only')
+    expect(await store.resolve(IDENTITY, classify)).not.toHaveProperty('homeCellRollIsolated')
+
+    await isolateForRoll(first.cellId)
+    await insertMigration(database, {
+      sourceCellId: first.cellId,
+      targetCellId: 'us-c2',
+      assignmentEpoch: first.assignmentEpoch,
+      leases: 1
+    })
+    expect(await store.resolve(IDENTITY, classify)).not.toHaveProperty('homeCellRollIsolated')
+    // A stalled migration whose lease counter lapsed still owns the epoch.
+    await database.query(`UPDATE relay_assignments SET migration_leases = 0`)
+    expect(await store.resolve(IDENTITY, classify)).not.toHaveProperty('homeCellRollIsolated')
+  })
+
+  it('reads the classification in the verification query itself', async () => {
+    const { store, counter, isolateForRoll } = await setup()
+    const first = await store.assign(IDENTITY, 'us-central1')
+    await isolateForRoll(first.cellId)
+
+    counter.sql.length = 0
+    await store.resolve(IDENTITY, classify)
+
+    expect(counter.sql.filter((sql) => sql.includes('FROM relay_assignments'))).toHaveLength(1)
+    expect(counter.count('relay_cell_admission')).toBe(1)
+  })
+})

@@ -52,7 +52,8 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     getPrimaryLeaf: (ptyId) => this.getLeavesForPty(ptyId)[0] ?? null,
     getTrackedPty: (ptyId) => this.ptysById.get(ptyId) ?? null,
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title?.trim() || null,
-    getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null
+    getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null,
+    getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId)
   })
 
   protected notifier: RuntimeNotifier | null = null
@@ -147,7 +148,7 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     listResolved: () => this.listResolvedWorktrees(),
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     selectRepos: (selector) => this.selectReposBySelector(selector),
-    scanRepo: (repo) => this.listRepoWorktreesForResolution(repo),
+    scanRepo: (repo) => this.listRepoWorktreesForListing(repo),
     listKnownHostIds: () => this.listKnownExecutionHostIds()
   })
 
@@ -200,7 +201,8 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
     getExplicitStatus: (handle) => this.getFreshExplicitAgentStatusForHandle(handle),
     getLifecycleStatus: (ptyId) => this.agentPromptLifecycleByPtyId.get(ptyId),
-    isRunning: (handle) => this.isTerminalRunningAgent(handle)
+    isRunning: (handle) => this.isTerminalRunningAgent(handle),
+    getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId)
   })
 
   protected _orchestrationDb: OrchestrationDb | null = null

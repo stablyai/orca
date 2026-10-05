@@ -60,6 +60,31 @@ async function listRemoteNamesViaExec(
   }
 }
 
+async function hasCaseFoldedLocalConflict(
+  exec: ExactRefProbeExec,
+  ref: string,
+  options: ExactRefProbeExecOptions
+): Promise<boolean> {
+  // Git's case-insensitive patterns miss Unicode aliases accepted by ref filesystems.
+  const { stdout } = await runGit(
+    exec,
+    ['for-each-ref', '--format=%(refname)', 'refs/heads/'],
+    options
+  )
+  const foldRef = (name: string) =>
+    name.normalize('NFD').toLowerCase().toUpperCase().normalize('NFD')
+  const foldedRef = foldRef(ref)
+  for (const existingRef of stdout.split(/\r?\n/).filter(Boolean)) {
+    if (!existingRef.startsWith('refs/heads/') || !isSafeGitRefName(existingRef)) {
+      throw new Error('Cannot verify branch-name case conflicts.')
+    }
+    if (foldRef(existingRef) === foldedRef) {
+      return true
+    }
+  }
+  return false
+}
+
 function buildRemoteBranchConflictRefs(
   remoteNames: readonly string[],
   branchName: string,
@@ -129,6 +154,9 @@ export async function getBranchConflictKindViaExec(
   if (presence === 'present') {
     return 'local'
   }
+  if (await hasCaseFoldedLocalConflict(exec, localRef, probeOptions)) {
+    return 'local'
+  }
 
   try {
     const remoteNames = await listRemoteNamesViaExec(exec, probeOptions)
@@ -171,7 +199,7 @@ export function getBranchConflictKind(
       ...(commandOptions?.stdin === undefined ? {} : { stdin: commandOptions.stdin })
     })
   return getBranchConflictKindViaExec(
-    runLocalGit,
+    (argv, commandOptions) => runLocalGit(argv, commandOptions, argv[0] === 'for-each-ref'),
     branchName,
     allowedBaseRef,
     {},

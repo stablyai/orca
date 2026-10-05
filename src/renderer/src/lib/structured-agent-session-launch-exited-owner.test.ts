@@ -94,7 +94,7 @@ async function settle(sessionId: string): Promise<void> {
 }
 
 function launch(): string {
-  const started = startStructuredAgentLaunch(WORKTREE, 'codex')
+  const started = startStructuredAgentLaunch(WORKTREE, 'codex', { requestId: 'request-1' })
   void started.launchResult.catch(() => undefined)
   return started.sessionId
 }

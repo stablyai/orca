@@ -1,5 +1,7 @@
-import { orcadBunRuntimeFilename } from '../../shared/orcad-artifacts'
+import { orcadNodePtyNativeArtifacts, orcadRipgrepArtifact } from '../../shared/orcad-artifacts'
 import { orcadAgentBrowserNativeName } from '../../shared/orcad-agent-browser-name'
+import type { ServerTarget } from '../../shared/node-runtime-pin'
+import { ensureRemoteOrcadNodeRuntime } from './orcad-remote-node-runtime'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { shellEscape } from './ssh-connection-utils'
@@ -20,11 +22,23 @@ export async function installOrcadBundle(
     conn: SshConnection
     host: RemoteHostPlatform
     localOrcadDir: string
+    target: ServerTarget
+    /** The locally verified pinned Node archive, fetched only when the host lacks the runtime. */
+    nodeRuntimeArchive: () => Promise<string>
     signal?: AbortSignal
   },
   fullVersion: string,
   remoteDir: string
 ): Promise<void> {
+  // Why before the slot probe: an installed slot is unlaunchable without the runtime it names.
+  await ensureRemoteOrcadNodeRuntime({
+    conn: options.conn,
+    host: options.host,
+    slotDir: remoteDir,
+    target: options.target,
+    archivePath: options.nodeRuntimeArchive,
+    signal: options.signal
+  })
   if (
     await isRemoteInstallComplete(options.conn, ORCAD_INSTALL_MODEL, remoteDir, options.host, {
       signal: options.signal
@@ -47,10 +61,14 @@ export async function installOrcadBundle(
       signal: options.signal
     })
     if (options.host.os !== 'win32') {
-      await execCommand(options.conn, executablePermissionsCommand(options.host, remoteDir), {
-        wrapCommand: options.host.commandDialect !== 'powershell',
-        signal: options.signal
-      })
+      await execCommand(
+        options.conn,
+        executablePermissionsCommand(options.host, remoteDir, options.target),
+        {
+          wrapCommand: options.host.commandDialect !== 'powershell',
+          signal: options.signal
+        }
+      )
     }
     await writeRelayFile(
       options.conn,
@@ -73,11 +91,14 @@ export async function installOrcadBundle(
   }
 }
 
-function executablePermissionsCommand(host: RemoteHostPlatform, directory: string): string {
-  const required = [
-    joinRemotePath(host, directory, orcadBunRuntimeFilename(host.os)),
-    joinRemotePath(host, directory, 'ripgrep', host.relayPlatform, 'rg')
-  ]
+function executablePermissionsCommand(
+  host: RemoteHostPlatform,
+  directory: string,
+  target: ServerTarget
+): string {
+  const required = [orcadRipgrepArtifact(target), ...orcadNodePtyNativeArtifacts(target)]
+    .filter((artifact) => /\/(?:rg|spawn-helper)$/.test(artifact))
+    .map((artifact) => joinRemotePath(host, directory, ...artifact.split('/')))
   const browsers = new Set(
     (['glibc', 'musl'] as const).map((libc) =>
       shellEscape(

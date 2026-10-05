@@ -104,7 +104,7 @@ describe('relay bundled ripgrep', () => {
         return child
       }
       const child = createProcess(42)
-      succeedWith(child, 'src/index.ts\n')
+      succeedWith(child, 'src/index.ts\0')
       return child
     })
 

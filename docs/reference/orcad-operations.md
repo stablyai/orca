@@ -165,7 +165,12 @@ An external supervisor (systemd, launchd, a process manager). orcad conforms to 
   to **stdout**; the supervisor owns capture and rotation. The daemon, being detached, writes
   its own NDJSON lifecycle log to `<data-root>/logs/daemon.log` (suppressed by
   `ORCA_DIAGNOSTICS_DISABLED=1`). Rotation of that file is not implemented — see
-  [What is not covered](#what-is-not-covered).
+  [What is not covered](#what-is-not-covered). orcad records every trace span it emits
+  (git commands, worktree paths, terminal spawns, structured-chat failures and the rest) to
+  `<data-root>/logs/orcad.trace.ndjson`, rotated at 10 MB × 10 files, private to its user and
+  redacted for secret-shaped strings. It stays on the host: a desktop's diagnostics bundle does
+  not collect it. `ORCA_DIAGNOSTICS_DISABLED=1` turns it off, and a logs folder orcad cannot
+  open leaves it off with one stderr warning rather than stopping orcad.
 
 ### orcad supervising the daemon
 

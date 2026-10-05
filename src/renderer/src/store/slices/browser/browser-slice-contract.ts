@@ -112,6 +112,7 @@ export type BrowserSlice = {
   browserPagesByWorkspace: Record<string, BrowserPage[]>
   browserCertificateFailuresByPageId: Record<string, BrowserCertificateFailure>
   browserAnnotationsByPageId: Record<string, BrowserPageAnnotation[]>
+  browserAnnotationMarkerIdsByPageId: Record<string, string[]>
   remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>
   /**
    * Closes of client-hosted pages their owning runtime never heard, keyed by environment.
@@ -196,6 +197,7 @@ export type BrowserSlice = {
   ) => void
   deleteBrowserPageAnnotation: (pageId: string, annotationId: string) => void
   clearBrowserPageAnnotations: (pageId: string) => void
+  invalidateBrowserPageAnnotationGeometry: (pageId: string) => void
   removeDeliveredBrowserPageAnnotations: (
     pageId: string,
     deliveredAnnotations: readonly BrowserPageAnnotation[]

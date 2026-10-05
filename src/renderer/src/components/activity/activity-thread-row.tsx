@@ -65,7 +65,8 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   canJump,
   compactMode,
   disableMarkUnread = false,
-  showJumpAction = true
+  showJumpAction = true,
+  previewSuppressed = false
 }: {
   thread: AgentPaneThread
   selected: boolean
@@ -78,6 +79,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   compactMode: boolean
   disableMarkUnread?: boolean
   showJumpAction?: boolean
+  previewSuppressed?: boolean
 }): React.JSX.Element {
   const { taskTitle, statusLine, statusKind, needsAttention, workspaceLabel } =
     activityThreadRowCopy(thread)
@@ -89,6 +91,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
       thread={thread}
       onJumpToWorkspace={onJump}
       canJumpToWorkspace={canJump}
+      suppressed={previewSuppressed}
     >
       <div
         data-current={selected ? 'true' : undefined}
@@ -133,7 +136,10 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                   className={cn(
                     'min-w-0 break-words text-[13px] leading-5 text-foreground/80',
                     compactMode ? 'line-clamp-2' : 'line-clamp-3',
-                    '[&_*]:!m-0 [&_*]:!p-0 [&_br]:hidden [&_ol]:list-none [&_ul]:list-none'
+                    '[&_*]:!m-0 [&_*]:!p-0 [&_br]:hidden [&_ol]:list-none [&_ul]:list-none',
+                    // Why: code blocks and tables otherwise render as scroll boxes the line clamp cannot cut.
+                    '[&_pre]:!max-h-none [&_pre]:!overflow-visible [&_pre]:!whitespace-normal [&_pre]:!rounded-none [&_pre]:!bg-transparent [&_pre]:![font:inherit] [&_pre_code]:![font:inherit]',
+                    '[&_div]:!overflow-visible [&_:is(table,thead,tbody,tr,th,td)]:!inline [&_:is(table,thead,tbody,tr,th,td)]:!align-baseline [&_:is(th,td)]:!border-0 [&_:is(th,td)]:!pr-2 [&_table]:![font:inherit]'
                   )}
                 />
               ) : (

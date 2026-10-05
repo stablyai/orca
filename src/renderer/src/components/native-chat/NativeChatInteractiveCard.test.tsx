@@ -39,7 +39,8 @@ const mocks = {
   sendAnswer: vi.fn<NativeChatInteractiveSend['sendAnswer']>(),
   sendRaw: vi.fn<NativeChatInteractiveSend['sendRaw']>(),
   cancelPending: vi.fn<NativeChatInteractiveSend['cancelPending']>(),
-  cancel: vi.fn<NativeChatInteractiveSend['cancel']>()
+  cancel: vi.fn<NativeChatInteractiveSend['cancel']>(),
+  cancelAsk: vi.fn<NativeChatInteractiveSend['cancelAsk']>()
 }
 
 function renderCard(canSend = true): ReturnType<typeof render> {
@@ -90,7 +91,8 @@ function CardHarness({
         sendAnswer: mocks.sendAnswer,
         sendRaw: mocks.sendRaw,
         cancelPending: mocks.cancelPending,
-        cancel: mocks.cancel
+        cancel: mocks.cancel,
+        cancelAsk: mocks.cancelAsk
       }}
     />
   )
@@ -135,6 +137,16 @@ function chooseSpacesAndSubmit(): void {
 }
 
 describe('NativeChatInteractiveCard answer lifecycle', () => {
+  it('routes question Cancel to rejection and releases the composer slot without Stop', () => {
+    const onShowingQuestionChange = vi.fn()
+    render(cardElement(true, undefined, onShowingQuestionChange))
+    expect(screen.getByTestId('native-chat-question-card-title')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(mocks.cancelAsk).toHaveBeenCalledOnce()
+    expect(mocks.cancel).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('native-chat-question-card-title')).not.toBeInTheDocument()
+    expect(onShowingQuestionChange).toHaveBeenLastCalledWith(false)
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = INITIAL_PROMPT

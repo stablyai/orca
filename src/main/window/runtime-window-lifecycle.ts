@@ -169,20 +169,22 @@ export function registerRuntimeWindowLifecycle(
       requestSessionTabCloseFromRenderer(mainWindow, tabId, worktreeId),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
       send('ui:moveSessionTab', { worktreeId, ...move }),
-    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId?) =>
+    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId?, navigation?) =>
       send('ui:openFileFromMobile', {
         worktreeId,
         filePath,
         relativePath,
-        runtimeEnvironmentId
+        runtimeEnvironmentId,
+        ...(navigation ? { navigation } : {})
       }),
-    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId?) =>
+    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId?, navigation?) =>
       send('ui:openDiffFromMobile', {
         worktreeId,
         filePath,
         relativePath,
         staged,
-        runtimeEnvironmentId
+        runtimeEnvironmentId,
+        ...(navigation ? { navigation } : {})
       }),
     readMobileMarkdownTab: (worktreeId, tabId) =>
       requestMobileMarkdownFromRenderer(mainWindow, {

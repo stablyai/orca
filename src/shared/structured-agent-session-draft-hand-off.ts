@@ -2,11 +2,9 @@
 // under a fresh submission id, so this link, never a draft id compared with a `clientMessageId`,
 // is how a client knows the host has taken a message over.
 
-import type { AgentJournalSubmission } from './agent-session-journal-types'
-import {
-  reconcileStructuredAgentSessionOutbox,
-  type StructuredAgentSessionOutboxEntry
-} from './structured-agent-session-outbox'
+import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
+import type { StructuredAgentSessionOutboxEntry } from './structured-agent-session-outbox'
+import { reconcileStructuredAgentSessionOutbox } from './structured-agent-session-outbox-reconcile'
 
 /** Ids of the queued drafts the journal shows handed off, in any dispatch state. An outbox entry
  *  under one of these ids belongs to the host: its card or bubble carries the text from here. */
@@ -29,13 +27,14 @@ export function handedOffQueuedMessageIds(
  */
 export function reconcileStructuredAgentSessionOutboxWithQueue(
   entries: readonly StructuredAgentSessionOutboxEntry[],
-  submissions: readonly AgentJournalSubmission[]
-): StructuredAgentSessionOutboxEntry[] {
+  submissions: readonly AgentJournalSubmission[],
+  items: readonly AgentJournalRenderItem[]
+): readonly StructuredAgentSessionOutboxEntry[] {
   const handedOff = handedOffQueuedMessageIds(submissions)
+  const ours = entries.filter((entry) => !handedOff.has(entry.clientMessageId))
   return reconcileStructuredAgentSessionOutbox(
-    handedOff.size === 0
-      ? entries
-      : entries.filter((entry) => !handedOff.has(entry.clientMessageId)),
-    submissions
+    ours.length === entries.length ? entries : ours,
+    submissions,
+    items
   )
 }

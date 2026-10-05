@@ -19,7 +19,6 @@ import {
 } from './ssh-remote-commands'
 import {
   getRemoteHostPlatform,
-  isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform,
   type RemotePathFlavor
@@ -127,7 +126,7 @@ export async function isRemoteInstallComplete(
       conn,
       host,
       probeRemoteInstallCompleteCommand(host, remoteRelayDir, [
-        ...model.requiredArtifacts(isWindowsRemoteHost(host)),
+        ...model.requiredArtifacts(host),
         model.installCompleteFilename
       ]),
       { signal: options?.signal }

@@ -1,0 +1,20 @@
+{
+  "description": "codex recording at 120x40 replayed on the agent pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-30: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "31: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "32: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "33: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "34-48: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "49-54: now=working edge=working quiet=working wait=pending",
+      "55-62: now=working edge=working quiet=ready-strong wait=ready@start",
+      "63-65: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start"
+    ],
+    "clockless": [
+      "0-48: verdict=pending:closed wait=pending",
+      "49-54: verdict=working wait=pending",
+      "55-65: verdict=ready-strong wait=ready@start"
+    ]
+  }
+}

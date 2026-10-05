@@ -7,7 +7,9 @@ import type {
   ConnectConfig,
   KeyboardInteractiveCallback,
   Prompt,
-  SFTPWrapper
+  PseudoTtyOptions,
+  SFTPWrapper,
+  ShellOptions
 } from 'ssh2'
 import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
 import {
@@ -292,6 +294,24 @@ export class SshConnection {
           true
         ),
       options?.signal
+    )
+  }
+
+  /** Interactive login shell over a session channel with pty-req; ssh2 transport only. */
+  async shell(pty: PseudoTtyOptions, options: ShellOptions = {}): Promise<ClientChannel> {
+    if (this.useSystemSshTransport) {
+      throw new Error('Interactive SSH shells are not available when using system SSH transport')
+    }
+    if (!this.client) {
+      throw new Error('Not connected')
+    }
+    const client = this.client
+    return this.openSessionChannelWithRetry(() =>
+      this.waitForSshCallback(
+        'SSH shell channel timed out',
+        (callback) => client.shell(pty, options, callback),
+        (channel) => channel.close()
+      )
     )
   }
 

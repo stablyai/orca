@@ -8,7 +8,11 @@ import {
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import type { JournalReducerState } from './journal-reducer'
-import { notePersonTurnAccepted, placeHandedOverMessage } from './journal-submission-fold'
+import {
+  notePersonTurnAccepted,
+  placeHandedOverMessage,
+  placeRejectedMessage
+} from './journal-submission-fold'
 import type { JournalRow } from './journal-row-schema'
 
 export function applyJournalDispatchRow(
@@ -34,6 +38,8 @@ export function applyJournalDispatchRow(
   if (row.state === 'pending') {
     submission.handedOverAt = row.ts
     placeHandedOverMessage(state, submission, row)
+  } else if (row.state === 'rejected') {
+    placeRejectedMessage(state, submission, row)
   }
   if (row.recovered) {
     submission.recovered = row.recovered

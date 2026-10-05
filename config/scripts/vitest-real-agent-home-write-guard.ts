@@ -188,12 +188,18 @@ declare global {
 }
 const state = (globalThis.orcaRealAgentHomeWriteGuard ??= install())
 // Why after install: the guard keeps the inherited paths as roots; tests that need one set their own.
-const inheritedEnvToUnset = realAgentSuiteOptedIn()
-  ? []
-  : [...INHERITED_STATE_ENV, ...INHERITED_LIVE_CLI_ENV]
-for (const name of inheritedEnvToUnset) {
-  delete process.env[name]
+export function clearInheritedAgentStateEnv(): void {
+  const inheritedEnvToUnset = realAgentSuiteOptedIn()
+    ? []
+    : [...INHERITED_STATE_ENV, ...INHERITED_LIVE_CLI_ENV]
+  for (const name of inheritedEnvToUnset) {
+    if (name === 'CLAUDE_CONFIG_DIR' && process.env.ORCA_REAL_CLAUDE_CLI_TEST === '1') {
+      continue
+    }
+    delete process.env[name]
+  }
 }
+clearInheritedAgentStateEnv()
 
 /** Drains recorded violations; only the guard's own self-test should need this. */
 export function takeRealAgentHomeWriteViolations(): string[] {

@@ -33,6 +33,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
@@ -117,6 +118,7 @@ describe('the chat strip and the session list read the same host child records',
       readChildWork: (subject) => server.getStructuredChildWorkViews(subject)
     }
     const host = await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory: root,
       hostId: 'local',
       claimKeyId: 'key-1',

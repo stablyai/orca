@@ -26,6 +26,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -107,6 +108,7 @@ beforeEach(async () => {
   dispatch = vi.fn(async () => accepted())
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
     journalDatabase: openTestJournalHostDatabase(root),
@@ -129,14 +131,16 @@ function startAgent(): Promise<unknown> {
 
 describe('settled attach retry', () => {
   it('settles a post-acquisition journal failure and retries without a restart', async () => {
-    const historyFilePath = vi
-      .fn<NonNullable<StructuredAgentSessionAdapter['historyFilePath']>>()
-      .mockRejectedValueOnce(new Error('journal path unavailable'))
-      .mockResolvedValue(null)
+    const journalDatabase = openTestJournalHostDatabase(root)
+    // The journal's open asks where the chat's per-chat file lives before it reads anything.
+    vi.spyOn(journalDatabase, 'legacyDirectoryFor').mockImplementationOnce(() => {
+      throw new Error('journal path unavailable')
+    })
     host = new StructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       store,
-      adapter: { ...adapter(), historyFilePath },
-      journalDatabase: openTestJournalHostDatabase(root),
+      adapter: adapter(),
+      journalDatabase,
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-a',
       now: () => NOW
@@ -191,6 +195,7 @@ describe('settled attach retry', () => {
     })
     const mintSpawnToken = vi.fn(() => 'spawn-safe')
     host = new StructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter: adapter(),
       journalDatabase: openTestJournalHostDatabase(root),
@@ -235,6 +240,7 @@ describe('settled attach retry', () => {
     let token = 0
     const mintSpawnToken = vi.fn(() => `spawn-${++token}`)
     host = new StructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter: adapter(),
       journalDatabase: openTestJournalHostDatabase(root),
@@ -265,6 +271,7 @@ describe('settled attach retry', () => {
     await host.flushAllStreamedEvents()
     store = await openTestAgentSessionRecordStore(root)
     host = new StructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter: adapter(),
       journalDatabase: openTestJournalHostDatabase(root),
@@ -322,6 +329,7 @@ describe('settled attach retry', () => {
     await host.flushAllStreamedEvents()
     store = await openTestAgentSessionRecordStore(root)
     host = new StructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter: adapter(),
       journalDatabase: openTestJournalHostDatabase(root),

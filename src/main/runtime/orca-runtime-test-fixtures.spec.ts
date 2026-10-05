@@ -150,6 +150,15 @@ const RESTORED_AUTHORITY_TOKEN_HASH = createHash('sha256')
   .update(RESTORED_AUTHORITY_TOKEN)
   .digest('hex')
 
+function isLocalBranchCatalogQuery(args: string[]): boolean {
+  return (
+    args.length === 3 &&
+    args[0] === 'for-each-ref' &&
+    args[1] === '--format=%(refname)' &&
+    args[2] === 'refs/heads/'
+  )
+}
+
 function isOriginMainBaseRefProbe(args: string[]): boolean {
   return (
     args[0] === 'rev-parse' &&
@@ -671,6 +680,7 @@ export { antigravityPromptBeforeModelReadyScreen, antigravityReadyScreen, bindSi
 export { createExplicitAgentStatusHarness, createFolderWorkspaceRuntimeStore, createRuntime }
 export { createRuntimeWithSshLease, createStaleRuntimeWorktreeStore, cursorBusyScreen }
 export { cursorReadyScreen, deferred, expectStablePaneKeyEnv, isOriginMainBaseRefProbe }
+export { isLocalBranchCatalogQuery }
 export { makeDeferred, makeFolderProjectGroup, makeFolderWorkspace, makeHeadlessTerminalLayout }
 export { makeRpcRequest, makeRuntimeStoreWithWorkspaceSession, makeStatusFrame }
 export { makeWorkspaceSessionWithHeadlessTerminal, makeWorktreeInfo, makeWorktreeMeta }
