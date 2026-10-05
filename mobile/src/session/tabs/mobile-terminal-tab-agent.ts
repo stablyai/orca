@@ -6,6 +6,7 @@ import { resolveTabAgentFromSignalSnapshot } from '../../../../src/shared/tab-ag
 import { resolveTabNameSource } from '../../../../src/shared/tab-title-resolution'
 import type { AgentStatusEntry } from '../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../src/shared/runtime-mobile-session-tab-contracts'
 import {
   resolveAgentSmartKeys,
@@ -61,13 +62,21 @@ export function resolveMobileTerminalTabOwnedAgentId(
   return null
 }
 
-/** Whether the terminal behind a handle runs an agent Orca identified, for the copy join. */
+/** Whether the terminal behind a handle runs a TUI agent Orca identified, for the copy join. */
 export function terminalHandleRunsAgent(
   tabs: readonly MobileSessionTab[],
   handle: string
 ): boolean {
   const tab = tabs.find((t) => t.type === 'terminal' && t.terminal === handle)
-  return tab?.type === 'terminal' && resolveMobileTerminalTabOwnedAgentId(tab) !== null
+  if (tab?.type !== 'terminal') {
+    return false
+  }
+  // Same evidence as the desktop probe, minus its shell veto: no foreground signal reaches mobile.
+  const status = tab.agentStatus
+  return (
+    (status?.restoredUnconfirmed !== true && isTuiAgent(status?.agentType)) ||
+    isTuiAgent(tab.launchAgent)
+  )
 }
 
 // An agent's tab stays an agent tab until the agent reports done and the title is a shell again. Launch hints count before status arrives.

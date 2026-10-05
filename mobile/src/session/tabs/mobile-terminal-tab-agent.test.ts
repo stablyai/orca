@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../src/shared/agent-status/contracts/agent-status-types'
+import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import type { MobileSessionTab } from './mobile-session-tabs'
 import { terminalHandleRunsAgent } from './mobile-terminal-tab-agent'
 
@@ -17,7 +18,7 @@ function agentStatus(agentType: string | undefined): AgentStatusEntry {
 
 function terminalTab(
   title: string,
-  options: { agentType?: string; id: string; terminal: string }
+  options: { agentType?: string; id: string; terminal: string; launchAgent?: TuiAgent }
 ): Extract<MobileSessionTab, { type: 'terminal' }> {
   return {
     type: 'terminal',
@@ -25,6 +26,7 @@ function terminalTab(
     title,
     terminal: options.terminal,
     isActive: true,
+    ...(options.launchAgent ? { launchAgent: options.launchAgent } : {}),
     ...(options.agentType === undefined ? {} : { agentStatus: agentStatus(options.agentType) })
   }
 }
@@ -41,5 +43,21 @@ describe('terminalHandleRunsAgent', () => {
     expect(terminalHandleRunsAgent(tabs, 'term-shell')).toBe(false)
     expect(terminalHandleRunsAgent(tabs, 'term-titled')).toBe(false)
     expect(terminalHandleRunsAgent(tabs, 'term-missing')).toBe(false)
+  })
+
+  it('joins only for TUI agents and ignores a status row restored from disk', () => {
+    const restored = terminalTab('zsh', {
+      id: 'restored',
+      agentType: 'claude',
+      terminal: 'term-restored'
+    })
+    const others: MobileSessionTab[] = [
+      terminalTab('zsh', { id: 'hook', agentType: 'dsb', terminal: 'term-hook' }),
+      { ...restored, agentStatus: { ...restored.agentStatus!, restoredUnconfirmed: true } },
+      terminalTab('zsh', { id: 'launched', launchAgent: 'codex', terminal: 'term-launched' })
+    ]
+    expect(terminalHandleRunsAgent(others, 'term-hook')).toBe(false)
+    expect(terminalHandleRunsAgent(others, 'term-restored')).toBe(false)
+    expect(terminalHandleRunsAgent(others, 'term-launched')).toBe(true)
   })
 })
