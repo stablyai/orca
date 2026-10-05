@@ -1152,6 +1152,7 @@
         "2ec42e1c52": "No remote workspace yet",
         "88214a785b": "Workspace sync waited for local session hydration and timed out",
         "4f78ba5885": "Workspace synced",
+        "unplacedTabPaths": "Terminal tabs on the host belong to paths this client cannot place: {{paths}}",
         "ef223fbb6b": "A device tried to connect but is not paired",
         "11992d0337": "If this was your phone or another Orca client, re-pair it from Settings → Mobile.",
         "6573cfe955": "Open Mobile Settings",

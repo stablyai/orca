@@ -1088,6 +1088,7 @@
         "2ec42e1c52": "Pas encore de espace de travail distant",
         "88214a785b": "La synchronisation de l'espace de travail a attendu l'hydratation de la session locale et a expiré",
         "4f78ba5885": "Espace de travail synchronisé",
+        "unplacedTabPaths": "Des onglets de terminal sur l'hôte appartiennent à des chemins que ce client ne peut pas placer : {{paths}}",
         "ef223fbb6b": "Un appareil a tenté de se connecter mais n'est pas jumelé",
         "11992d0337": "S'il s'agissait de votre téléphone ou d'un autre client Orca, réappairez-le depuis Paramètres → Mobile.",
         "6573cfe955": "Ouvrir les paramètres mobiles",

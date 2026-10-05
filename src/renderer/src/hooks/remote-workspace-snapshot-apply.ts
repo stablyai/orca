@@ -20,6 +20,11 @@ import {
   waitForSnapshotWorktreePlacement,
   type RemoteWorkspaceSnapshotPlacementStore
 } from './remote-workspace-snapshot-placement'
+import {
+  confirmPathsMissingOnHost,
+  purgeClientRowsForMissingHostPaths,
+  type ReadHostPathExistence
+} from './remote-workspace-missing-host-paths'
 
 const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1_000
 const SNAPSHOT_TERMINAL_RECONNECT_TIMEOUT_MS = 30_000
@@ -85,6 +90,8 @@ type RemoteWorkspaceSnapshotApplyInput = {
    * apply itself has no way back once the bounded in-apply wait expires.
    */
   onUnplacedTabWorktreePaths?: (worktreePaths: readonly string[]) => void
+  /** Asks the host whether paths still unplaced after the wait exist. Absent keeps them conflicted. */
+  readHostPathExistence?: ReadHostPathExistence
 }
 
 export type RemoteWorkspaceSnapshotApplyResult = 'applied' | 'stale' | 'failed'
@@ -122,7 +129,8 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   isPreparationTokenCurrent,
   waitForWorkspaceSessionReady,
   finalizeHydratedTerminals,
-  onUnplacedTabWorktreePaths
+  onUnplacedTabWorktreePaths,
+  readHostPathExistence
 }: RemoteWorkspaceSnapshotApplyInput): Promise<RemoteWorkspaceSnapshotApplyResult> {
   const { authority } = token
   if (!isArrivalCurrent(authority.targetId, arrival)) {
@@ -150,11 +158,20 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   let state = store.getState()
   let worktreeIds = resolveDirectSshSnapshotWorktreeIds(state, authority)
   let unplacedTabWorktreePaths: string[] = []
-  let remoteSession = importRemoteWorkspaceSession(snapshot.session, {
-    resolveWorktreeId: uniqueWorktreeIdByPath(worktreeIds),
-    executionHostId: toSshExecutionHostId(authority.targetId),
-    onUnplacedTerminalTabs: (worktreePath) => unplacedTabWorktreePaths.push(worktreePath)
-  })
+  let missingHostPaths: ReadonlySet<string> = new Set<string>()
+  const importSnapshot = (): ReturnType<typeof importRemoteWorkspaceSession> => {
+    unplacedTabWorktreePaths = []
+    return importRemoteWorkspaceSession(snapshot.session, {
+      resolveWorktreeId: uniqueWorktreeIdByPath(worktreeIds),
+      executionHostId: toSshExecutionHostId(authority.targetId),
+      onUnplacedTerminalTabs: (worktreePath) => {
+        if (!missingHostPaths.has(worktreePath)) {
+          unplacedTabWorktreePaths.push(worktreePath)
+        }
+      }
+    })
+  }
+  let remoteSession = importSnapshot()
   if (unplacedTabWorktreePaths.length > 0) {
     await waitForSnapshotWorktreePlacement(
       store,
@@ -168,12 +185,32 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
     // from the stale session payload and can be replaced by this snapshot.
     state = store.getState()
     worktreeIds = resolveDirectSshSnapshotWorktreeIds(state, authority)
-    unplacedTabWorktreePaths = []
-    remoteSession = importRemoteWorkspaceSession(snapshot.session, {
-      resolveWorktreeId: uniqueWorktreeIdByPath(worktreeIds),
-      executionHostId: toSshExecutionHostId(authority.targetId),
-      onUnplacedTerminalTabs: (worktreePath) => unplacedTabWorktreePaths.push(worktreePath)
-    })
+    remoteSession = importSnapshot()
+  }
+  if (unplacedTabWorktreePaths.length > 0 && readHostPathExistence) {
+    // A path the host positively reports gone cannot be a worktree anyone places later (#22590).
+    // Its rows are not "ours but unplaced", so they must not hold the whole target in `conflict`;
+    // the next replace-session upload then drops them from the host snapshot.
+    missingHostPaths = await confirmPathsMissingOnHost(
+      readHostPathExistence,
+      authority.targetId,
+      unplacedTabWorktreePaths,
+      () => isArrivalCurrent(authority.targetId, arrival) && isPreparationTokenCurrent(token)
+    )
+    if (!isArrivalCurrent(authority.targetId, arrival) || !isPreparationTokenCurrent(token)) {
+      return 'stale'
+    }
+    if (missingHostPaths.size > 0) {
+      missingHostPaths = purgeClientRowsForMissingHostPaths(
+        store,
+        authority,
+        missingHostPaths,
+        resolveDirectSshSnapshotWorktreeIds(store.getState(), authority)
+      )
+      state = store.getState()
+      worktreeIds = resolveDirectSshSnapshotWorktreeIds(state, authority)
+      remoteSession = importSnapshot()
+    }
   }
   const merged = mergeDirectSshRemoteWorkspaceSession(
     buildWorkspaceSessionPayload(state),
@@ -238,7 +275,12 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
         direction: 'pull',
         revision: snapshot.revision,
         updatedAt: snapshot.updatedAt,
-        hostObservationToken: snapshot.hostObservationToken
+        hostObservationToken: snapshot.hostObservationToken,
+        message: translate(
+          'auto.hooks.useIpcEvents.unplacedTabPaths',
+          'Terminal tabs on the host belong to paths this client cannot place: {{paths}}',
+          { paths: [...new Set(unplacedTabWorktreePaths)].join(', ') }
+        )
       })
     }
     const reconnectAbort = new AbortController()
