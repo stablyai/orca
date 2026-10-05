@@ -4,6 +4,7 @@
 import { vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'
+import { createTabsSlice } from '@/store/slices/tabs'
 import type { AppState } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 
@@ -95,12 +96,17 @@ export function createEditorStore(): StoreApi<AppState> {
 /** Store with a local worktree at /repo and an open, untouched untitled note at /repo/`fileName`. */
 export function createUntitledNoteStore(fileName: string): StoreApi<AppState> {
   const store = createEditorStore()
+  store.setState(createTabsSlice(store.setState, store.getState, store))
   store.setState({
+    folderWorkspaces: [],
+    projectGroups: [],
     worktreesByRepo: {
       'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' })]
     },
     browserTabsByWorktree: {},
     tabsByWorktree: {},
+    activeTabId: null,
+    activeTabIdByWorktree: {},
     activeBrowserTabIdByWorktree: {},
     unifiedTabsByWorktree: {}
   })

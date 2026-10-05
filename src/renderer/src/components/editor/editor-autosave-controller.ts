@@ -5,9 +5,14 @@ import {
   ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
   ORCA_EDITOR_SAVE_FILE_EVENT,
   type EditorSaveFileDetail,
+  type EditorSaveAndCloseResult,
   type EditorSaveQuiesceDetail
 } from './editor-autosave'
 import { flushPendingEditorChange } from './editor-pending-flush'
+import {
+  assertEditorFileOperationCurrent,
+  captureEditorFileOperationProvenance
+} from '@/lib/editor-file-operation-owner'
 import {
   autosaveSubscriberInputsEqual,
   getAutosaveSubscriberInputs
@@ -21,6 +26,7 @@ import {
 } from '../../../../shared/editor-save-events'
 
 export function attachEditorAutosaveController(store: AppStoreApi): () => void {
+  let active = true
   const saveQueue = createEditorSaveQueue(store)
   const { queueSave, quiesceFileSave, clearAutoSaveTimer, bumpSaveGeneration, syncAutoSave } =
     saveQueue
@@ -38,22 +44,105 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   })
 
   const handleSaveAndClose = (event: Event): void => {
-    const { fileId } = (event as CustomEvent<{ fileId: string }>).detail
+    if (!(event instanceof CustomEvent) || typeof event.detail?.fileId !== 'string') {
+      return
+    }
+    const { fileId, claim, resolve } = event.detail
+    if (typeof claim === 'function') {
+      claim()
+    }
+    const complete = (result: EditorSaveAndCloseResult): void => {
+      if (typeof resolve === 'function') {
+        resolve(result)
+      }
+    }
     const file = store.getState().openFiles.find((openFile) => openFile.id === fileId)
     if (!file) {
+      complete('closed')
       return
+    }
+    const { operationProvenance, filePath, worktreeId, runtimeEnvironmentId } = file
+    const externalSshTargetId = file.externalSshTargetId?.trim() || null
+    const tabIds = new Set(
+      (store.getState().unifiedTabsByWorktree?.[worktreeId] ?? [])
+        .filter((tab) => tab.entityId === fileId)
+        .map((tab) => tab.id)
+    )
+    let ownerProvenance = operationProvenance
+    let queued = false
+    const hasCloseAuthority = (): boolean => {
+      if (!active) {
+        return false
+      }
+      const state = store.getState()
+      const currentFile = state.openFiles.find((openFile) => openFile.id === fileId)
+      if (!queued || !currentFile) {
+        return true
+      }
+      if (
+        !ownerProvenance ||
+        currentFile.operationProvenance !== operationProvenance ||
+        currentFile.filePath !== filePath ||
+        currentFile.worktreeId !== worktreeId ||
+        (currentFile.externalSshTargetId?.trim() || null) !== externalSshTargetId ||
+        (currentFile.runtimeEnvironmentId?.trim() || null) !==
+          (runtimeEnvironmentId?.trim() || null) ||
+        !(state.unifiedTabsByWorktree?.[worktreeId] ?? []).some(
+          (tab) => tab.entityId === fileId && tabIds.has(tab.id)
+        )
+      ) {
+        return false
+      }
+      try {
+        assertEditorFileOperationCurrent(state, worktreeId, ownerProvenance)
+        return true
+      } catch {
+        return false
+      }
+    }
+    const closeAfterSave = (): void => {
+      try {
+        if (!hasCloseAuthority()) {
+          complete('retained')
+          return
+        }
+        flushPendingEditorChange(fileId)
+        const state = store.getState()
+        const currentFile = state.openFiles.find((openFile) => openFile.id === fileId)
+        if (
+          !hasCloseAuthority() ||
+          (currentFile && (currentFile.isDirty || state.editorDrafts[fileId] !== undefined))
+        ) {
+          complete('retained')
+          return
+        }
+        if (currentFile) {
+          state.closeFile(fileId)
+        }
+        complete('closed')
+      } catch {
+        complete('failed')
+      }
     }
 
-    flushPendingEditorChange(file.id)
-    const draft = store.getState().editorDrafts[fileId]
-    if (draft !== undefined) {
-      void queueSave(file, draft).then(
-        () => store.getState().closeFile(fileId),
-        () => {}
-      )
-      return
+    try {
+      flushPendingEditorChange(fileId)
+      const draft = store.getState().editorDrafts[fileId]
+      if (draft !== undefined) {
+        ownerProvenance ??= captureEditorFileOperationProvenance(
+          store.getState(),
+          worktreeId,
+          runtimeEnvironmentId,
+          runtimeEnvironmentId !== undefined
+        )
+        queued = true
+        void queueSave(file, draft).then(closeAfterSave, () => complete('failed'))
+      } else {
+        closeAfterSave()
+      }
+    } catch {
+      complete('failed')
     }
-    store.getState().closeFile(fileId)
   }
 
   const handleSaveFile = (event: Event): void => {
@@ -130,6 +219,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   )
 
   return () => {
+    active = false
     unsubscribe()
     window.removeEventListener(
       ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,

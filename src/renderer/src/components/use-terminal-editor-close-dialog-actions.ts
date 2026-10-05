@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '../store'
 import {
   ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
-  ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
+  requestEditorSaveAndClose,
   type EditorRequestFileCloseDetail
 } from './editor/editor-autosave'
 import { discardEditorFileChangesAndClose } from './editor/discard-editor-file-changes'
@@ -20,7 +20,6 @@ export type TerminalEditorCloseDialogActionsInput = Pick<
   | 'releaseCloseDialogGuardAfterDebounce'
   | 'saveDialogFileId'
   | 'setSaveDialogFileId'
-  | 'waitForFileClosed'
   | 'windowCloseAfterDirtyRef'
 >
 
@@ -36,7 +35,6 @@ export function useTerminalEditorCloseDialogActions(
     releaseCloseDialogGuardAfterDebounce,
     saveDialogFileId,
     setSaveDialogFileId,
-    waitForFileClosed,
     windowCloseAfterDirtyRef
   } = controller
   const handleSaveDialogSave = useCallback(async () => {
@@ -56,17 +54,16 @@ export function useTerminalEditorCloseDialogActions(
     }
 
     setSaveDialogFileId(null)
-    window.dispatchEvent(new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, { detail: { fileId } }))
     inFlightSaveFileIdRef.current = fileId
-    let closed = false
+    let result: Awaited<ReturnType<typeof requestEditorSaveAndClose>>
     try {
-      closed = await waitForFileClosed(fileId, 10_000)
+      result = await requestEditorSaveAndClose(fileId)
     } finally {
       if (inFlightSaveFileIdRef.current === fileId) {
         inFlightSaveFileIdRef.current = null
       }
     }
-    if (!closed) {
+    if (result !== 'closed') {
       if (!useAppStore.getState().openFiles.some((candidate) => candidate.id === fileId)) {
         pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
           (id) => id !== fileId
@@ -75,12 +72,14 @@ export function useTerminalEditorCloseDialogActions(
         releaseCloseDialogGuardAfterDebounce()
         return
       }
-      toast.error(
-        translate(
-          'auto.components.Terminal.a2a279b32a',
-          'Save timed out or failed. Fix errors before closing.'
+      if (result === 'failed') {
+        toast.error(
+          translate(
+            'auto.components.Terminal.a2a279b32a',
+            'Save timed out or failed. Fix errors before closing.'
+          )
         )
-      )
+      }
       setSaveDialogFileId(fileId)
       isClosingRef.current = false
       return
@@ -91,12 +90,7 @@ export function useTerminalEditorCloseDialogActions(
     advanceEditorCloseQueue()
     releaseCloseDialogGuardAfterDebounce()
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-  }, [
-    advanceEditorCloseQueue,
-    releaseCloseDialogGuardAfterDebounce,
-    saveDialogFileId,
-    waitForFileClosed
-  ])
+  }, [advanceEditorCloseQueue, releaseCloseDialogGuardAfterDebounce, saveDialogFileId])
 
   const handleSaveDialogDiscard = useCallback(async () => {
     if (isClosingRef.current || !saveDialogFileId) {
