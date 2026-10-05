@@ -247,14 +247,15 @@ async function pasteLocalDropPaths(
   })
 }
 
+/** Uploads dropped local files to the remote host, then pastes the resolved remote paths. */
 async function uploadRemoteDropPaths(
   args: NativeDropFlowArgs & { connectionId: string; targetShell: 'posix' | 'windows' }
 ): Promise<void> {
   const pending = toast.loading(
     translate(
-      'auto.components.terminal.pane.terminal.drop.handler.29c031b49a',
-      'Uploading {{value0}} file{{value1}} to remote…',
-      { value0: args.dataPaths.length, value1: args.dataPaths.length === 1 ? '' : 's' }
+      'auto.components.terminal.pane.terminal.drop.handler.uploadingFilesToRemote',
+      'Uploading {{count}} files to remote…',
+      { count: args.dataPaths.length }
     )
   )
   try {

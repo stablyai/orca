@@ -17,6 +17,7 @@ type MiniMaxCredentialActionContext = {
   recordFeatureInteraction: (featureId: FeatureInteractionId) => void
 }
 
+/** Save/clear handlers for the MiniMax API key and cookie, toasting on failure. */
 export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionContext): {
   saveMiniMaxApiKey: () => Promise<void>
   clearMiniMaxApiKey: () => Promise<void>
@@ -94,6 +95,7 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
     }
   }
 
+  /** Stores the drafted API key; rejects a blank draft before calling main. */
   const saveMiniMaxApiKey = async (): Promise<void> => {
     if (!miniMaxApiKeyDraft.trim()) {
       toast.error(
@@ -125,7 +127,7 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
     } catch (error) {
       toast.error(
         translate(
-          'auto.components.settings.AccountsPane.b43e761fe5',
+          'auto.components.settings.AccountsPane.minimaxCredentialUpdateFailed',
           'MiniMax credential update failed.'
         ),
         { description: error instanceof Error ? error.message : String(error) }
@@ -135,6 +137,7 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
     }
   }
 
+  /** Removes the stored API key and resets the draft. */
   const clearMiniMaxApiKey = async (): Promise<void> => {
     setMiniMaxCredentialBusy(true)
     try {
@@ -146,7 +149,7 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
     } catch (error) {
       toast.error(
         translate(
-          'auto.components.settings.AccountsPane.b43e761fe5',
+          'auto.components.settings.AccountsPane.minimaxCredentialUpdateFailed',
           'MiniMax credential update failed.'
         ),
         { description: error instanceof Error ? error.message : String(error) }

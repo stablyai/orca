@@ -28,6 +28,7 @@ type WorkspaceKanbanSettingsMenuProps = {
   onAddStatus: () => void
 }
 
+/** Board settings dropdown for renaming, reordering, adding and removing workspace statuses. */
 export default function WorkspaceKanbanSettingsMenu({
   workspaceStatuses,
   syncTaskStatusFromWorkspaceBoard,
@@ -165,7 +166,7 @@ export default function WorkspaceKanbanSettingsMenu({
                     disabled={index === workspaceStatuses.length - 1}
                     onClick={() => onMoveStatus(status.id, 1)}
                     aria-label={translate(
-                      'auto.components.sidebar.WorkspaceKanbanSettingsMenu.b45b350eb0',
+                      'auto.components.sidebar.WorkspaceKanbanSettingsMenu.moveStatusRight',
                       'Move {{value0}} right',
                       { value0: status.label }
                     )}

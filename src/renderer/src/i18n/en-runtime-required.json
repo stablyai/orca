@@ -29,7 +29,6 @@
       },
       "GitHubItemDialog": {
         "04539beb48": "issue",
-        "307c98e8e3": "Show {{value0}} more lines above",
         "3853476a97": "GitHub item",
         "3ab6ac0fc8": "Preview and edit the selected GitHub issue or pull request.",
         "45af57999b": "Close preview",
@@ -197,7 +196,6 @@
       },
       "activity": {
         "ActivityPrototypePage": {
-          "770d458144": "Group by",
           "a472a14700": "More options",
           "beb2c19173": "Unread"
         },
@@ -288,10 +286,6 @@
         },
         "HermesCronOutputView": {
           "88d48157fc": "default"
-        },
-        "createDestination": {
-          "stale": "{host} changed while this form was open. Choose it again before saving.",
-          "unavailable": "That host cannot hold a new automation yet. Choose another host to create this one on."
         },
         "externalScope": {
           "unknownManager": "This external automation is no longer listed for any host in view."
@@ -610,8 +604,7 @@
         "project": {
           "view": {
             "surfaces": {
-              "2c4b1c2c08": "number",
-              "7616c986c6": "Open {{value0}} issues"
+              "2c4b1c2c08": "number"
             }
           }
         }
@@ -1082,7 +1075,6 @@
           "b10cb4f696": "adding",
           "b11078a9c2": "wsl",
           "b2b1aa936d": "Paste your opencode.ai session cookie for rate limit fetching.",
-          "b43e761fe5": "MiniMax cookie update failed.",
           "b8c2905c2b": "Could not load Codex accounts.",
           "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in."
         },
@@ -1416,13 +1408,9 @@
           "b5e3e77e89": "action",
           "c90b858573": "text-amber-700 dark:text-amber-300"
         },
-        "RepositoryIconPicker": {
-          "2b7d27b93c": "Use {{value0}} repo color"
-        },
         "RepositoryPane": {
           "createPendingSetup": "Track setup",
           "creatingPendingSetup": "Creating...",
-          "settingUpHost": "Importing...",
           "setupExistingFolder": "Import existing folder",
           "setupExistingFolderHelp": "Make this project available on another host by linking a checkout that already exists there.",
           "setupHost": "Import",
@@ -1950,14 +1938,7 @@
           "2d4f0eb933": "Default",
           "631b97eea9": "Host scope",
           "680043342f": "compact",
-          "bc96dbd041": "Workspace options ({{value0}})",
           "c7591b6014": "repo"
-        },
-        "WorkspaceKanbanSettingsMenu": {
-          "b45b350eb0": "Move {{value0}} left"
-        },
-        "WorkspaceStatusAppearancePopover": {
-          "514be2f569": "Set {{value0}} color to {{value1}}"
         },
         "WorktreeCard": {
           "01f45d3d8a": "sidebar",
@@ -2320,8 +2301,7 @@
             "grokUsageAria": "Open Grok usage details"
           },
           "WorkspaceSpaceCompactPanel": {
-            "2837dc7c72": "cancelling",
-            "bef4dc0457": "{{value0}} reclaimable · {{value1}} unavailable"
+            "2837dc7c72": "cancelling"
           },
           "WorkspaceSpaceManagerPanel": {
             "02b27c2230": "workspace",
@@ -2534,7 +2514,8 @@
           "terminal": {
             "drop": {
               "handler": {
-                "29c031b49a": "Uploading {{value0}} file{{value1}} to runtime…"
+                "uploadingFilesToRemote_one": "Uploading {{count}} file to remote…",
+                "uploadingFilesToRemote_other": "Uploading {{count}} files to remote…"
               }
             }
           }

@@ -1512,7 +1512,8 @@
         "8812225174": "Reopen",
         "09d67a0f9b": "Failed to close pull request",
         "88809e79db": "Failed to reopen pull request",
-        "00f55cc17b": "Repository access is unavailable for this pull request."
+        "00f55cc17b": "Repository access is unavailable for this pull request.",
+        "showMoreLinesBelow": "Show {{value0}} more lines below"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reopen",
@@ -2954,7 +2955,8 @@
               "df4bd63c1d": "Unassigned",
               "30402d2c6e": "Try search or refresh.",
               "a2f31c4cd6": "No Linear projects found",
-              "c9b6e9f90d": "Unable to load Linear projects"
+              "c9b6e9f90d": "Unable to load Linear projects",
+              "openInLinear": "Open {{value0}} in Linear"
             }
           }
         },
@@ -3423,7 +3425,10 @@
                 "internalPathsTooLarge": "Drop path list is too large for a safe terminal paste.",
                 "b4cf68e889": "Skipped {{value0}} {{value1}}.",
                 "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
-                "writeRejected": "File drop cancelled: terminal could not accept the path."
+                "writeRejected": "File drop cancelled: terminal could not accept the path.",
+                "uploadingFilesToRemote": "Uploading {{count}} files to remote…",
+                "uploadingFilesToRemote_one": "Uploading {{count}} file to remote…",
+                "uploadingFilesToRemote_other": "Uploading {{count}} files to remote…"
               }
             }
           },
@@ -3963,7 +3968,8 @@
             "0583c806ac": "Workspace disk usage is not scanned.",
             "39786e3b73": "Scanning workspace sizes.",
             "bef4dc0457": "{{value0}} reclaimable · {{value1}} unavailable",
-            "3d8d47ce77": "{{value0}} · last result kept"
+            "3d8d47ce77": "{{value0}} · last result kept",
+            "reclaimableWorkspaces": "{{value0}} reclaimable · {{value1}} workspaces"
           },
           "WorkspaceSpaceManagerPanel": {
             "2965415393": "Force delete failed",
@@ -5696,7 +5702,8 @@
           "219ebf1961": "Branch name",
           "folderPathIdentity": "Branch / folder path",
           "cli": "Orca CLI",
-          "workspaceOptions": "Workspace options"
+          "workspaceOptions": "Workspace options",
+          "optionsWithActiveCount": "Workspace options ({{value0}} active)"
         },
         "SshTargetRow": {
           "4677394048": "Connecting…",
@@ -5724,7 +5731,8 @@
           "34f03eb0de": "Board settings",
           "26cbc92150": "Workspace board settings",
           "87d24a0c2f": "Sync board and issue status",
-          "4c2eaa78cc": "Moving a linked workspace updates its Linear issue status when a matching workflow state exists."
+          "4c2eaa78cc": "Moving a linked workspace updates its Linear issue status when a matching workflow state exists.",
+          "moveStatusRight": "Move {{value0}} right"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "Empty",
@@ -5736,7 +5744,8 @@
           "8be427206b": "Icon",
           "2ac106f6b2": "Color",
           "74b1413279": "Appearance",
-          "ccbd1e2c69": "Customize {{value0}} appearance"
+          "ccbd1e2c69": "Customize {{value0}} appearance",
+          "setStatusIcon": "Set {{value0}} icon to {{value1}}"
         },
         "WorktreeCard": {
           "a88c92d0e3": "{{value0}}/{{value1}} already exists.",
@@ -6818,7 +6827,8 @@
               "placeholder": "Leave blank to use the key saved by /connect or OPENCODE_API_KEY",
               "help": "Used for OpenCode Go usage in the status bar. The session cookie below is only needed for legacy console (OpenCode Black) accounts."
             }
-          }
+          },
+          "minimaxCredentialUpdateFailed": "MiniMax credential update failed."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -8176,7 +8186,8 @@
           "868c5c9b56": "Failed to import repo icon",
           "emojiTooLongForRepoIcon": "This emoji can't be used as a repo icon.",
           "currentEmojiSelection": "Current: {{value0}}",
-          "searchEmojiPlaceholder": "Search emoji"
+          "searchEmojiPlaceholder": "Search emoji",
+          "useRepoIcon": "Use {{value0}} repo icon"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Relative paths resolve from this project root.",
@@ -8258,7 +8269,8 @@
           "show": "Show",
           "hide": "Hide",
           "externalWorktreesGlobal": "Global default: {{value0}}",
-          "useGlobal": "Use global"
+          "useGlobal": "Use global",
+          "addingProject": "Adding..."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",
@@ -16831,7 +16843,9 @@
           "projectMismatch": "That project is not on {host}. Choose a project on that host, or another host.",
           "noProjects": "No projects are set up on {host}. Add one there, or choose another host.",
           "updateRequired": "Update the Orca server on {hosts} to store automations there.",
-          "move": "Saving creates this automation on {host} and deletes the original and its run history."
+          "move": "Saving creates this automation on {host} and deletes the original and its run history.",
+          "staleProject": "{host} changed while this form was open. Choose the project again before saving.",
+          "projectUnavailable": "Choose an available project on this host before saving."
         },
         "AutomationListToolbar": {
           "runs": "Runs"
@@ -16927,7 +16941,8 @@
             "permission": "Needs attention"
           },
           "filtersSection": "Filters",
-          "viewSection": "View"
+          "viewSection": "View",
+          "groupAgentActivityBy": "Group agent activity by"
         },
         "clearCompleted": {
           "clearedOne": "Cleared 1 completed agent",

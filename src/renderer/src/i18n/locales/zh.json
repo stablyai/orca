@@ -1345,7 +1345,8 @@
         "8812225174": "重新打开",
         "09d67a0f9b": "无法关闭拉取请求",
         "88809e79db": "无法重新提交拉取请求",
-        "00f55cc17b": "此拉取请求无法访问存储库。"
+        "00f55cc17b": "此拉取请求无法访问存储库。",
+        "showMoreLinesBelow": "在下面显示 {{value0}} 更多行"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "重新打开",
@@ -2751,7 +2752,8 @@
               "df4bd63c1d": "未分配",
               "30402d2c6e": "尝试搜索或刷新。",
               "a2f31c4cd6": "未找到 Linear 项目",
-              "c9b6e9f90d": "无法加载 Linear 项目"
+              "c9b6e9f90d": "无法加载 Linear 项目",
+              "openInLinear": "在 Linear 中打开 {{value0}}"
             }
           }
         },
@@ -3201,7 +3203,10 @@
                 "internalPathsTooLarge": "拖放的路径列表过大，无法安全粘贴到终端。",
                 "b4cf68e889": "已跳过 {{value0}} {{value1}}。",
                 "writeTimeout": "文件拖放已取消：终端在安全超时前未接受路径。",
-                "writeRejected": "文件拖放已取消：终端无法接受路径。"
+                "writeRejected": "文件拖放已取消：终端无法接受路径。",
+                "uploadingFilesToRemote": "正在上传 {{count}} 个文件到远程...",
+                "uploadingFilesToRemote_one": "正在上传 {{count}} 个文件到远程...",
+                "uploadingFilesToRemote_other": "正在上传 {{count}} 个文件到远程..."
               }
             }
           },
@@ -3750,7 +3755,8 @@
             "0583c806ac": "不扫描工作区磁盘使用情况。",
             "39786e3b73": "扫描工作区大小。",
             "bef4dc0457": "{{value0}} 可回收 · {{value1}} 不可用",
-            "3d8d47ce77": "{{value0}} · 保留最后的结果"
+            "3d8d47ce77": "{{value0}} · 保留最后的结果",
+            "reclaimableWorkspaces": "{{value0}} 可回收 · {{value1}} 个工作区"
           },
           "WorkspaceSpaceManagerPanel": {
             "2965415393": "强制删除失败",
@@ -5431,7 +5437,8 @@
           "automation": "自动化",
           "folderPathIdentity": "分支 / 文件夹路径",
           "cli": "Orca CLI",
-          "workspaceOptions": "工作区选项"
+          "workspaceOptions": "工作区选项",
+          "optionsWithActiveCount": "工作区选项（{{value0}} 个活动）"
         },
         "SshTargetRow": {
           "4677394048": "正在连接…",
@@ -5459,7 +5466,8 @@
           "34f03eb0de": "董事会设置",
           "26cbc92150": "工作区板设置",
           "87d24a0c2f": "同步看板和议题状态",
-          "4c2eaa78cc": "移动已关联的工作区时，如果存在匹配的工作流状态，将更新其 Linear 议题状态。"
+          "4c2eaa78cc": "移动已关联的工作区时，如果存在匹配的工作流状态，将更新其 Linear 议题状态。",
+          "moveStatusRight": "将 {{value0}} 向右移动"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "空的",
@@ -5471,7 +5479,8 @@
           "8be427206b": "图标",
           "2ac106f6b2": "颜色",
           "74b1413279": "外观",
-          "ccbd1e2c69": "自定义 {{value0}} 外观"
+          "ccbd1e2c69": "自定义 {{value0}} 外观",
+          "setStatusIcon": "将 {{value0}} 图标设置为 {{value1}}"
         },
         "WorktreeCard": {
           "a88c92d0e3": "{{value0}}/{{value1}} 已存在。",
@@ -6580,7 +6589,8 @@
               "placeholder": "留空以使用 /connect 或 OPENCODE_API_KEY 保存的密钥",
               "help": "用于在状态栏中显示 OpenCode Go 使用情况。下面的会话 Cookie 仅旧版控制台 (OpenCode Black) 账号需要。"
             }
-          }
+          },
+          "minimaxCredentialUpdateFailed": "MiniMax 凭据更新失败。"
         },
         "AdvancedPane": {
           "40b29e0bf3": "重新启动",
@@ -7895,7 +7905,8 @@
           "868c5c9b56": "无法导入仓库图标",
           "emojiTooLongForRepoIcon": "此表情符号无法用作仓库图标。",
           "currentEmojiSelection": "当前：{{value0}}",
-          "searchEmojiPlaceholder": "搜索表情符号"
+          "searchEmojiPlaceholder": "搜索表情符号",
+          "useRepoIcon": "使用 {{value0}} 仓库图标"
         },
         "RepositoryPane": {
           "15a99d9b9f": "相对路径从该项目根解析。",
@@ -7977,7 +7988,8 @@
           "externalWorktreesGlobal": "全局默认值：{{value0}}",
           "useGlobal": "使用全局设置",
           "hostStateWorkspaceWindowClosed": "工作区窗口已关闭",
-          "hostWorkspaceWindowClosedHelp": "服务器可以访问，但其 Orca 窗口已关闭。在 {{value0}} 上打开 Orca 以使用此设置。"
+          "hostWorkspaceWindowClosedHelp": "服务器可以访问，但其 Orca 窗口已关闭。在 {{value0}} 上打开 Orca 以使用此设置。",
+          "addingProject": "添加中..."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "提示词模板",
@@ -16538,7 +16550,9 @@
           "projectMismatch": "该项目不在 {host} 上。请选择该主机上的项目，或选择另一台主机。",
           "noProjects": "{host} 上未设置任何项目。请在该主机上添加一个，或选择另一台主机。",
           "updateRequired": "更新 {hosts} 上的 Orca 服务器即可在其中存储自动化。",
-          "move": "保存后会在 {host} 上创建此自动化，并删除原有自动化及其运行历史。"
+          "move": "保存后会在 {host} 上创建此自动化，并删除原有自动化及其运行历史。",
+          "staleProject": "此表单打开期间 {host} 已更改。保存前请重新选择项目。",
+          "projectUnavailable": "保存前请在此主机上选择一个可用项目。"
         },
         "AutomationEditorPromptSection": {
           "a7c3e91b04": "编辑姓名"
@@ -16704,7 +16718,8 @@
             "permission": "需注意"
           },
           "filtersSection": "筛选",
-          "viewSection": "视图"
+          "viewSection": "视图",
+          "groupAgentActivityBy": "智能体活动分组方式"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "显示所有主机和项目",

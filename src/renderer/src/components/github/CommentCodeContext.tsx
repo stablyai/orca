@@ -41,6 +41,7 @@ export type LoadPRFileContents = (args: {
   baseSha: string
 }) => Promise<GitHubPRFileContents>
 
+/** Shows the diff lines a PR review comment points at, expandable above and below. */
 export function CommentCodeContext({
   comment,
   repoPath,
@@ -295,7 +296,7 @@ export function CommentCodeContext({
                   )
                 }
                 aria-label={translate(
-                  'auto.components.GitHubItemDialog.307c98e8e3',
+                  'auto.components.GitHubItemDialog.showMoreLinesBelow',
                   'Show {{value0}} more lines below',
                   { value0: CODE_CONTEXT_EXPAND_STEP }
                 )}

@@ -1345,7 +1345,8 @@
         "8812225174": "Reabrir",
         "09d67a0f9b": "No se pudo cerrar la PR",
         "88809e79db": "No se pudo reabrir la PR",
-        "00f55cc17b": "El acceso al repositorio no está disponible para esta PR."
+        "00f55cc17b": "El acceso al repositorio no está disponible para esta PR.",
+        "showMoreLinesBelow": "Mostrar {{value0}} más líneas abajo"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reabrir",
@@ -2751,7 +2752,8 @@
               "df4bd63c1d": "No asignado",
               "30402d2c6e": "Intenta buscar o actualizar.",
               "a2f31c4cd6": "No se encontraron proyectos de Linear",
-              "c9b6e9f90d": "No se pueden cargar proyectos de Linear"
+              "c9b6e9f90d": "No se pueden cargar proyectos de Linear",
+              "openInLinear": "Abrir {{value0}} en Linear"
             }
           }
         },
@@ -3201,7 +3203,10 @@
                 "internalPathsTooLarge": "La lista de rutas del drop es demasiado grande para pegarla de forma segura en el terminal.",
                 "b4cf68e889": "Se omitió {{value0}} {{value1}}.",
                 "writeTimeout": "Se canceló el drop de archivos: el terminal no aceptó la ruta antes del tiempo límite de seguridad.",
-                "writeRejected": "Se canceló el drop de archivos: el terminal no pudo aceptar la ruta."
+                "writeRejected": "Se canceló el drop de archivos: el terminal no pudo aceptar la ruta.",
+                "uploadingFilesToRemote": "Subiendo {{count}} archivos al remoto…",
+                "uploadingFilesToRemote_one": "Subiendo {{count}} archivo al remoto…",
+                "uploadingFilesToRemote_other": "Subiendo {{count}} archivos al remoto…"
               }
             }
           },
@@ -3750,7 +3755,8 @@
             "0583c806ac": "No se ha escaneado el uso de disco del espacio de trabajo.",
             "39786e3b73": "Escaneando tamaños de espacios de trabajo.",
             "bef4dc0457": "{{value0}} recuperable · {{value1}} no disponible",
-            "3d8d47ce77": "{{value0}} · último resultado mantenido"
+            "3d8d47ce77": "{{value0}} · último resultado mantenido",
+            "reclaimableWorkspaces": "{{value0}} recuperable · {{value1}} espacios de trabajo"
           },
           "WorkspaceSpaceManagerPanel": {
             "2965415393": "Falló la eliminación forzada",
@@ -5450,7 +5456,8 @@
           "219ebf1961": "Nombre de rama",
           "folderPathIdentity": "Rama / ruta de carpeta",
           "cli": "Orca CLI",
-          "workspaceOptions": "Opciones de espacio de trabajo"
+          "workspaceOptions": "Opciones de espacio de trabajo",
+          "optionsWithActiveCount": "Opciones de espacio de trabajo ({{value0}} activas)"
         },
         "SshTargetRow": {
           "4677394048": "Conectando…",
@@ -5478,7 +5485,8 @@
           "34f03eb0de": "Ajustes del tablero",
           "26cbc92150": "Ajustes del tablero de espacios de trabajo",
           "87d24a0c2f": "Sincronizar tablero y estado de issue",
-          "4c2eaa78cc": "Al mover un espacio de trabajo vinculado, se actualiza el estado de su issue de Linear cuando existe un estado de workflow coincidente."
+          "4c2eaa78cc": "Al mover un espacio de trabajo vinculado, se actualiza el estado de su issue de Linear cuando existe un estado de workflow coincidente.",
+          "moveStatusRight": "Mover {{value0}} a la derecha"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "Vacío",
@@ -5490,7 +5498,8 @@
           "8be427206b": "Icono",
           "2ac106f6b2": "Color",
           "74b1413279": "Apariencia",
-          "ccbd1e2c69": "Personaliza la apariencia de {{value0}}"
+          "ccbd1e2c69": "Personaliza la apariencia de {{value0}}",
+          "setStatusIcon": "Establecer icono de {{value0}} en {{value1}}"
         },
         "WorktreeCard": {
           "a88c92d0e3": "{{value0}}/{{value1}} ya existe.",
@@ -6595,7 +6604,8 @@
           "cookieSelectedEndpoint": "Almacenado localmente y enviado al punto final MiniMax seleccionado para actualizaciones de uso.",
           "copySelectedConsoleCookie": "Abra la consola seleccionada, inicie sesión y luego copie el encabezado de solicitud de cookies de DevTools (Red → cualquier solicitud restante → Cookie).",
           "apiKeySelectedEndpoint": "Pegue la clave API desde su consola MiniMax → Claves API. Almacenado localmente y enviado al punto final MiniMax seleccionado para actualizaciones de uso. La clave API tiene prioridad sobre la cookie.",
-          "apiKeyInstructions": "Copie la clave API desde su consola MiniMax → Claves API. Una clave API guardada tiene prioridad sobre la cookie; Utilice la tecla Olvidar para volver a la cookie."
+          "apiKeyInstructions": "Copie la clave API desde su consola MiniMax → Claves API. Una clave API guardada tiene prioridad sobre la cookie; Utilice la tecla Olvidar para volver a la cookie.",
+          "minimaxCredentialUpdateFailed": "No se pudo actualizar la credencial de MiniMax."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Reiniciar",
@@ -7910,7 +7920,8 @@
           "868c5c9b56": "No se pudo importar el icono del repositorio",
           "emojiTooLongForRepoIcon": "Este emoji no se puede usar como icono del repositorio.",
           "currentEmojiSelection": "Actual: {{value0}}",
-          "searchEmojiPlaceholder": "Buscar emoji"
+          "searchEmojiPlaceholder": "Buscar emoji",
+          "useRepoIcon": "Usar {{value0}} como icono del repositorio"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Las rutas relativas se resuelven desde la raíz de este proyecto.",
@@ -7992,7 +8003,8 @@
           "externalWorktreesGlobal": "Valor global predeterminado: {{value0}}",
           "useGlobal": "Usar valor global",
           "hostStateWorkspaceWindowClosed": "Ventana del espacio de trabajo cerrada",
-          "hostWorkspaceWindowClosedHelp": "Se puede acceder al servidor pero su ventana Orca está cerrada. Abra Orca en {{value0}} para usar esta configuración."
+          "hostWorkspaceWindowClosedHelp": "Se puede acceder al servidor pero su ventana Orca está cerrada. Abra Orca en {{value0}} para usar esta configuración.",
+          "addingProject": "Agregando..."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Plantilla de comando",
@@ -16538,7 +16550,9 @@
           "projectMismatch": "Ese proyecto no está en {host}. Elija un proyecto en ese host, u otro host.",
           "noProjects": "No hay proyectos configurados en {host}. Agregue uno allí o elija otro host.",
           "updateRequired": "Actualice el servidor de Orca en {hosts} para almacenar automatizaciones allí.",
-          "move": "Al guardar se crea esta automatización en {host} y se eliminan la original y su historial de ejecuciones."
+          "move": "Al guardar se crea esta automatización en {host} y se eliminan la original y su historial de ejecuciones.",
+          "staleProject": "{host} cambió mientras este formulario estaba abierto. Elija el proyecto de nuevo antes de guardar.",
+          "projectUnavailable": "Elija un proyecto disponible en este host antes de guardar."
         },
         "emptyState": {
           "hostLoading": "Cargando host…",
@@ -16704,7 +16718,8 @@
             "permission": "Requiere atención"
           },
           "filtersSection": "Filtros",
-          "viewSection": "Vista"
+          "viewSection": "Vista",
+          "groupAgentActivityBy": "Agrupar actividad de agentes por"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "Mostrar todos los hosts y proyectos",

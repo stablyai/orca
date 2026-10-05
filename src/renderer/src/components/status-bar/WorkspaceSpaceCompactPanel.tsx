@@ -10,6 +10,7 @@ import {
 } from './workspace-space-format'
 import { translate } from '@/i18n/i18n'
 
+/** Status-bar summary of workspace disk usage with scan, cancel and open-full-page actions. */
 export function WorkspaceSpaceCompactPanel({
   onOpenFullPage
 }: {
@@ -71,7 +72,7 @@ export function WorkspaceSpaceCompactPanel({
                         }
                       )
                     : translate(
-                        'auto.components.status.bar.WorkspaceSpaceCompactPanel.bef4dc0457',
+                        'auto.components.status.bar.WorkspaceSpaceCompactPanel.reclaimableWorkspaces',
                         '{{value0}} reclaimable · {{value1}} workspaces',
                         {
                           value0: formatBytes(analysis.reclaimableBytes),

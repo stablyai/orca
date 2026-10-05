@@ -30,6 +30,7 @@ type RepositoryIconTabsProps = {
   onUseGitHubAvatar: () => void
 }
 
+/** Repo icon picker tabs: built-in icons, an uploaded image or a website favicon. */
 export function RepositoryIconTabs({
   initialTab,
   selectedLucideName,
@@ -172,7 +173,7 @@ export function RepositoryIconTabs({
                   className="size-8"
                   onClick={() => onSetIcon({ type: 'lucide', name: option.name })}
                   aria-label={translate(
-                    'auto.components.settings.RepositoryIconPicker.2b7d27b93c',
+                    'auto.components.settings.RepositoryIconPicker.useRepoIcon',
                     'Use {{value0}} repo icon',
                     { value0: option.label }
                   )}

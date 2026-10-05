@@ -1448,7 +1448,8 @@
         "8812225174": "Rouvrir",
         "09d67a0f9b": "Échec de la fermeture de la pull request",
         "88809e79db": "Échec de la réouverture de la pull request",
-        "00f55cc17b": "L'accès au dépôt est indisponible pour cette pull request."
+        "00f55cc17b": "L'accès au dépôt est indisponible pour cette pull request.",
+        "showMoreLinesBelow": "Afficher {{value0}} lignes supplémentaires en dessous"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Rouvrir",
@@ -2854,7 +2855,8 @@
               "df4bd63c1d": "Non assigné",
               "30402d2c6e": "Essayez la recherche ou actualisez.",
               "a2f31c4cd6": "Aucun projet Linear trouvé",
-              "c9b6e9f90d": "Impossible de charger les projets Linear"
+              "c9b6e9f90d": "Impossible de charger les projets Linear",
+              "openInLinear": "Ouvrir {{value0}} dans Linear"
             }
           }
         },
@@ -3323,7 +3325,10 @@
                 "internalPathsTooLarge": "La liste de chemins déposée est trop volumineuse pour un collage sûr dans le terminal.",
                 "b4cf68e889": "Ignoré : {{value0}} {{value1}}.",
                 "writeTimeout": "Glisser-déposer de fichiers annulé : le terminal n'a pas accepté le chemin avant le délai de sécurité.",
-                "writeRejected": "Glisser-déposer de fichiers annulé : le terminal n'a pas pu accepter le chemin."
+                "writeRejected": "Glisser-déposer de fichiers annulé : le terminal n'a pas pu accepter le chemin.",
+                "uploadingFilesToRemote": "Envoi de {{count}} fichiers vers l'hôte distant…",
+                "uploadingFilesToRemote_one": "Envoi de {{count}} fichier vers l'hôte distant…",
+                "uploadingFilesToRemote_other": "Envoi de {{count}} fichiers vers l'hôte distant…"
               }
             }
           },
@@ -3861,7 +3866,8 @@
             "0583c806ac": "L'espace disque des espaces de travail n'a pas été analysé.",
             "39786e3b73": "Analyse de la taille des espaces de travail.",
             "bef4dc0457": "{{value0}} récupérables · {{value1}} indisponibles",
-            "3d8d47ce77": "{{value0}} · dernier résultat conservé"
+            "3d8d47ce77": "{{value0}} · dernier résultat conservé",
+            "reclaimableWorkspaces": "{{value0}} récupérables · {{value1}} espaces de travail"
           },
           "WorkspaceSpaceManagerPanel": {
             "2965415393": "Échec de la suppression forcée",
@@ -5576,7 +5582,8 @@
           "219ebf1961": "Nom de branche",
           "folderPathIdentity": "Branche / chemin de dossier",
           "cli": "Orca CLI",
-          "workspaceOptions": "Options de l'espace de travail"
+          "workspaceOptions": "Options de l'espace de travail",
+          "optionsWithActiveCount": "Options des espaces de travail ({{value0}} actifs)"
         },
         "SshTargetRow": {
           "4677394048": "Connexion…",
@@ -5604,7 +5611,8 @@
           "34f03eb0de": "Paramètres du tableau",
           "26cbc92150": "Paramètres du tableau des espaces de travail",
           "87d24a0c2f": "Synchroniser le tableau et le statut des issues",
-          "4c2eaa78cc": "Déplacer un espace de travail lié met à jour le statut de son issue Linear quand un état de workflow correspondant existe."
+          "4c2eaa78cc": "Déplacer un espace de travail lié met à jour le statut de son issue Linear quand un état de workflow correspondant existe.",
+          "moveStatusRight": "Déplacer {{value0}} vers la droite"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "Vide",
@@ -5616,7 +5624,8 @@
           "8be427206b": "Icône",
           "2ac106f6b2": "Couleur",
           "74b1413279": "Apparence",
-          "ccbd1e2c69": "Personnaliser l'apparence de {{value0}}"
+          "ccbd1e2c69": "Personnaliser l'apparence de {{value0}}",
+          "setStatusIcon": "Définir l'icône de {{value0}} sur {{value1}}"
         },
         "WorktreeCard": {
           "a88c92d0e3": "{{value0}}/{{value1}} existe déjà.",
@@ -6698,7 +6707,8 @@
               "placeholder": "Laissez vide pour utiliser la clé enregistrée par /connect ou OPENCODE_API_KEY",
               "help": "Utilisé pour l'utilisation d'OpenCode Go dans la barre d'état. Le cookie de session ci-dessous n'est nécessaire que pour les anciens comptes console (OpenCode Black)."
             }
-          }
+          },
+          "minimaxCredentialUpdateFailed": "Échec de la mise à jour de l'identifiant MiniMax."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Redémarrer",
@@ -8051,7 +8061,8 @@
           "868c5c9b56": "Échec de l'importation de l'icône du dépôt",
           "emojiTooLongForRepoIcon": "Cet émoji ne peut pas servir d'icône de dépôt.",
           "currentEmojiSelection": "Actuel : {{value0}}",
-          "searchEmojiPlaceholder": "Rechercher un émoji"
+          "searchEmojiPlaceholder": "Rechercher un émoji",
+          "useRepoIcon": "Utiliser l'icône de dépôt {{value0}}"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Les chemins relatifs sont résolus depuis la racine de ce projet.",
@@ -8133,7 +8144,8 @@
           "show": "Afficher",
           "hide": "Masquer",
           "externalWorktreesGlobal": "Réglage global par défaut : {{value0}}",
-          "useGlobal": "Utiliser la valeur globale"
+          "useGlobal": "Utiliser la valeur globale",
+          "addingProject": "Ajout..."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Modèle de commande",
@@ -16711,7 +16723,9 @@
           "projectMismatch": "Ce projet n'est pas sur {host}. Choisissez un projet sur cet hôte ou sur un autre hôte.",
           "noProjects": "Aucun projet n'est configuré sur {host}. Ajoutez-en un ici ou choisissez un autre hôte.",
           "updateRequired": "Mettez à jour le serveur Orca sur {hosts} pour y stocker les automatisations.",
-          "move": "L'enregistrement crée cette automatisation sur {host} et supprime l'original et son historique d'exécution."
+          "move": "L'enregistrement crée cette automatisation sur {host} et supprime l'original et son historique d'exécution.",
+          "staleProject": "{host} a changé pendant que ce formulaire était ouvert. Choisissez à nouveau le projet avant de sauvegarder.",
+          "projectUnavailable": "Choisissez un projet disponible sur cet hôte avant de sauvegarder."
         },
         "AutomationListToolbar": {
           "runs": "Fonctionne"
@@ -16807,7 +16821,8 @@
             "unverifiable": "Aucune mise à jour récente",
             "unconfirmed": "Impossible de confirmer",
             "permission": "A besoin d'attention"
-          }
+          },
+          "groupAgentActivityBy": "Grouper l'activité des agents par"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "Afficher tous les hôtes et projets",

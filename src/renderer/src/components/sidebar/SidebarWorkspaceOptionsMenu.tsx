@@ -18,6 +18,7 @@ type SidebarWorkspaceOptionsMenuProps = {
   onMenuOpenChange?: (open: boolean) => void
 }
 
+/** Sidebar workspace options menu whose trigger label reports the active filter count. */
 const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsMenu({
   preserveWorkspaceBoardOpen = false,
   onMenuOpenChange
@@ -46,7 +47,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
               aria-label={
                 hasAnyFilter
                   ? translate(
-                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.bc96dbd041',
+                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.optionsWithActiveCount',
                       'Workspace options ({{value0}} active)',
                       { value0: activeFilterLabel }
                     )

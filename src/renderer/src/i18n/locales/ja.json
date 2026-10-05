@@ -1345,7 +1345,8 @@
         "8812225174": "再度開く",
         "09d67a0f9b": "PR をクローズできませんでした",
         "88809e79db": "PR の再開に失敗しました",
-        "00f55cc17b": "この PR ではリポジトリにアクセスできません。"
+        "00f55cc17b": "この PR ではリポジトリにアクセスできません。",
+        "showMoreLinesBelow": "下に {{value0}} 行をさらに表示"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "再度開く",
@@ -2751,7 +2752,8 @@
               "df4bd63c1d": "未割り当て",
               "30402d2c6e": "検索または更新してみてください。",
               "a2f31c4cd6": "Linear プロジェクトが見つかりません",
-              "c9b6e9f90d": "Linear プロジェクトをロードできません"
+              "c9b6e9f90d": "Linear プロジェクトをロードできません",
+              "openInLinear": "{{value0}} を Linear で開く"
             }
           }
         },
@@ -3201,7 +3203,10 @@
                 "internalPathsTooLarge": "安全にターミナルへ貼り付けるにはパス一覧が大きすぎます。",
                 "b4cf68e889": "{{value0}} {{value1}} をスキップしました。",
                 "writeTimeout": "ファイルドロップをキャンセルしました: 安全タイムアウト前にターミナルがパスを受け付けませんでした。",
-                "writeRejected": "ファイルドロップをキャンセルしました: ターミナルがパスを受け付けられませんでした。"
+                "writeRejected": "ファイルドロップをキャンセルしました: ターミナルがパスを受け付けられませんでした。",
+                "uploadingFilesToRemote": "{{count}} 個のファイルをリモートにアップロードしています…",
+                "uploadingFilesToRemote_one": "{{count}} 個のファイルをリモートにアップロードしています…",
+                "uploadingFilesToRemote_other": "{{count}} 個のファイルをリモートにアップロードしています…"
               }
             }
           },
@@ -3750,7 +3755,8 @@
             "0583c806ac": "ワークスペースのディスク使用量はスキャンされません。",
             "39786e3b73": "ワークスペースのサイズをスキャンしています。",
             "bef4dc0457": "{{value0}} は回収可能ですが、{{value1}} は利用できません",
-            "3d8d47ce77": "{{value0}} · 最後の結果が保持される"
+            "3d8d47ce77": "{{value0}} · 最後の結果が保持される",
+            "reclaimableWorkspaces": "{{value0}} 回収可能 · {{value1}} ワークスペース"
           },
           "WorkspaceSpaceManagerPanel": {
             "2965415393": "強制削除に失敗しました",
@@ -5431,7 +5437,8 @@
           "automation": "オートメーション",
           "folderPathIdentity": "ブランチ / フォルダーパス",
           "cli": "Orca CLI",
-          "workspaceOptions": "ワークスペースのオプション"
+          "workspaceOptions": "ワークスペースのオプション",
+          "optionsWithActiveCount": "ワークスペースオプション ({{value0}} 件アクティブ)"
         },
         "SshTargetRow": {
           "4677394048": "接続中…",
@@ -5459,7 +5466,8 @@
           "34f03eb0de": "ボード設定",
           "26cbc92150": "ワークスペースボードの設定",
           "87d24a0c2f": "ボードと Issue のステータスを同期",
-          "4c2eaa78cc": "リンク済みワークスペースを移動すると、一致するワークフロー状態がある場合に Linear Issue のステータスが更新されます。"
+          "4c2eaa78cc": "リンク済みワークスペースを移動すると、一致するワークフロー状態がある場合に Linear Issue のステータスが更新されます。",
+          "moveStatusRight": "{{value0}} を右に移動"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "空の",
@@ -5471,7 +5479,8 @@
           "8be427206b": "アイコン",
           "2ac106f6b2": "色",
           "74b1413279": "外観",
-          "ccbd1e2c69": "{{value0}} の外観をカスタマイズする"
+          "ccbd1e2c69": "{{value0}} の外観をカスタマイズする",
+          "setStatusIcon": "{{value0}} のアイコンを {{value1}} に設定します"
         },
         "WorktreeCard": {
           "a88c92d0e3": "{{value0}}/{{value1}} はすでに存在します。",
@@ -6580,7 +6589,8 @@
               "placeholder": "/connect または OPENCODE_API_KEY で保存されたキーを使う場合は空欄のままにします",
               "help": "ステータスバーの OpenCode Go 使用状況表示に使います。下のセッション Cookie はレガシーコンソール (OpenCode Black) アカウントでのみ必要です。"
             }
-          }
+          },
+          "minimaxCredentialUpdateFailed": "MiniMax の認証情報の更新に失敗しました。"
         },
         "AdvancedPane": {
           "40b29e0bf3": "再起動",
@@ -7932,7 +7942,8 @@
           "868c5c9b56": "リポジトリアイコンのインポートに失敗しました",
           "emojiTooLongForRepoIcon": "この絵文字はリポジトリアイコンとして使用できません。",
           "currentEmojiSelection": "現在: {{value0}}",
-          "searchEmojiPlaceholder": "絵文字を検索"
+          "searchEmojiPlaceholder": "絵文字を検索",
+          "useRepoIcon": "{{value0}} リポジトリアイコンを使用する"
         },
         "RepositoryPane": {
           "15a99d9b9f": "相対パスは、このプロジェクトのルートから解決されます。",
@@ -8014,7 +8025,8 @@
           "externalWorktreesGlobal": "グローバルデフォルト: {{value0}}",
           "useGlobal": "グローバル設定を使用",
           "hostStateWorkspaceWindowClosed": "ワークスペースウィンドウを閉じた",
-          "hostWorkspaceWindowClosedHelp": "サーバーにはアクセスできますが、Orca ウィンドウが閉じています。このセットアップを使用するには、{{value0}} で Orca を開いてください。"
+          "hostWorkspaceWindowClosedHelp": "サーバーにはアクセスできますが、Orca ウィンドウが閉じています。このセットアップを使用するには、{{value0}} で Orca を開いてください。",
+          "addingProject": "追加中…"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "コマンドテンプレート",
@@ -16538,7 +16550,9 @@
           "projectMismatch": "そのプロジェクトは {host} にありません。そのホスト上のプロジェクト、または別のホストを選択してください。",
           "noProjects": "{host} にはプロジェクトが設定されていません。そこに追加するか、別のホストを選択してください。",
           "updateRequired": "{hosts} の Orca サーバーを更新すると、そこに自動化を保存できます。",
-          "move": "保存すると、この自動化は {host} に作成され、元の自動化と実行履歴は削除されます。"
+          "move": "保存すると、この自動化は {host} に作成され、元の自動化と実行履歴は削除されます。",
+          "staleProject": "このフォームを開いている間に {host} が変更されました。保存する前にプロジェクトをもう一度選択してください。",
+          "projectUnavailable": "保存する前に、このホストで利用可能なプロジェクトを選択してください。"
         },
         "AutomationEditorPromptSection": {
           "a7c3e91b04": "名前の編集"
@@ -16704,7 +16718,8 @@
             "permission": "要対応"
           },
           "filtersSection": "フィルター",
-          "viewSection": "表示"
+          "viewSection": "表示",
+          "groupAgentActivityBy": "Agent のアクティビティをグループ化"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "すべてのホストとプロジェクトを表示",

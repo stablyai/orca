@@ -17,6 +17,7 @@ type WorkspaceStatusAppearancePopoverProps = {
   onChangeIcon: (statusId: string, icon: string) => void
 }
 
+/** Popover for choosing a workspace status's color and icon. */
 export default function WorkspaceStatusAppearancePopover({
   status,
   onChangeColor,
@@ -108,7 +109,7 @@ export default function WorkspaceStatusAppearancePopover({
                   className="size-8"
                   onClick={() => onChangeIcon(status.id, icon.id)}
                   aria-label={translate(
-                    'auto.components.sidebar.WorkspaceStatusAppearancePopover.514be2f569',
+                    'auto.components.sidebar.WorkspaceStatusAppearancePopover.setStatusIcon',
                     'Set {{value0}} icon to {{value1}}',
                     { value0: status.label, value1: icon.label }
                   )}

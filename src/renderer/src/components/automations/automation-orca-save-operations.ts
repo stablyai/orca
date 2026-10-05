@@ -100,7 +100,7 @@ export function resolveAutomationEditDestination(
       ok: false,
       notice: {
         message: translate(
-          'auto.components.automations.createDestination.stale',
+          'auto.components.automations.createDestination.staleProject',
           '{host} changed while this form was open. Choose the project again before saving.'
         ).replace('{host}', revalidated.entry.label),
         recovery: 'retry',
@@ -130,10 +130,11 @@ export function resolveAutomationEditDestination(
   }
 }
 
+/** Retryable notice for an edit whose project is no longer available on its host. */
 function unavailableDestinationNotice(): AutomationActionNotice {
   return {
     message: translate(
-      'auto.components.automations.createDestination.unavailable',
+      'auto.components.automations.createDestination.projectUnavailable',
       'Choose an available project on this host before saving.'
     ),
     recovery: 'retry',
