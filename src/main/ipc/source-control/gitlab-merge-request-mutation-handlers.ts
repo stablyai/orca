@@ -18,6 +18,8 @@ import {
   localGitOptionArgs,
   repoConnectionId
 } from './gitlab-repo-access'
+import { invalidateHostedReviewBranchCache } from '../../source-control/hosted-review-branch-cache'
+import { getRepoHostedReviewExecutionHostId } from '../../source-control/hosted-review-execution-host'
 
 export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
   ipcMain.handle(
@@ -73,15 +75,20 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     'gitlab:updateMR',
     async (_event, args: GitLabRepoSelectorArgs & { iid: number; updates: GitLabMRUpdate }) => {
       const repo = assertRegisteredRepo(args, store)
-      return updateMR(
-        repo.path,
-        args.iid,
-        args.updates,
-        repo.issueSourcePreference,
-        repoConnectionId(repo),
-        undefined,
-        ...localGitOptionArgs(store, repo)
-      )
+      try {
+        return await updateMR(
+          repo.path,
+          args.iid,
+          args.updates,
+          repo.issueSourcePreference,
+          repoConnectionId(repo),
+          undefined,
+          ...localGitOptionArgs(store, repo)
+        )
+      } finally {
+        // Why: the sidebar refresh reads through the host's 60s review cache; drop it so approvals show at once.
+        invalidateHostedReviewBranchCache(repo.path, getRepoHostedReviewExecutionHostId(repo))
+      }
     }
   )
 

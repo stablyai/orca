@@ -8,9 +8,11 @@ import {
   glabRepoExecOptions,
   glabExecFileAsync,
   release,
+  type LocalGitExecOptions,
   type ProjectRef
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
+import { fetchMRApproval } from './mr-reviewers-and-approvals'
 import {
   hasHostedReviewLocalGitOptions,
   getHostedReviewLocalGitOptions,
@@ -74,6 +76,27 @@ export async function getMergeRequest(
   }
 }
 
+// ponytail: one extra /approvals call per open-MR lookup (shared branch cache includes the worktree list); gate on `active` if the API budget bites.
+async function withApproval(
+  info: MRInfo,
+  repoPath: string,
+  projectRef: ProjectRef,
+  connectionId: string | null | undefined,
+  localGitOptions: LocalGitExecOptions
+): Promise<MRInfo> {
+  if (info.state !== 'opened') {
+    return info
+  }
+  const approval = await fetchMRApproval(
+    repoPath,
+    projectRef,
+    info.number,
+    connectionId,
+    localGitOptions
+  )
+  return approval ? { ...info, approval } : info
+}
+
 export async function getMergeRequestForBranch(
   repoPath: string,
   branch: string,
@@ -108,7 +131,14 @@ export async function getMergeRequestForBranch(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the single-MR endpoint returns the MR fields and its optional pipeline.
       const raw = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0]
       const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
-      return mapMRInfo(raw, pipelineStatus)
+      // Why: await keeps the /approvals call inside this acquire(); a bare return releases the gate early.
+      return await withApproval(
+        mapMRInfo(raw, pipelineStatus),
+        repoPath,
+        projectRef,
+        connectionId,
+        localGitOptions
+      )
     }
     if (typeof linkedMRIid === 'number') {
       return await fetchByIid(linkedMRIid)
@@ -137,7 +167,7 @@ export async function getMergeRequestForBranch(
           localGitOptions
         })
         if (!hideOnDefaultBranch) {
-          return info
+          return await withApproval(info, repoPath, projectRef, connectionId, localGitOptions)
         }
       }
     }
