@@ -155,7 +155,7 @@ export class ScheduledMessageService {
 
   /** Back to pending with a clean slate. */
   private revived(message: ScheduledMessage): ScheduledMessage {
-    this.delivery.forgetAttempts(message.id)
+    this.delivery.forget(message.id)
     const next: ScheduledMessage = { ...message, status: 'pending' }
     delete next.failureReason
     return next

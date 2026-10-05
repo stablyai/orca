@@ -11,10 +11,6 @@ export class ScheduledMessageDeliveryState {
     this.attempts.set(messageId, this.attemptsFor(messageId) + 1)
   }
 
-  forgetAttempts(messageId: string): void {
-    this.attempts.delete(messageId)
-  }
-
   forget(messageId: string): void {
     this.attempts.delete(messageId)
   }
