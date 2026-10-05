@@ -26,7 +26,8 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     handleCloseSessionTab,
     pendingTerminalRecoveryContextKey,
     parkedPendingTerminalContext,
-    retryPendingTerminalRecovery
+    retryPendingTerminalRecovery,
+    chatView
   } = scope
   const bulkCloseActions = createBulkCloseSheetActions({
     sessionTabsRef,
@@ -45,6 +46,13 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     activeSessionTab?.type === 'terminal' && typeof activeSessionTab.terminal !== 'string'
       ? activeSessionTab
       : null
+  const activeLeafView =
+    chatView.markerSession && activeSessionTab?.type === 'terminal'
+      ? chatView.tabLeafView(activeSessionTab)
+      : null
+  // Why: a chosen chat renders before its terminal handle is recovered; recovery keeps running.
+  const activeChatSurface = activeLeafView === 'chat'
+  const activeViewUndecided = activeLeafView === 'undecided'
   const isPendingTerminalRecoveryParked =
     pendingTerminalRecoveryContextKey !== null &&
     pendingTerminalRecoveryContextKey === parkedPendingTerminalContext
@@ -105,6 +113,8 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     activeFileTab,
     activeBrowserTab,
     activePendingTerminalTab,
+    activeChatSurface,
+    activeViewUndecided,
     isPendingTerminalRecoveryParked,
     retryPendingTerminalRecovery
   }

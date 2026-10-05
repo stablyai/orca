@@ -31,6 +31,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     terminalsRef,
     setSessionTabs,
     sessionTabsRef,
+    setChatViewHostOwned,
     appliedSnapshotMarkerRef,
     appliedSessionTabsRevisionRef,
     closedTabTombstonesRef,
@@ -96,6 +97,8 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0
       // Why: subscribe snapshots often repeat identical payloads; skip re-set to avoid a subscription teardown/replay loop.
       setSessionTabs((prev) => (mobileSessionTabsEqual(prev, nextTabs) ? prev : nextTabs))
+      // Why here: a marker-only change (host upgraded in place) must reach the view with no row delta.
+      setChatViewHostOwned(result.chatViewHostOwned === true)
       const terminalTabs = getTerminalRecordsFromSessionTabs(nextTabs)
       const terminalTabHandles = terminalTabs.map((terminal) => terminal.handle)
       defaultTerminalHandlesToLiveInput(terminalTabHandles)

@@ -11,7 +11,9 @@ import {
   isDictationSetupRequiredError
 } from '../dictation/mobile-dictation-setup'
 import { useMobileNativeChatController } from './use-mobile-native-chat-controller'
-import { useMobileNativeChatReadability } from './use-mobile-native-chat-readability'
+import { useMobileNativeChatReadabilityState } from './use-mobile-native-chat-readability'
+import { useMobileSessionChatView } from './use-mobile-session-chat-view'
+import { resolveMobileNativeChatGate } from './mobile-native-chat-render-data'
 import { useMobileNativeChatInputLease } from './use-mobile-native-chat-input-lease'
 import { useMobileNativeChatSendError } from './use-mobile-native-chat-send-error'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
@@ -40,6 +42,10 @@ export function useMobileSessionNativeChatDictation(
     dictationRouteContextRef,
     activeHandleRef,
     activeSessionTab,
+    sessionTabs,
+    sessionTabsRef,
+    chatViewHostOwned,
+    chatViewSnapshotAccepted,
     flushPendingLiveInputBeforeExternalSend,
     canSend,
     liveInputEnabled,
@@ -51,7 +57,23 @@ export function useMobileSessionNativeChatDictation(
     scopeKey: nativeChatScopeKey,
     showToast
   })
-  const nativeChatTranscriptIsLocalReadable = useMobileNativeChatReadability(client, worktreeId)
+  const nativeChatTranscriptReadability = useMobileNativeChatReadabilityState(
+    client,
+    hostId,
+    worktreeId
+  )
+  const nativeChatTranscriptIsLocalReadable = nativeChatTranscriptReadability === 'readable'
+  const chatView = useMobileSessionChatView({
+    hostId,
+    worktreeId,
+    client,
+    sessionTabs,
+    sessionTabsRef,
+    markerSession: chatViewHostOwned,
+    snapshotAccepted: chatViewSnapshotAccepted,
+    readability: nativeChatTranscriptReadability,
+    onSwitchUnconfirmed: showToast
+  })
   const {
     ready: nativeChatInputLeaseReady,
     readyRef: nativeChatInputLeaseReadyRef,
@@ -71,14 +93,28 @@ export function useMobileSessionNativeChatDictation(
     activeHandleRef,
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,
+    view: {
+      markerSession: chatView.markerSession,
+      activeLeafView: chatView.tabLeafView(activeSessionTab),
+      retainedIdentity: chatView.retainedIdentity(activeSessionTabId),
+      isTabChatView: chatView.isTabChatView,
+      setTabChatView: chatView.setTabChatView
+    },
     nativeChatInputLeaseReady,
     connState,
     agentSessionHostSupport,
     onSendError: nativeChatSendError.show,
     onSendResolved: nativeChatSendError.clear
   })
-  const { toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
-  nativeChatSendError.bannerMountedRef.current = showNativeChat
+  const { setTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
+  const nativeChatGate = resolveMobileNativeChatGate({
+    showNativeChat,
+    agent: nativeChatController.nativeChatAgent,
+    tab: activeSessionTab,
+    readability: nativeChatTranscriptReadability
+  })
+  // Why: the identity gate replaces the composer, so its send-error banner is not mounted then.
+  nativeChatSendError.bannerMountedRef.current = showNativeChat && !nativeChatGate
   const nativeChatOverlayInputLockReason =
     activeSessionTab?.type === 'agent-session'
       ? connState === 'connected'
@@ -229,6 +265,9 @@ export function useMobileSessionNativeChatDictation(
     nativeChatScopeKey,
     nativeChatSendError,
     nativeChatTranscriptIsLocalReadable,
+    nativeChatTranscriptReadability,
+    chatView,
+    nativeChatGate,
     nativeChatInputLeaseReady,
     nativeChatInputLeaseReadyRef,
     nativeChatInputLockReason,
@@ -237,7 +276,7 @@ export function useMobileSessionNativeChatDictation(
     clearNativeChatInputLease,
     nativeChatController,
     getSendCompletionGeneration,
-    toggleTabChatView,
+    setTabChatView,
     showNativeChat,
     showNativeChatRef,
     dictation,

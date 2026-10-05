@@ -1,6 +1,7 @@
 import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
+import type { TerminalLayoutSnapshot } from '../../../src/shared/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { MobileBrowserTab } from '../browser/MobileBrowserPane'
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
@@ -9,6 +10,10 @@ import type { MobileHighlightedDiffLine, MobileSyntaxSegment } from './mobile-fi
 import type { TerminalRecord } from './mobile-terminal-records'
 
 export type Terminal = TerminalRecord
+
+export type MobileSessionParentLayout = Pick<TerminalLayoutSnapshot, 'root' | 'chatLeafId'> & {
+  activeLeafId?: string | null
+}
 
 export type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session'
 
@@ -29,6 +34,12 @@ export type MobileSessionTab =
       launchDraft?: string
       launchDraftCreatedAt?: number
       terminalTheme?: MobileTerminalTheme
+      ptyId?: string | null
+      incarnationId?: string | null
+      /** Marker hosts: the host-owned tab view; absent means nobody switched this tab. */
+      viewMode?: 'terminal' | 'chat'
+      /** Marker hosts read only the leaf set and the chat-owning leaf. */
+      parentLayout?: MobileSessionParentLayout
       isActive: boolean
     }
   | {
@@ -72,6 +83,8 @@ export type SessionTabsResult = {
   activeTabType: MobileSessionTabType | null
   /** Host explicitly navigated this device (desktop/CLI `navigation: clients|all`), not a plain republication. */
   navigationIntent?: 'follow'
+  /** The host owns each tab's chat/terminal pair; absent on hosts that predate it. */
+  chatViewHostOwned?: true
 }
 
 export type RuntimeStatusResult = {

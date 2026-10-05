@@ -32,9 +32,8 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
       >
         <Text style={styles.groupHeading}>DEFAULT VIEW</Text>
         <Text style={styles.groupDescription}>
-          Choose how supported agent sessions (Claude, Codex, and other chat-capable agents) open on
-          this device. Terminal shows the raw CLI; Chat UI shows a chat interface like the desktop
-          app. You can still switch any individual session from its long-press menu.
+          Choose how sessions started as Claude, Codex, or another chat-capable agent open on this
+          device. You can switch a supported session from its long-press menu.
         </Text>
         <View style={[styles.section, styles.sectionTopGap]}>
           <View style={styles.row}>

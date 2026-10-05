@@ -7,7 +7,8 @@ import type { MobileNativeChatController } from './use-mobile-native-chat-contro
 
 vi.mock('react-native', () => ({
   StyleSheet: { create: (styles: unknown) => styles, absoluteFillObject: {} },
-  View: 'View'
+  View: 'View',
+  Text: 'Text'
 }))
 
 vi.mock('./MobileNativeChatView', () => ({ MobileNativeChatView: 'ChatView' }))
@@ -25,6 +26,7 @@ type Tick = {
   streamingText?: string
   streamLive?: boolean
   identity?: string
+  gate?: { title: string; subtitle: string }
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
@@ -64,7 +66,8 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     onClearSendError: vi.fn(),
     sendSurfaceId: tick.identity ?? 'tab-a',
     getSendCompletionGeneration: () => 0,
-    keyboardInset: 0
+    keyboardInset: 0,
+    gate: tick.gate ?? null
   })
 }
 
@@ -183,5 +186,14 @@ describe('MobileNativeChatOverlay streaming gate', () => {
     })
 
     expect(streaming()).toBeNull()
+  })
+
+  it('renders only the gate copy, with no chat list or composer, for a chat with no identity (A1c-3)', async () => {
+    await render({ gate: { title: 'No conversation here', subtitle: 'Not an agent.' } })
+    expect(streaming()).toBe('hidden')
+    const texts = renderer!.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => node.props.children)
+    expect(texts).toEqual(['No conversation here', 'Not an agent.'])
   })
 })

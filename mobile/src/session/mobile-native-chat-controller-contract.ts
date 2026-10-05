@@ -1,4 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import type { TerminalTabViewMode } from '../../../src/shared/terminal-tab-view-mode'
 import type {
   AskAnswerSelection,
   AskPrompt,
@@ -18,9 +19,9 @@ import type { useMobileNativeChatSession } from './use-mobile-native-chat-sessio
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 
 export type MobileNativeChatController = {
-  /** Whether a tab's effective view is chat (per-tab override, else the default). */
+  /** Whether a tab's effective view is chat (the host's pair, or the legacy per-device override). */
   isTabChatView: (tabId: string) => boolean
-  toggleTabChatView: (tabId: string) => void
+  setTabChatView: (tabId: string, view: TerminalTabViewMode) => void
   showNativeChat: boolean
   showNativeChatRef: MutableRefObject<boolean>
   /** Resolved agent for the active chat tab (names the empty-state copy). */

@@ -3,7 +3,9 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   buildMobileNativeChatTransientData,
   foldMobileNativeChatMessages,
-  mobileNativeChatEmptyState
+  mobileNativeChatEmptyState,
+  mobileNativeChatIdentityGateCopy,
+  resolveMobileNativeChatGate
 } from './mobile-native-chat-render-data'
 
 function assistant(id: string, text: string): NativeChatMessage {
@@ -438,5 +440,54 @@ describe("mobile shows the conversation, never a subagent's rows", () => {
 
     expect(folded.map((message) => message.id)).toEqual(['ask', 'spawn', 'answer'])
     expect(folded[2]?.blocks).toEqual([{ type: 'text', text: 'Delegated; nothing to fix.' }])
+  })
+})
+
+describe('mobileNativeChatIdentityGateCopy (A1c-3)', () => {
+  it('says "not an agent" for a chat with no agent evidence', () => {
+    expect(mobileNativeChatIdentityGateCopy(null, 'readable').title).toBe('No conversation here')
+    expect(mobileNativeChatIdentityGateCopy('claude', 'readable').title).toBe(
+      'No conversation here'
+    )
+  })
+
+  it('names the settling or failed transcript check for a gated agent', () => {
+    expect(mobileNativeChatIdentityGateCopy('grok', 'unknown').title).toBe('Loading conversation…')
+    expect(mobileNativeChatIdentityGateCopy('grok', 'failed').title).toBe(
+      'Could not load conversation'
+    )
+    expect(mobileNativeChatIdentityGateCopy('grok', 'unreadable').title).toBe(
+      'Could not load conversation'
+    )
+  })
+})
+
+describe('resolveMobileNativeChatGate (A1c-3)', () => {
+  const tab = { type: 'terminal' }
+  it('gates only a shown chat that has no identity', () => {
+    expect(
+      resolveMobileNativeChatGate({
+        showNativeChat: true,
+        agent: null,
+        tab,
+        readability: 'readable'
+      })?.title
+    ).toBe('No conversation here')
+    expect(
+      resolveMobileNativeChatGate({
+        showNativeChat: true,
+        agent: 'claude',
+        tab,
+        readability: 'readable'
+      })
+    ).toBeNull()
+    expect(
+      resolveMobileNativeChatGate({
+        showNativeChat: false,
+        agent: null,
+        tab,
+        readability: 'readable'
+      })
+    ).toBeNull()
   })
 })

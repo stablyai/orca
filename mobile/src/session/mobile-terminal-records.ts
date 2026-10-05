@@ -1,5 +1,6 @@
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { TerminalPaneLayoutNode } from '../../../src/shared/terminal-tab-types'
 
 export type TerminalRecord = {
   handle: string
@@ -25,6 +26,15 @@ export type MobileTerminalSessionTab = {
   launchDraft?: string
   launchDraftCreatedAt?: number
   terminalTheme?: MobileTerminalTheme
+  launchAgent?: string
+  ptyId?: string | null
+  incarnationId?: string | null
+  viewMode?: 'terminal' | 'chat'
+  parentLayout?: {
+    root: TerminalPaneLayoutNode | null
+    chatLeafId?: string
+    activeLeafId?: string | null
+  }
   isActive: boolean
 }
 
@@ -131,6 +141,11 @@ function mobileSessionTabEqual(
         // still has to reach the chat composer.
         a.launchDraft === b.launchDraft &&
         a.launchDraftCreatedAt === b.launchDraftCreatedAt &&
+        a.launchAgent === b.launchAgent &&
+        (a.ptyId ?? null) === (b.ptyId ?? null) &&
+        (a.incarnationId ?? null) === (b.incarnationId ?? null) &&
+        a.viewMode === b.viewMode &&
+        chatPairLayoutKey(a.parentLayout) === chatPairLayoutKey(b.parentLayout) &&
         JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
         mobileTerminalThemesEqual(a.terminalTheme, b.terminalTheme)
       )
@@ -163,6 +178,33 @@ function mobileSessionTabEqual(
     case 'agent-session':
       return b.type === 'agent-session' && a.sessionId === b.sessionId && a.agent === b.agent
   }
+}
+
+function collectLayoutLeafIds(node: TerminalPaneLayoutNode | null, out: string[]): string[] {
+  if (node?.type === 'leaf') {
+    out.push(node.leafId)
+  } else if (node) {
+    collectLayoutLeafIds(node.first, out)
+    collectLayoutLeafIds(node.second, out)
+  }
+  return out
+}
+
+/** The leaf ids of a layout tree, in tree order. */
+export function terminalLayoutLeafIds(node: TerminalPaneLayoutNode | null | undefined): string[] {
+  return collectLayoutLeafIds(node ?? null, [])
+}
+
+// Why only leaves, owner and active leaf: the published layout also carries sizes and buffers the phone never reads.
+function chatPairLayoutKey(layout: MobileTerminalSessionTab['parentLayout']): string {
+  return layout
+    ? [
+        ...terminalLayoutLeafIds(layout.root),
+        '',
+        layout.chatLeafId ?? '',
+        layout.activeLeafId ?? ''
+      ].join('\0')
+    : ''
 }
 
 // Reconcile a partial session snapshot against the last known record for the

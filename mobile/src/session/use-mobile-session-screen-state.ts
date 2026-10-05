@@ -32,6 +32,9 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const terminalsRef = useRef<Terminal[]>([])
   const [sessionTabs, setSessionTabs] = useState<MobileSessionTab[]>([])
   const sessionTabsRef = useRef<MobileSessionTab[]>([])
+  // Why beside the rows: the accepted snapshot's marker decides which chat-view logic reads them.
+  // Null until this screen accepts a snapshot for its scope.
+  const [chatViewMarker, setChatViewHostOwned] = useState<boolean | null>(null)
   // Why: track the last applied (epoch, version) so a late older snapshot can't overwrite a newer one and resurrect closed tabs (session-tab-snapshot-gate).
   const appliedSnapshotMarkerRef = useRef<AppliedSnapshotMarker>({ epoch: null, version: -1 })
   const appliedSessionTabsRevisionRef = useRef(0)
@@ -134,6 +137,9 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     sessionTabs,
     setSessionTabs,
     sessionTabsRef,
+    chatViewHostOwned: chatViewMarker === true,
+    chatViewSnapshotAccepted: chatViewMarker !== null,
+    setChatViewHostOwned,
     appliedSnapshotMarkerRef,
     appliedSessionTabsRevisionRef,
     closedTabTombstonesRef,

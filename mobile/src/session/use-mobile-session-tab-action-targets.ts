@@ -5,7 +5,7 @@ import {
   type MutableRefObject,
   type SetStateAction
 } from 'react'
-import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
+import type { MobileSessionTab } from './mobile-session-route-types'
 
 type MarkdownTab = Extract<MobileSessionTab, { type: 'markdown' }>
 type FileTab = Extract<MobileSessionTab, { type: 'file' }>
@@ -13,8 +13,16 @@ type BrowserTab = Extract<MobileSessionTab, { type: 'browser' }>
 type AgentSessionTab = Extract<MobileSessionTab, { type: 'agent-session' }>
 type SetActionTarget<T> = Dispatch<SetStateAction<T | null>>
 
+/** A terminal row's long-press target, addressed by tab id: a row may have no handle yet. */
+export type TerminalActionTarget = {
+  tabId: string
+  handle: string | null
+  title: string
+  isActive: boolean
+}
+
 export function useMobileSessionTabActionTargets() {
-  const [actionTarget, setActionTarget] = useState<Terminal | null>(null)
+  const [actionTarget, setActionTarget] = useState<TerminalActionTarget | null>(null)
   const [markdownActionTarget, setMarkdownActionTarget] = useState<MarkdownTab | null>(null)
   const [fileActionTarget, setFileActionTarget] = useState<FileTab | null>(null)
   const [browserActionTarget, setBrowserActionTarget] = useState<BrowserTab | null>(null)
@@ -37,15 +45,15 @@ export function useMobileSessionTabActionTargets() {
 }
 
 export function useMobileSessionTabActionSheetOpener(args: {
-  activeHandleRef: MutableRefObject<string | null>
-  setActionTarget: SetActionTarget<Terminal>
+  activeSessionTabIdRef: MutableRefObject<string | null>
+  setActionTarget: SetActionTarget<TerminalActionTarget>
   setMarkdownActionTarget: SetActionTarget<MarkdownTab>
   setFileActionTarget: SetActionTarget<FileTab>
   setBrowserActionTarget: SetActionTarget<BrowserTab>
   setAgentSessionActionTarget: SetActionTarget<AgentSessionTab>
 }): (tab: MobileSessionTab) => void {
   const {
-    activeHandleRef,
+    activeSessionTabIdRef,
     setActionTarget,
     setAgentSessionActionTarget,
     setBrowserActionTarget,
@@ -55,13 +63,11 @@ export function useMobileSessionTabActionSheetOpener(args: {
   return useCallback(
     (tab: MobileSessionTab) => {
       if (tab.type === 'terminal') {
-        if (typeof tab.terminal !== 'string') {
-          return
-        }
         setActionTarget({
-          handle: tab.terminal,
+          tabId: tab.id,
+          handle: typeof tab.terminal === 'string' ? tab.terminal : null,
           title: tab.title,
-          isActive: tab.terminal === activeHandleRef.current
+          isActive: tab.id === activeSessionTabIdRef.current
         })
       } else if (tab.type === 'markdown') {
         setMarkdownActionTarget(tab)
@@ -74,7 +80,7 @@ export function useMobileSessionTabActionSheetOpener(args: {
       }
     },
     [
-      activeHandleRef,
+      activeSessionTabIdRef,
       setActionTarget,
       setAgentSessionActionTarget,
       setBrowserActionTarget,

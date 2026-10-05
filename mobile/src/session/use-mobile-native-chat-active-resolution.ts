@@ -1,7 +1,46 @@
 import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
-import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
-import { useMobileSessionViewMode } from './use-mobile-session-view-mode'
+import type { TerminalTabViewMode } from '../../../src/shared/terminal-tab-view-mode'
+import {
+  resolveMobileNativeChat,
+  type MobileNativeChatResolution,
+  type MobileNativeChatTab
+} from './mobile-native-chat-eligibility'
+import type { MobileLeafView } from './mobile-session-chat-view'
+
+/** The active tab's place in the shared chat pair, resolved by `useMobileSessionChatView`. */
+export type MobileNativeChatActiveView = {
+  markerSession: boolean
+  activeLeafView: MobileLeafView
+  /** The route's last identity for the active row's terminal process, kept through status lapses. */
+  retainedIdentity: MobileNativeChatResolution | null
+  isTabChatView: (tabId: string) => boolean
+  setTabChatView: (tabId: string, view: TerminalTabViewMode) => void
+}
+
+/** Whether the active tab shows native chat, and the transcript identity it shows. */
+function resolveActiveNativeChat(args: {
+  activeSessionTab: MobileNativeChatTab | null
+  activeSessionTabId: string | null
+  readable: boolean
+  view: MobileNativeChatActiveView
+}): { showNativeChat: boolean; resolution: MobileNativeChatResolution | null } {
+  const { activeSessionTab, activeSessionTabId, view } = args
+  // Why: on a host that owns the pair, status picks the identity shown, never whether chat shows.
+  if (view.markerSession && activeSessionTab?.type === 'terminal') {
+    const showNativeChat = view.activeLeafView === 'chat'
+    return { showNativeChat, resolution: showNativeChat ? view.retainedIdentity : null }
+  }
+  const tabWantsChat =
+    activeSessionTab?.type === 'agent-session' ||
+    (activeSessionTabId ? view.isTabChatView(activeSessionTabId) : false)
+  const currentIdentity =
+    activeSessionTab && activeSessionTabId
+      ? resolveMobileNativeChat(activeSessionTab, args.readable)
+      : null
+  const showNativeChat = tabWantsChat && currentIdentity != null
+  return { showNativeChat, resolution: showNativeChat ? currentIdentity : null }
+}
 
 export function useMobileNativeChatActiveResolution(args: {
   hostId: string
@@ -10,9 +49,10 @@ export function useMobileNativeChatActiveResolution(args: {
   activeSessionTabId: string | null
   activeHandleRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
+  view: MobileNativeChatActiveView
 }): {
   isTabChatView: (tabId: string) => boolean
-  toggleTabChatView: (tabId: string) => void
+  setTabChatView: (tabId: string, view: TerminalTabViewMode) => void
   showNativeChat: boolean
   showNativeChatRef: MutableRefObject<boolean>
   activeChatAgent: string | null
@@ -34,15 +74,13 @@ export function useMobileNativeChatActiveResolution(args: {
     nativeChatTranscriptIsLocalReadable,
     worktreeId
   } = args
-  const { isTabChatView, toggleTabChatView } = useMobileSessionViewMode({ hostId, worktreeId })
-  const tabWantsChat =
-    activeSessionTab?.type === 'agent-session' ||
-    (activeSessionTabId ? isTabChatView(activeSessionTabId) : false)
-  const activeChatResolution =
-    activeSessionTab && activeSessionTabId && tabWantsChat
-      ? resolveMobileNativeChat(activeSessionTab, nativeChatTranscriptIsLocalReadable)
-      : null
-  const showNativeChat = activeChatResolution != null
+  const { isTabChatView, setTabChatView } = args.view
+  const { showNativeChat, resolution: activeChatResolution } = resolveActiveNativeChat({
+    activeSessionTab,
+    activeSessionTabId,
+    readable: nativeChatTranscriptIsLocalReadable,
+    view: args.view
+  })
   const showNativeChatRef = useRef(showNativeChat)
   const activeChatAgent = activeChatResolution?.agent ?? null
   const activeChatAgentRef = useRef<string | null>(activeChatAgent)
@@ -66,7 +104,7 @@ export function useMobileNativeChatActiveResolution(args: {
 
   return {
     isTabChatView,
-    toggleTabChatView,
+    setTabChatView,
     showNativeChat,
     showNativeChatRef,
     activeChatAgent,

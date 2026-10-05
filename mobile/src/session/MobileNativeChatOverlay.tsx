@@ -1,11 +1,13 @@
 import { useMemo } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
 import { useMobileNativeChatQueuedSlot } from './use-mobile-native-chat-queued-slot'
+import { styles as chatStyles } from './mobile-native-chat-view-styles'
+import type { NativeChatEmptyStateCopy } from '../../../src/shared/native-chat-empty-state'
 
 type Props = {
   controller: MobileNativeChatController
@@ -30,6 +32,8 @@ type Props = {
   /** Reads the retained route's focus generation for accepted-send fencing. */
   getSendCompletionGeneration: () => number
   keyboardInset: number
+  /** Chosen chat with no known transcript identity: only this copy renders, with no composer. */
+  gate?: NativeChatEmptyStateCopy | null
 }
 
 /** Keeps the terminal mounted underneath chat so its PTY subscription survives
@@ -50,7 +54,8 @@ export function MobileNativeChatOverlay({
   onClearSendError,
   sendSurfaceId,
   getSendCompletionGeneration,
-  keyboardInset
+  keyboardInset,
+  gate = null
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
   const folded = useMemo(() => foldMobileNativeChatMessages(session.messages), [session.messages])
@@ -72,6 +77,17 @@ export function MobileNativeChatOverlay({
   })
   if (!controller.showNativeChat) {
     return null
+  }
+  if (gate) {
+    // Why no composer: with no known identity, text would go to an unidentified PTY (desktop's gate).
+    return (
+      <View style={[styles.overlay, chatStyles.root]}>
+        <View style={chatStyles.center}>
+          <Text style={chatStyles.emptyTitle}>{gate.title}</Text>
+          <Text style={chatStyles.emptySubtitle}>{gate.subtitle}</Text>
+        </View>
+      </View>
+    )
   }
   return (
     <View style={styles.overlay}>

@@ -143,6 +143,46 @@ describe('mobile terminal records', () => {
     expect(mobileSessionTabsEqual([seeded], [{ ...seeded, launchDraftCreatedAt: 2 }])).toBe(false)
   })
 
+  it('treats a host chat-pair, launch-hint or PTY identity change as a session-tab change (A1c-9)', () => {
+    // A frame whose only delta is one of these must reach the view resolver and its fences.
+    const split = {
+      type: 'split' as const,
+      direction: 'vertical' as const,
+      first: { type: 'leaf' as const, leafId: 'leaf-1' },
+      second: { type: 'leaf' as const, leafId: 'leaf-2' }
+    }
+    const base: MobileTerminalSessionTab = {
+      type: 'terminal',
+      id: 'term-1::leaf-1',
+      parentTabId: 'term-1',
+      leafId: 'leaf-1',
+      title: 'Claude',
+      status: 'ready',
+      terminal: 'pty-1',
+      ptyId: 'pty-1',
+      parentLayout: { root: split },
+      isActive: true
+    }
+    const variants: MobileTerminalSessionTab[] = [
+      { ...base, viewMode: 'chat' },
+      { ...base, parentLayout: { root: split, chatLeafId: 'leaf-2' } },
+      { ...base, parentLayout: { root: split.first } },
+      { ...base, launchAgent: 'claude' },
+      { ...base, incarnationId: 'inc-2' },
+      { ...base, ptyId: 'pty-2' }
+    ]
+    for (const variant of variants) {
+      expect(mobileSessionTabsEqual([base], [variant])).toBe(false)
+    }
+    // Sizes are not read, so a ratio-only change keeps the previous rows.
+    expect(
+      mobileSessionTabsEqual(
+        [base],
+        [{ ...base, parentLayout: { root: { ...split, ratio: 0.3 } } }]
+      )
+    ).toBe(true)
+  })
+
   it('treats terminal agent-status changes as session-tab changes', () => {
     const base: MobileTerminalSessionTab = {
       type: 'terminal',

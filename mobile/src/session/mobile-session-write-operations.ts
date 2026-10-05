@@ -4,6 +4,7 @@ import { markdownTabDocumentSchema } from './session-read-reply-schema'
 import { terminalSendAcceptedSchema } from '../terminal/terminal-reply-schema'
 import {
   sessionCreatedTerminalTabSchema,
+  sessionTabChatViewReplySchema,
   sessionWriteUnreadReplySchema
 } from './session-write-reply-schema'
 import { quickCommandsReader } from './mobile-session-read-operations'
@@ -84,6 +85,21 @@ export const terminalDisplayModeSet = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('terminal-display-mode-set', sessionWriteUnreadReplySchema)
+  })
+)
+
+/**
+ * A tab's chat/terminal switch on a host that owns the pair. Throws on refusal so the pending
+ * writer reports it; the caller reads the relay-timeout code from the raw reply first, because
+ * that one means the write may still land.
+ */
+export const sessionTabChatViewWrite = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'session.tabs-set-chat-view',
+    method: 'session.tabs.setTabProps',
+    acceptance: 'require-result-or-throw',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('chat-view-applied', sessionTabChatViewReplySchema)
   })
 )
 

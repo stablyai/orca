@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { salvagedOptional } from '../../../src/shared/zod-salvage'
+import { openEnum, salvagedOptional } from '../../../src/shared/zod-salvage'
 
 // The session screen's writes: terminal input from native chat and the image surfaces, the tab
 // strip's rename/close/activate, the New Tab terminal create, the terminal menu's display-mode
@@ -40,3 +40,22 @@ export const sessionCreatedTerminalTabSchema = z
     })
   })
   .transform((reply) => reply.tab)
+
+const CHAT_VIEW_MODES = ['terminal', 'chat'] as const
+
+/**
+ * A fenced chat-pair write's reply. `chatView` is the pair the host now holds; a reply without it
+ * comes from a host that does not own the pair, which the pending writer treats as a failure.
+ * A malformed `chatView` refuses the whole reply rather than adopting a guessed pair. A view mode
+ * this build does not know reads as `undefined`, never as a known mode; the sender defers it to
+ * the snapshot.
+ */
+export const sessionTabChatViewReplySchema = z.looseObject({
+  chatView: z
+    .object({
+      viewMode: openEnum(CHAT_VIEW_MODES, undefined).nullable(),
+      chatLeafId: z.string().nullable()
+    })
+    .optional(),
+  superseded: z.literal(true).optional()
+})

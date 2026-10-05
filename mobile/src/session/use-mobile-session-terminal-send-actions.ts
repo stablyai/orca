@@ -216,7 +216,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
   }, [])
 
   const openSessionTabActionSheet = useMobileSessionTabActionSheetOpener({
-    activeHandleRef,
+    activeSessionTabIdRef: scope.activeSessionTabIdRef,
     setActionTarget,
     setMarkdownActionTarget,
     setFileActionTarget,

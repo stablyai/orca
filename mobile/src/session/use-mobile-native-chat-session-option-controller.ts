@@ -1,3 +1,4 @@
+import type { TerminalTabViewMode } from '../../../src/shared/terminal-tab-view-mode'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileOmpModelDiscovery } from './use-mobile-omp-model-discovery'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
@@ -33,7 +34,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
     invokeAction: (id: string) => Promise<boolean>
   }
-  toggleTabChatView: (tabId: string) => void
+  setTabChatView: (tabId: string, view: TerminalTabViewMode) => void
   worktreeId: string
 }): {
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
@@ -49,7 +50,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     isWorking,
     reportedModel,
     structured,
-    toggleTabChatView,
+    setTabChatView,
     worktreeId
   } = args
   const {
@@ -59,11 +60,12 @@ export function useMobileNativeChatSessionOptionController(args: {
     snapshot: structuredSnapshot
   } = structured
 
+  // Why the named view: the picker is usable only in the terminal, whatever another device did meanwhile.
   const handleAgentPicker = useCallback(() => {
     if (activeSessionTabId && isTabChatView(activeSessionTabId)) {
-      toggleTabChatView(activeSessionTabId)
+      setTabChatView(activeSessionTabId, 'terminal')
     }
-  }, [activeSessionTabId, isTabChatView, toggleTabChatView])
+  }, [activeSessionTabId, isTabChatView, setTabChatView])
 
   const discoveredModels = useMobileOmpModelDiscovery({
     client: args.client ?? null,

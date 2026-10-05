@@ -13,7 +13,9 @@ const holdUnconfirmedSend = vi.fn()
 
 // Mutable stand-ins so the launch-draft wiring below can drive chat resolution
 // and transcript state; defaults keep the send-seam tests unchanged.
-const viewMode = { isTabChatView: (_tabId: string) => true }
+// A host without the chat-pair marker: the legacy per-device override decides.
+const legacy = { markerSession: false, activeLeafView: 'terminal' as const, retainedIdentity: null }
+const viewMode = { ...legacy, isTabChatView: (_tabId: string) => true, setTabChatView: vi.fn() }
 const sessionState = { messages: [] as unknown[], status: 'ready', transcriptLoading: false }
 const structuredSendWithOutcome = vi.fn()
 const structuredCancel = vi.fn()
@@ -77,12 +79,6 @@ const promptsState = {
 
 // The controller composes many session hooks; each is mocked to a minimal shape
 // so this test isolates the send seam (outcome -> drafts accounting).
-vi.mock('./use-mobile-session-view-mode', () => ({
-  useMobileSessionViewMode: () => ({
-    isTabChatView: (tabId: string) => viewMode.isTabChatView(tabId),
-    toggleTabChatView: vi.fn()
-  })
-}))
 vi.mock('./use-mobile-native-chat-session', () => ({
   useMobileNativeChatSession: () => sessionState
 }))
@@ -203,6 +199,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       activeHandleRef: { current: activeHandle },
       deviceTokenRef: { current: null },
       nativeChatTranscriptIsLocalReadable: true,
+      view: viewMode,
       nativeChatInputLeaseReady: inputLeaseReady,
       onSendError,
       onSendResolved
@@ -549,6 +546,7 @@ describe('useMobileNativeChatController launch-draft wiring', () => {
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
       nativeChatTranscriptIsLocalReadable: true,
+      view: viewMode,
       nativeChatInputLeaseReady: true,
       onSendError: vi.fn(),
       onSendResolved: vi.fn()
@@ -641,6 +639,7 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
       nativeChatTranscriptIsLocalReadable: true,
+      view: viewMode,
       nativeChatInputLeaseReady: true,
       onSendError: vi.fn(),
       onSendResolved: vi.fn()
@@ -920,6 +919,7 @@ describe('useMobileNativeChatController streaming scope', () => {
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
       nativeChatTranscriptIsLocalReadable: true,
+      view: viewMode,
       nativeChatInputLeaseReady: true,
       onSendError: vi.fn(),
       onSendResolved: vi.fn()

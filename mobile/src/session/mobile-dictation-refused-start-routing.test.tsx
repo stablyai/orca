@@ -48,7 +48,16 @@ vi.mock('./use-mobile-native-chat-send-error', () => ({
   })
 }))
 vi.mock('./use-mobile-native-chat-readability', () => ({
-  useMobileNativeChatReadability: () => false
+  useMobileNativeChatReadabilityState: () => 'unreadable'
+}))
+vi.mock('./use-mobile-session-chat-view', () => ({
+  useMobileSessionChatView: () => ({
+    markerSession: false,
+    tabLeafView: () => 'terminal',
+    isTabChatView: () => false,
+    setTabChatView: () => {},
+    retainedIdentity: () => null
+  })
 }))
 vi.mock('./use-mobile-native-chat-input-lease', () => ({
   useMobileNativeChatInputLease: () => ({
@@ -61,7 +70,7 @@ vi.mock('./use-mobile-native-chat-input-lease', () => ({
 }))
 vi.mock('./use-mobile-native-chat-controller', () => ({
   useMobileNativeChatController: () => ({
-    toggleTabChatView: () => {},
+    setTabChatView: () => {},
     showNativeChat: false,
     showNativeChatRef: { current: false },
     setChatComposerText: () => {}

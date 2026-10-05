@@ -69,6 +69,7 @@ export function sessionStartupMountAdapters(
             setTerminals: () => {},
             terminalsRef: { current: [] },
             setSessionTabs: () => {},
+            setChatViewHostOwned: () => {},
             appliedSnapshotMarkerRef,
             closedTabTombstonesRef,
             setTerminalsLoaded: (value: boolean) => {

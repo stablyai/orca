@@ -65,6 +65,7 @@ function scope(pending: PendingSessionSelection | null) {
       terminalsRef: { current: [] },
       setSessionTabs: vi.fn(),
       sessionTabsRef: { current: [] },
+      setChatViewHostOwned: vi.fn(),
       appliedSnapshotMarkerRef: { current: { epoch: null, version: -1 } },
       appliedSessionTabsRevisionRef: { current: 0 },
       closedTabTombstonesRef: { current: new Map() },
@@ -210,5 +211,31 @@ describe('landing on a launched tab', () => {
     expect(state.setActiveSessionTabId).toHaveBeenLastCalledWith(`${PANE.tabId}::${PANE.leafId}`)
     expect(state.subscribeToTerminal).toHaveBeenLastCalledWith('term_new')
     expect(state.creatingTerminalRef.current).toBeNull()
+  })
+})
+
+describe('the chat-view marker at the accepted-application boundary (R4.1-4)', () => {
+  it('applies a marker-only change even when the rows are identical', () => {
+    const { state } = scope(null)
+    const apply = mount(state)
+    const rows = [terminalTab('tab-1', 'term_1', true)]
+
+    apply(snapshot(rows, { chatViewHostOwned: true }))
+    expect(state.setChatViewHostOwned).toHaveBeenLastCalledWith(true)
+    apply(snapshot(rows))
+    expect(state.setChatViewHostOwned).toHaveBeenLastCalledWith(false)
+  })
+
+  it('keeps the current marker when a stale frame is rejected', () => {
+    const { state } = scope(null)
+    const apply = mount(state)
+    const rows = [terminalTab('tab-1', 'term_1', true)]
+    const stale = snapshot(rows)
+
+    apply(snapshot(rows, { chatViewHostOwned: true }))
+    const calls = vi.mocked(state.setChatViewHostOwned).mock.calls.length
+    expect(apply(stale)).toEqual({ accepted: false })
+    expect(vi.mocked(state.setChatViewHostOwned).mock.calls).toHaveLength(calls)
+    expect(state.setChatViewHostOwned).toHaveBeenLastCalledWith(true)
   })
 })

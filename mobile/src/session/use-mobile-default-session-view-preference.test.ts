@@ -6,6 +6,7 @@ import {
   saveDefaultSessionView,
   type MobileSessionView
 } from '../storage/session-view-preferences'
+import { resetDefaultSessionViewStoreForTests } from '../storage/default-session-view-store'
 import {
   useMobileDefaultSessionViewPreference,
   type MobileDefaultSessionViewPreference
@@ -30,6 +31,7 @@ describe('useMobileDefaultSessionViewPreference', () => {
   let preference: MobileDefaultSessionViewPreference | null = null
 
   beforeEach(() => {
+    resetDefaultSessionViewStoreForTests()
     vi.mocked(loadDefaultSessionView).mockReset().mockResolvedValue('terminal')
     vi.mocked(saveDefaultSessionView).mockReset().mockResolvedValue(undefined)
   })

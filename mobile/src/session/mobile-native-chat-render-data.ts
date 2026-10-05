@@ -3,6 +3,10 @@ import {
   formatNativeChatEmptyStateCopy,
   type NativeChatEmptyStateCopy
 } from '../../../src/shared/native-chat-empty-state'
+import {
+  isNativeChatSupportedAgent,
+  nativeChatRequiresLocalTranscript
+} from '../../../src/shared/native-chat-agent-support'
 import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
 import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
@@ -12,6 +16,7 @@ import {
   normalizeImageTranscriptMessages
 } from './mobile-native-chat-image-transcript-markers'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import type { MobileNativeChatReadability } from './mobile-session-chat-view'
 
 /** The centered empty-state copy for a chat with no messages, mirroring the
  *  desktop `NativeChatEmptyState` (shared copy + agent label) so the two surfaces
@@ -38,6 +43,45 @@ export function mobileNativeChatEmptyState(
     default:
       return null
   }
+}
+
+/** The only copy a chosen chat shows while no transcript identity is known (desktop's gate):
+ *  a transcript-gated agent still being checked or unreadable says so; anything else is "not an agent". */
+export function mobileNativeChatIdentityGateCopy(
+  agentCandidate: string | null,
+  readability: MobileNativeChatReadability
+): NativeChatEmptyStateCopy {
+  if (
+    agentCandidate &&
+    isNativeChatSupportedAgent(agentCandidate) &&
+    nativeChatRequiresLocalTranscript(agentCandidate) &&
+    readability !== 'readable'
+  ) {
+    const label = formatAgentTypeLabel(agentCandidate)
+    return formatNativeChatEmptyStateCopy(readability === 'unknown' ? 'loading' : 'error', label)
+  }
+  return formatNativeChatEmptyStateCopy('notAgent', 'the agent')
+}
+
+/** The gate copy when chat is the chosen view but no transcript identity is known, else null.
+ *  Only a host-owned pair can choose chat without an identity, so legacy hosts never gate. */
+export function resolveMobileNativeChatGate(args: {
+  showNativeChat: boolean
+  agent: string | null
+  tab: {
+    type: string
+    launchAgent?: string | null
+    agentStatus?: { agentType?: string } | null
+  } | null
+  readability: MobileNativeChatReadability
+}): NativeChatEmptyStateCopy | null {
+  if (!args.showNativeChat || args.agent || args.tab?.type !== 'terminal') {
+    return null
+  }
+  return mobileNativeChatIdentityGateCopy(
+    args.tab.agentStatus?.agentType ?? args.tab.launchAgent ?? null,
+    args.readability
+  )
 }
 
 /** An optimistic user echo: the text and/or the local preview URIs of any images
