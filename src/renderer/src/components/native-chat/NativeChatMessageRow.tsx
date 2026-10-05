@@ -191,7 +191,7 @@ export const MessageRow = memo(function MessageRow({
               <CommentMarkdown
                 content={markdown}
                 variant="document"
-                className="text-sm"
+                className="text-sm tabular-nums [&_code]:[font-variant-numeric:normal]"
                 renderCodeBlock={NativeChatCodeBlock}
                 onLinkClick={onLinkClick}
                 allowFileUriLinks={allowFileUriLinks}
@@ -262,7 +262,7 @@ export const MessageRow = memo(function MessageRow({
         <CommentMarkdown
           content={markdown}
           variant="document"
-          className="text-sm"
+          className="text-sm tabular-nums [&_code]:[font-variant-numeric:normal]"
           renderCodeBlock={NativeChatCodeBlock}
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}
