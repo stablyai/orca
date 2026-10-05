@@ -90,6 +90,9 @@ public static class OrcaDesktopWin32 {
     public static extern bool IsIconic(IntPtr hwnd);
 
     [DllImport("user32.dll")]
+    public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+    [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
@@ -374,6 +377,32 @@ function Get-OrcaWindowFrame([IntPtr]$WindowHandle, $RootElement) {
         }
     } catch {}
     $null
+}
+
+function Get-OrcaWindowVisibilityState([IntPtr]$WindowHandle, [int]$ProcessId) {
+    $unknown = [pscustomobject]@{ isMinimized = $null; isOffscreen = $null }
+    if ($WindowHandle -eq [IntPtr]::Zero -or $ProcessId -le 0) { return $unknown }
+    try {
+        if (-not [OrcaDesktopWin32]::IsWindow($WindowHandle) -or [OrcaDesktopWin32]::GetWindowProcessId($WindowHandle) -ne $ProcessId) { return $unknown }
+        $minimized = [OrcaDesktopWin32]::IsIconic($WindowHandle)
+        if (-not $minimized) {
+            $before = New-Object OrcaDesktopWin32+RECT
+            if (-not [OrcaDesktopWin32]::GetWindowRect($WindowHandle, [ref]$before) -or $before.Right -le $before.Left -or $before.Bottom -le $before.Top) { return $unknown }
+            # Native monitor intersection avoids mixing DPI-virtualized window frames with UIA/display coordinates.
+            $monitor = [OrcaDesktopWin32]::MonitorFromWindow($WindowHandle, [uint32]0) # MONITOR_DEFAULTTONULL, never nearest/primary.
+        }
+        if (-not [OrcaDesktopWin32]::IsWindow($WindowHandle) -or [OrcaDesktopWin32]::GetWindowProcessId($WindowHandle) -ne $ProcessId -or [OrcaDesktopWin32]::IsIconic($WindowHandle) -ne $minimized) { return $unknown }
+        if (-not $minimized) {
+            $after = New-Object OrcaDesktopWin32+RECT
+            if (-not [OrcaDesktopWin32]::GetWindowRect($WindowHandle, [ref]$after) -or
+                $after.Left -ne $before.Left -or $after.Top -ne $before.Top -or $after.Right -ne $before.Right -or $after.Bottom -ne $before.Bottom) { return $unknown }
+            if ([OrcaDesktopWin32]::MonitorFromWindow($WindowHandle, [uint32]0) -ne $monitor) { return $unknown }
+        }
+        if (-not [OrcaDesktopWin32]::IsWindow($WindowHandle) -or [OrcaDesktopWin32]::GetWindowProcessId($WindowHandle) -ne $ProcessId -or [OrcaDesktopWin32]::IsIconic($WindowHandle) -ne $minimized) { return $unknown }
+        # Minimized geometry is intentionally not used: MonitorFromWindow would inspect the pre-minimize rectangle.
+        # These are corroborated observations, not an atomic native snapshot.
+        [pscustomobject]@{ isMinimized = $minimized; isOffscreen = ($minimized -or $monitor -eq [IntPtr]::Zero) }
+    } catch { $unknown }
 }
 
 function Get-OrcaWindowId([IntPtr]$WindowHandle) {
@@ -906,6 +935,7 @@ function Get-OrcaWindowList([string]$Query) {
         $height = [int][Math]::Max(0, [Math]::Round($windowFrame.height))
     }
     $app = New-OrcaAppRecord $process
+    $visibility = Get-OrcaWindowVisibilityState $handle ([int]$process.Id)
     [pscustomobject]@{
         app = $app
         windows = @([pscustomobject]@{
@@ -917,8 +947,8 @@ function Get-OrcaWindowList([string]$Query) {
             y = $y
             width = $width
             height = $height
-            isMinimized = $false
-            isOffscreen = $false
+            isMinimized = $visibility.isMinimized
+            isOffscreen = $visibility.isOffscreen
             screenIndex = $null
             platform = [pscustomobject]@{ backend = "uia"; nativeWindowHandle = Get-OrcaWindowId $handle }
         })

@@ -103,6 +103,20 @@ const checks = [
     enabled: process.platform === 'win32'
   },
   {
+    name: 'Windows window visibility tests',
+    command: 'powershell.exe',
+    args: [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'RemoteSigned',
+      '-File',
+      'native/computer-use-windows/runtime-window-visibility.test.ps1'
+    ],
+    enabled: process.platform === 'win32'
+  },
+  {
     name: 'macOS helper app bundle and signature',
     run: verifyMacOSHelperApp,
     enabled: process.platform === 'darwin'
