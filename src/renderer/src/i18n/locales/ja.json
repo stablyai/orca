@@ -18309,6 +18309,11 @@
         "copySessionId": "セッション ID をコピー",
         "copySessionIdSuccess": "セッション ID をコピーしました",
         "copySessionIdError": "セッション ID のコピーに失敗しました"
+      },
+      "subagentView": {
+        "threads": "エージェントのスレッド",
+        "main": "メインエージェント",
+        "readOnly": "読み取り専用のトランスクリプト"
       }
     },
     "jiraUserPicker": {

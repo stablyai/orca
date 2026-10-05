@@ -58,12 +58,17 @@ let mockActiveTabType: string = 'editor'
 const mockSetActiveTab = vi.fn((tabId: string) => {
   mockActiveTabId = tabId
 })
+const mockRevealNativeChatSubagent = vi.fn()
+const mockShowPaneSubagent = vi.fn()
+const mockShowPaneMainAgent = vi.fn()
+let mockSubagentTranscriptPath: string | null = null
+const SUBAGENT = { id: 'task-1', name: 'Explore battle scripts' }
 const mockSetActiveTabType = vi.fn((tabType: string) => {
   mockActiveTabType = tabType
 })
 let capturedRowActivations: {
   paneKey: string
-  onActivate: (tabId: string, paneKey: string) => void
+  onActivate: (tabId: string, paneKey: string, subagent?: { id: string; name: string }) => void
 }[] = []
 
 function buildMockStoreState(): Record<string, unknown> {
@@ -81,6 +86,9 @@ function buildMockStoreState(): Record<string, unknown> {
     activeTabType: mockActiveTabType,
     setActiveTab: mockSetActiveTab,
     setActiveTabType: mockSetActiveTabType,
+    revealNativeChatSubagent: mockRevealNativeChatSubagent,
+    showPaneSubagent: mockShowPaneSubagent,
+    showPaneMainAgent: mockShowPaneMainAgent,
     tabsByWorktree: mockTabsByWorktree,
     terminalLayoutsByTabId: {},
     ptyIdsByTabId: {},
@@ -131,6 +139,10 @@ vi.mock('@/lib/structured-agent-session-tab-activation', () => ({
   activateStructuredAgentSessionTab: structuredActivationMocks.activateStructuredAgentSessionTab
 }))
 
+vi.mock('../terminal-pane/pane-subagent-view-source', () => ({
+  paneSubagentTranscriptPath: () => mockSubagentTranscriptPath
+}))
+
 vi.mock('./useWorktreeAgentRows', () => ({
   useWorktreeAgentRows: vi.fn(() => mockAgents)
 }))
@@ -145,7 +157,7 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
     onActivate
   }: {
     agent: DashboardAgentRowData
-    onActivate: (tabId: string, paneKey: string) => void
+    onActivate: (tabId: string, paneKey: string, subagent?: { id: string; name: string }) => void
   }) => {
     capturedRowActivations.push({ paneKey: agent.paneKey, onActivate })
     return <div data-testid="agent-row" data-pane-key={agent.paneKey} />
@@ -166,6 +178,7 @@ describe('WorktreeCardAgents activation', () => {
     mockTabsByWorktree = {}
     mockStructuredTabIds = new Set()
     mockAgentStatusByPaneKey = {}
+    mockSubagentTranscriptPath = null
     mockActiveTabId = null
     mockActiveTabType = 'editor'
     capturedRowActivations = []
@@ -201,6 +214,105 @@ describe('WorktreeCardAgents activation', () => {
     })
     expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
     expect(staleAgentRowMocks.dismissStaleAgentRowByKey).not.toHaveBeenCalled()
+  })
+
+  it('reveals a clicked subagent row in its structured parent chat', async () => {
+    mockAgentActivityDisplayMode = 'full'
+    const tabId = 'structured-tab'
+    const paneKey = makePaneKey(tabId, LEAF_A)
+    mockAgents = [
+      mockAgent({ paneKey, tabId, agentType: 'claude', prompt: 'Parent', worktreeId: 'wt-1' })
+    ]
+    mockStructuredTabIds.add(tabId)
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+    capturedRowActivations[0].onActivate(tabId, paneKey, SUBAGENT)
+
+    expect(structuredActivationMocks.activateStructuredAgentSessionTab).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId
+    })
+    expect(mockRevealNativeChatSubagent).toHaveBeenCalledWith({
+      parentPaneKey: paneKey,
+      agentId: 'task-1'
+    })
+  })
+
+  it('opens a structured parent without a reveal when its own row is clicked', async () => {
+    mockAgentActivityDisplayMode = 'full'
+    const tabId = 'structured-tab'
+    const paneKey = makePaneKey(tabId, LEAF_A)
+    mockAgents = [
+      mockAgent({ paneKey, tabId, agentType: 'claude', prompt: 'Parent', worktreeId: 'wt-1' })
+    ]
+    mockStructuredTabIds.add(tabId)
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+    capturedRowActivations[0].onActivate(tabId, paneKey)
+
+    expect(structuredActivationMocks.activateStructuredAgentSessionTab).toHaveBeenCalled()
+    expect(mockRevealNativeChatSubagent).not.toHaveBeenCalled()
+  })
+
+  it('shows a clicked Claude CLI subagent in its terminal parent pane', async () => {
+    mockAgentActivityDisplayMode = 'full'
+    const tabId = 'terminal-tab'
+    const paneKey = makePaneKey(tabId, LEAF_A)
+    mockAgents = [
+      mockAgent({ paneKey, tabId, agentType: 'claude', prompt: 'Parent', worktreeId: 'wt-1' })
+    ]
+    mockTabsByWorktree = { 'wt-1': [{ id: tabId }] }
+    mockSubagentTranscriptPath = '/p/s/subagents/agent-task-1.jsonl'
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+    capturedRowActivations[0].onActivate(tabId, paneKey, SUBAGENT)
+
+    expect(mockShowPaneSubagent).toHaveBeenCalledWith(paneKey, {
+      agentId: 'task-1',
+      name: 'Explore battle scripts'
+    })
+    expect(mockShowPaneMainAgent).not.toHaveBeenCalled()
+    expect(activationMocks.activateTabAndFocusPane).toHaveBeenCalled()
+  })
+
+  it('returns a terminal pane to its main agent when the parent row is clicked', async () => {
+    mockAgentActivityDisplayMode = 'full'
+    const tabId = 'terminal-tab'
+    const paneKey = makePaneKey(tabId, LEAF_A)
+    mockAgents = [
+      mockAgent({ paneKey, tabId, agentType: 'claude', prompt: 'Parent', worktreeId: 'wt-1' })
+    ]
+    mockTabsByWorktree = { 'wt-1': [{ id: tabId }] }
+    mockSubagentTranscriptPath = '/p/s/subagents/agent-task-1.jsonl'
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+    capturedRowActivations[0].onActivate(tabId, paneKey)
+
+    expect(mockShowPaneMainAgent).toHaveBeenCalledWith(paneKey)
+    expect(mockShowPaneSubagent).not.toHaveBeenCalled()
+  })
+
+  it('keeps a terminal parent on its main agent when the subagent has no readable transcript', async () => {
+    mockAgentActivityDisplayMode = 'full'
+    const tabId = 'terminal-tab'
+    const paneKey = makePaneKey(tabId, LEAF_A)
+    mockAgents = [
+      mockAgent({ paneKey, tabId, agentType: 'claude', prompt: 'Parent', worktreeId: 'wt-1' })
+    ]
+    mockTabsByWorktree = { 'wt-1': [{ id: tabId }] }
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+    capturedRowActivations[0].onActivate(tabId, paneKey, SUBAGENT)
+
+    expect(activationMocks.activateTabAndFocusPane).toHaveBeenCalled()
+    expect(mockShowPaneSubagent).not.toHaveBeenCalled()
+    expect(mockShowPaneMainAgent).toHaveBeenCalledWith(paneKey)
+    expect(mockRevealNativeChatSubagent).not.toHaveBeenCalled()
   })
 
   it('reveals the worktree and focuses an automation worker row hydrated during reveal', async () => {

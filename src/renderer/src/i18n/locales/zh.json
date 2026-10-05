@@ -18274,6 +18274,11 @@
         "copySessionId": "复制会话 ID",
         "copySessionIdSuccess": "已复制会话 ID",
         "copySessionIdError": "复制会话 ID 失败"
+      },
+      "subagentView": {
+        "threads": "智能体线程",
+        "main": "主智能体",
+        "readOnly": "只读记录"
       }
     },
     "onboarding": {

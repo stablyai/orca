@@ -13,6 +13,7 @@ const SOURCE = makePaneKey('tab-source', '11111111-1111-4111-8111-111111111111')
 const TARGET = makePaneKey('tab-target', '22222222-2222-4222-8222-222222222222')
 const FINAL = makePaneKey('tab-final', '33333333-3333-4333-8333-333333333333')
 const SIBLING = makePaneKey('tab-target', '44444444-4444-4444-8444-444444444444')
+const SUBAGENT_VIEW = { agentId: 'a1', name: 'Explore', parentTranscriptPath: '/p/s.jsonl' }
 
 const retirePaneAuthority = vi.fn()
 const restorePaneAuthority = vi.fn()
@@ -47,6 +48,7 @@ describe('agent pane authority', () => {
     store.getState().setAgentStatus(SIBLING, { state: 'working', prompt: 'sibling' })
     store.getState().registerAgentLaunchConfig(TARGET, { agentArgs: '', agentEnv: {} })
     store.setState({
+      paneSubagentViewByPaneKey: { [TARGET]: SUBAGENT_VIEW, [SIBLING]: SUBAGENT_VIEW },
       sleepingAgentSessionsByPaneKey: {
         [TARGET]: {
           paneKey: TARGET,
@@ -69,6 +71,7 @@ describe('agent pane authority', () => {
     expect(state.agentStatusByPaneKey[TARGET]).toBeUndefined()
     expect(state.agentLaunchConfigByPaneKey[TARGET]).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey[TARGET]).toBeUndefined()
+    expect(state.paneSubagentViewByPaneKey).toEqual({ [SIBLING]: SUBAGENT_VIEW })
     expect(state.agentStatusByPaneKey[SIBLING]).toBeDefined()
     expect(state.recentlyRetiredAgentStatusPaneKeys[TARGET]).toEqual(expect.any(String))
     expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET, expect.any(String))

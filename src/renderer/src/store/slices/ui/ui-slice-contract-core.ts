@@ -25,6 +25,24 @@ export type PendingSidebarRowReveal = {
   highlight?: boolean
 }
 
+/** A sidebar subagent row asking its parent's native chat to open that subagent's section. */
+export type PendingNativeChatSubagentReveal = {
+  parentPaneKey: string
+  /** The subagent's provider id: the journal `agentId` its transcript rows carry. */
+  agentId: string
+}
+
+/** The subagent a terminal pane shows instead of its own agent; absent shows the main agent. */
+export type PaneSubagentView = {
+  /** The Claude hook agent id: its transcript is `subagents/agent-<agentId>.jsonl`. */
+  agentId: string
+  /** Kept from the sidebar row, which disappears once the subagent finishes. */
+  name: string
+  /** The parent session this subagent belongs to; a pane that has since moved to another
+   *  session no longer shows it. */
+  parentTranscriptPath: string
+}
+
 export type AgentSendPopoverTargetMode = {
   id: string
   instanceId: string
@@ -201,6 +219,17 @@ export type UISliceCore = {
   clearNewWorkspaceDraft: () => void
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
   pendingRevealSidebarRow: PendingSidebarRowReveal | null
+  pendingNativeChatSubagentReveal: PendingNativeChatSubagentReveal | null
+  revealNativeChatSubagent: (reveal: PendingNativeChatSubagentReveal) => void
+  clearPendingNativeChatSubagentReveal: () => void
+  paneSubagentViewByPaneKey: Record<string, PaneSubagentView>
+  showPaneSubagent: (
+    paneKey: string,
+    subagent: Omit<PaneSubagentView, 'parentTranscriptPath'>
+  ) => void
+  showPaneMainAgent: (paneKey: string) => void
+  /** Back to the main agent in every pane of a terminal tab. */
+  showTabMainAgents: (terminalTabId: string) => void
   revealWorktreeInSidebar: (
     worktreeId: string,
     options?: {

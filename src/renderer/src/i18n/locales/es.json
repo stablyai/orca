@@ -18274,6 +18274,11 @@
         "copySessionId": "Copiar ID de sesión",
         "copySessionIdSuccess": "ID de sesión copiado",
         "copySessionIdError": "No se pudo copiar el ID de sesión"
+      },
+      "subagentView": {
+        "threads": "Hilos de agentes",
+        "main": "Agente principal",
+        "readOnly": "Transcripción de solo lectura"
       }
     },
     "agentChildRow": {

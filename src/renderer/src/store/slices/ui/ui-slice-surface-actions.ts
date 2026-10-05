@@ -8,6 +8,7 @@ import {
   type CustomPet
 } from '../../../../../shared/pet-types'
 import { clampPetSize } from './ui-slice-hydration-sanitizers'
+import { removePaneKeys, removePaneKeysByTabPrefix } from '../agent-status-pane-keyed-records'
 
 export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Partial<UISlice> {
   return {
@@ -178,6 +179,38 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
       ),
     clearPendingRevealWorktreeId: () => set({ pendingRevealWorktree: null }),
     clearPendingRevealSidebarRow: () => set({ pendingRevealSidebarRow: null }),
+    pendingNativeChatSubagentReveal: null,
+    revealNativeChatSubagent: (reveal) => set({ pendingNativeChatSubagentReveal: reveal }),
+    clearPendingNativeChatSubagentReveal: () => set({ pendingNativeChatSubagentReveal: null }),
+    paneSubagentViewByPaneKey: {},
+    showPaneSubagent: (paneKey, subagent) =>
+      set((state) => {
+        const parentTranscriptPath =
+          state.agentStatusByPaneKey[paneKey]?.providerSession?.transcriptPath
+        if (!parentTranscriptPath) {
+          return state
+        }
+        return {
+          paneSubagentViewByPaneKey: {
+            ...state.paneSubagentViewByPaneKey,
+            [paneKey]: { ...subagent, parentTranscriptPath }
+          }
+        }
+      }),
+    showPaneMainAgent: (paneKey) =>
+      set((state) => ({
+        paneSubagentViewByPaneKey: removePaneKeys(
+          state.paneSubagentViewByPaneKey,
+          new Set([paneKey])
+        )
+      })),
+    showTabMainAgents: (terminalTabId) =>
+      set((state) => ({
+        paneSubagentViewByPaneKey: removePaneKeysByTabPrefix(
+          state.paneSubagentViewByPaneKey,
+          terminalTabId
+        )
+      })),
     scrollToDiffCommentId: null,
     setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id })
   }

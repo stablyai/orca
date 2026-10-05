@@ -18428,6 +18428,11 @@
         "copySessionId": "Copier l'ID de session",
         "copySessionIdSuccess": "ID de session copié",
         "copySessionIdError": "Impossible de copier l'ID de session"
+      },
+      "subagentView": {
+        "threads": "Fils des agents",
+        "main": "Agent principal",
+        "readOnly": "Transcription en lecture seule"
       }
     },
     "settings": {

@@ -55,8 +55,13 @@ function stateDotTooltipLabel(
 type Props = {
   agent: DashboardAgentRowData
   onDismiss: (paneKey: string) => void
-  /** Navigate to this agent's tab; paneKey lets the caller mark-visit the exact clicked row. */
-  onActivate: (tabId: string, paneKey: string) => void
+  /** Navigate to this agent's tab; paneKey lets the caller mark-visit the exact clicked row.
+   *  `subagent` names the clicked subagent row, which has no tab of its own. */
+  onActivate: (
+    tabId: string,
+    paneKey: string,
+    subagent?: DashboardAgentRowData['activationSubagent']
+  ) => void
   /** Why: injected from a parent so one shared tick re-renders every row's "Xm ago" (see hooks/use-now.ts), not a per-row interval. */
   now: number
   /** Why: bold prompt rides on the card's unvisited signal (shared with the workspace name), not per-agent state. */
@@ -111,9 +116,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     (e: React.MouseEvent) => {
       e.stopPropagation()
       // Why: subagent rows have no pane of their own, so focus the spawning parent's pane.
-      onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
+      onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey, agent.activationSubagent)
     },
-    [onActivate, agent.tab.id, agent.activationPaneKey, agent.paneKey]
+    [onActivate, agent.tab.id, agent.activationPaneKey, agent.paneKey, agent.activationSubagent]
   )
   const handleSendTargetClickCapture = useCallback(
     (e: React.MouseEvent) => {

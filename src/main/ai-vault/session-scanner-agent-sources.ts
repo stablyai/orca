@@ -20,7 +20,8 @@ import {
   ompSessionsRootDirs,
   sessionRootDirs
 } from './session-scanner-roots'
-import { SUBAGENT_DIR_NAME } from './session-scanner-subagent-transcripts'
+// Why: the same literal that locates subagent transcripts, so pruning can't drift from it.
+import { CLAUDE_SUBAGENT_DIR_NAME } from '../../shared/claude-subagent-transcript-path'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { normalizeAgentSessionsDir, primeAgentSessionsDirFromEnv } from './session-scanner-values'
 
@@ -114,7 +115,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // sessionId and aren't independently resumable, so they'd just duplicate the
     // parent as untitled rows; prune the subtree and read them on demand under
     // their parent instead.
-    directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
+    directoryPredicate: (name) => name !== CLAUDE_SUBAGENT_DIR_NAME
   },
   qoder: {
     rootDirs: (options, wslHomeDirs) =>
@@ -124,7 +125,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         ['.qoder', 'projects']
       ),
     extensions: ['.jsonl'],
-    directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
+    directoryPredicate: (name) => name !== CLAUDE_SUBAGENT_DIR_NAME
   },
   codebuddy: {
     rootDirs: (options, wslHomeDirs) => [
@@ -133,7 +134,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     ],
     extensions: ['.jsonl'],
     // Nested subagent transcripts are not independent top-level conversations.
-    directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
+    directoryPredicate: (name) => name !== CLAUDE_SUBAGENT_DIR_NAME
   },
   codex: {
     rootDirs: (options, wslHomeDirs) =>

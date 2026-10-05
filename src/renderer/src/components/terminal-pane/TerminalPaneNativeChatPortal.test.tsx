@@ -10,8 +10,13 @@ const mocks = vi.hoisted(
       isFocusedGroup: boolean
       contextMenuActions: { onClosePane: () => void }
     }
-  } => ({ nativeChatViewProps: null })
+    shownSubagentTranscriptPath: string | null
+  } => ({ nativeChatViewProps: null, shownSubagentTranscriptPath: null })
 )
+
+vi.mock('./pane-subagent-view-source', () => ({
+  paneShownSubagentTranscriptPath: () => mocks.shownSubagentTranscriptPath
+}))
 
 vi.mock('@/store', () => ({
   useAppStore: (
@@ -43,9 +48,32 @@ import { TerminalPaneNativeChatPortal } from './TerminalPaneNativeChatPortal'
 afterEach(() => {
   cleanup()
   mocks.nativeChatViewProps = null
+  mocks.shownSubagentTranscriptPath = null
 })
 
 describe('TerminalPaneNativeChatPortal', () => {
+  it("yields the pane to a subagent's cover so the hidden parent chat takes no focus or paste", () => {
+    const portalContainer = document.createElement('div')
+    mocks.shownSubagentTranscriptPath = '/p/693d/subagents/agent-a1.jsonl'
+    render(
+      <TerminalPaneNativeChatPortal
+        controller={makeController(portalContainer, { activePaneIsChatLeaf: true })}
+      />
+    )
+    expect(mocks.nativeChatViewProps).toBeNull()
+    expect(portalContainer.querySelector('.native-chat-pane-shell')).toBeNull()
+  })
+
+  it('covers the pane with its chat again once the pane shows its main agent', () => {
+    const portalContainer = document.createElement('div')
+    render(
+      <TerminalPaneNativeChatPortal
+        controller={makeController(portalContainer, { activePaneIsChatLeaf: true })}
+      />
+    )
+    expect(portalContainer.querySelectorAll('.native-chat-pane-shell')).toHaveLength(1)
+  })
+
   it('targets the restored chat pane when its sibling is active', () => {
     const portalContainer = document.createElement('div')
     const controller = makeController(portalContainer, { activePaneIsChatLeaf: false })

@@ -28,6 +28,8 @@ import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion
 import { translate } from '@/i18n/i18n'
 import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import { selectAcknowledgedAgentTimes } from './worktree-card-agent-ack-inputs'
+import type { SubagentActivationTarget } from './worktree-subagent-child-rows'
+import { paneSubagentTranscriptPath } from '../terminal-pane/pane-subagent-view-source'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -153,7 +155,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   )
 
   const handleActivateAgentTab = useCallback(
-    (tabId: string, paneKey: string) => {
+    (tabId: string, paneKey: string, subagent?: SubagentActivationTarget) => {
       const parsed = parsePaneKey(paneKey)
       if (!parsed) {
         // Why: malformed/legacy numeric keys can't be resolved after pane replay/remount, so drop the stale row instead of guessing.
@@ -171,14 +173,26 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       }
       // Why: design-doc rule — every user-initiated worktree switch must route through activateAndRevealWorktree (cross-repo activation + nav history).
       activateAndRevealWorktree(worktreeId)
-      const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
+      const store = useAppStore.getState()
+      const tabs = store.tabsByWorktree[worktreeId] ?? []
       if (tabs.some((t) => t.id === tabId)) {
+        // Why: a CLI subagent has no pane of its own; its parent's pane shows its transcript instead.
+        if (subagent && paneSubagentTranscriptPath(store, paneKey, subagent.id)) {
+          store.showPaneSubagent(paneKey, { agentId: subagent.id, name: subagent.name })
+        } else {
+          store.showPaneMainAgent(paneKey)
+        }
         activateTabAndFocusPane(tabId, parsed.leafId, {
           ackPaneKeyOnSuccess: paneKey,
           flashFocusedPane: true,
           scrollToBottomIfOutputSinceLastView: true
         })
-      } else if (!activateStructuredAgentSessionTab({ worktreeId, tabId })) {
+      } else if (activateStructuredAgentSessionTab({ worktreeId, tabId })) {
+        if (subagent) {
+          // Why: subagents have no tab of their own; their section in the parent's chat is their view.
+          store.revealNativeChatSubagent({ parentPaneKey: paneKey, agentId: subagent.id })
+        }
+      } else {
         const liveEntry = useAppStore.getState().agentStatusByPaneKey[paneKey]
         if (liveEntry?.worktreeId === worktreeId) {
           // Why: orchestration worker status can be worktree-attributed before the renderer knows its tab; keep the live row instead of dismissing as stale.

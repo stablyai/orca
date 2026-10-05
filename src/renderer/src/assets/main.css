@@ -1358,7 +1358,8 @@ html.native-shell .app-layout {
 }
 
 .worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
+  /* Why: a foreground wash, so hover still reads on a selected card's fill. */
+  background: color-mix(in srgb, var(--sidebar-foreground) 6%, transparent);
 }
 
 .worktree-agent-row-hover[data-focused-agent-pane='true'] {
@@ -1369,7 +1370,7 @@ html.native-shell .app-layout {
 }
 
 .dark .worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
 }
 
 .dark .worktree-agent-row-hover[data-focused-agent-pane='true'] {
@@ -1711,7 +1712,7 @@ html.native-shell .app-layout {
   .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
 [data-compact-agent-list='true']
   .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
+  background: color-mix(in srgb, var(--sidebar-foreground) 6%, transparent);
 }
 
 .dark
@@ -1720,7 +1721,7 @@ html.native-shell .app-layout {
 .dark
   [data-compact-agent-list='true']
   .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
 }
 
 [data-compact-agent-list='true']
@@ -1732,6 +1733,25 @@ html.native-shell .app-layout {
   [data-compact-agent-list='true']
   .compact-agent-row.worktree-agent-row-hover[data-focused-agent-pane='true'] {
   background: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+/* Why: the focused row carries the strongest fill, so its hover steps past it instead of
+   falling back to a lineage row's lighter hover. Kept last to win equal specificity. */
+.worktree-agent-row-hover[data-focused-agent-pane='true']:hover,
+[data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-row-hover[data-focused-agent-pane='true']:hover {
+  background: color-mix(in srgb, var(--sidebar-foreground) 20%, var(--sidebar-accent));
+}
+
+.dark .worktree-agent-row-hover[data-focused-agent-pane='true']:hover,
+.dark
+  [data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-row-hover[data-focused-agent-pane='true']:hover {
+  background: color-mix(
+    in srgb,
+    var(--sidebar-foreground) 10%,
+    color-mix(in srgb, var(--accent) 70%, transparent)
+  );
 }
 
 [data-compact-agent-list='true'] .worktree-agent-lineage-children {

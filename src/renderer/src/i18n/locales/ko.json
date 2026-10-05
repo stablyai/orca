@@ -18309,6 +18309,11 @@
         "copySessionId": "세션 ID 복사",
         "copySessionIdSuccess": "세션 ID를 복사했습니다",
         "copySessionIdError": "세션 ID를 복사하지 못했습니다"
+      },
+      "subagentView": {
+        "threads": "에이전트 스레드",
+        "main": "메인 에이전트",
+        "readOnly": "읽기 전용 기록"
       }
     },
     "jiraUserPicker": {

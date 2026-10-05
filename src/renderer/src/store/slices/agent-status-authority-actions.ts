@@ -106,6 +106,7 @@ export function createAgentStatusAuthorityActions(
             retiredPaneKeySet
           ),
           cacheTimerByKey: removePaneKeys(s.cacheTimerByKey, retiredPaneKeySet),
+          paneSubagentViewByPaneKey: removePaneKeys(s.paneSubagentViewByPaneKey, retiredPaneKeySet),
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
           recentlyRetiredAgentStatusPaneKeys: boundRecentlyRetiredAgentStatusPaneKeys(
             s.recentlyRetiredAgentStatusPaneKeys,

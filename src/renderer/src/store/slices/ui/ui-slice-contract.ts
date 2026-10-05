@@ -12,6 +12,8 @@ export type {
   AgentSendPopoverTargetMode,
   NewWorkspaceDraft,
   OpenAgentSendPopoverTargetModeArgs,
+  PaneSubagentView,
+  PendingNativeChatSubagentReveal,
   PendingSidebarRowReveal,
   PendingSidebarWorktreeReveal,
   TaskPageData,
