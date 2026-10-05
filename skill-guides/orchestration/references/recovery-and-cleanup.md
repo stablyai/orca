@@ -107,6 +107,14 @@ optional.
 | `inject_rejected`    | `--inject` refused because no recognized agent runs in the target (`data.terminal`, `data.reason`)                    | Start a recognized agent there or pick another terminal; or dispatch without `--inject` and use `terminal send`                |
 | `runtime_error`      | Any other failure, including a target terminal that already owns an active Dispatch                                   | Read the message, inspect state, and do not retry unchanged                                                                    |
 
+A refusal whose `error.data.effectsApplied` is `false` started nothing: no Task,
+Dispatch, worktree, terminal, or injection exists for it, so fix the input and
+run the corrected command. `worker-start` marks its
+`--model` / `--effort` refusals this way (`invalid_argument`, or
+`capability_unsupported` when the agent or server cannot apply them), including
+an effort the installed agent does not list for that model. A missing
+`effectsApplied` proves nothing either way: older hosts omit it.
+
 ## Retry, stop, and abandon
 
 Retry only a positively proven failed or stopped attempt. Name the failed Task

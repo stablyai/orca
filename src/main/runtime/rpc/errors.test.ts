@@ -125,6 +125,24 @@ describe('mapRuntimeError', () => {
     })
   })
 
+  it('keeps an orchestration invalid_argument refusal marker beside the generic recovery steps', () => {
+    const error = new OrchestrationError(
+      'invalid_argument',
+      'Agent codex model gpt-6-luna does not support effort ultra.',
+      { effectsApplied: false }
+    )
+
+    const response = mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)
+
+    expect(response.error).toMatchObject({
+      code: 'invalid_argument',
+      data: {
+        effectsApplied: false,
+        nextSteps: expect.arrayContaining([expect.stringContaining('Do not retry')])
+      }
+    })
+  })
+
   it('adds computer-use startup recovery steps for missing desktop apps', () => {
     const error = new Error('app not found: Gmail')
     Object.assign(error, { code: 'app_not_found' })

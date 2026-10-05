@@ -10,6 +10,7 @@ import {
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration-session-caller-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
+import { OrchestrationError } from '../orchestration/orchestration-error'
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
 import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session-host-authority'
@@ -175,7 +176,13 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     COMPUTER_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
     const code = (error as { code: string }).code
-    return errorResponse(id, meta, code, message, computerErrorData(code, message))
+    const recovery = computerErrorData(code, message)
+    // Orchestration reuses invalid_argument; its own data (e.g. effectsApplied) must still reach the caller.
+    const own =
+      error instanceof OrchestrationError && error.data && typeof error.data === 'object'
+        ? error.data
+        : undefined
+    return errorResponse(id, meta, code, message, own ? { ...recovery, ...own } : recovery)
   }
   if (
     error instanceof Error &&

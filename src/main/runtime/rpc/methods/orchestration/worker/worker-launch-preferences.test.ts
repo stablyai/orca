@@ -297,6 +297,31 @@ describe('orchestration worker launch preferences', () => {
     })
   })
 
+  it.each([
+    () => resolveWorkerLaunchPreferences({ agent: 'codex', effort: 'high' }),
+    () => resolveWorkerLaunchPreferences({ agent: 'grok', model: 'grok-code-fast-1' }),
+    () => resolveWorkerLaunchPreferences({ agent: 'codex', model: 'gpt-5.5', effort: 'turbo' }),
+    () =>
+      resolveWorkerLaunchPreferences({
+        agent: 'codex',
+        model: 'gpt-6-luna',
+        effort: 'ultra',
+        discoveredEfforts: ['low', 'max']
+      }),
+    () => resolveWorkerLaunchPreferences({ agent: 'opencode', model: 'opencode/x' }),
+    () => assertWorkerLaunchPreferencesCreateTerminal({ terminal: 'term_1', model: 'gpt-5.5' }),
+    () =>
+      assertWorkerLaunchPreferencesRuntimeSupported({
+        model: 'gpt-5.5',
+        capabilities: [],
+        serverName: 'windows'
+      })
+  ])('marks launch preference refusal %# as having applied no effects', (refuse) => {
+    expect(refuse).toThrow(
+      expect.objectContaining({ data: expect.objectContaining({ effectsApplied: false }) })
+    )
+  })
+
   it.each(['codex', 'omp'] as const)('rejects %s effort without a model', (agent) => {
     expect(() => resolveWorkerLaunchPreferences({ agent, effort: 'high' })).toThrow(
       '--effort requires --model'

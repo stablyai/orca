@@ -11,6 +11,9 @@ import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../.
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 
+// Why: these run before any Task, Dispatch, worktree or terminal exists, so callers may retry freely.
+const LAUNCH_PREFERENCES_REFUSED = { effectsApplied: false } as const
+
 export type OrchestrationWorkerLaunchSelection = {
   agent: TuiAgent | null
   model: string | null
@@ -63,7 +66,11 @@ export function resolveWorkerLaunchPreferences(args: {
   receipt: OrchestrationWorkerLaunchReceipt
 } {
   if (args.effort && !args.model) {
-    throw new OrchestrationError('invalid_argument', '--effort requires --model.')
+    throw new OrchestrationError(
+      'invalid_argument',
+      '--effort requires --model.',
+      LAUNCH_PREFERENCES_REFUSED
+    )
   }
   if (!args.model) {
     return {
@@ -75,14 +82,16 @@ export function resolveWorkerLaunchPreferences(args: {
   if (args.agent === 'opencode' && args.createsWorktree) {
     throw new OrchestrationError(
       'capability_unsupported',
-      'OpenCode model selection requires an existing worktree. Use --worktree current or an existing worktree selector, or omit --model.'
+      'OpenCode model selection requires an existing worktree. Use --worktree current or an existing worktree selector, or omit --model.',
+      LAUNCH_PREFERENCES_REFUSED
     )
   }
 
   if (args.agent === 'opencode' && args.openCodeModelLaunchSupported !== true) {
     throw new OrchestrationError(
       'capability_unsupported',
-      'This OpenCode TUI cannot verify launch-time model selection. Omit --model or use a supported OpenCode CLI.'
+      'This OpenCode TUI cannot verify launch-time model selection. Omit --model or use a supported OpenCode CLI.',
+      LAUNCH_PREFERENCES_REFUSED
     )
   }
 
@@ -90,7 +99,8 @@ export function resolveWorkerLaunchPreferences(args: {
   if (!catalog?.supportsWorkerLaunchPreferences || !catalog.modelApply.launchArgs) {
     throw new OrchestrationError(
       'invalid_argument',
-      `Agent ${args.agent} does not support launch-time model selection. Omit --model to run the model from its own config.`
+      `Agent ${args.agent} does not support launch-time model selection. Omit --model to run the model from its own config.`,
+      LAUNCH_PREFERENCES_REFUSED
     )
   }
 
@@ -98,7 +108,8 @@ export function resolveWorkerLaunchPreferences(args: {
     if (!args.discoveredEfforts.includes(args.effort)) {
       throw new OrchestrationError(
         'invalid_argument',
-        `Agent ${args.agent} model ${args.model} does not support effort ${args.effort}. The installed ${args.agent} lists: ${args.discoveredEfforts.join(', ')}.`
+        `Agent ${args.agent} model ${args.model} does not support effort ${args.effort}. The installed ${args.agent} lists: ${args.discoveredEfforts.join(', ')}.`,
+        LAUNCH_PREFERENCES_REFUSED
       )
     }
   } else if (args.effort) {
@@ -114,7 +125,8 @@ export function resolveWorkerLaunchPreferences(args: {
     ) {
       throw new OrchestrationError(
         'invalid_argument',
-        `Agent ${args.agent} model ${args.model} does not support effort ${args.effort}.`
+        `Agent ${args.agent} model ${args.model} does not support effort ${args.effort}.`,
+        LAUNCH_PREFERENCES_REFUSED
       )
     }
   }
@@ -130,7 +142,8 @@ export function resolveWorkerLaunchPreferences(args: {
   ) {
     throw new OrchestrationError(
       'invalid_argument',
-      `Agent ${args.agent} cannot apply the requested worker launch preferences.`
+      `Agent ${args.agent} cannot apply the requested worker launch preferences.`,
+      LAUNCH_PREFERENCES_REFUSED
     )
   }
 
@@ -149,7 +162,8 @@ export function assertWorkerLaunchPreferencesCreateTerminal(args: {
   if (args.terminal && (args.model || args.effort)) {
     throw new OrchestrationError(
       'invalid_argument',
-      '--model and --effort cannot be applied when reusing an existing terminal.'
+      '--model and --effort cannot be applied when reusing an existing terminal.',
+      LAUNCH_PREFERENCES_REFUSED
     )
   }
 }
@@ -166,7 +180,8 @@ export function assertWorkerLaunchPreferencesRuntimeSupported(args: {
   ) {
     throw new OrchestrationError(
       'capability_unsupported',
-      `Connected server ${args.serverName} does not support worker model or effort overrides.`
+      `Connected server ${args.serverName} does not support worker model or effort overrides.`,
+      LAUNCH_PREFERENCES_REFUSED
     )
   }
 }
