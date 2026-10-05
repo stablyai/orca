@@ -10,8 +10,8 @@ import {
 import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
 import type { ObservedSkillPackage } from './skill-package-identity'
 import {
-  openSkillTarGzip,
   parseSkillTarHeader,
+  readSkillTarGzip,
   SKILL_TAR_BLOCK_BYTES,
   type TarByteReader
 } from './skill-package-tar'
@@ -163,49 +163,53 @@ export async function extractSkillPackageArchive(input: {
   signal?: AbortSignal
 }): Promise<SkillPackageExtractionResult> {
   const filesystem = input.filesystem ?? nativeSkillInstallFilesystem
-  const archive = await openSkillTarGzip(input.archivePath)
   let destinationCreated = false
   try {
-    if (input.signal?.aborted) {
-      throw new SkillInstallOperationError(SKILL_INSTALL_CANCELLED_FAILURE)
-    }
-    const manifest = await readManifest(archive.reader)
-    if (
-      (input.expectedPackageDigest && manifest.packageDigest !== input.expectedPackageDigest) ||
-      (input.expectedPackageId && manifest.packageId !== input.expectedPackageId) ||
-      (input.expectedVersionId && manifest.versionId !== input.expectedVersionId)
-    ) {
-      throw new Error('skill-package-identity-mismatch')
-    }
-    await mkdir(input.destinationDirectory, { mode: 0o700 })
-    destinationCreated = true
-    const skillDirectory = join(input.destinationDirectory, 'skill')
-    await mkdir(skillDirectory, { mode: 0o700 })
-    for (const expected of manifest.files) {
+    const {
+      value: { manifest, skillDirectory },
+      ...archiveIdentity
+    } = await readSkillTarGzip(input.archivePath, async (reader) => {
       if (input.signal?.aborted) {
         throw new SkillInstallOperationError(SKILL_INSTALL_CANCELLED_FAILURE)
       }
-      const header = parseSkillTarHeader(await archive.reader.readExact(SKILL_TAR_BLOCK_BYTES))
+      const manifest = await readManifest(reader)
       if (
-        !header ||
-        header.path !== `skill/${expected.path}` ||
-        header.size !== expected.size ||
-        header.executable !== expected.executable
+        (input.expectedPackageDigest && manifest.packageDigest !== input.expectedPackageDigest) ||
+        (input.expectedPackageId && manifest.packageId !== input.expectedPackageId) ||
+        (input.expectedVersionId && manifest.versionId !== input.expectedVersionId)
       ) {
-        throw new Error('skill-package-file-envelope-mismatch')
+        throw new Error('skill-package-identity-mismatch')
       }
-      await extractFile(
-        archive.reader,
-        join(skillDirectory, ...expected.path.split('/')),
-        expected,
-        input.signal
-      )
-    }
-    await requireArchiveEnd(archive.reader)
+      await mkdir(input.destinationDirectory, { mode: 0o700 })
+      destinationCreated = true
+      const skillDirectory = join(input.destinationDirectory, 'skill')
+      await mkdir(skillDirectory, { mode: 0o700 })
+      for (const expected of manifest.files) {
+        if (input.signal?.aborted) {
+          throw new SkillInstallOperationError(SKILL_INSTALL_CANCELLED_FAILURE)
+        }
+        const header = parseSkillTarHeader(await reader.readExact(SKILL_TAR_BLOCK_BYTES))
+        if (
+          !header ||
+          header.path !== `skill/${expected.path}` ||
+          header.size !== expected.size ||
+          header.executable !== expected.executable
+        ) {
+          throw new Error('skill-package-file-envelope-mismatch')
+        }
+        await extractFile(
+          reader,
+          join(skillDirectory, ...expected.path.split('/')),
+          expected,
+          input.signal
+        )
+      }
+      await requireArchiveEnd(reader)
+      return { manifest, skillDirectory }
+    })
     if (input.signal?.aborted) {
       throw new SkillInstallOperationError(SKILL_INSTALL_CANCELLED_FAILURE)
     }
-    const archiveIdentity = await archive.archiveIdentity
     if (
       input.expectedArchiveSha256 &&
       archiveIdentity.archiveSha256 !== input.expectedArchiveSha256
@@ -224,8 +228,6 @@ export async function extractSkillPackageArchive(input: {
     return { manifest, skillDirectory, ...archiveIdentity }
   } catch (error) {
     const failure = normalizeArchiveReadError(error)
-    archive.abort(failure)
-    await archive.archiveIdentity.catch(() => undefined)
     if (destinationCreated) {
       await rm(input.destinationDirectory, { recursive: true, force: true })
     }
