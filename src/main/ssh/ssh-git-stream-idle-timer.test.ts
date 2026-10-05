@@ -14,9 +14,25 @@ it.each(['end', 'abort', 'timeout'] as const)(
       const encoded = Buffer.from(JSON.stringify(content))
       const notify = vi.fn()
       const mux = {
-        request: vi.fn(async () => ({
-          __orcaGitResponseStream: { streamId: 7, totalBytes: encoded.length, chunkCount: 1000 }
-        })),
+        // Why: mirrors the real mux contract — beforeResolve runs during
+        // response dispatch, before resolve() reaches the caller.
+        request: vi.fn(
+          async (
+            _method: string,
+            _params: Record<string, unknown>,
+            options?: { beforeResolve?: (result: unknown) => void }
+          ) => {
+            const result = {
+              __orcaGitResponseStream: {
+                streamId: 7,
+                totalBytes: encoded.length,
+                chunkCount: 1000
+              }
+            }
+            options?.beforeResolve?.(result)
+            return result
+          }
+        ),
         isDisposed: () => false,
         notify,
         onDispose: () => () => {},

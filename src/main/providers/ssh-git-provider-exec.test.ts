@@ -19,7 +19,7 @@ describe('SshGitProvider', () => {
     const unsubscribe = vi.fn()
     const onProgress = vi.fn()
     mux.onNotificationByMethod.mockReturnValue(unsubscribe)
-    mux.request.mockImplementationOnce(async (_method, params) => {
+    mux._response.mockImplementationOnce(async (_method, params) => {
       const progressHandler = mux.onNotificationByMethod.mock.calls[0][1]
       progressHandler({
         progressId: params.progressId,
@@ -60,7 +60,7 @@ describe('SshGitProvider', () => {
   it('reports an actionable reconnect message when the relay does not support cloning', async () => {
     const methodNotFound = new Error('Method not found: git.clone') as Error & { code?: number }
     methodNotFound.code = -32601
-    mux.request.mockRejectedValueOnce(methodNotFound)
+    mux._response.mockRejectedValueOnce(methodNotFound)
 
     await expect(
       provider.clone(['clone', '--progress', '--', 'url', 'repo'], '/home/user')
@@ -76,7 +76,7 @@ describe('SshGitProvider', () => {
       exitCode: 0,
       timedOut: false
     }
-    mux.request.mockResolvedValue(execResult)
+    mux._response.mockResolvedValue(execResult)
 
     const result = await provider.execNonInteractive('pnpm', ['--version'], '/home/user/repo', 8000)
 
@@ -101,7 +101,7 @@ describe('SshGitProvider', () => {
       exitCode: 0,
       timedOut: false
     }
-    mux.request.mockResolvedValue(execResult)
+    mux._response.mockResolvedValue(execResult)
 
     await provider.execNonInteractive(
       '/bin/bash',
@@ -140,7 +140,7 @@ describe('SshGitProvider', () => {
 
   it('exec forwards abort and timeout options to the relay request', async () => {
     const controller = new AbortController()
-    mux.request.mockResolvedValue({ stdout: '', stderr: '' })
+    mux._response.mockResolvedValue({ stdout: '', stderr: '' })
 
     await provider.exec(
       ['clone', '--progress', '--', 'git@example.com:repo.git', 'repo'],
@@ -162,14 +162,15 @@ describe('SshGitProvider', () => {
       },
       {
         signal: controller.signal,
-        timeoutMs: 60_000
+        timeoutMs: 60_000,
+        beforeResolve: expect.any(Function)
       }
     )
   })
 
   it('serializes non-interactive relay execs for the same cwd and operation', async () => {
     const completeRequests: (() => void)[] = []
-    mux.request.mockImplementation(
+    mux._response.mockImplementation(
       () =>
         new Promise((resolve) => {
           completeRequests.push(() =>
@@ -211,7 +212,7 @@ describe('SshGitProvider', () => {
 
   it('isolates non-interactive lanes between provider instances', async () => {
     const completeRequests: (() => void)[] = []
-    mux.request.mockImplementation(
+    mux._response.mockImplementation(
       () =>
         new Promise((resolve) => {
           completeRequests.push(() =>
@@ -231,21 +232,25 @@ describe('SshGitProvider', () => {
   })
 
   it('forwards leading global Git options without reordering argv', async () => {
-    mux.request.mockResolvedValue({ stdout: '', stderr: '' })
+    mux._response.mockResolvedValue({ stdout: '', stderr: '' })
     const args = ['-c', 'maintenance.auto=false', 'fetch', 'origin', 'main']
 
     await provider.exec(args, '/home/user/repo')
 
-    expect(mux.request).toHaveBeenCalledWith('git.exec', {
-      args,
-      cwd: '/home/user/repo',
-      __streamResponse: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.exec',
+      {
+        args,
+        cwd: '/home/user/repo',
+        __streamResponse: true
+      },
+      { beforeResolve: expect.any(Function) }
+    )
   })
 
   it('cancels a queued non-interactive exec without canceling the active relay child', async () => {
     const completeRequests: (() => void)[] = []
-    mux.request.mockImplementation(
+    mux._response.mockImplementation(
       () =>
         new Promise((resolve) => {
           completeRequests.push(() =>
@@ -278,7 +283,7 @@ describe('SshGitProvider', () => {
 
   it('uses an exec abort signal to cancel the matching active relay child with queued work present', async () => {
     const completeRequests: (() => void)[] = []
-    mux.request.mockImplementation((method) => {
+    mux._response.mockImplementation((method) => {
       if (method === 'agent.cancelExec') {
         return Promise.resolve({ canceled: true })
       }
