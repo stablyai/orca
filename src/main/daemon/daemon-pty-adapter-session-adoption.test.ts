@@ -274,13 +274,54 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           'createOrAttach',
           expect.objectContaining({ command: undefined })
         )
-        expect(request).toHaveBeenNthCalledWith(2, 'kill', {
+        expect(request).toHaveBeenNthCalledWith(2, 'killOwned', {
           sessionId: 'raced-out-legacy-session',
-          immediate: true
+          immediate: true,
+          expectedIncarnationId: 'legacy-replacement-incarnation'
         })
         expect(legacy.getActiveSessionIds()).toEqual([])
       } finally {
         legacy.dispose()
+        request.mockRestore()
+        ensureConnected.mockRestore()
+      }
+    })
+
+    it('does not retry a raced-out v30 attach when its single retire attempt fails', async () => {
+      const ensureConnected = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const request = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockResolvedValueOnce({
+          isNew: true,
+          snapshot: null,
+          pid: 4321,
+          shellState: 'unsupported',
+          incarnationId: 'legacy-orphan-incarnation'
+        })
+        .mockRejectedValueOnce(new Error('Connection lost'))
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(
+          legacy.spawn({
+            cols: 80,
+            rows: 24,
+            sessionId: 'orphaned-legacy-session',
+            attachOnly: true
+          })
+        ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
+        expect(request.mock.calls.filter((call) => call[0] === 'createOrAttach')).toHaveLength(1)
+        expect(request.mock.calls.filter((call) => call[0] === 'killOwned')).toHaveLength(1)
+        expect(request.mock.calls.filter((call) => call[0] === 'kill')).toHaveLength(0)
+        expect(errorSpy).toHaveBeenCalledWith(
+          '[daemon] attach-only retire of accidental legacy spawn failed; orphan may remain',
+          { protocolVersion: 30, killErrorClass: 'transport' }
+        )
+      } finally {
+        legacy.dispose()
+        errorSpy.mockRestore()
         request.mockRestore()
         ensureConnected.mockRestore()
       }
@@ -390,12 +431,18 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         .mockResolvedValue()
       const requestSpy = vi
         .spyOn(DaemonClient.prototype, 'request')
-        .mockImplementation(async (type: string) =>
+        .mockImplementation(async (type: string): Promise<unknown> =>
           type === 'getSize'
-            ? ({ size: { cols: 100, rows: 30 } } as never)
+            ? { size: { cols: 100, rows: 30 } }
             : type === 'createOrAttach'
-              ? ({ isNew: true, pid: 77, shellState: 'unsupported', snapshot: null } as never)
-              : ({} as never)
+              ? {
+                  isNew: true,
+                  pid: 77,
+                  shellState: 'unsupported',
+                  snapshot: null,
+                  incarnationId: 'owned-incarnation'
+                }
+              : {}
         )
       const current = new DaemonPtyAdapter({ socketPath, tokenPath })
       try {
@@ -407,9 +454,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           'createOrAttach',
           expect.objectContaining({ cols: 100, rows: 30, attachOnly: true })
         )
-        expect(requestSpy).toHaveBeenCalledWith('kill', {
+        expect(requestSpy).toHaveBeenCalledWith('killOwned', {
           sessionId: 'raced-current-session',
-          immediate: true
+          immediate: true,
+          expectedIncarnationId: 'owned-incarnation'
         })
         expect(current.getActiveSessionIds()).toEqual([])
       } finally {
@@ -425,12 +473,18 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         .mockResolvedValue()
       const requestSpy = vi
         .spyOn(DaemonClient.prototype, 'request')
-        .mockImplementation(async (type: string) =>
+        .mockImplementation(async (type: string): Promise<unknown> =>
           type === 'getSize'
-            ? ({ size: { cols: 100, rows: 30 } } as never)
+            ? { size: { cols: 100, rows: 30 } }
             : type === 'createOrAttach'
-              ? ({ isNew: true, pid: 77, shellState: 'unsupported', snapshot: null } as never)
-              : ({} as never)
+              ? {
+                  isNew: true,
+                  pid: 77,
+                  shellState: 'unsupported',
+                  snapshot: null,
+                  incarnationId: 'owned-incarnation'
+                }
+              : {}
         )
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
       try {
@@ -444,9 +498,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         )
         const createPayload = requestSpy.mock.calls.find(([type]) => type === 'createOrAttach')?.[1]
         expect(createPayload).not.toHaveProperty('attachOnly')
-        expect(requestSpy).toHaveBeenCalledWith('kill', {
+        expect(requestSpy).toHaveBeenCalledWith('killOwned', {
           sessionId: 'raced-legacy-session',
-          immediate: true
+          immediate: true,
+          expectedIncarnationId: 'owned-incarnation'
         })
       } finally {
         legacy.dispose()
@@ -461,29 +516,37 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         .mockResolvedValue()
       const requestSpy = vi
         .spyOn(DaemonClient.prototype, 'request')
-        .mockImplementation(async (type: string) => {
+        .mockImplementation(async (type: string): Promise<unknown> => {
           if (type === 'getSize') {
-            return { size: { cols: 100, rows: 30 } } as never
+            return { size: { cols: 100, rows: 30 } }
           }
           if (type === 'createOrAttach') {
-            return { isNew: true, pid: 77, shellState: 'unsupported', snapshot: null } as never
+            return {
+              isNew: true,
+              pid: 77,
+              shellState: 'unsupported',
+              snapshot: null,
+              incarnationId: 'owned-incarnation'
+            }
           }
           throw new Error('kill transport lost')
         })
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
       try {
         await expect(legacy.attach('orphaned-legacy-session')).rejects.toBeInstanceOf(
           TerminalSessionOwnerUnverifiedError
         )
 
-        expect(warnSpy).toHaveBeenCalledWith(
-          '[daemon] attach-only retire of unexpected spawn failed',
-          expect.objectContaining({ sessionId: 'orphaned-legacy-session' })
+        expect(requestSpy.mock.calls.filter((call) => call[0] === 'killOwned')).toHaveLength(1)
+        expect(requestSpy.mock.calls.filter((call) => call[0] === 'kill')).toHaveLength(0)
+        expect(errorSpy).toHaveBeenCalledWith(
+          '[daemon] attach-only retire of accidental legacy spawn failed; orphan may remain',
+          { protocolVersion: 30, killErrorClass: 'unknown' }
         )
       } finally {
         legacy.dispose()
-        warnSpy.mockRestore()
+        errorSpy.mockRestore()
         requestSpy.mockRestore()
         ensureConnectedSpy.mockRestore()
       }
