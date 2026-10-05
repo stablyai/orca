@@ -118,6 +118,12 @@ function installWillQuitHandler(): void {
     // A renderer can veto before-quit; push must survive until quit is committed.
     markHostShuttingDown()
     state.desktopPushService?.stop()
+    // Same reason, and nothing recreates it: the service is built once during ready
+    // startup, so disposing it in before-quit left a vetoed quit with no idle subscription.
+    state.unsubscribeAgentIdleEdge?.()
+    state.unsubscribeAgentIdleEdge = null
+    state.scheduledMessageService?.dispose()
+    state.scheduledMessageService = null
     state.unsubscribeSystemResumeBroadcast?.()
     state.unsubscribeSystemResumeBroadcast = null
     state.unsubscribeWakeSignalClock?.()

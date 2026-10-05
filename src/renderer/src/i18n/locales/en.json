@@ -1501,6 +1501,31 @@
     "unhide": "Show All",
     "zoom": "Zoom"
   },
+  "scheduledMessages": {
+    "notification": {
+      "sent": {
+        "title": "Scheduled message sent",
+        "body": "Orca delivered your queued message to the agent."
+      },
+      "missed": {
+        "title": "Scheduled message missed",
+        "body": "Orca was closed when it came due. It is waiting in Automations — send or reschedule it."
+      },
+      "undelivered": {
+        "title": "Scheduled message couldn't be delivered"
+      },
+      "noPane": {
+        "body": "That workspace had no open terminal. Open it, then use Send now in Automations."
+      },
+      "noAgent": {
+        "body": "No agent was running in that workspace, so Orca refused to type into a plain shell."
+      },
+      "failed": {
+        "title": "Scheduled message failed",
+        "body": "Orca couldn't send your queued message. It is still in Automations."
+      }
+    }
+  },
   "tray": {
     "openOrca": "Open Orca",
     "quit": "Quit",
@@ -7254,6 +7279,8 @@
           "sleepThisWorkspace": "This Workspace",
           "sleepDescendantsOption": "With Descendants ({{value0}})",
           "deleteWithDescendants": "Delete with Descendants…",
+          "scheduledMessagesWithCount": "Schedule message… ({{pending}} pending)",
+          "scheduledMessages": "Schedule message…",
           "editDetails": "Edit Details…",
           "copySubmenu": "Copy",
           "copyPathOption": "Path",
@@ -7976,6 +8003,8 @@
           "outsideDistro": "Pick a folder inside {{value0}}.",
           "underDistro": "This host can only add folders under \\\\wsl.localhost\\{{value0}}."
         },
+        "scheduledMessagesBadgeProblem": "A scheduled message needs attention. Open Automations to send or reschedule it.",
+        "scheduledMessagesBadgePending": "Scheduled messages are queued for this workspace’s agent.",
         "RemoteFileBrowserEntryList": {
           "pathEmpty": "{{path}} is empty"
         },
@@ -19959,6 +19988,42 @@
         "copyFailed": "Could not copy the link.",
         "signingIn": "Signing in…",
         "cancel": "Cancel"
+      },
+      "scheduledMessages": {
+        "errorEmpty": "Enter a message to send.",
+        "errorPast": "Pick a time in the future.",
+        "errorHorizon": "Messages can be scheduled up to a year ahead.",
+        "editTitle": "Edit scheduled message",
+        "composeTitle": "Schedule a message",
+        "composeDescription": "Orca types this into the workspace's agent when it comes due.",
+        "messageLabel": "Message",
+        "whenLabel": "When",
+        "atDateTime": "At a date and time",
+        "whenIdleOption": "When the agent is idle",
+        "whenIdleHint": "Delivers the next time this workspace’s agent finishes working.",
+        "atTimeHint": "Sends at that time even if the agent is mid-task, interrupting it.",
+        "cancel": "Cancel",
+        "save": "Save",
+        "schedule": "Schedule",
+        "sectionTitle": "Scheduled messages",
+        "sectionSubtitle": "One-time messages Orca will type into a workspace’s agent. Schedule them from a workspace’s right-click menu.",
+        "unknownWorkspace": "Unknown workspace",
+        "sendNow": "Send now",
+        "rowActions": "Scheduled message actions",
+        "edit": "Edit…",
+        "delete": "Delete",
+        "todayAt": "Today {{time}}",
+        "unknownTime": "an unknown time",
+        "inLessThanAMinute": "in under a minute",
+        "whenIdle": "When the agent is idle",
+        "dueNow": "{{absolute}} · due now",
+        "statusMissed": "Missed — Orca was closed when it came due",
+        "statusNoPane": "Failed — the workspace had no open terminal",
+        "statusNoAgent": "Failed — no agent was running in that terminal",
+        "statusFailed": "Failed to send",
+        "errorInvalidDateTime": "Pick a valid date and time.",
+        "errorTooMany": "This workspace already has as many scheduled messages as Orca allows. Send or delete one first.",
+        "errorSaveFailed": "Orca couldn't save this scheduled message."
       },
       "plainSshTerminal": {
         "open": "Open plain SSH terminal",

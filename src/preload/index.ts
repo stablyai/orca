@@ -92,6 +92,7 @@ import { e2eApi } from './api/diagnostics/e2e-bridge'
 import { mobileApi } from './api/mobile/mobile-bridge'
 import { agentStatusApi } from './api/agent-status/agent-status-bridge'
 import { speechApi } from './api/speech/speech-bridge'
+import { scheduledMessagesApi } from './api/scheduled-messages/scheduled-messages-bridge'
 
 installBrowserFindListener()
 
@@ -186,6 +187,7 @@ const api = {
   runtimeEnvironments: runtimeEnvironmentsApi,
   rateLimits: rateLimitsApi,
   opencodeGoCredentials: opencodeGoCredentialsApi,
+  scheduledMessages: scheduledMessagesApi,
   minimaxCredentials: minimaxCredentialsApi,
   zcodePlanCredentials: zcodePlanCredentialsApi,
   grokAccounts: grokAccountsApi,

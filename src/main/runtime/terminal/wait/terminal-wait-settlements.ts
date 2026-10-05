@@ -77,6 +77,15 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     ) {
       this.orchestrationMailboxNotifications.deliverForTerminal(terminal)
     }
+    // Scheduled messages ride the same edges; they gate liveness themselves.
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      this.emitAgentIdleEdge({
+        ptyId,
+        worktreeId: leaf.worktreeId,
+        leafId: leaf.leafId,
+        tabId: leaf.tabId
+      })
+    }
   }
 
   /** Edge-driven delivery needs a one-shot recheck when quiet evidence may later settle; otherwise hookless agents can strand queued mail without another title/graph/message edge. */

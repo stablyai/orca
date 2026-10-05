@@ -16,6 +16,7 @@ import {
 } from '../../../../shared/workspace-scope'
 import { workspaceSessionPartitionIdsForHost } from '../../restoring-sessions/session-owner-removal'
 import { workspaceSessionPartitionHostId as workspaceSessionOwnerPartitionForHost } from '../../../../shared/workspace-session/workspace-session-partition-owner'
+import { dropScheduledMessagesForWorktree } from '../../scheduled-message-worktree-sweep'
 import type { StoreRuntimeState } from '../store-runtime-state'
 
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../../workspaces/catalog/local-worktree-metadata-prune-gate'
@@ -191,6 +192,10 @@ export class MetadataLineageOperations {
       delete this[metadataLineageOperationsContext].runtime.state.crossStoreLineageByChildKey?.[
         worktreeWorkspaceKey(worktreeId)
       ]
+      dropScheduledMessagesForWorktree(
+        this[metadataLineageOperationsContext].runtime.state,
+        worktreeId
+      )
     }
     for (const partition of partitions) {
       removeWorkspaceSessionOwnerInPartition(

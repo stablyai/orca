@@ -1,12 +1,18 @@
 import { ProjectGroupNameDialog } from '../../worktree-list/rows/ProjectGroupNameDialog'
 import { WorktreeParentPickerPopover } from '../parenting/WorktreeParentPickerPopover'
 import { useTranslate } from '@/i18n/use-translate'
+import { ScheduledMessageComposeDialog } from '@/components/scheduled-messages/ScheduledMessageComposeDialog'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 
 export function WorktreeContextMenuOverlays({ model }: { model: WorktreeContextMenuModel }) {
   const t = useTranslate()
   return (
     <>
+      <ScheduledMessageComposeDialog
+        open={model.scheduleDialogOpen}
+        onOpenChange={model.setScheduleDialogOpen}
+        onSubmit={model.handleScheduleMessage}
+      />
       <ProjectGroupNameDialog
         open={model.createGroupDialogOpen}
         title={t('auto.components.sidebar.WorktreeContextMenu.6664418e98', 'New Project Group')}

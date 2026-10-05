@@ -23,6 +23,7 @@ import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { fillDefaultWorktreeMetaFields } from '../../../shared/worktree/metadata/meta-persisted-defaults'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import { rehomeLocalOnlyWorktreeMetadata } from '../loading-store/worktree-metadata/local-only-worktree-meta-rehoming'
+import { dropScheduledMessagesForWorktree } from '../scheduled-message-worktree-sweep'
 
 // Reclaim externally deleted local checkouts after idle grace; local stat cannot judge remote/WSL paths.
 export const WORKTREE_META_GC_GRACE_MS = 30 * 24 * 60 * 60 * 1000
@@ -80,6 +81,7 @@ export function gcStaleWorktreeMeta(state: PersistedState): number {
     delete state.worktreeLineageById[key]
     delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(key)]
     delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(key)]
+    dropScheduledMessagesForWorktree(state, key)
     // Remove identity aliases too or future worktrees at the same path could inherit dead metadata.
     removeWorktreeMetadataForHost(state, key, LOCAL_EXECUTION_HOST_ID)
     removed++
