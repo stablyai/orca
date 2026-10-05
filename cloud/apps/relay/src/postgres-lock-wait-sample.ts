@@ -4,15 +4,15 @@ import type { DatabaseLockWaitSample } from './relay-observability.js'
 // Every relay process connects as the same user through a socket, so neither
 // pg_stat_statements nor Query Insights can tell a director's lock wait from a
 // cell's. application_name (`orca-relay/<role>/<cell>`) can, so this samples it.
-// Plain read of shared state: no relay row is locked, and pg_blocking_pids runs
-// only for backends already waiting.
+// The table is the first relay table the waiting statement names: its FROM or
+// UPDATE target, not a table it only joins. Plain read of shared state: no relay
+// row is locked, and pg_blocking_pids runs only for backends already waiting.
 const LOCK_WAIT_SAMPLE_SQL = `
 SELECT split_part(waiter.application_name, '/', 2) AS waiter_role,
-       CASE
-         WHEN waiter.query ~ '\\mrelay_cells\\M' THEN 'relay_cells'
-         WHEN waiter.query ~ '\\mrelay_assignments\\M' THEN 'relay_assignments'
-         ELSE 'other'
-       END AS waited_table,
+       COALESCE(
+         substring(waiter.query FROM '\\m(relay_cells|relay_assignments)\\M'),
+         'other'
+       ) AS waited_table,
        split_part(holder.application_name, '/', 2) AS holder_role,
        COUNT(*) AS waiters
 FROM pg_stat_activity waiter
