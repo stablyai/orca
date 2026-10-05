@@ -17,6 +17,10 @@ import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-ev
 import type { WorktreePaletteRequestGuard } from '@/lib/worktree-palette-create-action'
 import { useMemo } from 'react'
 
+/**
+ * Combines one per-open query/filter state with candidate, section and selection hooks.
+ * Creates local filters before the store snapshot so explicit scope changes refresh matching.
+ */
 export function useWorktreeJumpPaletteController({
   visible,
   lingering,

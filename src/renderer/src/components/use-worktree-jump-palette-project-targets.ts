@@ -21,6 +21,10 @@ type WorktreeJumpPaletteProjectTargetsInput = WorktreeJumpPaletteStoreState &
   Pick<WorktreeJumpPaletteLocalState, 'deferredQuery' | 'filter'> &
   Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'>
 
+/**
+ * Builds settings/actions and searchable project targets within the palette's host/project scope.
+ * Any session-status selection suppresses these non-session targets rather than classifying them.
+ */
 export function useWorktreeJumpPaletteProjectTargets({
   settingsSections,
   filter,

@@ -23,6 +23,7 @@ export type PaletteFilterOption = {
   searchText: string
 }
 
+/** Keep display labels and details intact while precomputing case-insensitive search text. */
 function toFilterOption({
   id,
   label,
@@ -86,6 +87,7 @@ export type PaletteFilterModel = {
   defaultHostId: ExecutionHostId
 }
 
+/** Retain every host for duplicate repository IDs; host-less entries inherit the runtime. */
 function buildRepoHostIndex(
   repos: readonly Repo[],
   defaultHostId: ExecutionHostId
@@ -101,6 +103,7 @@ function buildRepoHostIndex(
   return hostIdsByRepoId
 }
 
+/** Resolve worktree ownership before repository fallback, then use the focused runtime host. */
 export function resolveWorktreeFilterHostId(
   worktree: Pick<Worktree, 'repoId' | 'hostId'>,
   repoById: ReadonlyMap<string, Pick<Repo, 'connectionId' | 'executionHostId'>>,
@@ -109,6 +112,7 @@ export function resolveWorktreeFilterHostId(
   return getWorktreeExecutionHostId(worktree, repoById.get(worktree.repoId), defaultHostId)
 }
 
+/** Index repository IDs by the sidebar's actual reveal-row keys, excluding unresolved rows. */
 function buildRepoIdsByProjectKey(
   repos: readonly Repo[],
   repoById: Map<string, Repo>,
@@ -130,6 +134,10 @@ function buildRepoIdsByProjectKey(
   return repoIdsByProjectKey
 }
 
+/**
+ * Build host/repository choices and row-identity indexes, leaving session status separate.
+ * Counts exclude archived worktrees; labels use sidebar disambiguation and host registry order.
+ */
 export function buildPaletteFilterModel({
   repos,
   worktrees,

@@ -44,6 +44,10 @@ type WorktreeJumpPaletteOpenTabsInput = WorktreeJumpPaletteStoreState &
     paletteSearchContext: PaletteSearchContext
   }
 
+/**
+ * Builds host-qualified tab candidates and applies session status before search or row caps.
+ * A status selection excludes non-terminal result types; matching uses the caller's snapshot clock.
+ */
 export function useWorktreeJumpPaletteOpenTabs({
   paletteStatusInputsActive,
   paletteSessionNowMs,

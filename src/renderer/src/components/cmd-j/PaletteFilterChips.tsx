@@ -12,6 +12,10 @@ import {
 
 type Chip = { field: PaletteFilterField; id: string; label: string }
 
+/**
+ * Show all selected axes as removable chips, falling back to IDs when labels disappear.
+ * Removing a chip affects only its axis; Clear all resets scope and status together.
+ */
 export default function PaletteFilterChips({
   model,
   filter,
@@ -21,6 +25,7 @@ export default function PaletteFilterChips({
   filter: PaletteFilterState
   onFilterChange: (next: PaletteFilterState) => void
 }): React.JSX.Element | null {
+  /** Resolve current model/localized labels without dropping stale selected IDs. */
   const chips = useMemo<Chip[]>(() => {
     const hostLabels = new Map(model.hosts.map((host) => [host.id, host.label]))
     const repositoryLabels = new Map(

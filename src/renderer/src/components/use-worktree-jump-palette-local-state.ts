@@ -12,6 +12,10 @@ import type { CmdJActiveGroupSnapshot } from '@/components/cmd-j/quick-action-co
 import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { PaletteItem } from './worktree-jump-palette-model'
 
+/**
+ * Owns the palette's transient query, selection, expansion and focus-restoration state.
+ * Each open reseeds host/project scope from the sidebar without retaining status selections.
+ */
 export function useWorktreeJumpPaletteLocalState({
   createLookupGuard,
   visible

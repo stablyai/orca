@@ -20,6 +20,7 @@ export type PaletteFilterGroup = {
   selected: readonly string[]
 }
 
+/** Render a multi-select option with independent keyboard highlight and selection state. */
 function FilterOptionRow({
   option,
   isSelected,
@@ -64,6 +65,10 @@ function FilterOptionRow({
   )
 }
 
+/**
+ * Search and virtualize one axis while keeping the keyboard cursor attached to an option ID.
+ * Bulk selection adds matching unselected IDs; Clear removes the whole axis, including hidden IDs.
+ */
 export function PaletteFilterFieldOptions({
   group,
   canGoBack,
@@ -83,9 +88,11 @@ export function PaletteFilterFieldOptions({
   onClearField: () => void
   onSelectAllMatching: (ids: readonly string[]) => void
 }): React.JSX.Element {
+  /** Rebuild membership only when the controlled selection array changes identity. */
   const selected = useMemo(() => new Set(group.selected), [group.selected])
   const normalizedQuery = optionQuery.trim().toLowerCase()
   const rankMode: FilterOptionRankMode = group.field === 'repository' ? 'popularity' : 'registry'
+  /** Rank searchable options using repository popularity or the host/status registry order. */
   const ranked = useMemo(
     () =>
       rankPaletteFilterOptions({
@@ -105,6 +112,7 @@ export function PaletteFilterFieldOptions({
   // effect: a stale row would stay active for one paint. Why not key off the
   // ranked list identity: a toggle re-ranks, so that would yank the cursor back
   // to the top mid multi-select.
+  /** Initialize the cursor for this field/query, letting the ranked list choose the first row. */
   const [highlight, setHighlight] = useState<{
     field: PaletteFilterField
     query: string
@@ -128,24 +136,30 @@ export function PaletteFilterFieldOptions({
           ranked.ordered.findIndex((option) => option.id === storedId)
         )
 
+  /** Focus search when entering an axis, not on selection changes within that axis. */
   useEffect(() => {
     inputRef.current?.focus()
   }, [group.field])
 
   const virtualizer = useVirtualizer({
     count: ranked.ordered.length,
+    /** Read the live scroller after empty-result unmounts and replacement mounts. */
     getScrollElement: () => scrollEl,
+    /** Match estimates to the fixed height rendered by every option row. */
     estimateSize: () => FILTER_OPTION_ROW_HEIGHT,
     overscan: 8,
+    /** Preserve virtual row identity across selection-driven reranking. */
     getItemKey: (index) => ranked.ordered[index]?.id ?? index
   })
 
   // Same wheel workaround as CommandList: Radix remove-scroll cancels wheel on portaled content.
+  /** Attach portaled wheel scrolling to the current scroller and remove it when that node changes. */
   useEffect(() => {
     const el = scrollEl
     if (!el) {
       return
     }
+    /** Consume wheel deltas only when this list can scroll, avoiding the portal's wheel cancellation. */
     const onWheel = (event: WheelEvent): void => {
       if (el.scrollHeight <= el.clientHeight) {
         return
@@ -157,6 +171,7 @@ export function PaletteFilterFieldOptions({
     return () => el.removeEventListener('wheel', onWheel)
   }, [scrollEl])
 
+  /** Clamp keyboard movement and reveal the target row while storing its field/query-scoped ID. */
   const moveActive = useCallback(
     (delta: number) => {
       if (ranked.ordered.length === 0) {
@@ -173,6 +188,7 @@ export function PaletteFilterFieldOptions({
     [activeIndex, group.field, normalizedQuery, ranked.ordered, virtualizer]
   )
 
+  /** Navigate or toggle the active option; input callers disable Space toggling to preserve typing. */
   const handleListKeyDown = useCallback(
     // Space toggles only from the listbox; in the search input it stays a
     // typeable character, and labels like "Delta Host" need it.

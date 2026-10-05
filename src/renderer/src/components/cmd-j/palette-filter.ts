@@ -23,14 +23,17 @@ const filterKeyByField: Record<PaletteFilterField, keyof PaletteFilterState> = {
   status: 'statusIds'
 }
 
+/** Treat any selected identity or session-status value as an active filter. */
 export function isPaletteFilterActive(filter: PaletteFilterState): boolean {
   return filter.hostIds.length > 0 || filter.repoIds.length > 0 || filter.statusIds.length > 0
 }
 
+/** Count selected values across axes, not matching rows or active categories. */
 export function getPaletteFilterSelectionCount(filter: PaletteFilterState): number {
   return filter.hostIds.length + filter.repoIds.length + filter.statusIds.length
 }
 
+/** Remove an existing ID or insert it in sorted order without mutating the input. */
 function toggleValue(values: readonly string[], id: string): readonly string[] {
   if (values.includes(id)) {
     return values.filter((value) => value !== id)
@@ -38,6 +41,7 @@ function toggleValue(values: readonly string[], id: string): readonly string[] {
   return [...values, id].sort()
 }
 
+/** Toggle one axis while retaining the other axes' array identities. */
 export function togglePaletteFilterValue(
   filter: PaletteFilterState,
   field: PaletteFilterField,
@@ -47,6 +51,7 @@ export function togglePaletteFilterValue(
   return { ...filter, [key]: toggleValue(filter[key], id) }
 }
 
+/** Merge unique IDs in sorted order, retaining the input reference on a no-op. */
 function addValues(values: readonly string[], ids: readonly string[]): readonly string[] {
   if (ids.length === 0) {
     return values
@@ -78,6 +83,7 @@ export function addPaletteFilterValues(
   return { ...filter, [key]: nextValues }
 }
 
+/** Clear the entire axis, preserving the filter reference when it is already empty. */
 export function clearPaletteFilterField(
   filter: PaletteFilterState,
   field: PaletteFilterField
@@ -93,6 +99,7 @@ type SidebarScopeForPaletteFilter = Parameters<typeof getVisibleWorkspaceHostIdS
   filterRepoIds: readonly string[]
 }
 
+/** Normalize sidebar scope IDs into deterministic, duplicate-free selections. */
 function sortedUnique(values: Iterable<string>): string[] {
   return [...new Set(values)].sort()
 }
@@ -133,6 +140,7 @@ export function buildPaletteFilterPredicate(
 
   const selectedHostIds = filter.hostIds.length > 0 ? new Set(filter.hostIds) : null
   const selectedRepoIds = filter.repoIds.length > 0 ? new Set(filter.repoIds) : null
+  /** Match any host owning this repository, using the runtime default for unknown IDs. */
   const repoMatchesSelectedHost = (repoId: string): boolean => {
     if (!selectedHostIds) {
       return true
@@ -150,6 +158,7 @@ export function buildPaletteFilterPredicate(
   }
 
   return {
+    /** Keep a project row when one represented repository satisfies both identity axes. */
     matchesProjectRowKey: (rowKey) => {
       const rowRepoIds = model.repoIdsByProjectKey.get(rowKey) ?? []
       return rowRepoIds.some(
@@ -157,6 +166,7 @@ export function buildPaletteFilterPredicate(
           (!selectedRepoIds || selectedRepoIds.has(repoId)) && repoMatchesSelectedHost(repoId)
       )
     },
+    /** Match repository and effective worktree host together, independently of status. */
     matchesWorktree: (worktree) => {
       if (selectedRepoIds && !selectedRepoIds.has(worktree.repoId)) {
         return false
@@ -172,6 +182,7 @@ export function buildPaletteFilterPredicate(
     },
     // Why: a group header has no repository, so a repository selection
     // excludes every group row; only the host axis can keep one.
+    /** Admit repository-less group headers only when no repository constraint is active. */
     matchesGroupHostId: (hostId) =>
       selectedRepoIds === null && (!selectedHostIds || selectedHostIds.has(hostId))
   }

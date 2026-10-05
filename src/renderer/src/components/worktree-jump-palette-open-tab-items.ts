@@ -13,6 +13,10 @@ import type {
   WorktreePaletteItem
 } from './worktree-jump-palette-model'
 
+/**
+ * Resolves host-qualified worktree matches, dropping identities that no longer exist.
+ * Keeps discovery order without a query and applies the common rank/activity ordering with one.
+ */
 export function buildWorktreePaletteItems({
   worktreeMatches,
   resolveWorktree,
