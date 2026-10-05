@@ -41,7 +41,7 @@ export type MarkdownRichModeEligibilityDecision = {
 
 const KNOWN_MARKDOWN_HTML_TAG_NAMES = new Set(defaultSchema.tagNames ?? [])
 const MAX_RICH_MARKDOWN_PROBE_CHARS = 50_000
-const REFERENCE_LINK_CANDIDATE = /^\uFEFF?[ \t>*+\-\d.)]*\[/m
+const MARKDOWN_DEFINITION_CANDIDATE = /^\uFEFF?[ \t>*+\-\d.)]*\[/m
 
 const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
   {
@@ -116,22 +116,24 @@ export function getMarkdownRichModeUnsupportedReason(
   // before blocking the user from rich mode.
   const htmlMatcher = UNSUPPORTED_PATTERNS.find((m) => m.reason === 'html-or-jsx')
   const hasHtml = htmlMatcher && hasHtmlOrJsx(contentWithoutCode, htmlMatcher.pattern)
+  const definitionReason =
+    body.length <= MAX_RICH_MARKDOWN_PROBE_CHARS && MARKDOWN_DEFINITION_CANDIDATE.test(body)
+      ? getDefinitionUnsupportedReason(body)
+      : undefined
 
   for (const matcher of UNSUPPORTED_PATTERNS) {
     if (matcher.reason === 'html-or-jsx') {
       continue
     }
-    const confirmsReference =
-      matcher.reason === 'reference-links' && body.length <= MAX_RICH_MARKDOWN_PROBE_CHARS
-    const candidate = confirmsReference ? body : contentWithoutCode
-    const pattern = confirmsReference ? REFERENCE_LINK_CANDIDATE : matcher.pattern
-    if (!pattern.test(candidate)) {
+    if (definitionReason !== undefined) {
+      if (definitionReason === matcher.reason) {
+        return matcher.reason
+      }
       continue
     }
-    if (matcher.reason === 'reference-links' && !hasLinkReferenceDefinition(body)) {
-      continue
+    if (matcher.pattern.test(contentWithoutCode)) {
+      return matcher.reason
     }
-    return matcher.reason
   }
 
   if (hasHtml) {
@@ -173,23 +175,25 @@ export function getMarkdownRichModeEligibility(params: {
   }
 }
 
-const linkReferenceDefinitionProcessor = unified().use(remarkParse).use(remarkGfm)
+const markdownDefinitionProcessor = unified().use(remarkParse).use(remarkGfm)
 
 // Unparsed documents keep the existing conservative Source fallback.
-function hasLinkReferenceDefinition(content: string): boolean {
-  if (content.length > MAX_RICH_MARKDOWN_PROBE_CHARS) {
-    return true
-  }
+function getDefinitionUnsupportedReason(content: string): 'reference-links' | 'footnotes' | null {
   try {
-    return containsDefinitionNode(linkReferenceDefinitionProcessor.parse(content))
+    const tree = markdownDefinitionProcessor.parse(content)
+    if (containsDefinitionNode(tree, 'definition')) {
+      return 'reference-links'
+    }
+    return containsDefinitionNode(tree, 'footnoteDefinition') ? 'footnotes' : null
   } catch {
-    return true
+    return 'reference-links'
   }
 }
 
-function containsDefinitionNode(node: Nodes): boolean {
+function containsDefinitionNode(node: Nodes, type: 'definition' | 'footnoteDefinition'): boolean {
   return (
-    node.type === 'definition' || ('children' in node && node.children.some(containsDefinitionNode))
+    node.type === type ||
+    ('children' in node && node.children.some((child) => containsDefinitionNode(child, type)))
   )
 }
 
