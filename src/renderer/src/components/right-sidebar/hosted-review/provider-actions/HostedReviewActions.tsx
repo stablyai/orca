@@ -24,6 +24,7 @@ import {
 import { runWorktreeDelete } from '../../../sidebar/workspace-actions/deletion/delete-worktree-flow'
 import { getDeleteStateForWorktreeHost } from '../../../sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
 import { presentGitLabMRMergeState } from './gitlab-mr-merge-state'
+import { GitLabApprovalButton, gitLabApprovalProgressLabel } from './GitLabApprovalAction'
 import {
   ClosedReviewActions,
   DraftReviewActions,
@@ -146,11 +147,13 @@ export default function HostedReviewActions({
   const {
     merging,
     readying,
+    approving,
     stateUpdating,
     actionError,
     handleMerge,
     handleAutoMerge,
     handleMarkReadyForReview,
+    handleApproval,
     handleCloseReview,
     handleReopenReview
   } = useHostedReviewActions({
@@ -166,12 +169,15 @@ export default function HostedReviewActions({
   })
   const isUpdatingReviewState = stateUpdating !== null
   const primaryMergeDisabled =
+    approving ||
     merging ||
     isUpdatingReviewState ||
     (!mergePresentation.directMergeAvailable && !mergePresentation.autoMergeAction)
   const directMergeDisabled =
-    merging || isUpdatingReviewState || !mergePresentation.directMergeAvailable
-  const menuDisabled = merging || isUpdatingReviewState
+    approving || merging || isUpdatingReviewState || !mergePresentation.directMergeAvailable
+  const menuDisabled = approving || merging || isUpdatingReviewState
+  const approvalProgressLabel =
+    isGitLab && review.approval ? gitLabApprovalProgressLabel(review.approval) : null
 
   const handleDeleteWorktree = useCallback(() => {
     // Share the delete funnel so skip-confirm, main-worktree, and child-workspace safeguards cannot drift.
@@ -325,8 +331,19 @@ export default function HostedReviewActions({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            {isGitLab && review.approval && (
+              <GitLabApprovalButton
+                approval={review.approval}
+                disabled={merging || isUpdatingReviewState}
+                pending={approving}
+                onApprovalChange={(change) => void handleApproval(change)}
+              />
+            )}
           </div>
         </TooltipProvider>
+        {approvalProgressLabel && (
+          <p className="text-[11px] text-muted-foreground">{approvalProgressLabel}</p>
+        )}
         <HostedReviewActionError message={actionError} />
       </div>
     )
