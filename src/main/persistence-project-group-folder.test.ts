@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import type { ProjectGroupUpdate } from '../shared/project-group-types'
 import { closeTestStores, createStore, testState } from './persistence-test-harness'
 
 vi.mock('electron', () => ({
@@ -90,8 +91,8 @@ describe('Store project group colour and icon', () => {
     expect(
       store.updateProjectGroup(group.id, { icon: { type: 'emoji', emoji: '🎧' } })?.icon
     ).toEqual({ type: 'emoji', emoji: '🎧' })
-    expect(
-      store.updateProjectGroup(group.id, { icon: { type: 'nonsense' } } as never)?.icon
-    ).toBeNull()
+    // Why: parsed like a payload off the wire, which is how an unsupported shape arrives.
+    const unsupported: ProjectGroupUpdate = JSON.parse('{"icon":{"type":"nonsense"}}')
+    expect(store.updateProjectGroup(group.id, unsupported)?.icon).toBeNull()
   })
 })

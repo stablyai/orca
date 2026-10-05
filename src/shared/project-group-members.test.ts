@@ -4,11 +4,21 @@ import type { ProjectGroup } from './project-group-types'
 import type { Repo } from './repo-types'
 
 function repo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'path' | 'displayName'>): Repo {
-  return overrides as Repo
+  return { badgeColor: '#000000', addedAt: 0, ...overrides }
 }
 
 function group(overrides: Partial<ProjectGroup> & Pick<ProjectGroup, 'id' | 'name'>): ProjectGroup {
-  return overrides as ProjectGroup
+  return {
+    parentPath: null,
+    parentGroupId: null,
+    createdFrom: 'manual',
+    tabOrder: 0,
+    isCollapsed: false,
+    color: null,
+    createdAt: 0,
+    updatedAt: 0,
+    ...overrides
+  }
 }
 
 const REPOS: Repo[] = [
