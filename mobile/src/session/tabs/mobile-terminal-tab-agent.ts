@@ -61,6 +61,15 @@ export function resolveMobileTerminalTabOwnedAgentId(
   return null
 }
 
+/** Whether the terminal behind a handle runs an agent Orca identified, for the copy join. */
+export function terminalHandleRunsAgent(
+  tabs: readonly MobileSessionTab[],
+  handle: string
+): boolean {
+  const tab = tabs.find((t) => t.type === 'terminal' && t.terminal === handle)
+  return tab?.type === 'terminal' && resolveMobileTerminalTabOwnedAgentId(tab) !== null
+}
+
 // An agent's tab stays an agent tab until the agent reports done and the title is a shell again. Launch hints count before status arrives.
 export function isMobileTerminalTabRunningAgent(tab: MobileTerminalTabAgentIdentity): boolean {
   if (

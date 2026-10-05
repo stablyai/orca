@@ -66,9 +66,12 @@ export type TerminalPointerInput = {
   readonly click: boolean
 }
 
+/** What the WebView knows about a selection; the host adds whether the pane runs an agent. */
+export type TerminalSelectionCells = Pick<TerminalSelectionGeometry, 'startCol' | 'cols'>
+
 export type TerminalSelectionEvents = {
   onSelectionMode?: (active: boolean) => void
-  onSelectionCopy?: (text: string, geometry?: TerminalSelectionGeometry) => void
+  onSelectionCopy?: (text: string, cells?: TerminalSelectionCells) => void
   onSelectionEvicted?: () => void
   onClipboardWrite?: (text: string) => void
   onModesChanged?: (modes: TerminalModes) => void

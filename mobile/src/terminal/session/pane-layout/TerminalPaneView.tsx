@@ -1,4 +1,3 @@
-import type { TerminalSelectionGeometry } from '../../../../../src/shared/terminal/output/terminal-selection-gutter'
 import { useCallback, useEffect, useState } from 'react'
 import { AppState, StyleSheet, View, Text, Pressable } from 'react-native'
 import { useFocusEffect } from 'expo-router'
@@ -14,6 +13,7 @@ import type {
   TerminalKeyboardAvoidanceMetrics,
   TerminalModes,
   TerminalPointerInput,
+  TerminalSelectionCells,
   TerminalWebViewHandle
 } from '../../webview/terminal-webview-contract'
 import type { RuntimeMobileTerminalTheme } from '../../../../../src/shared/runtime-mobile-session-tab-contracts'
@@ -36,7 +36,7 @@ type TerminalPaneViewProps = {
   onDocumentReleased: (handle: string) => void
   onWebReady: (handle: string) => void
   onSelectionMode: (handle: string, active: boolean) => void
-  onSelectionCopy: (handle: string, text: string, geometry?: TerminalSelectionGeometry) => void
+  onSelectionCopy: (handle: string, text: string, cells?: TerminalSelectionCells) => void
   onSelectionEvicted: (handle: string) => void
   onClipboardWrite: (handle: string, text: string) => void
   onModesChanged: (handle: string, modes: TerminalModes) => void
