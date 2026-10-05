@@ -106,7 +106,7 @@ describe('fetchClaudeRateLimits', () => {
     expect(result.usageMetadata?.retryAtMs).toBeLessThanOrEqual(Date.now() + 3000 * 1000)
 
     expect(netFetchMock).toHaveBeenCalledWith(
-      'https://api.anthropic.com/api/oauth/usage',
+      'https://api.anthropic.com/api/oauth/usage?cedar_ember=1',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer expired-oauth-token'
@@ -260,7 +260,7 @@ describe('fetchClaudeRateLimits', () => {
     expect(fetchViaPty).toHaveBeenCalledWith({ authPreparation })
     expect(netFetchMock).toHaveBeenNthCalledWith(
       2,
-      'https://api.anthropic.com/api/oauth/usage',
+      'https://api.anthropic.com/api/oauth/usage?cedar_ember=1',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer repaired-oauth-token'

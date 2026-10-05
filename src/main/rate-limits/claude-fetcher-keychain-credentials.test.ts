@@ -124,11 +124,11 @@ describe('fetchClaudeRateLimits', () => {
 
     expect(readActiveClaudeKeychainCredentialsStrict).toHaveBeenCalledWith(configDir)
     expect(netFetchMock).toHaveBeenCalledWith(
-      'https://api.anthropic.com/api/oauth/usage',
+      'https://api.anthropic.com/api/oauth/usage?cedar_ember=1',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer oauth-token',
-          'User-Agent': 'claude-code/2.1.0'
+          'User-Agent': 'claude-cli/2.1.280 (external, cli)'
         })
       })
     )
@@ -197,7 +197,7 @@ describe('fetchClaudeRateLimits', () => {
 
     expect(netFetchMock).toHaveBeenCalledTimes(1)
     expect(netFetchMock).toHaveBeenCalledWith(
-      'https://api.anthropic.com/api/oauth/usage',
+      'https://api.anthropic.com/api/oauth/usage?cedar_ember=1',
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer fresh-legacy-token' })
       })
@@ -328,7 +328,7 @@ describe('fetchClaudeRateLimits', () => {
     expect(readActiveClaudeKeychainCredentialsStrict).toHaveBeenNthCalledWith(2, undefined)
     expect(readActiveClaudeKeychainCredentials).not.toHaveBeenCalled()
     expect(netFetchMock).toHaveBeenCalledWith(
-      'https://api.anthropic.com/api/oauth/usage',
+      'https://api.anthropic.com/api/oauth/usage?cedar_ember=1',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer legacy-oauth-token'
@@ -368,7 +368,7 @@ describe('fetchClaudeRateLimits', () => {
     expect(readActiveClaudeKeychainCredentials).not.toHaveBeenCalled()
     expect(fetchViaPty).not.toHaveBeenCalled()
     expect(netFetchMock).toHaveBeenCalledWith(
-      'https://api.anthropic.com/api/oauth/usage',
+      'https://api.anthropic.com/api/oauth/usage?cedar_ember=1',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer scoped-oauth-token'
@@ -407,7 +407,7 @@ describe('fetchClaudeRateLimits', () => {
       'utf-8'
     )
     expect(netFetchMock).toHaveBeenCalledWith(
-      'https://api.anthropic.com/api/oauth/usage',
+      'https://api.anthropic.com/api/oauth/usage?cedar_ember=1',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer file-oauth-token'
@@ -443,7 +443,7 @@ describe('fetchClaudeRateLimits', () => {
     expect(readActiveClaudeKeychainCredentialsStrict).toHaveBeenNthCalledWith(1, configDir)
     expect(readActiveClaudeKeychainCredentialsStrict).toHaveBeenNthCalledWith(2, undefined)
     expect(netFetchMock).toHaveBeenCalledWith(
-      'https://api.anthropic.com/api/oauth/usage',
+      'https://api.anthropic.com/api/oauth/usage?cedar_ember=1',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer legacy-oauth-token'
@@ -478,7 +478,7 @@ describe('fetchClaudeRateLimits', () => {
 
     expect(netFetchMock).toHaveBeenNthCalledWith(
       1,
-      'https://api.anthropic.com/api/oauth/usage',
+      'https://api.anthropic.com/api/oauth/usage?cedar_ember=1',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer expired-oauth-token'
