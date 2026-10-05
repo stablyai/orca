@@ -49,6 +49,14 @@ it('strips an envelope it cannot open instead of passing ciphertext on as a pane
   expect(opened?.data.notificationId).toBe(SEALED_VECTOR.fcmData.notificationId)
 })
 
+it('keeps the envelope for a later read when the host store fails', async () => {
+  const { loadHosts } = await import('../../host-catalog/host-store')
+  vi.mocked(loadHosts).mockRejectedValueOnce(new Error('keystore locked'))
+  const opened = await openSealedPushData(SEALED_VECTOR.fcmData)
+  expect(opened).toEqual({ data: SEALED_VECTOR.fcmData, opened: false })
+  expect((await openSealedPushData(opened?.data))?.opened).toBe(true)
+})
+
 it('ignores data that carries no envelope', async () => {
   expect(await openSealedPushData({ hostFingerprint: 'x', paneKey: 'pane-1' })).toBeNull()
   expect(await openSealedPushData(null)).toBeNull()

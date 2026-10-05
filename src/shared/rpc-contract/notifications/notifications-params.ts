@@ -52,6 +52,10 @@ export const NotificationRegisterPushParams = z
   .refine((params) => params.platform !== 'ios' || params.apnsEnvironment !== undefined, {
     message: 'apnsEnvironment is required for ios'
   })
+  // Why: iOS shows the alert natively, so a sealed push would stay a generic placeholder.
+  .refine((params) => params.platform !== 'ios' || params.sealedContent === undefined, {
+    message: 'sealedContent is not supported for ios'
+  })
 
 export const NotificationsSubscribeParams = z
   .object({ includeDesktopSuppressed: z.boolean().optional() })

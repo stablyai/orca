@@ -86,9 +86,10 @@ export function openSealedPushEnvelope(
 }
 
 /**
- * Null when the data carries no sealed envelope. Otherwise the envelope is always
- * stripped, so ciphertext can never be mistaken for a paneKey by routing, and the
- * real title, body, worktree, pane and notification id are restored when the key opens it.
+ * Null when the data carries no sealed envelope. An envelope the paired key cannot open
+ * is stripped, and the real title, body, worktree, pane and notification id are restored when
+ * it opens. If the host store itself fails, the data is kept whole so a later read (a
+ * tap, a tray sweep) can still open it; readOrcaPushPayload never routes an e2e1 paneKey.
  */
 export async function openSealedPushData(data: unknown): Promise<OpenedPush | null> {
   if (!isRecord(data)) {
@@ -99,7 +100,10 @@ export async function openSealedPushData(data: unknown): Promise<OpenedPush | nu
     return null
   }
   const fingerprint = typeof rest.hostFingerprint === 'string' ? rest.hostFingerprint : ''
-  const hosts = await loadHosts().catch(() => [])
+  const hosts = await loadHosts().catch(() => null)
+  if (!hosts) {
+    return { data, opened: false }
+  }
   const hostId = resolveHostIdForFingerprint(fingerprint, hosts)
   const host = hostId ? hosts.find((candidate) => candidate.id === hostId) : undefined
   const envelope = host ? openSealedPushEnvelope(paneKey, host.deviceToken) : null
