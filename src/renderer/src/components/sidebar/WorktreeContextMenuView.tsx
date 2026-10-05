@@ -175,6 +175,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             <>
               <WorktreeOpenInSubMenu
                 worktreeId={worktree.id}
+                executionHostId={worktree.hostId}
                 worktreePath={worktree.path}
                 connectionId={repo?.connectionId ?? null}
                 disabled={isDeleting}

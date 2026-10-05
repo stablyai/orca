@@ -240,7 +240,7 @@ export function EditorFileTabContextMenu({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               disabled={revealBlocked}
-              onSelect={() => void revealInFileManager(file.filePath)}
+              onSelect={() => void revealInFileManager(file.filePath, file.runtimeEnvironmentId)}
             >
               <ExternalLink className="size-3.5" />
               {getRevealInFileManagerLabel()}

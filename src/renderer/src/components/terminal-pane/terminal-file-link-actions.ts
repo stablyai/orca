@@ -99,7 +99,7 @@ export function handleTerminalFileLink(
             run: () => downloadAndOpenRemoteTerminalFile(fileContext, mappedPath)
           }
   // Why omit, not disable: the popover has no disabled rows. The OS file manager can only show a
-  // file on this machine, and the main process refuses every reveal while a remote runtime is focused.
+  // file on this machine.
   const canReveal =
     !worktreeRoot &&
     canOpenWithSystemDefault &&
@@ -112,7 +112,7 @@ export function handleTerminalFileLink(
     ? {
         external: true,
         label: getRevealInFileManagerLabel(),
-        run: () => revealInFileManager(mappedPath)
+        run: () => revealInFileManager(mappedPath, deps.runtimeEnvironmentId)
       }
     : null
   return requestTerminalLinkAction(event, actionContext, {

@@ -22,7 +22,8 @@ import {
 import {
   resolveActiveWorkspaceRoute,
   resolveExplicitWorktreeOperationRouteResult,
-  resolveWorktreeOperationRouteResult
+  resolveWorktreeOperationRouteResult,
+  resolveWorktreeOperationRouteResultForHost
 } from './worktree-operation-route'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 export type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
@@ -106,6 +107,29 @@ export function getRuntimeEnvironmentIdForWorktree(
   }
   const resolution = resolveWorktreeOperationRouteResult(state, worktreeId)
   return resolution.kind === 'resolved' ? resolution.route.runtimeEnvironmentId : null
+}
+
+/**
+ * Owner of a workspace path for local OS opens (Finder, external editors): `null` is this client.
+ * Routes like file operations, so a card can name its own host when ids repeat across hosts.
+ */
+export function getLocalOpenRuntimeOwnerForWorktree(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string | null | undefined,
+  executionHostId?: ExecutionHostId
+): string | null {
+  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return null
+  }
+  // Why: an unplaceable or ambiguous owner must not read as local; a non-empty id keeps it blocked.
+  const unresolvedOwner = 'unresolved-owner'
+  if (!worktreeId) {
+    return unresolvedOwner
+  }
+  const resolution = executionHostId
+    ? resolveWorktreeOperationRouteResultForHost(state, worktreeId, executionHostId)
+    : resolveWorktreeOperationRouteResult(state, worktreeId)
+  return resolution.kind === 'resolved' ? resolution.route.runtimeEnvironmentId : unresolvedOwner
 }
 
 export function getExplicitRuntimeEnvironmentIdForWorktree(

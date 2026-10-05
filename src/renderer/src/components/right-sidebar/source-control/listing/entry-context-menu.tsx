@@ -19,7 +19,7 @@ import {
   isRevealInFileManagerBlocked,
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getLocalOpenRuntimeOwnerForWorktree } from '@/lib/worktree-runtime-owner'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import {
   getOpenInEntryAvailability,
@@ -58,7 +58,7 @@ export function SourceControlEntryContextMenu({
   // Why: a repo can belong to a runtime other than the focused one, and the OS reveal
   // cannot tell that host's path from a local one of the same name.
   const runtimeEnvironmentId = useAppStore((s) =>
-    getRuntimeEnvironmentIdForWorktree(s, currentWorktreeId)
+    getLocalOpenRuntimeOwnerForWorktree(s, currentWorktreeId)
   )
   const revealBlocked = isRevealInFileManagerBlocked(settings, {
     connectionId,
@@ -88,9 +88,9 @@ export function SourceControlEntryContextMenu({
 
   const handleRevealInFileManager = useCallback(() => {
     if (absolutePath) {
-      void revealInFileManager(absolutePath)
+      void revealInFileManager(absolutePath, runtimeEnvironmentId)
     }
-  }, [absolutePath])
+  }, [absolutePath, runtimeEnvironmentId])
 
   const handleOpenInApplication = useCallback(
     (command: string) => {

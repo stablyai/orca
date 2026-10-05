@@ -14,8 +14,9 @@ import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { getExternalEditorOpenCapability } from '@/lib/external-editor-open-capability'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getLocalOpenRuntimeOwnerForWorktree } from '@/lib/worktree-runtime-owner'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { ShellOpenExternalEditorResult } from '../../../../shared/shell-open-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OpenInApplication } from '../../../../shared/ui-chrome-types'
@@ -25,6 +26,8 @@ export { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
 
 type WorktreeOpenInMenuItemsProps = {
   worktreeId: string | null
+  /** The card's own host; ids repeat across hosts, so the active selection is not enough. */
+  executionHostId?: ExecutionHostId
   worktreePath: string
   connectionId?: string | null
   disabled?: boolean
@@ -281,11 +284,12 @@ export async function openWorktreePath(args: {
 
   const result =
     args.target === 'file-manager'
-      ? await window.api.shell.openInFileManager(args.worktreePath)
+      ? await window.api.shell.openInFileManager(args.worktreePath, args.runtimeEnvironmentId)
       : await window.api.shell.openInExternalEditor({
           path: args.worktreePath,
           command: args.command,
-          connectionId: args.connectionId
+          connectionId: args.connectionId,
+          runtimeEnvironmentId: args.runtimeEnvironmentId
         })
   if (!result.ok) {
     showOpenFailureToast(result, Boolean(args.connectionId?.trim()))
@@ -311,12 +315,15 @@ function useOpenInWorktreePath({
 
 export function WorktreeOpenInMenuItems({
   worktreeId,
+  executionHostId,
   worktreePath,
   connectionId,
   disabled,
   labelPrefix = ''
 }: WorktreeOpenInMenuItemsProps): React.JSX.Element {
-  const runtimeEnvironmentId = useAppStore((s) => getRuntimeEnvironmentIdForWorktree(s, worktreeId))
+  const runtimeEnvironmentId = useAppStore((s) =>
+    getLocalOpenRuntimeOwnerForWorktree(s, worktreeId, executionHostId)
+  )
   const openInWorktreePath = useOpenInWorktreePath({
     worktreePath,
     connectionId,
@@ -372,6 +379,7 @@ export function WorktreeOpenInMenuItems({
 
 export function WorktreeOpenInSubMenu({
   worktreeId,
+  executionHostId,
   worktreePath,
   connectionId,
   disabled
@@ -389,6 +397,7 @@ export function WorktreeOpenInSubMenu({
       >
         <WorktreeOpenInMenuItems
           worktreeId={worktreeId}
+          executionHostId={executionHostId}
           worktreePath={worktreePath}
           connectionId={connectionId}
           disabled={disabled}

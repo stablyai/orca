@@ -207,6 +207,15 @@ describe('registerShellHandlers', () => {
       await expect(handler({}, workspacePath)).resolves.toBeUndefined()
       expect(showItemInFolderMock).toHaveBeenCalledWith(normalize(workspacePath))
     })
+
+    it('reveals a local-owned path while a remote runtime is focused', async () => {
+      settings.activeRuntimeEnvironmentId = 'runtime-1'
+      const workspacePath = resolve('workspace')
+      const handler = getHandler('shell:openPath')
+
+      await expect(handler({}, workspacePath, null)).resolves.toBeUndefined()
+      expect(showItemInFolderMock).toHaveBeenCalledWith(normalize(workspacePath))
+    })
   })
 
   describe('shell:openInFileManager', () => {
@@ -254,6 +263,20 @@ describe('registerShellHandlers', () => {
 
       await expect(handler({}, workspacePath)).resolves.toEqual({ ok: true })
       expect(showItemInFolderMock).toHaveBeenCalledWith(normalize(workspacePath))
+    })
+
+    it('decides by the path owner, falling back to runtime focus only without one', async () => {
+      const workspacePath = resolve('workspace')
+      const handler = getHandler('shell:openInFileManager')
+      const runtimeUnsupported = { ok: false, reason: 'remote-runtime-unsupported' }
+
+      settings.activeRuntimeEnvironmentId = 'runtime-1'
+      await expect(handler({}, workspacePath, null)).resolves.toEqual({ ok: true })
+      await expect(handler({}, workspacePath)).resolves.toEqual(runtimeUnsupported)
+      settings.activeRuntimeEnvironmentId = null
+      await expect(handler({}, workspacePath, 'runtime-1')).resolves.toEqual(runtimeUnsupported)
+      expect(statMock).toHaveBeenCalledTimes(1)
+      expect(showItemInFolderMock).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -542,6 +565,39 @@ describe('registerShellHandlers', () => {
       })
       await expect(
         handler({}, { path: '/srv/project', command: 'code', connectionId: 'ssh-1' })
+      ).resolves.toEqual({ ok: false, reason: 'remote-runtime-unsupported' })
+      expect(statMock).not.toHaveBeenCalled()
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('launches local and SSH paths the caller owns while a remote runtime is focused', async () => {
+      settings.activeRuntimeEnvironmentId = 'runtime-1'
+      sshTargets.set('ssh-1', createSshTarget())
+      resolveCliCommandMock.mockReturnValue('/usr/local/bin/code')
+      const handler = getHandler('shell:openInExternalEditor')
+
+      await expect(
+        handler({}, { path: resolve('workspace'), runtimeEnvironmentId: null })
+      ).resolves.toEqual({ ok: true })
+      await expect(
+        handler(
+          {},
+          {
+            path: '/srv/project',
+            command: 'code',
+            connectionId: 'ssh-1',
+            runtimeEnvironmentId: null
+          }
+        )
+      ).resolves.toEqual({ ok: true })
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('rejects a runtime-owned path when no runtime is focused', async () => {
+      const handler = getHandler('shell:openInExternalEditor')
+
+      await expect(
+        handler({}, { path: resolve('workspace'), runtimeEnvironmentId: 'runtime-1' })
       ).resolves.toEqual({ ok: false, reason: 'remote-runtime-unsupported' })
       expect(statMock).not.toHaveBeenCalled()
       expect(spawnMock).not.toHaveBeenCalled()

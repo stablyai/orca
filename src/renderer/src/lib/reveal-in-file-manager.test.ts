@@ -43,13 +43,17 @@ describe('isRevealInFileManagerBlocked', () => {
     expect(isRevealInFileManagerBlocked(local, { runtimeEnvironmentId: 'env-1' })).toBe(true)
   })
 
-  it('blocks every file while a remote runtime is focused, as the main process does', () => {
+  it('allows a file this client owns while a remote runtime is focused', () => {
     expect(
       isRevealInFileManagerBlocked(
         { activeRuntimeEnvironmentId: 'env-1' },
         { runtimeEnvironmentId: null }
       )
-    ).toBe(true)
+    ).toBe(false)
+  })
+
+  it('falls back to the focused runtime when the owner is omitted, as the main process does', () => {
+    expect(isRevealInFileManagerBlocked({ activeRuntimeEnvironmentId: 'env-1' }, {})).toBe(true)
   })
 })
 
@@ -67,9 +71,9 @@ describe('revealInFileManager', () => {
   it('reveals the path without a toast when the OS accepts it', async () => {
     openInFileManager.mockResolvedValue({ ok: true })
 
-    await revealInFileManager('/repo/src/foo.ts')
+    await revealInFileManager('/repo/src/foo.ts', null)
 
-    expect(openInFileManager).toHaveBeenCalledWith('/repo/src/foo.ts')
+    expect(openInFileManager).toHaveBeenCalledWith('/repo/src/foo.ts', null)
     expect(toastError).not.toHaveBeenCalled()
   })
 

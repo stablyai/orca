@@ -11,8 +11,11 @@ export type {
 } from '../../shared/shell-open-types'
 
 export type ShellApi = {
-  openPath: (path: string) => Promise<void>
-  openInFileManager: (path: string) => Promise<ShellOpenLocalPathResult>
+  openPath: (path: string, runtimeEnvironmentId?: string | null) => Promise<void>
+  openInFileManager: (
+    path: string,
+    runtimeEnvironmentId?: string | null
+  ) => Promise<ShellOpenLocalPathResult>
   openInExternalEditor: (
     request: ShellOpenExternalEditorRequest
   ) => Promise<ShellOpenExternalEditorResult>

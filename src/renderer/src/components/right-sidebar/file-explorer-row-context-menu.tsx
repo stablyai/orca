@@ -267,7 +267,7 @@ export function FileExplorerRowContextMenu({
       )}
       <ContextMenuItem
         disabled={revealBlocked}
-        onSelect={() => void revealInFileManager(node.path)}
+        onSelect={() => void revealInFileManager(node.path, null)}
       >
         <ExternalLink />
         {getRevealInFileManagerLabel()}

@@ -119,7 +119,7 @@ describe('FileExplorerRowContextMenu reveal in file manager', () => {
     expect(reveal?.disabled).toBe(false)
     expect(showsLocalOnlyHint(reveal)).toBe(false)
     reveal?.onSelect?.()
-    expect(revealInFileManager).toHaveBeenCalledWith('/repo/src/index.ts')
+    expect(revealInFileManager).toHaveBeenCalledWith('/repo/src/index.ts', null)
   })
 
   it('reveals a locally listed row in a folder workspace', () => {

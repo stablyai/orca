@@ -2,6 +2,8 @@ export type ShellOpenExternalEditorRequest = {
   path: string
   command?: string
   connectionId?: string | null
+  /** Path owner: null = this client, runtime id = remote, omitted = global runtime focus. */
+  runtimeEnvironmentId?: string | null
 }
 
 export type ShellOpenPathFailureReason =

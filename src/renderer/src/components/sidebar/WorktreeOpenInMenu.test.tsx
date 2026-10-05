@@ -176,7 +176,7 @@ describe('WorktreeOpenInMenu', () => {
       runtimeEnvironmentId: null
     })
 
-    expect(openInFileManagerMock).toHaveBeenCalledWith('/tmp/workspace')
+    expect(openInFileManagerMock).toHaveBeenCalledWith('/tmp/workspace', null)
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 

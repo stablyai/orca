@@ -214,7 +214,9 @@ export function EditorPanelHeaderPath({
           {!isVirtualEditorTab && (
             <DropdownMenuItem
               disabled={revealBlocked}
-              onSelect={() => void revealInFileManager(activeFile.filePath)}
+              onSelect={() =>
+                void revealInFileManager(activeFile.filePath, activeFile.runtimeEnvironmentId)
+              }
             >
               <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
               {getRevealInFileManagerLabel()}

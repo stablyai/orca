@@ -4,6 +4,7 @@ import {
   getExplicitRuntimeEnvironmentIdForWorktree,
   getExecutionHostIdForWorktree,
   getKnownExecutionHostIdForWorktree,
+  getLocalOpenRuntimeOwnerForWorktree,
   getRuntimeEnvironmentIdForWorktree,
   getRuntimeSessionMirrorEnvironmentIds,
   getSettingsForWorktreeRuntimeOwner,
@@ -378,6 +379,37 @@ describe('getExplicitRuntimeEnvironmentIdForWorktree', () => {
     expect(
       getExecutionHostIdForWorktree(hostOverrideState, 'runtime-repo::wt-runtime-override')
     ).toBe('runtime:worktree-env')
+  })
+})
+
+describe('getLocalOpenRuntimeOwnerForWorktree', () => {
+  it('names the path owner, not the focused runtime, and fails closed without one', () => {
+    expect(getLocalOpenRuntimeOwnerForWorktree(state, 'local-repo::wt-a')).toBeNull()
+    expect(getLocalOpenRuntimeOwnerForWorktree(state, 'runtime-repo::wt-b')).toBe('owner-env')
+    expect(getLocalOpenRuntimeOwnerForWorktree(state, FLOATING_TERMINAL_WORKTREE_ID)).toBeNull()
+    // Why: unstamped legacy rows keep the single-focused-runtime route file listing uses.
+    expect(getLocalOpenRuntimeOwnerForWorktree(state, 'legacy-repo::wt-legacy')).toBe('focused-env')
+    expect(getLocalOpenRuntimeOwnerForWorktree(state, 'missing-repo::wt')).toBe('unresolved-owner')
+    expect(getLocalOpenRuntimeOwnerForWorktree(state, null)).toBe('unresolved-owner')
+  })
+
+  it('lets a card name its own host when the same id exists on two hosts', () => {
+    const worktreeId = 'local-repo::wt-a'
+    const duplicateState: WorktreeRuntimeOwnerState = {
+      ...state,
+      worktreesByRepo: {
+        'local-repo': [
+          { id: worktreeId, repoId: 'local-repo', hostId: 'local' },
+          { id: worktreeId, repoId: 'local-repo', hostId: 'runtime:env-1' }
+        ]
+      }
+    }
+
+    expect(getLocalOpenRuntimeOwnerForWorktree(duplicateState, worktreeId)).toBe('unresolved-owner')
+    expect(getLocalOpenRuntimeOwnerForWorktree(duplicateState, worktreeId, 'local')).toBeNull()
+    expect(getLocalOpenRuntimeOwnerForWorktree(duplicateState, worktreeId, 'runtime:env-1')).toBe(
+      'env-1'
+    )
   })
 })
 

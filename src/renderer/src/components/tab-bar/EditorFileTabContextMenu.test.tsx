@@ -377,7 +377,7 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
   })
 
   it('reveals a local file through the shared reveal action', async () => {
-    const reveal = await renderRevealItem()
+    const reveal = await renderRevealItem({ runtimeEnvironmentId: null })
 
     expect(reveal.props.disabled).toBe(false)
     expect(extractText(reveal.props.children)).not.toContain('Local only')
@@ -386,7 +386,17 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
       throw new Error('Reveal item has no select handler')
     }
     onSelect()
-    expect(revealInFileManager).toHaveBeenCalledWith('/repo/foo.ts')
+    expect(revealInFileManager).toHaveBeenCalledWith('/repo/foo.ts', null)
+  })
+
+  it('reveals a local file while a remote runtime is focused', async () => {
+    // Why: global runtime focus used to block reveal even for a local file.
+    storeSettings.activeRuntimeEnvironmentId = 'env-1'
+
+    const reveal = await renderRevealItem({ runtimeEnvironmentId: null })
+
+    expect(reveal.props.disabled).toBe(false)
+    expect(extractText(reveal.props.children)).not.toContain('Local only')
   })
 
   it.each([

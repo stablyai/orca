@@ -264,11 +264,11 @@ describe('EditorPanelHeaderPath reveal in file manager', () => {
   })
 
   it('reveals the open file through the shared reveal action', () => {
-    renderPath(baseFile())
+    renderPath(baseFile({ runtimeEnvironmentId: null }))
 
     fireEvent.click(openPathMenu())
 
-    expect(openInFileManager).toHaveBeenCalledWith('/repo/notes.md')
+    expect(openInFileManager).toHaveBeenCalledWith('/repo/notes.md', null)
   })
 
   it.each([

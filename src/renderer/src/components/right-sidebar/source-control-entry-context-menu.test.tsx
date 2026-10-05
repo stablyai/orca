@@ -45,7 +45,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => ownerRuntime.environmentId
+  getLocalOpenRuntimeOwnerForWorktree: () => ownerRuntime.environmentId
 }))
 
 vi.mock(import('@/lib/reveal-in-file-manager'), async (importOriginal) => ({
@@ -142,7 +142,19 @@ describe('SourceControlEntryContextMenu', () => {
     expect(revealItem?.disabled).toBe(false)
     expect(showsLocalOnlyHint(revealItem)).toBe(false)
     revealItem?.onSelect?.()
-    expect(revealInFileManager).toHaveBeenCalledWith('/repo/src/example.ts')
+    expect(revealInFileManager).toHaveBeenCalledWith('/repo/src/example.ts', null)
+  })
+
+  it('reveals a local repo file while a remote runtime is focused', () => {
+    // Why: global runtime focus used to block reveal even for a local repo.
+    storeState.settings.activeRuntimeEnvironmentId = 'env-1'
+
+    const revealItem = renderRevealItem()
+
+    expect(revealItem?.disabled).toBe(false)
+    expect(showsLocalOnlyHint(revealItem)).toBe(false)
+    revealItem?.onSelect?.()
+    expect(revealInFileManager).toHaveBeenCalledWith('/repo/src/example.ts', null)
   })
 
   it('offers the file manager once, outside the "Open in" apps', () => {
