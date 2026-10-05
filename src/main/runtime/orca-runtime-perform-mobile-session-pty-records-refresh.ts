@@ -9,7 +9,14 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../shared/runtime-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import { includeTargetResolvedWorktree } from './runtime-worktree-path-identity'
+import {
+  includeTargetResolvedWorktree,
+  runtimeWorktreeIdentityKey
+} from './runtime-worktree-path-identity'
+import {
+  hostWorktreeSleepBlocksAutomaticRecovery,
+  isWorktreeTerminalLeftAsleep
+} from './worktree-terminal-spawn-sleep-disposition'
 import { parseExecutionHostId } from '../../shared/execution-host'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { navigationTargetsHost } from '../../shared/runtime-navigation'
@@ -138,16 +145,23 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
       // their tab id, so focusing the renderer would silently no-op.
       // Phone-local activation also needs this path for inactive restored tabs:
       // desktop focus is intentionally suppressed, but the PTY still must exist.
+      const automaticActivation = isAutomaticTabActivation(opts.intent)
+      const hostSleepPhase = this.terminalSleepStateByWorktreeId.get(
+        runtimeWorktreeIdentityKey(worktreeId)
+      )?.phase
       const shouldMaterializePendingTerminal =
         publicTab?.type === 'terminal' &&
         publicTab.status !== 'ready' &&
         // Why: opening a tab is the documented wake gesture for a slept pane
         // (#11598), so only a background probe may be refused for one.
-        (!isAutomaticTabActivation(opts.intent) ||
-          !this.isDeliberatelyParkedPane(worktreeId, tab)) &&
+        // The host sleep map covers shell tabs that never got an agent resume record.
+        (!automaticActivation ||
+          (!this.isDeliberatelyParkedPane(worktreeId, tab) &&
+            !hostWorktreeSleepBlocksAutomaticRecovery(hostSleepPhase))) &&
         (!targetsHost ||
           !this.notifier?.focusTerminal ||
           this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
+      let materializedPendingTerminal = false
       if (shouldMaterializePendingTerminal) {
         const sessionId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
         const targetGroupId = snapshot?.tabGroups?.find((group) =>
@@ -185,22 +199,28 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
             startupCommandDelivery: agentStartup.startupCommandDelivery,
             launchConfig: agentStartup.launchConfig,
             launchAgent: tab.launchAgent,
-            targetGroupId
+            targetGroupId,
+            ...(automaticActivation ? { leaveWorktreeSleeping: true } : {})
           })
+          materializedPendingTerminal = true
         } catch (err) {
-          if (sessionId && parseAppSshPtyId(sessionId)) {
-            // Why: an expired SSH reattach clears durable bindings in the store,
-            // but this in-memory headless snapshot can still carry the old id.
-            this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, { force: true })
+          if (!isWorktreeTerminalLeftAsleep(err)) {
+            if (sessionId && parseAppSshPtyId(sessionId)) {
+              // Why: an expired SSH reattach clears durable bindings in the store,
+              // but this in-memory headless snapshot can still carry the old id.
+              this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, { force: true })
+            }
+            throw err
           }
-          throw err
         }
-        return this.applyMobileSessionTabNavigation(
-          this.getMobileSessionTabsForWorktree(worktreeId),
-          tab.id,
-          navigation,
-          opts.clientNavigationId
-        )
+        if (materializedPendingTerminal) {
+          return this.applyMobileSessionTabNavigation(
+            this.getMobileSessionTabsForWorktree(worktreeId),
+            tab.id,
+            navigation,
+            opts.clientNavigationId
+          )
+        }
       }
       const callerSnapshot = this.getMobileSessionTabsForWorktree(
         worktreeId,

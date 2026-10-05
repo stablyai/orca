@@ -35,6 +35,8 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       supportsSplitGroupPlacement?: boolean
       launchConfig?: SleepingAgentLaunchConfig
       signal?: AbortSignal
+      /** Automatic recovery must not clear a host sleep that commits while this spawn waits. */
+      leaveWorktreeSleeping?: boolean
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
@@ -66,7 +68,8 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       persistHostSessionBinding: true,
       // Why: this method publishes the authoritative snapshot below; skip the intermediate publish to avoid a wrong-group flash.
       deferMobileSessionPublish: true,
-      signal: opts.signal
+      signal: opts.signal,
+      ...(opts.leaveWorktreeSleeping ? { leaveWorktreeSleeping: true } : {})
     })
     const livePty = this.getLivePtyForHandle(terminal.handle)
     if (!livePty) {

@@ -86,6 +86,11 @@ export type TerminalCreateOptions = {
   /** Called before the spawn request leaves this process; a throw before it proves nothing spawned. */
   onPtySpawnDispatched?: () => void
   deferMobileSessionPublish?: boolean
+  /**
+   * Automatic recovery must not clear a host sleep that became committed while
+   * this spawn waited for the worktree lock. An explicit user spawn omits this.
+   */
+  leaveWorktreeSleeping?: boolean
 }
 
 /** Identity a fenced spawn can be re-found by in the execution host's own inventory. */

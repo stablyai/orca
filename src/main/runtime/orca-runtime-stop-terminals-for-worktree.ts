@@ -21,6 +21,11 @@ import {
 import { worktreePtyBelongsToHost, type WorktreePtyHostFence } from './worktree-pty-host-fence'
 import { summarizeWorktreePtyStopVerdict } from './worktree-pty-stop-verdict'
 import { describeMobileSessionTabCloseRefusal } from './mobile-session-tab-close-refusal-message'
+import {
+  settleWorktreeSpawnSleep,
+  WorktreeTerminalLeftAsleepError,
+  type WorktreeSpawnSleepDisposition
+} from './worktree-terminal-spawn-sleep-disposition'
 
 export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithResolveTerminalSplitSourceAuthority {
   private collectWorktreePtyIds(
@@ -262,23 +267,23 @@ export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithReso
     }
   }
 
-  async acquireWorktreeTerminalSpawn(worktreeId?: string): Promise<() => void> {
+  async acquireWorktreeTerminalSpawn(
+    worktreeId?: string,
+    disposition: WorktreeSpawnSleepDisposition = 'wake'
+  ): Promise<() => void> {
     if (!worktreeId) {
       return () => {}
     }
     const release = await this.acquireWorktreeTerminalMutation(worktreeId, 'shared')
-    const key = runtimeWorktreeIdentityKey(worktreeId)
-    const sleepState = this.terminalSleepStateByWorktreeId.get(key)
-    if (sleepState?.phase === 'sleeping' || sleepState?.phase === 'partial') {
-      this.terminalSleepStateByWorktreeId.delete(key)
-      this.emitClientEvent({
-        type: 'worktreeTerminalSleepState',
-        worktreeId: sleepState.worktreeId,
-        generation: sleepState.generation,
-        phase: 'woken',
-        ptyIds: sleepState.ptyIds,
-        terminalHandles: sleepState.terminalHandles
-      })
+    const leftAsleep = settleWorktreeSpawnSleep(
+      this.terminalSleepStateByWorktreeId,
+      worktreeId,
+      disposition,
+      (event) => this.emitClientEvent(event)
+    )
+    if (leftAsleep) {
+      release()
+      throw new WorktreeTerminalLeftAsleepError()
     }
     return release
   }

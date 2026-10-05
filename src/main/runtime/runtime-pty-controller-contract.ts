@@ -61,6 +61,11 @@ export type RuntimePtyController = {
     sessionId?: string
     /** Windows shell to spawn AS this PTY, instead of the host default. */
     shellOverride?: string
+    /**
+     * Automatic recovery must not clear a host sleep that commits while this
+     * spawn waits for the worktree lock. An explicit user spawn omits this.
+     */
+    leaveWorktreeSleeping?: boolean
     isNewSession?: boolean
     /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
     initiallyHidden?: boolean

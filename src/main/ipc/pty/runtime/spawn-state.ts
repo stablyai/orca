@@ -99,6 +99,8 @@ export type RuntimePtySpawnArgs = {
   resumeProviderSession?: AgentProviderSessionMetadata
   connectionId?: string | null
   worktreeId?: string
+  /** Automatic recovery must not clear a host sleep that commits while this spawn waits. */
+  leaveWorktreeSleeping?: boolean
   preAllocatedHandle?: string
   tabId?: string
   leafId?: string
