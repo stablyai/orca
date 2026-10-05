@@ -98,6 +98,22 @@ describe('sealPushNotification', () => {
     expect(dismissed.notificationId).toBe(notificationId)
   })
 
+  it('fits a worst-case title at every id length near the budget edge', () => {
+    for (let length = 950; length <= 1000; length += 1) {
+      const full = alert({
+        notificationId: `agent:${'a'.repeat(length)}`,
+        title: '\u0000'.repeat(80),
+        body: '🙂'.repeat(90)
+      })
+      const wire = sealPushNotification(full, TOKEN)
+      const dismiss = sealPushNotification({ ...full, kind: 'dismiss', notificationSeq: 4 }, TOKEN)
+      expectWithinGatewayLimits(wire)
+      expect(openSealedPushNotification(wire, TOKEN).notificationId).toBe(
+        openSealedPushNotification(dismiss, TOKEN).notificationId
+      )
+    }
+  })
+
   it('keeps an id too long to seal opaque on both an alert and its dismissal', () => {
     const full = alert({ notificationId: `agent:${'%D0%BF'.repeat(300)}` })
     const opened = openSealedPushNotification(sealPushNotification(full, TOKEN), TOKEN)

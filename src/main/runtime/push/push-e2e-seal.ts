@@ -65,7 +65,8 @@ const WORST_CASE_TITLE = '\u0000'.repeat(80)
 
 /** Decided from the id and epoch alone, so an alert and its dismissal always agree. */
 function carriesRealId(notificationId: string, epoch: string, key: Uint8Array): boolean {
-  const probe = { t: WORST_CASE_TITLE, n: notificationId, e: epoch }
+  // b: '' is what the shrink loop leaves behind, so it counts too.
+  const probe = { t: WORST_CASE_TITLE, b: '', n: notificationId, e: epoch }
   return sealEnvelope(probe, key).length <= MAX_SEALED_LENGTH
 }
 
