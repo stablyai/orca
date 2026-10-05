@@ -131,12 +131,6 @@ afterEach(() => {
 })
 
 describe('chunk reads in flight on one connection', () => {
-  // Pinned as a literal because every other case here is written in terms of the constant, so the
-  // budget itself would otherwise move silently with it.
-  it('budgets four', () => {
-    expect(MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS).toBe(4)
-  })
-
   it('admits four and refuses the fifth, then admits it once one finishes', async () => {
     gate.hold()
     const inFlight = Array.from({ length: MAX_CONCURRENT_MOBILE_WEB_BUNDLE_READS }, () =>

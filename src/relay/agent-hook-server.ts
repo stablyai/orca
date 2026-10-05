@@ -1,3 +1,18 @@
+import { RelayAgentHookCanonicalStatus } from './agent-hook-canonical-status'
+import type {
+  RelayHookForward,
+  RelayHookServerOptions,
+  RelayHookServerStartOptions
+} from './agent-hook-server-contract'
+export type {
+  RelayHookForward,
+  RelayHookServerOptions,
+  RelayHookServerStartOptions
+} from './agent-hook-server-contract'
+import { handleRelayHookRequest } from './agent-hook-request'
+import { transitionHookPresence } from '../shared/agent-hook-presence-transition'
+import { RelayAgentPresence } from './relay-agent-presence'
+import { isSameAgentProcess } from '../shared/agent-process-presence'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
@@ -17,59 +32,20 @@ import {
   getEndpointFileName,
   writeEndpointFile
 } from '../shared/agent-hook-listener/endpoint-publication'
-import { HOOK_REQUEST_SLOWLORIS_MS } from '../shared/agent-hook-listener/listener-limits'
-import { normalizeHookPayload } from '../shared/agent-hook-listener'
-import { mergeAgentHookRequestHeaders } from '../shared/agent-hook-listener/hook-envelope'
-import { readRequestBody } from '../shared/agent-hook-listener/request-body'
-import { resolveHookSource } from '../shared/agent-hook-listener/source-routing'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import {
   createHookTransportInterferenceTracker,
-  describeHookTransportInterference,
-  isHookRequestTruncatedError
+  describeHookTransportInterference
 } from '../shared/agent-hook-transport-interference'
-import {
-  isAgentHookSource,
-  REMOTE_AGENT_HOOK_ENV,
-  type AgentHookRelayEnvelope,
-  type AgentHookSource
-} from '../shared/agent-hook-relay'
-import {
-  buildSpoolHookBody,
-  drainAgentHookSpool,
-  type SpoolRecord
-} from '../shared/agent-hook-spool'
+import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from '../shared/agent-hook-relay'
+import type { SpoolRecord } from '../shared/agent-hook-spool'
 import { buildRelayHookPtyEnv, defaultEndpointDir } from './agent-hook-endpoint-coordinates'
-import { buildRelayHookEnvelope, hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
+import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
+import { drainRelayHookSpool, ingestRelayHookSpoolRecord } from './agent-hook-spool-ingest'
 import { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
 import { MAX_CACHED_PANES, selectReplayableCachedPanes } from './agent-hook-cached-pane-status'
 
-export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
-
-export type RelayHookServerOptions = {
-  /** Where to put endpoint.env / endpoint.cmd. Defaults to `$HOME/.orca-relay/agent-hooks`. */
-  endpointDir?: string
-  /** Env tag forwarded into hook payloads. Defaults to "remote", which main excludes from dev-vs-prod mismatch warnings. */
-  env?: string
-  /** Fixed auth token. WSL relay passes the host-issued token (already in guest env via WSLENV) so unmodified hook clients authenticate. Defaults to a fresh UUID. */
-  token?: string
-  /** Preferred bind port. WSL relay passes the Windows listener's port so env-sourced client coords stay truthful; falls back to :0 if occupied. Defaults to :0. */
-  preferredPort?: number
-  forward: RelayHookForward
-  /**
-   * True when the host has been told this pane's tab is gone and no PTY has re-bound the paneKey.
-   * Posts from such a pane come from a process the user already closed, so they describe no surface
-   * any client owns. Defaults to "never retired", which is the pre-existing behaviour — a listener
-   * with no PTY handler behind it (the WSL relay) keeps forwarding everything.
-   */
-  isPaneSurfaceRetired?: (paneKey: string) => boolean
-}
-
-export type RelayHookServerStartOptions = {
-  publishEndpoint?: boolean
-}
-
-export class RelayAgentHookServer {
+export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   private server: ReturnType<typeof createServer> | null = null
   private port = 0
   private token = ''
@@ -89,12 +65,15 @@ export class RelayAgentHookServer {
   >()
   private forward: RelayHookForward
   private isPaneSurfaceRetired: (paneKey: string) => boolean
+  private getAgentLaunchToken: (paneKey: string) => string | undefined
   private fixedToken: string | undefined
   private preferredPort: number
   private portFallbackApplied = false
+  private readonly presenceChecks = new RelayAgentPresence()
   private retryScheduler: AgentHookResultRetryScheduler
 
   constructor(options: RelayHookServerOptions) {
+    super()
     this.env = options.env ?? REMOTE_AGENT_HOOK_ENV
     this.endpointDir = options.endpointDir ?? defaultEndpointDir()
     this.endpointFilePath = join(this.endpointDir, getEndpointFileName())
@@ -102,12 +81,23 @@ export class RelayAgentHookServer {
     this.preferredPort = options.preferredPort ?? 0
     this.forward = options.forward
     this.isPaneSurfaceRetired = options.isPaneSurfaceRetired ?? (() => false)
+    this.getAgentLaunchToken = options.getAgentLaunchToken ?? (() => undefined)
+    this.configureCanonicalHooks(
+      options,
+      (paneKey) => this.clearPaneState(paneKey, true),
+      (paneKey) => {
+        const row = this.state.lastStatusByPaneKey.get(paneKey)
+        return row
+          ? { ...row, source: this.lastEnvelopeMetaByPaneKey.get(paneKey)?.source ?? row.source }
+          : undefined
+      }
+    )
     this.retryScheduler = new AgentHookResultRetryScheduler({
       state: this.state,
       env: this.env,
       isListening: () => this.server !== null,
       applyEvent: (event, source, env, version) => {
-        this.applyEvent(event, source, env, version)
+        this.applyEvent(event, source, env, version, { checkPresence: false })
       }
     })
   }
@@ -116,22 +106,11 @@ export class RelayAgentHookServer {
     if (this.server) {
       return
     }
+    this.startCanonicalHooks()
     this.token = this.fixedToken ?? randomUUID()
     this.endpointFileWritten = false
     this.portFallbackApplied = false
-    try {
-      drainAgentHookSpool({
-        endpointDir: this.endpointDir,
-        getPersistedLaunchTokenHash: () => undefined,
-        ingest: (record) => this.ingestSpoolRecord(record)
-      })
-    } catch (err) {
-      // Why: a downstream relay failure must not prevent the loopback listener from starting;
-      // the untruncated spool file remains available for retry on the next restart.
-      process.stderr.write(
-        `[relay-hook-server] spool replay failed: ${err instanceof Error ? err.message : String(err)}\n`
-      )
-    }
+    drainRelayHookSpool(this.endpointDir, (record) => this.ingestSpoolRecord(record))
     try {
       await this.listenOn(this.preferredPort)
     } catch (err) {
@@ -188,6 +167,7 @@ export class RelayAgentHookServer {
       token: this.token,
       env: this.env,
       version: ORCA_HOOK_PROTOCOL_VERSION,
+      openCodeTui: true,
       transport: ORCA_HOOK_RAW_JSON_TRANSPORT
     })
     return this.endpointFileWritten
@@ -199,6 +179,7 @@ export class RelayAgentHookServer {
     this.port = 0
     this.token = ''
     this.endpointFileWritten = false
+    this.stopCanonicalHooks()
     this.retryScheduler.clearAll()
     clearAllListenerCaches(this.state)
     this.lastEnvelopeMetaByPaneKey.clear()
@@ -215,17 +196,35 @@ export class RelayAgentHookServer {
       dropPane: (paneKey) => this.clearPaneState(paneKey)
     })
     for (const { event, meta } of replayable) {
+      void this.checkAgentPresence(event.paneKey)
       this.forward(
         buildRelayHookEnvelope(event, meta.source, meta.env, meta.version, { isReplay: true })
       )
     }
-    return replayable.length
+    return replayable.length + this.replayCanonicalHooks()
+  }
+
+  checkAgentPresence(paneKey: string): Promise<void> {
+    const row = this.state.lastStatusByPaneKey.get(paneKey)
+    const meta = this.lastEnvelopeMetaByPaneKey.get(paneKey)
+    return this.presenceChecks.check(
+      row,
+      () => this.state.lastStatusByPaneKey.get(paneKey),
+      (event) => {
+        if (meta) {
+          this.applyEvent(event, meta.source, meta.env, meta.version)
+        }
+      }
+    )
   }
 
   /** Drop a paneKey's cached entries on PTY exit so a terminated pane can't resurface as a ghost event on reconnect. */
-  clearPaneState(paneKey: string): void {
+  clearPaneState(paneKey: string, preserveTmuxInnerSubjects = false): void {
+    if (!preserveTmuxInnerSubjects) {
+      this.clearCanonicalPane(paneKey)
+    }
     this.retryScheduler.clearAssistantMessageRetry(paneKey)
-    this.retryScheduler.clearCodexSubagentPoll(paneKey)
+    this.retryScheduler.clearTranscriptPoll(paneKey)
     clearPaneCacheState(this.state, paneKey)
     this.lastEnvelopeMetaByPaneKey.delete(paneKey)
   }
@@ -249,74 +248,46 @@ export class RelayAgentHookServer {
   // ─── Private ──────────────────────────────────────────────────────
 
   private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    if (req.method !== 'POST') {
-      res.writeHead(404)
-      res.end()
-      return
-    }
-    if (req.headers['x-orca-agent-hook-token'] !== this.token) {
-      res.writeHead(403)
-      res.end()
-      return
-    }
-    // Why: track our own destroy so the slowloris cap can't be misread as outside interference.
-    let destroyedBySlowlorisCap = false
-    req.setTimeout(HOOK_REQUEST_SLOWLORIS_MS, () => {
-      destroyedBySlowlorisCap = true
-      req.destroy()
+    await handleRelayHookRequest(req, res, {
+      token: this.token,
+      env: this.env,
+      state: this.state,
+      isPaneSurfaceRetired: this.isPaneSurfaceRetired,
+      getAgentLaunchToken: this.getAgentLaunchToken,
+      applyEvent: (event, source, env, version) => this.applyEvent(event, source, env, version),
+      ingestTmuxHook: (source, body) => this.ingestCanonicalTmuxHook(source, body, this.env),
+      retryScheduler: this.retryScheduler,
+      transportInterference: this.transportInterference
     })
-    try {
-      const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
-      const source = resolveHookSource(pathname)
-      if (!source) {
-        res.writeHead(404)
-        res.end()
-        return
-      }
-      const body = await readRequestBody(req)
-      const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
-      const event = normalizeHookPayload(this.state, source, hookBody, this.env, {
-        deferCompactOwnershipToClient: true
-      })
-      if (event) {
-        // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
-        const env = hookBodyEnv(hookBody)
-        const version = hookBodyVersion(hookBody)
-        this.applyEvent(event, source, env, version)
-        this.retryScheduler.scheduleAssistantMessageRetry(source, hookBody, event, env, version)
-        this.retryScheduler.scheduleCodexSubagentPoll(source, hookBody, event, env, version)
-      }
-      res.writeHead(204)
-      res.end()
-    } catch (err) {
-      // Why (#11217): a remote host can run the same IDS; count truncations here so a blocked SSH
-      // relay reports the cause instead of an anonymous "hook request failed".
-      if (isHookRequestTruncatedError(err) && !destroyedBySlowlorisCap) {
-        this.transportInterference.record({ source: null, error: err })
-      }
-      // Why: hooks fail open (204 on any error) so a buggy agent never blocks the run; still log so the 204 doesn't mask bugs.
-      process.stderr.write(
-        `[relay-hook-server] hook request failed: ${err instanceof Error ? err.message : String(err)}\n`
-      )
-      res.writeHead(204)
-      res.end()
-    }
   }
 
   private applyEvent(
-    event: AgentHookEventPayload,
+    incoming: AgentHookEventPayload,
     source: AgentHookSource,
     env?: string,
     version?: string,
-    options: { isReplay?: boolean } = {}
-  ): void {
+    options: { isReplay?: boolean; checkPresence?: boolean } = {}
+  ): AgentHookEventPayload | undefined {
+    if (this.isCanonicalPane(incoming.paneKey)) {
+      return undefined
+    }
+    const transitioned = transitionHookPresence(
+      incoming,
+      this.state.lastStatusByPaneKey.get(incoming.paneKey)
+    )
+    if (!transitioned) {
+      return undefined
+    }
+    const event = transitioned.agentPresence?.ended
+      ? { ...transitioned, providerSessionOnly: true }
+      : transitioned
     // Why: this post came from a process still running inside a pane whose tab the user closed.
     // Caching or forwarding it makes every connected client advertise a live, resumable agent pane
     // that no tab owns — the advertisement that ends up auto-typing a second `--resume` onto a
     // transcript the orphan is still writing (#12447). Drop the stale cache with it.
     if (this.isPaneSurfaceRetired(event.paneKey)) {
       this.clearPaneState(event.paneKey)
-      return
+      return undefined
     }
     if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
       this.retryScheduler.clearAssistantMessageRetry(event.paneKey)
@@ -329,26 +300,32 @@ export class RelayAgentHookServer {
         this.clearPaneState(paneKey)
       )
     ) {
-      return
+      return undefined
     }
     this.lastEnvelopeMetaByPaneKey.delete(event.paneKey)
     this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
     this.forward(buildRelayHookEnvelope(event, source, env, version, options))
+    const sender = incoming.agentPresence?.process
+    const owner = event.agentPresence
+    // Why: a live hook proves its own process alive; only another process's hook casts doubt on the owner.
+    if (
+      options.checkPresence !== false &&
+      sender &&
+      owner?.process &&
+      !owner.ended &&
+      !isSameAgentProcess(sender, owner.process)
+    ) {
+      void this.checkAgentPresence(event.paneKey)
+    }
+    // Why: retries compare against the cached row by identity, so they must hold that exact row.
+    return this.state.lastStatusByPaneKey.get(event.paneKey)
   }
 
   private ingestSpoolRecord(record: SpoolRecord): void {
-    if (!isAgentHookSource(record.source)) {
-      return
-    }
-    const body = buildSpoolHookBody(record)
-    const event = normalizeHookPayload(this.state, record.source, body, this.env, {
-      deferCompactOwnershipToClient: true
-    })
-    if (!event) {
-      return
-    }
-    this.applyEvent(event, record.source, hookBodyEnv(body), hookBodyVersion(body), {
-      isReplay: true
+    ingestRelayHookSpoolRecord(record, this.state, this.env, {
+      apply: (...args) => this.applyEvent(...args, { isReplay: true }),
+      isPaneSurfaceRetired: this.isPaneSurfaceRetired,
+      getAgentLaunchToken: this.getAgentLaunchToken
     })
   }
 }

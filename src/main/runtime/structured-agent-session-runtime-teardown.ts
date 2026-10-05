@@ -6,10 +6,13 @@
 
 import type { AgentSessionResumeTrigger } from '../../shared/agent-session-resume-marker'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 
 export type InstalledRuntime = {
   host: StructuredAgentSessionHost
   adapter: { closeAll(): Promise<void> }
+  /** Closed last, once every conversation has drained into it. */
+  journalDatabase: JournalHostDatabase
   /** Resolves after every observed adapter exit has published, and every
    *  recovery callback it raised has settled. */
   waitForRecovery: () => Promise<void>
@@ -32,6 +35,9 @@ export async function tearDownRuntime(
   installed: InstalledRuntime,
   trigger: AgentSessionResumeTrigger
 ): Promise<void> {
+  // An exit settled while recovery drains wakes delivery, which would start a fresh child for
+  // teardown to kill; queued messages wait for the next launch instead.
+  installed.host.stopDelivery()
   // Drain an in-flight recovery before stopping children; recovery may still
   // be writing lifecycle rows or acquiring a replacement child.
   await installed.waitForRecovery()
@@ -65,10 +71,13 @@ export async function tearDownRuntime(
   } catch (error) {
     failures.push(error)
   }
+  if (failures.length === 0) {
+    // After every sink drained and every conversation settled: nothing writes after this.
+    installed.journalDatabase.close()
+    return
+  }
   if (failures.length === 1) {
     throw failures[0]
   }
-  if (failures.length > 1) {
-    throw new AggregateError(failures, 'structured agent-session runtime teardown failed')
-  }
+  throw new AggregateError(failures, 'structured agent-session runtime teardown failed')
 }

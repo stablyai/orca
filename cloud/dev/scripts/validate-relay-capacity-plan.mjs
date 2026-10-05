@@ -1,5 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import {
+  RELAY_CELL_CONNECTION_DRAIN_SECONDS,
+  RELAY_CELL_LOG_SAMPLE_RATE
+} from './validate-relay-asia-topology-plan.mjs'
+
+const CELL_BACKEND_RESOURCE = 'google_compute_backend_service.relay_gce_cell'
+const CONNECTION_DRAIN_PATH = 'connection_draining_timeout_sec'
+// A backend with no logging has `log_config: []`, so gaining the block moves this one path.
+const CELL_LOG_CONFIG_PATH = 'log_config.0'
 
 const SERVICE_ACCOUNT_EMAIL =
   /^[a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z0-9-]+\.iam\.gserviceaccount\.com$/
@@ -151,19 +160,24 @@ function canonicalResourcePaths(change, paths) {
   )
 }
 
-function bootstrapRestartNormalizationPaths(change, mode) {
-  if (!['bootstrap-cell', 'same-cap-cell', 'same-cap-image'].includes(mode)) return []
-  const policyMatches =
-    valueAtPath(change.change.before, 'update_policy.0.minimal_action') === 'RESTART' &&
-    valueAtPath(change.change.after, 'update_policy.0.minimal_action') === 'REPLACE'
-  const priorVersion = valueAtPath(change.change.before, 'version.0.name')
-  const versionMatches =
-    typeof priorVersion === 'string' &&
-    /^0\/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{6}\+00:00$/.test(priorVersion) &&
-    valueAtPath(change.change.after, 'version.0.name') === 'primary'
-  return policyMatches && versionMatches
-    ? ['update_policy.0.minimal_action', 'version.0.name']
-    : []
+// What relay-gce-cells.tf declares for these MIG fields (a test pins the two together). A gcloud
+// rolling action, like the stranded recovery's old one, rewrites the version label and persists
+// its flags into the update policy outside Terraform; a later plan then reverts them. Moving back
+// to the declared value is reconciliation, never a capacity change, so it is the only move allowed.
+export const DECLARED_MANAGER_FIELDS = Object.freeze({
+  'version.0.name': 'primary',
+  'update_policy.0.type': 'PROACTIVE',
+  'update_policy.0.minimal_action': 'REPLACE',
+  'update_policy.0.most_disruptive_allowed_action': 'REPLACE',
+  'update_policy.0.replacement_method': 'RECREATE',
+  'update_policy.0.max_surge_fixed': 0,
+  'update_policy.0.max_unavailable_fixed': 1
+})
+
+function declaredManagerReconciliationPaths(change) {
+  return Object.entries(DECLARED_MANAGER_FIELDS)
+    .filter(([path, declared]) => valueAtPath(change.change.after, path) === declared)
+    .map(([path]) => path)
 }
 
 function requireOnlyPaths(change, allowed, required = [], allowedUnknown = new Set()) {
@@ -292,6 +306,57 @@ function requireDesiredStartupScript(script, config) {
   }
 }
 
+// The same-cap job no longer targets this cell's backend service (the capacity role has no
+// compute.backendServices.update), so a wave plan carries no backend change and this reports an
+// empty list. It stays as the bound on any caller that does target one: exactly this cell's
+// backend, exactly the reviewed drain and request-logging attributes, each optional because a
+// cell that already has one plans no change for it. Splitting the backend out keeps `changes`
+// the template-and-MIG count both callers read.
+function takeCellBackendUpdate(changes, config) {
+  const backends = changes.filter(
+    ({ address }) => typeof address === 'string' && address.startsWith(`${CELL_BACKEND_RESOURCE}[`)
+  )
+  if (config.mode !== 'same-cap-cell' || backends.length === 0) {
+    return { rest: changes, backendUpdate: [] }
+  }
+  const [backend] = backends
+  if (
+    backends.length !== 1 ||
+    backend.address !== `${CELL_BACKEND_RESOURCE}[${JSON.stringify(config.cellId)}]` ||
+    backend.deposed !== undefined ||
+    !sameActions(backend, ['update'])
+  ) {
+    throw new Error('cell plan may change only this cell backend drain and request logging')
+  }
+  const after = backend.change?.after
+  const moved = changedPaths(backend.change?.before, after)
+  const logging = after?.log_config?.[0]
+  const accepted = [CONNECTION_DRAIN_PATH, CELL_LOG_CONFIG_PATH].filter((path) =>
+    moved.includes(path))
+  if (
+    accepted.length === 0 ||
+    (moved.includes(CONNECTION_DRAIN_PATH) &&
+      after?.[CONNECTION_DRAIN_PATH] !== RELAY_CELL_CONNECTION_DRAIN_SECONDS) ||
+    (moved.includes(CELL_LOG_CONFIG_PATH) &&
+      (after?.log_config?.length !== 1 ||
+        logging?.enable !== true ||
+        logging?.sample_rate !== RELAY_CELL_LOG_SAMPLE_RATE))
+  ) {
+    throw new Error('cell plan may change only this cell backend drain and request logging')
+  }
+  const backendComputed = new Set(['fingerprint', 'generated_id'])
+  requireOnlyPaths(
+    backend,
+    new Set([
+      ...accepted,
+      ...unknownPaths(backend.change.after_unknown).filter((path) => backendComputed.has(path))
+    ]),
+    accepted,
+    backendComputed
+  )
+  return { rest: changes.filter((change) => change !== backend), backendUpdate: accepted }
+}
+
 function plannedResources(module) {
   if (!module) return []
   return [
@@ -321,7 +386,7 @@ function requireDesiredPlannedCell(plan, config) {
   }
 }
 
-function validateManagerUpdate(manager, config) {
+function validateManagerUpdate(manager) {
   if (!sameActions(manager, ['update'])) {
     throw new Error('cell plan has unexpected MIG actions')
   }
@@ -332,14 +397,18 @@ function validateManagerUpdate(manager, config) {
     'version.0.instance_template'
   ])
   const managerUnknown = unknownPaths(manager.change.after_unknown)
+  const moved = changedPaths(manager.change.before, manager.change.after)
+  const reconciled = declaredManagerReconciliationPaths(manager).filter((path) =>
+    moved.includes(path))
+  // A plan that only reconciles declared fields leaves the template where it is.
   requireOnlyPaths(
     manager,
     new Set([
       'version.0.instance_template',
-      ...bootstrapRestartNormalizationPaths(manager, config.mode),
+      ...reconciled,
       ...managerUnknown.filter((path) => managerComputed.has(path))
     ]),
-    ['version.0.instance_template'],
+    reconciled.length > 0 ? [] : ['version.0.instance_template'],
     managerComputed
   )
 }
@@ -376,10 +445,12 @@ function cellPlan(plan, changes, config) {
   const obsoleteTemplates = changes.filter(
     ({ address, deposed }) => address === templateAddress && typeof deposed === 'string'
   )
+  // A failed wave apply leaves its predecessor deposed; the wave must plan its own cleanup.
   const allowsObsoleteTemplates =
-    config.mode === 'same-cap-image' &&
     obsoleteTemplates.length > 0 &&
-    obsoleteTemplates.every((change) => sameActions(change, ['delete']))
+    obsoleteTemplates.every((change) => sameActions(change, ['delete'])) &&
+    (config.mode === 'same-cap-image' ||
+      (config.mode === 'same-cap-cell' && obsoleteTemplates.length === 1))
   if (
     !template ||
     !manager ||
@@ -452,7 +523,7 @@ function cellPlan(plan, changes, config) {
     ['metadata_startup_script'],
     templateComputed
   )
-  validateManagerUpdate(manager, config)
+  validateManagerUpdate(manager)
   requireReplacementTemplateDependency(plan, template, manager)
   const beforeScript = template.change.before?.metadata_startup_script
   const script = template.change.after?.metadata_startup_script
@@ -499,7 +570,7 @@ function convergenceCellPlan(plan, changes, config) {
   ) {
     throw new Error('cell convergence plan changes outside the exact template and MIG')
   }
-  if (manager) validateManagerUpdate(manager, config)
+  if (manager) validateManagerUpdate(manager)
   if (obsoleteTemplates.some((change) => !sameActions(change, ['delete']))) {
     throw new Error('cell convergence plan has unexpected obsolete-template actions')
   }
@@ -530,39 +601,46 @@ export function validateCapacityPlan(plan, config) {
     config.mode === 'same-cap-image' &&
     !/^.+@sha256:[a-f0-9]{64}$/.test(config.rollbackImage ?? '')
   ) throw new Error('same-cap image Terraform plan has an invalid rollback image')
-  const changes = mutations(plan)
+  const { rest: changes, backendUpdate } = takeCellBackendUpdate(mutations(plan), config)
+  const backend = backendUpdate.length > 0 ? { backendUpdate } : {}
   if (changes.length === 0) {
     return {
       mode: config.mode,
       changes: 0,
+      ...backend,
       ...(config.mode === 'same-cap-image' ? { changeKind: 'none' } : {})
     }
   }
+  const templateAddress = `google_compute_instance_template.relay_gce_cell[${JSON.stringify(config.cellId)}]`
   const replacement = changes.some(
     ({ address, deposed, change }) =>
-      address === `google_compute_instance_template.relay_gce_cell[${JSON.stringify(config.cellId)}]` &&
+      address === templateAddress &&
       deposed === undefined &&
       JSON.stringify(change?.actions) === JSON.stringify(['create', 'delete'])
   )
   if (replacement) cellPlan(plan, changes, config)
   else convergenceCellPlan(plan, changes, config)
+  const obsoleteTemplates = changes.filter(
+    ({ address, deposed }) => address === templateAddress && typeof deposed === 'string'
+  )
   const obsoleteTemplateOnly = changes.every(
     ({ address, deposed, change }) =>
-      address === `google_compute_instance_template.relay_gce_cell[${JSON.stringify(config.cellId)}]` &&
+      address === templateAddress &&
       typeof deposed === 'string' &&
       JSON.stringify(change?.actions) === JSON.stringify(['delete'])
   )
+  // Same as the backend split: `changes` stays the template-and-MIG count the same-cap job gates
+  // on. same-cap-image keeps its own total and names obsolete deletes in changeKind instead.
+  const splitsObsoleteTemplates = config.mode === 'same-cap-cell' && obsoleteTemplates.length > 0
   return {
     mode: config.mode,
-    changes: changes.length,
+    changes: changes.length - (splitsObsoleteTemplates ? obsoleteTemplates.length : 0),
+    ...(splitsObsoleteTemplates ? { obsoleteTemplates: obsoleteTemplates.length } : {}),
+    ...backend,
     ...(config.mode === 'same-cap-image'
       ? {
           changeKind: replacement
-            ? changes.some(
-                ({ address, deposed }) =>
-                  address === `google_compute_instance_template.relay_gce_cell[${JSON.stringify(config.cellId)}]` &&
-                  typeof deposed === 'string'
-              )
+            ? obsoleteTemplates.length > 0
               ? 'replacement-with-obsolete-template'
               : 'replacement'
             : obsoleteTemplateOnly

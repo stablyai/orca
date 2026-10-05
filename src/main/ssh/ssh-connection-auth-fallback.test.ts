@@ -179,6 +179,7 @@ describe('SshConnection', () => {
       'target-1',
       'password',
       'example.com',
+      undefined,
       expect.any(AbortSignal)
     )
   })
@@ -244,7 +245,7 @@ describe('SshConnection', () => {
         ],
         finish
       )
-      for (let turn = 0; turn < 8 && finish.mock.calls.length === 0; turn += 1) {
+      for (let turn = 0; turn < 20 && finish.mock.calls.length === 0; turn += 1) {
         await Promise.resolve()
       }
 
@@ -254,6 +255,7 @@ describe('SshConnection', () => {
         'target-1',
         'keyboard-interactive',
         'Duo two-factor login\nSelect push or enter a passcode.\nOption:',
+        false,
         expect.any(AbortSignal)
       )
       expect(onCredentialRequest).toHaveBeenNthCalledWith(
@@ -261,6 +263,7 @@ describe('SshConnection', () => {
         'target-1',
         'keyboard-interactive',
         'Duo two-factor login\nSelect push or enter a passcode.\nPasscode:',
+        false,
         expect.any(AbortSignal)
       )
       expect(finish).toHaveBeenCalledWith(['1', '123456'])
@@ -311,7 +314,7 @@ describe('SshConnection', () => {
 
       await vi.advanceTimersByTimeAsync(100_000)
       firstResponse.resolve('1')
-      for (let turn = 0; turn < 4 && onCredentialRequest.mock.calls.length < 2; turn += 1) {
+      for (let turn = 0; turn < 20 && onCredentialRequest.mock.calls.length < 2; turn += 1) {
         await Promise.resolve()
       }
       expect(onCredentialRequest).toHaveBeenCalledTimes(2)
@@ -321,7 +324,7 @@ describe('SshConnection', () => {
       expect(finish).not.toHaveBeenCalled()
 
       secondResponse.resolve('123456')
-      for (let turn = 0; turn < 4 && finish.mock.calls.length === 0; turn += 1) {
+      for (let turn = 0; turn < 20 && finish.mock.calls.length === 0; turn += 1) {
         await Promise.resolve()
       }
       expect(finish).toHaveBeenCalledWith(['1', '123456'])
@@ -337,7 +340,13 @@ describe('SshConnection', () => {
     ssh2Mock.connectBehavior = 'pending'
     let credentialSignal: AbortSignal | undefined
     const onCredentialRequest = vi.fn(
-      (_targetId: string, _kind: string, _detail: string, signal?: AbortSignal) => {
+      (
+        _targetId: string,
+        _kind: string,
+        _detail: string,
+        _echo?: boolean,
+        signal?: AbortSignal
+      ) => {
         credentialSignal = signal
         const response = Promise.withResolvers<string | null>()
         if (signal?.aborted) {
@@ -405,6 +414,7 @@ describe('SshConnection', () => {
         'target-1',
         'passphrase',
         keyPath,
+        undefined,
         expect.any(AbortSignal)
       )
     } finally {

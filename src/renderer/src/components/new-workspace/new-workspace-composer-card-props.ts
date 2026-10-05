@@ -30,6 +30,7 @@ export const EMPTY_EPHEMERAL_VM_RECIPES: EphemeralVmRecipeOption[] = []
 export type NewWorkspaceComposerCardProps = {
   contextualTourSource?: string
   containerClassName?: string
+  contentClassName?: string
   composerRef?: React.RefObject<HTMLDivElement | null>
   onComposerNodeChange?: (node: HTMLDivElement | null) => void
   nameInputRef?: React.RefObject<HTMLInputElement | null>

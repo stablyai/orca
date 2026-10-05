@@ -1,4 +1,5 @@
 import { recordDaemonStreamBacklogEvent } from '../../../daemon/daemon-stream-backlog-probe'
+import { isRuntimeOwnedHiddenRendererPty } from '../../pty-hidden-delivery-gate'
 import { tryGetProviderForPty } from '../provider/registry'
 import {
   PRODUCER_FLOW_CONTROL_ENABLED,
@@ -25,9 +26,12 @@ export function syncPtyBackgroundedDelivery(
   id: string,
   caller: string
 ): void {
-  const background =
-    session.rendererPtyIsKnownHidden(id) &&
-    !(session.runtime?.hasRawTerminalViewSubscriber?.(id) ?? false)
+  // Why runtime-owned: a runtime background spawn has no pane to report visibility, but must pace
+  // like a renderer hidden-at-spawn PTY; any visible report still wins.
+  const knownHidden =
+    session.rendererPtyIsKnownHidden(id) ||
+    (isRuntimeOwnedHiddenRendererPty(id) && !visibleRendererPtys.has(id))
+  const background = knownHidden && !(session.runtime?.hasRawTerminalViewSubscriber?.(id) ?? false)
   if (session.backgroundedDeliverySyncByPty.get(id) === background) {
     return
   }

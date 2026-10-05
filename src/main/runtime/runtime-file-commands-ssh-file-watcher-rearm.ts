@@ -1,5 +1,6 @@
-// @ts-nocheck -- mechanically split declarations.
 import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
+import type { IFilesystemProvider } from '../providers/types'
+import { toRemoteRuntimeClientErrorLike } from '../../shared/remote-runtime-client-error-classification'
 import {
   runtimeWatcherReleaseKey,
   sshFileExplorerWatchRearms
@@ -17,40 +18,99 @@ export function armSshFileExplorerWatchRearm(args: {
   onTerminalError: (error: Error) => void
   signal?: AbortSignal
   initialUnwatch: () => void
-}): { unsubscribe: () => Promise<void> } {
+  initialProvider: Pick<IFilesystemProvider, 'watch'>
+}): {
+  initialCallbacks: {
+    callback: (events: FsChangeEvent[]) => void
+    onTerminalError: (error: Error) => void
+  }
+  unsubscribe: () => Promise<void>
+} {
   const key = runtimeWatcherReleaseKey(args.runtimeId, args.connectionId, args.rootPath)
   let currentUnwatch = args.initialUnwatch
+  let currentProvider = args.initialProvider
   let stopped = false
   let reinstalling: Promise<void> | null = null
+  let providerGeneration = 0
 
-  const reinstall = async (): Promise<void> => {
-    const provider = getSshFilesystemProvider(args.connectionId)
-    if (stopped || !provider) {
+  const reportTerminalError = (error: unknown): void => {
+    // Connection loss leaves the established stream armed for the next provider.
+    if (toRemoteRuntimeClientErrorLike(error).code === 'CONNECTION_LOST') {
       return
     }
-    // Why: the old handle is scoped to the dead transport; closing it here would only risk
-    // unwatching the root we just re-registered on the new one.
-    const nextUnwatch = await provider.watch(args.rootPath, args.callback, {
-      signal: args.signal,
-      onTerminalError: args.onTerminalError
-    })
-    if (stopped) {
+    args.onTerminalError(error instanceof Error ? error : new Error(String(error)))
+  }
+
+  const reinstall = async (
+    generation: number,
+    provider: Pick<IFilesystemProvider, 'watch'> | undefined
+  ): Promise<void> => {
+    if (stopped || generation !== providerGeneration || !provider) {
+      return
+    }
+    const isCurrent = (): boolean =>
+      !stopped &&
+      !args.signal?.aborted &&
+      generation === providerGeneration &&
+      provider === getSshFilesystemProvider(args.connectionId)
+    let nextUnwatch: () => void
+    try {
+      nextUnwatch = await provider.watch(
+        args.rootPath,
+        (events) => {
+          if (isCurrent()) {
+            args.callback(events)
+          }
+        },
+        {
+          signal: args.signal,
+          onTerminalError: (error) => {
+            if (isCurrent()) {
+              reportTerminalError(error)
+            }
+          }
+        }
+      )
+    } catch (error) {
+      if (!isCurrent()) {
+        return
+      }
+      throw error
+    }
+    if (!isCurrent()) {
       nextUnwatch()
       return
     }
+    // Why: a dead transport's handle must never unwatch the replacement transport's root.
+    if (currentProvider === provider) {
+      currentUnwatch()
+    }
     currentUnwatch = nextUnwatch
+    currentProvider = provider
     args.callback([{ kind: 'overflow', absolutePath: args.rootPath }])
   }
 
-  const unsubscribeRearm = onSshFilesystemProviderRegistered((registeredId) => {
-    if (registeredId !== args.connectionId || stopped) {
+  const scheduleReinstall = (): void => {
+    if (stopped) {
       return
     }
-    // Why: reconnect storms can register repeatedly; chain so a second one can't double-install.
+    const generation = ++providerGeneration
+    let attemptProvider: Pick<IFilesystemProvider, 'watch'> | undefined
+    // Why: obsolete reconnect attempts cannot terminate the stream or publish a stale refresh.
     const attempt = (reinstalling ?? Promise.resolve())
-      .then(reinstall)
+      .then(() => {
+        attemptProvider = getSshFilesystemProvider(args.connectionId)
+        return reinstall(generation, attemptProvider)
+      })
       .catch((error: unknown) => {
-        args.onTerminalError(error instanceof Error ? error : new Error(String(error)))
+        if (
+          !stopped &&
+          !args.signal?.aborted &&
+          generation === providerGeneration &&
+          attemptProvider === getSshFilesystemProvider(args.connectionId)
+        ) {
+          reportTerminalError(error)
+        }
       })
       .finally(() => {
         if (reinstalling === attempt) {
@@ -58,6 +118,11 @@ export function armSshFileExplorerWatchRearm(args: {
         }
       })
     reinstalling = attempt
+  }
+  const unsubscribeRearm = onSshFilesystemProviderRegistered((registeredId) => {
+    if (registeredId === args.connectionId) {
+      scheduleReinstall()
+    }
   })
 
   const stop = (): void => {
@@ -72,8 +137,28 @@ export function armSshFileExplorerWatchRearm(args: {
   const rearms = sshFileExplorerWatchRearms.get(key) ?? new Set<() => void>()
   rearms.add(stop)
   sshFileExplorerWatchRearms.set(key, rearms)
+  if (getSshFilesystemProvider(args.connectionId) !== args.initialProvider) {
+    scheduleReinstall()
+  }
+  const isInitialCurrent = (): boolean =>
+    !stopped &&
+    !args.signal?.aborted &&
+    providerGeneration === 0 &&
+    args.initialProvider === getSshFilesystemProvider(args.connectionId)
 
   return {
+    initialCallbacks: {
+      callback: (events) => {
+        if (isInitialCurrent()) {
+          args.callback(events)
+        }
+      },
+      onTerminalError: (error) => {
+        if (isInitialCurrent()) {
+          reportTerminalError(error)
+        }
+      }
+    },
     unsubscribe: () => {
       stop()
       const close = async (): Promise<void> => currentUnwatch()

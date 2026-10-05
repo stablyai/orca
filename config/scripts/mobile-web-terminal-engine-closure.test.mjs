@@ -69,7 +69,15 @@ describeClosure(
       expect(local).toContain('src/terminal/terminal-webview-html.web.ts')
       expect(local).toContain(ENGINE_CSS_MODULE)
       expect(local).not.toContain('src/terminal/terminal-webview-html.ts')
-      expect(local).not.toContain('src/terminal/document/message-bridge.ts')
+      // Ruling 24 put the bridge's two host facts behind seams and ruling 25 made the document
+      // ordinary modules, so the page reaches every one of them, `message-bridge` included: what
+      // keeps the shell's frames out is the transport the page passes, not an absent module.
+      expect(local).toContain('src/terminal/document/message-bridge.ts')
+      expect(local).toContain('src/terminal/document/create-terminal-document.ts')
+      // The entry is the bundle's, and the bundle is the phone's: a page that reached it would be
+      // shipping a second copy of the document as a string.
+      expect(local).not.toContain('src/terminal/document/native-document-entry.ts')
+      expect(local).not.toContain('src/terminal/terminal-webview-document-script.generated.ts')
     }, 180_000)
 
     it('is still what the native document reads its CSS beside', async () => {

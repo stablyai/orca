@@ -34,18 +34,30 @@ function serializedBytes(record: AgentStatusStoreByteBudgetRecord): number {
   return bytes
 }
 
-/** Enforce the complete snapshot budget before commit without allocating a full snapshot. */
-export function agentStatusStoreFitsByteBudget(state: AgentStatusStoreState): boolean {
-  let bytes = serializedBytes({
+/** One stored record's share of the serialized snapshot. */
+export function agentStatusStoreRecordBytes(
+  record: Exclude<AgentStatusStoreByteBudgetRecord, AgentStatusStoreSnapshot>
+): number {
+  return serializedBytes(record)
+}
+
+/** The snapshot's own envelope, without any records or the commas between them. */
+export function agentStatusStoreHeaderBytes(epoch: string, revision: number): number {
+  return serializedBytes({
     version: AGENT_STATUS_STORE_SNAPSHOT_VERSION,
-    epoch: state.epoch,
-    revision: state.revision,
+    epoch,
+    revision,
     parents: [],
     children: [],
     aliases: [],
     facts: [],
     tombstones: []
   })
+}
+
+/** Enforce the complete snapshot budget without allocating a full snapshot. */
+export function agentStatusStoreFitsByteBudget(state: AgentStatusStoreState): boolean {
+  let bytes = agentStatusStoreHeaderBytes(state.epoch, state.revision)
   for (const records of [
     state.parents,
     state.children,

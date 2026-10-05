@@ -16,6 +16,10 @@ export function buildRelayHookEnvelope(
 ): AgentHookRelayEnvelope {
   return {
     source,
+    ...(event.hostEvidenceObservedAt !== undefined
+      ? { evidenceAgeMs: Math.max(0, Date.now() - event.hostEvidenceObservedAt) }
+      : {}),
+    agentPresence: event.agentPresence,
     paneKey: event.paneKey,
     ...(event.launchToken ? { launchToken: event.launchToken } : {}),
     tabId: event.tabId,

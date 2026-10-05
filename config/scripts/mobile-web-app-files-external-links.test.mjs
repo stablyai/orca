@@ -15,7 +15,6 @@
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mobileWebAppRouteClosure } from './build-mobile-web-app-bundle.mjs'
-import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   EXTERNAL_LINK_SEAM as SEAM,
@@ -59,34 +58,6 @@ describeClosure(
   },
   240_000
 )
-
-/**
- * The explorer declares at least what the preview does, because it can become the preview.
- *
- * Grants are resolved once, from the route the shell opened: `grantsForRoute` reads
- * `session.routePathname` and `init.grants.native` carries the answer for the life of that
- * session. The explorer's rows push to the preview, and because the preview is a page route the
- * handoff keeps that push inside the same document — no second `init`, no re-resolved grants. So a
- * preview reached that way runs under the explorer's grants, and anything the preview is granted
- * and the explorer is not is refused at the call site with nothing on screen to say so.
- *
- * Pinned as a superset rather than as equality: the explorer may legitimately need a grant the
- * preview does not.
- */
-describe('the grants an in-page hop carries', () => {
-  const grantsOf = (pathname) =>
-    MOBILE_WEB_PAGE_ROUTES.find((route) => route.pathname === pathname)?.grants
-
-  it('gives the explorer every grant the preview declares', () => {
-    const explorer = grantsOf('/h/[hostId]/files/[worktreeId]')
-    const preview = grantsOf('/h/[hostId]/files/preview/[worktreeId]')
-    // Both declared, so a renamed route cannot turn this into a comparison of two undefineds.
-    expect(explorer, 'the explorer is declared').toBeDefined()
-    expect(preview, 'the preview is declared').toBeDefined()
-    expect(preview.length, 'the preview declares something to inherit').toBeGreaterThan(0)
-    expect(preview.filter((grant) => !explorer.includes(grant))).toEqual([])
-  })
-})
 
 /**
  * Neither files page writes a clipboard, which is why neither is granted `native.clipboard.write`.

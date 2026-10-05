@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as BoundedFileReader from '../../shared/node-bounded-file-reader'
-import type * as NodeFs from 'node:fs'
-import path from 'node:path'
 import {
   createBoundedFileReaderModuleMock,
   createFsPromisesModuleMock,
@@ -90,62 +88,6 @@ describe('getStatus', () => {
     )?.[1] as { preferWslDirectGit?: boolean } | undefined
     expect(addOptions).toBeDefined()
     expect(addOptions?.preferWslDirectGit).toBeUndefined()
-  })
-
-  it('benchmarks concurrent status burst subprocess pressure', async () => {
-    const benchPath = process.env.ORCA_GIT_STATUS_COALESCING_BENCH_JSON
-    if (!benchPath) {
-      return
-    }
-
-    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
-    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
-      if (args.includes('status')) {
-        return Promise.resolve({ stdout: '' })
-      }
-      if (args.includes('--numstat')) {
-        return Promise.resolve({ stdout: '' })
-      }
-      return Promise.resolve({ stdout: '' })
-    })
-
-    const runBurst = async (withSignals: boolean): Promise<number> => {
-      gitExecFileAsyncMock.mockClear()
-      await Promise.all(
-        Array.from({ length: 10 }, () =>
-          getStatus('/repo', withSignals ? { signal: new AbortController().signal } : {})
-        )
-      )
-      return gitExecFileAsyncMock.mock.calls.filter(([args]) =>
-        (args as string[]).includes('status')
-      ).length
-    }
-
-    const startedAt = performance.now()
-    const unsignalledStatusCommandCalls = await runBurst(false)
-    const signalledStatusCommandCalls = await runBurst(true)
-    const durationMs = performance.now() - startedAt
-    const { mkdirSync, writeFileSync } = await vi.importActual<typeof NodeFs>('fs')
-    mkdirSync(path.dirname(benchPath), { recursive: true })
-    writeFileSync(
-      benchPath,
-      JSON.stringify({
-        scenario: 'git-status-concurrent-burst',
-        concurrentCalls: 10,
-        unsignalledStatusCommandCalls,
-        signalledStatusCommandCalls,
-        statusArgs: [
-          '-c',
-          'core.quotePath=false',
-          'status',
-          '--porcelain=v2',
-          '--branch',
-          '--untracked-files=all'
-        ],
-        durationMs
-      })
-    )
   })
 
   it('coalesces identical in-flight status reads without caching after settle', async () => {

@@ -20,6 +20,13 @@ import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import type { TerminalPaneContextController } from './use-terminal-pane-context-actions'
 
+// Why: mirrors xterm's SelectionService.shouldForceSelection — a shifted click
+// (Option-click on Mac, via macOptionClickForcesSelection) is never forwarded
+// as a mouse report, so the TUI cannot paste and Orca must own it instead.
+function terminalForcesSelectionForClick(event: React.MouseEvent): boolean {
+  return navigator.userAgent.includes('Mac') ? event.altKey : event.shiftKey
+}
+
 export function useTerminalPaneMobileActions(controller: TerminalPaneContextController) {
   const {
     cwd,
@@ -127,10 +134,14 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
       // (fired on mouseup, not mousedown; see usePrimarySelectionPaste.ts).
       // Only the paste-to-PTY below is gated on tracking mode, since a
       // tracking TUI still needs the click forwarded as a mouse report and
-      // must not have propagation stopped.
+      // must not have propagation stopped — unless the modifier makes xterm
+      // withhold the report, in which case nobody else will paste.
       event.preventDefault()
       armPrimarySelectionNativePasteSuppression()
-      if (targetPane.terminal.modes.mouseTrackingMode !== 'none') {
+      if (
+        targetPane.terminal.modes.mouseTrackingMode !== 'none' &&
+        !terminalForcesSelectionForClick(event)
+      ) {
         return
       }
       const clickedPane = targetPane
@@ -185,7 +196,7 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
         const execution = await executeTerminalPastePlan(plan, {
           pasteText: (pasteText, pasteOptions) =>
             pasteTerminalText(clickedPane.terminal, pasteText, pasteOptions),
-          writePty: (data) => writeTerminalPastePtyInput(transport, data),
+          writePty: (data) => writeTerminalPastePtyInput(transport, data, 'driving'),
           isTargetCurrent: targetStillMounted,
           canContinue: targetStillMounted
         })
@@ -210,7 +221,10 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
       }
       event.preventDefault()
       armPrimarySelectionNativePasteSuppression()
-      if (targetPane.terminal.modes.mouseTrackingMode === 'none') {
+      if (
+        targetPane.terminal.modes.mouseTrackingMode === 'none' ||
+        terminalForcesSelectionForClick(event)
+      ) {
         event.stopPropagation()
       }
     },

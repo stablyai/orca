@@ -35,6 +35,11 @@ export function getTraceFilePath(): string {
   return join(getLogsDirectory(), 'main.trace.ndjson')
 }
 
+/** orcad's own trace file, named for its process as the daemon's log is. */
+export function getOrcadTraceFilePath(): string {
+  return join(getLogsDirectory(), 'orcad.trace.ndjson')
+}
+
 /** NDJSON lifecycle log written by the detached daemon process. Shared here so
  *  the daemon fork (which passes it as `--log-file`) and the bundle collector
  *  (which reads it) agree on one path. */

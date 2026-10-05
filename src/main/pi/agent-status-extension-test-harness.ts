@@ -46,6 +46,8 @@ export type AgentStatusExtensionHarness = {
   handlers: Record<string, HookHandler>
   processEnv: Record<string, string | undefined>
   callHook: (name: string, event?: unknown, context?: HookContext) => Promise<void>
+  emitPiEvent: (name: string, event: unknown) => void
+  piEventListenerCount: (name: string) => number
   // Re-invoke the extension factory in the same process (as Pi does on an
   // in-process extension reload), swapping in the freshly registered handlers.
   reload: () => void
@@ -130,6 +132,7 @@ export function createAgentStatusExtensionHarness(args: {
           command: { handler: (args: string, context: HookContext) => Promise<void> }
         ) => void
         setModel: (model: unknown) => Promise<boolean>
+        events?: EventEmitter
       }) => void
     }
   } = { exports: {} }
@@ -191,6 +194,7 @@ export function createAgentStatusExtensionHarness(args: {
   }
 
   const handlers: Record<string, HookHandler> = {}
+  const piEvents = new EventEmitter()
   const commands: AgentStatusExtensionHarness['commands'] = {}
   const setModelMock = vi.fn(async (_model: unknown) => true)
   const registerInto = (target: Record<string, HookHandler>): void => {
@@ -199,6 +203,7 @@ export function createAgentStatusExtensionHarness(args: {
         commands[name] = command
       },
       setModel: setModelMock,
+      events: piEvents,
       on(name: string, handler: HookHandler) {
         target[name] = handler
       }
@@ -219,6 +224,10 @@ export function createAgentStatusExtensionHarness(args: {
     callHook: async (name, event, hookContext) => {
       await handlers[name]?.(event, hookContext)
     },
+    emitPiEvent: (name, event) => {
+      piEvents.emit(name, event)
+    },
+    piEventListenerCount: (name) => piEvents.listenerCount(name),
     reload: () => {
       for (const key of Object.keys(handlers)) {
         delete handlers[key]

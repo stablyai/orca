@@ -1,13 +1,17 @@
 import { resolveSessionSearchLimit, SESSION_SEARCH_LIMIT_MAX } from './ai-vault-search-limit'
 import { z } from 'zod'
-import { AI_VAULT_AGENTS, AI_VAULT_SCOPE_PATHS_MAX_COUNT } from './ai-vault-types'
+import {
+  AI_VAULT_AGENTS,
+  AI_VAULT_SCOPE_PATHS_MAX_COUNT,
+  AI_VAULT_SEARCH_SORTS
+} from './ai-vault-types'
 import { AiVaultSearchScopeIdentitySchema } from './ai-vault-search-scope'
 
 export const AiVaultSearchFiltersSchema = z.object({
   agents: z.array(z.enum(AI_VAULT_AGENTS)).optional(),
   scopePaths: z.array(z.string().min(1).max(4096)).max(AI_VAULT_SCOPE_PATHS_MAX_COUNT).optional(),
   since: z.string().datetime({ offset: true }).optional(),
-  sort: z.enum(['relevance', 'newest']).optional()
+  sort: z.enum(AI_VAULT_SEARCH_SORTS).optional()
 })
 
 // Strip unknown fields so legacy tier/refresh are accepted without affecting the query.
@@ -19,6 +23,9 @@ export const AiVaultSearchRequestSchema = z
     limit: z.number().optional().transform(resolveSessionSearchLimit),
     cursor: z.string().optional(),
     filters: AiVaultSearchFiltersSchema.optional(),
+    supportedAgents: z.array(z.string()).optional(),
+    supportsQoderHistory: z.boolean().optional(),
+    supportsJcodeHistory: z.boolean().optional(),
     /** Scope by identity, resolved into paths by whichever host answers. */
     within: AiVaultSearchScopeIdentitySchema.optional(),
     debug: z.boolean().optional()
@@ -86,7 +93,8 @@ export const AiVaultSearchHostOutcomeSchema = z.object({
     'no-service',
     'unreachable',
     // This host does not know the workspace or project the scope named.
-    'scope-unknown'
+    'scope-unknown',
+    'unsupported-agent'
   ])
 })
 const routeSchema = z.enum(['phrase', 'and', 'or', 'typo+phrase', 'typo+and', 'typo+or'])
@@ -121,13 +129,17 @@ export const AiVaultSearchResponseSchema = z.discriminatedUnion('kind', [
     kind: z.literal('unavailable'),
     // `scope-unknown` only ever answers a request that carried `within`, so a
     // client too old to send one can never receive a reason it cannot parse.
-    reason: z.enum(['disabled', 'not-ready', 'no-service', 'scope-unknown'])
+    reason: z.enum(['disabled', 'not-ready', 'no-service', 'scope-unknown', 'unsupported-agent'])
   })
 ])
 export const AiVaultSearchStatusRequestSchema = z.object({})
 /** Consent flip for one host's index. Answered with that host's status after the change is applied. */
 export const AiVaultSetSearchEnabledParamsSchema = z.object({ enabled: z.boolean() })
 export const AiVaultSearchStatusSchema = z.object({
+  // Strings keep a future host's larger catalog readable by this client.
+  supportedAgents: z.array(z.string()).optional(),
+  supportsQoderHistory: z.boolean().optional(),
+  supportsJcodeHistory: z.boolean().optional(),
   enabled: z.boolean(),
   phase: z.enum(['idle', 'indexing', 'current', 'degraded', 'closed']),
   filesIndexed: z.number().int().nonnegative(),

@@ -1,3 +1,4 @@
+import { closeTestStores, createSqliteTestStore } from './persistence-test-harness'
 /**
  * SSH re-adoption has to repair the automation with the workspace.
  *
@@ -145,7 +146,7 @@ async function createStoreFromState(state: Record<string, unknown>) {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 /** Re-read whatever is on disk now — no fixture rewrite. */
@@ -154,7 +155,7 @@ async function reloadStore() {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 async function createSshStore(state: Record<string, unknown>) {
@@ -172,7 +173,8 @@ beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-readopt-'))
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTestStores()
   rmSync(testState.dir, { recursive: true, force: true })
   vi.resetModules()
 })

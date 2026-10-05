@@ -2,7 +2,6 @@ import * as path from 'node:path'
 import type { RemoveWorktreeResult } from '../shared/worktree/create-types'
 import { isBranchCheckedOutInWorktreeError } from '../shared/git-branch-delete-refusal'
 import { assertWorktreeUnlockedForRemoval } from '../shared/worktree/removal'
-import { isSubmoduleWorktreeRemovalRefusal } from '../shared/worktree/submodule-removal'
 import { deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure } from './git-handler-branch-cleanup'
 import type { GitExec } from './git-handler-ops'
 import type { GitCapabilityCache } from '../shared/git-capability-cache'
@@ -135,23 +134,7 @@ export async function removeWorktreeOp(
     args.push('--force')
   }
   args.push(worktreePath)
-  try {
-    await git(args, repoPath)
-  } catch (error) {
-    if (force || !isSubmoduleWorktreeRemovalRefusal(error)) {
-      throw error
-    }
-    // Why: Git refuses non-force removal of any worktree with an initialised
-    // submodule even when everything is clean. Re-prove cleanliness (parent
-    // status reports dirty submodule content as ` M <sub>`), then --force.
-    const { stdout } = await git(['status', '--porcelain', '--untracked-files=all'], worktreePath)
-    if (stdout.trim()) {
-      const dirtyError = new Error('Worktree has uncommitted or untracked changes.')
-      ;(dirtyError as Error & { stdout?: string }).stdout = stdout
-      throw dirtyError
-    }
-    await git(['worktree', 'remove', '--force', worktreePath], repoPath)
-  }
+  await git(args, repoPath)
 
   if (!branchName) {
     return {}

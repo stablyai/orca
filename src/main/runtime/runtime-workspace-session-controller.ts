@@ -107,7 +107,16 @@ export class RuntimeWorkspaceSessionController {
     return hostId ? (this.deps.getStore()?.getWorkspaceSession?.(hostId) ?? null) : null
   }
 
-  set(worktreeId: string, session: WorkspaceSessionState): void {
+  /** The session only when the worktree's own host partition owns it, not a rotated-owner fallback. */
+  getOwnPartition(worktreeId: string): WorkspaceSessionState | null {
+    const store = this.deps.getStore()
+    const hostId = store ? this.getPreferredHostId(worktreeId, store) : null
+    return hostId && hostId === this.tryGetHostId(worktreeId)
+      ? (store?.getWorkspaceSession?.(hostId) ?? null)
+      : null
+  }
+
+  setForWorktree(worktreeId: string, session: WorkspaceSessionState): void {
     this.deps.getStore()?.setWorkspaceSession?.(session, this.getHostId(worktreeId))
   }
 

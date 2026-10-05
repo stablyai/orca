@@ -1,23 +1,25 @@
+import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
 import type { CodexAppServerConnection } from './codex-app-server-connection-types'
 import { closeProcessRegistry } from '../../shared/child-process/close-process-registry'
 import {
   cancelCodexAcquisitionAttempt,
   type CodexAcquisitionRegistry,
   type CodexSession,
-  type CodexStructuredSessionAdapterDeps,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-state'
-import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 export function handleCodexSessionExit(input: {
   sessions: Map<string, CodexSession>
   sessionId: string
   connection: CodexAppServerConnection | null
   error: Error
+  /** Set for the end of a close Orca began: by that close, or by the root's own exit report. */
+  closedByOrca?: true
   prompts?: CodexSession['prompts']
-  allowFailedSettlement?: boolean
   onEvent?: (event: CodexStructuredSessionEvent) => void
-  onBackgroundTasksChanged?: CodexStructuredSessionAdapterDeps['onBackgroundTasksChanged']
+  logger?: StructuredAgentSessionLogger
 }): boolean {
   const session = input.sessions.get(input.sessionId)
   if (!session || session.connection !== input.connection || session.ended) {
@@ -25,33 +27,40 @@ export function handleCodexSessionExit(input: {
     return false
   }
   session.exitObservedAt ??= Date.now()
-  const event: StructuredAgentSessionLifecycleEvent = {
+  // Before the admission check: the child is gone whether or not its end was admitted.
+  session.turnOpenWaits.releaseAll()
+  const event: StructuredAgentSessionEndedEvent = {
     type: 'ended',
     sessionId: input.sessionId,
-    reason: input.error.message,
-    cause: session.requestedClose ? 'requested-close' : 'unexpected-exit',
+    // The connection reports the exit inside the close it ends; the close's own reason is the why.
+    reason: ((input.closedByOrca && session.orcaClose?.reason) || input.error).message,
+    // Only the child's own exit blames Codex; a close Orca made, for any reason, is Orca's.
+    failure: input.closedByOrca
+      ? agentSessionFailureFact('hostFault')
+      : agentSessionFailureFact('providerExited', { detail: providerDiagnosticOf(input.error) }),
+    cause: session.orcaClose?.requested ? 'requested-close' : 'unexpected-exit',
     fence: session.fence,
     acquisitionGeneration: session.acquisitionGeneration,
     observedAt: session.exitObservedAt
   } as const
-  // A synchronous sink rejection (usually backpressure) is handed to host
-  // recovery, which appends the bounded fallback before reacquisition.
+  // A synchronous sink rejection (usually backpressure) leaves the terminal rows to the host's
+  // exit settlement, which writes its own bounded fallback. The exit itself is observed, so the
+  // session ends either way: holding a dead child as unproven over a refused row would strand it.
   const admission = session.translator?.handle(event) ?? { accepted: true }
   if (!admission.accepted) {
-    // The connection invokes onExit exactly once. Forward a flagged event so
-    // host recovery can append its no-new-blob fallback even when admission is
-    // backpressured; waiting for a second callback would strand the lease.
-    if (event.cause !== 'unexpected-exit' && !input.allowFailedSettlement) {
-      return false
-    }
-    event.settlementRetryRequired = true
+    input.logger?.warn("Codex's final rows were refused; the host settles the turn instead", {
+      scope: 'codex-exit-rows',
+      sessionId: input.sessionId,
+      reason: admission.reason
+    })
   }
   session.ended = true
   // Nothing can echo for this child any more; the journal's pending-submission
   // recovery is what settles the sends these were armed for.
   session.dispatchEchoes.clear()
   session.backgroundTasks.clear()
-  input.onBackgroundTasksChanged?.(input.sessionId, null)
+  // Every close path funnels here, so the session's children end with it on each one.
+  session.backgroundTasks.publishChildWork()
   session.unbindReadingControl?.()
   input.onEvent?.(event)
   session.prompts.clear()
@@ -64,7 +73,7 @@ export async function closeCodexPublishedSession(
   sessionId: string,
   onEvent?: (event: CodexStructuredSessionEvent) => void,
   options?: {
-    allowFailedSettlement?: boolean
+    logger?: StructuredAgentSessionLogger
     requestedClose?: boolean
     expectedFence?: number
     expectedAcquisitionGeneration?: string
@@ -84,7 +93,10 @@ export async function closeCodexPublishedSession(
   }
   // Sink-failure recovery force-closes the child but must preserve the
   // observed-exit cause so host lease settlement runs as an unexpected death.
-  session.requestedClose = options?.requestedClose ?? true
+  session.orcaClose = {
+    requested: options?.requestedClose ?? true,
+    reason: options?.unexpectedReason ?? new Error('codex session closed')
+  }
   // Keep the session indexed until the child exit is observed. A timeout or
   // failed kill must leave the live connection available for a safe retry.
   const exited = await session.connection.close()
@@ -92,20 +104,16 @@ export async function closeCodexPublishedSession(
     return false
   }
   if (!session.ended) {
-    const handled = handleCodexSessionExit({
+    handleCodexSessionExit({
       sessions,
       sessionId,
       connection: session.connection,
-      error: options?.unexpectedReason ?? new Error('codex session closed'),
+      error: session.orcaClose.reason,
+      closedByOrca: true,
       prompts: session.prompts,
-      ...(options?.allowFailedSettlement ? { allowFailedSettlement: true } : {}),
-      ...(onEvent ? { onEvent } : {})
+      ...(onEvent ? { onEvent } : {}),
+      ...(options?.logger ? { logger: options.logger } : {})
     })
-    // Keep the closed session indexed when terminal settlement admission was
-    // rejected; a later close attempt retries the same stable lifecycle event.
-    if (!handled) {
-      return false
-    }
   }
   sessions.delete(sessionId)
   return true
@@ -115,7 +123,8 @@ export async function closeCodexSession(
   sessionId: string,
   sessions: Map<string, CodexSession>,
   acquisitions: CodexAcquisitionRegistry,
-  onEvent?: (event: CodexStructuredSessionEvent) => void
+  onEvent?: (event: CodexStructuredSessionEvent) => void,
+  logger?: StructuredAgentSessionLogger
 ): Promise<boolean> {
   const attempt = acquisitions.get(sessionId)
   if (!(await cancelCodexAcquisitionAttempt(attempt))) {
@@ -124,7 +133,7 @@ export async function closeCodexSession(
   if (attempt) {
     acquisitions.deleteIfCurrent(sessionId, attempt)
   }
-  return closeCodexPublishedSession(sessions, sessionId, onEvent)
+  return closeCodexPublishedSession(sessions, sessionId, onEvent, logger ? { logger } : {})
 }
 
 export async function closeAllCodexSessions(

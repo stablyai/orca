@@ -44,7 +44,7 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
     const ownerAgent = pty.launchAgent ?? pty.foregroundAgent
     const title = normalizeCompatibleAgentTitleForOwner(
-      args.title ?? getLatestPtyTitle(pty) ?? 'Terminal',
+      args.title ?? getLatestPtyTitle(this.getPtyDisplayRecord(pty)) ?? 'Terminal',
       ownerAgent,
       { ownerIsLaunch: Boolean(pty.launchAgent) }
     )

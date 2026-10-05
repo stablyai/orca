@@ -28,7 +28,7 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn(() => null) }
 }))
 
-function completionFixture(delayMs = 0) {
+function completionFixture(delayMs = 0, presence?: 'unverifiable') {
   const db = createDatabase('orca-codex-completion-title-')
   const hook: AgentStatusIpcPayload = {
     paneKey: PANE_KEY,
@@ -40,7 +40,11 @@ function completionFixture(delayMs = 0) {
     receivedAt: Date.now(),
     stateStartedAt: Date.now()
   }
-  const { runtime } = createRuntime(db, { getAgentStatusSnapshot: () => [hook] })
+  const { runtime } = createRuntime(db, {
+    getAgentStatusSnapshot: () => [hook],
+    // Why: a Codex hook row has presence but no process id, so the store cannot answer.
+    ...(presence ? { checkHookAgentPresence: async () => presence } : {})
+  })
   const write = vi.fn((_ptyId: string, _data: string) => true)
   const getForegroundProcess = vi.fn(async (): Promise<string | null> => {
     if (delayMs) {
@@ -75,12 +79,17 @@ describe('Codex completion title mailbox delivery', () => {
     { arrival: 'before', delay: 0 },
     { arrival: 'after', delay: 0 },
     { arrival: 'before', delay: 750 },
-    { arrival: 'after', delay: 750 }
+    { arrival: 'after', delay: 750 },
+    { arrival: 'before', delay: 0, presence: 'unverifiable' as const },
+    { arrival: 'after', delay: 750, presence: 'unverifiable' as const }
   ])(
-    'submits mail arriving $arrival completion with a $delay ms host probe',
-    async ({ arrival, delay }) => {
+    'submits mail arriving $arrival completion with a $delay ms host probe (presence $presence)',
+    async ({ arrival, delay, presence }) => {
       vi.useFakeTimers()
-      const { db, runtime, write, run, completeWithNativeTitles } = completionFixture(delay)
+      const { db, runtime, write, run, completeWithNativeTitles } = completionFixture(
+        delay,
+        presence
+      )
       await runtime.listTerminals()
       if (arrival === 'before') {
         insertDirectRunMessage(db, run.id, 'Worker progress')

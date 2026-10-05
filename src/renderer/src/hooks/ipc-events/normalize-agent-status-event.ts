@@ -22,7 +22,8 @@ export function normalizeAgentStatusEvent(
     interrupted: data.interrupted,
     sessionBoundary: data.sessionBoundary,
     turnCompletedAt: data.turnCompletedAt,
-    subagents: data.subagents
+    subagents: data.subagents,
+    mainAgent: data.mainAgent
   })
 }
 

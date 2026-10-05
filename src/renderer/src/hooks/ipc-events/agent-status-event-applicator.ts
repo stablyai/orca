@@ -6,7 +6,6 @@ import {
 } from '../../../../shared/agent-status-identity'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { shouldSuppressCodexAutoApprovalStatus } from '@/components/terminal-pane/codex-auto-approval-notification-suppression'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { track } from '@/lib/telemetry'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
@@ -217,18 +216,6 @@ export function createAgentStatusEventApplicator(args: {
     ) {
       return 'dropped'
     }
-    if (
-      shouldSuppressCodexAutoApprovalStatus(statusPayload, {
-        paneKey,
-        tabId: ownerTabId,
-        terminalHandle: data.terminalHandle,
-        launchToken: data.launchToken,
-        providerSession: data.providerSession,
-        existingProviderSession: existingStatus?.providerSession
-      })
-    ) {
-      return 'dropped'
-    }
     const terminalTitle = resolveAgentStatusTerminalTitle(statusPayload, title)
     const statusWorktreeId = data.worktreeId ?? owningWorktreeId
     const update: AgentStatusUpdate = {
@@ -240,7 +227,8 @@ export function createAgentStatusEventApplicator(args: {
         ...(data.evidenceObservedAt !== undefined
           ? { evidenceObservedAt: data.evidenceObservedAt }
           : {}),
-        stateStartedAt: data.stateStartedAt
+        stateStartedAt: data.stateStartedAt,
+        ...(Number.isFinite(data.turnStartedAt) ? { turnStartedAt: data.turnStartedAt } : {})
       },
       routing: {
         tabId: ownerTabId,

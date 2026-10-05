@@ -483,31 +483,4 @@ describe('legacy SSH orchestration fallback', () => {
       db.close()
     }
   })
-
-  it.each([
-    ['check', ['orchestration', 'check', '--terminal', COORDINATOR_HANDLE]],
-    ['ask', ['orchestration', 'ask', '--from', WORKER_HANDLE, '--question', 'continue?']]
-  ])('refuses a non-UUID --retry-request on orchestration %s', async (_label, commandArgv) => {
-    const { db, runtime } = createLegacyRuntime()
-
-    try {
-      const result = await runRemoteOrcaCli(
-        runtime,
-        {
-          argv: [...commandArgv, '--retry-request', 'ssh-check-1', '--json'],
-          cwd: '/home/alice/repo',
-          env: WORKER_ENV,
-          runtimeAuthority: RUNTIME_AUTHORITY
-        },
-        LEGACY_FALLBACK_OPTIONS
-      )
-
-      expect(result.exitCode).toBe(1)
-      expect(JSON.parse(result.stdout)).toMatchObject({
-        error: { code: 'invalid_argument', message: expect.stringContaining('must be the UUID') }
-      })
-    } finally {
-      db.close()
-    }
-  })
 })

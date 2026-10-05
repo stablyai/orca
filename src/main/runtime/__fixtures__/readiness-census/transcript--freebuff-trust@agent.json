@@ -1,0 +1,13 @@
+{
+  "description": "freebuff recording at 120x40 replayed on the agent pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-2: now=pending:after-paint edge=pending:after-paint quiet=pending:after-paint wait=ready@poll",
+      "3-4: now=blocked:agent-trust-workspace edge=blocked:agent-trust-workspace quiet=blocked:agent-trust-workspace wait=blocked:agent-trust-workspace@start"
+    ],
+    "clockless": [
+      "0-2: verdict=pending:after-paint wait=pending",
+      "3-4: verdict=blocked:agent-trust-workspace wait=blocked:agent-trust-workspace@start"
+    ]
+  }
+}

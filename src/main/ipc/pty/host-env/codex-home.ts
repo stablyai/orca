@@ -1,7 +1,5 @@
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
 import {
   isCodexHomeAuthReadyForLaunch,
   waitForManagedCodexAuthReady
@@ -15,11 +13,6 @@ import {
 } from '../../../codex/codex-pane-account-registry'
 import { resolveCodexPaneLaunchAccount } from '../../../codex/codex-pane-launch-account'
 import { getSystemCodexHomePath } from '../../../codex/codex-home-paths'
-import {
-  environmentCodexHomeOverrideContextsEqual,
-  getCustomCodexHomeOverrideForLaunch,
-  shellStartupCodexHomeOverrideContextsEqual
-} from '../../../codex/codex-real-home-path'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../../../pty/codex-home-wsl-env'
 import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
 import { parseWslPath } from '../../../wsl'
@@ -29,12 +22,6 @@ export function shouldSkipCodexHomeEnvForWindowsShell(
   cwd: string | undefined
 ): boolean {
   return isWslShellName(shellPath) || (typeof cwd === 'string' && parseWslPath(cwd) !== null)
-}
-
-export function isCodexStatusHooksEnabled(settings: GlobalSettings | undefined): boolean {
-  return (
-    isAgentStatusHooksEnabled(settings) && isTuiAgentEnabled('codex', settings?.disabledTuiAgents)
-  )
 }
 
 // Why: with the real-home flag ON, a host system-default launch resolves to a
@@ -225,47 +212,16 @@ export function recordCodexPaneAccountForSpawn(args: {
   isReattach: boolean
   pinnedByResume: boolean
   launchCodexHomePath: string | null
-  launchEnv?: NodeJS.ProcessEnv
   target: CodexAccountSelectionTarget
   settings: GlobalSettings | undefined
 }): void {
   if (!args.ptyId || !args.isDaemonHostSpawn || args.isReattach) {
     return
   }
-  const customHomeOverride = getCustomCodexHomeOverrideForLaunch(args.launchEnv)
-  const processHomeOverride = customHomeOverride ? getCustomCodexHomeOverrideForLaunch() : null
-  const recheckableEnvironmentOverride =
-    customHomeOverride?.source === 'environment' &&
-    processHomeOverride?.source === 'environment' &&
-    environmentCodexHomeOverrideContextsEqual(
-      customHomeOverride.context,
-      processHomeOverride.context
-    )
-      ? customHomeOverride.context
-      : undefined
-  const recheckableShellStartupOverride =
-    customHomeOverride?.source === 'shell-startup' &&
-    processHomeOverride?.source === 'shell-startup' &&
-    shellStartupCodexHomeOverrideContextsEqual(
-      customHomeOverride.context,
-      processHomeOverride.context
-    )
-      ? customHomeOverride.context
-      : undefined
   const record = args.settings
     ? resolveCodexPaneLaunchAccount({
         pinnedByResume: args.pinnedByResume,
         launchCodexHomePath: args.launchCodexHomePath,
-        // Why: pane-local overrides cannot be re-derived when a restart builds
-        // a fresh launch env, so route prompts would guess and block valid input.
-        recordComparableHomeRoute:
-          args.pinnedByResume ||
-          ((customHomeOverride?.source !== 'environment' ||
-            recheckableEnvironmentOverride !== undefined) &&
-            (customHomeOverride?.source !== 'shell-startup' ||
-              recheckableShellStartupOverride !== undefined)),
-        shellStartupHomeOverride: args.pinnedByResume ? undefined : recheckableShellStartupOverride,
-        environmentHomeOverride: args.pinnedByResume ? undefined : recheckableEnvironmentOverride,
         systemCodexHomePath: getSystemCodexHomePath(),
         settings: args.settings,
         target: args.target

@@ -11,7 +11,11 @@ import {
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
-import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultAgent,
+  AiVaultSearchSort,
+  AiVaultSession
+} from '../../../../shared/ai-vault-types'
 import type { AiVaultSearchScopeIdentity } from '../../../../shared/ai-vault-search-scope'
 import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault-search-settings'
 import { isWebClientLocation } from '@/lib/web-client-location'
@@ -139,7 +143,8 @@ export function useAiVaultPanelSearch(
   agents: readonly AiVaultAgent[],
   /** Which scope the host resolves; undefined searches everything it has. */
   within: AiVaultSearchScopeIdentity | undefined,
-  executionHostScope: ExecutionHostScope
+  executionHostScope: ExecutionHostScope,
+  sort: AiVaultSearchSort
 ) {
   const settings = useAppStore((state) => state.settings?.aiVaultSearch)
   const policy = resolveAiVaultSearchSettings({ aiVaultSearch: settings })
@@ -159,11 +164,12 @@ export function useAiVaultPanelSearch(
       searching && scope && agents.length > 0
         ? {
             query: trimmed,
-            filters: { agents: [...agents] },
+            // Relevance is the host's own default, so only the other order travels.
+            filters: { agents: [...agents], ...(sort === 'relevance' ? {} : { sort }) },
             ...(within ? { within } : {})
           }
         : null,
-    [searching, scope, agents, trimmed, within]
+    [searching, scope, agents, trimmed, within, sort]
   )
   const search = useAiVaultSearch(request, scope, JSON.stringify(policy))
   const sessions = useMemo(

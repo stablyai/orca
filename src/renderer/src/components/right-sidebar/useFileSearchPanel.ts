@@ -21,6 +21,7 @@ export type FileSearchPanelModel = {
   filtersProps: SearchFiltersProps
   resultsProps: {
     results: SearchResult | null
+    error?: string | null
     hasCommittedResults: boolean
     query: string
     loading: boolean
@@ -132,7 +133,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
   useEffect(() => {
     if (!worktreePath) {
       cancelPendingSearch()
-      updateActiveSearchState({ results: null, resultOwner: null })
+      updateActiveSearchState({ results: null, resultOwner: null, error: null })
     }
   }, [worktreePath, cancelPendingSearch, updateActiveSearchState])
 
@@ -281,6 +282,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
     },
     resultsProps: {
       results: deferredSearchResults.results,
+      error: searchState?.error,
       hasCommittedResults: fileSearchResults !== null,
       query: fileSearchQuery,
       loading: fileSearchLoading,

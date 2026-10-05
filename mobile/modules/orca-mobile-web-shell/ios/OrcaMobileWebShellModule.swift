@@ -5,7 +5,7 @@ public class OrcaMobileWebShellModule: Module {
     Name("OrcaMobileWebShell")
 
     View(OrcaMobileWebShellView.self) {
-      Events("onLoadState", "onBridgeMessage")
+      Events("onLoadState", "onBridgeMessage", "onExternalNavigation")
 
       Prop("generationDirectory") { (view: OrcaMobileWebShellView, value: String) in
         view.setGenerationDirectory(value)

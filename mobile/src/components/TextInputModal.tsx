@@ -24,6 +24,8 @@ type Props = {
   keyboardType?: KeyboardTypeOptions
   onSubmit: (value: string) => void
   onCancel: () => void
+  /** Called once the drawer has gone, which is when the field stops holding the focus. */
+  onAfterClose?: () => void
 }
 
 export function TextInputModal({
@@ -37,7 +39,8 @@ export function TextInputModal({
   allowEmpty = false,
   keyboardType,
   onSubmit,
-  onCancel
+  onCancel,
+  onAfterClose
 }: Props) {
   const [value, setValue] = useState(defaultValue)
   const [previousVisible, setPreviousVisible] = useState(visible)
@@ -64,7 +67,7 @@ export function TextInputModal({
   const canSubmit = allowEmpty || value.trim().length > 0
 
   return (
-    <BottomDrawer visible={visible} onClose={onCancel}>
+    <BottomDrawer visible={visible} onClose={onCancel} onAfterClose={onAfterClose}>
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         {message ? <Text style={styles.message}>{message}</Text> : null}

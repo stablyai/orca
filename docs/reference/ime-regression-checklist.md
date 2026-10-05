@@ -100,3 +100,47 @@ Each fix must pass all of these checks:
   regenerate its bundle patch and lockfile together.
 - Prefer deterministic replay or state-transition tests. Native evidence is a
   second layer, never a substitute for regression coverage.
+
+## Enter in application text fields (#25035)
+
+Use `Input`, `Textarea`, or `CommandInput` for styled fields. Existing unstyled
+fields with keyboard actions use `ImeInput` / `ImeTextarea` from
+`lib/ime-text-field.tsx`; those preserve the DOM element, styles, refs, and
+composition callbacks. They share `useImeEnterGestureOwnership` and keep
+IME-owned keys out of both field actions and bubbling form/menu shortcuts.
+Overlay primitives also reject IME-marked Escape in document capture, where
+field-level propagation guards cannot intercept dismissal.
+Do not add a second tracker at a call site already using a guarded field.
+Native Chat and the File Explorer inline name field retain their existing
+trackers because they also own specialized composition or element lifetimes.
+
+Required cases:
+
+- `isComposing`, `keyCode: 229` without `isComposing`, and `Process/229` must
+  never submit, choose a suggestion, or dismiss the field.
+- The unmarked Enter redispatch stays owned on either side of keyup, including
+  a `Process/229` release. A
+  subsequent ordinary typing/navigation key ends that carry immediately;
+  hidden renderers may defer animation frames, and typing a filename suffix
+  must not cause the next deliberate Enter to disappear.
+- Composition callbacks, blur, refs, and keyed remount cleanup still work.
+  Normal Enter, modifier submits, and Shift+Enter newlines remain available.
+- Test the actual shared field when a consumer delegates IME handling to it;
+  a mock that replaces `CommandInput` with a raw input removes the protection.
+
+`ime-text-field.test.tsx` covers primitives, raw fields, parent handlers, and
+command selection. File Explorer component tests cover all three operations
+and input replacement. `file-explorer-ime-enter.spec.ts` drives Chromium
+composition in New File, New Folder, and Rename in a folder workspace, then
+checks the complete name in the Explorer and on disk, with both continued typing
+and a redispatch followed by deliberate Enter. Overlay tests cover IME Escape
+and ordinary dismissal; Markdown tests preserve an unmarked save shortcut while
+composition state lingers. These are CDP event
+contracts, not native OS keyboard evidence.
+
+The audit also covers settings and title fields, issue/review creation and
+pickers, comments and annotations, search fields, Native Chat questions,
+notebook execution shortcuts, and Markdown menu handlers. Terminal input keeps
+its existing xterm/PTY ownership; mobile native fields use `onSubmitEditing`
+instead of desktop DOM keydown actions. Remote workspaces use the same renderer
+fields; file-operation routing and mixed-version wire contracts are unchanged.

@@ -1,6 +1,9 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
+import type { NestedWorktreeRemovalApproval } from '../../../../shared/worktree/nested-removal'
+
 export type RemoveWorktreeOptions = {
+  approvedNestedWorktrees?: NestedWorktreeRemovalApproval[]
   // 'forget-local' drops the workspace from Orca only (no remote Git/FS work)
   // for workspaces pinned to a removed/disconnected SSH host. Reuses the same
   // renderer-side teardown/purge as a normal remove.

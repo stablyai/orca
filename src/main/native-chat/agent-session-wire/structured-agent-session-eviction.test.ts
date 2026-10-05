@@ -5,191 +5,74 @@ import {
   STRUCTURED_AGENT_SESSION_EVICTION_STEPS,
   type StructuredAgentSessionEvictionContext
 } from './structured-agent-session-eviction'
-import {
-  AgentSessionAcquisitionRootExitObservedError,
-  AgentSessionPreSpawnError
-} from './structured-agent-session-adapter'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
+import { withJournalQueueMembers } from './structured-agent-session-journal-double-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
-function context(): StructuredAgentSessionEvictionContext & { order: string[] } {
+function context(closeError?: Error): StructuredAgentSessionEvictionContext & { order: string[] } {
   const order: string[] = []
   return {
     order,
     sessionId: 'session-1',
+    logger: createStructuredAgentSessionLogger(),
     eventSink: {
       unbind: vi.fn(() => order.push('unbind')),
       drained: vi.fn(async () => {
         order.push('drained')
-        return { ok: true }
+        return { ok: true as const }
       }),
-      close: vi.fn(() => order.push('close'))
-    } as unknown as StructuredAgentSessionEvictionContext['eventSink'],
-    adapter: {
-      closeSession: vi.fn(async () => {
-        order.push('closeSession')
-        return true
+      close: vi.fn(() => {
+        order.push('close')
+        if (closeError) {
+          throw closeError
+        }
       })
-    } as unknown as StructuredAgentSessionEvictionContext['adapter'],
-    forget: vi.fn(async () => {
-      order.push('forget')
+    },
+    acknowledgeRelease: vi.fn(() => {
+      order.push('acknowledgeRelease')
     }),
-    discardSink: vi.fn(() => order.push('discardSink')),
-    settleWork: vi.fn(async () => {
-      order.push('settleWork')
-    }),
-    releaseLease: vi.fn(async () => {
-      order.push('releaseLease')
-    })
+    discardSink: vi.fn(() => order.push('discardSink'))
   }
 }
 
 function runtimeState(): StructuredAgentSessionHostRuntimeState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: eviction against the sink cache reads only the sinks and the logger; store and adapter are never reached.
   return new StructuredAgentSessionHostRuntimeState({
-    store: {} as never,
-    adapter: {} as never
+    store: {},
+    adapter: {},
+    logger: recordingStructuredAgentSessionLogger().logger
   } as never)
 }
 
-describe('structured agent session eviction', () => {
-  it('stops the child before it lets the sink go, then forgets the session', async () => {
+describe("the route release after a child's exit", () => {
+  it('lets the sink go before it acknowledges the release', async () => {
     const ctx = context()
     await evictStructuredAgentSession(ctx)
-    expect(ctx.order).toEqual([
-      'closeSession',
-      'drained',
-      'settleWork',
-      'unbind',
-      'close',
-      'discardSink',
-      'releaseLease',
-      'forget'
-    ])
+    expect(ctx.order).toEqual(['unbind', 'close', 'discardSink', 'acknowledgeRelease'])
   })
 
-  it('uses disposal rather than handoff close when the chat is removed', async () => {
-    const ctx = context()
-    const closeSession = vi.fn(async () => {
-      throw new Error('resume cursor unavailable')
-    })
-    const disposeSession = vi.fn(async () => true)
-    ctx.adapter = { ...ctx.adapter, closeSession, disposeSession }
-
-    await evictStructuredAgentSession(ctx)
-
-    expect(disposeSession).toHaveBeenCalledWith('session-1')
-    expect(closeSession).not.toHaveBeenCalled()
-  })
-
-  it('names every step, so a half-finished eviction says which one failed', () => {
+  it('names every step, so a failure says which one it was', () => {
     expect(STRUCTURED_AGENT_SESSION_EVICTION_STEPS.map((step) => step.name)).toEqual([
-      'stop-provider-child',
-      'drain-published',
-      'settle-dead-generation',
       'stop-publishing',
       'close-sink',
       'discard-sink',
-      'release-lease',
-      'forget-session'
+      'acknowledge-release'
     ])
   })
 
-  it('aborts after a failed drain barrier without unbinding or forgetting the session', async () => {
-    const ctx = context()
-    ctx.eventSink.drained = vi.fn(async () => {
-      ctx.order.push('drained')
-      return { ok: false, error: new Error('append failed') }
-    }) as unknown as StructuredAgentSessionEvictionContext['eventSink']['drained']
+  // Bookkeeping for a process already gone: none of it may keep the child on record.
+  it('reports a failed step with its name and still runs every step after it', async () => {
+    const recorded = recordingStructuredAgentSessionLogger()
+    const ctx = { ...context(new Error('sink already gone')), logger: recorded.logger }
 
-    await expect(evictStructuredAgentSession(ctx)).rejects.toMatchObject({
-      step: 'drain-published'
-    })
-    expect(ctx.eventSink.unbind).not.toHaveBeenCalled()
-    expect(ctx.eventSink.close).not.toHaveBeenCalled()
-    expect(ctx.discardSink).not.toHaveBeenCalled()
-    expect(ctx.releaseLease).not.toHaveBeenCalled()
-    expect(ctx.forget).not.toHaveBeenCalled()
-    expect(ctx.order).toEqual(['closeSession', 'drained'])
-  })
-})
+    await expect(evictStructuredAgentSession(ctx)).resolves.toBeUndefined()
 
-// Closing the codex child is not silent: the adapter emits its `ended` event and flushes coalesced
-// text as it shuts down, and those rows are what clear the running-turn marker. If the sink is
-// already closed the journal keeps claiming the agent is working, forever.
-describe('rows the provider emits while closing', () => {
-  it('still reach the journal', async () => {
-    const state = runtimeState()
-    const sessionId = 'session-closing-rows'
-    const sink = state.eventSinkFor(sessionId)
-    const published: string[] = []
-    sink.bind({ journal: {} as never, fence: 1, publish: () => published.push('final-flush') })
-
-    await evictStructuredAgentSession({
-      sessionId,
-      eventSink: sink,
-      adapter: {
-        closeSession: async () => {
-          // What codex-structured-session-close does on its way out.
-          sink.sink.publish()
-          return true
-        }
-      } as never,
-      forget: async () => {},
-      discardSink: () => state.discardEventSink(sessionId),
-      releaseLease: async () => {}
-    })
-
-    expect(published).toEqual(['final-flush'])
-  })
-})
-
-// `closeSession` returning false means the adapter could not prove the child exited and has kept
-// the session indexed on purpose so a retry can reach it.
-describe('a child that will not stop', () => {
-  it.each([
-    new AgentSessionAcquisitionRootExitObservedError(new Error('root exited')),
-    new AgentSessionPreSpawnError(new Error('spawn failed'))
-  ])('continues eviction after an actionable provider verdict', async (error) => {
-    const ctx = context()
-    ctx.adapter.closeSession = vi.fn(async () => {
-      throw error
-    })
-
-    await evictStructuredAgentSession(ctx)
-
-    expect(ctx.order).toEqual([
-      'drained',
-      'settleWork',
-      'unbind',
-      'close',
-      'discardSink',
-      'releaseLease',
-      'forget'
+    expect(ctx.order).toEqual(['unbind', 'close', 'discardSink', 'acknowledgeRelease'])
+    expect(recorded.entries.map((entry) => entry.fields.error)).toEqual([
+      expect.objectContaining({ step: 'close-sink' })
     ])
-  })
-
-  it('aborts without forgetting the session, so the next close is a real retry', async () => {
-    const ctx = context()
-    ctx.adapter.closeSession = vi.fn(async () => false)
-
-    await expect(evictStructuredAgentSession(ctx)).rejects.toMatchObject({
-      step: 'stop-provider-child'
-    })
-    expect(ctx.forget).not.toHaveBeenCalled()
-    expect(ctx.discardSink).not.toHaveBeenCalled()
-    expect(ctx.order).toEqual([])
-  })
-
-  it('reports the failing step and leaves the sink usable for the retry', async () => {
-    const ctx = context()
-    ctx.adapter.closeSession = vi.fn(async () => {
-      throw new Error('child would not stop')
-    })
-
-    await expect(evictStructuredAgentSession(ctx)).rejects.toBeInstanceOf(
-      StructuredAgentSessionEvictionError
-    )
-    expect(ctx.eventSink.close).not.toHaveBeenCalled()
-    expect(ctx.forget).not.toHaveBeenCalled()
+    expect(recorded.entries[0]?.fields.error).toBeInstanceOf(StructuredAgentSessionEvictionError)
   })
 })
 
@@ -202,16 +85,20 @@ describe('eviction against the real sink cache', () => {
     const sessionId = 'session-reattach'
     await evictStructuredAgentSession({
       sessionId,
+      logger: recordingStructuredAgentSessionLogger().logger,
       eventSink: state.eventSinkFor(sessionId),
-      adapter: { closeSession: async () => true } as never,
-      forget: async () => {},
       discardSink: () => state.discardEventSink(sessionId),
-      releaseLease: async () => {}
+      acknowledgeRelease: () => {}
     })
 
     const published: string[] = []
     const reattached = state.eventSinkFor(sessionId)
-    reattached.bind({ journal: {} as never, fence: 2, publish: () => published.push('published') })
+    reattached.bind({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these rows are publications only, which reach nothing on the journal but its in-order read.
+      journal: withJournalQueueMembers({ appendItem: async () => ({}) }) as never,
+      fence: 2,
+      publish: () => published.push('published')
+    })
     reattached.sink.publish()
     await reattached.drained()
 

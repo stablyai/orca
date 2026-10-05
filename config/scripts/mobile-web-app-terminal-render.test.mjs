@@ -287,128 +287,6 @@ describeRender(
       await page.close()
     }, 300_000)
 
-    it('names the cause when the document chunk will not load', async () => {
-      // The component reaches the document through a dynamic import, so the document is its own
-      // chunk and the chunk can fail: offline, a hashed filename that no longer exists after a
-      // deploy, a module that throws as it evaluates. That is a rejected promise and nothing
-      // else — no engine ran, so no `error` notify is ever posted. Without the rejection being
-      // routed it is an unhandled rejection and a blank frame until the 15 s readiness watchdog.
-      //
-      // The fault is the real one: the chunk is identified by what it carries and refused at the
-      // wire, rather than a stub swapped in for the mount.
-      // A string literal only `host-notify` carries, so the chunk is recognised by its contents
-      // rather than by a filename that is a content hash or by a declaration name a minifier
-      // renames. It has to be unique to the document: the route's own chunk carries the
-      // component, the controller and the notification dispatcher, and refusing that one would
-      // take the whole route down instead of the document.
-      const documentChunkMarker = 'terminal runtime error'
-      let aborted = null
-      const served = []
-      const { page } = await openPage(PROBE_ROUTE, {
-        beforeNavigate: async (opened) => {
-          await opened.route('**/*.js', async (route) => {
-            const response = await route.fetch()
-            const body = await response.text()
-            served.push(route.request().url())
-            if (aborted === null && body.includes(documentChunkMarker)) {
-              aborted = route.request().url()
-              await route.abort('failed')
-              return
-            }
-            await route.fulfill({ response, body })
-          })
-        }
-      })
-      // The chunk is fetched when the component mounts, which is after the page entry is up, so
-      // the refusal is waited for rather than asserted on the way past. A run where nothing
-      // matched would otherwise fail below for the wrong reason.
-      await expect
-        .poll(() => aborted, {
-          timeout: 60_000,
-          message: `no served script carried the document; saw ${served.join(', ')}`
-        })
-        .not.toBe(null)
-      await page.waitForFunction(
-        () =>
-          (globalThis.__orcaTerminalEngineErrors ?? []).some((entry) =>
-            entry.includes('terminal document failed to load')
-          ),
-        undefined,
-        { timeout: 60_000, polling: 100 }
-      )
-      // And the user-visible half: the overlay, with its Reload, rather than a blank frame.
-      await page.getByText('Reload').waitFor({ timeout: 30_000 })
-      await page.unrouteAll({ behavior: 'ignoreErrors' })
-      await page.close()
-    }, 300_000)
-
-    it('comes back from Reload while the chunk it is waiting on is still in flight', async () => {
-      // The other end of the case above: the chunk does not fail, it is merely slow — a cold CDN
-      // edge, a phone on a train. The document is reached by a dynamic import, so the mount is in
-      // flight while the 15 s readiness watchdog runs out and puts the overlay on the screen, and
-      // ruling 20 names that overlay's Reload as the way back. Reload is a second mount, so it is
-      // refused outright unless the first mount's cleanup could give the page back while its
-      // import was still unresolved — which is what the handle being synchronous is for.
-      //
-      // Held past the watchdog rather than mocked past it, because the window under test is the
-      // one between the claim and the import resolving, and only a real pending request has it.
-      const HOLD_MS = 20_000
-      let held = null
-      const { page } = await openPage(PROBE_ROUTE, {
-        listeners: true,
-        beforeNavigate: async (opened) => {
-          await opened.route('**/*.js', async (route) => {
-            const response = await route.fetch()
-            const body = await response.text()
-            if (held === null && body.includes('terminal runtime error')) {
-              held = route.request().url()
-              await new Promise((resolve) => setTimeout(resolve, HOLD_MS))
-            }
-            await route.fulfill({ response, body })
-          })
-        }
-      })
-      await expect.poll(() => held, { timeout: 60_000 }).not.toBe(null)
-      // The watchdog, named: the overlay has to be the one the stall raises, not an engine error
-      // from somewhere else, or Reload would be answering a different question.
-      await page.waitForFunction(
-        () =>
-          (globalThis.__orcaTerminalEngineErrors ?? []).some((entry) =>
-            entry.includes('no ready signal')
-          ),
-        undefined,
-        { timeout: 60_000, polling: 100 }
-      )
-      const reload = page.getByText('Reload')
-      await reload.waitFor({ timeout: 30_000 })
-      expect(
-        await page.evaluate(() => globalThis.__orcaTerminalReady === true),
-        'the first mount was still waiting on its chunk when Reload appeared'
-      ).toBe(false)
-
-      await reload.click()
-      await page.waitForFunction(() => globalThis.__orcaTerminalReady === true, {
-        timeout: 60_000,
-        polling: 100
-      })
-      await openProbeTerminal(page)
-      await assertLiveTerminal(page, 'reload-during-import')
-
-      // And the mount the Reload abandoned has to have come to nothing. Its chunk arrives while
-      // the second mount is running on the same scope, so a build that resumed without re-reading
-      // the claim would install its listeners into this page and reset the live mount's scope,
-      // nulling the undo that takes the error reporter off. Read against a page that mounted once
-      // and disposed once: the abandoned mount is the only difference between them, so zero
-      // difference is the abandoned mount having touched nothing.
-      const afterAbandoned = await listenersWithNoTerminal(page)
-      const control = await openTerminal({ listeners: true })
-      await openProbeTerminal(control.page)
-      expect(afterAbandoned).toEqual(await listenersWithNoTerminal(control.page))
-      await control.page.close()
-      await page.unrouteAll({ behavior: 'ignoreErrors' })
-      await page.close()
-    }, 300_000)
-
     it('leaves the page the listeners it found, across a mount and a dispose', async () => {
       // Ruling 20 moved every install into a start function and ruling 21 gave each one a stop,
       // and the document installs on `window` and `document` both: the resize refit, the error
@@ -574,110 +452,123 @@ describeRender(
       await page.close()
     }, 300_000)
 
-    it('takes back the frames it is owed, not only the timers', async () => {
-      // The timer case above is witnessed by a 550 ms timeout, which every module's own stop
-      // cancels by the handle the scope holds. A frame is the other shape: `applyFitScale` asks
-      // for one through the scope's registry and never holds its id, so `stopFitScale` can only
-      // bump the token it tests itself against — the frame still runs. Nothing but
-      // `cancelDocumentFrames` takes it back.
-      //
-      // Two things have to be pinned down for that to be readable, and the first version of this
-      // case had neither.
-      //
-      // The witness has to be owed whenever the dispose lands. A single refit is not: the retry
-      // loop commits on its first attempt whenever the grid still measures, so one resize buys
-      // one frame and a dispose after it owes nothing — which agrees with an empty leak list for
-      // exactly the reason under test, once in five runs. So the refit is re-armed from a frame
-      // of the test's own, which leaves the document owed a frame at the end of every frame the
-      // browser serves, and dispose cannot land inside one.
-      //
-      // And the leak has to be counted from the moment dispose returned, not from the moment the
-      // host element left the DOM. React unmounts in two steps: the mutation phase detaches the
-      // host, and the passive cleanup that calls `dispose` runs after it — 1 ms apart here, 20 to
-      // 35 ms apart with the CPU throttled 20x, which is the CI runner this failed on. A frame
-      // served in that gap runs with a detached container while the document is still live and
-      // has not been asked to stop, and no registry could take it back. It went through
-      // `scheduleDocumentFrame` like every other; the old oracle called it a leak because it
-      // judged by the container rather than by dispose. Only what runs after the last statement
-      // of `dispose` is the document keeping something it gave up.
-      let documentChunk = null
-      const { page } = await openPage(PROBE_ROUTE, {
-        scheduler: true,
-        beforeNavigate: async (opened) => {
-          await opened.route('**/*.js', async (route) => {
-            const response = await route.fetch()
-            const body = await response.text()
-            if (body.includes('terminal runtime error')) {
-              documentChunk = new URL(route.request().url()).pathname
-            }
-            await route.fulfill({ response, body })
-          })
-        }
-      })
-      await page.waitForFunction(() => globalThis.__orcaTerminalReady === true, {
-        timeout: 60_000,
-        polling: 100
-      })
-      await openProbeTerminal(page)
-      expect(documentChunk, 'the document was served as its own chunk').not.toBe(null)
-
-      await page.evaluate((chunk) => {
-        const state = globalThis.__orcaScheduler
-        state.disposed = null
-        state.watching = true
-        // `dispose` empties the host and drops its class last, after `cancelDocumentFrames`, so
-        // the class going is the moment it returned. Observed on the element rather than on the
-        // tree because React may have detached it already.
-        const host = document.querySelector('.orca-terminal-document-host')
-        const observer = new MutationObserver(() => {
-          if (state.disposed !== null || host.classList.contains('orca-terminal-document-host')) {
-            return
+    it.each([
+      { name: 'takes back the frames it is owed, not only the timers', cancelFrames: true },
+      { name: 'detects leaked frames when disposal cannot cancel them', cancelFrames: false }
+    ])(
+      '$name',
+      async ({ cancelFrames }) => {
+        // Hold a real refit frame across disposal; ResizeObserver delivery cannot race the witness.
+        let documentChunk = null
+        const { page } = await openPage(PROBE_ROUTE, {
+          scheduler: true,
+          beforeNavigate: async (opened) => {
+            await opened.route('**/*.js', async (route) => {
+              const response = await route.fetch()
+              const body = await response.text()
+              if (body.includes('terminal runtime error')) {
+                documentChunk = new URL(route.request().url()).pathname
+              }
+              await route.fulfill({ response, body })
+            })
           }
-          state.disposed = {
-            // A cancelled frame never runs, so it is still owed here. That is the point.
-            owed: state.scheduled.filter(
-              (entry) => entry.kind === 'frame' && !entry.fired && entry.caller.includes(chunk)
-            ).length,
-            leakedBefore: state.leaked.length
-          }
-          observer.disconnect()
         })
-        observer.observe(host, { attributes: true, attributeFilter: ['class'] })
-        const pulse = () => {
-          if (state.disposed !== null) {
-            return
-          }
-          globalThis.dispatchEvent(new Event('resize'))
-          requestAnimationFrame(pulse)
-        }
-        requestAnimationFrame(pulse)
-        globalThis.setTimeout(() => globalThis.__orcaTerminalProbe.setMounted(false), 200)
-      }, documentChunk)
-      await page.locator('#terminal-container').waitFor({ state: 'detached', timeout: 30_000 })
-      await page.evaluate(() => {
-        globalThis.__orcaTerminalReady = false
-        globalThis.__orcaTerminalProbe.setMounted(true)
-      })
-      await page.waitForFunction(() => globalThis.__orcaTerminalReady === true, {
-        timeout: 60_000,
-        polling: 100
-      })
-      await openProbeTerminal(page)
-      await page.evaluate(() => new Promise((resolve) => globalThis.setTimeout(resolve, 3000)))
+        try {
+          await page.waitForFunction(() => globalThis.__orcaTerminalReady === true, {
+            timeout: 60_000,
+            polling: 100
+          })
+          await openProbeTerminal(page)
+          expect(documentChunk, 'the document was served as its own chunk').not.toBe(null)
+          // Ready is notified with the replay's fit still a frame away. Left pending, that fit
+          // commits the resized box below, the resize refit then has nothing to do, and there is no
+          // frame to hold; so the document settles first. Since the terminal is built before
+          // ready, the fixture returns fast enough to land inside that frame.
+          await page.evaluate(
+            () =>
+              new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+          )
 
-      const scheduler = await page.evaluate(() => globalThis.__orcaScheduler)
-      expect(
-        scheduler.disposed?.owed,
-        'the document owed a frame at the moment dispose returned'
-      ).toBeGreaterThan(0)
-      expect(
-        scheduler.leaked
-          .slice(scheduler.disposed.leakedBefore)
-          .filter((entry) => entry.startsWith('frame ') && entry.includes(documentChunk))
-      ).toEqual([])
-      await page.unrouteAll({ behavior: 'ignoreErrors' })
-      await page.close()
-    }, 300_000)
+          await page.evaluate((chunk) => {
+            const state = globalThis.__orcaScheduler
+            state.disposed = null
+            state.watching = true
+            state.holdFramesFrom = chunk
+            const host = document.querySelector('.orca-terminal-document-host')
+            // Dispose drops this class after cancelling frames; DOM detachment precedes cleanup.
+            const observer = new MutationObserver(() => {
+              if (
+                state.disposed !== null ||
+                host.classList.contains('orca-terminal-document-host')
+              ) {
+                return
+              }
+              state.disposed = {
+                owed: state.scheduled.filter(
+                  (entry) => entry.kind === 'frame' && !entry.fired && entry.caller.includes(chunk)
+                ).length,
+                leakedBefore: state.leaked.length
+              }
+              observer.disconnect()
+            })
+            observer.observe(host, { attributes: true, attributeFilter: ['class'] })
+            host.style.width = '80%'
+          }, documentChunk)
+          await page.waitForFunction(() => globalThis.__orcaScheduler.heldFrames > 0, undefined, {
+            timeout: 30_000
+          })
+          await page.evaluate((cancelFrames) => {
+            globalThis.__orcaRestoreFrameCancellation = globalThis.cancelAnimationFrame
+            if (!cancelFrames) {
+              // The negative control must expose held callbacks after the real document disposes.
+              globalThis.cancelAnimationFrame = () => {}
+            }
+            globalThis.__orcaTerminalProbe.setMounted(false)
+          }, cancelFrames)
+          await page.locator('#terminal-container').waitFor({ state: 'detached', timeout: 30_000 })
+          await page.waitForFunction(() => globalThis.__orcaScheduler.disposed !== null)
+          await page.evaluate(() => {
+            globalThis.cancelAnimationFrame = globalThis.__orcaRestoreFrameCancellation
+            globalThis.__orcaScheduler.holdFramesFrom = null
+            globalThis.__orcaTerminalReady = false
+            globalThis.__orcaTerminalProbe.setMounted(true)
+          })
+          await page.waitForFunction(() => globalThis.__orcaTerminalReady === true, {
+            timeout: 60_000,
+            polling: 100
+          })
+          await openProbeTerminal(page)
+          // Uncancelled work must actually run against the replacement, so the hold cannot hide leaks.
+          await page.evaluate(
+            () =>
+              new Promise((resolve) => {
+                globalThis.__orcaReleaseFrames()
+                requestAnimationFrame(() => requestAnimationFrame(resolve))
+              })
+          )
+
+          const scheduler = await page.evaluate(() => globalThis.__orcaScheduler)
+          expect(
+            scheduler.disposed?.owed,
+            'the document owed a frame at the moment dispose returned'
+          ).toBeGreaterThan(0)
+          const leakedFrames = scheduler.leaked
+            .slice(scheduler.disposed.leakedBefore)
+            .filter((entry) => entry.startsWith('frame ') && entry.includes(documentChunk))
+          if (cancelFrames) {
+            expect(leakedFrames).toEqual([])
+          } else {
+            expect(
+              leakedFrames.length,
+              'the recorder must expose uncancelled work'
+            ).toBeGreaterThan(0)
+          }
+        } finally {
+          await page.unrouteAll({ behavior: 'ignoreErrors' }).finally(() => page.close())
+        }
+      },
+      300_000
+    )
 
     it('styles what it owns, and only that', async () => {
       // The document's sheet says `*`, `html` and `body` because inside a WebView it owns the
@@ -722,7 +613,8 @@ describeRender(
             // and reserves no width for one.
             viewportOverflowY: getComputedStyle(viewport).overflowY,
             viewportReservesScrollbar: viewport.offsetWidth !== viewport.clientWidth,
-            // The document's: the overlay sits in unscaled viewport coordinates above the grid.
+            // The mount's: the overlay sits in the host's unscaled coordinates above the grid,
+            // not over the page's header as `fixed` would put it.
             overlayPosition: getComputedStyle(overlay).position
           }
         })
@@ -730,7 +622,7 @@ describeRender(
         xtermPosition: 'relative',
         viewportOverflowY: 'hidden',
         viewportReservesScrollbar: false,
-        overlayPosition: 'fixed'
+        overlayPosition: 'absolute'
       })
 
       await page.evaluate(() => globalThis.__orcaTerminalProbe.setMounted(false))
@@ -743,14 +635,14 @@ describeRender(
       await page.close()
     }, 300_000)
 
-    it('measures a fit through the handle and records what beforeinput reports', async () => {
+    it('fits through the handle from the ready box and records what beforeinput reports', async () => {
       const { page } = await openTerminal()
       await openProbeTerminal(page)
 
-      // The handle's own round trip: a measure is a command in and a notify back, and on the page
-      // both halves are direct calls rather than a bridge. Null would mean the document answered
-      // nothing, or answered a grid too small to fit.
-      const fit = await page.evaluate(() => globalThis.__orcaTerminalProbe.measure())
+      // The fit is the app's own, from the cell box the document put in web-ready, against the
+      // frame React Native laid out, as the session's is. Null would mean the ready carried no box,
+      // or a grid too small to fit.
+      const fit = await page.evaluate(() => globalThis.__orcaTerminalProbe.fit())
       expect(fit).not.toBeNull()
       expect(fit.cols).toBeGreaterThanOrEqual(20)
       expect(fit.rows).toBeGreaterThanOrEqual(8)

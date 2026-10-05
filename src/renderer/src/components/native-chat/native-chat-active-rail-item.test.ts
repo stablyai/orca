@@ -123,36 +123,30 @@ describe('active rail item', () => {
     ).toBe('u2')
   })
 
-  it('keeps a row taller than the viewport active while it spans it', () => {
+  // A rejected send the journal recorded keeps its place but opens no turn.
+  it('lights a prompt in no turn by its own id', () => {
+    const slots: NativeChatRailSlot[] = [
+      ...TURNS,
+      { turnKey: undefined, message: { id: 'rejected', role: 'user' } }
+    ]
     expect(
       findActiveNativeChatRailItem({
-        slots: [{ turnKey: 'u1' }],
-        virtualItems: [{ index: 0, start: 0, end: 2000 }],
+        slots,
+        virtualItems: rows(11),
         scrollTop: 800,
         clientHeight: VIEWPORT,
-        scrollHeight: 4000,
+        scrollHeight: 1100,
         previousActiveId: null
       })
-    ).toBe('u1')
-  })
-
-  // `start` already carries `scrollMargin`, so subtracting it again would shift
-  // every row and select the wrong turn.
-  it('reads offsets in container space, margin included', () => {
-    const margin = 500
+    ).toBe('rejected')
     expect(
       findActiveNativeChatRailItem({
-        slots: TURNS,
-        virtualItems: rows(10).map((row) => ({
-          ...row,
-          start: row.start + margin,
-          end: row.end + margin
-        })),
-        scrollTop: margin + 450,
-        clientHeight: VIEWPORT,
-        scrollHeight: 1500,
-        previousActiveId: null
+        slots,
+        virtualItems: rows(11),
+        scrollTop: 1010,
+        ...MID_SCROLL,
+        scrollHeight: 2000
       })
-    ).toBe('u2')
+    ).toBe('rejected')
   })
 })

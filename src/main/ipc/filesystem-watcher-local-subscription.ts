@@ -11,21 +11,25 @@ import {
   addLocalWatchListener,
   clearLocalCapacityRetry,
   rememberUnwatchableRoot,
+  registerWatcherSenderCleanup,
   takeLocalCapacityRetryListeners,
   trackDetachedLocalUnsubscribe
 } from './filesystem-watcher-listener-lifecycle'
 import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
 import { scheduleLocalCapacityRetry } from './filesystem-watcher-local-capacity'
 import { installLocalWatcher } from './filesystem-watcher-local-install'
+import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
 
 // ── Subscribe / Unsubscribe ──────────────────────────────────────────
 
 export async function subscribeLocalWatcher(
   worktreePath: string,
   sender: WebContents,
-  generation = watcherLifecycleState.localWatcherLifecycleGeneration
+  generation = watcherLifecycleState.localWatcherLifecycleGeneration,
+  senderSignal = registerWatcherSenderCleanup(sender)
 ): Promise<void> {
   if (
+    !isCurrentWatcherSender(sender, senderSignal) ||
     watcherLifecycleState.localWatchersClosed ||
     generation !== watcherLifecycleState.localWatcherLifecycleGeneration
   ) {
@@ -33,7 +37,7 @@ export async function subscribeLocalWatcher(
   }
   const finishInstall = beginWatcherInstall(worktreePath)
   try {
-    await subscribeWhileRemovalAllowed(worktreePath, sender, generation)
+    await subscribeWhileRemovalAllowed(worktreePath, sender, generation, senderSignal)
   } finally {
     finishInstall()
   }
@@ -42,9 +46,11 @@ export async function subscribeLocalWatcher(
 async function subscribeWhileRemovalAllowed(
   worktreePath: string,
   sender: WebContents,
-  generation: number
+  generation: number,
+  senderSignal: AbortSignal
 ): Promise<void> {
   if (
+    !isCurrentWatcherSender(sender, senderSignal) ||
     watcherLifecycleState.localWatchersClosed ||
     generation !== watcherLifecycleState.localWatcherLifecycleGeneration
   ) {
@@ -70,6 +76,9 @@ async function subscribeWhileRemovalAllowed(
     watcherLifecycleState.pendingTeardowns.delete(rootKey)
   }
   const capacityRetryListeners = takeLocalCapacityRetryListeners(rootKey)
+  const retrySignals = new Map(
+    capacityRetryListeners.map((listener) => [listener.id, registerWatcherSenderCleanup(listener)])
+  )
 
   if (root) {
     for (const listener of capacityRetryListeners) {
@@ -91,6 +100,10 @@ async function subscribeWhileRemovalAllowed(
       }
     }
     const result = await pendingInstall
+    const liveCapacityListeners = capacityRetryListeners.filter((listener) =>
+      isCurrentWatcherSender(listener, retrySignals.get(listener.id)!)
+    )
+    const senderIsCurrent = isCurrentWatcherSender(sender, senderSignal)
     if (
       result === 'cancelled' &&
       !canJoinInstall &&
@@ -102,33 +115,42 @@ async function subscribeWhileRemovalAllowed(
         watcherLifecycleState.pendingLocalInstallPromises.delete(rootKey)
       }
       const retryListeners = new Map(
-        capacityRetryListeners.map((listener) => [listener.id, listener])
+        liveCapacityListeners.map((listener) => [listener.id, listener])
       )
-      retryListeners.set(sender.id, sender)
+      if (senderIsCurrent) {
+        retryListeners.set(sender.id, sender)
+      }
       for (const listener of retryListeners.values()) {
         if (!listener.isDestroyed()) {
-          await subscribeWhileRemovalAllowed(worktreePath, listener, generation)
+          await subscribeWhileRemovalAllowed(
+            worktreePath,
+            listener,
+            generation,
+            listener === sender ? senderSignal : retrySignals.get(listener.id)!
+          )
         }
       }
       return
     }
     if (!inFlight) {
       if (result === 'installed') {
-        for (const listener of capacityRetryListeners) {
+        for (const listener of liveCapacityListeners) {
           addLocalWatchListener(rootKey, listener)
         }
       } else if (result === 'capacity') {
         const retryListeners = new Map(
-          capacityRetryListeners.map((listener) => [listener.id, listener])
+          liveCapacityListeners.map((listener) => [listener.id, listener])
         )
-        retryListeners.set(sender.id, sender)
+        if (senderIsCurrent) {
+          retryListeners.set(sender.id, sender)
+        }
         scheduleLocalCapacityRetry(rootKey, worktreePath, retryListeners, subscribeLocalWatcher)
       }
     }
     if (
       result === 'installed' &&
       watcherLifecycleState.watchedRoots.has(rootKey) &&
-      !sender.isDestroyed() &&
+      senderIsCurrent &&
       (!inFlight || inFlight.listeners.has(sender.id))
     ) {
       addLocalWatchListener(rootKey, sender)

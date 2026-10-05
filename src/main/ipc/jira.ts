@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { connect, disconnect, getStatus, selectSite, testConnection } from '../jira/client'
 import { _resetPreflightCache } from './preflight'
 import { JiraCancellableRequests } from './jira-cancellable-requests'
+import { registerJiraUserSearchHandlers } from './jira-user-search'
 import {
   addIssueComment,
   createIssue,
@@ -9,7 +10,6 @@ import {
   getIssueSummary,
   getIssueComments,
   getProjectStatusOrder,
-  listAssignableUsers,
   listCreateFields,
   listIssueTypes,
   listIssues,
@@ -17,7 +17,6 @@ import {
   listProjects,
   listTransitions,
   searchIssues,
-  searchUsers,
   updateIssue
 } from '../jira/issues'
 import type {
@@ -285,26 +284,7 @@ export function registerJiraHandlers(): void {
     return listPriorities(normalizeSiteId(args?.siteId))
   })
 
-  ipcMain.handle(
-    'jira:listAssignableUsers',
-    async (_event, args: { key: string; query?: string; siteId?: string }) => {
-      if (typeof args?.key !== 'string' || !args.key.trim()) {
-        return []
-      }
-      return listAssignableUsers(
-        args.key.trim(),
-        typeof args.query === 'string' ? args.query : undefined,
-        normalizeSiteId(args.siteId)
-      )
-    }
-  )
-
-  ipcMain.handle('jira:searchUsers', async (_event, args?: { query?: string; siteId?: string }) => {
-    return searchUsers(
-      typeof args?.query === 'string' ? args.query : undefined,
-      normalizeSiteId(args?.siteId)
-    )
-  })
+  registerJiraUserSearchHandlers()
 
   ipcMain.handle('jira:listTransitions', async (_event, args: { key: string; siteId?: string }) => {
     if (typeof args?.key !== 'string' || !args.key.trim()) {

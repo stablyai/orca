@@ -15,6 +15,7 @@ import {
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
+  TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
 import {
@@ -35,6 +36,8 @@ import type {
 } from '../../shared/runtime-client-events'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
+import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import { MACHINE_NAME_PUBLISH_WAIT_MS } from './runtime-machine-name'
 
 type RuntimeStatusHost = {
   getAvailableAuthoritativeWindow(): unknown
@@ -42,6 +45,17 @@ type RuntimeStatusHost = {
     ptyIds: Iterable<string>,
     terminalHandlesByPtyId: Readonly<Record<string, readonly string[]>>
   ): string[]
+}
+
+function supportsDurableTerminalPromptDelivery(): boolean {
+  if (typeof process.getBuiltinModule !== 'function') {
+    return false
+  }
+  try {
+    return process.getBuiltinModule('node:sqlite') !== undefined
+  } catch {
+    return false
+  }
 }
 
 export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
@@ -74,7 +88,9 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
         (process.env.ORCA_E2E_DISABLE_PAIRED_TERMINAL_PARKING !== '1' ||
           capability !== TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY) &&
         (process.env.ORCA_E2E_DISABLE_AUTHORITATIVE_SESSION_TABS_INVENTORY !== '1' ||
-          capability !== SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY)
+          capability !== SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY) &&
+        (capability !== TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY ||
+          supportsDurableTerminalPromptDelivery())
     )
     if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
@@ -133,11 +149,25 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
       worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_RESULT_TTL_MS },
       ...(windowsProcessStartTimeAvailable ? { windowsProcessStartTimeAvailable } : {}),
       hostPlatform: process.platform,
+      machineName: this.readMachineName(),
       terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null,
       floatingWorkspaceEnabled: this.store?.getSettings?.().floatingTerminalEnabled !== false,
       protocolVersion: RUNTIME_PROTOCOL_VERSION,
       minCompatibleMobileVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
     }
+  }
+
+  /** The name status publishes: the configured override, else the detected one. */
+  readMachineName(): string {
+    return this.machineName.read()
+  }
+
+  /**
+   * Waits for the machine-name lookup up to the publish budget. A status read leaks the bare
+   * hostname only while a slow lookup is still running; the next read carries what it found.
+   */
+  machineNameReady(): Promise<void> {
+    return this.machineName.readyWithin(MACHINE_NAME_PUBLISH_WAIT_MS)
   }
 
   setPtyController(controller: RuntimePtyController | null): void {
@@ -223,6 +253,9 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
   }
 
   protected notifyWorktreesChanged(repoId: string): void {
+    // Why here: the listing re-runs a scan this generation overtook, and a headless host has no
+    // window notifier to bump it, so the runtime's own change event bumps before it is sent.
+    runWorktreeChangeInvalidators(repoId)
     this.notifier?.worktreesChanged(repoId)
     this.emitClientEvent({ type: 'worktreesChanged', repoId })
   }

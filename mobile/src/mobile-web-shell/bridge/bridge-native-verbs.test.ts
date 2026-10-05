@@ -99,16 +99,6 @@ describe('reading a native verb call', () => {
 })
 
 describe('the media verbs on the same seam', () => {
-  it('serves all three, and each is a grant name of its own', () => {
-    expect([...BRIDGE_NATIVE_VERB_NAMES]).toEqual([
-      'native.clipboard.write',
-      'native.clipboard.read',
-      'native.media.pick',
-      'native.media.read',
-      'native.media.release'
-    ])
-  })
-
   it('answers each verb with the params it parsed', () => {
     expect(
       readBridgeNativeVerbCall({

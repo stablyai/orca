@@ -1,32 +1,38 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // An empty chat beside a pre-SQLite journal explains itself.
 //
 // The SQLite move shipped no importer, so a session whose history is a
 // `log.jsonl` founds a fresh empty journal beside it and looks exactly like a
 // chat created seconds ago. One status row is the difference.
 
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import Database from '../../sqlite/sync-database'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
-import { openJournalDatabase } from './journal-database'
-import { JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
 import { JOURNAL_FILE_FORMAT_REMNANT_DISCLOSURE_IDENTITY } from './journal-file-format-remnant'
-import { loadJournal } from './journal-open'
-import { journalDatabaseFile } from './journal-paths'
+import { journalDirectoryFor } from './journal-paths'
 import type { AgentSessionJournal } from './journal-store'
 import type { openAgentSessionJournal } from './journal-store-factory'
-import { createTrackedJournalOpener } from './journal-store-test-open'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase,
+  loadTestJournal,
+  deleteTestJournalRow,
+  insertTestJournalRowJson,
+  liveTestJournalRows,
+  SAVED_BY_NEWER_ORCA
+} from './journal-host-database-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 const DISCLOSURE_ITEM_ID = agentJournalItemKey(JOURNAL_FILE_FORMAT_REMNANT_DISCLOSURE_IDENTITY)
@@ -38,15 +44,21 @@ const journals = createTrackedJournalOpener()
 function open(overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> = {}) {
   return journals.open({
     identity: IDENTITY,
-    journalDir: root,
+    stateDirectory: root,
     now: () => (clock += 1),
     mintEpoch: () => `epoch-${clock}`,
     ...overrides
   })
 }
 
-function writeRemnant(name = 'log.jsonl'): Promise<void> {
-  return writeFile(join(root, name), '{"kind":"epoch","v":1,"seq":1}\n', 'utf8')
+/** Where this chat's history lived before the journal was one database per host. */
+function legacyDir(): string {
+  return journalDirectoryFor(root, IDENTITY)
+}
+
+async function writeRemnant(name = 'log.jsonl'): Promise<void> {
+  await mkdir(legacyDir(), { recursive: true })
+  await writeFile(join(legacyDir(), name), '{"kind":"epoch","v":1,"seq":1}\n', 'utf8')
 }
 
 function disclosure(journal: AgentSessionJournal): string | null {
@@ -71,7 +83,7 @@ describe('a chat whose history is still in the pre-SQLite format', () => {
     const journal = await open()
 
     expect(disclosure(journal)).toContain('send a message to pick up where you left off')
-    expect(disclosure(journal)).toContain(join(root, 'log.jsonl'))
+    expect(disclosure(journal)).toContain(join(legacyDir(), 'log.jsonl'))
     expect(disclosure(journal)).toContain('Codex')
   })
 
@@ -84,7 +96,7 @@ describe('a chat whose history is still in the pre-SQLite format', () => {
 
     const journal = await open()
 
-    expect(disclosure(journal)).toContain(join(root, 'log.jsonl'))
+    expect(disclosure(journal)).toContain(join(legacyDir(), 'log.jsonl'))
     expect(disclosure(journal)).not.toContain('snapshot.json')
   })
 
@@ -93,7 +105,7 @@ describe('a chat whose history is still in the pre-SQLite format', () => {
 
     const journal = await open()
 
-    expect(disclosure(journal)).toContain(join(root, 'snapshot.json'))
+    expect(disclosure(journal)).toContain(join(legacyDir(), 'snapshot.json'))
   })
 
   it('says nothing to a chat that is genuinely new', async () => {
@@ -130,57 +142,69 @@ describe('a chat whose history is still in the pre-SQLite format', () => {
 
     const reopened = await open()
 
-    expect(disclosure(reopened)).toContain(join(root, 'log.jsonl'))
+    expect(disclosure(reopened)).toContain(join(legacyDir(), 'log.jsonl'))
   })
 
-  // A repair's epoch is the marker that history was deleted and never rebuilt,
-  // and any row that is not the repair's own disclosure retires it. Appending
-  // here would silently stop the session ever asking the provider for that
-  // history — with the journal still holding none.
-  it('stays out of a journal this open just repaired', async () => {
+  // A damaged journal fails its open before this branch, so nothing is appended to it.
+  it('writes nothing into a damaged journal', async () => {
     const journal = await open()
     await journal.appendItem(
       { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'history' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.close()
-    // Deleting the anchor leaves every row unanchored: replay keeps nothing, so
-    // the repair publishes an empty `unreconcilable_prefix` epoch and — costing
-    // no malformed row — appends no disclosure of its own. That is the one state
-    // where this branch and a repair meet.
-    const opened = openJournalDatabase(journalDatabaseFile(root))
+    const opened = openTestJournalHostDatabase(root)
     try {
-      opened.db.prepare('DELETE FROM journal_rows WHERE seq = ?').run(1)
+      deleteTestJournalRow(opened.db, IDENTITY.sessionId, 1)
     } finally {
-      opened.db.close()
+      opened.close()
     }
     await writeRemnant()
 
-    const repaired = await open()
-
-    expect(disclosure(repaired)).toBeNull()
-    // Still asking the provider for the history the repair dropped.
-    expect(loadJournal(root, IDENTITY.sessionId)).toMatchObject({ corrupt: true })
+    await expect(open()).rejects.toMatchObject({
+      refusal: { details: { reason: 'journalCorrupt' } }
+    })
+    expect(loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({
+      damage: { sequence: 1, cause: 'no-epoch-row' }
+    })
+    const stored = openTestJournalHostDatabase(root)
+    try {
+      expect(liveTestJournalRows(stored.db, IDENTITY.sessionId).map((row) => row.seq)).toEqual([2])
+    } finally {
+      stored.close()
+    }
   })
 
-  // A latched journal loads empty, so it reaches the same branch — and an append
-  // into one throws, which would make the session unopenable rather than read-only.
-  it('writes nothing into a journal latched by a newer schema', async () => {
+  // A newer row fails the load before the empty-epoch branch would write a notice.
+  it("writes nothing into a newer Orca's journal, whose open is refused", async () => {
     const founded = await open()
+    const epoch = founded.epoch
     await founded.close()
-    const db = new Database(journalDatabaseFile(root))
-    try {
-      db.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION + 1}`)
-    } finally {
-      db.close()
-    }
+    insertTestJournalRowJson(
+      openTestJournalHostDatabase(root).db,
+      IDENTITY.sessionId,
+      2,
+      JSON.stringify({
+        v: 99,
+        kind: 'item',
+        epoch,
+        seq: 2,
+        fence: 1,
+        ts: 1,
+        itemId: 'future',
+        revision: 1,
+        body: { kind: 'status', text: 'from a newer build' }
+      })
+    )
     await writeRemnant()
 
-    const latched = await open()
+    const before = liveTestJournalRows(openTestJournalHostDatabase(root).db, IDENTITY.sessionId)
 
-    expect(latched.isReadOnly).toBe(true)
-    expect(disclosure(latched)).toBeNull()
+    await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
+    expect(liveTestJournalRows(openTestJournalHostDatabase(root).db, IDENTITY.sessionId)).toEqual(
+      before
+    )
   })
 
   // A row nothing projects is a row nobody reads.

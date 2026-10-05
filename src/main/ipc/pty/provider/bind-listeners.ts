@@ -28,6 +28,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
   setLocalWriteUnavailableUnsub(
     localProvider.onWriteUnavailable?.((payload) => {
       if (
+        !session.mainWindow ||
         session.mainWindow.isDestroyed() ||
         (typeof session.mainWindow.webContents.isDestroyed === 'function' &&
           session.mainWindow.webContents.isDestroyed())

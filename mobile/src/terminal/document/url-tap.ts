@@ -1,21 +1,18 @@
+import type { TerminalDocumentScope } from './document-scope'
 import { cellColToStringIndex, getLineText } from './cell-geometry'
 import { viewportToCell } from './viewport-cell'
 import {
-  terminalFileUrlRegexSource,
-  terminalHttpUrlMaxLength,
-  terminalHttpUrlRegexSource
-} from './document-constants'
-
-const URL_TAP_RE_SOURCE = terminalHttpUrlRegexSource
-const FILE_URL_TAP_RE_SOURCE = terminalFileUrlRegexSource
-const URL_TAP_MAX_LENGTH = terminalHttpUrlMaxLength
+  TERMINAL_FILE_URL_REGEX_SOURCE,
+  TERMINAL_HTTP_URL_MAX_LENGTH,
+  TERMINAL_HTTP_URL_REGEX_SOURCE
+} from '../terminal-webview-url-tap'
 
 export function findUrlAtColumn(lineText: string, col: number) {
-  return findTerminalUrlAtColumn(lineText, col, URL_TAP_RE_SOURCE)
+  return findTerminalUrlAtColumn(lineText, col, TERMINAL_HTTP_URL_REGEX_SOURCE)
 }
 
 export function findFileUrlAtColumn(lineText: string, col: number) {
-  return findTerminalUrlAtColumn(lineText, col, FILE_URL_TAP_RE_SOURCE)
+  return findTerminalUrlAtColumn(lineText, col, TERMINAL_FILE_URL_REGEX_SOURCE)
 }
 
 export function findTerminalUrlAtColumn(lineText: unknown, col: number, source: string) {
@@ -26,7 +23,7 @@ export function findTerminalUrlAtColumn(lineText: unknown, col: number, source: 
   let match: RegExpExecArray | null
   while ((match = re.exec(lineText)) !== null) {
     const end = match.index + match[0].length
-    if (match[0].length <= URL_TAP_MAX_LENGTH && col >= match.index && col < end) {
+    if (match[0].length <= TERMINAL_HTTP_URL_MAX_LENGTH && col >= match.index && col < end) {
       return match[0]
     }
     if (match[0].length === 0) {
@@ -36,20 +33,30 @@ export function findTerminalUrlAtColumn(lineText: unknown, col: number, source: 
   return null
 }
 
-export function fileUrlAtViewportPoint(clientX: number, clientY: number) {
-  const cell = viewportToCell(clientX, clientY)
+export function fileUrlAtViewportPoint(
+  scope: TerminalDocumentScope,
+  clientX: number,
+  clientY: number
+) {
+  const cell = viewportToCell(scope, clientX, clientY)
   if (!cell) {
     return null
   }
-  return findFileUrlAtColumn(getLineText(cell.row), cellColToStringIndex(cell.row, cell.col))
+  return findFileUrlAtColumn(
+    getLineText(scope, cell.row),
+    cellColToStringIndex(scope, cell.row, cell.col)
+  )
 }
 
-export function urlAtViewportPoint(clientX: number, clientY: number) {
-  const cell = viewportToCell(clientX, clientY)
+export function urlAtViewportPoint(scope: TerminalDocumentScope, clientX: number, clientY: number) {
+  const cell = viewportToCell(scope, clientX, clientY)
   if (!cell) {
     return null
   }
   // Map the cell column to a string index so wide chars earlier on the line
   // don't shift the match column off the tapped URL.
-  return findUrlAtColumn(getLineText(cell.row), cellColToStringIndex(cell.row, cell.col))
+  return findUrlAtColumn(
+    getLineText(scope, cell.row),
+    cellColToStringIndex(scope, cell.row, cell.col)
+  )
 }

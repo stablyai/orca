@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useRouter } from 'expo-router'
+import { usePathname, useRouter } from 'expo-router'
 import {
   BRIDGE_MAX_ROUTE_HREF_CHARS,
   BRIDGE_ROUTE_HREF_PATTERN
@@ -7,6 +7,7 @@ import {
 import { matchesRoutePattern } from '../mobile-web-shell/page-route-policy'
 import { usePageBridgeClient } from '../transport/client-context.web'
 import { stringifyRouteHref, type RouterHref } from './route-href'
+import { useBackClaim } from './use-back-claim.web'
 import type { RouteHandoff } from './route-handoff'
 
 /** The path half of a target, which is what the shell's route patterns are written against. */
@@ -133,14 +134,59 @@ function createRefusalReporter(): (reason: RouteHandoffRefusal, target: string) 
 export function useRouteHandoff(): RouteHandoff {
   const client = usePageBridgeClient()
   const router = useRouter()
+  // Subscribed to, not read for its value: `canGoBack()` answers off committed navigation state,
+  // and nothing else in this hook re-renders when a push inside the page commits one.
+  usePathname()
+  // A stack the page grew itself pops itself, so Back belongs to this document while one exists.
+  // Re-checked at the press rather than trusted from the claim: the two cross on separate frames,
+  // and `false` hands the press back to the shell to pop the screen this page was pushed onto.
+  useBackClaim(
+    router.canGoBack()
+      ? () => {
+          if (!router.canGoBack()) {
+            return false
+          }
+          router.back()
+          return true
+        }
+      : null
+  )
 
   return useMemo<RouteHandoff>(() => {
     const report = createRefusalReporter()
-    /** Whether this document is the one that renders the target, which is the shell's answer. */
+    /**
+     * Whether this document both renders the target and may: pattern listed, grants covered.
+     *
+     * Covered matters because grants are resolved once, from the route the shell opened, and a push
+     * kept local runs the target under the opener's list. On a wide layout the sidebar reaches the
+     * tasks page from every `/h` route, so keeping that hop local runs tasks without
+     * `native.clipboard.write` and its copy actions refuse with nothing on screen to say why.
+     * Handing it over instead opens it as its own session, with its own grants.
+     *
+     * A shell that sent no pairs gets the old answer: `null` is "nobody told me", which is not the
+     * same as "this route needs nothing", and an older shell must keep working. A target the shell
+     * lists but names no entry for is not covered — the page cannot justify the hop, so it hands it
+     * over rather than guessing.
+     */
     const servedHere = (target: string): boolean => {
       const pathname = pathnameOf(target)
-      const pageRoutes = client.getShellSession()?.pageRoutes ?? []
-      return pageRoutes.some((pattern) => matchesRoutePattern(pathname, pattern))
+      const session = client.getShellSession()
+      const pattern = (session?.pageRoutes ?? []).find((candidate) =>
+        matchesRoutePattern(pathname, candidate)
+      )
+      if (pattern === undefined) {
+        return false
+      }
+      const pairs = session?.pageRouteGrants ?? null
+      if (pairs === null) {
+        return true
+      }
+      const declared = pairs.find((entry) => entry.pathname === pattern)
+      if (declared === undefined) {
+        return false
+      }
+      const held = session?.grants.native ?? []
+      return declared.grants.every((grant) => held.includes(grant))
     }
     const handOff = (href: RouterHref): RouteHandoffOutcome => {
       // Resolved, not stringified: the object form is `[object Object]` under `String`, and the

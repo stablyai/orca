@@ -1,8 +1,9 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { extname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+import { censusSourceFiles } from '../test-support/census-source-files'
 
 /**
  * Bans the escapes that would make the typed boundary decorative.
@@ -67,16 +68,6 @@ const CAST_FENCE_EXCEPTIONS: readonly CastFenceException[] = [
 // Text, not AST: a suppression is a comment, and comments are not nodes. A directive spelled
 // inside a string literal therefore reads as one — which fails closed.
 const SUPPRESSION = /@ts-(?:expect-error|ignore|nocheck)\b/
-
-function sourceFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name)
-    if (entry.isDirectory()) {
-      return entry.name === 'node_modules' ? [] : sourceFiles(path)
-    }
-    return [path]
-  })
-}
 
 function parse(path: string, source: string): ts.SourceFile {
   const extension = extname(path)
@@ -150,7 +141,7 @@ function moduleEdges(path: string, source: string): { imports: string[]; reExpor
 }
 
 const scanned = scannedRoots
-  .flatMap(sourceFiles)
+  .flatMap(censusSourceFiles)
   .filter((path) => sourceExtensions.has(extname(path)))
   .filter((path) => !/\.test\.tsx?$/.test(path))
 

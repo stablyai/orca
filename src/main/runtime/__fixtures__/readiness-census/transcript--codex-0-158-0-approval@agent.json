@@ -1,0 +1,27 @@
+{
+  "description": "codex recording at 120x40 replayed on the agent pane, one entry per chunk",
+  "observations": {
+    "clocked": [
+      "0-21: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "22-37: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "38-41: now=working edge=working quiet=ready-strong wait=ready@start",
+      "42-66: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "67-70: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending",
+      "71-73: now=pending:closed edge=pending:closed quiet=ready-strong wait=ready@start",
+      "74-75: now=working edge=working quiet=ready-strong wait=ready@start",
+      "76-326: now=working edge=working quiet=working wait=pending",
+      "327-365: now=working edge=working quiet=ready-strong wait=ready@start",
+      "366-430: now=working edge=working quiet=working wait=pending",
+      "431-440: now=working edge=working quiet=ready-strong wait=ready@start",
+      "441-445: now=working edge=working quiet=working wait=pending",
+      "446-511: now=blocked:agent-interactive-prompt edge=blocked:agent-interactive-prompt quiet=blocked:agent-interactive-prompt wait=blocked:agent-interactive-prompt@start"
+    ],
+    "clockless": [
+      "0-37: verdict=pending:closed wait=pending",
+      "38-41: verdict=working wait=pending",
+      "42-73: verdict=pending:closed wait=pending",
+      "74-445: verdict=working wait=pending",
+      "446-511: verdict=blocked:agent-interactive-prompt wait=blocked:agent-interactive-prompt@start"
+    ]
+  }
+}

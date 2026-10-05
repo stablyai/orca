@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { eventSchemas, featureWallTileIdSchema } from './telemetry-events'
+import { eventSchemas } from './telemetry-events'
 
 describe('feature wall schemas', () => {
   it('accepts the unconditional open and close payloads', () => {
@@ -123,9 +123,5 @@ describe('feature wall schemas', () => {
         source: 'help_menu'
       }).success
     ).toBe(true)
-  })
-
-  it('feature wall enum schemas accept known values', () => {
-    expect(featureWallTileIdSchema.safeParse('tile-01').success).toBe(true)
   })
 })

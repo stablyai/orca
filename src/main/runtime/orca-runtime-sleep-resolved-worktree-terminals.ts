@@ -64,7 +64,7 @@ export class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWi
     const pendingPtyIds = new Set<string>()
     let generation = 0
     let fullyCommitted = false
-    let releaseReversibleRendererStops = (): void => {}
+    const settleReversibleStops = new Map<string, (stopped: boolean) => void>()
     try {
       const resolvedWorktrees = includeTargetResolvedWorktree(
         [...(await this.getResolvedWorktreeMap()).values()],
@@ -148,16 +148,25 @@ export class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWi
       const stopAndWait = ptyController.stopAndWait.bind(ptyController)
 
       const orderedLivePtyIds = [...livePtyIds].sort()
-      releaseReversibleRendererStops =
-        ptyController.markReversibleStops?.(orderedLivePtyIds) ?? (() => {})
-      const stopResults = await Promise.allSettled(
-        orderedLivePtyIds.map(async (ptyId) => ({
+      for (const ptyId of orderedLivePtyIds) {
+        settleReversibleStops.set(
           ptyId,
-          stopped: await stopAndWait(ptyId, {
+          this.intentionalPtyStops.mark(
+            ptyId,
+            'reversible',
+            this.ptysById.get(ptyId)?.incarnationId ?? null
+          )
+        )
+      }
+      const stopResults = await Promise.allSettled(
+        orderedLivePtyIds.map(async (ptyId) => {
+          const stopped = await stopAndWait(ptyId, {
             keepHistory: true,
             deadlineMs: teardownRpcDeadline(sleepDeadline)
           })
-        }))
+          settleReversibleStops.get(ptyId)?.(stopped)
+          return { ptyId, stopped }
+        })
       )
       const successfulStopPtyIds = orderedLivePtyIds.filter((_, index) => {
         const result = stopResults[index]
@@ -251,7 +260,9 @@ export class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWi
         postStopVerified: true
       }
     } finally {
-      releaseReversibleRendererStops()
+      for (const settleStop of settleReversibleStops.values()) {
+        settleStop(false)
+      }
       if (!fullyCommitted && generation > 0) {
         const cancelledPtyIds = [...pendingPtyIds].sort()
         if (cancelledPtyIds.length > 0) {

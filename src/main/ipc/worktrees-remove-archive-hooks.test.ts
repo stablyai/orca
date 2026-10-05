@@ -124,6 +124,9 @@ async function expectArchiveHookRefusal(
   throw new Error(`expected removal of ${args.worktreeId} to be refused by the archive hook`)
 }
 
+// Why: every removal and listing reply now names the catalog it produced or scanned.
+const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
+
 describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
 
@@ -807,7 +810,7 @@ describe('registerWorktreeHandlers', () => {
       worktreeId: 'repo-folder::/workspace/folder-project/nested'
     })
 
-    expect(result).toEqual({})
+    expect(result).toEqual({ catalogVersion: anyCatalogVersion })
     expect(runHookMock).not.toHaveBeenCalled()
     expect(removeWorktreeMock).not.toHaveBeenCalled()
     expect(store.removeWorktreeMeta).toHaveBeenCalled()

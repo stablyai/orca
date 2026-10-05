@@ -1,5 +1,13 @@
 import { z } from 'zod'
 import {
+  audioReadParamsSchema,
+  audioReadResultSchema,
+  audioStartParamsSchema,
+  audioStartResultSchema,
+  audioStopParamsSchema,
+  audioStopResultSchema
+} from './bridge-audio-verbs'
+import {
   mediaPickParamsSchema,
   mediaPickResultSchema,
   mediaReadParamsSchema,
@@ -31,7 +39,10 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.clipboard.read',
   'native.media.pick',
   'native.media.read',
-  'native.media.release'
+  'native.media.release',
+  'native.audio.start',
+  'native.audio.read',
+  'native.audio.stop'
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -99,6 +110,20 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.media.release': {
     params: mediaReleaseParamsSchema,
     result: mediaReleaseResultSchema
+  },
+  // Dictation's capture. Their shapes live in `bridge-audio-verbs.ts` for the media trio's reason:
+  // the pull, its ring and the tail the stop carries back are one contract.
+  'native.audio.start': {
+    params: audioStartParamsSchema,
+    result: audioStartResultSchema
+  },
+  'native.audio.read': {
+    params: audioReadParamsSchema,
+    result: audioReadResultSchema
+  },
+  'native.audio.stop': {
+    params: audioStopParamsSchema,
+    result: audioStopResultSchema
   }
 }
 

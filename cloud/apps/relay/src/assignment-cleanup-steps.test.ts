@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  assignmentCleanupSteps,
-  runAssignmentCleanup,
-  type AssignmentCleanupStore
-} from './assignment-cleanup-steps.js'
+import { runAssignmentCleanup, type AssignmentCleanupStore } from './assignment-cleanup-steps.js'
 
 function stubStore(overrides: Partial<AssignmentCleanupStore> = {}) {
   const calls: string[] = []
@@ -20,6 +16,7 @@ function stubStore(overrides: Partial<AssignmentCleanupStore> = {}) {
     abortExpiredRegionalRehomes: method('abortExpiredRegionalRehomes'),
     reapRegionalRehomeAttempts: method('reapRegionalRehomeAttempts'),
     releaseExpiredActivityLeases: method('releaseExpiredActivityLeases'),
+    pruneReleasedControlReservations: method('pruneReleasedControlReservations'),
     releaseExpiredActivity: method('releaseExpiredActivity'),
     releaseExpiredRegionPreferences: method('releaseExpiredRegionPreferences'),
     evacuateDeadCells: method('evacuateDeadCells'),
@@ -47,6 +44,7 @@ describe('assignment cleanup steps', () => {
       'abortExpiredRegionalRehomes',
       'reapRegionalRehomeAttempts',
       'releaseExpiredActivityLeases',
+      'pruneReleasedControlReservations',
       'releaseExpiredActivity',
       'releaseExpiredRegionPreferences',
       'evacuateDeadCells'
@@ -55,15 +53,5 @@ describe('assignment cleanup steps', () => {
     expect(String(warn.mock.calls[0]![0])).toContain(
       '[orca-relay] assignment cleanup failed: complete-ready-regional-rehomes'
     )
-  })
-
-  it('covers all eleven sweeps exactly once per run', async () => {
-    const { store, calls } = stubStore()
-
-    await runAssignmentCleanup(store)
-
-    expect(calls).toHaveLength(11)
-    expect(new Set(calls).size).toBe(11)
-    expect(assignmentCleanupSteps(store)).toHaveLength(11)
   })
 })

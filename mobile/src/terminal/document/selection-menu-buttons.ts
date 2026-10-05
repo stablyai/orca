@@ -1,9 +1,9 @@
-import { scope } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
 import { notify } from './host-notify'
 import { cancelSelect } from './selection-range'
 import { repositionOverlay } from './selection-overlay'
 
-export function startSelectionMenuButtons() {
+export function startSelectionMenuButtons(scope: TerminalDocumentScope) {
   scope.btnCopy!.addEventListener('click', function (e) {
     e.preventDefault()
     e.stopPropagation()
@@ -12,9 +12,9 @@ export function startSelectionMenuButtons() {
     }
     const text = scope.term.getSelection ? scope.term.getSelection() : ''
     if (text && text.length > 0) {
-      notify({ type: 'selection', text: text })
+      notify(scope, { type: 'selection', text: text })
     } else {
-      cancelSelect()
+      cancelSelect(scope)
     }
   })
   scope.btnSelAll!.addEventListener('click', function (e) {
@@ -31,7 +31,7 @@ export function startSelectionMenuButtons() {
         focus: { col: scope.term.cols - 1, row: b.length - 1 },
         activeHandle: null
       }
-      repositionOverlay()
+      repositionOverlay(scope)
     } catch {}
   })
 }

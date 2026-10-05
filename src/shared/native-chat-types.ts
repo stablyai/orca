@@ -10,6 +10,13 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
 } from './agent-session-background-task-wire'
+import type { AgentSessionTokenUsage } from './agent-session-context-usage'
+import type { AgentSessionFailureFact } from './agent-session-failure'
+import type {
+  AgentJournalMessageSendMode,
+  AgentJournalPosition,
+  AgentJournalProducerLinkage
+} from './agent-session-journal-types'
 import type { AgentType } from './agent-status-types'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 
@@ -50,6 +57,8 @@ export type NativeChatTextBlock = {
       truncated: boolean
     }
   }
+  /** On a status line that reports a failure: what failed, typed. */
+  failure?: AgentSessionFailureFact
 }
 
 /** A tool invocation by the agent. `input` is the (already-serialized) tool
@@ -88,6 +97,8 @@ export type NativeChatToolResultBlock = {
   type: 'tool-result'
   output: string
   isError?: boolean
+  /** The call this result answers, when the producer knows it; otherwise pairing is positional. */
+  callId?: string
   /** Present only for edit tools whose result reported resolved hunks. */
   editPatch?: NativeChatEditPatch
 }
@@ -125,7 +136,7 @@ export type NativeChatSubagentEntry = {
   state: NativeChatSubagentState
   /** Latest total tokens the provider reported FOR THIS CHILD, never a running sum. */
   tokens?: number
-  /** Epoch ms of the first event that created the entry. */
+  /** Epoch ms the child's latest run started; a resumed child restarts it. */
   startedAt?: number
   /** Epoch ms the entry latched terminal. */
   settledAt?: number
@@ -183,7 +194,9 @@ export type NativeChatBlock =
   | NativeChatSubagentGroupBlock
   | NativeChatBackgroundTaskBlock
 
-export type NativeChatMessage = {
+/** A transcript row. Structured rows carry the journal row's producer linkage, so
+ *  "who said this" survives the projection; terminal-backed rows carry none. */
+export type NativeChatMessage = AgentJournalProducerLinkage & {
   /** Stable across re-reads/appends so the assembler and the renderer list can
    *  dedup and key by it. */
   id: string
@@ -193,9 +206,55 @@ export type NativeChatMessage = {
    *  supply one (e.g. some scrape segments). Null sorts before any timestamp. */
   timestamp: number | null
   source: NativeChatSource
+  /** Optional provider row cursor; split projections share it for whole-row paging. */
+  transcriptOffset?: number
+  /** Model id that produced an assistant response, as the provider API names it. */
+  model?: string
+  /** The agent's provider that served `model`, where the agent records one. */
+  provider?: string
+  /** On assistant responses whose accounting reflects the prompt the model read. */
+  usage?: AgentSessionTokenUsage
   /** Optional explicit turn key. When present, two messages with the same
    *  `turnId` are treated as the same turn for dedup regardless of `id`. */
   turnId?: string
+  /** `id` of the transcript row this one follows in the agent's own conversation
+   *  tree, where the decoder carries the agent's link. Absent from older hosts. */
+  parentId?: string
+  /** How a user message was delivered when it was not an ordinary prompt. */
+  sentAs?: AgentJournalMessageSendMode
+  /** Accepted but not yet handed to the agent: drawn after everything the agent has done. */
+  queued?: true
+  /** Shown as not sent: in no turn, so a newer turn's bar and clock never land on it. Drawn where
+   *  the journal recorded it, or after the conversation when it holds no place there. */
+  unsent?: true
+  /** Set only by the structured projection, on rows the journal holds, and ranks
+   *  them ahead of time. Terminal-backed messages never carry it, and worker reads strip it. */
+  journalPosition?: AgentJournalPosition
+  /** Set only by the tool fold, on a row that absorbed later tool rows: the newest
+   *  absorbed row's journal position. The row still sorts by its own. */
+  foldedJournalPosition?: AgentJournalPosition
+}
+
+/** Split reasoning and its answer share the provider's row identity. */
+export function nativeChatSemanticRowId(message: NativeChatMessage): string {
+  return message.role === 'reasoning' && message.id.endsWith(':reasoning')
+    ? message.id.slice(0, -':reasoning'.length)
+    : message.id
+}
+
+/** New hosts expose the cursor; older messages retain their reasoning/answer id convention. */
+export function nativeChatMessagesShareTranscriptRow(
+  first: NativeChatMessage,
+  second: NativeChatMessage
+): boolean {
+  if (typeof first.transcriptOffset === 'number' && typeof second.transcriptOffset === 'number') {
+    return first.transcriptOffset === second.transcriptOffset
+  }
+  return (
+    first.role === 'reasoning' &&
+    second.role === 'assistant' &&
+    nativeChatSemanticRowId(first) === second.id
+  )
 }
 
 export const NATIVE_CHAT_TURN_LIFECYCLE_STATES = ['working', 'completed', 'interrupted'] as const

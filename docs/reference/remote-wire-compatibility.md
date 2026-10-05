@@ -102,7 +102,7 @@ gate, and a conflicted worktree that looks clean is granted a hosted-review crea
 should not have. Withholding an affordance is a degrade; removing the evidence a gate
 reads is not.
 
-A fallback is only ever allowed to shape a *reading*. If the member is sent back to the
+A fallback is only ever allowed to shape a _reading_. If the member is sent back to the
 host — a token the client echoes into a later call's params — pass it through as
 `z.string()` and let the send site keep it verbatim. `hostedReview`'s `provider` is the
 case: the eligibility reply names it and the create call returns it, so an
@@ -110,6 +110,23 @@ case: the eligibility reply names it and the create call returns it, so an
 provider, it puts `unsupported` on the wire and makes that host refuse its own. A
 reply-schema fallback must never shape a param. Gate on the token instead, where the
 client decides what it is willing to do with an arm it does not know.
+
+## Session search agent negotiation
+
+`aiVault.searchStatus` optionally advertises `supportedAgents`; current search clients
+send their own `supportedAgents` with `aiVault.searchSessions`. These are string lists,
+so a future provider name does not make a peer reject the capability reply. The client
+narrows explicit agent filters to the host's list before calling its request parser.
+The host narrows retrieval to the client's list before publishing a page.
+
+A peer without this field uses the frozen v1.4.211 search vocabulary. The existing
+`supportsQoderHistory` flag proves CodeBuddy, ZCode, and Qoder support;
+`supportsJcodeHistory` independently proves Jcode support. An explicit list takes
+precedence over both flags. If only the status method is missing, the client still
+searches the conservative legacy subset; other status errors propagate. Empty host
+intersections keep the requested filters and use the existing no-match scope, so
+consent, readiness, and unknown-scope results retain their normal precedence.
+Local IPC advertises this build's full list, and every remote leg negotiates separately.
 
 ## Enforcement
 
@@ -181,8 +198,10 @@ hand-written. It covers the three skews that surface can fail on:
 - a new client against the old dispatcher always gets an answer rather than silence,
   and `method_not_found` for every method that release does not register, so the
   absence is visible during negotiation instead of by calling;
-- a cursor survives a host restart: the client's fence is refused as stale with the live
-  one attached, and resuming from the held cursor replays only what it missed.
+- a cursor survives a host restart: a reattach at the client's fence is refused as stale
+  with the live one attached, a write still carrying that fence is delivered (writes are
+  named by their target, and every released client still sends a fence), and resuming from
+  the held cursor replays only what it missed.
 
 Run it with:
 

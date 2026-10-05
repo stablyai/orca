@@ -84,6 +84,7 @@ describe('runRemoteOrcaCli', () => {
       getActiveDispatchForIdentity: vi.fn(() => undefined),
       getActiveDispatchMailboxOwners: vi.fn(() => []),
       getCurrentRunForPane: vi.fn(() => undefined),
+      getCurrentRunForCoordinator: vi.fn(() => undefined),
       getRunMailboxOwnerIdsForHandle: vi.fn(() => []),
       findActiveRemoteAttachmentForPane: vi.fn(() => undefined)
     }
@@ -375,7 +376,7 @@ describe('runRemoteOrcaCli', () => {
     }
   })
 
-  it('carries the Dispatch capability through the SSH envelope', async () => {
+  it("still accepts an older host's --dispatch-capability through the SSH bridge", async () => {
     const db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
@@ -395,7 +396,7 @@ describe('runRemoteOrcaCli', () => {
       taskId: task.id,
       startOptions: {}
     })
-    const capability = db.prepareStartingWorkerAuthority({
+    db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_ssh',
       paneKey: 'tab_ssh:leaf_ssh',
@@ -424,7 +425,7 @@ describe('runRemoteOrcaCli', () => {
             '--outcome',
             'succeeded',
             '--dispatch-capability',
-            capability,
+            'dcap_from_an_old_host',
             '--json'
           ],
           cwd: '/home/alice/repo',
@@ -584,7 +585,9 @@ describe('runRemoteOrcaCli', () => {
     )
 
     expect(result.exitCode).toBe(0)
-    expect(db.getCurrentRunForPane).toHaveBeenCalledWith('tab_ssh:leaf_ssh')
+    expect(db.getCurrentRunForCoordinator).toHaveBeenCalledWith(
+      expect.objectContaining({ paneKey: 'tab_ssh:leaf_ssh' })
+    )
     expect(db.getActiveDispatchForIdentity).toHaveBeenCalledWith(
       'term_stale_ssh',
       'tab_ssh:leaf_ssh'
@@ -608,7 +611,7 @@ describe('runRemoteOrcaCli', () => {
     )
 
     expect(result.exitCode).toBe(0)
-    expect(db.getCurrentRunForPane).not.toHaveBeenCalled()
+    expect(db.getCurrentRunForCoordinator).not.toHaveBeenCalled()
     expect(db.getActiveDispatchForIdentity).toHaveBeenCalledWith('term_legacy_worker', undefined)
   })
 

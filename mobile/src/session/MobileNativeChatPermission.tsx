@@ -3,6 +3,10 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ShieldQuestion, X } from 'lucide-react-native'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import {
+  isNewerApprovalSubject,
+  isPlanApprovalSubject
+} from '../../../src/shared/agent-session-approval-subject'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 
 // Renders a detected agent permission ask as a card with tappable options.
@@ -19,6 +23,8 @@ function MobileNativeChatPermissionImpl({
 }): React.JSX.Element {
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
+  // A newer Orca's subject: its detail is shown, and only the card's cancel answers.
+  const newerSubject = isNewerApprovalSubject(permission.subject)
   const hasContext = Boolean(
     permission.description ||
     permission.decisionReason ||
@@ -93,7 +99,7 @@ function MobileNativeChatPermissionImpl({
               {permission.matchedAskRule.source}
             </Text>
           ) : null}
-          {permission.subject?.kind === 'plan' ? (
+          {isPlanApprovalSubject(permission.subject) ? (
             <View>
               <MobileMarkdown content={permission.subject.text} />
               {permission.subject.filePath ? (
@@ -102,6 +108,11 @@ function MobileNativeChatPermissionImpl({
             </View>
           ) : permission.detail ? (
             <Text style={styles.detail}>{permission.detail}</Text>
+          ) : null}
+          {newerSubject ? (
+            <Text testID="native-chat-approval-needs-newer-orca" style={styles.detail}>
+              This request needs a newer version of Orca.
+            </Text>
           ) : null}
         </ScrollView>
       ) : null}
@@ -114,11 +125,12 @@ function MobileNativeChatPermissionImpl({
               style={({ pressed }) => [
                 styles.option,
                 isPrimary ? styles.optionPrimary : styles.optionSecondary,
-                pressed && !submitting && styles.optionPressed
+                pressed && !submitting && styles.optionPressed,
+                newerSubject && styles.disabled
               ]}
               hitSlop={6}
               onPress={() => respond(option.send)}
-              disabled={submitting}
+              disabled={submitting || newerSubject}
             >
               <Text style={[styles.optionText, isPrimary && styles.optionTextPrimary]}>
                 {option.label}
@@ -211,6 +223,9 @@ const styles = StyleSheet.create({
   },
   optionPressed: {
     opacity: 0.7
+  },
+  disabled: {
+    opacity: 0.5
   },
   optionText: {
     color: colors.textPrimary,

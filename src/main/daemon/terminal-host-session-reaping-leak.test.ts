@@ -11,7 +11,8 @@
  * emulator is disposed when a subprocess exits (before the fix it never was).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TerminalHost } from './terminal-host'
+import { TerminalHost, type TerminalHostOptions } from './terminal-host'
+import { SESSION_FORCE_KILL_RETRY_MS } from './session-termination-controller'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { HeadlessEmulator } from './headless-emulator'
 
@@ -21,10 +22,12 @@ vi.mock('../pty-descendant-termination', () => ({
 }))
 
 function createMockSubprocess(): SubprocessHandle & {
+  _onDataCb: ((data: string) => void) | null
   _onExitCb: ((code: number) => void) | null
 } {
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements the subprocess contract and exposes test-only callback accessors.
   return {
     pid: 99999,
     getForegroundProcess: vi.fn(() => null),
@@ -49,7 +52,10 @@ function createMockSubprocess(): SubprocessHandle & {
     get _onExitCb() {
       return onExitCb
     }
-  } as SubprocessHandle & { _onExitCb: ((code: number) => void) | null }
+  } as SubprocessHandle & {
+    _onDataCb: ((data: string) => void) | null
+    _onExitCb: ((code: number) => void) | null
+  }
 }
 
 describe('TerminalHost dead-session reaping (leak regression)', () => {
@@ -57,6 +63,7 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
   let lastSubprocess: ReturnType<typeof createMockSubprocess>
   let emulatorDispose: ReturnType<typeof vi.spyOn>
   let platformDescriptor: PropertyDescriptor | undefined
+  let spawnFn: TerminalHostOptions['spawnSubprocess']
 
   beforeEach(() => {
     // Pin POSIX so immediate force-kill teardown is deterministic across host OSes; the
@@ -65,7 +72,7 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     killWithDescendantSweepMock.mockReset()
     emulatorDispose = vi.spyOn(HeadlessEmulator.prototype, 'dispose')
-    const spawnFn = vi.fn(() => {
+    spawnFn = vi.fn<TerminalHostOptions['spawnSubprocess']>(() => {
       lastSubprocess = createMockSubprocess()
       return lastSubprocess
     })
@@ -83,6 +90,52 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
   function streamClient() {
     return { onData: vi.fn(), onExit: vi.fn() }
   }
+
+  it('waits for detached descendant cleanup before killing the shell and releasing its fd', async () => {
+    await host.createOrAttach({
+      sessionId: 'shutdown-tree',
+      cols: 80,
+      rows: 24,
+      streamClient: { onData: vi.fn(), onExit: vi.fn() }
+    })
+    let finishDescendants = (): void => {}
+    killWithDescendantSweepMock.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishDescendants = resolve
+      })
+    )
+    let disposed = false
+    const shutdown = host.dispose().then(() => {
+      disposed = true
+    })
+
+    await Promise.resolve()
+    expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
+    expect(lastSubprocess.dispose).not.toHaveBeenCalled()
+    expect(disposed).toBe(false)
+    finishDescendants()
+    await shutdown
+    expect(lastSubprocess.forceKill).toHaveBeenCalledOnce()
+    expect(lastSubprocess.dispose).toHaveBeenCalledOnce()
+    expect(host.listSessions()).toEqual([])
+  })
+
+  it('force-kills live subprocesses and releases PTY fds on dispose', async () => {
+    await host.createOrAttach({
+      sessionId: 'session-1',
+      cols: 80,
+      rows: 24,
+      streamClient: { onData: vi.fn(), onExit: vi.fn() }
+    })
+
+    await host.dispose()
+    // Why: live sessions retain the native owner until force-kill is accepted
+    // and physical exit proves the child can no longer hold the ptmx fd.
+    // Exited sessions take the disposeSubprocess() path instead (see the test
+    // below). See docs/fix-pty-fd-leak.md.
+    expect(lastSubprocess.forceKill).toHaveBeenCalled()
+    expect(lastSubprocess.dispose).toHaveBeenCalled()
+  })
 
   it('disposes the emulator and reaps the session when its subprocess exits', async () => {
     await host.createOrAttach({
@@ -195,5 +248,146 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  describe('tombstones', () => {
+    it('caps tombstones at limit', async () => {
+      await host.dispose()
+      host = new TerminalHost({ spawnSubprocess: spawnFn, maxTombstones: 3 })
+
+      for (let i = 0; i < 5; i++) {
+        await host.createOrAttach({
+          sessionId: `session-${i}`,
+          cols: 80,
+          rows: 24,
+          streamClient: { onData: vi.fn(), onExit: vi.fn() }
+        })
+        host.kill(`session-${i}`)
+      }
+
+      // Oldest tombstones should be evicted
+      expect(host.isKilled('session-0')).toBe(false)
+      expect(host.isKilled('session-4')).toBe(true)
+    })
+  })
+
+  describe('dispose', () => {
+    it('releases held shell-ready marker prefixes before final checkpoint', async () => {
+      await host.dispose()
+      const onFinalCheckpoint = vi.fn()
+      host = new TerminalHost({
+        spawnSubprocess: spawnFn,
+        onFinalCheckpoint
+      })
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        shellReadySupported: true,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready')
+      await host.dispose()
+
+      expect(onFinalCheckpoint).toHaveBeenCalledWith('session-1', expect.any(Object), [
+        { kind: 'output', data: '\x1b]777;orca-shell-ready' }
+      ])
+    })
+
+    it('fences creation and retries a rejected force kill before dropping ownership', async () => {
+      vi.useFakeTimers()
+      try {
+        await host.createOrAttach({
+          sessionId: 'session-1',
+          cols: 80,
+          rows: 24,
+          streamClient: { onData: vi.fn(), onExit: vi.fn() }
+        })
+        let attempts = 0
+        const forceKill = vi.fn(() => {
+          attempts++
+          if (attempts === 1) {
+            throw new Error('transient daemon dispose kill failure')
+          }
+          lastSubprocess._onExitCb?.(137)
+        })
+        lastSubprocess.forceKill = forceKill
+
+        const dispose = host.dispose()
+        await vi.advanceTimersByTimeAsync(0)
+        expect(forceKill).toHaveBeenCalledTimes(1)
+        expect(host.dispose()).toBe(dispose)
+        await expect(
+          host.createOrAttach({
+            sessionId: 'late-session',
+            cols: 80,
+            rows: 24,
+            streamClient: { onData: vi.fn(), onExit: vi.fn() }
+          })
+        ).rejects.toThrow('Terminal host is shutting down')
+
+        await vi.advanceTimersByTimeAsync(SESSION_FORCE_KILL_RETRY_MS)
+        await dispose
+        expect(forceKill).toHaveBeenCalledTimes(2)
+        expect(lastSubprocess.dispose).toHaveBeenCalled()
+        expect(host.listSessions()).toEqual([])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not list exited sessions', async () => {
+      const onSessionReaped = vi.fn()
+      host = new TerminalHost({ spawnSubprocess: spawnFn, onSessionReaped })
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      lastSubprocess._onExitCb?.(0)
+      expect(host.listSessions()).toEqual([])
+      expect(onSessionReaped).toHaveBeenCalledWith('session-1')
+    })
+
+    it('never force-kills an exited session (recycled-pid SIGKILL safety)', async () => {
+      // Why: after a session's subprocess has exited (onExit fired), proc.pid
+      // refers to a reaped child whose pid may have been recycled. Force-killing
+      // it would process.kill(recycled_pid, 'SIGKILL') — killing a stranger.
+      // The exit now reaps the session via session.dispose(), which skips
+      // forceKill once _state==='exited' (only the fd is released). host.dispose
+      // then only ever sees live sessions.
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      // Natural exit reaps session-1 synchronously: its subprocess fd is
+      // released (dispose) but it is never force-killed, and it is dropped from
+      // the map (so it is not listed and not touched by host.dispose below).
+      const exitedSub = lastSubprocess
+      lastSubprocess._onExitCb?.(0)
+      expect(host.listSessions()).toEqual([])
+
+      // A second, live session remains in the map for host.dispose to reap.
+      await host.createOrAttach({
+        sessionId: 'session-2',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      const liveSub = lastSubprocess
+
+      await host.dispose()
+
+      expect(exitedSub.forceKill).not.toHaveBeenCalled()
+      expect(exitedSub.dispose).toHaveBeenCalled()
+      expect(liveSub.forceKill).toHaveBeenCalled()
+      expect(liveSub.dispose).toHaveBeenCalled()
+    })
   })
 })

@@ -50,7 +50,8 @@ export class RuntimeGitHubIssueCommentCommands {
       number,
       updates,
       repo.connectionId ?? null,
-      ...this.deps.getLocalGitArgs(repo)
+      this.deps.getLocalGitArgs(repo)[0],
+      repo.issueSourcePreference
     )
   }
 
@@ -58,7 +59,8 @@ export class RuntimeGitHubIssueCommentCommands {
     repoSelector: string,
     number: number,
     body: string,
-    prRepo?: GitHubOwnerRepo | null
+    prRepo?: GitHubOwnerRepo | null,
+    type?: 'issue' | 'pr'
   ): Promise<Awaited<ReturnType<typeof addIssueComment>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return addIssueComment(
@@ -67,7 +69,9 @@ export class RuntimeGitHubIssueCommentCommands {
       body,
       repo.connectionId ?? null,
       prRepo ?? null,
-      ...this.deps.getLocalGitArgs(repo)
+      this.deps.getLocalGitArgs(repo)[0],
+      // Why: the issue source selector only scopes issues; PR comments keep their resolution.
+      type === 'pr' ? undefined : repo.issueSourcePreference
     )
   }
 

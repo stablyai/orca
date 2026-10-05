@@ -40,7 +40,7 @@ describe('headless PTY registry hydration ordering', () => {
 
   it('hydrates orcad after Store and daemon readiness but before RPC and publication', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/orcad/orcad-entry.ts'), 'utf8')
-    const store = source.indexOf('const store = new Store(')
+    const store = source.indexOf('createOrcadProfileStateStartup(runtimeUserDataPath)')
     const daemon = source.indexOf('await startOrcadDaemon()', store)
     const handlersAndHydration = source.indexOf('await registerHeadlessPtyRuntime(', daemon)
     const rpc = source.indexOf('await rpc.start()', handlersAndHydration)
@@ -57,7 +57,7 @@ describe('headless PTY registry hydration ordering', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/orcad/orcad-entry.ts'), 'utf8')
     const cleanup = source.indexOf('registerCleanup(async () => {')
     const hookStop = source.indexOf('agentHookServer.stop()', cleanup)
-    const store = source.indexOf('const store = new Store(')
+    const store = source.indexOf('createOrcadProfileStateStartup(runtimeUserDataPath)')
     const hookStart = source.indexOf('await agentHookServer.start(', store)
     const daemon = source.indexOf('await startOrcadDaemon()', hookStart)
     const hookEnv = source.indexOf('buildAgentHookPtyEnv:', daemon)
@@ -78,14 +78,28 @@ describe('headless PTY registry hydration ordering', () => {
     const runtime = source.indexOf('const runtime = new OrcaRuntimeService(')
     const identityReader = source.indexOf('readObservedAgentStatusPaneIdentity:', runtime)
     const identitySubscription = source.indexOf('agentHookServer.subscribeEnrichedStatus(')
-    const hooksEnabled = source.indexOf('if (isAgentStatusHooksEnabled(', identitySubscription)
+    const hookStart = source.indexOf('await agentHookServer.start(', identitySubscription)
+    const settingsListener = source.indexOf('profileStore.onSettingsChanged(', hookStart)
+    const daemon = source.indexOf('await startOrcadDaemon()', hookStart)
     const identityFlush = source.indexOf('observedStatusCapture.attach(runtime)', runtime)
 
     expect(runtime).toBeGreaterThanOrEqual(0)
     expect(identityReader).toBeGreaterThan(runtime)
     expect(identitySubscription).toBeGreaterThanOrEqual(0)
     expect(identitySubscription).toBeLessThan(runtime)
-    expect(hooksEnabled).toBeGreaterThan(identitySubscription)
+    expect(hookStart).toBeGreaterThan(identitySubscription)
+    expect(settingsListener).toBeGreaterThan(hookStart)
+    expect(daemon).toBeGreaterThan(settingsListener)
+    expect(runtime).toBeGreaterThan(daemon)
+    expect(source.slice(identitySubscription, hookStart)).not.toContain(
+      'if (isAgentStatusHooksEnabled('
+    )
+    expect(source.slice(hookStart, settingsListener)).toContain(
+      'statusHooksEnabled: isAgentStatusHooksEnabled(profileStore.getSettings())'
+    )
+    expect(source.slice(settingsListener, daemon)).toContain(
+      'agentHookServer.setStatusHooksEnabled(isAgentStatusHooksEnabled(settings))'
+    )
     expect(identityFlush).toBeGreaterThan(runtime)
     expect(source.slice(identitySubscription, runtime)).toContain(
       'observedStatusCapture.observe(enriched)'

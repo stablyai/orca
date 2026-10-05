@@ -14,9 +14,11 @@ import {
   cleanupWindowsRelayUploadStageCommand,
   promoteWindowsRelayUploadStageCommand,
   recoverWindowsRelayUploadStageCommand,
-  reserveWindowsRelayUploadStageCommand
+  reserveWindowsRelayUploadStageCommand,
+  type WindowsUploadStageIdentity
 } from './ssh-relay-upload-stage-windows-commands'
 
+export type { WindowsUploadStageIdentity } from './ssh-relay-upload-stage-windows-commands'
 export {
   RELAY_UPLOAD_STAGE_POOL_NAME,
   RELAY_UPLOAD_STAGE_SLOT_COUNT,
@@ -52,11 +54,12 @@ function slotPaths(
 export function reserveRelayUploadStageCommand(
   host: RemoteHostPlatform,
   poolDir: string,
-  owner: string
+  owner: string,
+  identity?: WindowsUploadStageIdentity
 ): string {
   assertOwner(owner)
   return isWindowsRemoteHost(host)
-    ? reserveWindowsRelayUploadStageCommand(poolDir, owner)
+    ? reserveWindowsRelayUploadStageCommand(poolDir, owner, identity)
     : reservePosixStageCommand(poolDir, owner)
 }
 
@@ -82,11 +85,12 @@ export function promoteOwnedRelayUploadStageCommand(
   host: RemoteHostPlatform,
   stage: RelayUploadStageSlot,
   owner: string,
-  destinationDir: string
+  destinationDir: string,
+  identity?: WindowsUploadStageIdentity
 ): string {
   assertOwner(owner)
   return isWindowsRemoteHost(host)
-    ? promoteWindowsRelayUploadStageCommand(stage, owner, destinationDir)
+    ? promoteWindowsRelayUploadStageCommand(stage, owner, destinationDir, identity)
     : promotePosixStageCommand(stage, owner, destinationDir)
 }
 
@@ -100,22 +104,24 @@ export function relayUploadStagePromotionConfirmed(owner: string, output: string
 export function cleanupOwnedRelayUploadStageCommand(
   host: RemoteHostPlatform,
   stage: RelayUploadStageSlot,
-  owner: string
+  owner: string,
+  identity?: WindowsUploadStageIdentity
 ): string {
   assertOwner(owner)
   return isWindowsRemoteHost(host)
-    ? cleanupWindowsRelayUploadStageCommand(stage, owner)
+    ? cleanupWindowsRelayUploadStageCommand(stage, owner, identity)
     : cleanupPosixStageCommand(stage, owner)
 }
 
 export function recoverOneStaleRelayUploadStageCommand(
   host: RemoteHostPlatform,
   poolDir: string,
-  staleSeconds = RELAY_UPLOAD_STAGE_STALE_SECONDS
+  staleSeconds = RELAY_UPLOAD_STAGE_STALE_SECONDS,
+  identity?: WindowsUploadStageIdentity
 ): string {
   const cutoffSeconds = Math.max(1, Math.ceil(staleSeconds))
   return isWindowsRemoteHost(host)
-    ? recoverWindowsRelayUploadStageCommand(poolDir, cutoffSeconds)
+    ? recoverWindowsRelayUploadStageCommand(poolDir, cutoffSeconds, identity)
     : recoverPosixStageCommand(poolDir, Math.ceil(cutoffSeconds / 60))
 }
 

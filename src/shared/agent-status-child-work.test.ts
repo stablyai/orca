@@ -58,7 +58,11 @@ describe('AgentChildWorkRecord', () => {
     const children = AGENT_CHILD_WORK_STATES.map((state, index) =>
       child({
         childWorkId: `child-${index}`,
-        kind: AGENT_CHILD_WORK_KINDS[index % AGENT_CHILD_WORK_KINDS.length],
+        // Only a shell or a monitor may store `monitoring`.
+        kind:
+          state === 'monitoring'
+            ? 'monitor'
+            : AGENT_CHILD_WORK_KINDS[index % AGENT_CHILD_WORK_KINDS.length],
         state,
         membership: state === 'done' ? 'settled' : 'live',
         ...(state === 'done' ? { outcome: 'failed' } : {}),
@@ -71,7 +75,7 @@ describe('AgentChildWorkRecord', () => {
     const snapshot = store.getSnapshot()
     expect(snapshot.children.map((item) => item.kind)).toEqual([
       'agent',
-      'workflow',
+      'monitor',
       'command',
       'monitor',
       'unknown',

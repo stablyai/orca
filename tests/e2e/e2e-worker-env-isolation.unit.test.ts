@@ -1,4 +1,13 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -23,17 +32,17 @@ const E2E_ROOT = resolve(__dirname)
 const MODULE_SCOPE_ENV_WRITE =
   /^(?:process\.env\.[A-Za-z_][A-Za-z0-9_]*\s*(?:\??\|\||\?\?|)=[^=]|process\.env\[|delete\s+process\.env[.[]|Object\.assign\(\s*process\.env)/
 
-/**
- * The count of files writing `process.env` at module scope.
- *
- * May only ever be DECREASED. Raising it is never the fix: the replacement is a fixture option,
- * which is strictly more capable here because it reaches the app launch without touching the
- * worker every other spec shares.
- */
-const MODULE_SCOPE_ENV_WRITER_PIN = 0
-
+// No file may write at module scope. The replacement is a fixture option, which reaches the app
+// launch without touching the worker every other spec shares.
 const SCANNED_EXTENSIONS = ['.ts', '.tsx']
-const IGNORED_DIRECTORIES = new Set(['node_modules', 'dist', 'out', 'build', '__fixtures__'])
+const IGNORED_DIRECTORIES = new Set([
+  'node_modules',
+  'dist',
+  'out',
+  'build',
+  '__fixtures__',
+  '.cross-version-checkouts'
+])
 
 function collectE2eFiles(root: string): string[] {
   const found: string[] = []
@@ -68,9 +77,19 @@ describe('e2e worker env isolation', () => {
     expect(offenders).toEqual([])
   })
 
-  it('holds the module-scope env writer count at its ratchet', () => {
-    const files = new Set(offenders.map((offender) => offender.split(':')[0]))
-    expect(files.size).toBeLessThanOrEqual(MODULE_SCOPE_ENV_WRITER_PIN)
+  it('checks current source while excluding extracted release copies', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-e2e-env-scan-'))
+    try {
+      const cached = join(root, '.cross-version-checkouts')
+      mkdirSync(cached)
+      writeFileSync(join(cached, 'old.ts'), "process.env.ORCA_E2E_X = '1'\n")
+      const source = join(root, 'current.ts')
+      writeFileSync(source, "process.env.ORCA_E2E_X = '1'\n")
+      expect(collectE2eFiles(root)).toEqual([source])
+      expect(findModuleScopeEnvWrites(source)).toHaveLength(1)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('detects the shape it is meant to catch', () => {

@@ -1,31 +1,35 @@
 import type { GitHubIssueUpdate } from '../../shared/issue-mutation-types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 import type { LocalGitExecOptions } from './gh-utils'
-import { getIssueGitHubApiRepository, resolveGitHubRepoExecution } from './github-api-repository'
+import {
+  resolveGitHubRepoExecution,
+  resolveIssueGitHubApiRepositorySource,
+  type GitHubApiRepository
+} from './github-api-repository'
 import { acquire, classifyGhError, ghExecFileAsync, release } from './gh-utils'
 
-/**
- * Update an existing GitHub issue. Fans out to separate gh commands for
- * state changes vs field edits since `gh issue edit` does not support state.
- *
- * Why this path doesn't take a preference (mirrors `getIssue`): mutations
- * target an issue number already bound to a worktree / linked elsewhere in
- * the UI. Routing an update through the live per-repo preference would let
- * a user open upstream#N, toggle the selector to origin, save, and silently
- * write to origin#N — a different issue (or 404). That is the exact
- * silent-source-switch class of wrongness #1186 / the parent design doc
- * guard against. List and create paths honor preference; mutations stay on
- * the heuristic `getIssueOwnerRepo`.
- */
+// Use the selected source for issue-number edits.
 export async function updateIssue(
   repoPath: string,
   issueNumber: number,
   updates: GitHubIssueUpdate,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  preference?: IssueSourcePreference,
+  ownerRepoOverride?: GitHubApiRepository | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
-    () => getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions),
+    ownerRepoOverride ??
+      (async () =>
+        (
+          await resolveIssueGitHubApiRepositorySource(
+            repoPath,
+            preference,
+            connectionId,
+            localGitOptions
+          )
+        ).source),
     connectionId,
     localGitOptions
   )

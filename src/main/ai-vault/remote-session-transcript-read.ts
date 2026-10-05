@@ -9,6 +9,9 @@ export async function parseRemoteSessionTranscript(
   candidate: RemoteSessionCandidate,
   context: RemoteScannerContext
 ): Promise<AiVaultSession | null> {
+  if (candidate.source.parseCandidate) {
+    return candidate.source.parseCandidate(candidate.file, context)
+  }
   const sidecar = candidate.file.sidecar
   const exceedsWholeReadLimit =
     (candidate.file.sizeBytes ?? 0) > LEGACY_SESSION_TEXT_LIMIT_BYTES ||

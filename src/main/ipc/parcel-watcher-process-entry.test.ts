@@ -496,6 +496,92 @@ describe('parcel watcher process canary', () => {
     )
   })
 
+  it.each(['/repo', '/repo/Café'])(
+    'invalidates only the deleted root %s after delivering its batch',
+    async (dir) => {
+      let callback:
+        | ((err: Error | null, events: { type: string; path: string }[]) => void)
+        | undefined
+      subscribeMock
+        .mockResolvedValueOnce({ unsubscribe: vi.fn() })
+        .mockImplementationOnce(async (_dir, nextCallback) => {
+          callback = nextCallback
+          return { unsubscribe: vi.fn() }
+        })
+      const sendMock = vi.fn()
+      process.send = sendMock
+      await import('./parcel-watcher-process-entry')
+      await vi.advanceTimersByTimeAsync(0)
+      process.emit('message', { op: 'subscribe', id: 1, dir, opts: {} })
+      await vi.advanceTimersByTimeAsync(0)
+      sendMock.mockClear()
+
+      callback?.(null, [{ type: 'delete', path: `${dir}/nested` }])
+      callback?.(null, [{ type: 'delete', path: `${dir}-other` }])
+      await vi.advanceTimersByTimeAsync(0)
+      expect(sendMock.mock.calls.some(([message]) => message.op === 'watch-error')).toBe(false)
+      sendMock.mockClear()
+
+      callback?.(null, [{ type: 'delete', path: dir }])
+      callback?.(null, [{ type: 'update', path: `${dir}/late.txt` }])
+      callback?.(null, [{ type: 'delete', path: dir }])
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(sendMock.mock.calls.map(([message]) => message)).toEqual([
+        { op: 'events', id: 1, events: [{ type: 'delete', path: dir }] },
+        { op: 'watch-error', id: 1, message: expect.stringContaining('root') }
+      ])
+    }
+  )
+
+  it('invalidates an overflowing root-delete batch after IPC backpressure clears', async () => {
+    let callback:
+      | ((err: Error | null, events: { type: string; path: string }[]) => void)
+      | undefined
+    subscribeMock
+      .mockResolvedValueOnce({ unsubscribe: vi.fn() })
+      .mockImplementationOnce(async (_dir, nextCallback) => {
+        callback = nextCallback
+        return { unsubscribe: vi.fn() }
+      })
+    let releaseEvent: (() => void) | undefined
+    const sendMock = vi.fn((message, onSent) => {
+      if (message.op === 'events') {
+        releaseEvent = onSent
+        return false
+      }
+      return true
+    })
+    process.send = sendMock
+    await import('./parcel-watcher-process-entry')
+    await vi.advanceTimersByTimeAsync(0)
+    process.emit('message', {
+      op: 'subscribe',
+      id: 1,
+      dir: '/repo',
+      opts: {},
+      delivery: { maxEventsPerBatch: 1 }
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    sendMock.mockClear()
+
+    callback?.(null, [{ type: 'update', path: '/repo/first.txt' }])
+    await vi.advanceTimersByTimeAsync(0)
+    callback?.(null, [
+      { type: 'delete', path: '/repo/child.txt' },
+      { type: 'delete', path: '/repo' }
+    ])
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sendMock.mock.calls.map(([message]) => message.op)).toEqual(['events'])
+    releaseEvent?.()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sendMock.mock.calls.map(([message]) => message.op)).toEqual([
+      'events',
+      'overflow',
+      'watch-error'
+    ])
+  })
+
   it('bounds pending event batches while child IPC reports backpressure', async () => {
     let callback:
       | ((err: Error | null, events: { type: string; path: string }[]) => void)

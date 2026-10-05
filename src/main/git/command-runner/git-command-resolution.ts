@@ -14,7 +14,8 @@ import { usesHostGitForWslLinkedWorktree } from '../wsl-linked-worktree-git-rout
 import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
 import type { GitExecOptions } from './git-exec-options'
 
-function wslDistroForCommand(cwd: string | undefined, override?: string): string | null {
+/** The WSL distro a Git command with this cwd runs in, or null when it runs on the host. */
+export function wslDistroForCommand(cwd: string | undefined, override?: string): string | null {
   if (process.platform !== 'win32') {
     return null
   }

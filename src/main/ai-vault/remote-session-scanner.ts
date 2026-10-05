@@ -1,3 +1,8 @@
+import {
+  candidateFileTime,
+  prioritizeAntigravityTranscriptCandidates
+} from './antigravity-transcript-candidates'
+import { readRemoteAntigravityIndex } from './antigravity-index-reader'
 import { parseRemoteSessionTranscript } from './remote-session-transcript-read'
 import { BinarySessionTranscriptError } from './remote-session-content-lines'
 import type {
@@ -16,6 +21,7 @@ import {
 import { ScannedSessionCollection, dedupeScannedSessions } from './session-root-dedup'
 import {
   parseRemoteSessionFileCached,
+  remoteSessionCandidateKey,
   remoteSessionParseHostKey
 } from './remote-session-parse-cache'
 import { remoteCodexIndexedTitleReader } from './remote-session-scanner-codex-index'
@@ -36,6 +42,7 @@ import { canStopParsingSessions } from './session-scan-cutoff'
 import { refreshCodexTitleFromIndex } from './session-scanner-codex-cached-title'
 import { limitRemoteScanFilesystemConcurrency } from './remote-session-scan-concurrency'
 import { aiVaultScanLimit } from '../../shared/ai-vault-session-depth'
+import { remoteOpenCodeSources } from './remote-session-scanner-opencode-source'
 
 const REMOTE_SCAN_CONCURRENCY = 8
 const REMOTE_PARSE_CANDIDATE_MULTIPLIER = 2
@@ -50,6 +57,7 @@ export async function scanRemoteAiVaultSessions(args: {
   executionHostId: ExecutionHostId
   remoteHome: string
   hostPlatform: RemoteHostPlatform
+  includeAntigravityIdeSessions?: boolean
   limit?: number
   unlimited?: boolean
   scopePaths?: readonly string[]
@@ -67,24 +75,25 @@ export async function scanRemoteAiVaultSessions(args: {
     hostPlatform: args.hostPlatform,
     signal: args.signal,
     titleCaches: new Map(),
-    antigravityWorkspaceResolver: createAntigravityWorkspaceResolver(async (historyPath) => {
-      try {
-        throwIfAiVaultScanCancelled(args.signal)
-        const read = await provider.readFile(historyPath)
-        throwIfAiVaultScanCancelled(args.signal)
-        return read.isBinary ? null : read.content
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          throw error
-        }
-        return null
-      }
-    })
+    antigravityWorkspaceResolver: createAntigravityWorkspaceResolver((path) =>
+      readRemoteAntigravityIndex(provider, path, args.signal)
+    )
   }
-  const candidates = dedupeCodexRolloutFileAliases(
+  const discoveredCandidates = dedupeCodexRolloutFileAliases(
     (
       await mapRemoteScanBatches(
-        remoteSessionSources(args.remoteHome, args.hostPlatform),
+        [
+          ...remoteSessionSources(
+            args.remoteHome,
+            args.hostPlatform,
+            args.includeAntigravityIdeSessions
+          ),
+          ...remoteOpenCodeSources(
+            provider.openCode,
+            limit * REMOTE_PARSE_CANDIDATE_MULTIPLIER +
+              (args.scopePaths?.length ? REMOTE_SCOPE_PARSE_CANDIDATE_LIMIT + 1 : 0)
+          )
+        ],
         REMOTE_SCAN_CONCURRENCY,
         (source) => discoverRemoteSourceCandidates({ source, context, issues }),
         args.signal
@@ -100,6 +109,10 @@ export async function scanRemoteAiVaultSessions(args: {
     }
   )
 
+  const candidates = prioritizeAntigravityTranscriptCandidates(
+    discoveredCandidates,
+    (candidate) => candidate.source.agent === 'antigravity'
+  )
   const parsed = await parseRemoteSessionCandidates({
     candidates: candidates.slice(0, limit * REMOTE_PARSE_CANDIDATE_MULTIPLIER),
     context,
@@ -120,7 +133,7 @@ export async function scanRemoteAiVaultSessions(args: {
     issues,
     scopePaths,
     limit,
-    alreadyParsedFilePaths: parsed.parsedFilePaths
+    alreadyParsedCandidateKeys: parsed.parsedCandidateKeys
   })
   const scopeSessions = dedupeScannedSessions([...parsedScopeSessions, ...extraScopeSessions])
     .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
@@ -138,13 +151,15 @@ async function parseRemoteSessionCandidates(args: {
   context: RemoteScannerContext
   issues: AiVaultScanIssue[]
   limit: number
-}): Promise<{ sessions: AiVaultSession[]; parsedFilePaths: Set<string> }> {
+}): Promise<{ sessions: AiVaultSession[]; parsedCandidateKeys: Set<string> }> {
   const sessions = new ScannedSessionCollection()
-  const parsedFilePaths = new Set<string>()
+  const parsedCandidateKeys = new Set<string>()
   let index = 0
 
   while (index < args.candidates.length) {
-    if (canStopParsingSessions(sessions, args.limit, args.candidates[index]?.file.mtimeMs)) {
+    if (
+      canStopParsingSessions(sessions, args.limit, candidateFileTime(args.candidates[index]?.file))
+    ) {
       break
     }
 
@@ -153,7 +168,7 @@ async function parseRemoteSessionCandidates(args: {
     const batchSize = Math.min(REMOTE_SCAN_CONCURRENCY, needed, remaining)
     const batch = args.candidates.slice(index, index + batchSize)
     for (const candidate of batch) {
-      parsedFilePaths.add(candidate.file.path)
+      parsedCandidateKeys.add(remoteSessionCandidateKey(candidate))
     }
     throwIfAiVaultScanCancelled(args.context.signal)
     const results = await Promise.all(
@@ -171,7 +186,7 @@ async function parseRemoteSessionCandidates(args: {
   // The loop can terminate on the yield after its final batch, so re-check
   // rather than letting a cancelled scan return a partial parse as a success.
   throwIfAiVaultScanCancelled(args.context.signal)
-  return { sessions: [...sessions.values()], parsedFilePaths }
+  return { sessions: [...sessions.values()], parsedCandidateKeys }
 }
 
 async function scanRemoteInScopeSessions(args: {
@@ -180,14 +195,14 @@ async function scanRemoteInScopeSessions(args: {
   issues: AiVaultScanIssue[]
   scopePaths: readonly string[]
   limit: number
-  alreadyParsedFilePaths: ReadonlySet<string>
+  alreadyParsedCandidateKeys: ReadonlySet<string>
 }): Promise<AiVaultSession[]> {
   if (args.scopePaths.length === 0) {
     return []
   }
 
   const candidates = args.candidates.filter(
-    (candidate) => !args.alreadyParsedFilePaths.has(candidate.file.path)
+    (candidate) => !args.alreadyParsedCandidateKeys.has(remoteSessionCandidateKey(candidate))
   )
   const bound = Math.min(candidates.length, REMOTE_SCOPE_PARSE_CANDIDATE_LIMIT)
   const sessions: AiVaultSession[] = []

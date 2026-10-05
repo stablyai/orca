@@ -106,6 +106,23 @@ patch still adds `L"msys-2.0.dll"` to that file. Without that, editing the patch
 would turn the gate into a permanent false positive that fails every correctly
 rebuilt addon and tells the developer to do the one thing that cannot help.
 
+## A stale source tree looks exactly like a stale addon
+
+`rebuild-native-deps.mjs` rejects a marker-less addon in its Electron probe and
+again after the rebuild, so an unpatched `build/Release/conpty.node` is never
+left in place silently. But the rebuild compiles whatever `node_modules/node-pty`
+holds, and pnpm materializes that from the patch only at install time. On a
+checkout whose `node_modules` predates the denial, `--force` compiles for
+minutes and rewrites `conpty.node` byte-identical and unpatched; measured on a
+Windows dev checkout, same size, new mtime, marker still absent. The
+post-rebuild gate then said "rebuild from source", which was the step that had
+just run.
+
+So the script reads `src/win/conpty.cc` before it compiles: if the source does
+not carry `L"msys-2.0.dll"`, it stops before the rebuild and says to run
+`pnpm install`, which re-applies the current patch. If the patch itself lacks
+the literal, the checkout predates the denial and a reinstall cannot help.
+
 ## Every path the loader can fall through to
 
 `loadNativeModule` tries `build/Release`, then `build/Debug`, then
@@ -119,18 +136,29 @@ never carries the patch:
 | -------------------- | ----------------------------- | ---------------- | ------------------ |
 | same host, same arch | patched                       | yes              | `build/Release`    |
 | cross host           | absent, cannot be cross-built | no               | the prebuild       |
-| cross arch, built    | patched, target arch          | no               | `build/Release`    |
+| cross arch, built    | patched, target arch          | yes              | `build/Release`    |
 | cross arch, failed   | the host's arch               | no               | the prebuild       |
 
 `beforeBuild` runs `rebuild-native-deps.mjs --platform=win32 --arch=<target>`, so
 a cross-arch slice normally does get a patched `build/Release` for the target —
-row three is a correct package whose leftover prebuild is never reached.
-`prunePackagedNodePty` keeps that prebuild anyway, because its guard is
-`electronArch === process.arch` rather than the arch of the binary.
+row three is a correct package. `prunePackagedNodePty` asks the same question the
+loader does, reading the PE machine of `build/Release` rather than comparing
+`electronArch` to `process.arch`, so row three's leftover prebuild goes. Keying
+off the host arch kept it: unreached in the normal case, but still the binary the
+loader takes if `build/Release` ever fails to load for an unrelated reason — an
+AV quarantine, a missing dependency — which is the silent fall-through this whole
+gate exists to close. Rows two and four keep the prebuild because it is the only
+thing there the target could load. Measured on Windows 11 x64 with the VS 2022
+ARM64 cross toolset: `node-gyp rebuild --arch=arm64` does emit a `conpty.node`
+with machine `0xaa64`, so row three is a real package shape — but as of this
+writing no release produces it, because `electron-builder --win` is run without
+an arch and packages x64 only.
 
-So presence alone cannot separate row three from row four, and failing on any
-unmarked file present would reject a correct package with advice its builder
-could not act on. `verifyPackagedConptyBreakawayMarker` instead resolves the
+The verifier still does not key on presence: the prune is the step it is
+checking, and `build/Debug` is never pruned, so an unmarked file beside a
+correct `build/Release` cannot by itself separate row three from row four, and
+failing on one would reject a correct package with advice its builder could not
+act on. `verifyPackagedConptyBreakawayMarker` instead resolves the
 addon the way the loader does — first candidate whose PE `IMAGE_FILE_HEADER`
 machine matches the target — and checks the marker on that one. A package with
 no candidate at all, or none of the target's architecture, is refused: it has no

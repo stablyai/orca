@@ -1,7 +1,4 @@
-// Arranging the offer, and the one rule selection must never break.
-//
-// Checking a box changes WHICH eligible chats are acted on. It can never change what is eligible,
-// and it can never introduce a chat the host did not offer.
+// Arranging the offer for display: which ids it covers, and how the rows nest.
 
 import { describe, expect, it } from 'vitest'
 import {
@@ -10,7 +7,6 @@ import {
   groupResumeWorkspacesByRepo,
   resolveResumeGroupHeader,
   resumeWorkspaceKind,
-  selectedResumeSessionIds,
   type ResumeCandidate
 } from './native-chat-resume-on-restart-grouping'
 
@@ -30,31 +26,11 @@ function candidate(overrides: Partial<ResumeCandidate> = {}): ResumeCandidate {
   }
 }
 
-describe('selecting which offered chats to act on', () => {
-  it('defaults to every chat the host offered', () => {
+describe('naming every offered chat', () => {
+  it('keeps the order the host offered', () => {
     const offered = [candidate(), candidate({ sessionId: 'session-2' })]
 
     expect(allResumeSessionIds(offered)).toEqual(['session-1', 'session-2'])
-  })
-
-  it('acts only on the chats that are checked', () => {
-    const offered = [candidate(), candidate({ sessionId: 'session-2' })]
-
-    expect(selectedResumeSessionIds(offered, new Set(['session-2']))).toEqual(['session-2'])
-  })
-
-  // THE SAFETY RULE. A selection is intersected against the offer, so a stale or invented id cannot
-  // reach an action. The host re-derives the predicate regardless; this keeps the client honest too.
-  it('drops any selected id the host did not offer', () => {
-    const offered = [candidate()]
-
-    expect(
-      selectedResumeSessionIds(offered, new Set(['session-1', 'session-never-offered']))
-    ).toEqual(['session-1'])
-  })
-
-  it('acts on nothing when nothing is checked', () => {
-    expect(selectedResumeSessionIds([candidate()], new Set())).toEqual([])
   })
 })
 

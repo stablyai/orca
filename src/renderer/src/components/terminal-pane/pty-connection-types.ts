@@ -1,3 +1,4 @@
+import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
 import type { AgentAttentionUnreadReason } from '@/attention/agent-attention-contract'
 import type { PtyTransport } from './pty-transport'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
@@ -66,6 +67,8 @@ export type PtyConnectionDeps = {
   /** Releases a deferred split's detach fence when its initial spawn yields no PTY. */
   onDeferredCwdSpawnFailed?: () => void
   startup?: PtyPaneStartup
+  /** The pane's previous PTY; main stops it before this connection's first fresh spawn. */
+  replacesPtyId?: string
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>
   /** Park intent sampled at render time, before the host disposes the tab's
@@ -120,6 +123,8 @@ export type PtyConnectionDeps = {
   // main process can also emit `'test'` from the settings-pane button.
   dispatchNotification: (event: {
     source: 'terminal-bell' | 'agent-task-complete'
+    ptyId?: string | null
+    workspaceOwner?: NotificationWorkspaceOwner
     terminalTitle?: string
     paneKey?: string
     agentStatusSnapshot?: AgentCompletionStatusSnapshot

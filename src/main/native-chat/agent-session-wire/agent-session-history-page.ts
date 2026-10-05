@@ -8,6 +8,7 @@
 // `after` is the only direction that can answer `cursor_compacted`.
 
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
 import type {
   AgentJournalCursor,
   AgentJournalRenderItem,
@@ -19,7 +20,8 @@ import {
   type AgentSessionHistoryDirection,
   type AgentSessionHistoryPage,
   type AgentSessionHistoryRequest,
-  type AgentSessionHistoryResult
+  type AgentSessionHistoryResult,
+  type AgentSessionSubagentRosterEntry
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { projectJournalBatch } from './agent-session-journal-batch'
@@ -31,6 +33,7 @@ import {
   oversizedHistoryItem,
   submissionBytesByItemId
 } from './agent-session-history-page-bounds'
+import { offPageSubagentRoster } from './agent-session-history-subagent-roster'
 
 export { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
 
@@ -43,16 +46,40 @@ export function resolveHistoryLimit(limit: number | undefined): number {
   return Math.min(AGENT_SESSION_HISTORY_MAX_LIMIT, Math.max(1, Math.floor(limit)))
 }
 
+/** Whose rows a backward read serves. Both window over the session's own rows; a
+ *  reader of the session's own agent alone gets only those. In-process only: no wire
+ *  request carries it. */
+export type AgentSessionHistoryScope = 'every-agent' | 'own-agent'
+
+/**
+ * The newest `limit` of the session's own rows, in whole sequence groups, and every
+ * row after the oldest of them: a subagent's rows ride along with the conversation
+ * they happened in, so its burst cannot crowd the conversation off the page. The page
+ * stays contiguous and starts at its first item, as the cursor means. Fewer own rows
+ * than `limit` reach back to the start. With no subagent rows this is the newest
+ * `limit` rows, as before.
+ */
+function conversationWindow(
+  items: readonly AgentJournalRenderItem[],
+  limit: number
+): AgentJournalRenderItem[] {
+  const own = items.filter(isRootAgentJournalItem)
+  if (own.length === items.length) {
+    return newestWholeSequenceGroups(items, limit)
+  }
+  const ownWindow = newestWholeSequenceGroups(own, limit)
+  const start = ownWindow.length < own.length ? ownWindow[0]?.sequence : undefined
+  return start === undefined ? [...items] : items.filter((item) => item.sequence >= start)
+}
+
 export function readAgentSessionHistory(
   journal: AgentSessionJournal,
   request: AgentSessionHistoryRequest,
   /** Reduced state to read against. A synchronous multi-page catch-up passes one
    *  snapshot for the whole run so each page costs its own rows, not the timeline. */
-  snapshot: AgentJournalSnapshot = journal.snapshot()
+  snapshot: AgentJournalSnapshot = journal.snapshot(),
+  scope: AgentSessionHistoryScope = 'every-agent'
 ): AgentSessionHistoryResult {
-  if (journal.isReadOnly) {
-    return historyReset(snapshot, 'schema_unreadable')
-  }
   const limit = resolveHistoryLimit(request.limit)
   if (request.direction === 'after') {
     return readForward(journal, snapshot, request.cursor, limit)
@@ -66,10 +93,10 @@ export function readAgentSessionHistory(
       return historyReset(snapshot, 'cursor_ahead')
     }
   }
-  const older = cursor
-    ? snapshot.items.filter((item) => item.sequence < cursor.sequence)
-    : snapshot.items
-  const windowed = newestWholeSequenceGroups(older, limit)
+  const scoped =
+    scope === 'own-agent' ? snapshot.items.filter(isRootAgentJournalItem) : snapshot.items
+  const older = cursor ? scoped.filter((item) => item.sequence < cursor.sequence) : scoped
+  const windowed = conversationWindow(older, limit)
   const { items, dropped } = boundHistoryItemsByBytes(
     windowed,
     'newest',
@@ -83,11 +110,12 @@ export function readAgentSessionHistory(
       direction: request.direction,
       items,
       hasOlder: older.length > windowed.length || dropped > 0,
-      hasNewer: older.length < snapshot.items.length,
+      hasNewer: older.length < scoped.length,
       fallbackCursor: cursor ?? { epoch: snapshot.cursor.epoch, sequence: 0 },
       nextCursor: items[0]
         ? { epoch: snapshot.cursor.epoch, sequence: items[0].sequence }
-        : undefined
+        : undefined,
+      subagentRoster: offPageSubagentRoster(scoped, items)
     })
   }
 }
@@ -121,7 +149,7 @@ function buildHydrationPage(
   snapshot: AgentJournalSnapshot,
   fence?: number
 ): AgentSessionHistoryPage {
-  const items = newestWholeSequenceGroups(snapshot.items, AGENT_SESSION_HISTORY_MAX_LIMIT)
+  const items = conversationWindow(snapshot.items, AGENT_SESSION_HISTORY_MAX_LIMIT)
   const bounded = boundHistoryItemsByBytes(
     items,
     'newest',
@@ -138,7 +166,8 @@ function buildHydrationPage(
     nextCursor: bounded.items[0]
       ? { epoch: snapshot.cursor.epoch, sequence: bounded.items[0].sequence }
       : undefined,
-    fence
+    fence,
+    subagentRoster: offPageSubagentRoster(snapshot.items, bounded.items)
   })
 }
 
@@ -216,7 +245,7 @@ function readForward(
   if (contentBytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES) {
     items = items.map((item) => {
       const bytes = historyEntryBytes(item, submissionBytes)
-      return bytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES ? oversizedHistoryItem(item, bytes) : item
+      return bytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES ? oversizedHistoryItem(item) : item
     })
     contentBytes = pageContentBytes(items, projected.batch.removedItemIds)
   }
@@ -255,6 +284,7 @@ function buildPage(input: {
   fallbackCursor: AgentJournalCursor
   nextCursor: AgentJournalCursor | undefined
   fence?: number
+  subagentRoster?: AgentSessionSubagentRosterEntry[]
 }): AgentSessionHistoryPage {
   const epoch = input.snapshot.cursor.epoch
   const pageItemIds = new Set(input.items.map((item) => item.itemId))
@@ -277,6 +307,7 @@ function buildPage(input: {
     },
     liveCursor: input.snapshot.cursor,
     hasOlder: input.hasOlder,
-    hasNewer: input.hasNewer
+    hasNewer: input.hasNewer,
+    ...(input.subagentRoster === undefined ? {} : { subagentRoster: input.subagentRoster })
   }
 }

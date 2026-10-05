@@ -17,6 +17,7 @@
  * records; every other surface says "chat session" / "terminal agent".
  */
 
+import { requestsCwdOutsideWorkspaceRoot } from '../../shared/terminal-startup-cwd'
 import type {
   AgentLaunchMode,
   AgentLaunchModeReason,
@@ -72,6 +73,14 @@ export type AgentLaunchModePlacement = {
    *  resolved — never accepted from a caller, which would let one route around this decision.
    *  Absent means the kind was never established, and is not read as any particular kind. */
   workspaceKind?: WorkspaceLaunchKind
+  /** A requested start directory. It belongs here, unlike `model` or `effort`, because a structured
+   *  session has no way to apply one — it runs in its workspace — so honouring it and honouring the
+   *  chat preference are mutually exclusive rather than merely awkward. Read against
+   *  `workspacePath`: a cwd that names the root asks for nothing and decides nothing. */
+  cwd?: string
+  /** The root of the workspace the launch lands in, when the host has resolved it. Without it a
+   *  requested `cwd` cannot be proven to name the root and is read as custom. */
+  workspacePath?: string
 }
 
 const DOWNGRADE_DETAIL: Record<Exclude<AgentLaunchModeReason, 'user_default'>, string> = {
@@ -97,7 +106,8 @@ const BLOCKER_REASON: Record<
   'remote-execution-host': 'remote_execution_host',
   'project-runtime': 'wsl_execution_runtime',
   'runtime-capability': 'structured_sessions_unavailable',
-  'runtime-capability-unknown': 'structured_support_unknown'
+  'runtime-capability-unknown': 'structured_support_unknown',
+  'client-capability': 'structured_sessions_unavailable'
 }
 
 /** The host's own create-support verdict (`agentSession.createSupport`) in this vocabulary. */
@@ -129,11 +139,16 @@ export function decideAgentLaunchMode(args: {
       detail: `Started ${vocabulary.terminal}, the default for new agent tabs in your settings.`
     }
   }
+  // A worker placed on another runtime starts through federation, which creates terminal agents
+  // only; this host cannot answer for that runtime's structured support.
+  if (placement.on) {
+    return downgraded('remote_execution_host', vocabulary)
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an unrecognized agent name is handled rather than trusted; isAgentSessionHandleProvider rejects it and the launch downgrades to a terminal.
   const agent = placement.agent as TuiAgent
   const support = resolveStructuredNativeChatSupport({
     agent,
-    executionHostId: placement.on ? `runtime:${placement.on}` : 'local',
+    executionHostId: 'local',
     reusesTerminal: Boolean(placement.terminal),
     hostCapabilities: RUNTIME_CAPABILITIES,
     // The floating workspace has nowhere to keep a session, so it is decided here rather than left
@@ -141,7 +156,11 @@ export function decideAgentLaunchMode(args: {
     // the create-support probe reads the resolved workspace rather than guessing from a
     // client-side project runtime.
     ...(placement.workspaceKind ? { workspaceKind: placement.workspaceKind } : {}),
-    requiresTuiLaunchCommand: hasExplicitTuiLaunchCommand(settings, agent)
+    // Mirrors the renderer's own route input (`agent-launch-route-input.ts`): a cwd is terminal-only
+    // when it names somewhere other than the workspace root, by the same shared rule.
+    requiresTuiLaunchCommand:
+      requestsCwdOutsideWorkspaceRoot(placement.workspacePath, placement.cwd) ||
+      hasExplicitTuiLaunchCommand(settings, agent)
   })
   if (!support.supported) {
     return downgraded(BLOCKER_REASON[support.blocker], vocabulary)

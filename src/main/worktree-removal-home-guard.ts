@@ -17,7 +17,7 @@
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
-import { parseWslUncPath } from '../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslDrivePath } from '../shared/wsl-paths'
 
 export type PathOps = typeof posix
 
@@ -172,13 +172,33 @@ function isLikelyWindowsUserProfileDirectory(
 /**
  * WSL UNC aliases front a Linux filesystem, so POSIX home shapes — not
  * `<root>\Users` — are what protect `\\wsl.localhost\Ubuntu\home\alice`.
+ *
+ * Except under `/mnt/<letter>`: that tail is the distro's drvfs view of a Windows
+ * volume, so `\\wsl.localhost\Ubuntu\mnt\c\Users\bob` is the Windows profile with
+ * a Linux spelling. It takes the Windows rule on its drive form, which the UNC
+ * exclusion above would otherwise skip.
  */
 function isLikelyWslDistroHomeDirectory(resolvedWorktreePath: string, pathOps: PathOps): boolean {
   if (pathOps !== win32) {
     return false
   }
   const wsl = parseWslUncPath(resolvedWorktreePath)
-  return !!wsl && (wsl.linuxPath === '/' || isPosixHomeRoot(trimTrailingSlash(wsl.linuxPath)))
+  if (!wsl) {
+    return false
+  }
+  const linuxPath = trimTrailingSlash(wsl.linuxPath)
+  const drivePath = toWindowsWslDrivePath(linuxPath)
+  if (drivePath) {
+    const resolvedDrivePath = win32.resolve(drivePath)
+    // Why: `/mnt/c` is the whole volume. `C:\` is refused as a root before this guard runs; its
+    // drvfs spelling has to be refused here, since its win32 root is the distro share.
+    return (
+      win32.parse(resolvedDrivePath).root === resolvedDrivePath ||
+      isLikelyWindowsUserProfileDirectory(resolvedDrivePath, win32)
+    )
+  }
+  // Why `/mnt`: the automount parent holds every drvfs volume, so it contains every profile.
+  return wsl.linuxPath === '/' || linuxPath === '/mnt' || isPosixHomeRoot(linuxPath)
 }
 
 function isWslUncRemovalPath(resolvedWorktreePath: string): boolean {

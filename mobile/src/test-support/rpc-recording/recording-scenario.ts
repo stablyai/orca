@@ -30,7 +30,6 @@ export type ScenarioStep =
 export type RecordingScenario = DeclaredDeviceState & {
   id: string
   operation: string
-  version: number
   family: string
   sites: string[]
   schedules: string[]

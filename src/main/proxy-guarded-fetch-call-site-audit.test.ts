@@ -14,13 +14,15 @@ import { describe, expect, it } from 'vitest'
 // means a call site was added, removed, or moved: re-audit the file and update the count.
 const AUDITED_NON_NET_FETCH_CALLS = new Map<string, number>([
   // Isolated cookie-jar session, proxied by createOpenCodeRequestSession before any request.
-  ['main/rate-limits/opencode-go-usage-fetcher.ts', 2],
+  ['main/rate-limits/opencode-go-usage-fetcher.ts', 3],
   // Isolated cookie-jar session that does NOT apply the proxy — a pre-existing gap, not a
   // regression: no proxy has ever reached this partition. Keep it listed so it stays visible.
   ['main/rate-limits/minimax/minimax-request-context.ts', 2],
   // Injected HttpClient, not a session: resolves to net.fetch on defaultSession
   // (main/host/electron-http-client.ts) or to the global-fetch-audited Node fallback.
-  ['main/jira/authenticated-request.ts', 1]
+  ['main/jira/authenticated-request.ts', 1],
+  // The same injected HttpClient, and the updater's deps.fetch that it is passed as.
+  ['main/runtime/agent-state-rules/agent-state-rules-live-update.ts', 2]
 ])
 
 // `globalThis.fetch` / `global.fetch` belong to global-fetch-call-site-audit.test.ts.

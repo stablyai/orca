@@ -1,11 +1,6 @@
 import { createSessionSearchClient } from '../../shared/ai-vault-search-client'
 import type { AiVaultSearchRequest, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
-import {
-  ALL_EXECUTION_HOSTS_SCOPE,
-  LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId,
-  type ExecutionHostScope
-} from '../../shared/execution-host'
+import type { ExecutionHostId, ExecutionHostScope } from '../../shared/execution-host'
 import { ipcRenderer } from 'electron'
 import type {
   AiVaultDeleteSessionArgs,
@@ -23,17 +18,13 @@ import type { PreloadApi } from '../api-types'
 function searchClient(
   executionHostScope?: ExecutionHostScope
 ): ReturnType<typeof createSessionSearchClient> {
-  // `all` is merged by this desktop, which already redacted each remote leg.
-  const remote =
-    executionHostScope !== undefined &&
-    executionHostScope !== LOCAL_EXECUTION_HOST_ID &&
-    executionHostScope !== ALL_EXECUTION_HOSTS_SCOPE
+  // Main negotiates and redacts every remote leg before answering this same-build IPC boundary.
   return createSessionSearchClient(
     (method, params) =>
       method === 'aiVault.searchSessions'
         ? ipcRenderer.invoke('aiVault:searchSessions', params, executionHostScope)
         : ipcRenderer.invoke('aiVault:searchStatus', executionHostScope),
-    remote ? 'relay' : 'ipc'
+    'ipc'
   )
 }
 

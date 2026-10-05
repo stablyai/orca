@@ -5,18 +5,35 @@
 // guards. These schemas are the single deep validators for that render model:
 // admission must reject a JSON-valid but structurally wrong item (a question
 // whose `options` are null, a prompt without its `resolution`) so the row is
-// rejected at replay, where a repair can delete it, instead of throwing
+// refused at replay, where the chat fails to load, instead of throwing
 // mid-render.
 //
 // Discriminants (`kind`, known block `type`s) are validated deeply. Open string
 // fields (roles, dispatch/tool states) stay type-checked, never enum-checked,
 // and unknown object keys pass — a same-version row written by a slightly
 // newer build must not be misread as malformed (see journal-row-schema.ts).
+//
+// A newer writer extends a body only by new keys, new kinds of an open union, or a bumped row `v`,
+// never by changing a field's type, a bound or a closed set this build checks (the closed sets are
+// pinned in journal-closed-sets.test.ts). Open unions (a body's `kind`, a block's `type`, a goal's
+// `state`, an approval subject's `kind`) keep a value this build does not know as-is and nobody
+// draws it; the chat stays writable. Unreadable context usage is dropped
+// (journal-row-unusable-annotations.ts). Any other failure is damage: the chat fails to load and
+// nothing is deleted. A new value of an open string (turn, resolution, tool or goal `state`) is
+// read as-is too, except that an older build's rewind replaces an unknown turn, tool or resolution
+// state with a placeholder row and turns an unknown block into a text block of its raw JSON
+// (structured-rewind-journal-body.ts); an unknown body kind is carried as-is. History pages carry
+// no row `v`, so older clients see such a value too. It must be safe for every older build.
 
 import { z } from 'zod'
+import { AgentSessionContextUsageSchema } from './agent-session-context-usage-schema'
+import { AgentSessionFailureFactSchema } from './agent-session-failure-fact-schema'
+import { AgentJournalAnsweredTurnSchema } from './agent-session-answered-turn-schema'
+import { knownTags, openDiscriminatedUnion } from './agent-session-journal-open-union'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
+  AgentJournalResolution,
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
@@ -41,15 +58,6 @@ const ToolMetadata = {
   webSearchResults: z.array(z.object({ title: z.string(), url: z.string() })).optional()
 }
 
-const KNOWN_BLOCK_TYPES = new Set([
-  'text',
-  'tool-call',
-  'tool-result',
-  'image-ref',
-  'subagent-group',
-  'background-task'
-])
-
 /** Provider IDs are opaque; reject all-whitespace values without rewriting valid IDs. */
 const ProviderCallId = z
   .string()
@@ -69,7 +77,7 @@ const SubagentEntry = z.object({
 /** Renderers select blocks by `type` equality and skip what they cannot draw,
  *  so an unknown block type stays admissible; a known type with a broken
  *  payload does not. */
-const Block = z.union([
+const Block = openDiscriminatedUnion(
   z.discriminatedUnion('type', [
     z.object({
       type: z.literal('text'),
@@ -120,32 +128,36 @@ const Block = z.union([
       startedAt: z.number().optional(),
       settledAt: z.number().optional()
     })
-  ]),
-  z.object({ type: z.string() }).refine((block) => !KNOWN_BLOCK_TYPES.has(block.type))
-])
+  ])
+)
 
-const PromptOption = z
-  .object({
-    id: z.string(),
-    label: z.string(),
-    description: z.string().optional()
-  })
-  .strict()
+const PromptOption = z.object({
+  id: z.string(),
+  label: z.string(),
+  description: z.string().optional()
+})
 
-const Question = z
-  .object({
-    id: z.string(),
-    question: z.string(),
-    header: z.string().optional(),
-    multiSelect: z.boolean(),
-    options: z.array(PromptOption),
-    freeTextQuestionId: z.string().optional()
-  })
-  .strict()
+const Question = z.object({
+  id: z.string(),
+  question: z.string(),
+  header: z.string().optional(),
+  multiSelect: z.boolean(),
+  options: z.array(PromptOption),
+  freeTextQuestionId: z.string().optional()
+})
 
 const Resolution = z.object({
   state: z.string().min(1),
   selectedOptionId: z.string().nullable(),
+  answers: z
+    .array(
+      z.object({
+        questionId: z.string(),
+        optionIds: z.array(z.string()),
+        other: z.string().optional()
+      })
+    )
+    .optional(),
   resolvedBy: z.string().nullable(),
   resolvedAt: z.number().nullable()
 })
@@ -156,19 +168,42 @@ const ApprovalMatchedAskRule = z.object({
   ruleContent: z.string().optional()
 })
 
-const ApprovalSubject = z.object({
-  kind: z.literal('plan'),
-  text: z.string().min(1),
-  filePath: z.string().optional()
-})
+const KnownApprovalSubject = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('plan'), text: z.string().min(1), filePath: z.string().optional() })
+])
+export const AGENT_JOURNAL_APPROVAL_SUBJECT_KINDS = knownTags(KnownApprovalSubject)
+/** Open like blocks; a subject this build cannot draw is never approvable here
+ *  (agent-session-approval-subject.ts). */
+const ApprovalSubject = openDiscriminatedUnion(KnownApprovalSubject)
 
 const MessageBody = z.object({
   kind: z.literal('message'),
   role: z.string().min(1),
-  blocks: z.array(Block)
+  blocks: z.array(Block),
+  // Open like roles: a send mode a newer build writes must not turn the row malformed.
+  sentAs: z.string().min(1).optional(),
+  command: z.object({ name: z.string().min(1) }).optional()
 })
 
-export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
+const ThreadGoal = z.object({
+  objective: z.string(),
+  status: z.string().min(1),
+  tokenBudget: z.number().finite().nullable(),
+  tokensUsed: z.number().finite(),
+  timeUsedSeconds: z.number().finite(),
+  createdAt: z.number().finite(),
+  updatedAt: z.number().finite()
+})
+
+/** Like blocks: an unknown `state` stays admissible, a known one with a broken payload does not. */
+const ThreadGoalState = openDiscriminatedUnion(
+  z.discriminatedUnion('state', [
+    z.object({ state: z.literal('set'), goal: ThreadGoal }),
+    z.object({ state: z.literal('cleared') })
+  ])
+)
+
+const KnownItemBody = z.discriminatedUnion('kind', [
   MessageBody,
   z.object({
     kind: z.literal('tool-call'),
@@ -219,7 +254,9 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
         durationMs: z.number().finite().nonnegative().optional()
       })
       .optional(),
-    providerFrame: ProviderFrame.optional()
+    providerFrame: ProviderFrame.optional(),
+    threadGoal: ThreadGoalState.optional(),
+    failure: AgentSessionFailureFactSchema.optional()
   }),
   z.object({
     kind: z.literal('turn'),
@@ -233,17 +270,48 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
     startedAt: z.number().finite().positive().optional(),
     requestedAt: z.number().finite().positive().optional(),
     completedAt: z.number().finite().positive().optional(),
-    durationMs: z.number().finite().nonnegative().optional()
+    durationMs: z.number().finite().nonnegative().optional(),
+    contextUsage: AgentSessionContextUsageSchema.optional(),
+    providerTurnId: z.string().min(1).optional()
   })
 ])
+
+/** Every body kind this build knows; a body of another kind is kept as-is and drawn by nobody. */
+export const AGENT_JOURNAL_ITEM_BODY_KINDS = knownTags(KnownItemBody)
+export const AgentJournalItemBodySchema = openDiscriminatedUnion(KnownItemBody)
+
+/** Producer linkage as it rides a render item across the process boundary.
+ *  `producerKind` stays an open string for the reason the header gives: a host
+ *  that learns a third kind must not make its rows unreadable to this client. */
+export const AgentJournalProducerLinkageFields = {
+  // `.min(1)` on every id: an EMPTY string is present, and the reader that
+  // scopes a parent's surfaces tests presence, not truthiness. `agentId: ''`
+  // would read as a subagent and hide the row from its own author for good.
+  agentId: z.string().min(1).optional(),
+  parentAgentId: z.string().min(1).optional(),
+  providerParentRef: z.string().min(1).optional(),
+  producerKind: z.string().min(1).optional(),
+  attempt: z.number().int().optional()
+} as const
+
+/** Open like the other persisted vocabularies: a scope kind a newer host states must not turn
+ *  the row malformed. A reader places only `turn` with an id; anything else reads as `thread`. */
+export const AgentJournalTurnScopeSchema = z.object({
+  kind: z.string().min(1),
+  turnItemId: z.string().min(1).optional()
+})
 
 export const AgentJournalRenderItemSchema = z.object({
   itemId: z.string().min(1),
   revision: z.number().int(),
   body: AgentJournalItemBodySchema,
   sequence: z.number().int(),
+  sequenceIndex: z.number().int().nonnegative().optional(),
   observedAt: z.number(),
-  recovered: z.literal(true).optional()
+  recovered: z.literal(true).optional(),
+  recoveredAt: z.number().optional(),
+  turnScope: AgentJournalTurnScopeSchema.optional(),
+  ...AgentJournalProducerLinkageFields
 })
 
 export const AgentJournalSubmissionSchema = z.object({
@@ -255,8 +323,19 @@ export const AgentJournalSubmissionSchema = z.object({
   reason: z.string().nullable(),
   submittedAt: z.number(),
   resolvedAt: z.number().nullable(),
-  recovered: z.literal(true).optional()
+  submittedSequence: z.number().int().optional(),
+  answeredInTurn: AgentJournalAnsweredTurnSchema.optional(),
+  recovered: z.literal(true).optional(),
+  handoverRecorded: z.literal(true).optional(),
+  handedOverAt: z.number().optional(),
+  rejection: AgentSessionFailureFactSchema.optional(),
+  // Listed, or the parse strips it: this schema drops unknown keys.
+  queuedMessageId: z.string().min(1).optional()
 })
+
+export function isAgentJournalResolution(value: unknown): value is AgentJournalResolution {
+  return Resolution.safeParse(value).success
+}
 
 export function isAdmissibleAgentJournalItemBody(value: unknown): value is AgentJournalItemBody {
   return AgentJournalItemBodySchema.safeParse(value).success

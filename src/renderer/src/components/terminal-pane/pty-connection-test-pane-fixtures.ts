@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
+import type { PtyReplayDataMeta } from './pty-transport-types'
 
 export const LEAF_1 = '11111111-1111-4111-8111-111111111111' as const
 export const LEAF_2 = '22222222-2222-4222-8222-222222222222' as const
@@ -16,7 +17,7 @@ export type ConnectCallbacks = {
     data: string,
     meta?: { seq?: number; rawLength?: number; background?: boolean; droppedOutput?: boolean }
   ) => void
-  onReplayData?: (data: string, meta?: { clearBeforeReplay?: boolean }) => void
+  onReplayData?: (data: string, meta?: PtyReplayDataMeta) => void
   onError?: (msg: string) => void
   onErrorCleared?: (msg: string) => void
   onWriteUnavailable?: () => void
@@ -103,6 +104,7 @@ export type MockPaneTerminal = {
     scrollback: number
     ignoreBracketedPasteMode: boolean
     theme: { foreground: string; background: string }
+    vtExtensions: { kittyKeyboard: boolean }
   }
   write: Mock<(data: string, callback?: () => void) => void>
   resize: Mock<(cols: number, rows: number) => void>
@@ -162,7 +164,8 @@ export function createPane(paneId: number): MockPane {
       theme: {
         foreground: '#eeeeee',
         background: '#111111'
-      }
+      },
+      vtExtensions: { kittyKeyboard: true }
     },
     write: vi.fn<(data: string, callback?: () => void) => void>(function write(...args): void {
       const [data, callback] = args

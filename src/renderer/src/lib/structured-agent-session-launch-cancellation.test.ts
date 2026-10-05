@@ -64,6 +64,8 @@ describe('structured launch cancellation retirement', () => {
       identity: `codex:${WORKTREE_ID}`,
       intent: {
         worktreeId: WORKTREE_ID,
+        executionHostId: 'local',
+        target: { kind: 'local' },
         sessionId: SESSION_ID,
         agent: 'codex',
         params: {
@@ -80,23 +82,33 @@ describe('structured launch cancellation retirement', () => {
       promptDelivery: 'auto-submit',
       callers: {
         outcome: 'pending',
+        attempt: { kind: 'first', requestId: 'plus-pick', blank: true, stagedEntry: null },
         entries: new Set(),
         promptDeliveryResults: new Set(),
         onSettled: () => undefined
       },
       promise: launchPromise,
       visibilityUnknown: false,
-      cancelled: false
+      cancelled: false,
+      selection: { held: {} }
     } satisfies StructuredLaunchState)
 
     const beforeCancel = beginStructuredAgentSessionAuthoritativeInventory()
     expect(
-      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(new Set(), beforeCancel)
+      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
+        new Set(),
+        beforeCancel,
+        'local'
+      )
     ).toBe(false)
-    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID)
+    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local')
     const afterCancel = beginStructuredAgentSessionAuthoritativeInventory()
     expect(
-      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(new Set(), afterCancel)
+      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
+        new Set(),
+        afterCancel,
+        'local'
+      )
     ).toBe(false)
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE_ID, SESSION_ID)).toBe(true)
 
@@ -106,20 +118,85 @@ describe('structured launch cancellation retirement', () => {
     expect(suppressed.tabs).toEqual([])
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE_ID, SESSION_ID)).toBe(true)
     expect(
-      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(new Set(), beforeCancel)
+      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
+        new Set(),
+        beforeCancel,
+        'local'
+      )
     ).toBe(false)
 
     const afterSettlement = beginStructuredAgentSessionAuthoritativeInventory()
     expect(
-      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(new Set(), afterSettlement)
+      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
+        new Set(),
+        afterSettlement,
+        'local'
+      )
     ).toBe(true)
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE_ID, SESSION_ID)).toBe(
       false
     )
   })
 
+  // A runtime refused its chats answers with no chat rows; that absence is not the host's answer.
+  it('keeps a tombstone through an inventory that cannot list chats', async () => {
+    setStructuredLaunchState({
+      identity: `codex:${WORKTREE_ID}`,
+      intent: {
+        worktreeId: WORKTREE_ID,
+        executionHostId: 'local',
+        target: { kind: 'local' },
+        sessionId: SESSION_ID,
+        agent: 'codex',
+        params: {
+          envelope: {
+            sessionId: SESSION_ID,
+            clientOperationId: 'operation-unverifiable',
+            expectedRuntimeFence: null,
+            payloadFingerprint: 'fingerprint-unverifiable'
+          },
+          worktree: `id:${WORKTREE_ID}`,
+          agent: 'codex'
+        }
+      },
+      promptDelivery: 'auto-submit',
+      callers: {
+        outcome: 'pending',
+        attempt: { kind: 'first', requestId: 'plus-pick', blank: true, stagedEntry: null },
+        entries: new Set(),
+        promptDeliveryResults: new Set(),
+        onSettled: () => undefined
+      },
+      promise: Promise.resolve({ sessionId: SESSION_ID, fence: 1 }),
+      visibilityUnknown: false,
+      cancelled: false,
+      selection: { held: {} }
+    } satisfies StructuredLaunchState)
+    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const frame = (unverifiable: boolean): RuntimeMobileSessionTabsResult => ({
+      ...latePublication(),
+      activeTabId: null,
+      activeTabType: null,
+      tabs: [],
+      ...(unverifiable ? { agentSessionsUnverifiable: true as const } : {})
+    })
+    const call = vi.fn()
+    Object.defineProperty(window, 'api', { configurable: true, value: { runtime: { call } } })
+
+    call.mockResolvedValue({ ok: true, result: { snapshots: [frame(true)], authoritative: true } })
+    await refreshLocalStructuredSessionTabs()
+    expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE_ID, SESSION_ID)).toBe(true)
+
+    call.mockResolvedValue({ ok: true, result: { snapshots: [frame(false)], authoritative: true } })
+    await refreshLocalStructuredSessionTabs()
+    expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE_ID, SESSION_ID)).toBe(
+      false
+    )
+  })
+
   it('drains a restored cancellation before a newer inventory retires it', async () => {
-    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID)
+    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local')
     resetStructuredAgentLaunchRegistryForTests()
     resetStructuredAgentLaunchPersistenceForTests()
 

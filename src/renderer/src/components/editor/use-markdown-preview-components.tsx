@@ -21,6 +21,7 @@ import type { MarkdownPreviewFoundation } from './use-markdown-preview-foundatio
 import type { MarkdownPreviewReviewActions } from './use-markdown-preview-review-actions'
 import type { MarkdownPreviewViewport } from './use-markdown-preview-viewport'
 import { useLocalImageSrc } from './useLocalImageSrc'
+import { documentResourceAccess } from '@/lib/local-file-access'
 
 export function useMarkdownPreviewComponents({
   foundation,
@@ -64,6 +65,8 @@ export function useMarkdownPreviewComponents({
   const { renderAnnotationControls, wrapAnnotatedBlock } = annotationRenderers
 
   return useMemo(() => {
+    // Why: preview images come from document text, so main limits them to the document's roots.
+    const imageAccess = documentResourceAccess(filePath)
     const linkContext = {
       isMac,
       sourceOwner,
@@ -130,7 +133,13 @@ export function useMarkdownPreviewComponents({
         )
       },
       img: function MarkdownImg({ src, alt, ...props }) {
-        const resolvedSrc = useLocalImageSrc(src, filePath, undefined, imageRuntimeContext)
+        const resolvedSrc = useLocalImageSrc(
+          src,
+          filePath,
+          undefined,
+          imageRuntimeContext,
+          imageAccess
+        )
         const handleImageClick = (event: React.MouseEvent<HTMLImageElement>): void => {
           if (!isMarkdownPreviewOpenModifier(event, isMac)) {
             return

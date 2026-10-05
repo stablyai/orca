@@ -1,21 +1,28 @@
 import { ipcMain } from 'electron'
 import {
   clearMiniMaxSessionCookie,
+  getMiniMaxSessionCookieProtection,
   hasMiniMaxSessionCookie,
   saveMiniMaxSessionCookie
 } from '../minimax/minimax-cookie-store'
 import {
   clearMiniMaxApiKey,
+  getMiniMaxApiKeyProtection,
   hasMiniMaxApiKey,
   saveMiniMaxApiKey
 } from '../minimax/minimax-api-key-store'
 import { clearMiniMaxSessionCookieJar } from '../rate-limits/minimax/minimax-request-context'
+import { refreshAfterCredentialChange } from './credential-change-rate-limit-refresh'
 import type { RateLimitService } from '../rate-limits/service'
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 
 export type MiniMaxCredentialsStatus = {
   configured: boolean
   cookieConfigured: boolean
   apiKeyConfigured: boolean
+  /** How each stored credential sits on disk, so Settings can warn when it is unsealed. */
+  cookieProtection: SecretAtRestProtection | null
+  apiKeyProtection: SecretAtRestProtection | null
 }
 
 function getMiniMaxCredentialsStatus(): MiniMaxCredentialsStatus {
@@ -24,20 +31,21 @@ function getMiniMaxCredentialsStatus(): MiniMaxCredentialsStatus {
   return {
     configured: cookieConfigured || apiKeyConfigured,
     cookieConfigured,
-    apiKeyConfigured
+    apiKeyConfigured,
+    cookieProtection: cookieConfigured ? getMiniMaxSessionCookieProtection() : null,
+    apiKeyProtection: apiKeyConfigured ? getMiniMaxApiKeyProtection() : null
   }
 }
 
-// Why: fire-and-forget — callers get the persisted credential status immediately;
-// the rate-limit refresh runs in the background and only logs on failure.
 function refreshAfterMiniMaxCredentialChange(
   rateLimits: RateLimitService | null,
   action: 'save' | 'clear'
 ): void {
-  rateLimits?.invalidateMiniMaxCredentialState()
-  void rateLimits?.refresh().catch((error: unknown) => {
-    console.error(`[minimax] failed to trigger rate-limit refresh after ${action}:`, error)
-  })
+  refreshAfterCredentialChange(
+    rateLimits,
+    (service) => service.invalidateMiniMaxCredentialState(),
+    `[minimax] failed to trigger rate-limit refresh after ${action}:`
+  )
 }
 
 export function registerMiniMaxCredentialsHandlers(rateLimits: RateLimitService | null): void {

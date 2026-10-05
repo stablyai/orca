@@ -1,7 +1,10 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { useLocalStructuredAgentSessionsHeld } from '@/runtime/local-structured-chats'
 import { translate } from '@/i18n/i18n'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { NativeChatQueueFollowUpsSetting } from './NativeChatQueueFollowUpsSetting'
+import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentSetting'
 import { NativeChatSupportedAgents } from './NativeChatSupportedAgents'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitch } from './SettingsFormControls'
@@ -23,6 +26,11 @@ export function NativeChatExperimentalSetting({
   const resumeOnRestartEnabled = settings.nativeChatResumeWorkOnRestart === true
   const defaultView: NativeChatDefaultView =
     settings.openAgentTabsInChatByDefault === true ? 'native-chat' : 'terminal-chat'
+  // Structured-only settings; terminal-backed chat never reads them. They govern the chats this
+  // machine holds too, which keep running whatever the setting says.
+  const holdsStructuredChats = useLocalStructuredAgentSessionsHeld()
+  const structuredChatActive =
+    (defaultView === 'native-chat' && structuredNativeChatEnabled) || holdsStructuredChats
 
   return (
     <SearchableSetting
@@ -127,13 +135,13 @@ export function NativeChatExperimentalSetting({
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.structuredCopy',
-                    'Opt in to the host-owned structured chat runtime for Codex and Claude. Off keeps the existing terminal-backed chat path.'
+                    'Open new Codex and Claude agents as structured chats. Off opens them in the terminal-backed chat. Chats that already exist stay as they are.'
                   )}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.structuredScope',
-                    'Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
+                    'Runs on this machine and on paired Orca servers running a version that supports it; older servers keep terminal chat. WSL and SSH hosts continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
                   )}
                 </p>
               </div>
@@ -153,19 +161,19 @@ export function NativeChatExperimentalSetting({
           ) : null}
 
           {/* Only structured sessions have a resume cursor to continue from. */}
-          {defaultView === 'native-chat' && structuredNativeChatEnabled ? (
+          {structuredChatActive ? (
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 shrink space-y-0.5">
                 <Label>
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.resumeTitle',
-                    'Reconnect working chats automatically after a restart'
+                    'Resume working chats automatically after a restart'
                   )}
                 </Label>
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.resumeCopy',
-                    'When Orca quits or installs an update, chats that were mid-turn are offered again on the next launch. On, they are reconnected without asking and Orca tells you afterwards — the same thing as ticking "Don\'t ask again" in that prompt. Off, you choose from the list each time. Reconnecting restores a chat where it stopped; it does not continue the interrupted reply.'
+                    'When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.'
                   )}
                 </p>
               </div>
@@ -173,13 +181,24 @@ export function NativeChatExperimentalSetting({
                 checked={resumeOnRestartEnabled}
                 ariaLabel={translate(
                   'auto.components.settings.ExperimentalPane.nativeChat.resumeToggleLabel',
-                  'Toggle automatic reconnect after a restart'
+                  'Toggle automatic resume after a restart'
                 )}
                 onChange={() =>
                   updateSettings({ nativeChatResumeWorkOnRestart: !resumeOnRestartEnabled })
                 }
               />
             </div>
+          ) : null}
+
+          {structuredChatActive ? (
+            <NativeChatQueueFollowUpsSetting settings={settings} updateSettings={updateSettings} />
+          ) : null}
+
+          {structuredChatActive ? (
+            <NativeChatShellEnvironmentSetting
+              settings={settings}
+              updateSettings={updateSettings}
+            />
           ) : null}
         </div>
       ) : null}

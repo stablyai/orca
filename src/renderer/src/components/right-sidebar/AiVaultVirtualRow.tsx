@@ -1,4 +1,5 @@
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { cn } from '@/lib/utils'
@@ -41,6 +42,7 @@ export function AiVaultVirtualRow({
   vaultScope,
   buildResumeStartup,
   getOriginalPaneTarget,
+  isStructuredSessionOpen,
   getSessionLiveState,
   getWorktreeInfo,
   getSessionResumeState,
@@ -72,6 +74,7 @@ export function AiVaultVirtualRow({
   vaultScope: AiVaultScope
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
+  isStructuredSessionOpen: (session: AiVaultSession) => boolean
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
@@ -99,6 +102,7 @@ export function AiVaultVirtualRow({
 
   const isActiveStickyHeader = row.type === 'group' && activeStickyHeaderIndex === index
   const originalPaneTarget = row.type === 'session' ? getOriginalPaneTarget(row.session) : null
+  const structuredSessionOpen = row.type === 'session' && isStructuredSessionOpen(row.session)
   const worktreeInfo = row.type === 'session' ? getWorktreeInfo(row.session) : null
   // Why: omit the jump affordance when the session already lives in the
   // worktree on screen — jumping there is a no-op.
@@ -132,10 +136,14 @@ export function AiVaultVirtualRow({
   const searchResumeAllowed = searchHit ? canResumeAiVaultSearchHit(searchHit) : true
   const searchPathAllowed = searchHit ? hasAiVaultSearchHitPath(searchHit) : true
   const usesLegacyResumeCommand = row.type === 'session' && !row.session.structuredSession
-  const resumeStartup =
-    row.type === 'session' && searchResumeAllowed && usesLegacyResumeCommand
-      ? buildResumeStartup(row.session, resumeState?.worktreeId)
-      : { command: '' }
+  const canBuildResumeStartup =
+    row.type === 'session' &&
+    searchResumeAllowed &&
+    usesLegacyResumeCommand &&
+    (!isAntigravityReferenceSession(row.session) || !resumeGating.resumeDisabled)
+  const resumeStartup = canBuildResumeStartup
+    ? buildResumeStartup(row.session, resumeState?.worktreeId)
+    : { command: '' }
   const visibleResumeActions =
     searchResumeAllowed && resumeActions
       ? resumeActions
@@ -167,7 +175,7 @@ export function AiVaultVirtualRow({
           liveState={getSessionLiveState(row.session)}
           resumeStartup={resumeStartup}
           realHomeResumeStartup={
-            searchResumeAllowed && usesLegacyResumeCommand
+            canBuildResumeStartup
               ? buildResumeStartup({ ...row.session, codexHome: null }, resumeState?.worktreeId)
               : resumeStartup
           }
@@ -179,8 +187,11 @@ export function AiVaultVirtualRow({
           resumeActions={visibleResumeActions}
           onToggleDetails={() => onToggleSessionDetails(row.session.id)}
           onJumpToOriginalPane={
-            originalPaneTarget ? () => onJumpToOriginalPane(row.session) : undefined
+            originalPaneTarget || structuredSessionOpen
+              ? () => onJumpToOriginalPane(row.session)
+              : undefined
           }
+          resumeHidden={structuredSessionOpen}
           showJumpToWorktree={showJumpToWorktree}
           onJumpToWorktree={worktreeJumpId ? () => onJumpToWorktree(worktreeJumpId) : undefined}
           subagentResume={{ getState: getSessionResumeState, onResume }}

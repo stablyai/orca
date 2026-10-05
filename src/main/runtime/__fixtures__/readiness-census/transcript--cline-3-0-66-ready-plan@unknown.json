@@ -1,0 +1,7 @@
+{
+  "description": "cline recording at 120x40 replayed on the unknown pane, one entry per chunk",
+  "observations": {
+    "clocked": ["0-116: now=pending:open edge=pending:open quiet=pending:open wait=ready@poll"],
+    "clockless": ["0-116: verdict=pending:open wait=ready@poll"]
+  }
+}

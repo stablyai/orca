@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { normalizeMobileRichMarkdownKeyboardInset } from './mobile-rich-markdown-editor-keyboard-inset-script'
+import { normalizeMobileRichMarkdownKeyboardInset } from './mobile-rich-markdown-editor-keyboard-inset'
 import type {
   MobileRichMarkdownCommand,
   MobileRichMarkdownEditorMessage,

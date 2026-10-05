@@ -149,17 +149,17 @@ describe('windowed transcript', () => {
     }
     const { container } = render(list(withTool))
 
-    const header = screen.getByRole('button', { name: /1×/ })
+    const header = screen.getByRole('button', { name: /^ls/ })
     expect(header).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(header)
-    expect(screen.getByRole('button', { name: /1×/ })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: /^ls/ })).toHaveAttribute('aria-expanded', 'true')
 
     scrollTranscript(container, 5000)
     expect(windowState(container).indexes).not.toContain(1)
-    expect(screen.queryByRole('button', { name: /1×/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^ls/ })).toBeNull()
 
     scrollTranscript(container, 0)
-    expect(screen.getByRole('button', { name: /1×/ })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: /^ls/ })).toHaveAttribute('aria-expanded', 'true')
   })
 })
 

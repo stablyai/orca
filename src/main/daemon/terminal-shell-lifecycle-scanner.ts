@@ -1,4 +1,6 @@
+import { buildProcessBoundaryGround } from '../../shared/terminal-mode-reset-profiles'
 import type { TerminalOwner } from '../../shared/terminal-owner'
+import { TerminalArmedInputModes } from './terminal-armed-input-modes'
 
 // Why: PTY/SSH chunks can split a long combined DECSET or an OSC 133 payload
 // before its terminator. Keep parser state far beyond normal sequence lengths
@@ -15,7 +17,7 @@ const LIFECYCLE_OSC = /\x1b\]133;([^\x07\x1b]*)(?:\x07|\x1b\\)/
 // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
 const PRIVATE_MODE = /\x1b\[\?([0-9;]*)([hl])|\x9b\?([0-9;]*)([hl])/
 // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
-const KITTY_KEYBOARD = /\x1b\[([>=])([0-9;]*)u|\x9b([>=])([0-9;]*)u/
+const KITTY_KEYBOARD = /\x1b\[([<>=])([0-9;]*)u|\x9b([<>=])([0-9;]*)u/
 // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
 const FULL_RESET = /\x1bc/
 
@@ -32,6 +34,8 @@ export type ShellLifecycleScanEvents = {
    * and after this index were NOT consumed; the caller re-feeds them.
    */
   uncleanDeathTriggerEnd?: number
+  /** Where that OSC 133;D begins in the chunk; 0 when it began in an earlier one. */
+  uncleanDeathTriggerStart?: number
   /** An OSC 133;D closed a command that had entered the alternate screen and left it cleanly. */
   cleanExitCandidate?: { generation: number }
 }
@@ -51,10 +55,7 @@ export class TerminalShellLifecycleScanner {
   private generationState = 0
   private altActive = false
   private commandEnteredAlternateScreen = false
-  // Why one-shot: a refuted proof leaves altActive true (no reset was ever
-  // scanned), and without disarming every later prompt's D would re-open a
-  // full pause-and-inspect episode. Only a fresh alternate-screen entry re-arms.
-  private uncleanTriggerArmed = false
+  private readonly inputModes = new TerminalArmedInputModes()
 
   get owner(): TerminalOwner | undefined {
     return this.ownerState
@@ -76,6 +77,15 @@ export class TerminalShellLifecycleScanner {
     return true
   }
 
+  /** Scans and returns the process-boundary ground for the current host ownership. */
+  groundProcessBoundary(): string {
+    const ground = buildProcessBoundaryGround({
+      keepFocusReporting: this.inputModes.hostOwnsFocusReporting
+    })
+    this.scan(ground)
+    return ground
+  }
+
   seedOwner(owner: TerminalOwner | undefined, opts: { alternateScreen?: boolean } = {}): void {
     this.generationState += 1
     this.ownerState = owner
@@ -84,7 +94,6 @@ export class TerminalShellLifecycleScanner {
       // this a mirror seeded mid-TUI never arms its unclean-death trigger and
       // the whole occupancy loses recovery.
       this.altActive = opts.alternateScreen
-      this.uncleanTriggerArmed = opts.alternateScreen
       this.commandEnteredAlternateScreen = opts.alternateScreen
     }
   }
@@ -107,29 +116,33 @@ export class TerminalShellLifecycleScanner {
       const oscPayload = match[1]
       if (match[0] === '\x1bc') {
         this.revoke()
+        this.inputModes.reset()
         this.altActive = false
         this.commandEnteredAlternateScreen = false
-        this.uncleanTriggerArmed = false
         continue
       }
       if (oscPayload !== undefined) {
         const marker = oscPayload[0]
         if (marker === 'C') {
           this.revoke()
+          this.inputModes.markCommandStart()
           this.commandEnteredAlternateScreen = false
           continue
+        }
+        if (marker === 'A') {
+          this.inputModes.markPrompt()
         }
         if (marker !== 'D') {
           continue
         }
-        // An alternate screen still up at command-finished means the app died
-        // without its own teardown; the caller must repair before more bytes land.
-        const uncleanDeath = this.altActive && this.uncleanTriggerArmed
+        // An alternate screen or a command's input mode still up at command-finished
+        // means the app died without its own teardown; the caller must repair first.
+        // Every D re-asks: a refuted one may be a nested shell's while the app lives.
+        const uncleanDeath = this.inputModes.markCommandEnd() || this.altActive
         const cleanExit = !uncleanDeath && this.commandEnteredAlternateScreen && !this.altActive
         this.revoke()
         this.commandEnteredAlternateScreen = false
         if (uncleanDeath) {
-          this.uncleanTriggerArmed = false
           this.scanTail = ''
           // Why the clamp: a complete OSC can never sit wholly inside the
           // carried tail (extractScanTail keeps incomplete ones only), so this
@@ -139,6 +152,7 @@ export class TerminalShellLifecycleScanner {
             0,
             match.index + match[0].length - previousTailLength
           )
+          events.uncleanDeathTriggerStart = Math.max(0, match.index - previousTailLength)
           return events
         }
         if (cleanExit) {
@@ -150,10 +164,12 @@ export class TerminalShellLifecycleScanner {
       if (kittyPrefix !== undefined) {
         // `CSI < n u` (pop) and `CSI = 0 u` (clear) appear in our own injected
         // reset, so only a push of real flags counts as a new owner.
-        const first = Number((match[7] ?? match[9] ?? '').split(';')[0])
-        if (Number.isInteger(first) && first > 0) {
+        const kittyParams = match[7] ?? match[9] ?? ''
+        const first = Number(kittyParams.split(';')[0])
+        if (kittyPrefix !== '<' && Number.isInteger(first) && first > 0) {
           this.revoke()
         }
+        this.inputModes.applyKittyKeyboard(kittyPrefix, kittyParams)
         continue
       }
       const enabled = (match[3] ?? match[5]) === 'h'
@@ -168,11 +184,12 @@ export class TerminalShellLifecycleScanner {
         if (enabled && TUI_MODE_ENABLES.has(param)) {
           this.revoke()
         }
+        this.inputModes.applyPrivateMode(param, enabled)
         if (ALTERNATE_SCREEN_MODES.has(param)) {
+          this.inputModes.switchScreen(enabled)
           this.altActive = enabled
           if (enabled) {
             this.commandEnteredAlternateScreen = true
-            this.uncleanTriggerArmed = true
           }
         }
       }
@@ -203,7 +220,7 @@ export class TerminalShellLifecycleScanner {
       : tail.startsWith('\x9b')
         ? tail.slice(1)
         : undefined
-    return params !== undefined && /^[?>=][0-9;]*$/.test(params) ? tail : ''
+    return params !== undefined && /^[?<>=][0-9;]*$/.test(params) ? tail : ''
   }
 }
 

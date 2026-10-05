@@ -149,10 +149,10 @@ export const TERMINAL_DOCUMENT_ELEMENT_STYLE = `  #terminal-container {
   #sel-menu button + button { border-left: 1px solid #414868; }`
 
 /**
- * Both halves, in the order the WebView's `<head>` has always carried them.
+ * Both halves, in the order the WebView's `<head>` carries them.
  *
- * The concatenation is what the document shell splices in, so the emitted document does not move
- * for this split — the byte golden says whether that held.
+ * The root rules come first: the element rules the page scopes to its host are the second half, and
+ * a page's copy is that half alone.
  */
 export const TERMINAL_DOCUMENT_STYLE = `${TERMINAL_DOCUMENT_ROOT_STYLE}
 ${TERMINAL_DOCUMENT_ELEMENT_STYLE}`

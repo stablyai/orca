@@ -6,7 +6,9 @@
   "trailingComma": "none",
   "ignorePatterns": [
     "cloud/**",
+    "resources/licenses/**",
     ".github/actions/cloud-sql-rollout-lease/**",
-    ".anti-slop-plugin/**"
+    ".anti-slop-plugin/**",
+    "src/main/runtime/__fixtures__/*.timing.json"
   ]
 }

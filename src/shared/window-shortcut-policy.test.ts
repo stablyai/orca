@@ -40,14 +40,26 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'dictationKeyDown' })
   })
 
-  it('resolves the explicit window shortcut allowlist on macOS', () => {
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'Comma', key: ',', meta: true, control: false, alt: false, shift: false },
-        'darwin'
-      )
-    ).toEqual({ type: 'openSettings' })
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'leaves Cmd/Ctrl+, to terminal apps on %s unless explicitly rebound',
+    (platform) => {
+      const input = {
+        code: 'Comma',
+        key: ',',
+        meta: platform === 'darwin',
+        control: platform !== 'darwin',
+        alt: false,
+        shift: false
+      }
+      expect(resolveWindowShortcutAction(input, platform)).toBeNull()
+      expect(resolveWindowShortcutAction(input, platform, { 'tab.close': ['Mod+W'] })).toBeNull()
+      expect(
+        resolveWindowShortcutAction(input, platform, { 'app.settings': ['Mod+Comma'] })
+      ).toEqual({ type: 'openSettings' })
+    }
+  )
 
+  it('resolves the explicit window shortcut allowlist on macOS', () => {
     expect(
       resolveWindowShortcutAction(
         { code: 'KeyJ', key: 'j', meta: true, control: false, alt: false, shift: false },

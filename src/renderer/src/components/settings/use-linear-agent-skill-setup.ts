@@ -1,8 +1,4 @@
-import { useCallback, useMemo } from 'react'
-import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
-} from '@/lib/agent-skill-cli-prerequisite'
+import { useMemo } from 'react'
 import {
   LINEAR_AGENT_SKILL_NAMES,
   ORCA_LINEAR_SKILL_INSTALL_COMMAND
@@ -13,12 +9,7 @@ import {
   useInstalledAgentSkillNames
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
-import {
-  buildSkillCommandForRuntime,
-  ensureWslCliAvailableForAgentSkillTerminal,
-  getWslCliDistroRequest,
-  type LocalAgentRuntime
-} from './CliSkillRuntimeSetup'
+import { buildSkillCommandForRuntime, type LocalAgentRuntime } from './CliSkillRuntimeSetup'
 
 // Shared install/update wiring for Task Sources + Linear settings.
 export function useLinearAgentSkillSetup(): {
@@ -36,10 +27,7 @@ export function useLinearAgentSkillSetup(): {
   error: string | null
   terminalShellOverride: string | undefined
   terminalRuntime: LocalAgentRuntime | undefined
-  preInstallNotice: string
   refreshSkill: () => Promise<boolean>
-  getPrerequisiteStatus: () => Promise<Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>>
-  onBeforeOpenTerminal: () => Promise<void>
 } {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const {
@@ -76,22 +64,6 @@ export function useLinearAgentSkillSetup(): {
     ? updateTarget.skillName
     : undefined
 
-  const getPrerequisiteStatus = useCallback(
-    () =>
-      activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-        ? window.api.cli.getWslInstallStatus(
-            getWslCliDistroRequest(activeSkillRuntime.agentRuntime)
-          )
-        : window.api.cli.getInstallStatus(),
-    [activeSkillRuntime.agentRuntime]
-  )
-
-  const onBeforeOpenTerminal = useCallback(async () => {
-    await (activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-      ? ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
-      : ensureOrcaCliAvailableForAgentSkillTerminal())
-  }, [activeSkillRuntime.agentRuntime])
-
   const installDisabled = Boolean(activeSkillRuntime.installDisabledReason)
 
   return {
@@ -106,9 +78,6 @@ export function useLinearAgentSkillSetup(): {
     error: activeSkillRuntime.installDisabledReason ?? skillError,
     terminalShellOverride: activeSkillRuntime.terminalShellOverride,
     terminalRuntime: activeSkillRuntime.agentRuntime,
-    preInstallNotice: AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-    refreshSkill,
-    getPrerequisiteStatus,
-    onBeforeOpenTerminal
+    refreshSkill
   }
 }

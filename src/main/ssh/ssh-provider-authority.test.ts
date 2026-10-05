@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   assertSshMutationExpectation,
+  forgetSshConnectionGeneration,
   resetSshConnectionGenerations,
   setSshConnectionGeneration
 } from './ssh-connection-generation'
@@ -84,6 +85,29 @@ describe('SSH provider authority', () => {
     expect(abortB).not.toHaveBeenCalled()
     rotateSshProviderAuthority('ssh-b')
     expect(abortB).toHaveBeenCalledOnce()
+  })
+
+  it('rotates a recreated target past its forgotten floor without revoking other targets', () => {
+    const stale = rotateSshProviderAuthority('runtime-ssh-vm-1')
+    forgetSshConnectionGeneration('runtime-ssh-vm-1')
+    const authorityB = getSshProviderAuthority('ssh-b')
+    const controllerB = new AbortController()
+    const abortB = vi.spyOn(controllerB, 'abort')
+    registerSshProviderRequestAbort(authorityB, controllerB)
+
+    const replacement = rotateSshProviderAuthority('runtime-ssh-vm-1')
+
+    expect(replacement.connectionGeneration).toBeGreaterThan(stale.connectionGeneration)
+    expect(abortB).not.toHaveBeenCalled()
+    expect(isCurrentSshProviderAuthority(authorityB)).toBe(true)
+    expect(isCurrentSshProviderAuthority(stale)).toBe(false)
+    expect(() =>
+      assertSshMutationExpectation(
+        'runtime-ssh-vm-1',
+        'runtime-ssh-vm-1',
+        stale.connectionGeneration
+      )
+    ).toThrow('SSH connection changed; refresh and try again')
   })
 
   it('revokes every target when one target rolls the generation session scope', () => {

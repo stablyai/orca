@@ -37,6 +37,12 @@ const hostClient = vi.hoisted(() => ({
 vi.mock('../transport/client-context', () => ({
   useHostClient: () => hostClient.current
 }))
+// The wall's release offer: the native hook imports the update checker module.
+vi.mock('../app-update/use-wall-app-update', () => ({ useWallAppUpdate: () => null }))
+// Descriptor bookkeeping only; the real recorder reaches the native keychain through host-store.
+vi.mock('../transport/host-descriptor-recorder', () => ({
+  recordHostDescriptorFromStatus: vi.fn()
+}))
 
 function clientWithStatus(result: Record<string, unknown>): RpcClient {
   return { sendRequest: vi.fn().mockResolvedValue({ ok: true, result }) } as unknown as RpcClient

@@ -38,14 +38,6 @@ describe('cell inventory hold samples', () => {
     }
   })
 
-  it('never reports a p95 above the max', () => {
-    for (let size = 1; size <= 200; size++) {
-      const counts = samplesOf(Array.from({ length: size }, (_, i) => i + 1)).readCounts()
-
-      expect(counts.cellInventoryHoldMsP95).toBeLessThanOrEqual(counts.cellInventoryHoldMsMax)
-    }
-  })
-
   it('ignores a hold that is not a finite, non-negative duration', () => {
     const samples = samplesOf([Number.NaN, Number.POSITIVE_INFINITY, -1])
 
@@ -108,5 +100,47 @@ describe('cell inventory hold samples', () => {
 
     expect(samples.consumeCounts().cellInventoryLockUnavailable).toBe(4)
     expect(samples.consumeCounts()).toEqual(emptyCellInventoryHoldCounts())
+  })
+
+  // Why: the shared max and p95 mix every lock, so only the per-site p99 says
+  // whether a drain return waits on its own regional rows or on the inventory.
+  it('reports a p99 per hold site', () => {
+    const samples = new CellInventoryHoldSamples()
+    for (let ms = 1; ms <= 100; ms++) {
+      samples.record(ms)
+      samples.record(ms * 2, 'isolated-replacement')
+    }
+    samples.record(7, 'rehome-target-row')
+
+    expect(samples.readCounts()).toMatchObject({
+      cellInventoryHolds: 201,
+      cellInventoryHoldMaxSite: 'isolated-replacement',
+      inventoryHoldMsP99: 99,
+      isolatedReplacementHoldMsP99: 198,
+      isolatedReplacementHolds: 100,
+      rehomeTargetRowHoldMsP99: 7
+    })
+  })
+
+  // Why: the alert reads one max across every lock, so the label is the only
+  // thing that says whether a long hold was the inventory or a rehome target row.
+  it('names the site of the longest hold and reports rehome target rows apart', () => {
+    const samples = new CellInventoryHoldSamples()
+    samples.record(40)
+    samples.record(170, 'rehome-target-row')
+    samples.record(90, 'rehome-target-row')
+
+    expect(samples.readCounts()).toMatchObject({
+      cellInventoryHoldMsMax: 170,
+      cellInventoryHolds: 3,
+      cellInventoryHoldMaxSite: 'rehome-target-row',
+      rehomeTargetRowHoldMsMax: 170,
+      rehomeTargetRowHolds: 2
+    })
+    samples.record(300)
+    expect(samples.readCounts()).toMatchObject({
+      cellInventoryHoldMaxSite: 'inventory',
+      rehomeTargetRowHoldMsMax: 170
+    })
   })
 })

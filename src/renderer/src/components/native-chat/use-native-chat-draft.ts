@@ -1,5 +1,10 @@
-import { useCallback, useRef, useState } from 'react'
-import { readNativeChatDraftCache, writeNativeChatDraftCache } from './native-chat-draft-cache'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { appendReturnedDraftText } from '../../../../shared/returned-draft-text'
+import {
+  readNativeChatDraftCache,
+  subscribeToNativeChatDraftAppend,
+  writeNativeChatDraftCache
+} from './native-chat-draft-cache'
 
 /**
  * Composer draft state backed by the scope cache so a typed-but-unsent message
@@ -7,11 +12,18 @@ import { readNativeChatDraftCache, writeNativeChatDraftCache } from './native-ch
  * pane key also used for image attachments; when it changes (the composer is
  * reused for a different pane) the cached draft is reloaded.
  */
-export function useNativeChatDraft(scopeKey: string): {
+export function useNativeChatDraft(
+  scopeKey: string,
+  isComposing: () => boolean
+): {
   draft: string
   setDraft: (next: string | ((previous: string) => string)) => void
+  /** Shows text appended during an IME composition, which owns the field until it settles. */
+  flushDraftAppends: () => void
 } {
   const [draft, setDraftState] = useState(() => readNativeChatDraftCache(scopeKey))
+  // Appended while composing: the editor's own writes would erase it, so the cache keeps it after them.
+  const pendingAppendRef = useRef<{ scopeKey: string; text: string } | null>(null)
 
   // Reload the cached draft when reused for a different pane (scope change),
   // adjusting state during render rather than in an effect so the restored draft
@@ -22,18 +34,49 @@ export function useNativeChatDraft(scopeKey: string): {
     setDraftState(readNativeChatDraftCache(scopeKey))
   }
 
+  useEffect(
+    () =>
+      subscribeToNativeChatDraftAppend(scopeKey, (text) => {
+        if (!isComposing()) {
+          setDraftState(readNativeChatDraftCache(scopeKey))
+          return
+        }
+        const pending = pendingAppendRef.current
+        pendingAppendRef.current = {
+          scopeKey,
+          text:
+            pending?.scopeKey === scopeKey ? appendReturnedDraftText(pending.text, text) : text
+        }
+      }),
+    [isComposing, scopeKey]
+  )
+
   // Persist every mutation through the cache. Accepts the same value/updater
   // forms as a useState setter so call sites are drop-in.
   const setDraft = useCallback(
     (next: string | ((previous: string) => string)) => {
       setDraftState((previous) => {
         const resolved = typeof next === 'function' ? next(previous) : next
-        writeNativeChatDraftCache(scopeKey, resolved)
+        const pending = pendingAppendRef.current
+        writeNativeChatDraftCache(
+          scopeKey,
+          pending?.scopeKey === scopeKey
+            ? appendReturnedDraftText(resolved, pending.text)
+            : resolved
+        )
         return resolved
       })
     },
     [scopeKey]
   )
 
-  return { draft, setDraft }
+  const flushDraftAppends = useCallback(() => {
+    const pending = pendingAppendRef.current
+    pendingAppendRef.current = null
+    if (pending?.scopeKey === scopeKey) {
+      setDraft((previous) => appendReturnedDraftText(previous, pending.text))
+    }
+  }, [scopeKey, setDraft])
+
+  return { draft, setDraft, flushDraftAppends }
 }

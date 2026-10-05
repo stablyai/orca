@@ -136,6 +136,8 @@ export function prepareLoadedProfileSettings(
   const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
   if (
     parsed.settings?.agentYoloDefaultsMigrated !== true ||
+    parsed.settings?.agentDefaultArgs?.devin !==
+      migratedAgentYoloDefaults.agentDefaultArgs?.devin ||
     hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||
     hasUnsupportedTuiAgentArgs('kilo', parsed.settings?.agentDefaultArgs?.kilo)
   ) {

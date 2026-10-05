@@ -131,14 +131,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -524,7 +524,6 @@ describe('connectPanePty', () => {
         }
       },
       getAgentLaunchConfigForStatusEntry: vi.fn(() => undefined),
-      getAgentLaunchConfigForStatusMetadata: vi.fn(() => undefined),
       sleepingAgentSessionsByPaneKey: {
         [paneKey]: {
           paneKey,

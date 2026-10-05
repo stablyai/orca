@@ -53,6 +53,7 @@ function worktreeSetupWslenvEntries(env: Record<string, string | undefined>): st
   ]
 }
 
+/** Adds the host environment values required by a WSL PTY and its guest relay. */
 export function addOrcaWslInteropEnv(env: Record<string, string>): void {
   // Why set here: every WSL spawn path funnels through this helper, and the
   // in-guest login script needs the resolved wrapper root. Windows/WSL wrappers
@@ -78,11 +79,17 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     // and it cannot derive the hash segment from ORCA_USER_DATA_PATH alone.
     'ORCA_SHELL_READY_ROOT/p',
     'ORCA_CLI_COMMAND/u',
+    // Why /p: the managed CLI launcher lives in the host's userData tree.
+    'ORCA_WSL_CLI_DIR/p',
     'ORCA_CODEX_LAUNCH_PREFLIGHT/p',
+    'ORCA_CODEX_ISOLATE/u',
     'ORCA_PANE_KEY/u',
     'ORCA_TAB_ID/u',
     'ORCA_WORKTREE_ID/u',
     'ORCA_AGENT_LAUNCH_TOKEN/u',
+    // The guest plugin uses this marker to select the OpenCode variant that
+    // owns the pane when both native and WSL installations are present.
+    'ORCA_OPENCODE_AGENT/u',
     `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
     `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`,
     'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND/u',

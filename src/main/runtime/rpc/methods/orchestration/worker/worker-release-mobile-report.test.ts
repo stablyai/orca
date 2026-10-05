@@ -100,7 +100,7 @@ it.each(['unary', 'stream'])('mobile %s bytes do no orchestration database work'
       method.handler(method.params!.parse(params) as never, { runtime } as never)
     ).resolves.toMatchObject({ send: { accepted: true } })
   }
-  expect(write).toHaveBeenCalledWith('pty-worker', 'x')
+  expect(write).toHaveBeenCalledWith('pty-worker', 'x', 'driving')
   expect(commit).toHaveBeenCalledTimes(1)
   expect(dbAccess).not.toHaveBeenCalled()
   expect(takeover).not.toHaveBeenCalled()

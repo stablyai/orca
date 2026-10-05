@@ -17,6 +17,7 @@ import {
   assertLegacyAiVaultResumeAllowed,
   projectStructuredAiVaultSessions
 } from '../../../ai-vault/structured-session-ownership'
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../../structured-agent-session-host-refusal'
 import {
   AiVaultListSessionsParams,
   AiVaultPrepareSessionResumeParams,
@@ -66,14 +67,17 @@ export const AI_VAULT_METHODS = [
     name: 'aiVault.listSessions',
     params: AiVaultListSessionsParams,
     handler: async (params, { runtime, clientKind, clientCapabilities }) => {
-      await runtime.ensureStructuredAgentSessionHost()
+      await ensureStructuredAgentSessionHostUnlessRefused(() =>
+        runtime.ensureStructuredAgentSessionHost()
+      )
       let result
       try {
         result = await runtime.listAiVaultSessions({
           limit: params.unlimited ? undefined : params.limit,
           unlimited: params.unlimited,
           force: params.force,
-          scopePaths: params.scopePaths
+          scopePaths: params.scopePaths,
+          includeAntigravityIdeSessions: params.includeAntigravityIdeSessions
         })
       } catch (error) {
         if (error instanceof Error) {
@@ -107,7 +111,9 @@ export const AI_VAULT_METHODS = [
         // client-provided runtime/SSH stamp escape that host boundary.
         executionHostId: LOCAL_EXECUTION_HOST_ID
       }
-      await runtime.ensureStructuredAgentSessionHost()
+      await ensureStructuredAgentSessionHostUnlessRefused(() =>
+        runtime.ensureStructuredAgentSessionHost()
+      )
       assertLegacyAiVaultResumeAllowed(args)
       return runtime.prepareAiVaultSessionResume(args)
     }

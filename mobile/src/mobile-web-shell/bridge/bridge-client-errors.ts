@@ -53,6 +53,28 @@ export class BridgeSendFailedError extends Error {
   }
 }
 
+/**
+ * A request bigger than one frame may be, refused before it is posted.
+ *
+ * The shell's reader drops an oversized frame with a diagnostic and answers nothing, so posting it
+ * anyway leaves the caller's promise pending for the life of the page — a spinner that never stops
+ * and an error surface that is never written to. `git.bulkStage` carrying every changed path is the
+ * shape that reaches this on a large enough workspace.
+ *
+ * The message is what the screen puts on the user's error surface, so it says what to do rather
+ * than naming a cap nobody can act on. Also a definite failure: the frame never left, so nothing
+ * ran on the desktop and no delivery mark belongs on it.
+ */
+export class BridgeRequestOversizedError extends Error {
+  /** Carried so a caller can switch on this rather than reading it out of the message. */
+  readonly code = 'bridge_request_oversized'
+
+  constructor() {
+    super('This action sends too much at once to reach Orca. Try it on fewer files.')
+    this.name = 'BridgeRequestOversizedError'
+  }
+}
+
 /** A method sent through the native-verb member that is not one. The member is typed, so this is
  *  reachable only from a caller that widened it; refusing keeps the member from being a raw port. */
 export class BridgeClientNotNativeVerbError extends Error {

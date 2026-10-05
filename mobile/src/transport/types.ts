@@ -4,11 +4,11 @@ import {
   type PairingOffer
 } from '../../../src/shared/mobile-relay-pairing-offer'
 import {
-  MobileAccessEndpointSchema,
-  type MobileAccessEndpoint,
-  type MobileRelayHostOverlay
-} from './mobile-relay-host-overlay'
-import { MobileRelayEndpointSchema } from '../../../src/shared/mobile-relay-credential-contract'
+  MobileRelayEndpointSchema,
+  type MobileRelayEndpoint
+} from '../../../src/shared/mobile-relay-credential-contract'
+import { NODE_PLATFORM_NAMES } from './mobile-runtime-host-platform'
+import { salvagedOptional } from '../../../src/shared/zod-salvage'
 
 export { PairingOfferSchema }
 export type { PairingOffer }
@@ -102,14 +102,20 @@ export type ForegroundNudgeReason = 'focus' | 'app-resume' | 'network-change'
 
 export type HostProfile = {
   id: string
+  /** Resolved display value; the store maintains `name === personalName ?? lastKnownMachineName ?? "Host N"`,
+   *  except that a desktop reporting its OS without a machine name leaves the last adopted one here. */
   name: string
+  /** The name typed on this phone. Present only when the user renamed the host here; it overrides the desktop's. */
+  personalName?: string
+  /** What the desktop last called itself over status.get, kept for offline and post-restart rows. */
+  lastKnownMachineName?: string
+  lastKnownHostPlatform?: NodeJS.Platform
   endpoint: string
   deviceToken: string
   publicKeyB64: string
   lastConnected: number
-  endpoints?: MobileAccessEndpoint[]
-  relayHostId?: MobileRelayHostOverlay['relayHostId']
-  relay?: MobileRelayHostOverlay['relay']
+  /** Relay routing, joined from the overlay; only `setRelayRouting` and pairing write it. */
+  relay?: MobileRelayEndpoint
 }
 
 export type HostCredentialStatus = 'ready' | 'temporarily-unavailable' | 'missing'
@@ -119,18 +125,26 @@ export type HostCatalogEntry = Omit<HostProfile, 'deviceToken'> & {
   profile: HostProfile | null
 }
 
+// Why: salvaged so a value this build cannot read (a newer build's platform, an empty string)
+// drops only that field; a failed record parse would drop the whole paired host on the next write.
+// The outer `.optional()` keeps the inferred key optional rather than required `T | undefined`.
+const hostNameIdentityFields = {
+  personalName: salvagedOptional('personalName', z.string().min(1)).optional(),
+  lastKnownMachineName: salvagedOptional('lastKnownMachineName', z.string().min(1)).optional(),
+  lastKnownHostPlatform: salvagedOptional(
+    'lastKnownHostPlatform',
+    z.enum(NODE_PLATFORM_NAMES)
+  ).optional()
+}
+
 export const HostProfileSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+  ...hostNameIdentityFields,
   endpoint: z.string().min(1),
   deviceToken: z.string().min(1),
   publicKeyB64: z.string().min(1),
   lastConnected: z.number().finite(),
-  endpoints: z.array(MobileAccessEndpointSchema).min(1).max(16).optional(),
-  relayHostId: z
-    .string()
-    .regex(/^[A-Za-z0-9_-]{16}$/)
-    .optional(),
   relay: MobileRelayEndpointSchema.optional()
 })
 
@@ -140,6 +154,7 @@ export const HostProfileSchema = z.object({
 export const StoredHostProfileSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+  ...hostNameIdentityFields,
   endpoint: z.string().min(1),
   publicKeyB64: z.string().min(1),
   lastConnected: z.number().finite()

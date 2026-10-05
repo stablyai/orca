@@ -210,6 +210,37 @@ describe('splitWorkspaceSessionByHost', () => {
     expect(slices[RUNTIME_A]).toBeUndefined()
   })
 
+  it('routes tab-keyed rows through a caller-supplied tab index when the payload has no tab rows', () => {
+    // A debounced patch that changed only layouts (a park capture) or only PTY bindings carries
+    // no tabsByWorktree; the index stands in for the rows the payload never mentioned.
+    const state: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      terminalLayoutsByTabId: { 't-a': makeLayout() },
+      remoteSessionIdsByTabId: { 't-a': 'sess-a' },
+      terminalPtyIncarnationsByPaneKey: { 't-a:leaf-1': 'inc-3' }
+    }
+    const slices = splitWorkspaceSessionByHost(state, ownerByPrefix(), {
+      worktreeIdByTabId: new Map([['t-a', 'a-wt-1']])
+    })
+    expect(slices[RUNTIME_A]?.terminalLayoutsByTabId).toHaveProperty('t-a')
+    expect(slices[RUNTIME_A]?.remoteSessionIdsByTabId).toEqual({ 't-a': 'sess-a' })
+    expect(slices[RUNTIME_A]?.terminalPtyIncarnationsByPaneKey).toEqual({ 't-a:leaf-1': 'inc-3' })
+    expect(slices[LOCAL_EXECUTION_HOST_ID]?.terminalLayoutsByTabId).toEqual({})
+    expect(slices[LOCAL_EXECUTION_HOST_ID]?.remoteSessionIdsByTabId).toEqual({})
+  })
+
+  it('keeps a tab the supplied index does not name in the local slice', () => {
+    const state: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      terminalLayoutsByTabId: { orphan: makeLayout() }
+    }
+    const slices = splitWorkspaceSessionByHost(state, ownerByPrefix(), {
+      worktreeIdByTabId: new Map([['t-a', 'a-wt-1']])
+    })
+    expect(slices[LOCAL_EXECUTION_HOST_ID]?.terminalLayoutsByTabId).toHaveProperty('orphan')
+    expect(slices[RUNTIME_A]).toBeUndefined()
+  })
+
   it('routes browser pages via their record worktreeId', () => {
     const state: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),

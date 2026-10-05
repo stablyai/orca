@@ -3,16 +3,12 @@ import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
-import { monaco } from '@/lib/monaco-setup'
 import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
-import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
-import {
-  getDiffCommentPopoverLeft,
-  getDiffCommentPopoverTop
-} from '../diff-comments/diff-comment-popover-position'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
@@ -25,12 +21,15 @@ import { useDiffViewerFirstChangeAutoScroll } from './useDiffViewerFirstChangeAu
 import { getDiffViewerLargeDiffSaveAction } from './diff-viewer-large-diff-save-action'
 import type { DiffViewerProps } from './diff-viewer-props'
 import { buildDiffEditorWhitespaceOptions } from './diff-editor-whitespace-options'
-import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
+import {
+  buildDiffEditorWordWrapOptions,
+  syncDiffEditorOriginalWordWrap
+} from './diff-editor-word-wrap-options'
 import { buildDiffEditorHideUnchangedOptions } from './diff-editor-hide-unchanged-options'
 import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
 import { monacoFindOptions } from './monaco-find-options'
-import { resolveDocumentTheme } from '@/lib/document-theme'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 export default function DiffViewer({
   modelKey,
@@ -54,6 +53,7 @@ export default function DiffViewer({
   largeDiffSaveContentAvailable
 }: DiffViewerProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const isDark = useDocumentDarkTheme()
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
@@ -70,19 +70,18 @@ export default function DiffViewer({
   )
   const terminalFontSize = settings?.terminalFontSize ?? 13,
     diffEditorFontSize = computeDiffEditorFontSize(terminalFontSize, editorFontZoomLevel)
+  const diffWordWrap = settings?.diffWordWrap
 
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const { registerDiffEditor, unregisterDiffEditor } = useDiffEditorRegistration()
-  const diffBodyRef = useRef<HTMLDivElement | null>(null)
   const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
+  const wordWrapOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
+  const wordWrapMountFrameRef = useRef(0)
+  const diffWordWrapRef = useRef(diffWordWrap)
+  useLayoutEffect(() => {
+    diffWordWrapRef.current = diffWordWrap
+  }, [diffWordWrap])
   const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
-  const [popover, setPopover] = useState<{
-    lineNumber: number
-    startLine?: number
-    top: number
-    left?: number
-    lineHeight: number
-  } | null>(null)
 
   const renderLimit = useMemo(
     () => largeDiffRenderLimit ?? getLargeDiffRenderLimit({ originalContent, modifiedContent }),
@@ -98,6 +97,45 @@ export default function DiffViewer({
     return diffComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
   }, [scrollToDiffCommentId, diffComments, worktreeId])
 
+  const handleCreateComment = useCallback(
+    async ({
+      lineNumber,
+      startLine,
+      body
+    }: {
+      lineNumber: number
+      startLine?: number
+      body: string
+    }): Promise<boolean> => {
+      if (onAddLineComment) {
+        return onAddLineComment({
+          lineNumber,
+          startLine,
+          body
+        })
+      }
+      if (!worktreeId) {
+        return false
+      }
+      const result = await addDiffComment({
+        worktreeId,
+        filePath: relativePath,
+        source: 'diff',
+        startLine,
+        lineNumber,
+        body,
+        side: 'modified'
+      })
+      if (!result) {
+        toast.error(
+          translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
+        )
+      }
+      return Boolean(result)
+    },
+    [addDiffComment, onAddLineComment, relativePath, worktreeId]
+  )
+
   // Why: gate the decorator on a comment target; updateDiffComment is only wired for local diffs (worktreeId present).
   useDiffCommentDecorator({
     editor: hasLineCommentAction ? modifiedEditor : null,
@@ -107,18 +145,11 @@ export default function DiffViewer({
     comments: worktreeId ? diffComments : [],
     commentableLineNumbers,
     addButtonLabel: addLineCommentLabel,
-    pendingCommentTarget: popover,
     addNoteShortcutEnabled: hasLineCommentAction,
-    onAddCommentClick: ({ lineNumber, startLine, top }) =>
-      setPopover({
-        lineNumber,
-        startLine,
-        top,
-        left: modifiedEditor
-          ? (getDiffCommentPopoverLeft(modifiedEditor, diffBodyRef.current) ?? undefined)
-          : undefined,
-        lineHeight: modifiedEditor?.getOption(monaco.editor.EditorOption.lineHeight) ?? 0
-      }),
+    onCreateComment: handleCreateComment,
+    draftPlaceholder: addLineCommentPlaceholder,
+    draftSubmitLabel: addLineCommentLabel,
+    canOpenDraft: !renderLimit.limited,
     onDeleteComment: (id) => {
       if (worktreeId) {
         void deleteDiffComment(worktreeId, id)
@@ -128,34 +159,6 @@ export default function DiffViewer({
     pendingScrollCommentId: pendingScrollForThisViewer,
     onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
   })
-
-  useEffect(() => {
-    if (!modifiedEditor || !popover) {
-      return
-    }
-    const update = (): void => {
-      const lineHeight = modifiedEditor.getOption(monaco.editor.EditorOption.lineHeight)
-      const top = getDiffCommentPopoverTop(modifiedEditor, popover.lineNumber, lineHeight)
-      if (top == null) {
-        setPopover(null)
-        return
-      }
-      const left = getDiffCommentPopoverLeft(modifiedEditor, diffBodyRef.current)
-      setPopover((prev) =>
-        prev ? { ...prev, top, left: left == null ? prev.left : left, lineHeight } : prev
-      )
-    }
-    const scrollSub = modifiedEditor.onDidScrollChange(update)
-    const contentSub = modifiedEditor.onDidContentSizeChange(update)
-    const layoutSub = modifiedEditor.onDidLayoutChange(update)
-    return () => {
-      scrollSub.dispose()
-      contentSub.dispose()
-      layoutSub.dispose()
-    }
-    // Why: depend on popover.lineNumber (not the whole object) so the effect doesn't re-subscribe on every top update.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modifiedEditor, popover?.lineNumber])
 
   useDiffViewerFirstChangeAutoScroll({
     diffEditorRef,
@@ -168,6 +171,9 @@ export default function DiffViewer({
     // Why: on fallback transition, drop stale Monaco refs so decorators/save handlers don't talk to disposed UI.
     lineNumberOptionsSubRef.current?.dispose()
     lineNumberOptionsSubRef.current = null
+    cancelAnimationFrame(wordWrapMountFrameRef.current)
+    wordWrapOptionsSubRef.current?.dispose()
+    wordWrapOptionsSubRef.current = null
     // Why: capture before nulling so we unregister the exact instance (identity guard no-ops a stale dispose).
     const fallenBackEditor = diffEditorRef.current
     diffEditorRef.current = null
@@ -175,43 +181,7 @@ export default function DiffViewer({
       unregisterDiffEditor(fallenBackEditor)
     }
     setModifiedEditor(null)
-    setPopover(null)
   }, [unregisterDiffEditor])
-
-  const handleSubmitComment = async (body: string): Promise<void> => {
-    if (!popover) {
-      return
-    }
-    if (onAddLineComment) {
-      const ok = await onAddLineComment({
-        lineNumber: popover.lineNumber,
-        startLine: popover.startLine,
-        body
-      })
-      if (ok) {
-        setPopover(null)
-      }
-      return
-    }
-    if (!worktreeId) {
-      return
-    }
-    // Why: await persistence — a null result (failed save) keeps the popover open for retry instead of losing the draft.
-    const result = await addDiffComment({
-      worktreeId,
-      filePath: relativePath,
-      source: 'diff',
-      startLine: popover.startLine,
-      lineNumber: popover.lineNumber,
-      body,
-      side: 'modified'
-    })
-    if (result) {
-      setPopover(null)
-    } else {
-      console.error('Failed to add diff comment — draft preserved')
-    }
-  }
 
   // Keep refs to latest callbacks so the mounted editor always calls current versions
   const onSaveRef = useRef(onSave)
@@ -236,11 +206,35 @@ export default function DiffViewer({
     (diffEditor, monaco) => {
       diffEditorRef.current = diffEditor
       registerDiffEditor(diffEditor)
+      // Why: Monaco applies the inline-layout wrap override after mount, once width is known.
+      wordWrapMountFrameRef.current = requestAnimationFrame(() => {
+        if (diffEditorRef.current !== diffEditor) {
+          return
+        }
+        wordWrapOptionsSubRef.current?.dispose()
+        wordWrapOptionsSubRef.current = syncDiffEditorOriginalWordWrap(
+          diffEditor,
+          diffWordWrapRef.current
+        )
+      })
       lineNumberOptionsSubRef.current?.dispose()
       lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
 
       const originalEditor = diffEditor.getOriginalEditor()
       const modifiedEditor = diffEditor.getModifiedEditor()
+      modifiedEditor.onDidDispose(() => {
+        if (diffEditorRef.current !== diffEditor) {
+          return
+        }
+        cancelAnimationFrame(wordWrapMountFrameRef.current)
+        lineNumberOptionsSubRef.current?.dispose()
+        lineNumberOptionsSubRef.current = null
+        wordWrapOptionsSubRef.current?.dispose()
+        wordWrapOptionsSubRef.current = null
+        unregisterDiffEditor(diffEditor)
+        diffEditorRef.current = null
+        setModifiedEditor(null)
+      })
       diffEditor.onDidDispose(preserveDiffViewStateAcrossModelSwaps(diffEditor).dispose)
 
       setupCopy(originalEditor, monaco, filePath, propsRef)
@@ -280,15 +274,6 @@ export default function DiffViewer({
       } else {
         diffEditor.focus()
       }
-
-      diffEditor.onDidDispose(() => {
-        lineNumberOptionsSubRef.current?.dispose()
-        lineNumberOptionsSubRef.current = null
-        diffEditorRef.current = null
-        unregisterDiffEditor(diffEditor)
-        setModifiedEditor(null)
-        setPopover(null)
-      })
     },
     [editable, setupCopy, modelKey, filePath, sideBySide, registerDiffEditor, unregisterDiffEditor]
   )
@@ -307,36 +292,29 @@ export default function DiffViewer({
   }, [modelKey])
 
   useEffect(() => {
+    cancelAnimationFrame(wordWrapMountFrameRef.current)
     const diffEditor = diffEditorRef.current
     if (!diffEditor) {
-      return
+      return () => {
+        cancelAnimationFrame(wordWrapMountFrameRef.current)
+      }
     }
     lineNumberOptionsSubRef.current?.dispose()
     lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
+    wordWrapOptionsSubRef.current?.dispose()
+    wordWrapOptionsSubRef.current = syncDiffEditorOriginalWordWrap(diffEditor, diffWordWrap)
     return () => {
+      cancelAnimationFrame(wordWrapMountFrameRef.current)
       lineNumberOptionsSubRef.current?.dispose()
       lineNumberOptionsSubRef.current = null
+      wordWrapOptionsSubRef.current?.dispose()
+      wordWrapOptionsSubRef.current = null
     }
-  }, [sideBySide])
+  }, [diffWordWrap, sideBySide])
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      <div ref={diffBodyRef} className="flex-1 min-h-0 relative">
-        {popover && hasLineCommentAction && !renderLimit.limited && (
-          <DiffCommentPopover
-            key={`${popover.startLine ?? popover.lineNumber}:${popover.lineNumber}`}
-            lineNumber={popover.lineNumber}
-            startLine={popover.startLine}
-            top={popover.top}
-            left={popover.left}
-            lineHeight={popover.lineHeight}
-            placeholder={addLineCommentPlaceholder}
-            submitLabel={addLineCommentLabel}
-            submittingLabel="Posting…"
-            onCancel={() => setPopover(null)}
-            onSubmit={handleSubmitComment}
-          />
-        )}
+      <div className="flex-1 min-h-0 relative">
         {renderLimit.limited ? (
           <LargeDiffFallback
             filePath={relativePath}
@@ -354,7 +332,7 @@ export default function DiffViewer({
             language={language}
             original={originalContent}
             modified={modifiedContent}
-            theme={resolveDocumentTheme(settings?.theme ?? 'light') ? 'vs-dark' : 'vs'}
+            theme={isDark ? 'vs-dark' : 'vs'}
             onMount={handleMount}
             // Why: key models by tab identity and preserve the modified undo stack across Changes-mode HEAD rotations.
             originalModelPath={currentDiffModelPaths.originalModelPath}

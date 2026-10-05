@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalQuestionItem,
+  AgentSessionJournalIdentity
+} from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionAcquisition,
   StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
 import { StructuredAgentSessionAdapterRouter } from './structured-agent-session-adapter-router'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 function claudeIdentity(sessionId: string): AgentSessionJournalIdentity {
   return {
@@ -12,7 +16,7 @@ function claudeIdentity(sessionId: string): AgentSessionJournalIdentity {
     workspaceId: 'workspace-1',
     hostId: 'local',
     agent: 'claude',
-    providerHandle: { kind: 'claude', sessionId: 'provider-session-1', leafUuid: null }
+    providerHandle: claudeProviderHandle('provider-session-1', null)
   }
 }
 
@@ -21,7 +25,7 @@ function acquisition(fence: number, spawnToken: string): AgentSessionAcquisition
     process: { hostId: 'local', pid: 1, processStartTimeMs: 1, spawnToken },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'claude', sessionId: 'provider-session-1', leafUuid: null },
+      handle: claudeProviderHandle('provider-session-1', null),
       origin: 'created',
       mintedAtFence: fence,
       observedAt: 1
@@ -161,9 +165,56 @@ describe('StructuredAgentSessionAdapterRouter optional lifecycle methods', () =>
       const stopSession = router[method]
 
       await expect(stopSession('session-1')).resolves.toBe(true)
+      // A host with no cause to name passes none; the adapter settles its turn as news.
       expect(closeSession).toHaveBeenCalledWith('session-1')
     }
   )
+})
+
+const QUESTION: AgentJournalQuestionItem = {
+  kind: 'question',
+  question: 'Which branch?',
+  options: [{ id: 'main', label: 'main' }],
+  resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+}
+
+describe('StructuredAgentSessionAdapterRouter.stopEndsSession', () => {
+  it("answers for the session's live owner, and keeps the child with none", async () => {
+    const claude = adapterOf(vi.fn(async () => true))
+    claude.stopEndsSession = () => true
+    const codex = adapterOf(vi.fn(async () => false))
+    const router = new StructuredAgentSessionAdapterRouter({ claude, codex }, async () => {})
+
+    expect(router.stopEndsSession('session-1')).toBe(false)
+    await router.acquire({ identity: claudeIdentity('session-1'), fence: 1, spawnToken: 'spawn-1' })
+    expect(router.stopEndsSession('session-1')).toBe(true)
+  })
+
+  it("waits on the session's live owner to wind the Stop down, and on nothing with none", async () => {
+    const claude = adapterOf(vi.fn(async () => true))
+    claude.awaitStoppedRequestEnd = vi.fn(async () => undefined)
+    const codex = adapterOf(vi.fn(async () => false))
+    const router = new StructuredAgentSessionAdapterRouter({ claude, codex }, async () => {})
+
+    await router.awaitStoppedRequestEnd('session-1', 5)
+    expect(claude.awaitStoppedRequestEnd).not.toHaveBeenCalled()
+    await router.acquire({ identity: claudeIdentity('session-1'), fence: 1, spawnToken: 'spawn-1' })
+    await router.awaitStoppedRequestEnd('session-1', 5)
+    expect(claude.awaitStoppedRequestEnd).toHaveBeenCalledWith('session-1', 5)
+  })
+
+  it("answers a card's Cancel as the session's live owner does, and leaves it to cancelTurn with none", async () => {
+    const claude = adapterOf(vi.fn(async () => true))
+    claude.routePromptCancel = () => ({ kind: 'stop' })
+    const codex = adapterOf(vi.fn(async () => false))
+    const router = new StructuredAgentSessionAdapterRouter({ claude, codex }, async () => {})
+
+    expect(router.routePromptCancel({ sessionId: 'session-1', prompt: QUESTION })).toBeUndefined()
+    await router.acquire({ identity: claudeIdentity('session-1'), fence: 1, spawnToken: 'spawn-1' })
+    expect(router.routePromptCancel({ sessionId: 'session-1', prompt: QUESTION })).toEqual({
+      kind: 'stop'
+    })
+  })
 })
 
 describe('StructuredAgentSessionAdapterRouter.closeAll', () => {

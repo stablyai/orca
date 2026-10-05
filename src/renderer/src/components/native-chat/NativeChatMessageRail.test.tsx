@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { createRef, useImperativeHandle, useState } from 'react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatMessageRail } from './NativeChatMessageRail'
@@ -38,7 +39,55 @@ function retainClosingPopover(): ReturnType<typeof vi.spyOn> {
   })
 }
 
+const unloadedItems = [
+  { id: 'unloaded-prompt', text: 'Unloaded prompt', slotIndex: null, hasImages: false },
+  ...items
+]
+
+/** Stands in for the transcript: an unloaded pick stays pending until settled. */
+function PagingRail({ ref }: { ref?: React.Ref<{ settle: () => void }> }): React.JSX.Element {
+  const [pendingId, setPendingId] = useState<string | null>(null)
+  useImperativeHandle(ref, () => ({ settle: () => setPendingId(null) }), [])
+  return (
+    <NativeChatMessageRail
+      rail={{ items: unloadedItems, ticks: unloadedItems, activeId: null, visible: true }}
+      scrollRef={{ current: document.createElement('div') }}
+      onSelect={(item) => setPendingId(item.slotIndex === null ? item.id : null)}
+      pendingId={pendingId}
+    />
+  )
+}
+
 describe('message rail interaction', () => {
+  it('keeps the list open on an unloaded pick until its jump settles', async () => {
+    const user = userEvent.setup()
+    const paging = createRef<{ settle: () => void }>()
+    render(<PagingRail ref={paging} />)
+    await user.hover(screen.getByRole('button', { name: 'Your messages' }))
+    await screen.findByRole('dialog')
+
+    await user.click(screen.getByRole('button', { name: 'Unloaded prompt' }))
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Unloaded prompt' }).getAttribute('aria-busy')).toBe(
+      'true'
+    )
+
+    act(() => paging.current?.settle())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('closes a list held for a pending pick on Escape', async () => {
+    const user = userEvent.setup()
+    render(<PagingRail />)
+    await user.hover(screen.getByRole('button', { name: 'Your messages' }))
+    await screen.findByRole('dialog')
+    await user.click(screen.getByRole('button', { name: 'Unloaded prompt' }))
+    expect(screen.getByRole('dialog')).toBeTruthy()
+
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
   it('opens from the keyboard, reaches prompts, jumps, and restores focus', async () => {
     const user = userEvent.setup()
     const select = vi.fn()
@@ -314,6 +363,89 @@ describe('message rail interaction', () => {
       )
 
       expect(scrolled).toEqual([screen.getByRole('button', { name: 'Prompt 2' })])
+    })
+
+    // Pressing an item focuses it, which turns a hover preview interactive. Scrolling
+    // the lit row into view at that moment moved the list under the pointer, so the
+    // release landed on the list instead of the pressed item and the click was lost.
+    it('does not move the list or focus when a press makes a hover preview interactive', async () => {
+      const user = userEvent.setup()
+      const select = vi.fn()
+      render(
+        <NativeChatMessageRail
+          rail={{
+            items: overflowItems,
+            ticks: overflowItems,
+            activeId: overflowItems[19].id,
+            visible: true
+          }}
+          scrollRef={{ current: document.createElement('div') }}
+          onSelect={select}
+        />
+      )
+      await user.hover(screen.getByRole('button', { name: 'Your messages' }))
+      await screen.findByRole('dialog')
+      // Anti-vacuous: opening revealed the lit row.
+      expect(scrolled).toEqual([screen.getByRole('button', { name: 'Overflow prompt 19' })])
+      scrolled.length = 0
+
+      const older = screen.getByRole('button', { name: 'Overflow prompt 0' })
+      await user.pointer({ keys: '[MouseLeft>]', target: older })
+      expect(scrolled).toEqual([])
+      expect(document.activeElement).toBe(older)
+      await user.pointer({ keys: '[/MouseLeft]', target: older })
+      expect(select).toHaveBeenCalledWith(overflowItems[0])
+    })
+
+    it('does not move the list while a picked message pages in', async () => {
+      const { rerender } = render(
+        <NativeChatMessageRail
+          rail={{ items, ticks: items, activeId: items[2].id, visible: true }}
+          scrollRef={{ current: document.createElement('div') }}
+          onSelect={vi.fn()}
+        />
+      )
+      fireEvent.pointerEnter(screen.getByRole('button', { name: 'Your messages' }), {
+        pointerType: 'mouse'
+      })
+      await screen.findByRole('dialog')
+      // Anti-vacuous: opening revealed the lit row.
+      expect(scrolled).toEqual([screen.getByRole('button', { name: 'Prompt 2' })])
+      scrolled.length = 0
+
+      // A landed page gives every row a new slot while the pick is still pending.
+      const pagedItems = items.map((item) => ({ ...item, slotIndex: item.slotIndex + 5 }))
+      rerender(
+        <NativeChatMessageRail
+          rail={{ items: pagedItems, ticks: pagedItems, activeId: items[2].id, visible: true }}
+          scrollRef={{ current: document.createElement('div') }}
+          onSelect={vi.fn()}
+          pendingId={items[0].id}
+        />
+      )
+
+      expect(scrolled).toEqual([])
+    })
+
+    it('reveals the lit row when the list opens from the keyboard', async () => {
+      const user = userEvent.setup()
+      render(
+        <NativeChatMessageRail
+          rail={{
+            items: overflowItems,
+            ticks: overflowItems,
+            activeId: overflowItems[12].id,
+            visible: true
+          }}
+          scrollRef={{ current: document.createElement('div') }}
+          onSelect={vi.fn()}
+        />
+      )
+      screen.getByRole('button', { name: 'Your messages' }).focus()
+      await user.keyboard('{Enter}')
+      const lit = screen.getByRole('button', { name: 'Overflow prompt 12' })
+      await waitFor(() => expect(document.activeElement).toBe(lit))
+      expect(scrolled).toContain(lit)
     })
 
     it('leaves the panel alone when no message is lit', async () => {

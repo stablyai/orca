@@ -1,4 +1,13 @@
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { TERMINAL_SCROLLBACK_SESSION_HOMES } from '../../../../shared/workspace-session-terminal-buffers'
+
+/** The session fields a tab's scrollback can live in — typed off the same constant the cap
+ *  enumerates, so a third home is a compile error here until this resolver reads it. */
+export type TerminalScrollbackSessionHomes = Pick<
+  WorkspaceSessionState,
+  (typeof TERMINAL_SCROLLBACK_SESSION_HOMES)[number]
+>
 
 export type LeafScrollbackHomes = {
   /** `TerminalLayoutSnapshot.buffersByLeafId` — shared with peers through the remote projection. */
@@ -19,4 +28,15 @@ export function resolveLeafScrollbackBuffers({
     return sharedBuffers
   }
   return sharedBuffers ? { ...sharedBuffers, ...localOnly } : localOnly
+}
+
+/** Same read, addressed by tab over a session-shaped record (the store or a parsed session file). */
+export function resolveTabScrollbackBuffers(
+  session: Partial<TerminalScrollbackSessionHomes>,
+  tabId: string
+): Record<string, string> | undefined {
+  return resolveLeafScrollbackBuffers({
+    shared: session.terminalLayoutsByTabId?.[tabId],
+    localOnly: session.localOnlyScrollbackByTabId?.[tabId]
+  })
 }

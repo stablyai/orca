@@ -53,6 +53,14 @@ export function buildStreamUnsubscribe(
         }
       : null
   }
+  if (method === 'agentSession.subscribe') {
+    const sessionId = (params as { sessionId?: unknown }).sessionId
+    // The host keys each transcript stream by its frame id; without it every stream of the
+    // session on this socket would end.
+    return typeof sessionId === 'string' && requestId
+      ? { method: 'agentSession.unsubscribe', params: { sessionId, subscriptionId: requestId } }
+      : null
+  }
   if (method === 'nativeChat.subscribe') {
     const subscriptionId = (params as { subscriptionId?: unknown }).subscriptionId
     if (typeof subscriptionId === 'string') {
@@ -66,6 +74,22 @@ export function buildStreamUnsubscribe(
       : null
   }
   return null
+}
+
+/** Direct-connection unsubscribe for the stream opened by `requestId`, or null when none is required. */
+export function buildRequestStreamUnsubscribe(
+  method: string | undefined,
+  params: unknown,
+  requestId: string
+): { method: string; params: Record<string, unknown> } | null {
+  if (method !== 'terminal.subscribe') {
+    return buildStreamUnsubscribe(method, params, requestId)
+  }
+  const unsubscribeParams = buildTerminalUnsubscribeParams(params)
+  // Why: `requestId` names this exact request; hosts that predate it strip it and use the slot.
+  return unsubscribeParams
+    ? { method: 'terminal.unsubscribe', params: { ...unsubscribeParams, requestId } }
+    : null
 }
 
 export function buildTerminalUnsubscribeParams(

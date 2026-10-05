@@ -378,7 +378,7 @@ export function GeneralEditorSettingsSection({
         )}
         description={translate(
           'auto.components.settings.GeneralEditorSettingsSection.5f02e6fb21',
-          'Show local markdown review note controls in rich editor mode.'
+          'Show local markdown review note controls in markdown files.'
         )}
         keywords={['markdown', 'review', 'notes', 'annotations', 'agents']}
       >
@@ -389,7 +389,7 @@ export function GeneralEditorSettingsSection({
           )}
           description={translate(
             'auto.components.settings.GeneralEditorSettingsSection.f80603d293',
-            'Show local markdown note controls in rich editor mode and agent handoff actions.'
+            'Show markdown note controls in every markdown view and include markdown notes in agent handoff actions.'
           )}
           checked={settings.markdownReviewToolsEnabled}
           onChange={() =>

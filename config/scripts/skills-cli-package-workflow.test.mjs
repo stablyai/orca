@@ -14,8 +14,11 @@ describe('packaged skills CLI PR gates', () => {
 
     expect(job['runs-on']).toBe('windows-2022')
     expect(buildStep.run).toBe('pnpm run build:release:parallel')
-    expect(buildStep.env.ORCA_REUSE_WINDOWS_CLI_LAUNCHER).toBe('1')
-    expect(prepareStep.run).toBe('node config/scripts/ensure-native-runtime.mjs --runtime=electron')
+    expect(prepareStep.uses).toBe('./.github/actions/prepare-native-runtime')
+    expect(prepareStep.with).toEqual({
+      'native-runtime': 'electron',
+      'node-version': '${{ steps.deps.outputs.node-version }}'
+    })
     expect(packageStep.run).toContain('electron-builder')
     expect(packageStep.run).toContain('--dir')
     expect(packageStep.env.ORCA_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')

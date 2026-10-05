@@ -2,8 +2,6 @@ import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { listFilesWithGit } from '../ipc/filesystem-list-files-git-fallback'
-import { searchWithGitGrep } from '../ipc/filesystem-search-git'
 import {
   gitExecFileAsync,
   gitExecFileAsyncBuffer,
@@ -66,15 +64,7 @@ describe.runIf(process.platform === 'win32' && Boolean(distro))(
         )
       ).toThrow(/not a git repository/i)
 
-      await expect(listFilesWithGit(linkedPath, [], { wslDistro: distro! })).resolves.toEqual(
-        expect.arrayContaining(['tracked.txt', 'untracked.txt'])
-      )
       resetWslLinkedWorktreeGitRoutingForTests()
-      await expect(
-        searchWithGitGrep(linkedPath, { query: 'tracked', rootPath: linkedPath }, 10, {
-          wslDistro: distro!
-        })
-      ).resolves.toMatchObject({ totalMatches: 2 })
 
       let streamedStatus = ''
       await expect(

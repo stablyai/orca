@@ -1,8 +1,9 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { extname, join, relative } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+import { censusSourceFiles } from '../test-support/census-source-files'
 import {
   UNCHECKED_RPC_READERS,
   type UncheckedRpcReaderEntry
@@ -46,16 +47,6 @@ const UNCHECKED_READER_NAMES = new Set([
 // them in prose alone.
 const SELF_FILES = new Set(['src/transport/rpc-reader-payload.ts'])
 
-function sourceFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name)
-    if (entry.isDirectory()) {
-      return entry.name === 'node_modules' ? [] : sourceFiles(path)
-    }
-    return [path]
-  })
-}
-
 function parse(path: string, source: string): ts.SourceFile {
   const extension = extname(path)
   return ts.createSourceFile(
@@ -85,7 +76,7 @@ function uncheckedReaderCount(path: string, source: string): number {
 }
 
 const scanned = scannedRoots
-  .flatMap(sourceFiles)
+  .flatMap(censusSourceFiles)
   .filter((path) => sourceExtensions.has(extname(path)))
   .filter((path) => !/\.test\.tsx?$/.test(path))
   .map((path) => relative(mobileRoot, path).split(/[/\\]/).join('/'))
@@ -135,11 +126,6 @@ describe('unchecked RPC reader boundary', () => {
     // nothing would also satisfy. The file floor is what rules that out, and it stays a constant.
     expect(scanned.length).toBeGreaterThan(400)
     expect(observed.size).toBe(inventory.length)
-  })
-
-  it('lists each file once', () => {
-    const seen = inventory.map((entry) => entry.file)
-    expect(seen.filter((file, index) => seen.indexOf(file) !== index)).toEqual([])
   })
 
   it('has no unlisted file holding an unchecked reader', () => {

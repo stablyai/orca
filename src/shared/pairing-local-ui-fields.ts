@@ -15,6 +15,9 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   // Agent View filters and presentation belong to each client's host catalog and viewport.
   'agentsVisibleHostIds',
   'agentsFilterRepoIds',
+  'agentsHideWorkspacesFromOtherDevices',
+  'agentsHideAutomationGeneratedWorkspaces',
+  'agentsHideCliCreatedWorkspaces',
   'agentsShowChildAgents',
   'agentsCompactMode',
   'agentsShowSearch',

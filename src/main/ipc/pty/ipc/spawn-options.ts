@@ -1,12 +1,15 @@
+import { getAppEnvironment } from '../../../../shared/app-environment'
+import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/legacy-shared-config-dir'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
+import { PI_PROCESS_OWNER_ENV_KEYS } from '../../../pty/pi-process-owner-env'
 import { CODEX_HOME_ENV_KEYS } from '../host-env/codex-home'
 import {
   mergePtyEnvDeletions,
   removeCodexHomeDeletionRequests,
   getInheritedAgentHookEnvKeysToDelete,
-  getInheritedClaudeSessionStampEnvKeysToDelete
+  getInheritedAgentSessionStampEnvKeysToDelete
 } from '../host-env/pi-agent'
 import { promoteAgentTeamsShimPath, deleteRequestedEnvKeys } from '../host-env/path'
 import { beginPtySpawnForWorktree } from '../host-env/fresh-spawn-routing'
@@ -19,26 +22,40 @@ import {
 import { ptySizes } from '../delivery/visibility-state'
 import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
 import { getStartupTerminalIngressIntent } from '../../terminal-startup-color-query-replies'
+import { resolveConfiguredTerminalShellArgs } from '../configured-terminal-shell-args'
+import { withCodexTerminalServerIsolationEnv } from '../../../../shared/codex-terminal-server-isolation'
+import { planCodexNoDaemonLaunch } from '../../../pty/codex-no-daemon-launch-command'
 import type { PtyIpcSpawnState } from './spawn-state'
+import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-workspace-trust-spawn'
+import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 
+/** Carries deletions to provider-owned environments, including persistent older daemons. */
 export async function buildPtyIpcSpawnOptions(
   ctx: PtyIpcSpawnState
 ): Promise<{ isReattach: true } | null> {
   const args = ctx.args
-  ctx.spawnEnv = ctx.preAllocatedHandle
-    ? { ...ctx.env, ORCA_TERMINAL_HANDLE: ctx.preAllocatedHandle }
-    : ctx.env
+  // Why here: every provider (local, daemon, SSH relay, WSL) spawns from this env.
+  ctx.spawnEnv = withCodexTerminalServerIsolationEnv(
+    ctx.preAllocatedHandle ? { ...ctx.env, ORCA_TERMINAL_HANDLE: ctx.preAllocatedHandle } : ctx.env,
+    ctx.deps.getSettings?.()
+  )
   const envToDelete = ctx.claudeAuth?.stripAuthEnv
     ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
     : undefined
   ctx.combinedEnvToDelete = mergePtyEnvDeletions(
     envToDelete,
     args.envToDelete ?? [],
+    // Persistent daemons and older SSH hosts must not resurrect a parent Pi's ownership.
+    PI_PROCESS_OWNER_ENV_KEYS,
     ctx.agentTeamsEnvToDelete ?? [],
     // Why: disable old hosts without removing ORCA_REAL_* while their Windows shim remains on PATH.
     ctx.isDaemonHostSpawn || args.connectionId ? LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS : [],
     ctx.isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(ctx.spawnEnv) : [],
-    getInheritedClaudeSessionStampEnvKeysToDelete(ctx.spawnEnv),
+    // The daemon must judge its own inherited value; main may have a different config.
+    !args.connectionId && !ctx.isDaemonHostSpawn
+      ? getLegacyOpenCodeEnvKeysToDelete(ctx.spawnEnv, getAppEnvironment().getPath('userData'))
+      : [],
+    getInheritedAgentSessionStampEnvKeysToDelete(ctx.spawnEnv),
     ctx.skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
     // Why: the persistent daemon compares its own merged CODEX_HOME pair;
     // main cannot safely decide ownership for a process it may not parent.
@@ -48,6 +65,20 @@ export async function buildPtyIpcSpawnOptions(
     ctx.combinedEnvToDelete = removeCodexHomeDeletionRequests(ctx.combinedEnvToDelete)
   }
   deleteRequestedEnvKeys(ctx.spawnEnv, ctx.combinedEnvToDelete)
+  const openCodeLaunch = await prepareOpenCodePtyLaunch({
+    command: ctx.launchCommand,
+    agent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+    env: ctx.spawnEnv,
+    envToDelete: (ctx.combinedEnvToDelete ??= []),
+    cwd: ctx.cwd,
+    connectionId: args.connectionId,
+    isFreshLaunch: !ctx.preAdoptedStablePane && ctx.launchCommand !== undefined,
+    ...(ctx.codexSelectionTarget.runtime === 'wsl'
+      ? { wsl: { distro: ctx.expectedWslDistro ?? undefined } }
+      : {})
+  })
+  ctx.spawnEnv = openCodeLaunch.env
+  ctx.launchCommand = openCodeLaunch.command
   promoteAgentTeamsShimPath(ctx.spawnEnv, ctx.requestedAgentTeamsPath)
   ctx.spawnOptions = {
     cols: args.cols,
@@ -66,8 +97,17 @@ export async function buildPtyIpcSpawnOptions(
   if (ctx.combinedEnvToDelete) {
     ctx.spawnOptions.envToDelete = ctx.combinedEnvToDelete
   }
-  if (ctx.launchCommand !== undefined) {
-    ctx.spawnOptions.command = ctx.launchCommand
+  const noDaemonLaunch = planCodexNoDaemonLaunch({
+    command: ctx.launchCommand,
+    executesOnThisHost: !args.connectionId && ctx.codexSelectionTarget.runtime !== 'wsl',
+    shellOverride: ctx.effectiveShellOverride,
+    env: ctx.spawnEnv,
+    envToDelete: ctx.combinedEnvToDelete,
+    cwd: ctx.cwd
+  })
+  const launchCommand = noDaemonLaunch ? await noDaemonLaunch : ctx.launchCommand
+  if (launchCommand !== undefined) {
+    ctx.spawnOptions.command = launchCommand
   }
   if (args.commandDelivery !== undefined) {
     ctx.spawnOptions.commandDelivery = args.commandDelivery
@@ -80,6 +120,22 @@ export async function buildPtyIpcSpawnOptions(
   }
   if (args.worktreeId !== undefined) {
     ctx.spawnOptions.worktreeId = args.worktreeId
+  }
+  const trustWrite = applyAgentWorkspaceTrustToSpawn({
+    launchAgent: args.launchAgent,
+    worktreeId: args.worktreeId,
+    cwd: ctx.cwd,
+    store: ctx.deps.store,
+    isFreshLaunch: !ctx.preAdoptedStablePane && ctx.launchCommand !== undefined,
+    settings: ctx.deps.getSettings?.(),
+    env: ctx.spawnEnv,
+    claudeAuth: ctx.claudeAuth,
+    wslDistro: ctx.expectedWslDistro,
+    connectionId: args.connectionId ?? null,
+    spawnOptions: ctx.spawnOptions
+  })
+  if (trustWrite) {
+    await trustWrite
   }
   if (ctx.reservationPaneKey) {
     ctx.spawnOptions.paneKey = ctx.reservationPaneKey
@@ -94,6 +150,12 @@ export async function buildPtyIpcSpawnOptions(
   if (ctx.effectiveShellOverride !== undefined) {
     ctx.spawnOptions.shellOverride = ctx.effectiveShellOverride
   }
+  ctx.spawnOptions.terminalShellArgs = resolveConfiguredTerminalShellArgs({
+    connectionId: args.connectionId,
+    requestedShellOverride: args.shellOverride,
+    launchCommand: ctx.launchCommand,
+    settings: ctx.deps.getSettings?.()
+  })
   ctx.hadSessionSizeBeforeAttach =
     ctx.effectiveSessionAppId !== undefined ? ptySizes.has(ctx.effectiveSessionAppId) : false
   ctx.sessionSizeBeforeAttach =

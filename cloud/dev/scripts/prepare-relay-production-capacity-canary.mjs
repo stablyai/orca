@@ -136,12 +136,18 @@ export async function prepareProductionCapacityCell(config, overrides = {}) {
   const desiredState = config.mode === 'isolate' ? 'migration-only' : 'general'
   const membership = membershipWithStates(before.selector, { [config.cellId]: desiredState })
   const result = await applyExactAdmissionSelector(post, membership, {
-    expectedCurrentSelector: before.selector
+    expectedCurrentSelector: before.selector,
+    // The stamp that tells the director this cell is parked for a restart rather
+    // than held back as capacity, so it may re-place the hosts still on it. The
+    // activate branch omits it, and moving to 'general' clears it in the same
+    // statement that writes the state.
+    ...(config.mode === 'isolate' ? { rollIsolatedCells: [config.cellId] } : {})
   })
   return {
     changed: result.changed,
     generation: result.selector.generation,
-    admissionState: desiredState
+    admissionState: desiredState,
+    rollIsolated: config.mode === 'isolate'
   }
 }
 

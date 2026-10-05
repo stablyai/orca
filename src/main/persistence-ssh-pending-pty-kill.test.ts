@@ -1,8 +1,9 @@
+import { closeTestStores, testState, createStore } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { testState, createStore } from './persistence-test-harness'
+
 import {
   MAX_SSH_PENDING_PTY_KILLS_PER_TARGET,
   SSH_PENDING_PTY_KILL_TTL_MS
@@ -27,7 +28,8 @@ describe('Store SSH pending PTY kills', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
@@ -45,6 +47,19 @@ describe('Store SSH pending PTY kills', () => {
     const reloaded = await createStore()
     expect(reloaded.getSshRemotePtyKillIntents('ssh-1', NOW)).toEqual([
       { ptyId: 'pty-1', intent: { requestedAt: NOW, incarnationId: 'inc-a', attempts: 0 } }
+    ])
+  })
+
+  it('keeps an epoch-scoped intent with no incarnation across a restart, and drops a legacy one', async () => {
+    const store = await createStore()
+    for (const ptyId of ['pty2:epoch-a:1', 'pty-2']) {
+      store.recordSshRemotePtyKillIntent('ssh-1', ptyId, { requestedAt: NOW, attempts: 0 })
+    }
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getSshRemotePtyKillIntents('ssh-1', NOW)).toEqual([
+      { ptyId: 'pty2:epoch-a:1', intent: { requestedAt: NOW, attempts: 0 } }
     ])
   })
 

@@ -57,12 +57,18 @@ export function finalizeModelDiscoveryOutput(
     }
     return { success: false, error: `${spec.label} returned no available models.` }
   }
+  if (spec.id === 'opencode' || spec.id === 'opencode2') {
+    const configuredDefault = spec.models.find((model) => model.id === 'default')
+    if (configuredDefault && !models.some((model) => model.id === 'default')) {
+      models = [configuredDefault, ...models]
+    }
+  }
   // A sentinel model in the static spec (for example `default`) means the CLI
   // should keep its configured provider even when discovery lists concrete models.
   const defaultModelId =
     spec.defaultModelId === 'default' || models.some((model) => model.id === spec.defaultModelId)
-    ? spec.defaultModelId
-    : models[0].id
+      ? spec.defaultModelId
+      : models[0].id
   return staticModelDiscoveryResult(spec, models, defaultModelId, 'probe')
 }
 
@@ -85,7 +91,8 @@ export function planModelDiscovery(
       binary: command.binary,
       args: [...command.prefixArgs, ...modelDiscovery.args],
       stdinPayload: modelDiscovery.stdinPayload ?? null,
-      label: spec.label
+      label: spec.label,
+      ...(command.env ? { env: command.env } : {})
     }
   }
 }

@@ -6,7 +6,7 @@ import path from 'node:path'
 
 import {
   buildSearchBaseRefsArgv,
-  getDefaultBaseRef,
+  getBaseRefDefault,
   getBranchConflictKind,
   getRemoteCount,
   parseAndFilterSearchRefDetails,
@@ -537,7 +537,7 @@ describe('searchBaseRefs (widened glob)', () => {
   })
 })
 
-describe('getDefaultBaseRef (regression — unchanged behavior)', () => {
+describe('getBaseRefDefault (regression — unchanged behavior)', async () => {
   let tmpDir: string
 
   beforeEach(() => {
@@ -549,52 +549,69 @@ describe('getDefaultBaseRef (regression — unchanged behavior)', () => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('returns origin/main when both origin/main and upstream/main exist (origin wins)', () => {
+  it('returns origin/main when both origin/main and upstream/main exist (origin wins)', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'origin/main', sha)
     createRemoteRef(tmpDir, 'upstream/main', sha)
 
-    const result = getDefaultBaseRef(tmpDir)
+    const result = await getBaseRefDefault(tmpDir)
 
     expect(result).toBe('origin/main')
   })
 
-  it('returns the target of origin/HEAD when set', () => {
+  it('returns the target of origin/HEAD when set', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'origin/main', sha)
     git(tmpDir, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'])
 
-    const result = getDefaultBaseRef(tmpDir)
+    const result = await getBaseRefDefault(tmpDir)
 
     expect(result).toBe('origin/main')
   })
 
-  it('falls through from a stale origin/HEAD target to an existing primary ref', () => {
+  it('falls through from a stale origin/HEAD target to an existing primary ref', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'origin/main', sha)
     git(tmpDir, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/master'])
 
-    const result = getDefaultBaseRef(tmpDir)
+    const result = await getBaseRefDefault(tmpDir)
 
     expect(result).toBe('origin/main')
   })
 
-  it('falls through from a stale origin/HEAD primary target to another existing default ref', () => {
+  it('falls through from a stale origin/HEAD primary target to another existing default ref', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'origin/master', sha)
     git(tmpDir, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'])
 
-    const result = getDefaultBaseRef(tmpDir)
+    const result = await getBaseRefDefault(tmpDir)
 
     expect(result).toBe('origin/master')
   })
 
-  it('does NOT fall through to upstream/main when origin/* is absent', () => {
+  it('resolves symbolic chains to a default branch outside the primary candidates', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/release/stable', sha)
+    git(tmpDir, ['symbolic-ref', 'refs/remotes/origin/alias', 'refs/remotes/origin/release/stable'])
+    git(tmpDir, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/alias'])
+
+    await expect(getBaseRefDefault(tmpDir)).resolves.toBe('origin/release/stable')
+  })
+
+  it('ignores descendants of primary candidates', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/main/topic', sha)
+    createRemoteRef(tmpDir, 'origin/master', sha)
+
+    await expect(getBaseRefDefault(tmpDir)).resolves.toBe('origin/master')
+  })
+
+  it('does NOT fall through to upstream/main when origin/* is absent', async () => {
     // Why: default probe order is origin-only by design; upstream-aware defaulting is deferred.
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'upstream/main', sha)
 
-    const result = getDefaultBaseRef(tmpDir)
+    const result = await getBaseRefDefault(tmpDir)
 
     // initRepo creates a local `main`, so with no origin/* we expect it — not `upstream/main`.
     expect(result).toBe('main')
@@ -603,53 +620,39 @@ describe('getDefaultBaseRef (regression — unchanged behavior)', () => {
 })
 
 describe('resolveDefaultBaseRefViaExec', () => {
-  it('falls through from a stale origin/HEAD target to the probe list', async () => {
+  it('resolves the primary fallback ordering with one exact ref query', async () => {
     const calls: string[][] = []
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       calls.push(argv)
-      if (argv[0] === 'symbolic-ref') {
-        return { stdout: 'refs/remotes/origin/master\n' }
+      return {
+        stdout: 'refs/heads/main\0\nrefs/remotes/origin/master\0\nrefs/remotes/origin/main\0\n'
       }
-      if (argv[0] === 'rev-parse' && argv.at(-1) === 'refs/remotes/origin/main') {
-        return { stdout: 'main-sha\n' }
-      }
-      throw new Error('missing ref')
     }
 
     await expect(resolveDefaultBaseRefViaExec(exec)).resolves.toBe('origin/main')
-
     expect(calls).toEqual([
-      ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
-      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/master'],
-      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main']
+      [
+        'for-each-ref',
+        '--format=%(refname)%00%(symref)',
+        'refs/remotes/origin/HEA[D]',
+        'refs/remotes/origin/mai[n]',
+        'refs/remotes/origin/maste[r]',
+        'refs/heads/mai[n]',
+        'refs/heads/maste[r]'
+      ]
     ])
   })
 
-  it('verifies origin/HEAD even when it points at origin/main', async () => {
-    const calls: string[][] = []
-    const exec = async (argv: string[]): Promise<{ stdout: string }> => {
-      calls.push(argv)
-      if (argv[0] === 'symbolic-ref') {
-        return { stdout: 'refs/remotes/origin/main\n' }
-      }
-      if (argv[0] === 'rev-parse' && argv.at(-1) === 'refs/remotes/origin/master') {
-        return { stdout: 'master-sha\n' }
-      }
-      throw new Error('missing ref')
-    }
-
-    await expect(resolveDefaultBaseRefViaExec(exec)).resolves.toBe('origin/master')
-
-    expect(calls).toEqual([
-      ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
-      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main'],
-      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main'],
-      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/master']
-    ])
+  it('returns null if the host cannot read the ref table', async () => {
+    await expect(
+      resolveDefaultBaseRefViaExec(async () => {
+        throw new Error('unavailable host')
+      })
+    ).resolves.toBeNull()
   })
 })
 
-describe('getRemoteCount', () => {
+describe('getRemoteCount', async () => {
   let tmpDir: string
 
   beforeEach(() => {

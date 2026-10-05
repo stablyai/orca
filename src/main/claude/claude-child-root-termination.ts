@@ -19,6 +19,9 @@ type RootTerminationInput = {
  * nothing. A probe here could only let an unreadable process table cost the tree
  * the one fallback that still works once every table read has failed.
  *
+ * On POSIX the root is the provider supervisor, killed only after its own stop had
+ * its whole bound; Claude, in its own group, is reached by the descendant kill.
+ *
  * False means no signal was sent, because the root had already left.
  */
 export function terminateClaudeRoot(input: RootTerminationInput): boolean {

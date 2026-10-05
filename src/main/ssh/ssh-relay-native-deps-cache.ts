@@ -41,8 +41,9 @@ export const RELAY_NATIVE_DEPS_CACHE_DIR_NAME = 'native'
 /** Written last. Its presence is the only thing that makes an entry linkable. */
 export const RELAY_NATIVE_DEPS_CACHE_COMPLETE_NAME = '.deps-complete'
 
-/** Hidden so the entry listing skips it, and swept by age so a crashed pass drains. */
-export const RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX = '.gc-tombstone.'
+/** Older clients sweep the legacy prefix by mtime without checking references. */
+export const RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX = '.native-gc-'
+export const LEGACY_RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX = '.gc-tombstone.'
 
 /**
  * Bump when the remote install starts mutating the installed tree in a way the hashed inputs

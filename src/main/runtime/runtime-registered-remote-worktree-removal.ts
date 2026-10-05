@@ -3,6 +3,7 @@ import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { cleanupUnusedWorktreePushTargetRemoteSsh } from '../ipc/worktree-remote'
+import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
 import { gateRemovalWhereArchiveHookCannotRun } from '../worktree-archive-hook-gate'
@@ -54,6 +55,8 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
     rawResult = await (Object.keys(removeOptions).length > 0
       ? provider.removeWorktree(registeredWorktree.path, args.force, removeOptions)
       : provider.removeWorktree(registeredWorktree.path, args.force))
+    // Why: the worktree is unlisted from here on; a scan that began before the removal is overtaken.
+    runWorktreeChangeInvalidators(repo.id)
     completed = true
   } finally {
     await gate.finish(completed)

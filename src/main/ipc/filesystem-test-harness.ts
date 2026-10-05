@@ -60,6 +60,7 @@ export const recordCrashBreadcrumbMock: IpcMock = vi.fn()
 export const promoteLocalDownloadedFolderMock: IpcMock = vi.fn()
 
 export const electronMock = {
+  app: { getPath: () => '/orca-test-user-data' },
   BrowserWindow: { fromWebContents: fromWebContentsMock },
   dialog: { showSaveDialog: showSaveDialogMock, showOpenDialog: showOpenDialogMock },
   ipcMain: { handle: handleMock },
@@ -237,6 +238,36 @@ const ALL_MOCKS = [
   pullRequestLinkedIssueMock
 ].flatMap(collectMocks)
 
+/** A FileHandle double over `content`: positional reads copy from it, and stat reports its size. */
+export function localFileHandleMock(
+  content: Buffer,
+  { isFile = true, size = content.byteLength }: { isFile?: boolean; size?: number } = {}
+): Record<string, unknown> {
+  return {
+    stat: vi.fn(async () => ({
+      size,
+      isFile: () => isFile,
+      isDirectory: () => false,
+      mtimeMs: 123,
+      dev: 1,
+      ino: 2,
+      birthtimeMs: 3
+    })),
+    read: vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
+      const bytesRead = content.copy(
+        buffer,
+        offset,
+        position,
+        Math.min(position + length, content.length)
+      )
+      return { bytesRead, buffer }
+    }),
+    write: vi.fn().mockResolvedValue(undefined),
+    writeFile: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn()
+  }
+}
+
 /** Resets every filesystem IPC mock and reinstalls the defaults every suite starts from. */
 export function resetFilesystemIpcMocks(): void {
   handlers.clear()
@@ -272,14 +303,6 @@ export function resetFilesystemIpcMocks(): void {
   statMock.mockResolvedValue({ size: 10, isDirectory: () => false, mtimeMs: 123 })
   renameMock.mockResolvedValue(undefined)
   rmMock.mockResolvedValue(undefined)
-  openMock.mockResolvedValue({
-    read: vi.fn(async (buffer: Buffer) => {
-      buffer.fill(0x61)
-      return { bytesRead: buffer.length, buffer }
-    }),
-    write: vi.fn().mockResolvedValue(undefined),
-    writeFile: vi.fn().mockResolvedValue(undefined),
-    close: vi.fn()
-  })
+  openMock.mockResolvedValue(localFileHandleMock(Buffer.from('a'.repeat(10))))
   lstatMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
 }

@@ -6,8 +6,8 @@ import type { MobileClipboardImageResizer } from './mobile-clipboard-image-downs
  *
  * `expo-image-manipulator` is a native module with no browser counterpart, and the temp file its
  * native path writes exists to work around a loader that cannot decode a large base64 data URI —
- * a constraint a browser does not have. The shell's `img-src 'self' data:` admits the source, so
- * the decode is one `<img>` and the encode is `toDataURL`, with no file anywhere in it.
+ * a constraint a browser does not have. The shell's `img-src 'self' data: https:` admits the
+ * source, so the decode is one `<img>` and the encode is `toDataURL`, with no file anywhere in it.
  *
  * PNG out, as before: the caller's downscale loop measures base64 length and retries, so a format
  * that compressed differently would converge somewhere else, and the terminal paste that follows

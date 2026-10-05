@@ -1,5 +1,5 @@
 import { memo, useState } from 'react'
-import { Image, Pressable, Text, View } from 'react-native'
+import { Image, Platform, Pressable, Text, View } from 'react-native'
 import { openExternalLink } from '../../platform/external-link'
 import { Check, CornerDownRight, ExternalLink, Pencil, Trash2, Undo2 } from 'lucide-react-native'
 import type {
@@ -116,7 +116,10 @@ export const PRCommentCard = memo(function PRCommentCard({
   return (
     <View style={[styles.card, isReply && styles.reply, comment.isResolved && styles.cardResolved]}>
       <View style={styles.header}>
-        {comment.authorAvatarUrl ? (
+        {/* Skipped inside the shell's page. The reason it was added for has gone: img-src now
+            admits https:, so a provider avatar would load rather than be refused. The skip is now
+            a capability the page is missing, tracked with the other ruling-26 items. */}
+        {comment.authorAvatarUrl && Platform.OS !== 'web' ? (
           <Image source={{ uri: comment.authorAvatarUrl }} style={styles.avatar} />
         ) : (
           <View style={styles.avatar} />

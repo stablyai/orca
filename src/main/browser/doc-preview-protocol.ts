@@ -94,7 +94,12 @@ export async function handleDocPreviewRequest(request: Request): Promise<Respons
       headers: { 'Content-Type': 'text/plain; charset=utf-8' }
     })
   }
-  return new Response(new Uint8Array(outcome.bytes), {
+  const bytes = outcome.bytes
+  const body =
+    bytes.buffer instanceof ArrayBuffer
+      ? new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+      : new Uint8Array(bytes)
+  return new Response(body, {
     status: 200,
     headers: {
       'Content-Type': outcome.contentType,

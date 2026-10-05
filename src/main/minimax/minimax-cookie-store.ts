@@ -3,6 +3,7 @@ import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { hardenExistingSecureFile, writeSecureFile } from '../../shared/secure-file'
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 
 const MINIMAX_COOKIE_FILE = 'minimax-session-cookie.enc'
 const COOKIE_ENVELOPE_PREFIX = 'orca-minimax-cookie:v1:'
@@ -94,6 +95,30 @@ function readLegacyCookie(raw: Buffer): string {
     return plaintext
   }
   throw new Error('MiniMax session cookie could not be decrypted')
+}
+
+/**
+ * How the stored cookie is protected, or null when none is stored.
+ *
+ * Envelope kind where there is one; otherwise the same sniff the legacy reader uses, so
+ * a pre-envelope file is reported as what it actually is. No decrypt, so this is safe to
+ * call from a status handler without provoking a keychain prompt.
+ */
+export function getMiniMaxSessionCookieProtection(): SecretAtRestProtection | null {
+  const cookiePath = getMiniMaxCookiePath()
+  if (!existsSync(cookiePath)) {
+    return null
+  }
+  try {
+    const raw = readFileSync(cookiePath)
+    const envelope = decodeCookieEnvelope(raw)
+    if (envelope) {
+      return envelope.kind === 'plaintext' ? 'plaintext' : 'sealed'
+    }
+    return looksLikeCookieHeader(raw.toString('utf8')) ? 'plaintext' : 'sealed'
+  } catch {
+    return null
+  }
 }
 
 export function hasMiniMaxSessionCookie(): boolean {

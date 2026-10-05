@@ -9,6 +9,8 @@ const MAX_PENDING_SCROLL_MARKS = 16
 export type ProgrammaticScrollMarks = {
   /** Register the target offset of a scroll write this code is about to make. */
   mark: (targetOffset: number) => void
+  /** Recognize a queued landing before its scroll event updates bookkeeping. */
+  hasPendingScrollOffset: (scrollOffset: number, maxScrollOffset: number) => boolean
   /**
    * Classify a scroll event: true when it matches a registered write (or its
    * browser-clamped landing spot). Idempotent per Event so multiple listeners
@@ -51,6 +53,10 @@ export function createProgrammaticScrollMarks(): ProgrammaticScrollMarks {
         pendingTargets.shift()
       }
     },
+    hasPendingScrollOffset: (scrollOffset, maxScrollOffset) =>
+      pendingTargets.some((targetOffset) =>
+        matchesTarget(targetOffset, scrollOffset, maxScrollOffset)
+      ),
     consume: (event: Event, scrollOffset: number, maxScrollOffset: number): boolean => {
       const cached = classifiedEvents.get(event)
       if (cached !== undefined) {

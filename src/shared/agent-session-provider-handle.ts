@@ -1,12 +1,36 @@
 /**
  * Durable provider handle chain for an agent session.
  *
- * Handles are keyed per provider because the two structured lanes disagree about what
- * identifies a conversation. Claude's session id is the identity root and its leaf uuid is a
- * branch cursor; Codex's thread id is the whole key. Resumes extend the chain, forks start a new
- * identity root, and the chain records which is which so a fork is never presented as a resume.
+ * A handle names one provider conversation without saying what the provider means by it. Shared
+ * code reads only its transport, its agent, and the provider's own conversation id; anything else
+ * the provider needs to resume is `resumeCursor`, which only that provider's adapter reads. How a
+ * handle is stored and sent lives in agent-session-provider-handle-encoding.ts.
+ *
+ * Resumes extend the chain, forks start a new identity root, and the chain records which is which
+ * so a fork is never presented as a resume. A creation the provider never saved can be superseded
+ * by a new creation, which takes its place instead of standing beside it: the unsaved handle was
+ * never a conversation to continue.
  */
 
+import type { AgentType } from './agent-status-types'
+import {
+  agentSessionProviderHandleKey,
+  agentSessionProviderHandleRoot,
+  decodePersistedAgentSessionProviderHandle,
+  encodePersistedAgentSessionProviderHandle,
+  isAgentSessionProviderHandle,
+  isAgentSessionProviderHandleInNamespace,
+  isAgentSessionProviderHandleKeyFor,
+  type PersistedAgentSessionProviderHandle
+} from './agent-session-provider-handle-encoding'
+
+export {
+  agentSessionProviderHandleKey,
+  agentSessionProviderHandleRoot,
+  isAgentSessionProviderHandle
+} from './agent-session-provider-handle-encoding'
+
+/** The structured lanes this build drives. A record names one; a handle never does. */
 export const AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS = ['claude', 'codex'] as const
 
 export type AgentSessionHandleProvider = (typeof AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS)[number]
@@ -16,9 +40,31 @@ export function isAgentSessionHandleProvider(value: unknown): value is AgentSess
   return value === 'claude' || value === 'codex'
 }
 
-export type AgentSessionProviderHandle =
-  | { provider: 'claude'; sessionId: string; leafUuid: string | null }
-  | { provider: 'codex'; threadId: string }
+/** The protocol whose id space a handle's `nativeId` lives in. Open: a new transport adds no arm. */
+export type AgentSessionProviderTransport = 'claude-sdk' | 'codex-app-server' | (string & {})
+
+export type AgentSessionProviderHandle = {
+  /**
+   * The id space `nativeId` was minted in, which can differ from the agent's current transport. A
+   * mismatch with the running build makes the chat not resumable there, never the record unreadable.
+   */
+  transport: AgentSessionProviderTransport
+  /** Orca agent whose binary resumes the conversation; one transport serves many agents. */
+  agent: AgentType
+  /** The provider's own conversation id: Claude's session id, Codex's thread id. */
+  nativeId: string
+  /**
+   * Adapter-owned resume position (Claude: transcript leaf). Shared code never parses it; it is never
+   * identity, except inside Claude's legacy handle key.
+   */
+  resumeCursor?: string
+}
+
+/** Which provider a handle belongs to. Records and leases compare this, never the handle's data. */
+export type AgentSessionProviderHandleNamespace = Pick<
+  AgentSessionProviderHandle,
+  'transport' | 'agent'
+>
 
 export type AgentSessionProviderHandleOrigin = 'created' | 'adopted' | 'resumed' | 'forked'
 
@@ -32,6 +78,8 @@ export type AgentSessionProviderHandleLink = {
   observedAt: number
   /** Key of the link a fork was seeded from. Only set when `origin` is `forked`. */
   forkedFromKey?: string
+  /** Key of the unsaved creation this creation replaced. Only set when `origin` is `created`. */
+  supersedesKey?: string
 }
 
 export type AgentSessionProviderHandleChain = readonly AgentSessionProviderHandleLink[]
@@ -39,54 +87,19 @@ export type AgentSessionProviderHandleChain = readonly AgentSessionProviderHandl
 /** Bounded so one session cannot grow an unbounded persisted record. */
 export const MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS = 256
 
-const MAX_HANDLE_FIELD_LENGTH = 512
 const LINK_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
 
-function isHandleField(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= MAX_HANDLE_FIELD_LENGTH &&
-    value === value.trim()
-  )
-}
-
-export function isAgentSessionProviderHandle(value: unknown): value is AgentSessionProviderHandle {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  const handle = value as Partial<AgentSessionProviderHandle> & Record<string, unknown>
-  if (handle.provider === 'claude') {
-    return (
-      isHandleField(handle.sessionId) &&
-      (handle.leafUuid === null || isHandleField(handle.leafUuid))
-    )
-  }
-  return handle.provider === 'codex' && isHandleField(handle.threadId)
-}
-
-/** Stable string identity for one handle. Two handles with the same key name the same writer target. */
-export function agentSessionProviderHandleKey(handle: AgentSessionProviderHandle): string {
-  return handle.provider === 'claude'
-    ? `claude:${JSON.stringify([handle.sessionId, handle.leafUuid])}`
-    : `codex:${JSON.stringify(handle.threadId)}`
-}
-
-/**
- * Identity root: the part that a resume must preserve. A resume that changes the root is a fork,
- * whatever the provider called it.
- */
-export function agentSessionProviderHandleRoot(handle: AgentSessionProviderHandle): string {
-  return handle.provider === 'claude'
-    ? `claude:${JSON.stringify(handle.sessionId)}`
-    : `codex:${JSON.stringify(handle.threadId)}`
-}
-
+/** Every field, resume cursor included: a resume that only moved the adapter's state is still news. */
 export function agentSessionProviderHandlesEqual(
   left: AgentSessionProviderHandle,
   right: AgentSessionProviderHandle
 ): boolean {
-  return agentSessionProviderHandleKey(left) === agentSessionProviderHandleKey(right)
+  return (
+    left.transport === right.transport &&
+    left.agent === right.agent &&
+    left.nativeId === right.nativeId &&
+    left.resumeCursor === right.resumeCursor
+  )
 }
 
 export function agentSessionProviderHandleChainHead(
@@ -109,6 +122,10 @@ export function isAgentSessionProviderHandleLink(
     return false
   }
   const link = value as Partial<AgentSessionProviderHandleLink>
+  if (!isAgentSessionProviderHandle(link.handle)) {
+    return false
+  }
+  const handle = link.handle
   const originValid =
     link.origin === 'created' ||
     link.origin === 'adopted' ||
@@ -117,14 +134,15 @@ export function isAgentSessionProviderHandleLink(
   return (
     typeof link.linkId === 'string' &&
     LINK_ID_PATTERN.test(link.linkId) &&
-    isAgentSessionProviderHandle(link.handle) &&
     originValid &&
     Number.isSafeInteger(link.mintedAtFence) &&
     (link.mintedAtFence as number) >= 0 &&
     Number.isSafeInteger(link.observedAt) &&
     (link.origin === 'forked'
-      ? isHandleField(link.forkedFromKey)
-      : link.forkedFromKey === undefined)
+      ? isAgentSessionProviderHandleKeyFor(handle, link.forkedFromKey)
+      : link.forkedFromKey === undefined) &&
+    (link.supersedesKey === undefined ||
+      (link.origin === 'created' && isAgentSessionProviderHandleKeyFor(handle, link.supersedesKey)))
   )
 }
 
@@ -171,11 +189,14 @@ export function appendAgentSessionProviderHandleLink(
     }
     return [link]
   }
-  if (link.handle.provider !== head.handle.provider) {
+  if (!isAgentSessionProviderHandleInNamespace(link.handle, head.handle)) {
     throw new Error('agent_session_provider_handle_provider_mismatch')
   }
   if (link.mintedAtFence < head.mintedAtFence) {
     throw new Error('agent_session_provider_handle_stale_fence')
+  }
+  if (link.origin === 'created' && link.supersedesKey !== undefined) {
+    return supersedeUnsavedCreation(head, link)
   }
   if (link.origin === 'created' || link.origin === 'adopted') {
     throw new Error('agent_session_provider_handle_invalid')
@@ -213,4 +234,66 @@ export function appendAgentSessionProviderHandleLink(
     throw new Error('agent_session_provider_handle_chain_overflow')
   }
   return [...chain, link]
+}
+
+/**
+ * Replace the chain's only link, a creation the provider proved it never saved, with the creation
+ * that took its place. Every other head names a conversation the provider held (a resume or fork
+ * proved it, an adoption imported it), so only a `created` head can be superseded, and only by a
+ * new identity root that names it.
+ */
+function supersedeUnsavedCreation(
+  head: AgentSessionProviderHandleLink,
+  link: AgentSessionProviderHandleLink
+): AgentSessionProviderHandleLink[] {
+  if (
+    head.origin !== 'created' ||
+    link.supersedesKey !== agentSessionProviderHandleKey(head.handle) ||
+    agentSessionProviderHandleRoot(link.handle) === agentSessionProviderHandleRoot(head.handle) ||
+    link.linkId === head.linkId
+  ) {
+    throw new Error('agent_session_provider_handle_invalid')
+  }
+  // Why: in place, so a chat reopened unused across many restarts never grows toward the cap.
+  return [link]
+}
+
+// ─── Stored form ────────────────────────────────────────────────────────────
+
+/** A link as a record row stores it: only the handle has a stored form of its own. */
+export type PersistedAgentSessionProviderHandleLink = Omit<
+  AgentSessionProviderHandleLink,
+  'handle'
+> & {
+  handle: PersistedAgentSessionProviderHandle
+}
+
+export function encodePersistedAgentSessionProviderHandleChain(
+  chain: AgentSessionProviderHandleChain
+): PersistedAgentSessionProviderHandleLink[] {
+  return chain.map((link) => ({
+    ...link,
+    handle: encodePersistedAgentSessionProviderHandle(link.handle)
+  }))
+}
+
+/** The in-memory chain a stored one names, or null when any link or the chain itself is invalid. */
+export function decodePersistedAgentSessionProviderHandleChain(
+  value: unknown
+): AgentSessionProviderHandleLink[] | null {
+  if (!Array.isArray(value) || value.length > MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS) {
+    return null
+  }
+  const decoded: unknown[] = []
+  for (const link of value) {
+    const handle =
+      typeof link === 'object' && link !== null && 'handle' in link
+        ? decodePersistedAgentSessionProviderHandle(link.handle)
+        : null
+    if (!handle) {
+      return null
+    }
+    decoded.push({ ...link, handle })
+  }
+  return isAgentSessionProviderHandleChain(decoded) ? decoded : null
 }

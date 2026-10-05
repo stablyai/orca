@@ -158,17 +158,18 @@ output "relay_gce_cell_backend_services" {
 }
 
 output "relay_gce_cell_deployments" {
+  # try: a cell declared before its topology apply has no resources, and console evaluates this output.
   value = {
     for cell_id, cell in var.relay_gce_cells : cell_id => {
       origin                      = local.relay_gce_cell_urls[cell_id]
       region                      = cell.region
       zone                        = cell.zone
-      mig_name                    = google_compute_instance_group_manager.relay_gce_cell[cell_id].name
-      instance_group              = google_compute_instance_group_manager.relay_gce_cell[cell_id].instance_group
-      backend_name                = google_compute_backend_service.relay_gce_cell[cell_id].name
-      backend_id                  = google_compute_backend_service.relay_gce_cell[cell_id].id
+      mig_name                    = try(google_compute_instance_group_manager.relay_gce_cell[cell_id].name, null)
+      instance_group              = try(google_compute_instance_group_manager.relay_gce_cell[cell_id].instance_group, null)
+      backend_name                = try(google_compute_backend_service.relay_gce_cell[cell_id].name, null)
+      backend_id                  = try(google_compute_backend_service.relay_gce_cell[cell_id].id, null)
       url_map_name                = google_compute_url_map.relay_gce[0].name
-      generation_identity         = google_compute_instance_template.relay_gce_cell[cell_id].self_link
+      generation_identity         = try(google_compute_instance_template.relay_gce_cell[cell_id].self_link, null)
       image                       = cell.image
       capacity_requests           = cell.capacity_requests
       database_pool_max           = cell.database_pool_max
@@ -177,7 +178,7 @@ output "relay_gce_cell_deployments" {
       initially_enabled           = cell.initially_enabled
       fenced                      = contains(var.relay_gce_fenced_cells, cell_id)
       desired_target_size         = local.relay_gce_cell_target_sizes[cell_id]
-      target_size                 = google_compute_instance_group_manager.relay_gce_cell[cell_id].target_size
+      target_size                 = try(google_compute_instance_group_manager.relay_gce_cell[cell_id].target_size, null)
     }
   }
   description = "Non-secret candidate deployment topology consumed by the GCE preflight workflow."

@@ -99,7 +99,7 @@ export function registerWorkspaceHttpLinkBrowserOpener(
  * openLinksInAppModifierInverts makes it flip whichever way Link Routing points
  * so the other destination is always one click away.
  */
-export function resolveModifierRouting(
+function resolveModifierRouting(
   modifierHeld: boolean,
   openLinksInApp: boolean,
   modifierInverts: boolean

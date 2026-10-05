@@ -49,10 +49,11 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     })
     const hadStatus = retiredRows.length > 0
     for (const key of paneKeys) {
+      this.clearTmuxInnerSubjects(key)
       this.markPaneClosedForAgentStatus(key)
       this.restartedStatusLaunchTokenHashByPaneKey.delete(key)
       this.clearAssistantMessageRetry(key)
-      this.clearCodexSubagentPoll(key)
+      this.clearTranscriptPoll(key)
       clearPaneCacheState(this.state, key)
       this.activeHookTurnCompletedAtByPaneKey.delete(key)
       this.runtimeObservedStatusPaneKeys.delete(key)

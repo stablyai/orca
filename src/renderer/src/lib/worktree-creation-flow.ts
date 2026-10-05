@@ -63,12 +63,7 @@ function revealPendingCreation(
   store.setSidebarOpen(true)
 }
 
-/**
- * Kick off a worktree create in the background. The caller (the composer) has
- * already resolved every interactive decision into `request`, so this returns
- * immediately and the work outlives the now-closed modal. Progress and errors
- * surface on the pending creation's sidebar row and content panel.
- */
+/** Start creation without blocking the composer; the pending panel owns preparation and errors. */
 export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest): string {
   const store = useAppStore.getState()
   const existingCreationId = findPendingLinkedWorkItemCreationId(
@@ -138,10 +133,7 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
   store.updatePendingWorktreeCreation(creationId, {
     status: 'creating',
     startedAt: Date.now(),
-    phase:
-      entry.request.ephemeralVmRecipe && !entry.request.ephemeralVmRuntimeId
-        ? 'provisioning-vm'
-        : 'fetching',
+    phase: getInitialWorktreeCreationPhase(entry.request),
     error: undefined,
     provisioningLog: undefined
   })

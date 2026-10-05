@@ -555,12 +555,6 @@ describe('SshChannelMultiplexer', () => {
       expect(disposeHandler).toHaveBeenCalledTimes(1)
     })
 
-    it('ignores notify after dispose', () => {
-      mux.dispose()
-      mux.notify('pty.data', { id: 'pty-1', data: 'x' })
-      // No writes should happen after the initial keepalive writes
-    })
-
     it('reports isDisposed correctly', () => {
       expect(mux.isDisposed()).toBe(false)
       mux.dispose()

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { MAX_CODEX_SUBAGENTS_PER_GROUP } from '../../codex/codex-structured-journal-limits'
+import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
 import {
   boundWorkerTranscriptMessages,
+  boundWorkerTranscriptTail,
   redactWorkerTerminalLines
 } from './worker-transcript-payload'
 
@@ -177,6 +179,28 @@ describe('worker transcript wire bounds', () => {
     expect(result).toMatchObject({ limited: false, warnings: [] })
   })
 
+  it("serves a structured worker's journal rows without their list position", () => {
+    const [message] = projectStructuredItemsToNativeChat([
+      {
+        itemId: 'reply',
+        revision: 1,
+        sequence: 7,
+        sequenceIndex: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'done' }] }
+      }
+    ])
+    // Anti-vacuous: the projection itself does position the row.
+    expect(message?.journalPosition).toEqual({ sequence: 7, index: 1 })
+    for (const served of [
+      boundWorkerTranscriptMessages([message!]).messages,
+      boundWorkerTranscriptTail([message!], 262_144).messages
+    ]) {
+      expect(served).toHaveLength(1)
+      expect(served[0]).not.toHaveProperty('journalPosition')
+    }
+  })
+
   it('keeps two roster ids sharing a 512-char prefix distinct', () => {
     // The id is the roster key: a plain prefix clip would merge the two children.
     const head = 'a'.repeat(512)
@@ -212,6 +236,7 @@ describe('worker transcript wire bounds', () => {
     const message = {
       id: `${transcriptPath}:0000000000000042`,
       turnId: `${transcriptPath}:0000000000000001`,
+      parentId: `${transcriptPath}:0000000000000041`,
       role: 'assistant' as const,
       timestamp: null,
       source: 'transcript' as const,
@@ -224,6 +249,12 @@ describe('worker transcript wire bounds', () => {
     expect(first.messages).toEqual(second.messages)
     expect(first.messages[0]?.id).toMatch(/^worker-message-/)
     expect(first.messages[0]?.turnId).toMatch(/^worker-message-/)
+    // The parent link stays joinable to the parent row's opaque id.
+    const parent = boundWorkerTranscriptMessages(
+      [{ ...message, id: message.parentId, parentId: undefined }],
+      transcriptPath
+    )
+    expect(first.messages[0]?.parentId).toBe(parent.messages[0]?.id)
     expect(first.messages[0]?.blocks[0]).toEqual({ type: 'image-ref' })
     expect(JSON.stringify(first)).not.toContain('Users')
     expect(first.warnings).toEqual(

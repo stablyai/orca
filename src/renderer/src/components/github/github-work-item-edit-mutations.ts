@@ -29,19 +29,21 @@ export async function runIssueUpdate(args: {
   repoId?: string | null
   sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubWorkItemProjectOrigin | undefined
+  issueRepo?: GitHubOwnerRepo | null
   number: number
   updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
 }): Promise<void> {
-  if (args.projectOrigin) {
+  const issueRepo = args.projectOrigin
+  if (issueRepo) {
     const targetSettings =
       args.sourceContext?.provider === 'github'
         ? getTaskSourceRuntimeSettings(args.sourceContext)
         : getGitHubMutationSettings(args.repoId)
     const target = getActiveRuntimeTarget(targetSettings)
     const updateArgs = {
-      owner: args.projectOrigin.owner,
-      repo: args.projectOrigin.repo,
-      host: githubProjectHost(args.projectOrigin.host),
+      owner: issueRepo.owner,
+      repo: issueRepo.repo,
+      host: githubProjectHost(issueRepo.host),
       number: args.number,
       updates: args.updates
     }
@@ -59,18 +61,16 @@ export async function runIssueUpdate(args: {
     if (!res.ok) {
       throw new Error(res.error.message)
     }
-    if (target.kind === 'environment') {
-      notifyWorkItemDetailsMutation(
-        {
-          repoPath: args.repoPath ?? '',
-          repoId: args.repoId ?? undefined,
-          sourceContext: args.sourceContext,
-          type: 'issue',
-          number: args.number
-        },
-        { local: false }
-      )
-    }
+    notifyWorkItemDetailsMutation(
+      {
+        repoPath: args.repoPath ?? '',
+        repoId: args.repoId ?? undefined,
+        sourceContext: args.sourceContext,
+        type: 'issue',
+        number: args.number
+      },
+      { local: target.kind !== 'environment' }
+    )
     return
   }
   const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
@@ -93,7 +93,8 @@ export async function runIssueUpdate(args: {
         repoId: args.repoId ?? undefined,
         sourceContext: args.sourceContext,
         number: args.number,
-        updates: args.updates
+        updates: args.updates,
+        ...(args.issueRepo ? { ownerRepo: args.issueRepo } : {})
       })
   if (!res.ok) {
     throw new Error(res.error)
@@ -177,6 +178,7 @@ export async function runWorkItemBodyUpdate(args: {
     repoId: args.item.repoId,
     sourceContext: args.sourceContext,
     projectOrigin: args.projectOrigin,
+    issueRepo: args.parsedSlug,
     number: args.item.number,
     updates: { body: args.body }
   })

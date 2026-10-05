@@ -24,7 +24,7 @@ export function getShortcutTerminalStatus(
   if (!hasEffectiveBinding) {
     return undefined
   }
-  if (definition.scope === 'terminal') {
+  if (definition.scope === 'terminal' && isKeybindingAllowedInTerminal(definition)) {
     return {
       label: translate('auto.components.settings.ShortcutsPane.cb02e00202', 'Terminal'),
       description: translate(

@@ -17,6 +17,7 @@ import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from './tui-agent'
 import type { SessionOptionValue } from './native-chat-session-options'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
+import { appliedSessionOptionProps, buildFlagPromptStartupPlan } from './flag-prompt-startup'
 
 export { buildAgentResumeStartupPlan } from './tui-agent-resume-startup'
 
@@ -33,10 +34,6 @@ export type AgentStartupPlan = {
   /** Values actually emitted into this launch command, kept as base model ids
    * so the native-chat surface can render only launch-backed state. */
   sessionOptions?: Record<string, SessionOptionValue>
-}
-
-function appliedSessionOptionProps(values: Record<string, SessionOptionValue>) {
-  return Object.keys(values).length > 0 ? { sessionOptions: { ...values } } : {}
 }
 
 export function buildAgentStartupPlan(args: {
@@ -116,15 +113,16 @@ export function buildAgentStartupPlan(args: {
   }
 
   if (config.promptInjectionMode === 'flag-prompt') {
-    return {
+    return buildFlagPromptStartupPlan({
       agent,
-      launchCommand: `${launchCommand} --prompt ${quotedPrompt}`,
-      expectedProcess: config.expectedProcess,
-      followupPrompt: null,
+      launchCommand,
+      quotedPrompt,
+      prompt: trimmedPrompt,
+      shell,
       launchConfig,
-      ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-    }
+      sessionOptions: baseCommand.appliedSessionOptions,
+      agentEnv: args.agentEnv
+    })
   }
 
   if (config.promptInjectionMode === 'hermes-query') {
@@ -188,6 +186,22 @@ export function buildAgentStartupPlan(args: {
   }
 }
 
+/**
+ * Whether this agent's prompt rides the launch command rather than the live PTY.
+ *
+ * The same question `buildAgentStartupPlan` answers by returning `followupPrompt: null`, asked
+ * before a command exists — a caller deciding how to deliver a prompt has to know which half it is
+ * getting while it is still choosing what to create. Derived from the one injection table rather
+ * than restating it, and pinned against the builder for every agent by
+ * `tui-agent-prompt-transport.test.ts`, so the two cannot answer differently.
+ *
+ * Every mode but `stdin-after-start` folds the prompt into argv — that is what argv is FOR, so
+ * multi-line and special-character text reaches the CLI as one argument instead of keystrokes.
+ */
+export function agentPromptRidesLaunchCommand(agent: TuiAgent): boolean {
+  return TUI_AGENT_CONFIG[agent].promptInjectionMode !== 'stdin-after-start'
+}
+
 export type AgentDraftLaunchPlan = {
   agent: TuiAgent
   launchCommand: string
@@ -207,6 +221,7 @@ export function buildAgentDraftLaunchPlan(args: {
   agentArgs?: string | null
   agentEnv?: Record<string, string> | null
   sessionOptions?: Record<string, SessionOptionValue>
+  sessionOptionsOverrideAgentArgs?: boolean
   /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
   isRemote?: boolean
 }): AgentDraftLaunchPlan | null {
@@ -224,6 +239,7 @@ export function buildAgentDraftLaunchPlan(args: {
     shell,
     agentArgs: args.agentArgs,
     sessionOptions: args.sessionOptions,
+    sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
     isRemote: args.isRemote
   })
   if (!baseCommand.ok) {

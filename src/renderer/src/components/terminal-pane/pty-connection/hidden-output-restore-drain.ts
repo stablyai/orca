@@ -1,6 +1,5 @@
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
 import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
-import { RESET_AFTER_BYTE_GAP } from '../../../../../shared/terminal-mode-reset-profiles'
 import { cancelScheduledHiddenOutputRestore } from '../hidden-output-restore-scheduler'
 import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
 
@@ -173,7 +172,7 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
       cycle: session.hiddenOutputRestoreRemoteAbandonCycles
     })
     session.noteHiddenOutputRestoreFloodBackpressure()
-    session.writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
+    session.writeAbandonedRestoreGap()
     return true
   }
 }

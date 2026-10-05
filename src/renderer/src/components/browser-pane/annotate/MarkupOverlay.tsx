@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
 import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -69,7 +70,7 @@ export function MarkupOverlay({
       />
 
       {pendingText ? (
-        <input
+        <ImeInput
           ref={editor.textInputRef}
           // Why: key by position so each placement re-mounts a fresh input.
           key={`${pendingText.x},${pendingText.y}`}

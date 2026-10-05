@@ -1,17 +1,18 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { describeDropSkipReason } from '@/lib/drop-skip-reason-copy'
 
 export function reportTerminalDropUploadSkipsAndFailures(
   skipped: { reason: string }[],
   failed: { reason: string }[]
 ): void {
   if (skipped.length > 0) {
-    // Why: symlink rejection is policy, not error. Mixed skips collapse to one
-    // count so the terminal drop UI stays readable for multi-file drops.
-    const symlinkCount = skipped.filter((s) => s.reason === 'symlink').length
+    // Why: symlink rejection is policy, not an error; mixed reasons stay generic.
+    const allSymlinks = skipped.every((item) => item.reason === 'symlink')
     const noun = skipped.length === 1 ? 'item' : 'items'
+    const commonReason = sharedReason(skipped)
     toast.message(
-      symlinkCount === skipped.length
+      allSymlinks
         ? translate(
             'auto.components.terminal.pane.terminal.drop.handler.53f015fd85',
             'Skipped {{value0}} symlink{{value1}}.',
@@ -21,7 +22,13 @@ export function reportTerminalDropUploadSkipsAndFailures(
             'auto.components.terminal.pane.terminal.drop.handler.b4cf68e889',
             'Skipped {{value0}} {{value1}}.',
             { value0: skipped.length, value1: noun }
-          )
+          ),
+      {
+        description:
+          commonReason && commonReason !== 'symlink'
+            ? describeDropSkipReason(commonReason)
+            : undefined
+      }
     )
   }
   if (failed.length > 0) {
@@ -34,4 +41,9 @@ export function reportTerminalDropUploadSkipsAndFailures(
       )
     )
   }
+}
+
+function sharedReason(items: { reason: string }[]): string | undefined {
+  const first = items[0]?.reason
+  return first !== undefined && items.every((item) => item.reason === first) ? first : undefined
 }

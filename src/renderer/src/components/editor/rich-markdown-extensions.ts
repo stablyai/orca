@@ -1,11 +1,13 @@
+import { createMarkdownTokenizerStart } from './markdown-tokenizer-start'
 import type { AnyExtension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
+import { RichMarkdownTrailingParagraph } from './rich-markdown-trailing-paragraph'
 import Link from '@tiptap/extension-link'
 import { Code } from '@tiptap/extension-code'
 import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
 import TaskItem from '@tiptap/extension-task-item'
-import { Table } from '@tiptap/extension-table'
+import { RichMarkdownTable } from './rich-markdown-table'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableRow } from '@tiptap/extension-table-row'
@@ -41,6 +43,7 @@ import { RichMarkdownParagraph } from './rich-markdown-paragraph'
 import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
 import { createCachedLowlight } from './rich-markdown-lowlight-cache'
+import { documentResourceAccess } from '@/lib/local-file-access'
 
 const lowlight = createCachedLowlight(createLowlight(common))
 
@@ -73,9 +76,11 @@ export function createRichMarkdownExtensions({
       code: false,
       codeBlock: false,
       orderedList: false,
-      paragraph: false
+      paragraph: false,
+      trailingNode: false
     }),
     RichMarkdownParagraph,
+    RichMarkdownTrailingParagraph,
     RichMarkdownCode,
     RichMarkdownCodeBlockLowlight.extend({
       addNodeView() {
@@ -142,20 +147,29 @@ export function createRichMarkdownExtensions({
               | undefined
             const contextVersionAtLoad = getImageContextVersion(this.storage)
             if (src && fp) {
-              releaseImageLease = acquireLocalImageSrcLease(src, fp, undefined, runtimeContext)
-              void loadLocalImageSrc(src, fp, undefined, runtimeContext).then((resolved) => {
-                if (currentSrc !== src || currentContextVersion !== contextVersionAtLoad) {
-                  return
+              const access = documentResourceAccess(fp)
+              releaseImageLease = acquireLocalImageSrcLease(
+                src,
+                fp,
+                undefined,
+                runtimeContext,
+                access
+              )
+              void loadLocalImageSrc(src, fp, undefined, runtimeContext, access).then(
+                (resolved) => {
+                  if (currentSrc !== src || currentContextVersion !== contextVersionAtLoad) {
+                    return
+                  }
+                  if (resolved) {
+                    img.src = resolved
+                    return
+                  }
+                  // Why: local image paths must go through main's file
+                  // checks; a failed load should render missing, not hand
+                  // the raw path back to Chromium.
+                  img.removeAttribute('src')
                 }
-                if (resolved) {
-                  img.src = resolved
-                  return
-                }
-                // Why: local image paths must stay behind IPC/runtime
-                // authorization; a failed load should render missing, not
-                // hand the raw path back to Chromium.
-                img.removeAttribute('src')
-              })
+              )
             } else if (src) {
               img.src = src
             } else {
@@ -218,7 +232,7 @@ export function createRichMarkdownExtensions({
       nested: true
     }),
     ...createOrcaDetailsExtensions(),
-    Table.configure({
+    RichMarkdownTable.configure({
       resizable: false
     }),
     TableRow,
@@ -229,7 +243,16 @@ export function createRichMarkdownExtensions({
         throwOnError: false
       }
     }),
-    BlockMath.configure({
+    BlockMath.extend({
+      markdownTokenizer:
+        BlockMath.config.markdownTokenizer &&
+        typeof BlockMath.config.markdownTokenizer !== 'function'
+          ? {
+              ...BlockMath.config.markdownTokenizer,
+              start: createMarkdownTokenizerStart('$$')
+            }
+          : BlockMath.config.markdownTokenizer
+    }).configure({
       katexOptions: {
         displayMode: true,
         throwOnError: false

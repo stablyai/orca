@@ -132,14 +132,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -525,7 +525,7 @@ describe('connectPanePty', () => {
       await flushAsyncTicks()
 
       expect(pane.terminal.paste).toHaveBeenCalledWith(command)
-      expect(transport.sendInput).toHaveBeenCalledWith('\r')
+      expect(transport.sendInput).toHaveBeenCalledWith('\r', 'launch')
       expect(transport.sendInput).not.toHaveBeenCalledWith(`${command}\r`)
     } finally {
       globalThis.setTimeout = originalSetTimeout

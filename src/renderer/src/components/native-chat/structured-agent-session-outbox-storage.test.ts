@@ -1,10 +1,19 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+import {
+  createStructuredAgentSessionOutboxEntry,
+  type StructuredAgentSessionAttemptFailure
+} from '../../../../shared/structured-agent-session-outbox'
 import {
   hasUndeliveredStructuredAgentSessionOutbox,
+  appendStructuredAgentSessionOutboxMessage,
+  commitStructuredAgentSessionOutbox,
+  getStructuredAgentSessionOutbox,
+  mutateStructuredAgentSessionLaunchPrompt,
+  readOutbox,
   resetUndeliveredStructuredAgentSessionOutboxForTests,
+  subscribeToStructuredAgentSessionOutbox,
   subscribeToUndeliveredStructuredAgentSessionOutbox,
   writeOutbox
 } from './structured-agent-session-outbox-storage'
@@ -101,5 +110,178 @@ describe('undelivered structured agent session outbox projection', () => {
     expect(first).toHaveBeenCalledTimes(1)
     expect(second).toHaveBeenCalledTimes(1)
     releaseRemount()
+  })
+})
+
+describe("a saved message's last failure", () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it.each<StructuredAgentSessionAttemptFailure>([
+    { kind: 'refused', code: 'agent_session_checkpoint_stale' },
+    { kind: 'refused', code: 'agent_session_conflict', details: { reason: 'chatStarting' } },
+    {
+      kind: 'refused',
+      code: 'agent_session_ownership_unknown',
+      details: { reason: 'ownerUnproven', ownerVerdict: 'unverifiable' }
+    },
+    { kind: 'rejected', reason: 'Claude messages support at most 20 images' },
+    {
+      kind: 'rejected',
+      reason: 'Claude accepts at most 20 images in one message, so this message was not sent.',
+      rejection: { kind: 'attachmentInvalid', attachment: { reason: 'tooMany', limit: 20 } }
+    },
+    { kind: 'rejected', reason: null },
+    { kind: 'failed' }
+  ])('reads back $kind as it was saved', (lastFailure) => {
+    writeOutbox('session-a', [{ ...entry('session-a', 'client-1'), lastFailure }])
+
+    expect(readOutbox('session-a')[0]?.lastFailure).toEqual(lastFailure)
+  })
+
+  it('keeps the message and drops a failure it cannot read', () => {
+    localStorage.setItem(
+      'orca:desktopStructuredAgentSessionOutbox:v1:session-a',
+      JSON.stringify([
+        { ...entry('session-a', 'client-1'), lastFailure: 'The agent was restarting.' },
+        { ...entry('session-a', 'client-2'), lastFailure: { kind: 'rejected', reason: 7 } }
+      ])
+    )
+
+    const read = readOutbox('session-a')
+    expect(read.map((saved) => saved.clientMessageId)).toEqual(['client-1', 'client-2'])
+    expect(read.every((saved) => saved.lastFailure === undefined)).toBe(true)
+  })
+
+  // Written by a build that kept only the code or the reason; it reads as that build meant it.
+  it('reads an entry saved before failures carried details as it was', () => {
+    localStorage.setItem(
+      'orca:desktopStructuredAgentSessionOutbox:v1:session-a',
+      JSON.stringify([
+        {
+          ...entry('session-a', 'client-1'),
+          lastFailure: { kind: 'refused', code: 'agent_session_checkpoint_stale' }
+        },
+        { ...entry('session-a', 'client-2'), lastFailure: { kind: 'rejected', reason: 'Nope.' } }
+      ])
+    )
+
+    expect(readOutbox('session-a').map((saved) => saved.lastFailure)).toEqual([
+      { kind: 'refused', code: 'agent_session_checkpoint_stale' },
+      { kind: 'rejected', reason: 'Nope.' }
+    ])
+  })
+
+  it('keeps only what a newer build saved that this one can place', () => {
+    localStorage.setItem(
+      'orca:desktopStructuredAgentSessionOutbox:v1:session-a',
+      JSON.stringify([
+        {
+          ...entry('session-a', 'client-1'),
+          lastFailure: {
+            kind: 'refused',
+            code: 'agent_session_checkpoint_stale',
+            details: { reason: 'fromTheFuture', currentFence: 4 }
+          }
+        },
+        {
+          ...entry('session-a', 'client-2'),
+          lastFailure: {
+            kind: 'rejected',
+            reason: 'Claude stopped before it finished starting.',
+            rejection: { kind: 'providerStartFailed', detail: { text: 'exit 1', audience: 'log' } }
+          }
+        },
+        {
+          ...entry('session-a', 'client-3'),
+          lastFailure: { kind: 'rejected', reason: 'Nope.', rejection: { kind: 'fromTheFuture' } }
+        }
+      ])
+    )
+
+    expect(readOutbox('session-a').map((saved) => saved.lastFailure)).toEqual([
+      { kind: 'refused', code: 'agent_session_checkpoint_stale' },
+      {
+        kind: 'rejected',
+        reason: 'Claude stopped before it finished starting.',
+        rejection: { kind: 'providerStartFailed' }
+      },
+      { kind: 'rejected', reason: 'Nope.' }
+    ])
+  })
+})
+
+describe('the session outbox store', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('shows an open chat a message queued from elsewhere', () => {
+    const listener = vi.fn()
+    const release = subscribeToStructuredAgentSessionOutbox('session-1', () => [], listener)
+
+    const queued = appendStructuredAgentSessionOutboxMessage('session-1', 'review notes')
+
+    expect(listener).toHaveBeenCalledOnce()
+    expect(getStructuredAgentSessionOutbox('session-1')).toEqual([queued])
+    expect(readOutbox('session-1')).toEqual([queued])
+    release()
+  })
+
+  it('queues behind an in-flight send without disturbing it', () => {
+    writeOutbox('session-1', [{ ...entry('session-1', 'in-flight'), state: 'dispatching' }])
+
+    appendStructuredAgentSessionOutboxMessage('session-1', 'review notes')
+
+    expect(readOutbox('session-1', { recoverDispatching: false }).map((e) => e.state)).toEqual([
+      'dispatching',
+      'queued'
+    ])
+  })
+
+  it('keeps the open outbox when a required save fails', () => {
+    const release = subscribeToStructuredAgentSessionOutbox('session-1', () => [], vi.fn())
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new Error('quota')
+    })
+
+    expect(appendStructuredAgentSessionOutboxMessage('session-1', 'review notes')).toBeNull()
+    expect(getStructuredAgentSessionOutbox('session-1')).toEqual([])
+    setItem.mockRestore()
+    release()
+  })
+
+  it('releases the held copy with its last subscriber', () => {
+    const release = subscribeToStructuredAgentSessionOutbox(
+      'session-1',
+      () => [{ ...entry('session-1', 'loaded'), state: 'unconfirmed' }],
+      vi.fn()
+    )
+    expect(getStructuredAgentSessionOutbox('session-1')[0]?.state).toBe('unconfirmed')
+
+    release()
+
+    expect(getStructuredAgentSessionOutbox('session-1')).toEqual([])
+  })
+
+  it('lets a launch settlement read its own send as unconfirmed and leaves other sends alone', () => {
+    const release = subscribeToStructuredAgentSessionOutbox('session-1', () => [], vi.fn())
+    commitStructuredAgentSessionOutbox('session-1', [
+      { ...entry('session-1', 'launch'), state: 'dispatching' },
+      { ...entry('session-1', 'composer'), state: 'dispatching' }
+    ])
+    const seen: string[] = []
+
+    mutateStructuredAgentSessionLaunchPrompt('session-1', 'launch', (current) => {
+      seen.push(current.state)
+      return null
+    })
+
+    expect(seen).toEqual(['unconfirmed'])
+    expect(getStructuredAgentSessionOutbox('session-1')).toMatchObject([
+      { clientMessageId: 'composer', state: 'dispatching' }
+    ])
+    release()
   })
 })

@@ -1,3 +1,8 @@
+import {
+  ANTIGRAVITY_HISTORY_ROOTS,
+  type AntigravitySessionOrigin
+} from '../../shared/antigravity-session-origin'
+import { parseQoderSessionContent } from './session-scanner-qoder-parser'
 import { remoteSessionDocumentParsers } from './remote-session-document-parsers'
 import type { RemoteSessionContent } from './remote-session-content-lines'
 import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
@@ -5,19 +10,29 @@ import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { parseAntigravitySessionContent } from './session-scanner-antigravity-parser'
 import { isAntigravityTranscriptPath } from './session-scanner-antigravity-paths'
-import { parseCodexSessionContent } from './session-scanner-codex-parser'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
-import { parseMessageGraphSessionContent } from './session-scanner-graph-parsers'
 import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
+import { parseCodebuddySessionContent } from './session-scanner-codebuddy-parser'
 import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
 import { parseCopilotSessionContent } from './session-scanner-copilot-parser'
 import { parseCursorSessionContent } from './session-scanner-cursor-parser'
 import { parseHermesSessionContent } from './session-scanner-hermes-parser'
+import { parseJcodeSessionContent } from './session-scanner-jcode-parser'
 import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-transcripts'
 import { partitionOmpSubagentTranscriptPaths } from './session-scanner-omp-subagent-transcripts'
+import {
+  ompParser,
+  openClawParser,
+  parseMuseRemoteContent,
+  piParser,
+  primeAgentParser,
+  remoteOmpSessionsSegments,
+  remotePathSegments,
+  remotePiSessionsSegments,
+  remotePrimeAgentSessionsSegments
+} from './remote-session-scanner-source-parsers'
 import type { FileWithMtime } from './session-scanner-types'
-import { normalizeAgentSessionsDir } from './session-scanner-values'
-import { remoteCodexIndexedTitleReader } from './remote-session-scanner-codex-index'
+import { remoteCodexSources } from './remote-session-scanner-codex-sources'
 import { remoteClineSource } from './remote-session-scanner-cline-source'
 import { remoteDevinSource } from './remote-session-scanner-devin-source'
 import type {
@@ -37,7 +52,8 @@ type RemoteContentParser<T = string> = (
 
 export function remoteSessionSources(
   remoteHome: string,
-  hostPlatform: RemoteHostPlatform
+  hostPlatform: RemoteHostPlatform,
+  includeAntigravityIdeSessions = false
 ): RemoteSessionSource[] {
   return [
     ...remoteCodexSources(remoteHome, hostPlatform),
@@ -56,7 +72,31 @@ export function remoteSessionSources(
       // top-level sessions carrying the parent's sessionId.
       partitionSubagentTranscripts: partitionSubagentTranscriptPaths
     },
-    remoteAntigravitySource(remoteHome, hostPlatform),
+    {
+      // The execution host owns CodeBuddy's transcripts, including subagent pruning.
+      ...jsonlSource(
+        'codebuddy',
+        remoteHome,
+        hostPlatform,
+        ['.codebuddy', 'projects'],
+        parseCodebuddySessionContent
+      ),
+      partitionSubagentTranscripts: partitionSubagentTranscriptPaths
+    },
+    {
+      ...jsonlSource(
+        'qoder',
+        remoteHome,
+        hostPlatform,
+        ['.qoder', 'projects'],
+        parseQoderSessionContent
+      ),
+      partitionSubagentTranscripts: partitionSubagentTranscriptPaths
+    },
+    ...(includeAntigravityIdeSessions
+      ? ANTIGRAVITY_HISTORY_ROOTS
+      : (['antigravity-cli'] as const)
+    ).map((origin) => remoteAntigravitySource(remoteHome, hostPlatform, origin)),
     source(
       'gemini',
       remoteHome,
@@ -91,6 +131,15 @@ export function remoteSessionSources(
     ),
     remoteDevinSource(remoteHome, hostPlatform),
     remoteDevinSource(remoteHome, hostPlatform, 'agent_logs'),
+    source(
+      'jcode',
+      remoteHome,
+      hostPlatform,
+      ['.jcode', 'sessions'],
+      ['.json'],
+      parseJcodeSessionContent,
+      (path) => remotePathSegments(path).pop()?.startsWith('session_') === true
+    ),
     jsonlSource('pi', remoteHome, hostPlatform, remotePiSessionsSegments(), piParser),
     {
       ...jsonlSource('omp', remoteHome, hostPlatform, remoteOmpSessionsSegments(), ompParser),
@@ -105,6 +154,16 @@ export function remoteSessionSources(
       hostPlatform,
       remotePrimeAgentSessionsSegments(),
       primeAgentParser
+    ),
+    jsonlSource(
+      'muse',
+      remoteHome,
+      hostPlatform,
+      ['.local', 'share', 'muse', 'sessions'],
+      parseMuseRemoteContent,
+      // Why: each session dir holds session.jsonl plus .log/.sqlite3 sidecars;
+      // match only the transcript (same predicate as local discovery).
+      (path) => remotePathSegments(path).at(-1) === 'session.jsonl'
     ),
     jsonlSource(
       'droid',
@@ -126,9 +185,10 @@ export function remoteSessionSources(
 
 function remoteAntigravitySource(
   remoteHome: string,
-  hostPlatform: RemoteHostPlatform
+  hostPlatform: RemoteHostPlatform,
+  origin: AntigravitySessionOrigin
 ): RemoteSessionSource {
-  const cliRoot = joinRemotePath(hostPlatform, remoteHome, '.gemini', 'antigravity-cli')
+  const cliRoot = joinRemotePath(hostPlatform, remoteHome, '.gemini', origin)
   const historyPath = joinRemotePath(hostPlatform, cliRoot, 'history.jsonl')
   const parse = async (
     file: FileWithMtime,
@@ -150,6 +210,7 @@ function remoteAntigravitySource(
     extensions: ['.jsonl'],
     filePredicate: isAntigravityTranscriptPath,
     fixedChildFileSegments: ['.system_generated', 'logs', 'transcript.jsonl'],
+    additionalFixedChildFileSegments: [['.system_generated', 'logs', 'transcript_full.jsonl']],
     parse,
     parseLines: parse
   }
@@ -196,48 +257,6 @@ function jsonlSource(
   }
 }
 
-function remoteCodexSources(
-  remoteHome: string,
-  hostPlatform: RemoteHostPlatform
-): RemoteSessionSource[] {
-  return [
-    joinRemotePath(hostPlatform, remoteHome, '.codex'),
-    joinRemotePath(
-      hostPlatform,
-      remoteHome,
-      '.local',
-      'share',
-      'orca',
-      'codex-runtime-home',
-      'home'
-    )
-  ].map((codexHome) => {
-    const parse = (
-      file: FileWithMtime,
-      content: RemoteSessionContent,
-      context: RemoteScannerContext
-    ) =>
-      parseCodexSessionContent({
-        file,
-        content,
-        platform: context.hostPlatform.os,
-        codexHome,
-        executionHostId: context.executionHostId,
-        executionHostPlatform: context.hostPlatform.os,
-        signal: context.signal,
-        readIndexedTitle: remoteCodexIndexedTitleReader(codexHome, context)
-      })
-    return {
-      agent: 'codex',
-      rootDir: joinRemotePath(hostPlatform, codexHome, 'sessions'),
-      codexHome,
-      extensions: ['.jsonl'],
-      parse,
-      parseLines: parse
-    }
-  })
-}
-
 function remoteOpenClawSources(
   remoteHome: string,
   hostPlatform: RemoteHostPlatform
@@ -259,63 +278,4 @@ function parserOptions(context: RemoteScannerContext): RemoteParserOptions {
     executionHostId: context.executionHostId,
     executionHostPlatform: context.hostPlatform.os
   }
-}
-
-function piParser(
-  file: FileWithMtime,
-  content: RemoteSessionContent,
-  platform: NodeJS.Platform,
-  options: RemoteParserOptions,
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('pi', file, content, platform, options, signal)
-}
-
-function ompParser(
-  file: FileWithMtime,
-  content: RemoteSessionContent,
-  platform: NodeJS.Platform,
-  options: RemoteParserOptions,
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('omp', file, content, platform, options, signal)
-}
-
-function primeAgentParser(
-  file: FileWithMtime,
-  content: RemoteSessionContent,
-  platform: NodeJS.Platform,
-  options: RemoteParserOptions,
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('prime-agent', file, content, platform, options, signal)
-}
-
-function openClawParser(
-  file: FileWithMtime,
-  content: RemoteSessionContent,
-  platform: NodeJS.Platform,
-  options: RemoteParserOptions,
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('openclaw', file, content, platform, options, signal)
-}
-
-function remotePathSegments(path: string): string[] {
-  return path.replace(/\\/g, '/').split('/').filter(Boolean)
-}
-
-function remotePiSessionsSegments(): string[] {
-  return normalizeAgentSessionsDir('/.pi/agent/sessions', '.pi').split('/').filter(Boolean)
-}
-
-function remoteOmpSessionsSegments(): string[] {
-  return normalizeAgentSessionsDir('/.omp/agent/sessions', '.omp').split('/').filter(Boolean)
-}
-
-// Why: remote roots are posix regardless of the client platform, so these stay literal
-// rather than round-tripping through a local-platform path join that would emit
-// backslashes on a Windows client and collapse into a single bogus segment.
-function remotePrimeAgentSessionsSegments(): string[] {
-  return ['.prime', 'agent', 'sessions']
 }

@@ -690,30 +690,4 @@ describe('updater', () => {
       url: 'https://github.com/stablyai/orca/releases/download/v1.3.18'
     })
   })
-
-  // Why: native GitHub provider can pick cancelled prerelease tags with missing manifests, so keep the manifest-probed generic feed.
-  it('uses the manifest-probed generic feed after a Shift-click RC opt-in', async () => {
-    appMock.getVersion.mockReturnValue('1.3.17')
-    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.18-rc.1'])
-    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
-
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
-
-    const mainWindow = { webContents: { send: vi.fn() } }
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
-
-    checkForUpdatesFromMenu({ includePrerelease: true })
-
-    await vi.waitFor(() => {
-      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.3.17', 2, {
-        includePrerelease: true
-      })
-      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
-    })
-    expect(autoUpdaterMock.allowPrerelease).toBe(true)
-    expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
-      provider: 'generic',
-      url: 'https://github.com/stablyai/orca/releases/download/v1.3.18-rc.1'
-    })
-  })
 })

@@ -336,6 +336,44 @@ describe('PtyHandler', () => {
       }
     )
 
+    it.each(['process', 'client'])(
+      'drops an ORCA_CODEX_LAUNCH_PREFLIGHT from the relay %s env',
+      async (source) => {
+        const inherited = '/opt/orca/bin/orca'
+        const previous = process.env.ORCA_CODEX_LAUNCH_PREFLIGHT
+        if (source === 'process') {
+          process.env.ORCA_CODEX_LAUNCH_PREFLIGHT = inherited
+        }
+        try {
+          await dispatcher.callRequest('pty.spawn', {
+            cols: 80,
+            rows: 24,
+            ...(source === 'client' ? { env: { ORCA_CODEX_LAUNCH_PREFLIGHT: inherited } } : {})
+          })
+        } finally {
+          if (previous === undefined) {
+            delete process.env.ORCA_CODEX_LAUNCH_PREFLIGHT
+          } else {
+            process.env.ORCA_CODEX_LAUNCH_PREFLIGHT = previous
+          }
+        }
+
+        const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+        expect(spawnEnv.ORCA_CODEX_LAUNCH_PREFLIGHT).toBeUndefined()
+      }
+    )
+
+    it('keeps the Codex server opt-out the client asked for', async () => {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        env: { ORCA_CODEX_ISOLATE: '0' }
+      })
+
+      const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv.ORCA_CODEX_ISOLATE).toBe('0')
+    })
+
     it('drops an ORCA_HISTFILE handed over in the client env', async () => {
       await dispatcher.callRequest('pty.spawn', {
         cols: 80,
@@ -604,6 +642,54 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_PANE_KEY).toBe('augmenter-wins')
     // Renderer-supplied keys not in augmenter map flow through:
     expect(callArgs.env.ORCA_TAB_ID).toBe('tab-1')
+  })
+
+  it('mirrors pane identity onto its scrub-safe aliases for a remote spawn', async () => {
+    // Why the relay and not just the shared helper: a remote pane's env is built here, and an
+    // agent whose harness drops KEY/TOKEN names (DSH) has nothing to attribute its hooks to.
+    await dispatcher.callRequest('pty.spawn', {
+      cols: 80,
+      rows: 24,
+      env: { ORCA_PANE_KEY: 'tab-1:0', ORCA_AGENT_LAUNCH_TOKEN: 't' }
+    })
+
+    const callArgs = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(callArgs.env.ORCA_AGENT_PANE).toBe('tab-1:0')
+    expect(callArgs.env.ORCA_AGENT_LAUNCH).toBe('t')
+    expect(callArgs.env.ORCA_PANE_KEY).toBe('tab-1:0')
+  })
+
+  it("drops an alias the relay's own env carries when the spawn claims no identity", async () => {
+    // Why: the relay is itself startable from an Orca pane, so inheriting either name would
+    // attribute this pane's hooks to whichever row started the relay.
+    const previous = {
+      pane: process.env.ORCA_PANE_KEY,
+      launch: process.env.ORCA_AGENT_LAUNCH_TOKEN,
+      paneAlias: process.env.ORCA_AGENT_PANE
+    }
+    process.env.ORCA_PANE_KEY = 'relays-own-pane'
+    process.env.ORCA_AGENT_LAUNCH_TOKEN = 'relays-own-launch'
+    process.env.ORCA_AGENT_PANE = 'stale-alias'
+    try {
+      await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+    } finally {
+      for (const [key, value] of [
+        ['ORCA_PANE_KEY', previous.pane],
+        ['ORCA_AGENT_LAUNCH_TOKEN', previous.launch],
+        ['ORCA_AGENT_PANE', previous.paneAlias]
+      ] as const) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+
+    const callArgs = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    expect(callArgs.env.ORCA_PANE_KEY).toBeUndefined()
+    expect(callArgs.env.ORCA_AGENT_PANE).toBeUndefined()
+    expect(callArgs.env.ORCA_AGENT_LAUNCH).toBeUndefined()
   })
 
   it('passes PTY and explicit launch identity to env augmenters', async () => {

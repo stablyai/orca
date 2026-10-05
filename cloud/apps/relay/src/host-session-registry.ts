@@ -160,6 +160,30 @@ function send(socket: WebSocket, type: string, message: object): void {
   socket.send(JSON.stringify({ type, ...message }))
 }
 
+function readControlFrame(
+  socket: WebSocket,
+  timeoutMs: number,
+  timeoutReason: string,
+  receive: (raw: RawData, isBinary: boolean) => void
+): void {
+  if (socket.readyState !== socket.OPEN) return
+  const timer = setTimeout(() => {
+    finish()
+    socket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, timeoutReason)
+  }, timeoutMs)
+  function finish(): void {
+    clearTimeout(timer)
+    socket.off('message', onMessage)
+    socket.off('close', finish)
+  }
+  function onMessage(raw: RawData, isBinary: boolean): void {
+    finish()
+    receive(raw, isBinary)
+  }
+  socket.once('message', onMessage)
+  socket.once('close', finish)
+}
+
 // Hosts abandon connects after 15s; waiting much longer than that behind a
 // stalled predecessor only accumulates doomed sockets.
 const ACTIVATION_QUEUE_WAIT_MS = 30_000
@@ -794,12 +818,7 @@ export class HostSessionRegistry {
       socket.close(RELAY_CLOSE_CODE.DRAINING, 'relay draining')
       return
     }
-    let firstFrameTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-      socket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'host hello timeout')
-    }, 2_000)
-    socket.once('message', (raw, isBinary) => {
-      if (firstFrameTimer) clearTimeout(firstFrameTimer)
-      firstFrameTimer = null
+    readControlFrame(socket, 2_000, 'host hello timeout', (raw, isBinary) => {
       if (isBinary) {
         socket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'host hello must be text')
         return
@@ -991,6 +1010,7 @@ export class HostSessionRegistry {
       socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'wrong assignment epoch')
       return
     }
+    if (socket.readyState !== socket.OPEN) return
 
     const key = this.key(identity.sub, identity.relayHostId)
     const existing = this.sessions.get(key)
@@ -1035,11 +1055,7 @@ export class HostSessionRegistry {
       ciphertextB64: Buffer.from(ciphertext).toString('base64'),
       expiresAt
     })
-    const proofTimer = setTimeout(() => {
-      socket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'host proof timeout')
-    }, 10_000)
-    socket.once('message', (raw, isBinary) => {
-      clearTimeout(proofTimer)
+    readControlFrame(socket, 10_000, 'host proof timeout', (raw, isBinary) => {
       const ack = isBinary
         ? null
         : HostChallengeAckSchema.safeParse(payload(raw, 'host-challenge-ack'))
@@ -1103,7 +1119,7 @@ export class HostSessionRegistry {
       .catch(() => undefined)
       .then(async () => {
         clearTimeout(queueWaitTimer)
-        if (queueWaitExpired) return
+        if (queueWaitExpired || socket.readyState !== socket.OPEN) return
         if ((this.sessions.get(key) ?? null) !== existing) {
           socket.close(RELAY_CLOSE_CODE.PEER_DROPPED, 'control activation superseded')
           return

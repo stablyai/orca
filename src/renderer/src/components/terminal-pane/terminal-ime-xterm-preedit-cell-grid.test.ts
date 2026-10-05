@@ -10,7 +10,6 @@ type ImeTerminalCore = {
 
 let terminal: Terminal
 let view: HTMLElement
-let assignedSpacing: WeakMap<CSSStyleDeclaration, string>
 let measurements: string[]
 let fontScale: number
 
@@ -29,10 +28,10 @@ function compose(text: string): HTMLElement {
   return update(text)
 }
 
-function runs(preedit: HTMLElement): { text: string | null; spacing: string | undefined }[] {
+function runs(preedit: HTMLElement): { text: string | null; spacing: string }[] {
   return Array.from(preedit.children, (child) => ({
     text: child.textContent,
-    spacing: assignedSpacing.get(elementStyle(child))
+    spacing: elementStyle(child).letterSpacing
   }))
 }
 
@@ -93,18 +92,6 @@ describe('IME preedit advances on the terminal cell grid (#19315)', () => {
   beforeEach(() => {
     measurements = []
     fontScale = 1
-    assignedSpacing = new WeakMap()
-    const setter = Object.getOwnPropertyDescriptor(
-      CSSStyleDeclaration.prototype,
-      'letterSpacing'
-    )!.set!
-    // happy-dom drops calc(var(...)); Electron coverage checks the resulting layout.
-    vi.spyOn(CSSStyleDeclaration.prototype, 'letterSpacing', 'set').mockImplementation(
-      function (this: CSSStyleDeclaration, value) {
-        assignedSpacing.set(this, value)
-        setter.call(this, value)
-      }
-    )
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
       const context: CanvasRenderingContext2D = Object.create(null)
       context.font = '13px monospace'

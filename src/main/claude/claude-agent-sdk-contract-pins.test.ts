@@ -28,7 +28,7 @@ import { createClaudeStructuredLaunchResolver } from './claude-structured-launch
 const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
 const SESSION_ID = '5348c19f-6a54-4c2e-9c68-9c2b1a3d4e5f'
 const LEAF_UUID = 'ad0f7c9e-1b2c-4d3e-8f90-abc123def456'
-const PINNED_SDK_VERSION = '0.3.251'
+const PINNED_SDK_VERSION = '0.3.284'
 const SDK_PLATFORM_PACKAGE_BASENAMES = [
   'claude-agent-sdk-darwin-arm64',
   'claude-agent-sdk-darwin-x64',

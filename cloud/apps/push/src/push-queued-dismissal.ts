@@ -35,9 +35,11 @@ export async function reconcileQueuedDismissal(
       queued.notificationSeq > notification.notificationSeq
     )
       continue
+    // The lease guard re-evaluates after a concurrent claim commits; that alert then goes out and
+    // this dismissal is delivered after it.
     await tx.query(
-      'UPDATE push_delivery_batches SET payload_json = ?, state = ? WHERE batch_id = ?',
-      ['{}', 'dismissed', delivery.batch_id]
+      "DELETE FROM push_delivery_batches WHERE batch_id = ? AND state = 'pending' AND lease_until <= ?",
+      [delivery.batch_id, now]
     )
   }
   return false

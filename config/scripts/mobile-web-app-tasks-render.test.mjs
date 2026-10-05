@@ -39,7 +39,7 @@ const SHELL_HOST = {
 const UNMATCHED = 'Unmatched Route'
 const ROUTE_KEY = './h/[hostId]/tasks.tsx'
 /** Exactly what the route declares in `MOBILE_WEB_PAGE_ROUTES`, plus the protocol's own grant. */
-const TASKS_GRANTS = ['navigate', 'storage', 'externalLink', 'native.clipboard.write']
+const TASKS_GRANTS = ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
 
 const bundles = mobileWebAppDependenciesPresent()
 const describeRender = bundles ? describe : describe.skip

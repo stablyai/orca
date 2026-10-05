@@ -1,3 +1,4 @@
+import type { TerminalDocumentScope } from './document-scope'
 import { cellColToStringIndex, getLineText } from './cell-geometry'
 import { viewportToCell } from './viewport-cell'
 
@@ -208,15 +209,19 @@ export function matchFilePathAtColumn(lineText: string, col: number) {
 // handler can try file detection before forwarding a mouse click — which lets
 // file paths open even inside a mouse-tracking TUI. Relies on viewportToCell/
 // getLineText from the host script scope.
-export function filePathAtViewportPoint(originX: number, originY: number) {
-  const tapCell = viewportToCell(originX, originY)
+export function filePathAtViewportPoint(
+  scope: TerminalDocumentScope,
+  originX: number,
+  originY: number
+) {
+  const tapCell = viewportToCell(scope, originX, originY)
   if (!tapCell) {
     return null
   }
   // Map the cell column to a string index so wide chars (emoji/CJK) earlier on
   // the line don't shift the match column off the tapped path.
   return matchFilePathAtColumn(
-    getLineText(tapCell.row),
-    cellColToStringIndex(tapCell.row, tapCell.col)
+    getLineText(scope, tapCell.row),
+    cellColToStringIndex(scope, tapCell.row, tapCell.col)
   )
 }

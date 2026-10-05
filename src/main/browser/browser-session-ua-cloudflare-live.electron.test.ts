@@ -252,10 +252,10 @@ async function run() {
   if (arm === 'branch') {
     installBrowserSessionUserAgentPolicy(sess, request => {
       if (request.resourceType !== 'mainFrame' && (request.currentUserAgent === firefoxUserAgent || request.effectiveUserAgent === firefoxUserAgent)) {
-        return { userAgent: firefoxUserAgent }
+        return { kind: 'google-auth', userAgent: firefoxUserAgent }
       }
       if (request.resourceType === 'mainFrame' && request.currentUserAgent === firefoxUserAgent) {
-        return { userAgent: cleanUserAgent }
+        return { kind: 'process', userAgent: cleanUserAgent }
       }
       return undefined
     })

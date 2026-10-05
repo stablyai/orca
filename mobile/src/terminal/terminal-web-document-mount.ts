@@ -1,47 +1,34 @@
 import { Terminal } from '@xterm/xterm'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
-import type { TerminalDocumentWebglAddon } from './document/document-terminal-shape'
+import type { TerminalDocumentTerminal } from './document/document-terminal-shape'
+import type { TerminalDocumentStart, TerminalViewportChange } from './document/document-host-seams'
 import { TERMINAL_DOCUMENT_ELEMENT_STYLE, TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
-import { scopeStyleToHost } from './terminal-webview-html/document-style-scoping'
+import { scopeStyleToHost } from '../style-scoping/document-style-scoping'
 import { XTERM_ENGINE_CSS } from './terminal-webview-engine-css.generated'
+import { createTerminalDocument } from './document/create-terminal-document'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 
 /**
  * The terminal document, mounted in the page instead of in a WebView.
  *
- * Same program: the modules the WebView's script is generated from, started here in the order the
- * generator emits them. What the WebView's HTML gave them — the stylesheet, the elements they read
- * by id, the engine on `window` and a `postMessage` back to React Native — this supplies instead,
- * through the six scope seams and the host's own element.
+ * Same program: the factory the WebView's script is generated from, called here with the page's
+ * own hooks instead of the WebView's window (ruling 22). What the WebView's HTML gave the document
+ * — the stylesheet, the elements it reads by id, the engine on `window`, a `postMessage` back to
+ * React Native and the frames that arrive on it — this supplies instead, through the ten seams
+ * and the host element.
  *
- * Ruling 20 is what makes a remount work. ES module bodies run once per page, so the second mount
- * re-imports nothing: every element read, listener and reporter install lives in a start function,
- * and this runs that sequence per mount against the markup it has just replanted. `dispose` takes
- * back the three that outlive the host element.
- *
- * The import is still dynamic, because the page bundle must not carry the document into every
- * route that never opens a terminal.
+ * A call is a document. Nothing here is shared between two of them and nothing is reset: each call
+ * builds its own scope, so a second mount cannot reach the first one's state, and a stale callback
+ * from a mount that has gone away reads the scope it closed over rather than the live one.
  */
 
 export type TerminalWebDocument = {
-  /** Hands one host command to the document, as `postMessage` does inside the WebView. */
+  /** Hands one host command to the document, as a bridge frame does inside the WebView. */
   send: (command: TerminalWebViewCommand & { id: number }) => void
+  /** RN laid the host out again: the page's counterpart of the WebView's window resize. */
+  notifyViewport: () => void
   dispose: () => void
-  /**
-   * Settles when the document is live, or rejects with what stopped it.
-   *
-   * The handle itself is returned before this: the document is reached by a dynamic import, and a
-   * caller that had to await the import to get a handle would have nothing to dispose while the
-   * import was in flight. That is not a corner — a slow chunk is what the readiness watchdog is
-   * for, and the overlay's Reload is what ruling 20 names as the way out of it.
-   *
-   * A mount disposed before its import landed resolves rather than rejecting. Nothing failed:
-   * the caller asked for the terminal and then asked for it to go away, and the chunk arriving
-   * afterwards is not an error to report. The caller learns which it got from `dispose` being
-   * the thing it called, not from this.
-   */
-  ready: Promise<void>
 }
 
 const STYLE_ELEMENT_ID = 'orca-terminal-document-style'
@@ -53,16 +40,18 @@ const HOST_CLASS = 'orca-terminal-document-host'
  * The stylesheet, planted in the head once per page and reaching only inside the host.
  *
  * `<style>` rather than a constructed sheet or inline attributes: the document's own rules and
- * xterm's are written against ids and classes, and the document reads its elements with
- * `document.getElementById`, which a shadow root would break.
+ * xterm's are written against ids and classes, and this is the cheapest way to carry them.
+ *
+ * The element reads are no longer what a shadow root would break — `elementInRoot` is a
+ * `querySelector` under the host, which a shadow root answers. This sheet is: a rule in the
+ * document's head does not cross a shadow boundary, so it would have to move inside each root and
+ * be parsed once per host rather than once per page.
  *
  * What is planted is not what the WebView's `<head>` carries. The document-level rules are left
  * behind entirely and every remaining selector is prefixed with the host's class, so nothing here
  * can match an element the terminal does not own. That is also what makes leaving the sheet in
  * the head after unmount the right trade: it matches nothing once the host has dropped the class,
  * the next mount wants it back, and re-parsing 11 KiB per mount is all removing it would buy.
- * Two terminals at once is not the case — `document-scope` is a module singleton, so there is one
- * scope per page and `mount` refuses a second live document rather than letting the two share it.
  */
 function ensureDocumentStyle() {
   if (document.getElementById(STYLE_ELEMENT_ID)) {
@@ -72,8 +61,18 @@ function ensureDocumentStyle() {
   style.id = STYLE_ELEMENT_ID
   const prefix = `.${HOST_CLASS}`
   const engine = scopeStyleToHost(XTERM_ENGINE_CSS, prefix)
-  style.textContent = `${engine}\n${scopeStyleToHost(TERMINAL_DOCUMENT_ELEMENT_STYLE, prefix)}`
+  const elements = scopeStyleToHost(TERMINAL_DOCUMENT_ELEMENT_STYLE, prefix)
+  style.textContent = `${engine}\n${elements}\n${hostFrameStyle(prefix)}`
   document.head.appendChild(style)
+}
+
+/**
+ * The overlays' frame. In the WebView `position: fixed` is the terminal frame; here it is the
+ * page, so they would draw over the header. The host becomes their containing block instead.
+ */
+function hostFrameStyle(prefix: string) {
+  return `${prefix} { position: relative; }
+${prefix} #selection-overlay, ${prefix} #scroll-indicator { position: absolute; }`
 }
 
 /**
@@ -86,8 +85,7 @@ function ensureDocumentStyle() {
  */
 function createPageWebglAddon(onFallback: (reason: string) => void) {
   try {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the addon's public surface is `dispose`, which the document's shape names; the two optional members it also reads are absent here and guarded at every call.
-    return new WebglAddon() as unknown as TerminalDocumentWebglAddon
+    return new WebglAddon()
   } catch (error) {
     onFallback(error instanceof Error ? error.message : String(error))
     return null
@@ -95,214 +93,171 @@ function createPageWebglAddon(onFallback: (reason: string) => void) {
 }
 
 /**
- * Which document is live, if any: one per page, because there is one scope per page.
+ * The document, mounted: style, markup, one call, and the handle that stops it.
  *
- * `document-scope` is a module singleton and every module reads it, so a second mount while the
- * first is up would not be a second terminal: both would drive the same fields, the same elements
- * and the same start sequence. The component mounts and disposes in one effect and cannot reach
- * this state, which is exactly why the refusal is named rather than left to surface as two
- * terminals writing over each other.
- *
- * A token per mount rather than the host element or the host's class. Two mounts can be handed
- * the same element — the page remounts a terminal into a host React has reused — so an element is
- * not an identity, and the class says only that *some* document is using this host. The token is
- * what each handle holds, and it is what `dispose` checks before it touches anything shared.
+ * Synchronous, because the factory is a static import and building a document is a function call.
+ * A caller's cleanup can therefore never arrive before there is something to clean up.
  */
-let liveDocument: symbol | null = null
-
-/** What a mount has built so far, which is nothing until its import resolves. */
-type StartedDocument = {
-  modules: typeof import('./document/page-document-modules')
-  onWindowResize: () => void
-}
-
-/**
- * The document, mounted. The handle comes back before the document exists.
- *
- * Synchronous on purpose. The modules arrive through a dynamic import, and the caller's cleanup
- * can run while that import is still in flight — a slow chunk, a cold cache, a tab that was
- * backgrounded. A caller that had to await the import to get a handle would have nothing to
- * dispose in that window, and the claim below would outlive the mount that made it: the next
- * mount, the one the error overlay's Reload asks for, would be refused as a second document and
- * the terminal would never come back. So the claim and the handle are made here, together, and
- * `dispose` answers for whichever state the mount is in when it is called.
- */
+/** What the view fixed when it mounted, for every document it builds. */
 export function mountTerminalWebDocument(
   host: HTMLElement,
-  receive: (message: Record<string, unknown>) => void
+  receive: (message: Record<string, unknown>) => void,
+  start: TerminalDocumentStart = { textScale: 1, shown: true }
 ): TerminalWebDocument {
-  if (liveDocument) {
-    throw new Error('the terminal document is already mounted on this page')
-  }
-  const token = Symbol('orca terminal document')
-  liveDocument = token
-  let started: StartedDocument | null = null
-  /**
-   * Gives the page back, and only if it is still this mount's to give.
-   *
-   * The check covers the element too, not just the claim. Emptying a host and taking its class
-   * off are what make the terminal disappear, so a release that skipped the claim but did those
-   * anyway would blank the terminal a later mount has on the screen. One rule, inside the thing
-   * it governs, rather than at each caller.
-   */
-  const release = () => {
-    if (liveDocument !== token) {
-      return
-    }
-    liveDocument = null
-    host.innerHTML = ''
-    // The sheet stays in the head; the class does not, so every rule in it matches nothing
-    // again the moment the terminal is gone.
-    host.classList.remove(HOST_CLASS)
-  }
-
-  try {
-    ensureDocumentStyle()
-    host.classList.add(HOST_CLASS)
-    host.innerHTML = TERMINAL_DOCUMENT_MARKUP
-    // The WebView's `<head>` declares this before anything runs, and the document's error
-    // reporter reads it unguarded. Without it the first report throws inside `window.onerror`.
-    window.__engineErrors = []
-  } catch (error) {
-    // The claim is made before this runs, so it has to come back if the planting fails.
-    release()
-    throw error
-  }
-
-  // Adopted by the build itself, in the same turn as the start sequence and the listener it adds,
-  // rather than when this promise settles. A `.then` runs a microtask later, and a dispose in
-  // between would find nothing started, skip the teardown and hand the page back with the
-  // document still running on it.
-  const ready = buildTerminalWebDocument(host, receive, token, (built) => {
-    started = built
-  }).catch((error: unknown) => {
-    // The import failed, so nothing was started and the page has to go back — the overlay's
-    // Reload is a second mount and it must be allowed to make one. A later mount may already
-    // hold the page, which `release` answers for.
-    release()
-    throw error
-  })
+  ensureDocumentStyle()
+  host.classList.add(HOST_CLASS)
+  host.innerHTML = TERMINAL_DOCUMENT_MARKUP
+  const viewport = pageViewport(host)
+  const started = startDocumentOrGiveTheHostBack(host, receive, start, viewport)
 
   return {
     send: (command) => {
-      started?.modules.handleMsg(command)
+      started.send(command)
     },
+    notifyViewport: viewport.notify,
     dispose: () => {
-      // Once, and only by the document that is live. A handle outlives what it built — the
-      // component holds one in a ref and React may run a cleanup after a later mount has already
-      // started — so a second call, or a call from a handle whose document has been replaced,
-      // would tear down the terminal that is on the screen now. Everything below this line is
-      // shared: the scope, the module sequences, the `window.__engineErrors` array.
-      if (liveDocument !== token) {
-        return
-      }
-      liveDocument = null
-      if (started) {
-        teardownStartedDocument(started)
-      }
-      // Dropped, not just torn down. `send` reads this, and the modules it names are the page's one
-      // singleton — so a handle that kept them would route a command into whatever document is
-      // live next, which is the mount that replaced this one.
-      started = null
+      started.stop()
       host.innerHTML = ''
+      // The sheet stays in the head; the class does not, so every rule in it matches nothing
+      // again the moment the terminal is gone.
       host.classList.remove(HOST_CLASS)
-    },
-    ready
+    }
   }
-}
-
-/** Undoes a document that did start: its listener, its module sequence and its terminals. */
-function teardownStartedDocument({ modules, onWindowResize }: StartedDocument) {
-  window.removeEventListener('resize', onWindowResize)
-  modules.stopPageDocumentModules()
-  const { scope } = modules
-  // Both terminals, because a swap that never committed leaves two. `beginTerminalSurfaceSwap`
-  // opens a hidden replacement and `commitTerminalSurfaceSwap` disposes the one it replaced; an
-  // unmount between the two leaves the committed terminal live with nothing pointing at it. They
-  // are the same object whenever no swap is open, so the pair is deduplicated.
-  for (const terminal of new Set([scope.term, scope.committedTerm])) {
-    try {
-      terminal?.dispose()
-    } catch {}
-  }
-  scope.term = null
-  scope.committedTerm = null
 }
 
 /**
- * Builds and starts the document, and hands it to `adopt` — or returns having done neither.
+ * The call, and the host given back if it throws.
  *
- * The token is read again the instant the import lands, before anything below it runs. Every
- * statement after this point writes shared state: the six seams are fields on a module-singleton
- * scope, `startPageDocumentModules` resets that scope and installs listeners, and the resize
- * listener outlives the host. A mount disposed while its chunk was in flight owns none of it, and
- * running the body anyway would plant its elements' listeners into a page a later mount is using
- * and reset that mount's scope out from under it. Checking only when this resolves is too late:
- * by then the writes have happened and the caller can do nothing but discard the result.
- *
- * `adopt` rather than a return value for the same reason: what it hands over is what undoes all of
- * that, and the caller has to be holding it before this function's turn ends.
+ * A start that throws is unwound inside the factory, which leaves the document stopped and the
+ * page holding this function's own two edits: the markup and the class. Neither has an owner once
+ * there is no handle, and the error overlay the caller shows would otherwise sit over a dead
+ * terminal's elements, styled by a sheet whose rules the class is still matching.
  */
-async function buildTerminalWebDocument(
+function startDocumentOrGiveTheHostBack(
   host: HTMLElement,
   receive: (message: Record<string, unknown>) => void,
-  token: symbol,
-  adopt: (built: StartedDocument) => void
-): Promise<void> {
-  const documentModules = await import('./document/page-document-modules')
-  if (liveDocument !== token) {
-    return
+  start: TerminalDocumentStart,
+  viewport: PageViewport
+) {
+  try {
+    return startPageDocument(host, receive, start, viewport)
+  } catch (error) {
+    host.innerHTML = ''
+    host.classList.remove(HOST_CLASS)
+    throw error
   }
-  const { scope } = documentModules
+}
 
-  // Ruling 19 reaches `window.onerror` too: the WebView's document owns its page and may take
-  // that handler, but this one is a guest. An `error` listener reports the same failures without
-  // displacing whatever the page installed, and it hands back its own removal so `stopHostNotify`
-  // takes it off with everything else.
-  scope.installErrorReporter = (report) => {
-    const errorListener = (event: ErrorEvent) => {
-      report(event.message, event.filename, event.lineno, event.colno, event.error)
+type PageViewport = ReturnType<typeof pageViewport>
+
+/**
+ * The host's box, pushed by RN layout. RN web lays a `display:none` host out as 0x0 and its return
+ * as the same box: the size stays the last real one, as a covered WebView's does, and the return is
+ * a show rather than a resize. Sizes are the client rect's; RN web's are whole-pixel `offsetWidth`s.
+ */
+function pageViewport(host: HTMLElement) {
+  // Seeded from the host, since RN's first layout can land before this mount exists.
+  const seed = host.getBoundingClientRect()
+  let laidOut = { width: seed.width, height: seed.height }
+  let onChange: ((change: TerminalViewportChange) => void) | null = null
+  return {
+    rect: () => {
+      const box = host.getBoundingClientRect()
+      const hidden = box.width <= 0
+      const size = hidden ? laidOut : box
+      return { left: box.left, top: box.top, width: size.width, height: size.height, hidden }
+    },
+    observe: (change: (change: TerminalViewportChange) => void) => {
+      onChange = change
+      return () => {
+        onChange = null
+      }
+    },
+    notify: () => {
+      const { width, height } = host.getBoundingClientRect()
+      if (width <= 0) {
+        return
+      }
+      if (width === laidOut.width && height === laidOut.height) {
+        onChange?.('shown')
+        return
+      }
+      laidOut = { width, height }
+      onChange?.('resized')
     }
-    window.addEventListener('error', errorListener)
-    return () => window.removeEventListener('error', errorListener)
   }
+}
 
-  // Ruling 19 again, for colour: inside the WebView the terminal's theme is the page's own
-  // background and the document paints `html` and `body` with it. Here those belong to the
-  // application, and a repaint would outlive the terminal, so the host element takes it instead —
-  // it is the element the grid sits on, which is what the paint was for.
-  scope.paintDocumentBackground = (background) => {
-    host.style.background = background
-  }
+/** The eleven seams, as the page answers them. */
+function startPageDocument(
+  host: HTMLElement,
+  receive: (message: Record<string, unknown>) => void,
+  start: TerminalDocumentStart,
+  viewport: PageViewport
+) {
+  // Written by this document's own reporter: `startHostNotify` installs it through the seam below,
+  // which here is a `window` error listener, and every error it forwards is appended before the
+  // report that quotes it. What the page cannot have is the WebView head's half — a buffer open
+  // before the engine script runs — because the engine here is a static import of this module. So
+  // the buffer is per mount, and a second terminal quotes its own lines rather than the first's.
+  const capturedEngineErrors: string[] = []
+  return createTerminalDocument({
+    capturedEngineErrors: () => capturedEngineErrors,
 
-  scope.postToHost = receive
-  scope.createTerminal = (options) =>
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm's own Terminal is the engine the document was written against; its options are declared optional where the document's shape declares them present, which is the only difference.
-    new Terminal(options) as unknown as ReturnType<typeof scope.createTerminal>
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the addon's public surface is `dispose`, which the document's shape names; the two optional members it also reads are absent here and guarded there.
-  scope.createUnicode11Addon = () => new Unicode11Addon() as unknown as TerminalDocumentWebglAddon
-  scope.createWebglAddon = () =>
-    createPageWebglAddon((reason) =>
-      receive({
-        type: 'log',
-        tag: '[fit]webgl-unavailable',
-        payload: { renderer: 'dom', message: reason }
-      })
-    )
+    // Ruling 24's ninth member: this document's elements are the ones inside this host. Two
+    // terminals can be on the page at once — a stack transition keeps the outgoing screen mounted
+    // while the incoming one starts — and the markup's ids are the same in both hosts.
+    root: host,
 
-  // Now the document itself, with every seam already in place.
-  documentModules.startPageDocumentModules()
+    postToHost: receive,
 
-  // `message-bridge` is not imported (ruling 19), so its one non-bridge duty is re-armed here:
-  // a viewport change has to re-fit, or opening the keyboard leaves the terminal at the old scale.
-  const onWindowResize = () => {
-    documentModules.applyFitScale('window-resize')
-    documentModules.adjustRowsForViewport()
-    documentModules.repositionOverlay()
-    documentModules.clampPan()
-    documentModules.updateTransform()
-  }
-  window.addEventListener('resize', onWindowResize)
+    // Ruling 19 reaches `window.onerror`: the WebView's document owns its page and may take that
+    // handler, but this one is a guest. An `error` listener reports the same failures without
+    // displacing whatever the page installed, and it hands back its own removal so
+    // `stopHostNotify` takes it off with everything else.
+    installErrorReporter: (report) => {
+      const errorListener = (event: ErrorEvent) => {
+        report(event.message, event.filename, event.lineno, event.colno, event.error)
+      }
+      window.addEventListener('error', errorListener)
+      return () => window.removeEventListener('error', errorListener)
+    },
 
-  adopt({ modules: documentModules, onWindowResize })
+    // Ruling 19 again, for colour: inside the WebView the terminal's theme is the page's own
+    // background and the document paints `html` and `body` with it. Here those belong to the
+    // application, and a repaint would outlive the terminal, so the host element takes it instead —
+    // it is the element the grid sits on, which is what the paint was for.
+    paintDocumentBackground: (background) => {
+      host.style.background = background
+    },
+
+    // Ruling 24: the page's transport is the handle this returns. Listening for the shell's own
+    // `message` events would take frames that belong to the page's bridge, so nothing is installed
+    // and there is nothing to remove.
+    installHostTransport: () => () => {},
+
+    // Ruling 24: the WebView reads a global the engine bundle installs, because its script tag can
+    // fail. Here the engine is the import above, so it is here or this module did not load.
+    hasEngine: () => true,
+
+    start: () => start,
+
+    // The window here is the whole page, header and dock included; the grid is shown in the host.
+    viewportRect: viewport.rect,
+
+    // The host resizes without the window, and RN layout is what says so: the component pushes it.
+    observeViewport: viewport.observe,
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shape is xterm's own, except that `getCell` takes back the cell xterm allocated and the document declares only the members it reads on one.
+    createTerminal: (options) => new Terminal(options) as unknown as TerminalDocumentTerminal,
+    createUnicode11Addon: () => new Unicode11Addon(),
+    createWebglAddon: () =>
+      createPageWebglAddon((reason) =>
+        receive({
+          type: 'log',
+          tag: '[fit]webgl-unavailable',
+          payload: { renderer: 'dom', message: reason }
+        })
+      )
+  })
 }

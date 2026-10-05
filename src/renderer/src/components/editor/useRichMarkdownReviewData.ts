@@ -41,12 +41,15 @@ export function useRichMarkdownReviewData({
     [filePath, markdownAnnotationFilePath, worktreeRoot]
   )
   const canAnnotateRichMarkdown = Boolean(markdownAnnotationsEnabled && sourceRelativePath !== null)
+  // Why: stored notes stay intact; disabled review tools just stop surfacing them.
   const markdownComments = useMemo(
     () =>
-      (allDiffComments ?? []).filter(
-        (comment) => comment.filePath === sourceRelativePath && isMarkdownComment(comment)
-      ),
-    [allDiffComments, sourceRelativePath]
+      markdownAnnotationsEnabled
+        ? (allDiffComments ?? []).filter(
+            (comment) => comment.filePath === sourceRelativePath && isMarkdownComment(comment)
+          )
+        : [],
+    [allDiffComments, markdownAnnotationsEnabled, sourceRelativePath]
   )
   const markdownReviewNotes = useMemo(
     () => sortMarkdownReviewNotes(markdownComments as MarkdownReviewNote[]),
@@ -62,7 +65,7 @@ export function useRichMarkdownReviewData({
           'All unsent notes'
         ),
         notes: unsentNotes,
-        prompt: formatMarkdownReviewNotes(unsentNotes, markdownReviewContent)
+        formatPrompt: (notes) => formatMarkdownReviewNotes(notes, markdownReviewContent)
       }
     ]
   }, [markdownReviewContent, markdownReviewNotes])

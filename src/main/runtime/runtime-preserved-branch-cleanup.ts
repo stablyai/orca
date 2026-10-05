@@ -136,8 +136,12 @@ export class RuntimePreservedBranchCleanup {
     } else {
       const options = getLocalProjectWorktreeGitOptions(store, repo)
       await (Object.keys(options).length > 0
-        ? forceDeleteLocalBranch(repo.path, target.branchName, target.head, (argv, cwd) =>
-            gitExecFileAsync(argv, { cwd, ...options })
+        ? forceDeleteLocalBranch(
+            repo.path,
+            target.branchName,
+            target.head,
+            (argv, cwd) => gitExecFileAsync(argv, { cwd, ...options }),
+            options
           )
         : forceDeleteLocalBranch(repo.path, target.branchName, target.head))
       await cleanupUnusedWorktreePushTargetRemote(

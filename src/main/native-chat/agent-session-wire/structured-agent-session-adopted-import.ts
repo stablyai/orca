@@ -1,7 +1,12 @@
-import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
+import {
+  agentSessionRefusalError,
+  isAgentSessionRefusalError,
+  refuse,
+  type AgentSessionWireRefusal
+} from '../../../shared/agent-session-wire'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { agentSessionProviderHandleFromWire } from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionAttachParams, AttachedJournal } from './structured-agent-session-attach'
-import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
 import {
   importLegacyTranscriptIntoJournal,
@@ -19,10 +24,13 @@ export async function prepareAdoptedTranscript(
   } catch (error) {
     return {
       ok: false,
-      refusal: {
-        code: 'agent_session_identity_required',
-        message: error instanceof Error ? error.message : String(error)
-      }
+      refusal: isAgentSessionRefusalError(error)
+        ? error.refusal
+        : refuse(
+            'agent_session_identity_required',
+            { reason: 'transcriptUnreadable' },
+            error instanceof Error ? error.message : String(error)
+          )
     }
   }
 }
@@ -36,21 +44,22 @@ async function readAdoptedTranscript(
     return null
   }
   if (!adopt.transcriptPath) {
-    throw new Error('agent_session_identity_required')
+    throw agentSessionRefusalError('agent_session_identity_required', {
+      reason: 'transcriptNotFound'
+    })
   }
   const prepared = await prepareLegacyTranscriptImport({
     agent: params.agent,
-    sessionId:
-      adopt.providerHandle.kind === 'claude'
-        ? adopt.providerHandle.sessionId
-        : adopt.providerHandle.threadId,
+    sessionId: agentSessionProviderHandleFromWire(adopt.providerHandle).nativeId,
     options: { filePath: adopt.transcriptPath }
   })
   if (!prepared.ok) {
     throw new Error(prepared.error)
   }
   if (prepared.items.length === 0) {
-    throw new Error('agent_session_identity_required')
+    throw agentSessionRefusalError('agent_session_identity_required', {
+      reason: 'transcriptUnreadable'
+    })
   }
   return prepared.items
 }
@@ -62,13 +71,8 @@ export async function importAdoptedTranscript(
   record: AgentSessionRecord,
   prepared: JournalReplacementItem[] | null
 ): Promise<void> {
-  try {
-    await applyAdoptedTranscript(params, attached, record, prepared)
-  } catch (error) {
-    // Publication has not taken ownership of this provisional journal yet.
-    await agentSessionJournalCloseRetries.closeOrRetain(attached.journal)
-    throw error
-  }
+  // The journal is the conversation's, which outlives a failed import; nothing here closes it.
+  await applyAdoptedTranscript(params, attached, record, prepared)
 }
 
 async function applyAdoptedTranscript(
@@ -87,15 +91,14 @@ async function applyAdoptedTranscript(
     return
   }
   if (!adopt.transcriptPath) {
-    throw new Error('agent_session_identity_required')
+    throw agentSessionRefusalError('agent_session_identity_required', {
+      reason: 'transcriptNotFound'
+    })
   }
   const imported = await importLegacyTranscriptIntoJournal({
     journal: attached.journal,
     agent: params.agent,
-    sessionId:
-      adopt.providerHandle.kind === 'claude'
-        ? adopt.providerHandle.sessionId
-        : adopt.providerHandle.threadId,
+    sessionId: agentSessionProviderHandleFromWire(adopt.providerHandle).nativeId,
     fence: record.lease.runtimeFence,
     options: { filePath: adopt.transcriptPath }
   })
@@ -105,6 +108,8 @@ async function applyAdoptedTranscript(
   // `replaced: false` means the transcript decoded to nothing. The row promised a conversation and
   // the provider resumed one, so an empty journal here is a disagreement, not an empty chat.
   if (!imported.replaced) {
-    throw new Error('agent_session_identity_required')
+    throw agentSessionRefusalError('agent_session_identity_required', {
+      reason: 'transcriptUnreadable'
+    })
   }
 }

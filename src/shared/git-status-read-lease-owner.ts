@@ -3,6 +3,7 @@ type StatusReadEntry<T> = {
   promise: Promise<T>
   liveLeases: number
   settled: boolean
+  timeout?: ReturnType<typeof setTimeout>
 }
 
 function getAbortReason(signal: AbortSignal): unknown {
@@ -17,6 +18,11 @@ function getAbortReason(signal: AbortSignal): unknown {
 export class GitStatusReadLeaseOwner<T> {
   private readonly entries = new Map<string, StatusReadEntry<T>>()
 
+  constructor(
+    private readonly maxEntries = Infinity,
+    private readonly maxInFlightMs = 0
+  ) {}
+
   lease(
     key: string,
     signal: AbortSignal | undefined,
@@ -30,9 +36,23 @@ export class GitStatusReadLeaseOwner<T> {
     if (!entry) {
       const controller = new AbortController()
       const promise = load(controller.signal)
-      const createdEntry = { controller, promise, liveLeases: 0, settled: false }
+      const createdEntry: StatusReadEntry<T> = {
+        controller,
+        promise,
+        liveLeases: 0,
+        settled: false
+      }
       entry = createdEntry
-      this.entries.set(key, createdEntry)
+      if (this.entries.size < this.maxEntries) {
+        this.entries.set(key, createdEntry)
+        if (this.maxInFlightMs > 0) {
+          // Expiry detaches retries; existing callers retain their read and cancellation ownership.
+          createdEntry.timeout = setTimeout(
+            () => this.detach(key, createdEntry),
+            this.maxInFlightMs
+          )
+        }
+      }
       void promise.then(
         () => this.settle(key, createdEntry),
         () => this.settle(key, createdEntry)
@@ -44,6 +64,9 @@ export class GitStatusReadLeaseOwner<T> {
   }
 
   invalidate(): void {
+    for (const [key, entry] of this.entries) {
+      this.detach(key, entry)
+    }
     this.entries.clear()
   }
 
@@ -62,9 +85,7 @@ export class GitStatusReadLeaseOwner<T> {
         signal?.removeEventListener('abort', onAbort)
         entry.liveLeases -= 1
         if (abortReason !== undefined && entry.liveLeases === 0 && !entry.settled) {
-          if (this.entries.get(key) === entry) {
-            this.entries.delete(key)
-          }
+          this.detach(key, entry)
           entry.controller.abort(abortReason)
         }
         return true
@@ -77,6 +98,9 @@ export class GitStatusReadLeaseOwner<T> {
       }
 
       signal?.addEventListener('abort', onAbort, { once: true })
+      if (signal?.aborted) {
+        onAbort()
+      }
       void entry.promise.then(
         (value) => {
           if (release()) {
@@ -94,6 +118,14 @@ export class GitStatusReadLeaseOwner<T> {
 
   private settle(key: string, entry: StatusReadEntry<T>): void {
     entry.settled = true
+    this.detach(key, entry)
+  }
+
+  private detach(key: string, entry: StatusReadEntry<T>): void {
+    if (entry.timeout !== undefined) {
+      clearTimeout(entry.timeout)
+      entry.timeout = undefined
+    }
     if (this.entries.get(key) === entry) {
       this.entries.delete(key)
     }

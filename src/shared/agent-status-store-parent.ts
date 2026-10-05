@@ -50,7 +50,7 @@ function isParentScopeConsistent(parent: AgentStatusParentInput): boolean {
   if (status?.worktreeId !== undefined && status.worktreeId !== subject.workspaceId) {
     return false
   }
-  if (subject.kind === 'pty' && status?.paneKey !== subject.paneKey) {
+  if (subject.kind === 'pty' && status && status.paneKey !== subject.paneKey) {
     return false
   }
   if (subject.kind === 'pty-run' && status?.runId !== undefined && status.runId !== subject.runId) {

@@ -97,10 +97,14 @@ export function buildAiVaultServiceEnv(
   return env
 }
 
-/** Relay: the sidecar takes every root from its init message, not the environment. */
+/** Relay: home comes from init; OpenCode also supports host-side data overrides. */
 export function buildRelayAiVaultServiceEnv(
   baseEnv: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
-  return pickAllowedEnv(RUNTIME_ENV_ALLOWLIST, baseEnv, platform)
+  return pickAllowedEnv(
+    [...RUNTIME_ENV_ALLOWLIST, 'XDG_DATA_HOME', 'OPENCODE_DB'],
+    baseEnv,
+    platform
+  )
 }

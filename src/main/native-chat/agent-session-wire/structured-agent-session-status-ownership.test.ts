@@ -94,4 +94,29 @@ describe('structured status owner address retention', () => {
     expect(() => unavailable.publish(summary, location)).not.toThrow()
     expect(() => unavailable.forget(summary.sessionId)).not.toThrow()
   })
+
+  it('offers child work only under the address its parent row landed under', () => {
+    const sink = { publish: vi.fn(), forget: vi.fn(), publishChildWork: vi.fn() }
+    const owner = new StructuredAgentSessionStatusOwnership(() => sink)
+    const subject = makeStructuredAgentStatusSubject(location, summary.sessionId)
+    const evidence = [{ type: 'session-ended' as const, observedAt: 1 }]
+    owner.publishChildWork(summary.sessionId, evidence, 'claude')
+    expect(sink.publishChildWork).not.toHaveBeenCalled()
+    owner.publish(summary, location)
+    owner.publishChildWork(summary.sessionId, evidence, 'claude')
+    expect(sink.publishChildWork).toHaveBeenCalledExactlyOnceWith(subject, evidence, 'claude')
+    owner.forget(summary.sessionId)
+    owner.publishChildWork(summary.sessionId, evidence, 'claude')
+    expect(sink.publishChildWork).toHaveBeenCalledOnce()
+    // An address held after a publish that threw is not a row that landed.
+    const unlanded = new StructuredAgentSessionStatusOwnership(() => ({
+      ...sink,
+      publish: () => {
+        throw new Error('store down')
+      }
+    }))
+    expect(() => unlanded.publish(summary, location)).toThrow('store down')
+    unlanded.publishChildWork(summary.sessionId, evidence, 'claude')
+    expect(sink.publishChildWork).toHaveBeenCalledOnce()
+  })
 })

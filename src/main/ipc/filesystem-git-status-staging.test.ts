@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -305,42 +306,51 @@ describe('registerFilesystemHandlers', () => {
     })
   })
 
-  it('aborts tokenized local status without crossing renderer boundaries', async () => {
-    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
-    const statusSignals: AbortSignal[] = []
-    getStatusMock.mockImplementation(
-      (_worktreePath: string, options: { signal?: AbortSignal }) =>
-        new Promise((_resolve, reject) => {
-          if (options.signal) {
-            statusSignals.push(options.signal)
-            options.signal.addEventListener('abort', () => reject(new Error('aborted')), {
-              once: true
-            })
-          }
-        })
-    )
-    registerFilesystemHandlers(store as never)
+  it.each(['cancel', 'did-navigate', 'render-process-gone', 'destroyed'])(
+    'aborts tokenized local status on %s without crossing renderer boundaries',
+    async (eventName) => {
+      registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+      const statusSignals: AbortSignal[] = []
+      getStatusMock.mockImplementation(
+        (_worktreePath: string, options: { signal?: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            if (options.signal) {
+              statusSignals.push(options.signal)
+              options.signal.addEventListener('abort', () => reject(new Error('aborted')), {
+                once: true
+              })
+            }
+          })
+      )
+      registerFilesystemHandlers(store as never)
 
-    const firstEvent = { sender: { id: 7 } }
-    const secondEvent = { sender: { id: 8 } }
-    const firstRequest = handlers.get('git:status')!(firstEvent, {
-      worktreePath: WORKTREE_FEATURE_PATH,
-      requestToken: 'status-1'
-    }) as Promise<unknown>
-    const secondRequest = handlers.get('git:status')!(secondEvent, {
-      worktreePath: WORKTREE_FEATURE_PATH,
-      requestToken: 'status-1'
-    }) as Promise<unknown>
-    await vi.waitFor(() => expect(statusSignals).toHaveLength(2))
-    await handlers.get('git:cancelStatus')!(firstEvent, { requestToken: 'status-1' })
+      const firstEvent = { sender: Object.assign(new EventEmitter(), { id: 7 }) }
+      const secondEvent = { sender: Object.assign(new EventEmitter(), { id: 8 }) }
+      const firstRequest = handlers.get('git:status')!(firstEvent, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        requestToken: 'status-1'
+      }) as Promise<unknown>
+      const secondRequest = handlers.get('git:status')!(secondEvent, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        requestToken: 'status-1'
+      }) as Promise<unknown>
+      await vi.waitFor(() => expect(statusSignals).toHaveLength(2))
+      if (eventName === 'cancel') {
+        await handlers.get('git:cancelStatus')!(firstEvent, { requestToken: 'status-1' })
+      } else {
+        firstEvent.sender.emit(eventName)
+      }
 
-    expect(statusSignals[0]?.aborted).toBe(true)
-    expect(statusSignals[1]?.aborted).toBe(false)
-    await expect(firstRequest).rejects.toThrow('aborted')
+      expect(statusSignals[0]?.aborted).toBe(true)
+      expect(statusSignals[1]?.aborted).toBe(false)
+      await expect(firstRequest).rejects.toThrow('aborted')
 
-    await handlers.get('git:cancelStatus')!(secondEvent, { requestToken: 'status-1' })
-    await expect(secondRequest).rejects.toThrow('aborted')
-  })
+      await handlers.get('git:cancelStatus')!(secondEvent, { requestToken: 'status-1' })
+      await expect(secondRequest).rejects.toThrow('aborted')
+      expect(firstEvent.sender.eventNames()).toEqual([])
+      expect(secondEvent.sender.eventNames()).toEqual([])
+    }
+  )
 
   it('checks ignored paths through local and SSH git providers', async () => {
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])

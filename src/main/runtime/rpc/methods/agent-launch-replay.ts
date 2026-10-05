@@ -11,8 +11,8 @@
  * resolving the caller's worktree selector, because a selector resolution is a live precondition
  * and a replay must not be able to fail on one: an operation that already ran has an answer, and
  * re-deciding it against today's world is how a recorded success becomes a fresh refusal the client
- * then retries as a second effect. `admitAgentSessionMutation` puts the ledger ahead of the lease
- * and the fence for that same reason.
+ * then retries as a second effect. `admitAgentSessionMutation` puts the ledger ahead of the writer
+ * lease for that same reason.
  */
 
 import { deriveAgentLaunchChildOperationId } from '../../../../shared/agent-launch-operation'
@@ -116,7 +116,7 @@ function answerFromRecordedRow(
 }
 
 /**
- * Admit, then claim.
+ * Admit, then claim, in one durable transaction so a launch writes the ledger once before its effect.
  *
  * Two steps because they answer different questions — "is this id known and consistent?" and "may
  * *I* run it?" — and the second cannot be folded into the first. Admission hands two concurrent
@@ -136,12 +136,14 @@ export async function admitAgentLaunchOperation(
   }
   const store = await requireLaunchOperationStore(context)
   const callerKey = agentLaunchOperationCallerKey(context)
-  const admitted = await store.admitOperation({
-    callerKey,
-    operationId,
-    fingerprint,
-    now
-  })
+  const { decision: admitted, claim } = await store.admitAndClaimOperation(
+    { callerKey, operationId, fingerprint, now },
+    // A fresh row, or a replayed one no one has answered yet, leaves the right to run open.
+    (decision) =>
+      decision.decision === 'admit' ||
+      (decision.decision === 'replay' &&
+        answerFromRecordedRow(operationId, decision.row.outcome) === null)
+  )
   if (admitted.decision === 'refused') {
     return refusal(operationId, admitted.code, `was refused: ${admitted.code}`)
   }
@@ -151,22 +153,20 @@ export async function admitAgentLaunchOperation(
       return answer
     }
   }
-  const claim = await store.claimOperation({ callerKey, operationId })
+  // Unreachable with both steps in one transaction; answered as uncertain rather than run twice.
+  if (!claim || claim.claim === 'absent') {
+    return refusal(
+      operationId,
+      'agent_session_operation_unknown',
+      'has no claim; its outcome is unknown'
+    )
+  }
   if (claim.claim === 'lost') {
     // The handler joins same-process retries before admission. Reaching a claimed row here means
     // this runtime did not start it, so treating it as restart uncertainty is the safe answer.
     return (
       answerFromRecordedRow(operationId, claim.row.outcome) ??
       refusal(operationId, 'agent_session_operation_unknown', 'is claimed but unsettled')
-    )
-  }
-  if (claim.claim === 'absent') {
-    // Admitted a moment ago and gone already: the row cannot be re-admitted without reopening the
-    // duplicate-spawn window it exists to close, so this stays uncertain.
-    return refusal(
-      operationId,
-      'agent_session_operation_unknown',
-      'was pruned between admission and its claim; its outcome is unknown'
     )
   }
   return {

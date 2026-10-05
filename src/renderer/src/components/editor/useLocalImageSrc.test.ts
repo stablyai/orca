@@ -418,4 +418,22 @@ describe('loadLocalImageSrc', () => {
 
     expect(renders).toEqual([undefined])
   })
+
+  it('never shares a cached image across access kinds', () => {
+    const userFile = getLocalImageCacheKey('/tmp/a.png', undefined, undefined, {
+      kind: 'user-file'
+    })
+    const fromDocA = getLocalImageCacheKey('/tmp/a.png', undefined, undefined, {
+      kind: 'document-resource',
+      documentPath: '/tmp/a.md'
+    })
+    const fromDocB = getLocalImageCacheKey('/tmp/a.png', undefined, undefined, {
+      kind: 'document-resource',
+      documentPath: '/other/b.md'
+    })
+
+    expect(new Set([userFile, fromDocA, fromDocB, getLocalImageCacheKey('/tmp/a.png')]).size).toBe(
+      4
+    )
+  })
 })

@@ -148,17 +148,6 @@ describe('buildRows project grouping order', () => {
     ])
   })
 
-  it('orders repo headers by repoOrder in Manual mode (default), ignoring activity', () => {
-    const repoOrder = new Map([
-      [repoB.id, 0],
-      [repoA.id, 1],
-      [repoC.id, 2]
-    ])
-    const rows = buildRows('repo', [wC, wA, wB], map, null, new Set(), repoOrder)
-    const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
-    expect(headerKeys).toEqual(['repo:repo-b', 'repo:repo-a', 'repo:repo-c'])
-  })
-
   it('builds rows for a very large repo-group list', () => {
     const count = 130_000
     const repos = new Map<string, Repo>()

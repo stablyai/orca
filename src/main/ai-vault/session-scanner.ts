@@ -1,3 +1,4 @@
+import { candidateFileTime } from './antigravity-transcript-candidates'
 import type {
   AiVaultListResult,
   AiVaultScanIssue,
@@ -26,7 +27,12 @@ import { recordSessionScanIssue } from './session-scan-issues'
 import { getSessionParseCacheEntry } from './session-parse-cache-store'
 import { describeSkippedTranscriptRecords } from './session-transcript-record-budget'
 import { canStopParsingSessions } from './session-scan-cutoff'
-import { discoverInScopeClaudeFiles } from './session-scanner-scope-discovery'
+import { discoverInScopeCwdBucketFiles } from './session-scanner-scope-discovery'
+import {
+  CLAUDE_CWD_BUCKET_LAYOUT,
+  PI_CWD_BUCKET_LAYOUT,
+  CODEBUDDY_CWD_BUCKET_LAYOUT
+} from './session-cwd-bucket-layouts'
 import { discoverAiVaultSessionSources } from './session-scanner-source-discovery'
 import { cursorChatMetaRefusals, withCursorChatMetaScan } from './session-scanner-cursor-chat-meta'
 import type {
@@ -39,6 +45,7 @@ import { clampPositiveInteger, errorMessage } from './session-scanner-values'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { DEFAULT_AI_VAULT_SCAN_LIMIT } from '../../shared/ai-vault-session-depth'
 import { withDevinSessionsDbScan } from './session-scanner-devin-db'
+import { withOpenCodeSqliteScanScope } from './session-scanner-opencode-sqlite-scan-scope'
 
 const SESSION_PARSE_CONCURRENCY = 8
 const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
@@ -55,6 +62,10 @@ const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
 export async function scanAiVaultSessions(
   options: AiVaultScanOptions = {}
 ): Promise<AiVaultListResult> {
+  return withOpenCodeSqliteScanScope(() => scanAiVaultSessionStores(options))
+}
+
+async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<AiVaultListResult> {
   // The span makes scan cost visible in the local trace file: STA-1278-style
   // "one core pegged" reports need to show whether transcript scanning is the
   // subsystem burning CPU, and how much of each scan the cache absorbed.
@@ -73,8 +84,8 @@ export async function scanAiVaultSessions(
         const executionHostId = options.executionHostId ?? LOCAL_EXECUTION_HOST_ID
         const issues: AiVaultScanIssue[] = []
         const parseStats = createSessionParseStats()
-        const antigravityWorkspaceResolver = createAntigravityWorkspaceResolver(
-          readLocalAntigravityHistory
+        const antigravityWorkspaceResolver = createAntigravityWorkspaceResolver((path) =>
+          readLocalAntigravityHistory(path, options.signal)
         )
         // Why: persisted entries must be seeded before any candidate is parsed, or
         // the cold scan gains nothing from the cache file (#9210).
@@ -163,6 +174,14 @@ function mergeSessions(
   return [...byId.values()].sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
 }
 
+// Agents whose on-disk layout names a directory per cwd, so a scope's older
+// sessions can be found without reading every transcript's header.
+const CWD_BUCKET_LAYOUTS = [
+  CLAUDE_CWD_BUCKET_LAYOUT,
+  PI_CWD_BUCKET_LAYOUT,
+  CODEBUDDY_CWD_BUCKET_LAYOUT
+]
+
 async function scanInScopeSessions(args: {
   discoveries: SessionFileDiscovery[]
   scopePaths: readonly string[]
@@ -177,21 +196,19 @@ async function scanInScopeSessions(args: {
   if (args.scopePaths.length === 0) {
     return []
   }
-  const claudeRootDirs = args.discoveries
-    .filter((discovery) => discovery.agent === 'claude')
-    .map((discovery) => discovery.rootDir)
-  const files = await discoverInScopeClaudeFiles({
-    rootDirs: claudeRootDirs,
-    scopePaths: args.scopePaths,
-    limit: args.limit,
-    excludedFilePaths: args.alreadyParsedFilePaths,
-    issues: args.issues
-  })
-  const candidates = files.map((file): SessionFileCandidate => ({
-    agent: 'claude',
-    file,
-    codexHome: null
-  }))
+  const candidates: SessionFileCandidate[] = []
+  for (const layout of CWD_BUCKET_LAYOUTS) {
+    const files = await discoverInScopeCwdBucketFiles(layout, {
+      rootDirs: args.discoveries
+        .filter((discovery) => discovery.agent === layout.agent)
+        .map((discovery) => discovery.rootDir),
+      scopePaths: args.scopePaths,
+      limit: args.limit,
+      excludedFilePaths: args.alreadyParsedFilePaths,
+      issues: args.issues
+    })
+    candidates.push(...files.map((file) => ({ agent: layout.agent, file, codexHome: null })))
+  }
   if (candidates.length === 0) {
     return []
   }
@@ -222,7 +239,9 @@ async function parseSessionCandidates(args: {
 
   while (index < args.candidates.length) {
     throwIfAiVaultScanCancelled(args.signal)
-    if (canStopParsingSessions(sessions, args.limit, args.candidates[index]?.file.mtimeMs)) {
+    if (
+      canStopParsingSessions(sessions, args.limit, candidateFileTime(args.candidates[index]?.file))
+    ) {
       break
     }
 
@@ -237,7 +256,8 @@ async function parseSessionCandidates(args: {
           args.platform,
           args.executionHostId,
           args.parseStats,
-          args.antigravityWorkspaceResolver
+          args.antigravityWorkspaceResolver,
+          args.signal
         )
       )
     )
@@ -265,10 +285,17 @@ async function parseSessionCandidate(
   platform: NodeJS.Platform,
   executionHostId: ExecutionHostId,
   parseStats: SessionParseStats,
-  antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
+  antigravityWorkspaceResolver?: AntigravityWorkspaceResolver,
+  signal?: AbortSignal
 ): Promise<SessionParseResult> {
   try {
-    let session = await parseAgentSessionFileCached(candidate, platform, parseStats)
+    let session = await parseAgentSessionFileCached(
+      candidate,
+      platform,
+      parseStats,
+      undefined,
+      signal
+    )
     if (session && candidate.antigravityHistoryPath && antigravityWorkspaceResolver) {
       session = await antigravityWorkspaceResolver.enrich(session, candidate.antigravityHistoryPath)
     }

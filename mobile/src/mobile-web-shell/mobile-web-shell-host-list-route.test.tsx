@@ -25,6 +25,12 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   }
 }))
 
+vi.mock('react-native', () => ({
+  ActivityIndicator: 'ActivityIndicator',
+  StyleSheet: { create: (styles: unknown) => styles },
+  View: 'View'
+}))
+
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ hostId: dependencies.hostId })
 }))
@@ -38,21 +44,6 @@ vi.mock('../host-screen/HostScreen', () => ({
     dependencies.nativeRenders += 1
     return null
   }
-}))
-
-// `firstParam` lives beside the source-control screen state, which imports the lucide barrel, and
-// that barrel's `LucideProvider` re-export is the gap the web build patches with a plugin. Nine
-// icons, named as the other suites name theirs; none of them renders here.
-vi.mock('lucide-react-native', () => ({
-  ArrowDown: vi.fn(),
-  ArrowDownUp: vi.fn(),
-  ArrowUp: vi.fn(),
-  Check: vi.fn(),
-  CloudUpload: vi.fn(),
-  GitBranch: vi.fn(),
-  GitPullRequestArrow: vi.fn(),
-  History: vi.fn(),
-  RefreshCw: vi.fn()
 }))
 
 vi.mock('../layout/responsive-layout', () => ({

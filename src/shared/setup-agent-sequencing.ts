@@ -1,4 +1,5 @@
 import { encodePowerShellCommand } from './powershell-command-encoding'
+import { getPosixCodexShellLaunchPreflight } from './codex-shell-function'
 import {
   nativeWindowsPathToPosixShellPath,
   resolveSetupRunnerCommand,
@@ -6,6 +7,8 @@ import {
   type SetupRunnerCommandShell,
   type SetupRunnerShell
 } from './setup-runner-command'
+import { createNonSecureContextUuid } from './non-secure-context-uuid'
+import { quotePowerShellLiteral } from './powershell-native-argument'
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 // Exported so the gate and its tests share one definition.
@@ -28,11 +31,7 @@ export function resolveSetupAgentSequenceLaunchCommand(
 }
 
 export function createSetupAgentSequenceNonce(): string {
-  const cryptoApi = globalThis.crypto
-  if (typeof cryptoApi?.randomUUID === 'function') {
-    return cryptoApi.randomUUID()
-  }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  return createNonSecureContextUuid()
 }
 
 export function createSequencedSetupAgentCommands(args: {
@@ -130,7 +129,9 @@ function buildPosixStartupScript(
     `rm -f ${marker} ${tmp} 2>/dev/null;`,
     // Why: failure and timeout announce themselves; a silent success left
     // "Waiting for setup..." as the pane's last line forever.
-    `if [ "$status" = "0" ]; then echo ${quotePosixArg(SETUP_COMPLETE_MESSAGE)} >&2; if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
+    // Why here and not first: setup may be what puts codex on PATH, and this
+    // `bash -lc` never reads Orca's shell wrapper, so it defines the function itself.
+    `if [ "$status" = "0" ]; then echo ${quotePosixArg(SETUP_COMPLETE_MESSAGE)} >&2;\n${getPosixCodexShellLaunchPreflight()}if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
     'echo "Setup failed; skipping agent startup." >&2;',
     'exit "${status:-1}";',
     'fi;',
@@ -196,10 +197,10 @@ function buildWindowsSetupCommand(
 ): string {
   // Why: delayed expansion keeps path metacharacters as data when cmd invokes the batch runner.
   const script = [
-    `$runner = ${quotePowerShellString(runnerScriptPath)}`,
-    `$marker = ${quotePowerShellString(markerPath)}`,
+    `$runner = ${quotePowerShellLiteral(runnerScriptPath)}`,
+    `$marker = ${quotePowerShellLiteral(markerPath)}`,
     '$tmp = $marker + ".tmp"',
-    `$nonce = ${quotePowerShellString(nonce)}`,
+    `$nonce = ${quotePowerShellLiteral(nonce)}`,
     'Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue',
     '$processInfo = [System.Diagnostics.ProcessStartInfo]::new()',
     '$processInfo.FileName = $env:ComSpec',
@@ -248,13 +249,13 @@ function buildWindowsStartupCommand(
       '"session (" + $_.FullyQualifiedErrorId + "). A startup command that runs a .ps1 " + ' +
       '"may be blocked.") }',
     '$ProgressPreference = $orcaProgress',
-    `$marker = ${quotePowerShellString(markerPath)}`,
+    `$marker = ${quotePowerShellLiteral(markerPath)}`,
     'if ([string]::IsNullOrWhiteSpace($marker)) {',
     '  [Console]::Error.WriteLine("Missing setup marker path.")',
     '  exit 1',
     '}',
     '$tmp = $marker + ".tmp"',
-    `$nonce = ${quotePowerShellString(nonce)}`,
+    `$nonce = ${quotePowerShellLiteral(nonce)}`,
     `$deadline = (Get-Date).AddSeconds(${timeout})`,
     '[Console]::Error.WriteLine("Waiting for setup to finish before starting agent...")',
     'while ($true) {',
@@ -272,7 +273,7 @@ function buildWindowsStartupCommand(
     '        [Console]::Error.WriteLine("Missing sequenced startup command.")',
     '        exit 1',
     '      }',
-    `      [Console]::Error.WriteLine(${quotePowerShellString(SETUP_COMPLETE_MESSAGE)})`,
+    `      [Console]::Error.WriteLine(${quotePowerShellLiteral(SETUP_COMPLETE_MESSAGE)})`,
     '      Invoke-Expression $startup',
     '      if ($global:LASTEXITCODE -ne $null) { exit $global:LASTEXITCODE }',
     '      if (-not $?) { exit 1 }',
@@ -302,10 +303,6 @@ function quotePosixArg(value: string): string {
     return value
   }
   return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
-function quotePowerShellString(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`
 }
 
 export function getSetupAgentSequenceShellForTests(

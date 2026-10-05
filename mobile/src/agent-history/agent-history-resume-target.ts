@@ -53,7 +53,7 @@ export type MobileAiVaultSessionResumeTarget =
     }
   | { status: 'blocked'; message: string }
 
-export function getMobileAiVaultResumeRepoTargetStatus(
+function getMobileAiVaultResumeRepoTargetStatus(
   repo: MobileAiVaultResumeRepo | null | undefined
 ): MobileAiVaultResumeTargetStatus {
   if (!repo) {
@@ -62,7 +62,7 @@ export function getMobileAiVaultResumeRepoTargetStatus(
   return getMobileAiVaultResumeExecutionHostTargetStatus(getRepoExecutionHostId(repo))
 }
 
-export function getMobileAiVaultResumeWorktreeTargetStatus(args: {
+function getMobileAiVaultResumeWorktreeTargetStatus(args: {
   worktreeId: string | null
   worktrees: readonly MobileAiVaultResumeWorktree[]
   repos: readonly MobileAiVaultResumeRepo[]
@@ -94,7 +94,7 @@ export function getMobileAiVaultResumeWorktreeTargetStatus(args: {
   )
 }
 
-export function isSupportedMobileAiVaultResumeTargetStatus(
+function isSupportedMobileAiVaultResumeTargetStatus(
   status: MobileAiVaultResumeTargetStatus
 ): status is 'local' {
   // Why: mobile sessions come from the host-local transcript scan, so an SSH
@@ -102,9 +102,7 @@ export function isSupportedMobileAiVaultResumeTargetStatus(
   return status === 'local'
 }
 
-export function mobileAiVaultResumeTargetBlockMessage(
-  status: MobileAiVaultResumeTargetStatus
-): string {
+function mobileAiVaultResumeTargetBlockMessage(status: MobileAiVaultResumeTargetStatus): string {
   if (status === 'runtime') {
     return 'Resume from history is not available in runtime-hosted workspaces.'
   }

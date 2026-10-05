@@ -7,10 +7,7 @@ import {
 import { cancelPendingSafeFitContinuations } from '@/lib/pane-manager/pane-tree-ops'
 import { PANE_PTY_RESIZE_HOLD_FLUSH_EVENT } from '@/lib/pane-manager/pane-pty-resize-hold'
 import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import {
-  getProviderSessionClaimKey,
-  isPassiveCompletedHibernationEvidence
-} from '@/lib/sleeping-agent-pane-ownership'
+import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
 import { releaseRendererPtyVisibilityClaim } from '../pty-renderer-delivery-claims'
 
 import { REMOTE_PTY_ID_PREFIX } from './pty-connect-limits'
@@ -18,6 +15,7 @@ import { SHIFT_ENTER_RECONFIRM_IDLE_MS } from './foreground-output-scan'
 import type { PanePtyBinding } from './pane-pty-binding'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { noteArmsHibernatedPaneWake } from './pty-exit-hibernate'
 
 export function installSessionReconcileDispose(session: ConnectPanePtySession): PanePtyBinding {
   session.reconcileIfSessionDead = (
@@ -134,7 +132,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       const currentPtyId = session.transport.getPtyId()
       if (
         recordEntry &&
-        isPassiveCompletedHibernationEvidence(recordEntry.record) &&
+        noteArmsHibernatedPaneWake(recordEntry.record) &&
         currentPtyId !== null &&
         state.suppressedPtyExitIds[currentPtyId] === true &&
         !session.disposed &&
@@ -177,6 +175,13 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
     dispose() {
       session.disposed = true
       session.startupTiming?.finish('disposed')
+      const unsentReplacedPtyId: string | null = session.claimPendingReplacedPtyId()
+      if (unsentReplacedPtyId) {
+        // Why: no spawn will carry this stop now, and the pane no longer references the PTY.
+        void Promise.resolve()
+          .then(() => window.api.pty.kill(unsentReplacedPtyId))
+          .catch((err: unknown) => console.warn('[terminal] failed to stop a replaced PTY:', err))
+      }
       // A successor can claim the numeric pane slot before this retired
       // binding's disposal callback runs; do not clear its pane-scoped error.
       const currentPaneTransport = session.deps.paneTransportsRef.current.get(session.pane.id)
@@ -215,6 +220,8 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.startupGridSettleHandle?.cancel()
       session.startupGridSettleHandle = null
       session.ptySizeReassertion.dispose()
+      session.terminalSelectionFitGuard?.dispose()
+      session.terminalSelectionFitGuard = null
       if (session.pendingForegroundGridDriftCheckRaf !== null) {
         cancelAnimationFrame(session.pendingForegroundGridDriftCheckRaf)
         session.pendingForegroundGridDriftCheckRaf = null
@@ -254,10 +261,6 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.pendingTerminalBellNotification = false
       session.clearTerminalBellNotificationTimer()
       session.clearReattachIdleAgentCursorResetTimer()
-      if (session.alternateScreenBackgroundRepaintTimer !== null) {
-        clearTimeout(session.alternateScreenBackgroundRepaintTimer)
-        session.alternateScreenBackgroundRepaintTimer = null
-      }
       session.cleanupHiddenOutputRestoreDeferredRetry()
       session.cleanupHiddenOutputRestoreForegroundDeadline()
       session.cleanupHiddenOutputRestoreFloodRepaint()

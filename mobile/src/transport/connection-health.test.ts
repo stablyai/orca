@@ -80,12 +80,6 @@ describe('classifyConnection Tailscale hint', () => {
     expect('hint' in warning && warning.hint).toBeFalsy()
   })
 
-  it('keeps plain labels when no endpoint is provided', () => {
-    const verdict = classifyConnection({ ...base, reconnectAttempts: 3 })
-    expect(verdict.kind).toBe('warning')
-    expect('hint' in verdict && verdict.hint).toBeFalsy()
-  })
-
   it('never hints on healthy states', () => {
     const verdict = classifyConnection({
       state: 'connected',

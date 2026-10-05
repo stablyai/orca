@@ -2,11 +2,14 @@ import { useEffect, type MutableRefObject } from 'react'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings'
+import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
+import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import {
   addBrowserPageZoomEventListener,
   applyBrowserPageZoom,
   rememberExplicitBrowserPageZoomLevel,
+  type BrowserPageZoomCommand,
   type BrowserPageZoomDirection
 } from './browser-page-zoom'
 
@@ -17,7 +20,9 @@ import {
  */
 export function useBrowserPageWebviewShortcuts({
   browserTabId,
+  workspaceId,
   isActive,
+  chromeShortcutScope,
   isActiveRef,
   webviewRef,
   paneZoomLevelRef,
@@ -26,7 +31,9 @@ export function useBrowserPageWebviewShortcuts({
   reloadWebviewOrRecoverGuest
 }: {
   browserTabId: string
+  workspaceId: string
   isActive: boolean
+  chromeShortcutScope: BrowserChromeShortcutScope
   isActiveRef: MutableRefObject<boolean>
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   paneZoomLevelRef: MutableRefObject<number>
@@ -39,7 +46,7 @@ export function useBrowserPageWebviewShortcuts({
   // Browser history shortcuts (renderer path: focus on browser chrome)
   // Why: macOS can't deliver Logitech side-buttons to Electron; Logi Options+ remaps them to history chords, handled here when chrome is focused.
   useEffect(() => {
-    if (!isActive) {
+    if (chromeShortcutScope === 'inactive') {
       return
     }
     const shortcutPlatform = getShortcutPlatform()
@@ -49,11 +56,15 @@ export function useBrowserPageWebviewShortcuts({
         : keybindingMatchesAction('browser.forward', e, shortcutPlatform, keybindings)
           ? 'forward'
           : null
-      if (direction === null) {
+      if (
+        direction === null ||
+        !browserChromeShortcutOwnsEvent(chromeShortcutScope, e, workspaceId)
+      ) {
         return
       }
       e.preventDefault()
-      e.stopPropagation()
+      // Why: stop other window capture listeners (workspace, embedded editors) from also acting.
+      e.stopImmediatePropagation()
       // Why: Logitech Options+ side-button remaps arrive as these chords on macOS; route through the same nav path as the toolbar.
       if (direction === 'back') {
         webviewRef.current?.goBack()
@@ -63,7 +74,7 @@ export function useBrowserPageWebviewShortcuts({
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isActive, keybindings, webviewRef])
+  }, [chromeShortcutScope, keybindings, webviewRef, workspaceId])
 
   // Browser history shortcuts (IPC path: focus inside webview guest)
   // Why: a focused webview is a separate WebContents, so main forwards the chords back here.
@@ -71,7 +82,10 @@ export function useBrowserPageWebviewShortcuts({
     if (!isActive) {
       return
     }
-    return window.api.ui.onBrowserHistoryNavigate((direction) => {
+    return window.api.ui.onBrowserHistoryNavigate(({ browserPageId, direction }) => {
+      if (browserPageId !== browserTabId) {
+        return
+      }
       // Why: Logitech Options+ side-button remaps arrive as these chords on macOS; route through the same nav path as the toolbar.
       if (direction === 'back') {
         webviewRef.current?.goBack()
@@ -79,12 +93,12 @@ export function useBrowserPageWebviewShortcuts({
         webviewRef.current?.goForward()
       }
     })
-  }, [isActive, webviewRef])
+  }, [browserTabId, isActive, webviewRef])
 
   // Cmd/Ctrl+R — reload (renderer path: focus on browser chrome, not in guest)
   // Why: guest shortcut forwarding never fires when focus is on browser chrome, so handle the chord directly here.
   useEffect(() => {
-    if (!isActive) {
+    if (chromeShortcutScope === 'inactive') {
       return
     }
     const shortcutPlatform = getShortcutPlatform()
@@ -99,16 +113,19 @@ export function useBrowserPageWebviewShortcuts({
       if (!isHardReload && !isReload) {
         return
       }
-      if (isEditableKeyboardTarget(e.target)) {
+      if (
+        isEditableKeyboardTarget(e.target) ||
+        !browserChromeShortcutOwnsEvent(chromeShortcutScope, e, workspaceId)
+      ) {
         return
       }
       e.preventDefault()
-      e.stopPropagation()
+      e.stopImmediatePropagation()
       reloadWebviewOrRecoverGuest(isHardReload)
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isActive, keybindings, reloadWebviewOrRecoverGuest])
+  }, [chromeShortcutScope, keybindings, reloadWebviewOrRecoverGuest, workspaceId])
 
   // Cmd/Ctrl+R — reload (IPC path: focus inside webview guest)
   // Why: a focused guest is a separate Chromium process, so main forwards the chord back here.
@@ -116,19 +133,23 @@ export function useBrowserPageWebviewShortcuts({
     if (!isActive) {
       return
     }
-    return window.api.ui.onReloadBrowserPage(() => {
-      reloadWebviewOrRecoverGuest(false)
+    return window.api.ui.onReloadBrowserPage(({ browserPageId }) => {
+      if (browserPageId === browserTabId) {
+        reloadWebviewOrRecoverGuest(false)
+      }
     })
-  }, [isActive, reloadWebviewOrRecoverGuest])
+  }, [browserTabId, isActive, reloadWebviewOrRecoverGuest])
 
   useEffect(() => {
     if (!isActive) {
       return
     }
-    return window.api.ui.onHardReloadBrowserPage(() => {
-      reloadWebviewOrRecoverGuest(true)
+    return window.api.ui.onHardReloadBrowserPage(({ browserPageId }) => {
+      if (browserPageId === browserTabId) {
+        reloadWebviewOrRecoverGuest(true)
+      }
     })
-  }, [isActive, reloadWebviewOrRecoverGuest])
+  }, [browserTabId, isActive, reloadWebviewOrRecoverGuest])
 
   useEffect(() => {
     if (!isActive) {
@@ -147,13 +168,13 @@ export function useBrowserPageWebviewShortcuts({
         showBrowserZoomFeedback(nextLevel)
       }
     }
-    const removeGuestListener = window.api.ui.onZoomBrowserPage(applyActivePageZoom)
-    const removeLocalListener = addBrowserPageZoomEventListener((detail) => {
-      if (detail.browserPageId !== browserTabId) {
-        return
+    const handleZoom = ({ browserPageId, direction }: BrowserPageZoomCommand): void => {
+      if (browserPageId === browserTabId) {
+        applyActivePageZoom(direction)
       }
-      applyActivePageZoom(detail.direction)
-    })
+    }
+    const removeGuestListener = window.api.ui.onZoomBrowserPage(handleZoom)
+    const removeLocalListener = addBrowserPageZoomEventListener(handleZoom)
     return () => {
       removeGuestListener()
       removeLocalListener()

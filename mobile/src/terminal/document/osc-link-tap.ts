@@ -1,10 +1,10 @@
 import { cellColToStringIndex, getLineText } from './cell-geometry'
 import { viewportToCell } from './viewport-cell'
-import {
-  scope,
-  type TerminalDocumentLine,
-  type TerminalInitialOscLink,
-  type TerminalOscLinkService
+import type {
+  TerminalDocumentLine,
+  TerminalDocumentScope,
+  TerminalInitialOscLink,
+  TerminalOscLinkService
 } from './document-scope'
 import { parsePathLineCol, type TerminalPathCandidate } from './path-tap'
 
@@ -15,7 +15,7 @@ export type TerminalOscLinkTarget =
 
 // Why: OSC 8 links can render as labels like "#1234"; the URI lives in
 // xterm's internal link service, so every access is guarded and falls through.
-export function oscLinkService(): TerminalOscLinkService | null {
+export function oscLinkService(scope: TerminalDocumentScope): TerminalOscLinkService | null {
   try {
     const core = scope.term && scope.term._core
     if (!core) {
@@ -29,9 +29,13 @@ export function oscLinkService(): TerminalOscLinkService | null {
   }
 }
 
-export function oscLinkAtViewportPoint(clientX: number, clientY: number) {
+export function oscLinkAtViewportPoint(
+  scope: TerminalDocumentScope,
+  clientX: number,
+  clientY: number
+) {
   try {
-    const cell = viewportToCell(clientX, clientY)
+    const cell = viewportToCell(scope, clientX, clientY)
     if (!cell) {
       return null
     }
@@ -41,11 +45,11 @@ export function oscLinkAtViewportPoint(clientX: number, clientY: number) {
     }
     const urlId = oscLinkIdAtCell(line, cell.col)
     if (!urlId) {
-      return initialOscLinkAtCell(cell.row, cell.col)
+      return initialOscLinkAtCell(scope, cell.row, cell.col)
     }
-    const svc = oscLinkService()
+    const svc = oscLinkService(scope)
     if (!svc || !svc.getLinkData) {
-      return initialOscLinkAtCell(cell.row, cell.col)
+      return initialOscLinkAtCell(scope, cell.row, cell.col)
     }
     const data = svc.getLinkData(urlId)
     const uri = data && data.uri
@@ -55,7 +59,7 @@ export function oscLinkAtViewportPoint(clientX: number, clientY: number) {
   }
 }
 
-export function initialOscLinkAtCell(row: number, col: number) {
+export function initialOscLinkAtCell(scope: TerminalDocumentScope, row: number, col: number) {
   for (let i = 0; i < scope.initialOscLinks.length; i++) {
     const link = scope.initialOscLinks[i]
     if (!link || typeof link.uri !== 'string') {
@@ -69,7 +73,7 @@ export function initialOscLinkAtCell(row: number, col: number) {
       shiftedRow === row &&
       col >= link.startCol &&
       col < link.endCol &&
-      initialOscLinkTextStillMatches(link, shiftedRow)
+      initialOscLinkTextStillMatches(scope, link, shiftedRow)
     ) {
       return terminalOscLinkTarget(link.uri)
     }
@@ -180,7 +184,7 @@ export function parseFilePathTrailingLineTarget(filePath: string) {
   return { pathText: match[1], line: line, column: column }
 }
 
-export function captureInitialOscLinkTexts() {
+export function captureInitialOscLinkTexts(scope: TerminalDocumentScope) {
   if (!Array.isArray(scope.initialOscLinks)) {
     return
   }
@@ -189,22 +193,30 @@ export function captureInitialOscLinkTexts() {
     if (!link || typeof link.text === 'string') {
       continue
     }
-    link.text = initialOscLinkTextAtRow(link, link.row)
+    link.text = initialOscLinkTextAtRow(scope, link, link.row)
   }
 }
 
-export function initialOscLinkTextStillMatches(link: TerminalInitialOscLink, row: number) {
+export function initialOscLinkTextStillMatches(
+  scope: TerminalDocumentScope,
+  link: TerminalInitialOscLink,
+  row: number
+) {
   if (typeof link.text !== 'string') {
     return false
   }
-  return link.text.length > 0 && initialOscLinkTextAtRow(link, row) === link.text
+  return link.text.length > 0 && initialOscLinkTextAtRow(scope, link, row) === link.text
 }
 
-export function initialOscLinkTextAtRow(link: TerminalInitialOscLink, row: number) {
+export function initialOscLinkTextAtRow(
+  scope: TerminalDocumentScope,
+  link: TerminalInitialOscLink,
+  row: number
+) {
   try {
-    const lineText = getLineText(row)
-    const start = cellColToStringIndex(row, link.startCol)
-    const end = cellColToStringIndex(row, link.endCol)
+    const lineText = getLineText(scope, row)
+    const start = cellColToStringIndex(scope, row, link.startCol)
+    const end = cellColToStringIndex(scope, row, link.endCol)
     return lineText.slice(start, end)
   } catch {
     return ''

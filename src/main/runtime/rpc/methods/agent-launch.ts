@@ -19,7 +19,7 @@
  * harmless, and does nothing to reunite a caller with a surface a dead attempt left behind.
  */
 
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
 import type {
   AgentLaunchIntent,
@@ -31,12 +31,25 @@ import {
   WorktreeCreateCollisionError,
   WORKTREE_CREATE_COLLISION_CODE
 } from '../../../../shared/new-workspace/worktree-create-collision'
+import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
 import { executeAgentLaunch } from '../../../agent-launch/agent-launch-executor'
+import {
+  trackTerminalSpawnDispatch,
+  type TerminalSpawnDispatch
+} from '../../../agent-launch/agent-launch-not-started'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcContext } from '../core'
 import { admitAgentLaunchOperation, agentLaunchOperationCallerKey } from './agent-launch-replay'
 import { AgentLaunch, AgentLaunchReplay, type AgentLaunchParams } from './agent-launch-schemas'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
+import {
+  agentLaunchFailureCode,
+  launchFailureWithoutEffectsCode
+} from './agent-launch-failure-code'
+import {
+  agentLaunchCallerNavigationId,
+  selectAgentLaunchTabForCaller
+} from './agent-launch-caller-selection'
 import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
 
 /**
@@ -75,7 +88,7 @@ async function agentLaunchTarget(
     return { kind: 'create-worktree', create: { ...params.target.create } }
   }
   const workspace = await runtime.showTerminalWorkspaceLaunchScope(params.target.worktree)
-  return { kind: 'existing', worktree: workspace.id }
+  return { kind: 'existing', worktree: workspace.id, workspacePath: workspace.path }
 }
 
 async function agentLaunchIntent(
@@ -87,7 +100,13 @@ async function agentLaunchIntent(
     target: await agentLaunchTarget(params, runtime),
     ...(params.prompt ? { prompt: params.prompt } : {}),
     ...(params.sessionOptions ? { sessionOptions: params.sessionOptions } : {}),
-    ...(params.reuseTerminal ? { reuseTerminal: params.reuseTerminal } : {})
+    ...(params.reuseTerminal ? { reuseTerminal: params.reuseTerminal } : {}),
+    // `null` means "no arguments" and must survive; only absence falls back to the settings default.
+    ...(params.agentArgs !== undefined ? { agentArgs: params.agentArgs } : {}),
+    ...(params.cwd ? { cwd: params.cwd } : {}),
+    ...(params.launchSource ? { launchSource: params.launchSource } : {}),
+    ...(params.paneKey ? { paneKey: params.paneKey } : {}),
+    ...(params.sessionId ? { sessionId: params.sessionId } : {})
   }
 }
 
@@ -119,22 +138,40 @@ async function resolveUnlaunchedIntent(
   params: AgentLaunchParams,
   runtime: OrcaRuntimeService
 ): Promise<AgentLaunchIntent> {
+  if (params.reuseTerminal || params.target.kind === 'create-worktree') {
+    assertOpenCodeModelLaunchPreferencesAbsent(params.agent, params.sessionOptions)
+  }
   const intent = await agentLaunchIntent(params, runtime)
   await validateReusedTerminal(intent, runtime)
   return intent
 }
 
-function runAgentLaunch(
+async function runAgentLaunch(
   intent: AgentLaunchIntent,
   context: RpcContext,
   attachOperationId?: string,
-  operationCallerKey?: string
+  operationCallerKey?: string,
+  terminalSpawn?: TerminalSpawnDispatch
 ): Promise<AgentLaunchResult> {
+  const callerNavigationId = agentLaunchCallerNavigationId(intent.target, context)
   return executeAgentLaunch({
     runtime: context.runtime,
     intent,
-    surfaces: agentLaunchSurfaceFactory(context, attachOperationId, operationCallerKey),
-    workspaces: agentLaunchWorkspaceFactory(context, intent.agent)
+    surfaces: agentLaunchSurfaceFactory(
+      context,
+      attachOperationId,
+      operationCallerKey,
+      callerNavigationId !== null,
+      terminalSpawn
+    ),
+    workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
+    // The tab is shown as it is published, not after a prompt that can take a minute to land.
+    ...(callerNavigationId !== null
+      ? {
+          onSurfacePublished: (surface) =>
+            selectAgentLaunchTabForCaller(context.runtime, surface, callerNavigationId)
+        }
+      : {})
   })
 }
 
@@ -170,31 +207,17 @@ function settleQuietly(settlement: Promise<void>): Promise<void> {
   })
 }
 
-/** Long enough for every code this path raises, with room for one a later guard adds. */
-const LAUNCH_FAILURE_CODE_MAX_LENGTH = 128
-
-/**
- * This path raises its refusals as the thrown code, the way the method's own guards do — and the
- * recorded code is what a replay answers with, so it is worth keeping.
- *
- * Bounded because a code is an identifier but `error.message` is free text: an errno sentence
- * carrying an absolute path arrives here as one, and it would be written into a ledger file that is
- * re-serialized whole on every subsequent operation. Bounded on the way IN only. A length check in
- * `isAgentSessionOperationRow` would reject rows this same build wrote, and one rejected row costs
- * the entire store.
- */
-function agentLaunchFailureCode(error: unknown): string {
-  const code = error instanceof Error ? error.message : ''
-  return code.length > 0 ? code.slice(0, LAUNCH_FAILURE_CODE_MAX_LENGTH) : 'agent_launch_failed'
-}
-
 type ActiveAgentLaunch = {
   fingerprint: string
   promise: Promise<AgentLaunchResult>
 }
 
 class AgentLaunchExecutionError extends Error {
-  constructor(cause: unknown) {
+  constructor(
+    cause: unknown,
+    /** Decided once, by the launch that ran; a later reader cannot re-derive it from the error. */
+    readonly failedWithoutEffects: boolean
+  ) {
     super('agent_session_operation_unknown', { cause })
   }
 }
@@ -221,7 +244,7 @@ async function executeReplaySafeAgentLaunch(
 ): Promise<AgentLaunchResult> {
   const admission = await admitAgentLaunchOperation(context, params, fingerprint)
   if (admission.decision === 'refuse') {
-    throw new Error(admission.refusal.code)
+    throw Object.assign(new Error(admission.refusal.code), { code: admission.refusal.code })
   }
   if (admission.decision === 'replay') {
     return admission.result
@@ -233,15 +256,26 @@ async function executeReplaySafeAgentLaunch(
     await settleQuietly(admission.fail(agentLaunchFailureCode(error)))
     throw error
   }
-  // Only a typed pre-creation collision proves that the claimed launch had no effects.
+  const terminalSpawn = trackTerminalSpawnDispatch()
   let result: AgentLaunchResult
   try {
-    result = await runAgentLaunch(intent, context, admission.attachOperationId, admission.callerKey)
+    result = await runAgentLaunch(
+      intent,
+      context,
+      admission.attachOperationId,
+      admission.callerKey,
+      terminalSpawn
+    )
   } catch (error) {
-    if (error instanceof WorktreeCreateCollisionError) {
-      await settleQuietly(admission.fail(WORKTREE_CREATE_COLLISION_CODE))
+    const failedWithoutEffects = launchFailureWithoutEffectsCode(
+      error,
+      intent.target.kind,
+      terminalSpawn
+    )
+    if (failedWithoutEffects) {
+      await settleQuietly(admission.fail(failedWithoutEffects))
     }
-    throw new AgentLaunchExecutionError(error)
+    throw new AgentLaunchExecutionError(error, failedWithoutEffects !== null)
   }
   // Settlement is bookkeeping; failure leaves the truthful `unknown` refusal for later retries.
   await settleQuietly(admission.settle(result))
@@ -291,6 +325,9 @@ export const AGENT_LAUNCH_METHODS = [
             throw Object.assign(new Error(error.cause.message, { cause: error.cause }), {
               code: WORKTREE_CREATE_COLLISION_CODE
             })
+          }
+          if (error.failedWithoutEffects) {
+            throw error.cause
           }
           throw new Error('agent_session_operation_unknown', { cause: error.cause })
         }

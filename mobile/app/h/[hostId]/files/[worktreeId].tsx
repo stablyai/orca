@@ -1,20 +1,21 @@
 import { useLocalSearchParams } from 'expo-router'
 import { MobileFileExplorerPanel } from '../../../../src/files/MobileFileExplorerPanel'
-import { firstParam } from '../../../../src/source-control/mobile-source-control-screen-state'
+import { firstParam } from '../../../../src/navigation/route-param-reader'
 import {
   shellScreenRoute,
   shellScreenRouteKey
 } from '../../../../src/mobile-web-shell/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
-import { useMobileWebShellEnabled } from '../../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
+import { ShellSwitchPendingScreen } from '../../../../src/mobile-web-shell/ShellSwitchPendingScreen'
+import { useShellSwitchDecision } from '../../../../src/mobile-web-shell/shell-switch-decision'
 
 /**
  * The file explorer, from the desktop's bundle or from this app.
  *
  * The shell decides, not this switch: it renders the page only for a route the bundle lists with
  * grants this app implements, and answers `native-route` otherwise, which is what `fallback` is.
- * `enabled === null` is the flag read still settling and renders the native screen, which is the
- * only frame a store build ever paints here.
+ * A flag read still settling is a third answer and paints neither renderer; see
+ * `shell-switch-decision.ts`.
  *
  * Encoded, not interpolated raw, for the reason `web.tsx` states: an id carrying `?`, `#` or
  * whitespace would build a pathname the page refuses and mount nothing.
@@ -32,7 +33,6 @@ export default function MobileFileExplorerScreen() {
   const hostId = firstParam(params.hostId)
   const worktreeId = firstParam(params.worktreeId)
   const name = firstParam(params.name)
-  const enabled = useMobileWebShellEnabled()
   const native = (
     <MobileFileExplorerPanel hostId={hostId} worktreeId={worktreeId} name={name} embedded={false} />
   )
@@ -47,7 +47,12 @@ export default function MobileFileExplorerScreen() {
         })
       : null
 
-  if (enabled !== true || !hostId || route === null) {
+  const decision = useShellSwitchDecision(route)
+
+  if (decision.kind === 'pending') {
+    return <ShellSwitchPendingScreen />
+  }
+  if (decision.kind === 'native') {
     return native
   }
   // Keyed on the route: a host captures the grants its session was opened with, so a screen reused
@@ -55,9 +60,9 @@ export default function MobileFileExplorerScreen() {
   // left. The key is what makes the change a remount, which disposes that bridge in the commit.
   return (
     <MobileWebShellScreen
-      key={shellScreenRouteKey(route)}
+      key={shellScreenRouteKey(decision.route)}
       hostId={hostId}
-      route={route}
+      route={decision.route}
       fallback={native}
     />
   )

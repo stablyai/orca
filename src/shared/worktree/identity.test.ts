@@ -21,8 +21,4 @@ describe('canonical worktree identity', () => {
       canonicalWorktreeIdentity({ ...local, worktreeId: 'repo-1::/workspace/renamed-feature' })
     ).toBe(canonicalWorktreeIdentity(local))
   })
-
-  it('does not use the display name as identity input', () => {
-    expect(canonicalWorktreeIdentity(local)).toBe(canonicalWorktreeIdentity({ ...local }))
-  })
 })

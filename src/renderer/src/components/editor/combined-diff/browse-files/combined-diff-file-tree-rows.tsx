@@ -1,5 +1,5 @@
 import React from 'react'
-import { SourceControlVirtualFileList } from '@/components/right-sidebar/source-control/listing/virtual-file-list'
+import { VirtualizedList } from '@/components/virtualized-list'
 import type {
   CombinedDiffFileTreeEntry,
   CombinedDiffFileTreeMode
@@ -41,7 +41,7 @@ export function CombinedDiffFileTreeRows({
   onNavigate: (entry: CombinedDiffFileTreeEntry) => void
 }): React.JSX.Element {
   return (
-    <SourceControlVirtualFileList
+    <VirtualizedList
       rows={rows}
       scrollElement={scrollElement}
       estimateRowHeightPx={COMBINED_DIFF_TREE_ROW_HEIGHT_PX}

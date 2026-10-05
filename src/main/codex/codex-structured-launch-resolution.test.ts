@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { createCodexStructuredLaunchResolver } from './codex-structured-launch-resolution'
 import { codexStructuredPermissionPolicyForSettings } from './codex-structured-permission-policy'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'session-1'
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
@@ -104,14 +106,44 @@ describe('codex structured launch resolution', () => {
   it('resumes the last thread this session actually proved, not one a caller names', async () => {
     const launch = await resolverFor(
       record({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle, so the link's other fields stay unset.
         providerHandleChain: [
-          { handle: { provider: 'codex', threadId: 'thread-old' } },
-          { handle: { provider: 'codex', threadId: 'thread-current' } }
+          { handle: codexProviderHandle('thread-old') },
+          { handle: codexProviderHandle('thread-current') }
         ] as AgentSessionRecord['providerHandleChain']
       })
     )({ identity: IDENTITY })
 
     expect(launch.resumeThreadId).toBe('thread-current')
+  })
+
+  it('lets only a thread this session created be superseded when Codex never saved it', async () => {
+    const link = (
+      origin: AgentSessionProviderHandleLink['origin'],
+      mintedAtFence: number
+    ): AgentSessionProviderHandleLink => ({
+      linkId: `link-${mintedAtFence}`,
+      handle: codexProviderHandle('t'),
+      origin,
+      mintedAtFence,
+      observedAt: 1
+    })
+    const chainFor = (origin: 'created' | 'resumed' | 'adopted') =>
+      origin === 'resumed' ? [link('created', 1), link('resumed', 2)] : [link(origin, 1)]
+
+    const created = await resolverFor(record({ providerHandleChain: chainFor('created') }))({
+      identity: IDENTITY
+    })
+    expect(created).toMatchObject({ resumeThreadId: 't', supersedeIfUnsaved: true })
+    for (const origin of ['resumed', 'adopted'] as const) {
+      const launch = await resolverFor(record({ providerHandleChain: chainFor(origin) }))({
+        identity: IDENTITY
+      })
+      expect(launch.resumeThreadId).toBe('t')
+      expect(launch).not.toHaveProperty('supersedeIfUnsaved')
+    }
+    const fresh = await resolverFor(record())({ identity: IDENTITY })
+    expect(fresh).not.toHaveProperty('supersedeIfUnsaved')
   })
 
   // Agent Permissions is the only thing derived from the arguments field. app-server owns it on
@@ -150,6 +182,16 @@ describe('codex structured launch resolution', () => {
     })
   })
 
+  // A thread opened on the configured default and then given a turn on the saved model reads to
+  // Codex as a model switch, and it injects the saved model's whole prompt a second time.
+  it('opens the thread on the model the record saved', async () => {
+    const launch = await resolverFor(
+      record({ options: { model: 'gpt-chosen', effort: 'high', fastMode: 'false' } })
+    )({ identity: IDENTITY })
+
+    expect(launch.model).toBe('gpt-chosen')
+  })
+
   // The configured CLI arguments are a terminal concern: a durable record written before they
   // stopped being read must not smuggle one back into app-server's argv.
   it("ignores the record's durable launch arguments", async () => {
@@ -164,8 +206,9 @@ describe('codex structured launch resolution', () => {
     const resolveRollout = vi.fn(async () => '/home/work/.codex/sessions/rollout.jsonl')
     const launch = await resolverFor(
       record({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle, so the link's other fields stay unset.
         providerHandleChain: [
-          { handle: { provider: 'codex', threadId: 'thread-current' } }
+          { handle: codexProviderHandle('thread-current') }
         ] as AgentSessionRecord['providerHandleChain']
       }),
       async (id) => `/repos/${id}`,

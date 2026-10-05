@@ -139,6 +139,28 @@ describe('handshake framing', () => {
     })
   })
 
+  it('carries the optional informational runtime on handshake-ok', () => {
+    const runtime = { kind: 'pinned-node', version: '24.21.0' }
+    const payload = Buffer.from(
+      JSON.stringify({ type: 'orca-relay-handshake-ok', version: '0.1.0', runtime })
+    )
+    expect(parseHandshakeMessage(payload)).toEqual({
+      type: 'orca-relay-handshake-ok',
+      version: '0.1.0',
+      runtime
+    })
+  })
+
+  it.each([['pinned-node'], [{ kind: 1, version: '24' }], [null]])(
+    'refuses a present-but-malformed runtime %j',
+    (runtime) => {
+      const payload = Buffer.from(
+        JSON.stringify({ type: 'orca-relay-handshake-ok', version: '0.1.0', runtime })
+      )
+      expect(() => parseHandshakeMessage(payload)).toThrow('runtime')
+    }
+  )
+
   it('handshake frames use a distinct MessageType from Regular and KeepAlive', () => {
     expect(MessageType.Handshake).not.toBe(MessageType.Regular)
     expect(MessageType.Handshake).not.toBe(MessageType.KeepAlive)

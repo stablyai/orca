@@ -48,7 +48,7 @@ const SHELL_HOST = {
   lastConnected: 1
 }
 /** Exactly what the preview declares in `MOBILE_WEB_PAGE_ROUTES`, plus the protocol's own grant. */
-const PREVIEW_GRANTS = ['navigate', 'storage', 'externalLink']
+const PREVIEW_GRANTS = ['navigate', 'storage', 'externalLink', 'haptics']
 
 /**
  * A terminal artifact, which is the only preview this screen lets anyone edit.

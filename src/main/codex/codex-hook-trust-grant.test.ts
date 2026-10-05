@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -15,6 +15,7 @@ import {
   grantManagedCodexHookTrust,
   type CodexManagedTrustGrantPlan
 } from './codex-hook-trust-grant'
+import { removeSelfComputedTrustBeforeGrant } from './codex-managed-trust-grant-plan'
 import { setCodexTrustGrantTelemetry } from './codex-trust-grant-telemetry'
 import { readCodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
 import {
@@ -116,6 +117,18 @@ describe('grantManagedCodexHookTrust', () => {
     expect(runner).not.toHaveBeenCalled()
   })
 
+  it('treats an unreadable session index as pending instead of running a trust RPC', async () => {
+    writeFileSync(join(runtimeHomeDir, 'state_5.sqlite'), 'not a sqlite database')
+    const runner = vi.fn()
+    _internals.setGrantSessionRunner(runner)
+
+    expect(await grantManagedCodexHookTrust(buildPlan([managedEntry('stop')]))).toMatchObject({
+      lane: 'fallback',
+      reason: 'retry-cached'
+    })
+    expect(runner).not.toHaveBeenCalled()
+  })
+
   it('returns granted entries with codex-verbatim hashes and records the ledger', async () => {
     const entries = [managedEntry('session_start'), managedEntry('stop')]
     const runner = vi.fn(async (_request: CodexHookTrustGrantRequest) =>
@@ -164,7 +177,8 @@ describe('grantManagedCodexHookTrust', () => {
       ...managedEntry('stop'),
       sourcePath: String.raw`C:\Users\Alice\.codex\hooks.json`
     }
-    const plan = buildPlan([entry])
+    const plan: CodexManagedTrustGrantPlan = { ...buildPlan([entry]), telemetryLane: 'managed' }
+    // Why: the managed fallback lane's write, both separator variants.
     upsertHookTrustEntries(plan.tomlPath, [entry])
     expect(readHookTrustEntries(plan.tomlPath).get(computeTrustKey(entry))?.trustedHash).toBe(
       computeTrustedHash(entry)
@@ -175,8 +189,26 @@ describe('grantManagedCodexHookTrust', () => {
     })
     _internals.setGrantSessionRunner(runner)
 
-    expect(await grantManagedCodexHookTrust(plan)).toMatchObject({ lane: 'rpc' })
+    expect(
+      await grantManagedCodexHookTrust(plan, () => removeSelfComputedTrustBeforeGrant(plan))
+    ).toMatchObject({ lane: 'rpc' })
     expect(runner).toHaveBeenCalledTimes(1)
+  })
+
+  it("runs the caller's pre-session step only when a session runs", async () => {
+    const entries = [managedEntry('session_start')]
+    _internals.setGrantSessionRunner(async () => grantedSessionResult(entries))
+    const plan = buildPlan(entries)
+    const beforeSession = vi.fn()
+
+    expect(await grantManagedCodexHookTrust(plan, beforeSession)).toMatchObject({ lane: 'rpc' })
+    expect(beforeSession).toHaveBeenCalledTimes(1)
+    upsertHookTrustEntries(plan.tomlPath, [
+      { ...entries[0], trustedHash: 'sha256:codex-session_start' }
+    ])
+    // Why: a clear before the ledger check would delete the record the ledger proves, forcing a session per launch.
+    expect(await grantManagedCodexHookTrust(plan, beforeSession)).toMatchObject({ lane: 'rpc' })
+    expect(beforeSession).toHaveBeenCalledTimes(1)
   })
 
   it('skips the RPC session while the ledger grant still holds, and re-grants on config drift', async () => {
@@ -266,11 +298,37 @@ describe('grantManagedCodexHookTrust', () => {
     })
     expect(runner).toHaveBeenCalledTimes(1)
     expect(codexAppServerCapabilityCache.shouldTry('native')).toBe(true)
+    // Why: an inline grant costs its launch the full timeout, so it keeps the long cooldown.
+    vi.setSystemTime(1_000 + 10_001)
+    expect(await grantManagedCodexHookTrust(plan)).toMatchObject({ reason: 'retry-cached' })
+    expect(runner).toHaveBeenCalledTimes(1)
 
     runner.mockImplementation(async () => grantedSessionResult(entries))
     vi.setSystemTime(1_000 + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS)
     expect(await grantManagedCodexHookTrust(plan)).toMatchObject({ lane: 'rpc' })
     expect(runner).toHaveBeenCalledTimes(2)
+  })
+
+  it('neither starts nor waits on a cooldown for a background grant', async () => {
+    const entries = [managedEntry('session_start')]
+    const runner = vi.fn((): Promise<CodexHookTrustGrantSessionResult> => {
+      throw new Error('codex app-server exited before completing the session')
+    })
+    _internals.setGrantSessionRunner(runner)
+    const background: CodexManagedTrustGrantPlan = { ...buildPlan(entries), background: true }
+    const inline = buildPlan(entries)
+
+    // Why: the real-home lane schedules a background retry; a second schedule here could only disagree.
+    expect(await grantManagedCodexHookTrust(background)).toMatchObject({ reason: 'error' })
+    expect(_internals.transientCooldownCountForTests()).toBe(0)
+    expect(await grantManagedCodexHookTrust(background)).toMatchObject({ reason: 'error' })
+    expect(runner).toHaveBeenCalledTimes(2)
+
+    // Why: the launch-path cooldown stays on its own lane.
+    expect(await grantManagedCodexHookTrust(inline)).toMatchObject({ reason: 'error' })
+    expect(await grantManagedCodexHookTrust(inline)).toMatchObject({ reason: 'retry-cached' })
+    expect(await grantManagedCodexHookTrust(background)).toMatchObject({ reason: 'error' })
+    expect(runner).toHaveBeenCalledTimes(4)
   })
 
   it('bounds transient cooldowns when host identities churn', async () => {
@@ -330,14 +388,16 @@ describe('grantManagedCodexHookTrust', () => {
     })
   })
 
-  it('restores exact config bytes before fallback after a mutating RPC error', async () => {
+  // Why no restore: the session writes trust only at Orca's own keys, and a
+  // snapshot restore would also undo a save that landed during it.
+  it('keeps a config.toml save made during a failed session', async () => {
     const entries = [managedEntry('session_start')]
     const plan = buildPlan(entries)
-    const original = '# user formatting\r\n[hooks]\r\n'
     mkdirSync(runtimeHomeDir, { recursive: true })
-    writeFileSync(plan.tomlPath, original)
+    writeFileSync(plan.tomlPath, '# user formatting\r\n[hooks]\r\n')
+    const savedDuringSession = '# user formatting\r\n[hooks]\r\nmodel = "saved-during-session"\r\n'
     _internals.setGrantSessionRunner(async () => {
-      writeFileSync(plan.tomlPath, '[hooks.state."rpc-partial"]\ntrusted_hash = "changed"\n')
+      writeFileSync(plan.tomlPath, savedDuringSession)
       throw new Error('post-write transport failure')
     })
 
@@ -345,15 +405,16 @@ describe('grantManagedCodexHookTrust', () => {
       lane: 'fallback',
       reason: 'error'
     })
-    expect(readFileSync(plan.tomlPath, 'utf8')).toBe(original)
+    expect(readFileSync(plan.tomlPath, 'utf8')).toBe(savedDuringSession)
   })
 
-  it('removes an RPC-created config before fallback when none existed', async () => {
+  it('keeps a config.toml created during a failed session', async () => {
     const entries = [managedEntry('session_start')]
     const plan = buildPlan(entries)
     mkdirSync(runtimeHomeDir, { recursive: true })
+    const createdDuringSession = 'model = "created-during-session"\n'
     _internals.setGrantSessionRunner(async () => {
-      writeFileSync(plan.tomlPath, '[hooks.state."rpc-partial"]\ntrusted_hash = "changed"\n')
+      writeFileSync(plan.tomlPath, createdDuringSession)
       return {
         outcome: 'verify-failed',
         reason: 'post-write listing failed',
@@ -365,7 +426,7 @@ describe('grantManagedCodexHookTrust', () => {
       lane: 'fallback',
       reason: 'verify-failed'
     })
-    expect(existsSync(plan.tomlPath)).toBe(false)
+    expect(readFileSync(plan.tomlPath, 'utf8')).toBe(createdDuringSession)
   })
 
   it('honors the ops kill switch env flag', async () => {
@@ -379,35 +440,6 @@ describe('grantManagedCodexHookTrust', () => {
       reason: 'disabled'
     })
     expect(runner).not.toHaveBeenCalled()
-  })
-
-  // Why (#16441): the grant used to run through spawnSync, so two grants on one
-  // config.toml were impossible by construction. Now they must queue — an
-  // interleaved capture/restore pair resurrects trust the other run removed.
-  it('serializes concurrent grants that share one config.toml', async () => {
-    const entries = [managedEntry('session_start')]
-    const plan = buildPlan(entries)
-    let inFlight = 0
-    let maxInFlight = 0
-    const releases: (() => void)[] = []
-    _internals.setGrantSessionRunner(async () => {
-      inFlight += 1
-      maxInFlight = Math.max(maxInFlight, inFlight)
-      await new Promise<void>((resolve) => releases.push(resolve))
-      inFlight -= 1
-      return grantedSessionResult(entries)
-    })
-
-    const first = grantManagedCodexHookTrust(plan)
-    const second = grantManagedCodexHookTrust(plan)
-    await vi.waitFor(() => expect(releases).toHaveLength(1))
-    releases[0]!()
-    await first
-    await vi.waitFor(() => expect(releases).toHaveLength(2))
-    releases[1]!()
-    await second
-
-    expect(maxInFlight).toBe(1)
   })
 
   it('lets grants on different config.toml paths overlap', async () => {

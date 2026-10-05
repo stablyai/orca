@@ -74,7 +74,11 @@ export const BRIDGE_NATIVE_REFUSAL_CODES = [
    *  expo-image-picker 55.0.24 — and it is kept for the first that does. */
   'native_media_permission_denied',
   /** A `native.` method on a `subscribe`, which this seam answers on requests only. */
-  'native_verb_not_a_stream'
+  'native_verb_not_a_stream',
+  /** A read or a wake-tag call for a capture this session does not have: never started, stopped,
+   *  or ended with the page that asked for it. One code for all three, because the page's answer
+   *  to each is the same — its capture is over and its dictation with it. */
+  'native_audio_not_capturing'
 ] as const
 
 export type BridgeNativeRefusalCode = (typeof BRIDGE_NATIVE_REFUSAL_CODES)[number]

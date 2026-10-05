@@ -1,7 +1,10 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
 import { reportStructuredSessionUserInput } from '@/lib/worker-terminal-takeover-report'
-import { isStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
+import {
+  isStructuredAgentSessionComposerCommand,
+  isStructuredAgentSessionGoalCommand
+} from '../../../../shared/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
 import { pushHistory, type HistoryState } from './native-chat-composer-state'
@@ -45,7 +48,10 @@ export function useNativeChatStructuredComposerSend({
       if (!structuredTransport) {
         return
       }
-      if (attachments.length > 0 && isStructuredAgentSessionComposerCommand(text, agent)) {
+      const hostCommand =
+        isStructuredAgentSessionComposerCommand(text, agent) ||
+        (structuredTransport.threadGoal !== undefined && isStructuredAgentSessionGoalCommand(text))
+      if (attachments.length > 0 && hostCommand) {
         structuredTransport.onError('Remove attachments before using a chat-session command.')
         return
       }
@@ -66,7 +72,7 @@ export function useNativeChatStructuredComposerSend({
           )
           setHistory((previous) => pushHistory(previous, text))
           if (
-            isStructuredAgentSessionComposerCommand(text, agent) &&
+            hostCommand &&
             (composition.current.draft !== submitted.draft ||
               composition.current.imageAttachments !== submitted.imageAttachments)
           ) {

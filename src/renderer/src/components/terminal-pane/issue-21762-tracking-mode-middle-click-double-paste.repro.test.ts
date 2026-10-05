@@ -88,14 +88,17 @@ function buildController(pane: ManagedPane): TerminalPaneContextController {
 
 function fireMiddleMouseDown(
   handler: (event: React.MouseEvent<HTMLDivElement>) => void,
-  target: EventTarget
+  target: EventTarget,
+  modifiers: { shiftKey?: boolean; altKey?: boolean } = {}
 ): { defaultPrevented: boolean; propagationStopped: boolean } {
   let defaultPrevented = false
   let propagationStopped = false
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test-only stub; the handler only calls button/target/preventDefault/stopPropagation off the event.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test-only stub; the handler only reads button/target/shiftKey/altKey and calls preventDefault/stopPropagation off the event.
   handler({
     button: 1,
     target,
+    shiftKey: modifiers.shiftKey ?? false,
+    altKey: modifiers.altKey ?? false,
     preventDefault: () => {
       defaultPrevented = true
     },
@@ -147,5 +150,105 @@ describe('issue 21762: middle-click native-paste suppression in mouse-tracking T
     expect(armPrimarySelectionNativePasteSuppressionMock).toHaveBeenCalled()
     expect(outcome.propagationStopped).toBe(true)
     expect(pane.terminal.focus).toHaveBeenCalled()
+  })
+
+  // Follow-up to #21834: xterm withholds the mouse report for a shifted click
+  // (SelectionService.shouldForceSelection), so the TUI never pastes. Arming
+  // suppression while also returning early would leave nothing pasted at all.
+  describe('Shift+middle-click in a mouse-tracking pane', () => {
+    it("takes Orca's own paste path: stops propagation and focuses the pane", () => {
+      const pane = buildTrackedPane('sgr')
+      const { result } = renderHook(() => useTerminalPaneMobileActions(buildController(pane)))
+
+      const outcome = fireMiddleMouseDown(
+        result.current.handlePrimarySelectionMiddleMouseDown,
+        pane.container,
+        { shiftKey: true }
+      )
+
+      expect(armPrimarySelectionNativePasteSuppressionMock).toHaveBeenCalled()
+      expect(outcome.defaultPrevented).toBe(true)
+      expect(outcome.propagationStopped).toBe(true)
+      expect(pane.terminal.focus).toHaveBeenCalled()
+    })
+
+    it('keeps the unshifted click on the TUI-owned path (no #21762 regression)', () => {
+      const pane = buildTrackedPane('sgr')
+      const { result } = renderHook(() => useTerminalPaneMobileActions(buildController(pane)))
+
+      const outcome = fireMiddleMouseDown(
+        result.current.handlePrimarySelectionMiddleMouseDown,
+        pane.container,
+        { shiftKey: false }
+      )
+
+      expect(armPrimarySelectionNativePasteSuppressionMock).toHaveBeenCalled()
+      expect(outcome.propagationStopped).toBe(false)
+      expect(pane.terminal.focus).not.toHaveBeenCalled()
+    })
+
+    // Guards against collapsing the modifier check to `shiftKey || altKey`:
+    // off Mac, xterm still forwards an Alt+middle-click, so the TUI pastes.
+    it('leaves Alt+middle-click on the TUI-owned path off Mac', () => {
+      const pane = buildTrackedPane('sgr')
+      const { result } = renderHook(() => useTerminalPaneMobileActions(buildController(pane)))
+
+      const outcome = fireMiddleMouseDown(
+        result.current.handlePrimarySelectionMiddleMouseDown,
+        pane.container,
+        { altKey: true }
+      )
+
+      expect(outcome.propagationStopped).toBe(false)
+      expect(pane.terminal.focus).not.toHaveBeenCalled()
+    })
+
+    it('stops auxclick propagation too, matching the mousedown handler', () => {
+      const pane = buildTrackedPane('sgr')
+      const { result } = renderHook(() => useTerminalPaneMobileActions(buildController(pane)))
+
+      const shifted = fireMiddleMouseDown(
+        result.current.handlePrimarySelectionAuxClick,
+        pane.container,
+        {
+          shiftKey: true
+        }
+      )
+      const plain = fireMiddleMouseDown(
+        result.current.handlePrimarySelectionAuxClick,
+        pane.container
+      )
+
+      expect(armPrimarySelectionNativePasteSuppressionMock).toHaveBeenCalledTimes(2)
+      expect(shifted.propagationStopped).toBe(true)
+      expect(plain.propagationStopped).toBe(false)
+    })
+
+    it('on Mac follows xterm: Option, not Shift, forces the terminal to own the click', () => {
+      const userAgent = vi.spyOn(navigator, 'userAgent', 'get')
+      userAgent.mockReturnValue('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')
+      try {
+        const pane = buildTrackedPane('sgr')
+        const { result } = renderHook(() => useTerminalPaneMobileActions(buildController(pane)))
+
+        const shifted = fireMiddleMouseDown(
+          result.current.handlePrimarySelectionMiddleMouseDown,
+          pane.container,
+          { shiftKey: true }
+        )
+        expect(shifted.propagationStopped).toBe(false)
+        expect(pane.terminal.focus).not.toHaveBeenCalled()
+
+        const optioned = fireMiddleMouseDown(
+          result.current.handlePrimarySelectionMiddleMouseDown,
+          pane.container,
+          { altKey: true }
+        )
+        expect(optioned.propagationStopped).toBe(true)
+        expect(pane.terminal.focus).toHaveBeenCalled()
+      } finally {
+        userAgent.mockRestore()
+      }
+    })
   })
 })

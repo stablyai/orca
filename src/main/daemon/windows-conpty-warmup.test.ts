@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as pty from 'node-pty'
 import { warmWindowsConptyOnce } from './windows-conpty-warmup'
+import { assignHostProcessToKillOnCloseJob } from '../windows/windows-pty-job'
+
+vi.mock('../windows/windows-pty-job', () => ({
+  assignHostProcessToKillOnCloseJob: vi.fn(() => true)
+}))
 
 function setPlatform(platform: NodeJS.Platform): () => void {
   const original = process.platform
@@ -17,6 +22,7 @@ afterEach(() => {
   restorePlatform?.()
   restorePlatform = null
   vi.restoreAllMocks()
+  vi.clearAllMocks()
 })
 
 function makeFakePty(): { proc: pty.IPty; fireExit: () => void } {
@@ -41,6 +47,7 @@ describe('warmWindowsConptyOnce', () => {
     await flushImmediates()
 
     expect(spawnPty).not.toHaveBeenCalled()
+    expect(assignHostProcessToKillOnCloseJob).not.toHaveBeenCalled()
   })
 
   it('spawns a short-lived cmd.exe with the bundled ConPTY on Windows', async () => {
@@ -52,6 +59,7 @@ describe('warmWindowsConptyOnce', () => {
     await flushImmediates()
 
     expect(spawnPty).toHaveBeenCalledTimes(1)
+    expect(assignHostProcessToKillOnCloseJob).toHaveBeenCalledBefore(vi.mocked(spawnPty))
     const [file, args, options] = vi.mocked(spawnPty).mock.calls[0]
     expect(String(file).toLowerCase()).toContain('cmd')
     expect(args).toEqual(['/c', 'exit'])

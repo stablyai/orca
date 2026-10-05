@@ -33,16 +33,24 @@ export type { PtyStartupReplyEchoMatch } from './pty-startup-reply-echo-shapes'
 //
 // Both are projected on every write, which is why (2) is covered at all.
 
-type ExpectedEcho = { projections: readonly EchoProjection[]; remainingBytes: number }
+/** `owner`: a reply this PTY's owner produced itself; `relayed`: one a viewer sent in. */
+export type PtyReplySource = 'owner' | 'relayed'
+
+type ExpectedEcho = {
+  projections: readonly EchoProjection[]
+  remainingBytes: number
+  source: PtyReplySource
+}
 
 // Why bytes and not reads: the echo is a fixed ~30 bytes, but nothing bounds how the tty
 // chunks them — an SSH relay or a slow drain delivers a few bytes at a time, and a
 // per-read budget is then spent inside the echo itself. This is a backstop against a
 // pathological stream, set well above any splash an echo could arrive behind.
 const ECHO_SEARCH_BUDGET_BYTES = 256 * 1024
-// Why far tighter past the deadline: a reply still on the wire at expiry deserves the
-// read or two its echo takes, but nothing beyond it — see reset().
-const ECHO_POST_DEADLINE_BUDGET_BYTES = 512
+// Why far tighter for the owner's own late replies: it answers in the query's turn, so past
+// the launch splash nothing large sits between its reply and the echo. A relayed reply keeps
+// the long watch: it left while the app kept printing, so its echo can trail that output.
+const ECHO_POST_STARTUP_BUDGET_BYTES = 512
 // Live replies make the queue session-lived, so cap it under query floods.
 const MAX_TRACKED_ECHOES = 64
 
@@ -50,10 +58,13 @@ const MAX_TRACKED_ECHOES = 64
 export class PtyStartupReplyDelivery {
   private readonly expectedEchoes: ExpectedEcho[] = []
   private closed = false
+  private startupWindowOpen = true
 
+  /** Why a clock and not a timer: a timer per PTY for the whole session would outlive its use. */
   constructor(
     private readonly ownerBackend: PtyOwnerBackend,
-    private readonly writeProvider: (data: string) => void
+    private readonly writeProvider: (data: string) => void,
+    private readonly startupWindowEndsAt: number
   ) {}
 
   get hasExpectedEcho(): boolean {
@@ -65,15 +76,20 @@ export class PtyStartupReplyDelivery {
    * nothing was sent — the return value is the truth, because the write already happened
    * by the time it is returned.
    */
-  answer(reply: string): boolean {
+  answer(reply: string, source: PtyReplySource = 'relayed'): boolean {
     if (this.closed) {
       return false
     }
+    this.endStartupWindowIfDue()
     const projections = replyEchoProjections(reply, this.ownerBackend)
+    const remainingBytes =
+      source === 'owner' && !this.startupWindowOpen
+        ? ECHO_POST_STARTUP_BUDGET_BYTES
+        : ECHO_SEARCH_BUDGET_BYTES
     // Why register before the write: node-pty can synchronously re-enter onData, so the
     // echo can arrive inside `writeProvider` itself.
     const expected: ExpectedEcho | null =
-      projections.length > 0 ? { projections, remainingBytes: ECHO_SEARCH_BUDGET_BYTES } : null
+      projections.length > 0 ? { projections, remainingBytes, source } : null
     if (expected) {
       this.expectedEchoes.push(expected)
     }
@@ -117,6 +133,7 @@ export class PtyStartupReplyDelivery {
    * read rather than per `matchEcho` call, which runs several times over one span.
    */
   chargeEchoSearch(byteCount: number): void {
+    this.endStartupWindowIfDue()
     for (let index = this.expectedEchoes.length - 1; index >= 0; index -= 1) {
       const expected = this.expectedEchoes[index]
       if (!expected) {
@@ -129,14 +146,16 @@ export class PtyStartupReplyDelivery {
     }
   }
 
-  /**
-   * Startup window closed. Replies already on the wire stay recognizable, but only across
-   * the next few hundred bytes: an unbounded projection would keep deleting matching
-   * spans out of ordinary output for the rest of the session.
-   */
-  reset(): void {
+  /** Startup window closed: the owner's own replies are watched for a short span only. */
+  private endStartupWindowIfDue(): void {
+    if (!this.startupWindowOpen || Date.now() < this.startupWindowEndsAt) {
+      return
+    }
+    this.startupWindowOpen = false
     for (const expected of this.expectedEchoes) {
-      expected.remainingBytes = Math.min(expected.remainingBytes, ECHO_POST_DEADLINE_BUDGET_BYTES)
+      if (expected.source === 'owner') {
+        expected.remainingBytes = Math.min(expected.remainingBytes, ECHO_POST_STARTUP_BUDGET_BYTES)
+      }
     }
   }
 

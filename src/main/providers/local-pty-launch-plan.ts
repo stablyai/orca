@@ -51,9 +51,9 @@ export type LocalPtyLaunchPlan = {
   getFallbackShellReadyConfig:
     | ((shell: string) => ReturnType<typeof getShellLaunchConfig>)
     | undefined
-  // Why hoisted: a fallback shell must drop the primary's launch env, and
+  // Why hoisted: a fallback shell must undo the primary's launch env, and
   // re-deriving the key names would re-run wrapper generation.
-  primaryLaunchEnvKeys: string[]
+  primaryPreLaunchEnv: Record<string, string | undefined>
   isWslShell: boolean
   launchWslDistro: string | null
 }
@@ -98,7 +98,7 @@ function finalizeLocalPtyLaunchPlan(
     windowsFallbackAttempts: shell.windowsFallbackAttempts ?? [],
     shellReadyLaunch: null,
     getFallbackShellReadyConfig: undefined,
-    primaryLaunchEnvKeys: [],
+    primaryPreLaunchEnv: {},
     isWslShell,
     launchWslDistro: isWslShell ? (seed.launchWslContext?.distro ?? null) : null
   }
@@ -245,7 +245,12 @@ export function createLocalPtyLaunchPlan(
     '/bin/zsh'
   return finalizeLocalPtyLaunchPlan(seed, {
     shellPath,
-    shellArgs: ['-l'],
+    // Why: shellOverride here is already resolved from the setting, so it cannot
+    // distinguish a one-off shell pick; the spawn path only sends args for the profile.
+    shellArgs:
+      !args.command && !args.launchAgent && args.terminalShellArgs !== undefined
+        ? args.terminalShellArgs
+        : ['-l'],
     effectiveCwd: cwd,
     validationCwd: cwd
   })

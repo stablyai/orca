@@ -12,6 +12,8 @@ import {
   MOBILE_TERMINAL_SURFACE_TIMEOUT_MS,
   isClientDisconnectedError
 } from './orca-runtime-core'
+import { rendererPublicationThrottle } from '../window/renderer-publication-throttle'
+import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution'
 
 export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWithCreateMobileSessionTerminal {
   protected async runCreateMobileSessionTerminal(
@@ -65,6 +67,29 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
     if (opts.signal?.aborted) {
       throw new Error('client_disconnected')
     }
+    if (opts.clientMutationId && startupCommand.command && startupCommand.launchAgent === 'qoder') {
+      const clientIdentity = opts.clientNavigationId ?? 'local'
+      const seed = `${clientIdentity}\0${worktreeId}\0${opts.clientMutationId}`
+      // A command-bearing retry must reconcile the owning PTY before delivering the resume again.
+      return await this.createRuntimeOwnedMobileSessionTerminal(
+        worktreeId,
+        opts.activate !== false,
+        afterTabId,
+        {
+          ...startupCommand,
+          cwd,
+          identity: {
+            tabId: deterministicAgentSessionUuid(`mobile-qoder-tab\0${seed}`),
+            leafId: deterministicAgentSessionUuid(`mobile-qoder-leaf\0${seed}`)
+          },
+          createMutation: { clientIdentity, id: opts.clientMutationId },
+          viewMode: opts.viewMode,
+          targetGroupId: opts.targetGroupId,
+          supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
+          signal: opts.signal
+        }
+      )
+    }
     const win = this.getAvailableAuthoritativeWindow()
     if (!win) {
       return await this.createRuntimeOwnedMobileSessionTerminal(
@@ -90,7 +115,7 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
       throw new Error('runtime_unavailable')
     }
     const releasePublicationThrottle = pairedCreate
-      ? this.rendererPublicationThrottle.acquire(win.webContents)
+      ? rendererPublicationThrottle.acquire(win.webContents)
       : () => {}
     try {
       const requestId = randomUUID()

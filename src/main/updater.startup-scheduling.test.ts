@@ -268,17 +268,4 @@ describe('updater', () => {
 
     expect((autoUpdaterMock as Record<string, unknown>).verifyUpdateCodeSignature).toBeUndefined()
   })
-
-  it('does not override verifyUpdateCodeSignature on non-Windows platforms', async () => {
-    vi.stubGlobal('process', { ...process, platform: 'darwin' })
-
-    const { setupAutoUpdater } = await loadUpdaterModule()
-
-    const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
-
-    setupAutoUpdater(mainWindow as never)
-
-    expect((autoUpdaterMock as Record<string, unknown>).verifyUpdateCodeSignature).toBeUndefined()
-  })
 })

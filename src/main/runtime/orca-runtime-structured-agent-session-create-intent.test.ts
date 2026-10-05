@@ -1,5 +1,71 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const applyAgentWorkspaceTrust = vi.hoisted(() => vi.fn(async () => ({})))
+vi.mock('../agent-workspace-trust', () => ({ applyAgentWorkspaceTrust }))
+
 import { OrcaRuntimeService } from './orca-runtime'
+
+beforeEach(() => {
+  applyAgentWorkspaceTrust.mockClear()
+})
+
+function createCodexIntentRuntime(settings: Record<string, unknown>) {
+  const prepareCodexStructuredLaunch = vi.fn(() => '/accounts/selected/home')
+  const runtime = new OrcaRuntimeService(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: create intent only reads getSettings from the store.
+    { getSettings: () => ({ agentDefaultEnv: { codex: {} }, ...settings }) } as never,
+    undefined,
+    { prepareCodexStructuredLaunch }
+  )
+  vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
+    supported: true
+  })
+  Object.assign(runtime, {
+    resolveStructuredAgentSessionLocation: vi.fn(async () => ({
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'workspace-1',
+      workspaceKind: 'git-worktree' as const
+    })),
+    resolveRuntimeFileTarget: vi.fn(async () => ({ worktree: { path: '/repos/workspace-1' } }))
+  })
+  const createIntent = () =>
+    runtime.resolveStructuredAgentSessionCreateIntent({
+      envelope: { sessionId: 'session-1', clientOperationId: 'operation-1' },
+      worktree: 'id:workspace-1',
+      agent: 'codex'
+    })
+  return { prepareCodexStructuredLaunch, createIntent }
+}
+
+describe('structured Codex folder trust', () => {
+  it('pre-trusts the chat folder before launch preparation, as a Codex terminal launch does', async () => {
+    const { prepareCodexStructuredLaunch, createIntent } = createCodexIntentRuntime({})
+
+    await createIntent()
+
+    expect(applyAgentWorkspaceTrust).toHaveBeenCalledWith('codex', '/repos/workspace-1', {
+      env: expect.any(Object),
+      claudeAuth: null,
+      wslDistro: null,
+      connectionId: null
+    })
+    expect(applyAgentWorkspaceTrust.mock.invocationCallOrder[0]).toBeLessThan(
+      prepareCodexStructuredLaunch.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('writes nothing with the setting off, and still prepares the launch', async () => {
+    const { prepareCodexStructuredLaunch, createIntent } = createCodexIntentRuntime({
+      agentWorkspaceTrustEnabled: false
+    })
+
+    await createIntent()
+
+    expect(applyAgentWorkspaceTrust).not.toHaveBeenCalled()
+    expect(prepareCodexStructuredLaunch).toHaveBeenCalledTimes(1)
+  })
+})
 
 describe('structured agent-session create intent', () => {
   it('pins the selected Codex launch home after normal launch preparation', async () => {
@@ -52,7 +118,6 @@ describe('structured agent-session create intent', () => {
     })
 
     expect(prepareCodexStructuredLaunch).toHaveBeenCalledWith({
-      workspacePath: '/repos/workspace-1',
       launchEnv: expect.objectContaining({ CODEX_HOME: '/configured/home' })
     })
     expect(intent.accountHome).toEqual({
@@ -60,6 +125,31 @@ describe('structured agent-session create intent', () => {
       path: '/accounts/selected/home'
     })
     expect(intent.options).toEqual({ model: 'gpt-5.6-sol', effort: 'medium', fastMode: 'true' })
+  })
+
+  it('resolves the record-less catalog account home read-only, never through launch preparation', async () => {
+    const prepareCodexStructuredLaunch = vi.fn(() => '/accounts/selected/home')
+    const resolveCodexStructuredLaunchHome = vi.fn(() => '/accounts/selected/home')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the account-home read only consumes getSettings from the store.
+    const store = {
+      getSettings: () => ({
+        agentDefaultEnv: { codex: { CODEX_HOME: '/configured/home' } }
+      })
+    } as never
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      prepareCodexStructuredLaunch,
+      resolveCodexStructuredLaunchHome
+    })
+
+    const accountHome = await runtime.resolveStructuredAgentAccountHome('codex')
+
+    // A read must not run launch preparation: no home sync, no session bridge,
+    // no cleared account selection — the read-only sibling answers instead.
+    expect(prepareCodexStructuredLaunch).not.toHaveBeenCalled()
+    expect(resolveCodexStructuredLaunchHome).toHaveBeenCalledWith({
+      launchEnv: expect.objectContaining({ CODEX_HOME: '/configured/home' })
+    })
+    expect(accountHome).toEqual({ variable: 'CODEX_HOME', path: '/accounts/selected/home' })
   })
 
   it('pins the configured Claude launch home without Codex launch preparation', async () => {
@@ -112,11 +202,15 @@ describe('structured agent-session create intent', () => {
     })
 
     expect(prepareCodexStructuredLaunch).not.toHaveBeenCalled()
+    // Claude was never pre-trusted for a structured chat.
+    expect(applyAgentWorkspaceTrust).not.toHaveBeenCalled()
     expect(intent.accountHome).toEqual({
       variable: 'CLAUDE_CONFIG_DIR',
       path: '/configured/claude-home'
     })
     expect(intent.options).toEqual({ model: 'opus', effort: 'high', fastMode: 'true' })
+    // createSupport reports this same seed, so a paired client's picker shows what create runs.
+    expect(runtime.structuredAgentSessionLaunchSeedOptions('claude')).toEqual(intent.options)
   })
 
   it('uses the managed Claude launch home before falling back to ~/.claude', async () => {

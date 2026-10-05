@@ -62,7 +62,7 @@ Reads resolve the declared entry or `null`, and never a write. A write that fed 
 would let a later read return a byte nothing declared, which is the device back inside the
 recording; writes are recorded as effects instead, where they are observed rather than assumed.
 That is the whole point of the declaration: every byte a read can return is visible in the scenario
-file, and `scenarioSha256` pins it per golden like any other scenario field.
+file, and the golden records what the product read from it.
 
 ## Scenario actions
 
@@ -134,77 +134,37 @@ visible, it does not make the reduction itself observable.
 
 ## Golden schema
 
-Each file records `runnerVersion`, `baseline`, `lockfileSha256` (mobile's lockfile),
-`recorderSha256`, `adapterSha256`, `scenarioSha256`, `platform`, `scenarioVersion`,
-`projectionVersion`, `goldenFormatVersion`, `operation`, `family`, and `namedDeltas`. `platform`
-and `lockfileSha256` are provenance and are not compared: a dependency or OS that changes
-behaviour changes the trace itself, so comparing them would only fail candidates on unrelated
-bumps. The rest are pinned.
+Each file holds `goldenFormatVersion`, `operation`, `family`, `namedDeltas`, the value pool and the
+interned recording. Nothing else: no commit it was recorded from and no digest of its inputs. Every
+run of the recording suites re-derives each golden from the current tree and compares it, which is
+a stronger claim than "reproduces from some pinned commit", and git already records where each byte
+came from.
 
-`recorderSha256` covers every non-markdown file under this directory **except `adapters/`**, so the
-engine that produced a golden is as pinned as the product baseline: editing the runner, the
-transport, the projection or a fixture fails candidate mode on the header of every golden and
-forces a deliberate re-record of all of them.
+Format version 5 and earlier also carried a pinned `baseline` commit and digests of the recorder,
+the mount adapter and the scenario. A digest could only fail when an input changed and the recording
+did not, which is exactly the change that carries no information, and the pin had to name the
+recording branch's own commit, which a squash merge then made unreachable. Every behaviour change
+rewrote all 787 headers and needed a follow-up pull request to repin main; version 6 dropped all of
+it. `rpc:diff` still reads the old files, so a diff across the change is a real diff.
 
-`adapterSha256` covers the source of the mount adapter module _that golden_ was recorded through —
-the file under `adapters/` that mounts each operation its scenarios drive, read off the same
-`mounts` calls that build the table the recording runs against, so the pin cannot name a file the
-runner did not use. Adding a domain's module re-digests nothing that was already recorded, and
-editing one fails exactly the goldens mounted through it. The adapters used to sit in
-`recorderSha256` with the engine, which made every golden's header a function of every other
-family's adapter: #20568 added two task modules and put a conflict on that one line in 153 files,
-against every domain branch in flight.
+A failed replay reports the identity fields that moved by name, the checkpoint list, then each
+differing (checkpoint, field) at its first differing JSON path with both resolved values, grouped
+where an append-only field re-states the same moved entry at later checkpoints; past eight groups it
+counts the rest. The failure ends with the command that re-records that golden.
 
-`mutants/` is excluded for a different reason: nothing there is pinned by anything. A file that
-cannot change a recording is not provenance for one, and pinning it would claim a provenance the
-golden does not have — while charging every domain that adds a mutant a re-record of all 153
-files.
-The mutant table, the per-family mutant registry, the reference states and the suites that apply
-them all live there. What makes the exclusion sound is that no recording can reach them: the loader
-takes a resolved mutation spec instead of importing a table by name.
-`mutants/mutant-seam.test.ts` is the check, and it proves reachability forward, walking the static
-import graph from the two recording drivers and failing if any module under `mutants/` appears in
-it. Naming the directory is rejected too, in either spelling, for the paths a module can be read by
-rather than imported; `MUTANT_DIRECTORY` is not exported for the same reason. A path assembled at
-runtime from fragments would defeat both, which is the seam's remaining edge.
-
-For the same reason `recorderSha256` pins only the suites in `recording-drivers.ts`. A golden's
-bytes come from `pilot-recordings.test.ts` or `family-recordings.test.ts` and from what they
-import; a suite that reads goldens, or writes one to a scratch directory, puts no observation in a
-recorded file. `scripts/rpc-recording.mts` records exactly that list, so the two cannot drift apart.
+`mutants/` is unreachable from the recording drivers by rule, not by convention:
+`mutants/mutant-seam.test.ts` walks the static import graph from the two drivers and fails if any
+module under `mutants/` appears in it, and refuses a recording file that names the directory. A
+mutant planted on the recording path would be recorded and replayed alike, so every golden would
+compare clean while certifying the mutated code.
 
 A module-private product export an adapter drives is exposed by its own module — see
-`settingsMountExposures` — not by a shared table, because the exposure text does change what a
-recording loads. Each domain module gets its own loader carrying its own exposures, and one
-recording mounts one adapter, so `adapterSha256` pins exactly the exposures that reached it.
-
-One exposure is shared instead, and pays for it: five domains mount a screen that reads the client
-off the context `client-context.tsx` keeps module-private, and each used to carry its own copy of
-`exports.recorderHostClientContext = Ctx;`. That string names a local no type checker follows, so
-five spellings were five independent ways to reach a `ReferenceError` seconds into a recording.
-`hostClientContextExposure` is the one copy; the trade is that it sits inside `recorderSha256`, so
-editing it re-records all 787 goldens rather than the five families. A rename of the local is still
-invisible to `tsc` — nothing short of editing the product module makes a private local checkable —
-so `adapter-seam.test.ts` asserts the declaration it names exists exactly once, and refuses a sixth
-inline copy.
-
-The adapter seam is the directory, not a filename convention, because a convention is a rule nobody
-enforces. `adapter-seam.test.ts` enforces this one: every file under `adapters/` is a registered
-module, every registered module is declared in the file it is registered under, no adapter module
-imports a sibling (which would leave a golden pinned to one module and driven by two), and
-`pilotMountAdapters` mounts nothing of its own — an adapter defined in an engine file would be
-pinned by `recorderSha256` on all 153 goldens instead of by `adapterSha256` on its own.
-
-`scenarioSha256` covers the scenario input _that golden_ was recorded from — one manifest scenario
-for a pilot golden, the generated variants and any hoisted prelude for a matrix or schedule golden,
-canonicalised by `captureValue` so an explicit-undefined param stays distinct from an absent one.
-Editing a scenario still fails candidate mode on the header, but only for the goldens derived from
-it. The manifest used to be an input to `recorderSha256` instead, which made every golden's header
-a function of every other family's scenarios: adding one domain's family re-digested all 153 files
-and put a conflict on that line in every domain branch in flight. Which goldens a manifest derives
-lives in `derived-goldens.ts`, so the digest is a function of the same derivation that records the
-file rather than of a restatement of it; `golden-header-digest.test.ts` pins what both separations
-buy.
+`settingsMountExposures` — not by a shared table. One exposure is shared instead: five domains
+mount a screen that reads the client off the context `client-context.tsx` keeps module-private, and
+`hostClientContextExposure` is the one copy of that string. A rename of the local is invisible to
+`tsc`, so `adapter-seam.test.ts` asserts the declaration it names exists exactly once, and refuses a
+sixth inline copy. The same test requires every file under `adapters/` to be registered in
+`adapters/mounted-operation-modules.ts`.
 
 Checkpoints contain ordered sender calls and serialized physical application payloads, action and
 request settlements, projected state, and ordered external effects. Each sender call, each payload
@@ -234,12 +194,7 @@ positional slots; absent, undefined and null are distinct `$rpc` tags. Literal o
 `$rpc` are escaped. Only object keys are sorted; array/effect order, options, budgets, settlement
 times and errors stay observable. Errors contain category, message and `isRpcDeliveryUnknown`, never
 stack paths, plus `code` and a recursively captured `cause` when the thrown error carries them.
-Platform is provenance; candidate comparison does not require the same operating system.
-
-Format version 4 added `scenarioSha256` and version 5 adds `adapterSha256`. A stale golden would
-already fail this reader's byte compare, so each bump buys the diagnosis rather than the rejection:
-`readGolden` names the stale format and says to re-record, instead of reporting an opaque
-`(encoding)` difference. Neither bump moved an observation.
+A golden records no operating system, so comparison does not require the one it was recorded on.
 
 ### Value pool
 
@@ -263,11 +218,15 @@ early request every downstream checkpoint re-states — touches the same 16 file
 under version 2 that is ±17,100 lines and 1.03 MB of diff, and under version 3 ±3,764 lines and
 0.20 MB, because a moved entry no longer rewrites every field value that contains it.
 
-`readGolden` refuses any other `goldenFormatVersion`, checks that every pooled entry hashes to its
-own key and that no entry sits in the pool unreferenced — content addressing is what keeps an entry
-shared across checkpoints honest, and an unread entry would be content in the file that nothing
-compares. It then resolves hashes back to values, and `compareGolden` reports the scenario, the
-checkpoint id, the field, the JSON path inside it, and both resolved values.
+Replay passes only if the committed file is exactly the text `rpc:record` would write for the run,
+so nothing the file carries goes uncompared: a leftover header key, a stale pool entry, reordered
+keys or a hand edit all fail with the re-record command. When the text differs, `readGolden` decodes
+the file for the report: it refuses any other `goldenFormatVersion`, checks that every pooled entry
+hashes to its own key and that no entry sits in the pool unreferenced (a file it cannot decode fails
+with the re-record command too), and resolves hashes back to values; the report names the scenario,
+the checkpoint id, the field, the JSON path inside it, and both resolved values, or says every field
+matches and only the file text differs. `rpc:diff` decodes leniently instead, so it still reads the
+old formats.
 
 ### Prelude checkpoints
 
@@ -280,9 +239,9 @@ the same state through different inputs is evidence. Sibling schedules already d
 prefix, so they are unchanged.
 
 Nothing about a shared prelude is unverified. The `.prelude` scenario's checkpoints live in the same
-golden as the variants that start after them, and `compareGolden` walks every checkpoint in the
-file, so changing the prelude fails the golden it belongs to. The value pool does not weaken that:
-it is per-file and content-addressed, so a prelude entry a later checkpoint re-states is stored once
+golden as the variants that start after them, and replay compares every checkpoint in the file,
+so changing the prelude fails the golden it belongs to. The value pool does not weaken that: it is
+per-file and content-addressed, so a prelude entry a later checkpoint re-states is stored once
 and any change to it moves the hash in every checkpoint that reads it.
 
 Family matrices and schedule recordings retain both boundaries. Matrices execute
@@ -307,7 +266,7 @@ without a message, `method_not_found`, and a transport rejection with and withou
 that were recorded before and are gone were unreachable: `successResponse` always sets `result`, so
 JSON carries no explicit-undefined slot, and no mounted method's handler returns a number, a string,
 an array, a bare `{}`, or a boolean. `null` stays because `linear.getIssue` returns it for a missing
-issue and the b2 seed is a shipped null-result bug.
+issue and the b2 seed is a null result accepted as success.
 
 The message-less refusal and rejection are what separate the two failure paths a migrated call site
 must keep apart: a refusal with no message falls back to the screen's copy, a transport drop with no
@@ -336,7 +295,7 @@ success fails the suite until it is given a fulfilled scenario or a line in
 `REPLY_MATRIX_NORMAL_RESULT_INVENTORY`, which carries the reply and the reason; an entry whose
 family has since recorded a success fails too, so the list only shrinks. Four sites are on it: both
 legs of the b3 seed, whose single scenario exists to record the defect; the b2 seed, whose only
-recorded success is the shipped null result; and `settings.update`, a best-effort write whose reply
+recorded success is the null result; and `settings.update`, a best-effort write whose reply
 body no call site reads.
 
 Detached unhandled rejections are captured as effects in a sequential process-scoped window,
@@ -344,20 +303,28 @@ with prior process listeners restored afterward. The known main bug it first rec
 both legs: `new-workspace-runtime-context-null-results-degrade-to-absent` now records a null or
 absent `settings.get` or `ui.get` result degrading the way a reply missing that member does, so
 neither matrix golden carries a property-read TypeError effect any more. That leaves no golden
-recording an unhandled rejection at all, so `unhandled-recording.test.ts` is what pins the capture:
+recording an unhandled rejection at all, so `unhandled-recording.test.ts` is what pins the capture,
+both the helper and its wiring through `runRecording` into a checkpoint and the cleanup checkpoint:
 without it a refactor could stop emitting the effect and every golden would still compare clean.
 Task-model projections record setter invocations and resulting model values, not native UI.
 
-## Commands and checker contract
-
-Record only from unchanged pinned product sources and lockfile. The fence exempts only
-`mobile/src/test-support/rpc-recording`, which `recorderSha256` and `adapterSha256` pin between
-them; every other test-support path is compared against the baseline like product code:
+## Commands
 
 ```sh
-ORCA_BACKGROUND_LAUNCH=1 RPC_FOUNDATION_RECORD=1 pnpm --dir mobile exec tsx scripts/rpc-recording.mts --record
-ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test src/test-support/rpc-recording
+ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test src/test-support/rpc-recording  # replay and compare
+pnpm --dir mobile rpc:record                    # re-record every golden from the current tree
+pnpm --dir mobile rpc:record <golden-id> ...    # re-record only these (ids as the failure prints)
+pnpm --dir mobile rpc:record --prune            # also delete goldens the manifest no longer derives
+pnpm --dir mobile rpc:diff [<base>]             # decode what moved against <base> (default: merge base with origin/main)
 ```
+
+With no base, `rpc:diff` includes the moves the branch already committed; `rpc:diff HEAD` shows
+only the uncommitted ones.
+
+Recording is deterministic and carries no header, so an unchanged behaviour re-records to the same
+bytes on any machine: recording everything is always safe, and `git diff` shows only what moved.
+Without `--prune`, a golden the manifest stopped deriving is listed and the census test
+(`derived-goldens.test.ts`) keeps failing on it; deleting coverage is always explicit.
 
 Mutants are the defect evidence. `mutants/operation-mutations.ts` holds one anchored source edit
 per adapter family, and every family's recording must change visible state when its mutant is
@@ -368,7 +335,8 @@ hook. `runRecordingMutant` accepts a mutated mounting adapter, scheduler, baseli
 observation projection, and returns `{verdict: "killed" | "survived", recording}`. Every mutant
 test requires the mutation to apply exactly once and change visible state to count as killed.
 
-Set `RPC_FOUNDATION_REFERENCE_ROOT` to an archived `bcba08b3e4` source tree to corroborate the
+The b1, b2 and b3 seeds are regressions from an unmerged refactor (`bcba08b3e4`, never on main),
+not shipped bugs. Set `RPC_FOUNDATION_REFERENCE_ROOT` to an archived `bcba08b3e4` source tree to corroborate the
 three B-seed mutants against the real defect; the reference checkout is never edited. Each seed
 pins the archived tree's visible state, so a later refactor of those files cannot pass by merely
 differing from main. Archived-tree corroboration for b1/b2/b3 is **unproven in CI**:
@@ -378,14 +346,30 @@ families because no reference states are defined for them.
 
 ## What this oracle does and does not see
 
-It replays 397 manifest scenarios against frozen goldens and fails on any divergence: 787 goldens
-over 790 tests, all inside `pnpm --dir mobile test`. Counted with
-`python3 -c "import json;print(len(json.load(open('mobile/rpc-foundation/pilot-scenarios.json'))['scenarios']))"`,
-`find mobile/rpc-foundation/goldens -type f | wc -l`, and the reported total of
-`vitest run src/test-support/rpc-recording/{pilot,family}-recordings.test.ts src/test-support/rpc-recording/derived-goldens.test.ts`. Counts quoted further down are measurements of
-the change they describe and are not restatements of this one. For a migration it answers one
-question — does the rewritten call site produce the same sender calls, settlements, state and
-effects as main did?
+It replays every manifest scenario against its committed golden and fails on any divergence, all
+inside `pnpm --dir mobile test`. Counted with
+`python3 -c "import json;print(len(json.load(open('mobile/rpc-foundation/pilot-scenarios.json'))['scenarios']))"`
+and `find mobile/rpc-foundation/goldens -type f | wc -l`. Counts quoted further down are
+measurements of the change they describe and are not restatements of this one. For a refactor it
+answers one question — does the rewritten call site produce the same sender calls, settlements,
+state and effects as the base branch did? A pull request that moves no golden says yes.
+
+### Recorded requests against the host's params contract
+
+The goldens script the host's replies, so nothing in a replay stops a scenario from recording a
+success for a request the real host would refuse. `recorded-request-params.test.ts` parses every
+distinct request the corpus puts on the wire with the host dispatcher's own
+`parseRpcRequestParams` and the schema `rpc-params-catalog.generated.ts` binds to that method. It
+fails on a method the host does not have, params the host refuses, params sent to a method that
+takes none (the dispatcher never reads them), and keys the schema silently strips, unless an entry
+in its inventory gives the reason; an entry nothing strips fails too. It runs in the Mobile Checks
+suite, which a desktop pull request to `src/shared/` triggers, so tightening a host schema that
+today's phone requests do not satisfy fails there. It checks against the current
+host only, and it does not check the scripted replies against real host results.
+
+When it landed it found twelve requests the host would refuse, all from invented fixture values
+rather than product code: git object ids that were not ids, an iOS push token without its APNs
+environment, a Linear filter passed as a GitHub preset, and a GitLab project reference as a string.
 
 It is not a substitute for reading the diff. Five facts bound it, all learned the hard way:
 
@@ -410,12 +394,12 @@ It is not a substitute for reading the diff. Five facts bound it, all learned th
 - **It was blind to a stream close with no frame behind it.** Deleting `unsubscribeStream()` from
   `mobile-notifications.ts`'s cleanup — the local close, not the `notifications.unsubscribe` RPC
   beside it — survived all 810 tests. Neither unsubscribe builder in `rpc-client-stream-registry.ts`
-  knows `notifications.subscribe`, so closing that stream writes nothing to the wire: what the
-  mutant leaks is a live subscription record, and the leak stayed invisible until a cutover replayed
+  knew `notifications.subscribe` then, so closing that stream wrote nothing to the wire: what the
+  mutant leaked was a live subscription record, and the leak stayed invisible until a cutover replayed
   it. `notifications-desktop-stream-closed` stops the stream and then cuts over, where the leak
   becomes a second `notifications.subscribe` payload — one hand-written scenario per builder-less
   method, which is a rule nobody enforces. The teardown observation below closes the class: the same
-  mutant now fails seven goldens rather than that one, and a family whose method does build an
+  mutant then failed seven goldens rather than that one, and a family whose method does build an
   unsubscribe (`nativeChat.subscribe`, `runtime.clientEvents.subscribe`) is pinned by that payload
   at unmount as well.
 
@@ -477,81 +461,37 @@ the runtime task settings. That divergence is recorded, not repaired —
 `settings-task-hydration-refuse-after-data.json` is the observation, and changing the behaviour is
 a product change with its own re-record.
 
-### Running it for a step-4 migration
+### Working with the recordings
 
-```sh
-# 1. Before touching the call site, confirm the oracle is green on your branch.
-ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test src/test-support/rpc-recording
+- **Refactor.** Run the suite. No golden moves: that is the parity proof. If one moves, the failure
+  names the golden, checkpoint, field and path; `rpc:diff` shows the same after a re-record.
+- **Behaviour change.** Change the product, run the suite, read each failure, then
+  `pnpm --dir mobile rpc:record` and commit. The pull request diff is exactly the goldens whose
+  recorded behaviour moved; say why in the pull request. Nothing is owed after the merge.
+- **New scenario.** Add it to `pilot-scenarios.json`. The suite fails naming each missing golden
+  and the command that records it; run that command and commit the new files.
+- **Recorder change.** Re-record. The diff is exactly what the recorder now observes differently;
+  if there is none, there is nothing to commit.
+- **Review.** Read the "RPC recording changes" section of the Mobile Checks job summary, which is
+  `rpc:diff` against the base. Each changed file is one behaviour move.
+- **Merge conflict in a golden.** Never hand-merge one: goldens are derived. Take the incoming side
+  (`git checkout origin/main -- mobile/rpc-foundation/goldens`, from the incoming ref, not `HEAD`),
+  finish merging the product code and the scenarios, run `rpc:record`, then
+  `rpc:diff origin/main` and check it lists only the moves your branch means to make — a re-record
+  would otherwise absorb a regression the merge introduced.
+- **Red main.** `Mobile tests on main` replays the whole mobile suite on every merge, because two
+  pull requests can each pass against their own base and disagree once both land. The failure names
+  each golden and the command; whoever merged last re-records in a follow-up.
 
-# 2. Migrate the call site. Re-run. Any divergence is your diff, reported down to the JSON path.
+A desktop pull request can move a golden too: the recordings import a few hundred modules under
+`src/shared`. Mobile Checks therefore runs on any pull request that touches `src/shared/**` or the
+root lockfile, not only on changes under `mobile/`.
 
-# 3. If a divergence is intended, say so deliberately. Recording refuses to run unless the
-#    product tree matches the pinned baseline, so bump `baseline` in pilot-scenarios.json to the
-#    commit you are recording from first.
-ORCA_BACKGROUND_LAUNCH=1 RPC_FOUNDATION_RECORD=1 \
-  pnpm --dir mobile exec tsx scripts/rpc-recording.mts --record
-```
-
-A call site that subscribes runs the same recipe, with one thing to check before step 2. The
-subscribe payload is named `<method>#<n>` by per-method occurrence, and every `frame` step in the
-scenario names it — so a migration that moves the subscribe past another send of the same method
-renames it and the scenario no longer resolves. That is a loud failure, not a silent one
+A subscription scenario names its payload `<method>#<n>` by per-method occurrence, and every
+`frame` step names it too — so a change that moves the subscribe past another send of the same
+method renames it and the scenario no longer resolves. That is a loud failure, not a silent one
 (`Missing subscription payload`), but it is the first thing to read when a subscription scenario
 stops matching.
-
-A re-record is a claim about behaviour. State the cause in the commit; every golden the refresh
-moves should have one.
-
-### Recording a behaviour change
-
-A change that moves what a screen observes cannot be recorded from main's pin: the fence compares
-the working tree against `baseline`, so the migrated source has to be what `baseline` names. Do not
-record into a scratch directory and copy the moved files back — that leaves those goldens pinned to
-a tree that does not produce them, which is the one claim this header exists to make.
-
-1. Land the product change first, so every fenced path (`mobile/src`, `src/shared`,
-   `mobile/pnpm-lock.yaml`) is final and committed.
-2. Repin `baseline` in `pilot-scenarios.json` to that commit on your own branch. Nothing else: not
-   main, not a tree you have not committed. The manifest is outside the fenced paths, so the repin
-   may sit uncommitted while you record. After merging main the pin is the merge commit, since that
-   is the last commit to touch a fenced path and the only tree the fence can match.
-3. Re-record everything, not a subset, with the `--record` command above. The repin rewrites the
-   `baseline` header of every golden, so every file moves and a partial refresh would leave the
-   corpus pinned to two different trees.
-4. Prove the delta by decoding the value pool of every golden against the branch point and sorting
-   the files into four classes: header-only, body moved, added, deleted. The disclosed behaviour
-   change is exactly the body-moved set; anything else in the last three classes is an unintended
-   move to explain before committing. Know which header keys your own branch moves before you
-   read the header-only class, or you will not recognise a clean result: the repin moves
-   `baseline` on every golden, a branch that edited anything under `RECORDER_DIRECTORY` also moves
-   `recorderSha256` on every golden, and a branch that edited one adapter module moves that
-   family's `adapterSha256`. Any key outside that set is the finding. `scenarioSha256` hashes the
-   derived scenarios rather than the manifest, so a repin alone never moves it.
-5. Commit the repin and the refresh together, and state the cause.
-
-After a squash-merge the pinned sha is unreachable from main, so the next recording on main repins
-to main's tip in a follow-up — the same two-step #20563 and #20895 used. A reviewer checking an
-in-flight branch resolves the pin against the branch, where it is a real commit.
-
-Editing the recorder engine on a migration branch is the awkward case: `recorderSha256` moves, so
-every golden needs rewriting, but the product tree no longer matches `baseline`, and bumping
-`baseline` to the branch would record the migrated source and make the parity claim circular. Record
-from the pinned commit instead, with this branch's recorder laid over it: `git worktree add
---detach <dir> <baseline>`, this tree's `rpc-recording/` and `pilot-scenarios.json` copied in,
-`node_modules` symlinked, `RPC_FOUNDATION_GOLDENS` pointed at a scratch directory — then copy the
-result back and run the candidate suite here. It must be a worktree, not a `git archive`
-extraction: the fence runs `git diff --quiet <baseline>` and an untracked-file check, both of which
-need a real `.git`, so an archive tree fails as `Product sources or lockfile differ from the pinned
-main baseline` — a product mismatch that is not there. Format the recorder before recording: an
-`oxfmt` pass afterwards moves `recorderSha256` again. A recorder-only branch that has merged main
-is not the awkward case: its product tree is main's, so repin `baseline` to main's tip and record
-in place — there is no migrated source for the goldens to be recorded against. That repin is the
-whole of it, though. Where a branch is told not to repin, `--record` refuses on any product tree
-that is not the pinned one, merged or not, and the detached-pin worktree above is the only recipe
-that runs. Adding or editing
-one domain's module under `adapters/` no longer needs any of this: only that domain's goldens move,
-and they re-record from its own branch like any other behaviour change. Adding a mutant, a probe or
-a suite that does not record needs none of it either, and moves no golden at all.
 
 If your call site carries a mutation anchor in `mutants/operation-mutations.ts`, rewriting it will
 make the anchor match zero sites. Re-anchor the same defect at its new home rather than deleting
@@ -613,7 +553,7 @@ the drop happened under, and records a non-empty report as a `reply-salvage` eff
 operation, the method, the decoded variant, the dropped paths and the count. Nothing in the product
 tree changes: the report was already being built and thrown away.
 
-44 of the 787 goldens carry one, and every other checked read in the corpus decodes its reply
+44 of the goldens carried one when this was written, and every other checked read in the corpus decodes its reply
 whole (`grep -l reply-salvage mobile/rpc-foundation/goldens/*.json | wc -l`). The matrix varies the
 envelope a host sends rather than the shape of a row inside a result, so on most families this
 observation pins an absence rather than a recorded drop. What it buys is the next tightening: an element or member schema narrowed so a recorded row stops parsing moves the
@@ -654,14 +594,15 @@ timer has not run when `dispose()` returns, so reading the set first made a defe
 byte-identical to a stream nobody ever closed.
 
 Why it is not enough to watch the wire: closing a stream only writes a frame when its method has an
-unsubscribe builder, and `notifications.subscribe` has none. Deleting that cleanup's
-`unsubscribeStream()` used to fail one golden, the cutover scenario written for it; it now fails
-seven, and the next builder-less method needs no scenario of its own.
+unsubscribe builder. `notifications.subscribe` had none until the transport took over its release:
+deleting its cleanup's `unsubscribeStream()` used to fail one golden, the cutover scenario written
+for it, and this observation made it fail seven, so the next builder-less method needs no scenario
+of its own.
 
 An empty set is not recorded, so the corpus stays quiet and a family that starts leaking gains a
-checkpoint. Four goldens report a non-empty set today, and all four are the same non-leak: the two
-`runtime.clientEvents.subscribe` matrices, on every partition whose subscribe reply is not a
-well-formed `ready`. With no `subscriptionId` to unsubscribe with, `disposeServerSubscription` marks
+checkpoint. Five goldens report a non-empty set today, and all five are the same non-leak: the two
+`runtime.clientEvents.subscribe` matrices and the `notifications.subscribe` matrix, on every
+partition whose subscribe reply is not a well-formed `ready`. With no `subscriptionId` to unsubscribe with, `disposeServerSubscription` marks
 the record cancelled and keeps it until the id arrives — the retention the per-session registry
 paragraph above describes. `cancelled` is in the observation so those are legible as what they are:
 a product cleanup that never ran records `cancelled: false`, and because the drain precedes the

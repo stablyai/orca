@@ -15,6 +15,8 @@ on:
         type: string
 
 permissions:
+  # actions: read downloads the orcad template the parent release-cut run built.
+  actions: read
   contents: write
 
 concurrency:
@@ -29,6 +31,10 @@ jobs:
     # faster runner.
     runs-on: blacksmith-6vcpu-macos-15
     timeout-minutes: 60
+    # actions: read fetches the relay addons from the release-cut run.
+    permissions:
+      actions: read
+      contents: write
     env:
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
@@ -127,6 +133,16 @@ jobs:
           echo "identity=$identity" >>"$GITHUB_OUTPUT"
           echo "Classified $TAG as $identity"
 
+      # Only a Windows runner compiles these; release-cut's relay-windows-process-tree
+      # job built them from this tag before dispatching this workflow.
+      - name: Collect the Windows process-table addons for the relay
+        uses: actions/download-artifact@v8
+        with:
+          name: relay-windows-process-tree
+          path: .build/windows-process-tree
+          run-id: ${{ inputs.release_run_id }}
+          github-token: ${{ github.token }}
+
       - name: Build app
         run: pnpm build:release
         env:
@@ -136,6 +152,20 @@ jobs:
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+          # Fail the release rather than ship a relay that cannot launch outside
+          # sshd's job for a standard user on a Windows SSH host.
+          ORCA_REQUIRE_RELAY_NATIVE_ADDONS: x64,arm64
+
+      # Design D2: the parent release-cut run merged it from every node-server lane at this tag.
+      - name: Download the orcad deployment template from the release run
+        # Why: release-cut skips the template for a tag that predates it.
+        if: hashFiles('config/scripts/packaged-orcad-template.cjs') != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
+          run-id: ${{ inputs.release_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Gate runtime file-watcher process isolation
         run: |
@@ -174,6 +204,7 @@ jobs:
           command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always -c.publish.releaseType=draft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ORCA_REQUIRE_ORCAD_TEMPLATE: '1'
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}

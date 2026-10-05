@@ -6,6 +6,9 @@ import type { MobileWebShellLoadStatePayload } from './load-state'
 /** One raw JSON envelope, exactly as the page posted it. Parsing is the caller's. */
 export type MobileWebShellBridgeMessagePayload = { json: string }
 
+/** The URL of a main-frame navigation the shell cancelled, as the document spelled it. */
+export type MobileWebShellExternalNavigationPayload = { url: string }
+
 export type OrcaMobileWebShellViewProps = ViewProps & {
   /**
    * Absolute path of an activated generation directory: `index.html`, `manifest.json`, and
@@ -29,6 +32,26 @@ export type OrcaMobileWebShellViewProps = ViewProps & {
    * (`MobileWebShellBridge.maxMessageByteCount`); a refusal is silent and reaches no event.
    */
   onBridgeMessage?: (event: NativeSyntheticEvent<MobileWebShellBridgeMessagePayload>) => void
+  /**
+   * A main-frame navigation a human started was cancelled, which is the user aiming the top frame
+   * somewhere else: a tap on a link inside the sealed HTML-preview frame, which the browser hands up
+   * as a top-frame request.
+   *
+   * **Only a gesture-started navigation away from the shell's own document is offered.** A top-page
+   * meta refresh, a redirect and anything the page does to its own path carry no gesture, so none of
+   * them reaches this. Neither does a tap naming the shell's own document: that is refused outright
+   * and never offered, because allowing it would reload the page out from under the session and
+   * offering it would send the user out of the app -- and that holds for `<a href="/" download>` too,
+   * which is the same URL in a download's clothing. A gesture-started download of anything else is
+   * offered, which is what makes `<a download>` behave as it does on the native screens.
+   *
+   * The URL is unfiltered by design — `readBridgeExternalLinkUrl` owns the scheme list and lives in
+   * the half that ships over the air — so a handler must run it through that before opening
+   * anything. Bounded natively at 4096 characters so an artifact cannot spend the boundary.
+   */
+  onExternalNavigation?: (
+    event: NativeSyntheticEvent<MobileWebShellExternalNavigationPayload>
+  ) => void
 }
 
 /** What a ref on the view carries. Expo puts the view's functions on the component prototype. */

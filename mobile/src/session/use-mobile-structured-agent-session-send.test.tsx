@@ -390,7 +390,7 @@ describe('mobile structured send retries', () => {
     expect(calls().every(([, params]) => !('retryUnknown' in (params as object)))).toBe(true)
   })
 
-  it('keeps an ambiguous id after the host replay window expires', async () => {
+  it('sends under a new id once the host has expired an ambiguous one', async () => {
     let attempts = 0
     sendRequest.mockImplementation(async (method) => {
       if (method !== 'agentSession.send') {
@@ -399,6 +399,9 @@ describe('mobile structured send retries', () => {
       attempts += 1
       if (attempts === 1) {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))
+      }
+      if (attempts === 3) {
+        return sendResult('accepted')
       }
       return ok({
         ok: false,
@@ -413,11 +416,16 @@ describe('mobile structured send retries', () => {
     await act(async () => {
       expect(await hook!.sendWithOutcome('old ambiguity')).toBe('unknown')
       expect(await hook!.sendWithOutcome('old ambiguity')).toBe('rejected')
-      expect(await hook!.sendWithOutcome('old ambiguity')).toBe('rejected')
+      expect(await hook!.sendWithOutcome('old ambiguity')).toBe('accepted')
     })
 
     expect(calls()).toHaveLength(3)
-    expect(new Set(sentIds()).size).toBe(1)
+    const [first, replay, fresh] = sentIds()
+    expect(replay).toBe(first)
+    expect(fresh).not.toBe(first)
+    expect(onSendError).toHaveBeenCalledWith(
+      "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed."
+    )
   })
 
   it('does not retain an id when the action budget expires before dispatch', async () => {
@@ -429,5 +437,23 @@ describe('mobile structured send retries', () => {
 
     expect(calls()).toHaveLength(0)
     expect(asyncStorage.setItem).not.toHaveBeenCalled()
+  })
+
+  it('puts a store that would not take the journal on screen, and sends nothing', async () => {
+    // Inside the page the store is the app's, reached over the `storage` grant, and it rejects a
+    // journal past `PAGE_STORAGE_MAX_VALUE_CHARS` — 48 unsettled sends, measured. A refusal that
+    // resolved instead would put a mutation on the wire carrying an operation id nothing holds,
+    // and a retry after a crash would send this message twice (rulings-ota-c7.md ruling 7).
+    asyncStorage.setItem.mockImplementation(async () => {
+      throw new Error('Orca could not save orca:mobileStructuredSendOperations:v1')
+    })
+    await mountSession()
+
+    await act(async () => {
+      expect(await hook!.sendWithOutcome('the journal will not take this')).toBe('rejected')
+    })
+
+    expect(onSendError).toHaveBeenCalledWith('Message not sent')
+    expect(calls()).toHaveLength(0)
   })
 })

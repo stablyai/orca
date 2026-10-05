@@ -42,7 +42,7 @@ describe('native chat ask row', () => {
       nativeChatAskRunSubject([
         askCall({ questions: [{ question: 'Which branch?' }, { question: 'Proceed?' }] })
       ])
-    ).toEqual({ kind: 'count', count: 2 })
+    ).toEqual({ kind: 'questions', questions: ['Which branch?', 'Proceed?'] })
   })
 
   it('aggregates the per-question calls Codex journals for a single prompt', () => {
@@ -53,7 +53,7 @@ describe('native chat ask row', () => {
         askCall({ questions: [{ question: 'Which branch?' }] }, 'request_user_input'),
         askCall({ questions: [{ question: 'Proceed?' }] }, 'request_user_input')
       ])
-    ).toEqual({ kind: 'count', count: 2 })
+    ).toEqual({ kind: 'questions', questions: ['Which branch?', 'Proceed?'] })
   })
 
   it('decodes the JSON-string arguments Codex delivers', () => {

@@ -1,19 +1,26 @@
 import { cellToViewportPx } from './cell-geometry'
-import { scope } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
 import { getCellHeight } from './fit-scale'
 import { notify } from './host-notify'
 import { applyXtermSelection, selRange } from './selection-range'
-import { viewportToCell } from './viewport-cell'
+import { viewportPoint, viewportToCell } from './viewport-cell'
 import { getTotalScale } from './viewport-transform'
 
-export function repositionOverlay() {
+/** How close to an edge a handle drag starts scrolling, in pixels. */
+const EDGE_SCROLL_PX = 40
+
+/** The edge-scroll tick, in milliseconds. */
+const EDGE_SCROLL_INTERVAL = 60
+
+export function repositionOverlay(scope: TerminalDocumentScope) {
   if (scope.selMode !== 'select' || !scope.sel || !scope.term) {
     return
   }
-  const r = selRange()!
-  const sPx = cellToViewportPx(r.start.col, r.start.row)
-  const ePx = cellToViewportPx(r.end.col + 1, r.end.row)
-  const cellH = getCellHeight() * getTotalScale()
+  const r = selRange(scope)!
+  const sPx = cellToViewportPx(scope, r.start.col, r.start.row)
+  const ePx = cellToViewportPx(scope, r.end.col + 1, r.end.row)
+  const cellH = getCellHeight(scope) * getTotalScale(scope)
+  const viewport = scope.viewportRect()
   // Why: native iOS pattern — start handle anchors at the TOP of the
   // first selected cell (dot above, stem covers the cell going down);
   // end handle anchors at the BOTTOM of the last selected cell (dot
@@ -22,8 +29,8 @@ export function repositionOverlay() {
   scope.handleStart!.style.top = sPx.y + 'px'
   scope.handleEnd!.style.left = ePx.x + 'px'
   scope.handleEnd!.style.top = ePx.y + cellH + 'px'
-  const startVisible = sPx.y >= 0 && sPx.y <= window.innerHeight
-  const endVisible = ePx.y >= 0 && ePx.y <= window.innerHeight
+  const startVisible = sPx.y >= 0 && sPx.y <= viewport.height
+  const endVisible = ePx.y >= 0 && ePx.y <= viewport.height
   scope.handleStart!.style.visibility = startVisible ? 'visible' : 'hidden'
   scope.handleEnd!.style.visibility = endVisible ? 'visible' : 'hidden'
   let menuCenterX: number, menuY: number, vTransform: string, marginTop: string
@@ -32,15 +39,15 @@ export function repositionOverlay() {
     menuY = sPx.y
     vTransform = 'translateY(-100%)'
     marginTop = '-12px'
-  } else if (endVisible && ePx.y + cellH + 56 < window.innerHeight) {
+  } else if (endVisible && ePx.y + cellH + 56 < viewport.height) {
     menuCenterX = ePx.x
     menuY = ePx.y + cellH
     vTransform = 'translateY(0)'
     marginTop = '12px'
   } else {
     // selection covers full viewport — pin to visible center
-    menuCenterX = window.innerWidth / 2
-    menuY = window.innerHeight / 2
+    menuCenterX = viewport.width / 2
+    menuY = viewport.height / 2
     vTransform = 'translateY(-50%)'
     marginTop = '0'
   }
@@ -54,18 +61,19 @@ export function repositionOverlay() {
   const EDGE_MARGIN = 8
   const menuW = scope.selMenu!.offsetWidth || 0
   const minLeft = EDGE_MARGIN
-  const maxLeft = Math.max(EDGE_MARGIN, window.innerWidth - menuW - EDGE_MARGIN)
+  const maxLeft = Math.max(EDGE_MARGIN, viewport.width - menuW - EDGE_MARGIN)
   const desiredLeft = menuCenterX - menuW / 2
   const clampedLeft = Math.max(minLeft, Math.min(maxLeft, desiredLeft))
   scope.selMenu!.style.left = clampedLeft + 'px'
 }
 
 export function syncSelectionHandleToViewportPoint(
+  scope: TerminalDocumentScope,
   handle: string,
   clientX: number,
   clientY: number
 ) {
-  const c = viewportToCell(clientX, clientY)
+  const c = viewportToCell(scope, clientX, clientY)
   if (!c || !scope.sel) {
     return false
   }
@@ -74,28 +82,29 @@ export function syncSelectionHandleToViewportPoint(
   } else {
     scope.sel.focus = c
   }
-  applyXtermSelection()
+  applyXtermSelection(scope)
   return true
 }
 
-export function syncEdgeScrollSelectionEndpoint() {
+export function syncEdgeScrollSelectionEndpoint(scope: TerminalDocumentScope) {
   if (!scope.sel || !scope.sel.activeHandle) {
     return false
   }
   // Why: WebView may not emit new touchmove events while a handle is held
   // at the edge; resample the stored finger point after each viewport scroll.
   return syncSelectionHandleToViewportPoint(
+    scope,
     scope.sel.activeHandle,
     scope.edgeScrollClientX,
     scope.edgeScrollClientY
   )
 }
 
-export function startEdgeScroll(dir: number) {
+export function startEdgeScroll(scope: TerminalDocumentScope, dir: number) {
   if (scope.edgeScrollDir === dir) {
     return
   }
-  stopEdgeScroll()
+  stopEdgeScroll(scope)
   scope.edgeScrollDir = dir
   scope.edgeScrollTimer = setInterval(function () {
     if (!scope.term || scope.edgeScrollDir === 0) {
@@ -105,16 +114,16 @@ export function startEdgeScroll(dir: number) {
     scope.term.scrollLines(scope.edgeScrollDir)
     const afterY = scope.term.buffer.active.viewportY
     if (beforeY === afterY) {
-      notify({ type: 'haptic', kind: 'edge-bump' })
-      stopEdgeScroll()
+      notify(scope, { type: 'haptic', kind: 'edge-bump' })
+      stopEdgeScroll(scope)
       return
     }
-    syncEdgeScrollSelectionEndpoint()
-    repositionOverlay()
-  }, scope.EDGE_SCROLL_INTERVAL)
+    syncEdgeScrollSelectionEndpoint(scope)
+    repositionOverlay(scope)
+  }, EDGE_SCROLL_INTERVAL)
 }
 
-export function stopEdgeScroll() {
+export function stopEdgeScroll(scope: TerminalDocumentScope) {
   if (scope.edgeScrollTimer) {
     clearInterval(scope.edgeScrollTimer)
     scope.edgeScrollTimer = null
@@ -122,25 +131,31 @@ export function stopEdgeScroll() {
   scope.edgeScrollDir = 0
 }
 
-export function handleDragMove(handle: string, clientX: number, clientY: number) {
+export function handleDragMove(
+  scope: TerminalDocumentScope,
+  handle: string,
+  clientX: number,
+  clientY: number
+) {
   scope.edgeScrollClientX = clientX
   scope.edgeScrollClientY = clientY
-  if (!syncSelectionHandleToViewportPoint(handle, clientX, clientY)) {
+  if (!syncSelectionHandleToViewportPoint(scope, handle, clientX, clientY)) {
     return
   }
-  repositionOverlay()
-  if (clientY < scope.EDGE_SCROLL_PX) {
-    startEdgeScroll(-1)
-  } else if (clientY > window.innerHeight - scope.EDGE_SCROLL_PX) {
-    startEdgeScroll(1)
+  repositionOverlay(scope)
+  const y = viewportPoint(scope, clientX, clientY).y
+  if (y < EDGE_SCROLL_PX) {
+    startEdgeScroll(scope, -1)
+  } else if (y > scope.viewportRect().height - EDGE_SCROLL_PX) {
+    startEdgeScroll(scope, 1)
   } else {
-    stopEdgeScroll()
+    stopEdgeScroll(scope)
   }
 }
 
 // Latching document-level touch dispatcher: see tap-dispatch.ts.
 
 /** Ruling 21: the edge-scroll interval, which outlives the selection that started it. */
-export function stopSelectionOverlay() {
-  stopEdgeScroll()
+export function stopSelectionOverlay(scope: TerminalDocumentScope) {
+  stopEdgeScroll(scope)
 }

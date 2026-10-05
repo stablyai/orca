@@ -1,3 +1,4 @@
+import { isTmuxInnerSubject } from '../../../shared/tmux-agent-hook-owner'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload
@@ -25,6 +26,14 @@ import { structuredStatusLegacyEvent } from './server-structured-status-row'
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
 export abstract class AgentHookServerListeners extends AgentHookServerState {
+  setStartupPromptClaimListener(
+    listener: (body: unknown) => boolean | 'pending',
+    clear: () => void
+  ): void {
+    this.onStartupPromptClaim = listener
+    this.clearStartupPromptClaims = clear
+  }
+
   protected emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void {
     this.onAgentStatus?.(enriched)
     for (const listener of this.enrichedStatusListeners) {
@@ -53,8 +62,8 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
         order: getLegacyStatusListingOrder(this.state, paneKey) ?? UNORDERED_STATUS_ROW
       })
     }
-    for (const parent of this.canonicalStatusStore.getSnapshot().parents) {
-      if (!parent.status) {
+    for (const parent of this.canonicalStatusStore.getParents()) {
+      if (!parent.status || isTmuxInnerSubject(parent.subject)) {
         continue
       }
       rows.push({
