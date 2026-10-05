@@ -147,6 +147,23 @@ describe('system SSH forward process', () => {
     )
   })
 
+  it('spawns Teleport local forwarding directly through tsh', () => {
+    spawnMock.mockReturnValue(createFakeProcess())
+
+    spawnSystemSshPortForward(
+      createTarget({ proxyCommand: 'tsh ssh root@%h' }),
+      5173,
+      '127.0.0.1',
+      3000
+    )
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'tsh',
+      ['ssh', '-L', '127.0.0.1:5173:127.0.0.1:3000', 'root@example.com'],
+      expect.objectContaining({ stdio: ['pipe', 'ignore', 'pipe'] })
+    )
+  })
+
   it('suppresses Orca mux flags for port forwards without disabling ssh_config muxing', () => {
     spawnMock.mockReturnValue(createFakeProcess())
 

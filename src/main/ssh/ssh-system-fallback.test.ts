@@ -505,6 +505,19 @@ describe('spawnSystemSsh', () => {
     )
   })
 
+  it('spawns tsh directly for Teleport SSH proxy commands with current shell wrapping', () => {
+    spawnSystemSshCommand(createTarget({ proxyCommand: 'tsh ssh root@%h' }), 'echo hello')
+
+    const args = spawnMock.mock.calls[0][1] as string[]
+    expect(spawnMock.mock.calls[0]?.[0]).toBe('tsh')
+    expect(args.slice(0, 2)).toEqual(['ssh', 'root@example.com'])
+    expect(args.at(-1)).toContain('printf %b "$@"')
+    expect(args.at(-1)).not.toContain('\n')
+    expect(spawnMock.mock.calls[0]?.[2]).toEqual(
+      expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] })
+    )
+  })
+
   it('can spawn a native remote command without the POSIX shell wrapper', () => {
     spawnSystemSshCommand(createTarget({ configHost: 'fdpass-host' }), 'echo hello', {
       wrapCommand: false
@@ -678,6 +691,29 @@ describe('spawnSystemSsh', () => {
     expect(args[standaloneControlIdx + 1]).toBe('none')
   })
 
+  it('streams POSIX directory uploads through direct Teleport commands', async () => {
+    const tarCreate = createMockChildProcess()
+    const tshExtract = createMockChildProcess()
+    spawnMock.mockReturnValueOnce(tarCreate).mockReturnValueOnce(tshExtract)
+
+    const upload = uploadDirectoryViaSystemSsh(
+      createTarget({ proxyCommand: 'tsh ssh root@%h' }),
+      '/tmp/local-relay',
+      '/tmp/remote-relay'
+    )
+    tarCreate.stdout.end('archive')
+    tarCreate.emit('close', 0)
+    tshExtract.emit('close', 0)
+
+    await expect(upload).resolves.toBeUndefined()
+    expect(spawnMock.mock.calls[1]?.[0]).toBe('tsh')
+    expect(spawnMock.mock.calls[1]?.[1]).toEqual([
+      'ssh',
+      'root@example.com',
+      expect.stringContaining('tar -xzf -')
+    ])
+  })
+
   it('sends Windows file writes over sftp, not through a remote PowerShell stdin', async () => {
     const spawned: EventedProcess[] = []
     spawnMock.mockImplementation(() => {
@@ -842,6 +878,18 @@ describe('spawnSystemSsh', () => {
     // The first spawn is the sftp client, whose own `-S` names a program to run.
     expect(args).not.toContain('-S')
     expect(args).toContain('ControlPath=none')
+  })
+
+  it('settles direct Teleport process startup when tsh is missing', () => {
+    const proc = createEventedProcess()
+    spawnMock.mockReturnValue(proc)
+    const result = spawnSystemSsh(createTarget({ proxyCommand: 'tsh ssh root@%h' }))
+    const onExit = vi.fn()
+
+    result.onExit(onExit)
+    proc.emit('error', new Error('spawn tsh ENOENT'))
+
+    expect(onExit).toHaveBeenCalledWith(null)
   })
 
   it('throws when no system ssh is found', () => {

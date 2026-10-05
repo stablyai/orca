@@ -89,6 +89,7 @@ import {
   type SftpNamespacePathMapping
 } from './sftp-namespace-resolution'
 import type { FileUploadSession } from '../providers/types'
+import { buildTeleportSshCommand } from './teleport-ssh-command'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import {
@@ -241,6 +242,9 @@ export class SshConnection {
   canRunConcurrentExecCommands(): boolean {
     if (!this.useSystemSshTransport) {
       return true
+    }
+    if (buildTeleportSshCommand(this.target, this.systemSshResolvedConfig)) {
+      return false
     }
     return (
       getOrcaControlSocketPath(this.target, {
@@ -1176,10 +1180,12 @@ export class SshConnection {
     this.systemSshResolvedConfig = cloneResolvedConfig(resolved)
     this.systemSshControlMasterDisabledForSession = false
     this.systemSshGssapiOnlyForSession = gssapiOnly
-    const controlPath = getOrcaControlSocketPath(this.target, {
-      resolvedConfig: this.systemSshResolvedConfig,
-      gssapiOnly: this.systemSshGssapiOnlyForSession
-    })
+    const controlPath = buildTeleportSshCommand(this.target, this.systemSshResolvedConfig)
+      ? null
+      : getOrcaControlSocketPath(this.target, {
+          resolvedConfig: this.systemSshResolvedConfig,
+          gssapiOnly: this.systemSshGssapiOnlyForSession
+        })
     try {
       await this.doSystemSshProbe(connectGeneration)
     } catch (err) {
@@ -1837,9 +1843,11 @@ export class SshConnection {
         throw this.createCancelledConnectAttemptError()
       }
       this.systemSshResolvedConfig = cloneResolvedConfig(resolved)
-      const controlPath = getOrcaControlSocketPath(this.target, {
-        resolvedConfig: this.systemSshResolvedConfig
-      })
+      const controlPath = buildTeleportSshCommand(this.target, this.systemSshResolvedConfig)
+        ? null
+        : getOrcaControlSocketPath(this.target, {
+            resolvedConfig: this.systemSshResolvedConfig
+          })
       const proc = await this.spawnSystemSshWithControlMasterRetry(controlPath, connectGeneration)
       if (!this.isCurrentConnectAttempt(connectGeneration)) {
         if (this.systemSsh === proc) {

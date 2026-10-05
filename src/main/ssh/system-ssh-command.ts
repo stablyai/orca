@@ -1,10 +1,11 @@
-import { spawn, type ChildProcess } from 'node:child_process'
 import { Duplex } from 'node:stream'
+import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/run-process'
 import type { ClientChannel } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
 import { wrapRemoteCommandForPosixShell, type SshExecOptions } from './ssh-connection-utils'
 import { buildSshArgs, type SystemSshBuildArgsOptions } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
+import { buildTeleportSshCommand } from './teleport-ssh-command'
 
 export type SystemSshProcess = {
   stdin: NodeJS.WritableStream
@@ -16,7 +17,7 @@ export type SystemSshProcess = {
 }
 
 export type SystemSshCommandChannel = ClientChannel & {
-  _process?: ChildProcess
+  _process?: SpawnedProcess
   _closeRequested?: boolean
 }
 
@@ -33,6 +34,11 @@ export function spawnSystemSsh(
   target: SshTarget,
   options?: SystemSshBuildArgsOptions
 ): SystemSshProcess {
+  const teleportCommand = buildTeleportSshCommand(target, options?.resolvedConfig)
+  if (teleportCommand) {
+    return wrapChildProcess(spawnSshProcess(teleportCommand.executable, teleportCommand.args))
+  }
+
   const sshPath = findSystemSsh()
   if (!sshPath) {
     throw new Error(
@@ -41,10 +47,7 @@ export function spawnSystemSsh(
   }
 
   const args = buildSshArgs(target, options)
-  const proc = spawn(sshPath, args, {
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true
-  })
+  const proc = spawnSshProcess(sshPath, args)
 
   return wrapChildProcess(proc)
 }
@@ -54,6 +57,13 @@ export function spawnSystemSshCommand(
   command: string,
   options?: SystemSshCommandOptions
 ): SystemSshCommandChannel {
+  const remoteCommand =
+    options?.wrapCommand === false ? command : wrapRemoteCommandForPosixShell(command)
+  const teleportCommand = buildTeleportSshCommand(target, options?.resolvedConfig, remoteCommand)
+  if (teleportCommand) {
+    return wrapCommandProcess(spawnSshProcess(teleportCommand.executable, teleportCommand.args))
+  }
+
   const sshPath = findSystemSsh()
   if (!sshPath) {
     throw new Error(
@@ -61,16 +71,19 @@ export function spawnSystemSshCommand(
     )
   }
 
-  const remoteCommand =
-    options?.wrapCommand === false ? command : wrapRemoteCommandForPosixShell(command)
-  const proc = spawn(sshPath, [...buildSshArgs(target, options), remoteCommand], {
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true
-  })
+  const proc = spawnSshProcess(sshPath, [...buildSshArgs(target, options), remoteCommand])
   return wrapCommandProcess(proc)
 }
 
-function wrapChildProcess(proc: ChildProcess): SystemSshProcess {
+function spawnSshProcess(executable: string, args: string[]): SpawnedProcess {
+  return spawnProcess({
+    program: executable,
+    args,
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+}
+
+function wrapChildProcess(proc: SpawnedProcess): SystemSshProcess {
   return {
     stdin: proc.stdin!,
     stdout: proc.stdout!,
@@ -84,12 +97,23 @@ function wrapChildProcess(proc: ChildProcess): SystemSshProcess {
       }
     },
     onExit: (cb) => {
-      proc.on('exit', (code) => cb(code))
+      const onError = (): void => {
+        proc.off('exit', onExit)
+        cb(null)
+      }
+      const onExit = (code: number | null): void => {
+        proc.off('error', onError)
+        cb(code)
+      }
+      // Why: direct tsh paths are resolved by spawn rather than findSystemSsh;
+      // a missing executable must settle startup instead of emitting unhandled.
+      proc.once('error', onError)
+      proc.once('exit', onExit)
     }
   }
 }
 
-function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
+function wrapCommandProcess(proc: SpawnedProcess): SystemSshCommandChannel {
   const duplex = new Duplex({
     read() {
       proc.stdout?.resume()
@@ -100,24 +124,24 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
   })
   const channel = duplex as unknown as SystemSshCommandChannel
 
-  const mutableChannel = channel as unknown as {
-    stdin: NodeJS.WritableStream
-    stderr: NodeJS.ReadableStream
-    _process?: ChildProcess
-    _closeRequested?: boolean
-    close: () => void
-  }
-  mutableChannel.stdin = proc.stdin!
-  mutableChannel.stderr = proc.stderr!
-  mutableChannel._process = proc
-  mutableChannel.close = () => {
-    mutableChannel._closeRequested = true
-    try {
-      proc.kill('SIGTERM')
-    } catch {
-      // Process may already be dead
+  channel._process = proc
+  Object.defineProperties(channel, {
+    stdin: { value: proc.stdin!, configurable: true, enumerable: true, writable: true },
+    stderr: { value: proc.stderr!, configurable: true, enumerable: true, writable: true },
+    close: {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: () => {
+        channel._closeRequested = true
+        try {
+          proc.kill('SIGTERM')
+        } catch {
+          // Process may already be dead
+        }
+      }
     }
-  }
+  })
 
   const cleanupProcessListeners = (): void => {
     proc.stdout!.off('data', onStdoutData)
