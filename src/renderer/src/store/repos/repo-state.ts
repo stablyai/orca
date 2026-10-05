@@ -4,7 +4,8 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type {
   NestedRepoScanResult,
   ProjectGroup,
-  ProjectGroupImportResult
+  ProjectGroupImportResult,
+  ProjectGroupUpdate
 } from '../../../../shared/project-group-types'
 import type {
   Project,
@@ -233,7 +234,7 @@ export type RepoSlice = {
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the group's own host owns the call.
   updateProjectGroup: (
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>,
+    updates: ProjectGroupUpdate,
     options?: { hostId?: ExecutionHostId }
   ) => Promise<boolean>
   deleteProjectGroup: (groupId: string, options?: { hostId?: ExecutionHostId }) => Promise<boolean>

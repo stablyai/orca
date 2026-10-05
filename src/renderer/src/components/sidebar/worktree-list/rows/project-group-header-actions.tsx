@@ -13,7 +13,10 @@ import { translate } from '@/i18n/i18n'
 import { getFolderWorkspacePathStatusDescription } from '@/lib/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from '../../repo-header-action-button-class'
 import {
   handleRepoHeaderActionPointerDown,
@@ -25,14 +28,18 @@ export function ProjectGroupHeaderMenu({
   groupId,
   hostId,
   label,
+  hasFolder,
   onRename,
+  onSetFolder,
   onDelete
 }: {
   groupId: string
   /** Owner host of the group row, so rename/delete route to the host that holds it. */
   hostId?: ExecutionHostId
   label: string
+  hasFolder: boolean
   onRename: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
+  onSetFolder: (groupId: string, hostId?: ExecutionHostId) => void
   onDelete: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
 }): React.JSX.Element {
   return (
@@ -71,6 +78,20 @@ export function ProjectGroupHeaderMenu({
         <DropdownMenuItem onSelect={() => onRename(groupId, label, hostId)}>
           {translate('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
         </DropdownMenuItem>
+        {/* Why: the picker browses this machine, so only local groups can take its path. */}
+        {hostId === LOCAL_EXECUTION_HOST_ID ? (
+          <DropdownMenuItem onSelect={() => onSetFolder(groupId, hostId)}>
+            {hasFolder
+              ? translate(
+                  'auto.components.sidebar.WorktreeList.projectGroupFolder.change',
+                  'Change group folder'
+                )
+              : translate(
+                  'auto.components.sidebar.WorktreeList.projectGroupFolder.set',
+                  'Set group folder'
+                )}
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem variant="destructive" onSelect={() => onDelete(groupId, label, hostId)}>
           {translate('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
         </DropdownMenuItem>

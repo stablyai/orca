@@ -5871,7 +5871,12 @@
           "groupRenameFailedDesc": "Orca could not confirm the new name with the group's host. Recheck the group after reconnecting.",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "Failed to unnest workspace",
+          "projectGroupFolder": {
+            "change": "Change group folder",
+            "set": "Set group folder",
+            "failed": "Failed to set group folder"
+          }
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",

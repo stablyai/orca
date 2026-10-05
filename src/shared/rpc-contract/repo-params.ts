@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 import { createRepoUpdateSchema } from './repo-update-params'
 import { RepoSelector } from './github-repo-target-params'
+import { PROJECT_GROUP_FOLDER_ERROR, isProjectGroupFolderValid } from '../project-group-folder'
 
 export const RepoPath = z.object({
   path: requiredString('Missing repo path'),
@@ -54,7 +55,10 @@ export const ProjectGroupUpdate = z.object({
     name: OptionalString,
     isCollapsed: z.boolean().optional(),
     tabOrder: OptionalFiniteNumber,
-    color: OptionalString.nullable().optional()
+    color: OptionalString.nullable().optional(),
+    parentPath: OptionalString.nullable()
+      .optional()
+      .refine(isProjectGroupFolderValid, PROJECT_GROUP_FOLDER_ERROR)
   })
 })
 

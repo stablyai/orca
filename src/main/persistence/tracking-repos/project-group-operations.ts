@@ -1,5 +1,5 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { ProjectGroup, ProjectGroupUpdate } from '../../../shared/project-group-types'
 import {
   createProjectGroup,
   getProjectGroupSubtreeIds,
@@ -61,16 +61,18 @@ export class ProjectGroupPersistenceOperations {
     return group
   }
 
-  updateProjectGroup(
-    groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
-  ): ProjectGroup | null {
+  updateProjectGroup(groupId: string, updates: ProjectGroupUpdate): ProjectGroup | null {
     const group = (this.state.projectGroups ?? []).find((entry) => entry.id === groupId)
     if (!group) {
       return null
     }
     if (updates.name !== undefined) {
       group.name = normalizeProjectGroupName(updates.name, group.name)
+    }
+    if (updates.parentPath !== undefined) {
+      // Why: blank clears the folder rather than pointing a workspace at the filesystem root.
+      const trimmed = typeof updates.parentPath === 'string' ? updates.parentPath.trim() : ''
+      group.parentPath = trimmed.length > 0 ? trimmed : null
     }
     if (updates.isCollapsed !== undefined) {
       group.isCollapsed = updates.isCollapsed

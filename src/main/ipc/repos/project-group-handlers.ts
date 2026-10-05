@@ -13,12 +13,13 @@ import {
   ProjectGroupUpdateArgs,
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
+import { ensureDefaultProjectGroupFolder } from '../../project-groups/default-project-group-folder'
 import { activeNestedRepoScans, runNestedRepoScanForIpc } from './nested-repo-scan-ipc'
 
 export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: Store): void {
   ipcMain.handle('projectGroups:list', () => store.getProjectGroups())
 
-  ipcMain.handle('projectGroups:create', (_event, rawArgs: unknown): ProjectGroup => {
+  ipcMain.handle('projectGroups:create', (_event, rawArgs: unknown): Promise<ProjectGroup> => {
     const args = parseProjectGroupIpcArgs(
       ProjectGroupCreateArgs,
       rawArgs,
@@ -31,8 +32,13 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
       parentGroupId: args.parentGroupId ?? null,
       createdFrom: args.createdFrom ?? 'manual'
     })
-    notifyReposChanged(mainWindow)
-    return group
+    // Why: parsing stays synchronous so invalid args still throw instead of rejecting.
+    return ensureDefaultProjectGroupFolder(group, (id, updates) =>
+      store.updateProjectGroup(id, updates)
+    ).then((ready) => {
+      notifyReposChanged(mainWindow)
+      return ready
+    })
   })
 
   ipcMain.handle('projectGroups:update', (_event, rawArgs: unknown): ProjectGroup | null => {

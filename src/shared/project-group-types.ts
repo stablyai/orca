@@ -17,6 +17,11 @@ export type ProjectGroup = {
   updatedAt: number
 }
 
+/** Fields a client may change on a project group, declared once so every layer agrees. */
+export type ProjectGroupUpdate = Partial<
+  Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'parentPath'>
+>
+
 export type NestedRepoScanOptions = {
   maxDepth?: number
   maxRepos?: number

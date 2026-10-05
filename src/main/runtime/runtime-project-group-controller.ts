@@ -1,5 +1,5 @@
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
-import type { ProjectGroup } from '../../shared/project-group-types'
+import type { ProjectGroup, ProjectGroupUpdate } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import type {
   FolderWorkspacePathStatus,
@@ -11,6 +11,7 @@ import {
   getFolderWorkspacePathStatusForPath
 } from '../project-groups/folder-workspace-path-status'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { ensureDefaultProjectGroupFolder } from '../project-groups/default-project-group-folder'
 import type { RuntimeStore } from './runtime-store-contract'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 
@@ -74,14 +75,17 @@ export class RuntimeProjectGroupController {
       parentGroupId: input.parentGroupId ?? null,
       createdFrom: input.createdFrom ?? 'manual'
     })
+    // Why: a group is a long-lived container, so it opens somewhere usable by default.
+    const ready = store.updateProjectGroup
+      ? await ensureDefaultProjectGroupFolder(group, (id, updates) =>
+          store.updateProjectGroup!(id, updates)
+        )
+      : group
     this.deps.notifyReposChanged()
-    return group
+    return ready
   }
 
-  async updateGroup(
-    groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
-  ): Promise<ProjectGroup | null> {
+  async updateGroup(groupId: string, updates: ProjectGroupUpdate): Promise<ProjectGroup | null> {
     const store = this.deps.getStore()
     if (!store?.updateProjectGroup) {
       throw new Error('runtime_unavailable')

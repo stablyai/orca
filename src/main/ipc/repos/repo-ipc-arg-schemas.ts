@@ -5,6 +5,10 @@ import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-linked-item
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import { DiffCommentSchema } from '../../../shared/diff-comment-schema'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
+import {
+  PROJECT_GROUP_FOLDER_ERROR,
+  isProjectGroupFolderValid
+} from '../../../shared/project-group-folder'
 
 export const ProjectGroupCreateArgs = z.object({
   name: z.string().min(1),
@@ -20,7 +24,12 @@ export const ProjectGroupUpdateArgs = z.object({
     name: z.string().optional(),
     isCollapsed: z.boolean().optional(),
     tabOrder: z.number().finite().optional(),
-    color: z.string().nullable().optional()
+    color: z.string().nullable().optional(),
+    parentPath: z
+      .string()
+      .nullable()
+      .optional()
+      .refine(isProjectGroupFolderValid, PROJECT_GROUP_FOLDER_ERROR)
   })
 })
 

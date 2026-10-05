@@ -314,6 +314,7 @@ const WorktreeList = React.memo(function WorktreeList({
         handleMoveProjectToGroup={projectGroupDialogs.handleMoveProjectToGroup}
         handleRemoveProjectFromGroup={projectGroupDialogs.handleRemoveProjectFromGroup}
         handleRenameProjectGroup={projectGroupDialogs.handleRenameProjectGroup}
+        handleSetProjectGroupFolder={projectGroupDialogs.handleSetProjectGroupFolder}
         handleDeleteProjectGroup={projectGroupDialogs.handleDeleteProjectGroup}
         handleCreateFolderWorkspace={handleCreateFolderWorkspace}
         activeModal={activeModal}
