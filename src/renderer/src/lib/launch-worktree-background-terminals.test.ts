@@ -131,6 +131,8 @@ describe('launchWorktreeBackgroundTerminals', () => {
     expect(mockSpawn).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
+        cols: 120,
+        rows: 40,
         cwd: '/repo/worktree',
         command: 'pnpm dev',
         connectionId: null,
@@ -142,6 +144,8 @@ describe('launchWorktreeBackgroundTerminals', () => {
     expect(mockSpawn).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
+        cols: 120,
+        rows: 40,
         command: 'bash /tmp/setup.sh',
         env: expect.objectContaining({ ORCA_WORKTREE_PATH: '/repo/worktree' }),
         tabId: 'tab-2',
@@ -151,6 +155,14 @@ describe('launchWorktreeBackgroundTerminals', () => {
     expect(mockUpdateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-1')
     expect(mockUpdateTabPtyId).toHaveBeenCalledWith('tab-2', 'pty-2')
     expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledTimes(2)
+    // Why: attach-time replay needs these capture dims so inline-TUI cursor
+    // rows survive adoption into a differently-sized pane.
+    expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith('pty-1', expect.any(Function), {
+      captureDims: { cols: 120, rows: 40 }
+    })
+    expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith('pty-2', expect.any(Function), {
+      captureDims: { cols: 120, rows: 40 }
+    })
   })
 
   it('spawns setup in a split when setup launch mode requests a split', async () => {

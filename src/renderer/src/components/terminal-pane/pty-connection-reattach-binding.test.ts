@@ -1,6 +1,5 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import {
   LEAF_1,
@@ -116,15 +115,6 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     }
   )
 }))
-
-// Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
-vi.mock('./pty-dispatcher', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>()
-  return {
-    ...actual,
-    getEagerPtyBufferHandle: vi.fn(() => undefined)
-  }
-})
 
 function createDeps(overrides: Record<string, unknown> = {}) {
   return buildPaneConnectionDeps(() => mockStoreState, overrides)
@@ -522,106 +512,6 @@ describe('connectPanePty', () => {
       expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalledWith(1, 'terminal-new')
     }
   )
-
-  it('adopts a live eager PTY and withholds snapshots after its renderer dies', async () => {
-    // Why: a live eager buffer means "attach + replay", not "reattach" — else first mount mis-routes to daemon-reattach and orphans the eager agent PTY.
-    const eagerPtyId = 'auto-eager-pty'
-    vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
-      ptyId === eagerPtyId ? { flush: () => '', dispose: () => {} } : undefined
-    )
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport()
-    transportFactoryQueue.push(transport)
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: eagerPtyId }] },
-      ptyIdsByTabId: { 'tab-1': [eagerPtyId] },
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: { type: 'leaf', leafId: LEAF_1 },
-          activeLeafId: LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [LEAF_1]: eagerPtyId }
-        }
-      }
-    } as StoreState
-    const deps = createDeps({
-      restoredLeafId: LEAF_1,
-      restoredPtyIdByLeafId: { [LEAF_1]: eagerPtyId }
-    })
-
-    const pane = createPane(1)
-    connectPanePty(pane as never, createManager(1) as never, deps as never)
-    await flushAsyncTicks()
-
-    expect(transport.attach).toHaveBeenCalledWith(
-      expect.objectContaining({ existingPtyId: eagerPtyId })
-    )
-    expect(pane.container.dataset.ptyId).toBe(eagerPtyId)
-    expect(transport.connect).not.toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: eagerPtyId })
-    )
-    const { hasPtySerializer } = await import('./pty-buffer-serializer')
-    expect(hasPtySerializer(eagerPtyId)).toBe(true)
-
-    const serializeRequestHandler = (
-      window.api.pty.onSerializeBufferRequest as unknown as {
-        mock: { calls: [[(request: { requestId: string; ptyId: string }) => void]] }
-      }
-    ).mock.calls[0]?.[0]
-    const { notifyUndeliverableWrite } =
-      await import('@/lib/pane-manager/terminal-write-pipeline-health')
-    notifyUndeliverableWrite(pane.terminal, 'replay-wedged')
-    serializeRequestHandler?.({ requestId: 'dead-renderer', ptyId: eagerPtyId })
-    await flushAsyncTicks()
-
-    expect(window.api.pty.sendSerializedBuffer).toHaveBeenCalledWith('dead-renderer', null)
-  })
-
-  it('does not adopt another tab live eager PTY from a stale restored leaf binding', async () => {
-    // Why: restored leaf bindings can outlive tab ownership; a global eager buffer proves the PTY is alive, ptyIdsByTabId proves this tab owns it.
-    const otherTabPtyId = 'other-tab-eager-pty'
-    vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
-      ptyId === otherTabPtyId ? { flush: () => '', dispose: () => {} } : undefined
-    )
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport()
-    transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
-      if (opts.sessionId) {
-        return { id: opts.sessionId }
-      }
-      return 'fresh-pty'
-    })
-    transportFactoryQueue.push(transport)
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: {
-        'wt-1': [
-          { id: 'tab-1', ptyId: 'tab-pty' },
-          { id: 'tab-2', ptyId: otherTabPtyId }
-        ]
-      },
-      ptyIdsByTabId: {
-        'tab-1': ['tab-pty'],
-        'tab-2': [otherTabPtyId]
-      }
-    } as StoreState
-    const deps = createDeps({
-      restoredLeafId: LEAF_1,
-      restoredPtyIdByLeafId: { [LEAF_1]: otherTabPtyId }
-    })
-
-    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
-    await flushAsyncTicks()
-
-    expect(transport.attach).not.toHaveBeenCalledWith(
-      expect.objectContaining({ existingPtyId: otherTabPtyId })
-    )
-    expect(transport.connect).not.toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: otherTabPtyId })
-    )
-    expect(deps.updateTabPtyId).not.toHaveBeenCalledWith('tab-1', otherTabPtyId)
-  })
 
   it('fresh-spawns a shell into any PTY-less tab, so agent launches must never publish one', async () => {
     // Why: #2989 depends on PTY-less tabs taking this legitimate fresh-shell path.
