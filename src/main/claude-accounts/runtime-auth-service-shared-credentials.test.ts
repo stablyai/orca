@@ -66,6 +66,26 @@ describe('shared Claude connector credentials', () => {
   beforeEach(resetRuntimeAuthTestState)
   afterEach(cleanupRuntimeAuthTestState)
 
+  it.each(['scoped', 'legacy', 'file'] as const)(
+    'preserves connector grants stored only in %s when there is no previous Orca write',
+    async (surface) => {
+      const { service, settings, runtimePath, system } = await setup()
+      testState.scopedKeychainCredentials = system
+      testState.legacyKeychainCredentials = system
+      writeFileSync(runtimePath, system)
+      if (surface === 'scoped') {
+        testState.scopedKeychainCredentials = withSharedFields(system)
+      } else if (surface === 'legacy') {
+        testState.legacyKeychainCredentials = withSharedFields(system)
+      } else {
+        writeFileSync(runtimePath, withSharedFields(system))
+      }
+      settings.activeClaudeManagedAccountId = 'first'
+      await service.syncForCurrentSelection()
+      expect(JSON.parse(readFileSync(runtimePath, 'utf-8'))).toMatchObject(sharedFields)
+    }
+  )
+
   it.each(['darwin', 'linux', 'win32'] as const)(
     'excludes connector secrets when capturing a managed account on %s',
     async (platform) => {
@@ -201,6 +221,31 @@ describe('shared Claude connector credentials', () => {
       )
     }
   )
+
+  it('keeps the proved newer legacy grants when adopting a Claude refresh after restart', async () => {
+    const { service, settings, runtimePath, firstPath } = await setup()
+    settings.activeClaudeManagedAccountId = 'first'
+    await service.syncForCurrentSelection()
+    const refreshed = createClaudeCredentialsJson(
+      'first@example.com',
+      'refreshed',
+      null,
+      Date.now() + 120_000
+    )
+    const rotated = {
+      ...sharedFields,
+      mcpOAuth: { figma: { accessToken: 'new-access', refreshToken: 'new-refresh' } }
+    }
+    testState.legacyKeychainCredentials = withSharedFields(refreshed, rotated)
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime auth uses only getSettings/updateSettings from this store mock.
+    const restarted = new ClaudeRuntimeAuthService(createStore(settings) as never)
+    await restarted.syncForCurrentSelection()
+    expect(JSON.parse(readFileSync(runtimePath, 'utf-8'))).toMatchObject(rotated)
+    expect(JSON.parse(readManagedCredentialsForTest('first', firstPath) ?? '')).toEqual(
+      JSON.parse(refreshed)
+    )
+  })
 
   it('leaves all credentials untouched when the active keychain cannot be read', async () => {
     const { service, settings, runtimePath } = await setup()

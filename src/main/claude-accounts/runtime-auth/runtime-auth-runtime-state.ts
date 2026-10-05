@@ -44,17 +44,26 @@ export class ClaudeRuntimeAuthRuntimeState extends ClaudeRuntimeAuthKeychainSnap
     }
     const sharedFields = (credential: string): unknown =>
       JSON.parse(mergeSharedClaudeCredentialFields('{}', credential))
+    if (this.lastWrittenCredentialsJson === null) {
+      // Before our first write, a missing field in another store does not prove revocation.
+      // Read-back may already have proved which live credential contains a newer account refresh.
+      const priority = candidates.includes(credentialsJson)
+        ? [credentialsJson, ...candidates.filter((candidate) => candidate !== credentialsJson)]
+        : candidates
+      const shared = priority.reduceRight(
+        (merged, candidate) =>
+          mergeSharedClaudeCredentialFields(merged, candidate, {
+            preserveMissingLiveFields: true
+          }),
+        '{}'
+      )
+      return mergeSharedClaudeCredentialFields(credentialsJson, shared)
+    }
     // Older CLIs refresh the legacy item; newer CLIs may update only the scoped item or file.
-    const changed =
-      this.lastWrittenCredentialsJson === null
-        ? undefined
-        : candidates.find(
-            (candidate) =>
-              !this.jsonValuesEqual(
-                sharedFields(candidate),
-                sharedFields(this.lastWrittenCredentialsJson ?? '{}')
-              )
-          )
+    const lastSharedFields = sharedFields(this.lastWrittenCredentialsJson)
+    const changed = candidates.find(
+      (candidate) => !this.jsonValuesEqual(sharedFields(candidate), lastSharedFields)
+    )
     return mergeSharedClaudeCredentialFields(credentialsJson, changed ?? candidates[0] ?? null)
   }
 

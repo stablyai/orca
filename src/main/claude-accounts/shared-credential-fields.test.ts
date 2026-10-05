@@ -5,6 +5,21 @@ import {
 } from './shared-credential-fields'
 
 describe('mergeSharedClaudeCredentialFields', () => {
+  it('preserves fields from other live stores when their absence is not authoritative', () => {
+    const target = JSON.stringify({ claudeAiOauth: {}, mcpOAuth: { figma: 'grant' } })
+    const live = JSON.stringify({ pluginSecrets: { plugin: 'secret' } })
+    expect(
+      JSON.parse(
+        mergeSharedClaudeCredentialFields(target, live, {
+          preserveMissingLiveFields: true
+        })
+      )
+    ).toEqual({
+      claudeAiOauth: {},
+      mcpOAuth: { figma: 'grant' },
+      pluginSecrets: { plugin: 'secret' }
+    })
+  })
   it('merges the live credential shared fields into the target credential', () => {
     const target = JSON.stringify({ claudeAiOauth: { accessToken: 'target-token' } })
     const live = JSON.stringify({

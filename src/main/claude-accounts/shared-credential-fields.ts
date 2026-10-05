@@ -41,7 +41,8 @@ export function stripSharedClaudeCredentialFields(credentialsJson: string): stri
 // Shared connector state follows the live runtime, including revocations, rather than frozen account snapshots.
 export function mergeSharedClaudeCredentialFields(
   targetCredentialsJson: string,
-  liveCredentialsJson: string | null
+  liveCredentialsJson: string | null,
+  options: { preserveMissingLiveFields?: boolean } = {}
 ): string {
   const target = parseCredentialObject(targetCredentialsJson)
   const live = parseCredentialObject(liveCredentialsJson)
@@ -62,7 +63,7 @@ export function mergeSharedClaudeCredentialFields(
         merged[key] = live[key]
         changed = true
       }
-    } else if (targetHasKey) {
+    } else if (targetHasKey && !options.preserveMissingLiveFields) {
       delete merged[key]
       changed = true
     }
