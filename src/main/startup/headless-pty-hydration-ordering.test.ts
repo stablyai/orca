@@ -53,6 +53,20 @@ describe('headless PTY registry hydration ordering', () => {
     expect(readiness).toBeGreaterThan(rpc)
   })
 
+  it('publishes the orcad headless graph after PTY registration and before RPC', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/orcad/orcad-entry.ts'), 'utf8')
+    const handlersAndHydration = source.indexOf('await registerHeadlessPtyRuntime(')
+    const sentinel = source.indexOf(
+      'runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })',
+      handlersAndHydration
+    )
+    const rpc = source.indexOf('rpc = new OrcaRuntimeRpcServer({', sentinel)
+
+    expect(handlersAndHydration).toBeGreaterThanOrEqual(0)
+    expect(sentinel).toBeGreaterThan(handlersAndHydration)
+    expect(rpc).toBeGreaterThan(sentinel)
+  })
+
   it('starts the orcad hook owner after Store hydration and before daemon PTY recovery', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/orcad/orcad-entry.ts'), 'utf8')
     const cleanup = source.indexOf('registerCleanup(async () => {')
