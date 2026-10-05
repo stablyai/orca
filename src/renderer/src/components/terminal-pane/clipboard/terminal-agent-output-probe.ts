@@ -15,13 +15,18 @@ export function terminalShowsAgentOutput(terminal: object): boolean {
   return probes.get(terminal)?.() === true
 }
 
-/** Same evidence the agent paste bracketing trusts: the live foreground agent, else a fresh status row. */
+/** The live foreground agent, else a fresh status row unless the foreground is proven to be the shell. */
 export function paneRunsTuiAgent(
   foreground: PaneForegroundAgentEntry | undefined,
   entry: AgentStatusEntry | undefined
 ): boolean {
-  return (
-    isTuiAgent(foreground?.agent) ||
-    (entry?.restoredUnconfirmed !== true && isTuiAgent(entry?.agentType))
-  )
+  if (isTuiAgent(foreground?.agent)) {
+    return true
+  }
+  // Why veto here but not in paste bracketing: a latched shell flag only costs the old
+  // unjoined copy, while a stale status row would rewrite copied shell output.
+  if (foreground?.shellForeground === true) {
+    return false
+  }
+  return entry?.restoredUnconfirmed !== true && isTuiAgent(entry?.agentType)
 }
