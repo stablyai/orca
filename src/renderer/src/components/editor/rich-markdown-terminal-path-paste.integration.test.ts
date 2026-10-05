@@ -43,14 +43,18 @@ function links(editor: Editor) {
   const hrefs: unknown[] = []
   editor.state.doc.descendants((node) => {
     for (const mark of node.marks) {
-      if (mark.type.name === 'link') hrefs.push(mark.attrs.href)
+      if (mark.type.name === 'link') {
+        hrefs.push(mark.attrs.href)
+      }
     }
   })
   return hrefs
 }
 
 afterEach(() => {
-  for (const editor of editors.splice(0)) editor.destroy()
+  for (const editor of editors.splice(0)) {
+    editor.destroy()
+  }
   document.body.replaceChildren()
 })
 
