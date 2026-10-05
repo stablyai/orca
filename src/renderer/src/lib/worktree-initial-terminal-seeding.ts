@@ -5,7 +5,10 @@ import type {
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../shared/closed-terminal-tab-tombstones'
-import { createSequencedSetupAgentCommands } from '../../../shared/setup-agent-sequencing'
+import {
+  createSequencedSetupAgentCommands,
+  withSequencedSetupEnv
+} from '../../../shared/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runner-command'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { useAppStore } from '@/store'
@@ -90,6 +93,7 @@ export function ensureWorktreeHasInitialTerminal(
       ? store
       : useAppStore.getState()
   let sequencedStartup = startup
+  let sequencedSetup = setup
   let wrappedSetupCommandStr: string | undefined
 
   if (startup && setup?.waitForAgentStartup === true) {
@@ -106,6 +110,7 @@ export function ensureWorktreeHasInitialTerminal(
       ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
     }
     wrappedSetupCommandStr = sequenced.setupCommand
+    sequencedSetup = withSequencedSetupEnv(setup, sequenced.setupEnv)
   }
 
   const backendStartupTerminalSpawned = opts?.backendStartupTerminalSpawned === true
@@ -118,7 +123,7 @@ export function ensureWorktreeHasInitialTerminal(
         store,
         worktreeId,
         existingTerminalTabId,
-        setup,
+        sequencedSetup,
         issueCommand,
         wrappedSetupCommandStr,
         opts
@@ -137,7 +142,7 @@ export function ensureWorktreeHasInitialTerminal(
             state,
             worktreeId,
             firstTerminalTabId,
-            setup,
+            sequencedSetup,
             issueCommand,
             wrappedSetupCommandStr,
             opts
@@ -167,7 +172,7 @@ export function ensureWorktreeHasInitialTerminal(
       store,
       worktreeId,
       null,
-      setup,
+      sequencedSetup,
       undefined,
       wrappedSetupCommandStr,
       opts
@@ -203,7 +208,7 @@ export function ensureWorktreeHasInitialTerminal(
         store,
         worktreeId,
         existingTerminalTabId,
-        setup,
+        sequencedSetup,
         issueCommand,
         wrappedSetupCommandStr,
         opts
@@ -217,7 +222,7 @@ export function ensureWorktreeHasInitialTerminal(
     store,
     worktreeId,
     sequencedStartup,
-    setup,
+    sequencedSetup,
     issueCommand,
     defaultTabs,
     wrappedSetupCommandStr,
@@ -281,7 +286,7 @@ export function ensureWorktreeHasInitialTerminal(
     store,
     worktreeId,
     terminalTab.id,
-    setup,
+    sequencedSetup,
     issueCommand,
     wrappedSetupCommandStr,
     opts

@@ -7,6 +7,7 @@ import {
   registerWorktreeActivationReset
 } from './worktree-activation-test-harness'
 import { useAppStore } from '@/store'
+import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../../shared/typed-setup-shell-command'
 import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
@@ -299,16 +300,28 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-2', 'Setup', {
       recordInteraction: false
     })
+    // Why the queued command no longer names the runner: it is a constant now, and the script it
+    // evaluates rides the pane env so a pair-inserting line editor has nothing to corrupt (#18059).
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
       'tab-2',
       expect.objectContaining({
-        command: expect.stringContaining('bash /tmp/repo/.git/orca/setup-runner.sh')
+        command:
+          `bash -lc 'if test -z "$${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}"; ` +
+          'then echo "Orca: the setup script did not reach this shell; skipping it." >&2; ' +
+          `exit 127; fi; eval "$${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}"'`,
+        env: expect.objectContaining({
+          [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: expect.stringContaining(
+            'bash /tmp/repo/.git/orca/setup-runner.sh'
+          )
+        })
       })
     )
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
       'tab-2',
       expect.objectContaining({
-        command: expect.stringContaining('printf')
+        env: expect.objectContaining({
+          [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: expect.stringContaining('printf')
+        })
       })
     )
   })

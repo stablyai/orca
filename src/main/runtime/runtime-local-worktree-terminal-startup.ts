@@ -4,7 +4,10 @@ import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { Worktree } from '../../shared/worktree/types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
-import { createSequencedSetupAgentCommands } from '../../shared/setup-agent-sequencing'
+import {
+  createSequencedSetupAgentCommands,
+  withSequencedSetupEnv
+} from '../../shared/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../shared/setup-runner-command'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
@@ -74,6 +77,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   let startupTerminalPaneKey: string | null = null
   let startupTerminalPtyId: string | null = null
   let sequencedStartup = startup
+  let sequencedSetup = setup
   let wrappedSetupCommand: string | undefined
   if (startup && setup?.waitForAgentStartup === true) {
     const platform = setupPlatform(setup, process.platform === 'win32' ? 'windows' : 'posix')
@@ -89,6 +93,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
     }
     wrappedSetupCommand = sequenced.setupCommand
+    sequencedSetup = withSequencedSetupEnv(setup, sequenced.setupEnv)
   }
 
   if (sequencedStartup && ports.canSpawn) {
@@ -126,16 +131,22 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     const runtimeWillProvision = didSpawnStartup && Boolean(setup || defaultTabs)
     if (runtimeWillProvision) {
       const provisioned = await ports.provision(
-        provisionArgs(args, startupTerminalHandle, didSpawnStartup, wrappedSetupCommand)
+        provisionArgs(
+          args,
+          sequencedSetup,
+          startupTerminalHandle,
+          didSpawnStartup,
+          wrappedSetupCommand
+        )
       )
       didSpawnSetup = provisioned.setupSpawned
       setupTerminalHandle = provisioned.setupTerminalHandle
     }
     const activationSetup = didSpawnSetup
       ? undefined
-      : setup
+      : sequencedSetup
         ? {
-            ...setup,
+            ...sequencedSetup,
             ...(didSpawnStartup && wrappedSetupCommand ? { command: wrappedSetupCommand } : {})
           }
         : undefined
@@ -148,7 +159,13 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     )
   } else if (ports.canSpawn && (setup || defaultTabs || didSpawnStartup)) {
     const provisioning = ports.provision({
-      ...provisionArgs(args, startupTerminalHandle, didSpawnStartup, wrappedSetupCommand),
+      ...provisionArgs(
+        args,
+        sequencedSetup,
+        startupTerminalHandle,
+        didSpawnStartup,
+        wrappedSetupCommand
+      ),
       surfaceOwner: false
     })
     if (request.awaitTerminalProvisioning) {
@@ -170,9 +187,9 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   }
   const returnedSetup = didSpawnSetup
     ? undefined
-    : setup
+    : sequencedSetup
       ? {
-          ...setup,
+          ...sequencedSetup,
           ...(didSpawnStartup && wrappedSetupCommand ? { command: wrappedSetupCommand } : {})
         }
       : undefined
@@ -191,6 +208,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
 
 function provisionArgs(
   args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0],
+  setup: CreateWorktreeResult['setup'] | undefined,
   primaryTerminalHandle: string | null,
   hasStartupTerminal: boolean,
   wrappedSetupCommand?: string
@@ -199,7 +217,7 @@ function provisionArgs(
     worktreeSelector: `id:${args.worktree.id}`,
     worktreeId: args.worktree.id,
     worktreePath: args.worktree.path,
-    ...(args.setup ? { setup: args.setup } : {}),
+    ...(setup ? { setup } : {}),
     ...(args.defaultTabs ? { defaultTabs: args.defaultTabs } : {}),
     primaryTerminalHandle,
     hasStartupTerminal,

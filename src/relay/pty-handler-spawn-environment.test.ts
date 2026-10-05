@@ -4,8 +4,10 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  POSIX_SETUP_OBSERVED_SCRIPT_ENV,
   resolveSetupAgentSequenceLaunchCommand,
-  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
+  SETUP_SCRIPT_CARRIER_ENV_NAMES
 } from '../shared/setup-agent-sequencing'
 import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
 import { fishHistorySessionName, relayFishHistorySessionName } from '../main/fish-history-session'
@@ -419,14 +421,13 @@ describe('PtyHandler', () => {
       rmSync(wslHistoryFile, { force: true })
     })
 
-    const spawnWslPane = (): Promise<unknown> =>
+    const spawnWslPane = (historyIsolationEnabled = true, env?: Record<string, string>) =>
       dispatcher.callRequest('pty.spawn', {
-        cols: 80,
-        rows: 24,
         shellOverride: 'wsl.exe',
         terminalWindowsWslDistro: 'Ubuntu',
         worktreeId: wslWorktreeId,
-        historyIsolationEnabled: true
+        historyIsolationEnabled,
+        env
       })
 
     it('scopes HISTFILE past the wsl.exe wrapper and carries it over WSLENV', async () => {
@@ -437,6 +438,21 @@ describe('PtyHandler', () => {
         true
       )
       expect(spawnEnv.WSLENV?.split(':')).toContain('HISTFILE')
+    })
+
+    // Why: a Setup pane types `eval "$ORCA_SETUP_OBSERVED_SCRIPT"`, so a guest that never
+    // receives the variable runs nothing, prints no completion marker, and leaves the worker
+    // stuck at setup_state: running (#18059). WSLENV is the only carrier across that boundary.
+    it('carries the setup and startup script env into the guest over WSLENV', async () => {
+      await spawnWslPane(false, {
+        [POSIX_SETUP_OBSERVED_SCRIPT_ENV]: 'bash /repo/setup-runner.sh'
+      })
+
+      const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv[POSIX_SETUP_OBSERVED_SCRIPT_ENV]).toBe('bash /repo/setup-runner.sh')
+      expect(spawnEnv.WSLENV?.split(':')).toEqual(
+        expect.arrayContaining([...SETUP_SCRIPT_CARRIER_ENV_NAMES])
+      )
     })
 
     // The injected file lives on the relay host, so the existing host-side

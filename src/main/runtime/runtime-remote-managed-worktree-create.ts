@@ -2,7 +2,10 @@ import { paneIdentity } from './runtime-terminal-pane-identity'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
 import { getSetupRunnerCommandPlatformForPath } from '../../shared/setup-runner-command'
-import { createSequencedSetupAgentCommands } from '../../shared/setup-agent-sequencing'
+import {
+  createSequencedSetupAgentCommands,
+  withSequencedSetupEnv
+} from '../../shared/setup-agent-sequencing'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import type { WorktreeTerminalProvisioningArgs } from './runtime-worktree-terminal-provisioning'
@@ -81,6 +84,7 @@ export async function createRuntimeRemoteManagedWorktree(
   let startupTerminalPtyId: string | null = null
 
   let sequencedStartup = args.startup
+  let sequencedSetup = result.setup
   let wrappedSetupCommandStr: string | undefined
   if (args.startup && result.setup?.waitForAgentStartup === true) {
     const platform = setupPlatform(result.setup)
@@ -96,6 +100,7 @@ export async function createRuntimeRemoteManagedWorktree(
       ...(sequenced.startupEnv ? { env: { ...args.startup.env, ...sequenced.startupEnv } } : {})
     }
     wrappedSetupCommandStr = sequenced.setupCommand
+    sequencedSetup = withSequencedSetupEnv(result.setup, sequenced.setupEnv)
   }
 
   if (sequencedStartup && deps.canSpawn()) {
@@ -145,7 +150,7 @@ export async function createRuntimeRemoteManagedWorktree(
         worktreeSelector: `path:${result.worktree.path}`,
         worktreeId: result.worktree.id,
         worktreePath: result.worktree.path,
-        ...(result.setup ? { setup: result.setup } : {}),
+        ...(sequencedSetup ? { setup: sequencedSetup } : {}),
         ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
         primaryTerminalHandle: startupTerminalHandle,
         hasStartupTerminal: didSpawnStartup,
@@ -162,9 +167,9 @@ export async function createRuntimeRemoteManagedWorktree(
     // failure fall through with the wrapped command so renderer retries.
     const activationSetup = didSpawnSetup
       ? undefined
-      : result.setup
+      : sequencedSetup
         ? {
-            ...result.setup,
+            ...sequencedSetup,
             ...(didSpawnStartup && wrappedSetupCommandStr
               ? { command: wrappedSetupCommandStr }
               : {})
@@ -195,7 +200,7 @@ export async function createRuntimeRemoteManagedWorktree(
       worktreeSelector: `path:${result.worktree.path}`,
       worktreeId: result.worktree.id,
       worktreePath: result.worktree.path,
-      ...(result.setup ? { setup: result.setup } : {}),
+      ...(sequencedSetup ? { setup: sequencedSetup } : {}),
       ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
       primaryTerminalHandle: startupTerminalHandle,
       hasStartupTerminal: didSpawnStartup,
@@ -228,7 +233,9 @@ export async function createRuntimeRemoteManagedWorktree(
   }
 
   return finishRuntimeRemoteWorktreeCreate({
-    result,
+    // Why the swap: the sequenced setup script rides the launch's env, so the renderer fallback
+    // must get the same envVars the runtime would have spawned with.
+    result: sequencedSetup ? { ...result, setup: sequencedSetup } : result,
     request: args,
     ...(warning ? { warning } : {}),
     didSpawnSetup,

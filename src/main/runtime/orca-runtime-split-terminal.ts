@@ -35,6 +35,7 @@ export class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyC
     this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
       direction,
       command: opts.command,
+      env: opts.env,
       worktreeId: leaf.worktreeId,
       sourceLeafId: leaf.leafId,
       telemetrySource: opts.telemetrySource,

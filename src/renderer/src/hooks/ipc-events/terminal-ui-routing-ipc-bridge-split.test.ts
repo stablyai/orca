@@ -96,6 +96,36 @@ describe('runtime terminal split IPC routing', () => {
     unregister()
   })
 
+  // Why: a runtime-created Setup pane types `eval "$ORCA_SETUP_OBSERVED_SCRIPT"`, so the split
+  // request has to carry that variable or the pane runs nothing at all (#18059).
+  it('carries split env through to the pane that runs the command', () => {
+    const received: SplitTerminalPaneDetail[] = []
+    mocks.hasRegisteredRuntimeTerminalTab.mockReturnValue(true)
+    const unregister = registerTerminalPaneSplitRequestHandler(
+      'tab-parked',
+      'repo::/folder',
+      (detail) => {
+        received.push(detail)
+      }
+    )
+
+    routeRuntimeTerminalSplitRequest({
+      tabId: 'tab-parked',
+      worktreeId: 'repo::/folder',
+      paneRuntimeId: 7,
+      direction: 'vertical',
+      command: `bash -lc 'eval "$ORCA_SETUP_OBSERVED_SCRIPT"'`,
+      env: { ORCA_SETUP_OBSERVED_SCRIPT: 'bash /repo/setup-runner.sh' }
+    })
+
+    expect(received).toEqual([
+      expect.objectContaining({
+        env: { ORCA_SETUP_OBSERVED_SCRIPT: 'bash /repo/setup-runner.sh' }
+      })
+    ])
+    unregister()
+  })
+
   it('dispatches immediately when the target lifecycle is already mounted', () => {
     const received: SplitTerminalPaneDetail[] = []
     mocks.hasRegisteredRuntimeTerminalTab.mockReturnValue(true)

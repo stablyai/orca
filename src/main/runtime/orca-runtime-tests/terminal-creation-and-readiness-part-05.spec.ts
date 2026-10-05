@@ -25,6 +25,85 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
+  // Why: a Setup pane split from a leaf with no main-side PTY goes through the renderer, and its
+  // command is `eval "$ORCA_SETUP_OBSERVED_SCRIPT"` — dropping env here runs nothing at all and
+  // leaves setup reported as still running (#18059).
+  it('forwards split env to the renderer when the source leaf has no live main-side pty', async () => {
+    const tabId = 'tab-split-env'
+    const sourceLeafId = '22222222-2222-4222-8222-222222222222'
+    const splitTerminal = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setNotifier({ splitTerminal } as never)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'shell',
+          activeLeafId: sourceLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: sourceLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-renderer-owned',
+          paneTitle: null
+        }
+      ]
+    })
+    const sourceHandle = runtime.getTerminalHandleForPaneKey(makePaneKey(tabId, sourceLeafId))
+
+    const split = runtime.splitTerminal(sourceHandle!, {
+      direction: 'vertical',
+      command: `bash -lc 'eval "$ORCA_SETUP_OBSERVED_SCRIPT"'`,
+      env: { ORCA_SETUP_OBSERVED_SCRIPT: 'bash /repo/setup-runner.sh' }
+    })
+
+    await vi.waitFor(() => expect(splitTerminal).toHaveBeenCalledTimes(1))
+    const splitOpts = splitTerminal.mock.calls[0]?.[2]
+    expect(splitOpts).toMatchObject({
+      direction: 'vertical',
+      env: { ORCA_SETUP_OBSERVED_SCRIPT: 'bash /repo/setup-runner.sh' }
+    })
+
+    // Why publish the split leaf: `splitTerminal` waits up to 10s for it, and an abandoned wait
+    // rejects long after this test ends, failing whichever file the runner is on by then.
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'shell',
+          activeLeafId: splitOpts?.newLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: splitOpts?.newLeafId,
+          paneRuntimeId: 2,
+          ptyId: 'pty-renderer-split',
+          paneTitle: null
+        },
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: sourceLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-renderer-owned',
+          paneTitle: null
+        }
+      ]
+    })
+    await expect(split).resolves.toMatchObject({ leafId: splitOpts?.newLeafId })
+  })
+
   it('returns the exact pre-minted leaf for concurrent renderer-backed splits', async () => {
     const tabId = 'tab-concurrent-splits'
     const sourceLeafId = '11111111-1111-4111-8111-111111111111'
