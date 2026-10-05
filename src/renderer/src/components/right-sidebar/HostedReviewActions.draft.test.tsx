@@ -18,12 +18,14 @@ vi.mock('./use-hosted-review-actions', () => ({
   useHostedReviewActions: () => ({
     merging: false,
     readying: false,
+    approving: false,
     stateUpdating: null,
     actionError: null,
     handleMerge: vi.fn(),
     handleAutoMerge: vi.fn(),
     handleMarkReadyForReview: actionMocks.handleMarkReadyForReview,
     handleCloseReview: actionMocks.handleCloseReview,
+    handleApproval: vi.fn(),
     handleReopenReview: vi.fn()
   })
 }))
@@ -167,5 +169,44 @@ describe('HostedReviewActions GitHub merge selection', () => {
     if (scenario.label === 'Checking' || scenario.label === 'Conflicts') {
       expect(markup).toMatch(/<button[^>]*disabled=""/)
     }
+  })
+})
+
+describe('HostedReviewActions open state', () => {
+  function renderOpen(
+    review: Partial<HostedReviewActionInfo> & Pick<HostedReviewActionInfo, 'provider'>
+  ): string {
+    return renderToStaticMarkup(
+      <HostedReviewActions
+        review={{ number: 42, state: 'open', status: 'success', mergeable: 'UNKNOWN', ...review }}
+        repo={repo}
+        worktree={worktree}
+        onRefreshReview={vi.fn().mockResolvedValue(undefined)}
+      />
+    )
+  }
+  const approval = {
+    approvalsRequired: 1,
+    approvalsLeft: 1,
+    approvedCount: 0,
+    userCanApprove: true,
+    userHasApproved: false
+  }
+
+  it('shows Approve and progress beside a merge blocked on approval', () => {
+    const markup = renderOpen({ provider: 'gitlab', mergeStateStatus: 'not_approved', approval })
+    expect(markup).toContain('Approval required')
+    expect(markup).toContain('Approve')
+    expect(markup).toContain('0 of 1 approvals')
+  })
+
+  it('shows neither when GitLab sent no approval data', () => {
+    const markup = renderOpen({ provider: 'gitlab' })
+    expect(markup).not.toContain('Revoke approval')
+    expect(markup).not.toContain('approvals')
+  })
+
+  it('never renders approval controls for GitHub', () => {
+    expect(renderOpen({ provider: 'github', approval })).not.toContain('approvals')
   })
 })

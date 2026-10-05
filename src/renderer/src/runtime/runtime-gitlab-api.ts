@@ -1,5 +1,7 @@
 import type { PreloadApi } from '../../../preload/api-types'
 import {
+  GITLAB_MR_APPROVAL_RUNTIME_CAPABILITY,
+  GITLAB_MR_APPROVAL_UPDATE_REQUIRED_MESSAGE,
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
   GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE,
   type RuntimeCapability
@@ -79,6 +81,12 @@ export function createRuntimeGitLabApi(transport: RuntimeGitLabTransport): GitLa
         !(await transport.supportsCapability(GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY))
       ) {
         return { ok: false, error: GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE }
+      }
+      if (
+        args.updates.approval &&
+        !(await transport.supportsCapability(GITLAB_MR_APPROVAL_RUNTIME_CAPABILITY))
+      ) {
+        return { ok: false, error: GITLAB_MR_APPROVAL_UPDATE_REQUIRED_MESSAGE }
       }
       return route<GitLabApiResult<'updateMR'>>(GITLAB_WEB_RPC_METHODS.updateMR, args)
     },
