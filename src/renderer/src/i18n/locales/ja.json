@@ -10627,6 +10627,17 @@
               "statusline": "ステータスライン",
               "dim": "薄暗い",
               "colors": "色"
+            },
+            "fitWideGlyphs": {
+              "wide": "全角",
+              "cjk": "cjk",
+              "korean": "韓国語",
+              "hangul": "ハングル",
+              "chinese": "中国語",
+              "japanese": "日本語",
+              "fallback": "代替フォント",
+              "spacing": "字間",
+              "center": "中央揃え"
             }
           },
           "windows": {
@@ -12040,7 +12051,9 @@
         },
         "TerminalRenderingSection": {
           "6d4c55bacc": "インライン画像",
-          "fffab5890b": "SIXEL、iTerm2 (IIP)、および Kitty グラフィックスプロトコルを使用して、ターミナルに画像を直接表示します。"
+          "fffab5890b": "SIXEL、iTerm2 (IIP)、および Kitty グラフィックスプロトコルを使用して、ターミナルに画像を直接表示します。",
+          "fitWideGlyphs": "全角文字のサイズ調整と中央揃え",
+          "fitWideGlyphsDescription": "代替フォントで描かれる韓国語・中国語・日本語の文字を、行の高さを超えない範囲で 2 セル幅に近づけて拡大し、中央に配置して文字間が空いて見えないようにします。"
         },
         "CursorAccountsSection": {
           "dashboardLink": "Cursor ダッシュボード",

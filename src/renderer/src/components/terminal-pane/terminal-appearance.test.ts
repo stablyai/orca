@@ -335,6 +335,30 @@ describe('applyTerminalAppearance theme assignment', () => {
     expect(writes).toBe(writesAfterFirst)
   })
 
+  it('applies wide glyph fitting live, writing only when the setting changes', () => {
+    const pane = makePane(1)
+    let writes = 0
+    let stored: boolean | undefined
+    Object.defineProperty(pane.terminal.options, 'fitWideGlyphs', {
+      configurable: true,
+      enumerable: true,
+      get: () => stored,
+      set: (value: boolean) => {
+        stored = value
+        writes += 1
+      }
+    })
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, settings)
+    apply(pane, settings)
+    // Each write clears the renderer and rebuilds the glyph atlas.
+    expect({ stored, writes }).toEqual({ stored: true, writes: 1 })
+
+    apply(pane, { ...settings, terminalFitWideGlyphs: false })
+    expect({ stored, writes }).toEqual({ stored: false, writes: 2 })
+  })
+
   it('defers metric options on an unmeasurable pane and lands them on the next fit', () => {
     // A metric write makes xterm clear, resize and full-refresh; on a pane with
     // no usable box that repaint is wasted and the cols/rows re-fit that must

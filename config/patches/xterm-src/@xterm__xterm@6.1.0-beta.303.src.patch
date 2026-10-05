@@ -1234,11 +1234,232 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 +    preedit.replaceChildren(...nodes);
    }
  }
+diff --git a/src/browser/renderer/dom/DomRenderer.ts b/src/browser/renderer/dom/DomRenderer.ts
+index 657217f7104c97ce54b98e88b381b325b061604c..b0a670f283863bf6728a0ce6d109150e6caacfb0 100644
+--- a/src/browser/renderer/dom/DomRenderer.ts
++++ b/src/browser/renderer/dom/DomRenderer.ts
+@@ -14,7 +14,7 @@ import { ICharSizeService, ICoreBrowserService, IThemeService } from '../../serv
+ import { ILinkifier2, ILinkifierEvent, ITerminal, ReadonlyColorSet } from '../../Types';
+ import { color } from '../../../common/Color';
+ import { Disposable, toDisposable } from '../../../common/Lifecycle';
+-import { IBufferService, ICoreService, IInstantiationService, IOptionsService } from '../../../common/services/Services';
++import { IBufferService, ICoreService, IInstantiationService, IOptionsService, IUnicodeService } from '../../../common/services/Services';
+ import { Emitter } from '../../../common/Event';
+ import { addDisposableListener } from '../../Dom';
+ 
+@@ -74,7 +74,8 @@ export class DomRenderer extends Disposable implements IRenderer {
+     @IBufferService private readonly _bufferService: IBufferService,
+     @ICoreService private readonly _coreService: ICoreService,
+     @ICoreBrowserService private readonly _coreBrowserService: ICoreBrowserService,
+-    @IThemeService private readonly _themeService: IThemeService
++    @IThemeService private readonly _themeService: IThemeService,
++    @IUnicodeService unicodeService: IUnicodeService
+   ) {
+     super();
+     this._rowContainer = this._document.createElement('div');
+@@ -94,6 +95,7 @@ export class DomRenderer extends Disposable implements IRenderer {
+     this._injectCss(this._themeService.colors);
+ 
+     this._rowFactory = instantiationService.createInstance(DomRendererRowFactory, document);
++    this._rowFactory.unicodeService = unicodeService;
+ 
+     this._element.classList.add(Constants.TERMINAL_CLASS_PREFIX + this._terminalClass);
+     this._screenElement.appendChild(this._rowContainer);
+@@ -214,6 +216,10 @@ export class DomRenderer extends Disposable implements IRenderer {
+       `}` +
+       `${this._terminalSelector} span.${RowCss.BLINK_HIDDEN_CLASS} {` +
+       ` visibility: hidden;` +
++      `}` +
++      // Orca: text rather than padding leads a fitted wide glyph, so decorations span its cells.
++      `${this._terminalSelector} span.${RowCss.WIDE_GLYPH_CLASS}::before {` +
++      ` content: '\\a0';` +
+       `}`;
+     // Blink animation
+     const blinkAnimationUnderlineId = `blink_underline_${this._terminalClass}`;
+diff --git a/src/browser/renderer/dom/DomRendererRowFactory.ts b/src/browser/renderer/dom/DomRendererRowFactory.ts
+index 6ae089a4387de14488f39f5dab7024cffdcd9d10..c988efac2cb39823937a9dcc46c7887aaf366a7d 100644
+--- a/src/browser/renderer/dom/DomRendererRowFactory.ts
++++ b/src/browser/renderer/dom/DomRendererRowFactory.ts
+@@ -8,7 +8,7 @@ import { IBufferLine, ICellData } from '../../../common/buffer/Types';
+ import { INVERTED_DEFAULT_COLOR } from '../shared/Constants';
+ import { WHITESPACE_CELL_CHAR, Attributes } from '../../../common/buffer/Constants';
+ import { CellData } from '../../../common/buffer/CellData';
+-import { ICoreService, IDecorationService, IOptionsService } from '../../../common/services/Services';
++import { ICoreService, IDecorationService, IOptionsService, IUnicodeService } from '../../../common/services/Services';
+ import { channels, color } from '../../../common/Color';
+ import { ICharacterJoinerService, ICoreBrowserService, IThemeService } from '../../services/Services';
+ import { JoinedCellData } from '../../services/CharacterJoinerService';
+@@ -31,7 +31,8 @@ export const enum RowCss {
+   CURSOR_STYLE_BLOCK_CLASS = 'xterm-cursor-block',
+   CURSOR_STYLE_OUTLINE_CLASS = 'xterm-cursor-outline',
+   CURSOR_STYLE_BAR_CLASS = 'xterm-cursor-bar',
+-  CURSOR_STYLE_UNDERLINE_CLASS = 'xterm-cursor-underline'
++  CURSOR_STYLE_UNDERLINE_CLASS = 'xterm-cursor-underline',
++  WIDE_GLYPH_CLASS = 'xterm-wide-glyph'
+ }
+ 
+ 
+@@ -43,6 +44,8 @@ export class DomRendererRowFactory {
+   private _columnSelectMode: boolean = false;
+ 
+   public defaultSpacing = 0;
++  /** Orca: set by DomRenderer; without it (hand-built factories) wide glyphs stay unfitted. */
++  public unicodeService: IUnicodeService | undefined;
+ 
+   constructor(
+     private readonly _document: Document,
+@@ -181,6 +184,12 @@ export class DomRendererRowFactory {
+ 
+       // lookup char render width and calc spacing
+       spacing = width * cellWidth - widthCache.get(chars, cell.isBold(), cell.isItalic());
++      // Orca: enlarged and centered wide glyphs carry their own spacing, so they never merge. Like
++      // the WebGL atlas, only fit cells exactly as wide as their first code point.
++      const wideGlyph = width > 1 && !isJoined && !cell.isInvisible() && this._optionsService.rawOptions.fitWideGlyphs
++        && width === this.unicodeService?.wcwidth(chars.codePointAt(0) ?? 0)
++        ? widthCache.getWideGlyphFit(chars, cell.isBold(), cell.isItalic(), width * cellWidth)
++        : undefined;
+ 
+       if (!charElement) {
+         charElement = this._document.createElement('span');
+@@ -212,6 +221,7 @@ export class DomRendererRowFactory {
+           && !isJoined
+           && !isDecorated
+           && isValidJoinRange
++          && !wideGlyph
+         ) {
+           // no span alterations, thus only account chars skipping all code below
+           if (cell.isInvisible()) {
+@@ -299,6 +309,10 @@ export class DomRendererRowFactory {
+         classes.push(RowCss.DIM_CLASS);
+       }
+ 
++      if (wideGlyph) {
++        classes.push(RowCss.WIDE_GLYPH_CLASS);
++      }
++
+       if (cell.isInvisible()) {
+         text = WHITESPACE_CELL_CHAR;
+       } else {
+@@ -469,13 +483,25 @@ export class DomRendererRowFactory {
+       }
+ 
+       // exclude conditions for cell merging - never merge these
+-      if (!isCursorCell && !isJoined && !isDecorated && isValidJoinRange) {
++      if (!isCursorCell && !isJoined && !isDecorated && isValidJoinRange && !wideGlyph) {
+         cellAmount++;
+       } else {
+         charElement.textContent = text;
+       }
+-      // apply letter-spacing rule
+-      if (spacing !== this.defaultSpacing) {
++      if (wideGlyph) {
++        // A ::before space and the letter-spacing put `offset` on each side of the glyph; negative
++        // word-spacing cancels the space's own advance, so the span stays exactly its cells wide.
++        charElement.style.letterSpacing = `${wideGlyph.offset}px`;
++        charElement.style.wordSpacing = `${-wideGlyph.space}px`;
++        if (wideGlyph.scale !== 1) {
++          charElement.style.fontSize = `${this._optionsService.rawOptions.fontSize * wideGlyph.scale}px`;
++        }
++        if (wideGlyph.lineHeightDelta !== 0) {
++          // 1lh is the row's line-height; the baseline moves by half of what the span's differs.
++          charElement.style.lineHeight = `calc(1lh - ${wideGlyph.lineHeightDelta}px)`;
++        }
++      } else if (spacing !== this.defaultSpacing) {
++        // apply letter-spacing rule
+         charElement.style.letterSpacing = `${spacing}px`;
+       }
+ 
 diff --git a/src/browser/renderer/dom/WidthCache.ts b/src/browser/renderer/dom/WidthCache.ts
-index d45938515e7a9903de0da0d61716fd42e4deea0c..17d6577e388eb2e4397338093e35373864b822a4 100644
+index d45938515e7a9903de0da0d61716fd42e4deea0c..92cab3ed07644b5ed318884cac8c425b8cdce882 100644
 --- a/src/browser/renderer/dom/WidthCache.ts
 +++ b/src/browser/renderer/dom/WidthCache.ts
-@@ -142,7 +142,7 @@ export class WidthCache implements IDisposable {
+@@ -6,6 +6,7 @@
+ import { throwIfFalsy } from '../shared/RendererUtils';
+ import { IDisposable } from '../../../common/Types';
+ import { FontWeight } from '../../../common/services/Services';
++import { IWideGlyphFit, WideGlyphFitter } from '../shared/WideGlyphFit';
+ 
+ 
+ export const enum WidthCacheSettings {
+@@ -28,6 +29,16 @@ const enum FontVariant {
+ export interface IWidthCacheFontVariantCanvas {
+   setFont(fontFamily: string, fontSize: number, fontWeight: FontWeight, italic: boolean): void;
+   measure(c: string): number;
++  /** Orca: full metrics for wide glyph fitting; measure-only doubles leave glyphs unfitted. */
++  measureMetrics?(c: string): TextMetrics;
++}
++
++/** Orca: a wide glyph fit plus what a DOM row needs to apply it. */
++export interface IDomWideGlyphFit extends IWideGlyphFit {
++  /** Advance of the leading space at the scaled size, which negative word-spacing cancels. */
++  space: number;
++  /** Line-height reduction that puts the enlarged strut's baseline `shift` below the row's. */
++  lineHeightDelta: number;
+ }
+ 
+ export class WidthCache implements IDisposable {
+@@ -48,6 +59,8 @@ export class WidthCache implements IDisposable {
+   private _weight: FontWeight = 'normal';
+   private _weightBold: FontWeight = 'bold';
+   private _canvasElements: IWidthCacheFontVariantCanvas[] = [];
++  private _wideGlyphFitter = new WideGlyphFitter();
++  private _wideGlyphFits = new Map<string, IDomWideGlyphFit | null>();
+ 
+   constructor(
+     canvasFactory: () => IWidthCacheFontVariantCanvas = () => new WidthCacheFontVariantCanvas()
+@@ -74,6 +87,9 @@ export class WidthCache implements IDisposable {
+     this._flat.fill(WidthCacheSettings.FLAT_UNSET);
+     // .clear() has some overhead, re-assign instead (>3 times faster)
+     this._holey = new Map<string, number>();
++    this._wideGlyphFits = new Map();
++    // Orca: the fitter keys faces by variant only, so a font or weight change must drop them.
++    this._wideGlyphFitter = new WideGlyphFitter();
+   }
+ 
+   /**
+@@ -137,12 +153,49 @@ export class WidthCache implements IDisposable {
+     return width;
+   }
+ 
++  /** Orca: how to enlarge and center wide glyph `c` in `span` pixels, if it needs it. */
++  public getWideGlyphFit(c: string, bold: boolean | number, italic: boolean | number, span: number): IDomWideGlyphFit | undefined {
++    let variant = FontVariant.REGULAR;
++    if (bold) variant |= FontVariant.BOLD;
++    if (italic) variant |= FontVariant.ITALIC;
++    const key = `${c}|${variant}|${span}`;
++    let fit = this._wideGlyphFits.get(key);
++    if (fit === undefined) {
++      fit = this._fitWideGlyph(c, bold, italic, variant, span);
++      this._wideGlyphFits.set(key, fit);
++    }
++    return fit ?? undefined;
++  }
++
++  private _fitWideGlyph(c: string, bold: boolean | number, italic: boolean | number, variant: FontVariant, span: number): IDomWideGlyphFit | null {
++    const canvas = this._canvasElements[variant];
++    const measure = canvas.measureMetrics?.bind(canvas);
++    if (!measure) {
++      return null;
++    }
++    // The span's line box is the primary font's; half a pixel keeps antialiasing inside the row.
++    const line = measure('W');
++    const fit = this._wideGlyphFitter.fit(c, {
++      span,
++      ascent: line.fontBoundingBoxAscent - 0.5,
++      descent: line.fontBoundingBoxDescent - 0.5
++    }, String(variant), measure);
++    if (!fit) {
++      return null;
++    }
++    return {
++      ...fit,
++      space: this.get('\xa0', bold, italic) * fit.scale,
++      lineHeightDelta: (fit.scale - 1) * (line.fontBoundingBoxAscent - line.fontBoundingBoxDescent) - 2 * fit.shift
++    };
++  }
++
+   protected _measure(c: string, variant: FontVariant): number {
+     return this._canvasElements[variant].measure(c);
    }
  }
  
@@ -1247,6 +1468,166 @@ index d45938515e7a9903de0da0d61716fd42e4deea0c..17d6577e388eb2e4397338093e353738
    private _canvas: OffscreenCanvas | HTMLCanvasElement;
    private _ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
  
+@@ -166,4 +219,8 @@ class WidthCacheFontVariantCanvas implements IWidthCacheFontVariantCanvas {
+   public measure(c: string): number {
+     return this._ctx.measureText(c).width;
+   }
++
++  public measureMetrics(c: string): TextMetrics {
++    return this._ctx.measureText(c);
++  }
+ }
+diff --git a/src/browser/renderer/shared/WideGlyphFit.ts b/src/browser/renderer/shared/WideGlyphFit.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..fbd9855c62cbfbdab1fa867269f2860d46c89fbd
+--- /dev/null
++++ b/src/browser/renderer/shared/WideGlyphFit.ts
+@@ -0,0 +1,131 @@
++/**
++ * Copyright (c) 2026 The xterm.js authors. All rights reserved.
++ * @license MIT
++ */
++
++// Orca: sizes and centers wide glyphs whose fallback face leaves them narrower than their cells.
++// The WebGL addon cannot import new core files, so it ships a byte-identical copy; keep this file
++// import-free and limited to erasable TypeScript so Orca can unit test both copies as installed.
++
++/** Scripts a terminal font stack draws from one fallback face, so one scale keeps a line even. */
++export type WideGlyphScript = 'hangul' | 'han' | 'kana';
++
++// The script's scale and baseline shift must fit every glyph of the face: sample its extremes.
++const SCRIPT_SAMPLES: Record<WideGlyphScript, string> = {
++  hangul: '가갈뷁힣ㅎ',
++  han: '中國鬱龍語',
++  kana: 'あガぽヅカ'
++};
++
++export function getWideGlyphScript(code: number): WideGlyphScript | undefined {
++  if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x1100 && code <= 0x115F) ||
++    (code >= 0x3130 && code <= 0x318F) || (code >= 0xA960 && code <= 0xA97F)) {
++    return 'hangul';
++  }
++  if ((code >= 0x3040 && code <= 0x30FF) || (code >= 0x31F0 && code <= 0x31FF)) {
++    return 'kana';
++  }
++  if ((code >= 0x3400 && code <= 0x4DBF) || (code >= 0x4E00 && code <= 0x9FFF) ||
++    (code >= 0xF900 && code <= 0xFAFF) || (code >= 0x20000 && code <= 0x3FFFF)) {
++    return 'han';
++  }
++  return undefined;
++}
++
++/** The space a wide glyph may fill, measured from the alphabetic baseline it is drawn on. */
++export interface IWideGlyphBox {
++  /** Width of the cells the glyph occupies. */
++  span: number;
++  /** Room above the baseline, up to the top of the primary font's line box. */
++  ascent: number;
++  /** Room below the baseline, down to the bottom of the primary font's line box. */
++  descent: number;
++}
++
++export interface IWideGlyphFit {
++  /** Font size multiplier; 1 keeps the terminal font size. */
++  scale: number;
++  /** Space left of the scaled glyph that centers it in its span. */
++  offset: number;
++  /** How far to lower the baseline so the scaled ink stays inside the line box. */
++  shift: number;
++}
++
++/** The subset of TextMetrics the fit reads, measured at the alphabetic baseline. */
++export interface IWideGlyphMetrics {
++  width: number;
++  actualBoundingBoxAscent: number;
++  actualBoundingBoxDescent: number;
++}
++
++interface IInkExtent {
++  width: number;
++  ascent: number;
++  descent: number;
++}
++
++function inkExtent(metrics: IWideGlyphMetrics): IInkExtent {
++  return { width: metrics.width, ascent: metrics.actualBoundingBoxAscent, descent: metrics.actualBoundingBoxDescent };
++}
++
++/** Largest scale that keeps `ink` within the span and the line box's full height; below 1 when it cannot fit. */
++function maxScale(ink: IInkExtent, box: IWideGlyphBox): number {
++  const height = ink.ascent + ink.descent;
++  return Math.min(box.span / ink.width, height > 0 ? (box.ascent + box.descent) / height : Infinity);
++}
++
++/** The smallest baseline move that keeps `ink` at `scale` inside the line box. */
++function baselineShift(ink: IInkExtent, scale: number, box: IWideGlyphBox): number {
++  return Math.min(Math.max(0, ink.ascent * scale - box.ascent), box.descent - ink.descent * scale);
++}
++
++export class WideGlyphFitter {
++  private readonly _faces = new Map<string, { scale: number, ink: IInkExtent }>();
++
++  /**
++   * Fits a glyph that occupies exactly the cells of its first code point. `measure` reports the
++   * unscaled font; `fontKey` separates font variants. Undefined when the glyph already fills its
++   * span. Listed scripts grow as far as the span and line box allow, lowering the baseline only
++   * once the line box's ascent runs out; other glyphs only center.
++   */
++  public fit(chars: string, box: IWideGlyphBox, fontKey: string, measure: (text: string) => IWideGlyphMetrics): IWideGlyphFit | undefined {
++    const glyph = inkExtent(measure(chars));
++    if (!(glyph.width > 0) || glyph.width >= box.span) {
++      return undefined;
++    }
++    const script = getWideGlyphScript(chars.codePointAt(0) ?? 0);
++    const face = script && this._measureFace(script, box, fontKey, measure);
++    if (!face || face.scale <= 1) {
++      return { scale: 1, offset: (box.span - glyph.width) / 2, shift: 0 };
++    }
++    // Also bound by the glyph itself: a code point the samples miss may come from another face.
++    // Never shrinks: a glyph taller than the line box keeps its size and overflows it, as unfitted.
++    const scale = Math.max(1, Math.min(face.scale, maxScale(glyph, box)));
++    // The face's shift, not the glyph's, keeps every glyph of the face on one baseline; it only
++    // ever lowers, so an overflowing glyph never rises above where it draws unfitted.
++    const shift = Math.max(0, Math.min(
++      Math.max(baselineShift(face.ink, scale, box), glyph.ascent * scale - box.ascent),
++      box.descent - glyph.descent * scale
++    ));
++    return { scale, offset: (box.span - glyph.width * scale) / 2, shift };
++  }
++
++  private _measureFace(script: WideGlyphScript, box: IWideGlyphBox, fontKey: string, measure: (text: string) => IWideGlyphMetrics): { scale: number, ink: IInkExtent } {
++    const key = `${fontKey}|${script}|${box.span}|${box.ascent}|${box.descent}`;
++    let face = this._faces.get(key);
++    if (!face) {
++      const ink: IInkExtent = { width: 0, ascent: -Infinity, descent: -Infinity };
++      for (const sample of SCRIPT_SAMPLES[script]) {
++        const metrics = measure(sample);
++        if (metrics.width > 0) {
++          ink.width = Math.max(ink.width, metrics.width);
++          ink.ascent = Math.max(ink.ascent, metrics.actualBoundingBoxAscent);
++          ink.descent = Math.max(ink.descent, metrics.actualBoundingBoxDescent);
++        }
++      }
++      face = { scale: ink.width > 0 ? maxScale(ink, box) : 1, ink };
++      this._faces.set(key, face);
++    }
++    return face;
++  }
++}
+diff --git a/src/browser/services/RenderService.ts b/src/browser/services/RenderService.ts
+index 75cd55418b0eac94c3f28273c73a26086e437a90..1feb073984b82234e4108165e0036205da928560 100644
+--- a/src/browser/services/RenderService.ts
++++ b/src/browser/services/RenderService.ts
+@@ -104,7 +104,8 @@ export class RenderService extends Disposable implements IRenderService {
+       'fontWeight',
+       'fontWeightBold',
+       'minimumContrastRatio',
+-      'rescaleOverlappingGlyphs'
++      'rescaleOverlappingGlyphs',
++      'fitWideGlyphs'
+     ], () => {
+       this.clear();
+       this.handleResize(bufferService.cols, bufferService.rows);
 diff --git a/src/common/SortedList.ts b/src/common/SortedList.ts
 index 8a10076e3963e33b4a7d1e4602333eb3f4772dc9..c6dcf18b762e3c56fe22e9c2d49b8e550d96f915 100644
 --- a/src/common/SortedList.ts
@@ -1369,3 +1750,28 @@ index 8a10076e3963e33b4a7d1e4602333eb3f4772dc9..c6dcf18b762e3c56fe22e9c2d49b8e55
        this._flushDeletedTask.flush();
      }
    }
+diff --git a/src/common/services/OptionsService.ts b/src/common/services/OptionsService.ts
+index d14982e3ff8907fd3182c8c970d81afa74eba84b..846770d4cea692bfe1080c5d33dc38757b4d0065 100644
+--- a/src/common/services/OptionsService.ts
++++ b/src/common/services/OptionsService.ts
+@@ -49,6 +49,7 @@ export const DEFAULT_OPTIONS: Readonly<Required<ITerminalOptions>> = {
+   theme: {},
+   reflowCursorLine: false,
+   rescaleOverlappingGlyphs: false,
++  fitWideGlyphs: false,
+   rightClickSelectsWord: isMac,
+   windowOptions: {},
+   windowsPty: {},
+diff --git a/src/common/services/Services.ts b/src/common/services/Services.ts
+index 8f0aeeed15d38aa8ab341577520db15d13788a52..e0521900b8eaf6623541bf02debbe8a015790aef 100644
+--- a/src/common/services/Services.ts
++++ b/src/common/services/Services.ts
+@@ -231,6 +231,8 @@ export interface ITerminalOptions {
+   mouseEventsRequireAlt?: boolean;
+   reflowCursorLine?: boolean;
+   rescaleOverlappingGlyphs?: boolean;
++  /** Orca: enlarges Hangul, Han and Kana glyphs narrower than their two cells and centers wide glyphs. */
++  fitWideGlyphs?: boolean;
+   rightClickSelectsWord?: boolean;
+   rows?: number;
+   showCursorImmediately?: boolean;

@@ -10590,6 +10590,17 @@
               "statusline": "상태 표시줄",
               "dim": "어둑한",
               "colors": "그림 물감"
+            },
+            "fitWideGlyphs": {
+              "wide": "넓은 문자",
+              "cjk": "cjk",
+              "korean": "한국어",
+              "hangul": "한글",
+              "chinese": "중국어",
+              "japanese": "일본어",
+              "fallback": "대체 글꼴",
+              "spacing": "자간",
+              "center": "가운데 정렬"
             }
           },
           "windows": {
@@ -12040,7 +12051,9 @@
         },
         "TerminalRenderingSection": {
           "6d4c55bacc": "인라인 이미지",
-          "fffab5890b": "SIXEL, iTerm2(IIP) 및 Kitty 그래픽 프로토콜을 사용하여 터미널에 이미지를 직접 표시합니다."
+          "fffab5890b": "SIXEL, iTerm2(IIP) 및 Kitty 그래픽 프로토콜을 사용하여 터미널에 이미지를 직접 표시합니다.",
+          "fitWideGlyphs": "넓은 문자 크기 맞춤 및 가운데 정렬",
+          "fitWideGlyphsDescription": "대체 글꼴로 그려지는 한국어·중국어·일본어 문자를 줄 높이를 넘지 않는 선에서 두 칸 너비에 가깝게 키우고 가운데에 배치해, 글자 사이가 띄어 쓴 것처럼 벌어져 보이지 않게 합니다."
         },
         "CursorAccountsSection": {
           "dashboardLink": "Cursor 대시보드",

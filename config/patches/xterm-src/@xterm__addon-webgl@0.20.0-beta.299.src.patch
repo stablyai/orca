@@ -1,3 +1,24 @@
+diff --git a/src/CharAtlasUtils.ts b/src/CharAtlasUtils.ts
+index d9ca69b39d4be3a3e7f5625c469e0fddfa837946..cad782913aa8a964f4a0d3fc235db1d6ce773d41 100644
+--- a/src/CharAtlasUtils.ts
++++ b/src/CharAtlasUtils.ts
+@@ -48,6 +48,8 @@ export function generateConfig(deviceCellWidth: number, deviceCellHeight: number
+     allowTransparency: options.allowTransparency,
+     drawBoldTextInBrightColors: options.drawBoldTextInBrightColors,
+     minimumContrastRatio: options.minimumContrastRatio,
++    // Orca's core patch adds this option; the published typings the addon builds against lack it.
++    fitWideGlyphs: 'fitWideGlyphs' in options && options.fitWideGlyphs === true,
+     colors: clonedColors
+   };
+ }
+@@ -74,6 +76,7 @@ export function configEquals(a: ICharAtlasConfig, b: ICharAtlasConfig): boolean
+       a.deviceCharHeight === b.deviceCharHeight &&
+       a.drawBoldTextInBrightColors === b.drawBoldTextInBrightColors &&
+       a.minimumContrastRatio === b.minimumContrastRatio &&
++      a.fitWideGlyphs === b.fitWideGlyphs &&
+       a.colors.foreground.rgba === b.colors.foreground.rgba &&
+       a.colors.background.rgba === b.colors.background.rgba;
+ }
 diff --git a/src/GlyphRenderer.ts b/src/GlyphRenderer.ts
 index 742f0879ff4f04509e4a07c8efdf0d5743fe8ee5..885a206a394fff783737a412c0b75bf935dd0eca 100644
 --- a/src/GlyphRenderer.ts
@@ -21,7 +42,7 @@ index 742f0879ff4f04509e4a07c8efdf0d5743fe8ee5..885a206a394fff783737a412c0b75bf9
  }
  
 diff --git a/src/TextureAtlas.ts b/src/TextureAtlas.ts
-index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318e7db194c 100644
+index 4977ad741065e26bbfd35bc50e7558a033b13340..e419cdaa04561a755a6db5c87e1e97e02187fd4c 100644
 --- a/src/TextureAtlas.ts
 +++ b/src/TextureAtlas.ts
 @@ -3,6 +3,7 @@
@@ -32,7 +53,15 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
  import { IColorContrastCache } from 'browser/Types';
  import { DIM_OPACITY, TEXT_BASELINE } from './Constants';
  import { tryDrawCustomGlyph } from './customGlyphs/CustomGlyphRasterizer';
-@@ -135,21 +136,23 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -16,6 +17,7 @@ import { AttributeData } from 'common/buffer/AttributeData';
+ import { Attributes, DEFAULT_COLOR, DEFAULT_EXT, UnderlineStyle } from 'common/buffer/Constants';
+ import { ILogService, IUnicodeService } from 'common/services/Services';
+ import { Emitter } from 'common/Event';
++import { WideGlyphFitter } from './WideGlyphFit';
+ 
+ /**
+  * A shared object which is used to draw nothing for a particular cell.
+@@ -135,21 +137,25 @@ export class TextureAtlas implements ITextureAtlas {
    private _pageLayoutVersion = 0;
    public get pageLayoutVersion(): number { return this._pageLayoutVersion; }
  
@@ -41,6 +70,8 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
 +  // assignment fails to parse, which rasterizes glyphs at a stale weight.
 +  public fontProbeMismatchCount = 0;
 +  public fontProbeLastMismatch: { desired: string, actual: string } | undefined;
++
++  private readonly _wideGlyphFitter = new WideGlyphFitter();
 +
    public clearTexture(): void {
 -    if (this._pages[0].currentRow.x === 0 && this._pages[0].currentRow.y === 0) {
@@ -68,7 +99,7 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
    }
  
    private _createNewPage(): AtlasPage {
-@@ -465,6 +468,36 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -465,6 +471,66 @@ export class TextureAtlas implements ITextureAtlas {
      return this._config.colors.contrastCache;
    }
  
@@ -102,10 +133,40 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
 +    }
 +  }
 +
++  /**
++   * Orca: where to draw a wide glyph so it fills and centers in its cells. Leaves the context on
++   * the alphabetic baseline, at the scaled size when the glyph grows; undefined draws it upstream's
++   * way. Ligatures are excluded because they span more cells than their first character.
++   */
++  private _fitWideGlyph(chars: string, chWidth: number, fontStyle: string, fontWeight: FontWeight, padding: number): { x: number, y: number } | undefined {
++    if (!this._config.fitWideGlyphs || chWidth < 2 || chWidth !== this._unicodeService.wcwidth(chars.codePointAt(0) ?? 0)) {
++      return undefined;
++    }
++    const ctx = this._tmpCtx;
++    const anchorAscent = ctx.measureText('W').actualBoundingBoxAscent;
++    ctx.textBaseline = 'alphabetic';
++    // How far the alphabetic baseline sits above the anchor upstream draws glyphs at.
++    const baselineRise = anchorAscent - ctx.measureText('W').actualBoundingBoxAscent;
++    // A device pixel of margin keeps antialiased edges out of the neighbouring rows.
++    const fit = this._wideGlyphFitter.fit(chars, {
++      span: chWidth * this._config.deviceCellWidth,
++      ascent: this._config.deviceCharHeight - baselineRise - 1,
++      descent: baselineRise - 1
++    }, `${fontStyle} ${fontWeight}`, text => ctx.measureText(text));
++    if (!fit) {
++      ctx.textBaseline = TEXT_BASELINE;
++      return undefined;
++    }
++    if (fit.scale !== 1) {
++      ctx.font = `${fontStyle} ${fontWeight} ${this._config.fontSize * this._config.devicePixelRatio * fit.scale}px ${this._config.fontFamily}`;
++    }
++    return { x: padding + fit.offset, y: padding + this._config.deviceCharHeight - baselineRise + fit.shift };
++  }
++
    private _drawToCache(codeOrChars: number | string, bg: number, fg: number, ext: number, restrictToCellHeight: boolean, domContainer: HTMLElement | undefined): IRasterizedGlyph {
      const chars = typeof codeOrChars === 'number' ? String.fromCharCode(codeOrChars) : codeOrChars;
  
-@@ -536,6 +569,7 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -536,6 +602,7 @@ export class TextureAtlas implements ITextureAtlas {
      const fontStyle = italic ? 'italic' : '';
      this._tmpCtx.font =
        `${fontStyle} ${fontWeight} ${this._config.fontSize * this._config.devicePixelRatio}px ${this._config.fontFamily}`;
@@ -113,6 +174,48 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
      this._tmpCtx.textBaseline = TEXT_BASELINE;
  
      const powerlineGlyph = chars.length === 1 && isPowerlineGlyph(chars.charCodeAt(0));
+@@ -565,6 +632,10 @@ export class TextureAtlas implements ITextureAtlas {
+       chWidth = this._unicodeService.getStringCellWidth(codeOrChars);
+     }
+ 
++    const wideGlyph = customGlyph ? undefined : this._fitWideGlyph(chars, chWidth, fontStyle, fontWeight, padding);
++    const glyphX = wideGlyph?.x ?? padding;
++    const glyphY = wideGlyph?.y ?? padding + this._config.deviceCharHeight;
++
+     // Draw underline
+     if (underline) {
+       this._tmpCtx.save();
+@@ -716,7 +787,7 @@ export class TextureAtlas implements ITextureAtlas {
+             this._tmpCtx.clip(clipRegion);
+             this._tmpCtx.lineWidth = this._config.devicePixelRatio * 3;
+             this._tmpCtx.strokeStyle = backgroundColor.css;
+-            this._tmpCtx.strokeText(chars, padding, padding + this._config.deviceCharHeight);
++            this._tmpCtx.strokeText(chars, glyphX, glyphY);
+             this._tmpCtx.restore();
+           }
+         }
+@@ -737,7 +808,7 @@ export class TextureAtlas implements ITextureAtlas {
+ 
+     // Draw the character
+     if (!customGlyph) {
+-      this._tmpCtx.fillText(chars, padding, padding + this._config.deviceCharHeight);
++      this._tmpCtx.fillText(chars, glyphX, glyphY);
+     }
+ 
+     // If this character is underscore and beyond the cell bounds, shift it up until it is visible
+diff --git a/src/Types.ts b/src/Types.ts
+index bfd6fd76cebe8f55dce7bfad5406d4f7cd184320..dc044a2f60a500e6cfc80df2ebd6b785f45cf012 100644
+--- a/src/Types.ts
++++ b/src/Types.ts
+@@ -53,6 +53,8 @@ export interface ICharAtlasConfig {
+   allowTransparency: boolean;
+   drawBoldTextInBrightColors: boolean;
+   minimumContrastRatio: number;
++  /** Orca: enlarge and center wide glyphs narrower than their cells. */
++  fitWideGlyphs?: boolean;
+   colors: IColorSet;
+ }
+ 
 diff --git a/src/WebglRenderer.ts b/src/WebglRenderer.ts
 index a951efba5c75e82735cd39b6b22c4b5d5fad5928..e7f80c3a8c14dd65a16a97f1d17e3da1d65ed8bf 100644
 --- a/src/WebglRenderer.ts
@@ -129,3 +232,140 @@ index a951efba5c75e82735cd39b6b22c4b5d5fad5928..e7f80c3a8c14dd65a16a97f1d17e3da1
        merged = true;
        this._clearModel(true);
        this._updateModel(0, this._terminal.rows - 1);
+diff --git a/src/WideGlyphFit.ts b/src/WideGlyphFit.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..fbd9855c62cbfbdab1fa867269f2860d46c89fbd
+--- /dev/null
++++ b/src/WideGlyphFit.ts
+@@ -0,0 +1,131 @@
++/**
++ * Copyright (c) 2026 The xterm.js authors. All rights reserved.
++ * @license MIT
++ */
++
++// Orca: sizes and centers wide glyphs whose fallback face leaves them narrower than their cells.
++// The WebGL addon cannot import new core files, so it ships a byte-identical copy; keep this file
++// import-free and limited to erasable TypeScript so Orca can unit test both copies as installed.
++
++/** Scripts a terminal font stack draws from one fallback face, so one scale keeps a line even. */
++export type WideGlyphScript = 'hangul' | 'han' | 'kana';
++
++// The script's scale and baseline shift must fit every glyph of the face: sample its extremes.
++const SCRIPT_SAMPLES: Record<WideGlyphScript, string> = {
++  hangul: '가갈뷁힣ㅎ',
++  han: '中國鬱龍語',
++  kana: 'あガぽヅカ'
++};
++
++export function getWideGlyphScript(code: number): WideGlyphScript | undefined {
++  if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x1100 && code <= 0x115F) ||
++    (code >= 0x3130 && code <= 0x318F) || (code >= 0xA960 && code <= 0xA97F)) {
++    return 'hangul';
++  }
++  if ((code >= 0x3040 && code <= 0x30FF) || (code >= 0x31F0 && code <= 0x31FF)) {
++    return 'kana';
++  }
++  if ((code >= 0x3400 && code <= 0x4DBF) || (code >= 0x4E00 && code <= 0x9FFF) ||
++    (code >= 0xF900 && code <= 0xFAFF) || (code >= 0x20000 && code <= 0x3FFFF)) {
++    return 'han';
++  }
++  return undefined;
++}
++
++/** The space a wide glyph may fill, measured from the alphabetic baseline it is drawn on. */
++export interface IWideGlyphBox {
++  /** Width of the cells the glyph occupies. */
++  span: number;
++  /** Room above the baseline, up to the top of the primary font's line box. */
++  ascent: number;
++  /** Room below the baseline, down to the bottom of the primary font's line box. */
++  descent: number;
++}
++
++export interface IWideGlyphFit {
++  /** Font size multiplier; 1 keeps the terminal font size. */
++  scale: number;
++  /** Space left of the scaled glyph that centers it in its span. */
++  offset: number;
++  /** How far to lower the baseline so the scaled ink stays inside the line box. */
++  shift: number;
++}
++
++/** The subset of TextMetrics the fit reads, measured at the alphabetic baseline. */
++export interface IWideGlyphMetrics {
++  width: number;
++  actualBoundingBoxAscent: number;
++  actualBoundingBoxDescent: number;
++}
++
++interface IInkExtent {
++  width: number;
++  ascent: number;
++  descent: number;
++}
++
++function inkExtent(metrics: IWideGlyphMetrics): IInkExtent {
++  return { width: metrics.width, ascent: metrics.actualBoundingBoxAscent, descent: metrics.actualBoundingBoxDescent };
++}
++
++/** Largest scale that keeps `ink` within the span and the line box's full height; below 1 when it cannot fit. */
++function maxScale(ink: IInkExtent, box: IWideGlyphBox): number {
++  const height = ink.ascent + ink.descent;
++  return Math.min(box.span / ink.width, height > 0 ? (box.ascent + box.descent) / height : Infinity);
++}
++
++/** The smallest baseline move that keeps `ink` at `scale` inside the line box. */
++function baselineShift(ink: IInkExtent, scale: number, box: IWideGlyphBox): number {
++  return Math.min(Math.max(0, ink.ascent * scale - box.ascent), box.descent - ink.descent * scale);
++}
++
++export class WideGlyphFitter {
++  private readonly _faces = new Map<string, { scale: number, ink: IInkExtent }>();
++
++  /**
++   * Fits a glyph that occupies exactly the cells of its first code point. `measure` reports the
++   * unscaled font; `fontKey` separates font variants. Undefined when the glyph already fills its
++   * span. Listed scripts grow as far as the span and line box allow, lowering the baseline only
++   * once the line box's ascent runs out; other glyphs only center.
++   */
++  public fit(chars: string, box: IWideGlyphBox, fontKey: string, measure: (text: string) => IWideGlyphMetrics): IWideGlyphFit | undefined {
++    const glyph = inkExtent(measure(chars));
++    if (!(glyph.width > 0) || glyph.width >= box.span) {
++      return undefined;
++    }
++    const script = getWideGlyphScript(chars.codePointAt(0) ?? 0);
++    const face = script && this._measureFace(script, box, fontKey, measure);
++    if (!face || face.scale <= 1) {
++      return { scale: 1, offset: (box.span - glyph.width) / 2, shift: 0 };
++    }
++    // Also bound by the glyph itself: a code point the samples miss may come from another face.
++    // Never shrinks: a glyph taller than the line box keeps its size and overflows it, as unfitted.
++    const scale = Math.max(1, Math.min(face.scale, maxScale(glyph, box)));
++    // The face's shift, not the glyph's, keeps every glyph of the face on one baseline; it only
++    // ever lowers, so an overflowing glyph never rises above where it draws unfitted.
++    const shift = Math.max(0, Math.min(
++      Math.max(baselineShift(face.ink, scale, box), glyph.ascent * scale - box.ascent),
++      box.descent - glyph.descent * scale
++    ));
++    return { scale, offset: (box.span - glyph.width * scale) / 2, shift };
++  }
++
++  private _measureFace(script: WideGlyphScript, box: IWideGlyphBox, fontKey: string, measure: (text: string) => IWideGlyphMetrics): { scale: number, ink: IInkExtent } {
++    const key = `${fontKey}|${script}|${box.span}|${box.ascent}|${box.descent}`;
++    let face = this._faces.get(key);
++    if (!face) {
++      const ink: IInkExtent = { width: 0, ascent: -Infinity, descent: -Infinity };
++      for (const sample of SCRIPT_SAMPLES[script]) {
++        const metrics = measure(sample);
++        if (metrics.width > 0) {
++          ink.width = Math.max(ink.width, metrics.width);
++          ink.ascent = Math.max(ink.ascent, metrics.actualBoundingBoxAscent);
++          ink.descent = Math.max(ink.descent, metrics.actualBoundingBoxDescent);
++        }
++      }
++      face = { scale: ink.width > 0 ? maxScale(ink, box) : 1, ink };
++      this._faces.set(key, face);
++    }
++    return face;
++  }
++}

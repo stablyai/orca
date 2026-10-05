@@ -75,6 +75,7 @@ export function buildDefaultSettings(args: {
     // Why on: the addon is lazy-loaded off the critical path and only creates
     // canvas layers once a pane receives an image; parser/decoder setup still has overhead.
     terminalInlineImages: true,
+    terminalFitWideGlyphs: true,
     terminalCursorStyle: 'block',
     terminalCursorStyleDefaultedToBlock: true,
     terminalCursorBlink: true,
