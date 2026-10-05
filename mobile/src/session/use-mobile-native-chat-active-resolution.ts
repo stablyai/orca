@@ -1,6 +1,16 @@
 import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
-import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
+import {
+  conversationAddressKey,
+  type TerminalConversationSelection
+} from '../../../src/shared/terminal-conversation-identity'
+import type { ConversationModelReport } from '../../../src/shared/terminal-conversation-model-report'
+import {
+  resolveMobileNativeChat,
+  resolveMobileNativeChatFileSessionId,
+  selectMobileTerminalConversation,
+  type MobileNativeChatTab
+} from './mobile-native-chat-eligibility'
 import { useMobileSessionViewMode } from './use-mobile-session-view-mode'
 
 export function useMobileNativeChatActiveResolution(args: {
@@ -20,6 +30,9 @@ export function useMobileNativeChatActiveResolution(args: {
   activeChatSessionId: string | null
   activeChatStructured: boolean
   activeChatResolution: ReturnType<typeof resolveMobileNativeChat>
+  /** The model the active tab's conversation reports, and which evidence supplied it. */
+  activeConversation: TerminalConversationSelection | null
+  activeConversationModelReport: Omit<ConversationModelReport, 'model'> | undefined
   activeTabAgentWorking: boolean
   nativeChatStatus: MobileNativeChatTab['agentStatus'] | null
   sourceIdentity: string
@@ -45,6 +58,16 @@ export function useMobileNativeChatActiveResolution(args: {
   const showNativeChat = activeChatResolution != null
   const showNativeChatRef = useRef(showNativeChat)
   const activeChatAgent = activeChatResolution?.agent ?? null
+  const activeConversation = activeSessionTab
+    ? selectMobileTerminalConversation(activeSessionTab, activeChatAgent)
+    : null
+  const activeConversationModelReport = activeConversation
+    ? {
+        conversationKey: conversationAddressKey(activeConversation.address),
+        modelSource: activeConversation.modelSource,
+        fieldReportKey: activeConversation.fieldReportKey
+      }
+    : undefined
   const activeChatAgentRef = useRef<string | null>(activeChatAgent)
 
   useLayoutEffect(() => {
@@ -61,7 +84,10 @@ export function useMobileNativeChatActiveResolution(args: {
   const nativeChatStatus = activeChatResolution && !activeChatStructured ? activeTabStatus : null
   const routeKey = `${hostId}\0${worktreeId}\0${activeSessionTabId ?? ''}`
   const streamIdentity = `${routeKey}\0${activeChatSessionId ?? ''}\0${activeHandleRef.current ?? ''}`
-  const providerSessionId = activeSessionTab?.agentStatus?.providerSession?.id ?? ''
+  const providerSessionId =
+    (activeSessionTab?.type === 'terminal'
+      ? resolveMobileNativeChatFileSessionId(activeSessionTab)
+      : activeSessionTab?.agentStatus?.providerSession?.id) ?? ''
   const streamScopeKey = `${routeKey}\0${activeChatSessionId ?? providerSessionId}\0${activeHandleRef.current ?? ''}`
 
   return {
@@ -74,6 +100,8 @@ export function useMobileNativeChatActiveResolution(args: {
     activeChatSessionId,
     activeChatStructured,
     activeChatResolution,
+    activeConversation,
+    activeConversationModelReport,
     activeTabAgentWorking,
     nativeChatStatus,
     sourceIdentity: encodeNativeChatTranscriptIdentity([hostId, worktreeId]),

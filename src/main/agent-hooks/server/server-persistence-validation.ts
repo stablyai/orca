@@ -13,6 +13,7 @@ import {
   normalizeGrokPromptId
 } from '../../../shared/agent-hook-listener/listener-limits'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { readConversationIdentityFields } from '../../../shared/terminal-conversation-identity'
 import type { AgentHookAuthorityEvidence, EnrichedAgentHookEventPayload } from './server-types'
 import { isValidPaneKey, isValidPiProviderSessionOnly } from './server-status-identity'
 
@@ -151,6 +152,8 @@ export function sanitizeHydratedEntry(
       ? record.compactTrigger
       : undefined
   const turnStartedAt = record.turnStartedAt
+  // Why a malformed facet reads as absent: hydration then seeds it from the row's own address.
+  const conversation = readConversationIdentityFields(record.conversation) ?? undefined
   return {
     paneKey,
     agentPresence: readAgentProcessPresence(record.agentPresence),
@@ -176,7 +179,8 @@ export function sanitizeHydratedEntry(
     stateStartedAt,
     ...(typeof turnStartedAt === 'number' && Number.isFinite(turnStartedAt) && turnStartedAt > 0
       ? { turnStartedAt }
-      : {})
+      : {}),
+    ...(conversation ? { conversation } : {})
   }
 }
 

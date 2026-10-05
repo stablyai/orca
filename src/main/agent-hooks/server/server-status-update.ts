@@ -1,4 +1,5 @@
 import { transitionHookPresence } from '../../../shared/agent-hook-presence-transition'
+import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
 import {
   reconcileRemoteCodexState,
   markCodexLeadTurnInterrupted
@@ -19,15 +20,43 @@ import {
 import { isStaleGrokTurnEnd } from './server-grok-status-rules'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
+import {
+  nextConversationFacet,
+  type AgentConversationAddressEvidence
+} from './server-conversation-facet'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
+  /** For events that carry the provider's own report: only these may move the conversation facet. */
+  protected applyReportedStatus(
+    incoming: AgentHookEventPayload & { authorityRestartId?: string },
+    onAccepted?: () => void,
+    origin?: AgentStatusObservationOrigin,
+    observedAt?: number
+  ): EnrichedAgentHookEventPayload | undefined {
+    return this.applyNormalizedStatus(
+      incoming,
+      onAccepted,
+      origin,
+      observedAt,
+      undefined,
+      'reported'
+    )
+  }
+
   protected applyNormalizedStatus(
     incoming: AgentHookEventPayload & { authorityRestartId?: string },
     onAccepted?: () => void,
     origin: AgentStatusObservationOrigin = 'hook',
     observedAt?: number,
-    mutationBefore?: EnrichedAgentHookEventPayload
+    mutationBefore?: EnrichedAgentHookEventPayload,
+    // Why default carried: a caller that forgets cannot fake a provider report.
+    addressEvidence: AgentConversationAddressEvidence = 'carried'
   ): EnrichedAgentHookEventPayload | undefined {
+    // Why first: later steps copy earlier addresses into the payload, so only the raw input can say what was reported.
+    const reported =
+      addressEvidence === 'reported'
+        ? normalizeAgentProviderSession(incoming.providerSession)
+        : null
     const transitioned = transitionHookPresence(
       incoming,
       this.state.lastStatusByPaneKey.get(incoming.paneKey)
@@ -83,9 +112,11 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (terminalOwnedPayload.providerSessionOnly) {
       // Why: identity-only rows survive replay but must not emit prompt telemetry or a fabricated status.
       onAccepted?.()
+      const timed = this.attachStatusTiming(terminalOwnedPayload, now)
       const enriched = {
-        ...this.attachStatusTiming(terminalOwnedPayload, now),
-        observation: this.stampObservation(terminalOwnedPayload, origin, now)
+        ...timed,
+        observation: this.stampObservation(terminalOwnedPayload, origin, now),
+        conversation: nextConversationFacet(previous?.conversation, previous, timed, reported, now)
       }
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
@@ -182,7 +213,16 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     }
     const effectivePayload = latch.event
     if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
-      const held = withHeldChildWaitMainAgent(previous, effectivePayload)
+      const heldRow = withHeldChildWaitMainAgent(previous, effectivePayload)
+      // Why no report: a held row keeps the previous row's address and model whatever the event named.
+      const heldConversation =
+        heldRow === previous
+          ? previous.conversation
+          : nextConversationFacet(previous.conversation, previous, heldRow, null, now)
+      const held =
+        heldConversation === heldRow.conversation
+          ? heldRow
+          : { ...heldRow, conversation: heldConversation }
       // Why: a child's prompt leaves the main agent running, so the held row takes its `mainAgent` and
       // must take the same event's background evidence; a main agent's own prompt blocks it, so not there.
       if (previous.toolAgentId) {
@@ -219,9 +259,11 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       runningNonAgentTask === undefined
         ? unpairedPayload
         : { ...unpairedPayload, claudeRunningNonAgentTask: runningNonAgentTask }
+    const timed = this.attachStatusTiming(pairedPayload, now, observedAt)
     const enriched = {
-      ...this.attachStatusTiming(pairedPayload, now, observedAt),
-      observation: this.stampObservation(pairedPayload, origin, observedAt ?? now)
+      ...timed,
+      observation: this.stampObservation(pairedPayload, origin, observedAt ?? now),
+      conversation: nextConversationFacet(previous?.conversation, previous, timed, reported, now)
     }
     if (
       typeof enriched.payload.turnCompletedAt === 'number' &&

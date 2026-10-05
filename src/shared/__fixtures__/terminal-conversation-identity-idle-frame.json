@@ -1,0 +1,53 @@
+{
+  "worktree": "wt-1",
+  "publicationEpoch": "headless:fixture",
+  "snapshotVersion": 1,
+  "activeGroupId": "headless-terminals:wt-1",
+  "activeTabId": "tab-1::11111111-1111-4111-8111-111111111111",
+  "activeTabType": "terminal",
+  "tabGroups": [
+    {
+      "id": "headless-terminals:wt-1",
+      "activeTabId": "tab-1",
+      "tabOrder": [
+        "tab-1"
+      ]
+    }
+  ],
+  "tabs": [
+    {
+      "type": "terminal",
+      "id": "tab-1::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab-1",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "Say hi | my-repo",
+      "ptyId": "pty-agent",
+      "parentLayout": {
+        "root": {
+          "type": "leaf",
+          "leafId": "11111111-1111-4111-8111-111111111111"
+        },
+        "activeLeafId": "11111111-1111-4111-8111-111111111111",
+        "expandedLeafId": null,
+        "ptyIdsByLeafId": {
+          "11111111-1111-4111-8111-111111111111": "pty-agent"
+        }
+      },
+      "isActive": true,
+      "status": "ready",
+      "terminal": "terminal-fixture",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "ac1f6b90-2f77-4f0e-9c5e-1d2f6a4b8c31",
+          "transcriptPath": "/fixture/rollout.jsonl"
+        },
+        "capturedAt": 1791108000000,
+        "source": "live"
+      },
+      "conversationOfferedWithoutStatus": true
+    }
+  ],
+  "clientHostedPagesUnreconciled": true
+}

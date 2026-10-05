@@ -33,16 +33,18 @@ function NativeChatBridgeView({
   readTerminalScreen,
   contextMenuActions
 }: Exclude<NativeChatViewProps, { mode: 'structured' }>): React.JSX.Element {
-  const { entry: agentStatusEntry, paneKey } = useNativeChatStatusEntry(
-    terminalTabId,
-    preferredPaneKey
-  )
+  const {
+    entry: agentStatusEntry,
+    paneKey,
+    conversation
+  } = useNativeChatStatusEntry(terminalTabId, preferredPaneKey)
   return (
     <NativeChatSessionGate
       paneKey={paneKey}
       launchAgent={launchAgent}
       resolvedAgent={resolvedAgent}
       agentStatusEntry={agentStatusEntry}
+      conversation={conversation}
       ptyId={targetPtyId}
     >
       {(resolution) => (

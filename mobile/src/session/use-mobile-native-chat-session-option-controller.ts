@@ -9,6 +9,7 @@ import type {
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
+import type { ConversationModelReport } from '../../../src/shared/terminal-conversation-model-report'
 import {
   useMobileNativeChatSessionOptions,
   type MobileNativeChatSessionOptionsController
@@ -25,6 +26,7 @@ export function useMobileNativeChatSessionOptionController(args: {
   isWorking: boolean
   reportedModel: string | null
   modelSwitchCommand?: string
+  modelReport?: Omit<ConversationModelReport, 'model'>
   structured: {
     conversationCommands?: readonly AgentSessionConversationCommand[]
     optionPickerRequest?: { id: string; sequence: number } | null
@@ -77,6 +79,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     agent: activeChatStructured ? null : agent,
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
     reportedModel,
+    modelReport: args.modelReport,
     dispatchCommand,
     onAgentPicker: handleAgentPicker
   })

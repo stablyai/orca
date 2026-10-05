@@ -204,13 +204,20 @@ export function buildSanitizedTabsByWorktree(
 ): WorkspaceSessionState['tabsByWorktree'] {
   // Why: strip transient pendingActivationSpawn — session:set persists without Zod re-parse, so a stale flag would drop the first PTY spawn on restart.
   // Same for the recovery ledger: it describes a mounted pane's in-flight heal, so a persisted one would refuse the first recovery after restart.
+  // And the host conversation mirror: the host republishes it on every frame, so a stored copy could only be stale.
   return Object.fromEntries(
     Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
       worktreeId,
       tabs.map((tab) => {
-        const { pendingActivationSpawn: _unused, recovery: _recovery, ...rest } = tab
+        const {
+          pendingActivationSpawn: _unused,
+          recovery: _recovery,
+          hostConversationByLeafId: _hostConversation,
+          ...rest
+        } = tab
         void _unused
         void _recovery
+        void _hostConversation
         return rest
       })
     ])

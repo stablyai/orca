@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
+import { offeredConversationAgent } from '../../../src/shared/terminal-conversation-identity'
 import { useClipboardReader } from '../platform/clipboard'
 import { triggerSelection, triggerError } from '../platform/haptics'
 import { loadMobileNewTabAgentOptions } from './mobile-new-tab-agent-loader'
@@ -42,7 +43,9 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
   const clipboardContents = useClipboardReader().contents
   const agent =
     activeSessionTab && 'agentStatus' in activeSessionTab
-      ? (activeSessionTab.agentStatus?.agentType ?? nativeChatController.nativeChatAgent)
+      ? (activeSessionTab.agentStatus?.agentType ??
+        offeredConversationAgent(activeSessionTab) ??
+        nativeChatController.nativeChatAgent)
       : nativeChatController.nativeChatAgent
   const handlePaste = useMobileTerminalPaste({
     client,

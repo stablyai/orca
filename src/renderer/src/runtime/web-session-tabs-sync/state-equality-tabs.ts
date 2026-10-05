@@ -4,9 +4,33 @@ import type {
   BrowserWorkspace
 } from '../../../../shared/browser-workspace-types'
 import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { HostLeafConversation, TerminalTab } from '../../../../shared/terminal-tab-types'
+import { terminalConversationIdentityEqual } from '../../../../shared/terminal-conversation-identity'
 import { sameRuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
 import { sameStringArray } from './state-equality-core'
+
+function hostConversationsEqual(
+  a: Readonly<Record<string, HostLeafConversation>> | undefined,
+  b: Readonly<Record<string, HostLeafConversation>> | undefined
+): boolean {
+  if (a === b) {
+    return true
+  }
+  const leftKeys = Object.keys(a ?? {})
+  if (leftKeys.length !== Object.keys(b ?? {}).length) {
+    return false
+  }
+  return leftKeys.every((leafId) => {
+    const left = a?.[leafId]
+    const right = b?.[leafId]
+    return (
+      !!left &&
+      !!right &&
+      left.offeredWithoutStatus === right.offeredWithoutStatus &&
+      terminalConversationIdentityEqual(left.identity, right.identity)
+    )
+  })
+}
 
 export function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
   return (
@@ -28,7 +52,8 @@ export function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.generation === b.generation &&
     a.shellOverride === b.shellOverride &&
     a.launchAgent === b.launchAgent &&
-    a.pendingActivationSpawn === b.pendingActivationSpawn
+    a.pendingActivationSpawn === b.pendingActivationSpawn &&
+    hostConversationsEqual(a.hostConversationByLeafId, b.hostConversationByLeafId)
   )
 }
 

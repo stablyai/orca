@@ -1,5 +1,6 @@
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { TerminalConversationIdentity } from '../../../src/shared/terminal-conversation-identity'
 
 export type TerminalRecord = {
   handle: string
@@ -21,6 +22,8 @@ export type MobileTerminalSessionTab = {
   status?: 'pending-handle' | 'ready'
   terminal: string | null
   agentStatus?: AgentStatusEntry | null
+  conversationIdentity?: TerminalConversationIdentity
+  conversationOfferedWithoutStatus?: true
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
   launchDraftCreatedAt?: number
@@ -132,6 +135,9 @@ function mobileSessionTabEqual(
         a.launchDraft === b.launchDraft &&
         a.launchDraftCreatedAt === b.launchDraftCreatedAt &&
         JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
+        // Why: an identity- or offer-only frame must reach chat; no status byte moves with it.
+        JSON.stringify(a.conversationIdentity) === JSON.stringify(b.conversationIdentity) &&
+        a.conversationOfferedWithoutStatus === b.conversationOfferedWithoutStatus &&
         mobileTerminalThemesEqual(a.terminalTheme, b.terminalTheme)
       )
     case 'markdown':

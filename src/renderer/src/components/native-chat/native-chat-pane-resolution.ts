@@ -1,6 +1,12 @@
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import type { TerminalConversationSelection } from '../../../../shared/terminal-conversation-identity'
+import type { HostLeafConversation } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isNativeChatSupportedAgent } from './native-chat-availability'
+import {
+  offeredHostLeafAgent,
+  selectHostLeafConversation
+} from './native-chat-leaf-conversation-identity'
 
 /** Inputs that resolve the active pane to the agent/session/pty triple the
  *  native-chat data + input layers need. Kept as a plain shape (not the live
@@ -23,6 +29,8 @@ export type NativeChatPaneResolutionInput = {
   /** Agent identity resolved from trusted terminal title/foreground signals.
    *  Fallback only: launch metadata and hook status remain authoritative. */
   resolvedAgent?: TuiAgent | null
+  /** A paired host's conversation for this exact leaf, when it published one. */
+  conversation?: HostLeafConversation
 }
 
 export type NativeChatPaneResolution = {
@@ -35,6 +43,8 @@ export type NativeChatPaneResolution = {
   transcriptPath: string | null
   ptyId: string | null
   paneKey: string
+  /** Whether the address came from the host's field (`address`) or the legacy status read. */
+  authority: TerminalConversationSelection['authority']
 }
 
 /** Resolve the active pane to `{ agent, sessionId, ptyId, paneKey }`, or null
@@ -46,15 +56,21 @@ export type NativeChatPaneResolution = {
 export function resolveNativeChatSession(
   input: NativeChatPaneResolutionInput
 ): NativeChatPaneResolution | null {
-  const agent = input.agentStatusEntry?.agentType ?? input.launchAgent ?? input.resolvedAgent
+  const agent =
+    input.agentStatusEntry?.agentType ??
+    offeredHostLeafAgent(input.conversation, input.agentStatusEntry) ??
+    input.launchAgent ??
+    input.resolvedAgent
   if (!agent || !isNativeChatSupportedAgent(agent)) {
     return null
   }
+  const selection = selectHostLeafConversation(input.conversation, input.agentStatusEntry, agent)
   return {
     agent,
-    sessionId: input.agentStatusEntry?.providerSession?.id ?? null,
-    transcriptPath: input.agentStatusEntry?.providerSession?.transcriptPath ?? null,
+    sessionId: selection.address?.providerSession.id ?? null,
+    transcriptPath: selection.address?.providerSession.transcriptPath ?? null,
     ptyId: input.ptyId,
-    paneKey: input.paneKey
+    paneKey: input.paneKey,
+    authority: selection.authority
   }
 }

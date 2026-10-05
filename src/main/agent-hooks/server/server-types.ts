@@ -2,11 +2,24 @@ import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusli
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type {
   AgentStatusClearIpcPayload,
-  AgentStatusState
+  AgentStatusState,
+  AgentType
 } from '../../../shared/agent-status-types'
 import type { AgentStatusObservation } from '../../../shared/agent-status-observation'
 import type { AgentKind } from '../../../shared/telemetry-events'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
+import type { ConversationIdentityFields } from '../../../shared/terminal-conversation-identity'
+
+/** The conversation the store kept for a pane; changed only by a kept original provider report. */
+export type StoredAgentConversation = ConversationIdentityFields
+
+/** A pane's stored facet, the agent its row names now, and whether the row is a resume-only remnant. */
+export type StoredAgentConversationRead = {
+  facet: StoredAgentConversation
+  /** The row's current agent; a status-only write by another agent moves it but never the facet. */
+  rowAgent: AgentType | null
+  rowIsRemnant: boolean
+}
 
 // Why: server-side enrichment — receivedAt = latest event arrival, stateStartedAt = when the current state first appeared; extra fields ride the shared map untouched (it only writes/clears).
 export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
@@ -28,6 +41,8 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   restoredUnconfirmed?: true
   /** User-hidden resume identity retained solely for destructive liveness checks. */
   retainedForLiveness?: true
+  /** Status-independent conversation facet; `undefined` when never set (or a pre-upgrade row). */
+  conversation?: StoredAgentConversation
 }
 
 // `claudeRunningNonAgentTask` is persisted on purpose: it is the one child-work fact the row's

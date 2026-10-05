@@ -2,6 +2,12 @@ import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { isRuntimeOwnedSshTargetId } from '../../../src/shared/execution-host'
 import {
+  offeredConversationAgent,
+  selectTerminalConversation,
+  type TerminalConversationIdentity,
+  type TerminalConversationSelection
+} from '../../../src/shared/terminal-conversation-identity'
+import {
   isNativeChatSupportedAgent,
   nativeChatRequiresLocalTranscript
 } from '../../../src/shared/native-chat-agent-support'
@@ -30,11 +36,32 @@ export type MobileNativeChatTab = {
   type: string
   launchAgent?: string | null
   agentStatus?: AgentStatusEntry | null
+  /** The host's conversation for this terminal pane; see `selectMobileTerminalConversation`. */
+  conversationIdentity?: TerminalConversationIdentity
+  conversationOfferedWithoutStatus?: true
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
   launchDraftCreatedAt?: number
   sessionId?: string | null
   agent?: string | null
+}
+
+/** The agent evidence a terminal tab carries: a genuine status first, else an offered identity. */
+export function resolveMobileTerminalLiveAgent(tab: MobileNativeChatTab): string | null {
+  return tab.agentStatus?.agentType ?? offeredConversationAgent(tab)
+}
+
+/** One reading of a terminal tab's conversation, shared with the desktop's selector. */
+export function selectMobileTerminalConversation(
+  tab: MobileNativeChatTab,
+  agent: string | null | undefined
+): TerminalConversationSelection {
+  return selectTerminalConversation({
+    conversationIdentity: tab.conversationIdentity,
+    conversationOfferedWithoutStatus: tab.conversationOfferedWithoutStatus,
+    agentStatus: tab.agentStatus,
+    agent
+  })
 }
 
 /** Resolve a session tab to the transcript identity native chat needs, or
@@ -58,7 +85,7 @@ export function resolveMobileNativeChat(
   if (tab.type !== 'terminal') {
     return null
   }
-  const liveAgent = tab.agentStatus?.agentType ?? null
+  const liveAgent = resolveMobileTerminalLiveAgent(tab)
   const agent = liveAgent
     ? isNativeChatSupportedAgent(liveAgent)
       ? liveAgent
@@ -70,10 +97,11 @@ export function resolveMobileNativeChat(
   if (nativeChatRequiresLocalTranscript(agent) && !nativeChatTranscriptIsLocalReadable) {
     return null
   }
+  const address = selectMobileTerminalConversation(tab, agent).address
   return {
     agent,
-    sessionId: tab.agentStatus?.providerSession?.id ?? null,
-    transcriptPath: tab.agentStatus?.providerSession?.transcriptPath ?? null
+    sessionId: address?.providerSession.id ?? null,
+    transcriptPath: address?.providerSession.transcriptPath ?? null
   }
 }
 
@@ -92,7 +120,10 @@ export function resolveMobileNativeChatFileSessionId(
     return tab.sessionId ?? null
   }
   if (tab?.type === 'terminal') {
-    return tab.agentStatus?.providerSession?.id ?? null
+    return (
+      selectMobileTerminalConversation(tab, resolveMobileTerminalLiveAgent(tab) ?? tab.launchAgent)
+        .address?.providerSession.id ?? null
+    )
   }
   return null
 }

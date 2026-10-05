@@ -16,11 +16,13 @@ import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-sessio
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type {
-  AgentStatusEntry,
   AgentStatusIpcPayload,
   AgentStatusOrchestrationContext
 } from '../../shared/agent-status-types'
-import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
+import {
+  buildRuntimeMobileAgentStatus,
+  type RuntimeMobileAgentStatusBuild
+} from './runtime-mobile-agent-status-builder'
 import { FIRST_PANE_ID } from '../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -93,6 +95,8 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
       getProviderSessionRows: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey),
       getProviderSessionSnapshot: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
       getStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
+      getConversationIdentity: (paneKey, terminalHandle) =>
+        this.getAgentConversationForPaneFn?.(paneKey, terminalHandle),
       getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
       findPty: (worktreeId, tab, options) =>
         this.findPtyForMobileTerminalTab(worktreeId, tab, options),
@@ -117,7 +121,7 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
     terminalHandle: string | null,
     retained: RuntimeAgentRowSnapshot | null,
     getHookRowsForPane: (paneKey: string) => AgentStatusIpcPayload[]
-  ): { agentStatus: AgentStatusEntry } | Record<string, never> {
+  ): RuntimeMobileAgentStatusBuild {
     // Why display records: a phone status is presentation, so it shows the stale-working clear.
     const displayPty = pty ? this.getPtyDisplayRecord(pty) : null
     return buildRuntimeMobileAgentStatus(

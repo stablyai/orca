@@ -1,5 +1,11 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  HostLeafConversation,
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/terminal-tab-types'
+import { readTerminalConversationIdentity } from '../../../../shared/terminal-conversation-identity'
+import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { normalizeTerminalLayoutPtyOwnership } from '@/components/terminal-pane/terminal-layout-pty-ownership'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/pane-agent-owner'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-title-owner'
@@ -49,6 +55,32 @@ function retainPendingTerminalBindings(
     retained[surface.leafId] = priorPtyId
   }
   return retained
+}
+
+/** Per local leaf, the host's conversation members; keyed like mirrored status, so a pruned
+ *  duplicate surface maps onto the leaf that kept its PTY and that leaf's own surface wins. */
+function buildHostConversationByLeafId(
+  surfaces: readonly TerminalSurface[],
+  retainedSurfaceByPrunedLeafId: ReadonlyMap<string, TerminalSurface> | undefined
+): Record<string, HostLeafConversation> | undefined {
+  let byLeafId: Record<string, HostLeafConversation> | undefined
+  const ordered = [
+    ...surfaces.filter((surface) => !retainedSurfaceByPrunedLeafId?.has(surface.leafId)),
+    ...surfaces.filter((surface) => retainedSurfaceByPrunedLeafId?.has(surface.leafId))
+  ]
+  for (const surface of ordered) {
+    const leafId = retainedSurfaceByPrunedLeafId?.get(surface.leafId)?.leafId ?? surface.leafId
+    const identity = readTerminalConversationIdentity(surface.conversationIdentity)
+    if (identity === undefined || !isTerminalLeafId(leafId) || byLeafId?.[leafId]) {
+      continue
+    }
+    byLeafId ??= {}
+    byLeafId[leafId] = {
+      identity,
+      offeredWithoutStatus: surface.conversationOfferedWithoutStatus === true
+    }
+  }
+  return byLeafId
 }
 
 /** Constructs mirrored terminal tabs from the mobile session status payload, normalising Pi-compatible agent titles under launch ownership. */
@@ -119,6 +151,10 @@ export function buildMirroredTerminalTabs(
         }
       }
     }
+    const hostConversationByLeafId = buildHostConversationByLeafId(
+      surfaces,
+      retainedSurfaceByPrunedLeafId
+    )
     const launchAgent =
       activeSurface.launchAgent ?? surfaces.find((surface) => surface.launchAgent)?.launchAgent
     const ownerRecord = resolvePaneAgentOwnerRecord({
@@ -184,7 +220,8 @@ export function buildMirroredTerminalTabs(
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + index,
         // Why: launchAgent is host-owned lifecycle metadata; once the host omits it, don't resurrect stale startup intent.
-        ...(launchAgent ? { launchAgent } : {})
+        ...(launchAgent ? { launchAgent } : {}),
+        ...(hostConversationByLeafId ? { hostConversationByLeafId } : {})
       },
       hostTabId: parentTabId,
       ptyIds,

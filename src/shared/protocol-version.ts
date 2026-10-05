@@ -166,6 +166,10 @@ export const SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY =
 // repeating the host's whole bounded list on every title tick.
 export const SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY =
   'session-tabs.retirement-proof-delta.v1' as const
+// Why: a phone advertising this reads a terminal tab's published conversation field, so the host
+// stops folding that identity into a synthesized `done` status for it.
+export const TERMINAL_CONVERSATION_IDENTITY_CLIENT_CAPABILITY =
+  'session-tabs.conversation-identity.v1' as const
 export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
   'agent-session.session-boundary.v1' as const
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'

@@ -11,6 +11,7 @@ import {
 import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex-state'
 import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status-legacy-adapter'
 import { HYDRATE_MAX_AGE_MS, LAST_STATUS_FILE_VERSION } from './server-constants'
+import { seedConversationFromLegacyRow } from './server-conversation-facet'
 import type { LastStatusFile } from './server-types'
 import {
   authorityCommitmentsMatch,
@@ -100,6 +101,13 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
           prunedLegacyClaudeSubagents +=
             (entry.payload.subagents?.length ?? 0) - (hydratedPayload.subagents?.length ?? 0)
           entry.payload = hydratedPayload
+        }
+        if (entry.conversation === undefined) {
+          // Why: a row persisted before facets existed still names its conversation at the top level.
+          const seeded = seedConversationFromLegacyRow(entry)
+          if (seeded) {
+            entry.conversation = seeded
+          }
         }
         if (entry.payload.state !== 'done') {
           // Why: the terminal transition may have fired while no receiver was up; restore as unconfirmed, never as live truth.

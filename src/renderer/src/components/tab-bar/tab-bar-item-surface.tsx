@@ -1,5 +1,10 @@
 import React from 'react'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import {
+  hostLeafConversation,
+  offeredHostLeafAgent,
+  soleHostConversationLeafId
+} from '../native-chat/native-chat-leaf-conversation-identity'
 import { resolveNativeChatTabAgentEvidence } from './native-chat-tab-agent-evidence'
 import type { DropIndicator } from './drop-indicator'
 import {
@@ -111,6 +116,14 @@ export function renderTabBarItems({
       // Key the live-agent lookup by the backing terminal tab id: agent-status pane keys use it, not the unified tab id.
       const detectedAgent = tabAgentTypesByTabId[terminalTab.id] ?? null
       const tabWideFallbackSafe = nativeChatTabWideFallbackUnsafeTabsById[terminalTab.id] !== true
+      // Why gated like launchAgent: a split tab's sole mirrored leaf need not be the one chat opens.
+      const conversationAgent =
+        tabWideFallbackSafe && !detectedAgent
+          ? offeredHostLeafAgent(
+              hostLeafConversation(terminalTab, soleHostConversationLeafId(terminalTab)),
+              undefined
+            )
+          : null
       canToggleViewMode =
         unifiedTabForItem !== undefined &&
         canToggleNativeChat({
@@ -118,6 +131,7 @@ export function renderTabBarItems({
           contentType: 'terminal',
           launchAgent: tabWideFallbackSafe ? terminalTab.launchAgent : null,
           detectedAgent,
+          conversationAgent,
           resolvedAgent: tabWideFallbackSafe ? resolvedAgent : null,
           nativeChatTranscriptIsLocalReadable,
           isChatViewMode: unifiedTabForItem.viewMode === 'chat'

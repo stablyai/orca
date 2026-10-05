@@ -10,10 +10,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
-import {
-  readMobileConversationIdentityCarrier,
-  stripMobileConversationIdentityCarrier
-} from '../../mobile-conversation-identity-carrier'
+import { foldConversationIdentityForLegacyPhones } from './session-tab-legacy-phone-conversation-fold'
 import { supportsStructuredAgentSessions } from './structured-agent-session-policy'
 
 type SessionTabsPayload = RuntimeMobileSessionTabsResult | RuntimeMobileSessionTabsSnapshot
@@ -58,7 +55,7 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
   clientKind: 'mobile' | 'runtime' | undefined,
   clientCapabilities: readonly RuntimeCapability[] | undefined
 ): TPayload {
-  const resolved = resolveConversationIdentityCarriers(payload, clientKind === 'mobile')
+  const resolved = foldConversationIdentityForLegacyPhones(payload, clientKind, clientCapabilities)
   const structuredVisible = supportsStructuredAgentSessions({ clientKind, clientCapabilities })
   let projected: TPayload
   if (clientKind === 'mobile') {
@@ -99,30 +96,6 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
     return legacyTab
   })
   return changed ? ({ ...projected, tabs } as TPayload) : projected
-}
-
-/**
- * Every audience loses the private carrier on a new tab; only a phone with no genuine status gets
- * it as `agentStatus`, because paired desktops replace their own completion rows with what they receive.
- */
-function resolveConversationIdentityCarriers<TPayload extends SessionTabsPayload>(
-  payload: TPayload,
-  foldForMobile: boolean
-): TPayload {
-  if (!payload.tabs.some((tab) => readMobileConversationIdentityCarrier(tab))) {
-    return payload
-  }
-  const tabs = payload.tabs.map((tab) => {
-    const carrier = readMobileConversationIdentityCarrier(tab)
-    if (!carrier) {
-      return tab
-    }
-    const stripped = stripMobileConversationIdentityCarrier(tab)
-    return foldForMobile && stripped.type === 'terminal' && !stripped.agentStatus
-      ? { ...stripped, agentStatus: carrier }
-      : stripped
-  })
-  return { ...payload, tabs }
 }
 
 function projectUnsupportedAgentSessionTabTitles<TPayload extends SessionTabsPayload>(

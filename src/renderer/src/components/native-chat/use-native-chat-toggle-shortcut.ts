@@ -11,6 +11,11 @@ import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId
 } from './native-chat-leaf-routing'
+import {
+  hostLeafConversation,
+  offeredHostLeafAgent,
+  soleHostConversationLeafId
+} from './native-chat-leaf-conversation-identity'
 
 export function resolveNativeChatToggleShortcutDetectedAgent({
   terminalTabId,
@@ -76,6 +81,16 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
         terminalLayout,
         agentStatusByPaneKey: state.agentStatusByPaneKey
       })
+      const conversationLeafId =
+        resolveNativeChatActiveLayoutLeafId(terminalLayout) ??
+        (tabWideFallbackSafe ? soleHostConversationLeafId(terminalTab) : undefined)
+      const conversationAgent =
+        detectedAgent || !conversationLeafId
+          ? null
+          : offeredHostLeafAgent(
+              hostLeafConversation(terminalTab, conversationLeafId),
+              state.agentStatusByPaneKey[`${tab.entityId}:${conversationLeafId}`]
+            )
       const titleFallbackAgent =
         tabWideFallbackSafe && terminalTab
           ? resolveNativeChatTabAgentEvidence(terminalTab, tab)
@@ -86,6 +101,7 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
           contentType: 'terminal',
           launchAgent: detectedAgent || !tabWideFallbackSafe ? null : terminalTab?.launchAgent,
           detectedAgent,
+          conversationAgent,
           resolvedAgent: detectedAgent ? null : titleFallbackAgent,
           nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
             getConnectionIdFromState(state, worktreeId)

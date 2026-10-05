@@ -1,4 +1,5 @@
 import type { AiVaultSessionTitle } from './ai-vault-session-title'
+import type { TerminalConversationIdentity } from './terminal-conversation-identity'
 import type { TuiAgent } from './tui-agent'
 
 /** Why recovery reasons live in the shared row type: the tab row carries the
@@ -110,6 +111,16 @@ export type TerminalTab = {
    *  legitimate recovery after restart. Stripped exactly like
    *  `pendingActivationSpawn` (buildSanitizedTabsByWorktree). */
   recovery?: TerminalTabRecoveryLedger
+  /** Transient mirror of a paired host's per-leaf conversation identity. Never persisted (rebuilt
+   *  from every host frame; stripped like `recovery`) and never merged into agent status. A leaf
+   *  key is absent when the host omitted the field. */
+  hostConversationByLeafId?: Record<string, HostLeafConversation>
+}
+
+export type HostLeafConversation = {
+  identity: TerminalConversationIdentity
+  /** The host offered the identity on this statusless leaf as agent evidence and address. */
+  offeredWithoutStatus: boolean
 }
 
 export type TerminalPaneSplitDirection = 'vertical' | 'horizontal'

@@ -2,6 +2,7 @@ import type { AgentStatusEntry } from './agent-status-types'
 import type { BrowserCertificateFailure, BrowserLoadError } from './browser-workspace-types'
 import type { RuntimeBrowserPlacement } from './runtime-browser-placement'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
+import type { TerminalConversationIdentity } from './terminal-conversation-identity'
 import type { TerminalLayoutSnapshot } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
 
@@ -110,9 +111,22 @@ export type RuntimeMobileSessionSnapshotTab =
   | RuntimeMobileSessionBrowserTab
   | RuntimeMobileSessionAgentTab
 
+/** Host-published only: the renderer snapshot input cannot carry these, so the projection is their sole producer. */
+export type RuntimeMobileSessionTerminalConversationFields = {
+  /** Absent when the host holds no conversation it publishes for this pane (or is an old host). */
+  conversationIdentity?: TerminalConversationIdentity
+  /** True-only: the tab has no status and the host offers its identity as agent evidence and address. */
+  conversationOfferedWithoutStatus?: true
+}
+
 export type RuntimeMobileSessionTerminalClientTab =
-  | (RuntimeMobileSessionTerminalTab & { status: 'pending-handle'; terminal: null })
-  | (RuntimeMobileSessionTerminalTab & { status: 'ready'; terminal: string })
+  | (RuntimeMobileSessionTerminalTab &
+      RuntimeMobileSessionTerminalConversationFields & {
+        status: 'pending-handle'
+        terminal: null
+      })
+  | (RuntimeMobileSessionTerminalTab &
+      RuntimeMobileSessionTerminalConversationFields & { status: 'ready'; terminal: string })
 
 export type RuntimeMobileSessionClientTab =
   | RuntimeMobileSessionTerminalClientTab

@@ -9,6 +9,7 @@ import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
 import { selectUnifiedTerminalTabFields } from './terminal-unified-tab-lookup'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import { selectOfferedHostConversationAgentsByLeaf } from '../native-chat/native-chat-leaf-conversation-identity'
 import {
   nativeChatLaunchAgentForLeaf,
   resolveNativeChatLeafRoute,
@@ -62,6 +63,11 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
   const terminalTab = useAppStore((store) =>
     getCachedTerminalTabForWorktree(store.tabsByWorktree, worktreeId, tabId)
+  )
+  // Why from the tab, not a new subscription: a leaf with a status has a detected agent, which wins.
+  const offeredConversationAgentByLeaf = useMemo(
+    () => selectOfferedHostConversationAgentsByLeaf(terminalTab),
+    [terminalTab]
   )
   const restoredLayout = useMemo(
     () => (terminalTab ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab) : savedLayout),
@@ -133,12 +139,15 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
         contentType: 'terminal',
         launchAgent: detectedAgent ? null : launchAgent,
         detectedAgent,
+        conversationAgent:
+          detectedAgent || !leafId ? null : (offeredConversationAgentByLeaf[leafId] ?? null),
         resolvedAgent: detectedAgent ? null : resolveTitleAgentForLeaf(leafId),
         nativeChatTranscriptIsLocalReadable
       })
     },
     [
       tabAgentTypeByLeaf,
+      offeredConversationAgentByLeaf,
       nativeChatEnabled,
       nativeChatTranscriptIsLocalReadable,
       terminalTab?.launchAgent,

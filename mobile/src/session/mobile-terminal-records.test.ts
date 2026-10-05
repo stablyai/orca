@@ -143,6 +143,46 @@ describe('mobile terminal records', () => {
     expect(mobileSessionTabsEqual([seeded], [{ ...seeded, launchDraftCreatedAt: 2 }])).toBe(false)
   })
 
+  it('treats a conversation identity or offer change as a session-tab change', () => {
+    // Why: neither member moves a status byte, so the route would keep the stale tab.
+    const base: MobileTerminalSessionTab = {
+      type: 'terminal',
+      id: 'term-1::leaf-1',
+      parentTabId: 'term-1',
+      leafId: 'leaf-1',
+      title: 'Say hi | my-repo',
+      status: 'ready',
+      terminal: 'pty-1',
+      isActive: true
+    }
+    const identity = {
+      agentType: 'codex',
+      providerSession: { key: 'session_id' as const, id: 'S' },
+      capturedAt: 1,
+      source: 'live'
+    }
+    const withIdentity: MobileTerminalSessionTab = { ...base, conversationIdentity: identity }
+    const offered: MobileTerminalSessionTab = {
+      ...withIdentity,
+      conversationOfferedWithoutStatus: true
+    }
+
+    expect(mobileSessionTabsEqual([base], [withIdentity])).toBe(false)
+    expect(mobileSessionTabsEqual([withIdentity], [offered])).toBe(false)
+    expect(
+      mobileSessionTabsEqual(
+        [offered],
+        [{ ...offered, conversationIdentity: { ...identity, capturedAt: 2 } }]
+      )
+    ).toBe(false)
+    expect(
+      mobileSessionTabsEqual([offered], [{ ...offered, conversationIdentity: undefined }])
+    ).toBe(false)
+    expect(
+      mobileSessionTabsEqual([offered], [{ ...offered, conversationIdentity: { ...identity } }])
+    ).toBe(true)
+  })
+
   it('treats terminal agent-status changes as session-tab changes', () => {
     const base: MobileTerminalSessionTab = {
       type: 'terminal',

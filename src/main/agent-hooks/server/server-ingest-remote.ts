@@ -306,7 +306,9 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       payload: normalizedPayload
     }
     this.recordCurrentAuthorityObservation(event)
-    this.applyNormalizedStatus(
+    // Why reported: relay hooks, replays and transcript polls all land here; polls repeat the latest
+    // forwarded address and model, so the conversation facet treats them as no-ops by idempotence.
+    this.applyReportedStatus(
       event,
       applyClaudeBackgroundWork
         ? () => {

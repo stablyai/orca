@@ -10,7 +10,8 @@ import type {
   AgentHookStatusRowIdentity,
   AgentHookStatusRowMutation,
   EnrichedAgentHookEventPayload,
-  StatusRowMutationListener
+  StatusRowMutationListener,
+  StoredAgentConversationRead
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerListeners } from './server-listeners'
@@ -37,7 +38,8 @@ function semanticRow(row: EnrichedAgentHookEventPayload): Record<string, unknown
     promptInteractionKey: _promptInteractionKey,
     ...semantic
   } = toAgentStatusIpcPayload(row)
-  return semantic
+  // Why: a facet-only change (new address or model) must republish, though no status byte moved.
+  return { ...semantic, conversation: row.conversation }
 }
 
 // Why: runs on every status write; a structural walk exits on the first difference and skips
@@ -76,6 +78,30 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
 
   protected getStatusPaneKeyForTerminalHandle(terminalHandle: string): string | undefined {
     return this.paneKeyByTerminalHandle.get(terminalHandle)
+  }
+
+  /** The pane's conversation facet; undefined when its row (if any) holds none, e.g. canonical rows. */
+  getConversationIdentityForPane(
+    paneKey: string,
+    terminalHandle?: string | null
+  ): StoredAgentConversationRead | undefined {
+    const joinedPaneKey = terminalHandle
+      ? this.paneKeyByTerminalHandle.get(terminalHandle)
+      : undefined
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+    const row = (this.state.lastStatusByPaneKey.get(paneKey) ??
+      (joinedPaneKey ? this.state.lastStatusByPaneKey.get(joinedPaneKey) : undefined)) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    if (!row?.conversation) {
+      return undefined
+    }
+    const rowAgent = row.payload.agentType
+    return {
+      facet: row.conversation,
+      rowAgent: rowAgent && rowAgent !== 'unknown' ? rowAgent : null,
+      rowIsRemnant: row.providerSessionOnly === true
+    }
   }
 
   protected sameTerminalOwner(

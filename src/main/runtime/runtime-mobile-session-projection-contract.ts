@@ -1,4 +1,4 @@
-import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type {
   BrowserTabInfo,
   RuntimeMobileSessionClientTab,
@@ -9,6 +9,8 @@ import type {
 } from '../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
+import type { RuntimeMobileAgentStatusBuild } from './runtime-mobile-agent-status-builder'
+import type { GetAgentConversationForPane } from './terminal-conversation-identity'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { TitleDisplayClear } from './runtime-worktree-status-projection'
 
@@ -20,6 +22,7 @@ export type RuntimeMobileSessionProjectionHost = {
   getProviderSessionRows(paneKey: string): AgentStatusIpcPayload[] | undefined
   getProviderSessionSnapshot(): AgentStatusIpcPayload[]
   getStatusSnapshot(): AgentStatusIpcPayload[]
+  getConversationIdentity: GetAgentConversationForPane
   getLeafKey(tabId: string, leafId: string): string
   findPty(
     worktreeId: string,
@@ -47,7 +50,7 @@ export type RuntimeMobileSessionProjectionHost = {
     terminalHandle: string | null,
     retained: RuntimeAgentRowSnapshot | null,
     getRows: (paneKey: string) => AgentStatusIpcPayload[]
-  ): { agentStatus: AgentStatusEntry } | Record<string, never>
+  ): RuntimeMobileAgentStatusBuild
   sanitizeGroups(
     groups: RuntimeMobileSessionTabGroup[] | undefined,
     tabs: RuntimeMobileSessionClientTab[]

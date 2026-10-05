@@ -2,6 +2,10 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { isClaudeManagementTitle } from '../../../src/shared/agent-title-core'
 import { isShellProcess } from '../../../src/shared/shell-process-detection'
+import {
+  conversationIsOfferedWithoutStatus,
+  type TerminalConversationIdentity
+} from '../../../src/shared/terminal-conversation-identity'
 import { resolveMobileTerminalTabOwnedAgentId } from './mobile-terminal-tab-agent'
 
 /** Minimal session-tab shape needed to tell an agent session from a plain shell. */
@@ -13,6 +17,8 @@ export type AgentSendKeyboardDismissalTab = {
     readonly state?: AgentStatusEntry['state']
   } | null
   readonly launchAgent?: TuiAgent | null
+  readonly conversationIdentity?: TerminalConversationIdentity
+  readonly conversationOfferedWithoutStatus?: true
 }
 
 /** Whether a send from this tab should drop the software keyboard.
@@ -29,8 +35,9 @@ export function shouldDismissKeyboardAfterTerminalSend(
   if (!accepted || !tab || tab.type !== 'terminal') {
     return false
   }
+  // Why the offer counts as `done`: an old phone sees the same tab as a folded `done` status.
   if (
-    tab.agentStatus?.state === 'done' &&
+    (tab.agentStatus?.state === 'done' || conversationIsOfferedWithoutStatus(tab)) &&
     (isShellProcess(tab.title) || isClaudeManagementTitle(tab.title))
   ) {
     return false

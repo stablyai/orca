@@ -4,7 +4,8 @@ import {
   canShowMobileNativeChat,
   isMobileFolderNativeChatReadable,
   isMobileNativeChatTranscriptReadable,
-  resolveMobileNativeChat
+  resolveMobileNativeChat,
+  resolveMobileNativeChatFileSessionId
 } from './mobile-native-chat-eligibility'
 
 function status(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
@@ -219,4 +220,51 @@ it('resolves folder readability from the serving host catalog and rejects Model-
   expect(read('ssh:box')).toBe(false)
   expect(isMobileFolderNativeChatReadable({ folderWorkspaces: [] }, 'folder:one')).toBe(false)
   expect(isMobileFolderNativeChatReadable(null, 'folder:one')).toBe(false)
+})
+
+describe('a terminal tab with the conversation field and no status', () => {
+  const session = { key: 'session_id' as const, id: 'S', transcriptPath: '/r/S.jsonl' }
+  const fieldTab = (agentType: string, offered: boolean) => ({
+    type: 'terminal',
+    conversationIdentity: { agentType, providerSession: session, capturedAt: 1, source: 'live' },
+    ...(offered ? { conversationOfferedWithoutStatus: true as const } : {})
+  })
+
+  it.each(['codex', 'claude', 'omp'])(
+    'opens an offered %s conversation from the field',
+    (agent) => {
+      expect(resolveMobileNativeChat(fieldTab(agent, true), true)).toEqual({
+        agent,
+        sessionId: 'S',
+        transcriptPath: '/r/S.jsonl'
+      })
+      expect(resolveMobileNativeChatFileSessionId(fieldTab(agent, true))).toBe('S')
+    }
+  )
+
+  it.each(['codex', 'claude', 'omp'])(
+    'gives a %s field the host did not offer no chat',
+    (agent) => {
+      expect(resolveMobileNativeChat(fieldTab(agent, false), true)).toBeNull()
+      expect(resolveMobileNativeChatFileSessionId(fieldTab(agent, false))).toBeNull()
+    }
+  )
+
+  it('keeps a launched agent but no address when the field is not offered', () => {
+    expect(
+      resolveMobileNativeChat({ ...fieldTab('codex', false), launchAgent: 'codex' }, true)
+    ).toEqual({ agent: 'codex', sessionId: null, transcriptPath: null })
+  })
+
+  it('never names the agent from the field beside a genuine status that lacks one', () => {
+    expect(
+      resolveMobileNativeChat(
+        {
+          ...fieldTab('codex', false),
+          agentStatus: status({ state: 'done', providerSession: session })
+        },
+        true
+      )
+    ).toBeNull()
+  })
 })

@@ -1,0 +1,602 @@
+{
+  "neutral PTY title under a shell leaf title": {
+    "oldPhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "zsh",
+      "launchAgent": "codex",
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "agentStatus": {
+        "state": "done",
+        "sessionBoundary": true,
+        "prompt": "",
+        "updatedAt": 1791107995000,
+        "stateStartedAt": 1791107995000,
+        "stateHistory": [],
+        "paneKey": "tab:11111111-1111-4111-8111-111111111111",
+        "tabId": "tab",
+        "terminalTitle": "zsh",
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "terminalHandle": "term-1",
+        "worktreeId": "wt-1"
+      }
+    },
+    "capablePhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "zsh",
+      "launchAgent": "codex",
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      },
+      "conversationOfferedWithoutStatus": true
+    }
+  },
+  "shell PTY title under a neutral leaf title": {
+    "oldPhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "Say hi | my-repo",
+      "launchAgent": "codex",
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      }
+    },
+    "capablePhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "Say hi | my-repo",
+      "launchAgent": "codex",
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      }
+    }
+  },
+  "shell tracker title over a neutral PTY title": {
+    "oldPhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "zsh",
+      "launchAgent": "codex",
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "agentStatus": {
+        "state": "done",
+        "sessionBoundary": true,
+        "prompt": "",
+        "updatedAt": 1791107995000,
+        "stateStartedAt": 1791107995000,
+        "stateHistory": [],
+        "paneKey": "tab:11111111-1111-4111-8111-111111111111",
+        "tabId": "tab",
+        "terminalTitle": "zsh",
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "terminalHandle": "term-1",
+        "worktreeId": "wt-1"
+      }
+    },
+    "capablePhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "zsh",
+      "launchAgent": "codex",
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      },
+      "conversationOfferedWithoutStatus": true
+    }
+  },
+  "neutral tracker title over a shell PTY title": {
+    "oldPhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "Say hi | my-repo",
+      "launchAgent": "codex",
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      }
+    },
+    "capablePhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "Say hi | my-repo",
+      "launchAgent": "codex",
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      }
+    }
+  },
+  "a retained tool as a live signal": {
+    "oldPhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "Say hi | my-repo",
+      "launchAgent": "codex",
+      "agentStatus": {
+        "state": "done",
+        "prompt": "",
+        "updatedAt": 1791107999000,
+        "stateStartedAt": 1791107999000,
+        "paneKey": "tab:11111111-1111-4111-8111-111111111111",
+        "stateHistory": [],
+        "agentType": "codex",
+        "terminalHandle": "term-1",
+        "worktreeId": "wt-1",
+        "tabId": "tab",
+        "terminalTitle": "Say hi | my-repo",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        }
+      },
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      }
+    },
+    "capablePhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "Say hi | my-repo",
+      "launchAgent": "codex",
+      "agentStatus": {
+        "state": "done",
+        "prompt": "",
+        "updatedAt": 1791107999000,
+        "stateStartedAt": 1791107999000,
+        "paneKey": "tab:11111111-1111-4111-8111-111111111111",
+        "stateHistory": [],
+        "agentType": "codex",
+        "terminalHandle": "term-1",
+        "worktreeId": "wt-1",
+        "tabId": "tab",
+        "terminalTitle": "Say hi | my-repo",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        }
+      },
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      }
+    }
+  },
+  "a retained question as a live signal": {
+    "oldPhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "Say hi | my-repo",
+      "launchAgent": "codex",
+      "agentStatus": {
+        "state": "done",
+        "prompt": "",
+        "updatedAt": 1791107999000,
+        "stateStartedAt": 1791107999000,
+        "paneKey": "tab:11111111-1111-4111-8111-111111111111",
+        "stateHistory": [],
+        "agentType": "codex",
+        "terminalHandle": "term-1",
+        "worktreeId": "wt-1",
+        "tabId": "tab",
+        "terminalTitle": "Say hi | my-repo",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        }
+      },
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      }
+    },
+    "capablePhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "Say hi | my-repo",
+      "launchAgent": "codex",
+      "agentStatus": {
+        "state": "done",
+        "prompt": "",
+        "updatedAt": 1791107999000,
+        "stateStartedAt": 1791107999000,
+        "paneKey": "tab:11111111-1111-4111-8111-111111111111",
+        "stateHistory": [],
+        "agentType": "codex",
+        "terminalHandle": "term-1",
+        "worktreeId": "wt-1",
+        "tabId": "tab",
+        "terminalTitle": "Say hi | my-repo",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        }
+      },
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      }
+    }
+  },
+  "the builder early return with a surviving facet": {
+    "oldPhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "Say hi | my-repo",
+      "launchAgent": "codex",
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      }
+    },
+    "capablePhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "Say hi | my-repo",
+      "launchAgent": "codex",
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      }
+    }
+  },
+  "a Claude management PTY title": {
+    "oldPhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "claude agents",
+      "launchAgent": "codex",
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      }
+    },
+    "capablePhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "claude agents",
+      "launchAgent": "codex",
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      }
+    }
+  },
+  "an aged no-launch remnant under a shell title (genuine status without an agent)": {
+    "oldPhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "zsh",
+      "agentStatus": {
+        "state": "done",
+        "prompt": "",
+        "updatedAt": 1791107999000,
+        "stateStartedAt": 1791107999000,
+        "paneKey": "tab:11111111-1111-4111-8111-111111111111",
+        "terminalHandle": "term-1",
+        "worktreeId": "wt-1",
+        "tabId": "tab",
+        "terminalTitle": "zsh",
+        "stateHistory": [],
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        }
+      },
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      }
+    },
+    "capablePhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "zsh",
+      "agentStatus": {
+        "state": "done",
+        "prompt": "",
+        "updatedAt": 1791107999000,
+        "stateStartedAt": 1791107999000,
+        "paneKey": "tab:11111111-1111-4111-8111-111111111111",
+        "terminalHandle": "term-1",
+        "worktreeId": "wt-1",
+        "tabId": "tab",
+        "terminalTitle": "zsh",
+        "stateHistory": [],
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        }
+      },
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      }
+    }
+  },
+  "the same remnant with a launch record": {
+    "oldPhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "zsh",
+      "launchAgent": "codex",
+      "agentStatus": {
+        "state": "done",
+        "prompt": "",
+        "updatedAt": 1791107999000,
+        "stateStartedAt": 1791107999000,
+        "paneKey": "tab:11111111-1111-4111-8111-111111111111",
+        "terminalHandle": "term-1",
+        "agentType": "codex",
+        "worktreeId": "wt-1",
+        "tabId": "tab",
+        "terminalTitle": "zsh",
+        "stateHistory": [],
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        }
+      },
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      }
+    },
+    "capablePhone": {
+      "type": "terminal",
+      "id": "tab::11111111-1111-4111-8111-111111111111",
+      "parentTabId": "tab",
+      "leafId": "11111111-1111-4111-8111-111111111111",
+      "title": "zsh",
+      "launchAgent": "codex",
+      "agentStatus": {
+        "state": "done",
+        "prompt": "",
+        "updatedAt": 1791107999000,
+        "stateStartedAt": 1791107999000,
+        "paneKey": "tab:11111111-1111-4111-8111-111111111111",
+        "terminalHandle": "term-1",
+        "agentType": "codex",
+        "worktreeId": "wt-1",
+        "tabId": "tab",
+        "terminalTitle": "zsh",
+        "stateHistory": [],
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        }
+      },
+      "isActive": true,
+      "status": "ready",
+      "terminal": "term-1",
+      "conversationIdentity": {
+        "agentType": "codex",
+        "providerSession": {
+          "key": "session_id",
+          "id": "session-S",
+          "transcriptPath": "/r/S.jsonl"
+        },
+        "capturedAt": 1791107995000,
+        "source": "live"
+      }
+    }
+  }
+}

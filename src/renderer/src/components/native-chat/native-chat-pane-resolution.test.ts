@@ -35,7 +35,8 @@ describe('resolveNativeChatSession', () => {
       sessionId: 'sess-abc',
       transcriptPath: null,
       ptyId: 'pty-1',
-      paneKey
+      paneKey,
+      authority: 'none'
     })
   })
 
@@ -61,7 +62,8 @@ describe('resolveNativeChatSession', () => {
       sessionId: 'sess-abc',
       transcriptPath: '/home/u/.claude/projects/slug/real-uuid.jsonl',
       ptyId: 'pty-1',
-      paneKey
+      paneKey,
+      authority: 'none'
     })
   })
 
@@ -75,7 +77,14 @@ describe('resolveNativeChatSession', () => {
         agentStatusEntry: entry({ paneKey, agentType: 'claude' }),
         ptyId: 'pty-1'
       })
-    ).toEqual({ agent: 'claude', sessionId: null, transcriptPath: null, ptyId: 'pty-1', paneKey })
+    ).toEqual({
+      agent: 'claude',
+      sessionId: null,
+      transcriptPath: null,
+      ptyId: 'pty-1',
+      paneKey,
+      authority: 'none'
+    })
   })
 
   it('resolves two split leaves independently to their own values', () => {
@@ -106,14 +115,16 @@ describe('resolveNativeChatSession', () => {
       sessionId: 'left-sess',
       transcriptPath: null,
       ptyId: 'pty-left',
-      paneKey: leftKey
+      paneKey: leftKey,
+      authority: 'none'
     })
     expect(right).toEqual({
       agent: 'codex',
       sessionId: 'right-sess',
       transcriptPath: null,
       ptyId: 'pty-right',
-      paneKey: rightKey
+      paneKey: rightKey,
+      authority: 'none'
     })
   })
 
@@ -135,7 +146,8 @@ describe('resolveNativeChatSession', () => {
       sessionId: 'codex-1',
       transcriptPath: null,
       ptyId: 'pty-1',
-      paneKey
+      paneKey,
+      authority: 'none'
     })
   })
 
@@ -155,7 +167,8 @@ describe('resolveNativeChatSession', () => {
         sessionId: null,
         transcriptPath: null,
         ptyId: 'pty-1',
-        paneKey
+        paneKey,
+        authority: 'none'
       })
     }
   )
@@ -296,7 +309,8 @@ describe('resolveNativeChatSession', () => {
       sessionId: 'codex-live',
       transcriptPath: null,
       ptyId: 'pty-1',
-      paneKey
+      paneKey,
+      authority: 'none'
     })
   })
 

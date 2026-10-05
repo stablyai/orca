@@ -1,14 +1,14 @@
-// The private conversation identity carrier reaches the wire only as a phone's agentStatus: every
-// tab-bearing egress is driven through the real dispatcher and JSON, for every audience.
+// A terminal tab's conversation field and offer reach every audience but a phone without the
+// identity capability, which gets them folded into agentStatus instead. Every tab-bearing egress
+// is driven through the real dispatcher and JSON.
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { TERMINAL_CONVERSATION_IDENTITY_CLIENT_CAPABILITY } from '../../../../shared/protocol-version'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab
 } from '../../../../shared/runtime-types'
-import {
-  buildMobileConversationIdentityCarrier,
-  withMobileConversationIdentityCarrier
-} from '../../mobile-conversation-identity-carrier'
+import type { TerminalConversationIdentity } from '../../../../shared/terminal-conversation-identity'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
@@ -23,23 +23,30 @@ vi.mock('electron', () => ({
 }))
 
 type ClientKind = 'mobile' | 'runtime' | undefined
+/** A phone that reads the field itself. */
+type Audience = ClientKind | 'capable-mobile'
 
-const carrier = buildMobileConversationIdentityCarrier({
-  candidate: {
-    providerSession: { key: 'session_id', id: 'codex-session', transcriptPath: '/r.jsonl' },
-    sessionAgent: 'codex',
-    observedAt: 1234
-  },
-  ownerAgent: 'codex',
-  ownerOptions: { ownerIsLaunch: true },
+const identity: TerminalConversationIdentity = {
+  agentType: 'codex',
+  providerSession: { key: 'session_id', id: 'codex-session', transcriptPath: '/r.jsonl' },
+  capturedAt: 1234,
+  source: 'live'
+}
+// The exact shape #25358's private carrier had, so shipped phones see no change.
+const fold: AgentStatusEntry = {
+  state: 'done',
+  sessionBoundary: true,
+  prompt: '',
+  updatedAt: 1234,
+  stateStartedAt: 1234,
+  stateHistory: [],
   paneKey: 'tab-1:leaf-1',
   tabId: 'tab-1',
   terminalTitle: 'Say hi | my-repo',
+  agentType: 'codex',
+  providerSession: identity.providerSession,
   terminalHandle: 'term-1',
   worktreeId: 'wt-1'
-})
-if (!carrier) {
-  throw new Error('expected a carrier')
 }
 const statuslessTab: RuntimeMobileSessionTerminalClientTab = {
   type: 'terminal',
@@ -52,7 +59,11 @@ const statuslessTab: RuntimeMobileSessionTerminalClientTab = {
   status: 'ready',
   terminal: 'term-1'
 }
-const carrierTab = withMobileConversationIdentityCarrier(statuslessTab, carrier)
+const offeredTab: RuntimeMobileSessionTerminalClientTab = {
+  ...statuslessTab,
+  conversationIdentity: identity,
+  conversationOfferedWithoutStatus: true
+}
 
 function snapshotOf(
   tab: RuntimeMobileSessionTerminalClientTab,
@@ -76,23 +87,23 @@ function harness(): {
 } {
   const runtime = new OrcaRuntimeService()
   const listeners: ((snapshot: RuntimeMobileSessionTabsResult, sequence: number) => void)[] = []
-  vi.spyOn(runtime, 'listMobileSessionTabs').mockResolvedValue(snapshotOf(carrierTab))
-  vi.spyOn(runtime, 'listAllMobileSessionTabs').mockResolvedValue([snapshotOf(carrierTab)])
+  vi.spyOn(runtime, 'listMobileSessionTabs').mockResolvedValue(snapshotOf(offeredTab))
+  vi.spyOn(runtime, 'listAllMobileSessionTabs').mockResolvedValue([snapshotOf(offeredTab)])
   vi.spyOn(runtime, 'listAllMobileSessionTabsWithChangeSequence').mockResolvedValue({
-    snapshots: [snapshotOf(carrierTab)],
+    snapshots: [snapshotOf(offeredTab)],
     changeSequence: 0
   })
   vi.spyOn(runtime, 'supportsAuthoritativeSessionTabsInventory').mockReturnValue(false)
-  vi.spyOn(runtime, 'activateMobileSessionTab').mockResolvedValue(snapshotOf(carrierTab))
+  vi.spyOn(runtime, 'activateMobileSessionTab').mockResolvedValue(snapshotOf(offeredTab))
   vi.spyOn(runtime, 'createMobileSessionTerminal').mockResolvedValue({
-    tab: carrierTab,
+    tab: offeredTab,
     publicationEpoch: 'headless:1',
     snapshotVersion: 1
   })
   vi.spyOn(runtime, 'adoptTerminalOrphans').mockResolvedValue({
     adopted: false,
     topologyRevision: 1,
-    snapshot: snapshotOf(carrierTab)
+    snapshot: snapshotOf(offeredTab)
   })
   vi.spyOn(runtime, 'onMobileSessionTabsChanged').mockImplementation((listener) => {
     listeners.push(listener)
@@ -116,13 +127,19 @@ async function dispatch(
   dispatcher: RpcDispatcher,
   method: string,
   params: unknown,
-  clientKind: ClientKind
+  audience: Audience
 ): Promise<RpcResponse[]> {
   const replies: RpcResponse[] = []
   await dispatcher.dispatchStreaming(
     { id: method, authToken: 'tok', method, params },
     (raw) => replies.push(JSON.parse(raw)),
-    { clientKind, connectionId: `conn-${String(clientKind)}` }
+    audience === 'capable-mobile'
+      ? {
+          clientKind: 'mobile',
+          connectionId: 'conn-capable-mobile',
+          clientCapabilities: [TERMINAL_CONVERSATION_IDENTITY_CLIENT_CAPABILITY]
+        }
+      : { clientKind: audience, connectionId: `conn-${String(audience)}` }
   )
   expect(replies[0]?.ok).toBe(true)
   return replies
@@ -132,12 +149,10 @@ function resultOf(reply: RpcResponse | undefined): unknown {
   return reply?.ok ? reply.result : undefined
 }
 
-/** The terminal tab exactly as the audience should receive it. */
-function expectedTab(clientKind: ClientKind): unknown {
+/** The terminal tab exactly as the audience should receive it; an old phone reads only the fold. */
+function expectedTab(audience: Audience): unknown {
   return JSON.parse(
-    JSON.stringify(
-      clientKind === 'mobile' ? { ...statuslessTab, agentStatus: carrier } : statuslessTab
-    )
+    JSON.stringify(audience === 'mobile' ? { ...statuslessTab, agentStatus: fold } : offeredTab)
   )
 }
 
@@ -145,9 +160,9 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('conversation identity carrier egress', () => {
-  it.each<ClientKind>(['mobile', 'runtime', undefined])(
-    'publishes the carrier on every folded session.tabs route only to a phone (%s)',
+describe('conversation identity egress', () => {
+  it.each<Audience>(['mobile', 'capable-mobile', 'runtime', undefined])(
+    'publishes the field on every session.tabs route and folds it only for an old phone (%s)',
     async (clientKind) => {
       const { dispatcher, publish } = harness()
       const tab = expectedTab(clientKind)
@@ -159,7 +174,7 @@ describe('conversation identity carrier egress', () => {
         tabs: [tab]
       })
       const subscribed = await dispatch(dispatcher, 'session.tabs.subscribe', worktree, clientKind)
-      publish(snapshotOf(carrierTab, 2), 1)
+      publish(snapshotOf(offeredTab, 2), 1)
       expect(subscribed.map(resultOf)).toEqual([
         expect.objectContaining({ tabs: [tab] }),
         expect.objectContaining({ tabs: [tab] })
@@ -168,7 +183,7 @@ describe('conversation identity carrier egress', () => {
         resultOf((await dispatch(dispatcher, 'session.tabs.listAll', undefined, clientKind))[0])
       ).toMatchObject({ snapshots: [{ tabs: [tab] }] })
       const all = await dispatch(dispatcher, 'session.tabs.subscribeAll', undefined, clientKind)
-      publish(snapshotOf(carrierTab, 3), 2)
+      publish(snapshotOf(offeredTab, 3), 2)
       expect(all.map(resultOf)).toEqual([
         expect.objectContaining({ snapshots: [expect.objectContaining({ tabs: [tab] })] }),
         expect.objectContaining({ tabs: [tab] })
@@ -188,11 +203,11 @@ describe('conversation identity carrier egress', () => {
     }
   )
 
-  it.each<ClientKind>(['mobile', 'runtime', undefined])(
-    'sends the unfolded create and adopt results with no carrier or extra key (%s)',
+  it.each<Audience>(['mobile', 'capable-mobile', 'runtime', undefined])(
+    'sends the unfolded create and adopt results with the field and never a fold (%s)',
     async (clientKind) => {
       const { dispatcher } = harness()
-      const statusless = JSON.parse(JSON.stringify(statuslessTab))
+      const statusless = JSON.parse(JSON.stringify(offeredTab))
 
       const created = resultOf(
         (
@@ -234,7 +249,7 @@ describe('conversation identity carrier egress', () => {
     }
   )
 
-  it('folds a carrier buffered during the subscribeAll census only when it is published', async () => {
+  it('folds an offer buffered during the subscribeAll census only when it is published', async () => {
     const { dispatcher, publish, runtime } = harness()
     let resolveCensus = (_value: {
       snapshots: RuntimeMobileSessionTabsResult[]
@@ -256,8 +271,8 @@ describe('conversation identity carrier egress', () => {
     )
     await vi.waitFor(() => expect(census).toHaveBeenCalled())
     expect(runtime.onMobileSessionTabsChanged).toHaveBeenCalled()
-    publish(snapshotOf(carrierTab, 2), 1)
-    resolveCensus({ snapshots: [snapshotOf(carrierTab)], changeSequence: 0 })
+    publish(snapshotOf(offeredTab, 2), 1)
+    resolveCensus({ snapshots: [snapshotOf(offeredTab)], changeSequence: 0 })
     await pending
 
     const tab = expectedTab('mobile')
@@ -267,14 +282,50 @@ describe('conversation identity carrier egress', () => {
     ])
   })
 
-  it('sends a runtime subscriber no extra frame for a carrier-only change', async () => {
+  it.each<Audience>(['runtime', 'capable-mobile', 'mobile'])(
+    'sends a %s subscriber a frame for an identity-only change',
+    async (audience) => {
+      const { dispatcher, publish } = harness()
+      const replies = await dispatch(dispatcher, 'session.tabs.subscribeAll', undefined, audience)
+      const changed = { ...offeredTab, conversationIdentity: { ...identity, capturedAt: 5678 } }
+
+      publish(snapshotOf(changed, 2), 1)
+
+      expect(replies).toHaveLength(2)
+      expect(resultOf(replies[1])).toMatchObject({
+        tabs: [
+          audience === 'mobile'
+            ? { agentStatus: { updatedAt: 5678 } }
+            : { conversationIdentity: { capturedAt: 5678 } }
+        ]
+      })
+    }
+  )
+
+  it('folds each subscription by the capabilities it was opened with', async () => {
     const { dispatcher, publish } = harness()
-    const replies = await dispatch(dispatcher, 'session.tabs.subscribeAll', undefined, 'runtime')
-    const changedCarrier = { ...carrier, updatedAt: 5678, stateStartedAt: 5678 }
+    const before = await dispatch(
+      dispatcher,
+      'session.tabs.subscribe',
+      { worktree: 'id:wt-1' },
+      'capable-mobile'
+    )
+    const after = await dispatch(
+      dispatcher,
+      'session.tabs.subscribe',
+      { worktree: 'id:wt-1' },
+      'mobile'
+    )
+    publish(snapshotOf(offeredTab, 2), 1)
 
-    publish(snapshotOf(withMobileConversationIdentityCarrier(statuslessTab, changedCarrier)), 1)
-    publish(snapshotOf(statuslessTab), 2)
-
-    expect(replies).toHaveLength(1)
+    expect(before.map(resultOf)).toEqual([
+      expect.objectContaining({ tabs: [expectedTab('capable-mobile')] }),
+      expect.objectContaining({ tabs: [expectedTab('capable-mobile')] })
+    ])
+    // Why: a later `runtime.clientCapabilities.update` replaces the connection's array, not this one.
+    expect(after.map(resultOf)).toEqual([
+      expect.objectContaining({ tabs: [expectedTab('mobile')] }),
+      expect.objectContaining({ tabs: [expectedTab('mobile')] })
+    ])
   })
 })

@@ -2,6 +2,7 @@ import type { AgentSessionHandleProvider } from '../../../src/shared/agent-sessi
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { TerminalConversationIdentity } from '../../../src/shared/terminal-conversation-identity'
 import type { MobileBrowserTab } from '../browser/MobileBrowserPane'
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { MobileDiffLine } from './mobile-diff-lines'
@@ -22,6 +23,10 @@ export type MobileSessionTab =
       status?: 'pending-handle' | 'ready'
       terminal: string | null
       agentStatus?: AgentStatusEntry | null
+      /** The host's conversation for this pane, independent of status (absent from older hosts). */
+      conversationIdentity?: TerminalConversationIdentity
+      /** True-only: the host offers that conversation on this statusless tab. */
+      conversationOfferedWithoutStatus?: true
       /** Agent Orca launched in this terminal, if any. This makes chat eligible
        *  before the first live agent-status update reaches the mobile client. */
       launchAgent?: TuiAgent

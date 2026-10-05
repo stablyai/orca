@@ -5,7 +5,8 @@ import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  TERMINAL_CONVERSATION_IDENTITY_CLIENT_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import { remoteRuntimeClientCapabilities } from '../../../src/shared/remote-runtime-client-capabilities'
 
@@ -20,7 +21,9 @@ export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilitie
   // Mobile renders either launch outcome — a structured chat or a terminal agent — so it may ask
   // the host to pick. Without this the host refuses `agent.launch` and every mobile create with an
   // agent stays a PTY.
-  AGENT_LAUNCH_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  // Reads a terminal tab's conversation field, so the host stops folding it into a fake `done` status.
+  TERMINAL_CONVERSATION_IDENTITY_CLIENT_CAPABILITY
 ])
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD =

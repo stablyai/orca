@@ -22,6 +22,8 @@ export type NativeChatAvailabilityInput = {
    *  when one exists — i.e. an agent detected at runtime even though
    *  `launchAgent` was not set (manually-started agents, resumed sessions). */
   detectedAgent?: AgentType | null
+  /** The agent a paired host offers with a statusless leaf's conversation; never set beside a status. */
+  conversationAgent?: AgentType | null
   /** The agent identity from another trusted tab signal (for example the
    *  terminal title resolver) when it identifies the foreground as an agent
    *  before hooks arrive. */
@@ -49,7 +51,8 @@ export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean
   if (input.isChatViewMode === true) {
     return true
   }
-  const agent = input.detectedAgent ?? input.launchAgent ?? input.resolvedAgent
+  const agent =
+    input.detectedAgent ?? input.conversationAgent ?? input.launchAgent ?? input.resolvedAgent
   if (
     nativeChatRequiresLocalTranscript(agent) &&
     input.nativeChatTranscriptIsLocalReadable !== true

@@ -12,18 +12,16 @@ import type {
 } from '../../shared/runtime-types'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
-import {
-  providerSessionMatchesAgent,
-  readMobileConversationIdentityCarrier,
-  withMobileConversationIdentityCarrier
-} from './mobile-conversation-identity-carrier'
+import { providerSessionMatchesAgent } from './terminal-conversation-identity'
 import {
   renewRuntimeMobileAgentStatusFromPtyTitle,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
+import type { RuntimeMobileAgentStatusBuild } from './runtime-mobile-agent-status-builder'
 import { finalizeRuntimeMobileSessionTabsResult } from './runtime-mobile-session-result-finalization'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import { createRuntimeMobileSessionStatusRowLookup } from './runtime-mobile-session-status-row-lookup'
+import { projectRuntimeTerminalConversationFields } from './runtime-mobile-session-terminal-identity'
 import {
   getLatestAgentCandidateTitle,
   getLeafDisplayRecord,
@@ -147,8 +145,8 @@ export function projectRuntimeMobileSessionTabs(
         retainedAgentStatus?.payload.agentType ??
         null
     })
-    const ownerAgent =
-      ownerRecord?.agent ?? liveLeafPty?.foregroundAgent ?? pty?.foregroundAgent ?? null
+    const foregroundAgent = liveLeafPty?.foregroundAgent ?? pty?.foregroundAgent ?? null
+    const ownerAgent = ownerRecord?.agent ?? foregroundAgent
     const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
     const title = normalizeCompatibleAgentTitleForOwner(
       trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title,
@@ -237,7 +235,7 @@ export function projectRuntimeMobileSessionTabs(
       : livePty
         ? host.issuePtyHandle(livePty)
         : null
-    const projectedAgentStatus =
+    const projectedAgentStatus: RuntimeMobileAgentStatusBuild =
       agentStatus ??
       host.buildPtyStatus(
         mobileStatusPty,
@@ -251,9 +249,11 @@ export function projectRuntimeMobileSessionTabs(
       | undefined
     const { turnCompletedAt: projectedTurnCompletedAt, ...clientStatusFields } =
       projectedStatusEntry ?? {}
+    const paneHookRow =
+      hookAgentStatus ?? selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey))
     const rawTurnCompletedAt =
       hookAgentStatus?.live?.payload.turnCompletedAt ??
-      selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey)).live?.payload.turnCompletedAt ??
+      paneHookRow.live?.payload.turnCompletedAt ??
       projectedTurnCompletedAt
     const turnCompletedAt =
       typeof rawTurnCompletedAt === 'number' && Number.isFinite(rawTurnCompletedAt)
@@ -262,8 +262,7 @@ export function projectRuntimeMobileSessionTabs(
     const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry
       ? { agentStatus: clientStatusFields as AgentStatusEntry }
       : {}
-    const conversationIdentityCarrier = readMobileConversationIdentityCarrier(projectedAgentStatus)
-    const clientTab: RuntimeMobileSessionClientTab = {
+    tabs.push({
       type: 'terminal',
       id: tab.id,
       parentTabId: tab.parentTabId,
@@ -286,14 +285,20 @@ export function projectRuntimeMobileSessionTabs(
       isActive: tab.isActive,
       ...(terminalHandle
         ? { status: 'ready' as const, terminal: terminalHandle }
-        : { status: 'pending-handle' as const, terminal: null })
-    }
-    // Why: the client tab is rebuilt field by field, so the builder's carrier must be handed on explicitly.
-    tabs.push(
-      conversationIdentityCarrier
-        ? withMobileConversationIdentityCarrier(clientTab, conversationIdentityCarrier)
-        : clientTab
-    )
+        : { status: 'pending-handle' as const, terminal: null }),
+      ...projectRuntimeTerminalConversationFields({
+        stored: host.getConversationIdentity(paneKey, terminalHandle),
+        rendererStatus: tab.agentStatus,
+        rendererProviderSession: hookProviderSession,
+        hookRow: paneHookRow,
+        retained: retainedAgentStatus,
+        ownerAgent,
+        ownerOptions,
+        foregroundAgent,
+        offeredByBuilder: projectedAgentStatus.offersConversationWithoutStatus === true,
+        publishesAgentStatus: projectedStatusEntry !== undefined
+      })
+    })
   }
   return finalizeRuntimeMobileSessionTabsResult({ snapshot, tabs }, host)
 }

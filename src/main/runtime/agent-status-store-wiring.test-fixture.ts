@@ -25,6 +25,7 @@ export function makeAgentStatusStoreWiring(): {
     getAgentProviderSessionRowsForPane: (
       paneKey: string
     ) => ReturnType<AgentHookServer['getStatusSnapshotForPane']>
+    getAgentConversationForPane: AgentHookServer['getConversationIdentityForPane']
     reconcileAgentStatusForEndedProcess: (
       paneKeys: Parameters<AgentHookServer['reconcileEndedProcessForPaneKeys']>[0]
     ) => void
@@ -42,6 +43,8 @@ export function makeAgentStatusStoreWiring(): {
       getAgentProviderSessionSnapshot: () => statusStore.getStatusSnapshot(),
       getAgentProviderSessionRowsForPane: (paneKey) =>
         statusStore.getStatusSnapshotForPane(paneKey),
+      getAgentConversationForPane: (paneKey, terminalHandle) =>
+        statusStore.getConversationIdentityForPane(paneKey, terminalHandle),
       reconcileAgentStatusForEndedProcess: (paneKeys) => {
         statusStore.reconcileEndedProcessForPaneKeys(paneKeys)
       }

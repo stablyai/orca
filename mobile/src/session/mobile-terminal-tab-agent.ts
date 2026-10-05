@@ -1,6 +1,10 @@
 import { stripLeadingAgentTitleDecorationOrEmpty } from '../../../src/shared/agent-title-decoration'
 import { resolveExplicitTerminalTitleAgentType } from '../../../src/shared/terminal-title-agent-type'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import {
+  offeredConversationAgent,
+  type TerminalConversationIdentity
+} from '../../../src/shared/terminal-conversation-identity'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { isBlankBrowserUrl } from '../browser/browser-url'
 import type { MobileSessionTab } from './mobile-session-route-types'
@@ -19,6 +23,8 @@ type MobileTerminalTabAgentIdentity = {
   title: string
   agentStatus?: { agentType?: AgentStatusEntry['agentType'] | null } | null
   launchAgent?: TuiAgent | null
+  conversationIdentity?: TerminalConversationIdentity
+  conversationOfferedWithoutStatus?: true
 }
 
 /** Agent identity Orca owns, excluding the display-only title fallback. */
@@ -28,6 +34,11 @@ export function resolveMobileTerminalTabOwnedAgentId(
   const hookAgentType = tab.agentStatus?.agentType?.trim()
   if (hookAgentType && hookAgentType !== 'unknown') {
     return hookAgentType
+  }
+  // Why between hook and launch: an old phone's fold puts this same agent in `agentStatus`.
+  const offeredAgent = offeredConversationAgent(tab)
+  if (offeredAgent) {
+    return offeredAgent
   }
   if (tab.launchAgent) {
     return tab.launchAgent

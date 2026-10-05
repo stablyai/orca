@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import type { AgentType } from '../../../../shared/agent-status-types'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { conversationAddressKey } from '../../../../shared/terminal-conversation-identity'
 import {
   getAgentSessionOptionCatalog,
   type CatalogModel
@@ -22,6 +25,14 @@ import {
   resolveNativeChatModelDiscoveryContext
 } from './native-chat-session-option-discovery'
 import { readClaudeSessionOptionsFromTerminalScreen } from './claude-terminal-session-options'
+import {
+  findHostLeafConversation,
+  selectHostLeafConversation
+} from './native-chat-leaf-conversation-identity'
+import {
+  decideConversationModelReport,
+  type ConversationModelReportBaseline
+} from '../../../../shared/terminal-conversation-model-report'
 
 import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
 
@@ -78,17 +89,32 @@ export function useNativeChatSessionOptions(args: {
     readTerminalScreen,
     paneKey
   } = args
-  // Why: a primitive selector, so unrelated status pings on the pane rerender nothing.
-  const reportedModel = useAppStore((state) =>
-    paneKey ? (state.agentStatusByPaneKey[paneKey]?.model ?? null) : null
+  // Why primitives under useShallow, so unrelated status pings on the pane rerender nothing.
+  const reported = useAppStore(
+    useShallow((state) => {
+      const selection = selectHostLeafConversation(
+        findHostLeafConversation(
+          state.tabsByWorktree,
+          terminalTabId,
+          paneKey ? parsePaneKey(paneKey)?.leafId : undefined
+        ),
+        paneKey ? state.agentStatusByPaneKey[paneKey] : undefined,
+        agent
+      )
+      return {
+        model: selection.model,
+        canSwitchOmpModel: selection.modelSwitchCommand === 'orca-model',
+        modelSource: selection.modelSource,
+        fieldReportKey: selection.fieldReportKey,
+        conversationKey: conversationAddressKey(selection.address)
+      }
+    })
   )
-  const canSwitchOmpModel = useAppStore((state) =>
-    paneKey ? state.agentStatusByPaneKey[paneKey]?.modelSwitchCommand === 'orca-model' : false
-  )
-  // The hook-reported model this surface last applied. Only a report that CHANGES
-  // is evidence: the same value is re-delivered on every status ping, and a
-  // session-start report cannot have observed a `/model` picked after it.
-  const appliedReportedModelRef = useRef<string | null>(null)
+  const reportedModel = reported.model
+  const canSwitchOmpModel = reported.canSwitchOmpModel
+  // Only a report that CHANGES is evidence: the same value is re-delivered on every status ping,
+  // and a session-start report cannot have observed a `/model` picked after it.
+  const reportBaselineRef = useRef<ConversationModelReportBaseline | undefined>(undefined)
   // The screen text that last parsed into reported values, so a later model
   // discovery can re-resolve it against the host's real ids.
   const reportedScreenRef = useRef<string | null>(null)
@@ -196,13 +222,27 @@ export function useNativeChatSessionOptions(args: {
   // Why: keyed on the scope, not the surface — the record survives a surface rebuild
   // for the same pty, so re-applying the same report there would revert a user's pick.
   useEffect(() => {
-    appliedReportedModelRef.current = null
+    reportBaselineRef.current = undefined
   }, [agent, targetPtyId, terminalTabId])
 
   useEffect(() => {
     // Why: Claude's model is read off its terminal frame above; the hook path is
     // for agents that stamp the model on their status posts and have no frame to read.
-    if (!surface || agent === 'claude' || !reportedModel) {
+    if (!surface || agent === 'claude') {
+      return
+    }
+    const record = (model: string | null): boolean => {
+      const decision = decideConversationModelReport(reportBaselineRef.current, {
+        conversationKey: reported.conversationKey,
+        model,
+        modelSource: reported.modelSource,
+        fieldReportKey: reported.fieldReportKey
+      })
+      reportBaselineRef.current = decision.baseline
+      return decision.apply
+    }
+    if (!reportedModel) {
+      record(null)
       return
     }
     const catalog = getAgentSessionOptionCatalog(agent)
@@ -217,12 +257,19 @@ export function useNativeChatSessionOptions(args: {
       agent === 'omp'
         ? reportedModel.trim()
         : matchNativeChatCatalogModelId({ ...catalog, models }, reportedModel)
-    if (!matched || appliedReportedModelRef.current === matched) {
+    if (!record(matched || null) || !matched) {
       return
     }
-    appliedReportedModelRef.current = matched
     surface.reportSessionOptions({ model: matched })
-  }, [agent, discoveryContext, reportedModel, surface])
+  }, [
+    agent,
+    discoveryContext,
+    reportedModel,
+    reported.conversationKey,
+    reported.fieldReportKey,
+    reported.modelSource,
+    surface
+  ])
 
   useEffect(() => {
     if (!surface || !discoveryContext) {
