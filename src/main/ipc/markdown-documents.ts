@@ -17,6 +17,11 @@ import {
   isRipgrepMissingCwdExit,
   ripgrepMissingCwdError
 } from '../../shared/ripgrep-process-availability'
+import {
+  assertMarkdownDocumentPathWithinLimit,
+  createMarkdownDocumentListingBudget,
+  retainMarkdownDocument
+} from '../../shared/markdown-document-listing-limits'
 
 export function isMarkdownDocumentName(name: string): boolean {
   return isMarkdownExtension(extname(name))
@@ -102,19 +107,26 @@ export function markdownDocumentsFromRelativePaths(
   rootPath: string,
   relativePaths: string[]
 ): MarkdownDocument[] {
-  return relativePaths
-    .map((relativePath) => markdownDocumentFromRelativePath(rootPath, relativePath))
-    .filter((document): document is MarkdownDocument => document !== null)
-    .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+  const budget = createMarkdownDocumentListingBudget()
+  const documents: MarkdownDocument[] = []
+  for (const relativePath of relativePaths) {
+    const document = markdownDocumentFromRelativePath(rootPath, relativePath)
+    if (document) {
+      retainMarkdownDocument(budget, document)
+      documents.push(document)
+    }
+  }
+  return documents.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
 }
 
 const MARKDOWN_LISTING_TIMEOUT_MS = 15_000
-const MAX_MARKDOWN_PATH_BYTES = 1024 * 1024
 
 export async function listMarkdownDocuments(
   rootPath: string,
   options: { wslDistro?: string } = {}
 ): Promise<MarkdownDocument[]> {
+  const budget = createMarkdownDocumentListingBudget()
+  assertMarkdownDocumentPathWithinLimit(rootPath)
   const child = spawnBundledRipgrep(
     [
       '--files',
@@ -190,31 +202,32 @@ export async function listMarkdownDocuments(
       stderr = (stderr + chunk).slice(0, 4096)
     }
     const onData = (chunk: Buffer | string): void => {
-      const decoded = filenameDecoder.decode(chunk)
-      if (decoded === null) {
-        return
-      }
-      carry += decoded
-      let start = 0
-      let end: number
-      while ((end = carry.indexOf('\0', start)) !== -1) {
-        const path = carry.slice(start, end)
-        if (Buffer.byteLength(path) > MAX_MARKDOWN_PATH_BYTES) {
-          finish(new Error('Markdown document path exceeds the listing limit'))
+      try {
+        const decoded = filenameDecoder.decode(chunk)
+        if (decoded === null) {
           return
         }
-        if (!path.startsWith('./') || path.split('/').includes('..')) {
-          finish(new Error('Invalid path in Markdown document listing'))
-          return
+        carry += decoded
+        let start = 0
+        let end: number
+        while ((end = carry.indexOf('\0', start)) !== -1) {
+          const path = carry.slice(start, end)
+          assertMarkdownDocumentPathWithinLimit(path)
+          if (!path.startsWith('./') || path.split('/').includes('..')) {
+            finish(new Error('Invalid path in Markdown document listing'))
+            return
+          }
+          if (isMarkdownDocumentName(path)) {
+            const document = markdownDocumentFromFilePath(rootPath, join(rootPath, path.slice(2)))
+            retainMarkdownDocument(budget, document)
+            documents.push(document)
+          }
+          start = end + 1
         }
-        if (isMarkdownDocumentName(path)) {
-          documents.push(markdownDocumentFromFilePath(rootPath, join(rootPath, path.slice(2))))
-        }
-        start = end + 1
-      }
-      carry = carry.slice(start)
-      if (Buffer.byteLength(carry) > MAX_MARKDOWN_PATH_BYTES) {
-        finish(new Error('Markdown document path exceeds the listing limit'))
+        carry = carry.slice(start)
+        assertMarkdownDocumentPathWithinLimit(carry)
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error(String(error)))
       }
     }
     const onClose = (code: number | null, signal: NodeJS.Signals | null): void => {

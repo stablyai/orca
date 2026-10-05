@@ -99,7 +99,7 @@ describe('Markdown document ripgrep lifecycle', () => {
   it('rejects an oversized unfinished record without retaining the process', async () => {
     const result = listMarkdownDocuments(root)
     child.stdout.write(`./${'a'.repeat(1024 * 1024)}`)
-    await expect(result).rejects.toThrow('path exceeds')
+    await expect(result).rejects.toMatchObject({ code: 'markdown_document_listing_capacity' })
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })
 

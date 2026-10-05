@@ -2,8 +2,8 @@ import { createElement } from 'react'
 import { hookMount, performHookAction } from '../hook-mount'
 import { projectMountedScreen, renderedElementProps, screenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
-import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
-import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
+import { loadHostClientContext } from '../host-client-context-exposure'
+import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
 import type {
@@ -17,11 +17,6 @@ import type {
 
 const HOST = 'host-1'
 const WORKTREE = 'repo42::/p'
-
-/** The commit list reads its reconnect handle through the context `client-context.tsx` keeps. */
-export const sourceControlScreenReadMountExposures: readonly OperationExposure[] = [
-  hostClientContextExposure
-]
 
 /**
  * The four source-control reads whose replies no other adapter observes: the Changes screen's
