@@ -65,6 +65,8 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.trigger': 'apex',
   '.apex': 'apex',
   '.rb': 'ruby',
+  '.rake': 'ruby',
+  '.ru': 'ruby',
   '.php': 'php',
   '.swift': 'swift',
   '.sh': 'shell',
@@ -119,6 +121,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
 const FILENAME_TO_LANGUAGE: Record<string, string> = {
   Dockerfile: 'dockerfile',
   Makefile: 'makefile',
+  Guardfile: 'ruby',
   'CMakeLists.txt': 'cmake',
   '.gitignore': 'ini',
   '.gitattributes': 'ini',

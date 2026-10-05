@@ -11,6 +11,7 @@ import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { registerAstroLanguage } from './monaco-languages/register-astro'
 import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
 import { registerNimLanguage } from './monaco-languages/register-nim'
+import { registerRubyLanguage } from './monaco-languages/register-ruby'
 import { registerShellMarkdownAliases } from './monaco-languages/register-shell-markdown-aliases'
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
 import { registerTypstLanguage } from './monaco-languages/register-typst'
@@ -19,6 +20,8 @@ import { installMonacoDelayerCancellationGuard } from './monaco-delayer-cancella
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
 import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
 import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
+import { installLspBridge } from './lsp/install-lsp-bridge'
+import { defineOrcaMonacoThemes } from './monaco-orca-themes'
 import { runMonacoSetupSteps } from './monaco-setup-steps'
 
 globalThis.MonacoEnvironment = {
@@ -79,10 +82,12 @@ monacoTS.javascriptDefaults.setCompilerOptions({
 })
 
 runMonacoSetupSteps([
+  ['Orca editor themes', () => defineOrcaMonacoThemes(monaco)],
   ['Vue language registration', () => registerVueLanguage(monaco)],
   ['Svelte language registration', () => registerSvelteLanguage(monaco)],
   ['Astro language registration', () => registerAstroLanguage(monaco)],
   ['Nim language registration', () => registerNimLanguage(monaco)],
+  ['Ruby TextMate tokenizer', () => registerRubyLanguage(monaco)],
   ['Typst language registration', () => registerTypstLanguage(monaco)],
   ['JSONL language registration', () => registerJsonlLanguage(monaco)],
   ['shell Markdown alias registration', () => registerShellMarkdownAliases(monaco)],
@@ -92,7 +97,8 @@ runMonacoSetupSteps([
   // Why: Monaco's built-in context-menu Paste reads navigator.clipboard, which is blocked in
   // Orca's sandboxed renderer. Route it through the trusted IPC bridge so right-click Paste
   // works like Cmd+V (which already works via native events).
-  ['context-menu paste', () => installMonacoContextMenuPaste(monaco)]
+  ['context-menu paste', () => installMonacoContextMenuPaste(monaco)],
+  ['LSP navigation bridge', () => installLspBridge(monaco)]
 ])
 
 // Configure Monaco to use the locally bundled editor instead of CDN

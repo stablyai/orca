@@ -3120,6 +3120,9 @@
             "cc5a2dc706": "編集ペインのタイトル: {{value0}}",
             "7dbbfcbecc": "ペインのタイトル"
           },
+          "TerminalSymbolLinks": {
+            "noDefinition": "{{token}} の定義が見つかりません"
+          },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "ディスクスペースアナライザーを開く",
             "ae20d0ffc2": "閉じる",
@@ -7929,6 +7932,24 @@
           "emojiTooLongForRepoIcon": "この絵文字はリポジトリアイコンとして使用できません。",
           "currentEmojiSelection": "現在: {{value0}}",
           "searchEmojiPlaceholder": "絵文字を検索"
+        },
+        "RepositoryLanguageServersSection": {
+          "title": "言語サーバー",
+          "description": "このプロジェクトで定義へ移動、参照の検索、ホバー表示を使えます。サーバーを有効にすると、このリポジトリのコードが実行されます。",
+          "localOnly": "言語サーバーはローカルプロジェクトでのみ利用できます。",
+          "typescript": "TypeScript / JavaScript",
+          "ruby": "Ruby",
+          "off": "オフ",
+          "bundled": "同梱",
+          "notInstalled": "未インストール",
+          "manage": "インストールまたは更新",
+          "install": "インストール",
+          "update": "更新",
+          "customCommand": "カスタムコマンド",
+          "installTitle": "{{server}} をインストール",
+          "installAria": "言語サーバーのインストールターミナル",
+          "installFailed": "インストールに失敗しました。上の出力を確認してください。",
+          "dismiss": "閉じる"
         },
         "RepositoryPane": {
           "15a99d9b9f": "相対パスは、このプロジェクトのルートから解決されます。",

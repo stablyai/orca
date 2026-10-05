@@ -3323,6 +3323,9 @@
             "cc5a2dc706": "Edit pane title: {{value0}}",
             "7dbbfcbecc": "Pane title"
           },
+          "TerminalSymbolLinks": {
+            "noDefinition": "No definition found for {{token}}"
+          },
           "TerminalLinkActionPopover": {
             "openLink": "Open link",
             "openFile": "Open file",
@@ -8173,6 +8176,36 @@
           "emojiTooLongForRepoIcon": "This emoji can't be used as a repo icon.",
           "currentEmojiSelection": "Current: {{value0}}",
           "searchEmojiPlaceholder": "Search emoji"
+        },
+        "RepositoryLanguageServersSection": {
+          "search": {
+            "languageServer": "language server",
+            "goToDefinition": "go to definition",
+            "findReferences": "find references",
+            "hover": "hover",
+            "lsp": "lsp",
+            "ruby": "ruby",
+            "rubyLsp": "ruby-lsp",
+            "solargraph": "solargraph",
+            "typescript": "typescript",
+            "gemInstall": "gem install"
+          },
+          "title": "Language Servers",
+          "description": "Go to definition, find references and hover for this project. Enabling a server runs code from this repository.",
+          "localOnly": "Language servers are available for local projects only.",
+          "typescript": "TypeScript / JavaScript",
+          "ruby": "Ruby",
+          "off": "Off",
+          "bundled": "Bundled",
+          "notInstalled": "Not installed",
+          "manage": "Install or update",
+          "install": "Install",
+          "update": "Update",
+          "customCommand": "Custom command",
+          "installTitle": "Install {{server}}",
+          "installAria": "Language server install terminal",
+          "installFailed": "Install failed. Check the output above.",
+          "dismiss": "Dismiss"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Relative paths resolve from this project root.",

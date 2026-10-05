@@ -1419,6 +1419,35 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "Use {{value0}} repo color"
         },
+        "RepositoryLanguageServersSection": {
+          "bundled": "Bundled",
+          "customCommand": "Custom command",
+          "description": "Go to definition, find references and hover for this project. Enabling a server runs code from this repository.",
+          "dismiss": "Dismiss",
+          "install": "Install",
+          "installAria": "Language server install terminal",
+          "installFailed": "Install failed. Check the output above.",
+          "installTitle": "Install {{server}}",
+          "localOnly": "Language servers are available for local projects only.",
+          "manage": "Install or update",
+          "notInstalled": "Not installed",
+          "off": "Off",
+          "ruby": "Ruby",
+          "search": {
+            "findReferences": "find references",
+            "gemInstall": "gem install",
+            "goToDefinition": "go to definition",
+            "hover": "hover",
+            "languageServer": "language server",
+            "lsp": "lsp",
+            "ruby": "ruby",
+            "rubyLsp": "ruby-lsp",
+            "solargraph": "solargraph",
+            "typescript": "typescript"
+          },
+          "typescript": "TypeScript / JavaScript",
+          "update": "Update"
+        },
         "RepositoryPane": {
           "createPendingSetup": "Track setup",
           "creatingPendingSetup": "Creating...",

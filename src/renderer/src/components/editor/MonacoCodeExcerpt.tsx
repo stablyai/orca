@@ -4,6 +4,7 @@ import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-fon
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { orcaMonacoTheme } from '@/lib/monaco-orca-themes'
 
 let pythonLanguageRegistrationPromise: Promise<void> | null = null
 
@@ -37,7 +38,7 @@ export function useMonacoColorizedLines(lines: string[], language: string): stri
   const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
 
   useEffect(() => {
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
+    monaco.editor.setTheme(orcaMonacoTheme(isDark))
   }, [isDark])
 
   // Why: colorize emits theme-specific token classes, so a theme switch must re-colorize.

@@ -3120,6 +3120,9 @@
             "cc5a2dc706": "Editar título del panel: {{value0}}",
             "7dbbfcbecc": "Título del panel"
           },
+          "TerminalSymbolLinks": {
+            "noDefinition": "No se ha encontrado ninguna definición para {{token}}"
+          },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "Abrir analizador de espacio en disco",
             "ae20d0ffc2": "Descartar",
@@ -7907,6 +7910,24 @@
           "emojiTooLongForRepoIcon": "Este emoji no se puede usar como icono del repositorio.",
           "currentEmojiSelection": "Actual: {{value0}}",
           "searchEmojiPlaceholder": "Buscar emoji"
+        },
+        "RepositoryLanguageServersSection": {
+          "title": "Servidores de lenguaje",
+          "description": "Ir a la definición, buscar referencias y mostrar información al pasar el ratón en este proyecto. Activar un servidor ejecuta código de este repositorio.",
+          "localOnly": "Los servidores de lenguaje solo están disponibles para proyectos locales.",
+          "typescript": "TypeScript / JavaScript",
+          "ruby": "Ruby",
+          "off": "Desactivado",
+          "bundled": "Incluido",
+          "notInstalled": "No instalado",
+          "manage": "Instalar o actualizar",
+          "install": "Instalar",
+          "update": "Actualizar",
+          "customCommand": "Comando personalizado",
+          "installTitle": "Instalar {{server}}",
+          "installAria": "Terminal de instalación del servidor de lenguaje",
+          "installFailed": "La instalación falló. Revisa la salida de arriba.",
+          "dismiss": "Descartar"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Las rutas relativas se resuelven desde la raíz de este proyecto.",

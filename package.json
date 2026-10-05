@@ -201,6 +201,9 @@
     "stream-json": "3.7.0",
     "tldts": "7.4.16",
     "tweetnacl": "^1.0.3",
+    "typescript-6": "npm:typescript@^6.0.3",
+    "typescript-language-server": "^6.0.1",
+    "vscode-jsonrpc": "^9.0.3",
     "ws": "^8.22.0",
     "yaml": "^2.9.1",
     "zod": "~4.6.5"

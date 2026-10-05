@@ -6,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getRepositoryGitAuthorSearchEntries } from './repository-git-author-search-entries'
 import { getRepositoryGitHooksSearchEntries } from './repository-git-hooks-search-entries'
+import { getRepositoryLanguageServersSearchEntries } from './repository-language-servers-search-entries'
 import { getRepositoryGitWorktreeSearchEntries } from './repository-git-worktree-search-entries'
 
 type RepositoryPaneSearchOptions = {
@@ -221,6 +222,10 @@ export function getRepositoryPaneSearchEntries(
     },
     ...(isFolder
       ? []
-      : [...getRepositoryGitAuthorSearchEntries(repo), ...getRepositoryGitHooksSearchEntries(repo)])
+      : [
+          ...getRepositoryGitAuthorSearchEntries(repo),
+          ...getRepositoryGitHooksSearchEntries(repo)
+        ]),
+    ...getRepositoryLanguageServersSearchEntries(repo)
   ]
 }

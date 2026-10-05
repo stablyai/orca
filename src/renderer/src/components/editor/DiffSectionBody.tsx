@@ -18,6 +18,7 @@ import {
 } from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
 import { installDiffEditorShiftWheelScroll } from './diff-editor-shift-wheel-scroll'
+import { orcaMonacoTheme } from '@/lib/monaco-orca-themes'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -207,7 +208,7 @@ export function DiffSectionBody({
           language={language}
           original={section.originalContent}
           modified={section.modifiedContent}
-          theme={isDark ? 'vs-dark' : 'vs'}
+          theme={orcaMonacoTheme(isDark)}
           onMount={handleEditorMount}
           // Why: @monaco-editor/react can dispose models before widget teardown.
           // Keep them through unmount and dispose unattached models next tick.

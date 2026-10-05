@@ -4,6 +4,7 @@ import {
   installBrowserFindListener,
   installNativeFileDropHandlers
 } from './preload-runtime-support'
+import { installLspPortForwarding, lspApi } from './api/lsp-bridge'
 import { appApi } from './api/app-bridge'
 import { orcaProfilesApi } from './api/orca-profiles-bridge'
 import { platformApi } from './api/platform-bridge'
@@ -89,6 +90,7 @@ import { speechApi } from './api/speech-bridge'
 
 installNativeFileDropHandlers()
 installBrowserFindListener()
+installLspPortForwarding()
 
 // Custom APIs for renderer. Each domain bridge owns its IPC contract.
 const telemetryTrackApi: PreloadApi['telemetryTrack'] = (name, props) =>
@@ -101,6 +103,7 @@ const telemetryGetConsentStateApi: PreloadApi['telemetryGetConsentState'] = () =
   ipcRenderer.invoke('telemetry:getConsentState')
 
 const api = {
+  lsp: lspApi,
   app: appApi,
   orcaProfiles: orcaProfilesApi,
   platform: platformApi,

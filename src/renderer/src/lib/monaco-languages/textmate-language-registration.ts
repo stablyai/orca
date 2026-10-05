@@ -16,6 +16,8 @@ export type TextMateLanguageRegistration = {
   scopeName: string
   loadGrammar: TextMateGrammarLoader
   loadProviderModule?: () => Promise<TextMateTokenProviderModule>
+  // Why: Monaco's basic languages (e.g. Ruby) are pre-registered with a lazy Monarch factory.
+  replaceExistingTokenizer?: boolean
 }
 
 function loadDefaultProviderModule(): Promise<TextMateTokenProviderModule> {
@@ -23,20 +25,28 @@ function loadDefaultProviderModule(): Promise<TextMateTokenProviderModule> {
 }
 
 export function registerTextMateLanguage(
-  monaco: MonacoModule,
+  monaco: Pick<MonacoModule, 'languages'>,
   registration: TextMateLanguageRegistration
 ): void {
   const languageAlreadyRegistered = monaco.languages
     .getLanguages()
     .some((language) => language.id === registration.language.id)
-  if (languageAlreadyRegistered) {
+  if (languageAlreadyRegistered && !registration.replaceExistingTokenizer) {
     return
   }
 
-  monaco.languages.register(registration.language)
-  if (registration.configuration) {
-    monaco.languages.setLanguageConfiguration(registration.language.id, registration.configuration)
+  if (!languageAlreadyRegistered) {
+    monaco.languages.register(registration.language)
+    if (registration.configuration) {
+      monaco.languages.setLanguageConfiguration(
+        registration.language.id,
+        registration.configuration
+      )
+    }
   }
+
+  // Why: TokenizationRegistry.registerFactory disposes the prior factory (and any tokenizer it
+  // installed) and its late resolution is dropped, so the last registered factory wins.
 
   let tokensProviderPromise: Promise<TextMateTokensProvider> | undefined
   monaco.languages.registerTokensProviderFactory(registration.language.id, {

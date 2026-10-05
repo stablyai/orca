@@ -3120,6 +3120,9 @@
             "cc5a2dc706": "창 제목 수정: {{value0}}",
             "7dbbfcbecc": "창 제목"
           },
+          "TerminalSymbolLinks": {
+            "noDefinition": "{{token}}의 정의를 찾을 수 없습니다"
+          },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "디스크 공간 분석기 열기",
             "ae20d0ffc2": "닫기",
@@ -7892,6 +7895,24 @@
           "emojiTooLongForRepoIcon": "이 이모티콘은 repo 아이콘으로 사용할 수 없습니다.",
           "currentEmojiSelection": "현재: {{value0}}",
           "searchEmojiPlaceholder": "이모티콘 검색"
+        },
+        "RepositoryLanguageServersSection": {
+          "title": "언어 서버",
+          "description": "이 프로젝트에서 정의로 이동, 참조 찾기, 호버를 사용할 수 있습니다. 서버를 활성화하면 이 저장소의 코드가 실행됩니다.",
+          "localOnly": "언어 서버는 로컬 프로젝트에서만 사용할 수 있습니다.",
+          "typescript": "TypeScript / JavaScript",
+          "ruby": "Ruby",
+          "off": "끔",
+          "bundled": "내장",
+          "notInstalled": "설치되지 않음",
+          "manage": "설치 또는 업데이트",
+          "install": "설치",
+          "update": "업데이트",
+          "customCommand": "사용자 지정 명령",
+          "installTitle": "{{server}} 설치",
+          "installAria": "언어 서버 설치 터미널",
+          "installFailed": "설치에 실패했습니다. 위의 출력을 확인하세요.",
+          "dismiss": "닫기"
         },
         "RepositoryPane": {
           "15a99d9b9f": "상대 경로는 이 프로젝트 루트에서 확인됩니다.",

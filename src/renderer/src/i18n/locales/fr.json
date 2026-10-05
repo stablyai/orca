@@ -3223,6 +3223,9 @@
             "cc5a2dc706": "Modifier le titre du volet : {{value0}}",
             "7dbbfcbecc": "Titre du volet"
           },
+          "TerminalSymbolLinks": {
+            "noDefinition": "Aucune définition trouvée pour {{token}}"
+          },
           "TerminalLinkActionPopover": {
             "openLink": "Ouvrir le lien",
             "openFile": "Ouvrir le fichier",
@@ -8048,6 +8051,24 @@
           "emojiTooLongForRepoIcon": "Cet émoji ne peut pas servir d'icône de dépôt.",
           "currentEmojiSelection": "Actuel : {{value0}}",
           "searchEmojiPlaceholder": "Rechercher un émoji"
+        },
+        "RepositoryLanguageServersSection": {
+          "title": "Serveurs de langage",
+          "description": "Aller à la définition, trouver les références et survoler pour ce projet. Activer un serveur exécute du code de ce dépôt.",
+          "localOnly": "Les serveurs de langage ne sont disponibles que pour les projets locaux.",
+          "typescript": "TypeScript / JavaScript",
+          "ruby": "Ruby",
+          "off": "Désactivé",
+          "bundled": "Inclus",
+          "notInstalled": "Non installé",
+          "manage": "Installer ou mettre à jour",
+          "install": "Installer",
+          "update": "Mettre à jour",
+          "customCommand": "Commande personnalisée",
+          "installTitle": "Installer {{server}}",
+          "installAria": "Terminal d'installation du serveur de langage",
+          "installFailed": "L'installation a échoué. Consultez la sortie ci-dessus.",
+          "dismiss": "Ignorer"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Les chemins relatifs sont résolus depuis la racine de ce projet.",

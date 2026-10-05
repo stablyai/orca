@@ -54,6 +54,7 @@ export function cleanupTerminalPaneMount(args: {
   restoreExpandedLayoutFrom(expandedStyleSnapshots)
   disposeAll(refs.linkProviderDisposablesRef.current)
   disposeAll(refs.terminalHandleLinkDisposablesRef.current)
+  disposeAll(refs.symbolLinkDisposablesRef.current)
   disposeAll(refs.linkifierClickPrimingDisposablesRef.current)
   for (const gesture of refs.linkPointerGesturesRef.current.values()) {
     gesture.dispose()

@@ -3120,6 +3120,9 @@
             "cc5a2dc706": "编辑窗格标题：{{value0}}",
             "7dbbfcbecc": "窗格标题"
           },
+          "TerminalSymbolLinks": {
+            "noDefinition": "未找到 {{token}} 的定义"
+          },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "打开磁盘空间分析器",
             "ae20d0ffc2": "关闭",
@@ -7892,6 +7895,24 @@
           "emojiTooLongForRepoIcon": "此表情符号无法用作仓库图标。",
           "currentEmojiSelection": "当前：{{value0}}",
           "searchEmojiPlaceholder": "搜索表情符号"
+        },
+        "RepositoryLanguageServersSection": {
+          "title": "语言服务器",
+          "description": "在此项目中使用转到定义、查找引用和悬停提示。启用服务器会运行此仓库中的代码。",
+          "localOnly": "语言服务器仅适用于本地项目。",
+          "typescript": "TypeScript / JavaScript",
+          "ruby": "Ruby",
+          "off": "关闭",
+          "bundled": "内置",
+          "notInstalled": "未安装",
+          "manage": "安装或更新",
+          "install": "安装",
+          "update": "更新",
+          "customCommand": "自定义命令",
+          "installTitle": "安装 {{server}}",
+          "installAria": "语言服务器安装终端",
+          "installFailed": "安装失败。请查看上方输出。",
+          "dismiss": "关闭"
         },
         "RepositoryPane": {
           "15a99d9b9f": "相对路径从该项目根解析。",

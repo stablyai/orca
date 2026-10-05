@@ -36,6 +36,19 @@ describe('detectLanguage', () => {
     }
   )
 
+  it.each([
+    'app/models/user.rb',
+    'lib/tasks/db.rake',
+    'orca.gemspec',
+    'config.ru',
+    'Gemfile',
+    'Rakefile',
+    'Guardfile',
+    'C:\\repo\\Guardfile'
+  ])('maps Ruby source %s to the ruby language id', (filePath) => {
+    expect(detectLanguage(filePath)).toBe('ruby')
+  })
+
   it('maps exact filenames from Windows paths', () => {
     expect(detectLanguage('C:\\Users\\alice\\repo\\Dockerfile')).toBe('dockerfile')
     expect(detectLanguage('C:\\Users\\alice\\repo\\CMakeLists.txt')).toBe('cmake')

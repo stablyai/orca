@@ -1,4 +1,5 @@
 import { app, type Event } from 'electron'
+import { getLspSessionManager } from '../lsp/lsp-session-registry'
 import { closeAllWatchers } from '../ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from '../ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
@@ -138,6 +139,8 @@ function installWillQuitHandler(): void {
     state.pluginMarketplaceService = null
     state.pluginMarketplaceInstaller = null
     const pluginHostShutdown = state.pluginService?.dispose() ?? Promise.resolve()
+    // Why: language servers are spawned detached, so quit must await their kill or they orphan.
+    const lspShutdown = getLspSessionManager()?.disposeAll({ force: true }) ?? Promise.resolve()
     const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
     stopCodexAccountSessionBridges()
     // Why before the stop: teardown stamps each working session's resume marker with why the app
@@ -266,6 +269,7 @@ function installWillQuitHandler(): void {
       { name: 'local-ssh-browser-routes', promise: localSshRouteShutdown },
       { name: 'ssh', promise: sshShutdown },
       { name: 'plugin-hosts', promise: pluginHostShutdown },
+      { name: 'lsp-sessions', promise: lspShutdown },
       { name: 'skill-uploads', promise: skillUploadShutdown },
       { name: 'grok-hooks', promise: grokHookCleanup },
       { name: 'ref-maintenance', promise: refMaintenanceShutdown },

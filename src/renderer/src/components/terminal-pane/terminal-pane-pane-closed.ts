@@ -50,6 +50,7 @@ export function createTerminalPaneClosedHandler(
     const isRetiredSurface = closedPane?.reason === 'retire'
     disposeMapEntry(refs.linkProviderDisposablesRef.current, paneId)
     disposeMapEntry(refs.terminalHandleLinkDisposablesRef.current, paneId)
+    disposeMapEntry(refs.symbolLinkDisposablesRef.current, paneId)
     disposeMapEntry(refs.linkifierClickPrimingDisposablesRef.current, paneId)
     const gesture = refs.linkPointerGesturesRef.current.get(paneId)
     gesture?.dispose()
