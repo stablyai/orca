@@ -7,6 +7,7 @@ const {
   execServeSimCommandMock,
   hideNativeSimulatorAppMock,
   killServeSimHelperProcessesForDeviceMock,
+  killOwnedServeSimHelperProcessesForDeviceMock,
   listSimulatorDevicesMock,
   listServeSimHelperProcessesForDeviceMock,
   shutdownSimulatorDeviceMock,
@@ -15,9 +16,12 @@ const {
   netFetchMock
 } = vi.hoisted(() => ({
   ensureSimulatorBootedMock: vi.fn(async () => {}),
-  execServeSimCommandMock: vi.fn(async (_executable?: unknown, _args?: string[]) => ({})),
+  execServeSimCommandMock: vi.fn(
+    async (_executable?: unknown, _args?: string[], _options?: { helperOwner?: string }) => ({})
+  ),
   hideNativeSimulatorAppMock: vi.fn(async () => {}),
   killServeSimHelperProcessesForDeviceMock: vi.fn(async () => {}),
+  killOwnedServeSimHelperProcessesForDeviceMock: vi.fn(async () => {}),
   listSimulatorDevicesMock: vi.fn(async (): Promise<SimulatorDevice[]> => []),
   listServeSimHelperProcessesForDeviceMock: vi.fn(async (): Promise<ServeSimHelperProcess[]> => []),
   shutdownSimulatorDeviceMock: vi.fn(async () => {}),
@@ -44,6 +48,7 @@ vi.mock('../simctl-simulator-devices', () => ({
 
 vi.mock('../serve-sim-helper-processes', () => ({
   killServeSimHelperProcessesForDevice: killServeSimHelperProcessesForDeviceMock,
+  killOwnedServeSimHelperProcessesForDevice: killOwnedServeSimHelperProcessesForDeviceMock,
   listServeSimHelperProcessesForDevice: listServeSimHelperProcessesForDeviceMock
 }))
 
@@ -76,6 +81,7 @@ describe('IosEmulatorBackend', () => {
     listServeSimHelperProcessesForDeviceMock.mockImplementation(async () => [
       { pid: 1234, command: 'serve-sim-bin device-1' }
     ])
+    killOwnedServeSimHelperProcessesForDeviceMock.mockReset()
     killServeSimHelperProcessesForDeviceMock.mockReset()
     killServeSimHelperProcessesForDeviceMock.mockImplementation(async () => {})
     hideNativeSimulatorAppMock.mockReset()
@@ -380,6 +386,45 @@ describe('IosEmulatorBackend', () => {
       helperPid: 1234,
       includeOrphaned: true
     })
+  })
+
+  it('uses its launch owner for automatic cleanup without shared-state kill or device shutdown', async () => {
+    parseServeSimDetachedSessionMock.mockReturnValue({
+      deviceUdid: 'device-1',
+      streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
+      wsUrl: 'ws://127.0.0.1:3102',
+      helperPid: 1234
+    })
+    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
+    await backend.startSession('device-1')
+    const owner = execServeSimCommandMock.mock.calls[0]?.[2]?.helperOwner
+    expect(owner).toMatch(/^[a-f0-9-]{36}$/)
+
+    await backend.stopHelperForDevice('device-1', {
+      helperPid: 5678,
+      includeOrphaned: true,
+      ownedOnly: true
+    })
+    await backend.shutdownDevice('device-1', { ownedOnly: true })
+
+    expect(killOwnedServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-1', owner)
+    expect(execServeSimCommandMock).toHaveBeenCalledOnce()
+    expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
+    expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
+  })
+
+  it('does not share launch ownership between backend instances', async () => {
+    const first = new IosEmulatorBackend()
+    const second = new IosEmulatorBackend()
+    await first.stopHelperForDevice('device-1', { ownedOnly: true })
+    await second.stopHelperForDevice('device-1', { ownedOnly: true })
+    const calls = killOwnedServeSimHelperProcessesForDeviceMock.mock.calls
+    expect(calls[0]).not.toEqual(calls[1])
+  })
+
+  it('still powers off the simulator on an explicit shutdown', async () => {
+    await new IosEmulatorBackend().shutdownDevice('device-1')
+    expect(shutdownSimulatorDeviceMock).toHaveBeenCalledWith('device-1')
   })
 
   it('treats a session as reusable only when reachable and helper-backed', async () => {

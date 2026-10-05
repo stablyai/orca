@@ -7,6 +7,7 @@ const {
   execServeSimCommandMock,
   hideNativeSimulatorAppMock,
   killServeSimHelperProcessesForDeviceMock,
+  killOwnedServeSimHelperProcessesForDeviceMock,
   listSimulatorDevicesMock,
   listServeSimHelperProcessesForDeviceMock,
   shutdownSimulatorDeviceMock,
@@ -15,6 +16,7 @@ const {
   execServeSimCommandMock: vi.fn(async () => ({})),
   hideNativeSimulatorAppMock: vi.fn(async () => {}),
   killServeSimHelperProcessesForDeviceMock: vi.fn(async () => {}),
+  killOwnedServeSimHelperProcessesForDeviceMock: vi.fn(async () => {}),
   listSimulatorDevicesMock: vi.fn(async (): Promise<SimulatorDevice[]> => []),
   listServeSimHelperProcessesForDeviceMock: vi.fn(async (): Promise<ServeSimHelperProcess[]> => []),
   shutdownSimulatorDeviceMock: vi.fn(async () => {}),
@@ -39,6 +41,7 @@ vi.mock('./simctl-simulator-devices', () => ({
 
 vi.mock('./serve-sim-helper-processes', () => ({
   killServeSimHelperProcessesForDevice: killServeSimHelperProcessesForDeviceMock,
+  killOwnedServeSimHelperProcessesForDevice: killOwnedServeSimHelperProcessesForDeviceMock,
   listServeSimHelperProcessesForDevice: listServeSimHelperProcessesForDeviceMock
 }))
 
@@ -79,6 +82,7 @@ describe('EmulatorBridge helper ownership', () => {
     execServeSimCommandMock.mockImplementation(async () => ({}))
     listSimulatorDevicesMock.mockReset()
     listSimulatorDevicesMock.mockImplementation(async () => [])
+    killOwnedServeSimHelperProcessesForDeviceMock.mockReset()
     killServeSimHelperProcessesForDeviceMock.mockReset()
     killServeSimHelperProcessesForDeviceMock.mockImplementation(async () => {})
     listServeSimHelperProcessesForDeviceMock.mockReset()
@@ -99,19 +103,17 @@ describe('EmulatorBridge helper ownership', () => {
     const stoppedUdid = await bridge.stopActiveManagedForWorktree('wt-1')
 
     expect(stoppedUdid).toBe('device-old')
-    expect(execServeSimCommandMock).toHaveBeenCalledWith(
-      { command: '/serve-sim', env: {} },
-      ['--kill', '-q', 'device-old'],
-      undefined
+    expect(execServeSimCommandMock).not.toHaveBeenCalled()
+    expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
+    expect(killOwnedServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith(
+      'device-old',
+      expect.any(String)
     )
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-old', {
-      helperPid: 1234,
-      includeOrphaned: false
-    })
+    expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
     expect(bridge.getActiveForWorktree('wt-1')).toBeNull()
   })
 
-  it('shuts down the previous Orca-managed device when requested', async () => {
+  it('leaves the shared simulator powered on during managed cleanup', async () => {
     const bridge = new EmulatorBridge()
     bridge.registerActiveEmulator('wt-1', session('device-old'), { managed: true })
 
@@ -120,16 +122,13 @@ describe('EmulatorBridge helper ownership', () => {
     })
 
     expect(stoppedUdid).toBe('device-old')
-    expect(execServeSimCommandMock).toHaveBeenCalledWith(
-      { command: '/serve-sim', env: {} },
-      ['--kill', '-q', 'device-old'],
-      undefined
+    expect(execServeSimCommandMock).not.toHaveBeenCalled()
+    expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
+    expect(killOwnedServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith(
+      'device-old',
+      expect.any(String)
     )
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-old', {
-      helperPid: 1234,
-      includeOrphaned: false
-    })
-    expect(shutdownSimulatorDeviceMock).toHaveBeenCalledWith('device-old')
+    expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
     expect(bridge.getActiveForWorktree('wt-1')).toBeNull()
   })
 
@@ -142,6 +141,7 @@ describe('EmulatorBridge helper ownership', () => {
     expect(stoppedUdid).toBeNull()
     expect(execServeSimCommandMock).not.toHaveBeenCalled()
     expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
+    expect(killOwnedServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
     expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
     expect(bridge.getActiveForWorktree('wt-1')).toBeNull()
   })
@@ -173,19 +173,47 @@ describe('EmulatorBridge helper ownership', () => {
 
     await bridge.destroyAllSessions()
 
-    expect(execServeSimCommandMock).toHaveBeenCalledTimes(1)
-    expect(execServeSimCommandMock).toHaveBeenCalledWith(
-      { command: '/serve-sim', env: {} },
-      ['--kill', '-q', 'device-managed'],
-      undefined
+    expect(execServeSimCommandMock).not.toHaveBeenCalled()
+    expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
+    expect(killOwnedServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith(
+      'device-managed',
+      expect.any(String)
     )
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledTimes(1)
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-managed', {
-      helperPid: 1234
-    })
-    expect(shutdownSimulatorDeviceMock).toHaveBeenCalledWith('device-managed')
+    expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
     expect(bridge.getActiveForWorktree('wt-managed')).toBeNull()
     expect(bridge.getActiveForWorktree('wt-external')).toBeNull()
+  })
+
+  it('reaps a helper when app shutdown wins a concurrent attach', async () => {
+    let finishStart:
+      | ((info: Awaited<ReturnType<typeof execServeSimCommandMock>>) => void)
+      | undefined
+    execServeSimCommandMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishStart = resolve
+        })
+    )
+    const bridge = new EmulatorBridge({ waitForEndpointReady: vi.fn(async () => true) })
+    const acquire = bridge.acquireHelperForDevice('device-1')
+
+    await vi.waitFor(() => expect(execServeSimCommandMock).toHaveBeenCalledOnce())
+    const shutdown = bridge.destroyAllSessions()
+    finishStart?.({
+      device: 'device-1',
+      streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
+      wsUrl: 'ws://127.0.0.1:3102'
+    })
+
+    await expect(acquire).rejects.toMatchObject({ code: 'emulator_no_active' })
+    await shutdown
+
+    expect(killOwnedServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith(
+      'device-1',
+      expect.any(String)
+    )
+    expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
+    expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
   })
 
   it('rejects a capability the resolved backend does not support', async () => {
@@ -233,6 +261,7 @@ describe('EmulatorBridge helper ownership', () => {
     await survivingLease.release()
 
     expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
+    expect(killOwnedServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
     expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
     expect(bridge.getActiveForWorktree('wt-surviving')).toMatchObject({
       deviceUdid: 'device-1'
@@ -251,11 +280,12 @@ describe('EmulatorBridge helper ownership', () => {
     const lease = await bridge.acquireHelperForDevice('device-1')
     await lease.release({ cleanupIfUnused: true })
 
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-1', {
-      helperPid: undefined,
-      includeOrphaned: true
-    })
-    expect(shutdownSimulatorDeviceMock).toHaveBeenCalledWith('device-1')
+    expect(killOwnedServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith(
+      'device-1',
+      expect.any(String)
+    )
+    expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
+    expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
   })
 
   it('keeps a shared device alive when one registered workspace detaches', async () => {
@@ -266,6 +296,7 @@ describe('EmulatorBridge helper ownership', () => {
     await bridge.stopActiveManagedForWorktree('wt-1', { shutdownDevice: true })
 
     expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
+    expect(killOwnedServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
     expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
     expect(bridge.getActiveForWorktree('wt-1')).toBeNull()
     expect(bridge.getActiveForWorktree('wt-2')).toMatchObject({ deviceUdid: 'device-1' })
@@ -290,6 +321,7 @@ describe('EmulatorBridge helper ownership', () => {
     await Promise.resolve()
 
     expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
+    expect(killOwnedServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
     finishStart?.({
       device: 'device-1',
       streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
@@ -301,6 +333,7 @@ describe('EmulatorBridge helper ownership', () => {
     await shutdown
 
     expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
+    expect(killOwnedServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
     expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
     expect(bridge.getActiveForWorktree('wt-attaching')).toMatchObject({ deviceUdid: 'device-1' })
   })
@@ -320,6 +353,7 @@ describe('EmulatorBridge helper ownership', () => {
     })
     expect(execServeSimCommandMock).not.toHaveBeenCalled()
     expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
+    expect(killOwnedServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
     expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
   })
 
@@ -364,27 +398,22 @@ describe('EmulatorBridge helper ownership', () => {
       1,
       { command: '/serve-sim', env: {} },
       ['--detach', '-q', 'device-1'],
-      { json: true }
+      expect.objectContaining({ json: true })
     )
-    expect(execServeSimCommandMock).toHaveBeenNthCalledWith(
-      2,
-      { command: '/serve-sim', env: {} },
-      ['--kill', '-q', 'device-1'],
-      undefined
+    expect(killOwnedServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith(
+      'device-1',
+      expect.any(String)
     )
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-1', {
-      helperPid: undefined,
-      includeOrphaned: true
-    })
+    expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
     expect(listServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-1', {
       helperPid: undefined,
       includeOrphaned: true
     })
     expect(execServeSimCommandMock).toHaveBeenNthCalledWith(
-      3,
+      2,
       { command: '/serve-sim', env: {} },
       ['--detach', '-q', 'device-1'],
-      { json: true }
+      expect.objectContaining({ json: true })
     )
     expect(hideNativeSimulatorAppMock).toHaveBeenCalledTimes(1)
   })
@@ -403,12 +432,8 @@ describe('EmulatorBridge helper ownership', () => {
     })
 
     expect(waitForEndpointReady).toHaveBeenCalledTimes(2)
-    expect(execServeSimCommandMock).toHaveBeenCalledWith(
-      { command: '/serve-sim', env: {} },
-      ['--kill', '-q', 'device-1'],
-      undefined
-    )
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledTimes(2)
+    expect(killOwnedServeSimHelperProcessesForDeviceMock).toHaveBeenCalledTimes(2)
+    expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
     expect(listServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
     expect(hideNativeSimulatorAppMock).not.toHaveBeenCalled()
   })
@@ -429,7 +454,8 @@ describe('EmulatorBridge helper ownership', () => {
 
     expect(waitForEndpointReady).toHaveBeenCalledTimes(2)
     expect(listServeSimHelperProcessesForDeviceMock).toHaveBeenCalledTimes(2)
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledTimes(2)
+    expect(killOwnedServeSimHelperProcessesForDeviceMock).toHaveBeenCalledTimes(2)
+    expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
   })
 })
 
@@ -437,6 +463,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
   beforeEach(() => {
     execServeSimCommandMock.mockReset()
     execServeSimCommandMock.mockImplementation(async () => ({}))
+    killOwnedServeSimHelperProcessesForDeviceMock.mockReset()
     killServeSimHelperProcessesForDeviceMock.mockReset()
     killServeSimHelperProcessesForDeviceMock.mockImplementation(async () => {})
     listServeSimHelperProcessesForDeviceMock.mockReset()
@@ -660,6 +687,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     expect(res).toEqual({ attached: true, info: session('device-1') })
     expect(execServeSimCommandMock).not.toHaveBeenCalled()
     expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
+    expect(killOwnedServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
     expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
     expect(send).toHaveBeenCalledWith('ui:emulatorAutoAttach', {
       worktreeId: 'wt-1',
@@ -711,7 +739,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     expect(execServeSimCommandMock).toHaveBeenCalledWith(
       { command: '/serve-sim', env: {} },
       ['--detach', '-q', 'device-default'],
-      { json: true }
+      expect.objectContaining({ json: true })
     )
   })
 
@@ -754,7 +782,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     expect(execServeSimCommandMock).toHaveBeenCalledWith(
       { command: '/serve-sim', env: {} },
       ['--detach', '-q', 'device-iphone'],
-      { json: true }
+      expect.objectContaining({ json: true })
     )
   })
 })
