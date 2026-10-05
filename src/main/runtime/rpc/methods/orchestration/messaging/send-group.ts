@@ -14,6 +14,7 @@ import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import type { BareRecipientResolution, SendRecipientWarning } from './recipient-routing'
 import type { SendParams } from '../schemas'
 import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
+import { parseTopicGroupAddress } from '../../../../orchestration/topic-protocol'
 import type { z } from 'zod'
 
 type SendParamsInput = z.infer<typeof SendParams>
@@ -33,9 +34,14 @@ function listRunGroupCandidates(args: {
   warnings: SendRecipientWarning[]
 }): GroupCandidate[] {
   const { db, runtime, senderRunId, groupAddress, agents, warnings } = args
+  const topic = parseTopicGroupAddress(groupAddress)
+  const subscriberTaskIds = topic
+    ? new Set(db.listTopicSubscriberTaskIds(senderRunId, topic))
+    : undefined
   const live = db
     .listWorkerTerminalResources({ runId: senderRunId })
     .filter((row) => row.dispatchStatus === 'pending' || row.dispatchStatus === 'dispatched')
+    .filter((row) => !subscriberTaskIds || subscriberTaskIds.has(row.taskId))
   // A federated worker reads relayed control mail, not this database's Dispatch mailbox.
   const federated = new Set(
     db.listFederatedDispatchesByIds(live.map((row) => row.dispatchId)).map((row) => row.dispatch_id)
@@ -44,8 +50,8 @@ function listRunGroupCandidates(args: {
   return live.flatMap((row) => {
     const to = `dispatch:${row.dispatchId}`
     if (federated.has(row.dispatchId)) {
-      // Remote identity and status are unknown, so only @all establishes membership.
-      if (groupAddress.toLowerCase() === '@all') {
+      // Topic membership is task policy, so unlike identity groups it is known even for remote workers.
+      if (groupAddress.toLowerCase() === '@all' || topic !== undefined) {
         warnings.push({
           code: 'recipient_unreachable',
           recipient: to,
@@ -142,7 +148,21 @@ export async function sendGroupMessage(args: {
 
   // `@worktree:<id>` names one workspace explicitly; every other group means the sender's Run.
   const worktreeGroup = groupAddress.toLowerCase().startsWith('@worktree:')
+  const topic = parseTopicGroupAddress(groupAddress)
   let audienceRunId = worktreeGroup ? undefined : resolveAudienceRunId()
+  if (topic && audienceRunId) {
+    const publisher = db.getActiveDispatchForIdentity(from, senderPaneKey)
+    if (
+      !publisher ||
+      publisher.run_id !== audienceRunId ||
+      !db.taskPublishesTopic(publisher.task_id, topic)
+    ) {
+      throw new OrchestrationError(
+        'topic_publish_not_allowed',
+        `${from} is not an active publisher for topic ${topic} in Run ${audienceRunId}.`
+      )
+    }
+  }
   let agents: GroupAgentSnapshot[] = []
   if (worktreeGroup || !['@all', '@idle'].includes(groupAddress.toLowerCase())) {
     const { terminals } = await runtime.listTerminals(undefined, undefined, {

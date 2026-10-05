@@ -281,6 +281,66 @@ describe('orchestration.send group addresses', () => {
     expect(result.messages.every((m) => m.type === 'status')).toBe(true)
   })
 
+  it('fans out a topic only to tasks subscribed in the sender Run', async () => {
+    setupWithTerminals([
+      makeSummary('term_coord'),
+      makeSummary('term_publisher'),
+      makeSummary('term_subscriber'),
+      makeSummary('term_other')
+    ])
+    const publisherTask = db.createTask({ runId: activeRunId, spec: 'publish findings' })
+    createRootDispatch(db, publisherTask.id, 'term_publisher')
+    const subscriberTask = db.createTask({ runId: activeRunId, spec: 'consume findings' })
+    const subscriberDispatch = createRootDispatch(db, subscriberTask.id, 'term_subscriber')
+    const otherTask = db.createTask({ runId: activeRunId, spec: 'unrelated worker' })
+    createRootDispatch(db, otherTask.id, 'term_other')
+    db.setTaskTopicPolicy({
+      taskId: publisherTask.id,
+      runId: activeRunId!,
+      publishes: ['findings'],
+      subscribes: []
+    })
+    db.setTaskTopicPolicy({
+      taskId: subscriberTask.id,
+      runId: activeRunId!,
+      publishes: [],
+      subscribes: ['findings']
+    })
+
+    const result = await call('orchestration.send', {
+      from: 'term_publisher',
+      to: '@topic:findings',
+      subject: 'findings',
+      body: 'candidate A wins'
+    })
+
+    expect(result).toMatchObject({
+      messages: [{ to_handle: `dispatch:${subscriberDispatch.id}` }],
+      recipients: 1
+    })
+  })
+
+  it('rejects topic publication from a task without the publisher grant', async () => {
+    setupWithTerminals([makeSummary('term_coord'), makeSummary('term_worker')])
+    const workerTask = db.createTask({ runId: activeRunId, spec: 'worker' })
+    createRootDispatch(db, workerTask.id, 'term_worker')
+    db.setTaskTopicPolicy({
+      taskId: workerTask.id,
+      runId: activeRunId!,
+      publishes: [],
+      subscribes: ['findings']
+    })
+
+    await expect(
+      call('orchestration.send', {
+        from: 'term_worker',
+        to: '@topic:findings',
+        subject: 'not allowed'
+      })
+    ).rejects.toMatchObject({ code: 'topic_publish_not_allowed' })
+    expect(db.getInbox(100)).toHaveLength(0)
+  })
+
   it('fans out @idle to only the idle Dispatches of the Run', async () => {
     setupWithTerminals(
       [

@@ -1,5 +1,6 @@
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { OrchestrationAddressableAgent } from './structured-worker-group-addressing'
+import { parseTopicGroupAddress } from './topic-protocol'
 
 // Why: group addresses enable broadcast messaging to logical groups of agents.
 // Resolution is done at send-time: one message record per recipient, same thread_id,
@@ -75,6 +76,11 @@ export function resolveGroupAddress(
   if (group === '@all') {
     // Why: every candidate except the sender, to avoid self-delivery loops.
     return terminals.map((t) => t.handle).filter((h) => h !== senderHandle)
+  }
+
+  if (parseTopicGroupAddress(to) !== undefined) {
+    // Topic candidates are prefiltered by the Run-owned topic policy before this generic group step.
+    return terminals.map((terminal) => terminal.handle).filter((handle) => handle !== senderHandle)
   }
 
   if (group === '@idle') {
