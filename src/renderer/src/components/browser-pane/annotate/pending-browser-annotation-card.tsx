@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import { useState } from 'react'
 import { CornerDownLeft, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -79,7 +80,7 @@ export function PendingBrowserAnnotationCard({
         <Label htmlFor="browser-annotation-comment" className="sr-only">
           {translate('auto.components.browser.pane.BrowserPane.d2a7092e6e', 'Annotation comment')}
         </Label>
-        <textarea
+        <ImeTextarea
           id="browser-annotation-comment"
           value={comment}
           onChange={(event) => setComment(event.target.value)}

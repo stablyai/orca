@@ -94,7 +94,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   findTerminalTabIdForLeaf,
   hasHostAuthoritativeTerminalMembership
-} from '../runtime/workspace-session-terminal-membership-authority'
+} from '../persistence/terminal-topology/terminal-topology-membership'
 import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
 import { PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR } from '../../shared/pty-consumer-session'
 import {

@@ -7,7 +7,6 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
@@ -23,6 +22,7 @@ import {
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../shared/protocol-version'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch-runtime-capability'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { remoteRuntimeClientCapabilities } from '../../shared/remote-runtime-client-capabilities'
 import { supportsAgentLaunch } from '../runtime/rpc/methods/agent-launch'

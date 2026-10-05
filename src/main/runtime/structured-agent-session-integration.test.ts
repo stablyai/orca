@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 // One structured Codex session driven end to end over `agentSession.*`.
 //
 // Nothing here is stubbed except the Codex child itself: the RPC dispatcher, the

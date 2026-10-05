@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 // The create route's pre-commit boundary: a failure before `attach` must reach the client as a
 // refusal it can classify, and a failure at or after `attach` must not.
 

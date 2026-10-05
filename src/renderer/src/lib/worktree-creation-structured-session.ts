@@ -62,6 +62,8 @@ export async function launchStructuredWorktreeSession(
   // keeps a retry from re-resolving against a host that has changed since.
   const plan = adoptAgentSessionLaunchVerdict({
     route: args.agentLaunchRoute,
+    // One create is one user action: a retry of it re-delivers the same request.
+    requestId: args.creationId,
     agent,
     prompt: args.request.launchDraftPrompt ?? args.request.quickPrompt,
     ...(args.request.promptDelivery ? { promptDelivery: args.request.promptDelivery } : {})

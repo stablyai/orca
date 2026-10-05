@@ -21,12 +21,19 @@ import {
 } from './runtime-file-upload-client'
 import { getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import type { LocalFileAccess } from '../../../shared/local-file-access'
+import { localAccess } from './runtime-file-read-client'
 
 export async function importExternalPathsToRuntime(
   context: RuntimeFileOperationArgs,
   sourcePaths: string[],
   destinationDir: string,
-  options?: { ensureDestinationDir?: boolean; assertCurrent?: () => void }
+  options?: {
+    ensureDestinationDir?: boolean
+    assertCurrent?: () => void
+    /** Local imports only; remote destinations stay root-relative. */
+    access?: LocalFileAccess
+  }
 ): Promise<{ results: ImportItemResult[] }> {
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind !== 'environment' || !context.worktreeId || !context.worktreePath) {
@@ -35,7 +42,8 @@ export async function importExternalPathsToRuntime(
         sourcePaths,
         destDir: destinationDir,
         connectionId: context.connectionId,
-        ensureDir: options?.ensureDestinationDir
+        ensureDir: options?.ensureDestinationDir,
+        ...localAccess(context.connectionId, options?.access)
       })
     )
   }

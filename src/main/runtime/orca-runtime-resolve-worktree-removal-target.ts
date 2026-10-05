@@ -20,14 +20,9 @@ import type {
 import type { RuntimeTerminalRename } from '../../shared/runtime-types'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
-import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { terminalShellOverrideRefusal } from './terminal-shell-override-host-support'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
-import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution'
-import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
-import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
-import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../shared/execution-host'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import {
@@ -38,6 +33,8 @@ import {
 import { interruptedLocalWorktreeRemovalJob } from './runtime-interrupted-local-worktree-removal'
 import { retryFailedRemovalUnlessRegistered } from '../worktree-removal-table'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
+import { resolveQoderTerminalCommandForWorkspace } from './qoder-terminal-command-resolution'
+import { buildRuntimeAgentTerminalStartupOptions } from './runtime-agent-terminal-startup'
 
 export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithRemoveManagedWorktree {
   protected async resolveWorktreeRemovalTarget(
@@ -244,6 +241,19 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     workspace: TerminalWorkspaceLaunchScope,
     opts: TerminalCreateOptions
   ): Promise<TerminalCreateOptions> {
+    const launch = await this.buildAgentTerminalCreateOptions(workspace, opts)
+    return resolveQoderTerminalCommandForWorkspace(
+      launch,
+      workspace,
+      this.store,
+      this.getAgentLaunchPlatformForWorkspace(workspace)
+    )
+  }
+
+  protected async buildAgentTerminalCreateOptions(
+    workspace: TerminalWorkspaceLaunchScope,
+    opts: TerminalCreateOptions
+  ): Promise<TerminalCreateOptions> {
     // Before any early return: every create lane funnels through here, and a host that cannot
     // apply the requested shell must refuse rather than spawn its default one.
     const shellRefusal = terminalShellOverrideRefusal({
@@ -287,63 +297,13 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
       return opts
     }
 
-    const settings = store.getSettings()
-    const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
-    // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
-    // shape must match the PTY route this scope already resolved.
-    const isRemote = Boolean(workspace.connectionId)
-    if (opts.startupAgent && !isTuiAgentEnabled(opts.startupAgent, settings.disabledTuiAgents)) {
-      throw new Error(`Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`)
-    }
-    const agent =
-      opts.startupAgent ??
-      resolveBareAgentLaunchCommand({
-        command: opts.command,
-        settings,
-        platform,
-        isRemote
-      })
-    if (!agent) {
-      return opts
-    }
-
-    const startupPlan = buildAgentStartupPlan({
-      ...resolveAgentStartupPlanInputs({
-        agent,
-        settings,
-        platform,
-        isRemote,
-        ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
-        // A requested shell is the one this PTY will actually be, so it owns the quoting family.
-        windowsShellOverride: opts.shellOverride,
-        sessionOptions: this.toAgentSessionOptions(opts.launchPreferences)
-      }),
-      prompt: opts.startupPrompt ?? '',
-      allowEmptyPromptLaunch: true
-    })
-    if (!startupPlan) {
-      // Why: an explicit agent that yields no plan would otherwise spawn a bare
-      // shell that never reaches agent readiness.
-      if (opts.startupAgent) {
-        throw new Error(`Could not build launch command for ${opts.startupAgent}.`)
-      }
-      return opts
-    }
-    // A prompt this launch command cannot carry has nowhere to go from here — the create returns
-    // options, not a live PTY — so refuse rather than spawn the agent and drop the text.
-    if (opts.startupPrompt && startupPlan.followupPrompt) {
-      throw new Error(`Agent ${agent} does not take a startup prompt on its launch command.`)
-    }
-
-    return {
-      ...opts,
-      command: startupPlan.launchCommand,
-      ...(startupPlan.env ? { env: startupPlan.env } : {}),
-      launchConfig: startupPlan.launchConfig,
-      launchAgent: agent,
-      startupCommandDelivery: startupPlan.startupCommandDelivery,
-      // A bare command the user typed stays out of launch accounting, as before.
-      ...(opts.startupAgent ? { telemetry: agentStartedTelemetry(agent, opts.launchSource) } : {})
-    }
+    return buildRuntimeAgentTerminalStartupOptions(
+      workspace,
+      opts,
+      store.getSettings(),
+      this.getAgentLaunchPlatformForWorkspace(workspace),
+      this.toAgentSessionOptions(opts.launchPreferences),
+      this.runtimeId
+    )
   }
 }

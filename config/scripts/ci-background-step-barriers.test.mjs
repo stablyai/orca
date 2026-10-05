@@ -96,13 +96,13 @@ describe('CI background step barriers', () => {
     expect(steps.findIndex((step) => step.id === 'changed-code-quality')).toBeGreaterThan(install)
   })
 
-  it('serializes mobile pnpm entrypoints before allocating test workers', () => {
+  it('joins independent mobile typechecks before allocating test workers', () => {
     const steps = mobile.jobs.verify.steps
     assertJoinedBefore(steps, 'production-types', (step) => step.name === 'Test')
     const ratchet = steps.findIndex((step) => step.name === 'Typecheck tests (ratchet)')
     const join = steps.findIndex((step) => step.wait === 'production-types')
     expect(steps[ratchet].background).toBeUndefined()
-    expect(ratchet).toBeGreaterThan(join)
+    expect(ratchet).toBeLessThan(join)
   })
 
   it('waits for WebKit and the bundle before any browser tests', () => {

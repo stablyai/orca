@@ -42,7 +42,8 @@ export function restorePersistedStructuredLaunchState(
     }
     throw error
   }
-  const callers: StructuredLaunchCallerGroup = createStructuredLaunchCallerGroup()
+  // Only a Retry or re-check restarts a restored launch.
+  const callers: StructuredLaunchCallerGroup = createStructuredLaunchCallerGroup({ kind: 'retry' })
   const state: StructuredLaunchState = {
     identity: structuredLaunchIdentity(worktreeId, record.agent, record.resumeFrom),
     intent,

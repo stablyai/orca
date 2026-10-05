@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import type { CSSProperties, RefObject } from 'react'
 import {
   MessageSquare,
@@ -198,7 +199,7 @@ export default function TerminalPaneHeaderOverlay({
             }}
           >
             {isEditing ? (
-              <input
+              <ImeInput
                 ref={renameInputRef}
                 className="pane-title-input"
                 aria-label={translate(

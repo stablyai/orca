@@ -7,6 +7,8 @@ import { SearchIcon } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
+import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
+import { useImeTextFieldProps } from '@/lib/ime-text-field'
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
@@ -66,6 +68,7 @@ function CommandDialog({
             'fixed top-[20%] left-[50%] z-50 w-[660px] max-w-[90vw] translate-x-[-50%] rounded-lg border border-black/14 bg-background/96 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl outline-none dark:border-white/14 dark:bg-[rgba(23,23,23,0.96)] dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
             contentClassName
           )}
+          onEscapeKeyDown={(event) => handleImeOverlayEscape(event)}
           onOpenAutoFocus={onOpenAutoFocus}
           onCloseAutoFocus={onCloseAutoFocus}
         >
@@ -102,6 +105,7 @@ function CommandInput({
   /** Rendered after the field, inside the input frame (e.g. a filter control). */
   trailing?: React.ReactNode
 }) {
+  const imeProps = useImeTextFieldProps<HTMLInputElement>(props)
   return (
     <div
       className={cn(
@@ -119,6 +123,7 @@ function CommandInput({
           className
         )}
         {...props}
+        {...imeProps}
       />
       {trailing}
     </div>

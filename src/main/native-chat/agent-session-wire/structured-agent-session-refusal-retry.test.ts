@@ -349,9 +349,12 @@ describe('agentSessionRefusalOperationState host oracle', () => {
 
     const unreadable = await createHarness()
     await unreadable.host.close(SESSION, 'evict')
-    unreadable.host.deps.adapter.historyFilePath = async () => {
-      throw new Error('transcript unreadable')
-    }
+    // The journal's open asks where the chat's per-chat file lives before it reads anything.
+    const unreadableOpen = vi
+      .spyOn(unreadable.host.deps.journalDatabase, 'legacyDirectoryFor')
+      .mockImplementation(() => {
+        throw new Error('journal path unreadable')
+      })
     const unreadableSend = { method: 'agentSession.send' as const, operationId: operationId() }
     record(
       await assertHostAgreement(
@@ -359,7 +362,7 @@ describe('agentSessionRefusalOperationState host oracle', () => {
         unreadableSend,
         'agent_session_journal_unreadable',
         async () => {
-          delete unreadable.host.deps.adapter.historyFilePath
+          unreadableOpen.mockRestore()
           return { harness: unreadable, spec: unreadableSend }
         }
       )

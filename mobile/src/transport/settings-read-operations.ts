@@ -112,6 +112,31 @@ export const terminalCopyTrimsGutterRead = bindDeferredRpcOperation(
   })
 )
 
+const showPinnedInGroupsReader: RpcCompatibleReader<unknown, 'show-pinned-in-groups', boolean> = (
+  raw
+) => {
+  const settings = raw == null ? undefined : settingsMember(raw)
+  const show: unknown =
+    settings == null ? undefined : settingsField(settings, 'showPinnedWorktreesInGroups')
+  return {
+    compatible: true,
+    variant: 'show-pinned-in-groups',
+    // Why `=== true`: a host predating the setting sends no key; desktop's default is off.
+    value: show === true,
+    salvage: { droppedPaths: [], droppedCount: 0 }
+  }
+}
+
+export const showPinnedWorktreesInGroupsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'settings.show-pinned-worktrees-in-groups-or-skip',
+    method: 'settings.get',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: showPinnedInGroupsReader
+  })
+)
+
 export const botOverridesRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'settings.bot-logins-or-skip',

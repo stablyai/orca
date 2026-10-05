@@ -4,7 +4,7 @@ import {
   resolveOpenCodeGoApiKey,
   type OpenCodeGoApiKeyResolution
 } from './opencode-go-api-key-source'
-import type { OpenCodeGoUsageWindows } from './opencode-go-status-parsing'
+import { makeOpenCodeGoZenBalance, type OpenCodeGoUsageWindows } from './opencode-go-status-parsing'
 import type { OpenCodeCredentialBackend } from '../opencode/opencode-credential-backend'
 import {
   fetchOpenCodeGoUsageWithApiKey,
@@ -52,6 +52,7 @@ function usageResult(
     session: windows.session,
     weekly: windows.weekly,
     monthly: windows.monthly,
+    extraUsage: makeOpenCodeGoZenBalance(null, 'api-key-source'),
     updatedAt: Date.now(),
     error: null,
     status: 'ok',

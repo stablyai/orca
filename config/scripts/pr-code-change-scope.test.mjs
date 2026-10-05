@@ -626,12 +626,8 @@ describe('PR Checks skip wiring', () => {
     for (const jobName of expensiveJobs.filter(
       (jobName) => !['test', 'static_analysis', 'typecheck'].includes(jobName)
     )) {
-      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(
-        ['package', 'package_windows'].includes(jobName)
-          ? ['code_paths', 'preflight']
-          : ['code_paths']
-      )
-      expect(prWorkflow.jobs[jobName].if, jobName).toBe(
+      expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(['code_paths', 'preflight'])
+      expect(prWorkflow.jobs[jobName].if, jobName).toContain(
         `needs.code_paths.outputs.${jobName} == 'true'`
       )
     }

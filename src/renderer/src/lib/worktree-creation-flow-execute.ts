@@ -1,3 +1,4 @@
+import { prepareWorktreeCreationHooks } from '@/lib/worktree-creation-hook-preparation'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
@@ -49,7 +50,13 @@ export async function executeWorktreeCreation(
   creationId: string,
   request: WorktreeCreationRequest
 ): Promise<void> {
-  const preparedRequest = await prepareRequestForCreate(creationId, request)
+  const trustedRequest = request.hookPreparation
+    ? await prepareWorktreeCreationHooks(creationId, request)
+    : request
+  if (!trustedRequest) {
+    return
+  }
+  const preparedRequest = await prepareRequestForCreate(creationId, trustedRequest)
   if (!preparedRequest) {
     return
   }
@@ -89,6 +96,8 @@ export async function executeWorktreeCreation(
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
+          executionHostId:
+            preparedRequest.workspaceRunContext?.hostId ?? preparedRequest.executionHostId,
           ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
           ...(preparedRequest.displayNameKind
             ? { displayNameKind: preparedRequest.displayNameKind }

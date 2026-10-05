@@ -440,8 +440,12 @@ jobs:
 
   git_compatibility:
     name: Git compatibility
-    needs: [code_paths]
-    if: needs.code_paths.outputs.git_compatibility == 'true'
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.git_compatibility == 'true' &&
+      needs.preflight.result == 'success'
     runs-on: ubuntu-latest
 
     steps:
@@ -509,8 +513,12 @@ jobs:
   # repair stops happening. Pinned because the binary is the thing expected to drift.
   codex_index_heal_contract:
     name: Codex index-heal contract
-    needs: [code_paths]
-    if: needs.code_paths.outputs.codex_index_heal_contract == 'true'
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.codex_index_heal_contract == 'true' &&
+      needs.preflight.result == 'success'
     # Why ARM: @openai/codex ships @openai/codex-linux-arm64.
     runs-on: ubuntu-24.04-arm
     env:
@@ -575,8 +583,12 @@ jobs:
 
   xterm_patch_sync:
     name: xterm patch sync
-    needs: [code_paths]
-    if: needs.code_paths.outputs.xterm_patch_sync == 'true'
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.xterm_patch_sync == 'true' &&
+      needs.preflight.result == 'success'
     # Why ARM: the patch check rebuilds 4 packages x 2 builds and byte-compares against the
     # checked-in bundles. Those were generated on Linux x64 and reproduce byte-for-byte on
     # darwin-arm64, so the output is neither host-arch nor host-OS dependent.
@@ -604,8 +616,12 @@ jobs:
 
   shell_contracts:
     name: shell contracts
-    needs: [code_paths]
-    if: needs.code_paths.outputs.shell_contracts == 'true'
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.shell_contracts == 'true' &&
+      needs.preflight.result == 'success'
     # Why ARM: fish 4.x is published for noble/arm64 and zsh is in the arm64 archive.
     runs-on: ubuntu-24.04-arm
     # Why: this job's cost is almost entirely package download, and a stalled mirror has
@@ -758,8 +774,12 @@ jobs:
   # would pay for it on every shard to run one file in whichever shard it landed in.
   orcad_browser:
     name: orcad browser provider
-    needs: [code_paths]
-    if: needs.code_paths.outputs.orcad_browser == 'true'
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.orcad_browser == 'true' &&
+      needs.preflight.result == 'success'
     runs-on: ubuntu-latest
 
     steps:
@@ -811,7 +831,7 @@ jobs:
       # in this job loads node-pty.
       - uses: ./.github/actions/install-node-dependencies
         with:
-          native-runtime: node
+          native-runtime: none
           cache-dependency-path: |
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
@@ -872,8 +892,12 @@ jobs:
 
   cross-version-wire:
     name: cross-version wire compatibility
-    needs: [code_paths]
-    if: needs.code_paths.outputs.cross-version-wire == 'true'
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.cross-version-wire == 'true' &&
+      needs.preflight.result == 'success'
     # Why ARM: source-only: tagged checkout plus in-process vitest, no docker or browser.
     runs-on: ubuntu-24.04-arm
 
@@ -916,8 +940,12 @@ jobs:
 
   managed_hook_node18:
     name: managed hooks on Node 18
-    needs: [code_paths]
-    if: needs.code_paths.outputs.managed_hook_node18 == 'true'
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.managed_hook_node18 == 'true' &&
+      needs.preflight.result == 'success'
     # Why ARM: Node 18 publishes linux-arm64; the per-platform runtime files are read as data.
     runs-on: ubuntu-24.04-arm
 
@@ -1263,8 +1291,19 @@ jobs:
 
   e2e:
     name: e2e
-    needs: code_paths
-    if: needs.code_paths.outputs.e2e_should_run == 'true'
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.e2e_should_run == 'true' &&
+      (
+        needs.preflight.result == 'success' ||
+        (
+          needs.preflight.result == 'skipped' &&
+          needs.code_paths.outputs.static_analysis == 'false' &&
+          needs.code_paths.outputs.typecheck == 'false'
+        )
+      )
     # Why: reusable e2e.yml only checkouts, builds, and uploads artifacts.
     permissions:
       contents: read

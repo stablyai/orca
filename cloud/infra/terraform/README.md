@@ -332,7 +332,7 @@ cell templates/MIGs/backends, and exact shared URL-map host additions. It
 rejects deletes, replacements, loss of an existing host route, US-resource
 changes, and unrelated drift. Do not add production C27-C29 until the
 compatible image has been published and each entry can pin its immutable
-digest. A later cell, such as C30 or C31, is its own reviewed wave. The shared URL map
+digest. A later cell, such as C30, C31 or the C34 spare, is its own reviewed wave. The shared URL map
 pulls every live cell into its plan, so the workflow plans each live cell at the
 image its state template already serves, and the validator rejects any change
 to a cell outside the wave. US C32 and C33 use the same workflow at the same

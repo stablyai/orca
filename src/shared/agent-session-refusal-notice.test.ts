@@ -559,7 +559,12 @@ describe('a chat whose history the host could not open', () => {
       'send',
       "Orca couldn't open this chat's history right now. Your message was not sent. Try again."
     ],
-    // Only an update gets past it, so it never says to try again.
+    // Only an update gets past it, so it never says to try again. A read meets it on one chat.
+    [
+      'journalWrittenByNewerOrca',
+      'read-history',
+      'This chat was saved by a newer Orca. Update Orca to open it.'
+    ],
     [
       'journalWrittenByNewerOrca',
       'send',

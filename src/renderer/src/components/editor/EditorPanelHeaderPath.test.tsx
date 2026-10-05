@@ -134,7 +134,8 @@ describe('EditorPanelHeaderPath inline rename', () => {
       oldPath: '/repo/notes.md',
       newName: 'renamed.mdx',
       worktreeId: 'wt-1',
-      worktreePath: '/repo'
+      worktreePath: '/repo',
+      documentScoped: false
     })
   })
 
@@ -160,19 +161,39 @@ describe('EditorPanelHeaderPath inline rename', () => {
     expect(renameFileOnDiskMock).not.toHaveBeenCalled()
   })
 
-  it('ignores an Enter that only confirms an IME candidate', () => {
+  it('ignores IME confirmation and its redispatch before accepting deliberate Enter', () => {
     renderPath(baseFile())
     openRenameInput()
 
     const input = getRenameInput('Rename file notes.md')
-    fireEvent.change(input, { target: { value: 'renamed.md' } })
-    fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 })
-    expect(renameFileOnDiskMock).not.toHaveBeenCalled()
+    const frames: FrameRequestCallback[] = []
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    try {
+      fireEvent.compositionStart(input)
+      fireEvent.change(input, { target: { value: 'renamed.md' } })
+      fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 })
+      fireEvent.compositionEnd(input)
+      fireEvent.keyUp(input, { key: 'Enter', keyCode: 13 })
+      expect(renameFileOnDiskMock).not.toHaveBeenCalled()
 
-    fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 })
-    expect(renameFileOnDiskMock).toHaveBeenCalledWith(
-      expect.objectContaining({ newName: 'renamed.md' })
-    )
+      fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 })
+      expect(renameFileOnDiskMock).not.toHaveBeenCalled()
+      expect(getRenameInput('Rename file notes.md')).toBe(input)
+
+      fireEvent.keyUp(input, { key: 'Enter', keyCode: 13 })
+      for (const frame of frames) {
+        frame(0)
+      }
+      fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 })
+      expect(renameFileOnDiskMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ newName: 'renamed.md' })
+      )
+    } finally {
+      raf.mockRestore()
+    }
   })
 
   it('cancels on Escape without a trailing blur-commit, and ignores empty renames', () => {

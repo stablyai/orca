@@ -66,6 +66,9 @@ describe('fetchOpenCodeGoUsage', () => {
     expect(result.status).toBe('ok')
     expect(result.session).toEqual(WINDOWS.session)
     expect(result.usageMetadata?.credentialSource).toBe('environment')
+    expect(result.extraUsage).toEqual(
+      expect.objectContaining({ balance: null, enabled: false, disabledReason: 'api-key-source' })
+    )
   })
 
   it('passes the settings override down as the highest-precedence tier', async () => {

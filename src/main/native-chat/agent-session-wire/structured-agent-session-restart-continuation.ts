@@ -14,14 +14,19 @@ import {
   readAgentSessionFailureFact,
   type UnreadAgentSessionFailureFact
 } from '../../../shared/agent-session-failure'
-import type { AgentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
+import {
+  agentSessionRefusalReference,
+  type AgentSessionRefusalReference
+} from '../../../shared/agent-session-wire-refusals'
 import {
   agentSessionSendSubmission,
   type AgentSessionMutationEnvelope,
   type AgentSessionMutationResult,
-  type AgentSessionSendResult
+  type AgentSessionSendResult,
+  type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { RESTART_CONTINUATION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
 import {
   AGENT_SESSION_RESTART_CONTINUATION_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
@@ -120,7 +125,10 @@ function restartNoteWriter(
       return
     }
     await session.journal.appendItem(
-      { provider: 'orca', clientMessageId: `restart-continuation:${sessionId}:${host.now()}` },
+      {
+        provider: 'orca',
+        clientMessageId: `${RESTART_CONTINUATION_ROW_PREFIX}${sessionId}:${host.now()}`
+      },
       { kind: 'status', text, ...(tone ? { tone } : {}) },
       // About the conversation, not any turn in it.
       { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
@@ -160,7 +168,7 @@ export type StructuredAgentSessionContinuationDeps = {
     body: AgentJournalMessageItem
   }) => Promise<{
     ok: boolean
-    refusal?: { code: string }
+    refusal?: AgentSessionWireRefusal
     /** The submission is where the provider's answer lives; the envelope only says Orca took it.
      *  A continuation never sends `delivery`, so a queued answer cannot arrive; the key exists so
      *  the host's union return stays assignable. */
@@ -310,7 +318,9 @@ async function sendContinuation(
       done: {
         sessionId,
         outcome: 'refused',
-        reason: sent.refusal?.code ?? 'agent_session_send_failed'
+        reason: sent.refusal?.code ?? 'agent_session_send_failed',
+        // Its details too, so a newer Orca's refusal is filed as one, not as a bare code.
+        ...(sent.refusal ? { refusal: agentSessionRefusalReference(sent.refusal) } : {})
       }
     }
   }

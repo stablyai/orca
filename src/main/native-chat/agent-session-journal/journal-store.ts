@@ -67,7 +67,6 @@ import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-wr
 import type { JournalEpochController } from './journal-epoch-controller'
 import { JournalWriteQueue } from './journal-write-queue'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
-import { journalStoreLoadedFields } from './journal-store-open'
 import type { JournalItemAppender, JournalResolvedItem } from './journal-item-appender'
 import type { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
 import type { JournalStopMarks } from './journal-stop-marks'
@@ -81,9 +80,6 @@ export class AgentSessionJournal {
   private readonly mintEpoch: () => string
 
   private state: JournalReducerState
-  private readOnly = false
-  private malformedRows = 0
-  private openedCorrupt = false
   private openedThrough: AgentJournalCursor = { epoch: '', sequence: 0 }
   private onCommitted: (() => void) | null = null
   private readonly queue: JournalWriteQueue
@@ -114,10 +110,8 @@ export class AgentSessionJournal {
       owe: (work) => this.queue.owe(work),
       database: () => this.database,
       state: () => this.state,
-      readOnly: () => this.readOnly,
-      setReadOnly: (readOnly) => {
-        this.readOnly = readOnly
-      },
+      // A newer Orca's database: nothing it holds opens, and every write is refused.
+      readOnly: () => this.database.readOnly,
       cursor: this.cursor,
       adopt: (loaded) => {
         this.adoptLoadedJournal(loaded)
@@ -127,14 +121,7 @@ export class AgentSessionJournal {
         applyJournalRow(this.state, row)
         this.onCommitted?.()
       },
-      setOpenedCorrupt: (corrupt) => {
-        this.openedCorrupt = corrupt
-      },
       notifyCommitted: () => this.onCommitted?.(),
-      malformedRows: () => this.malformedRows,
-      setMalformedRows: (count) => {
-        this.malformedRows = count
-      },
       journal: () => this,
       enqueue: (build) => this.rowWriter.enqueue(build)
     })
@@ -147,12 +134,12 @@ export class AgentSessionJournal {
     this.restore = collaborators.restore
   }
 
-  get isReadOnly(): boolean {
-    return this.readOnly
-  }
-
   get epoch(): string {
     return this.state.epoch
+  }
+
+  get agent(): AgentSessionJournalIdentity['agent'] {
+    return this.identity.agent
   }
 
   /** Whether a row at this sequence was on disk when this handle opened, so an earlier handle
@@ -163,16 +150,6 @@ export class AgentSessionJournal {
       this.state.epoch === this.openedThrough.epoch &&
       sequence <= this.openedThrough.sequence
     )
-  }
-
-  /** What the last open's repair did. */
-  get repair(): { malformedRows: number } {
-    return { malformedRows: this.malformedRows }
-  }
-
-  /** The open replayed an unusable prefix: the chat is owed a rebuild from provider history. */
-  get needsRebuild(): boolean {
-    return this.openedCorrupt
   }
 
   async open(): Promise<void> {
@@ -285,8 +262,7 @@ export class AgentSessionJournal {
   readSince(cursor: AgentJournalCursor, limit?: number): JournalReadSince {
     const { sessionId } = this.identity
     const rowsAfter = journalRowsAfterReader(this.database.db, sessionId, this.state.epoch, limit)
-    const source = { state: this.state, rowsAfter, readOnly: this.readOnly }
-    return readJournalSince(source, cursor, () => this.cursor())
+    return readJournalSince({ state: this.state, rowsAfter }, cursor, () => this.cursor())
   }
 
   /** Upsert by stable identity. The revision is assigned here so a caller
@@ -384,8 +360,8 @@ export class AgentSessionJournal {
     return rejectJournalQueuedSubmissions(this, fence, rejection, which)
   }
 
-  /** The escape hatch for corruption, an unreconcilable prefix, a forked handle,
-   *  and an unreadable schema. It invalidates every cursor; clients reload. */
+  /** The escape hatch for a forked handle and an unreadable schema. It invalidates every cursor;
+   *  clients reload. */
   async rollEpoch(reason: AgentJournalEpochReason, fence: number): Promise<AgentJournalCursor> {
     return this.epochController.roll(reason, fence)
   }
@@ -399,6 +375,6 @@ export class AgentSessionJournal {
   }
 
   private adoptLoadedJournal(loaded: JournalLoad): void {
-    Object.assign(this, journalStoreLoadedFields(loaded))
+    this.state = loaded.state
   }
 }

@@ -179,10 +179,8 @@ export function createClaudeJournalTranslator(
     message: Record<string, unknown>,
     startsTurn: boolean,
     observedAt: number,
-    requestedAt?: number,
-    openedBy?: string
-  ): boolean =>
-    journalClaudeMessage(messageContext, message, startsTurn, observedAt, requestedAt, openedBy)
+    requestedAt?: number
+  ): boolean => journalClaudeMessage(messageContext, message, startsTurn, observedAt, requestedAt)
 
   return {
     handle: (event) => {
@@ -250,8 +248,7 @@ export function createClaudeJournalTranslator(
             event.message,
             event.startsTurn === true,
             event.observedAt ?? Date.now(),
-            event.requestedAt,
-            event.clientMessageId
+            event.requestedAt
           )
         ) {
           providerFallback.append(

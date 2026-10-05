@@ -18,7 +18,7 @@ export const OMP_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   models: [],
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--model']),
+    removeAgentArgs: (tokens) => removeAgentArgOption('omp', tokens, ['--model']),
     // OMP only opens its TUI picker for /model; our extension applies the exact selector.
     midSession: { kind: 'command', build: (value) => `/orca-model ${String(value)}` }
   },

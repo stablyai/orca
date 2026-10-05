@@ -191,7 +191,7 @@ function attachContext(
       discardEventSink: () => undefined
     },
     sessions,
-    subscribers: { reset: () => undefined, snapshot: () => undefined, publish: () => undefined },
+    subscribers: { snapshot: () => undefined, publish: () => undefined },
     tasks: { trackAttach: <T>(task: Promise<T>) => task },
     reconcileLeases: async () => null,
     serialize: <T>(_sessionId: string, task: () => Promise<T>) => task(),

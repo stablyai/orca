@@ -28,12 +28,45 @@ import type {
 } from './native-chat-subagent-sections'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 
-/** What a user message says under it when it did not go through, with its own Retry when the
- *  surface can send it again. */
-export type NativeChatDeliveryNotice = {
-  text: string
-  onRetry?: () => void
-  onDismiss?: () => void
+/** What a user message says about its delivery: that nothing has confirmed it yet, quietly in
+ *  place of its time, or that it did not go through, with its own Retry when the surface can send
+ *  it again. */
+export type NativeChatDeliveryNotice =
+  | { sending: true; text?: never; onRetry?: never; onDismiss?: never }
+  | { sending?: never; text: string; onRetry?: () => void; onDismiss?: () => void }
+
+const USER_META_REVEAL =
+  'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
+
+/** Under a user message: copy + timestamp, revealed together like the agent controls row. Until
+ *  confirmed, a quiet "Sending…" stays visible in the time's place and copy keeps its own reveal,
+ *  so the row keeps its height when it clears. Image-only prompts have no text to copy. */
+function UserMessageMeta({
+  markdown,
+  timestamp,
+  sending
+}: {
+  markdown: string
+  timestamp: number | null
+  sending: boolean
+}): React.JSX.Element | null {
+  if (!markdown && timestamp === null && !sending) {
+    return null
+  }
+  return (
+    <div className={cn('flex select-none items-center gap-1', !sending && USER_META_REVEAL)}>
+      {markdown ? (
+        <NativeChatCopyButton text={markdown} className={sending ? USER_META_REVEAL : undefined} />
+      ) : null}
+      {sending ? (
+        <span className="text-xs whitespace-nowrap text-muted-foreground">
+          {translate('components.native-chat.messageSending', 'Sending…')}
+        </span>
+      ) : (
+        <NativeChatMessageTimestamp timestamp={timestamp} focusable />
+      )}
+    </div>
+  )
 }
 
 /** One message: its prose first, then a collapsible run folding all of the
@@ -178,15 +211,12 @@ export const MessageRow = memo(function MessageRow({
             <span>{translate('components.native-chat.goal.sentAsGoal', 'Sent as goal')}</span>
           </div>
         ) : null}
-        {/* Copy + timestamp reveal together, mirroring the agent controls row.
-            Image-only prompts have no text to copy, so the button is omitted. */}
-        {markdown || message.timestamp !== null ? (
-          <div className="flex select-none items-center gap-1 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100">
-            {markdown ? <NativeChatCopyButton text={markdown} /> : null}
-            <NativeChatMessageTimestamp timestamp={message.timestamp} focusable />
-          </div>
-        ) : null}
-        {deliveryNotice ? (
+        <UserMessageMeta
+          markdown={markdown}
+          timestamp={message.timestamp}
+          sending={deliveryNotice?.sending === true}
+        />
+        {deliveryNotice?.text !== undefined ? (
           <div className="flex max-w-[85%] items-center gap-2 text-[11px] text-destructive/80">
             <span className="min-w-0 break-words">{deliveryNotice.text}</span>
             {deliveryNotice.onDismiss ? (

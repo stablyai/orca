@@ -14,7 +14,10 @@ import {
   agentSessionRecordFixture
 } from '../../shared/agent-session-record.test-fixture'
 import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
-import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  SAVED_BY_NEWER_ORCA
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import { journalIdentityFor } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { attachParamsForRecord } from '../native-chat/agent-session-wire/structured-agent-session-conversation-open'
@@ -269,7 +272,7 @@ describe('restoring the chat tabs open at quit', () => {
     { store: 'records a newer Orca wrote', newer: true, writesFail: false },
     { store: 'a store whose writes keep failing', newer: false, writesFail: true }
   ])(
-    'lists and reads every chat from $store, and writes nothing',
+    'lists every chat from $store and writes nothing; it reads them unless a newer Orca saved them',
     async ({ newer, writesFail }) => {
       const records = [
         chatRecord(CHAT_A),
@@ -298,12 +301,17 @@ describe('restoring the chat tabs open at quit', () => {
         `agent-session:${CHAT_B}`
       ])
       expect(published()[0]).toMatchObject({ replacesSessionId: CLEARED })
-      await expectHistory(CHAT_A)
-      await expectHistory(CHAT_B)
-      // A newer Orca's leases are adjudicated in memory, so nothing fails there.
+      // A newer Orca's leases are adjudicated in memory, so nothing fails there; its chats do not open.
       if (newer) {
-        expect(log.entries).toEqual([])
+        for (const sessionId of [CHAT_A, CHAT_B]) {
+          await expect(
+            getStructuredAgentSessionHost()!.journalSnapshot(sessionId)
+          ).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
+        }
+        expect(log.entries.map((entry) => entry.fields.scope)).not.toContain('lease-reconcile')
       } else {
+        await expectHistory(CHAT_A)
+        await expectHistory(CHAT_B)
         expect(log.entries).toEqual([
           expect.objectContaining({
             fields: {

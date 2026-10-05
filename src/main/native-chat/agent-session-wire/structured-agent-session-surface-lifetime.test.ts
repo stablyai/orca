@@ -337,7 +337,7 @@ describe('a chat that closes', () => {
     expect(closeSession).toHaveBeenCalledOnce()
   })
 
-  it('settles and releases on the retry when a step after the child stopped aborts', async () => {
+  it('reports a failed drain after the child stopped, and still settles and releases', async () => {
     await attach()
     dispatch.mockResolvedValueOnce({ state: 'admitted' })
     const body = hostTestMessage('pending across an aborted eviction')
@@ -351,12 +351,9 @@ describe('a chat that closes', () => {
     failEvictionDrain()
     const settled = captureSettledSubmissions()
 
-    await expect(host.close(SESSION, 'evict')).rejects.toMatchObject({ step: 'drain-published' })
-    // The child is proven gone, but the wind-down it owes is not done: nothing settled, no release.
-    expect(session!.child).toBeNull()
-    expect(store.getRecord(SESSION)?.lease.claimStatus).not.toBe('released')
-
+    // The child is proven gone: the failed drain is bookkeeping, reported, and the rest still runs.
     await expect(host.close(SESSION, 'evict')).resolves.toBeUndefined()
+    expect(session!.child).toBeNull()
     expect(closeSession).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
@@ -544,6 +541,36 @@ describe('an unexpected provider exit', () => {
     replaceFailedSink()
   })
 
+  // TypeScript accepts the body; the persisted reader rejects a call id that is only spaces.
+  it('stops a provider whose output would not read back, and the next send starts a child', async () => {
+    await attach()
+
+    sink?.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 },
+      {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'tool-call', name: 'Bash', input: null, callId: ' ' }]
+      },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    await vi.waitFor(() => {
+      expect(closeSession).toHaveBeenCalledWith(SESSION)
+      expect(store.getRecord(SESSION)?.lease).toMatchObject({ claimStatus: 'released' })
+    })
+    expect(hostErrors).toContainEqual(expect.objectContaining({ code: 'journal_row_rejected' }))
+    replaceFailedSink()
+
+    // Nothing restarts it on its own; the next send does, and the chat still loads.
+    expect(acquire).toHaveBeenCalledOnce()
+    await startAgent()
+    expect(acquire).toHaveBeenCalledTimes(2)
+    emitTurnLifecycle('running', 2)
+    await host.flushAllStreamedEvents()
+    await reboot()
+    expect((await host.history({ sessionId: SESSION, direction: 'tail' })).ok).toBe(true)
+  })
+
   it('settles a journal sink failure whose stop saw the provider root exit', async () => {
     await attach()
     // The lease follows the root, so its seen exit settles like a proven one.
@@ -645,7 +672,7 @@ describe('an unexpected provider exit', () => {
     unsubscribe()
   })
 
-  it('keeps a requested close out of recovery', async () => {
+  it('ends the record of a requested close as a close, never as a crash to recover from', async () => {
     await attach()
     const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
 
@@ -659,7 +686,9 @@ describe('an unexpected provider exit', () => {
     })
 
     expect(acquire).toHaveBeenCalledOnce()
-    expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
+    expect(host['sessions'].get(SESSION)?.child).toBeNull()
+    expect(host['sessions'].get(SESSION)?.lastEndedChild).not.toHaveProperty('failure')
+    expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
   })
 
   it('recovers after a failed lifecycle barrier and dispatches a distinct next message', async () => {
@@ -812,19 +841,16 @@ describe('an unexpected provider exit', () => {
   })
 })
 
-describe('a quit over an eviction that never got its retry', () => {
-  // Nothing calls `close` a second time when the user quits instead of reopening the chat, so the
-  // quit sweep is the last thing that can hand the lease back — and it only reaches the session if
-  // it still counts a stopped child's unfinished wind-down as owed.
-  it('finishes the wind-down the aborted close left behind', async () => {
+describe('a quit after a close whose drain failed', () => {
+  // The close's own wind-down hands the lease back past a failed drain, so quit finds nothing owed.
+  it('has nothing of that child left to finish', async () => {
     await attach()
-    await sendPending('pending across an abandoned eviction')
+    await sendPending('pending across a failed drain')
     const settled = captureSettledSubmissions()
     failEvictionDrain()
 
-    await expect(host.close(SESSION, 'evict')).rejects.toMatchObject({ step: 'drain-published' })
-    expect(host['sessions'].get(SESSION)?.child).toBeNull()
-    expect(store.getRecord(SESSION)?.lease.claimStatus).not.toBe('released')
+    await expect(host.close(SESSION, 'evict')).resolves.toBeUndefined()
+    expect(host['sessions'].get(SESSION)?.child ?? null).toBeNull()
 
     await host.flushAllStreamedEvents()
 

@@ -58,7 +58,8 @@ describe('rich markdown local images', () => {
 
       expect(window.api.fs.readFile).toHaveBeenCalledWith({
         filePath: '/repo/docs/diagram.png',
-        connectionId: undefined
+        connectionId: undefined,
+        access: { kind: 'document-resource', documentPath: '/repo/docs/readme.md' }
       })
       expect(host.querySelector('img')?.src).toBe('blob:rich-local-image')
     } finally {

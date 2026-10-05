@@ -60,11 +60,6 @@ export class ClaudeOpenTurn {
   }
 
   /** The open turn's row, where a fact about the running turn lands. */
-  /** The submission that opened the open turn, when known (`ClaudeCurrentTurn.openedBy`). */
-  get openedBy(): string | null {
-    return this.current?.openedBy ?? null
-  }
-
   get identity(): AgentJournalItemIdentity | null {
     return this.current ? claudeCurrentTurnIdentity(this.current) : null
   }

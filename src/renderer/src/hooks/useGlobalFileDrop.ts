@@ -8,8 +8,6 @@ import { joinPath } from '@/lib/path'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   importExternalPathsToRuntime,
-  isRemoteRuntimeFileOperation,
-  statRuntimePath,
   type RuntimeFileOperationArgs
 } from '@/runtime/runtime-file-client'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
@@ -21,6 +19,7 @@ import {
 } from '../../../shared/native-file-drop'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { describeDropTempCopyFailure } from '@/lib/drop-temp-copy-failure-copy'
+import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 
 export function getEditorFileDropSettingsForWorktree(
   store: WorktreeRuntimeOwnerState,
@@ -160,18 +159,19 @@ export function useGlobalFileDrop(): void {
       for (const filePath of data.paths) {
         void (async () => {
           try {
-            const isRemoteRuntimePath = isRemoteRuntimeFileOperation(fileContext, filePath)
-            // Why: remote paths don't need local auth — the relay/runtime is the security boundary.
-            if (!connectionId && !isRemoteRuntimePath) {
-              await window.api.fs.authorizeExternalPath({ targetPath: filePath })
-            }
-            const stat = await statRuntimePath(fileContext, filePath)
+            const stat = await statUserOpenedPath(fileContext, filePath)
             if (stat.isDirectory) {
               return
             }
 
             let relativePath = filePath
-            if (worktreePath && isPathInsideWorktree(filePath, worktreePath)) {
+            // Why: a project link out of the project keeps its absolute path, so it reads as
+            // user-named instead of being refused as a project file.
+            if (
+              worktreePath &&
+              !stat.escapesWorktree &&
+              isPathInsideWorktree(filePath, worktreePath)
+            ) {
               const maybeRelative = toWorktreeRelativePath(filePath, worktreePath)
               if (maybeRelative !== null && maybeRelative.length > 0) {
                 relativePath = maybeRelative
@@ -191,7 +191,7 @@ export function useGlobalFileDrop(): void {
               mode: 'edit'
             })
           } catch {
-            // Ignore files that cannot be authorized or stat'd.
+            // Ignore files that cannot be stat'd.
           }
         })()
       }

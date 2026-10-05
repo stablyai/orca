@@ -2383,3 +2383,203 @@ These screens reject the examined changes; they do not establish that every
 future optimization is exhausted. Shorter admitted jobs and one shared preflight
 reduce demand on the existing runner allowance. They do not increase that
 allowance or prove lower queue delay under different account traffic.
+
+## October 5 remaining import, diagnostic and checkout work
+
+The [hosted comparison](https://github.com/stablyai/orca/actions/runs/37247027814)
+used three alternating pairs per treatment at source
+`b18b174cd463f852051dc22adc8478b82dee4d1f`. Focused tests ran as fresh one-worker
+processes on the four-core, 16 GB Linux ARM runner with Node 24.21.0, pnpm 12.8.1
+and Vitest 4.1.11; persisted transforms and Node compile caches were disabled.
+
+| Work                                              | Original median | Candidate median | Median paired saving |
+| ------------------------------------------------- | --------------- | ---------------- | -------------------- |
+| Real incumbent-process test file                  | 16.478s         | 5.976s           | 10.520s              |
+| Commentable-line lifecycle test file              | 9.595s          | 6.880s           | 2.714s               |
+| Agent-status diagnostic plus semantic test cohort | 11.547s         | 8.235s           | 3.361s               |
+| Windows x64 SSH checkout                          | 22.052s         | 16.884s          | 5.020s               |
+| Windows ARM SSH checkout                          | 46.758s         | 33.910s          | 13.456s              |
+
+The incumbent cases own distinct sockets, shim directories and process groups.
+Running them concurrently preserves all nine outcomes and every real five-second
+lsof deadline. Both original and candidate still reject an unreaped helper and
+false claims of clean enumeration. Fault receipts prove the actual modified probe
+was imported and all owned helpers, groups, sockets and directories were cleaned.
+The Windows platform gate retains all nine skips.
+
+The renderer lifecycle tests keep their six original bodies and real decorator,
+zone and model behavior. Only the unrelated saved-note delivery menu is replaced
+by a typed throwing facade. Its cleanup assertion rejects unexpected use. Actual
+faults in memoization, value-equal refreshes and model replacement still fail their
+original assertions; a real menu call fails the facade and the cleanup guard.
+
+The agent-status benchmark reports counters and timings but asserts only a
+nonempty status map and positive elapsed time. It remains available through
+`ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.agent-status-benchmark.config.ts`.
+Ordinary discovery removes exactly that reporting test. Its 15 meaningful routing,
+index-retention and batch cases remain unchanged. Three real production faults
+pass the old reporting test and fail those retained contracts. Manual execution
+preserves its JSON schema and all nine deterministic counters at 423 worktrees,
+634 tabs and 1,000 events.
+
+Windows SSH hosts retain complete main, shared, relay, type, configuration,
+native, resource and test trees, plus root files. Six actual checkouts per
+architecture pinned candidate source `ce69b84d675b0a8b4763b03329c9d6549ac723f1`;
+all 16,568 retained files match the full checkout's contents, modes and index.
+The original 5,209 required inputs and six further inputs added by the source
+rebase are present. Local full/sparse builds match 54 generated artifacts;
+explicit test discovery is identical. Missing imported source, a named test or a
+required descriptor still fails. Full Windows native/provisioning lanes remain
+a separate qualification gate.
+
+Test timings exclude dependency setup, checkout and queues. Checkout timings
+include the action and shell/runner observation boundaries but exclude later
+builds and provisioning. These scoped savings must not be summed or treated as
+measured changes to full-shard occupancy or PR latency.
+
+## October 5 mobile typecheck overlap
+
+The [hosted comparison](https://github.com/stablyai/orca/actions/runs/37249591578)
+ran three alternating pairs on the four-core, 16 GB Linux ARM runner, with Node
+24.21.0 and TypeScript 6.0.3. The production compiler and test-typecheck ratchet
+use installed tools after dependency installation. Both resolved compiler
+programs have `noEmit: true`, with no incremental, composite or build-info writes.
+The change moves the existing unconditional production join after the foreground
+ratchet and before tests; it changes no compiler command or failure policy.
+
+| Complete typecheck stage | Original serial | Overlapped |
+| ------------------------ | --------------- | ---------- |
+| Pair 1                   | 68.284s         | 41.582s    |
+| Pair 2, reversed order   | 65.385s         | 41.042s    |
+| Pair 3                   | 64.240s         | 40.418s    |
+| Median                   | 65.385s         | 41.042s    |
+
+The median paired saving is 24.343 seconds, or 37.2% of this stage. The stage
+bracket includes native background/wait boundaries and observation overhead,
+but excludes dependency installation and the later test suite. All six stages
+preserve the three workers' compiler/ratchet verdicts and stdout/stderr hashes.
+The test compiler's existing diagnostics remain subject to the unchanged
+ratchet. Neither compiler attempted native loading or recorded filesystem
+mutations. Maximum aggregate owned-process RSS sampled every 200 milliseconds
+was 5.137 GiB; this is a sampled value rather than a kernel peak. The ratchet now
+runs even when the concurrently running production compiler later fails.
+
+Two real, independent type faults still prevent tests from starting. The
+production fault preserves the unaffected ratchet and child output; the test
+fault preserves the production output and fails the ratchet. Their explicit
+control receipts pass even though their intentionally failing jobs are allowed
+to finish collecting evidence.
+
+The separate [external cancellation control](https://github.com/stablyai/orca/actions/runs/37251289372)
+held the two real installed compiler entrypoints before checking, while retaining
+the production-background/ratchet-foreground topology. All three owned workers
+were observed alive 14.275 seconds before the cancellation request. Both native
+step outcomes became cancelled, tests did not start, and the runner's final
+cleanup log names all three exact worker PIDs. The attempted earlier assertion
+of PID absence failed: GitHub performs orphan cleanup after the always-tail
+observer and artifact upload. Post-cleanup absence was not observed and is not
+claimed. This control supplies no compiler-completion or timing measurement.
+
+## October 5 explicit RPC registry test setup
+
+The [hosted comparison](https://github.com/stablyai/orca/actions/runs/37251277897)
+ran three alternating pairs of the complete 156-file mixed cohort on source
+`d1e08ddd666e3099fc51c79f01f0305f5162186d`, using four workers on the four-core
+Linux ARM runner, Node 24.21.0, pnpm 12.8.1 and Vitest 4.1.11. Persisted module
+transforms and Node compile caches were disabled. All 153 candidate test files
+pass explicit method lists to their dispatchers. A shared throwing fixture
+prevents those tests from loading the unused default method catalog and rejects
+any accidental iteration of it. The three real catalog subjects remain
+unchanged and run beside the candidate subjects in every arm.
+
+| Complete cohort process | Original | Candidate | Paired saving |
+| ----------------------- | -------- | --------- | ------------- |
+| Pair 1                  | 142.184s | 89.238s   | 52.946s       |
+| Pair 2, reversed order  | 142.833s | 88.933s   | 53.900s       |
+| Pair 3                  | 141.274s | 90.186s   | 51.088s       |
+| Median                  | 142.184s | 89.238s   | 52.946s       |
+
+The median paired saving is 37.2% of this fixed cohort. All six arms preserve
+the complete ordered ledger, including duplicate parameterized case names:
+1,469 passes and one existing setup-dependent skip, totaling 1,470 outcomes.
+The real catalog subjects contribute 63 of those cases. Candidate bodies and
+assertions are unchanged. One file at its line limit uses the dispatch method's
+parameter type in place of its equivalent type-only import; its emitted code
+matches the measured candidate.
+
+Seventeen control invocations preserve actual terminal-handler fault detection,
+reject unexpected default-catalog consumption, and still detect a missing real
+catalog registration. A plain consumption counter prevents global mock-history
+resets from erasing the guard; actual `clearAllMocks` and `resetAllMocks` controls
+demonstrate that distinction and preserve unrelated call history. The isolated
+driver restores all source files after success, faults and a real cancellation.
+Independent review also confirms all 153 candidate sources, the fixture, three
+catalog subjects and declared qualification inputs survive the rebase unchanged.
+
+These are fresh-process wall times for this cohort, excluding dependency setup,
+queues and other test shards. They do not measure full-shard balance, total PR
+runner demand, or a change to the dashboard's PR runtime percentiles.
+
+## October 5 fused terminal cursor row scans
+
+Readiness checks repeatedly read terminal rows to recognize composer text.
+The shared reader now collects undimmed text and the first visible glyph's style
+in one pass. The cursor suffix remains a separate scan; dim glyph attributes,
+empty cells, wide characters and wrapped spaces keep their existing behavior.
+No grid data is retained between calls.
+
+The [hosted comparison](https://github.com/stablyai/orca/actions/runs/37263358478)
+used source `1bec53ceb23b5f296a38ffa0e085778d32fc7849`, Linux ARM,
+Node 24.21.0, pnpm 12.8.1 and one worker. All six fresh processes ran the same
+49-case readiness census module, with separate empty Vite caches, filesystem
+transform caching disabled and Node compile caching disabled.
+
+| Complete focused process | Original | Candidate | Paired saving |
+| ------------------------ | -------- | --------- | ------------- |
+| Pair 1                   | 66.412s  | 60.464s   | 5.948s        |
+| Pair 2, reversed order   | 66.880s  | 61.061s   | 5.819s        |
+| Pair 3                   | 68.056s  | 65.821s   | 2.234s        |
+
+The median paired saving is 5.819 seconds, or 8.7% of this fixed workload.
+All 294 timed case outcomes passed. Separate qualification preserves complete
+context/composer outputs on 98 recordings and the logical cursor/projection
+outputs of all 192 Runtime census cases. Nine actual scanner faults fail the
+intended assertions; the 89-case IME/composer slice also passes. Blank-row tests
+bound cell reads to 72 instead of the original 132 for a 12-column, five-row grid,
+with and without a reusable cell adapter.
+
+The raw timer-driven polling trace differed and was excluded from equivalence
+evidence. Logical per-frame output captures match; no raw polling-count equality
+is claimed. These measurements exclude setup, queues and other modules and do
+not establish a change in full-shard balance, PR percentiles or runner demand.
+
+## October 5 Qoder test import guards
+
+The direct Qoder Runtime tests now import the existing unused-default-RPC guard
+before their Runtime fixture. Their complete test bodies remain unchanged.
+The guard rejects an unexpected registry access instead of loading the full
+default-method graph. The three real registry catalogs remain unmocked.
+
+The [hosted comparison](https://github.com/stablyai/orca/actions/runs/37266875139)
+used fixed source `1bec53ceb23b5f296a38ffa0e085778d32fc7849`, Linux ARM,
+Node 24.21.0, pnpm 12.8.1 and four isolated fork workers. Every fresh process ran
+both Qoder files and all three catalogs: 85 cases across five files. Each invocation
+used a distinct empty Vite cache, with results, filesystem transform and Node
+compile caching disabled. All 510 timed outcomes passed.
+
+| Complete five-file process | Original | Candidate | Paired saving |
+| -------------------------- | -------- | --------- | ------------- |
+| Pair 1                     | 17.677s  | 16.323s   | 1.354s        |
+| Pair 2, reversed order     | 16.827s  | 16.021s   | 0.806s        |
+| Pair 3                     | 17.324s  | 16.211s   | 1.113s        |
+
+The median paired saving is 1.113 seconds, or 6.4% of this fixed workload.
+Separate actual faults in retained launch recipes, Qoder command selection and
+method registration fail the same intended assertions before and after the
+imports. Generated launch IDs and shifted stack lines differ in the raw failure
+messages; they were preserved and are not claimed byte-identical.
+
+The single hosted trial occupied 134 runner-seconds including all six samples,
+shared setup and upload. That is trial cost, not a production saving. These
+focused process measurements do not establish full-shard savings, PR runtime
+percentiles, queue relief or a change in the organization's runner allowance.

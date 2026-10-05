@@ -5,7 +5,7 @@ import { collectPersistedTerminalLeafIds } from './mobile-session-layout-project
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { mergeTerminalOrphanGroupLayout } from './terminal-orphan-topology'
 import { canonicalizeTerminalSessionWorktreeId } from './workspace-session-worktree-id'
-import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
+import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
 
 type Claim = RuntimeTerminalOrphanAdoptionRequest['claims'][number]
 type Topology = NonNullable<RuntimeTerminalOrphanAdoptionRequest['topology']>

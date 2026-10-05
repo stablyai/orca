@@ -639,7 +639,7 @@
       "protection": "partial",
       "owner": "agent-session-runtime",
       "layer": "runtime-unit",
-      "surfaces": ["structured chat journal replay", "structured chat recovery"],
+      "surfaces": ["structured chat journal replay", "structured chat damaged history"],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "remote-runtime"],
       "coveredPlatforms": ["macos"],
@@ -648,15 +648,17 @@
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/main/src/main/native-chat/agent-session-journal/journal-open.ts"
       ],
-      "invariant": "Replay preserves latest revisions, original item order, fences, aliases, submissions, repair precedence, read-only schema latching and cursor cleanup while retaining live items rather than all historical bodies.",
-      "oracle": "Replay 2,048 16 KiB revisions into one latest item with less than 8 MiB sampled live heap growth; preserve prefix and future-schema latching after a gap, malformed suffix repair precedence, and hold no SQLite read snapshot across reduction (a mid-replay checkpoint is not busy). Existing journal and subscriber tests cover replayed content and recovery.",
+      "invariant": "Replay preserves latest revisions, original item order, fences, aliases, submissions, a newer schema winning over damage and cursor cleanup while retaining live items rather than all historical bodies; damage fails the load and deletes nothing.",
+      "oracle": "Replay 2,048 16 KiB revisions into one latest item with less than 8 MiB sampled live heap growth; name a future-schema row read past a gap, name the first damage, fail a damaged load with every row kept, and hold no SQLite read snapshot across reduction (a mid-replay checkpoint is not busy). Existing journal and subscriber tests cover replayed content.",
       "commands": [
+        // As the 2026-09-11 evidence run ran it; the recovery test it names went with the read-time repair.
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts src/main/native-chat/agent-session-wire/agent-session-journal-recovery.test.ts",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts src/main/native-chat/agent-session-journal/journal-corruption-repair.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts src/main/native-chat/agent-session-journal/journal-damage.test.ts"
       ],
       "testFiles": [
         "src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts",
-        "src/main/native-chat/agent-session-journal/journal-corruption-repair.test.ts"
+        "src/main/native-chat/agent-session-journal/journal-damage.test.ts"
       ],
       "assertionRefs": [
         {
@@ -664,9 +666,18 @@
           "assertions": [
             "releases superseded revision bodies while reducing a long journal",
             "holds no read snapshot while reducing, so a checkpoint can pass mid-replay",
-            "keeps the prefix but latches read-only for a future row beyond a gap",
-            "keeps gap repair precedence when a later row is malformed",
-            "rejects an unanchored prefix before a later gap"
+            "reads past a gap to a future row, which names the newer row and no damage",
+            "names the first damage when a later row is malformed too",
+            "names a missing epoch row before a later gap"
+          ]
+        },
+        {
+          "file": "src/main/native-chat/agent-session-journal/journal-damage.test.ts",
+          "assertions": [
+            "fails to load and keeps every row: %s",
+            "reads past damage to a newer build's row, which fails the load as a newer Orca's instead",
+            "is refused when it is written, and the chat still loads with every other row",
+            "is founded afresh on open, with nothing deleted, and takes writes"
           ]
         }
       ],
@@ -679,6 +690,15 @@
           "result": "passed",
           "durationSeconds": 7.71,
           "summary": "245 tests passed across 22 files. Retained-heap oracle fails on baseline at 68.6 MB and passes under 8 MiB with streaming; gap/schema and cursor-cleanup assertions passed."
+        },
+        {
+          "date": "2026-10-02",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts",
+          "result": "passed",
+          "durationSeconds": 5.56,
+          "summary": "450 tests passed across 42 files, run as the vitest invocation the test script makes. Damage fails the load with every row kept; the retained-heap, newer-row-past-a-gap and cursor-cleanup assertions passed."
         }
       ],
       "runtimeBudget": {
@@ -948,7 +968,7 @@
       "invariant": "One structured-send operation id causes at most one provider dispatch. A recorded or transport-ambiguous send reuses that id across retry, caller reconnect, client remount, and journal recovery; only a terminal rejection may rotate to a first delivery.",
       "oracle": "Inject adapter acknowledgement loss, RPC response loss, caller replacement, logical-client close after response, auth recovery with a written request, missing journal submissions, legacy pending rows, stale fences, operation expiry, mobile remount, and durable-journal capacity. Assert one provider dispatch or one operation id for every ambiguous retry, fresh identity only after rejection, and no eviction of ambiguous mobile ids.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-disposition.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-disposition.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.probe.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/mobile-structured-send-operation-journal.test.ts ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts"
       ],
       "testFiles": [
@@ -963,6 +983,7 @@
         "src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx",
         "src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx",
         "src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx",
+        "src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.probe.test.tsx",
         "src/renderer/src/lib/launch-structured-agent-session.test.ts",
         "mobile/src/session/mobile-native-chat-image-attachment.test.ts",
         "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
@@ -1033,13 +1054,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-09-12",
+          "date": "2026-10-04",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-disposition.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-disposition.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.probe.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
           "result": "passed",
-          "durationSeconds": 22.1,
-          "summary": "Thirteen focused host, shared, renderer, and orchestration files passed 148 tests."
+          "durationSeconds": 42.3,
+          "summary": "Thirteen focused host, shared, renderer, and orchestration files passed 197 tests after the delivery probe tests moved to their own file."
         },
         {
           "date": "2026-09-12",
@@ -16958,15 +16979,38 @@
       "invariant": "Hidden-output restore, snapshot replay, metadata-only replay, and clear-before-replay must preserve order and never overlay stale bytes on newer live terminal output; restoring a snapshot onto an already-dirty pane must yield a buffer exactly equal to the snapshot frame.",
       "oracle": "Apply snapshots onto adversarially dirty pane states (already on the alternate screen, stale content occupying cells the new frame leaves blank, scrollback present, wide glyphs, revived sessions with restarted PTY seq counters) and assert exact buffer equality with the snapshot frame; fault injection interleaves hidden chunks, live output, metadata-only replay, and clear-before-replay, then asserts ordered terminal buffer content, clear decisions, and replay diagnostics. Marker-presence checks are not acceptable evidence on restore paths.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-output-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-stalled-hidden-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-replay-payload-handling.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-output-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-stalled-hidden-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-replay-payload-handling.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-replay.test.ts src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-output-restore.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-stalled-hidden-restore.test.ts",
-        "src/renderer/src/components/terminal-pane/pty-connection-replay-payload-handling.test.ts"
+        "src/renderer/src/components/terminal-pane/pty-connection-replay-payload-handling.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-replay.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-replay.test.ts",
+          "assertions": [
+            "repaints a pushed image exactly and keeps the history the TUI covers",
+            "keeps the pane's history when the host screen has another grid",
+            "keeps history unduplicated when a pushed image also carries history",
+            "paints the whole image when the TUI started while hidden",
+            "reads the pane buffer after a queued alt-screen entry parses",
+            "repaints from the normal buffer once the host TUI has exited",
+            "clears a raw byte replay in place on the alt screen",
+            "paints a requested image from an exited TUI exactly over an alt screen"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts",
+          "assertions": [
+            "keeps the covered history for a live TUI exactly as the host holds it",
+            "repaints from the normal buffer once the host TUI has exited"
+          ]
+        },
         {
           "file": "src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts",
           "assertions": [

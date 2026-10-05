@@ -291,18 +291,6 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codex.connections).toHaveLength(0)
   })
 
-  it('reports the rollout path Codex named, and null when it named none', async () => {
-    const withPath = fakeCodex()
-    const adapter = await acquired(withPath)
-    expect(await adapter.historyFilePath({ identity: identityFor('session-1') })).toBe(
-      '/rollouts/abc.jsonl'
-    )
-
-    const withoutPath = fakeCodex({ 'thread/start': () => ({ thread: { id: THREAD_ID } }) })
-    const bare = await acquired(withoutPath)
-    expect(await bare.historyFilePath({ identity: identityFor('session-1') })).toBeNull()
-  })
-
   it('lets closeAll cancel and reap an acquisition still opening', async () => {
     const codex = fakeCodex()
     let releaseOpen = (): void => {}

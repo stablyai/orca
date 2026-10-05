@@ -6,6 +6,43 @@ import { runProcess } from './child-process/run-process'
 import { buildRgArgs, createAccumulator, ingestRgJsonLine } from './text-search'
 
 describe('text search match budgets', () => {
+  it.each(['x', '😀'])(
+    'keeps whole Unicode context around dense real rg matches for %s',
+    async (query) => {
+      const { rgPath } = await import('@vscode/ripgrep-universal')
+      const root = await mkdtemp(join(tmpdir(), 'orca-rg-dense-unicode-'))
+      const filename = join(root, 'unicode.txt')
+      try {
+        await writeFile(filename, `a${'😀x'.repeat(10_000)}\n`)
+        const result = await runProcess({
+          program: rgPath,
+          args: buildRgArgs(query, '.', {}),
+          cwd: root
+        })
+        expect(result.code).toBe(0)
+        const accumulator = createAccumulator()
+        for (const line of result.stdout.split('\n')) {
+          if (ingestRgJsonLine(line, root, accumulator, 2000) === 'stop') {
+            break
+          }
+        }
+        expect(accumulator.totalMatches).toBe(2000)
+        const matches = accumulator.fileMap.get(filename)?.matches ?? []
+        expect(matches).toHaveLength(2000)
+        for (const [index, match] of matches.entries()) {
+          expect(match.column).toBe(index * 3 + (query === 'x' ? 4 : 2))
+          expect(match.matchLength).toBe(query.length)
+          expect(match.lineContent.isWellFormed()).toBe(true)
+          const start = (match.displayColumn ?? match.column) - 1
+          const length = match.displayMatchLength ?? match.matchLength
+          expect(match.lineContent.slice(start, start + length)).toBe(query)
+        }
+      } finally {
+        await rm(root, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('keeps dense-line columns after a leading U+FEFF from real rg', async () => {
     const { rgPath } = await import('@vscode/ripgrep-universal')
     const root = await mkdtemp(join(tmpdir(), 'orca-rg-dense-bom-'))

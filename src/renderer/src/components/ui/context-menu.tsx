@@ -3,6 +3,7 @@ import { ChevronRightIcon, CircleIcon } from 'lucide-react'
 import { ContextMenu as ContextMenuPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
+import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 
 function ContextMenu({ ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Root>) {
   return <ContextMenuPrimitive.Root data-slot="context-menu" modal={false} {...props} />
@@ -65,6 +66,7 @@ function ContextMenuSubContent({
         // overflow clipping does not hide the cascade on click/hover.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
+        onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </ContextMenuPrimitive.Portal>
   )
@@ -87,6 +89,7 @@ function ContextMenuContent({
         // capture clicks at the OS level when menus overlap them.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
+        onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </ContextMenuPrimitive.Portal>
   )

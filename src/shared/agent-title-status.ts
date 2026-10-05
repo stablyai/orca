@@ -153,7 +153,9 @@ export function normalizeTerminalTitle(title: string): string {
     if (status === 'working') {
       return `${GEMINI_WORKING} Gemini CLI`
     }
-    if (status === 'idle') {
+    // Why only with the glyph: a bare `gemini` title (a shell auto-title) reads idle by default,
+    // and stamping Gemini's rest glyph on it turned a name into explicit readiness.
+    if (status === 'idle' && title.includes(GEMINI_IDLE)) {
       return `${GEMINI_IDLE} Gemini CLI`
     }
   }

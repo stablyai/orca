@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -190,7 +191,7 @@ export function LinearIssueTextEditor({
     <div className="min-w-0">
       {fields !== 'description' ? (
         <div className="relative">
-          <textarea
+          <ImeTextarea
             value={titleDraft}
             onChange={(event) => updateTitleDraft(event.target.value)}
             onBlur={() => void saveField('title')}

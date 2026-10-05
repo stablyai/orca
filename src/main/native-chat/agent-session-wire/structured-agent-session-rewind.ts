@@ -77,9 +77,6 @@ export async function rewindStructuredAgentSession(
           if (conversationCommandBlocked(ctx, record, context.readChildWork(sessionId))) {
             return rewindRefusal('busy')
           }
-          if (ctx.journal.isReadOnly) {
-            return rewindRefusal('unsupported')
-          }
           const snapshot = ctx.journal.snapshot()
           const providerKeys = new Map(
             snapshot.submissions.flatMap((submission) =>

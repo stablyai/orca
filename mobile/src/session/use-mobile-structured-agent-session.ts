@@ -2,7 +2,10 @@ import { useCallback, useMemo, useRef } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
+import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat-cut-turn-notice'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/structured-agent-session-main-agent-working'
+import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-agent-session-read-refusal'
 import {
   activeStructuredAgentSessionTurnId,
   isStructuredAgentSessionThinking
@@ -157,16 +160,28 @@ export function useMobileStructuredAgentSession(args: {
     onSendError
   })
 
+  // What the transcript reads, as desktop does: the journal plus the one notice a cut turn with no
+  // row gets.
+  const transcriptItems = useMemo(
+    () =>
+      withNativeChatCutTurnNotices(state.items, {
+        agentName: TUI_AGENT_DISPLAY_NAMES[agent === 'codex' ? 'codex' : 'claude']
+      }),
+    [agent, state.items]
+  )
   const messages = useMemo(
     // Off: the phone hands a rejected message back to its composer, so a row would show it twice.
     () =>
-      projectStructuredAgentSessionMessages(state.items, [], state.submissions, {
+      projectStructuredAgentSessionMessages(transcriptItems, [], state.submissions, {
         rejectedInPlace: false
       }),
-    [state.items, state.submissions]
+    [transcriptItems, state.submissions]
   )
   const turnId = activeStructuredAgentSessionTurnId(state.items)
-  const turnTiming = useMobileStructuredAgentTurnTiming(state, turnId)
+  const turnTiming = useMobileStructuredAgentTurnTiming(
+    { ...state, items: transcriptItems },
+    turnId
+  )
   const activityText =
     selectStructuredAgentTurnActivity(state.items, turnId, state.activity)?.text ?? null
   const thinking = isStructuredAgentSessionThinking(state.items)
@@ -225,6 +240,7 @@ export function useMobileStructuredAgentSession(args: {
       status,
       transcriptLoading: status === 'loading',
       error: state.error,
+      readFailedFinally: status === 'error' && isFinalAgentSessionReadRefusal(state.readRefusal),
       hasMore: state.hasOlder,
       loadingEarlier: loadingOlder,
       loadEarlier

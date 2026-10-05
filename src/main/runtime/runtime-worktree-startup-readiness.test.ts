@@ -182,4 +182,84 @@ describe('OpenCode submit readiness', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(result.value).toBeNull()
   })
+
+  describe('through the settle checks a ready signal gets', () => {
+    function waitWith(
+      h: ReturnType<typeof fixture>,
+      checks: {
+        accept?: () => boolean
+        isShellInFront?: () => Promise<boolean>
+        timeoutMs?: number
+      }
+    ) {
+      return settle(
+        waitForWorktreeStartupDraft(h.host, 'term-1', 'opencode2', {
+          timeoutMs: checks.timeoutMs ?? 60_000,
+          requireComposerMarker: true,
+          submit: true,
+          ...(checks.accept ? { accept: checks.accept } : {}),
+          ...(checks.isShellInFront ? { isShellInFront: checks.isShellInFront } : {})
+        })
+      )
+    }
+
+    it('does not settle a grace while a shell is proven in front', async () => {
+      vi.useFakeTimers()
+      const h = fixture()
+      let shellInFront = true
+      const result = waitWith(h, { isShellInFront: async () => shellInFront })
+      h.emit(BOX)
+      await vi.advanceTimersByTimeAsync(OPENCODE_AGENT_ROW_GRACE_MS)
+      expect(result.value).toBeUndefined()
+      // The next read that still shows the box asks again, and now OpenCode is in front.
+      shellInFront = false
+      h.emit('\x1b[22;27H\x1b[?25h')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(result.value).toBe('pty-1')
+    })
+
+    it('lets a dialog on screen veto a grace', async () => {
+      vi.useFakeTimers()
+      const h = fixture()
+      const accept = vi.fn(() => false)
+      const result = waitWith(h, { accept })
+      h.emit(BOX)
+      await vi.advanceTimersByTimeAsync(OPENCODE_AGENT_ROW_GRACE_MS)
+      expect(accept).toHaveBeenCalledWith('pty-1')
+      expect(result.value).toBeUndefined()
+    })
+
+    it('refuses the deadline inside a pending grace while a shell is in front', async () => {
+      vi.useFakeTimers()
+      const h = fixture()
+      const result = waitWith(h, { isShellInFront: async () => true, timeoutMs: 3000 })
+      h.emit(BOX)
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(result.value).toBeNull()
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('takes the box at the deadline inside a pending grace with the agent in front', async () => {
+      vi.useFakeTimers()
+      const h = fixture()
+      const result = waitWith(h, { isShellInFront: async () => false, timeoutMs: 3000 })
+      h.emit(BOX)
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(result.value).toBe('pty-1')
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('withdraws a pending grace at a shell hand-off', async () => {
+      vi.useFakeTimers()
+      const h = fixture()
+      const result = waitWith(h, { isShellInFront: async () => false, timeoutMs: 8000 })
+      h.emit(BOX)
+      // The agent exits to its shell, which turns bracketed paste off as it runs a command.
+      h.emit('\x1b[?2004l')
+      await vi.advanceTimersByTimeAsync(OPENCODE_AGENT_ROW_GRACE_MS)
+      expect(result.value).toBeUndefined()
+      await vi.advanceTimersByTimeAsync(8000 - OPENCODE_AGENT_ROW_GRACE_MS)
+      expect(result.value).toBeNull()
+    })
+  })
 })

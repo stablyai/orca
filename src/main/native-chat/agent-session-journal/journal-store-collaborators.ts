@@ -40,14 +40,9 @@ export type JournalStoreHost = {
   database: () => JournalHostDatabase
   state: () => JournalReducerState
   readOnly: () => boolean
-  setReadOnly: (readOnly: boolean) => void
   cursor: () => AgentJournalCursor
   adopt: (loaded: JournalLoad) => void
   commit: (row: JournalRow) => void
-  /** Records whether the open's replay found an unusable prefix. */
-  setOpenedCorrupt: (corrupt: boolean) => void
-  malformedRows: () => number
-  setMalformedRows: (count: number) => void
   journal: () => AgentSessionJournal
   enqueue: (build: (seq: number, ts: number) => JournalRow) => Promise<JournalRow>
 }
@@ -72,7 +67,6 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     serialize: host.serialize,
     database: host.database,
     readOnly: host.readOnly,
-    setReadOnly: host.setReadOnly,
     highestFence: () => host.state().highestFence,
     queuePauseRestatement: () =>
       journalQueuePauseRestatement(

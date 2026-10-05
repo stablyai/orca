@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+import { structuredAgentSessionEntryResendsUnconfirmed } from '../../../../shared/structured-agent-session-outbox-unconfirmed-resend'
 import {
   commitStructuredAgentSessionOutbox,
   getStructuredAgentSessionOutbox
@@ -40,17 +41,15 @@ export function useStructuredAgentSessionOutboxUnconfirmedProbe(args: {
   // A non-null `retryAfterUnknownSubmittedAt` means the user already retried, so
   // another request would repeat that explicit action. Only entries that have
   // never been retried, and that no Stop outlived, are safe to probe automatically.
+  // The delivery notices read the same rule: while it is resent here, its row says it is sending.
   const probeId =
     blocker &&
     blocker.sessionId === sessionId &&
-    blocker.retryAfterUnknownSubmittedAt === null &&
-    blocker.outlivedStop !== true
+    structuredAgentSessionEntryResendsUnconfirmed(blocker, submissions)
       ? blocker.clientMessageId
       : null
-  const probeSettled =
-    probeId !== null && submissions.some((submission) => submission.clientMessageId === probeId)
   useEffect(() => {
-    if (probeId === null || probeSettled || !owner.attached) {
+    if (probeId === null || !owner.attached) {
       return
     }
     const attempts = probeAttemptsRef.current.id === probeId ? probeAttemptsRef.current.attempts : 0
@@ -70,5 +69,5 @@ export function useStructuredAgentSessionOutboxUnconfirmedProbe(args: {
       Math.min(UNCONFIRMED_PROBE_BASE_DELAY_MS * 2 ** attempts, UNCONFIRMED_PROBE_MAX_DELAY_MS)
     )
     return () => clearTimeout(timer)
-  }, [owner.attached, owner.ownerChange, owner.targetKey, probeId, probeSettled, sessionId])
+  }, [owner.attached, owner.ownerChange, owner.targetKey, probeId, sessionId])
 }

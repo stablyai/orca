@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 // `agentSession.hold` / `release` are kept answering for clients that still send them, and do
 // nothing else: a view never starts or keeps an agent.
 //

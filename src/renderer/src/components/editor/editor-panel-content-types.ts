@@ -1,4 +1,5 @@
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type { CsvFilePreview } from './csv/csv-file-content'
 
 /**
  * Thrown when a worktree's host owner is not yet known (the backing repo has
@@ -47,6 +48,7 @@ export const WORKTREE_HOST_UNRESOLVED_ERROR =
   "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip."
 
 export type FileContent = {
+  csvPreview?: CsvFilePreview
   content: string
   isBinary: boolean
   isImage?: boolean

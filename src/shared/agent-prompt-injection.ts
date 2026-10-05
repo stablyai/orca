@@ -6,6 +6,9 @@ import { isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
 export const AGENT_PROMPT_BRACKETED_PASTE_START = '\x1b[200~'
 export const AGENT_PROMPT_BRACKETED_PASTE_END = '\x1b[201~'
 export const AGENT_PROMPT_SUBMIT = '\r'
+/** Why: Claude Code can leave a prompt as editable text when paste-end and Enter arrive in the
+ *  same PTY write, so the desktop's draft paste sends Enter on the next turn, this long after. */
+export const AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS = 50
 
 /** Why unknown agents keep the lead: an unidentified Claude still needs it, while known non-Claude
  *  TUIs get pre-lead bytes because Codex drops typed text that shares the paste's write (STA-8200). */

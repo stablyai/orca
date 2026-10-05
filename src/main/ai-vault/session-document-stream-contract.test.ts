@@ -110,12 +110,28 @@ describe('streamed session document contracts', () => {
     }
   )
 
-  it.each(['null', '[]', '123', '"text"'])(
+  it.each(['null', '[]', '[{}]', '123', '"text"', '"{}"'])(
     'does not publish a nonobject document %s',
     async (content) => {
       expect(await read(content)).toBeNull()
     }
   )
+
+  it('recognizes an object root after whitespace and empty byte chunks', async () => {
+    async function* padded() {
+      yield Buffer.alloc(0)
+      yield Buffer.from(' \t')
+      yield Buffer.from('\r\n')
+      yield Buffer.alloc(0)
+      yield* bytes('{"id":"日本語😀","messages":[1]}', 1)
+      yield Buffer.alloc(0)
+      yield Buffer.from(' \n')
+    }
+    expect(await read('', { bytes: padded() })).toEqual({
+      record: { id: '日本語😀' },
+      state: [1]
+    })
+  })
 
   it('validates discarded subtrees and closes their source on malformed input', async () => {
     let closed = false

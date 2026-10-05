@@ -1,3 +1,4 @@
+import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
 import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
 import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -71,10 +72,25 @@ export async function startLocalWorker(args: {
           worktree: requestedWorktree === 'current' ? `id:${callerWorkspaceId}` : requestedWorktree
         }
   })
+  let openCodeModelLaunchSupported = false
+  if (!createsWorktree && launchParams.agent === 'opencode' && launchParams.model) {
+    const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
+      runtime,
+      params.from,
+      callerSession
+    )
+    openCodeModelLaunchSupported = await probeWorkerOpenCodeModelLaunchSupport(
+      runtime,
+      launchParams,
+      { worktree: requestedWorktree === 'current' ? `id:${callerWorkspaceId}` : requestedWorktree }
+    )
+  }
+
   const { agent, launch } = prepareLocalWorkerStart({
     params: launchParams,
     createsWorktree,
-    runtime
+    runtime,
+    openCodeModelLaunchSupported
   })
 
   const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
@@ -253,6 +269,7 @@ export async function startLocalWorker(args: {
       devMode: params.devMode,
       requestId: orchestrationMutation?.requestId ?? started.dispatch.id,
       agent: agent ?? null,
+      launchedAgent: params.terminal ? null : (agent ?? null),
       setupReceipt,
       launchReceipt: launch.receipt,
       mode,

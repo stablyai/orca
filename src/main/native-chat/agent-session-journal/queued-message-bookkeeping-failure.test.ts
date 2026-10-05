@@ -136,7 +136,6 @@ describe('draft bookkeeping inside a journal append', () => {
       PRIMARY KEY (session_id, message_id))`)
     db.close()
     const journal = await open()
-    expect(journal.isReadOnly).toBe(false)
     await queueAndConsume(journal, 'draft-1')
     await journal.resolveDispatch({
       clientMessageId: 'sub-draft-1',

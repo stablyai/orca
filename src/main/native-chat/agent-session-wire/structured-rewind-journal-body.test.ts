@@ -24,6 +24,22 @@ describe('rewind recovery of newer durable records', () => {
     })
   })
 
+  // Retained by its place, never by its kind, so an updated Orca still has it after the rewind.
+  it('carries an item of a kind this build does not know as it was, and records it', () => {
+    const body = { kind: 'plan-card', title: 'by a newer build' }
+    expect(restoreRewindJournalBody(body)).toBe(body)
+    expect(
+      AgentSessionRewindRecordSchema.safeParse({
+        operationId: 'op-1',
+        callerKey: 'caller-1',
+        itemId: 'codex:thread-1:turn-1:3',
+        expectedEpoch: 'epoch-1',
+        phase: 'prepared',
+        retained: [{ itemId: 'codex:thread-1:turn-1:1', body, observedAt: 1 }]
+      }).success
+    ).toBe(true)
+  })
+
   it('preserves background-task blocks across rewind recovery', () => {
     const body = {
       kind: 'message' as const,

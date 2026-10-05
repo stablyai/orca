@@ -18,14 +18,14 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type Database from '../../sqlite/sync-database'
 import { JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
-import { journalRepairDisclosure } from './journal-repair-disclosure'
 import { journalDatabasePath } from './journal-host-database'
 import type { AgentSessionJournal } from './journal-store'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase,
   liveTestJournalRows,
-  insertTestJournalRowJson
+  insertTestJournalRowJson,
+  SAVED_BY_NEWER_ORCA
 } from './journal-host-database-test-support'
 
 const IDENTITY: AgentSessionJournalIdentity = {
@@ -110,10 +110,9 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-const REPAIR_TEXT = journalRepairDisclosure().body.text
 describe('axis 1: the database shape', () => {
-  // A newer build's database opens read-only: its chats read, and nothing here writes to it.
-  it('reads a database a newer build stamped, refuses every write, and writes nothing', async () => {
+  // A newer build's database: none of its chats open here, and nothing here writes to it.
+  it('refuses every chat in a database a newer build stamped, and writes nothing', async () => {
     const journal = await open()
     await journal.appendItem(item(0), body('a'), {
       fence: 1,
@@ -123,32 +122,17 @@ describe('axis 1: the database shape', () => {
     await withDatabase((db) => db.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION + 1}`))
     const before = await digest(journalDatabasePath(root))
 
-    const reopened = await open()
-    expect(reopened.isReadOnly).toBe(true)
-    expect(reopened.snapshot().items.map((entry) => entry.body)).toEqual([body('a')])
+    await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
+    // A chat the database never held is refused the same way rather than being founded.
     await expect(
-      reopened.appendItem(item(1), body('b'), { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    ).rejects.toMatchObject({
-      code: 'journal_read_only'
-    })
-    // A chat the database never held opens empty rather than being founded, and refuses the same way.
-    const unwritten = await journals.open({
-      identity: { ...IDENTITY, sessionId: 'session-2' },
-      stateDirectory: root
-    })
-    expect(unwritten.isReadOnly).toBe(true)
-    expect(unwritten.snapshot().items).toEqual([])
-    await expect(
-      unwritten.appendItem(item(1), body('b'), { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    ).rejects.toMatchObject({
-      code: 'journal_read_only'
-    })
+      journals.open({ identity: { ...IDENTITY, sessionId: 'session-2' }, stateDirectory: root })
+    ).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
     await journals.closeAll()
     expect(await digest(journalDatabasePath(root))).toBe(before)
   })
 
   // Tables a newer schema changed read as a chat only an update opens, not as damage.
-  it('refuses as read-only a chat whose tables a newer build changed', async () => {
+  it("refuses as a newer Orca's a chat whose tables a newer build changed", async () => {
     const journal = await open()
     await journal.appendItem(item(0), body('a'), {
       fence: 1,
@@ -160,23 +144,7 @@ describe('axis 1: the database shape', () => {
       db.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION + 1}`)
     })
 
-    await expect(open()).rejects.toMatchObject({ code: 'journal_read_only' })
-  })
-
-  it('refuses the schema escape hatch on a store latched by a newer row', async () => {
-    const journal = await open()
-    const epoch = journal.epoch
-    const nextSeq = journal.cursor().sequence + 1
-    await journal.close()
-    await appendRawRow(epoch, nextSeq, futureRow(epoch, nextSeq))
-
-    const reopened = await open()
-    // With byte-copy quarantine gone there is nothing for `schema_unreadable` to
-    // do differently, so it takes the same writable guard as every other reason.
-    await expect(reopened.rollEpoch('schema_unreadable', 2)).rejects.toMatchObject({
-      code: 'journal_read_only'
-    })
-    expect(reopened.isReadOnly).toBe(true)
+    await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
   })
 
   // The only older version brought forward; 1 and 2 are refused (journal-database.test.ts).
@@ -190,7 +158,6 @@ describe('axis 1: the database shape', () => {
     await withDatabase((db) => db.pragma('user_version = 0'))
 
     const reopened = await open()
-    expect(reopened.isReadOnly).toBe(false)
     expect(reopened.snapshot().items).toHaveLength(1)
     await reopened.close()
     await withDatabase((db) => {
@@ -200,7 +167,7 @@ describe('axis 1: the database shape', () => {
 })
 
 describe('axis 2: the row body shape', () => {
-  it('degrades to read-only on a row from a newer build, without skipping it', async () => {
+  it("refuses a journal holding a row from a newer build as a newer Orca's, and keeps that row", async () => {
     const journal = await open()
     await journal.appendItem(item(0), body('a'), {
       fence: 1,
@@ -211,14 +178,7 @@ describe('axis 2: the row body shape', () => {
     await journal.close()
     await appendRawRow(epoch, nextSeq, futureRow(epoch, nextSeq))
 
-    const reopened = await open()
-    expect(reopened.isReadOnly).toBe(true)
-    await expect(
-      reopened.appendItem(item(1), body('b'), { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    ).rejects.toMatchObject({
-      code: 'journal_read_only'
-    })
-    await reopened.close()
+    await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
     // Never skipped, never deleted: the row this build cannot read is still there.
     await withDatabase((db) => {
       const stored = liveTestJournalRows(db, IDENTITY.sessionId).find((row) => row.seq === nextSeq)
@@ -226,7 +186,7 @@ describe('axis 2: the row body shape', () => {
     })
   })
 
-  it('skips a malformed row without giving up the journal, and discloses the skip', async () => {
+  it('refuses a journal holding a row that is not a row, and keeps that row', async () => {
     const journal = await open()
     await journal.appendItem(item(0), body('a'), {
       fence: 1,
@@ -237,35 +197,16 @@ describe('axis 2: the row body shape', () => {
     await journal.close()
     await appendRawRow(epoch, nextSeq, '{not json')
 
-    const reopened = await open()
-    expect(reopened.isReadOnly).toBe(false)
-    const items = reopened.snapshot().items
-    // The surviving row is untouched…
-    expect(items.some((entry) => entry.body.kind === 'message')).toBe(true)
-    // …and the skip is visible in the timeline instead of silently swallowed.
-    expect(
-      items.some((entry) => entry.body.kind === 'status' && entry.body.text === REPAIR_TEXT)
-    ).toBe(true)
-  })
-
-  it('keeps one disclosure row across reopens instead of stacking duplicates', async () => {
-    const journal = await open()
-    await journal.appendItem(item(0), body('a'), {
-      fence: 1,
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await expect(open()).rejects.toMatchObject({
+        refusal: { code: 'agent_session_journal_unreadable', details: { reason: 'journalCorrupt' } }
+      })
+    }
+    await withDatabase((db) => {
+      const stored = liveTestJournalRows(db, IDENTITY.sessionId)
+      expect(stored.map((row) => row.seq)).toEqual([1, 2, nextSeq])
+      expect(stored.at(-1)?.rowJson).toBe('{not json')
     })
-    const epoch = journal.epoch
-    const nextSeq = journal.cursor().sequence + 1
-    await journal.close()
-    await appendRawRow(epoch, nextSeq, '{not json')
-
-    await open().then((first) => first.close())
-    const reopened = await open()
-    expect(
-      reopened
-        .snapshot()
-        .items.filter((entry) => entry.body.kind === 'status' && entry.body.text === REPAIR_TEXT)
-    ).toHaveLength(1)
   })
 
   it('reopens a journal holding an admitted malformed-percent item id without throwing', async () => {
@@ -296,7 +237,6 @@ describe('axis 2: the row body shape', () => {
     )
 
     const reopened = await open()
-    expect(reopened.isReadOnly).toBe(false)
     expect(reopened.snapshot().items.some((entry) => entry.itemId === '%')).toBe(true)
   })
 })

@@ -24,6 +24,7 @@ const {
 const handlers = new Map<string, (event: unknown, args: unknown) => unknown>()
 
 vi.mock('electron', () => ({
+  app: { getPath: () => '/orca-test-user-data' },
   ipcMain: {
     handle: handleMock
   },
@@ -43,7 +44,6 @@ vi.mock('../wsl', () => ({
 }))
 
 vi.mock('./filesystem-auth', () => ({
-  authorizeExternalPath: vi.fn(async (value: string) => value),
   resolveAuthorizedPath: resolveAuthorizedPathMock
 }))
 

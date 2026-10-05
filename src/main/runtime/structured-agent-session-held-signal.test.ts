@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 /**
  * "This machine holds a structured chat" against a real host and record store. Session history,
  * resume preparation and replay-safe phone launches all build the host for a user who never had a

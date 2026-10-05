@@ -198,21 +198,24 @@ describe('a resent send id', () => {
     expect(store.getRecord(SESSION)?.rewind?.phase).toBe('prepared')
   })
 
-  it('is answered from a store a newer Orca wrote, which takes no write', async () => {
+  it('answers unknown, never a refusal, from a store a newer Orca wrote, which takes no write', async () => {
     await attach()
     const params = sendParams('sent, then a newer Orca wrote the store')
     await host.send(CALLER, params)
     await deliveredOnce()
     await host.close(SESSION, 'evict')
+    const rowsBefore = store.listOperationRows()
     Object.defineProperty(openTestJournalHostDatabase(root), 'readOnly', { value: true })
     expect(store.readOnly).toBe(true)
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
+    // This build never reads a newer Orca's chat, so the answer its journal holds stays unknown.
     await expect(host.send(CALLER, params)).resolves.toMatchObject({
-      ok: true,
-      replayed: true,
-      value: { submission: { clientMessageId: params.envelope.clientOperationId } }
+      ok: false,
+      refusal: { code: 'agent_session_operation_unknown', details: { reason: 'outcomeUnknown' } }
     })
     expect(dispatch).toHaveBeenCalledTimes(1)
+    expect(store.listOperationRows()).toEqual(rowsBefore)
   })
 })
 

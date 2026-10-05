@@ -109,8 +109,8 @@ describe('PR E2E gate contract', () => {
     // Why: without this the job could lose its filter and run on every PR — the
     // cost the path filter exists to avoid — while the gate assertions above
     // stay green.
-    expect(prWorkflow.jobs.e2e.needs).toBe('code_paths')
-    expect(prWorkflow.jobs.e2e.if).toBe("needs.code_paths.outputs.e2e_should_run == 'true'")
+    expect(prWorkflow.jobs.e2e.needs).toEqual(['code_paths', 'preflight'])
+    expect(prWorkflow.jobs.e2e.if).toContain("needs.code_paths.outputs.e2e_should_run == 'true'")
     expect(prWorkflow.jobs.code_paths.outputs.e2e_should_run).toBe(
       '${{ steps.e2e_filter.outputs.should_run }}'
     )

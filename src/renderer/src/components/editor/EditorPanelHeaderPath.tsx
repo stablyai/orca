@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import { useEffect, useRef, useState } from 'react'
 import { Copy, ExternalLink, Eye, Pencil } from 'lucide-react'
 import {
@@ -88,7 +89,7 @@ export function EditorPanelHeaderPath({
         }}
       >
         {isRenaming ? (
-          <input
+          <ImeInput
             ref={renameInputRef}
             data-editor-header-rename-input="true"
             aria-label={translate(

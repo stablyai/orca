@@ -22,6 +22,13 @@ describe('getAgentSlashCommands', () => {
     expect(names).toContain('clear')
     expect(names).toContain('compact')
     expect(names).not.toContain('model')
+    // Claude's terminal writes no /context reply the chat could show.
+    expect(names).not.toContain('context')
+  })
+
+  it('offers OpenClaude /context, whose report lands in its transcript', () => {
+    const names = getAgentSlashCommands('openclaude').map((c) => c.name)
+    expect(names).toEqual([...getAgentSlashCommands('claude').map((c) => c.name), 'context'])
   })
 
   it('falls back to a small common set for an unknown agent (never empty)', () => {

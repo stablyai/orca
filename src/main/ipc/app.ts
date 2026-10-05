@@ -15,10 +15,9 @@ import { isWslAvailableAsync, listWslDistrosAsync } from '../wsl'
 import { isGitBashAvailable } from '../git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { destroySystemTray } from '../tray/system-tray'
-import { authorizeExternalPath } from './filesystem-auth'
 import {
   ensureDefaultFloatingWorkspacePath,
-  grantFloatingWorkspaceDirectory,
+  trustFloatingWorkspaceDirectory,
   resolveFloatingTerminalCwd
 } from './floating-workspace-directory'
 import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown-documents'
@@ -60,7 +59,6 @@ async function pickFloatingMarkdownDocument(
   if (!isMarkdownDocumentName(filePath)) {
     throw new Error('Selected file is not a markdown document.')
   }
-  authorizeExternalPath(filePath)
   return markdownDocumentFromFilePath(cwd, filePath, { outsideRootRelativePath: 'basename' })
 }
 
@@ -70,7 +68,7 @@ async function pickFloatingWorkspaceDirectory(
 ): Promise<string | null> {
   const parentWindow = BrowserWindow.fromWebContents(event.sender)
   const options = {
-    // Why: this picker only grants access to an existing directory; creation belongs to explicit file actions.
+    // Why: this picker only chooses an existing directory; creation belongs to explicit file actions.
     properties: ['openDirectory']
   } satisfies Electron.OpenDialogOptions
   const result = parentWindow
@@ -80,8 +78,8 @@ async function pickFloatingWorkspaceDirectory(
     return null
   }
   const selectedDir = result.filePaths[0]
-  // Why: a user-approved picker selection is a trust grant for later markdown creation, unlike typed settings text.
-  await grantFloatingWorkspaceDirectory(store, selectedDir)
+  // Why: only a user-approved picker selection may become the floating terminal's cwd, unlike typed settings text.
+  await trustFloatingWorkspaceDirectory(store, selectedDir)
   return selectedDir
 }
 

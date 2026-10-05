@@ -82,6 +82,7 @@ describe('structured launch cancellation retirement', () => {
       promptDelivery: 'auto-submit',
       callers: {
         outcome: 'pending',
+        attempt: { kind: 'first', requestId: 'plus-pick', blank: true, stagedEntry: null },
         entries: new Set(),
         promptDeliveryResults: new Set(),
         onSettled: () => undefined
@@ -161,6 +162,7 @@ describe('structured launch cancellation retirement', () => {
       promptDelivery: 'auto-submit',
       callers: {
         outcome: 'pending',
+        attempt: { kind: 'first', requestId: 'plus-pick', blank: true, stagedEntry: null },
         entries: new Set(),
         promptDeliveryResults: new Set(),
         onSettled: () => undefined

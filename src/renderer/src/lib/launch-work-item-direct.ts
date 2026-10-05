@@ -40,6 +40,7 @@ import {
   planAgentSessionLaunch,
   type AgentSessionLaunchPlan
 } from '@/lib/agent-session-launch-plan'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 
 /**
  * "Use" flow: create the workspace, activate it, launch the default agent,
@@ -214,7 +215,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       promptDelivery,
       launchPlatform: args.launchPlatform,
       repoProjectRuntime,
-      planLaunch: planAgentSessionLaunch
+      planLaunch: planAgentSessionLaunch,
+      requestId: newAgentLaunchRequestId()
     })
     if (launchPreparation.unavailable) {
       activateAndRevealWorktree(worktreeId, {

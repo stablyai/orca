@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
@@ -67,6 +68,7 @@ export function FloatingTerminalWindowControls({
     // Floating resolves the terminal-backed lane: a chat view over a PTY when the chat default is
     // on, never a structured session.
     const result = launchAgentInNewTab({
+      requestId: newAgentLaunchRequestId(),
       agent: defaultAgent,
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       launchSource: 'shortcut'

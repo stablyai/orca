@@ -1,4 +1,5 @@
 import { createDrainMigrationRowLookup } from './drain-migration-row-lookup.js'
+import { HeapWindowReaper } from './heap-window-reaper.js'
 import {
   selectIdleRegionalRehomes,
   type IdleRegionalRehomeCandidate,
@@ -498,6 +499,19 @@ export class RelayHomeCellUnavailableError extends Error {
 // never return otherwise starves connection headroom fleet-wide and turns
 // every placement into relay_capacity_exhausted.
 const LATE_ARRIVAL_DEBT_RETENTION_MS = 10 * 60 * 1_000
+// A released reservation is read by nothing: every reader filters it out by state, and the only
+// statement that still touches it is the per-host lock, which just makes that lock set longer. A day
+// is margin for forensics, not for reads.
+export const RELEASED_CONTROL_RESERVATION_RETENTION_MS = 24 * 60 * 60 * 1_000
+// ~27 rows per page, so a statement deletes a few hundred rows at most. With ~9 director ticks a
+// minute the row cap is ~5M rows a day: the 13.7M-row backlog drains over about three days, and a
+// walk that finds nothing reads ~1 MB a tick.
+const RELEASED_CONTROL_RESERVATION_REAP_BUDGET = {
+  pagesPerStatement: 16,
+  maxPagesPerTick: 128,
+  maxRowsPerTick: 400,
+  budgetMs: 250
+}
 const CELL_FENCE_TTL_MS = 5 * 60 * 1_000
 const CELL_FENCE_ATTEMPT_TTL_MS = 60 * 60 * 1_000
 const CELL_DRAIN_SEND_PERMIT_MS = 30_000
@@ -541,6 +555,11 @@ export class RelayAssignmentStore {
   private readonly admissionSelector: RelayCellAdmissionSelector
   private readonly migrationCellRegistrar: RelayMigrationCellRegistrar
   private readonly activityQueue = new AssignmentIdentityQueue()
+  private readonly releasedReservationReaper = new HeapWindowReaper(
+    'relay_control_connection_reservations',
+    `state = 'released' AND released_at <= ?`,
+    RELEASED_CONTROL_RESERVATION_REAP_BUDGET
+  )
   private assignmentTail: Promise<void> = Promise.resolve()
 
   constructor(
@@ -2944,6 +2963,10 @@ export class RelayAssignmentStore {
   async evacuateDeadCells(limit = 100): Promise<number> {
     if (!this.requireLiveCells) return 0
     const cutoff = this.now() - this.heartbeatTtlMs
+    const cellIds = await this.deadCellEvacuationCandidates(cutoff)
+    // Why: without a candidate cell the host query below walks every assignment by primary key to
+    // return nothing (574 ms per call in production, from stale existing-only cells it can never act on).
+    if (cellIds.length === 0) return 0
     const rows = await this.database.query(
       `SELECT assignment.user_id, assignment.relay_host_id, assignment.cell_id
        FROM relay_assignments assignment
@@ -3006,8 +3029,9 @@ export class RelayAssignmentStore {
              AND fence.expires_at > ?
            )
          )
+         AND assignment.cell_id IN (${cellIds.map(() => '?').join(', ')})
        ORDER BY assignment.user_id, assignment.relay_host_id LIMIT ?`,
-      [1, cutoff, this.now(), this.now(), limit]
+      [1, cutoff, this.now(), this.now(), ...cellIds, limit]
     )
     let moved = 0
     for (const row of rows) {
@@ -3032,6 +3056,43 @@ export class RelayAssignmentStore {
       }
     }
     return moved
+  }
+
+  // The cell-level half of evacuateDeadCells' predicate, so it is a superset: every cell the host
+  // query could act on is here, and only the per-host pin checks are left out.
+  private async deadCellEvacuationCandidates(cutoff: number): Promise<string[]> {
+    const now = this.now()
+    const rows = await this.database.query(
+      `SELECT cell.cell_id
+       FROM relay_cells cell
+       LEFT JOIN relay_cell_committed_fences committed ON committed.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_fence_attempts attempt ON attempt.attempt_id = committed.attempt_id
+       LEFT JOIN relay_cell_fences fence ON fence.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
+       WHERE (runtime.cell_id IS NULL OR runtime.ready != ? OR runtime.last_heartbeat_at <= ?)
+         AND (
+           (
+             cell.enabled = 1
+             AND NOT EXISTS (
+               SELECT 1 FROM relay_cell_connection_limits limits
+               WHERE limits.cell_id = cell.cell_id
+             )
+           )
+           OR (
+             cell.enabled = 0
+             AND attempt.completed_at IS NOT NULL
+             AND attempt.aborted_at IS NULL
+             AND committed.cell_incarnation = runtime.cell_incarnation
+             AND fence.cell_incarnation = committed.cell_incarnation
+             AND committed.attested_at >= runtime.last_heartbeat_at
+             AND committed.expires_at > ?
+             AND fence.expires_at > ?
+           )
+         )
+       ORDER BY cell.cell_id`,
+      [1, cutoff, now, now]
+    )
+    return rows.map((row) => text(row, 'cell_id'))
   }
 
   async configureCell(
@@ -7156,6 +7217,12 @@ export class RelayAssignmentStore {
     }
     warnSweepCellInventoryBusy('abort-expired-evacuations', inventoryBusy)
     return aborted
+  }
+
+  async pruneReleasedControlReservations(): Promise<number> {
+    return await this.releasedReservationReaper.reap(this.database, [
+      this.now() - RELEASED_CONTROL_RESERVATION_RETENTION_MS
+    ])
   }
 
   async releaseExpiredActivityLeases(): Promise<number> {

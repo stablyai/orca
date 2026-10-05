@@ -53,7 +53,7 @@ export function deliverToSubscriber(
     ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
   }
   // Caught up, so there are no rows to read: every publish behind a commit's own delivery.
-  if (!journal.isReadOnly && sameJournalCursor(subscriber.cursor, journal.cursor())) {
+  if (sameJournalCursor(subscriber.cursor, journal.cursor())) {
     emitCaughtUp(port, subscriber, emitCheckpoint, shared)
     return
   }

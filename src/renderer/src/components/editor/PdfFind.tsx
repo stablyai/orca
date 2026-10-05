@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -126,7 +127,7 @@ export default function PdfFind({
       style={{ width: 300 }}
       onKeyDown={handleKeyDown}
     >
-      <input
+      <ImeInput
         ref={handleInputRef}
         type="text"
         value={query}

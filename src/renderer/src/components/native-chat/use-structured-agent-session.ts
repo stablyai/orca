@@ -38,6 +38,9 @@ import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-
 import { outboxOutsideQueuedCards } from './structured-agent-session-queued-cards'
 import { structuredAgentSessionStartFailureFacts } from './structured-agent-session-delivery-notices'
 import { hostStatesTurnScopes } from '../../../../shared/native-chat-turn-membership'
+import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
+import { withNativeChatCutTurnNotices } from '../../../../shared/native-chat-cut-turn-notice'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/tui-agent-display-names'
 
 export type { StructuredPromptItem } from './structured-agent-session-message-projection'
 
@@ -115,6 +118,14 @@ export function useStructuredAgentSession(args: {
     () => (transportState.queuedMessages ?? []).map((message) => message.messageId),
     [transportState.queuedMessages]
   )
+  const prompts = pendingStructuredSessionPrompts(transportState.journalItems)
+  // A host's queue waits on any pending prompt, and nothing here can settle one this build cannot
+  // answer: the send must start a turn, after which the card's cancel works.
+  const queueEnabled = queueFollowUps && !pendingPromptsAllUnanswerableHere(prompts)
+  const queueDelivery = useMemo(
+    () => ({ capability: queueCapability, enabled: queueEnabled }),
+    [queueCapability, queueEnabled]
+  )
   const outboxController = useStructuredAgentSessionOutbox({
     sessionId,
     target,
@@ -122,7 +133,7 @@ export function useStructuredAgentSession(args: {
     submissions: transportState.submissions,
     journalItems: transportState.journalItems,
     composerScopeKey,
-    queueDelivery: { capability: queueCapability, enabled: queueFollowUps },
+    queueDelivery,
     queuedMessageIds
   })
 
@@ -143,7 +154,6 @@ export function useStructuredAgentSession(args: {
     enabled: providerVisible
   })
 
-  const prompts = pendingStructuredSessionPrompts(transportState.journalItems)
   const { outbox } = outboxController
   // A host that takes a Stop naming no turn gets Stop from the send until the work settles; every
   // Stop before a turn opens needs that form. An older host can stop only a turn it has opened.
@@ -157,15 +167,19 @@ export function useStructuredAgentSession(args: {
   // A queued send is a card, never a transcript bubble.
   const isWorking = transportState.isWorking
   const transcriptOutbox = useMemo(
+    () => outboxOutsideQueuedCards(outbox, queuedMessageIds, isWorking, queueDelivery),
+    [isWorking, outbox, queueDelivery, queuedMessageIds]
+  )
+  // What the transcript reads: the journal plus the one notice a cut turn with no row gets.
+  const transcriptItems = useMemo(
     () =>
-      outboxOutsideQueuedCards(outbox, queuedMessageIds, isWorking, {
-        capability: queueCapability,
-        enabled: queueFollowUps
+      withNativeChatCutTurnNotices(transportState.journalItems, {
+        agentName: TUI_AGENT_DISPLAY_NAMES[agent === 'codex' ? 'codex' : 'claude']
       }),
-    [isWorking, outbox, queueCapability, queueFollowUps, queuedMessageIds]
+    [agent, transportState.journalItems]
   )
   const messages = useStructuredAgentSessionMessages(
-    transportState.journalItems,
+    transcriptItems,
     transcriptOutbox,
     transportState.submissions,
     queuedMessageIds
@@ -200,7 +214,7 @@ export function useStructuredAgentSession(args: {
             { command }
           )
       }),
-    journalItems: transportState.journalItems,
+    journalItems: transcriptItems,
     subagentRoster: transportState.subagentRoster,
     messages,
     status: transportEnabled ? state.status : 'ready',

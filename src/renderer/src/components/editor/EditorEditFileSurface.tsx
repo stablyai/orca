@@ -6,6 +6,7 @@ import { ChangesModeView } from './ChangesModeView'
 import { ConflictBanner, ConflictPlaceholderView } from './ConflictComponents'
 import {
   CsvViewer,
+  CsvPagedViewer,
   ImageViewer,
   IpynbViewer,
   MermaidViewer,
@@ -98,6 +99,17 @@ export function EditorEditFileSurface({
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
         {translate('auto.components.editor.EditorContent.b2735221f5', 'Loading...')}
       </div>
+    )
+  }
+  if (fileContent.csvPreview) {
+    return (
+      <CsvPagedViewer
+        key={activeFile.id}
+        file={fileContent.csvPreview}
+        preferenceKey={pdfPreferenceKey}
+        filePath={activeFile.filePath}
+        onReload={() => reloadContent(activeFile)}
+      />
     )
   }
   if (fileContent.loadError) {
@@ -243,7 +255,19 @@ export function EditorEditFileSurface({
   ) : isMermaid && mdViewMode === 'rich' ? (
     <MermaidViewer key={activeFile.id} content={currentContent} filePath={activeFile.filePath} />
   ) : isCsv && mdViewMode === 'rich' ? (
-    <CsvViewer key={activeFile.id} content={currentContent} filePath={activeFile.filePath} />
+    <CsvViewer
+      key={activeFile.id}
+      content={currentContent}
+      filePath={activeFile.filePath}
+      worktreeId={activeFile.worktreeId}
+      runtimeEnvironmentId={activeFile.runtimeEnvironmentId}
+      preferenceKey={pdfPreferenceKey}
+      fileId={activeFile.id}
+      isDirty={activeFile.isDirty}
+      onDirtyStateHint={activeFile.readOnly ? undefined : handleDirtyStateHint}
+      onContentChange={activeFile.readOnly ? undefined : handleContentChange}
+      onSave={activeFile.readOnly ? undefined : handleSave}
+    />
   ) : isNotebook && mdViewMode === 'rich' ? (
     <IpynbViewer
       key={activeFile.id}

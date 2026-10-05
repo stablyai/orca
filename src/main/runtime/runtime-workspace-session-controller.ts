@@ -116,7 +116,7 @@ export class RuntimeWorkspaceSessionController {
       : null
   }
 
-  set(worktreeId: string, session: WorkspaceSessionState): void {
+  setForWorktree(worktreeId: string, session: WorkspaceSessionState): void {
     this.deps.getStore()?.setWorkspaceSession?.(session, this.getHostId(worktreeId))
   }
 

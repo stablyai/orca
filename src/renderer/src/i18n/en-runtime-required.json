@@ -1580,6 +1580,7 @@
           "a42f6fbdd8": "Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.",
           "e5995ce268": "Keep computer awake while agents are working",
           "modeDescriptionDefault": "Choose On, Agent, or Off. Agent mode stays awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.",
+          "modeDescriptionMac": "Choose On, Agent, or Off. Agent mode prevents idle sleep while agents work, so long runs finish with the lid open. Closing the lid still puts this Mac to sleep.",
           "modeDescriptionWindows": "Choose On, Agent, or Off. Agent mode stays awake while agents are working; lid-close behavior follows this device's power settings.",
           "modeTitle": "Keep computer awake"
         },
@@ -1883,6 +1884,9 @@
         },
         "CacheTimer": {
           "07729cc155": "expired"
+        },
+        "DeleteWorktreeDirtyChangeHint": {
+          "8e2994ce28": "Deleting this workspace permanently removes these changes from disk."
         },
         "FolderWorkspaceComposerDialog": {
           "chooseSourceProject": "Choose task source",
@@ -2781,7 +2785,7 @@
         "notDelivered": "This message was not delivered.",
         "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
         "notSignedIn": "{{agent}} is not signed in for the selected account.",
-        "previousExitUnverifiable": "{{agent}} from before may still be running. Your messages will send once it stops.",
+        "previousExitUnverifiable": "Couldn't stop {{agent}} from before.",
         "providerExitedRejection": "{{agent}} stopped before this message was sent.",
         "providerExitedRow": "{{agent}} stopped while this response was in progress. You can continue in this conversation.",
         "providerRateLimited": "{{agent}} is rate-limited and retrying.",
@@ -2793,6 +2797,7 @@
         "queueFull": "Too many messages were waiting for the agent, so this one was not sent.",
         "runCommandAgain": "Run /{{command}} again.",
         "sendToTryAgain": "Send your message to try again.",
+        "sendAgainToTryOnceMore": "Send your message again to try once more.",
         "signInFirst": "Sign in first.",
         "signInThenRunCommand": "Sign in, then run /{{command}} again.",
         "signInThenSend": "Sign in, then send your message again.",
@@ -2859,6 +2864,7 @@
         "backgroundTasksRunning": "Background tasks are still running.",
         "capacity": "Orca has received too many requests in the last day.",
         "chatNotFound": "Orca can't find this chat.",
+        "chatSavedByNewerOrca": "This chat was saved by a newer Orca.",
         "clearUnfinished": "The last /clear didn't finish.",
         "commandRunning": "A /compact or /clear is still running.",
         "conversationCleared": "This conversation has been cleared.",
@@ -2882,7 +2888,6 @@
         "openCurrentConversation": "Open the current conversation to continue.",
         "optionRejected": "The agent didn't accept this setting.",
         "outcomeUnknown": "Orca couldn't confirm what happened. Check the chat.",
-        "sendOutcomeLost": "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
         "ownerUnproven": "The previous agent in this chat may still be running.",
         "promptPending": "The agent is waiting for an answer to a question or approval.",
         "questionChanged": "This question was already answered or has changed.",
@@ -2892,6 +2897,7 @@
         "reopenChat": "Reopen the chat to check again.",
         "restartFailed": "The agent couldn't restart.",
         "savedByNewerOrca": "Chats were saved by a newer Orca.",
+        "sendOutcomeLost": "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
         "settleEarlierMessage": "Wait for your earlier message to go through, or retry it.",
         "startNewChat": "Start a new chat to continue.",
         "terminalAgentHoldsChat": "This chat is still open in a terminal agent.",
@@ -2901,6 +2907,7 @@
         "unreachable": "Orca couldn't reach the agent.",
         "unsupported": "This needs a newer Orca on the computer running this chat. Update Orca there, then try again.",
         "updateOrcaToKeepUsing": "Update Orca to keep using them.",
+        "updateOrcaToOpenChat": "Update Orca to open it.",
         "waitForBackgroundTasks": "Wait for the background tasks to finish.",
         "waitForCommand": "Wait for the /compact or /clear to finish.",
         "waitForStart": "Wait for the agent to finish starting.",

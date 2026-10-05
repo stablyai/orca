@@ -100,11 +100,12 @@ export function openForWrite(
 }
 
 /** For an operation the running child performs, which starts none: the conversation, then any
- *  stop an earlier attempt left owed, so it never reaches a child that takes no input. */
+ *  close a stop began on that child, which it joins, so it never reaches a child that takes no
+ *  input. */
 export function openForProviderWrite(
   context: Pick<
     StructuredAgentSessionMutationContext,
-    'openConversation' | 'finishOwedStop' | 'deps'
+    'openConversation' | 'joinChildClose' | 'deps'
   >,
   envelope: AgentSessionMutationEnvelope
 ): () => Promise<AgentSessionMutationSessionPreparation> {
@@ -114,7 +115,7 @@ export function openForProviderWrite(
       envelope,
       context.deps.logger
     )
-    return opened.ok ? context.finishOwedStop(envelope.sessionId) : opened
+    return opened.ok ? context.joinChildClose(envelope.sessionId) : opened
   }
 }
 

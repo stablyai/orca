@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session-journal-types'
 // A chat at rest, through the RPC surface a client actually calls: opening it starts nothing, what
 // it can answer without an agent it answers, and the first send is what starts one.
@@ -29,6 +30,7 @@ import { closeStructuredAgentSessionChild } from '../../structured-agent-session
 import { discardStructuredWorkerSession } from './orchestration-structured-worker-session'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import {
+  liveTestJournalRows,
   openTestJournalHostDatabase,
   updateTestJournalRowJson
 } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
@@ -311,19 +313,34 @@ describe('the accessor', () => {
     expect(logged()).toEqual([denied, exhausted])
   })
 
-  it('opens a corrupt journal through the recovering open and still accepts a send (P2-03)', async () => {
+  it('refuses a damaged journal as unloadable at subscribe and send, and keeps its rows (P2-03)', async () => {
     await foundRestTestChat(rig)
     await rig.host.flushAllStreamedEvents()
-    // A row that no longer parses: the recovering open keeps the readable prefix and rebuilds.
     updateTestJournalRowJson(openTestJournalHostDatabase(rig.root).db, SESSION, 2, '}{')
     await rig.restart()
     setStructuredAgentSessionHost(rig.host)
 
     const frames = await call('agentSession.subscribe', { sessionId: SESSION })
-    expect(frames.some((frame) => !frame.ok)).toBe(false)
-    expect(frames.find((frame) => frame.ok)).toMatchObject({ result: { type: 'snapshot' } })
+    expect(frames.find((frame) => !frame.ok)).toMatchObject({
+      error: {
+        data: {
+          refusal: {
+            code: 'agent_session_journal_unreadable',
+            details: { reason: 'journalCorrupt' }
+          }
+        }
+      }
+    })
     const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
-    expect((await rig.host.send(CALLER, restTestSend('after the repair', fence))).ok).toBe(true)
+    expect(await rig.host.send(CALLER, restTestSend('after the damage', fence))).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_journal_unreadable', details: { reason: 'journalCorrupt' } }
+    })
+    expect(
+      liveTestJournalRows(openTestJournalHostDatabase(rig.root).db, SESSION).find(
+        (row) => row.seq === 2
+      )?.rowJson
+    ).toBe('}{')
   })
 
   it('subscribes an old mobile client that holds first even when no agent can start (P2-06)', async () => {

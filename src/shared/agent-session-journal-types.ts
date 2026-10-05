@@ -21,8 +21,8 @@ export { type AgentType }
 
 /** Bump only alongside a read-time upcaster in `journal-row-schema.ts`. */
 /** v3 introduced the `turn` item. A row without one is still written at v2 so
- *  an older host keeps reading it; the first v3 row latches that host read-only
- *  instead of truncating the epoch. */
+ *  an older host keeps reading it; the first v3 row stops that host writing the chat
+ *  (a released one keeps it read-only, this build fails its load) instead of truncating. */
 export const AGENT_SESSION_JOURNAL_SCHEMA_VERSION = 3
 export const AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION = 3
 const AGENT_SESSION_JOURNAL_PRE_TURN_SCHEMA_VERSION = 2
@@ -167,11 +167,24 @@ export type AgentJournalApprovalMatchedAskRule = {
   ruleContent?: string
 }
 
-export type AgentJournalApprovalSubject = {
+export type AgentJournalPlanApprovalSubject = {
   kind: 'plan'
   text: string
   filePath?: string
 }
+
+declare const agentJournalUnknownKind: unique symbol
+/** A kind tag this build does not know. Branded, so it never stands in for a known tag. */
+export type AgentJournalUnknownKind = string & { readonly [agentJournalUnknownKind]: true }
+
+/** A subject of a kind a newer Orca wrote: carried as it was, with whatever fields it holds, and
+ *  never drawn or approved here. */
+export type AgentJournalUnknownApprovalSubject = { readonly kind: AgentJournalUnknownKind }
+
+/** Open, as the journal schema reads it: narrow with `isPlanApprovalSubject` before reading it. */
+export type AgentJournalApprovalSubject =
+  | AgentJournalPlanApprovalSubject
+  | AgentJournalUnknownApprovalSubject
 
 export type AgentJournalApprovalItem = {
   kind: 'approval'

@@ -6,6 +6,7 @@ import {
   type DeviceResumeConfirmed
 } from '@orca-cloud/relay-contract'
 import type { RelayDatabase, SqlRow } from './database.js'
+import { HeapWindowReaper } from './heap-window-reaper.js'
 
 const CREDENTIAL_GRACE_MS = 24 * 60 * 60 * 1000
 // Released desktops validate invite expiry against their own clock with zero
@@ -20,9 +21,23 @@ const TERMINAL_INVITE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 // active/unconsumed AND inside its deadline, and every deadline is set at most 30s past insert, so
 // a settled row can never authorize anything again. A day is margin for forensics, not for reads.
 const INACTIVE_AUTHORIZATION_RETENTION_MS = 24 * 60 * 60 * 1000
+// A stored confirm result only answers a retry of the same request on the same connection basis,
+// and a different basis is refused as a tuple mismatch; a basis lives for one phone connection. A
+// week matches the pairing support window above.
+export const CONFIRM_RESULT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
+// Nothing in the relay reads audit events back; 90 days covers support and incident questions.
+export const AUDIT_EVENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000
 // Bounded so one cycle cannot hold row locks or grow WAL without limit; the backlog drains over
 // however many cycles it takes.
 const REAP_BATCH_ROWS = 5000
+// ~14 rows per page. With ~9 director ticks a minute the row cap is ~3M rows a day, so the 7.4M-row
+// backlog drains over two to three days; a walk that finds nothing reads ~1 MB a tick.
+const CONFIRM_RESULT_REAP_BUDGET = {
+  pagesPerStatement: 16,
+  maxPagesPerTick: 128,
+  maxRowsPerTick: 250,
+  budgetMs: 250
+}
 
 export type RelayIdentity = { userId: string; relayHostId: string }
 export type CredentialReservation = RelayIdentity & {
@@ -81,6 +96,13 @@ function string(row: SqlRow, field: string): string {
 }
 
 export class RelayCredentialStore {
+  // committed_at has no index, so a LIMIT delete would plan as a sequential scan of the whole table.
+  private readonly confirmResultReaper = new HeapWindowReaper(
+    'relay_confirm_results',
+    'committed_at <= ?',
+    CONFIRM_RESULT_REAP_BUDGET
+  )
+
   constructor(
     private readonly database: RelayDatabase,
     private readonly now: () => number = Date.now
@@ -680,16 +702,29 @@ export class RelayCredentialStore {
       'consumed_at IS NOT NULL AND consumed_at <= ?',
       [now - INACTIVE_AUTHORIZATION_RETENTION_MS]
     )
+    await this.confirmResultReaper.reap(this.database, [now - CONFIRM_RESULT_RETENTION_MS])
+    // Ordered so the plan walks relay_audit_events_at from its oldest entry: unordered, a LIMIT
+    // can plan as a sequential scan that rereads the retained rows before reaching the old ones.
+    await this.reapBatch('relay_audit_events', 'at <= ?', [now - AUDIT_EVENT_RETENTION_MS], 'at')
   }
 
   // ctid/rowid, not the primary key: the physical address lets the delete re-find exactly the batch
-  // the subquery located instead of re-matching the predicate per row.
-  private async reapBatch(table: string, predicate: string, params: unknown[]): Promise<void> {
-    const address = this.database.dialect === 'sqlite' ? 'rowid' : 'ctid'
+  // the subquery located instead of re-matching the predicate per row. On Postgres an array of TIDs,
+  // not `IN`: IN can plan as a hash join over a sequential scan of the whole table.
+  private async reapBatch(
+    table: string,
+    predicate: string,
+    params: unknown[],
+    orderBy?: string
+  ): Promise<void> {
+    const sqlite = this.database.dialect === 'sqlite'
+    const address = sqlite ? 'rowid' : 'ctid'
+    const order = orderBy ? `ORDER BY ${orderBy} ` : ''
+    const batch = `SELECT ${address} FROM ${table} WHERE ${predicate} ${order}LIMIT ${REAP_BATCH_ROWS}`
     await this.database.query(
-      `DELETE FROM ${table} WHERE ${address} IN (
-         SELECT ${address} FROM ${table} WHERE ${predicate} LIMIT ${REAP_BATCH_ROWS}
-       )`,
+      sqlite
+        ? `DELETE FROM ${table} WHERE rowid IN (${batch})`
+        : `DELETE FROM ${table} WHERE ctid = ANY(ARRAY(${batch}))`,
       params
     )
   }

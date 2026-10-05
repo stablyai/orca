@@ -27,6 +27,9 @@ vi.mock('node-pty', () => ({ spawn: mocks.mockPtySpawn }))
 vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mocks.mockCreateShellPromptReadinessProbe
 }))
+vi.mock('../main/opencode/opencode-launch-capabilities', () => ({
+  probeOpenCodeLaunchCapabilities: async () => null
+}))
 vi.mock('../main/pty/posix-pty-process-groups', () => ({
   forceKillPosixPtyProcessGroups: vi.fn((_pid: number, fallback: () => void) => fallback())
 }))
@@ -94,6 +97,38 @@ async function spawn(params: Record<string, unknown> = {}): Promise<Record<strin
 }
 
 describe('relay OpenCode source selection on real fixture files', () => {
+  it.each(['home', 'xdg', 'shell'] as const)(
+    'consumer config root follows the remote %s environment',
+    async (kind) => {
+      await install('// remote plugin', '')
+      const home = join(root, 'remote-home')
+      const xdg = join(root, 'remote-xdg')
+      const consumer = kind === 'home' ? join(home, '.config', 'opencode') : join(xdg, 'opencode')
+      mkdirSync(home, { recursive: true })
+      mkdirSync(consumer, { recursive: true })
+      writeFileSync(join(consumer, 'opencode.json'), '{"model":"remote-model"}')
+      if (kind === 'shell') {
+        writeFileSync(join(home, '.zshrc'), `export XDG_CONFIG_HOME='${xdg}'\n`)
+      }
+      const env = await spawn({
+        cwd: home,
+        launchAgent: 'opencode',
+        env: {
+          HOME: home,
+          USERPROFILE: home,
+          XDG_CONFIG_HOME: kind === 'xdg' ? xdg : '',
+          SHELL: kind === 'shell' ? '/bin/zsh' : '/bin/sh'
+        }
+      })
+      expect(readFileSync(plugin(consumer, 'opencode'), 'utf8')).toBe('// remote plugin')
+      expect(existsSync(plugin(join(root, 'xdg', 'opencode'), 'opencode'))).toBe(false)
+      expect(readFileSync(join(consumer, 'opencode.json'), 'utf8')).toBe('{"model":"remote-model"}')
+      expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+      expect(env.HOME).toBe(home)
+      expect(env.XDG_CONFIG_HOME).toBe(kind === 'xdg' ? xdg : '')
+    }
+  )
+
   it('leaves a standalone relay without supplied sources unconfigured', async () => {
     const env = await spawn()
     expect(env.ORCA_OPENCODE_AGENT).toBeUndefined()

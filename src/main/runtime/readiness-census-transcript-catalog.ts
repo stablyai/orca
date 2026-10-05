@@ -52,7 +52,9 @@ const RUNTIME_RECORDERS: readonly (readonly [string, Recorder])[] = [
   ['prime-agent-', { agent: 'prime-agent', foregroundProcess: 'prime-agent' }],
   ['qoder-cn-', { agent: 'qoder-cn', foregroundProcess: 'qoderclicn' }],
   ['qoder-', { agent: 'qoder', foregroundProcess: 'qodercli' }],
-  ['zcode-', { agent: 'zcode', foregroundProcess: 'zcode' }]
+  ['zcode-', { agent: 'zcode', foregroundProcess: 'zcode' }],
+  // A bare shell's prompt, a non-agent control like the daemon's less/nano/vim.
+  ['zsh-', { agent: null, foregroundProcess: 'zsh' }]
 ]
 
 // less, nano and vim are non-agent controls for the agent-unknown pane.

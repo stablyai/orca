@@ -22,6 +22,8 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/gitea/client.ts', 1],
   // Generated OpenCode claim source consumes JSON or cancels its body in finally.
   ['main/opencode/opencode-startup-prompt-source.ts', 1],
+  // Authenticated loopback preflight consumes bounded JSON and cancels every body in finally.
+  ['main/opencode/opencode-launch-model-context.ts', 1],
   ['main/orca-profiles/profile-cloud-client.ts', 1],
   ['main/orca-profiles/profile-cloud-org-members-client.ts', 1],
   ['main/rate-limits/codex-fetcher.ts', 3],

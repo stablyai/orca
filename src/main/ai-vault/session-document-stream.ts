@@ -115,15 +115,8 @@ export async function readStreamedSessionDocument<T>(args: {
     assembler.consume(token)
   })
   const decoder = new StringDecoder('utf8')
-  let objectRoot: boolean | undefined
   for await (const chunk of args.bytes) {
     throwIfAiVaultScanCancelled(args.signal)
-    if (objectRoot === undefined) {
-      const first = chunk.find((byte) => byte !== 32 && byte !== 9 && byte !== 10 && byte !== 13)
-      if (first !== undefined) {
-        objectRoot = first === 123
-      }
-    }
     parser.write(decoder.write(chunk))
     await yieldToEventLoop()
   }
@@ -136,5 +129,5 @@ export async function readStreamedSessionDocument<T>(args: {
   if (consumeFailure) {
     throw consumeFailure.error
   }
-  return objectRoot ? { record, state } : null
+  return assembler.current === record ? { record, state } : null
 }

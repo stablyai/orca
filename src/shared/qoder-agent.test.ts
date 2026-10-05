@@ -11,7 +11,7 @@ import {
   normalizeTerminalTitle,
   detectAgentStatusFromTitle
 } from './agent-detection'
-import { buildAgentStartupPlan } from './tui-agent-startup'
+import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from './tui-agent-startup'
 import { getAgentResumeArgv } from './agent-session-resume'
 import { createHookListenerState } from './agent-hook-listener/listener-state'
 import { normalizeAndAccept } from './agent-hook-listener-test-harness'
@@ -19,12 +19,16 @@ import { normalizeAndAccept } from './agent-hook-listener-test-harness'
 describe('Qoder agent identity and lifecycle', () => {
   it('recognizes the installed versioned binary on native platforms and excludes headless runs', () => {
     for (const command of [
+      'qoder',
+      '/home/dev/.qoder/entry/qoder',
+      'C:\\Qoder\\qoder.cmd',
       'qodercli',
       '/home/dev/.qoder/bin/qodercli/qodercli-1.1.64',
       'C:\\Qoder\\qodercli-1.1.64.exe'
     ]) {
       expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe('qoder')
       expect(isExpectedAgentProcess(command, 'qodercli')).toBe(true)
+      expect(isExpectedAgentProcess(command, 'qoder')).toBe(true)
     }
     expect(recognizeAgentProcessFromCommandLine('qodercli --print hello')).toBeNull()
     for (const args of [
@@ -40,7 +44,41 @@ describe('Qoder agent identity and lifecycle', () => {
       'qoder'
     )
     expect(recognizeAgentProcessFromCommandLine('qodercli-unrelated')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('qoder-unrelated')).toBeNull()
   })
+
+  it.each(['qoder', 'qodercli'])(
+    'excludes headless %s and preserves interactive resume',
+    (command) => {
+      for (const args of [
+        '--print hello',
+        '-p hello',
+        '--remote task',
+        '--list-sessions',
+        '--input-format stream-json',
+        '--output-format stream-json',
+        '--remote-control session'
+      ]) {
+        expect(recognizeAgentProcessFromCommandLine(`${command} ${args}`)).toBeNull()
+      }
+      expect(
+        recognizeAgentProcessFromCommandLine(`${command} --resume proof --prompt-interactive hello`)
+          ?.agent
+      ).toBe('qoder')
+    }
+  )
+
+  it.each(['ide', 'chat', 'serve-web', 'tunnel', './project', '/home/dev/project', 'C:\\project'])(
+    'does not identify qoder %s as an agent',
+    (subcommand) => {
+      expect(recognizeAgentProcessFromCommandLine(`qoder ${subcommand}`)).toBeNull()
+      expect(
+        recognizeAgentProcessFromCommandLine(`qoder ${subcommand}`, {
+          includeHeadlessOneShot: true
+        })
+      ).toBeNull()
+    }
+  )
 
   it.each([
     ['◇ Qoder CLI | Ready', 'idle'],
@@ -143,6 +181,31 @@ it('does not rewrite DSH titles containing a pipe as Qoder', () => {
   expect(getAgentLabel(title)).not.toBe('Qoder CLI')
   expect(detectAgentStatusFromTitle(title)).not.toBe('working')
 })
+
+it.each(['darwin', 'linux', 'win32'] as const)(
+  'starts and resumes a configured modern Qoder entry on %s',
+  (platform) => {
+    const plan = buildAgentStartupPlan({
+      agent: 'qoder',
+      prompt: 'proof',
+      cmdOverrides: { qoder: 'qoder' },
+      platform,
+      isRemote: platform === 'linux'
+    })
+    expect(plan?.launchCommand).toBe("qoder --prompt-interactive 'proof'")
+    expect(plan?.launchConfig.agentCommand).toBe('qoder')
+    const resume = buildAgentResumeStartupPlan({
+      agent: 'qoder',
+      providerSession: { key: 'session_id', id: 'proof-session' },
+      cmdOverrides: {},
+      agentCommand: plan?.launchConfig.agentCommand,
+      platform,
+      isRemote: platform === 'linux'
+    })
+    expect(resume?.launchCommand).toBe("qoder '--resume' 'proof-session'")
+    expect(isExpectedAgentProcess('qodercli-1.1.65', resume?.expectedProcess ?? '')).toBe(true)
+  }
+)
 
 it('settles manual compaction without interrupting automatic compaction', () => {
   const state = createHookListenerState()

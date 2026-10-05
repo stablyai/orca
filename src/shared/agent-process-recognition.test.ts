@@ -405,12 +405,38 @@ describe('agent process recognition', () => {
     ).toEqual({ agent: 'gemini', processName: 'gemini' })
   })
 
-  it.each(['earendil-works', 'mariozechner'])('recognizes the @%s Pi npm entrypoint', (scope) => {
-    expect(
-      recognizeAgentProcessFromCommandLine(
-        String.raw`node.exe C:\Users\dev\AppData\Roaming\npm\node_modules\@${scope}\pi-coding-agent\dist\cli.js`
-      )
-    ).toEqual({ agent: 'pi', processName: 'pi' })
+  it.each([
+    ['earendil-works', 'cli.js'],
+    ['earendil-works', 'bundle/cli.js'],
+    ['mariozechner', 'cli.js'],
+    ['mariozechner', 'bundle/cli.js']
+  ])('recognizes the @%s Pi npm entrypoint at dist/%s', (scope, entrypoint) => {
+    const windowsEntrypoint = entrypoint.replace('/', '\\')
+    const windowsPath = `C:\\Users\\Dev User\\AppData\\Roaming\\npm\\node_modules\\@${scope}\\pi-coding-agent\\dist\\${windowsEntrypoint}`
+    for (const command of [
+      `node /usr/local/lib/node_modules/@${scope}/pi-coding-agent/dist/${entrypoint}`,
+      `node.exe ${windowsPath.replace('Dev User', 'dev')}`,
+      String.raw`"C:\Program Files\nodejs\node.exe" "${windowsPath}"`
+    ]) {
+      expect(recognizeAgentProcessFromCommandLine(command)).toEqual({
+        agent: 'pi',
+        processName: 'pi'
+      })
+    }
+  })
+
+  it.each([
+    'node /tmp/dist/bundle/cli.js',
+    'node /tmp/node_modules/@other/pi-coding-agent/dist/bundle/cli.js',
+    'node /tmp/node_modules/@earendil-works/not-pi-coding-agent/dist/bundle/cli.js',
+    'node /tmp/notnode_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js',
+    'node /tmp/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js.extra',
+    'node /tmp/node_modules/@earendil-works/pi-coding-agent/dist/bundle/nested/cli.js',
+    'node /tmp/server.js /tmp/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js',
+    'node --require /tmp/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js /tmp/server.js',
+    'node --eval "console.log(1)" /tmp/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js'
+  ])('does not recognize a Pi entrypoint lookalike or argument: %s', (command) => {
+    expect(recognizeAgentProcessFromCommandLine(command)).toBeNull()
   })
 
   it('recognizes Prime Agent by its binary and npm entrypoint', () => {

@@ -212,13 +212,13 @@ describe('grok agent-arg overrides', () => {
     expect(removeEffort(['--effortless'])).toEqual(['--effortless'])
   })
 
-  it('drops only the overridden key from the launch record', () => {
+  it('drops only the overridden key from the launch record and argv', () => {
     expect(
       resolveAgentSessionOptionLaunch('grok', { model: 'grok-4.5', effort: 'high' }, [
         '--reasoning-effort=low'
       ])
     ).toEqual({
-      args: ['-m', 'grok-4.5', '--reasoning-effort', 'high'],
+      args: ['-m', 'grok-4.5'],
       appliedValues: { model: 'grok-4.5' }
     })
   })

@@ -7,6 +7,7 @@ import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-cod
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { prepareAiVaultSessionForResume } from '@/lib/ai-vault-session-resume-preparation'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
+import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import {
   activateAndRevealFolderWorkspace,
   activateAndRevealWorktree
@@ -28,7 +29,8 @@ export function activateAiVaultResumeWorkspace(workspaceId: string): boolean {
 export async function resumeAiVaultSessionInNewChat(
   session: AiVaultSession,
   agent: AgentSessionHandleProvider,
-  worktreeId: string
+  worktreeId: string,
+  requestId: AgentLaunchRequestId
 ): Promise<void> {
   try {
     // Codex rows can live under a shared legacy home; the same preparation the terminal resume
@@ -36,6 +38,7 @@ export async function resumeAiVaultSessionInNewChat(
     const preparedSession = await prepareAiVaultSessionForResume(session)
     const plan = adoptAgentSessionLaunchVerdict({
       route: 'structured-native-chat',
+      requestId,
       agent,
       worktreeId,
       resumeFrom: { providerSessionId: preparedSession.sessionId }

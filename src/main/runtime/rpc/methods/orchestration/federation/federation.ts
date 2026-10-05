@@ -3,6 +3,7 @@ import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
+import { createWorkerBriefWriteGuard } from '../../../../launched-agent-write-guard'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
 import { assertOrchestrationWorktreeCreationSupported } from '../worker/folder-worktree-placement'
@@ -20,7 +21,7 @@ import {
 } from './federation-setup'
 import { FederationAttachStartParams } from './federation-start-schema'
 import { failFederatedAttachmentWithReceipt } from './federation-start-receipt'
-import { prepareFederationConfiguredWorkerStart } from '../worker/worker-configured-agent-preflight'
+import { prepareFederationWorkerLaunchOnHost } from '../worker/worker-opencode-model-preflight'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
@@ -54,7 +55,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         )
       }
       const createsWorktree = params.worktree === 'new-top-level'
-      const { agent, launch } = await prepareFederationConfiguredWorkerStart({
+      const { agent, launch } = await prepareFederationWorkerLaunchOnHost({
         params,
         createsWorktree,
         runtime
@@ -244,10 +245,13 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           reusesTerminal: Boolean(params.terminal)
         })
         failedStage = 'dispatch_input'
+        // A shell back at its prompt also reads as ready, so the brief needs the agent found in front.
+        const briefGuard = createWorkerBriefWriteGuard(runtime, agent, !params.terminal)
         const prompt = await sendAgentTurn({
           kind: 'terminal',
           runtime,
           handle: terminalHandle,
+          ...(briefGuard ? { beforeWrite: briefGuard.beforeWrite } : {}),
           turn: {
             purpose: 'dispatch-preamble',
             operationId: orchestrationMutation.requestId,
@@ -264,7 +268,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
               cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
             })
           }
-        })
+        }).finally(() => briefGuard?.dispose())
         effects.push({
           kind: 'dispatch_input',
           role: 'agent',

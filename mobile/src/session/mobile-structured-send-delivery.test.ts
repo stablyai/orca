@@ -169,7 +169,9 @@ describe('mobileStructuredSendDelivery', () => {
     })
   })
 
-  it('never releases an ambiguous id on a later RPC refusal or failure', () => {
+  it('spends an ambiguous id the host has expired, and says to check the chat', () => {
+    // The host refuses an expired id on every replay; keeping it would refuse this text forever.
+    // The earlier attempt may still be in the chat, so the words never say it was not sent.
     expect(
       mobileStructuredSendDelivery(
         {
@@ -179,7 +181,25 @@ describe('mobileStructuredSendDelivery', () => {
         },
         true
       )
-    ).toEqual({ outcome: 'rejected', operationIdSpent: false, error: 'Operation expired' })
+    ).toEqual({
+      outcome: 'rejected',
+      operationIdSpent: true,
+      error:
+        "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed."
+    })
+  })
+
+  it('never releases an ambiguous id on any other later RPC refusal or failure', () => {
+    expect(
+      mobileStructuredSendDelivery(
+        {
+          status: 'refused',
+          code: 'agent_session_operation_conflict',
+          message: 'Operation conflict'
+        },
+        true
+      )
+    ).toEqual({ outcome: 'rejected', operationIdSpent: false, error: 'Operation conflict' })
     expect(
       mobileStructuredSendDelivery(
         { status: 'failed', message: 'Your message was not sent. Send it again.' },

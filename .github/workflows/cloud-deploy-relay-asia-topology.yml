@@ -78,6 +78,7 @@ jobs:
             production:production-gce-c30) ;;
             production:production-gce-c31) ;;
             production:production-gce-c32,production-gce-c33) target_region=us-central1 ;;
+            production:production-gce-c34) ;;
             *) echo "cell-ids do not match the reviewed environment topology" >&2; exit 1 ;;
           esac
           echo "TARGET_REGION=${target_region}" >> "${GITHUB_ENV}"

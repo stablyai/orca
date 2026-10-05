@@ -120,7 +120,8 @@ export function createUiAgentActions(
       }),
     sendPromptToSidebarAgentTarget: async (paneKey) => {
       const mode = get().agentSendPopoverTargetMode
-      if (!mode || mode.status === 'sending') {
+      // An empty prompt has nothing to send: every note may already be on its way.
+      if (!mode || mode.status === 'sending' || !mode.prompt.trim()) {
         return false
       }
 
@@ -154,7 +155,7 @@ export function createUiAgentActions(
         import('@/lib/active-agent-note-send'),
         import('@/lib/agent-message-send')
       ])
-      const result = await sendMessageToAgent({
+      const sending = sendMessageToAgent({
         worktreeId: mode.worktreeId,
         prompt: mode.prompt,
         target: runningAgentMessageTarget(target)
@@ -164,6 +165,8 @@ export function createUiAgentActions(
         })
         return { status: 'status-unavailable' as const, code: 'runtime-unverifiable' as const }
       })
+      mode.onPromptHandedOff?.(sending)
+      const result = await sending
 
       const stillCurrent = (): boolean => {
         const current = get().agentSendPopoverTargetMode

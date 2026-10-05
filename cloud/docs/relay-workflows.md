@@ -215,7 +215,19 @@ promote while a same-cap restore has just returned an empty general US cell: the
 would land there and the canary would roll the new cell back. Both cells are declared rehome
 sources and sit in the same-cap migration-only list until each one's canary promotes it, then move
 to the general list. The shadow gate's fleet pool list tracks the 16-connection Asia pools, so
-whether a US cell belongs there is decided at promotion, not assumed.
+whether a US cell belongs there is decided at promotion, not assumed. Both were promoted to general
+on 2026-10-01, so the same-cap job now rolls them as general cells. They stay out of the fleet pool
+list because their pool is the US default of 10.
+
+C34 is an Asia spare at the C31 shape in `asia-east2-c`, so the six Asia cells spread 2/2/2. It is
+its own topology wave and registers alone as migration-only, then the director is configured with
+`cell-ids` set to C34. It has no promotion wave: the Asia admission script and workflow refuse
+`promote` for it, and placement and regional rehome select only general cells. It is a
+migration-only landing zone that only an explicit evacuation or migration naming it can target.
+Do not name it in the multi-target `promote-general-cell` or `retire-migration-cell` modes, which
+accept any migration-only cell. It is a declared rehome source, sits in the same-cap migration-only
+list, and stays out of the fleet pool list. Promoting it later takes its own reviewed change adding a
+promotion wave and canary entry.
 Rollback returns
 Asia cells to migration-only; it does not destroy the network or use
 existing-only. The production topology dispatch remains unavailable until the

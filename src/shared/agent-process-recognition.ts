@@ -171,7 +171,8 @@ export function isExpectedAgentProcess(
     normalizedProcess.startsWith(`${normalizedExpected}.`) ||
     (['qoderclicn', 'qodercn'].includes(normalizedExpected) &&
       /^(?:qoderclicn|qodercn)(?:-\d.*)?$/.test(normalizedProcess)) ||
-    (normalizedExpected === 'qodercli' && /^qodercli-\d/.test(normalizedProcess)) ||
+    (['qoder', 'qodercli'].includes(normalizedExpected) &&
+      /^(?:qoder|qodercli(?:-\d.*)?)$/.test(normalizedProcess)) ||
     (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-'))
   )
 }
@@ -200,6 +201,10 @@ export function recognizeAgentProcessFromCommandLine(
   const tokens = tokenizeCommandLine(commandLine)
   const firstNormalized = normalizeProcessName(tokens[0])
   let direct = recognizedAgentForProcess(firstNormalized)
+  // Qoder's public dispatcher routes these commands to the IDE rather than the agent CLI.
+  if (firstNormalized === 'qoder' && tokens[1] && !tokens[1].startsWith('-')) {
+    return null
+  }
   // Why: the generic Orca CLI is not an agent; only this subcommand launches its TUI mode.
   if (direct?.agent === 'claude-agent-teams' && tokens[1]?.toLowerCase() !== 'claude-teams') {
     direct = null

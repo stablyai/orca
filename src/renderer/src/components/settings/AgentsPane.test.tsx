@@ -12,7 +12,11 @@ import {
   getAgentWorkspaceTrustDescription,
   getAgentWorkspaceTrustTitle
 } from './agent-workspace-trust-copy'
-import { getAgentAwakeDescription, getAgentAwakeTitle } from './agent-awake-copy'
+import {
+  getAgentAwakeDescription,
+  getAgentAwakeLidNote,
+  getAgentAwakeTitle
+} from './agent-awake-copy'
 import { getCodexTerminalServerIsolationTitle } from './codex-terminal-server-isolation-copy'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentRuntimeSetting } from './AgentRuntimeSetting'
@@ -350,6 +354,24 @@ describe('AgentsPane', () => {
   it('describes Windows lid behavior according to the device', () => {
     expect(getAgentAwakeDescription('Windows')).toBe(
       "Choose On, Agent, or Off. Agent mode stays awake while agents are working; lid-close behavior follows this device's power settings."
+    )
+  })
+
+  it('describes macOS lid behavior without promising lid-closed wake', () => {
+    expect(getAgentAwakeDescription('Macintosh')).toBe(
+      'Choose On, Agent, or Off. Agent mode prevents idle sleep while agents work, so long runs finish with the lid open. Closing the lid still puts this Mac to sleep.'
+    )
+  })
+
+  it('picks the lid note for each platform', () => {
+    expect(getAgentAwakeLidNote('Macintosh')).toBe(
+      'Prevents idle sleep with the lid open; closing the lid still puts this Mac to sleep.'
+    )
+    expect(getAgentAwakeLidNote('Windows')).toBe(
+      "Lid-close behavior follows this device's power settings."
+    )
+    expect(getAgentAwakeLidNote('X11; Linux x86_64')).toBe(
+      'Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
     )
   })
 

@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'

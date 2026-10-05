@@ -269,7 +269,7 @@ export function EditorPanelHeader({
           </Tooltip>
         </TooltipProvider>
       )}
-      {hasEditorToggle && (
+      {hasEditorToggle && !activeFile.csvPreviewOnly && (
         <EditorViewToggle
           value={effectiveToggleValue}
           modes={availableEditorToggleModes}

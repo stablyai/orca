@@ -7,6 +7,10 @@ import {
 } from '../../../../shared/structured-agent-session-outbox'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  settleStructuredAgentSessionOutboxEntryWatches,
+  type StructuredAgentSessionOutboxEntryRemoval
+} from './structured-agent-session-outbox-entry-watch'
 
 const OUTBOX_PREFIX = 'orca:desktopStructuredAgentSessionOutbox:v1:'
 
@@ -166,6 +170,15 @@ export function commitStructuredAgentSessionOutbox(
   entries: StructuredAgentSessionOutboxEntry[],
   options: { onlyIfSaved?: boolean } = {}
 ): boolean {
+  return commitOutbox(sessionId, entries, options, 'spent')
+}
+
+function commitOutbox(
+  sessionId: string,
+  entries: StructuredAgentSessionOutboxEntry[],
+  options: { onlyIfSaved?: boolean },
+  removal: StructuredAgentSessionOutboxEntryRemoval
+): boolean {
   const saved = writeOutbox(sessionId, entries)
   if (!saved && options.onlyIfSaved) {
     return false
@@ -177,6 +190,7 @@ export function commitStructuredAgentSessionOutbox(
       listener()
     }
   }
+  settleStructuredAgentSessionOutboxEntryWatches(sessionId, entries, removal)
   return saved
 }
 
@@ -215,7 +229,7 @@ export function enqueueStructuredAgentSessionLaunchPrompt(
 }
 
 export function discardStructuredAgentSessionLaunchOutbox(sessionId: string): void {
-  commitStructuredAgentSessionOutbox(sessionId, [])
+  commitOutbox(sessionId, [], {}, 'discarded')
 }
 
 export function mutateStructuredAgentSessionLaunchPrompt(
