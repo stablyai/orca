@@ -1,6 +1,4 @@
-import { rmSync } from 'node:fs'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
-import { deleteActiveClaudeKeychainCredentialsStrict } from '../keychain'
 import { ClaudeRuntimeAuthSnapshotCapture } from './runtime-auth-snapshot-capture'
 import type { ClaudeKeychainSnapshotValue } from './runtime-auth-types'
 
@@ -40,23 +38,31 @@ export class ClaudeRuntimeAuthSnapshotRestore extends ClaudeRuntimeAuthSnapshotC
       hasCredentialSurfaceOwnership =
         fileCredentialsOwned || scopedKeychainOwned || legacyKeychainOwned
     }
+    const sharedCredentialsJson = hasCredentialSurfaceOwnership
+      ? await this.mergeLiveRuntimeSharedCredentials('{}')
+      : undefined
     this.restoreRuntimeOauthAccountIfOwned(
       snapshot?.configOauthAccount ?? null,
       this.getOwnedRuntimeOauthBaseline(ownedOauthAccount, hasCredentialSurfaceOwnership),
       { allowCredentialSurfaceOwnership: hasCredentialSurfaceOwnership }
     )
     if (fileCredentialsOwned) {
-      this.restoreRuntimeCredentials(snapshot?.credentialsJson ?? null)
+      this.restoreRuntimeCredentials(snapshot?.credentialsJson ?? null, sharedCredentialsJson)
     }
     if (process.platform === 'darwin') {
       if (scopedSnapshot?.status === 'captured' && scopedKeychainOwned) {
         await this.restoreActiveClaudeKeychainCredentials(
           scopedSnapshot.credentialsJson,
-          paths.configDir
+          paths.configDir,
+          sharedCredentialsJson
         )
       }
       if (legacySnapshot?.status === 'captured' && legacyKeychainOwned) {
-        await this.restoreActiveClaudeKeychainCredentials(legacySnapshot.credentialsJson)
+        await this.restoreActiveClaudeKeychainCredentials(
+          legacySnapshot.credentialsJson,
+          undefined,
+          sharedCredentialsJson
+        )
       }
     }
     this.lastWrittenCredentialsJson = null
@@ -104,6 +110,9 @@ export class ClaudeRuntimeAuthSnapshotRestore extends ClaudeRuntimeAuthSnapshotC
     }
     const hasCredentialSurfaceOwnership =
       fileCredentialsOwned || scopedKeychainOwned || legacyKeychainOwned
+    const sharedCredentialsJson = hasCredentialSurfaceOwnership
+      ? await this.mergeLiveRuntimeSharedCredentials('{}')
+      : undefined
     this.restoreRuntimeOauthAccountIfOwned(
       null,
       this.getOwnedRuntimeOauthBaseline(managedOauthAccount, hasCredentialSurfaceOwnership),
@@ -112,14 +121,18 @@ export class ClaudeRuntimeAuthSnapshotRestore extends ClaudeRuntimeAuthSnapshotC
       }
     )
     if (fileCredentialsOwned) {
-      rmSync(paths.credentialsPath, { force: true })
+      this.restoreRuntimeCredentials(null, sharedCredentialsJson)
     }
     if (process.platform === 'darwin') {
       if (scopedKeychainOwned) {
-        await deleteActiveClaudeKeychainCredentialsStrict(paths.configDir)
+        await this.restoreActiveClaudeKeychainCredentials(
+          null,
+          paths.configDir,
+          sharedCredentialsJson
+        )
       }
       if (legacyKeychainOwned) {
-        await deleteActiveClaudeKeychainCredentialsStrict()
+        await this.restoreActiveClaudeKeychainCredentials(null, undefined, sharedCredentialsJson)
       }
     }
   }
@@ -159,6 +172,9 @@ export class ClaudeRuntimeAuthSnapshotRestore extends ClaudeRuntimeAuthSnapshotC
     }
     const hasCredentialSurfaceOwnership =
       fileCredentialsOwned || scopedKeychainOwned || legacyKeychainOwned
+    const sharedCredentialsJson = hasCredentialSurfaceOwnership
+      ? await this.mergeLiveRuntimeSharedCredentials('{}')
+      : undefined
     this.restoreRuntimeOauthAccountIfOwned(
       snapshot.configOauthAccount,
       this.getOwnedRuntimeOauthBaseline(managedOauthAccount, hasCredentialSurfaceOwnership),
@@ -167,17 +183,22 @@ export class ClaudeRuntimeAuthSnapshotRestore extends ClaudeRuntimeAuthSnapshotC
       }
     )
     if (fileCredentialsOwned) {
-      this.restoreRuntimeCredentials(snapshot.credentialsJson)
+      this.restoreRuntimeCredentials(snapshot.credentialsJson, sharedCredentialsJson)
     }
     if (process.platform === 'darwin') {
       if (scopedSnapshot?.status === 'captured' && scopedKeychainOwned) {
         await this.restoreActiveClaudeKeychainCredentials(
           scopedSnapshot.credentialsJson,
-          paths.configDir
+          paths.configDir,
+          sharedCredentialsJson
         )
       }
       if (legacySnapshot?.status === 'captured' && legacyKeychainOwned) {
-        await this.restoreActiveClaudeKeychainCredentials(legacySnapshot.credentialsJson)
+        await this.restoreActiveClaudeKeychainCredentials(
+          legacySnapshot.credentialsJson,
+          undefined,
+          sharedCredentialsJson
+        )
       }
     }
     this.clearLastWrittenRuntimeState()

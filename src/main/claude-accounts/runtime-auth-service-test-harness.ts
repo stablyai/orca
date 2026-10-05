@@ -16,7 +16,6 @@ export const testState = {
   legacyKeychainCredentials: null as string | null,
   throwScopedKeychainRead: false,
   throwLegacyKeychainRead: false,
-  throwActiveKeychainRead: false,
   throwRuntimeKeychainWrite: false,
   throwLegacyRuntimeKeychainWrite: false,
   throwScopedKeychainWrite: false,
@@ -50,9 +49,6 @@ export function createOauthRefreshMock() {
 export function createKeychainMock() {
   return {
     readActiveClaudeKeychainCredentials: vi.fn(async (configDir?: string) => {
-      if (testState.throwActiveKeychainRead) {
-        throw new Error('active keychain read failed')
-      }
       if (configDir) {
         if (configDir !== expectedRuntimeConfigDir()) {
           return testState.legacyKeychainCredentials
@@ -151,7 +147,6 @@ export function resetRuntimeAuthTestState(): void {
   testState.legacyKeychainCredentials = null
   testState.throwScopedKeychainRead = false
   testState.throwLegacyKeychainRead = false
-  testState.throwActiveKeychainRead = false
   testState.throwRuntimeKeychainWrite = false
   testState.throwLegacyRuntimeKeychainWrite = false
   testState.throwScopedKeychainWrite = false

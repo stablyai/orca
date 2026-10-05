@@ -2,8 +2,10 @@ import { existsSync, readFileSync, rmSync } from 'node:fs'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
 import {
   deleteActiveClaudeKeychainCredentialsStrict,
+  readActiveClaudeKeychainCredentialsStrict,
   writeActiveClaudeKeychainCredentials
 } from '../keychain'
+import { mergeSharedClaudeCredentialFields } from '../shared-credential-fields'
 import { ClaudeRuntimeAuthKeychainSnapshots } from './runtime-auth-keychain-snapshots'
 import {
   RUNTIME_OAUTH_ACCOUNT_PARSE_ERROR,
@@ -11,6 +13,51 @@ import {
 } from './runtime-auth-types'
 
 export class ClaudeRuntimeAuthRuntimeState extends ClaudeRuntimeAuthKeychainSnapshots {
+  protected async mergeLiveRuntimeSharedCredentials(credentialsJson: string): Promise<string> {
+    const paths = this.pathResolver.getRuntimePaths()
+    const candidates: string[] = []
+    if (process.platform === 'darwin') {
+      // A failed read must stop the switch before any shared tokens are overwritten.
+      const scoped = await readActiveClaudeKeychainCredentialsStrict(paths.configDir)
+      const legacy = await readActiveClaudeKeychainCredentialsStrict()
+      if (scoped !== null) {
+        candidates.push(scoped)
+      }
+      if (legacy !== null) {
+        candidates.push(legacy)
+      }
+    }
+    const file = this.readRuntimeCredentialsFile()
+    if (file !== null) {
+      candidates.push(file)
+    }
+    for (const candidate of candidates) {
+      let record: Record<string, unknown> | null = null
+      try {
+        record = this.asRecord(JSON.parse(candidate))
+      } catch {
+        // Report malformed live state without logging secrets.
+      }
+      if (!record) {
+        throw new Error('Cannot preserve malformed Claude runtime credentials')
+      }
+    }
+    const sharedFields = (credential: string): unknown =>
+      JSON.parse(mergeSharedClaudeCredentialFields('{}', credential))
+    // Older CLIs refresh the legacy item; newer CLIs may update only the scoped item or file.
+    const changed =
+      this.lastWrittenCredentialsJson === null
+        ? undefined
+        : candidates.find(
+            (candidate) =>
+              !this.jsonValuesEqual(
+                sharedFields(candidate),
+                sharedFields(this.lastWrittenCredentialsJson ?? '{}')
+              )
+          )
+    return mergeSharedClaudeCredentialFields(credentialsJson, changed ?? candidates[0] ?? null)
+  }
+
   protected readRuntimeCredentialsFile(): string | null {
     const credentialsPath = this.pathResolver.getRuntimePaths().credentialsPath
     return existsSync(credentialsPath) ? readFileSync(credentialsPath, 'utf-8') : null
@@ -58,7 +105,10 @@ export class ClaudeRuntimeAuthRuntimeState extends ClaudeRuntimeAuthKeychainSnap
     const currentCredentialsJson = existsSync(paths.credentialsPath)
       ? readFileSync(paths.credentialsPath, 'utf-8')
       : null
-    return currentCredentialsJson === previouslyWrittenCredentialsJson
+    return this.accountCredentialFieldsEqual(
+      currentCredentialsJson,
+      previouslyWrittenCredentialsJson
+    )
   }
 
   protected runtimeCredentialsChangedSinceLastWrite(baselineCredentialsJson: string): boolean {
@@ -76,10 +126,17 @@ export class ClaudeRuntimeAuthRuntimeState extends ClaudeRuntimeAuthKeychainSnap
     }
   }
 
-  protected restoreRuntimeCredentials(credentialsJson: string | null): void {
+  protected restoreRuntimeCredentials(
+    credentialsJson: string | null,
+    sharedCredentialsJson?: string
+  ): void {
     const paths = this.pathResolver.getRuntimePaths()
-    if (credentialsJson !== null) {
-      this.writeRuntimeCredentials(credentialsJson)
+    const restored = mergeSharedClaudeCredentialFields(
+      credentialsJson ?? '{}',
+      sharedCredentialsJson ?? this.readRuntimeCredentialsFile()
+    )
+    if (credentialsJson !== null || restored !== '{}') {
+      this.writeRuntimeCredentials(restored)
     } else {
       rmSync(paths.credentialsPath, { force: true })
     }
@@ -122,16 +179,20 @@ export class ClaudeRuntimeAuthRuntimeState extends ClaudeRuntimeAuthKeychainSnap
       await this.readActiveClaudeKeychainCredentialsBestEffort(configDir)
     return (
       previouslyWrittenCredentialsJson !== null &&
-      currentCredentialsJson === previouslyWrittenCredentialsJson
+      this.accountCredentialFieldsEqual(currentCredentialsJson, previouslyWrittenCredentialsJson)
     )
   }
 
   protected async restoreActiveClaudeKeychainCredentials(
     credentialsJson: string | null,
-    configDir?: string
+    configDir?: string,
+    sharedCredentialsJson?: string
   ): Promise<void> {
-    await (credentialsJson !== null
-      ? writeActiveClaudeKeychainCredentials(credentialsJson, configDir)
+    const live =
+      sharedCredentialsJson ?? (await readActiveClaudeKeychainCredentialsStrict(configDir))
+    const restored = mergeSharedClaudeCredentialFields(credentialsJson ?? '{}', live)
+    await (credentialsJson !== null || restored !== '{}'
+      ? writeActiveClaudeKeychainCredentials(restored, configDir)
       : deleteActiveClaudeKeychainCredentialsStrict(configDir))
   }
 
