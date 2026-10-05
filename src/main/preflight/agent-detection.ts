@@ -26,7 +26,8 @@ import { hydrateShellPathForAgentDetection } from '../ipc/agent-detection-shell-
 import {
   execCommandInWslOrThrow,
   findRunnableLocalCommand,
-  isCommandAvailable
+  isCommandAvailable,
+  runLocalPreflightProgramOrThrow
 } from '../ipc/preflight-command-exec'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import {
@@ -40,7 +41,10 @@ import {
 } from '../../shared/tui-agent-detection-commands'
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
 import { prunePreflightWslCache } from '../preflight-wsl-cache'
-import { detectAgentCommandsOnHost } from './agent-command-detection'
+import { resolveAgentCommandPathsOnHost } from './agent-command-detection'
+import { excludeMisidentifiedAgents } from '../../shared/tui-agent-identity-exclusion'
+import { buildIdentityProbe, clearIdentityProbeCache } from './preflight-identity-probe'
+import { isGhAuthenticated, isGlabAuthenticated } from './preflight-cli-auth'
 export { detectAgentCommandsOnHost } from './agent-command-detection'
 
 export type PreflightStatus = {
@@ -140,17 +144,25 @@ async function detectCommandRuntime(
 }
 
 export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
-  const commands = getTuiAgentDetectionProbeCommands(
-    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    getPreflightWslTarget(context) ? 'wsl' : process.platform
+  const wslTarget = getPreflightWslTarget(context)
+  const runtime = wslTarget ? 'wsl' : process.platform
+  const foundPaths = await resolveAgentCommandPathsOnHost(
+    getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, runtime),
+    context
   )
-  return resolveDetectedTuiAgentIds(
+  const foundCommands = new Set(foundPaths.keys())
+  const probe = wslTarget
+    ? buildIdentityProbe(foundPaths, preflightCacheKey(wslTarget), (program, args) =>
+        execCommandInWslOrThrow(wslTarget, [program, ...args].map(quotePosixShell).join(' '))
+      )
+    : buildIdentityProbe(foundPaths, LOCAL_PREFLIGHT_CACHE_KEY, runLocalPreflightProgramOrThrow)
+  return excludeMisidentifiedAgents(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    await detectAgentCommandsOnHost(commands, { context }),
-    getPreflightWslTarget(context) ? 'wsl' : process.platform
+    resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, runtime),
+    foundCommands,
+    probe
   )
 }
-
 export async function detectInstalledAgentsWithShellPathHydration(
   context?: PreflightRuntimeContext
 ): Promise<string[]> {
