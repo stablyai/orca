@@ -30,7 +30,11 @@ export function dispatchTerminalWebViewNotification(
     handlers.onSelectionMode?.(!!msg.enabled)
   } else if (msg.type === 'selection') {
     const text = typeof msg.text === 'string' ? msg.text : ''
-    handlers.onSelectionCopy?.(text)
+    const geometry =
+      typeof msg.startCol === 'number' && typeof msg.cols === 'number' && msg.cols > 0
+        ? { startCol: msg.startCol, cols: msg.cols }
+        : undefined
+    handlers.onSelectionCopy?.(text, geometry)
   } else if (msg.type === 'clipboard-write') {
     if (typeof msg.text === 'string') {
       handlers.onClipboardWrite?.(msg.text)
