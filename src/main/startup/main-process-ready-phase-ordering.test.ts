@@ -113,7 +113,7 @@ describe('initial proxy application ordering', () => {
 
     const windowIndex = desktop.indexOf('openMainWindow()')
     const proxyIndex = desktop.indexOf('await state.initialProxyApplicationReady')
-    const relayIndex = desktop.indexOf('new DesktopRelayService(')
+    const relayIndex = desktop.indexOf('startDesktopRelayService(runtimeRpc)')
 
     expect(windowIndex).toBeGreaterThanOrEqual(0)
     expect(proxyIndex).toBeGreaterThan(windowIndex)
@@ -146,8 +146,12 @@ describe('initial proxy application ordering', () => {
 
     const proxyIndex = serve.indexOf('await state.initialProxyApplicationReady')
     const rpcIndex = serve.indexOf('runtimeRpc.start()')
+    // The relay provider reads the E2EE keypair and mobile socket wiring that start() creates,
+    // and its first fetch must land behind the persisted proxy.
+    const relayIndex = serve.indexOf('startDesktopRelayService(runtimeRpc)')
 
     expect(proxyIndex).toBeGreaterThanOrEqual(0)
     expect(rpcIndex).toBeGreaterThan(proxyIndex)
+    expect(relayIndex).toBeGreaterThan(rpcIndex)
   })
 })
