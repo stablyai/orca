@@ -18,6 +18,8 @@ import {
 } from './runtime-file-routing'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
+import { getRuntimePathBasename } from '../../../shared/cross-platform-path'
+import { IMAGE_FILE_MIME_TYPES } from '../../../shared/image-file-extensions'
 
 const REMOTE_DOWNLOAD_CHUNK_BYTES = 384 * 1024
 const REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE =
@@ -58,6 +60,17 @@ export async function readRuntimeFileContent({
   }
 
   const worktree = toRuntimeWorktreeSelector(worktreeId)
+  const filename = getRuntimePathBasename(relativePath).toLowerCase()
+  const extensionIndex = filename.lastIndexOf('.')
+  if (extensionIndex > 0 && IMAGE_FILE_MIME_TYPES[filename.slice(extensionIndex)]) {
+    // SVG is readable text on mobile, but desktop image previews need its encoded bytes.
+    return callRuntimeRpc<RuntimeFilePreviewResult>(
+      target,
+      'files.readPreview',
+      { worktree, relativePath },
+      { timeoutMs: 15_000 }
+    )
+  }
   let result: RuntimeFileReadResult
   try {
     result = await callRuntimeRpc<RuntimeFileReadResult>(
