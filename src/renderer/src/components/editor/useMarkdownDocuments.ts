@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
@@ -11,6 +13,7 @@ import {
   resolveMarkdownDocLink
 } from './markdown-doc-links'
 import { selectMarkdownDocumentWorktreePath } from './markdown-document-worktree-path-selector'
+import { isMarkdownDocumentCapacityError } from './rich-markdown-ipc-error-message'
 import {
   getMarkdownDocumentListRequestKey,
   requestSharedMarkdownDocumentList
@@ -82,7 +85,11 @@ export function useMarkdownDocuments(
     worktreePath ?? ''
   )
   const currentRequestKeyRef = useRef<string | null>(documentRequestKey)
+  const lastCapacityNoticeKeyRef = useRef<string | null>(null)
   useLayoutEffect(() => {
+    if (currentRequestKeyRef.current !== documentRequestKey) {
+      lastCapacityNoticeKeyRef.current = null
+    }
     currentRequestKeyRef.current = documentRequestKey
   }, [documentRequestKey])
   // Suspense hides layout effects while a current scan is still valid.
@@ -121,6 +128,7 @@ export function useMarkdownDocuments(
         ) {
           return
         }
+        lastCapacityNoticeKeyRef.current = null
         setDocumentSnapshot({ requestKey: documentRequestKey, documents })
       } catch (err) {
         console.error('Failed to list markdown documents:', err)
@@ -129,6 +137,19 @@ export function useMarkdownDocuments(
           currentRequestKeyRef.current === documentRequestKey
         ) {
           setDocumentSnapshot({ requestKey: documentRequestKey, documents: [] })
+          if (
+            isMarkdownDocumentCapacityError(err) &&
+            lastCapacityNoticeKeyRef.current !== documentRequestKey
+          ) {
+            lastCapacityNoticeKeyRef.current = documentRequestKey
+            toast.error(
+              translate(
+                'editor.markdownLinks.capacity',
+                'Markdown links are unavailable because this workspace is too large.'
+              ),
+              { id: `markdown-document-capacity:${documentRequestKey}` }
+            )
+          }
         }
       }
     },

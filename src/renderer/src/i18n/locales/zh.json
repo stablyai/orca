@@ -18607,6 +18607,9 @@
       "searching": "正在搜索…",
       "searchFailed": "搜索未能完成，请重试。",
       "refreshFailed": "预览更新失败，正在显示上一版本。请打开源码视图查看当前内容。"
+    },
+    "markdownLinks": {
+      "capacity": "此工作区过大，Markdown 链接暂不可用。"
     }
   },
   "featureTips": {
