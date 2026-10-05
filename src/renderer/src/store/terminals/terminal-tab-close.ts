@@ -17,6 +17,7 @@ import { commitTerminalSurfaceClose } from './terminal-surface-close-intent'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { removePaneKeysByTabPrefix } from '../slices/agent-status-pane-keyed-records'
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
+import { clearRetiringTabFontSizeOverrides } from '@/components/terminal-pane/terminal-font-size-overrides'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,
@@ -28,11 +29,18 @@ export function createTerminalTabCloseActions(
       // Why narrowed separately: main alone records a close for a process exit.
       const intentReason = closeReason === 'pty-exit' ? null : closeReason
       const retiresSession = intentReason !== null
+      const currentState = get()
       const retirementPlan =
         opts?.precomputedRetirementPlan?.tabId === tabId
           ? opts.precomputedRetirementPlan
-          : buildTerminalTabRetirementPlan(get(), tabId)
+          : buildTerminalTabRetirementPlan(currentState, tabId)
       let closingWorktreeId: string | null = null
+      if (retirementPlan.worktreeId) {
+        clearRetiringTabFontSizeOverrides(currentState, {
+          tabId,
+          worktreeId: retirementPlan.worktreeId
+        })
+      }
       // Why: a parked tab has no mounted TerminalPane cleanup, so revoke its observer/candidate state before provider exit races.
       retireParkedTerminalTab(tabId)
       if (retiresSession) {
