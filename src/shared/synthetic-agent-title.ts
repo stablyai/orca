@@ -77,9 +77,9 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
   // the only thing that can light up the pane — this profile is what turns that row into the
   // "action required" title and the BEL that drives the notification.
   bob: {
-    workingLabel: 'Bob',
-    permissionLabel: 'Bob - action required',
-    idleLabel: 'Bob ready'
+    workingLabel: 'IBM Bob',
+    permissionLabel: 'IBM Bob - action required',
+    idleLabel: 'IBM Bob ready'
   },
   devin: {
     workingLabel: 'Devin',
