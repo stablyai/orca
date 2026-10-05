@@ -10,18 +10,23 @@ import {
   selectPaletteStatusInputs
 } from './worktree-jump-palette-status-inputs'
 import { selectWorktreePaletteCacheInputs } from '@/components/cmd-j/worktree-palette-cache-inputs'
+import type { PaletteFilterState } from './cmd-j/palette-filter'
 
 export function useWorktreeJumpPaletteStoreState({
   visible,
-  lingering
+  lingering,
+  filter
 }: {
   visible: boolean
   lingering: boolean
+  filter: PaletteFilterState
 }) {
   useTranslation()
   // Freeze age labels for one palette session; live status dots own their clock separately.
   // oxlint-disable-next-line react-hooks/exhaustive-deps -- visibility intentionally starts a new session clock.
   const paletteNowMs = useMemo(() => Date.now(), [visible])
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- explicit filter changes refresh the status snapshot.
+  const paletteSessionNowMs = useMemo(() => Date.now(), [visible, filter])
   const closeModal = useAppStore((state) => state.closeModal)
   const openModal = useAppStore((state) => state.openModal)
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
@@ -66,7 +71,7 @@ export function useWorktreeJumpPaletteStoreState({
   const paletteIndexStatus = useMemo(
     () => selectPaletteIndexStatusSnapshot(useAppStore.getState(), paletteStatusInputsActive),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- these deps are the snapshot refresh policy.
-    [paletteStatusInputsActive, tabsByWorktree, unifiedTabsByWorktree]
+    [paletteStatusInputsActive, tabsByWorktree, unifiedTabsByWorktree, filter]
   )
   const {
     agentStatusByPaneKey,
@@ -119,6 +124,7 @@ export function useWorktreeJumpPaletteStoreState({
   return {
     visible,
     paletteNowMs,
+    paletteSessionNowMs,
     closeModal,
     openModal,
     openSettingsPage,

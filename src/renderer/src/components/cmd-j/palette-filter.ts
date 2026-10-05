@@ -3,7 +3,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { getVisibleWorkspaceHostIdSet } from '../sidebar/visible-worktree-host-scope'
 import { resolveWorktreeFilterHostId, type PaletteFilterModel } from './palette-filter-options'
 
-export type PaletteFilterField = 'host' | 'repository'
+export type PaletteFilterField = 'host' | 'repository' | 'status'
 
 /**
  * Sorted arrays rather than Sets: identity is stable across renders and the
@@ -12,16 +12,23 @@ export type PaletteFilterField = 'host' | 'repository'
 export type PaletteFilterState = {
   hostIds: readonly string[]
   repoIds: readonly string[]
+  statusIds: readonly string[]
 }
 
-export const EMPTY_PALETTE_FILTER: PaletteFilterState = { hostIds: [], repoIds: [] }
+export const EMPTY_PALETTE_FILTER: PaletteFilterState = { hostIds: [], repoIds: [], statusIds: [] }
+
+const filterKeyByField: Record<PaletteFilterField, keyof PaletteFilterState> = {
+  host: 'hostIds',
+  repository: 'repoIds',
+  status: 'statusIds'
+}
 
 export function isPaletteFilterActive(filter: PaletteFilterState): boolean {
-  return filter.hostIds.length > 0 || filter.repoIds.length > 0
+  return filter.hostIds.length > 0 || filter.repoIds.length > 0 || filter.statusIds.length > 0
 }
 
 export function getPaletteFilterSelectionCount(filter: PaletteFilterState): number {
-  return filter.hostIds.length + filter.repoIds.length
+  return filter.hostIds.length + filter.repoIds.length + filter.statusIds.length
 }
 
 function toggleValue(values: readonly string[], id: string): readonly string[] {
@@ -36,9 +43,8 @@ export function togglePaletteFilterValue(
   field: PaletteFilterField,
   id: string
 ): PaletteFilterState {
-  return field === 'host'
-    ? { ...filter, hostIds: toggleValue(filter.hostIds, id) }
-    : { ...filter, repoIds: toggleValue(filter.repoIds, id) }
+  const key = filterKeyByField[field]
+  return { ...filter, [key]: toggleValue(filter[key], id) }
 }
 
 function addValues(values: readonly string[], ids: readonly string[]): readonly string[] {
@@ -63,22 +69,24 @@ export function addPaletteFilterValues(
   field: PaletteFilterField,
   ids: readonly string[]
 ): PaletteFilterState {
-  const values = field === 'host' ? filter.hostIds : filter.repoIds
+  const key = filterKeyByField[field]
+  const values = filter[key]
   const nextValues = addValues(values, ids)
   if (nextValues === values) {
     return filter
   }
-  return field === 'host' ? { ...filter, hostIds: nextValues } : { ...filter, repoIds: nextValues }
+  return { ...filter, [key]: nextValues }
 }
 
 export function clearPaletteFilterField(
   filter: PaletteFilterState,
   field: PaletteFilterField
 ): PaletteFilterState {
-  if ((field === 'host' ? filter.hostIds : filter.repoIds).length === 0) {
+  const key = filterKeyByField[field]
+  if (filter[key].length === 0) {
     return filter
   }
-  return field === 'host' ? { ...filter, hostIds: [] } : { ...filter, repoIds: [] }
+  return { ...filter, [key]: [] }
 }
 
 type SidebarScopeForPaletteFilter = Parameters<typeof getVisibleWorkspaceHostIdSet>[0] & {
@@ -100,7 +108,7 @@ export function buildPaletteFilterFromSidebarScope(
   if (hostIds.length === 0 && repoIds.length === 0) {
     return EMPTY_PALETTE_FILTER
   }
-  return { hostIds, repoIds }
+  return { hostIds, repoIds, statusIds: [] }
 }
 
 export type PaletteFilterPredicate = {
@@ -112,14 +120,14 @@ export type PaletteFilterPredicate = {
 }
 
 /**
- * Returns null when no filter is active so callers can skip the pass entirely
- * rather than paying an identity-predicate call per row.
+ * Returns null when no host or repository filter is active so callers can skip
+ * the identity pass entirely, including when only session status is filtered.
  */
 export function buildPaletteFilterPredicate(
   filter: PaletteFilterState,
   model: PaletteFilterModel
 ): PaletteFilterPredicate | null {
-  if (!isPaletteFilterActive(filter)) {
+  if (filter.hostIds.length === 0 && filter.repoIds.length === 0) {
     return null
   }
 

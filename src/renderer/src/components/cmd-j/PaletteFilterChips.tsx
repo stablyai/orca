@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import { ListFilter, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import type { PaletteFilterModel } from './palette-filter-options'
+import { buildPaletteStatusFilterOptions, type PaletteFilterModel } from './palette-filter-options'
 import {
   EMPTY_PALETTE_FILTER,
   isPaletteFilterActive,
@@ -26,6 +26,9 @@ export default function PaletteFilterChips({
     const repositoryLabels = new Map(
       model.repositories.map((repository) => [repository.id, repository.label])
     )
+    const statusLabels: Record<string, string> = Object.fromEntries(
+      buildPaletteStatusFilterOptions().map(({ id, label }) => [id, label])
+    )
     return [
       ...filter.hostIds.map((id) => ({
         field: 'host' as const,
@@ -36,17 +39,21 @@ export default function PaletteFilterChips({
         field: 'repository' as const,
         id,
         label: repositoryLabels.get(id) ?? id
+      })),
+      ...filter.statusIds.map((id) => ({
+        field: 'status' as const,
+        id,
+        label: statusLabels[id] ?? id
       }))
     ]
-  }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories])
+  }, [filter.hostIds, filter.repoIds, filter.statusIds, model.hosts, model.repositories])
 
   if (!isPaletteFilterActive(filter)) {
     return null
   }
 
   return (
-    // Why: the scope is seeded from the sidebar, not chosen here, so it reads as metadata
-    // rather than as pills offering to undo an action the user never took.
+    // Why: keep the sidebar scope and palette selections on one compact metadata line.
     <div className="mx-3 mt-2 flex items-center gap-1.5 pl-3.5 text-[11px] text-muted-foreground">
       {/* Why: a fixed anchor the eye can find at one filter, where a bare muted line vanishes. */}
       <ListFilter className="size-3 shrink-0" aria-hidden="true" />

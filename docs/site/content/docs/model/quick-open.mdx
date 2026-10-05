@@ -21,7 +21,9 @@ Type a web search instead of a path or URL to open it in the worktree browser wi
 
 Jump across worktrees and tabs in one search. The palette opens with the sidebar's current host and project scope, including individual repository selections. The placeholder in the empty input reads _repo/worktree_ — type either half and Orca filters accordingly. Typing can still find non-archived worktrees hidden by the sidebar's other visibility toggles, but it keeps that host and repository scope. Slack-style emoji shortcodes (`:rocket:`) use the same suggestion popover as workspace naming.
 
-Press **Tab** in the palette for a host and project filter menu. Project choices are repository-granular. Selected hosts and repositories narrow the result set and show as chips you can remove one at a time. Changes are temporary: closing the palette discards them, and the next open reseeds the filter from the sidebar.
+Press **Tab** in the palette for a host, project, and session-status filter menu. Project choices are repository-granular. Selections narrow the result set and show as chips you can remove one at a time. Changes are temporary: closing the palette discards them, and the next open reseeds the host and project filter from the sidebar.
+
+Under **Statuses**, choose **Waiting for input**, **Finished / unread result**, **Working**, or **Idle**. Multiple statuses match any selected choice; host and project choices further narrow that set. With a status selected, only matching chats and terminals appear, both in recents and in typed searches. Statuses reuse the tab's agent-attention and unread state: running or permission-waiting sessions do not become finished just because they have unread output, and a plain shell is not inferred to have finished a task. Explicit filter changes refresh the recent-session snapshot.
 
 Results include:
 

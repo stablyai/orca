@@ -1,4 +1,5 @@
 import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
+import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
@@ -40,6 +41,36 @@ function toFilterOption({
     count,
     searchText: buildPaletteFilterOptionSearchText(label, detail)
   }
+}
+
+/** Static session choices share localized labels between the menu and chips. */
+export function buildPaletteStatusFilterOptions(): PaletteFilterOption[] {
+  return [
+    toFilterOption({
+      id: 'waiting',
+      label: translate('worktreeJumpPalette.filter.statusWaiting', 'Waiting for input'),
+      detail: '',
+      count: 0
+    }),
+    toFilterOption({
+      id: 'finished',
+      label: translate('worktreeJumpPalette.filter.statusFinished', 'Finished / unread result'),
+      detail: '',
+      count: 0
+    }),
+    toFilterOption({
+      id: 'working',
+      label: translate('worktreeJumpPalette.filter.statusWorking', 'Working'),
+      detail: '',
+      count: 0
+    }),
+    toFilterOption({
+      id: 'idle',
+      label: translate('worktreeJumpPalette.filter.statusIdle', 'Idle'),
+      detail: '',
+      count: 0
+    })
+  ]
 }
 
 export type PaletteFilterModel = {

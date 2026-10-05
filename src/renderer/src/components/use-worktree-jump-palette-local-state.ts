@@ -39,7 +39,6 @@ export function useWorktreeJumpPaletteLocalState({
     [deferredQuery]
   )
   const createWorktreeName = taskSourceUrl ? query.trim() : deferredCreateAction.createWorktreeName
-  const showCreateAction = deferredCreateAction.showCreateAction || taskSourceUrl !== null
   const [selectedItemId, setSelectedItemId] = useState('')
   const latestQueryRef = useRef('')
   const autoSelectedItemIdRef = useRef<string | null>(null)
@@ -49,6 +48,9 @@ export function useWorktreeJumpPaletteLocalState({
   const [filter, setFilter] = useState<PaletteFilterState>(() =>
     buildPaletteFilterFromSidebarScope(sidebarScope)
   )
+  const showCreateAction =
+    filter.statusIds.length === 0 &&
+    (deferredCreateAction.showCreateAction || taskSourceUrl !== null)
   const [dialogElement, setDialogElement] = useState<HTMLElement | null>(null)
   const previousWorktreeIdRef = useRef<string | null>(null)
   const previousActiveTabTypeRef = useRef<WorkspaceVisibleTabType>('terminal')

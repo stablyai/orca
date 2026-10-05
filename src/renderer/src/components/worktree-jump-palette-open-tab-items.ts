@@ -1,4 +1,7 @@
 import { comparePaletteRankedItems } from '@/lib/cmd-j-section-leadership'
+import { getPaletteWorktreeIdentity } from '@/lib/palette-repo-resolution'
+import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
+import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
 import type { BrowserPaletteSearchResult } from '@/lib/browser-palette-search'
 import type { SimulatorPaletteSearchResult } from '@/lib/simulator-palette-search'
 import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace-tab-palette-search'
@@ -6,8 +9,54 @@ import type {
   BrowserPaletteItem,
   OpenTabPaletteItem,
   SimulatorPaletteItem,
-  WorkspaceTabPaletteItem
+  WorkspaceTabPaletteItem,
+  WorktreePaletteItem
 } from './worktree-jump-palette-model'
+
+export function buildWorktreePaletteItems({
+  worktreeMatches,
+  resolveWorktree,
+  hasQuery
+}: Pick<
+  WorktreeJumpPaletteWorktrees,
+  'worktreeMatches' | 'resolveWorktree' | 'hasQuery'
+>): WorktreePaletteItem[] {
+  const items = worktreeMatches
+    .map((match) => {
+      const worktree = resolveWorktree(match.worktreeId, match.worktreeHostId)
+      return worktree
+        ? {
+            id: encodePaletteIdentity(['worktree', getPaletteWorktreeIdentity(worktree)]),
+            type: 'worktree' as const,
+            match,
+            worktree
+          }
+        : null
+    })
+    .filter((item): item is WorktreePaletteItem => item !== null)
+  if (!hasQuery) {
+    return items
+  }
+  const orderByIdentity = new Map(
+    items.map((item, index) => [getPaletteWorktreeIdentity(item.worktree), index])
+  )
+  return items.sort((left, right) =>
+    comparePaletteRankedItems(
+      {
+        rank: left.match.rank,
+        order: orderByIdentity.get(getPaletteWorktreeIdentity(left.worktree)) ?? 0,
+        identity: left.id,
+        activity: left.match.activity
+      },
+      {
+        rank: right.match.rank,
+        order: orderByIdentity.get(getPaletteWorktreeIdentity(right.worktree)) ?? 0,
+        identity: right.id,
+        activity: right.match.activity
+      }
+    )
+  )
+}
 
 export function buildBrowserPaletteItems(
   results: readonly BrowserPaletteSearchResult[]

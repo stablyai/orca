@@ -24,11 +24,13 @@ function FilterOptionRow({
   option,
   isSelected,
   isActive,
+  showCount,
   onToggle
 }: {
   option: PaletteFilterOption
   isSelected: boolean
   isActive: boolean
+  showCount: boolean
   onToggle: () => void
 }): React.JSX.Element {
   return (
@@ -53,9 +55,11 @@ function FilterOptionRow({
         {isSelected ? <Check className="size-3" aria-hidden="true" /> : null}
       </span>
       <span className="min-w-0 flex-1 truncate text-foreground">{option.label}</span>
-      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/70">
-        {option.count}
-      </span>
+      {showCount ? (
+        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/70">
+          {option.count}
+        </span>
+      ) : null}
     </button>
   )
 }
@@ -81,7 +85,7 @@ export function PaletteFilterFieldOptions({
 }): React.JSX.Element {
   const selected = useMemo(() => new Set(group.selected), [group.selected])
   const normalizedQuery = optionQuery.trim().toLowerCase()
-  const rankMode: FilterOptionRankMode = group.field === 'host' ? 'registry' : 'popularity'
+  const rankMode: FilterOptionRankMode = group.field === 'repository' ? 'popularity' : 'registry'
   const ranked = useMemo(
     () =>
       rankPaletteFilterOptions({
@@ -198,17 +202,23 @@ export function PaletteFilterFieldOptions({
   const searchPlaceholder =
     group.field === 'host'
       ? translate('worktreeJumpPalette.filter.searchHosts', 'Filter hosts...')
-      : translate('worktreeJumpPalette.filter.searchProjects', 'Filter projects...')
+      : group.field === 'repository'
+        ? translate('worktreeJumpPalette.filter.searchProjects', 'Filter projects...')
+        : translate('worktreeJumpPalette.filter.searchStatuses', 'Filter statuses...')
   const emptyLabel =
     group.field === 'host'
       ? translate('worktreeJumpPalette.filter.noHosts', 'No matching hosts')
-      : translate('worktreeJumpPalette.filter.noProjects', 'No matching projects')
+      : group.field === 'repository'
+        ? translate('worktreeJumpPalette.filter.noProjects', 'No matching projects')
+        : translate('worktreeJumpPalette.filter.noStatuses', 'No matching statuses')
   // Why a dedicated string per field: lowercasing a translated heading breaks in
   // languages that capitalize nouns mid-sentence (German "Projekte").
   const clearLabel =
     group.field === 'host'
       ? translate('worktreeJumpPalette.filter.clearHosts', 'Clear hosts')
-      : translate('worktreeJumpPalette.filter.clearProjects', 'Clear projects')
+      : group.field === 'repository'
+        ? translate('worktreeJumpPalette.filter.clearProjects', 'Clear projects')
+        : translate('worktreeJumpPalette.filter.clearStatuses', 'Clear statuses')
 
   const canSelectAll = ranked.unselectedCount > 0
   const canClear = ranked.selectedCount > 0
@@ -298,6 +308,7 @@ export function PaletteFilterFieldOptions({
                     option={option}
                     isSelected={selected.has(option.id)}
                     isActive={virtualItem.index === activeIndex}
+                    showCount={group.field !== 'status'}
                     onToggle={() => onToggle(option.id)}
                   />
                 </div>

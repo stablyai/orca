@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Tab } from '../../../shared/tab-types'
 import { makeUnifiedTab, makeWorktree } from './worktree-jump-palette-test-fixtures'
+import { EMPTY_PALETTE_FILTER } from './cmd-j/palette-filter'
 import { useWorktreeJumpPaletteOpenTabs } from './use-worktree-jump-palette-open-tabs'
 
 afterEach(cleanup)
@@ -46,6 +47,8 @@ it('keeps same-id browser results on their owner with recency, and follows owner
     // The store holds {key, result}; the hook takes the unwrapped result.
     workspacePortScan: null,
     paletteStatusInputsActive: true,
+    filter: EMPTY_PALETTE_FILTER,
+    paletteSessionNowMs: Date.now(),
     allWorktrees: worktrees,
     browserSortedWorktrees: worktrees,
     repoMap: new Map(),

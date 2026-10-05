@@ -18,11 +18,12 @@ import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-w
 
 type WorktreeJumpPaletteProjectTargetsInput = WorktreeJumpPaletteStoreState &
   WorktreeJumpPaletteFilter &
-  Pick<WorktreeJumpPaletteLocalState, 'deferredQuery'> &
+  Pick<WorktreeJumpPaletteLocalState, 'deferredQuery' | 'filter'> &
   Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'>
 
 export function useWorktreeJumpPaletteProjectTargets({
   settingsSections,
+  filter,
   pluginCommands,
   allWorktrees,
   repos,
@@ -40,16 +41,18 @@ export function useWorktreeJumpPaletteProjectTargets({
   defaultHostId
 }: WorktreeJumpPaletteProjectTargetsInput) {
   const settingsResults = useMemo(
-    () => buildCmdJSettingsResults(settingsSections),
-    [settingsSections]
+    () => (filter.statusIds.length > 0 ? [] : buildCmdJSettingsResults(settingsSections)),
+    [filter.statusIds, settingsSections]
   )
   const actionResults = useMemo(
     () =>
-      buildCmdJActionResults([
-        ...getCmdJQuickActions(),
-        ...buildPluginQuickActions(pluginCommands)
-      ]),
-    [pluginCommands]
+      filter.statusIds.length > 0
+        ? []
+        : buildCmdJActionResults([
+            ...getCmdJQuickActions(),
+            ...buildPluginQuickActions(pluginCommands)
+          ]),
+    [filter.statusIds, pluginCommands]
   )
   const renderableProjectRepoIds = useMemo(() => {
     const ids = new Set<string>()
@@ -95,7 +98,7 @@ export function useWorktreeJumpPaletteProjectTargets({
   )
   const projectTargetItems = useMemo<ProjectTargetPaletteItem[]>(
     () =>
-      hasQuery
+      hasQuery && filter.statusIds.length === 0
         ? searchCmdJProjectResults({
             query: deferredQuery,
             projectGroups,
@@ -121,6 +124,7 @@ export function useWorktreeJumpPaletteProjectTargets({
       deferredQuery,
       defaultHostId,
       filterPredicate,
+      filter.statusIds,
       groupHostIdByGroupId,
       hasQuery,
       projectGroups,

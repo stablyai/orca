@@ -4,7 +4,7 @@ import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { PaletteFilterModel } from './palette-filter-options'
+import { buildPaletteStatusFilterOptions, type PaletteFilterModel } from './palette-filter-options'
 import {
   addPaletteFilterValues,
   clearPaletteFilterField,
@@ -70,7 +70,7 @@ export default function PaletteFilterMenu({
   onFilterChange: (next: PaletteFilterState) => void
   onRequestInputFocus: () => void
   portalContainer: HTMLElement | null
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const [open, setOpen] = useState(false)
   // null = category root; non-null = drill into that field's options
   const [activeField, setActiveField] = useState<PaletteFilterField | null>(null)
@@ -97,8 +97,14 @@ export default function PaletteFilterMenu({
         selected: filter.repoIds
       })
     }
+    entries.push({
+      field: 'status',
+      heading: translate('worktreeJumpPalette.filter.statuses', 'Statuses'),
+      options: buildPaletteStatusFilterOptions(),
+      selected: filter.statusIds
+    })
     return entries
-  }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories])
+  }, [filter.hostIds, filter.repoIds, filter.statusIds, model.hosts, model.repositories])
 
   // Stale field falls back to root if its group disappeared mid-session.
   const activeGroup =
@@ -133,7 +139,7 @@ export default function PaletteFilterMenu({
   }, [])
 
   // Why: stopPropagation so the palette's ancestor cmdk doesn't steal keys;
-  // Escape on the options layer steps back instead of closing when both axes exist.
+  // Escape on the options layer steps back instead of closing when multiple axes exist.
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
       event.stopPropagation()
@@ -153,10 +159,6 @@ export default function PaletteFilterMenu({
     },
     [onRequestInputFocus]
   )
-
-  if (groups.length === 0) {
-    return null
-  }
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>

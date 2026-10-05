@@ -24,7 +24,7 @@ export function getWorktreeJumpPaletteEmptyState(controller: WorktreeJumpPalette
       ),
       subtitle: translate(
         'worktreeJumpPalette.filter.emptySubtitle',
-        'Clear the filter above, or widen it to more hosts and projects.'
+        'Clear the filter above, or choose more hosts, projects, and statuses.'
       )
     }
   }
