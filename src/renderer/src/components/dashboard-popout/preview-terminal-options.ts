@@ -25,7 +25,10 @@ export function buildPreviewAppearanceOptions(
   )
   return {
     fontSize: settings?.terminalFontSize ?? 14,
-    fontFamily: buildFontFamily(settings?.terminalFontFamily ?? ''),
+    fontFamily: buildFontFamily(
+      settings?.terminalFontFamily ?? '',
+      settings?.terminalFontFallbacks
+    ),
     fontWeight: fontWeights.fontWeight,
     fontWeightBold: fontWeights.fontWeightBold,
     cursorStyle,
