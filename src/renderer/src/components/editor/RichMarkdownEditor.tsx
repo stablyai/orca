@@ -416,7 +416,7 @@ export default function RichMarkdownEditor({
       onSubmitAnnotation={review.submitAnnotation}
       onCopyReviewNotes={() => void review.handleCopyMarkdownReviewNotes()}
       onCopyReviewNote={(note) => void review.handleCopyMarkdownReviewNote(note)}
-      onToggleReviewRail={() => review.setReviewRailOpen((open) => !open)}
+      onToggleReviewRail={review.toggleReviewRail}
       onReviewNotesDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
       onReviewNoteSourceClick={review.scrollRichMarkdownReviewNoteSourceIntoView}
       onDeleteReviewComment={(commentId) => void deleteDiffComment(worktreeId, commentId)}

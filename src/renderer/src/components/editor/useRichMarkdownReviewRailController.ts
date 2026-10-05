@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
 import type { Editor } from '@tiptap/react'
 import {
@@ -41,6 +41,7 @@ export function useRichMarkdownReviewRailController({
   const attentionReviewCommentTimeoutRef = useRef<number | null>(null)
   const sourceAttentionTimeoutRef = useRef<number | null>(null)
   const notePositionsFrameRef = useRef<number | null>(null)
+  const pendingRailScrollRestoreRef = useRef<(() => void) | null>(null)
   const reviewRailVisible = markdownComments.length > 0 && reviewRailOpen
 
   notePositionsRef.current = notePositions
@@ -53,6 +54,43 @@ export function useRichMarkdownReviewRailController({
   const cancelNotePositionFrame = useCallback((): void => {
     cancelFrame(notePositionsFrameRef)
   }, [])
+
+  const toggleReviewRail = useCallback((): void => {
+    const editor = editorRef.current
+    const container = scrollContainerRef.current
+    pendingRailScrollRestoreRef.current = null
+    if (editor && !editor.isDestroyed && container && container.scrollTop > 0) {
+      const rect = container.getBoundingClientRect()
+      const position = editor.view.posAtCoords({
+        left: Math.max(rect.left, editor.view.dom.getBoundingClientRect().left) + 1,
+        top: rect.top + 1
+      })?.pos
+      if (position !== undefined) {
+        const doc = editor.state.doc
+        const top = editor.view.coordsAtPos(position).top - rect.top
+        pendingRailScrollRestoreRef.current = () => {
+          if (
+            editorRef.current !== editor ||
+            scrollContainerRef.current !== container ||
+            editor.isDestroyed ||
+            editor.state.doc !== doc
+          ) {
+            return
+          }
+          container.scrollTop +=
+            editor.view.coordsAtPos(position).top - container.getBoundingClientRect().top - top
+        }
+      }
+    }
+    setReviewRailOpen((open) => !open)
+  }, [editorRef, scrollContainerRef])
+
+  useLayoutEffect(() => {
+    // Keep the same reading line when opening the rail reflows the document.
+    const restore = pendingRailScrollRestoreRef.current
+    pendingRailScrollRestoreRef.current = null
+    restore?.()
+  }, [reviewRailOpen])
 
   const syncNotePositions = useCallback((): void => {
     const editor = editorRef.current
@@ -221,7 +259,8 @@ export function useRichMarkdownReviewRailController({
     scrollRichMarkdownReviewNoteCardIntoView,
     scrollRichMarkdownReviewNoteSourceIntoView,
     setReviewRailOpen,
-    syncNotePositions
+    syncNotePositions,
+    toggleReviewRail
   }
 }
 
