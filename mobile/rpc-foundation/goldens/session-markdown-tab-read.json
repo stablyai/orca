@@ -47,13 +47,14 @@
         }
       }
     },
-    "d4cf305b17f8": {
+    "d3532fb01744": {
       "file": {},
       "markdown": {
         "tab-md": {
           "baseVersion": "v1",
           "content": "# a",
           "editable": true,
+          "imageSources": {},
           "isDirty": false,
           "localContent": "# a",
           "readOnlyReason": {
@@ -84,7 +85,7 @@
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
-          "state": "d4cf305b17f8",
+          "state": "d3532fb01744",
           "effects": []
         }
       }

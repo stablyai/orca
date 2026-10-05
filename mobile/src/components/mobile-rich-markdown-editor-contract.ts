@@ -27,6 +27,8 @@ export type MobileRichMarkdownEditorProps = {
   onChange: (content: string) => void
   onKeyboardInsetChange?: (bottom: number) => void
   onOpenLink: (url: string) => void
+  /** Display URLs keyed by authored image src, for relative paths the document cannot load itself. */
+  imageSources?: Record<string, string>
 }
 
 /** How a host delivers a command into whatever surface renders the editor document. */
@@ -34,4 +36,5 @@ export type MobileRichMarkdownEditorTransport = {
   setMarkdown: (markdown: string, generation: number) => void
   setEditable: (editable: boolean) => void
   runCommand: (command: MobileRichMarkdownCommand) => void
+  setImageSources: (sources: Record<string, string>) => void
 }

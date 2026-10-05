@@ -31,13 +31,15 @@ export type RichMarkdownKeyboardInsetReader = {
   observe: (onChange: () => void) => () => void
 }
 
-/** The five things a host can ask a running document to do. */
+/** The six things a host can ask a running document to do. */
 export type RichMarkdownEditorApi = {
   setMarkdown: (markdown: string, generation: number) => void
   setEditable: (editable: boolean) => void
   runCommand: (command: MobileRichMarkdownCommand) => Promise<void>
   currentMarkdown: () => string
   dismissKeyboard: () => void
+  /** `editor-image-sources`: display URLs keyed by authored image src; the file keeps the authored src. */
+  setImageSources: (sources: Record<string, string>) => void
 }
 
 /**

@@ -38,6 +38,7 @@ export function useMobileRichMarkdownEditorController({
   onChange,
   onKeyboardInsetChange,
   onOpenLink,
+  imageSources,
   transport
 }: MobileRichMarkdownEditorProps & { transport: MobileRichMarkdownEditorTransport }) {
   const readyRef = useRef(false)
@@ -65,6 +66,13 @@ export function useMobileRichMarkdownEditorController({
     }
   }, [editable, transport])
 
+  // Image replies update display URLs without replacing the edited content.
+  useEffect(() => {
+    if (readyRef.current) {
+      transport.setImageSources(imageSources ?? {})
+    }
+  }, [imageSources, transport])
+
   // Clear any reported keyboard inset when the editor unmounts so a lifted
   // Save/Discard bar settles back once the tab closes.
   useEffect(() => {
@@ -77,6 +85,7 @@ export function useMobileRichMarkdownEditorController({
         readyRef.current = true
         applyContent(content)
         transport.setEditable(editable)
+        transport.setImageSources(imageSources ?? {})
         return
       }
       if (
@@ -102,7 +111,16 @@ export function useMobileRichMarkdownEditorController({
         }
       }
     },
-    [applyContent, content, editable, onChange, onKeyboardInsetChange, onOpenLink, transport]
+    [
+      applyContent,
+      content,
+      editable,
+      imageSources,
+      onChange,
+      onKeyboardInsetChange,
+      onOpenLink,
+      transport
+    ]
   )
 
   const runCommand = useCallback(

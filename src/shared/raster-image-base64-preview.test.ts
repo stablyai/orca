@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { decodeBase64Prefix, exceedsRasterImagePreviewLimits } from './raster-image-base64-preview'
+import {
+  decodeBase64Prefix,
+  exceedsRasterImagePreviewLimits,
+  readRasterImagePreviewDimensions
+} from './raster-image-base64-preview'
 import type * as RasterImageDimensionsModule from './raster-image-dimensions'
 import { readRasterImageDimensions } from './raster-image-dimensions'
 import {
@@ -341,5 +345,30 @@ describe('exceedsRasterImagePreviewLimits', () => {
         )
       }
     }
+  })
+})
+
+describe('readRasterImagePreviewDimensions', () => {
+  it('uses the staged probe for a small JPEG after long metadata', () => {
+    dimensionReadLengths.length = 0
+    expect(
+      readRasterImagePreviewDimensions(jpegBytes(70_000, 640, 480).toString('base64'))
+    ).toEqual({ width: 640, height: 480 })
+    expect(dimensionReadLengths).toEqual([64, 1024, 16_384, 74_117])
+  })
+
+  it('retains near-cap dimensions and demotes invalid oversized payloads to unknown', () => {
+    expect(readRasterImagePreviewDimensions(pngBytes(24, 8192, 4096).toString('base64'))).toEqual({
+      width: 8192,
+      height: 4096
+    })
+    expect(
+      readRasterImagePreviewDimensions(`${pngBytes(70_000, 32_769, 1).toString('base64')}!!!`)
+    ).toBeNull()
+    expect(
+      readRasterImagePreviewDimensions(
+        jpegBytes(70_000, 640, 480).subarray(0, 64).toString('base64')
+      )
+    ).toBeNull()
   })
 })

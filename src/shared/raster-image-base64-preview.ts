@@ -138,27 +138,15 @@ const RASTER_IMAGE_HEADER_PROBE_BYTES = 64
 // widens geometrically: total decoded stays within ~1.07x of the bytes the header actually needed.
 const RASTER_IMAGE_HEADER_PROBE_GROWTH = 16
 
-/**
- * Whether the encoded dimensions are known to exceed the preview limits.
- *
- * Distinct from a failed read: an unrecognized or truncated header means we could not measure the
- * image, not that it is too large. Treating those the same blanks out valid images that no decoder
- * has trouble with, so only a confident over-limit answer should suppress a preview.
- */
-export function exceedsRasterImagePreviewLimits(
-  content: string,
-  mimeType: string | undefined
-): boolean {
-  if (!isKnownRasterImageMimeType(mimeType)) {
-    return false
-  }
+// Unknown headers do not establish dimensions; oversized headers require a full decode.
+export function readRasterImagePreviewDimensions(content: string) {
   let probeBytes = RASTER_IMAGE_HEADER_PROBE_BYTES
   for (;;) {
     const prefix = decodeBase64Prefix(content, probeBytes)
     // A short probe only ever fails where the whole payload would: it walks a strict prefix of the
     // same characters through the same state machine.
     if (!prefix) {
-      return false
+      return null
     }
     // Shorter than asked for means the payload ran out, so a wider probe cannot add bytes.
     const exhausted =
@@ -167,7 +155,7 @@ export function exceedsRasterImagePreviewLimits(
     if (dimensions !== null) {
       const withinLimits = isRasterImagePreviewDimensions(dimensions)
       if (withinLimits || exhausted) {
-        return !withinLimits
+        return dimensions
       }
       // About to suppress: redo the decode over the whole payload so the verdict stays the one the
       // full read gives, including its rejection of base64 that turns invalid past the header.
@@ -175,11 +163,22 @@ export function exceedsRasterImagePreviewLimits(
       continue
     }
     if (exhausted) {
-      return false
+      return null
     }
     probeBytes = Math.min(
       probeBytes * RASTER_IMAGE_HEADER_PROBE_GROWTH,
       RASTER_IMAGE_PREVIEW_HEADER_MAX_BYTES
     )
   }
+}
+
+export function exceedsRasterImagePreviewLimits(
+  content: string,
+  mimeType: string | undefined
+): boolean {
+  if (!isKnownRasterImageMimeType(mimeType)) {
+    return false
+  }
+  const dimensions = readRasterImagePreviewDimensions(content)
+  return dimensions !== null && !isRasterImagePreviewDimensions(dimensions)
 }

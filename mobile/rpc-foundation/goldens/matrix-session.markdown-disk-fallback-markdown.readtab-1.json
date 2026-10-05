@@ -146,23 +146,6 @@
         }
       }
     },
-    "3e3efaab3a20": {
-      "file": {},
-      "markdown": {
-        "tab-md": {
-          "baseVersion": "v1",
-          "content": "# served",
-          "editable": true,
-          "isDirty": false,
-          "localContent": "# served",
-          "readOnlyReason": {
-            "$rpc": "undefined"
-          },
-          "stale": false,
-          "status": "ready"
-        }
-      }
-    },
     "3f9b64bce472": {
       "name": "markdown.readTab#1",
       "ordinal": 1,
@@ -314,6 +297,24 @@
         }
       }
     },
+    "917d33f6e1cc": {
+      "file": {},
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v1",
+          "content": "# served",
+          "editable": true,
+          "imageSources": {},
+          "isDirty": false,
+          "localContent": "# served",
+          "readOnlyReason": {
+            "$rpc": "undefined"
+          },
+          "stale": false,
+          "status": "ready"
+        }
+      }
+    },
     "9678ee74c12b": {
       "name": "markdown.readTab#1",
       "ordinal": 1,
@@ -443,7 +444,7 @@
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
-          "state": "3e3efaab3a20",
+          "state": "917d33f6e1cc",
           "effects": []
         }
       },

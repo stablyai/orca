@@ -3,6 +3,7 @@ import type { RpcFailure } from '../transport/types'
 import { resolveMobileFileTabDoc } from '../files/mobile-file-tab-doc'
 import { filePreviewTextRead } from '../files/mobile-file-preview-operations'
 import { markdownTabRead } from './mobile-session-read-operations'
+import { readMarkdownImageSources } from './markdown-relative-image-srcs'
 import {
   buildMarkdownDiskFallbackDoc,
   shouldReadMarkdownFromDiskAfterReadTabFailure
@@ -12,12 +13,35 @@ import type { MobileSessionTabApplicationModel } from './use-mobile-session-tab-
 
 export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicationModel) {
   const { worktreeId, client, setMarkdownDocs, setFileDocs } = scope
+
+  // Publish text first; the initial map owns replies across local edits and Save.
+  const resolveMarkdownImages = useCallback(
+    (tabId: string, relativePath: string, content: string, owner: Record<string, string>) => {
+      if (!client) {
+        return
+      }
+      void readMarkdownImageSources(client, worktreeId, relativePath, content).then(
+        (imageSources) => {
+          setMarkdownDocs((prev) => {
+            const doc = prev.get(tabId)
+            if (!doc || doc.status !== 'ready' || doc.imageSources !== owner) {
+              return prev
+            }
+            return new Map(prev).set(tabId, { ...doc, imageSources })
+          })
+        }
+      )
+    },
+    [client, setMarkdownDocs, worktreeId]
+  )
   const readMarkdownTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
       if (!client) {
         return
       }
-      setMarkdownDocs((prev) => new Map(prev).set(tab.id, { status: 'loading' }))
+      const loading = { status: 'loading' } as const
+      const imageSources: Record<string, string> = {}
+      setMarkdownDocs((prev) => new Map(prev).set(tab.id, loading))
       try {
         const response = await markdownTabRead.request(client, {
           worktree: `id:${worktreeId}`,
@@ -26,20 +50,24 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
         if (response.ok) {
           const result = markdownTabRead.interpret(response)
           setMarkdownDocs((prev) =>
-            new Map(prev).set(tab.id, {
-              status: 'ready',
-              content: result.content,
-              localContent: result.content,
-              baseVersion: result.version,
-              isDirty: false,
-              editable: result.editable === true,
-              stale: result.isDirty,
-              readOnlyReason: result.readOnlyReason,
-              ...(result.truncated === true
-                ? { truncated: true, byteLength: result.byteLength }
-                : {})
-            })
+            prev.get(tab.id) === loading
+              ? new Map(prev).set(tab.id, {
+                  status: 'ready',
+                  content: result.content,
+                  localContent: result.content,
+                  baseVersion: result.version,
+                  isDirty: false,
+                  editable: result.editable === true,
+                  stale: result.isDirty,
+                  readOnlyReason: result.readOnlyReason,
+                  imageSources,
+                  ...(result.truncated === true
+                    ? { truncated: true, byteLength: result.byteLength }
+                    : {})
+                })
+              : prev
           )
+          resolveMarkdownImages(tab.id, tab.relativePath, result.content, imageSources)
           return
         }
         if (!shouldReadMarkdownFromDiskAfterReadTabFailure(response as RpcFailure)) {
@@ -57,26 +85,31 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
         }
         const fileResult = fallback.value
         setMarkdownDocs((prev) =>
-          new Map(prev).set(
-            tab.id,
-            buildMarkdownDiskFallbackDoc({
-              content: fileResult.content,
-              truncated: fileResult.truncated,
-              byteLength: fileResult.byteLength,
-              tabIsDirty: tab.isDirty
-            })
-          )
+          prev.get(tab.id) === loading
+            ? new Map(prev).set(tab.id, {
+                ...buildMarkdownDiskFallbackDoc({
+                  content: fileResult.content,
+                  truncated: fileResult.truncated,
+                  byteLength: fileResult.byteLength,
+                  tabIsDirty: tab.isDirty
+                }),
+                imageSources
+              })
+            : prev
         )
+        resolveMarkdownImages(tab.id, tab.relativePath, fileResult.content, imageSources)
       } catch (err) {
         setMarkdownDocs((prev) =>
-          new Map(prev).set(tab.id, {
-            status: 'error',
-            message: documentReadErrorMessage(err, "Couldn't load markdown")
-          })
+          prev.get(tab.id) === loading
+            ? new Map(prev).set(tab.id, {
+                status: 'error',
+                message: documentReadErrorMessage(err, "Couldn't load markdown")
+              })
+            : prev
         )
       }
     },
-    [client, worktreeId]
+    [client, resolveMarkdownImages, setMarkdownDocs, worktreeId]
   )
 
   const readFileTab = useCallback(

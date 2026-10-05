@@ -183,6 +183,22 @@
         }
       }
     },
+    "5b6ca367e05d": {
+      "file": {},
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "",
+          "content": "# disk",
+          "editable": false,
+          "imageSources": {},
+          "isDirty": false,
+          "localContent": "# disk",
+          "readOnlyReason": "Editing needs Orca desktop running.",
+          "stale": false,
+          "status": "ready"
+        }
+      }
+    },
     "5d8fad85cc4d": {
       "name": "files.read#1",
       "ordinal": 3,
@@ -296,21 +312,6 @@
           "result": {
             "error": "refused"
           }
-        }
-      }
-    },
-    "c6cea5310098": {
-      "file": {},
-      "markdown": {
-        "tab-md": {
-          "baseVersion": "",
-          "content": "# disk",
-          "editable": false,
-          "isDirty": false,
-          "localContent": "# disk",
-          "readOnlyReason": "Editing needs Orca desktop running.",
-          "stale": false,
-          "status": "ready"
         }
       }
     },
@@ -481,7 +482,7 @@
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
-          "state": "c6cea5310098",
+          "state": "5b6ca367e05d",
           "effects": []
         }
       },

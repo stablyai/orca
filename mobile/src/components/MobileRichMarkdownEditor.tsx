@@ -44,7 +44,8 @@ function MobileRichMarkdownEditorInner(
     editable,
     onChange,
     onKeyboardInsetChange,
-    onOpenLink
+    onOpenLink,
+    imageSources
   }: MobileRichMarkdownEditorComponentProps,
   ref: ForwardedRef<MobileRichMarkdownEditorHandle>
 ) {
@@ -68,6 +69,10 @@ function MobileRichMarkdownEditorInner(
       runCommand: (command: MobileRichMarkdownCommand) =>
         inject(
           `window.__orcaRichMarkdown && window.__orcaRichMarkdown.runCommand(${escapeInjectedJavaScriptString(command)});`
+        ),
+      setImageSources: (sources: Record<string, string>) =>
+        inject(
+          `window.__orcaRichMarkdown && window.__orcaRichMarkdown.setImageSources(${escapeInjectedJavaScriptString(JSON.stringify(sources))});`
         )
     }),
     [inject]
@@ -90,6 +95,7 @@ function MobileRichMarkdownEditorInner(
     onChange,
     onKeyboardInsetChange,
     onOpenLink: openLink,
+    imageSources,
     transport
   })
 

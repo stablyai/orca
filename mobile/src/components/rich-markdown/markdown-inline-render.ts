@@ -20,7 +20,9 @@ export function renderInline(text: string): string {
     const image = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
     const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
     if (image && isSafeUrl(image[2])) {
-      output += `<img src="${escapeAttr(image[2]!)}" alt="${escapeAttr(image[1] ?? '')}" />`
+      // Display URLs must never replace authored paths on Save.
+      const src = escapeAttr(image[2]!)
+      output += `<img data-orca-src="${src}" src="${src}" alt="${escapeAttr(image[1] ?? '')}" />`
     } else if (link && isSafeUrl(link[2])) {
       output += `<a href="${escapeAttr(link[2]!)}">${renderInline(link[1]!)}</a>`
     } else if (/^https?:\/\//i.test(token)) {

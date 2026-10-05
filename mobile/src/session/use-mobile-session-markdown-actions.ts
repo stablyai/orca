@@ -190,16 +190,19 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
         if (markdownSaveSeqRef.current.get(tab.id) !== saveSeq) {
           return
         }
-        setMarkdownDocs((prev) =>
-          new Map(prev).set(tab.id, {
+        setMarkdownDocs((prev) => {
+          const existing = prev.get(tab.id)
+          const imageSources = existing?.status === 'ready' ? existing.imageSources : undefined
+          return new Map(prev).set(tab.id, {
             status: 'ready',
             content: result.content,
             localContent: result.content,
             baseVersion: result.version,
             isDirty: false,
-            editable: true
+            editable: true,
+            ...(imageSources ? { imageSources } : {})
           })
-        )
+        })
         markdownSaveSeqRef.current.delete(tab.id)
         triggerSuccess()
         showToast('Saved')

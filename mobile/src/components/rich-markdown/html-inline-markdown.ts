@@ -39,7 +39,10 @@ export function inlineMarkdown(node: Node | null | undefined): string {
     return `[${inlineChildren(node)}](${node.getAttribute('href') ?? ''})`
   }
   if (tag === 'img') {
-    return `![${node.getAttribute('alt') ?? ''}](${node.getAttribute('src') ?? ''})`
+    // `data-orca-src` is the authored src; `src` may be the host's display URL for it.
+    return `![${node.getAttribute('alt') ?? ''}](${
+      node.getAttribute('data-orca-src') ?? node.getAttribute('src') ?? ''
+    })`
   }
   if (tag === 'label') {
     return ''

@@ -42,13 +42,19 @@
         }
       }
     },
-    "3e3efaab3a20": {
+    "44abbe2af7aa": {
+      "name": "markdown.readTab#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.readTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\"}}"
+    },
+    "917d33f6e1cc": {
       "file": {},
       "markdown": {
         "tab-md": {
           "baseVersion": "v1",
           "content": "# served",
           "editable": true,
+          "imageSources": {},
           "isDirty": false,
           "localContent": "# served",
           "readOnlyReason": {
@@ -58,11 +64,6 @@
           "status": "ready"
         }
       }
-    },
-    "44abbe2af7aa": {
-      "name": "markdown.readTab#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.readTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\"}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -84,7 +85,7 @@
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
-          "state": "3e3efaab3a20",
+          "state": "917d33f6e1cc",
           "effects": []
         }
       }

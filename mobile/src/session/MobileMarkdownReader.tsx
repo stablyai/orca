@@ -86,6 +86,7 @@ export function MobileMarkdownReader({
         editable={doc.editable && !doc.saving}
         onChange={onChange}
         onKeyboardInsetChange={setWebviewKeyboardInset}
+        imageSources={doc.imageSources}
       />
       {showFloatingActions ? (
         <View
