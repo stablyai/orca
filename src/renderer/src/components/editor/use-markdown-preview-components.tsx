@@ -27,6 +27,10 @@ import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
 import { readGitHubCalloutKind } from '@/lib/remark-github-callouts'
 import { translate } from '@/i18n/i18n'
 
+function hasMermaidCodeClass(value: unknown): boolean {
+  return typeof value === 'string' && /language-mermaid/.test(value)
+}
+
 export function useMarkdownPreviewComponents({
   foundation,
   viewport,
@@ -170,7 +174,7 @@ export function useMarkdownPreviewComponents({
         return <img {...props} src={resolvedSrc} alt={alt ?? ''} onClick={handleImageClick} />
       },
       code: ({ className, children, ...props }) => {
-        if (/language-mermaid/.test(className || '')) {
+        if (hasMermaidCodeClass(className)) {
           return (
             <MermaidBlock
               content={String(children).trimEnd()}
@@ -187,14 +191,19 @@ export function useMarkdownPreviewComponents({
         )
       },
       pre: ({ node, children, ...props }) => {
-        const child = React.Children.toArray(children)[0]
-        if (React.isValidElement(child) && child.type === MermaidBlock) {
-          return <>{children}</>
-        }
+        const isMermaid = node?.children.some(
+          (child) =>
+            child.type === 'element' &&
+            child.tagName === 'code' &&
+            Array.isArray(child.properties.className) &&
+            child.properties.className.some(hasMermaidCodeClass)
+        )
         return wrapAnnotatedBlock(
           'pre',
-          node as MarkdownPreviewPositionNode,
-          <CodeBlockCopyButton {...props}>{children}</CodeBlockCopyButton>
+          node,
+          <CodeBlockCopyButton {...props} wrapInPre={!isMermaid}>
+            {children}
+          </CodeBlockCopyButton>
         )
       },
       p: ({ node, children, ...props }) =>
