@@ -7,7 +7,7 @@ import {
   unregisterSshPtyProvider,
   getLocalPtyProvider
 } from './pty'
-import { isCommandOnPath } from './preflight-command-exec'
+import { resolveLocalCommandPath } from './preflight-command-exec'
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
 import type * as FsPromises from 'node:fs/promises'
 import type { Store } from '../persistence'
@@ -15,9 +15,10 @@ import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
 import type { PtySpawnIpcArgs } from './pty/ipc/spawn-types'
 
-vi.mock('./preflight-command-exec', () => ({ isCommandOnPath: vi.fn() }))
+vi.mock('./preflight-command-exec', () => ({ resolveLocalCommandPath: vi.fn() }))
 vi.mock('./local-agent-install-dir-detection', () => ({
-  detectCommandsInInstallDirs: () => new Set()
+  detectCommandsInInstallDirs: () => new Set(),
+  resolveCommandsInInstallDirs: () => new Map()
 }))
 vi.mock('./preflight-wsl-agent-detection', () => ({ detectWslCommandsOnPath: vi.fn() }))
 const { mux } = vi.hoisted(() => ({ mux: vi.fn() }))
@@ -76,11 +77,13 @@ describe('desktop Qoder execution-host selection', () => {
     handlers,
     mainWindow
   })
-  const nativeProbe = vi.mocked(isCommandOnPath)
+  const nativeProbe = vi.mocked(resolveLocalCommandPath)
   const wslProbe = vi.mocked(detectWslCommandsOnPath)
   beforeEach(() => {
-    nativeProbe.mockReset().mockImplementation(async (cmd) => cmd === 'qodercli')
-    wslProbe.mockReset().mockResolvedValue(new Set(['qoder']))
+    nativeProbe
+      .mockReset()
+      .mockImplementation(async (cmd) => (cmd === 'qodercli' ? `/usr/bin/${cmd}` : null))
+    wslProbe.mockReset().mockResolvedValue(new Map([['qoder', '/usr/bin/qoder']]))
     mux.mockReset()
   })
   async function spawn(args: Partial<PtySpawnIpcArgs> = {}, store?: Store) {
@@ -129,7 +132,9 @@ describe('desktop Qoder execution-host selection', () => {
     ['legacy-only', ['qodercli']],
     ['both', ['qoder', 'qodercli']]
   ] as const)('keeps legacy preference on %s native hosts', async (_, commands) => {
-    nativeProbe.mockImplementation(async (cmd) => commands.some((found) => found === cmd))
+    nativeProbe.mockImplementation(async (cmd) =>
+      commands.some((found) => found === cmd) ? `/usr/bin/${cmd}` : null
+    )
     const { providerSpawn } = await spawn()
     expect(providerSpawn).toHaveBeenCalledWith(
       expect.objectContaining({ command: 'qodercli --resume original-id' })
@@ -139,7 +144,7 @@ describe('desktop Qoder execution-host selection', () => {
     expect(wslProbe).not.toHaveBeenCalled()
   })
   it('preserves exact resume tokens and captured configuration on a native folder', async () => {
-    nativeProbe.mockImplementation(async (cmd) => cmd === 'qoder')
+    nativeProbe.mockImplementation(async (cmd) => (cmd === 'qoder' ? `/usr/bin/${cmd}` : null))
     const plan = buildAgentResumeStartupPlan({
       agent: 'qoder',
       providerSession: { key: 'session_id', id: 'session with spaces' },
@@ -229,7 +234,7 @@ describe('desktop Qoder execution-host selection', () => {
   })
   it('keeps native Windows launches on the host shell', async () => {
     await withWin32Platform(async () => {
-      nativeProbe.mockImplementation(async (cmd) => cmd === 'qoder')
+      nativeProbe.mockImplementation(async (cmd) => (cmd === 'qoder' ? `/usr/bin/${cmd}` : null))
       const { providerSpawn } = await spawn({
         cwd: 'C:\\review',
         worktreeId: 'repo-review::C:\\review',

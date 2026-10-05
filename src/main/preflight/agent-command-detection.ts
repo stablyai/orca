@@ -1,12 +1,12 @@
 import { z } from 'zod'
 import { getActiveMultiplexer } from '../ssh/ssh-target-registry'
 import { detectWslCommandsOnPath } from '../ipc/preflight-wsl-agent-detection'
-import { detectCommandsInInstallDirs } from '../ipc/local-agent-install-dir-detection'
+import { resolveCommandsInInstallDirs } from '../ipc/local-agent-install-dir-detection'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
 } from '../ipc/preflight-runtime-target'
-import { isCommandOnPath } from '../ipc/preflight-command-exec'
+import { resolveLocalCommandPath } from '../ipc/preflight-command-exec'
 
 export async function detectAgentCommandsOnHost(
   commands: readonly string[],
@@ -24,25 +24,34 @@ export async function detectAgentCommandsOnHost(
     )
     return new Set(result.agents.filter((cmd) => commands.includes(cmd)))
   }
-  const context = options.context
+  return new Set((await resolveAgentCommandPathsOnHost(commands, options.context)).keys())
+}
+
+/**
+ * Each found command's executable on a local or WSL host. Why paths: an identity probe must
+ * run the binary detection matched, not a bare name the child's own PATH re-resolves.
+ */
+export async function resolveAgentCommandPathsOnHost(
+  commands: readonly string[],
+  context?: PreflightRuntimeContext
+): Promise<Map<string, string>> {
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
     return detectWslCommandsOnPath(wslTarget, commands)
   }
   const pathChecks = await Promise.all(
-    commands.map(async (cmd) => ({
-      cmd,
-      installedOnPath: await isCommandOnPath(cmd)
-    }))
+    commands.map(async (cmd) => ({ cmd, resolvedPath: await resolveLocalCommandPath(cmd) }))
   )
-  const missedCommands = pathChecks.filter((check) => !check.installedOnPath).map(({ cmd }) => cmd)
+  const missedCommands = pathChecks.filter((check) => !check.resolvedPath).map(({ cmd }) => cmd)
   // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
   // computes user install dirs once instead of blocking once per missed CLI.
-  const installDirCommands = detectCommandsInInstallDirs(missedCommands)
-  const foundCommands = new Set(
-    pathChecks
-      .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))
-      .map(({ cmd }) => cmd)
-  )
-  return foundCommands
+  const installDirPaths = resolveCommandsInInstallDirs(missedCommands)
+  const foundPaths = new Map<string, string>()
+  for (const { cmd, resolvedPath } of pathChecks) {
+    const program = resolvedPath ?? installDirPaths.get(cmd)
+    if (program) {
+      foundPaths.set(cmd, program)
+    }
+  }
+  return foundPaths
 }
