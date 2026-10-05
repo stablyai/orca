@@ -16,10 +16,8 @@ export type MobileFileMutationOwnership = SshMutationExpectation & {
   expectedExecutionHostId: 'local' | `ssh:${string}`
 }
 
-// The two members the ownership gate routes on, as the reply reader hands them back. Absence and
-// an explicit `null` stay distinct: the host omits `state` for a target it holds no connection for.
 export type MobileFileMutationSshState =
-  | (Pick<SshConnectionState, 'connectionGeneration'> & { targetId?: string })
+  | (Pick<SshConnectionState, 'connectionGeneration'> & { targetId?: string; status?: string })
   | null
   | undefined
 
@@ -28,13 +26,17 @@ export function buildMobileFileMutationOwnership(
   sshState: MobileFileMutationSshState = null
 ): MobileFileMutationOwnership {
   const host = parseExecutionHostId(worktreeHostId)
-  if (worktreeHostId !== undefined && !host) {
+  if (!host || host.kind === 'runtime') {
     throw new Error(SSH_OWNER_CHANGED_MESSAGE)
   }
-  if (!host || host.kind === 'local' || host.kind === 'runtime') {
+  if (host.kind === 'local') {
     return { expectedExecutionHostId: 'local' }
   }
-  if (sshState?.targetId !== host.targetId || sshState.connectionGeneration === undefined) {
+  if (
+    sshState?.status !== 'connected' ||
+    sshState.targetId !== host.targetId ||
+    sshState.connectionGeneration === undefined
+  ) {
     throw new Error(SSH_OWNER_CHANGED_MESSAGE)
   }
   return {

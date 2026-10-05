@@ -6,8 +6,7 @@ import {
 
 describe('file ownership reply schemas', () => {
   it('keeps the three hostId states distinct', () => {
-    // Absent means no host recorded and captures local; explicit null means the host said local;
-    // a string is parsed. Collapsing absent and null would change where a write lands.
+    // Missing, null, and explicit execution owners must reach the capture without substitution.
     expect(fileOwnershipWorktreeSchema.parse({ worktree: {} })?.hostId).toBeUndefined()
     expect(fileOwnershipWorktreeSchema.parse({ worktree: { hostId: null } })?.hostId).toBeNull()
     expect(fileOwnershipWorktreeSchema.parse({ worktree: { hostId: 'ssh:a' } })?.hostId).toBe(
@@ -41,6 +40,29 @@ describe('file ownership reply schemas', () => {
     expect(
       fileOwnershipSshStateSchema.parse({ state: { targetId: 7, connectionGeneration: 1 } })
         ?.targetId
+    ).toBeUndefined()
+  })
+
+  it.each(['connected', 'reconnecting', 'unexpected-status'])(
+    'retains SSH status %s so the ownership gate can refuse anything except connected',
+    (status) => {
+      expect(
+        fileOwnershipSshStateSchema.parse({
+          state: { targetId: 't', status, connectionGeneration: 3 }
+        })?.status
+      ).toBe(status)
+    }
+  )
+
+  it('leaves a missing or unreadable SSH status unverified', () => {
+    expect(
+      fileOwnershipSshStateSchema.parse({ state: { targetId: 't', connectionGeneration: 3 } })
+        ?.status
+    ).toBeUndefined()
+    expect(
+      fileOwnershipSshStateSchema.parse({
+        state: { targetId: 't', status: 7, connectionGeneration: 3 }
+      })?.status
     ).toBeUndefined()
   })
 

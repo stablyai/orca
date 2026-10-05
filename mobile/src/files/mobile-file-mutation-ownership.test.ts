@@ -29,10 +29,14 @@ function clientWithResponses(responses: RpcResponse[]): {
   return { client: { sendRequest }, sendRequest }
 }
 
-function sshState(targetId: string, connectionGeneration: number | undefined): SshConnectionState {
+function sshState(
+  targetId: string,
+  connectionGeneration: number | undefined,
+  status: SshConnectionState['status'] = 'connected'
+): SshConnectionState {
   return {
     targetId,
-    status: 'connected',
+    status,
     error: null,
     reconnectAttempt: 0,
     connectionGeneration
@@ -40,12 +44,18 @@ function sshState(targetId: string, connectionGeneration: number | undefined): S
 }
 
 describe('mobile file mutation ownership', () => {
-  it.each([undefined, 'local', 'runtime:environment-1'])(
-    'binds %s worktrees to the runtime-local file host',
+  it('binds an explicit local owner to the runtime-local file host', () => {
+    expect(buildMobileFileMutationOwnership('local')).toEqual({
+      expectedExecutionHostId: 'local'
+    })
+  })
+
+  it.each([undefined, null, '', 'runtime:environment-1'])(
+    'refuses an unverified execution owner %s',
     (hostId) => {
-      expect(buildMobileFileMutationOwnership(hostId)).toEqual({
-        expectedExecutionHostId: 'local'
-      })
+      expect(() => buildMobileFileMutationOwnership(hostId)).toThrow(
+        "Couldn't verify the SSH connection"
+      )
     }
   )
 
@@ -57,6 +67,29 @@ describe('mobile file mutation ownership', () => {
       expectedSshTargetId: 'target one',
       expectedSshConnectionGeneration: 17
     })
+  })
+
+  it.each([
+    'disconnected',
+    'connecting',
+    'auth-failed',
+    'deploying-relay',
+    'reconnecting',
+    'reconnection-failed',
+    'error'
+  ] as const)('refuses a %s SSH state even when it retains a generation', (status) => {
+    expect(() =>
+      buildMobileFileMutationOwnership('ssh:target-1', sshState('target-1', 4, status))
+    ).toThrow("Couldn't verify the SSH connection")
+  })
+
+  it('refuses an SSH reply without a connected status', () => {
+    expect(() =>
+      buildMobileFileMutationOwnership('ssh:target-1', {
+        targetId: 'target-1',
+        connectionGeneration: 4
+      })
+    ).toThrow("Couldn't verify the SSH connection")
   })
 
   it.each([
@@ -105,18 +138,40 @@ describe('mobile file mutation ownership', () => {
     ])
   })
 
-  // The three hostId states the reply reader keeps distinct, read end to end. An absent host is
-  // "none recorded" and captures local; an explicit null is a host that named something this client
-  // cannot place, and it refuses rather than sending the write to the runtime-local host.
-  it('captures local ownership for a workspace whose reply records no host', async () => {
+  it('refuses a workspace whose reply records no execution host', async () => {
     const { client } = clientWithResponses([
       success({ capabilities: [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY] }),
       success({ worktree: {} })
     ])
 
-    await expect(captureMobileFileMutationOwnership(client, 'id:worktree-1')).resolves.toEqual({
-      expectedExecutionHostId: 'local'
-    })
+    await expect(captureMobileFileMutationOwnership(client, 'id:worktree-1')).rejects.toThrow(
+      "Couldn't verify the SSH connection"
+    )
+  })
+
+  it('refuses a runtime owner instead of converting it into a local owner', async () => {
+    const { client, sendRequest } = clientWithResponses([
+      success({ capabilities: [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY] }),
+      success({ worktree: { hostId: 'runtime:environment-1' } })
+    ])
+
+    await expect(captureMobileFileMutationOwnership(client, 'id:worktree-1')).rejects.toThrow(
+      "Couldn't verify the SSH connection"
+    )
+    expect(sendRequest).toHaveBeenCalledTimes(2)
+  })
+
+  it('refuses a reconnecting SSH owner after reading the host state', async () => {
+    const { client, sendRequest } = clientWithResponses([
+      success({ capabilities: [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY] }),
+      success({ worktree: { hostId: 'ssh:target-1' } }),
+      success({ state: sshState('target-1', 4, 'reconnecting') })
+    ])
+
+    await expect(captureMobileFileMutationOwnership(client, 'id:worktree-1')).rejects.toThrow(
+      "Couldn't verify the SSH connection"
+    )
+    expect(sendRequest).toHaveBeenCalledTimes(3)
   })
 
   it('refuses a workspace whose reply names an explicit null host', async () => {
