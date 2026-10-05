@@ -88,6 +88,8 @@ async function cleanupServer(server: RunningServer): Promise<void> {
 }
 
 describe.runIf(process.platform !== 'win32')('Codex app-server process teardown', () => {
+  // Why 60s, matching the sibling cases: all four drive the same 40 consecutive
+  // launches, and this one was the only case left on the 30s default.
   it('reaps the forced-close descendant in 40 consecutive launches', async () => {
     const running: RunningServer[] = []
     try {
@@ -105,7 +107,7 @@ describe.runIf(process.platform !== 'win32')('Codex app-server process teardown'
         await cleanupServer(server)
       }
     }
-  }, 30_000)
+  }, 60_000)
 
   it.each(['normal', 'signal'] as const)(
     'reaps provider descendants before relaying a %s root exit in 40 consecutive launches',
