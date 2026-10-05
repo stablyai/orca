@@ -164,9 +164,7 @@ export function useMarkdownPreviewComponents({
       },
       code: ({ className, children, ...props }) => {
         if (/language-mermaid/.test(className || '')) {
-          return (
-            <MermaidBlock content={String(children).trimEnd()} isDark={isDark} htmlLabels={false} />
-          )
+          return <MermaidBlock content={String(children).trimEnd()} isDark={isDark} />
         }
         return (
           <code className={className} {...props}>
