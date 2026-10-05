@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type { Repo } from '../../shared/repo-types'
+import type * as HostedReviewBranchCache from '../source-control/hosted-review-branch-cache'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 
 const ORIGINAL_PLATFORM = process.platform
@@ -38,7 +39,8 @@ const {
   getWorkItemByProjectRefMock,
   getMergeRequestMock,
   getMergeRequestForBranchMock,
-  getProjectSlugMock
+  getProjectSlugMock,
+  invalidateHostedReviewBranchCacheMock
 } = vi.hoisted(() => ({
   ipcHandlers: new Map<string, (...args: unknown[]) => unknown>(),
   listMergeRequestsMock: vi.fn(),
@@ -65,7 +67,8 @@ const {
   getWorkItemByProjectRefMock: vi.fn(),
   getMergeRequestMock: vi.fn(),
   getMergeRequestForBranchMock: vi.fn(),
-  getProjectSlugMock: vi.fn()
+  getProjectSlugMock: vi.fn(),
+  invalidateHostedReviewBranchCacheMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -112,6 +115,11 @@ vi.mock('../gitlab/work-item-details', () => ({
 
 vi.mock('../gitlab/gitlab-project-recents', () => ({
   recordGitLabProjectRecent: vi.fn()
+}))
+
+vi.mock('../source-control/hosted-review-branch-cache', async (importActual) => ({
+  ...(await importActual<typeof HostedReviewBranchCache>()),
+  invalidateHostedReviewBranchCache: invalidateHostedReviewBranchCacheMock
 }))
 
 import { registerGitLabHandlers } from './gitlab'
@@ -171,7 +179,8 @@ describe('GitLab IPC handlers', () => {
       getWorkItemByProjectRefMock,
       getMergeRequestMock,
       getMergeRequestForBranchMock,
-      getProjectSlugMock
+      getProjectSlugMock,
+      invalidateHostedReviewBranchCacheMock
     ]) {
       mock.mockReset()
     }
@@ -616,6 +625,8 @@ describe('GitLab IPC handlers', () => {
       undefined,
       localGitOptions
     )
+    // Why: the sidebar refresh reads through the host's 60s review cache.
+    expect(invalidateHostedReviewBranchCacheMock).toHaveBeenCalledWith('/local/orca', 'local')
     expect(updateMRReviewersMock).toHaveBeenCalledWith(
       '/local/orca',
       8,
@@ -705,5 +716,20 @@ describe('GitLab IPC handlers', () => {
     expect(excerpt.trace).not.toContain('section_start')
     expect(excerpt.trace).not.toContain('line 0\n')
     expect(excerpt.trace.length).toBeLessThan(noisyTrace.length)
+  })
+
+  it('invalidates the review cache even when the MR update rejects', async () => {
+    updateMRMock.mockRejectedValueOnce(new Error('timeout'))
+    registerGitLabHandlers(storeWithRepos([repo()]) as Store)
+
+    await expect(
+      ipcHandlers.get('gitlab:updateMR')?.(null, {
+        repoPath: '/local/orca',
+        iid: 8,
+        updates: { approval: 'approve' }
+      })
+    ).rejects.toThrow('timeout')
+    // Why: a lost response does not prove the write did not land.
+    expect(invalidateHostedReviewBranchCacheMock).toHaveBeenCalledWith('/local/orca', 'local')
   })
 })

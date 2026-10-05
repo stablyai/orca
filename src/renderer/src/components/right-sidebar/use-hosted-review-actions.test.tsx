@@ -235,6 +235,75 @@ describe('useHostedReviewActions', () => {
     expect(gitLabRefresh).toHaveBeenCalledTimes(1)
   })
 
+  it('routes GitLab approval through the existing update API and refreshes', async () => {
+    const gitLabRefresh = vi.fn().mockResolvedValue(undefined)
+    await renderHook(makeRepo(), gitLabRefresh, undefined, true)
+
+    await act(async () => {
+      await latest?.handleApproval('approve')
+    })
+
+    expect(window.api.gl.updateMR).toHaveBeenCalledWith({
+      repoPath: '/repo',
+      repoId: 'repo-1',
+      iid: 1015,
+      updates: { approval: 'approve' }
+    })
+    expect(gitLabRefresh).toHaveBeenCalledTimes(1)
+    expect(latest?.actionError).toBeNull()
+    expect(latest?.approving).toBe(false)
+  })
+
+  it('shows a failed approval in the card error and still refreshes', async () => {
+    const gitLabRefresh = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(window.api.gl.updateMR).mockResolvedValueOnce({
+      ok: false,
+      error: '401 Unauthorized'
+    })
+    await renderHook(makeRepo(), gitLabRefresh, undefined, true)
+
+    await act(async () => {
+      await latest?.handleApproval('approve')
+    })
+
+    expect(latest?.actionError).toBe('401 Unauthorized')
+    // Why: a lost response or an "already approved" race must not leave the button stale.
+    expect(gitLabRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows a thrown approval error in the card', async () => {
+    vi.mocked(window.api.gl.updateMR).mockRejectedValueOnce(new Error('network down'))
+    await renderHook(makeRepo(), undefined, undefined, true)
+
+    await act(async () => {
+      await latest?.handleApproval('unapprove')
+    })
+
+    expect(latest?.actionError).toBe('network down')
+  })
+
+  it('reports approving while the request is in flight', async () => {
+    let finish: (value: { ok: true }) => void = () => {}
+    vi.mocked(window.api.gl.updateMR).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve
+      })
+    )
+    await renderHook(makeRepo(), undefined, undefined, true)
+
+    let inFlight: Promise<void> | undefined
+    await act(async () => {
+      inFlight = latest?.handleApproval('approve')
+    })
+    expect(latest?.approving).toBe(true)
+
+    await act(async () => {
+      finish({ ok: true })
+      await inFlight
+    })
+    expect(latest?.approving).toBe(false)
+  })
+
   it('confirms the downstack merge scope before merging a registered stack', async () => {
     const stackedPR = {
       ...githubPR,

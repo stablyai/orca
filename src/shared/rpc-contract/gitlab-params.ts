@@ -72,7 +72,8 @@ export const UpdateMr = RepoSelector.extend({
     body: z.string().optional(),
     addLabels: z.array(z.string()).optional(),
     removeLabels: z.array(z.string()).optional(),
-    readyForReview: z.literal(true).optional()
+    readyForReview: z.literal(true).optional(),
+    approval: z.enum(['approve', 'unapprove']).optional()
   }),
   projectRef: GitLabProjectRef
 })
