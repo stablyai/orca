@@ -3,6 +3,7 @@ import { escapeRegex } from '../../../../shared/string-utils'
 
 type ClipboardAnchor = {
   href: string
+  text: string
 }
 
 const WINDOWS_ABSOLUTE_PATH_PREFIX =
@@ -21,7 +22,8 @@ function extractClipboardAnchors(html: string): ClipboardAnchor[] {
 
   const document = new DOMParser().parseFromString(html, 'text/html')
   return Array.from(document.querySelectorAll('a[href]'), (anchor) => ({
-    href: anchor.getAttribute('href') ?? ''
+    href: anchor.getAttribute('href') ?? '',
+    text: anchor.textContent?.trim() ?? ''
   }))
 }
 
@@ -29,6 +31,29 @@ function getHttpHostname(href: string): string | null {
   try {
     const url = new URL(href)
     return url.protocol.startsWith('http') ? url.hostname.toLowerCase() : null
+  } catch {
+    return null
+  }
+}
+
+function getHttpHostnameFromLabel(label: string): string | null {
+  if (!label) {
+    return null
+  }
+
+  try {
+    const url = new URL(`http://${label}`)
+    if (
+      url.username ||
+      url.password ||
+      url.port ||
+      url.pathname !== '/' ||
+      url.search ||
+      url.hash
+    ) {
+      return null
+    }
+    return url.hostname.toLowerCase()
   } catch {
     return null
   }
@@ -63,7 +88,19 @@ export function shouldPasteTerminalWindowsPathAsPlainText({
 
   return anchors.some((anchor) => {
     const basename = getHttpHostname(anchor.href)
-    return basename !== null && containsWindowsPathWithBasename(plainText, basename)
+    if (basename === null) {
+      return false
+    }
+
+    if (containsWindowsPathWithBasename(plainText, basename)) {
+      return true
+    }
+
+    const labelBasename = anchor.text
+    return (
+      getHttpHostnameFromLabel(labelBasename) === basename &&
+      containsWindowsPathWithBasename(plainText, labelBasename)
+    )
   })
 }
 

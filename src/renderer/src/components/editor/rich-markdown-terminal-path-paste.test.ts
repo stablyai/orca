@@ -118,6 +118,17 @@ describe('rich markdown terminal path paste', () => {
     ).toBe(true)
   })
 
+  it('preserves a Unicode path basename linked through an IDN hostname', () => {
+    const { editor, inserted } = makeEditor()
+    const text = 'Open C:\\Users\\My Project\\résumé.md'
+    const event = makePasteEvent(text, '<a href="http://résumé.md">résumé.md</a>')
+
+    expect(handleRichMarkdownTerminalPathPaste(editor, event)).toBe(true)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(inserted).toEqual([text])
+  })
+
   it('does not treat valid filename punctuation as the end of a basename', () => {
     expect(
       shouldPasteTerminalWindowsPathAsPlainText({
