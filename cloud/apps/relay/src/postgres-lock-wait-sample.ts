@@ -9,6 +9,8 @@ import type { DatabaseLockWaitSample } from './relay-observability.js'
 // Blockers are read once per waiter; non-relay waiters stay in so chains through
 // them resolve, and the depth cap bounds a cycle. The table is the first relay
 // table the waiting statement names, which may be one it only references.
+// It shares the director's 3-slot pool, so when every slot is a lock waiter the
+// sample queues and undercounts director waiters; a dedicated connection fixes that.
 const LOCK_WAIT_SAMPLE_SQL = `
 WITH RECURSIVE waiting AS MATERIALIZED (
   SELECT pid, application_name, query, (pg_blocking_pids(pid))[1] AS blocker

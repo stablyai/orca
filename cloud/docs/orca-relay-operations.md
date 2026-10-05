@@ -526,7 +526,10 @@ scheduled `drain-return-deferred` answers a fast drain produces by design.
 Every 5 s each director samples `pg_stat_activity` for relay backends waiting
 on a lock, keyed by waiter role, table and holder role
 (`dbLockWaitersByKeyDelta`). The holder is the root of the wait chain, and the
-table is the first relay table the waiting statement names. Summed waiters divided by `dbLockWaitSamplesDelta`
+table is the first relay table the waiting statement names. The sample runs
+on the director's own 3-connection pool, so when every connection is waiting on
+a lock it queues behind them and undercounts director waiters; a dedicated
+sampler connection would fix that. Summed waiters divided by `dbLockWaitSamplesDelta`
 is the mean number waiting, i.e. lock-wait seconds per second; directors and
 cells share one database user, so Query Insights cannot make this split.
 Reconciliation logs `orca_relay_reservation_drift` for each cell whose
