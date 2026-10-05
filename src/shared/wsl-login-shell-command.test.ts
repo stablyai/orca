@@ -8,7 +8,8 @@ import {
   buildWslExecArgs,
   buildWslInteractiveLoginShellCommand,
   buildWslLoginShellCommand,
-  quotePosixShell
+  quotePosixShell,
+  WSL_FISH_SHELL_READY_INIT
 } from './wsl-login-shell-command'
 
 const WSL_TEST_COMMAND_TIMEOUT_MS = 10_000
@@ -337,5 +338,67 @@ describe('in-guest wrapper root resolution', () => {
     const result = spawnSync('sh', ['-c', probe], { encoding: 'utf8' })
     expect(result.status).toBe(0)
     expect(result.stdout).toBe('/mnt/c/ud/shell-wrappers/deadbeefdeadbeef/shell-ready')
+  })
+})
+
+// Why: the host holds a WSL startup command until the guest reports ready
+// (#24188). Only a prompt hook may report it: a marker sent before the shell's
+// startup files lets those files eat the command.
+describe('guest shell ready reporting', () => {
+  // Why a sentinel: fish's init command spans lines, so output cannot be split on newlines.
+  const ARGS_END = '<<orca-args-end>>'
+  const dispatch = (
+    shellName: string,
+    features: string | null,
+    wrapperRoot = ''
+  ): { args: string; features: string } => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-wsl-dispatch-'))
+    try {
+      const shell = join(dir, shellName).replace(/\\/g, '/')
+      writeFileSync(
+        shell,
+        `#!/bin/sh\nprintf '%s' "$*"\nprintf '${ARGS_END}%s' "\${ORCA_SHELL_FEATURES-unset}"\n`
+      )
+      chmodSync(shell, 0o755)
+      const script = buildWslInteractiveLoginShellCommand()
+      const probe = [
+        features === null ? 'unset ORCA_SHELL_FEATURES' : `export ORCA_SHELL_FEATURES=${features}`,
+        `_orca_wsl_shell=${quotePosixShell(shell)}`,
+        `_orca_shell_ready_root=${quotePosixShell(wrapperRoot)}`,
+        script.slice(script.indexOf('_orca_wsl_shell_name='))
+      ].join('\n')
+      const result = spawnSync('sh', ['-c', probe], { encoding: 'utf8' })
+      expect(result.status).toBe(0)
+      const [args = '', reported = ''] = result.stdout.split(ARGS_END)
+      return { args, features: reported }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+
+  it('never emits the marker ahead of the guest shell', () => {
+    expect(buildWslInteractiveLoginShellCommand()).not.toContain("printf '\\033]777")
+  })
+
+  it('starts fish with the prompt hook when ready was requested', () => {
+    const fish = dispatch('fish', 'ready')
+    expect(fish.args).toBe(`-l -C ${WSL_FISH_SHELL_READY_INIT}`)
+    expect(fish.features).toBe('unset')
+    expect(dispatch('fish', null).args).toBe('-l')
+  })
+
+  it('leaves a hookless shell to the host timeout and never leaks the channel', () => {
+    expect(dispatch('dash', 'ready')).toEqual({ args: '-l', features: 'unset' })
+  })
+
+  it('leaves a wrapped zsh to report and consume the channel itself', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-wsl-root-'))
+    try {
+      mkdirSync(join(root, 'zsh'))
+      const zsh = dispatch('zsh', 'ready', root.replace(/\\/g, '/'))
+      expect(zsh).toEqual({ args: '-l', features: 'ready' })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
