@@ -14,6 +14,8 @@ import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { getExternalEditorOpenCapability } from '@/lib/external-editor-open-capability'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import type { ShellOpenExternalEditorResult } from '../../../../shared/shell-open-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OpenInApplication } from '../../../../shared/ui-chrome-types'
@@ -22,6 +24,7 @@ import { translate } from '@/i18n/i18n'
 export { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
 
 type WorktreeOpenInMenuItemsProps = {
+  worktreeId: string | null
   worktreePath: string
   connectionId?: string | null
   disabled?: boolean
@@ -53,10 +56,13 @@ export function getWorktreeOpenInEntries(
 export function getOpenInEntryAvailability(
   entry: OpenInMenuEntry,
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  connectionId?: string | null
+  connectionId?: string | null,
+  runtimeEnvironmentId?: string | null
 ): { disabled: boolean; metadata?: string } {
+  // Why: the workspace's owner decides; global runtime focus does not make local paths remote.
+  const ownerSettings = settingsForRuntimeOwner(settings, runtimeEnvironmentId)
   if (entry.target === 'file-manager') {
-    const disabled = isLocalPathOpenBlocked(settings, { connectionId })
+    const disabled = isLocalPathOpenBlocked(ownerSettings, { connectionId })
     return disabled
       ? {
           disabled: true,
@@ -64,7 +70,7 @@ export function getOpenInEntryAvailability(
         }
       : { disabled: false }
   }
-  const capability = getExternalEditorOpenCapability(settings, {
+  const capability = getExternalEditorOpenCapability(ownerSettings, {
     connectionId,
     command: entry.command
   })
@@ -246,9 +252,13 @@ export async function openWorktreePath(args: {
   target: 'file-manager' | 'external-editor'
   worktreePath: string
   connectionId?: string | null
+  runtimeEnvironmentId?: string | null
   command?: string
 }): Promise<void> {
-  const settings = useAppStore.getState().settings
+  const settings = settingsForRuntimeOwner(
+    useAppStore.getState().settings,
+    args.runtimeEnvironmentId
+  )
   if (args.target === 'file-manager') {
     if (isLocalPathOpenBlocked(settings, { connectionId: args.connectionId ?? null })) {
       showLocalPathOpenBlockedToast()
@@ -284,26 +294,34 @@ export async function openWorktreePath(args: {
 
 function useOpenInWorktreePath({
   worktreePath,
-  connectionId
-}: WorktreeOpenInMenuItemsProps): (
-  target: 'file-manager' | 'external-editor',
-  command?: string
-) => Promise<void> {
+  connectionId,
+  runtimeEnvironmentId
+}: {
+  worktreePath: string
+  connectionId?: string | null
+  runtimeEnvironmentId: string | null
+}): (target: 'file-manager' | 'external-editor', command?: string) => Promise<void> {
   return useCallback(
     async (target, command) => {
-      await openWorktreePath({ target, worktreePath, connectionId, command })
+      await openWorktreePath({ target, worktreePath, connectionId, runtimeEnvironmentId, command })
     },
-    [connectionId, worktreePath]
+    [connectionId, runtimeEnvironmentId, worktreePath]
   )
 }
 
 export function WorktreeOpenInMenuItems({
+  worktreeId,
   worktreePath,
   connectionId,
   disabled,
   labelPrefix = ''
 }: WorktreeOpenInMenuItemsProps): React.JSX.Element {
-  const openInWorktreePath = useOpenInWorktreePath({ worktreePath, connectionId })
+  const runtimeEnvironmentId = useAppStore((s) => getRuntimeEnvironmentIdForWorktree(s, worktreeId))
+  const openInWorktreePath = useOpenInWorktreePath({
+    worktreePath,
+    connectionId,
+    runtimeEnvironmentId
+  })
   const openInApplications = useAppStore(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
@@ -314,7 +332,12 @@ export function WorktreeOpenInMenuItems({
   return (
     <>
       {entries.map((entry) => {
-        const availability = getOpenInEntryAvailability(entry, settings, connectionId)
+        const availability = getOpenInEntryAvailability(
+          entry,
+          settings,
+          connectionId,
+          runtimeEnvironmentId
+        )
         return (
           <DropdownMenuItem
             key={entry.id}
@@ -348,6 +371,7 @@ export function WorktreeOpenInMenuItems({
 }
 
 export function WorktreeOpenInSubMenu({
+  worktreeId,
   worktreePath,
   connectionId,
   disabled
@@ -364,6 +388,7 @@ export function WorktreeOpenInSubMenu({
         onPointerDown={stopMenuPropagation}
       >
         <WorktreeOpenInMenuItems
+          worktreeId={worktreeId}
           worktreePath={worktreePath}
           connectionId={connectionId}
           disabled={disabled}

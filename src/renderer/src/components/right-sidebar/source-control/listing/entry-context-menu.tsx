@@ -101,10 +101,11 @@ export function SourceControlEntryContextMenu({
         target: 'external-editor',
         worktreePath: absolutePath,
         connectionId,
+        runtimeEnvironmentId,
         command
       })
     },
-    [absolutePath, connectionId]
+    [absolutePath, connectionId, runtimeEnvironmentId]
   )
 
   return (
@@ -141,7 +142,8 @@ export function SourceControlEntryContextMenu({
               const availability = getOpenInEntryAvailability(
                 { ...application, target: 'external-editor' },
                 settings,
-                connectionId
+                connectionId,
+                runtimeEnvironmentId
               )
               return (
                 <ContextMenuItem

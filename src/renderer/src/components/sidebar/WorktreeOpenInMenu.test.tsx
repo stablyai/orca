@@ -116,6 +116,7 @@ describe('WorktreeOpenInMenu', () => {
 
   it('disables the Open in submenu while deleting', () => {
     const tree = WorktreeOpenInSubMenu({
+      worktreeId: 'worktree-1',
       worktreePath: '/tmp/workspace',
       connectionId: null,
       disabled: true
@@ -126,6 +127,7 @@ describe('WorktreeOpenInMenu', () => {
 
   it('stops menu item click propagation', () => {
     const tree = WorktreeOpenInSubMenu({
+      worktreeId: 'worktree-1',
       worktreePath: '/tmp/workspace',
       connectionId: null
     })
@@ -151,6 +153,49 @@ describe('WorktreeOpenInMenu', () => {
     )
     expect(openInFileManagerMock).not.toHaveBeenCalled()
     expect(openInExternalEditorMock).not.toHaveBeenCalled()
+  })
+
+  it('opens a local workspace while a remote runtime is focused', async () => {
+    // Why: global runtime focus is not ownership; the workspace's own owner decides.
+    mockState.settings = { activeRuntimeEnvironmentId: 'runtime-1', openInApplications: [] }
+    const [vsCode, fileManager] = getWorktreeOpenInEntries(
+      [{ id: 'vscode', label: 'VS Code', command: 'code' }],
+      'Finder'
+    )
+
+    expect(getOpenInEntryAvailability(vsCode, mockState.settings, null, null)).toEqual({
+      disabled: false
+    })
+    expect(getOpenInEntryAvailability(fileManager, mockState.settings, null, null)).toEqual({
+      disabled: false
+    })
+    await openWorktreePath({
+      target: 'file-manager',
+      worktreePath: '/tmp/workspace',
+      connectionId: null,
+      runtimeEnvironmentId: null
+    })
+
+    expect(openInFileManagerMock).toHaveBeenCalledWith('/tmp/workspace')
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps a runtime-owned workspace local-only when no runtime is focused', async () => {
+    const [entry] = getWorktreeOpenInEntries([], 'Finder')
+
+    expect(getOpenInEntryAvailability(entry, mockState.settings, null, 'runtime-1')).toEqual({
+      disabled: true,
+      metadata: 'Local only'
+    })
+    await openWorktreePath({
+      target: 'file-manager',
+      worktreePath: '/tmp/workspace',
+      connectionId: null,
+      runtimeEnvironmentId: 'runtime-1'
+    })
+
+    expect(openInFileManagerMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
 
   it('shows an actionable toast when the host launcher fails', async () => {
