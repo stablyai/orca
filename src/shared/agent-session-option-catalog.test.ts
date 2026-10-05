@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getAgentSessionOptionCatalog, mergeCatalogModels } from './agent-session-option-catalog'
+import {
+  getAgentSessionOptionCatalog,
+  mergeCatalogModels,
+  withConsentGatedSeedModels
+} from './agent-session-option-catalog'
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 import {
   resolveNativeChatSessionOptionDefaults,
@@ -119,6 +123,49 @@ describe('agent session option catalog', () => {
     expect(sonnet.description).toBe('Sonnet 5 · Efficient')
     expect(sonnet.isDefault).toBe(true)
     expect(sonnet.options.map(({ id }) => id)).toEqual(['effort'])
+  })
+
+  it('re-adds only consent-gated Claude seed rows a probe omitted', () => {
+    const catalog = getAgentSessionOptionCatalog('claude')!
+    const merged = withConsentGatedSeedModels(catalog, [
+      { id: 'opus[1m]', label: 'Opus (1M context)', options: [] },
+      { id: 'sonnet', label: 'Sonnet', options: [] },
+      { id: 'haiku', label: 'Haiku', options: [] }
+    ])
+    expect(merged.map(({ id }) => id)).toEqual(['fable', 'opus[1m]', 'sonnet', 'haiku'])
+    // The seed's `opus` alias stays out: the host listing `opus[1m]` and not `opus` is
+    // evidence, unlike the consent-gated Fable row.
+    expect(merged.some(({ id }) => id === 'opus')).toBe(false)
+    expect(merged.find(({ id }) => id === 'fable')?.options.map(({ id }) => id)).toEqual(['effort'])
+  })
+
+  it('strips `isDefault` from a re-added gated row so it cannot pose as the probed default', () => {
+    const claude = getAgentSessionOptionCatalog('claude')!
+    const catalog = {
+      ...claude,
+      models: [{ id: 'fable', label: 'Fable', isDefault: true, options: [] }]
+    }
+    const merged = withConsentGatedSeedModels(catalog, [
+      { id: 'sonnet', label: 'Sonnet', options: [] }
+    ])
+    expect(merged.map(({ id }) => id)).toEqual(['fable', 'sonnet'])
+    expect(merged[0].isDefault).toBeUndefined()
+  })
+
+  it('leaves a probe that already lists Fable untouched', () => {
+    const catalog = getAgentSessionOptionCatalog('claude')!
+    const discovered = [
+      { id: 'sonnet', label: 'Sonnet', options: [] },
+      { id: 'fable', label: 'Fable 5', options: [] }
+    ]
+    expect(withConsentGatedSeedModels(catalog, discovered)).toEqual(discovered)
+  })
+
+  it('returns discovery unchanged for a catalog with no consent-gated ids', () => {
+    const catalog = getAgentSessionOptionCatalog('cursor')!
+    expect(catalog.consentGatedModelIds).toBeUndefined()
+    const discovered = [{ id: 'auto', label: 'Auto', options: [] }]
+    expect(withConsentGatedSeedModels(catalog, discovered)).toEqual(discovered)
   })
 
   it('parses Cursor model discovery without treating headings as models', () => {
