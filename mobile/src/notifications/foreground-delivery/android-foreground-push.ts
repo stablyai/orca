@@ -2,6 +2,7 @@ import { Platform } from 'react-native'
 import * as Notifications from 'expo-notifications'
 import { canPresentForegroundPush } from './push-receive'
 import { readOrcaPushPayload } from '../payload-identity/push-payload'
+import { openSealedPushData } from '../payload-identity/push-sealed-payload'
 
 export async function presentForegroundPush(
   identifier: string,
@@ -9,7 +10,8 @@ export async function presentForegroundPush(
   prepare: () => boolean | Promise<boolean> = () => true,
   isCurrent: () => boolean = () => true
 ): Promise<void> {
-  const payload = readOrcaPushPayload(content.data)
+  const opened = await openSealedPushData(content.data).catch(() => null)
+  const payload = readOrcaPushPayload(opened ? opened.data : content.data)
   if (
     !payload ||
     !(await prepare()) ||
@@ -21,9 +23,9 @@ export async function presentForegroundPush(
   await Notifications.scheduleNotificationAsync({
     identifier,
     content: {
-      title: content.title,
-      body: content.body,
-      data: content.data,
+      title: opened?.opened ? (opened.title ?? content.title) : content.title,
+      body: opened?.opened ? (opened.body ?? '') : content.body,
+      data: opened ? opened.data : content.data,
       sound: content.sound === 'default' ? 'default' : false
     },
     trigger:
