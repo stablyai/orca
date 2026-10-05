@@ -50,7 +50,8 @@ describe('orca search command spec', () => {
     expect(searchSpec.repeatableFlags).toEqual(['agent', 'path'])
     for (const spec of COMMAND_SPECS) {
       if (spec !== searchSpec) {
-        expect(spec.repeatableFlags).toBeUndefined()
+        expect(spec.repeatableFlags ?? []).not.toContain('agent')
+        expect(spec.repeatableFlags ?? []).not.toContain('path')
       }
     }
   })

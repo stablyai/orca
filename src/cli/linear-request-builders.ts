@@ -1,5 +1,3 @@
-import { readFile } from 'node:fs/promises'
-import { isAbsolute, join } from 'node:path'
 import type {
   LinearIssueInclude,
   LinearIssueListRequest,
@@ -17,10 +15,20 @@ import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalStringFlag,
   getRepeatedStringFlag,
-  getRequiredStringFlag,
-  getRequiredStringFlagAllowingEmpty
+  getRequiredStringFlag
 } from './flags'
 import { RuntimeClientError } from './runtime-client'
+import { readBodyFlags, type BodyFlagLimit } from './body-flag-input'
+import { buildCurrentWorktreeContext } from './current-worktree-context'
+
+const LINEAR_BODY_LIMIT: BodyFlagLimit = {
+  maxChars: LINEAR_WRITE_BODY_CAP,
+  tooLarge: () =>
+    new RuntimeClientError(
+      'linear_body_too_large',
+      `Linear body must be at most ${LINEAR_WRITE_BODY_CAP} characters`
+    )
+}
 
 const LINEAR_PRIORITY_VALUES = new Map([
   ['none', 0],
@@ -149,7 +157,7 @@ export function buildIssueRequest(
     workspaceId,
     include: includes,
     depth: clampLinearIssueDepth(requestedDepth),
-    context: buildLinearCurrentContext(cwd, remote)
+    context: buildCurrentWorktreeContext(cwd, remote)
   }
 }
 
@@ -171,21 +179,7 @@ export function buildWriteTargetRequest(
     input,
     current,
     workspaceId: getOptionalStringFlag(flags, 'workspace'),
-    context: buildLinearCurrentContext(cwd, remote)
-  }
-}
-
-export function buildLinearCurrentContext(
-  cwd: string,
-  remote: boolean
-): LinearIssueRequest['context'] {
-  return {
-    remote,
-    ...(remote ? {} : { cwd }),
-    ...(process.env.ORCA_WORKTREE_ID ? { worktreeId: process.env.ORCA_WORKTREE_ID } : {}),
-    ...(process.env.ORCA_TERMINAL_HANDLE
-      ? { terminalHandle: process.env.ORCA_TERMINAL_HANDLE }
-      : {})
+    context: buildCurrentWorktreeContext(cwd, remote)
   }
 }
 
@@ -237,39 +231,5 @@ export async function readLinearBody(
   cwd: string,
   options: { required: boolean }
 ): Promise<string | undefined> {
-  const hasBody = flags.has('body')
-  const hasBodyFile = flags.has('body-file')
-  if (hasBody && hasBodyFile) {
-    throw new RuntimeClientError('invalid_argument', 'Use either --body or --body-file, not both')
-  }
-  if (!hasBody && !hasBodyFile) {
-    if (options.required) {
-      throw new RuntimeClientError('invalid_argument', 'Missing --body or --body-file')
-    }
-    return undefined
-  }
-  const body = hasBody
-    ? getRequiredStringFlagAllowingEmpty(flags, 'body')
-    : await readLinearBodyFile(getRequiredStringFlag(flags, 'body-file'), cwd)
-  if (body.length > LINEAR_WRITE_BODY_CAP) {
-    throw new RuntimeClientError(
-      'linear_body_too_large',
-      `Linear body must be at most ${LINEAR_WRITE_BODY_CAP} characters`
-    )
-  }
-  return body
-}
-
-async function readLinearBodyFile(path: string, cwd: string): Promise<string> {
-  if (path !== '-') {
-    return await readFile(isAbsolute(path) ? path : join(cwd, path), 'utf8')
-  }
-  if (process.stdin.isTTY) {
-    throw new RuntimeClientError('invalid_argument', 'stdin body requested but stdin is a TTY')
-  }
-  const chunks: Buffer[] = []
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
-  }
-  return Buffer.concat(chunks).toString('utf8')
+  return readBodyFlags(flags, cwd, { required: options.required, limit: LINEAR_BODY_LIMIT })
 }

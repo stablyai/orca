@@ -8,7 +8,8 @@ export function getSmartWorkspaceNameFieldCopy({
   crossRepoSwitchTarget,
   disabled,
   disabledPlaceholder,
-  mode
+  mode,
+  youtrackConnected = false
 }: {
   repoBackedSourcesDisabled: boolean
   linearAvailable: boolean
@@ -17,8 +18,9 @@ export function getSmartWorkspaceNameFieldCopy({
   disabled: boolean
   disabledPlaceholder?: string
   mode: SmartNameMode
+  youtrackConnected?: boolean
 }) {
-  const smartPlaceholder = repoBackedSourcesDisabled
+  const basePlaceholder = repoBackedSourcesDisabled
     ? linearAvailable
       ? translate(
           'auto.components.new.workspace.SmartWorkspaceNameField.placeholderNameOrLinearUrl',
@@ -47,6 +49,11 @@ export function getSmartWorkspaceNameFieldCopy({
             'auto.components.new.workspace.SmartWorkspaceNameField.placeholderSmartGitLab',
             'Type a name, #1234, GitHub, GitLab, or Jira URL'
           )
+  const smartPlaceholder = youtrackConnected
+    ? translate('youtrack.smartField.placeholderSuffix', '{{base}} or YouTrack ID', {
+        base: basePlaceholder
+      })
+    : basePlaceholder
   const crossRepoSwitchIsTaskSource = crossRepoSwitchTarget === 'task-source'
   const crossRepoSwitchTitle = crossRepoSwitchIsTaskSource
     ? translate(

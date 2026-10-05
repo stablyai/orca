@@ -15,6 +15,7 @@ import type {
 } from './runtime-linear-command-dependencies'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { RuntimeLinearDedupeCommands } from './runtime-linear-dedupe-commands'
+import { resolveCallerWorktree } from './caller-worktree-resolution'
 
 export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands {
   public parseLinearAttachmentUrl(value: string): URL {
@@ -220,46 +221,25 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
       throw new Error('runtime_unavailable')
     }
 
-    let worktree: ResolvedWorktree | null = null
-    if (context?.terminalHandle) {
-      try {
-        const terminal = await this.showTerminal(context.terminalHandle)
-        if (context.worktreeId && context.worktreeId !== terminal.worktreeId) {
-          throw new LinearAgentAccessError(
+    const resolved = await resolveCallerWorktree<ResolvedWorktree>(context, {
+      showTerminal: (handle) => this.showTerminal(handle),
+      worktreeById: (worktreeId) => this.resolveWorktreeSelector(`id:${worktreeId}`),
+      worktreeForPath: (cwd) => this.resolveWorktreeForContainedPath(cwd)
+    })
+    if (!resolved.ok) {
+      throw resolved.reason === 'mismatch'
+        ? new LinearAgentAccessError(
             'linear_permission_denied',
             'The provided Linear worktree context does not match the caller terminal.'
           )
-        }
-        worktree = await this.resolveWorktreeSelector(`id:${terminal.worktreeId}`)
-      } catch (error) {
-        if (error instanceof LinearAgentAccessError) {
-          throw error
-        }
-        if (context.remote === true || context.worktreeId) {
-          throw new LinearAgentAccessError(
+        : new LinearAgentAccessError(
             'linear_issue_required',
-            'Could not verify the current Linear-linked worktree.'
+            resolved.reason === 'unverified'
+              ? 'Could not verify the current Linear-linked worktree.'
+              : 'Run --current from inside an Orca-managed worktree or pass an issue id.'
           )
-        }
-      }
     }
-
-    if (!worktree && context?.remote !== true && context?.cwd) {
-      worktree = await this.resolveWorktreeForContainedPath(context.cwd)
-      if (!worktree) {
-        throw new LinearAgentAccessError(
-          'linear_issue_required',
-          'Run --current from inside an Orca-managed worktree or pass an issue id.'
-        )
-      }
-    }
-
-    if (!worktree) {
-      throw new LinearAgentAccessError(
-        'linear_issue_required',
-        'Run --current from inside an Orca-managed worktree or pass an issue id.'
-      )
-    }
+    const worktree = resolved.worktree
 
     const link = getLinearCurrentIssueFromWorktree(worktree)
     if (!link.workspaceId) {

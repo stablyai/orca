@@ -14,6 +14,7 @@ import {
   type WorkspaceEmojiSuggestion
 } from '@/lib/workspace-emoji-shortcodes'
 import { resolveSmartWorkspaceCommandValue } from './smart-workspace-command-value'
+import type { SmartWorkspaceSourceIntent } from './smart-workspace-command-value'
 import {
   buildSmartWorkspaceSourceRows,
   getVisibleBranchResults,
@@ -22,6 +23,7 @@ import {
   isSmartWorkspaceSourceQueryWithinLimit
 } from './smart-workspace-source-results'
 import { RESULT_LIMIT, type RowEntry } from './smart-workspace-name-field-model'
+import { isExactYouTrackMatch } from '../../../../shared/new-workspace/smart-workspace-youtrack-rows'
 import type { useSmartWorkspaceNameFieldFoundation } from './use-smart-workspace-name-field-foundation'
 
 type Foundation = ReturnType<typeof useSmartWorkspaceNameFieldFoundation>
@@ -40,6 +42,7 @@ export function useSmartWorkspaceNameFieldPresentation(
 ) {
   const {
     jiraSource,
+    youtrackIssues,
     branches,
     mode,
     branchResultsSource,
@@ -141,7 +144,8 @@ export function useSmartWorkspaceNameFieldPresentation(
       gitlabUrlIntent,
       mode,
       resultLimit: RESULT_LIMIT,
-      value
+      value,
+      youtrackIssues
     })
   }, [
     branches,
@@ -162,7 +166,8 @@ export function useSmartWorkspaceNameFieldPresentation(
     linearUrlLookupFailed,
     mode,
     selectedRepo?.id,
-    value
+    value,
+    youtrackIssues
   ])
   const { typedTextActionRow, searchResultRows } = useMemo(() => {
     const typedTextRow = rows.find(isTypedTextSourceRow) ?? null
@@ -180,7 +185,7 @@ export function useSmartWorkspaceNameFieldPresentation(
   const isQueryStale =
     !linearUrlIntentOwnsInput && trimmedValue.length > 0 && trimmedDebouncedQuery !== trimmedValue
   // Why: unambiguous refs highlight their source row instead of the typed-text fallback.
-  const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | 'jira' | null>(() => {
+  const sourceIntent = useMemo<SmartWorkspaceSourceIntent>(() => {
     if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
       return null
     }
@@ -190,6 +195,10 @@ export function useSmartWorkspaceNameFieldPresentation(
     }
     if (jiraSource.intent) {
       return 'jira'
+    }
+    // Why: only an exact ID/URL pins the highlight; ID-prefix suggestions stay keyboard-navigable.
+    if (rows.some((row) => row.kind === 'youtrack' && isExactYouTrackMatch(row.issue, trimmed))) {
+      return 'youtrack'
     }
     if (/^#\d+$/.test(trimmed) || parseGitHubIssueOrPRLink(trimmed) !== null) {
       return 'github'

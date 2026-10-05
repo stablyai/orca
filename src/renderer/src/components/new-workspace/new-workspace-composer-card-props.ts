@@ -12,6 +12,7 @@ import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/Sma
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira-types'
+import type { YouTrackIssue } from '../../../../shared/youtrack-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
@@ -78,6 +79,7 @@ export type NewWorkspaceComposerCardProps = {
   smartNameMode?: SmartNameMode
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   onSmartJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  onSmartYouTrackIssueSelect?: (issue: YouTrackIssue) => void
   onOpenJiraSettings?: () => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void

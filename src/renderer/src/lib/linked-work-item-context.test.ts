@@ -164,6 +164,23 @@ describe('getLinkedWorkItemPromptContext', () => {
     expectNoProductWorkflowDirection(result.linkedContextBlocks[0])
   })
 
+  it('names the YouTrack issue ID alongside its link', () => {
+    const item = {
+      provider: 'youtrack' as const,
+      number: 0,
+      url: 'https://yt.example.com/issue/PROJ-81',
+      title: 'PROJ-81 Retry payments',
+      youtrackIdentifier: 'PROJ-81'
+    }
+    const block = 'Linked YouTrack issue: PROJ-81\nhttps://yt.example.com/issue/PROJ-81'
+    expect(getLinkedWorkItemPromptContext(item)).toEqual({
+      linkedUrls: [],
+      linkedContextBlocks: [block]
+    })
+    expect(getLaunchableWorkItemDraftContent(item)).toBe(`${block}\n`)
+    expect(resolveQuickCreateLinkedWorkItemPrompt(item, '').draftPrompt).toBe(`${block}\n`)
+  })
+
   it('falls back to the URL for non-Linear items', () => {
     expect(
       getLinkedWorkItemPromptContext({

@@ -98,6 +98,33 @@ export function buildLinearLaunchContextBlock(args: LinearLaunchContextArgs): st
   return lines.join('\n')
 }
 
+type IssueLaunchReference = {
+  provider?: TaskProvider
+  url?: string
+  title?: string
+  linearIdentifier?: string
+  youtrackIdentifier?: string
+  linkedContext?: LinkedWorkItemContext
+}
+
+// Why: like Linear, a YouTrack draft carries only the issue ID and link; the agent reads the rest via `orca youtrack`.
+function getIssueLaunchContextBlock(item: IssueLaunchReference | null | undefined): string | null {
+  if (isLinearWorkItemReference(item)) {
+    return buildLinearLaunchContextBlock({
+      provider: item?.provider,
+      identifier: item?.linearIdentifier,
+      title: item?.title,
+      url: item?.url
+    })
+  }
+  const identifier = item?.youtrackIdentifier?.trim()
+  if (item?.provider !== 'youtrack' || !identifier) {
+    return null
+  }
+  const url = item.url?.trim()
+  return [`Linked YouTrack issue: ${identifier}`, ...(url ? [url] : [])].join('\n')
+}
+
 function escapeLinkedContextControlChars(value: string): string {
   return Array.from(value, (char) => {
     const code = char.codePointAt(0) ?? 0
@@ -151,24 +178,11 @@ function capLinkedContextSourceLines(args: { sourceLines: string; fixedChars: nu
 }
 
 export function getLinkedWorkItemPromptContext(
-  linkedWorkItem:
-    | (Pick<
-        { provider?: TaskProvider; url: string; title?: string; linearIdentifier?: string },
-        'provider' | 'url' | 'title' | 'linearIdentifier'
-      > & { linkedContext?: LinkedWorkItemContext })
-    | null
-    | undefined
+  linkedWorkItem: (IssueLaunchReference & { url: string }) | null | undefined
 ): { linkedUrls: string[]; linkedContextBlocks: string[] } {
-  if (isLinearWorkItemReference(linkedWorkItem)) {
-    const linearBlock = buildLinearLaunchContextBlock({
-      provider: linkedWorkItem?.provider,
-      identifier: linkedWorkItem?.linearIdentifier,
-      title: linkedWorkItem?.title,
-      url: linkedWorkItem?.url
-    })
-    return linearBlock
-      ? { linkedUrls: [], linkedContextBlocks: [linearBlock] }
-      : { linkedUrls: [], linkedContextBlocks: [] }
+  const issueBlock = getIssueLaunchContextBlock(linkedWorkItem)
+  if (issueBlock || isLinearWorkItemReference(linkedWorkItem)) {
+    return { linkedUrls: [], linkedContextBlocks: issueBlock ? [issueBlock] : [] }
   }
   const linkedUrl = linkedWorkItem?.url?.trim()
   return linkedUrl
@@ -182,19 +196,15 @@ export function getLaunchableWorkItemDraftContent(args: {
   url: string
   title?: string
   linearIdentifier?: string
+  youtrackIdentifier?: string
   linkedContext?: LinkedWorkItemContext
 }): string {
   if (args.pasteContent?.trim()) {
     return args.pasteContent
   }
-  if (isLinearWorkItemReference(args)) {
-    const linearBlock = buildLinearLaunchContextBlock({
-      provider: args.provider,
-      identifier: args.linearIdentifier,
-      title: args.title,
-      url: args.url
-    })
-    return linearBlock ? formatDraftContextBlock(linearBlock) : ''
+  const issueBlock = getIssueLaunchContextBlock(args)
+  if (issueBlock || isLinearWorkItemReference(args)) {
+    return issueBlock ? formatDraftContextBlock(issueBlock) : ''
   }
   return args.url
 }
@@ -208,23 +218,17 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
           url: string
           title?: string
           linearIdentifier?: string
+          youtrackIdentifier?: string
         },
-        'provider' | 'number' | 'url' | 'title' | 'linearIdentifier'
+        'provider' | 'number' | 'url' | 'title' | 'linearIdentifier' | 'youtrackIdentifier'
       > & { linkedContext?: LinkedWorkItemContext })
     | null
     | undefined,
   note: string
 ): { prompt: string; draftPrompt: string | null } {
   const trimmedNote = note.trim()
-  const linearBlock = isLinearWorkItemReference(linkedWorkItem)
-    ? buildLinearLaunchContextBlock({
-        provider: linkedWorkItem?.provider,
-        identifier: linkedWorkItem?.linearIdentifier,
-        title: linkedWorkItem?.title,
-        url: linkedWorkItem?.url
-      })
-    : null
-  const linearDraft = linearBlock ? formatDraftContextBlock(linearBlock) : null
+  const issueBlock = getIssueLaunchContextBlock(linkedWorkItem)
+  const linearDraft = issueBlock ? formatDraftContextBlock(issueBlock) : null
   const linkedUrl = linkedWorkItem?.url?.trim() || null
   const draftPrompt = linearDraft
     ? [trimmedNote, linearDraft].filter(Boolean).join('\n\n')
