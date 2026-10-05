@@ -4,7 +4,7 @@ import { getWorkspaceKanbanSidebarDropTarget } from '../../workspace-kanban-side
 import { getFullDropIndexForWorktreeDragUnit } from '../../worktree-drag-units'
 import { getWorktreeSidebarDragRectsForGroup } from '../../worktree-sidebar-drag-autoscroll'
 import { getWorktreeSidebarDragGrab } from '../../worktree-sidebar-drag-geometry'
-import { getPointerDropStatusTarget } from './status-target'
+import { getPointerDropStatusTarget, getWorkspaceStatusTargetGroupKey } from './status-target'
 import type { WorktreeDropCommitContext } from './drop-commit-context'
 import type { WorktreeDragRuntime } from './use-runtime'
 import type { WorktreeDragSession } from './use-session'
@@ -117,6 +117,7 @@ export function useWorktreeNativeDrag(args: {
           ? ctx.computeWorktreeStatusDrop({
               pointerY: event.clientY,
               status: target.status,
+              groupKey: target.groupKey,
               draggedIds: dragSession.reorderDraggedIds
             })
           : null
@@ -190,6 +191,7 @@ export function useWorktreeNativeDrag(args: {
           ? ctx.computeWorktreeStatusDrop({
               pointerY: event.clientY,
               status: target.status,
+              groupKey: target.groupKey,
               draggedIds: dragSession.reorderDraggedIds
             })
           : null
@@ -199,6 +201,13 @@ export function useWorktreeNativeDrag(args: {
           ctx.onMoveWorktreesToStatusAtIndex({
             worktreeIds: dragSession.reorderDraggedIds,
             status: target.status,
+            targetGroupKey:
+              target.groupKey ??
+              getWorkspaceStatusTargetGroupKey({
+                sourceGroupKey: dragSession.sourceGroupKey,
+                status: target.status,
+                workspaceStatuses: ctx.workspaceStatuses
+              }),
             dropIndex: statusDrop.dropIndex,
             groups: ctx.worktreeDragGroups
           })

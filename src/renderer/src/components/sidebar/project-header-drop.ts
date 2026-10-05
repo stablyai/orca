@@ -3,8 +3,14 @@ import {
   computeWorktreeSidebarHeaderDropPreview,
   type WorktreeSidebarHeaderDropPreview
 } from './worktree-sidebar-header-drop-preview'
-import type { Row } from './worktree-list/grouping/row-types'
+import type {
+  GroupHeaderRow,
+  Row,
+  WorktreeGroupBy,
+  WorktreeGroupBySecondary
+} from './worktree-list/grouping/row-types'
 import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectOrderBy } from '../../../../shared/ui-chrome-types'
 
 export type ProjectHeaderDragBucketKey = string
 
@@ -22,26 +28,71 @@ export type ProjectHeaderDragRect = {
 
 export type ProjectHeaderDropPreview = WorktreeSidebarHeaderDropPreview
 
-export function getProjectHeaderDragBucketKey(
-  repo: Pick<Repo, 'projectGroupId'>
-): ProjectHeaderDragBucketKey {
-  return repo.projectGroupId ? `group:${repo.projectGroupId}` : 'ungrouped'
+export function canReorderProjectHeaders(args: {
+  groupBy: WorktreeGroupBy
+  groupBySecondary: WorktreeGroupBySecondary
+  projectOrderBy: ProjectOrderBy
+}): boolean {
+  return (
+    (args.groupBy === 'repo' || args.groupBySecondary === 'repo') &&
+    args.projectOrderBy === 'manual'
+  )
 }
 
-export function getSidebarOrderedRepoHeaderIdsByBucket(
-  rows: readonly Row[]
-): Map<ProjectHeaderDragBucketKey, string[]> {
-  const buckets = new Map<ProjectHeaderDragBucketKey, string[]>()
+export function getProjectHeaderDragBucketKey(
+  repo: Pick<Repo, 'projectGroupId'>,
+  parentGroupKey?: string
+): ProjectHeaderDragBucketKey {
+  const projectGroupKey = repo.projectGroupId ? `group:${repo.projectGroupId}` : 'ungrouped'
+  return parentGroupKey
+    ? `parent:${encodeURIComponent(parentGroupKey)}:${projectGroupKey}`
+    : projectGroupKey
+}
+
+function getProjectHeaderParentGroupKey(row: GroupHeaderRow): string | undefined {
+  // Secondary Project headers are nested only below Status or PR keys, whose
+  // keys never contain '/'. Project identity keys can contain provider paths,
+  // so the first separator is the hierarchy boundary; the last may be inside
+  // the Project key itself (for example project:git:git.example.com/org).
+  const separatorIndex = row.key.indexOf('/')
+  return separatorIndex > 0 ? row.key.slice(0, separatorIndex) : undefined
+}
+
+export type SidebarRepoHeaderDragLayout = {
+  idsByBucket: Map<ProjectHeaderDragBucketKey, string[]>
+  bucketByHeaderKey: Map<string, ProjectHeaderDragBucketKey>
+  indexByHeaderKey: Map<string, number>
+}
+
+export function getSidebarRepoHeaderDragLayout(
+  rows: readonly Row[],
+  scopeByParentGroup = false
+): SidebarRepoHeaderDragLayout {
+  const idsByBucket = new Map<ProjectHeaderDragBucketKey, string[]>()
+  const bucketByHeaderKey = new Map<string, ProjectHeaderDragBucketKey>()
+  const indexByHeaderKey = new Map<string, number>()
   for (const row of rows) {
     if (row.type !== 'header' || !row.repo) {
       continue
     }
-    const bucketKey = getProjectHeaderDragBucketKey(row.repo)
-    const list = buckets.get(bucketKey) ?? []
+    const bucketKey = getProjectHeaderDragBucketKey(
+      row.repo,
+      scopeByParentGroup ? getProjectHeaderParentGroupKey(row) : undefined
+    )
+    const list = idsByBucket.get(bucketKey) ?? []
+    bucketByHeaderKey.set(row.key, bucketKey)
+    indexByHeaderKey.set(row.key, list.length)
     list.push(row.repo.id)
-    buckets.set(bucketKey, list)
+    idsByBucket.set(bucketKey, list)
   }
-  return buckets
+  return { idsByBucket, bucketByHeaderKey, indexByHeaderKey }
+}
+
+export function getSidebarOrderedRepoHeaderIdsByBucket(
+  rows: readonly Row[],
+  scopeByParentGroup = false
+): Map<ProjectHeaderDragBucketKey, string[]> {
+  return getSidebarRepoHeaderDragLayout(rows, scopeByParentGroup).idsByBucket
 }
 
 export function getLogicalRepoOrderRankById(

@@ -5,9 +5,9 @@ import {
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import { getEffectiveProjectGroupManualRank } from '../../../../../../shared/project-groups'
-import { PROJECT_GROUP_META, getProjectGroupHeaderKey } from './group-keys'
+import { PROJECT_GROUP_META, getNestedGroupKey, getProjectGroupHeaderKey } from './group-keys'
 import { appendOrderedGroups } from './group-sections'
-import type { SectionAppendContext } from './group-sections'
+import type { GroupChildrenAppender, SectionAppendContext } from './group-sections'
 import type { OrderedGroupEntry } from './project-grouping'
 import {
   compareRecentRank,
@@ -24,9 +24,22 @@ export function appendProjectGroupSections(
     folderWorkspaces: readonly RenderableFolderWorkspace[]
     projectOrderBy: ProjectOrderBy
     repoOrder: Map<string, number> | undefined
+    /** Qualifies every emitted key when Project grouping is nested under another lane. */
+    parentKey?: string
+    baseDepth?: number
+    appendGroupChildren?: GroupChildrenAppender
   }
 ): void {
-  const { orderedGroups, projectGroups, folderWorkspaces, projectOrderBy, repoOrder } = args
+  const {
+    orderedGroups,
+    projectGroups,
+    folderWorkspaces,
+    projectOrderBy,
+    repoOrder,
+    parentKey,
+    baseDepth = 0,
+    appendGroupChildren
+  } = args
   const { result, collapsedGroups } = ctx
 
   const groupByProjectGroupId = new Map<string | null, OrderedGroupEntry[]>()
@@ -87,6 +100,10 @@ export function appendProjectGroupSections(
     )
   }
 
+  const qualifyKey = (key: string): string => (parentKey ? getNestedGroupKey(parentKey, key) : key)
+  const qualifyEntries = (entries: OrderedGroupEntry[]): OrderedGroupEntry[] =>
+    parentKey ? entries.map(([key, group]) => [qualifyKey(key), group]) : entries
+
   const getProjectGroupSubtreeCount = (groupId: string): number => {
     const directCount = groupByProjectGroupId.get(groupId)?.length ?? 0
     const folderWorkspaceCount = folderWorkspacesByProjectGroupId.get(groupId)?.length ?? 0
@@ -100,9 +117,10 @@ export function appendProjectGroupSections(
   const appendProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
     const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
     const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
-    const key = getProjectGroupHeaderKey(projectGroup.id)
+    const key = qualifyKey(getProjectGroupHeaderKey(projectGroup.id))
     result.push({
       type: 'header',
+      groupKind: 'project-group',
       key,
       label: projectGroup.name,
       count: getProjectGroupSubtreeCount(projectGroup.id),
@@ -112,10 +130,30 @@ export function appendProjectGroupSections(
       projectGroupDepth: depth
     })
     if (!collapsedGroups.has(key)) {
-      for (const pair of folderWorkspacesByProjectGroupId.get(projectGroup.id) ?? []) {
-        result.push(buildFolderWorkspaceRow(pair, depth + 1))
+      const directFolderWorkspaces = folderWorkspacesByProjectGroupId.get(projectGroup.id) ?? []
+      if (appendGroupChildren && directFolderWorkspaces.length > 0) {
+        appendGroupChildren(
+          key,
+          {
+            label: projectGroup.name,
+            items: [],
+            projectGroup,
+            repoIds: new Set(),
+            folderWorkspaces: directFolderWorkspaces
+          },
+          depth
+        )
+      } else {
+        for (const pair of directFolderWorkspaces) {
+          result.push(buildFolderWorkspaceRow(pair, depth + 1, true))
+        }
       }
-      appendOrderedGroups(ctx, withRepoSectionDisplayLabels(repoEntries), depth + 1)
+      appendOrderedGroups(
+        ctx,
+        qualifyEntries(withRepoSectionDisplayLabels(repoEntries)),
+        depth + 1,
+        appendGroupChildren
+      )
       for (const childGroup of childGroups) {
         appendProjectGroup(childGroup, depth + 1)
       }
@@ -124,7 +162,7 @@ export function appendProjectGroupSections(
   }
 
   for (const projectGroup of childGroupsByParentId.get(null) ?? []) {
-    appendProjectGroup(projectGroup, 0)
+    appendProjectGroup(projectGroup, baseDepth)
   }
 
   const remainingRepoEntries = [...(groupByProjectGroupId.get(null) ?? [])]
@@ -138,7 +176,8 @@ export function appendProjectGroupSections(
   }
   appendOrderedGroups(
     ctx,
-    withRepoSectionDisplayLabels(sortRepoEntriesWithinGroup(remainingRepoEntries)),
-    0
+    qualifyEntries(withRepoSectionDisplayLabels(sortRepoEntriesWithinGroup(remainingRepoEntries))),
+    baseDepth,
+    appendGroupChildren
   )
 }

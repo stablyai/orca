@@ -5692,7 +5692,8 @@
           "219ebf1961": "Branch name",
           "folderPathIdentity": "Branch / folder path",
           "cli": "Orca CLI",
-          "workspaceOptions": "Workspace options"
+          "workspaceOptions": "Workspace options",
+          "thenBy": "Then by"
         },
         "SshTargetRow": {
           "4677394048": "Connecting…",

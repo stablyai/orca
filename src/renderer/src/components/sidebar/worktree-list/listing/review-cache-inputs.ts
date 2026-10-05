@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
-import type { WorktreeGroupBy } from '../grouping/row-types'
+import type { WorktreeGroupBy, WorktreeGroupBySecondary } from '../grouping/row-types'
 
 export type WorktreeListReviewCacheState = Pick<
   AppState,
@@ -22,14 +22,18 @@ export const EMPTY_WORKTREE_LIST_REVIEW_CACHE_INPUTS: WorktreeListReviewCacheInp
 export function selectWorktreeListReviewCacheInputs(
   state: WorktreeListReviewCacheState,
   groupBy: WorktreeGroupBy,
-  cardProperties: readonly WorktreeCardProperty[]
+  cardProperties: readonly WorktreeCardProperty[],
+  groupBySecondary: WorktreeGroupBySecondary = 'none'
 ): WorktreeListReviewCacheInputs {
   const hasFolderWorkspaces = state.folderWorkspaces.length > 0
   const newCardStyle = state.settings?.experimentalNewWorktreeCardStyle === true
   const folderCardsNeedReview =
     hasFolderWorkspaces &&
     (newCardStyle ? cardProperties.includes('status') : cardProperties.includes('pr'))
-  const needsPrCache = groupBy === 'pr-status' || folderCardsNeedReview
+  const needsPrCache =
+    groupBy === 'pr-status' ||
+    (groupBy !== 'none' && groupBySecondary === 'pr-status') ||
+    folderCardsNeedReview
   const needsHostedReviewCache = newCardStyle && folderCardsNeedReview
 
   // Why: ordinary git worktree cards own entry-level subscriptions. The list

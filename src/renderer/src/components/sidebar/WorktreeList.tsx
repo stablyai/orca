@@ -34,6 +34,7 @@ import { useSidebarWorktreeFilters } from './worktree-list/listing/use-filters'
 import { useSidebarWorktreeSelection } from './worktree-list/navigation/use-selection'
 import { useSidebarWorktreeSortOrder } from './worktree-list/listing/use-sort-order'
 import { useVisibleSidebarWorktrees } from './worktree-list/listing/use-visible-worktrees'
+import { useSecondaryStatusDragSource } from './worktree-list/drag/use-secondary-status-drag-source'
 import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-mutations'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
@@ -73,6 +74,7 @@ const WorktreeList = React.memo(function WorktreeList({
     [activeWorkspaceKey, activeWorktreeId]
   )
   const groupBy = useAppStore((s) => s.groupBy)
+  const groupBySecondary = useAppStore((s) => s.groupBySecondary)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const sortBy = useAppStore((s) => s.sortBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
@@ -92,7 +94,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const settings = useAppStore((s) => s.settings)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const { prCache, hostedReviewCache } = useAppStore(
-    useShallow((s) => selectWorktreeListReviewCacheInputs(s, groupBy, cardProps))
+    useShallow((s) => selectWorktreeListReviewCacheInputs(s, groupBy, cardProps, groupBySecondary))
   )
   const pinnedDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
   const defaultHostId = getSettingsFocusedExecutionHostId(settings)
@@ -104,6 +106,20 @@ const WorktreeList = React.memo(function WorktreeList({
     }),
     [projectHostSetupProjection]
   )
+  const {
+    emptySecondaryStatusSourceGroupKey,
+    onWorktreeDragSourceChange: handleWorktreeDragSourceChange
+  } = useSecondaryStatusDragSource({
+    groupBy,
+    groupBySecondary,
+    worktreeMap,
+    repoMap,
+    prCache,
+    workspaceStatuses,
+    settings,
+    projectGroups,
+    projectGrouping
+  })
 
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
   const { filterState, hasFilters, clearFilters, revealWorkspaceFilters } =
@@ -126,6 +142,7 @@ const WorktreeList = React.memo(function WorktreeList({
     collapsedGroups,
     agentSendTargetWorktreeId,
     groupBy,
+    groupBySecondary,
     pinnedDisplayPolicy,
     visibleWorktrees,
     repoMap,
@@ -155,6 +172,7 @@ const WorktreeList = React.memo(function WorktreeList({
   })
   const rowModel = useSidebarSectionRows({
     groupBy,
+    groupBySecondary,
     projectOrderBy,
     pinnedDisplayPolicy,
     defaultHostId,
@@ -175,7 +193,8 @@ const WorktreeList = React.memo(function WorktreeList({
     newExternalWorktreesInboxByRepo: externalWorktreeCards.newExternalWorktreesInboxByRepo,
     filterRepoIds: filterState.filterRepoIds,
     visibleWorkspaceHostIds: filterState.visibleWorkspaceHostIds,
-    workspaceHostScope: filterState.workspaceHostScope
+    workspaceHostScope: filterState.workspaceHostScope,
+    emptySecondaryStatusSourceGroupKey
   })
   const selection = useSidebarWorktreeSelection({
     sectionRows: rowModel.sectionRows,
@@ -284,7 +303,7 @@ const WorktreeList = React.memo(function WorktreeList({
       />
       <VirtualizedWorktreeViewport
         // Why: status headers move during wake (inactive -> active); key only on grouping mode so row identity survives.
-        key={`group:${groupBy}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
+        key={`group:${groupBy}:${groupBySecondary}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
         rows={rowModel.sectionRows}
         // Why: full-page nav views aren't scoped to a worktree, so no sidebar card should look selected.
         activeWorktreeId={
@@ -293,6 +312,7 @@ const WorktreeList = React.memo(function WorktreeList({
         activeWorkspaceExecutionHostId={activeWorkspaceExecutionHostId}
         currentWorktreeId={currentSidebarWorktreeId}
         groupBy={groupBy}
+        groupBySecondary={groupBySecondary}
         pinnedDisplayPolicy={pinnedDisplayPolicy}
         projectOrderBy={projectOrderBy}
         toggleGroup={toggleGroup}
@@ -337,6 +357,7 @@ const WorktreeList = React.memo(function WorktreeList({
         allRepoIds={rowModel.allRepoIds}
         onReorderHostSections={rowModel.handleReorderHostSections}
         onHostDragActiveChange={rowModel.setHostDragActive}
+        onWorktreeDragSourceChange={handleWorktreeDragSourceChange}
         prCache={prCache}
         hostedReviewCache={hostedReviewCache}
         workspaceStatuses={workspaceStatuses}

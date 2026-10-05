@@ -22,6 +22,10 @@ export type PRGroupKey = 'done' | 'in-review' | 'in-progress' | 'closed'
 
 export const PR_GROUP_ORDER: PRGroupKey[] = ['done', 'in-review', 'in-progress', 'closed']
 
+export function isPRGroupKey(value: string): value is PRGroupKey {
+  return value === 'done' || value === 'in-review' || value === 'in-progress' || value === 'closed'
+}
+
 /** Section key for a PR lane. Shared so worktree and folder-workspace bucketing
  *  cannot drift onto different prefixes. */
 export function getPRLaneKey(prGroup: PRGroupKey): string {
@@ -73,6 +77,10 @@ export const PROJECT_GROUP_META = {
 
 export function getProjectGroupHeaderKey(groupId: string | null): string {
   return groupId ? `project-group:${groupId}` : UNGROUPED_PROJECT_GROUP_KEY
+}
+
+export function getNestedGroupKey(parentKey: string, childKey: string): string {
+  return `${parentKey}/${childKey}`
 }
 
 export const PINNED_GROUP_KEY = 'pinned'

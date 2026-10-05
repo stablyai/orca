@@ -1,4 +1,5 @@
 import type { Project, ProjectHostSetup } from '../../../../../../shared/project-types'
+import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
@@ -18,8 +19,11 @@ export type ProjectGroupingModel = {
 
 export type WorktreeGroupEntry = {
   label: string
+  /** Unqualified grouping key used to resolve semantic metadata after nesting. */
+  sourceKey?: string
   items: Worktree[]
   repo?: Repo
+  projectGroup?: ProjectGroup
   repoIds: Set<string>
   /** Folder workspaces bucketed into this lane under non-repo grouping. Carries
    *  the owning group because FolderWorkspaceRow requires a non-optional one. */

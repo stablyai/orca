@@ -85,6 +85,23 @@ function findProjectGroupSectionEndIndex(
   return rows.length
 }
 
+export function getRepoHeaderSectionEndByHeaderKey(args: {
+  rows: readonly RenderRow[]
+  firstHeaderIndex: number
+}): Map<string, number> {
+  const rowStarts = getEstimatedRenderRowStarts(args.rows, args.firstHeaderIndex)
+  const sectionEndByHeaderKey = new Map<string, number>()
+  for (let index = 0; index < args.rows.length; index++) {
+    const row = args.rows[index]
+    if (row?.type !== 'header' || !row.repo) {
+      continue
+    }
+    const endIndex = findNextHeaderRenderRowIndex(args.rows, index + 1)
+    sectionEndByHeaderKey.set(row.key, rowStarts[endIndex] ?? rowStarts[args.rows.length] ?? 0)
+  }
+  return sectionEndByHeaderKey
+}
+
 export function getRepoHeaderSectionEndByRepoId(args: {
   rows: readonly RenderRow[]
   firstHeaderIndex: number

@@ -13,7 +13,12 @@ import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import { buildRows } from '../grouping/build-rows'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
-import type { PinnedWorktreeDisplayPolicy, Row, WorktreeGroupBy } from '../grouping/row-types'
+import type {
+  PinnedWorktreeDisplayPolicy,
+  Row,
+  WorktreeGroupBy,
+  WorktreeGroupBySecondary
+} from '../grouping/row-types'
 import { getLogicalRepoOrderRankById } from '../../project-header-drop'
 import { getEmptyProjectPlaceholderRepoIds } from '../../empty-project-placeholder-repos'
 import { addHostSectionRows } from '../../host-section-rows'
@@ -23,6 +28,7 @@ import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-k
 
 type SectionRowsArgs = {
   groupBy: WorktreeGroupBy
+  groupBySecondary: WorktreeGroupBySecondary
   projectOrderBy: ProjectOrderBy
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   defaultHostId: ExecutionHostId
@@ -44,6 +50,7 @@ type SectionRowsArgs = {
   filterRepoIds: readonly string[]
   visibleWorkspaceHostIds: readonly ExecutionHostId[] | null
   workspaceHostScope: AppState['workspaceHostScope']
+  emptySecondaryStatusSourceGroupKey: string | null
 }
 
 function collectRenderedSidebarRowKeys(sectionRows: ReturnType<typeof addHostSectionRows>) {
@@ -165,10 +172,16 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         args.visibleFolderWorkspacesForRows,
         hostLabelById,
         defaultHostId,
-        args.pinnedDisplayPolicy
+        args.pinnedDisplayPolicy,
+        {
+          secondary: args.groupBySecondary,
+          emptySecondaryStatusSourceGroupKey: args.emptySecondaryStatusSourceGroupKey
+        }
       ),
     [
       args.groupBy,
+      args.groupBySecondary,
+      args.emptySecondaryStatusSourceGroupKey,
       worktrees,
       repoMap,
       args.prCache,

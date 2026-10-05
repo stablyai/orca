@@ -136,6 +136,36 @@ describe('reveal keys under non-repo grouping', () => {
     expect(keys).toContain('workspace-status:in-progress')
   })
 
+  it('returns the lane-qualified Project Group ancestry for nested grouping', () => {
+    const root = makeProjectGroup({ id: 'group-root', name: 'Company' })
+    const child = makeProjectGroup({
+      id: 'group-child',
+      name: 'Platform',
+      parentGroupId: root.id,
+      connectionId: 'target-1'
+    })
+    const nestedFolderWorkspace = makeFolderWorkspace({ projectGroupId: child.id })
+
+    expect(
+      getFolderWorkspaceRevealGroupKeys(
+        folderWorkspaceKey(nestedFolderWorkspace.id),
+        [nestedFolderWorkspace],
+        [child, root],
+        {
+          groupBy: 'workspace-status',
+          groupBySecondary: 'repo',
+          workspaceStatuses: [],
+          defaultHostId: 'local'
+        }
+      )
+    ).toEqual([
+      'workspace-status:in-progress',
+      'workspace-status:in-progress/project-group:group-root',
+      'workspace-status:in-progress/project-group:group-child',
+      'host:ssh:target-1'
+    ])
+  })
+
   it('returns the host key so a collapsed host can be expanded too', () => {
     const keys = getFolderWorkspaceRevealGroupKeys(workspaceKey, [folderWorkspace], [group], {
       groupBy: 'workspace-status',
@@ -143,6 +173,17 @@ describe('reveal keys under non-repo grouping', () => {
       defaultHostId: 'local'
     })
     expect(keys).toContain('host:ssh:target-1')
+  })
+
+  it('returns the nested lane beneath a Project Group for Project-first grouping', () => {
+    const keys = getFolderWorkspaceRevealGroupKeys(workspaceKey, [folderWorkspace], [group], {
+      groupBy: 'repo',
+      groupBySecondary: 'workspace-status',
+      workspaceStatuses: [],
+      defaultHostId: 'local'
+    })
+    expect(keys).toContain('project-group:group-child')
+    expect(keys).toContain('project-group:group-child/workspace-status:in-progress')
   })
 
   it('still returns project-group keys under repo grouping', () => {

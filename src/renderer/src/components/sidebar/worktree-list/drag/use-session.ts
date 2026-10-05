@@ -1,10 +1,13 @@
 import { useCallback, useMemo, useRef } from 'react'
 import type React from 'react'
-import type { WorkspaceStatus } from '../../../../../../shared/worktree/types'
+import type {
+  WorkspaceStatus,
+  WorkspaceStatusDefinition
+} from '../../../../../../shared/worktree/types'
 import type { HostSectionRow } from '../../host-section-rows'
 import { PINNED_GROUP_KEY } from '../grouping/group-keys'
 import { WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP } from '../viewport/virtual-rows'
-import { getWorkspaceStatusGroupKey } from '../../workspace-status'
+import { getWorkspaceStatusTargetGroupKey } from './status-target'
 import { expandDraggedWorktreeIdsForVisibleLineage } from '../../worktree-manual-order'
 import { getWorktreeDragUnitGroups } from '../../worktree-drag-units'
 import {
@@ -29,6 +32,8 @@ import { getNaturalWorktreeIds } from '../../natural-worktree-ids'
 export type WorktreeStatusDropRequest = {
   pointerY: number
   status: WorkspaceStatus
+  /** Exact rendered Status lane under the pointer, including any parent grouping. */
+  groupKey?: string | null
   draggedIds: readonly string[]
 }
 
@@ -39,8 +44,9 @@ export type WorktreeDragSession = ReturnType<typeof useWorktreeDragSession>
 export function useWorktreeDragSession(args: {
   rows: HostSectionRow[]
   scrollRef: React.RefObject<HTMLDivElement | null>
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
 }) {
-  const { rows, scrollRef } = args
+  const { rows, scrollRef, workspaceStatuses } = args
   const worktreeDragSessionRef = useRef<WorktreeSidebarDragSession | null>(null)
   // Why: cross-group hovers hit-test a group the session never captured, so hold
   // that group's drop decision separately or a card expanding in the target group
@@ -172,8 +178,14 @@ export function useWorktreeDragSession(args: {
       if (!container) {
         return null
       }
-      const groupKey = getWorkspaceStatusGroupKey(request.status)
       const session = worktreeDragSessionRef.current
+      const groupKey =
+        request.groupKey ??
+        getWorkspaceStatusTargetGroupKey({
+          sourceGroupKey: session?.sourceGroupKey ?? '',
+          status: request.status,
+          workspaceStatuses
+        })
       const scrollTop = container.scrollTop
       const heldAnchor = statusDropAnchorsRef.current.get(groupKey) ?? null
       const anchor = shouldReevaluateWorktreeSidebarDropAnchor({
@@ -203,7 +215,7 @@ export function useWorktreeDragSession(args: {
       }
       return preview
     },
-    [computeWorktreeDropForGroup, scrollRef]
+    [computeWorktreeDropForGroup, scrollRef, workspaceStatuses]
   )
 
   // Why: consumers pass session-derived callbacks into memoised cards; a fresh object every

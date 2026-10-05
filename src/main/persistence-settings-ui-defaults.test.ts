@@ -717,6 +717,75 @@ describe('Store', () => {
     expect(store.getUI().groupBy).toBe('workspace-status')
   })
 
+  it('defaults secondary grouping to none when absent', async () => {
+    writeDataFile({ schemaVersion: 1, ui: {} })
+    const store = await createStore()
+    expect(store.getUI().groupBySecondary).toBe('none')
+  })
+
+  it.each(['workspace-status', 'pr-status'] as const)(
+    'preserves explicit %s secondary grouping',
+    async (groupBySecondary) => {
+      writeDataFile({
+        schemaVersion: 1,
+        ui: { groupBySecondary }
+      })
+      const store = await createStore()
+      expect(store.getUI().groupBySecondary).toBe(groupBySecondary)
+    }
+  )
+
+  it('preserves and round-trips explicit project secondary grouping', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { groupBy: 'workspace-status', groupBySecondary: 'repo' }
+    })
+    const store = await createStore()
+    expect(store.getUI().groupBySecondary).toBe('repo')
+
+    store.updateUI({ groupBySecondary: 'none' })
+    expect(store.getUI().groupBySecondary).toBe('none')
+  })
+
+  it('normalizes invalid secondary grouping to none', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { groupBySecondary: 'bogus' }
+    })
+    const store = await createStore()
+    expect(store.getUI().groupBySecondary).toBe('none')
+  })
+
+  it('normalizes a secondary grouping that duplicates the primary grouping', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { groupBy: 'repo', groupBySecondary: 'repo' }
+    })
+    const store = await createStore()
+
+    expect(store.getUI().groupBySecondary).toBe('none')
+
+    store.updateUI({ groupBy: 'workspace-status', groupBySecondary: 'workspace-status' })
+    expect(store.getUI().groupBySecondary).toBe('none')
+  })
+
+  it('retains secondary grouping through project and status reorder updates', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { groupBy: 'repo', groupBySecondary: 'workspace-status' }
+    })
+    const store = await createStore()
+    const reversedStatuses = store.getUI().workspaceStatuses?.toReversed() ?? []
+
+    store.updateUI({
+      manualRepoOrder: [{ hostId: 'local', repoId: 'repo-a' }]
+    })
+    expect(store.getUI().groupBySecondary).toBe('workspace-status')
+
+    store.updateUI({ workspaceStatuses: reversedStatuses })
+    expect(store.getUI().groupBySecondary).toBe('workspace-status')
+  })
+
   it('defaults projectOrderBy to manual when absent, even with recent sortBy', async () => {
     writeDataFile({
       schemaVersion: 1,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildRows } from './worktree-list/grouping/build-rows'
 import { PINNED_GROUP_KEY } from './worktree-list/grouping/group-keys'
 import { repo, worktree, repoMap, makeDetectedWorktree } from './worktree-list-groups-test-fixtures'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 
 describe('buildRows with pinned worktrees', () => {
@@ -595,6 +596,64 @@ describe('buildRows with pinned worktrees', () => {
     expect(collapsedAll).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: 'imported-worktrees-card', placement: 'pinned-fallback' })
+      ])
+    )
+  })
+
+  it('keeps the pinned imported fallback when a secondary Project Group ancestor is collapsed', () => {
+    const projectGroup: ProjectGroup = {
+      id: 'group-platform',
+      name: 'Platform',
+      parentPath: null,
+      parentGroupId: null,
+      createdFrom: 'manual',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const groupedRepo: Repo = { ...repo, projectGroupId: projectGroup.id }
+    const pinnedWorktree = {
+      ...worktree,
+      id: 'wt-pinned',
+      repoId: groupedRepo.id,
+      isPinned: true,
+      workspaceStatus: 'in-progress'
+    }
+    const rows = buildRows(
+      'workspace-status',
+      [pinnedWorktree],
+      new Map([[groupedRepo.id, groupedRepo]]),
+      null,
+      new Set(['workspace-status:in-progress/project-group:group-platform']),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[pinnedWorktree.id, pinnedWorktree]]),
+      false,
+      { showPinnedWorktreesInGroups: true } as never,
+      [projectGroup],
+      new Set(),
+      new Map([[groupedRepo.id, { repo: groupedRepo, hiddenWorktrees: [makeDetectedWorktree()] }]]),
+      new Map(),
+      [],
+      undefined,
+      [],
+      undefined,
+      'local',
+      'duplicate-in-groups',
+      { secondary: 'repo' }
+    )
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'imported-worktrees-card',
+          placement: 'pinned-fallback',
+          repo: expect.objectContaining({ id: groupedRepo.id })
+        })
       ])
     )
   })

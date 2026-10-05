@@ -43,6 +43,7 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
     markdownTocPanelWidth: 240,
     combinedDiffFileTreeWidth: 256,
     groupBy: 'repo',
+    groupBySecondary: 'none',
     sortBy: 'name',
     projectOrderBy: 'manual',
     showActiveOnly: false,

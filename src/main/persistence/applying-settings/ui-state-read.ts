@@ -25,6 +25,7 @@ import { normalizeContextualTourIds } from '../../../shared/contextual-tours'
 import { normalizeFeatureInteractions } from '../../../shared/feature-interactions'
 import {
   normalizeGroupBy,
+  normalizeGroupBySecondary,
   normalizeProjectOrderBy,
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,
@@ -39,10 +40,12 @@ export function getPersistedUI(
   activeView: PersistedState['ui']['activeView']
 ): PersistedState['ui'] {
   const uiState = stripMainOwnedTelemetryMarkerFromUI(state.ui)
+  const groupBy = normalizeGroupBy(state.ui?.groupBy)
   return {
     ...getDefaultUIState(),
     ...uiState,
-    groupBy: normalizeGroupBy(state.ui?.groupBy),
+    groupBy,
+    groupBySecondary: normalizeGroupBySecondary(state.ui?.groupBySecondary, groupBy),
     sortBy: normalizeSortBy(state.ui?.sortBy),
     projectOrderBy: normalizeProjectOrderBy(state.ui?.projectOrderBy),
     rightSidebarTab: normalizeRightSidebarTab(state.ui?.rightSidebarTab),

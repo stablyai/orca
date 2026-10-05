@@ -200,6 +200,7 @@ export function getDefaultUIState(): PersistedUIState {
     markdownTocPanelWidth: 240,
     combinedDiffFileTreeWidth: 256,
     groupBy: 'repo',
+    groupBySecondary: 'none',
     sortBy: 'recent',
     projectOrderBy: 'manual',
     showActiveOnly: false,

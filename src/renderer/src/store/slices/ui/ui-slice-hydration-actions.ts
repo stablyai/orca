@@ -92,6 +92,15 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           ui.rightSidebarTab,
           ui.rightSidebarExplorerView
         )
+        const persistedGroupBy: string = ui.groupBy
+        const groupBy: UISlice['groupBy'] = persistedGroupBy === 'parent' ? 'repo' : ui.groupBy
+        const groupBySecondary: UISlice['groupBySecondary'] =
+          ui.groupBySecondary !== groupBy &&
+          (ui.groupBySecondary === 'workspace-status' ||
+            ui.groupBySecondary === 'repo' ||
+            ui.groupBySecondary === 'pr-status')
+            ? ui.groupBySecondary
+            : 'none'
         const hydrated = {
           // Why: persisted widths may be stale/corrupt/hand-edited; clamp during hydration so invalid values can't break layout.
           sidebarWidth: sanitizePersistedSidebarWidth(
@@ -117,7 +126,8 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
           rightSidebarTab: rightSidebarRoute.rightSidebarTab,
           rightSidebarExplorerView: rightSidebarRoute.rightSidebarExplorerView,
-          groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
+          groupBy,
+          groupBySecondary,
           sortBy,
           // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
           projectOrderBy: ui.projectOrderBy,

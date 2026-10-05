@@ -12,7 +12,11 @@ import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-h
 import type { RenderRow } from '../listing/render-row'
 import { getWorktreeLineageGroupKey } from '../grouping/group-keys'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
-import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
+import type {
+  PinnedWorktreeDisplayPolicy,
+  WorktreeGroupBy,
+  WorktreeGroupBySecondary
+} from '../grouping/row-types'
 import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
 import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
 import {
@@ -41,6 +45,7 @@ export type PendingSidebarRevealArgs = {
   collapsedGroups: Set<string>
   toggleGroup: (key: string) => void
   groupBy: WorktreeGroupBy
+  groupBySecondary: WorktreeGroupBySecondary
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   defaultHostId: ExecutionHostId
   prCache: AppState['prCache'] | null
@@ -66,6 +71,7 @@ export function expandGroupsForWorktreeReveal(
     args.projectGroups,
     {
       groupBy: args.groupBy,
+      groupBySecondary: args.groupBySecondary,
       workspaceStatuses: args.workspaceStatuses,
       defaultHostId: args.defaultHostId
     }
@@ -129,7 +135,8 @@ export function expandGroupsForWorktreeReveal(
           args.workspaceStatuses,
           args.settings,
           args.projectGroups,
-          args.projectGrouping
+          args.projectGrouping,
+          args.groupBySecondary
         )
   for (const groupKey of groupKeys) {
     if (args.collapsedGroups.has(groupKey)) {

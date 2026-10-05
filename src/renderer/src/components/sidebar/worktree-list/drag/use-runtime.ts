@@ -25,6 +25,7 @@ export function useWorktreeDragRuntime(args: {
 }) {
   const { worktreeDragSessionRef, statusDropAnchorsRef, onWorkspaceBoardDragPreviewCancel } = args
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
+  const [dragOverStatusGroupKey, setDragOverStatusGroupKey] = useState<string | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
   const [nativeLineageDropTargetId, setNativeLineageDropTargetId] = useState<string | null>(null)
   const [worktreeDragState, setWorktreeDragState] = useState<WorktreeRowDragState>(
@@ -69,6 +70,7 @@ export function useWorktreeDragRuntime(args: {
     worktreePointerDragRef.current = null
     setSidebarPointerDragDocumentStyles(false)
     setDragOverStatus(null)
+    setDragOverStatusGroupKey(null)
     setPinDragOver(false)
     clearWorkspaceKanbanSidebarDropTargetVisual()
     onWorkspaceBoardDragPreviewCancel()
@@ -93,6 +95,8 @@ export function useWorktreeDragRuntime(args: {
     () => ({
       dragOverStatus,
       setDragOverStatus,
+      dragOverStatusGroupKey,
+      setDragOverStatusGroupKey,
       pinDragOver,
       setPinDragOver,
       nativeLineageDropTargetId,
@@ -115,6 +119,7 @@ export function useWorktreeDragRuntime(args: {
       cancelWorktreePointerAutoscroll,
       clearWorktreeDrag,
       dragOverStatus,
+      dragOverStatusGroupKey,
       nativeLineageDropTargetId,
       pinDragOver,
       worktreeDragState

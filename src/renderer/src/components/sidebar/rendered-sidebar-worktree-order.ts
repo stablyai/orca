@@ -61,7 +61,8 @@ export function computeRenderedSidebarRows(
   const { prCache } = selectWorktreeListReviewCacheInputs(
     state,
     state.groupBy,
-    state.worktreeCardProperties
+    state.worktreeCardProperties,
+    state.groupBySecondary
   )
 
   const rows = buildRows(
@@ -93,7 +94,8 @@ export function computeRenderedSidebarRows(
     // Why no hostLabelById: it only feeds display-only host context labels, never row order.
     undefined,
     defaultHostId,
-    pinnedDisplayPolicy
+    pinnedDisplayPolicy,
+    { secondary: state.groupBySecondary }
   )
 
   // Why lazy: with no host filter, addHostSectionRows is a pass-through, so skip building the whole host registry on a keystroke.

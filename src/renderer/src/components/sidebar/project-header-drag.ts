@@ -297,10 +297,15 @@ export function useRepoHeaderDrag({
   }, [state.draggingRepoId])
 
   const onHandlePointerDown = useCallback(
-    (event: React.PointerEvent<HTMLElement>, repoId: string) => {
+    (
+      event: React.PointerEvent<HTMLElement>,
+      repoId: string,
+      bucketKey?: ProjectHeaderDragSession['bucketKey']
+    ) => {
       const session = createProjectHeaderDragSession({
         event,
         repoId,
+        bucketKey,
         repoById: repoByIdRef.current,
         sidebarRepoHeaderIdsByBucket: sidebarRepoHeaderIdsByBucketRef.current,
         getScrollContainer: getContainerRef.current

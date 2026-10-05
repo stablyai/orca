@@ -484,7 +484,71 @@ describe('createUISlice hydratePersistedUI', () => {
 
     expect(store.getState().groupBy).toBe('none')
     expect([...store.getState().collapsedGroups]).toEqual([])
-    expect(setUI).toHaveBeenCalledWith({ groupBy: 'none', collapsedGroups: [] })
+    expect(setUI).toHaveBeenCalledWith({
+      groupBy: 'none',
+      groupBySecondary: 'none',
+      collapsedGroups: []
+    })
+  })
+
+  it.each(['workspace-status', 'repo', 'pr-status'] as const)(
+    'hydrates the persisted %s secondary grouping mode',
+    (groupBySecondary) => {
+      const store = createUIStore()
+
+      store.getState().hydratePersistedUI(
+        makePersistedUI({
+          groupBy: groupBySecondary === 'repo' ? 'workspace-status' : 'repo',
+          groupBySecondary
+        })
+      )
+
+      expect(store.getState().groupBySecondary).toBe(groupBySecondary)
+    }
+  )
+
+  it('persists secondary group changes with collapsed groups cleared', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.setState({
+      groupBy: 'workspace-status',
+      collapsedGroups: new Set(['workspace-status:in-progress/repo:old'])
+    })
+    store.getState().setGroupBySecondary('repo')
+
+    expect(store.getState().groupBySecondary).toBe('repo')
+    expect([...store.getState().collapsedGroups]).toEqual([])
+    expect(setUI).toHaveBeenCalledWith({ groupBySecondary: 'repo', collapsedGroups: [] })
+  })
+
+  it('clears a secondary dimension when it becomes the primary dimension', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setGroupBySecondary('workspace-status')
+    store.getState().setGroupBy('workspace-status')
+
+    expect(store.getState().groupBy).toBe('workspace-status')
+    expect(store.getState().groupBySecondary).toBe('none')
+    expect(setUI).toHaveBeenLastCalledWith({
+      groupBy: 'workspace-status',
+      groupBySecondary: 'none',
+      collapsedGroups: []
+    })
+  })
+
+  it('normalizes duplicate primary and secondary dimensions during hydration', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ groupBy: 'repo', groupBySecondary: 'repo' }))
+
+    expect(store.getState().groupBy).toBe('repo')
+    expect(store.getState().groupBySecondary).toBe('none')
   })
 
   it('hydrates persisted per-worktree explorer roots', () => {

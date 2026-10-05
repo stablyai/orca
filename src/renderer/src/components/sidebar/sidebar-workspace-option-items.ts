@@ -32,6 +32,8 @@ export const GROUP_BY_OPTIONS = [
   }
 ] as const
 
+export const SECONDARY_GROUP_BY_OPTIONS = GROUP_BY_OPTIONS
+
 export const CARD_LAYOUT_OPTIONS = [
   {
     id: 'detailed',

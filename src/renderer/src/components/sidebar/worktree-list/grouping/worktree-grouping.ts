@@ -60,6 +60,7 @@ export function buildOrderedGroups(args: {
   repoOrder: Map<string, number> | undefined
   projectOrderBy: ProjectOrderBy
   folderWorkspaces?: readonly RenderableFolderWorkspace[]
+  includeEmptyWorkspaceStatusGroups?: boolean
 }): OrderedGroupEntry[] {
   const {
     groupBy,
@@ -75,7 +76,8 @@ export function buildOrderedGroups(args: {
     pendingByRepo,
     repoOrder,
     projectOrderBy,
-    folderWorkspaces = []
+    folderWorkspaces = [],
+    includeEmptyWorkspaceStatusGroups = false
   } = args
 
   const grouped = new Map<string, WorktreeGroupEntry>()
@@ -214,13 +216,19 @@ export function buildOrderedGroups(args: {
       }
     }
   } else if (groupBy === 'workspace-status') {
-    // Why: status grouping is opt-in while the board drawer remains the wider
-    // all-lanes drag target; keep the sidebar compact by omitting empty lanes.
+    // Keep status grouping compact at rest. During a nested Status drag the
+    // caller opts into empty groups so every configured lane is a reachable
+    // drop target without permanently expanding every Project/PR section.
     for (const status of workspaceStatuses) {
       const key = getWorkspaceStatusGroupKey(status.id)
       const group = grouped.get(key)
       if (group) {
         orderedGroups.push([key, group])
+      } else if (includeEmptyWorkspaceStatusGroups) {
+        orderedGroups.push([
+          key,
+          { label: status.label, items: [], repo: undefined, repoIds: new Set() }
+        ])
       }
     }
   } else {

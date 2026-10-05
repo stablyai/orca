@@ -80,7 +80,8 @@ export function renderFolderWorkspaceVirtualRow(args: {
   const { surfaceInset, cardContentIndent } = getFolderWorkspaceRowGeometry({
     experimentalNewWorktreeCardStyle: ctx.newCardStyle,
     isFolderBackedWorkspaceChild:
-      ctx.groupBy === 'repo' && row.projectGroup.createdFrom === 'folder-scan',
+      (ctx.groupBy === 'repo' || row.projectGrouped === true) &&
+      row.projectGroup.createdFrom === 'folder-scan',
     isGrouped: ctx.groupBy !== 'none',
     groupDepth: row.groupDepth,
     lineageDepth: row.depth
