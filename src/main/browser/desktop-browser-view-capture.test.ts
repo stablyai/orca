@@ -22,6 +22,7 @@ describe('desktop annotation viewport capture', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     image.isEmpty.mockReturnValue(false)
+    image.getSize.mockReturnValue({ width: 1200, height: 800 })
   })
 
   it('uses the retained capture transaction and returns decoded PNG dimensions', async () => {
@@ -33,7 +34,10 @@ describe('desktop annotation viewport capture', () => {
     })
     expect(lookup).toHaveBeenCalledWith(record.webContents)
     expect(capture).toHaveBeenCalledWith(
-      { kind: 'screenshot', params: { format: 'png', captureBeyondViewport: false } },
+      {
+        kind: 'screenshot',
+        params: { format: 'png', captureBeyondViewport: false }
+      },
       expect.any(Function)
     )
     expect(decode).toHaveBeenCalledWith(Buffer.from('png fixture'))
@@ -54,4 +58,12 @@ describe('desktop annotation viewport capture', () => {
     ).rejects.toThrow('page navigated')
     expect(decode).not.toHaveBeenCalled()
   })
+})
+
+it('rejects a nonempty one-pixel placeholder for a full-size owned view', async () => {
+  image.getSize.mockReturnValue({ width: 1, height: 1 })
+  await expect(captureDesktopBrowserViewViewport(createOwnedViewFixture().record)).rejects.toThrow(
+    'not ready'
+  )
+  expect(image.toDataURL).not.toHaveBeenCalled()
 })

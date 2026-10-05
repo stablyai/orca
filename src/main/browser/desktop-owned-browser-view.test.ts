@@ -60,7 +60,7 @@ describe('DesktopOwnedBrowserView', () => {
     await fixture.controller.close()
   })
 
-  it('propagates an afterIdle rejection even when its reason is undefined', async () => {
+  it('fences reuse after an afterIdle rejection even when its reason is undefined', async () => {
     const fixture = createOwnedViewFixture()
     await expect(
       fixture.controller.withStableView(
@@ -71,7 +71,12 @@ describe('DesktopOwnedBrowserView', () => {
         }
       )
     ).rejects.toBeUndefined()
-    expect(() => browserCaptureIdle.assertCaptureAllowed(fixture.record.webContents)).not.toThrow()
+    expect(() => browserCaptureIdle.assertCaptureAllowed(fixture.record.webContents)).toThrow(
+      'reserved'
+    )
+    expect(() =>
+      fixture.controller.updateLayout({ x: 0, y: 0, width: 100, height: 100 }, true)
+    ).toThrow('fenced')
     await fixture.controller.close()
   })
   it('serializes capture, layout, capture, then close', async () => {

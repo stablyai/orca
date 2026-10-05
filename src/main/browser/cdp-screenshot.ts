@@ -23,7 +23,8 @@ type NativeCaptureAdmission = {
 const nativeCaptureAdmissions = new WeakMap<WebContents, NativeCaptureAdmission>()
 
 function startAdmittedNativeCapture(
-  webContents: WebContents
+  webContents: WebContents,
+  stayHidden = true
 ): Promise<Electron.NativeImage> | null {
   if (nativeCaptureAdmissions.has(webContents)) {
     return null
@@ -31,9 +32,7 @@ function startAdmittedNativeCapture(
 
   let promise: Promise<Electron.NativeImage>
   try {
-    promise = Promise.resolve(
-      webContents.capturePage(undefined, { stayHidden: true, stayAwake: false })
-    )
+    promise = Promise.resolve(webContents.capturePage(undefined, { stayHidden, stayAwake: false }))
   } catch {
     return null
   }
@@ -55,6 +54,16 @@ function startAdmittedNativeCapture(
   )
   return trackedPromise
 }
+/** Settles an owned viewport paint pulse; its pixels never become the CDP result. */
+export async function drawOwnedCaptureViewport(webContents: WebContents): Promise<void> {
+  const pulse = startAdmittedNativeCapture(webContents, false)
+  if (!pulse) {
+    throw new Error('Desktop-owned browser viewport paint pulse is unavailable')
+  }
+  // Native capture cannot be cancelled: keep the reservation until it settles.
+  await pulse
+}
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   let timer: NodeJS.Timeout | null = null
   return Promise.race([

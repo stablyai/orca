@@ -25,6 +25,9 @@ export type OwnedBrowserCaptureFixture = OwnedViewFixture & {
     devicePixelRatio: number
     contentWidth: number
     contentHeight: number
+    viewportWidth?: number
+    viewportHeight?: number
+    zoomFactor: number
   }
   captures: { bounds: Electron.Rectangle; params: unknown }[]
   sendCommand: Mock<(method: string, params?: Record<string, unknown>) => Promise<unknown>>
@@ -39,7 +42,8 @@ export function createOwnedBrowserCaptureFixture(): OwnedBrowserCaptureFixture {
     timeOrigin: 12345,
     devicePixelRatio: 1,
     contentWidth: 1152,
-    contentHeight: 2728
+    contentHeight: 2728,
+    zoomFactor: 1
   }
   const captures: { bounds: Electron.Rectangle; params: unknown }[] = []
   const sendCommand = vi.fn(
@@ -48,6 +52,11 @@ export function createOwnedBrowserCaptureFixture(): OwnedBrowserCaptureFixture {
         return {
           cssContentSize: { width: properties.contentWidth, height: properties.contentHeight }
         }
+      }
+      if (method === 'Emulation.setVisibleSize') {
+        properties.viewportWidth = Number(params?.width) / properties.zoomFactor
+        properties.viewportHeight = Number(params?.height) / properties.zoomFactor
+        return {}
       }
       if (method === 'Runtime.evaluate') {
         const expression = String(params?.expression)
@@ -63,8 +72,8 @@ export function createOwnedBrowserCaptureFixture(): OwnedBrowserCaptureFixture {
         return {
           result: {
             value: {
-              innerWidth: fixture.state.bounds.width,
-              innerHeight: fixture.state.bounds.height,
+              innerWidth: properties.viewportWidth ?? fixture.state.bounds.width,
+              innerHeight: properties.viewportHeight ?? fixture.state.bounds.height,
               timeOrigin: properties.timeOrigin,
               devicePixelRatio: properties.devicePixelRatio,
               scrollX: properties.scrollX,
@@ -82,6 +91,7 @@ export function createOwnedBrowserCaptureFixture(): OwnedBrowserCaptureFixture {
   )
   const guest = Object.assign(fixture.guest, {
     isCrashed: () => false,
+    getZoomFactor: () => properties.zoomFactor,
     invalidate: vi.fn(),
     capturePage: vi.fn(),
     debugger: { isAttached: () => true, attach: vi.fn(), detach: vi.fn(), sendCommand }

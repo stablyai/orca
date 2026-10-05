@@ -36,32 +36,34 @@ export function presentDesktopBrowserPage({
   let capturePending = false
   let forwarded = false
   let pending: DesktopBrowserViewLayout | null = null
-  let writing = false
+  let writing: Promise<void> | null = null
   let lastWritten = ''
   page.getBounds = () => (content.isConnected ? content.getBoundingClientRect() : null)
 
-  const write = async (): Promise<void> => {
+  const write = (): Promise<void> => {
     if (writing) {
-      return
+      return writing
     }
-    writing = true
-    try {
-      while (pending && claim.isCurrent() && !disposed) {
-        const layout = pending
-        pending = null
-        if (JSON.stringify(layout) === lastWritten) {
-          continue
+    writing = (async () => {
+      try {
+        while (pending && claim.isCurrent() && !disposed) {
+          const layout = pending
+          pending = null
+          if (JSON.stringify(layout) === lastWritten) {
+            continue
+          }
+          await page.api.updateLayout(layout)
+          lastWritten = JSON.stringify(layout)
         }
-        await page.api.updateLayout(layout)
-        lastWritten = JSON.stringify(layout)
+      } catch (error) {
+        if (!disposed) {
+          onError(error)
+        }
       }
-    } catch (error) {
-      if (!disposed) {
-        onError(error)
-      }
-    } finally {
-      writing = false
-    }
+    })().finally(() => {
+      writing = null
+    })
+    return writing
   }
   const capture = async (): Promise<void> => {
     if (capturePending || disposed || !forwarded || !claim.isCurrent()) {
@@ -69,6 +71,15 @@ export function presentDesktopBrowserPage({
     }
     capturePending = true
     try {
+      await write()
+      if (
+        disposed ||
+        !forwarded ||
+        !claim.isCurrent() ||
+        lastWritten !== JSON.stringify(page.layout)
+      ) {
+        return
+      }
       const result = await page.surface.captureViewport()
       if (result && !disposed && forwarded && claim.isCurrent()) {
         onFrame(result.dataUrl)
@@ -112,12 +123,10 @@ export function presentDesktopBrowserPage({
     // Modal surfaces still need a current background, but cannot forward input.
     const needFrame =
       connected && current.active && !current.hidden && (occluded || current.inputLocked)
+    const startCapture = !forwarded && needFrame
     if (forwarded !== needFrame) {
       forwarded = needFrame
       clearTimeout(captureTimer)
-      if (forwarded) {
-        void capture()
-      }
     }
     onMode(nextForwarded)
     const layout: DesktopBrowserViewLayout = {
@@ -150,6 +159,9 @@ export function presentDesktopBrowserPage({
       page.layout = layout
       pending = layout
       void write()
+    }
+    if (startCapture) {
+      void capture()
     }
     if (current.active && animation === undefined) {
       animation = requestAnimationFrame(tick)

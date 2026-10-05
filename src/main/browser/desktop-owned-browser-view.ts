@@ -52,6 +52,9 @@ export class DesktopOwnedBrowserView {
   ): Promise<T> {
     this.assertAccepting()
     return this.enqueue(async () => {
+      if (this.retainedReservation) {
+        throw new Error('Desktop-owned browser view is fenced after failed capture restoration')
+      }
       const reservation = await browserCaptureIdle.reserve(this.record.webContents)
       let operationOutcome: PromiseSettledResult<T>
       let afterIdleOutcome: PromiseSettledResult<void> | null = null
@@ -87,7 +90,12 @@ export class DesktopOwnedBrowserView {
           await browserCaptureIdle.waitForIdle(this.record.webContents)
         }
       } finally {
-        reservation.release()
+        if (afterIdleOutcome?.status === 'rejected') {
+          // Failed restoration fences reuse; close may settle and destroy this exact guest.
+          this.retainedReservation = reservation
+        } else {
+          reservation.release()
+        }
       }
       if (operationOutcome.status === 'rejected') {
         throw operationOutcome.reason
@@ -135,6 +143,9 @@ export class DesktopOwnedBrowserView {
       throw new Error('Desktop-owned browser view is closed')
     }
     this.assertAttached()
+    if (this.retainedReservation) {
+      throw new Error('Desktop-owned browser view is fenced after failed capture restoration')
+    }
   }
 
   private detach(): void {

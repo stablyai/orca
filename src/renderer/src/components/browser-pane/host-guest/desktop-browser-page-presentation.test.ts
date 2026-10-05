@@ -49,7 +49,7 @@ afterEach(async () => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })
-async function fixture() {
+async function fixture(configure?: (api: DesktopBrowserViewApi) => void) {
   const browserPageId = `presenter-${++sequence}`
   pages.push(browserPageId)
   const state: DesktopBrowserViewState = {
@@ -117,6 +117,7 @@ async function fixture() {
     onMode,
     onError
   }
+  configure?.(api)
   const presenter = presentDesktopBrowserPage(options)
   cleanups.push(presenter.dispose)
   await flush()
@@ -228,4 +229,25 @@ describe('desktop browser page presentation', () => {
     )
     expect(value.api.close).not.toHaveBeenCalled()
   })
+})
+
+it('waits for the occluded layout to settle before requesting its first fallback', async () => {
+  const popup = document.createElement('div')
+  document.body.append(popup)
+  vi.spyOn(popup, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 60, 800, 400))
+  cleanups.push(registerNativeViewOcclusionElement(popup))
+  let settle!: () => void
+  const layout = new Promise<void>((resolve) => {
+    settle = resolve
+  })
+  const f = await fixture((api) => {
+    vi.mocked(api.updateLayout).mockReturnValueOnce(layout)
+  })
+  expect(f.api.updateLayout).toHaveBeenCalled()
+  expect(f.api.captureViewport).not.toHaveBeenCalled()
+  expect(f.onFrame).not.toHaveBeenCalled()
+  settle()
+  await flush()
+  expect(f.api.captureViewport).toHaveBeenCalledTimes(1)
+  expect(f.onFrame).toHaveBeenCalledWith('data:image/png;base64,AA==')
 })

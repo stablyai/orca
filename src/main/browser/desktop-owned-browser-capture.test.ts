@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { captureFullPageScreenshot, captureScreenshot } from './cdp-screenshot'
 import { browserCaptureIdle } from './browser-capture-idle'
 import { DesktopOwnedBrowserCapture } from './desktop-owned-browser-capture'
-import { registerDesktopOwnedBrowserCapture } from './desktop-owned-browser-capture-registry'
+import {
+  getDesktopOwnedBrowserCapture,
+  registerDesktopOwnedBrowserCapture
+} from './desktop-owned-browser-capture-registry'
 import { createOwnedBrowserCaptureFixture } from './desktop-owned-browser-capture-test-fixture'
 import { deferred } from './desktop-owned-browser-view-test-fixture'
 
@@ -196,4 +199,171 @@ describe('desktop-owned browser direct capture routing', () => {
     await a.controller.close()
     await b.controller.close()
   })
+})
+
+it('settles the owned viewport paint pulse before CDP capture or later layout', async () => {
+  const f = createOwnedBrowserCaptureFixture()
+  const coordinator = new DesktopOwnedBrowserCapture()
+  const dispose = coordinator.register(f.controller, f.owner)
+  const pulse = deferred<void>()
+  f.guest.capturePage.mockReturnValue(pulse.promise)
+  const route = getDesktopOwnedBrowserCapture(f.record.webContents)
+  if (!route) {
+    throw new Error('Owned capture route was not registered')
+  }
+  const capture = route(
+    { kind: 'screenshot', params: { format: 'png', captureBeyondViewport: false } },
+    noHold
+  )
+  for (let i = 0; i < 12; i++) {
+    await Promise.resolve()
+  }
+  expect(f.guest.capturePage).toHaveBeenCalledWith(undefined, {
+    stayHidden: false,
+    stayAwake: false
+  })
+  expect(f.captures).toHaveLength(0)
+  const originalBounds = { ...f.state.bounds }
+  const layout = f.controller.updateLayout({ x: 1, y: 2, width: 600, height: 400 }, false)
+  await Promise.resolve()
+  expect(f.state.bounds).toEqual(originalBounds)
+  pulse.resolve()
+  await expect(capture).resolves.toEqual({ data: 'owned-page-pixels' })
+  expect(f.captures[0].bounds).toEqual(originalBounds)
+  await layout
+  expect(f.state.visible).toBe(false)
+  expect(browserCaptureIdle.isIdle(f.record.webContents)).toBe(true)
+  dispose()
+  await f.controller.close()
+})
+
+it('rejects a one-pixel CSS viewport on a full-size owned view without publishing CDP pixels', async () => {
+  const f = createOwnedBrowserCaptureFixture()
+  const coordinator = new DesktopOwnedBrowserCapture()
+  const dispose = coordinator.register(f.controller, f.owner)
+  const send = f.sendCommand.getMockImplementation()!
+  f.sendCommand.mockImplementation((method, params) => {
+    if (method === 'Runtime.evaluate' && !String(params?.expression).includes('window.scrollTo')) {
+      return Promise.resolve({
+        result: {
+          value: {
+            innerWidth: 1,
+            innerHeight: 1,
+            devicePixelRatio: 1,
+            timeOrigin: f.properties.timeOrigin,
+            scrollX: f.properties.scrollX,
+            scrollY: f.properties.scrollY
+          }
+        }
+      })
+    }
+    return send(method, params)
+  })
+  const route = getDesktopOwnedBrowserCapture(f.record.webContents)
+  if (!route) {
+    throw new Error('Owned capture route missing')
+  }
+  await expect(
+    route({ kind: 'screenshot', params: { format: 'png', captureBeyondViewport: false } }, noHold)
+  ).rejects.toThrow('css=1x1, owned=1152x642')
+  expect(f.captures).toHaveLength(0)
+  expect(f.state.visible).toBe(false)
+  expect(browserCaptureIdle.isIdle(f.record.webContents)).toBe(true)
+  dispose()
+  await f.controller.close()
+})
+
+it('synchronizes a hidden frame from native geometry and restores CSS, zoom, scroll and visibility', async () => {
+  const f = createOwnedBrowserCaptureFixture()
+  f.properties.viewportWidth = 1
+  f.properties.viewportHeight = 1
+  f.properties.zoomFactor = 2
+  const coordinator = new DesktopOwnedBrowserCapture()
+  const dispose = coordinator.register(f.controller, f.owner)
+  const route = getDesktopOwnedBrowserCapture(f.record.webContents)
+  if (!route) {
+    throw new Error('Owned capture route missing')
+  }
+  await expect(
+    route({ kind: 'screenshot', params: { format: 'png', captureBeyondViewport: false } }, noHold)
+  ).resolves.toEqual({ data: 'owned-page-pixels' })
+  const sizes = f.sendCommand.mock.calls.filter(([method]) => method === 'Emulation.setVisibleSize')
+  expect(sizes).toEqual([
+    ['Emulation.setVisibleSize', { width: 1152, height: 642 }],
+    ['Emulation.setVisibleSize', { width: 2, height: 2 }]
+  ])
+  expect(
+    f.sendCommand.mock.calls.some(([method]) => method === 'Emulation.setDeviceMetricsOverride')
+  ).toBe(false)
+  expect(f.properties.viewportWidth).toBe(1)
+  expect(f.properties.viewportHeight).toBe(1)
+  expect(f.properties.zoomFactor).toBe(2)
+  expect(f.properties.scrollY).toBe(81)
+  expect(f.state.visible).toBe(false)
+  expect(f.state.bounds).toEqual({ x: 4, y: 40, width: 1152, height: 642 })
+  dispose()
+  await f.controller.close()
+})
+
+it('restores the original hidden frame when its paint pulse fails', async () => {
+  const f = createOwnedBrowserCaptureFixture()
+  f.properties.viewportWidth = 1
+  f.properties.viewportHeight = 1
+  f.guest.capturePage.mockRejectedValueOnce(new Error('native pulse failed'))
+  const coordinator = new DesktopOwnedBrowserCapture()
+  const dispose = coordinator.register(f.controller, f.owner)
+  const route = getDesktopOwnedBrowserCapture(f.record.webContents)
+  if (!route) {
+    throw new Error('Owned capture route missing')
+  }
+  await expect(
+    route({ kind: 'screenshot', params: { format: 'png', captureBeyondViewport: false } }, noHold)
+  ).rejects.toThrow('native pulse failed')
+  expect(f.properties.viewportWidth).toBe(1)
+  expect(f.properties.viewportHeight).toBe(1)
+  expect(f.captures).toHaveLength(0)
+  await f.controller.updateLayout({ x: 1, y: 2, width: 600, height: 400 }, false)
+  dispose()
+  await f.controller.close()
+})
+
+it('retains an unanswered restoration, fences queued reuse after settlement, and permits exact guest close', async () => {
+  vi.useFakeTimers()
+  const f = createOwnedBrowserCaptureFixture()
+  f.properties.viewportWidth = 1
+  f.properties.viewportHeight = 1
+  const coordinator = new DesktopOwnedBrowserCapture()
+  const dispose = coordinator.register(f.controller, f.owner)
+  const restore = deferred<unknown>()
+  const send = f.sendCommand.getMockImplementation()!
+  f.sendCommand.mockImplementation((method, params) =>
+    method === 'Emulation.setVisibleSize' && params?.width === 1
+      ? restore.promise.then(() => send(method, params))
+      : send(method, params)
+  )
+  const route = getDesktopOwnedBrowserCapture(f.record.webContents)
+  if (!route) {
+    throw new Error('Owned capture route missing')
+  }
+  const capture = route(
+    { kind: 'screenshot', params: { format: 'png', captureBeyondViewport: false } },
+    noHold
+  )
+  const rejected = expect(capture).rejects.toThrow(
+    'Timed out while running Emulation.setVisibleSize'
+  )
+  await vi.advanceTimersByTimeAsync(0)
+  const bounds = { ...f.state.bounds }
+  const layout = f.controller.updateLayout({ x: 1, y: 2, width: 600, height: 400 }, false)
+  const fenced = expect(layout).rejects.toThrow('fenced')
+  await vi.advanceTimersByTimeAsync(8000)
+  expect(browserCaptureIdle.isIdle(f.record.webContents)).toBe(false)
+  expect(f.state.bounds).toEqual(bounds)
+  restore.resolve({})
+  await rejected
+  await fenced
+  expect(f.state.bounds).toEqual(bounds)
+  dispose()
+  await f.controller.close()
+  expect(f.guest.destroyed).toBe(true)
 })

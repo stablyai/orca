@@ -77,7 +77,7 @@ async function scrollOwnedCaptureViewport(
   }
 }
 
-async function waitForOwnedCaptureViewport(
+export async function waitForOwnedCaptureViewport(
   guest: WebContents,
   verify: (viewport: OwnedCaptureViewport) => void
 ): Promise<OwnedCaptureViewport> {
@@ -122,4 +122,14 @@ export async function restoreOwnedCaptureViewport(
       throw new Error('Owned browser capture did not restore the original scroll position')
     }
   })
+}
+
+/** Changes only the guest frame size, leaving device metrics and native container geometry intact. */
+export async function resizeOwnedCaptureFrame(
+  guest: WebContents,
+  size: { width: number; height: number }
+): Promise<void> {
+  await runDebuggerCommandWithTimeout('Emulation.setVisibleSize', () =>
+    sendGuestCdpCommand(guest, 'Emulation.setVisibleSize', size)
+  )
 }
