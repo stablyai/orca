@@ -107,6 +107,7 @@ export class ClaudeRuntimeAuthReadback extends ClaudeRuntimeAuthCredentialMatchi
           const paths = this.pathResolver.getRuntimePaths()
           await writeActiveClaudeKeychainCredentialsForRuntime(merged, paths.configDir)
         }
+        this.lastWrittenSharedCredentialsJson = merged
       }
       return { status: 'persisted' }
     } catch (error) {

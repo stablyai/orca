@@ -5,7 +5,10 @@ import {
   readActiveClaudeKeychainCredentialsStrict,
   writeActiveClaudeKeychainCredentials
 } from '../keychain'
-import { mergeSharedClaudeCredentialFields } from '../shared-credential-fields'
+import {
+  mergeSharedClaudeCredentialFields,
+  reconcileSharedClaudeCredentialFields
+} from '../shared-credential-fields'
 import { ClaudeRuntimeAuthKeychainSnapshots } from './runtime-auth-keychain-snapshots'
 import {
   RUNTIME_OAUTH_ACCOUNT_PARSE_ERROR,
@@ -31,40 +34,11 @@ export class ClaudeRuntimeAuthRuntimeState extends ClaudeRuntimeAuthKeychainSnap
     if (file !== null) {
       candidates.push(file)
     }
-    for (const candidate of candidates) {
-      let record: Record<string, unknown> | null = null
-      try {
-        record = this.asRecord(JSON.parse(candidate))
-      } catch {
-        // Report malformed live state without logging secrets.
-      }
-      if (!record) {
-        throw new Error('Cannot preserve malformed Claude runtime credentials')
-      }
-    }
-    const sharedFields = (credential: string): unknown =>
-      JSON.parse(mergeSharedClaudeCredentialFields('{}', credential))
-    if (this.lastWrittenCredentialsJson === null) {
-      // Before our first write, a missing field in another store does not prove revocation.
-      // Read-back may already have proved which live credential contains a newer account refresh.
-      const priority = candidates.includes(credentialsJson)
-        ? [credentialsJson, ...candidates.filter((candidate) => candidate !== credentialsJson)]
-        : candidates
-      const shared = priority.reduceRight(
-        (merged, candidate) =>
-          mergeSharedClaudeCredentialFields(merged, candidate, {
-            preserveMissingLiveFields: true
-          }),
-        '{}'
-      )
-      return mergeSharedClaudeCredentialFields(credentialsJson, shared)
-    }
-    // Older CLIs refresh the legacy item; newer CLIs may update only the scoped item or file.
-    const lastSharedFields = sharedFields(this.lastWrittenCredentialsJson)
-    const changed = candidates.find(
-      (candidate) => !this.jsonValuesEqual(sharedFields(candidate), lastSharedFields)
+    const shared = reconcileSharedClaudeCredentialFields(
+      candidates,
+      this.lastWrittenSharedCredentialsJson
     )
-    return mergeSharedClaudeCredentialFields(credentialsJson, changed ?? candidates[0] ?? null)
+    return mergeSharedClaudeCredentialFields(credentialsJson, shared)
   }
 
   protected readRuntimeCredentialsFile(): string | null {

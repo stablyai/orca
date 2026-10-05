@@ -65,6 +65,12 @@ export class ClaudeRuntimeAuthSnapshotRestore extends ClaudeRuntimeAuthSnapshotC
         )
       }
     }
+    this.recordRestoredSharedCredentials(
+      sharedCredentialsJson,
+      fileCredentialsOwned,
+      scopedSnapshot?.status === 'captured' && scopedKeychainOwned,
+      legacySnapshot?.status === 'captured' && legacyKeychainOwned
+    )
     this.lastWrittenCredentialsJson = null
     this.lastWrittenOauthAccount = null
     this.hasLastWrittenOauthAccount = false
@@ -83,6 +89,21 @@ export class ClaudeRuntimeAuthSnapshotRestore extends ClaudeRuntimeAuthSnapshotC
       return ownedOauthAccount
     }
     return null
+  }
+
+  private recordRestoredSharedCredentials(
+    credentialsJson: string | undefined,
+    fileRestored: boolean,
+    scopedRestored: boolean,
+    legacyRestored: boolean
+  ): void {
+    if (
+      credentialsJson !== undefined &&
+      fileRestored &&
+      (process.platform !== 'darwin' || (scopedRestored && legacyRestored))
+    ) {
+      this.lastWrittenSharedCredentialsJson = credentialsJson
+    }
   }
 
   protected async clearRuntimeAuthForAccount(
@@ -135,6 +156,12 @@ export class ClaudeRuntimeAuthSnapshotRestore extends ClaudeRuntimeAuthSnapshotC
         await this.restoreActiveClaudeKeychainCredentials(null, undefined, sharedCredentialsJson)
       }
     }
+    this.recordRestoredSharedCredentials(
+      sharedCredentialsJson,
+      fileCredentialsOwned,
+      scopedKeychainOwned,
+      legacyKeychainOwned
+    )
   }
 
   protected async restoreSystemDefaultSnapshotForMissingManagedCredentials(
@@ -201,6 +228,12 @@ export class ClaudeRuntimeAuthSnapshotRestore extends ClaudeRuntimeAuthSnapshotC
         )
       }
     }
+    this.recordRestoredSharedCredentials(
+      sharedCredentialsJson,
+      fileCredentialsOwned,
+      scopedSnapshot?.status === 'captured' && scopedKeychainOwned,
+      legacySnapshot?.status === 'captured' && legacyKeychainOwned
+    )
     this.clearLastWrittenRuntimeState()
   }
 }

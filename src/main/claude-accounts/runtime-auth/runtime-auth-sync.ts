@@ -274,6 +274,7 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
         throw error
       }
     }
+    this.lastWrittenSharedCredentialsJson = runtimeCredentialsJson
     const managedOauthAccount = await this.readManagedOauthAccount(activeAccount)
     if (this.writeRuntimeOauthAccount(managedOauthAccount)) {
       this.lastWrittenOauthAccount = managedOauthAccount

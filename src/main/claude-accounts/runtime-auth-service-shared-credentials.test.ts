@@ -1,18 +1,19 @@
 import {
   cleanupRuntimeAuthTestState,
-  createClaudeAccount,
   createClaudeCredentialsJson,
   createElectronMock,
   createKeychainMock,
-  createManagedClaudeAuth,
   createOauthRefreshMock,
-  createSettings,
   createStore,
   readManagedCredentialsForTest,
   resetRuntimeAuthTestState,
-  setPlatform,
   testState
 } from './runtime-auth-service-test-harness'
+import {
+  createSharedCredentialRuntime,
+  sharedFields,
+  withSharedFields
+} from './runtime-auth-shared-credentials-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -25,43 +26,6 @@ vi.mock('node:os', async () => {
   return { ...actual, homedir: () => testState.fakeHomeDir }
 })
 
-const sharedFields = {
-  mcpOAuth: { figma: { accessToken: 'mcp-access', refreshToken: 'mcp-refresh' } },
-  mcpOAuthClientConfig: { figma: { clientId: 'figma-client' } },
-  mcpXaaIdp: { token: 'idp-token' },
-  mcpXaaIdpConfig: { issuer: 'idp-issuer' },
-  pluginSecrets: { plugin: 'secret' }
-}
-
-function withSharedFields(credentials: string, fields = sharedFields): string {
-  return JSON.stringify({ ...JSON.parse(credentials), ...fields })
-}
-
-async function setup(platform: NodeJS.Platform = 'darwin') {
-  setPlatform(platform)
-  const runtimePath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
-  const system = createClaudeCredentialsJson('system@example.com', 'system')
-  const first = createClaudeCredentialsJson('first@example.com', 'first')
-  const second = createClaudeCredentialsJson('second@example.com', 'second')
-  const firstPath = createManagedClaudeAuth(testState.userDataDir, 'first', first)
-  const secondPath = createManagedClaudeAuth(testState.userDataDir, 'second', second)
-  writeFileSync(runtimePath, withSharedFields(system))
-  testState.scopedKeychainCredentials = withSharedFields(system)
-  testState.legacyKeychainCredentials = withSharedFields(system)
-  const settings = createSettings({
-    claudeManagedAccounts: [
-      createClaudeAccount('first', firstPath, { email: 'first@example.com' }),
-      createClaudeAccount('second', secondPath, { email: 'second@example.com' })
-    ]
-  })
-  const store = createStore(settings)
-  const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime auth uses only getSettings/updateSettings from this store mock.
-  const service = new ClaudeRuntimeAuthService(store as never)
-  await service.syncForCurrentSelection()
-  return { service, settings, runtimePath, first, second, system, firstPath, secondPath }
-}
-
 describe('shared Claude connector credentials', () => {
   beforeEach(resetRuntimeAuthTestState)
   afterEach(cleanupRuntimeAuthTestState)
@@ -69,7 +33,7 @@ describe('shared Claude connector credentials', () => {
   it.each(['scoped', 'legacy', 'file'] as const)(
     'preserves connector grants stored only in %s when there is no previous Orca write',
     async (surface) => {
-      const { service, settings, runtimePath, system } = await setup()
+      const { service, settings, runtimePath, system } = await createSharedCredentialRuntime()
       testState.scopedKeychainCredentials = system
       testState.legacyKeychainCredentials = system
       writeFileSync(runtimePath, system)
@@ -89,7 +53,7 @@ describe('shared Claude connector credentials', () => {
   it.each(['darwin', 'linux', 'win32'] as const)(
     'excludes connector secrets when capturing a managed account on %s',
     async (platform) => {
-      const { firstPath, first } = await setup(platform)
+      const { firstPath, first } = await createSharedCredentialRuntime(platform)
       const { ClaudeManagedAuthStorage } = await import('./claude-managed-auth-storage')
       await new ClaudeManagedAuthStorage().writeCredentials(
         'first',
@@ -105,7 +69,8 @@ describe('shared Claude connector credentials', () => {
   it.each(['scoped', 'legacy', 'file'] as const)(
     'propagates connector revocations from the %s surface and does not resurrect frozen account grants',
     async (surface) => {
-      const { service, settings, runtimePath, first, secondPath, second } = await setup()
+      const { service, settings, runtimePath, first, secondPath, second } =
+        await createSharedCredentialRuntime()
       settings.activeClaudeManagedAccountId = 'first'
       await service.syncForCurrentSelection()
       if (surface === 'scoped') {
@@ -126,7 +91,7 @@ describe('shared Claude connector credentials', () => {
   )
 
   it('preserves grants refreshed only in the keychain when returning to the system default', async () => {
-    const { service, settings, runtimePath, first } = await setup()
+    const { service, settings, runtimePath, first, system } = await createSharedCredentialRuntime()
     settings.activeClaudeManagedAccountId = 'first'
     await service.syncForCurrentSelection()
     const rotated = {
@@ -139,12 +104,21 @@ describe('shared Claude connector credentials', () => {
     expect(JSON.parse(readFileSync(runtimePath, 'utf-8'))).toMatchObject(rotated)
     expect(JSON.parse(testState.scopedKeychainCredentials ?? '')).toMatchObject(rotated)
     expect(JSON.parse(testState.legacyKeychainCredentials ?? '')).toMatchObject(rotated)
+    const nextRotation = {
+      ...sharedFields,
+      mcpOAuth: { figma: { accessToken: 'rotated-again', refreshToken: 'rotated-again' } }
+    }
+    testState.scopedKeychainCredentials = withSharedFields(system, nextRotation)
+    settings.activeClaudeManagedAccountId = 'first'
+    await service.syncForCurrentSelection()
+    expect(JSON.parse(readFileSync(runtimePath, 'utf-8'))).toMatchObject(nextRotation)
+    expect(JSON.parse(testState.legacyKeychainCredentials ?? '')).toMatchObject(nextRotation)
   })
 
   it.each(['darwin', 'linux', 'win32'] as const)(
     'keeps connector grants through account switches, syncs, restart, and deselect on %s',
     async (platform) => {
-      const state = await setup(platform)
+      const state = await createSharedCredentialRuntime(platform)
       const { service, settings, runtimePath, first, second, firstPath, secondPath } = state
       for (const id of ['first', 'second', 'first']) {
         settings.activeClaudeManagedAccountId = id
@@ -191,7 +165,7 @@ describe('shared Claude connector credentials', () => {
   it.each(['scoped', 'legacy', 'file'] as const)(
     'preserves MCP rotations written only to the %s surface while adopting a Claude refresh',
     async (surface) => {
-      const { service, settings, runtimePath, firstPath } = await setup()
+      const { service, settings, runtimePath, firstPath } = await createSharedCredentialRuntime()
       settings.activeClaudeManagedAccountId = 'first'
       await service.syncForCurrentSelection()
       const refreshed = createClaudeCredentialsJson(
@@ -222,8 +196,8 @@ describe('shared Claude connector credentials', () => {
     }
   )
 
-  it('keeps the proved newer legacy grants when adopting a Claude refresh after restart', async () => {
-    const { service, settings, runtimePath, firstPath } = await setup()
+  it('preserves conflicting MCP grants after restart even when the Claude account token is newer', async () => {
+    const { service, settings, runtimePath, firstPath } = await createSharedCredentialRuntime()
     settings.activeClaudeManagedAccountId = 'first'
     await service.syncForCurrentSelection()
     const refreshed = createClaudeCredentialsJson(
@@ -240,15 +214,19 @@ describe('shared Claude connector credentials', () => {
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime auth uses only getSettings/updateSettings from this store mock.
     const restarted = new ClaudeRuntimeAuthService(createStore(settings) as never)
-    await restarted.syncForCurrentSelection()
-    expect(JSON.parse(readFileSync(runtimePath, 'utf-8'))).toMatchObject(rotated)
+    await expect(restarted.syncForCurrentSelection()).rejects.toThrow(
+      'live connector credentials conflict'
+    )
+    expect(JSON.parse(readFileSync(runtimePath, 'utf-8'))).toMatchObject(sharedFields)
+    expect(JSON.parse(testState.scopedKeychainCredentials ?? '')).toMatchObject(sharedFields)
+    expect(JSON.parse(testState.legacyKeychainCredentials ?? '')).toMatchObject(rotated)
     expect(JSON.parse(readManagedCredentialsForTest('first', firstPath) ?? '')).toEqual(
       JSON.parse(refreshed)
     )
   })
 
   it('leaves all credentials untouched when the active keychain cannot be read', async () => {
-    const { service, settings, runtimePath } = await setup()
+    const { service, settings, runtimePath } = await createSharedCredentialRuntime()
     settings.activeClaudeManagedAccountId = 'first'
     await service.syncForCurrentSelection()
     const before = readFileSync(runtimePath, 'utf-8')
@@ -269,7 +247,7 @@ describe('shared Claude connector credentials', () => {
   it.each(['scoped', 'legacy', 'file'] as const)(
     'refuses to overwrite malformed live credentials in the %s surface',
     async (surface) => {
-      const { service, settings, runtimePath } = await setup()
+      const { service, settings, runtimePath } = await createSharedCredentialRuntime()
       settings.activeClaudeManagedAccountId = 'first'
       await service.syncForCurrentSelection()
       if (surface === 'scoped') {
@@ -293,7 +271,7 @@ describe('shared Claude connector credentials', () => {
   )
 
   it('keeps newly authorized MCP grants when returning to a signed-out system default', async () => {
-    const { service, settings, runtimePath, first } = await setup()
+    const { service, settings, runtimePath, first } = await createSharedCredentialRuntime()
     // A missing system credential is a signed-out default, with no connector grants yet.
     rmSync(runtimePath)
     testState.scopedKeychainCredentials = null
