@@ -10,23 +10,12 @@ const SENTINEL_STREAM_ID = -1
  * responseEnd) while the SSH channel stays up would hang the client forever. */
 const STREAM_INACTIVITY_TIMEOUT_MS = 30_000
 
-/** Bound transient buffering of other concurrent streams' chunks while this
- * reader awaits its sentinel: every reader sees all git.responseChunk frames
- * and can't filter by streamId until its own sentinel resolves. Foreign frames
- * are dropped on drain anyway; this just caps the pre-sentinel backlog. */
-const MAX_PENDING_FRAMES = 64
-
 export class GitResponseStreamError extends Error {
   readonly code = RelayErrorCode.StreamProtocolError
   constructor(message: string) {
     super(message)
   }
 }
-
-type PendingFrame =
-  | { kind: 'chunk'; params: Record<string, unknown> }
-  | { kind: 'end'; params: Record<string, unknown> }
-  | { kind: 'error'; params: Record<string, unknown> }
 
 /**
  * Request a git method that may return a large payload, opting into response
@@ -52,10 +41,8 @@ export function requestGitStreamable(
     inactivityTimeoutMs?: number
   }
 ): Promise<unknown> {
-  // Why: subscribe to chunk/end/error BEFORE awaiting the sentinel response so a
-  // chunk that lands in the same dispatch tick as the response is not dropped
-  // (mirrors readFileViaStream). streamIdRef stays SENTINEL until the sentinel
-  // resolves; frames are queued until then and drained.
+  // Why: subscribe to chunk/end/error before awaiting the sentinel response so
+  // adjacent frames can be dispatched as soon as the response installs their id.
   const streamIdRef = { current: SENTINEL_STREAM_ID }
   const unsubscribers: (() => void)[] = []
   const cleanup = (): void => {
@@ -75,8 +62,7 @@ export function requestGitStreamable(
     let totalBytes = 0
     let chunkCount = 0
     let settled = false
-    let metadataReady = false
-    const pending: PendingFrame[] = []
+    let streamIdentityInstalled = false
 
     const inactivityMs = options?.inactivityTimeoutMs ?? STREAM_INACTIVITY_TIMEOUT_MS
     let inactivityTimer: ReturnType<typeof setTimeout> | null = null
@@ -197,58 +183,9 @@ export function requestGitStreamable(
       fail(new Error((p.message as string | undefined) ?? 'git response stream error'))
     }
 
-    const drainPending = (): void => {
-      while (!settled && pending.length > 0) {
-        const frame = pending.shift()!
-        if (frame.kind === 'chunk') {
-          handleChunk(frame.params)
-        } else if (frame.kind === 'end') {
-          handleEnd(frame.params)
-        } else {
-          handleStreamError(frame.params)
-        }
-      }
-    }
-
-    // Why: pre-sentinel we cannot filter by streamId (our id is unknown yet), so
-    // every concurrent reader transiently buffers all readers' chunks. Cap the
-    // backlog by dropping the oldest; foreign frames are dropped on drain anyway,
-    // and if our own seq-0 were ever dropped the seq check fails loudly rather
-    // than corrupting. The sentinel normally resolves long before this cap.
-    const pushPending = (frame: PendingFrame): void => {
-      pending.push(frame)
-      if (pending.length > MAX_PENDING_FRAMES) {
-        pending.shift()
-      }
-    }
-
-    unsubscribers.push(
-      mux.onNotificationByMethod('git.responseChunk', (p) => {
-        if (!metadataReady) {
-          pushPending({ kind: 'chunk', params: p })
-          return
-        }
-        handleChunk(p)
-      })
-    )
-    unsubscribers.push(
-      mux.onNotificationByMethod('git.responseEnd', (p) => {
-        if (!metadataReady) {
-          pushPending({ kind: 'end', params: p })
-          return
-        }
-        handleEnd(p)
-      })
-    )
-    unsubscribers.push(
-      mux.onNotificationByMethod('git.responseError', (p) => {
-        if (!metadataReady) {
-          pushPending({ kind: 'error', params: p })
-          return
-        }
-        handleStreamError(p)
-      })
-    )
+    unsubscribers.push(mux.onNotificationByMethod('git.responseChunk', (p) => handleChunk(p)))
+    unsubscribers.push(mux.onNotificationByMethod('git.responseEnd', (p) => handleEnd(p)))
+    unsubscribers.push(mux.onNotificationByMethod('git.responseError', (p) => handleStreamError(p)))
     if (options?.signal) {
       const signal = options.signal
       if (signal.aborted) {
@@ -270,18 +207,23 @@ export function requestGitStreamable(
     // and that cleanup must be able to drop the abort listener above (#11953).
     unsubscribers.push(mux.onDispose((reason) => fail(createSshDisposalError(reason))))
 
-    // Why: forward only the mux-request options (signal/timeoutMs) and omit them
-    // entirely when absent, so callers that previously issued a 2-arg
-    // mux.request keep the same call shape (and their tests). inactivityTimeoutMs
-    // governs reassembly here, not the sentinel request.
+    const installStreamMetadata = (result: unknown): void => {
+      if (!isGitResponseStreamMarker(result)) {
+        return
+      }
+      const marker = result.__orcaGitResponseStream
+      streamIdRef.current = marker.streamId
+      totalBytes = marker.totalBytes
+      chunkCount = marker.chunkCount
+      streamIdentityInstalled = true
+    }
+
     const streamParams = { ...params, __streamResponse: true }
-    const requestOptions =
-      options?.signal !== undefined || options?.timeoutMs !== undefined
-        ? { signal: options.signal, timeoutMs: options.timeoutMs }
-        : undefined
-    const requestPromise = requestOptions
-      ? mux.request(method, streamParams, requestOptions)
-      : mux.request(method, streamParams)
+    const requestPromise = mux.request(method, streamParams, {
+      signal: options?.signal,
+      timeoutMs: options?.timeoutMs,
+      beforeResolve: installStreamMetadata
+    })
     void requestPromise
       .then((result) => {
         if (settled) {
@@ -292,15 +234,16 @@ export function requestGitStreamable(
           succeed(result)
           return
         }
-        const marker = result.__orcaGitResponseStream
-        totalBytes = marker.totalBytes
-        chunkCount = marker.chunkCount
-        streamIdRef.current = marker.streamId
-        metadataReady = true
+        // Why: the multiplexer clears its request timer before calling this
+        // promise continuation. Fail explicitly if a compatible-looking mux
+        // skipped the synchronous identity hook instead of hanging forever.
+        if (!streamIdentityInstalled || streamIdRef.current === SENTINEL_STREAM_ID) {
+          fail(new GitResponseStreamError('Git response stream identity was not installed'))
+          return
+        }
         // Why: start the inactivity deadline now — mux.request's timeout only
         // covered the sentinel; the reassembly phase needs its own guard.
         armInactivity()
-        drainPending()
       })
       .catch((err) => fail(err as Error))
   })
