@@ -15,6 +15,7 @@ import { applyBrowserRecordUpdates } from './apply-browser-records'
 import { applyWorktreeRecordUpdates } from './apply-worktree-records'
 import { applyActiveStateUpdates } from './apply-active-state'
 import { buildWebSessionTabsFinalPatch } from './apply-final-patch'
+import { withChatViewHostMarker } from './chat-view-host-marker'
 
 /** Reconcile one host frame through the staged terminal/browser/layout pipeline. */
 export function applyWebSessionTabsSnapshotWithContext(
@@ -48,5 +49,10 @@ export function applyWebSessionTabsSnapshotWithContext(
   const browserRecords = applyBrowserRecordUpdates(terminalRecords)
   const worktreeRecords = applyWorktreeRecordUpdates(browserRecords)
   const activeState = applyActiveStateUpdates(worktreeRecords)
-  return buildWebSessionTabsFinalPatch(activeState)
+  return withChatViewHostMarker(
+    state,
+    buildWebSessionTabsFinalPatch(activeState),
+    rawSnapshot,
+    options
+  )
 }

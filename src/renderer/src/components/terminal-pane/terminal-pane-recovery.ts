@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { locateTerminalTab } from '@/store/terminals/terminal-tab-location'
+import { selectPendingChatPair } from '@/store/slices/tabs/terminal-chat-pair-effective'
 import {
   admitTerminalRecoveryRemount,
   captureTabRecoveryGeneration
@@ -221,7 +222,8 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
     return false
   }
   const state = useAppStore.getState()
-  const tab = locateTerminalTab(state.tabsByWorktree, request.tabId)?.tab
+  const location = locateTerminalTab(state.tabsByWorktree, request.tabId)
+  const tab = location?.tab
   // A terminal-backed tab is intentionally hidden while native chat owns the
   // provider. Late xterm callbacks from that hidden surface must not remount
   // the tab and race the handoff's owner transition.
@@ -232,8 +234,14 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
   // only on the unified tab, so the row reads undefined on the first load after
   // upgrade. More generally this is a disjunction over two partly-redundant
   // sources for a SAFETY check: a hole in either index errs toward refusing a
-  // heal on a hidden surface, never toward remounting a chat-owned one.
-  if (tab?.viewMode === 'chat' || state.getTab?.(request.tabId)?.viewMode === 'chat') {
+  // heal on a hidden surface, never toward remounting a chat-owned one. On a host-owned pair a
+  // pending chat click hides the surface too, so it joins the same disjunction.
+  if (
+    tab?.viewMode === 'chat' ||
+    state.getTab?.(request.tabId)?.viewMode === 'chat' ||
+    (location &&
+      selectPendingChatPair(state, location.worktreeId, request.tabId)?.viewMode === 'chat')
+  ) {
     return false
   }
   // Fail fast before the liveness probe. The authoritative admission runs

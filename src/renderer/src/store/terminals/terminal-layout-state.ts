@@ -17,7 +17,7 @@ import {
 import { transferNormalizedTerminalLayoutPtyOwnership } from './workspace-terminal-hydration-patch'
 import {
   applyLocalChatOwnerRemoval,
-  resolveLocalLayoutChatOwner
+  resolveStoreOwnedLayoutChatOwner
 } from './terminal-layout-chat-owner'
 
 export function createTerminalLayoutActions(
@@ -113,8 +113,8 @@ export function createTerminalLayoutActions(
           }
         }
         // Why before normalization: a pane-identity remap then carries the stored owner along.
-        const localOwned = resolveLocalLayoutChatOwner(s, tabId, layout)
-        const incoming = localOwned ?? layout
+        const storeOwned = resolveStoreOwnedLayoutChatOwner(s, tabId, layout)
+        const incoming = storeOwned?.layout ?? layout
         const normalized = normalizeTerminalLayoutPtyOwnership(incoming)
         // Resolved before the bailout: normalization can transfer pane ownership even when the stored snapshot is untouched.
         if (normalized.changed) {
@@ -123,9 +123,11 @@ export function createTerminalLayoutActions(
             normalized.snapshot
           )
         }
-        const { layout: snapshot, viewModePatch } = localOwned
-          ? applyLocalChatOwnerRemoval(s, tabId, normalized.snapshot)
-          : { layout: normalized.snapshot, viewModePatch: {} }
+        // Why local only: on a host-owned pair the host removes the owner and the snapshot delivers it.
+        const { layout: snapshot, viewModePatch } =
+          storeOwned?.authority === 'local'
+            ? applyLocalChatOwnerRemoval(s, tabId, normalized.snapshot)
+            : { layout: normalized.snapshot, viewModePatch: {} }
         // Why: pane-title churn re-persists structurally identical snapshots; bailing keeps every pane selector asleep.
         const existing = s.terminalLayoutsByTabId[tabId]
         if (

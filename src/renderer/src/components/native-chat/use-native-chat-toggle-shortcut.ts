@@ -7,6 +7,7 @@ import { canToggleNativeChat } from './native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { isMacPlatform, matchesNativeChatToggleShortcut } from './native-chat-shortcut'
 import { getConnectionIdFromState } from '@/lib/connection-context'
+import { selectPendingChatPair } from '@/store/slices/tabs/terminal-chat-pair-effective'
 import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId
@@ -90,7 +91,8 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
           nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
             getConnectionIdFromState(state, worktreeId)
           ),
-          isChatViewMode: tab.viewMode === 'chat'
+          isChatViewMode:
+            (selectPendingChatPair(state, worktreeId, tab.entityId) ?? tab).viewMode === 'chat'
         })
       ) {
         return

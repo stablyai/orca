@@ -17633,6 +17633,10 @@
       },
       "gitlabIpcTimeout": {
         "timedOut": "Timed out talking to GitLab."
+      },
+      "terminalChatPairOutbound": {
+        "switchFailed": "Couldn't switch view",
+        "switchUnconfirmed": "Couldn't confirm the view switch"
       }
     },
     "ssh": {

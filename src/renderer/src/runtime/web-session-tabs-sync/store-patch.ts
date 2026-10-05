@@ -7,6 +7,7 @@ import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane
 import { observeAgentHookCompletionForNotification } from '@/hooks/agent-hook-completion-notifications'
 import { remapHostAgentStatus } from './agent-status-primitives'
 import { agentStatusEntryEqual } from './state-equality-core'
+import { reconcilePendingChatPairs } from '../terminal-chat-pair-outbound'
 import {
   HOST_WORKING_CLIENT_BOUNDARY_LIMIT,
   hostWorkingClientBoundaryByPaneKey,
@@ -168,6 +169,11 @@ export function applyWebSessionTabsStorePatch(
     }
   } catch (error) {
     console.warn('[web-session-tabs-sync] post-patch bookkeeping failed:', error)
+  }
+  try {
+    reconcilePendingChatPairs()
+  } catch (error) {
+    console.warn('[web-session-tabs-sync] pending chat view reconcile failed:', error)
   }
   return settleHostMirror
 }

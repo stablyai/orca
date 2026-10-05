@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Tab } from '../../../../shared/tab-types'
+import type { TerminalChatPair } from '../../../../shared/terminal-tab-view-mode'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { useAppStore } from '../../store'
@@ -14,6 +15,7 @@ import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-co
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { selectPendingChatPairsForWorktree } from '@/store/slices/tabs/terminal-chat-pair-effective'
 import { useOptionalShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   getWindowsTerminalCapabilityOwnerKey,
@@ -82,6 +84,8 @@ export type TabBarRuntimeModel = {
   resolvedGroupId: string
   statusByRelativePath: Map<string, GitFileStatus>
   unifiedTabByVisibleId: Map<string, Tab>
+  /** This desktop's unconfirmed chat-pair writes, by terminal tab id (host-owned pairs only). */
+  pendingChatPairByTabId: Record<string, TerminalChatPair>
   workspaceHasSimulatorTab: boolean
   toggleTabViewMode: (tabId: string) => void
   nativeChatTranscriptIsLocalReadable: boolean
@@ -252,6 +256,9 @@ export function useTabBarRuntimeModel({
   // Why: every retained TabBar observes the same hot maps; one feature-gated selector shares their projections.
   const { nativeChatEnabled, tabAgentTypesByTabId, nativeChatTabWideFallbackUnsafeTabsById } =
     useAppStore(useShallow(selectTabBarAgentProjections))
+  const pendingChatPairByTabId = useAppStore((s) =>
+    selectPendingChatPairsForWorktree(s, worktreeId)
+  )
   const nativeChatTranscriptIsLocalReadable = useAppStore((s) =>
     isNativeChatTranscriptLocalReadable(getConnectionIdFromState(s, worktreeId))
   )
@@ -277,6 +284,7 @@ export function useTabBarRuntimeModel({
     resolvedGroupId,
     statusByRelativePath,
     unifiedTabByVisibleId,
+    pendingChatPairByTabId,
     workspaceHasSimulatorTab,
     toggleTabViewMode,
     nativeChatEnabled,

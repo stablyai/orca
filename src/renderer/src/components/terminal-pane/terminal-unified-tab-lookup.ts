@@ -1,4 +1,5 @@
 import type { Tab } from '../../../../shared/tab-types'
+import type { TerminalChatPair } from '../../../../shared/terminal-tab-view-mode'
 
 export type UnifiedTerminalTabFields = {
   unifiedTabId: string | undefined
@@ -55,7 +56,9 @@ export function getCachedTerminalGroupIdForWorktree(
 export function selectUnifiedTerminalTabFields(
   unifiedTabsByWorktree: Record<string, Tab[]>,
   worktreeId: string,
-  terminalTabId: string
+  terminalTabId: string,
+  // Why: on a host-owned pair this desktop's unconfirmed click outranks the stored host view.
+  pendingChatPair?: TerminalChatPair
 ): UnifiedTerminalTabFields {
   const tab = getCachedUnifiedTerminalTabForWorktree(
     unifiedTabsByWorktree,
@@ -64,7 +67,7 @@ export function selectUnifiedTerminalTabFields(
   )
   return {
     unifiedTabId: tab?.id,
-    isChatViewMode: tab?.viewMode === 'chat',
+    isChatViewMode: (pendingChatPair ?? tab)?.viewMode === 'chat',
     unifiedTabLabel: tab?.label,
     isTabPinned: tab?.isPinned === true
   }

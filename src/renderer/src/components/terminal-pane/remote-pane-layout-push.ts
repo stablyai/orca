@@ -3,7 +3,21 @@ import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
 import { updateWebRuntimePaneLayout } from '@/runtime/web-runtime-session'
 
 export type RemotePaneLayoutPusher = {
-  push: (input: { worktreeId: string; tabId: string; layout: TerminalLayoutSnapshot }) => void
+  push: (input: {
+    worktreeId: string
+    tabId: string
+    layout: TerminalLayoutSnapshot
+    /** False when the host owns the chat pair: chat ownership travels only as fenced pair writes. */
+    includeChatOwner?: boolean
+  }) => void
+}
+
+function withoutChatOwner(layout: TerminalLayoutSnapshot): TerminalLayoutSnapshot {
+  if (layout.chatLeafId === undefined) {
+    return layout
+  }
+  const { chatLeafId: _owner, ...ownerless } = layout
+  return ownerless
 }
 
 /**
@@ -20,7 +34,9 @@ export function createRemotePaneLayoutPusher(): RemotePaneLayoutPusher {
   } | null = null
   let nextAttemptId = 0
   return {
-    push: ({ worktreeId, tabId, layout }) => {
+    push: ({ worktreeId, tabId, layout: persisted, includeChatOwner = true }) => {
+      // Why before the dedupe: an owner-only change must not cost a push that carries no owner.
+      const layout = includeChatOwner ? persisted : withoutChatOwner(persisted)
       if (
         lastAttempt?.worktreeId === worktreeId &&
         lastAttempt.tabId === tabId &&
@@ -35,7 +51,7 @@ export function createRemotePaneLayoutPusher(): RemotePaneLayoutPusher {
         tabId,
         root: layout.root,
         expandedLeafId: layout.expandedLeafId,
-        chatLeafId: layout.chatLeafId ?? null,
+        ...(includeChatOwner ? { chatLeafId: layout.chatLeafId ?? null } : {}),
         ...(layout.titlesByLeafId ? { titlesByLeafId: layout.titlesByLeafId } : {})
       }).then((updated) => {
         // Why: a disconnected or timed-out push carried no information, so the next persist must retry it.

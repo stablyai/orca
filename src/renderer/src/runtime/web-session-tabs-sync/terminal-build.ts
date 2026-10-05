@@ -7,6 +7,8 @@ import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from '../runti
 import { toWebTerminalSurfaceTabId } from '../web-runtime-session'
 import type { MirroredTerminalTab, TerminalSurface, ReadyTerminalSurface } from './state'
 import { chooseRemoteTerminalLayout, isTerminalSurfaceTab } from './terminal-surfaces'
+import { snapshotHostOwnsChatPair } from './chat-view-host-marker'
+import { normalizeTerminalChatPair } from '../../../../shared/terminal-tab-view-mode'
 
 function pendingBindingBelongsToEnvironment(
   ptyId: string,
@@ -51,6 +53,11 @@ function retainPendingTerminalBindings(
   return retained
 }
 
+function withoutChatOwner(layout: TerminalLayoutSnapshot): TerminalLayoutSnapshot {
+  const { chatLeafId: _closedOwner, ...ownerless } = layout
+  return ownerless
+}
+
 /** Constructs mirrored terminal tabs from the mobile session status payload, normalising Pi-compatible agent titles under launch ownership. */
 export function buildMirroredTerminalTabs(
   snapshot: RuntimeMobileSessionTabsResult,
@@ -62,6 +69,7 @@ export function buildMirroredTerminalTabs(
   focusTarget?: { parentTabId: string; leafId: string },
   terminalPtyMode: 'local' | 'remote' = 'remote'
 ): MirroredTerminalTab[] {
+  const hostOwnsChatPair = snapshotHostOwnsChatPair(snapshot, terminalPtyMode)
   const groups = new Map<string, TerminalSurface[]>()
   for (const tab of snapshot.tabs.filter(isTerminalSurfaceTab)) {
     const group = groups.get(tab.parentTabId) ?? []
@@ -97,9 +105,31 @@ export function buildMirroredTerminalTabs(
       environmentId,
       terminalPtyMode
     )
-    const layout = normalizeTerminalLayoutPtyOwnership(
-      chooseRemoteTerminalLayout(surfaces, ptyIdsByLeafId, existingLayout, requestedActiveLeafId)
+    const chosenLayout = normalizeTerminalLayoutPtyOwnership(
+      chooseRemoteTerminalLayout(
+        surfaces,
+        ptyIdsByLeafId,
+        existingLayout,
+        requestedActiveLeafId,
+        hostOwnsChatPair
+      )
     ).snapshot
+    const hostViewModeSurface = surfaces.find((surface) => surface.viewMode)
+    // Why: on a host-owned pair the store holds host truth only; a present owner outside the tree
+    // means the owning pane closed, so the tab is terminal and no sibling may claim chat.
+    const hostChatPair = hostOwnsChatPair
+      ? normalizeTerminalChatPair(
+          {
+            ...(hostViewModeSurface?.viewMode ? { viewMode: hostViewModeSurface.viewMode } : {}),
+            ...(chosenLayout.chatLeafId ? { chatLeafId: chosenLayout.chatLeafId } : {})
+          },
+          chosenLayout.root
+        )
+      : null
+    const layout =
+      hostChatPair && hostChatPair.chatLeafId !== chosenLayout.chatLeafId
+        ? withoutChatOwner(chosenLayout)
+        : chosenLayout
     const layoutPtyEntries = Object.entries(layout.ptyIdsByLeafId ?? {})
     const ptyIds = layoutPtyEntries.map(([, ptyId]) => ptyId)
     let retainedSurfaceByPrunedLeafId: Map<string, TerminalSurface> | undefined
@@ -157,9 +187,13 @@ export function buildMirroredTerminalTabs(
     const isPinned = existing
       ? existing.isPinned === true
       : surfaces.some((surface) => surface.isPinned)
-    // Why: viewMode echoes back through host snapshots, so prefer the client's record during the echo window and adopt the host value only without a prior tab.
-    const hostViewModeSurface = surfaces.find((surface) => surface.viewMode)
-    const viewMode = existing ? existing.viewMode : hostViewModeSurface?.viewMode
+    // Why: an old host echoes viewMode back, so the client's record wins during the echo window;
+    // a host-owned pair is adopted verbatim because this desktop's own clicks live in an overlay.
+    const viewMode = hostChatPair
+      ? hostChatPair.viewMode
+      : existing
+        ? existing.viewMode
+        : hostViewModeSurface?.viewMode
     return {
       tab: {
         id: localTabId,

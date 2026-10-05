@@ -5,7 +5,10 @@ import {
   type WorktreeHostConnection
 } from '@/lib/worktree-host-connection-phase'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { resolveChatPairAuthority } from '@/store/slices/tabs/terminal-chat-pair-authority'
+import {
+  resolveChatPairAuthority,
+  type ChatPairAuthority
+} from '@/store/slices/tabs/terminal-chat-pair-authority'
 import {
   selectRuntimeAwareSshError,
   selectRuntimeAwareSshTargetLabel,
@@ -13,8 +16,8 @@ import {
 } from '@/store/slices/runtime-environment-ssh'
 
 export type TerminalPaneHostState = {
-  /** The store holds this worktree's chat pair (this desktop is its host), not a per-pane copy. */
-  chatPairStoreOwned: boolean
+  /** Who owns this worktree's chat pair; only `'legacy'` keeps a per-pane copy. */
+  chatPairAuthority: ChatPairAuthority
   nativeChatTranscriptIsLocalReadable: boolean
   sshReconnectEnvironmentId: string | null
   /** The failure detail behind the status; the overlay shows only a canned sentence without it. */
@@ -30,10 +33,10 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
   const nativeChatTranscriptIsLocalReadableResult =
     isNativeChatTranscriptLocalReadable(connectionId)
   const host = resolveWorktreeHostConnection(state, worktreeId, connectionId)
-  const chatPairStoreOwned = resolveChatPairAuthority(state, worktreeId) === 'local'
+  const chatPairAuthority = resolveChatPairAuthority(state, worktreeId)
   if (!host.targetId) {
     return {
-      chatPairStoreOwned,
+      chatPairAuthority,
       nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
       sshReconnectEnvironmentId: null,
       sshReconnectError: null,
@@ -45,7 +48,7 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
   }
   const { targetId: sshReconnectTargetId, environmentId: sshReconnectEnvironmentId } = host
   return {
-    chatPairStoreOwned,
+    chatPairAuthority,
     nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
     sshReconnectEnvironmentId,
     sshReconnectError: selectRuntimeAwareSshError(
@@ -70,7 +73,7 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
 
 function isSameHostState(a: TerminalPaneHostState, b: TerminalPaneHostState): boolean {
   return (
-    a.chatPairStoreOwned === b.chatPairStoreOwned &&
+    a.chatPairAuthority === b.chatPairAuthority &&
     a.nativeChatTranscriptIsLocalReadable === b.nativeChatTranscriptIsLocalReadable &&
     a.sshReconnectEnvironmentId === b.sshReconnectEnvironmentId &&
     a.sshReconnectError === b.sshReconnectError &&

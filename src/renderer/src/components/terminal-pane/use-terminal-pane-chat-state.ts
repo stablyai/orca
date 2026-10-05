@@ -19,10 +19,12 @@ import type { TerminalPaneTitleController } from './use-terminal-pane-title-stat
 export function useTerminalPaneChatState(controller: TerminalPaneTitleController) {
   const {
     chatLeafId,
+    chatPairAuthority,
     managerRef,
     nativeChatTranscriptIsLocalReadable,
     onAgentExitedRef,
     paneCount,
+    pendingChatPair,
     savedLayout,
     setChatLeafId,
     setTabWideAgentHintLeafId,
@@ -44,7 +46,12 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   // tab, so one publication paid the lookup five times per mounted tab.
   const { unifiedTabId, isChatViewMode, unifiedTabLabel, isTabPinned } = useAppStore(
     useShallow((store) =>
-      selectUnifiedTerminalTabFields(store.unifiedTabsByWorktree, worktreeId, tabId)
+      selectUnifiedTerminalTabFields(
+        store.unifiedTabsByWorktree,
+        worktreeId,
+        tabId,
+        pendingChatPair
+      )
     )
   )
   const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
@@ -149,6 +156,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   const { applyNativeChatLeafRoute, toggleNativeChatForLeaf, switchNativeChatToTerminal } =
     useTerminalPaneChatPairActions({
       chatLeafId,
+      chatPairAuthority,
       effectiveChatViewMode,
       isChatViewMode,
       setChatLeafId,
@@ -172,7 +180,8 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
           chatLeafStillMounted: panes.some((pane) => pane.leafId === chatLeafId),
           activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId),
           chatLeafHasConfirmedAgentExit: true
-        })
+        }),
+        { confirmedAgentExit: true }
       )
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.

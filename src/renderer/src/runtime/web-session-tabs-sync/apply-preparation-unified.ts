@@ -8,6 +8,7 @@ import {
 } from '../web-session-focus-intent'
 import { isWebSessionBrowserPlacementGroupReserved } from '../web-session-browser-placement'
 import { buildHostToLocalTabIdMap, updateHostSessionTabIdMappings } from './layout-groups'
+import { snapshotHostOwnsChatPair } from './chat-view-host-marker'
 
 export function prepareWebSessionTabsSnapshotUnified(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBrowser>
@@ -33,14 +34,19 @@ export function prepareWebSessionTabsSnapshotUnified(
     retainedUnifiedTabs,
     existingViewModeByTabId,
     hostGroupIdByTabId,
-    targetGroupId
+    targetGroupId,
+    options
   } = base
+  const hostOwnsChatPair = snapshotHostOwnsChatPair(snapshot, options?.terminalPtyMode)
   const mirroredTerminalUnifiedTabs = mirroredTerminalTabs.map((entry) =>
     buildTerminalUnifiedTab(
       entry.tab,
       hostGroupIdByTabId.get(entry.hostTabId) ?? targetGroupId,
       environmentId,
-      entry.tab.viewMode ?? existingViewModeByTabId.get(entry.tab.id)
+      // Why: on a host-owned pair absence is host truth too; the client fallback would undo it.
+      hostOwnsChatPair
+        ? entry.tab.viewMode
+        : (entry.tab.viewMode ?? existingViewModeByTabId.get(entry.tab.id))
     )
   )
   const mirroredBrowserUnifiedTabs = mirroredBrowserTabs.map((entry) => entry.unifiedTab)

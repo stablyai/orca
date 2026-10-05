@@ -17,6 +17,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
   const {
     clearedScrollbackLeafIdsRef,
     chatLeafId,
+    chatPairAuthority,
     containerRef,
     isChatViewMode,
     expandedPaneIdRef,
@@ -34,10 +35,10 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     terminalTab,
     worktreeId
   } = controller
-  const chatOwnerRef = useRef({ chatLeafId, isChatViewMode })
+  const chatOwnerRef = useRef({ chatLeafId, isChatViewMode, chatPairAuthority })
   useLayoutEffect(() => {
-    chatOwnerRef.current = { chatLeafId, isChatViewMode }
-  }, [chatLeafId, isChatViewMode])
+    chatOwnerRef.current = { chatLeafId, isChatViewMode, chatPairAuthority }
+  }, [chatLeafId, isChatViewMode, chatPairAuthority])
   const persistLayoutSnapshot = useCallback((): void => {
     const manager = managerRef.current
     const container = containerRef.current
@@ -125,7 +126,12 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
       (ptyId) => typeof ptyId === 'string' && isRemoteRuntimePtyId(ptyId)
     )
     if (hasRemotePane) {
-      remotePaneLayoutPusherRef.current?.push({ worktreeId, tabId, layout })
+      remotePaneLayoutPusherRef.current?.push({
+        worktreeId,
+        tabId,
+        layout,
+        includeChatOwner: chatOwnerRef.current.chatPairAuthority !== 'host'
+      })
     }
     for (const leafId of currentLeafIds) {
       clearedScrollbackLeafIds.delete(leafId)

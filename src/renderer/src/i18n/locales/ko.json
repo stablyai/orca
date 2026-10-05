@@ -17450,6 +17450,10 @@
       },
       "gitlabIpcTimeout": {
         "timedOut": "GitLab과의 대화 시간이 초과되었습니다."
+      },
+      "terminalChatPairOutbound": {
+        "switchFailed": "보기를 전환하지 못했습니다",
+        "switchUnconfirmed": "보기 전환을 확인하지 못했습니다"
       }
     },
     "ssh": {

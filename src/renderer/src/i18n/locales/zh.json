@@ -17450,6 +17450,10 @@
       },
       "gitlabIpcTimeout": {
         "timedOut": "与 GitLab 对话超时。"
+      },
+      "terminalChatPairOutbound": {
+        "switchFailed": "无法切换视图",
+        "switchUnconfirmed": "无法确认视图切换"
       }
     },
     "ssh": {

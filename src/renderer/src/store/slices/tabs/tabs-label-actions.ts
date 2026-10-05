@@ -9,22 +9,13 @@ import {
   patchTerminalTabRow
 } from './tabs-host-mirroring'
 import { applyChatPairToState, readTerminalChatPair } from './terminal-chat-pair-state'
-import { resolveChatPairAuthority } from './terminal-chat-pair-authority'
+import { resolveEffectiveChatPair } from './terminal-chat-pair-effective'
+import {
+  findHostOwnedTerminalWorktree,
+  findStoreOwnedTerminalTab,
+  writeHostOwnedChatPair
+} from './terminal-chat-pair-routing'
 import { locateTerminalTab } from '../../terminals/terminal-tab-location'
-import type { AppState } from '../../types'
-
-/** A terminal tab whose pair this desktop's store owns: every write goes through one helper. */
-function findLocalTerminalTab(state: AppState, tabId: string) {
-  const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
-  if (
-    !found ||
-    found.tab.contentType !== 'terminal' ||
-    resolveChatPairAuthority(state, found.worktreeId) !== 'local'
-  ) {
-    return null
-  }
-  return found.tab
-}
 
 export function createTabsLabelActions(
   set: TabsSliceSet,
@@ -80,6 +71,16 @@ export function createTabsLabelActions(
     },
 
     applyTerminalChatPair: (terminalTabId, leafId, mode, options) => {
+      const hostWorktreeId = findHostOwnedTerminalWorktree(get(), terminalTabId)
+      if (hostWorktreeId) {
+        return writeHostOwnedChatPair(
+          { getState: get, setState: set },
+          hostWorktreeId,
+          terminalTabId,
+          { leafId, viewMode: mode },
+          options
+        )
+      }
       const toggle: { committed: { from: 'terminal' | 'chat'; to: 'terminal' | 'chat' } | null } = {
         committed: null
       }
@@ -102,9 +103,9 @@ export function createTabsLabelActions(
     },
 
     setTabViewMode: (tabId, mode) => {
-      const local = findLocalTerminalTab(get(), tabId)
-      if (local) {
-        get().applyTerminalChatPair(local.entityId, null, mode)
+      const owned = findStoreOwnedTerminalTab(get(), tabId)
+      if (owned) {
+        get().applyTerminalChatPair(owned.tab.entityId, null, mode)
         return
       }
       set((state) => {
@@ -125,10 +126,14 @@ export function createTabsLabelActions(
     },
 
     toggleTabViewMode: (tabId) => {
-      const local = findLocalTerminalTab(get(), tabId)
-      if (local) {
-        const nextMode = local.viewMode === 'chat' ? 'terminal' : 'chat'
-        get().applyTerminalChatPair(local.entityId, null, nextMode, { userToggle: true })
+      const owned = findStoreOwnedTerminalTab(get(), tabId)
+      if (owned) {
+        const currentMode =
+          owned.authority === 'host'
+            ? resolveEffectiveChatPair(get(), owned.worktreeId, owned.tab.entityId).viewMode
+            : owned.tab.viewMode
+        const nextMode = currentMode === 'chat' ? 'terminal' : 'chat'
+        get().applyTerminalChatPair(owned.tab.entityId, null, nextMode, { userToggle: true })
         return
       }
       let toggled: {

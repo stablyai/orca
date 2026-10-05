@@ -8,6 +8,7 @@ import type {
 } from '../../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session-state-types'
 import type { RuntimeSessionTabChatView } from '../../../../../shared/runtime-session-contracts'
+import type { TerminalChatPair } from '../../../../../shared/terminal-tab-view-mode'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-hydration-keys'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
@@ -17,6 +18,10 @@ export type TabsSlice = {
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
   layoutByWorktree: Record<string, TabGroupLayoutNode>
+  /** Paired worktrees whose latest applied host snapshot says the host owns the chat pair. */
+  chatViewHostOwnedByWorktree: Record<string, true>
+  /** This desktop's unconfirmed chat-pair writes on host-owned worktrees, by terminal tab id. */
+  pendingChatPairByTabId: Record<string, TerminalChatPair>
   createUnifiedTab: (
     worktreeId: string,
     contentType: TabContentType,

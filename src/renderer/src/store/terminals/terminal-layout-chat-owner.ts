@@ -20,15 +20,16 @@ function ownerIsSettled(layout: TerminalLayoutSnapshot, owner: string | undefine
 }
 
 /**
- * The layout lane on a `'local'` tab never chooses the owner: it keeps the stored one, and may
- * only seed a first layout or fill in an owner for a chat that has none. Null means the tab is
- * not local (or unknown), so the incoming owner is stored as before.
+ * The layout lane never chooses the owner of a tab whose pair the store holds. On `'local'` it
+ * keeps the stored owner, and may only seed a first layout or fill in an owner for a chat that has
+ * none. On `'host'` it keeps the host's owner verbatim: moves and removals arrive as host
+ * snapshots. Null means the incoming owner is stored as before (a `'legacy'` or unknown tab).
  */
-export function resolveLocalLayoutChatOwner(
+export function resolveStoreOwnedLayoutChatOwner(
   state: LayoutOwnerState,
   tabId: string,
   incoming: TerminalLayoutSnapshot
-): TerminalLayoutSnapshot | null {
+): { layout: TerminalLayoutSnapshot; authority: 'local' | 'host' } | null {
   const existing = state.terminalLayoutsByTabId[tabId]
   // Why the fast path: title and geometry churn re-persist the stored owner on every write.
   if (
@@ -38,15 +39,23 @@ export function resolveLocalLayoutChatOwner(
     return null
   }
   const location = locateTerminalTab(state.tabsByWorktree, tabId)
-  if (!location || resolveChatPairAuthority(state, location.worktreeId) !== 'local') {
+  const authority = location ? resolveChatPairAuthority(state, location.worktreeId) : 'legacy'
+  if (authority === 'legacy') {
     return null
+  }
+  if (authority === 'host') {
+    // Why: the pane stamps its effective owner, which may be an unconfirmed click.
+    return { layout: withTerminalChatOwner(incoming, existing?.chatLeafId), authority }
   }
   const seed =
     incoming.chatLeafId && terminalLayoutNodeContainsLeaf(incoming.root, incoming.chatLeafId)
       ? incoming.chatLeafId
       : undefined
   const canSeed = !existing || readTerminalChatViewMode(state, tabId) === 'chat'
-  return withTerminalChatOwner(incoming, existing?.chatLeafId ?? (canSeed ? seed : undefined))
+  return {
+    layout: withTerminalChatOwner(incoming, existing?.chatLeafId ?? (canSeed ? seed : undefined)),
+    authority
+  }
 }
 
 /**

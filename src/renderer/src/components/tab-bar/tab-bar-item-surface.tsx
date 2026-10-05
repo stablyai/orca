@@ -28,6 +28,7 @@ export type TabBarItemSurfaceRuntime = Pick<
   | 'resolvedGroupId'
   | 'generatedTabTitlesEnabled'
   | 'unifiedTabByVisibleId'
+  | 'pendingChatPairByTabId'
   | 'nativeChatEnabled'
   | 'tabAgentTypesByTabId'
   | 'nativeChatTabWideFallbackUnsafeTabsById'
@@ -66,6 +67,7 @@ export function renderTabBarItems({
     resolvedGroupId,
     generatedTabTitlesEnabled,
     unifiedTabByVisibleId,
+    pendingChatPairByTabId,
     nativeChatEnabled,
     tabAgentTypesByTabId,
     nativeChatTabWideFallbackUnsafeTabsById,
@@ -111,6 +113,8 @@ export function renderTabBarItems({
       // Key the live-agent lookup by the backing terminal tab id: agent-status pane keys use it, not the unified tab id.
       const detectedAgent = tabAgentTypesByTabId[terminalTab.id] ?? null
       const tabWideFallbackSafe = nativeChatTabWideFallbackUnsafeTabsById[terminalTab.id] !== true
+      // Why: on a host-owned pair this desktop's unconfirmed click outranks the stored host view.
+      const viewMode = (pendingChatPairByTabId[terminalTab.id] ?? unifiedTabForItem)?.viewMode
       canToggleViewMode =
         unifiedTabForItem !== undefined &&
         canToggleNativeChat({
@@ -120,9 +124,9 @@ export function renderTabBarItems({
           detectedAgent,
           resolvedAgent: tabWideFallbackSafe ? resolvedAgent : null,
           nativeChatTranscriptIsLocalReadable,
-          isChatViewMode: unifiedTabForItem.viewMode === 'chat'
+          isChatViewMode: viewMode === 'chat'
         })
-      isChatView = nativeChatEnabled && unifiedTabForItem?.viewMode === 'chat'
+      isChatView = nativeChatEnabled && viewMode === 'chat'
       viewModeTabId = unifiedTabForItem?.id
     }
     return (

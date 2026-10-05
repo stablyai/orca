@@ -173,7 +173,8 @@ export function chooseRemoteTerminalLayout(
   surfaces: readonly TerminalSurface[],
   ptyIdsByLeafId: Record<string, string>,
   existingLayout?: TerminalLayoutSnapshot,
-  requestedActiveLeafId?: string
+  requestedActiveLeafId?: string,
+  hostOwnsChatPair = false
 ): TerminalLayoutSnapshot {
   const leafIds = surfaces.map((surface) => surface.leafId)
   const knownLeafIds = new Set(leafIds)
@@ -204,8 +205,11 @@ export function chooseRemoteTerminalLayout(
       : parentLayout?.expandedLeafId && knownLeafIds.has(parentLayout.expandedLeafId)
         ? parentLayout.expandedLeafId
         : null
-  const chatLeafId =
-    parentLayout?.chatLeafId && knownLeafIds.has(parentLayout.chatLeafId)
+  // Why verbatim when the host owns the pair: an unknown owner is evidence of a closed owner,
+  // which the caller turns into terminal; dropping it here would read as an ownerless chat.
+  const chatLeafId = hostOwnsChatPair
+    ? parentLayout?.chatLeafId
+    : parentLayout?.chatLeafId && knownLeafIds.has(parentLayout.chatLeafId)
       ? parentLayout.chatLeafId
       : existingLayout?.chatLeafId && knownLeafIds.has(existingLayout.chatLeafId)
         ? existingLayout.chatLeafId

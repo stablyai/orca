@@ -28,7 +28,9 @@ export function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.generation === b.generation &&
     a.shellOverride === b.shellOverride &&
     a.launchAgent === b.launchAgent &&
-    a.pendingActivationSpawn === b.pendingActivationSpawn
+    a.pendingActivationSpawn === b.pendingActivationSpawn &&
+    // Why: a host-owned pair can change only the view; the bail-out must not swallow it.
+    a.viewMode === b.viewMode
   )
 }
 
