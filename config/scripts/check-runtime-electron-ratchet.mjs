@@ -48,9 +48,9 @@ export const STRUCTURED_CHAT_LANES = [
   { directory: ['src', 'main', 'codex'] },
   { directory: ['src', 'shared'] },
   { directory: ['src', 'main', 'runtime'], basename: /^(?:structured-|agent-session-)/ },
-  // Allowed absent until they land; every other lane throws if missing, so a rename can't empty it.
-  { directory: ['src', 'main', 'acp'], mayBeAbsent: true },
-  { directory: ['src', 'main', 'provider-process'], mayBeAbsent: true }
+  { directory: ['src', 'main', 'provider-process'] },
+  // Allowed absent until it lands; every other lane throws if missing, so a rename can't empty it.
+  { directory: ['src', 'main', 'acp'], mayBeAbsent: true }
 ]
 
 export function collectStructuredChatEntryPoints(root = ROOT) {

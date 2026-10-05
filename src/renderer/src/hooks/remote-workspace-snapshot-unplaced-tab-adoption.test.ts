@@ -330,6 +330,19 @@ describe('a host snapshot whose terminal tabs cannot be placed locally', () => {
     ).toBe('unverifiable')
   })
 
+  it('answers for the worktrees it placed when the host names another path it cannot place', async () => {
+    const store = createStore()
+    // A second machine left a tab on beta; this client only has alpha.
+    landAlphaLineage(store)
+    await applySnapshot(store, snapshot(1))
+
+    expect(syncPhase(store)).toBe('conflict')
+    expect(isHydrated(store)).toBe(false)
+    expect(adoptedTabIds(store)).toEqual(['T1', 'T2'])
+    expect(resolveWorkspaceTerminalHostAuthority(store.getState(), ALPHA_ID)).toBe('none')
+    expect(resolveWorkspaceTerminalHostAuthority(store.getState(), BETA_ID)).toBe('unverifiable')
+  })
+
   it('adopts every host tab and declares the target hydrated once the catalog is present', async () => {
     const store = createStore()
     landHostLineage(store)
