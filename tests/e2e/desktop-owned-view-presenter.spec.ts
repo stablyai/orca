@@ -345,7 +345,6 @@ test('ordinary owned-view presenter forwards, clips, occludes, captures, and des
         const tab = store.getState().createBrowserTab(worktreeId, url, {
           activate: true,
           browserPageId: pageId,
-          desktopBackend: 'owned-view',
           title: 'Owned view E2E'
         })
         return { browserTabId: tab.id, browserPageId: pageId, generation: await generation }
