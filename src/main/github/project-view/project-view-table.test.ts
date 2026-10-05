@@ -104,4 +104,17 @@ describe('project view layout selection', () => {
       expect(fetchItemsCountOnly).toHaveBeenCalledWith({ ...args, query: '' })
     }
   )
+
+  it('falls back to unfiltered query when search index returns 0 items (#12648)', async () => {
+    vi.mocked(fetchProjectViewsPage).mockResolvedValue(page([view('table', 'TABLE_LAYOUT')]))
+    const rows = [{ id: 'issue-1' }] as any
+    vi.mocked(fetchAllItems)
+      .mockResolvedValueOnce({ ok: true, rows: [], totalCount: 0, parentFieldDropped: false })
+      .mockResolvedValueOnce({ ok: true, rows, totalCount: 1, parentFieldDropped: false })
+    const result = await getProjectViewTable({ ...args, viewId: 'table' })
+    expect(result).toMatchObject({ ok: true, data: { rows, totalCount: 1 } })
+    expect(fetchAllItems).toHaveBeenCalledTimes(2)
+    expect(fetchAllItems).toHaveBeenNthCalledWith(1, { ...args, query: 'status:open' })
+    expect(fetchAllItems).toHaveBeenNthCalledWith(2, { ...args, query: '' })
+  })
 })
