@@ -3551,8 +3551,8 @@
             "sshHost": "Host SSH"
           },
           "usagePercentageLabel": {
-            "used": "{{value0}}% usado",
-            "remaining": "{{value0}}% restante"
+            "used": "{{value0}}%",
+            "remaining": "{{value0}}%"
           },
           "UsagePercentageDisplayChangeNotice": {
             "title": "Usage now shows % used",

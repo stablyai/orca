@@ -4,7 +4,11 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { SettingsSegmentedControl } from '@/components/settings/SettingsFormControls'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { translate } from '@/i18n/i18n'
-import { formatRateLimitWindowChipLabel, formatWindowLabel } from '@/lib/window-label-formatter'
+import {
+  formatRateLimitWindowChipLabel,
+  formatUsagePoolChipLabel,
+  formatWindowLabel
+} from '@/lib/window-label-formatter'
 import { CURSOR_MODELS_BUCKET_NAME } from '../../../../shared/cursor-usage-buckets'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 import {
@@ -43,6 +47,10 @@ function shortLabel(
   useRemainingDuration = false
 ): string {
   if (p.buckets?.some((b) => b.name === section.label)) {
+    // Why: footer chips show Antigravity pools like Claude/Codex windows; the popover keeps names.
+    if (useRemainingDuration && p.provider === 'antigravity') {
+      return formatUsagePoolChipLabel(section.window)
+    }
     return section.label
   }
   // fableWeekly shares the 7d window with weekly; label it distinctly so the two

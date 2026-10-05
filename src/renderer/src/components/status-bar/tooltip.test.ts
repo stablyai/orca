@@ -500,8 +500,7 @@ describe('ProviderPanel reset rendering', () => {
     const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     // Why: bars show consumption (% used), matching harness meters (#7551).
-    expect(markup).toContain('35%')
-    expect(markup).toContain('% used')
+    expect(markup).toContain('<span>35%</span>')
     expect(markup).not.toContain('% left')
   })
 
@@ -521,8 +520,7 @@ describe('ProviderPanel reset rendering', () => {
 
     const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
-    expect(markup).toContain('100%')
-    expect(markup).toContain('% used')
+    expect(markup).toContain('<span>100%</span>')
   })
 
   it('clamps over-100 usedPercent to 100% used in the panel', () => {
@@ -562,7 +560,7 @@ describe('ProviderPanel reset rendering', () => {
       createElement(ProviderPanel, { p, usagePercentageDisplay: 'remaining' })
     )
 
-    expect(markup).toContain('75% left')
+    expect(markup).toContain('<span>75%</span>')
     expect(markup).toContain('width:75%')
     expect(markup).not.toContain('width:25%')
   })

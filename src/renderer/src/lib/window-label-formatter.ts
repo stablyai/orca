@@ -49,3 +49,19 @@ export function formatRateLimitWindowChipLabel(
   }
   return formatWindowLabel(window.windowMinutes)
 }
+
+/**
+ * Chip label for a quota pool (an Antigravity model group) shown in place of its name.
+ *
+ * Why: a pool whose window agy reports under an unknown name arrives with windowMinutes 0
+ * and no reset; "0m" would read as "resets now", so it gets no suffix at all.
+ */
+export function formatUsagePoolChipLabel(
+  window: { windowMinutes: number; resetsAt: number | null },
+  now: number = Date.now()
+): string {
+  if (window.resetsAt == null && window.windowMinutes <= 0) {
+    return ''
+  }
+  return formatRateLimitWindowChipLabel(window, now)
+}

@@ -3879,8 +3879,8 @@
             "sshHost": "SSH 主机"
           },
           "usagePercentageLabel": {
-            "used": "已用 {{value0}}%",
-            "remaining": "剩余 {{value0}}%"
+            "used": "{{value0}}%",
+            "remaining": "{{value0}}%"
           },
           "UsagePercentageDisplayChangeNotice": {
             "title": "用量现在显示已用百分比",

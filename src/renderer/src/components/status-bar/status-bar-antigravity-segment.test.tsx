@@ -49,7 +49,7 @@ function antigravityLimits(overrides: Partial<ProviderRateLimits> = {}): Provide
 }
 
 describe('Antigravity status-bar segment', () => {
-  it('renders both model-group pools by name', async () => {
+  it('renders every model-group pool in the Claude/Codex window format', async () => {
     // Why: the verbose bucket allowlist was written for Gemini's experimental models, so
     // Antigravity's pools — whose names come from the account's tier and cannot be enumerated
     // ahead of time — were filtered out and the segment showed no number at all.
@@ -58,9 +58,54 @@ describe('Antigravity status-bar segment', () => {
       <ProviderSegment p={antigravityLimits()} compact={false} display="used" mode="verbose" />
     )
 
-    expect(markup).toContain('Gemini Models')
-    expect(markup).toContain('Claude and GPT models')
-    expect(markup).toContain('100%')
+    // Why: long tier group names crowded the footer; they stay in the popover only.
+    expect(markup).not.toContain('Gemini Models')
+    expect(markup).not.toContain('Claude and GPT models')
+    expect(markup).toContain('100% wk')
+    expect(markup).toContain('>0% wk')
+  })
+
+  it('shows the pool reset time instead of its name in compact mode', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const now = 1_700_000_000_000
+    const dateNow = vi.spyOn(Date, 'now').mockReturnValue(now)
+    try {
+      const resetsAt = now + 2 * 24 * 60 * 60_000 + 3 * 60 * 60_000
+      const markup = renderToStaticMarkup(
+        <ProviderSegment
+          p={antigravityLimits({
+            buckets: [
+              { name: 'Gemini Models', ...weeklyWindow(100), resetsAt },
+              { name: 'Claude and GPT models', ...weeklyWindow(0) }
+            ]
+          })}
+          compact={false}
+          display="used"
+          mode="compact"
+        />
+      )
+
+      expect(markup).toContain('100% 2d 3h')
+      expect(markup).not.toContain('Gemini Models')
+    } finally {
+      dateNow.mockRestore()
+    }
+  })
+
+  it('omits the time label for a pool whose window agy did not name', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const markup = renderToStaticMarkup(
+      <ProviderSegment
+        p={antigravityLimits({
+          buckets: [{ name: 'Gemini Models', ...weeklyWindow(40), windowMinutes: 0 }]
+        })}
+        compact={false}
+        display="used"
+        mode="verbose"
+      />
+    )
+
+    expect(markup).toContain('40%</span>')
   })
 
   it('shows the weekly window when a tier reports no session pool', async () => {

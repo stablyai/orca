@@ -4093,8 +4093,8 @@
             "sshHost": "SSH Host"
           },
           "usagePercentageLabel": {
-            "used": "{{value0}}% used",
-            "remaining": "{{value0}}% left"
+            "used": "{{value0}}%",
+            "remaining": "{{value0}}%"
           },
           "UsagePercentageDisplayChangeNotice": {
             "title": "Usage now shows % used",

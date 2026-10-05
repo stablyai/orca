@@ -3879,8 +3879,8 @@
             "sshHost": "SSH ホスト"
           },
           "usagePercentageLabel": {
-            "used": "{{value0}}% 使用済み",
-            "remaining": "残り {{value0}}%"
+            "used": "{{value0}}%",
+            "remaining": "{{value0}}%"
           },
           "UsagePercentageDisplayChangeNotice": {
             "title": "使用状況に、使用済みの割合を表示するようになりました",
