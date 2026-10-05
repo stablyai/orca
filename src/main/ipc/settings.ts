@@ -19,6 +19,7 @@ import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network-proxy'
 import { normalizeAppIconId } from '../../shared/app-icon'
+import { normalizeFileIconTheme } from '../../shared/file-icon-theme'
 import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
@@ -71,6 +72,7 @@ const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
   'showTitlebarAppName'
 ]
 
+/** Keep renderer-provided values behind the same normalization boundary as persisted settings. */
 export function registerSettingsHandlers(
   store: Store,
   agentAwakeService?: AgentAwakeService
@@ -162,6 +164,9 @@ export function registerSettingsHandlers(
     }
     if ('appIcon' in args) {
       sanitizedArgs.appIcon = normalizeAppIconId(args.appIcon)
+    }
+    if ('fileIconTheme' in args) {
+      sanitizedArgs.fileIconTheme = normalizeFileIconTheme(args.fileIconTheme)
     }
     if ('aiVaultSearch' in args) {
       sanitizedArgs.aiVaultSearch = resolveAiVaultSearchSettings(args)
