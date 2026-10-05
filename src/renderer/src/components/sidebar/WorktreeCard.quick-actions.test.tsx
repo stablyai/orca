@@ -23,6 +23,7 @@ let projectGroups: unknown[] = []
 let workspaceDeleteModifierPressed = false
 let gitConflictOperationByWorktree: Record<string, GitConflictOperation> = {}
 let WorktreeCard: typeof WorktreeCardComponent
+let contextMenuOnOpenChange: ((open: boolean) => void) | undefined
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
@@ -75,7 +76,16 @@ vi.mock('./WorktreeCardAgents', () => ({
 }))
 
 vi.mock('./WorktreeContextMenu', () => ({
-  default: ({ children }: { children: ReactNode }) => <>{children}</>,
+  default: ({
+    children,
+    onOpenChange
+  }: {
+    children: ReactNode
+    onOpenChange?: (open: boolean) => void
+  }) => {
+    contextMenuOnOpenChange = onOpenChange
+    return <>{children}</>
+  },
   CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
@@ -146,6 +156,7 @@ describe('WorktreeCard quick actions', () => {
     projectGroups = []
     workspaceDeleteModifierPressed = false
     gitConflictOperationByWorktree = {}
+    contextMenuOnOpenChange = undefined
   })
 
   it('marks the unread toggle as a workspace-board-preserving action', () => {
@@ -540,5 +551,23 @@ describe('WorktreeCard quick actions', () => {
 
     expect(markup).toContain('Merging')
     expect(markup).toContain('data-worktree-card-meta-row=""')
+  })
+
+  it('reports its own worktree when its context menu closes', () => {
+    const worktree = makeWorktree()
+    const onContextMenuClose = vi.fn()
+    renderToStaticMarkup(
+      <WorktreeCard
+        worktree={worktree}
+        repo={makeRepo()}
+        isActive={false}
+        onContextMenuClose={onContextMenuClose}
+      />
+    )
+
+    contextMenuOnOpenChange?.(true)
+    expect(onContextMenuClose).not.toHaveBeenCalled()
+    contextMenuOnOpenChange?.(false)
+    expect(onContextMenuClose).toHaveBeenCalledExactlyOnceWith(worktree)
   })
 })

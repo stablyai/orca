@@ -6440,6 +6440,13 @@
           "title": "Tri modifié en Manuel",
           "description": "Manuel conserve les espaces de travail là où vous les déposez.",
           "restore": "Retour à {{label}}"
+        },
+        "markDone": {
+          "movedOne": "{{name}} déplacé vers {{status}}",
+          "movedMany": "{{count}} espaces de travail déplacés vers {{status}}",
+          "undo": "Annuler",
+          "failedOne": "Impossible de déplacer {{name}} vers {{status}}",
+          "failedMany": "Impossible de déplacer {{count}} espaces de travail vers {{status}}"
         }
       },
       "shared": {

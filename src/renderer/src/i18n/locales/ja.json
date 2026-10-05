@@ -6337,6 +6337,13 @@
           "title": "並べ替えが手動に変更されました",
           "description": "手動では、ドロップした場所にワークスペースが保持されます。",
           "restore": "{{label}} に戻る"
+        },
+        "markDone": {
+          "movedOne": "{{name}} を {{status}} に移動しました",
+          "movedMany": "{{count}} 件のワークスペースを {{status}} に移動しました",
+          "undo": "元に戻す",
+          "failedOne": "{{name}} を {{status}} に移動できませんでした",
+          "failedMany": "{{count}} 件のワークスペースを {{status}} に移動できませんでした"
         }
       },
       "shared": {

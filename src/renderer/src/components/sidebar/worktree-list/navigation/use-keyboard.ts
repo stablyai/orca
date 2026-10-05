@@ -6,6 +6,7 @@ import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
 import type { HostSectionRow } from '../../host-section-rows'
@@ -18,6 +19,7 @@ import {
   resolveCycledWorktreeId
 } from '../../worktree-keyboard-cycle'
 import { findPreferredRenderRowIndexForWorktreeIdentity } from './render-row-lookup'
+import { markWorkspacesDone } from './mark-done'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -49,6 +51,8 @@ export function useWorktreeListKeyboardNavigation(args: {
   scrollRef: React.RefObject<HTMLDivElement | null>
   activeModal: string
   markDirectScrollInput: () => void
+  selectedWorktrees: readonly Worktree[]
+  onNavigate: (worktree: Worktree) => void
 }) {
   const {
     rows,
@@ -59,7 +63,9 @@ export function useWorktreeListKeyboardNavigation(args: {
     virtualizer,
     scrollRef,
     activeModal,
-    markDirectScrollInput
+    markDirectScrollInput,
+    selectedWorktrees,
+    onNavigate
   } = args
   const keybindings = useAppStore((s) => s.keybindings)
 
@@ -89,6 +95,7 @@ export function useWorktreeListKeyboardNavigation(args: {
       }
 
       void activateWorktreeFromSidebar(nextWorktree.id, nextWorktree.hostId)
+      onNavigate(nextWorktree)
 
       const rowIndex = findPreferredRenderRowIndexForWorktreeIdentity(
         renderRows,
@@ -105,7 +112,8 @@ export function useWorktreeListKeyboardNavigation(args: {
       activeWorktreeId,
       activeWorkspaceExecutionHostId,
       virtualizer,
-      pinnedDisplayPolicy
+      pinnedDisplayPolicy,
+      onNavigate
     ]
   )
 
@@ -161,6 +169,15 @@ export function useWorktreeListKeyboardNavigation(args: {
       ) {
         return
       }
+      if (
+        !e.repeat &&
+        keybindingMatchesAction('workspace.markDone', e, getShortcutPlatform(), keybindings)
+      ) {
+        if (markWorkspacesDone(useAppStore.getState(), selectedWorktrees)) {
+          e.preventDefault()
+          return
+        }
+      }
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         // The focused DOM node owns navigation, including while a new terminal mounts.
         e.currentTarget.setAttribute('data-keyboard-navigation', '')
@@ -185,7 +202,7 @@ export function useWorktreeListKeyboardNavigation(args: {
         markDirectScrollInput()
       }
     },
-    [activeModal, markDirectScrollInput, navigateWorktree]
+    [activeModal, keybindings, markDirectScrollInput, navigateWorktree, selectedWorktrees]
   )
 
   return { handleContainerKeyDown }

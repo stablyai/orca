@@ -81,7 +81,9 @@ function Probe() {
     virtualizer,
     scrollRef,
     activeModal: modal,
-    markDirectScrollInput: () => {}
+    markDirectScrollInput: () => {},
+    selectedWorktrees: [],
+    onNavigate: () => {}
   })
   return (
     <div

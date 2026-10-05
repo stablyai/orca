@@ -25,6 +25,20 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'workspace.markDone',
+    title: 'Mark In progress workspace Done',
+    group: 'Workspace List',
+    scope: 'worktreeList',
+    searchKeywords: ['shortcut', 'workspace', 'worktree', 'status', 'done', 'complete', 'board'],
+    // Why: bare Backspace is a typing key on Mac and the list can hold focus after re-clicking the active card; match the file explorer's Cmd+Backspace.
+    defaultBindings: {
+      darwin: ['Mod+Backspace', 'Delete'],
+      linux: ['Delete'],
+      win32: ['Delete']
+    },
+    allowBareKeybindings: true
+  },
+  {
     id: 'terminal.clearPaneTitle',
     title: 'Clear Pane Title',
     group: 'Terminal Panes',

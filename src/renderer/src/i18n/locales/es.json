@@ -6337,6 +6337,13 @@
           "title": "Orden cambiado a Manual",
           "description": "Manual mantiene los espacios de trabajo donde los colocas.",
           "restore": "Volver a {{label}}"
+        },
+        "markDone": {
+          "movedOne": "{{name}} movido a {{status}}",
+          "movedMany": "{{count}} espacios de trabajo movidos a {{status}}",
+          "undo": "Deshacer",
+          "failedOne": "No se pudo mover {{name}} a {{status}}",
+          "failedMany": "No se pudieron mover {{count}} espacios de trabajo a {{status}}"
         }
       },
       "shared": {

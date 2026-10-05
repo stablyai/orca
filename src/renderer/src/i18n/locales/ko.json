@@ -6337,6 +6337,13 @@
           "title": "정렬이 수동으로 변경됨",
           "description": "매뉴얼 은 워크스페이스를 드롭하는 위치에 유지합니다.",
           "restore": "{{label}} (으) 로 돌아가기"
+        },
+        "markDone": {
+          "movedOne": "{{name}}을(를) {{status}}(으)로 이동했습니다",
+          "movedMany": "워크스페이스 {{count}}개를 {{status}}(으)로 이동했습니다",
+          "undo": "실행 취소",
+          "failedOne": "{{name}}을(를) {{status}}(으)로 이동할 수 없습니다",
+          "failedMany": "워크스페이스 {{count}}개를 {{status}}(으)로 이동할 수 없습니다"
         }
       },
       "shared": {

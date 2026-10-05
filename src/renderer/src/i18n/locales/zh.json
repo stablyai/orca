@@ -6337,6 +6337,13 @@
           "title": "排序更改为手动",
           "description": "手动将工作区保留在您放置它们的位置。",
           "restore": "返回{{label}}"
+        },
+        "markDone": {
+          "movedOne": "已将 {{name}} 移至 {{status}}",
+          "movedMany": "已将 {{count}} 个工作区移至 {{status}}",
+          "undo": "撤消",
+          "failedOne": "无法将 {{name}} 移至 {{status}}",
+          "failedMany": "无法将 {{count}} 个工作区移至 {{status}}"
         }
       },
       "shared": {

@@ -14,6 +14,7 @@ import {
 } from './workspace-lineage-menu-actions'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
+import { markDoneKeyMovesExactly } from './worktree-list/navigation/mark-done'
 import {
   CLOSE_ALL_CONTEXT_MENUS_EVENT,
   EMPTY_BROWSER_TABS_BY_WORKTREE,
@@ -161,6 +162,11 @@ export function useWorktreeContextMenuModel({
     (item) => getDeleteStateForWorktreeHost(item, deleteStateByWorktreeId)?.isDeleting
   )
   const contextDeletePending = isMultiContext ? deletingContext : deletingSubtree
+  // Why: right-click leaves the sidebar selection equal to the menu's rows, so ask the key's own
+  // resolver. Only the sidebar list handles the key; board cards wire their own status callback.
+  const markDoneShortcutApplies = useAppStore(
+    (s) => menuOpen && !onAssignWorkspaceStatus && markDoneKeyMovesExactly(s, contextWorktrees)
+  )
   const contextWorkspaceStatus = useMemo(() => {
     const [first, ...rest] = activeContextWorktrees
     if (!first) {
@@ -370,6 +376,7 @@ export function useWorktreeContextMenuModel({
     isDeleting,
     isMultiContext,
     lineageDescendantCount,
+    markDoneShortcutApplies,
     menuOpen,
     menuPoint,
     onContextMenuSelect,

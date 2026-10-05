@@ -129,6 +129,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       onSelectionGesture: props.onSelectionGesture,
       onWorktreeCardClick: props.onWorktreeCardClick,
       onContextMenuSelect: props.onContextMenuSelect,
+      onContextMenuClose: props.onContextMenuClose,
       onImmediateActivate: primaryActive.handleImmediateWorktreeRowActivate,
       onRowClickCapture: args.onRowClickCapture,
       onRowPointerDown: args.onRowPointerDown,
@@ -151,6 +152,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       getCachedFolderWorkspacePathStatus: args.getCachedFolderWorkspacePathStatus,
       onSelectionGesture: props.onSelectionGesture,
       onContextMenuSelect: props.onContextMenuSelect,
+      onContextMenuClose: props.onContextMenuClose,
       onImmediateActivate: primaryActive.handleImmediateWorktreeRowActivate,
       onRowClickCapture: args.onRowClickCapture,
       onRowPointerDown: args.onRowPointerDown

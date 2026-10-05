@@ -100,6 +100,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     onCardDragStart: props.onCardDragStart,
     onCardDragEnd: props.onCardDragEnd,
     onContextMenuSelect: props.onContextMenuSelect,
+    onContextMenuClose: props.onContextMenuClose,
     folderWorkspaceId: review.folderWorkspaceId,
     deleteFolderWorkspace: foundation.deleteFolderWorkspace,
     setActiveWorktree: foundation.setActiveWorktree,

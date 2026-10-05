@@ -82,6 +82,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     isDeleting,
     isMultiContext,
     lineageDescendantCount,
+    markDoneShortcutApplies,
     menuOpen,
     menuPoint,
     onContextMenuSelect,
@@ -167,6 +168,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             contextWorkspaceStatus={contextWorkspaceStatus}
             deletingContext={deletingContext}
             isMultiContext={isMultiContext}
+            markDoneShortcutApplies={markDoneShortcutApplies}
             onAssignWorkspaceStatus={handleAssignWorkspaceStatus}
             workspaceStatuses={workspaceStatuses}
           />

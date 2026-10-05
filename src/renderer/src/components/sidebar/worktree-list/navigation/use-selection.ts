@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
@@ -43,6 +43,8 @@ export function useSidebarWorktreeSelection(args: {
   )
   const [selectedWorktreeIds, setSelectedWorktreeIds] = useState<Set<string>>(new Set())
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
+  // Identity whose single-row selection a context menu created; any user selection change resets it.
+  const contextMenuSelectionRef = useRef<string | null>(null)
 
   const prunedSelection = pruneWorktreeSelection(
     selectedWorktreeIds,
@@ -108,6 +110,7 @@ export function useSidebarWorktreeSelection(args: {
         targetId: worktreeIdentity,
         intent
       })
+      contextMenuSelectionRef.current = null
       setSelectedWorktreeIds(result.selectedIds)
       setSelectionAnchorId(result.anchorId)
       // Plain click navigates; modifier gestures are selection-only so a batch can build without switching away.
@@ -120,14 +123,43 @@ export function useSidebarWorktreeSelection(args: {
     (_event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
       const worktreeIdentity = getWorktreeHostIdentity(worktree)
       if (selectedWorktreeIds.has(worktreeIdentity) && selectedWorktreeIds.size > 1) {
+        contextMenuSelectionRef.current = null
         return selectedWorktrees
       }
+      // Why: a row the user already selected stays selected; only a menu-made selection is undone on close.
+      const userSelectedRow =
+        selectedWorktreeIds.has(worktreeIdentity) &&
+        contextMenuSelectionRef.current !== worktreeIdentity
+      contextMenuSelectionRef.current = userSelectedRow ? null : worktreeIdentity
       setSelectedWorktreeIds(new Set([worktreeIdentity]))
       setSelectionAnchorId(worktreeIdentity)
       return [worktree]
     },
     [selectedWorktreeIds, selectedWorktrees]
   )
+
+  // Why: a highlight the menu left behind would not be what the mark-Done key acts on (the active row).
+  const clearContextMenuSelection = useCallback((worktree: Worktree) => {
+    const identity = getWorktreeHostIdentity(worktree)
+    // Why the ref survives: the close broadcast runs before a re-right-click of the same row decides ownership.
+    if (contextMenuSelectionRef.current !== identity) {
+      return
+    }
+    setSelectedWorktreeIds((previous) =>
+      previous.size === 1 && previous.has(identity) ? new Set() : previous
+    )
+    setSelectionAnchorId((previous) => (previous === identity ? null : previous))
+  }, [])
+
+  // Why: like Finder, moving the active row with the keyboard replaces the selection with that row.
+  const selectOnly = useCallback((worktree: Worktree) => {
+    const identity = getWorktreeHostIdentity(worktree)
+    contextMenuSelectionRef.current = null
+    setSelectedWorktreeIds((previous) =>
+      previous.size === 1 && previous.has(identity) ? previous : new Set([identity])
+    )
+    setSelectionAnchorId(identity)
+  }, [])
 
   // Why layout effect: the Cmd/Ctrl+1–9 handler can fire right after commit; publishing after paint would leave the shortcut cache stale.
   useLayoutEffect(() => {
@@ -161,6 +193,8 @@ export function useSidebarWorktreeSelection(args: {
     selectedWorktreeIds,
     selectedWorktrees,
     updateSelectionForGesture,
-    selectForContextMenu
+    selectForContextMenu,
+    clearContextMenuSelection,
+    selectOnly
   }
 }

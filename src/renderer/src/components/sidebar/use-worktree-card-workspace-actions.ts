@@ -25,6 +25,7 @@ export function useWorktreeCardWorkspaceActions({
   onCardDragStart,
   onCardDragEnd,
   onContextMenuSelect,
+  onContextMenuClose,
   folderWorkspaceId,
   deleteFolderWorkspace,
   setActiveWorktree,
@@ -42,6 +43,7 @@ export function useWorktreeCardWorkspaceActions({
   | 'onCardDragStart'
   | 'onCardDragEnd'
   | 'onContextMenuSelect'
+  | 'onContextMenuClose'
 > &
   Pick<Foundation, 'deleteFolderWorkspace' | 'setActiveWorktree' | 'setShowRenameErrorDialog'> &
   Pick<LinkedDetails, 'isDeleting'> &
@@ -158,6 +160,15 @@ export function useWorktreeCardWorkspaceActions({
     [onContextMenuSelect, worktree]
   )
 
+  const handleContextMenuOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        onContextMenuClose?.(worktree)
+      }
+    },
+    [onContextMenuClose, worktree]
+  )
+
   const stopQuickActionPointerPropagation = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
       // Why: document-level pointer handling dismisses the Kanban board; quick actions must not count as card activation.
@@ -176,6 +187,7 @@ export function useWorktreeCardWorkspaceActions({
     handleDragStart,
     handleDragEnd,
     handleContextMenuSelect,
+    handleContextMenuOpenChange,
     stopQuickActionPointerPropagation
   }
 }
