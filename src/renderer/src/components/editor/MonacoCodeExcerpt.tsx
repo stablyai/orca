@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { monaco } from '@/lib/monaco-setup'
+import { patchPythonTripleQuotedFStrings } from '@/lib/monaco-languages/register-python'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -24,7 +25,10 @@ async function ensureColorizationLanguage(language: string): Promise<void> {
           })
         }
         monaco.languages.setLanguageConfiguration('python', conf)
-        monaco.languages.setMonarchTokensProvider('python', pythonTokens)
+        monaco.languages.setMonarchTokensProvider(
+          'python',
+          patchPythonTripleQuotedFStrings(pythonTokens)
+        )
       }
     )
   await pythonLanguageRegistrationPromise
