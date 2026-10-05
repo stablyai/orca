@@ -5,6 +5,10 @@ import {
   encodeTerminalStreamText
 } from '../../../../../shared/terminal-stream-protocol'
 import { appendAckPendingOutput } from './terminal-stream-replay'
+import {
+  clearTerminalMultiplexCredit,
+  recordTerminalMultiplexCredit
+} from './terminal-multiplex-progress'
 import type {
   TerminalMultiplexConnection,
   TerminalMultiplexConnectionBase,
@@ -88,11 +92,16 @@ export function installMultiplexFrameDelivery(
     if (!stream.ackOutput) {
       return true
     }
-    return (
+    const windowAvailable =
       stream.ackInFlightBytes + bytes <= stream.ackWindowBytes &&
-      state.ackTotalInFlightBytes + bytes <= state.ackTotalWindowBytes &&
-      (!stream.ackOutputSourceRanges || stream.sourceRangeLedger?.canAccept(bytes) === true)
-    )
+      state.ackTotalInFlightBytes + bytes <= state.ackTotalWindowBytes
+    const ledgerAllowed =
+      windowAvailable && stream.ackOutputSourceRanges
+        ? stream.sourceRangeLedger?.canAccept(bytes) === true
+        : null
+    const allowed = windowAvailable && ledgerAllowed !== false
+    recordTerminalMultiplexCredit(state, stream, bytes, ledgerAllowed, allowed)
+    return allowed
   }
   state.sendAckGatedOutput = (
     stream: TerminalMultiplexStream,
@@ -131,6 +140,7 @@ export function installMultiplexFrameDelivery(
       stream.ackInFlightBytes += chunk.bytes.byteLength
       state.ackTotalInFlightBytes += chunk.bytes.byteLength
     }
+    clearTerminalMultiplexCredit(stream)
     return true
   }
   state.queueOrSendOutput = (

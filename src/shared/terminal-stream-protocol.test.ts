@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
+  decodeTerminalStreamFrameHeader,
   decodeTerminalStreamJson,
   decodeTerminalStreamText,
   encodeTerminalStreamFrame,
@@ -11,6 +12,23 @@ import {
 } from './terminal-stream-protocol'
 
 describe('terminal-stream-protocol', () => {
+  it('reads diagnostic identity without copying the terminal payload', () => {
+    const encoded = encodeTerminalStreamFrame({
+      opcode: TerminalStreamOpcode.Input,
+      streamId: 19,
+      seq: 0x100000001,
+      payload: encodeTerminalStreamText('private terminal input')
+    })
+    const slice = vi.spyOn(encoded, 'slice')
+    expect(decodeTerminalStreamFrameHeader(encoded)).toEqual({
+      opcode: TerminalStreamOpcode.Input,
+      streamId: 19,
+      seq: 0x100000001
+    })
+    expect(slice).not.toHaveBeenCalled()
+    expect(decodeTerminalStreamFrameHeader(encoded.subarray(0, 15))).toBeNull()
+  })
+
   it('round-trips fixed-width binary frame headers and payloads', () => {
     const payload = encodeTerminalStreamText('hello terminal')
     const encoded = encodeTerminalStreamFrame({

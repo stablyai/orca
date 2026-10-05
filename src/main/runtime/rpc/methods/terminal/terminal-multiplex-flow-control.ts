@@ -4,6 +4,10 @@ import {
 } from '../../../../../shared/terminal-multiplex-flow-control'
 import { drainTerminalMultiplexRoundRobin } from '../../terminal-multiplex-round-robin'
 import {
+  clearTerminalMultiplexCredit,
+  rejectTerminalMultiplexAck
+} from './terminal-multiplex-progress'
+import {
   sendSnapshotFrames,
   serializeBudgetedRequestedSnapshot
 } from './terminal-snapshot-publication'
@@ -122,6 +126,9 @@ export function installMultiplexFlowControl(
         )
       }
       stream.ackPendingOutputOverflowed = false
+      if (stream.ackPendingOutput.length === 0) {
+        clearTerminalMultiplexCredit(stream)
+      }
     } catch (error) {
       if (replacement) {
         if (stream.sourceRangeReplacement === replacement) {
@@ -223,9 +230,13 @@ export function installMultiplexFlowControl(
     }
     const result = stream.sourceRangeLedger?.acknowledge(streamGeneration, ackedEndByte)
     if (!result) {
+      rejectTerminalMultiplexAck(state, stream)
       return
     }
     if (result.status !== 'accepted') {
+      if (result.status !== 'duplicate') {
+        rejectTerminalMultiplexAck(state, stream)
+      }
       return
     }
     if (result.settled.length > 0) {

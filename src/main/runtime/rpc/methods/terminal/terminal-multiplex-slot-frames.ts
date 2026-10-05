@@ -1,7 +1,6 @@
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamJson,
-  decodeTerminalStreamText,
   type TerminalStreamFrame
 } from '../../../../../shared/terminal-stream-protocol'
 import {
@@ -9,7 +8,12 @@ import {
   TerminalMultiplexSnapshotRequestFrame,
   TerminalMultiplexSourceRangeAckFrame
 } from './stream-schemas'
-import { isTerminalInputLockedForClient, sendTerminalStreamInput } from './terminal-input-delivery'
+import { handleTerminalMultiplexInput } from './terminal-multiplex-input-progress'
+import {
+  cancelTerminalMultiplexCredit,
+  getTerminalMultiplexProgress,
+  rejectTerminalMultiplexAck
+} from './terminal-multiplex-progress'
 import {
   getOutputAfterSnapshotSeq,
   normalizeMultiplexSnapshotScrollbackRows
@@ -42,6 +46,7 @@ export function installMultiplexSlotFrames(
       return
     }
     if (frame.opcode === TerminalStreamOpcode.Ack) {
+      getTerminalMultiplexProgress(state, stream).progress.count('ackReceived')
       const payload = decodeTerminalStreamJson<unknown>(frame.payload) ?? {}
       if (stream.ackOutputSourceRanges) {
         const parsed = TerminalMultiplexSourceRangeAckFrame.safeParse(payload)
@@ -51,37 +56,21 @@ export function installMultiplexSlotFrames(
             parsed.data.streamGeneration,
             parsed.data.ackedEndByte
           )
+        } else {
+          rejectTerminalMultiplexAck(state, stream)
         }
       } else {
         const parsed = TerminalMultiplexLegacyAckFrame.safeParse(payload)
         if (parsed.success) {
           state.acknowledgeOutput(stream, parsed.data.bytes)
+        } else {
+          rejectTerminalMultiplexAck(state, stream)
         }
       }
       return
     }
     if (frame.opcode === TerminalStreamOpcode.Input) {
-      const text = decodeTerminalStreamText(frame.payload)
-      if (!text) {
-        return
-      }
-      if (isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
-        return
-      }
-      // Mobile already has the higher-priority floor, so a rejected desktop claim must not suppress later phone input.
-      const inputClaimTail = stream.isMobile ? Promise.resolve(true) : stream.desktopClaimTail
-      void inputClaimTail.then(async (claimed) => {
-        if (!claimed || isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
-          return
-        }
-        const outcome = await sendTerminalStreamInput(runtime, {
-          terminal: stream.terminal,
-          text,
-          client: stream.client,
-          isMobile: stream.isMobile
-        })
-        state.notifyStreamWriteUnavailable(stream, outcome)
-      })
+      handleTerminalMultiplexInput(state, stream, frame.payload)
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SetOutputPaused && stream.supportsOutputPause) {
@@ -95,6 +84,7 @@ export function installMultiplexSlotFrames(
         stream.ackPendingOutput = []
         stream.ackPendingOutputBytes = 0
         stream.ackPendingOutputOverflowed = false
+        cancelTerminalMultiplexCredit(stream)
       }
       return
     }

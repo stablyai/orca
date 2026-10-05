@@ -25,8 +25,11 @@ import { RUNTIME_ENVIRONMENT_HANDLER_CHANNELS } from './runtime-environment-hand
 import { retirePairedRuntimeBrowserClientHostEnvironment } from '../browser/paired-runtime-browser-client-host-runtime'
 import { registerRuntimeEnvironmentBrowserClientHostHandler } from './runtime-environment-browser-client-host-handler'
 import { advanceRuntimeEnvironmentCapabilityIncarnation } from './runtime-environment-capability-evidence'
+import { terminalSubscriptionSendProgress } from './terminal-subscription-send-progress'
+import { forwardRuntimeSubscriptionBinary } from './runtime-subscription-binary-send'
 
 type RetainedRemoteRuntimeSubscription = RemoteRuntimeSubscription & {
+  method: string
   environmentId: string
   ownerWebContentsId: number
   removeDestroyedListener: () => void
@@ -86,6 +89,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     ipcMain.removeHandler(channel)
   }
   ipcMain.removeAllListeners('runtimeEnvironments:subscriptionBinary')
+  terminalSubscriptionSendProgress.dispose()
 
   registerRuntimeEnvironmentConnectivityHandlers({
     store,
@@ -237,6 +241,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
         return { subscriptionId, requestId: subscription.requestId }
       }
       remoteRuntimeSubscriptions.set(subscriptionId, {
+        method: args.method,
         requestId: subscription.requestId,
         environmentId: environment.id,
         ownerWebContentsId,
@@ -266,30 +271,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
   ipcMain.on(
     'runtimeEnvironments:subscriptionBinary',
     (event, args: { subscriptionId?: unknown; bytes?: unknown }) => {
-      if (typeof args.subscriptionId !== 'string') {
-        return
-      }
-      const bytes = toBinaryPayload(args.bytes)
-      if (!bytes) {
-        return
-      }
-      const subscription = remoteRuntimeSubscriptions.get(args.subscriptionId)
-      if (subscription?.ownerWebContentsId === event.sender.id) {
-        subscription.sendBinary(bytes)
-      }
+      forwardRuntimeSubscriptionBinary(remoteRuntimeSubscriptions, event.sender.id, args)
     }
   )
-}
-
-function toBinaryPayload(value: unknown): Uint8Array<ArrayBufferLike> | null {
-  if (value instanceof Uint8Array) {
-    return value
-  }
-  if (value instanceof ArrayBuffer) {
-    return new Uint8Array(value)
-  }
-  if (ArrayBuffer.isView(value)) {
-    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
-  }
-  return null
 }
