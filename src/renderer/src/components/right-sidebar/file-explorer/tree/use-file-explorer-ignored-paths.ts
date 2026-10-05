@@ -44,29 +44,68 @@ type IgnoredPathsQueryContext = {
   worktreePath: string
 }
 
+// Why: an in-flight query already left for a specific host; a changed runtime
+// environment or connection must re-query instead of riding along its verdicts.
+type IgnoredPathsQueryContextIdentity = {
+  connectionId: string | undefined
+  runtimeEnvironmentId: ReturnType<
+    typeof getRightSidebarWorktreeRuntimeSettings
+  >['activeRuntimeEnvironmentId']
+}
+
+type IgnoredPathsQueryWaiter = {
+  onSettled: (paths: string[]) => void
+  paths: readonly string[]
+}
+
 type IgnoredPathsQueryFlight = {
+  contextIdentity: IgnoredPathsQueryContextIdentity
   pathSet: Set<string>
-  waiters: Set<(paths: string[]) => void>
+  waiters: Set<IgnoredPathsQueryWaiter>
 }
 
 type IgnoredPathsQueryLane = {
   context: IgnoredPathsQueryContext
   inFlight: IgnoredPathsQueryFlight | null
-  pendingPathSet: Set<string>
-  pendingWaiters: Set<(paths: string[]) => void>
+  pendingWaiters: Set<IgnoredPathsQueryWaiter>
 }
 
 const ignoredPathsQueryLanes = new Map<string, IgnoredPathsQueryLane>()
+
+function ignoredPathsQueryContextIdentity(
+  context: IgnoredPathsQueryContext
+): IgnoredPathsQueryContextIdentity {
+  return {
+    connectionId: context.connectionId,
+    runtimeEnvironmentId: context.settings.activeRuntimeEnvironmentId
+  }
+}
+
+function isSameIgnoredPathsQueryContextIdentity(
+  left: IgnoredPathsQueryContextIdentity,
+  right: IgnoredPathsQueryContextIdentity
+): boolean {
+  return (
+    left.connectionId === right.connectionId &&
+    left.runtimeEnvironmentId === right.runtimeEnvironmentId
+  )
+}
 
 function pumpIgnoredPathsQueryLane(key: string, lane: IgnoredPathsQueryLane): void {
   if (lane.inFlight !== null || lane.pendingWaiters.size === 0) {
     return
   }
+  const pathSet = new Set<string>()
+  for (const waiter of lane.pendingWaiters) {
+    for (const path of waiter.paths) {
+      pathSet.add(path)
+    }
+  }
   const flight: IgnoredPathsQueryFlight = {
-    pathSet: lane.pendingPathSet,
+    contextIdentity: ignoredPathsQueryContextIdentity(lane.context),
+    pathSet,
     waiters: lane.pendingWaiters
   }
-  lane.pendingPathSet = new Set()
   lane.pendingWaiters = new Set()
   lane.inFlight = flight
   getRuntimeGitIgnoredPaths(
@@ -94,7 +133,7 @@ function settleIgnoredPathsQueryLane(
 ): void {
   lane.inFlight = null
   for (const waiter of flight.waiters) {
-    waiter(paths)
+    waiter.onSettled(paths)
   }
   if (lane.pendingWaiters.size === 0) {
     ignoredPathsQueryLanes.delete(key)
@@ -113,7 +152,6 @@ function requestFileExplorerIgnoredPaths(
   const lane: IgnoredPathsQueryLane = existingLane ?? {
     context,
     inFlight: null,
-    pendingPathSet: new Set(),
     pendingWaiters: new Set()
   }
   if (existingLane === undefined) {
@@ -121,13 +159,19 @@ function requestFileExplorerIgnoredPaths(
   }
   lane.context = context
 
-  if (lane.inFlight !== null && paths.every((path) => lane.inFlight?.pathSet.has(path) === true)) {
-    lane.inFlight.waiters.add(onSettled)
+  const waiter: IgnoredPathsQueryWaiter = { onSettled, paths }
+  const inFlight = lane.inFlight
+  if (
+    inFlight !== null &&
+    isSameIgnoredPathsQueryContextIdentity(
+      inFlight.contextIdentity,
+      ignoredPathsQueryContextIdentity(context)
+    ) &&
+    paths.every((path) => inFlight.pathSet.has(path))
+  ) {
+    inFlight.waiters.add(waiter)
   } else {
-    for (const path of paths) {
-      lane.pendingPathSet.add(path)
-    }
-    lane.pendingWaiters.add(onSettled)
+    lane.pendingWaiters.add(waiter)
     pumpIgnoredPathsQueryLane(key, lane)
   }
 
@@ -135,7 +179,7 @@ function requestFileExplorerIgnoredPaths(
   // check-ignore query per change; coalesce them into one in-flight query plus one
   // trailing merge per worktree, and drop a caller's pending paths on unmount.
   return () => {
-    lane.pendingWaiters.delete(onSettled)
+    lane.pendingWaiters.delete(waiter)
   }
 }
 

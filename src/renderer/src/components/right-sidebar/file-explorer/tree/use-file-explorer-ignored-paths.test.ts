@@ -4,6 +4,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getRuntimeGitIgnoredPathsMock = vi.hoisted(() => vi.fn())
+const getRightSidebarWorktreeRuntimeSettingsMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/runtime/runtime-git-status-client', () => ({
   getRuntimeGitIgnoredPaths: getRuntimeGitIgnoredPathsMock
@@ -14,7 +15,7 @@ vi.mock('@/lib/connection-context', () => ({
 }))
 
 vi.mock('./file-explorer-runtime-owner', () => ({
-  getRightSidebarWorktreeRuntimeSettings: () => ({ activeRuntimeEnvironmentId: null })
+  getRightSidebarWorktreeRuntimeSettings: getRightSidebarWorktreeRuntimeSettingsMock
 }))
 
 import {
@@ -61,6 +62,8 @@ describe('useFileExplorerIgnoredPaths', () => {
       deferreds.push(deferred)
       return deferred.promise
     })
+    getRightSidebarWorktreeRuntimeSettingsMock.mockReset()
+    getRightSidebarWorktreeRuntimeSettingsMock.mockReturnValue({ activeRuntimeEnvironmentId: null })
   })
 
   afterEach(() => {
@@ -161,5 +164,61 @@ describe('useFileExplorerIgnoredPaths', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('drops a cancelled caller pending paths from the trailing query', async () => {
+    const caller = renderIgnoredPathsHook('wt-cancelled-paths', ['seed.ts'])
+    // The updated request lands in pending because the first query is still in flight.
+    caller.rerender({ paths: ['a.ts'] })
+    caller.unmount()
+
+    renderIgnoredPathsHook('wt-cancelled-paths', ['b.ts'])
+
+    await act(async () => {
+      deferreds[0]?.resolve([])
+    })
+
+    expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(2)
+    expect(getRuntimeGitIgnoredPathsMock.mock.calls[1]?.[1]).toEqual(['b.ts'])
+
+    await act(async () => {
+      deferreds[1]?.resolve(['b.ts'])
+    })
+  })
+
+  it('re-queries instead of riding along an in-flight query from another runtime environment', async () => {
+    getRightSidebarWorktreeRuntimeSettingsMock.mockReturnValue({
+      activeRuntimeEnvironmentId: 'env-1'
+    })
+    const { result, rerender } = renderIgnoredPathsHook('wt-runtime-env', ['a.ts'])
+
+    expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(1)
+    expect(getRuntimeGitIgnoredPathsMock.mock.calls[0]?.[0]?.settings).toEqual({
+      activeRuntimeEnvironmentId: 'env-1'
+    })
+
+    getRightSidebarWorktreeRuntimeSettingsMock.mockReturnValue({
+      activeRuntimeEnvironmentId: 'env-2'
+    })
+    rerender({ paths: ['a.ts'] })
+
+    // The env-1 query is still in flight, so the env-2 request waits as pending.
+    expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      deferreds[0]?.resolve(['env-1-verdict'])
+    })
+
+    expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(2)
+    expect(getRuntimeGitIgnoredPathsMock.mock.calls[1]?.[0]?.settings).toEqual({
+      activeRuntimeEnvironmentId: 'env-2'
+    })
+    expect(getRuntimeGitIgnoredPathsMock.mock.calls[1]?.[1]).toEqual(['a.ts'])
+
+    await act(async () => {
+      deferreds[1]?.resolve(['env-2-verdict'])
+    })
+
+    expect(result.current).toEqual(['env-2-verdict'])
   })
 })
