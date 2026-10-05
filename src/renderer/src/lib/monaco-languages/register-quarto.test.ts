@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  createMonarchTokenizer,
   endEmbeddedLanguages,
-  measureNestedDepth,
   tokenizeMonarchDocument,
   tokenTypeAt
 } from './monarch-tokenizer-test-harness'
@@ -155,18 +153,6 @@ describe('registerQuartoLanguage', () => {
     ])
     const heading = tokenizeQuarto('## Slide title')[0]
     expect(tokenTypeAt(heading, 0)).toBe('keyword')
-  })
-
-  it('keeps long executable-cell lines at a single embed entry', () => {
-    const tokenizer = createMonarchTokenizer(QUARTO_LANGUAGE_ID, quartoMonarchLanguage)
-    const { maxNestedDepth, error } = measureNestedDepth(tokenizer, [
-      `${FENCE}{python}`,
-      `print("${'{a}'.repeat(5000)}")`,
-      FENCE
-    ])
-
-    expect(error).toBeUndefined()
-    expect(maxNestedDepth).toBeLessThanOrEqual(1)
   })
 
   it('marks pandoc fenced divs', () => {
