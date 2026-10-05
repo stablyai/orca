@@ -93,6 +93,12 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.lua': 'lua',
   '.r': 'r',
   '.scala': 'scala',
+  '.groovy': 'groovy',
+  '.gvy': 'groovy',
+  '.gy': 'groovy',
+  '.gsh': 'groovy',
+  '.gradle': 'groovy',
+  '.jenkinsfile': 'groovy',
   '.dart': 'dart',
   '.ex': 'elixir',
   '.exs': 'elixir',
@@ -123,6 +129,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
 
 const FILENAME_TO_LANGUAGE: Record<string, string> = {
   Dockerfile: 'dockerfile',
+  Jenkinsfile: 'groovy',
   Makefile: 'makefile',
   'CMakeLists.txt': 'cmake',
   '.gitignore': 'ini',
@@ -167,6 +174,8 @@ export function detectLanguage(filePath: string): string {
   // Scoped dotenv names fall back to INI only when no specific extension matches.
   return (
     EXT_TO_LANGUAGE[ext] ??
+    // Variant pipelines such as Jenkinsfile.release keep the Jenkinsfile prefix.
+    (lowerName.startsWith('jenkinsfile.') ? 'groovy' : undefined) ??
     detectMonacoFilenameLanguage(filename) ??
     (lowerName === '.env' || lowerName.startsWith('.env.') ? 'ini' : 'plaintext')
   )
