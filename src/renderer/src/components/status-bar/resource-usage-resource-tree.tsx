@@ -1,7 +1,10 @@
 import React, { useMemo } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { useWorktreeMap } from '../../store/selectors'
+import { useAppStore } from '../../store'
+import { findKnownWorktreeById } from '../../store/slices/worktrees/listing/detected-worktree-meta'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type {
   Metric,
   UnifiedProjectGroup,
@@ -10,6 +13,7 @@ import type {
 } from './resource-usage-merge-types'
 import { MetricPair, ROW_TRAILING_GUTTER_CLS } from './resource-usage-metrics'
 import { WorktreeRow } from './resource-usage-session-rows'
+import { resolveResourceManagerWorkspaceExecutionHostId } from './resource-manager-workspace-owner'
 
 export type SortOption = 'memory' | 'cpu' | 'name'
 
@@ -57,6 +61,7 @@ function sortProjectGroups(groups: UnifiedProjectGroup[], sort: SortOption): Uni
 
 export function ResourceTree({
   repos,
+  activeHostId,
   sortOption,
   collapsedRepos,
   toggleRepo,
@@ -66,21 +71,94 @@ export function ResourceTree({
   navigateToWorktree,
   navigateToTab,
   onDelete,
-  onKillSession
+  onKillSession,
+  readOnly
 }: {
   repos: UnifiedProjectGroup[]
+  activeHostId: string
   sortOption: SortOption
   collapsedRepos: Set<string>
   toggleRepo: (repoId: string) => void
   collapsedWorktrees: Set<string>
   activeWorktreeId: string | null
   toggleWorktree: (worktreeId: string) => void
-  navigateToWorktree: (worktreeId: string) => void
+  navigateToWorktree: (worktreeId: string, sampledHostId?: ExecutionHostId) => void
   navigateToTab: (tabId: string, paneKey: string | null) => void
-  onDelete: (worktreeId: string) => void
+  onDelete: (worktreeId: string, sampledHostId?: ExecutionHostId) => void
   onKillSession: (session: UnifiedSessionRow) => void
+  readOnly: boolean
 }): React.JSX.Element {
-  const worktreeById = useWorktreeMap()
+  const worktreesByRepo = useAppStore((state) => state.worktreesByRepo)
+  const detectedWorktreesByRepo = useAppStore((state) => state.detectedWorktreesByRepo)
+  const folderWorkspaces = useAppStore((state) => state.folderWorkspaces)
+  const projectGroups = useAppStore((state) => state.projectGroups)
+  const catalogRepos = useAppStore((state) => state.repos)
+  const settings = useAppStore((state) => state.settings)
+  const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
+  const runtimeEnvironmentCatalogHydrated = useAppStore(
+    (state) => state.runtimeEnvironmentCatalogHydrated
+  )
+  const removedRuntimeEnvironmentIds = useAppStore((state) => state.removedRuntimeEnvironmentIds)
+  const restoredRuntimeHostIdByWorkspaceSessionKey = useAppStore(
+    (state) => state.restoredRuntimeHostIdByWorkspaceSessionKey
+  )
+  const activeWorkspaceExecutionHostId = useAppStore(
+    (state) => state.activeWorkspaceExecutionHostId
+  )
+  const storeRecordById = useMemo(() => {
+    const map = new Map<string, Worktree>()
+    const ownerState = {
+      worktreesByRepo,
+      detectedWorktreesByRepo,
+      folderWorkspaces,
+      projectGroups,
+      repos: catalogRepos,
+      settings,
+      runtimeEnvironments,
+      runtimeEnvironmentCatalogHydrated,
+      removedRuntimeEnvironmentIds,
+      restoredRuntimeHostIdByWorkspaceSessionKey,
+      activeWorktreeId,
+      activeWorkspaceExecutionHostId
+    }
+    for (const repo of repos) {
+      for (const worktree of repo.worktrees) {
+        const executionHostId = resolveResourceManagerWorkspaceExecutionHostId(
+          ownerState,
+          worktree.worktreeId,
+          activeHostId,
+          worktree.hasLocalSamples ? parseExecutionHostId(activeHostId)?.id : undefined
+        )
+        if (!executionHostId) {
+          continue
+        }
+        const record = findKnownWorktreeById(
+          { worktreesByRepo, detectedWorktreesByRepo, folderWorkspaces },
+          worktree.worktreeId,
+          executionHostId
+        )
+        if (record) {
+          map.set(worktree.worktreeId, record)
+        }
+      }
+    }
+    return map
+  }, [
+    repos,
+    activeHostId,
+    worktreesByRepo,
+    detectedWorktreesByRepo,
+    folderWorkspaces,
+    projectGroups,
+    catalogRepos,
+    settings,
+    runtimeEnvironments,
+    runtimeEnvironmentCatalogHydrated,
+    removedRuntimeEnvironmentIds,
+    restoredRuntimeHostIdByWorkspaceSessionKey,
+    activeWorktreeId,
+    activeWorkspaceExecutionHostId
+  ])
 
   const sortedRepos = useMemo(() => {
     const grouped = sortProjectGroups(repos, sortOption)
@@ -91,7 +169,10 @@ export function ResourceTree({
   }, [repos, sortOption])
 
   const renderWorktree = (wt: UnifiedWorktreeRow): React.JSX.Element => {
-    const storeRecord = worktreeById.get(wt.worktreeId) ?? null
+    // Why: the id-keyed map cannot distinguish twins; resolve display/action
+    // metadata through the same host-qualified catalog boundary as navigation.
+    const storeRecord = storeRecordById.get(wt.worktreeId) ?? null
+    const sampledHostId = wt.hasLocalSamples ? parseExecutionHostId(activeHostId)?.id : undefined
     return (
       <WorktreeRow
         key={wt.worktreeId}
@@ -100,10 +181,11 @@ export function ResourceTree({
         activeWorktreeId={activeWorktreeId}
         isCollapsed={collapsedWorktrees.has(wt.worktreeId)}
         onToggle={() => toggleWorktree(wt.worktreeId)}
-        onNavigate={() => navigateToWorktree(wt.worktreeId)}
-        onDelete={() => onDelete(wt.worktreeId)}
+        onNavigate={() => navigateToWorktree(wt.worktreeId, sampledHostId)}
+        onDelete={() => onDelete(wt.worktreeId, sampledHostId)}
         onKillSession={onKillSession}
         navigateToTab={navigateToTab}
+        readOnly={readOnly}
       />
     )
   }

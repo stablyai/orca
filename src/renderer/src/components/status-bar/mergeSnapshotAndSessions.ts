@@ -9,6 +9,10 @@
  *     the registerPty branch at src/main/ipc/pty.ts:832).
  *   - `pty.listSessions()` — every PTY the daemon tracks, local or SSH.
  *
+ * When `ctx.hostScope` is 'remote' the snapshot came from a runtime host's own
+ * collector, so the runtime-scoped exclusion below is inverted (those rows are
+ * the only real ones) and the local daemon list is ignored entirely.
+ *
  * The merge is renderer-only and pure. It does NOT widen the shared
  * `WorktreeMemory` shape; instead it emits a renderer-local view-model
  * with `Metric = number | null`, where `null` means "no local sample"
@@ -144,16 +148,20 @@ export function mergeSnapshotAndSessions(
   const repos = new Map<string, UnifiedProjectGroup>()
   const worktreeRowsByRepo = new Map<string, Map<string, UnifiedWorktreeRow>>()
   const seenSessionIds = new Set<string>()
+  const remoteScope = ctx.hostScope === 'remote'
   // Why: pre-build O(1) lookup indices once per merge. This includes live
   // ptyIdsByTabId plus deferred-reattach wake hints, so restored inactive
   // sessions do not appear as Resource Manager orphans before their pane mounts.
-  const index = buildResourceSessionBindingIndex(ctx)
+  // Remote IDs can collide with local IDs; this inventory cannot establish remote bindings.
+  const index = buildResourceSessionBindingIndex(
+    remoteScope ? { tabsByWorktree: {}, ptyIdsByTabId: {}, workspaceSessionReady: false } : ctx
+  )
   const boundPtyIds = index.boundPtyIds
   // Why: the daemon list is the only place agent ownership is reported. Snapshot-derived rows
   // describe the same sessions by id, so carry it across rather than inventing an answer; a
   // session the daemon never listed is 'unknown', not 'absent'.
   const ownershipBySessionId = new Map(
-    daemonSessions.map((session) => [session.id, session.agentOwnership])
+    (remoteScope ? [] : daemonSessions).map((session) => [session.id, session.agentOwnership])
   )
 
   function ensureRepo(repoId: string, repoName: string): UnifiedProjectGroup {
@@ -198,8 +206,9 @@ export function mergeSnapshotAndSessions(
       const repoName = (worktree && ctx.repoDisplayNameById.get(repoId)) || wt.repoName
       const { isRemote, isRuntimeScoped } = resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId)
       // Why: local snapshot data must never render under a runtime-hosted repo
-      // row; belt-and-braces with the matching session-ingest guard below.
-      if (isRuntimeScoped) {
+      // row; belt-and-braces with the matching session-ingest guard below. Under
+      // a remote host the same rows are the payload, so the guard does not apply.
+      if (!remoteScope && isRuntimeScoped) {
         continue
       }
       const repo = ensureRepo(repoId, repoName)
@@ -228,15 +237,18 @@ export function mergeSnapshotAndSessions(
         memory: wt.memory,
         history: wt.history,
         hasLocalSamples: true,
-        isRemote,
+        // Why: every row of a runtime host's snapshot is remote by construction, no
+        // matter what the local repo record says about its connectionId.
+        isRemote: remoteScope || isRemote,
         sessions,
         browsers: []
       })
     }
   }
 
-  // ── Step 2: union daemon sessions that the snapshot didn't cover.
-  for (const session of daemonSessions) {
+  // ── Step 2: union daemon sessions that the snapshot didn't cover. The daemon
+  //   list is this machine's, so it says nothing about a remote host's terminals.
+  for (const session of remoteScope ? [] : daemonSessions) {
     if (seenSessionIds.has(session.id)) {
       continue
     }
@@ -310,8 +322,10 @@ export function mergeSnapshotAndSessions(
     })
   }
 
-  // ── Step 3: add browser resources, including browser-only workspaces.
-  for (const [worktreeId, browsers] of Object.entries(ctx.browserTabsByWorktree ?? {})) {
+  // ── Step 3: add browser resources, including browser-only workspaces. Browser
+  //   workspaces render in this client, so they never belong to a remote host.
+  const browserEntries = remoteScope ? [] : Object.entries(ctx.browserTabsByWorktree ?? {})
+  for (const [worktreeId, browsers] of browserEntries) {
     const worktree = ctx.worktreeById?.get(worktreeId)
     if (!worktree || browsers.length === 0) {
       continue

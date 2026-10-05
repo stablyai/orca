@@ -2,7 +2,12 @@ import { useMemo } from 'react'
 import type { AppState } from '../../store/types'
 import type { MemorySnapshot } from '../../../../shared/process-stats-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+import { isExecutionHostAliasForWorktree } from '../../lib/worktree-execution-host-alias'
 import { mergeSnapshotAndSessions } from './mergeSnapshotAndSessions'
 import type { DaemonSession } from './resource-usage-merge-types'
 import type { ResourceSessionBindingInputs } from './resource-session-bindings'
@@ -19,8 +24,29 @@ import {
 import { formatMemory } from './resource-usage-metrics'
 import { findAmbiguousWorktreeIds, findDuplicateIds } from '../../lib/unified-tab-host-ownership'
 
+function summarizeSnapshotMemory(snapshot: MemorySnapshot | null) {
+  const privateMemory = snapshot?.totalPrivateMemory
+  return {
+    totalMemory: snapshot?.totalMemory ?? 0,
+    totalCpu: snapshot?.totalCpu ?? 0,
+    memoryLabel: snapshot ? formatMemory(snapshot.totalMemory) : '—',
+    // Why null-not-zero: a host that cannot read commit (every Unix host, and any
+    // host older than the field) must render nothing here, never "0 B committed".
+    commitLabel:
+      snapshot?.processCommitMetric && privateMemory !== undefined
+        ? formatMemory(privateMemory)
+        : null,
+    commitToneClass: getCommitPressureToneClass({
+      privateMemory,
+      hostTotalMemory: snapshot?.host.totalMemory ?? 0
+    })
+  }
+}
+
 export function useResourceUsageDerivedModel({
   open,
+  activeHostId,
+  viewingRemoteHost,
   resourceSnapshot,
   sessions,
   resourceSessionBindings,
@@ -37,6 +63,9 @@ export function useResourceUsageDerivedModel({
   spaceScanReady
 }: {
   open: boolean
+  activeHostId: ExecutionHostId
+  viewingRemoteHost: boolean
+  /** The host on screen in the popover. */
   resourceSnapshot: MemorySnapshot | null
   sessions: readonly DaemonSession[]
   resourceSessionBindings: ResourceSessionBindingInputs
@@ -48,7 +77,9 @@ export function useResourceUsageDerivedModel({
   workspaceSessionReady: boolean
   sessionCount: number
   sessionsError: boolean
+  /** This machine's snapshot error; the closed badge and daemon banners are local-only. */
   memorySnapshotError: string | null
+  /** This machine's snapshot, whichever host the popover shows. */
   snapshot: MemorySnapshot | null
   spaceScanReady: boolean
 }) {
@@ -88,10 +119,17 @@ export function useResourceUsageDerivedModel({
     return map
   }, [repos])
 
-  const worktreeById = useMemo(
-    () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
-    [allWorktrees]
-  )
+  const worktreeById = useMemo(() => {
+    const map = new Map<string, Worktree>()
+    for (const worktree of allWorktrees) {
+      // Why: retain unique off-host rows for ownership filtering, but when an id
+      // repeats, its display metadata must follow the selected host like activation.
+      if (!map.has(worktree.id) || isExecutionHostAliasForWorktree(activeHostId, worktree)) {
+        map.set(worktree.id, worktree)
+      }
+    }
+    return map
+  }, [activeHostId, allWorktrees])
   // Why: a bare resource identity cannot choose between the same workspace id on different
   // hosts, but the id still exists; keep the map whole and let the merge gate attribution only.
   const ambiguousWorktreeIds = useMemo(() => findAmbiguousWorktreeIds(allWorktrees), [allWorktrees])
@@ -101,6 +139,7 @@ export function useResourceUsageDerivedModel({
     () =>
       open
         ? mergeSnapshotAndSessions(resourceSnapshot, sessions, {
+            hostScope: viewingRemoteHost ? 'remote' : 'local',
             // Why spread: the rows and the bulk selector must classify from the identical binding
             // inputs. Re-listing them here let the row path miss deferred SSH sessions, so their
             // single-row kill skipped confirmation while bulk cleanup correctly spared them (#8459).
@@ -116,6 +155,7 @@ export function useResourceUsageDerivedModel({
         : [],
     [
       open,
+      viewingRemoteHost,
       resourceSnapshot,
       sessions,
       resourceSessionBindings,
@@ -141,43 +181,31 @@ export function useResourceUsageDerivedModel({
   // closed path used boundPtyIds (wake hints) and inflated the chip to 60+.
   const triggerSessionCount = sessionCount
 
+  // Why: rss vs working-set is a property of the machine that sampled, so the
+  // column and tooltip must follow the host on screen, not this one.
   const memoryMetricCopy = getResourceMemoryMetricCopy(
     resourceSnapshot?.processMemoryMetric ?? 'rss'
   )
-  // Why null-not-zero: a host that cannot read commit (every Unix host, and any
-  // host older than the field) must render nothing here, never "0 B committed".
   const commitMetricCopy = resourceSnapshot?.processCommitMetric
     ? getResourceCommitMetricCopy()
     : null
-  const { totalMemory, totalCpu, memBadgeLabel, totalPrivateMemory, commitToneClass } =
-    useMemo(() => {
-      const memory = resourceSnapshot?.totalMemory ?? 0
-      const cpu = resourceSnapshot?.totalCpu ?? 0
-      const privateMemory = resourceSnapshot?.totalPrivateMemory
-      return {
-        totalMemory: memory,
-        totalCpu: cpu,
-        memBadgeLabel: resourceSnapshot ? formatMemory(memory) : '—',
-        totalPrivateMemory: privateMemory,
-        commitToneClass: getCommitPressureToneClass({
-          privateMemory,
-          hostTotalMemory: resourceSnapshot?.host.totalMemory ?? 0
-        })
-      }
-    }, [resourceSnapshot])
-  const commitBadgeLabel =
-    commitMetricCopy && totalPrivateMemory !== undefined ? formatMemory(totalPrivateMemory) : null
+  const onScreen = useMemo(() => summarizeSnapshotMemory(resourceSnapshot), [resourceSnapshot])
+  // Why: the closed badge is a local reading, so its tint and tooltip must not
+  // borrow a remote host's figures or rss/working-set wording.
+  const local = useMemo(() => summarizeSnapshotMemory(snapshot), [snapshot])
+  const localMemoryMetricCopy = getResourceMemoryMetricCopy(snapshot?.processMemoryMetric ?? 'rss')
+  const memBadgeLabel = local.memoryLabel
 
   // Why: memorySnapshotError null means "succeeded" OR "never fetched"; a sessions failure before any snapshot still counts as daemon-unreachable.
   const daemonUnreachable = sessionsError && (memorySnapshotError !== null || snapshot === null)
   // Why: sessions IPC can fail while snapshot IPC works; flag it so the empty session list isn't mistaken for healthy.
   const sessionsOnlyError = sessionsError && memorySnapshotError === null
   const resourceManagerTooltipLines = getResourceManagerTooltipLines({
-    memoryLabel: resourceSnapshot
+    memoryLabel: snapshot
       ? [
-          `${memBadgeLabel} · ${memoryMetricCopy.summaryLabel}`,
-          commitBadgeLabel && commitMetricCopy
-            ? `${commitBadgeLabel} ${commitMetricCopy.summaryLabel}`
+          `${memBadgeLabel} · ${localMemoryMetricCopy.summaryLabel}`,
+          local.commitLabel
+            ? `${local.commitLabel} ${getResourceCommitMetricCopy().summaryLabel}`
             : null
         ]
           .filter(Boolean)
@@ -197,11 +225,12 @@ export function useResourceUsageDerivedModel({
     triggerSessionCount,
     memoryMetricCopy,
     commitMetricCopy,
-    totalMemory,
-    totalCpu,
+    totalMemory: onScreen.totalMemory,
+    totalCpu: onScreen.totalCpu,
     memBadgeLabel,
-    commitToneClass,
-    commitBadgeLabel,
+    commitToneClass: onScreen.commitToneClass,
+    commitBadgeLabel: onScreen.commitLabel,
+    badgeCommitToneClass: local.commitToneClass,
     daemonUnreachable,
     sessionsOnlyError,
     resourceManagerTooltipLines,

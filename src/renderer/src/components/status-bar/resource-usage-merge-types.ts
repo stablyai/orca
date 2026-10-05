@@ -51,7 +51,12 @@ export type UnifiedProjectGroup = {
   worktrees: UnifiedWorktreeRow[]
 }
 
+/** Which machine the rows describe. Remote = a runtime host's own snapshot. */
+export type MergeHostScope = 'local' | 'remote'
+
 export type MergeContext = {
+  /** Defaults to 'local'; 'remote' means the snapshot came from a runtime host. */
+  hostScope?: MergeHostScope
   /** From useAppStore: maps worktreeId -> tabs[] for tab-walk resolution. */
   tabsByWorktree: Record<string, TerminalTab[]>
   /** From useAppStore: maps tabId -> ptyIds[] for the bound check. */

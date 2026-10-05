@@ -6,6 +6,7 @@ import type { AppState } from '../../store/types'
 import { getAllWorktreesFromState } from '../../store/selectors'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
 import type { DaemonSession, UnifiedSessionRow } from './resource-usage-merge-types'
@@ -14,8 +15,10 @@ import { selectUnboundDaemonSessions } from './resource-session-bindings'
 import { navigateResourceSessionToTab } from './resource-session-navigation'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
 import { resolveResourceManagerWorktreeTarget } from './resource-manager-worktree-target'
+import { resolveResourceManagerWorkspaceExecutionHostId } from './resource-manager-workspace-owner'
 
 export function useResourceUsageActions({
+  activeHostId,
   setCollapsedRepos,
   setCollapsedWorktrees,
   tabsByWorktree,
@@ -37,6 +40,7 @@ export function useResourceUsageActions({
   popoverBodyRef,
   popoverBodyFocusFrameRef
 }: {
+  activeHostId: string
   setCollapsedRepos: Dispatch<SetStateAction<Set<string>>>
   setCollapsedWorktrees: Dispatch<SetStateAction<Set<string>>>
   tabsByWorktree: AppState['tabsByWorktree']
@@ -89,24 +93,34 @@ export function useResourceUsageActions({
   )
 
   // Why: keep popover open on worktree navigation so users can browse; onFocusOutside suppresses the bound-row focus transfer.
-  const navigateToWorktree = useCallback((worktreeId: string): void => {
-    if (worktreeId === ORPHAN_WORKTREE_ID || worktreeId.startsWith(`${UNATTRIBUTED_REPO_ID}::`)) {
-      return
-    }
-    // Why: the target resolve below only knows worktrees, so a folder key never matched; the folder activator owns host and path-status gating.
-    if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
-      activateAndRevealWorkspace(worktreeId)
-      return
-    }
-    const target = resolveResourceManagerWorktreeTarget(
-      worktreeId,
-      getAllWorktreesFromState(useAppStore.getState())
-    )
-    if (!target) {
-      return
-    }
-    activateAndRevealWorktree(worktreeId, { executionHostId: target.hostId })
-  }, [])
+  const navigateToWorktree = useCallback(
+    (worktreeId: string, sampledHostId?: ExecutionHostId): void => {
+      if (worktreeId === ORPHAN_WORKTREE_ID || worktreeId.startsWith(`${UNATTRIBUTED_REPO_ID}::`)) {
+        return
+      }
+      const state = useAppStore.getState()
+      const executionHostId = resolveResourceManagerWorkspaceExecutionHostId(
+        state,
+        worktreeId,
+        activeHostId,
+        sampledHostId
+      )
+      if (!executionHostId) {
+        return
+      }
+      // Why: the target resolve below only knows worktrees, so a folder key never matched; the folder activator owns host and path-status gating.
+      if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
+        activateAndRevealWorkspace(worktreeId, { executionHostId })
+        return
+      }
+      const target = state.getKnownWorktreeById(worktreeId, executionHostId)
+      if (!target) {
+        return
+      }
+      activateAndRevealWorktree(worktreeId, { executionHostId })
+    },
+    [activeHostId]
+  )
 
   const navigateToTab = useCallback(
     (tabId: string, paneKey: string | null) => {
@@ -122,18 +136,25 @@ export function useResourceUsageActions({
   )
 
   const deleteWorktree = useCallback(
-    (worktreeId: string): void => {
+    (worktreeId: string, sampledHostId?: ExecutionHostId): void => {
+      if (
+        activeHostId !== LOCAL_EXECUTION_HOST_ID ||
+        (sampledHostId !== undefined && sampledHostId !== LOCAL_EXECUTION_HOST_ID)
+      ) {
+        return
+      }
       const target = resolveResourceManagerWorktreeTarget(
         worktreeId,
-        getAllWorktreesFromState(useAppStore.getState())
+        getAllWorktreesFromState(useAppStore.getState()),
+        sampledHostId
       )
       if (!target) {
         return
       }
       setOpen(false)
-      runWorktreeDelete(worktreeId, { expectedHostId: target.hostId })
+      runWorktreeDelete(worktreeId, { expectedHostId: sampledHostId ?? target.hostId })
     },
-    [setOpen]
+    [activeHostId, setOpen]
   )
 
   const handleOpenWorkspaceCleanup = useCallback((): void => {
