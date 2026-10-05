@@ -6,6 +6,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { sessionSearchScopeCatalogFromStore } from '../ai-vault-search/session-search-store-scope-catalog'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { app } from 'electron'
+import { DeepSeekCredentials } from '../deepseek/deepseek-credentials'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getLocalPtyProvider, getSshPtyProvider, clearProviderPtyState } from '../ipc/pty'
 import { agentHookServer } from '../agent-hooks/server'
@@ -196,6 +197,7 @@ export function configureRuntimeServices(runtime: OrcaRuntimeService): void {
   )
   runtime.setSkillCloudService(new SkillCloudService(app.getPath('userData')))
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
+  rateLimits.setDeepSeekCredentials(new DeepSeekCredentials(runtime.getRuntimeId()))
   runtime.setCommitMessageAgentEnvironmentResolvers({
     // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,

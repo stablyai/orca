@@ -45,6 +45,10 @@ export type RuntimeServiceCommandSurface = {
   setCommitMessageAgentEnvironmentResolvers: RuntimeAccountController['setCommitMessageAgentEnvironment']
   getCommitMessageAgentEnvironmentResolvers: RuntimeAccountController['getCommitMessageAgentEnvironment']
   getAccountsSnapshot: RuntimeAccountController['getSnapshot']
+  getDeepSeekAccountStatus: RuntimeAccountController['getDeepSeekAccountStatus']
+  saveDeepSeekApiKey: RuntimeAccountController['saveDeepSeekApiKey']
+  removeDeepSeekApiKey: RuntimeAccountController['removeDeepSeekApiKey']
+  refreshDeepSeekBalance: RuntimeAccountController['refreshDeepSeekBalance']
   refreshAccountsForMobile: RuntimeAccountController['refreshForMobile']
   refreshAccountsForMobileSubscriber: RuntimeAccountController['refreshForMobileSubscriber']
   selectClaudeAccount: RuntimeAccountController['selectClaude']
@@ -142,6 +146,10 @@ export function installRuntimeServiceCommandSurface(
     getCommitMessageAgentEnvironmentResolvers:
       accounts.getCommitMessageAgentEnvironment.bind(accounts),
     getAccountsSnapshot: accounts.getSnapshot.bind(accounts),
+    getDeepSeekAccountStatus: accounts.getDeepSeekAccountStatus.bind(accounts),
+    saveDeepSeekApiKey: accounts.saveDeepSeekApiKey.bind(accounts),
+    removeDeepSeekApiKey: accounts.removeDeepSeekApiKey.bind(accounts),
+    refreshDeepSeekBalance: accounts.refreshDeepSeekBalance.bind(accounts),
     refreshAccountsForMobile: accounts.refreshForMobile.bind(accounts),
     refreshAccountsForMobileSubscriber: accounts.refreshForMobileSubscriber.bind(accounts),
     selectClaudeAccount: accounts.selectClaude.bind(accounts),

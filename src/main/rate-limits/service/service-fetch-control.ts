@@ -1,6 +1,8 @@
 import { RateLimitServiceState } from './service-state'
 
 export abstract class RateLimitServiceFetchControl extends RateLimitServiceState {
+  protected fetchAbortGeneration = 0
+
   protected waitForFetchIdle(): Promise<void> {
     if (
       !this.isFetching &&
@@ -57,6 +59,7 @@ export abstract class RateLimitServiceFetchControl extends RateLimitServiceState
   }
 
   protected abortActiveFetchCycle(): void {
+    this.fetchAbortGeneration += 1
     for (const controller of this.activeFetchAbortControllers) {
       controller.abort()
     }

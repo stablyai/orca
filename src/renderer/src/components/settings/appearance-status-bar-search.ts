@@ -172,6 +172,24 @@ export const getStatusBarToggles = createLocalizedCatalog(
     getCursorStatusBarToggleSearchEntry(),
     getZcodeStatusBarToggleSearchEntry(),
     {
+      id: 'deepseek',
+      title: translate('deepseek.statusBar.title', 'DeepSeek balance'),
+      description: translate(
+        'deepseek.statusBar.description',
+        'Show DeepSeek prepaid balances in their original currencies.'
+      ),
+      keywords: [
+        ...translateSearchKeyword('deepseek.search.name', 'deepseek'),
+        ...translateSearchKeyword('deepseek.search.balance', 'balance'),
+        ...translateSearchKeyword('deepseek.search.currency', 'currency'),
+        ...translateSearchKeyword('deepseek.search.statusBar', 'status bar')
+      ],
+      toggleDescription: translate(
+        'deepseek.statusBar.toggle',
+        'Show the DeepSeek balance for the account host.'
+      )
+    },
+    {
       id: 'ssh',
       title: translate('auto.components.settings.appearance.search.57fb424c56', 'Remote Hosts'),
       description: translate(

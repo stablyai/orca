@@ -18985,6 +18985,50 @@
     "noDirectories": "No folders added yet.",
     "removePath": "Remove {{name}}"
   },
+  "deepseek": {
+    "accounts": {
+      "sshHost": "SSH host",
+      "scope": "Balance and API key belong to {{host}}.",
+      "keys": "DeepSeek API keys",
+      "readFailed": "Could not read this host’s DeepSeek account.",
+      "loading": "Checking account…",
+      "unsupported": "DeepSeek accounts are unsupported on this host. Protected credential storage and balance support are required.",
+      "saved": "API key saved in protected storage.",
+      "unverified": "The saved API key could not be verified. Remove it or save a replacement.",
+      "empty": "Save a DeepSeek API key to check your prepaid balance.",
+      "keyLabel": "DeepSeek API key",
+      "save": "Save key",
+      "refresh": "Refresh balance",
+      "remove": "Remove key",
+      "actionFailed": "DeepSeek account change failed. Check host availability and protected storage, then retry.",
+      "searchTitle": "DeepSeek balance",
+      "searchDescription": "Save a protected API key and view prepaid currency balances."
+    },
+    "statusBar": {
+      "title": "DeepSeek balance",
+      "description": "Show DeepSeek prepaid balances in their original currencies.",
+      "toggle": "Show the DeepSeek balance for the account host."
+    },
+    "balance": {
+      "total": "Balance",
+      "granted": "Granted",
+      "toppedUp": "Topped up",
+      "insufficient": "DeepSeek reports insufficient balance for API calls.",
+      "stale": "Refresh failed — showing the last balance.",
+      "pending": "Balance unavailable",
+      "updated": "Updated {{when}}"
+    },
+    "name": "DeepSeek",
+    "search": {
+      "name": "deepseek",
+      "balance": "balance",
+      "apiKey": "api key",
+      "credits": "credits",
+      "currency": "currency",
+      "account": "account",
+      "statusBar": "status bar"
+    }
+  },
   "accounts": {
     "antigravity": {
       "scope": "Manage the native agy account on {{host}}.",

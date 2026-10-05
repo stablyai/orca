@@ -14,6 +14,8 @@ export function getUsageProviderAccountsSectionId(
       return 'accounts-opencode-go'
     case 'minimax':
       return 'accounts-minimax'
+    case 'deepseek':
+      return 'accounts-deepseek'
     case 'grok':
       return 'accounts-grok'
     case 'cursor':

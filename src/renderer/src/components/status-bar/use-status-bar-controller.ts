@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useDeepSeekAccount } from '@/hooks/useDeepSeekAccount'
+import { getDeepSeekAccountScope } from '@/runtime/deepseek-account-scope'
+import { refreshDeepSeekAccount } from '@/runtime/deepseek-account-client'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '../../store'
 import { selectFloatingWorkspaceHasUnread } from '../../store/selectors'
@@ -15,6 +19,14 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
   const rateLimits = useAppStore((s) => s.rateLimits)
   const settings = useAppStore((s) => s.settings)
+  const activeWorkspaceHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
+  const deepseekScope = getDeepSeekAccountScope(
+    settings,
+    activeWorkspaceHostId,
+    getRendererAppPlatform()
+  )
+  const deepseekState = useDeepSeekAccount(deepseekScope.environmentId, deepseekScope.unsupported)
+  const { account: deepseekAccount, limits: deepseek } = deepseekState
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -79,13 +91,26 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     setIsRefreshing(true)
     try {
       // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
-      await Promise.all([refreshRateLimits(), refreshDetectedAgents()])
+      const deepseekRefresh =
+        deepseekAccount?.supported && deepseekAccount.ownerId && deepseekScope.environmentId
+          ? refreshDeepSeekAccount(
+              { kind: 'environment', environmentId: deepseekScope.environmentId },
+              deepseekAccount.ownerId
+            )
+          : Promise.resolve()
+      await Promise.all([refreshRateLimits(), refreshDetectedAgents(), deepseekRefresh])
     } finally {
       if (mountedRef.current) {
         setIsRefreshing(false)
       }
     }
-  }, [isRefreshing, refreshRateLimits, refreshDetectedAgents])
+  }, [
+    isRefreshing,
+    refreshRateLimits,
+    refreshDetectedAgents,
+    deepseekAccount,
+    deepseekScope.environmentId
+  ])
 
   if (!statusBarVisible) {
     return null
@@ -108,7 +133,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     opencodeGoApiKeyConfigured: rateLimits.opencodeGoApiKeyConfigured,
     grokAuthConfigured: rateLimits.grokAuthConfigured,
     cursorAuthConfigured: rateLimits.cursorAuthConfigured,
-    zcodePlanApiKeyConfigured: rateLimits.zcodePlanApiKeyConfigured
+    zcodePlanApiKeyConfigured: rateLimits.zcodePlanApiKeyConfigured,
+    deepseekApiKeyConfigured: deepseekAccount?.supported === true && deepseekAccount.configured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
@@ -119,6 +145,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
   const visibleCursor = getVisibleUsageProvider('cursor', cursor, usageSettings)
   const visibleZcode = getVisibleUsageProvider('zcode', zcode, usageSettings)
+  const visibleDeepSeek = getVisibleUsageProvider('deepseek', deepseek, usageSettings)
+  const showDeepSeek = visibleDeepSeek !== null && statusBarItems.includes('deepseek')
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -173,11 +201,24 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showMiniMax ||
     showGrok ||
     showCursor ||
-    showZcode
+    showZcode ||
+    showDeepSeek
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode },
+    {
+      claude,
+      codex,
+      gemini,
+      opencodeGo,
+      kimi,
+      antigravity,
+      minimax,
+      grok,
+      cursor,
+      zcode,
+      deepseek
+    },
     usageSettings
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
@@ -211,7 +252,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showMiniMax ? visibleMiniMax : null,
     showGrok ? visibleGrok : null,
     showCursor ? visibleCursor : null,
-    showZcode ? visibleZcode : null
+    showZcode ? visibleZcode : null,
+    showDeepSeek ? visibleDeepSeek : null
   ].filter((p): p is ProviderRateLimits => p !== null)
 
   const handleManageAccounts = (): void => {

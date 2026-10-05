@@ -1,4 +1,5 @@
 import React from 'react'
+import { formatDeepSeekBalance } from '../../../../shared/deepseek-balance'
 import { ChevronRight, RefreshCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { SettingsSegmentedControl } from '@/components/settings/SettingsFormControls'
@@ -140,7 +141,7 @@ export function UsageRow({
   mode?: StatusBarUsageMode
 }): React.JSX.Element {
   const sections = usedSections(p)
-  const hasUsage = sections.length > 0
+  const hasUsage = sections.length > 0 || Boolean(p.balance)
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
   const reset = hasUsage ? soonestResetLabel(sections, now) : null
@@ -156,7 +157,9 @@ export function UsageRow({
           {name}
           {plan ? <span className="font-normal text-muted-foreground"> · {plan}</span> : null}
         </span>
-        {!hasUsage ? (
+        {p.balance ? (
+          <span className="ml-auto text-xs tabular-nums">{formatDeepSeekBalance(p.balance)}</span>
+        ) : !hasUsage ? (
           <>
             <span className="min-w-0 truncate text-[11px] text-muted-foreground">
               {state.statusLabel}
@@ -180,7 +183,17 @@ export function UsageRow({
           <span className="shrink-0 text-[11px] text-muted-foreground">{reset}</span>
         ) : null}
       </div>
-      {hasUsage && mode === 'verbose' ? (
+      {p.balance && (!p.balance.is_available || p.status === 'error') ? (
+        <p className="pl-[30px] text-xs text-muted-foreground">
+          {p.status === 'error'
+            ? translate('deepseek.balance.stale', 'Refresh failed — showing the last balance.')
+            : translate(
+                'deepseek.balance.insufficient',
+                'DeepSeek reports insufficient balance for API calls.'
+              )}
+        </p>
+      ) : null}
+      {sections.length > 0 && mode === 'verbose' ? (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">
           {sections.map((section) => (
             <UsageMetric

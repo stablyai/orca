@@ -1,3 +1,5 @@
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { ManagedDataAccountsSection } from './ManagedDataAccountsSection'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
@@ -219,4 +221,15 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
       </SearchableSetting>
     </section>
   )
+}
+export function renderManagedDataAccountsSections(
+  model: AccountsPaneSectionModel
+): React.JSX.Element | null {
+  const { searchQuery, settings } = model
+  return !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
+    <div key={settings.activeRuntimeEnvironmentId ?? 'local'} className="space-y-8">
+      <ManagedDataAccountsSection provider="opencode" target={getActiveRuntimeTarget(settings)} />
+      <ManagedDataAccountsSection provider="devin" target={getActiveRuntimeTarget(settings)} />
+    </div>
+  ) : null
 }

@@ -1,3 +1,4 @@
+import { formatDeepSeekBalance } from '../../../../shared/deepseek-balance'
 import { AlertTriangle } from 'lucide-react'
 import React from 'react'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
@@ -65,7 +66,9 @@ function WindowLabel({
 // the roster trigger and ProviderDetailsMenu so the dot's has-data condition
 // and markup can't drift between the two.
 export function ProviderLetterBadge({ p }: { p: ProviderRateLimits }): React.JSX.Element {
-  const hasData = Boolean(p.session || p.weekly || p.fableWeekly || p.monthly || p.buckets?.length)
+  const hasData = Boolean(
+    p.session || p.weekly || p.fableWeekly || p.monthly || p.balance || p.buckets?.length
+  )
   return (
     <span className="inline-flex items-center gap-1 text-muted-foreground">
       <span
@@ -80,6 +83,9 @@ export type UsageTone = 'urgent' | 'warning' | 'normal'
 
 /** Urgency by consumption, matching the usage bar colors, whatever % display the user chose. */
 export function getUsageTone(p: ProviderRateLimits): UsageTone {
+  if (p.balance?.is_available === false) {
+    return 'urgent'
+  }
   const tightest = getTightestUsageSection(p)
   const used = tightest ? clampUsedPercent(tightest.window.usedPercent) : 0
   return used >= USAGE_URGENT_PERCENT
@@ -153,6 +159,8 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'R'
     case 'cursor':
       return 'U'
+    case 'deepseek':
+      return 'D'
     case 'zcode':
       return 'Z'
     case 'codex':
@@ -312,6 +320,16 @@ export function ProviderSegment({
   display: UsagePercentageDisplay
   mode?: StatusBarUsageMode
 }): React.JSX.Element {
+  if (p?.provider === 'deepseek' && p.balance) {
+    return (
+      <span className="inline-flex items-center gap-1.5 tabular-nums">
+        <ProviderIcon provider="deepseek" />
+        {formatDeepSeekBalance(p.balance) ||
+          translate('deepseek.balance.pending', 'Balance unavailable')}
+        {p.status === 'error' || !p.balance.is_available ? <AlertTriangle size={11} /> : null}
+      </span>
+    )
+  }
   const provider = p?.provider ?? 'claude'
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
 

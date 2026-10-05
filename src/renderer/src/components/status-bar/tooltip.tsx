@@ -3,6 +3,8 @@ import {
   formatResetCountdown,
   formatResetDuration
 } from '../../../../shared/rate-limit-reset-format'
+import { Coins } from 'lucide-react'
+import { MonetaryBalanceDetails } from './MonetaryBalanceDetails'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
@@ -84,6 +86,9 @@ export function formatResetCreditExpiry(
 // ---------------------------------------------------------------------------
 
 export function ProviderIcon({ provider }: { provider: string }): React.JSX.Element {
+  if (provider === 'deepseek') {
+    return <Coins size={13} />
+  }
   if (provider === 'codex') {
     return <OpenAIIcon size={13} />
   }
@@ -288,6 +293,10 @@ export function ProviderPanel({
   }
 
   const name = getProviderDisplayName(p.provider)
+
+  if (p.provider === 'deepseek') {
+    return <MonetaryBalanceDetails p={p} />
+  }
 
   if (p.status === 'unavailable') {
     return (

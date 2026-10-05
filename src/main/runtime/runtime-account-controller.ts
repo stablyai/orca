@@ -17,6 +17,7 @@ import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/ra
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+import { unsupportedDeepSeekAccount } from '../../shared/deepseek-balance'
 
 export type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
@@ -72,6 +73,29 @@ export class RuntimeAccountController {
       codex: codexAccounts.listAccounts(),
       rateLimits: rateLimits.getState()
     }
+  }
+
+  getDeepSeekAccountStatus(): ReturnType<RateLimitService['getDeepSeekAccountStatus']> {
+    return this.services?.rateLimits.getDeepSeekAccountStatus() ?? unsupportedDeepSeekAccount()
+  }
+
+  saveDeepSeekApiKey(
+    ownerId: string,
+    apiKey: string
+  ): ReturnType<RateLimitService['saveDeepSeekApiKey']> {
+    return this.requireServices().rateLimits.saveDeepSeekApiKey(ownerId, apiKey)
+  }
+
+  removeDeepSeekApiKey(ownerId: string): ReturnType<RateLimitService['removeDeepSeekApiKey']> {
+    return this.requireServices().rateLimits.removeDeepSeekApiKey(ownerId)
+  }
+
+  refreshDeepSeekBalance(ownerId: string): Promise<RateLimitState> {
+    const rateLimits = this.requireServices().rateLimits
+    if (rateLimits.getDeepSeekAccountStatus().ownerId !== ownerId) {
+      throw new Error('DeepSeek account owner changed; reload Accounts')
+    }
+    return rateLimits.refreshDeepSeekBalance()
   }
 
   dataAccountsSnapshot(): Pick<AccountsSnapshot, 'opencode' | 'devin'> {
