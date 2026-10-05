@@ -19,6 +19,9 @@ const BRACKETED_PASTE_QUIET_MS = 1500
 // Why: an interactive shell turns bracketed paste on at its prompt and off when it runs the typed
 // command (`zsh-prompt-runs-command.txt`), so a 2004 before the last `?2004l` is the shell's.
 const DECRST_BRACKETED_PASTE = '\x1b[?2004l'
+// Why: the deadline's last settle check is one foreground read, which over SSH could otherwise hold
+// a past-due wait for the channel's 30 s timeout.
+const DEADLINE_SETTLE_CHECK_MS = 2_000
 
 export type WorktreeStartupReadinessHost = {
   getPtyId: (handle: string) => string | null
@@ -131,6 +134,7 @@ export function waitForWorktreeStartupDraft(
     let graceTimer: NodeJS.Timeout | null = null
     let graceElapsed = false
     let hardTimer: NodeJS.Timeout | null = null
+    let deadlineCheckTimer: NodeJS.Timeout | null = null
     let unsubscribe: (() => void) | null = null
     // Bumped at each shell hand-off: a check begun before one must not settle the wait after it.
     let handoffs = 0
@@ -150,6 +154,9 @@ export function waitForWorktreeStartupDraft(
       clearGrace()
       if (hardTimer) {
         clearTimeout(hardTimer)
+      }
+      if (deadlineCheckTimer) {
+        clearTimeout(deadlineCheckTimer)
       }
       unsubscribe?.()
       options.signal?.removeEventListener('abort', onAbort)
@@ -249,6 +256,7 @@ export function waitForWorktreeStartupDraft(
         return finish(null)
       }
       const deadlineHandoffs = handoffs
+      deadlineCheckTimer = setTimeout(() => finish(null), DEADLINE_SETTLE_CHECK_MS)
       void passesSettleChecks().then(
         (passes) => finish(passes && deadlineHandoffs === handoffs ? ptyId : null),
         () => finish(null)

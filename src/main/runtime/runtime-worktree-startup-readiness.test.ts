@@ -190,6 +190,7 @@ describe('OpenCode submit readiness', () => {
         accept?: () => boolean
         isShellInFront?: () => Promise<boolean>
         timeoutMs?: number
+        signal?: AbortSignal
       }
     ) {
       return settle(
@@ -198,7 +199,8 @@ describe('OpenCode submit readiness', () => {
           requireComposerMarker: true,
           submit: true,
           ...(checks.accept ? { accept: checks.accept } : {}),
-          ...(checks.isShellInFront ? { isShellInFront: checks.isShellInFront } : {})
+          ...(checks.isShellInFront ? { isShellInFront: checks.isShellInFront } : {}),
+          ...(checks.signal ? { signal: checks.signal } : {})
         })
       )
     }
@@ -260,6 +262,110 @@ describe('OpenCode submit readiness', () => {
       expect(result.value).toBeUndefined()
       await vi.advanceTimersByTimeAsync(8000 - OPENCODE_AGENT_ROW_GRACE_MS)
       expect(result.value).toBeNull()
+    })
+
+    // A foreground read the test answers by hand, as an SSH host would.
+    function pendingRead() {
+      let answer = (_inFront: boolean): void => {}
+      let fail = (_error: Error): void => {}
+      const read = vi.fn(
+        () =>
+          new Promise<boolean>((resolve, reject) => {
+            answer = resolve
+            fail = reject
+          })
+      )
+      return { read, answer: (inFront: boolean) => answer(inFront), fail: (e: Error) => fail(e) }
+    }
+
+    it('refuses the deadline when a shell hand-off lands during its check', async () => {
+      vi.useFakeTimers()
+      const h = fixture()
+      const check = pendingRead()
+      const result = waitWith(h, { isShellInFront: check.read, timeoutMs: 3000 })
+      h.emit(BOX)
+      await vi.advanceTimersByTimeAsync(3000)
+      h.emit('\x1b[?2004l')
+      check.answer(false)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(result.value).toBeNull()
+    })
+
+    it('refuses the deadline when its check fails', async () => {
+      vi.useFakeTimers()
+      const h = fixture()
+      const check = pendingRead()
+      const result = waitWith(h, { isShellInFront: check.read, timeoutMs: 3000 })
+      h.emit(BOX)
+      await vi.advanceTimersByTimeAsync(3000)
+      check.fail(new Error('ssh channel closed'))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(result.value).toBeNull()
+    })
+
+    it('resolves once, with null, when aborted during the deadline check', async () => {
+      vi.useFakeTimers()
+      const h = fixture()
+      const check = pendingRead()
+      const abort = new AbortController()
+      const pending = waitForWorktreeStartupDraft(h.host, 'term-1', 'opencode2', {
+        timeoutMs: 3000,
+        requireComposerMarker: true,
+        submit: true,
+        isShellInFront: check.read,
+        signal: abort.signal
+      })
+      const resolved = vi.fn()
+      void pending.then(resolved)
+      h.emit(BOX)
+      await vi.advanceTimersByTimeAsync(3000)
+      abort.abort()
+      check.answer(false)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(resolved.mock.calls).toEqual([[null]])
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('takes the box at the deadline after a refused grace once the agent is in front', async () => {
+      vi.useFakeTimers()
+      const h = fixture()
+      let shellInFront = true
+      const result = waitWith(h, { isShellInFront: async () => shellInFront, timeoutMs: 8000 })
+      h.emit(BOX)
+      await vi.advanceTimersByTimeAsync(OPENCODE_AGENT_ROW_GRACE_MS)
+      expect(result.value).toBeUndefined()
+      shellInFront = false
+      await vi.advanceTimersByTimeAsync(8000 - OPENCODE_AGENT_ROW_GRACE_MS)
+      expect(result.value).toBe('pty-1')
+    })
+
+    it('gives up when the deadline check never answers', async () => {
+      vi.useFakeTimers()
+      const h = fixture()
+      const check = pendingRead()
+      const result = waitWith(h, { isShellInFront: check.read, timeoutMs: 3000 })
+      h.emit(BOX)
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(check.read).toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1999)
+      expect(result.value).toBeUndefined()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(result.value).toBeNull()
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('restarts the grace at a hand-off rather than keeping the one from before it', async () => {
+      vi.useFakeTimers()
+      const h = fixture()
+      const result = waitWith(h, { isShellInFront: async () => false })
+      h.emit(BOX)
+      await vi.advanceTimersByTimeAsync(3000)
+      // A hand-off whose chunk goes on to show a cursor under bracketed paste again.
+      h.emit('\x1b[?2004l\x1b[?2004h\x1b[?25h')
+      await vi.advanceTimersByTimeAsync(OPENCODE_AGENT_ROW_GRACE_MS - 1)
+      expect(result.value).toBeUndefined()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(result.value).toBe('pty-1')
     })
   })
 })
