@@ -39,6 +39,10 @@ import type {
   SessionTabCloseRequest,
   SessionTabCloseResponse
 } from '../../shared/session-tab-close'
+import type {
+  TerminalChatViewRequest,
+  TerminalChatViewResponse
+} from '../../shared/terminal-chat-view-request'
 
 export type CloseActiveTabPayload = { sourceId: string }
 
@@ -216,6 +220,8 @@ export type UiCommandEventApi = {
   onCloseSessionTab: (callback: (data: { tabId: string; worktreeId: string }) => void) => () => void
   onSessionTabCloseRequest: (callback: (request: SessionTabCloseRequest) => void) => () => void
   respondSessionTabClose: (response: SessionTabCloseResponse) => void
+  onTerminalChatViewRequest: (callback: (request: TerminalChatViewRequest) => void) => () => void
+  respondTerminalChatView: (response: TerminalChatViewResponse) => void
   onMoveSessionTab: (
     callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
   ) => () => void

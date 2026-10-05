@@ -9,6 +9,8 @@ import { resolveNativeChatLeafRoute } from '../native-chat/native-chat-leaf-rout
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
 import { parseWorkspaceSession } from '../../../../shared/workspace-session-schema'
 import type { RemotePaneLayoutPusher } from './remote-pane-layout-push'
+import { EMPTY_LAYOUT } from './layout-serialization'
+import { useAppStore } from '../../store'
 
 const LEFT = '11111111-1111-4111-8111-111111111111'
 const RIGHT = '22222222-2222-4222-8222-222222222222'
@@ -100,7 +102,9 @@ function makeFixture(paneIds = [1, 2], remotePusher?: RemotePaneLayoutPusher) {
 }
 function useFixture(fixture: ReturnType<typeof makeFixture>, initialOwner: string | null) {
   const [chatLeafId, setChatLeafId] = useState(initialOwner)
-  const input = { ...fixture, chatLeafId, setChatLeafId }
+  // Same subscription the pane foundation hands the chat hook.
+  const savedLayout = useAppStore((state) => state.terminalLayoutsByTabId.tab ?? EMPTY_LAYOUT)
+  const input = { ...fixture, chatLeafId, setChatLeafId, savedLayout }
   const chat = useTerminalPaneChatState(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies every field read by the chat hook.
     input as unknown as Parameters<typeof useTerminalPaneChatState>[0]

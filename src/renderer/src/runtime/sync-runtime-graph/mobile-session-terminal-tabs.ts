@@ -6,7 +6,7 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-typ
 import {
   isNativeChatTabWideFallbackSafe,
   nativeChatLaunchAgentForLeaf
-} from '../../components/native-chat/native-chat-leaf-routing'
+} from '../../../../shared/native-chat-leaf-ownership'
 import type { MobileSessionWorktreeInputs } from './types'
 import {
   isClaudeManagementTitle,
@@ -19,6 +19,10 @@ import {
 } from './mobile-session-surfaces'
 import { resolveRuntimeTerminalTitle } from './sync-projections'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
+import {
+  normalizeTerminalChatPair,
+  resolveTerminalTabViewMode
+} from '../../../../shared/terminal-tab-view-mode'
 
 export function buildMobileTerminalSurfaceTabs(
   inputs: MobileSessionWorktreeInputs,
@@ -60,6 +64,18 @@ export function buildMobileTerminalSurfaceTabs(
       ? { titlesByLeafId: sanitizedSavedLayout.titlesByLeafId }
       : {})
   } satisfies TerminalLayoutSnapshot).snapshot
+  const unifiedTab =
+    inputs.unifiedTabs.find((tab) => tab.id === unifiedTabId) ??
+    inputs.unifiedTabs.find((tab) => tab.contentType === 'terminal' && tab.entityId === terminal.id)
+  const chatPair = normalizeTerminalChatPair(
+    {
+      viewMode: resolveTerminalTabViewMode(unifiedTab, terminal),
+      ...(parentLayout.chatLeafId ? { chatLeafId: parentLayout.chatLeafId } : {})
+    },
+    parentLayout.root
+  )
+  const { chatLeafId: _publishedOwner, ...ownerlessParentLayout } = parentLayout
+  const publishedParentLayout = chatPair.chatLeafId ? parentLayout : ownerlessParentLayout
 
   return leafIds.map((leafId) => {
     const numericPaneId = capture?.numericPaneIdByLeafId.get(leafId) ?? null
@@ -120,7 +136,8 @@ export function buildMobileTerminalSurfaceTabs(
             launchDraftCreatedAt: publishedLaunchDraft.createdAt
           }
         : {}),
-      parentLayout,
+      parentLayout: publishedParentLayout,
+      ...(chatPair.viewMode ? { viewMode: chatPair.viewMode } : {}),
       isActive: isDesktopTabActive && leafId === activeLeafId
     }
   })

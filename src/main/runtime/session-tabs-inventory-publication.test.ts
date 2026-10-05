@@ -417,3 +417,32 @@ describe('authoritative session tab inventory publication', () => {
     }
   })
 })
+
+describe('chat view host marker', () => {
+  it('stamps renderer-published and never-published results alike', () => {
+    const runtime = createInventoryRuntime()
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: 'repo::/worktree',
+          publicationEpoch: 'renderer-epoch',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: null,
+          activeTabType: null,
+          tabs: []
+        }
+      ]
+    })
+    expect(runtime['getMobileSessionTabsForWorktree']('repo::/worktree').chatViewHostOwned).toBe(
+      true
+    )
+    // First connect to a worktree nothing has published yet.
+    expect(
+      runtime['getMobileSessionTabsForWorktree']('repo::/unpublished', 'client-1').chatViewHostOwned
+    ).toBe(true)
+  })
+})

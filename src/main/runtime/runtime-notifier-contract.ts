@@ -1,3 +1,4 @@
+import type { RuntimeSessionTabChatView } from '../../shared/runtime-session-contracts'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
@@ -97,6 +98,13 @@ export type RuntimeNotifier = {
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
+  /** Applies a chat pair in the renderer that owns the tab; resolves with the pair it holds. */
+  setTerminalChatView?(
+    worktreeId: string,
+    tabId: string,
+    leafId: string | null,
+    viewMode: 'terminal' | 'chat'
+  ): Promise<RuntimeSessionTabChatView>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
   /**
    * Acts only on the host's own window: 'host'/'all' move it, 'caller'/'clients' open without moving

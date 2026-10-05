@@ -16,6 +16,7 @@ import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-rel
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
 import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
+import { requestTerminalChatViewFromRenderer } from './terminal-chat-view-request-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
 
 let runtimeNotifierTokenCounter = 0
@@ -167,6 +168,8 @@ export function registerRuntimeWindowLifecycle(
     focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),
     closeSessionTab: (tabId, worktreeId) =>
       requestSessionTabCloseFromRenderer(mainWindow, tabId, worktreeId),
+    setTerminalChatView: (worktreeId, tabId, leafId, viewMode) =>
+      requestTerminalChatViewFromRenderer(mainWindow, { worktreeId, tabId, leafId, viewMode }),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
       send('ui:moveSessionTab', { worktreeId, ...move }),
     openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId?, navigation?) =>

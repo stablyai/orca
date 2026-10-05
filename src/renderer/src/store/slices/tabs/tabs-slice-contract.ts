@@ -7,6 +7,7 @@ import type {
   TabGroupLayoutNode
 } from '../../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session-state-types'
+import type { RuntimeSessionTabChatView } from '../../../../../shared/runtime-session-contracts'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-hydration-keys'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
@@ -99,6 +100,16 @@ export type TabsSlice = {
     opts?: { recordInteraction?: boolean }
   ) => void
   setTabLabel: (tabId: string, label: string) => void
+  /**
+   * Writes a terminal tab's whole chat pair (unified + row `viewMode`, layout owner) in one
+   * update. `leafId` null addresses the parent. Returns the pair the store then holds.
+   */
+  applyTerminalChatPair: (
+    terminalTabId: string,
+    leafId: string | null,
+    mode: 'terminal' | 'chat',
+    options?: { userToggle?: boolean }
+  ) => RuntimeSessionTabChatView | null
   /** Set a tab's view mode (terminal vs native chat). Patches only that tab. */
   setTabViewMode: (tabId: string, mode: 'terminal' | 'chat') => void
   /** Flip a tab between terminal and native-chat renderings; the live TerminalPane stays mounted. */

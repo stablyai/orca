@@ -1,6 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithCloseHeadlessMobileTerminalTab } from './orca-runtime-close-headless-mobile-terminal-tab'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabsSnapshot
@@ -10,64 +9,43 @@ import type {
   TerminalPaneLayoutNode
 } from '../../shared/terminal-tab-types'
 import { cloneTerminalLayoutSnapshot } from './mobile-session-layout-projection'
+import {
+  applySessionTabPropsToSnapshotTab,
+  buildHeadlessSessionTabPropsPatch,
+  type HeadlessSessionTabProps
+} from './headless-session-tab-props-patch'
+import {
+  readHeadlessChatPairState,
+  readPublishedChatPairState,
+  toSessionTabChatView
+} from './session-tab-chat-pair'
+import type {
+  RuntimeSessionTabChatView,
+  RuntimeSessionTabChatViewWrite,
+  RuntimeSessionTabPropsResult
+} from '../../shared/runtime-session-contracts'
+import { resolveTerminalChatPairWrite } from '../../shared/terminal-tab-view-mode'
 
 export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWithCloseHeadlessMobileTerminalTab {
   protected persistHeadlessSessionTabProps(
     worktreeId: string,
     tabId: string,
-    props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
+    props: HeadlessSessionTabProps
   ): void {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession) {
       return
     }
-    const tabs = session.tabsByWorktree[worktreeId]
-    const nextSession: WorkspaceSessionState = { ...session }
-    let changed = false
-    if (tabs?.some((tab) => tab.id === tabId)) {
-      changed = true
-      nextSession.tabsByWorktree = {
-        ...session.tabsByWorktree,
-        [worktreeId]: tabs.map((tab) =>
-          tab.id === tabId
-            ? {
-                ...tab,
-                ...(props.color !== undefined ? { color: props.color } : {}),
-                ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
-                ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
-              }
-            : tab
-        )
-      }
+    const nextSession = buildHeadlessSessionTabPropsPatch(session, worktreeId, tabId, props)
+    if (nextSession) {
+      this.setWorkspaceSessionForWorktree(worktreeId, nextSession)
     }
-
-    const unifiedTabs = session.unifiedTabs?.[worktreeId]
-    if (unifiedTabs?.some((tab) => tab.id === tabId || tab.entityId === tabId)) {
-      changed = true
-      nextSession.unifiedTabs = {
-        ...session.unifiedTabs,
-        [worktreeId]: unifiedTabs.map((tab) =>
-          tab.id === tabId || tab.entityId === tabId
-            ? {
-                ...tab,
-                ...(props.color !== undefined ? { color: props.color } : {}),
-                ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {})
-              }
-            : tab
-        )
-      }
-    }
-
-    if (!changed) {
-      return
-    }
-    this.setWorkspaceSessionForWorktree(worktreeId, nextSession)
   }
 
   protected applyHeadlessSessionTabPropsToSnapshot(
     worktreeId: string,
     tabId: string,
-    props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
+    props: HeadlessSessionTabProps
   ): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
@@ -79,12 +57,7 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
         return tab
       }
       changed = true
-      return {
-        ...tab,
-        ...(props.color !== undefined ? { color: props.color } : {}),
-        ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
-        ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
-      }
+      return applySessionTabPropsToSnapshotTab(tab, props)
     })
     if (!changed) {
       return
@@ -97,6 +70,86 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
     }
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
+  }
+
+  // One session write and one snapshot bump for the whole pair: row + unified viewMode and owner.
+  protected applyHeadlessChatPairWrite(
+    worktreeId: string,
+    parentTabId: string,
+    leafId: string | null,
+    viewMode: 'terminal' | 'chat',
+    props: Pick<HeadlessSessionTabProps, 'color' | 'isPinned'>
+  ): void {
+    const state = readHeadlessChatPairState(
+      this.getWorkspaceSessionForWorktree(worktreeId),
+      this.mobileSessionTabsByWorktree.get(worktreeId),
+      worktreeId,
+      parentTabId
+    )
+    if (!state) {
+      return
+    }
+    // Why: a tab with no layout has one derived pane, which owns chat without an owner id.
+    const next = resolveTerminalChatPairWrite({
+      current: state.pair,
+      root: state.root,
+      viewMode,
+      leafId: state.hasLayout ? leafId : null
+    })
+    if (!next) {
+      if (props.color !== undefined || props.isPinned !== undefined) {
+        this.persistHeadlessSessionTabProps(worktreeId, parentTabId, props)
+        this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, parentTabId, props)
+      }
+      return
+    }
+    const pairProps: HeadlessSessionTabProps = {
+      ...props,
+      viewMode: next.viewMode,
+      ...(state.hasLayout ? { chatLeafId: next.chatLeafId ?? null } : {})
+    }
+    this.persistHeadlessSessionTabProps(worktreeId, parentTabId, pairProps)
+    this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, parentTabId, pairProps)
+  }
+
+  /** The reply for a write the fence refuses, or null when it applies. */
+  protected admitChatViewWrite(
+    worktreeId: string,
+    parentTabId: string,
+    write: RuntimeSessionTabChatViewWrite
+  ): RuntimeSessionTabPropsResult | null {
+    const admission = this.chatViewWriteFence.admit(
+      worktreeId,
+      parentTabId,
+      write.writerId,
+      write.seq
+    )
+    if (admission === 'apply') {
+      return null
+    }
+    return {
+      updated: true,
+      chatView: this.readMobileSessionTabChatView(worktreeId, parentTabId),
+      ...(admission === 'superseded' ? { superseded: true as const } : {})
+    }
+  }
+
+  protected readMobileSessionTabChatView(
+    worktreeId: string,
+    parentTabId: string
+  ): RuntimeSessionTabChatView {
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    // Why: a renderer-owned tab's truth is the renderer's latest publication.
+    return toSessionTabChatView(
+      this.getAvailableAuthoritativeWindow()
+        ? readPublishedChatPairState(snapshot, parentTabId)
+        : readHeadlessChatPairState(
+            this.getWorkspaceSessionForWorktree(worktreeId),
+            snapshot,
+            worktreeId,
+            parentTabId
+          )
+    )
   }
 
   protected getMobileSessionTopLevelTabId(tab: RuntimeMobileSessionSnapshotTab): string {

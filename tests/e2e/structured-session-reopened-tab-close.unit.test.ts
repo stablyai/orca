@@ -86,6 +86,7 @@ async function setup() {
       onMoveSessionTab: noop,
       onSplitTerminal: noop,
       onRenameTerminal: noop,
+      onTerminalChatViewRequest: noop,
       onFocusTerminal: noop,
       respondSessionTabClose: ({ requestId, error }: { requestId: string; error?: string }) =>
         pendingResponses.get(requestId)?.(error)

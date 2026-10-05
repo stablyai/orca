@@ -11,7 +11,17 @@ import { buildHeadlessMobileSessionTabGroups } from './mobile-session-layout-pro
 import { appendRetiredTerminalSurfaceProofs } from './mobile-session-terminal-retirement-proof'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
-import type { RuntimeSessionTabCloseReason } from '../../shared/runtime-session-contracts'
+import type {
+  RuntimeSessionTabChatViewWrite,
+  RuntimeSessionTabCloseReason,
+  RuntimeSessionTabPropsResult
+} from '../../shared/runtime-session-contracts'
+import {
+  readHeadlessChatPairState,
+  resolvePaneLayoutChatOwnerFillIn,
+  resolveSessionTabChatPairTarget
+} from './session-tab-chat-pair'
+import { terminalLayoutNodeContainsLeaf } from '../../shared/native-chat-leaf-ownership'
 
 export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWithCloseStructuredAgentSessionTab {
   protected async closeHeadlessMobileTerminalTab(
@@ -203,23 +213,50 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
-    const resolvedArgs = { ...args, tabId: hostTabId }
+    const priorPair = readHeadlessChatPairState(
+      this.getWorkspaceSessionForWorktree(worktreeId),
+      snapshot,
+      worktreeId,
+      hostTabId
+    )
+    const priorOwner =
+      priorPair?.pair.viewMode === 'chat' &&
+      priorPair.pair.chatLeafId &&
+      terminalLayoutNodeContainsLeaf(priorPair.root, priorPair.pair.chatLeafId)
+        ? priorPair.pair.chatLeafId
+        : null
+    // Why fill-in only: stale persistence from any client must not move or clear the owner;
+    // the pair writer (setTabProps) is the only lane that changes an existing owner.
+    const resolvedArgs = {
+      ...args,
+      tabId: hostTabId,
+      chatLeafId: resolvePaneLayoutChatOwnerFillIn(priorPair, args.root, args.chatLeafId)
+    }
     const acceptedLayout = this.persistHeadlessTerminalPaneLayout(worktreeId, resolvedArgs)
     if (acceptedLayout) {
+      // Why prior owner: persistence normalization strips an owner outside the tree before read-back.
+      const ownerRetired =
+        priorOwner !== null &&
+        ![priorOwner, acceptedLayout.chatLeafId].some(
+          (leafId) => leafId && terminalLayoutNodeContainsLeaf(acceptedLayout.root, leafId)
+        )
+      if (ownerRetired) {
+        // Why before the layout frame: no publication may show chat without its owning pane.
+        this.applyHeadlessChatPairWrite(worktreeId, hostTabId, null, 'terminal', {})
+      }
       this.applyHeadlessTerminalPaneLayoutToSnapshot(worktreeId, {
         tabId: hostTabId,
         root: acceptedLayout.root,
         expandedLeafId: acceptedLayout.expandedLeafId,
-        chatLeafId: acceptedLayout.chatLeafId ?? null,
+        chatLeafId: ownerRetired ? null : (acceptedLayout.chatLeafId ?? null),
         ...(acceptedLayout.titlesByLeafId ? { titlesByLeafId: acceptedLayout.titlesByLeafId } : {})
       })
     }
     return { updated: true }
   }
 
-  // Why: tab color/pin are host-authoritative for remote-server tabs but had no
-  // push path, so pinning or coloring a tab reverted on the next snapshot and
-  // was never persisted. Persist to the workspace session + live snapshot.
+  // Why: tab color/pin/view are host-authoritative for remote-server tabs but had no
+  // push path, so they reverted on the next snapshot and were never persisted.
   async setMobileSessionTabProps(
     worktreeSelector: string,
     args: {
@@ -227,22 +264,70 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       color?: string | null
       isPinned?: boolean
       viewMode?: 'terminal' | 'chat'
+      chatViewWrite?: RuntimeSessionTabChatViewWrite
     }
-  ): Promise<{ updated: true }> {
+  ): Promise<RuntimeSessionTabPropsResult> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
-    // Why: a renderer-authoritative host owns + republishes tab props, so a
-    // headless write would be overwritten. Persist only when headless.
-    if (this.getAvailableAuthoritativeWindow()) {
-      return { updated: true }
-    }
+    // Why no await from here to the write: requests run concurrently, so the fence decision
+    // and the write (or the relay send) must happen in one synchronous step.
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
-    this.persistHeadlessSessionTabProps(worktreeId, hostTabId, args)
-    this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, hostTabId, args)
-    return { updated: true }
+    const authoritativeWindow = this.getAvailableAuthoritativeWindow()
+    if (args.viewMode === undefined) {
+      // Why: a renderer-authoritative host owns + republishes color/pin.
+      if (!authoritativeWindow) {
+        this.persistHeadlessSessionTabProps(worktreeId, hostTabId, args)
+        this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, hostTabId, args)
+      }
+      return { updated: true }
+    }
+    const target = resolveSessionTabChatPairTarget(snapshot, args.tabId, hostTabId)
+    if (authoritativeWindow) {
+      // Why: today's paired clients mirror their own view, auto-exits included; a desktop host
+      // takes view writes only from clients that use the fenced pair writer.
+      if (!args.chatViewWrite) {
+        return { updated: true }
+      }
+      const notifier = this.notifier
+      if (!notifier?.setTerminalChatView) {
+        throw new Error('runtime_unavailable')
+      }
+      const refused = this.admitChatViewWrite(worktreeId, target.parentTabId, args.chatViewWrite)
+      if (refused) {
+        return refused
+      }
+      const { writerId, seq } = args.chatViewWrite
+      // Why confirm only on success: a resend after a failed or still-pending relay must apply.
+      const chatView = await notifier.setTerminalChatView(
+        worktreeId,
+        target.parentTabId,
+        target.leafId,
+        args.viewMode
+      )
+      this.chatViewWriteFence.confirm(worktreeId, target.parentTabId, writerId, seq)
+      return { updated: true, chatView }
+    }
+    if (args.chatViewWrite) {
+      const refused = this.admitChatViewWrite(worktreeId, target.parentTabId, args.chatViewWrite)
+      if (refused) {
+        return refused
+      }
+    }
+    this.applyHeadlessChatPairWrite(worktreeId, target.parentTabId, target.leafId, args.viewMode, {
+      ...(args.color !== undefined ? { color: args.color } : {}),
+      ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {})
+    })
+    if (args.chatViewWrite) {
+      const { writerId, seq } = args.chatViewWrite
+      this.chatViewWriteFence.confirm(worktreeId, target.parentTabId, writerId, seq)
+    }
+    return {
+      updated: true,
+      chatView: this.readMobileSessionTabChatView(worktreeId, target.parentTabId)
+    }
   }
 }

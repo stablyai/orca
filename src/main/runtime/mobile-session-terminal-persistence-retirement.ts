@@ -84,10 +84,12 @@ export function retireTerminalSurfaceFromPersistence(
     return recordTerminalSurfaceRetirement(session, surface, paneKey)
   }
 
-  const nextLayout =
+  const retiredLayout =
     exactLeafInLayout && layout
       ? retireLeavesFromTerminalLayout(layout, new Set([surface.leafId]))
       : null
+  const nextLayout = retiredLayout?.layout ?? null
+  const chatOwnerRetired = retiredLayout?.chatOwnerRetired === true
   const removeParent = !nextLayout
   const nextTabsForWorktree = removeParent
     ? persistedTabs.filter((tab) => tab.id !== surface.parentTabId)
@@ -95,6 +97,7 @@ export function retireTerminalSurfaceFromPersistence(
         tab.id === surface.parentTabId
           ? {
               ...tab,
+              ...(chatOwnerRetired ? { viewMode: 'terminal' as const } : {}),
               ptyId:
                 nextLayout.ptyIdsByLeafId?.[nextLayout.activeLeafId ?? ''] ??
                 Object.values(nextLayout.ptyIdsByLeafId ?? {})[0] ??
@@ -117,7 +120,13 @@ export function retireTerminalSurfaceFromPersistence(
           ? unifiedTabsForWorktree.filter(
               (tab) => tab.id !== surface.parentTabId && tab.entityId !== surface.parentTabId
             )
-          : unifiedTabsForWorktree
+          : chatOwnerRetired
+            ? unifiedTabsForWorktree.map((tab) =>
+                tab.id === surface.parentTabId || tab.entityId === surface.parentTabId
+                  ? { ...tab, viewMode: 'terminal' as const }
+                  : tab
+              )
+            : unifiedTabsForWorktree
       }
     : undefined
   const validTopLevelIds = new Set((unifiedTabs?.[surface.worktreeId] ?? []).map((tab) => tab.id))

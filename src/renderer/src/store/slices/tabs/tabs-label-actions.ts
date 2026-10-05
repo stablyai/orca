@@ -8,6 +8,23 @@ import {
   mirrorTabViewModeToHost,
   patchTerminalTabRow
 } from './tabs-host-mirroring'
+import { applyChatPairToState, readTerminalChatPair } from './terminal-chat-pair-state'
+import { resolveChatPairAuthority } from './terminal-chat-pair-authority'
+import { locateTerminalTab } from '../../terminals/terminal-tab-location'
+import type { AppState } from '../../types'
+
+/** A terminal tab whose pair this desktop's store owns: every write goes through one helper. */
+function findLocalTerminalTab(state: AppState, tabId: string) {
+  const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+  if (
+    !found ||
+    found.tab.contentType !== 'terminal' ||
+    resolveChatPairAuthority(state, found.worktreeId) !== 'local'
+  ) {
+    return null
+  }
+  return found.tab
+}
 
 export function createTabsLabelActions(
   set: TabsSliceSet,
@@ -16,6 +33,7 @@ export function createTabsLabelActions(
   TabsSlice,
   | 'reorderUnifiedTabs'
   | 'setTabLabel'
+  | 'applyTerminalChatPair'
   | 'setTabViewMode'
   | 'toggleTabViewMode'
   | 'setTabCustomLabel'
@@ -61,7 +79,34 @@ export function createTabsLabelActions(
       set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? state)
     },
 
+    applyTerminalChatPair: (terminalTabId, leafId, mode, options) => {
+      const toggle: { committed: { from: 'terminal' | 'chat'; to: 'terminal' | 'chat' } | null } = {
+        committed: null
+      }
+      set((state) => {
+        const applied = applyChatPairToState(state, terminalTabId, { leafId, viewMode: mode })
+        if (!applied) {
+          return state
+        }
+        if (options?.userToggle && applied.from !== applied.to) {
+          toggle.committed = { from: applied.from, to: applied.to }
+        }
+        return applied.patch
+      })
+      const { committed } = toggle
+      if (committed) {
+        const agent = locateTerminalTab(get().tabsByWorktree, terminalTabId)?.tab.launchAgent
+        emitNativeChatToggled({ ...committed, agent: agent ?? null })
+      }
+      return readTerminalChatPair(get(), terminalTabId)
+    },
+
     setTabViewMode: (tabId, mode) => {
+      const local = findLocalTerminalTab(get(), tabId)
+      if (local) {
+        get().applyTerminalChatPair(local.entityId, null, mode)
+        return
+      }
       set((state) => {
         const tabPatch = patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: mode })
         const rowPatch = patchTerminalTabRow(state.tabsByWorktree, tabId, { viewMode: mode })
@@ -80,6 +125,12 @@ export function createTabsLabelActions(
     },
 
     toggleTabViewMode: (tabId) => {
+      const local = findLocalTerminalTab(get(), tabId)
+      if (local) {
+        const nextMode = local.viewMode === 'chat' ? 'terminal' : 'chat'
+        get().applyTerminalChatPair(local.entityId, null, nextMode, { userToggle: true })
+        return
+      }
       let toggled: {
         from: 'terminal' | 'chat'
         to: 'terminal' | 'chat'

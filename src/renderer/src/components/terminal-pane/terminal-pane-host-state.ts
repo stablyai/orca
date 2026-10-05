@@ -5,6 +5,7 @@ import {
   type WorktreeHostConnection
 } from '@/lib/worktree-host-connection-phase'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { resolveChatPairAuthority } from '@/store/slices/tabs/terminal-chat-pair-authority'
 import {
   selectRuntimeAwareSshError,
   selectRuntimeAwareSshTargetLabel,
@@ -12,6 +13,8 @@ import {
 } from '@/store/slices/runtime-environment-ssh'
 
 export type TerminalPaneHostState = {
+  /** The store holds this worktree's chat pair (this desktop is its host), not a per-pane copy. */
+  chatPairStoreOwned: boolean
   nativeChatTranscriptIsLocalReadable: boolean
   sshReconnectEnvironmentId: string | null
   /** The failure detail behind the status; the overlay shows only a canned sentence without it. */
@@ -27,8 +30,10 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
   const nativeChatTranscriptIsLocalReadableResult =
     isNativeChatTranscriptLocalReadable(connectionId)
   const host = resolveWorktreeHostConnection(state, worktreeId, connectionId)
+  const chatPairStoreOwned = resolveChatPairAuthority(state, worktreeId) === 'local'
   if (!host.targetId) {
     return {
+      chatPairStoreOwned,
       nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
       sshReconnectEnvironmentId: null,
       sshReconnectError: null,
@@ -40,6 +45,7 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
   }
   const { targetId: sshReconnectTargetId, environmentId: sshReconnectEnvironmentId } = host
   return {
+    chatPairStoreOwned,
     nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
     sshReconnectEnvironmentId,
     sshReconnectError: selectRuntimeAwareSshError(
@@ -64,6 +70,7 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
 
 function isSameHostState(a: TerminalPaneHostState, b: TerminalPaneHostState): boolean {
   return (
+    a.chatPairStoreOwned === b.chatPairStoreOwned &&
     a.nativeChatTranscriptIsLocalReadable === b.nativeChatTranscriptIsLocalReadable &&
     a.sshReconnectEnvironmentId === b.sshReconnectEnvironmentId &&
     a.sshReconnectError === b.sshReconnectError &&

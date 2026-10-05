@@ -167,6 +167,7 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
         removedPublicationEpoch ? { removedPublicationEpoch } : {}
       )
       this.mobileSessionTabsByWorktree.delete(worktreeId)
+      this.chatViewWriteFence.forgetWorktree(worktreeId)
       this.mobileSessionTabsAgentStatusHeartbeat.removeWorktree(worktreeId)
       this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
       this.cancelScheduledMobileSessionTabsChanged(worktreeId)

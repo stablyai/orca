@@ -131,6 +131,8 @@ export function createTerminalTabCreationActions(
           ...(startupCwd && startupCwd.length > 0 ? { startupCwd } : {}),
           ...(options?.forceHostRuntime ? { forceHostRuntime: true } : {}),
           ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
+          // Why: the row is the host-sync index of the view; keep it in step with the unified tab.
+          ...(options?.viewMode ? { viewMode: options.viewMode } : {}),
           // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
         }

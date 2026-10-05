@@ -276,6 +276,31 @@ export type RuntimeMobileSessionTabsResult = {
    * durable on disk, so holding their tabs strands nothing.
    */
   agentSessionsUnverifiable?: true
+  /**
+   * Set by hosts whose rows carry the authoritative per-tab chat pair (`viewMode` + layout
+   * `chatLeafId`), whose `setTabProps` with `viewMode` applies that pair absolutely, honours
+   * `chatViewWrite` and replies with `chatView`, whose `updatePaneLayout` only fills in a missing
+   * owner, and which turn a tab to terminal when its owning pane is removed.
+   */
+  chatViewHostOwned?: true
+}
+
+/** The chat pair a host holds after a `setTabProps` carrying `viewMode`. */
+export type RuntimeSessionTabChatView = {
+  viewMode: 'terminal' | 'chat' | null
+  chatLeafId: string | null
+}
+
+/** One client process's ordered pair write; the host refuses a `seq` at or below the last applied. */
+export type RuntimeSessionTabChatViewWrite = {
+  writerId: string
+  seq: number
+}
+
+export type RuntimeSessionTabPropsResult = {
+  updated: true
+  chatView?: RuntimeSessionTabChatView
+  superseded?: true
 }
 
 export type RuntimeMobileSessionCreateTerminalResult = {

@@ -130,7 +130,11 @@ export const SetTabProps = WorktreeTabSelector.extend({
   color: z.string().max(64).nullable().optional(),
   isPinned: z.boolean().optional(),
   // undefined = leave unchanged; no "clear" semantic (absence means default 'terminal').
-  viewMode: z.enum(['terminal', 'chat']).optional()
+  viewMode: z.enum(['terminal', 'chat']).optional(),
+  // Orders one client process's pair writes at the host; meaningful only with viewMode.
+  chatViewWrite: z
+    .object({ writerId: z.string().min(1).max(64), seq: z.number().int().positive() })
+    .optional()
 })
 
 export const CreateTerminalTab = WorktreeTabSelector.extend({

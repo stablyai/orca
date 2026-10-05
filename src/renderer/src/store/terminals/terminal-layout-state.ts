@@ -15,6 +15,10 @@ import {
   withTerminalTabPtyId
 } from './terminal-pty-identities'
 import { transferNormalizedTerminalLayoutPtyOwnership } from './workspace-terminal-hydration-patch'
+import {
+  applyLocalChatOwnerRemoval,
+  resolveLocalLayoutChatOwner
+} from './terminal-layout-chat-owner'
 
 export function createTerminalLayoutActions(
   set: TerminalStoreSet,
@@ -108,20 +112,30 @@ export function createTerminalLayoutActions(
             )
           }
         }
-        const normalized = normalizeTerminalLayoutPtyOwnership(layout)
+        // Why before normalization: a pane-identity remap then carries the stored owner along.
+        const localOwned = resolveLocalLayoutChatOwner(s, tabId, layout)
+        const incoming = localOwned ?? layout
+        const normalized = normalizeTerminalLayoutPtyOwnership(incoming)
         // Resolved before the bailout: normalization can transfer pane ownership even when the stored snapshot is untouched.
         if (normalized.changed) {
           ownershipTransfers = resolveTerminalLayoutPtyOwnershipTransfers(
-            layout,
+            incoming,
             normalized.snapshot
           )
         }
+        const { layout: snapshot, viewModePatch } = localOwned
+          ? applyLocalChatOwnerRemoval(s, tabId, normalized.snapshot)
+          : { layout: normalized.snapshot, viewModePatch: {} }
         // Why: pane-title churn re-persists structurally identical snapshots; bailing keeps every pane selector asleep.
         const existing = s.terminalLayoutsByTabId[tabId]
-        if (existing && terminalLayoutEqual(existing, normalized.snapshot)) {
+        if (
+          existing &&
+          terminalLayoutEqual(existing, snapshot) &&
+          Object.keys(viewModePatch).length === 0
+        ) {
           return s
         }
-        const structuralEdit = !terminalLayoutNodeEqual(existing?.root, normalized.snapshot.root)
+        const structuralEdit = !terminalLayoutNodeEqual(existing?.root, snapshot.root)
         const workspaceId = structuralEdit
           ? Object.keys(s.tabsByWorktree).find((id) =>
               s.tabsByWorktree[id].some((tab) => tab.id === tabId)
@@ -129,12 +143,13 @@ export function createTerminalLayoutActions(
           : undefined
         const tracksRemoteEdit = workspaceId && getConnectionIdFromState(s, workspaceId)
         return {
-          terminalLayoutsByTabId: { ...s.terminalLayoutsByTabId, [tabId]: normalized.snapshot },
+          ...viewModePatch,
+          terminalLayoutsByTabId: { ...s.terminalLayoutsByTabId, [tabId]: snapshot },
           ...(tracksRemoteEdit
             ? {
                 pendingDirectSshLayoutEditsByTabId: {
                   ...s.pendingDirectSshLayoutEditsByTabId,
-                  [tabId]: { targetId: tracksRemoteEdit, root: normalized.snapshot.root }
+                  [tabId]: { targetId: tracksRemoteEdit, root: snapshot.root }
                 }
               }
             : {})

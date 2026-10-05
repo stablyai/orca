@@ -23,6 +23,7 @@ import type { PaneProcessExit } from './pty-connection-types'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalErrorsByPaneId } from './terminal-error-accumulation'
 import { selectTerminalPaneHostState } from './terminal-pane-host-state'
+import { EMPTY_LAYOUT } from './layout-serialization'
 
 export function useTerminalPaneFoundation(
   props: TerminalPaneProps,
@@ -67,6 +68,7 @@ export function useTerminalPaneFoundation(
   // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
   isVisibleRef.current = isRendererVisible
   const {
+    chatPairStoreOwned: storeOwnsChatPair,
     nativeChatTranscriptIsLocalReadable,
     sshReconnectEnvironmentId,
     sshReconnectError,
@@ -123,9 +125,12 @@ export function useTerminalPaneFoundation(
   const [quickCommandEditorOpen, setQuickCommandEditorOpen] = useState(false)
   const [quickCommandEditorHostId, setQuickCommandEditorHostId] =
     useState<ExecutionHostId>(LOCAL_EXECUTION_HOST_ID)
-  const [chatLeafId, setChatLeafId] = useState<string | null>(
+  const [localChatLeafId, setChatLeafId] = useState<string | null>(
     () => useAppStore.getState().terminalLayoutsByTabId[tabId]?.chatLeafId ?? null
   )
+  const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
+  // Why: on a local worktree the store holds the one pair, so a pane copy could write a stale owner back.
+  const chatLeafId = storeOwnsChatPair ? (savedLayout.chatLeafId ?? null) : localChatLeafId
   const onAgentExitedRef = useRef<(leafId: string) => void>(() => {})
   const [tabWideAgentHintLeafId, setTabWideAgentHintLeafId] = useState<string | null | undefined>(
     undefined
@@ -219,6 +224,8 @@ export function useTerminalPaneFoundation(
     setQuickCommandEditorHostId,
     chatLeafId,
     setChatLeafId,
+    storeOwnsChatPair,
+    savedLayout,
     onAgentExitedRef,
     tabWideAgentHintLeafId,
     setTabWideAgentHintLeafId,

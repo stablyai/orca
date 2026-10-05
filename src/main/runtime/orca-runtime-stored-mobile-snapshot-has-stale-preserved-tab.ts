@@ -138,7 +138,8 @@ export class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends Orc
       activeGroupId: null,
       activeTabId: null,
       activeTabType: null,
-      tabs: []
+      tabs: [],
+      chatViewHostOwned: true
     }
     const changeSequence = ++this.mobileSessionTabsChangeSequence
     for (const subscription of this.mobileSessionTabListeners) {

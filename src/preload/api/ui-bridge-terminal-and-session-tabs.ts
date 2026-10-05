@@ -188,6 +188,15 @@ export const uiTerminalAndSessionTabsApi = {
   respondSessionTabClose: (response) => {
     ipcRenderer.send('ui:sessionTabCloseResponse', response)
   },
+  onTerminalChatViewRequest: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
+      callback(request)
+    ipcRenderer.on('ui:terminalChatViewRequest', listener)
+    return () => ipcRenderer.removeListener('ui:terminalChatViewRequest', listener)
+  },
+  respondTerminalChatView: (response) => {
+    ipcRenderer.send('ui:terminalChatViewResponse', response)
+  },
   onMoveSessionTab: (
     callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
   ): (() => void) => {

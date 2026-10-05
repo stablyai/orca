@@ -61,10 +61,11 @@ function omitLeafRecords<T>(
   return Object.keys(retained).length > 0 ? retained : undefined
 }
 
+/** Prunes retired leaves; null when none remain. Retiring the chat owner drops it (the tab leaves chat). */
 export function retireLeavesFromTerminalLayout(
   layout: TerminalLayoutSnapshot,
   retiredLeafIds: ReadonlySet<string>
-): TerminalLayoutSnapshot | null {
+): { layout: TerminalLayoutSnapshot; chatOwnerRetired: boolean } | null {
   const root = pruneTerminalPane(layout.root, retiredLeafIds)
   if (!root) {
     return null
@@ -75,18 +76,23 @@ export function retireLeavesFromTerminalLayout(
     layout.activeLeafId && retainedLeafIdSet.has(layout.activeLeafId)
       ? layout.activeLeafId
       : retainedLeafIds[0]!
+  const chatOwnerRetired = Boolean(layout.chatLeafId && retiredLeafIds.has(layout.chatLeafId))
+  const { chatLeafId: _retiredOwner, ...ownerless } = layout
   return {
-    ...layout,
-    root,
-    activeLeafId,
-    expandedLeafId:
-      layout.expandedLeafId && retainedLeafIdSet.has(layout.expandedLeafId)
-        ? layout.expandedLeafId
-        : null,
-    ptyIdsByLeafId: omitLeafRecords(layout.ptyIdsByLeafId, retiredLeafIds),
-    buffersByLeafId: omitLeafRecords(layout.buffersByLeafId, retiredLeafIds),
-    scrollbackRefsByLeafId: omitLeafRecords(layout.scrollbackRefsByLeafId, retiredLeafIds),
-    titlesByLeafId: omitLeafRecords(layout.titlesByLeafId, retiredLeafIds)
+    chatOwnerRetired,
+    layout: {
+      ...(chatOwnerRetired ? ownerless : layout),
+      root,
+      activeLeafId,
+      expandedLeafId:
+        layout.expandedLeafId && retainedLeafIdSet.has(layout.expandedLeafId)
+          ? layout.expandedLeafId
+          : null,
+      ptyIdsByLeafId: omitLeafRecords(layout.ptyIdsByLeafId, retiredLeafIds),
+      buffersByLeafId: omitLeafRecords(layout.buffersByLeafId, retiredLeafIds),
+      scrollbackRefsByLeafId: omitLeafRecords(layout.scrollbackRefsByLeafId, retiredLeafIds),
+      titlesByLeafId: omitLeafRecords(layout.titlesByLeafId, retiredLeafIds)
+    }
   }
 }
 
@@ -236,12 +242,14 @@ export function retireTerminalSurfacesFromSnapshot(args: {
     const sourceLayout =
       tab.parentLayout ??
       retiredTabs.find((retired) => retired.parentTabId === tab.parentTabId)?.parentLayout
-    const parentLayout = sourceLayout
+    const retiredLayout = sourceLayout
       ? retireLeavesFromTerminalLayout(sourceLayout, retiredLeafIds)
-      : undefined
+      : null
     return {
       ...tab,
-      ...(parentLayout ? { parentLayout } : {}),
+      ...(retiredLayout ? { parentLayout: retiredLayout.layout } : {}),
+      // Why: closing the chat pane leaves chat for the tab; a sibling never inherits it.
+      ...(retiredLayout?.chatOwnerRetired ? { viewMode: 'terminal' as const } : {}),
       isActive:
         tab.isActive ||
         retiredTabs.some((retired) => retired.parentTabId === tab.parentTabId && retired.isActive)
