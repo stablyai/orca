@@ -60,6 +60,15 @@ function sealEnvelope(envelope: SealedPushEnvelope, key: Uint8Array): string {
   return SEALED_PUSH_PREFIX + Buffer.concat([nonce, box]).toString('base64')
 }
 
+// Escaped as \u0000, each char costs 6 JSON bytes: the most an 80-char clipped title can take.
+const WORST_CASE_TITLE = '\u0000'.repeat(80)
+
+/** Decided from the id and epoch alone, so an alert and its dismissal always agree. */
+function carriesRealId(notificationId: string, epoch: string, key: Uint8Array): boolean {
+  const probe = { t: WORST_CASE_TITLE, n: notificationId, e: epoch }
+  return sealEnvelope(probe, key).length <= MAX_SEALED_LENGTH
+}
+
 function placeholderTitle(notification: PushSendNotification): string {
   if (notification.agentState === 'needs-input') {
     return 'Agent needs input'
@@ -82,16 +91,12 @@ export function sealPushNotification(
     ...(isDismiss ? {} : { t: title, b: body }),
     ...(worktreeId ? { w: worktreeId } : {}),
     ...(paneKey ? { p: paneKey } : {}),
-    ...(notificationId ? { n: notificationId } : {}),
+    ...(notificationId && carriesRealId(notificationId, notificationEpoch, key)
+      ? { n: notificationId }
+      : {}),
     e: notificationEpoch
   }
   let sealed = sealEnvelope(envelope, key)
-  // Budget order: the real id only improves dismissal matching, so it goes first;
-  // the body is shortened last because it is what the user reads.
-  if (sealed.length > MAX_SEALED_LENGTH) {
-    delete envelope.n
-    sealed = sealEnvelope(envelope, key)
-  }
   while (sealed.length > MAX_SEALED_LENGTH && envelope.b) {
     // By code point, so an emoji is never split; each pass strictly shortens the body.
     const chars = Array.from(envelope.b)
