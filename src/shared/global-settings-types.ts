@@ -13,6 +13,7 @@ import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
 import type { GlobalWindowsRuntimeDefault } from './project-execution-runtime'
 import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
+import type { FolderColorHex } from './folder-color-palette'
 import type { ComputerAwakeMode } from './computer-awake-mode'
 import type { CommitMessageAiSettings } from './commit-message-ai-types'
 import type { HostSettingOverrides } from './host-setting-overrides'
@@ -250,6 +251,10 @@ export type GlobalSettings = {
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
   rightSidebarOpenByDefault: boolean
   showGitIgnoredFiles?: boolean
+  /** File explorer icon theme. `builtin` keeps Orca's bundled Lucide icons. */
+  fileIconTheme?: string
+  /** Exact-path, execution-scoped folder colors selected from the explorer context menu. */
+  folderColorOverrides?: Record<string, FolderColorHex>
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
   sourceControlViewMode: SourceControlViewMode
   /** Preferred Source Control group order. Per-user, not per-workspace. */

@@ -20,11 +20,23 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { createMultiSelectDragGhost } from './file-explorer-multi-drag-image'
 import { FileExplorerRowContextMenu } from './file-explorer-row-context-menu'
+import type { PluginIconThemeRegistration } from '../../../../shared/plugins/plugin-icon-theme-artifact'
+import { resolveFileIconThemeAsset } from '@/lib/file-icon-theme'
+import { PluginFileIcon } from './PluginFileIcon'
+import { useAppStore } from '@/store'
+import {
+  folderColorOverrideKey,
+  resolveFolderColorOverride,
+  setFolderColorOverride,
+  type FolderColorHex
+} from '../../../../shared/folder-color-palette'
+import { getFileExplorerOperationExecutionHostId } from './file-explorer-operation-owner'
 
 // ─── File / Folder Row with Context Menu ─────────────────────────
 
 export type FileExplorerRowProps = {
   node: TreeNode
+  iconTheme?: PluginIconThemeRegistration | null
   displayDepthOffset?: number
   isExpanded: boolean
   isLoading: boolean
@@ -71,6 +83,7 @@ export type FileExplorerRowProps = {
 /** Offsets visual indentation for a scoped tree without changing the node paths passed to file actions. */
 export function FileExplorerRow({
   node,
+  iconTheme = null,
   displayDepthOffset = 0,
   isExpanded,
   isLoading,
@@ -112,7 +125,28 @@ export function FileExplorerRow({
   onNativeDragTargetChange,
   onNativeDragExpandDir
 }: FileExplorerRowProps): React.JSX.Element {
+  const folderColorOverrides = useAppStore((state) => state.settings?.folderColorOverrides)
+  const updateSettings = useAppStore((state) => state.updateSettings)
+  const folderColorKey = folderColorOverrideKey(
+    node.path,
+    getFileExplorerOperationExecutionHostId(node.operationOwner)
+  )
+  const folderColor = node.isDirectory
+    ? resolveFolderColorOverride(folderColorOverrides, folderColorKey)
+    : null
+  const handleFolderColorChange = (color: FolderColorHex | null): void => {
+    void updateSettings({
+      folderColorOverrides: setFolderColorOverride(folderColorOverrides, folderColorKey, color)
+    })
+  }
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
+  const pluginIcon = iconTheme
+    ? resolveFileIconThemeAsset(iconTheme, {
+        name: node.name,
+        isDirectory: node.isDirectory,
+        isExpanded
+      })
+    : null
   const rowDropDir = node.isDirectory ? node.path : targetDir
   const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
     useFileExplorerRowDrag({
@@ -199,10 +233,22 @@ export function FileExplorerRow({
               />
               {isLoading ? (
                 <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+              ) : pluginIcon ? (
+                <PluginFileIcon
+                  asset={pluginIcon}
+                  className="size-3 shrink-0 text-muted-foreground"
+                  color={folderColor ?? undefined}
+                />
               ) : isExpanded ? (
-                <FolderOpen className="size-3 shrink-0 text-muted-foreground" />
+                <FolderOpen
+                  className="size-3 shrink-0 text-muted-foreground"
+                  style={{ color: folderColor ?? undefined }}
+                />
               ) : (
-                <Folder className="size-3 shrink-0 text-muted-foreground" />
+                <Folder
+                  className="size-3 shrink-0 text-muted-foreground"
+                  style={{ color: folderColor ?? undefined }}
+                />
               )}
             </>
           ) : (
@@ -210,6 +256,11 @@ export function FileExplorerRow({
               <span className="size-3 shrink-0" />
               {node.isSymlink ? (
                 <Link className="size-3 shrink-0 text-muted-foreground" />
+              ) : pluginIcon ? (
+                <PluginFileIcon
+                  asset={pluginIcon}
+                  className="size-3 shrink-0 text-muted-foreground"
+                />
               ) : (
                 React.createElement(FileIcon, {
                   className: 'size-3 shrink-0 text-muted-foreground'
@@ -287,6 +338,8 @@ export function FileExplorerRow({
         onRequestDelete={onRequestDelete}
         onCollapseFolderSubtree={onCollapseFolderSubtree}
         onFindInFolder={onFindInFolder}
+        folderColor={folderColor}
+        onFolderColorChange={handleFolderColorChange}
       />
     </ContextMenu>
   )

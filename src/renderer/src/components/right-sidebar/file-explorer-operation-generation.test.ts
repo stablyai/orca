@@ -5,6 +5,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   captureFileExplorerOperationGuard,
+  getFileExplorerOperationExecutionHostId,
   getFileExplorerOperationOwner
 } from './file-explorer-operation-owner'
 
@@ -27,6 +28,21 @@ afterEach(() => {
 })
 
 describe('file explorer operation generations', () => {
+  it('provides canonical host ids for host-scoped presentation settings', () => {
+    expect(getFileExplorerOperationExecutionHostId({ kind: 'local' })).toBe('local')
+    expect(
+      getFileExplorerOperationExecutionHostId({ kind: 'ssh', connectionId: 'private target' })
+    ).toBe('ssh:private%20target')
+    expect(
+      getFileExplorerOperationExecutionHostId({
+        kind: 'runtime',
+        environmentId: 'hub-a',
+        executionHostId: 'runtime:hub-a'
+      })
+    ).toBe('runtime:hub-a')
+    expect(getFileExplorerOperationExecutionHostId({ kind: 'unresolved' })).toBeNull()
+  })
+
   it('routes floating workspace file mutations to the local host', () => {
     const owner = getFileExplorerOperationOwner(FLOATING_TERMINAL_WORKTREE_ID)
     const guard = captureFileExplorerOperationGuard(FLOATING_TERMINAL_WORKTREE_ID, owner)
