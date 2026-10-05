@@ -12,6 +12,7 @@ import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import type { DirectSshPaneRetryAttempt } from '@/store/slices/direct-ssh-terminal-recovery'
 import { directSshAuthoritiesEqual } from '@/store/slices/direct-ssh-terminal-authority-ledger'
 
+import { buildProjectGroupWorkspaceEnv } from '../project-group-workspace-env'
 import { settleTerminalPaneRecovery } from '../terminal-pane-recovery'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -60,9 +61,13 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
       : null
   session.workspaceEnv = { ORCA_WORKSPACE_ID: session.deps.worktreeId }
   if (session.folderWorkspace) {
-    session.workspaceEnv.ORCA_PROJECT_GROUP_ID = session.folderWorkspace.projectGroupId
     session.workspaceEnv.ORCA_WORKSPACE_ROOT = session.folderWorkspace.folderPath
   }
+  // Why: lets an agent route work to a sibling project without a hand-maintained path table.
+  Object.assign(
+    session.workspaceEnv,
+    buildProjectGroupWorkspaceEnv(session.state, session.deps.worktreeId, session.folderWorkspace)
+  )
   session.paneIdentityEnv = {
     ...session.workspaceEnv,
     ORCA_PANE_KEY: session.cacheKey,
