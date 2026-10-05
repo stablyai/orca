@@ -171,7 +171,7 @@ function isBranchConfigSeparator(code: number): boolean {
 }
 
 // Deferred materialization may omit store flags; read the repo-local Orca-created marker too.
-async function remoteHasOrcaProvenance(
+export async function remoteHasOrcaProvenance(
   execGit: GitRemoteExec,
   repoPath: string,
   remoteName: string
