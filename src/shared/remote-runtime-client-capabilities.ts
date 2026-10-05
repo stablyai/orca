@@ -11,6 +11,7 @@ import {
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from './protocol-version'
+import { TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY } from './terminal-quick-command-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
 import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from './skill-install-capability'
 
@@ -32,6 +33,7 @@ export function remoteRuntimeClientCapabilities(
       WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
       WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
       AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
+      TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY,
       ...additionalCapabilities
     ])
   )

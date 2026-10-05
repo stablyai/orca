@@ -3005,7 +3005,11 @@
               "command_label": "命令",
               "agent_toolbar_hint": "支持/目标、技能、路径",
               "agent_footer_hint": "多行提示很好——让他们保持专注。",
-              "resize_hint": "拖动角点以调整大小"
+              "resize_hint": "拖动角点以调整大小",
+              "length_over_limit": "内容过长，无法保存。",
+              "length_count": "{{value0}} / {{value1}} 个字符",
+              "size_count": "{{value0}} / {{value1}}",
+              "prompt_over_host_limit": "对此主机来说过长。请在主机上更新 Orca 以保存更长的提示词。"
             },
             "TerminalQuickCommandDialogFooter": {
               "2e2b958dfc": "保存",

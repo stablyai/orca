@@ -11,6 +11,7 @@ import {
   isTerminalAgentQuickCommand,
   supportsTerminalAgentQuickCommand
 } from '../../../../shared/terminal-quick-commands'
+import { getTerminalQuickCommandBodySize } from '../../../../shared/terminal-quick-command-prompt-limit'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   Dialog,
@@ -44,8 +45,11 @@ type TerminalQuickCommandDialogProps = {
   /** Settings has no ambient workspace to imply scope from, so it opens the
    *  Advanced section up front. In-workspace entry points leave it collapsed. */
   defaultAdvancedOpen?: boolean
+  /** An older target host's agent-prompt character cap; `null` (the default) means none. */
+  agentPromptMaxLength?: number | null
   onOpenChange: (open: boolean) => void
-  onSave: (command: TerminalQuickCommand) => void
+  /** Resolves whether the save landed; the dialog closes only then, so a refusal keeps the text. */
+  onSave: (command: TerminalQuickCommand) => Promise<boolean> | boolean
 }
 
 const EMPTY_REPOS: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[] = []
@@ -68,6 +72,7 @@ export function TerminalQuickCommandDialog({
   command,
   repos = EMPTY_REPOS,
   defaultAdvancedOpen = false,
+  agentPromptMaxLength = null,
   onOpenChange,
   onSave
 }: TerminalQuickCommandDialogProps): React.JSX.Element {
@@ -75,6 +80,7 @@ export function TerminalQuickCommandDialog({
     getAgentCatalog().find((entry) => supportsTerminalAgentQuickCommand(entry.id))?.id ?? 'claude'
   const [draft, setDraft] = useState<TerminalQuickCommand>(command)
   const wasOpenRef = useRef(open)
+  const savingRef = useRef(false)
   const syncedCommandRef = useRef(command)
   const draftMemoryRef = useRef<ReturnType<typeof createTerminalQuickCommandDialogDraftMemory>>(
     undefined!
@@ -109,6 +115,13 @@ export function TerminalQuickCommandDialog({
 
   const selectedAgent =
     isAgentAction && supportsTerminalAgentQuickCommand(draft.agent) ? draft.agent : fallbackAgent
+  const bodySize = getTerminalQuickCommandBodySize(
+    selectedAction,
+    isAgentAction ? draft.prompt : draft.command,
+    agentPromptMaxLength
+  )
+  // Why: past the limit the host refuses the save, so block it instead of losing the text.
+  const bodyTooLong = bodySize.used > bodySize.max
 
   const setAction = (action: 'terminal-command' | 'agent-prompt'): void => {
     setDraft((current) => {
@@ -133,7 +146,10 @@ export function TerminalQuickCommandDialog({
     )
   }
 
-  const saveDraft = (): void => {
+  const saveDraft = async (): Promise<void> => {
+    if (savingRef.current) {
+      return
+    }
     const next: TerminalQuickCommand = isTerminalAgentQuickCommand(draft)
       ? {
           id: draft.id,
@@ -153,18 +169,26 @@ export function TerminalQuickCommandDialog({
         }
     if (
       !next.label ||
+      bodyTooLong ||
       (isTerminalAgentQuickCommand(next)
         ? !next.prompt.trim() || !supportsTerminalAgentQuickCommand(next.agent)
         : !next.command.trim())
     ) {
       return
     }
-    onSave(next)
-    onOpenChange(false)
+    savingRef.current = true
+    try {
+      if (await onSave(next)) {
+        onOpenChange(false)
+      }
+    } finally {
+      savingRef.current = false
+    }
   }
 
   const canSave =
     draft.label.trim().length > 0 &&
+    !bodyTooLong &&
     (isAgentAction
       ? draft.prompt.trimEnd().length > 0 && supportsTerminalAgentQuickCommand(draft.agent)
       : draft.command.trimEnd().length > 0)
@@ -212,7 +236,7 @@ export function TerminalQuickCommandDialog({
             }
             if (isScreenSubmitShortcut(event) && canSave) {
               event.preventDefault()
-              saveDraft()
+              void saveDraft()
             }
           }}
         >
@@ -236,6 +260,7 @@ export function TerminalQuickCommandDialog({
             draft={draft}
             isAgentAction={isAgentAction}
             selectedAgent={selectedAgent}
+            bodySize={bodySize}
             draftMemoryRef={draftMemoryRef}
             setDraft={setDraft}
             toggleAppendEnter={toggleAppendEnter}
@@ -258,7 +283,7 @@ export function TerminalQuickCommandDialog({
           canSave={canSave}
           submitShortcutLabel={submitShortcutLabel}
           onCancel={() => onOpenChange(false)}
-          onSave={saveDraft}
+          onSave={() => void saveDraft()}
         />
       </DialogContent>
     </Dialog>

@@ -3108,7 +3108,11 @@
               "command_label": "Commande",
               "agent_toolbar_hint": "Prend en charge /goal, les skills et les chemins",
               "agent_footer_hint": "Les prompts multi-lignes conviennent — restez concis.",
-              "resize_hint": "Glissez le coin pour redimensionner"
+              "resize_hint": "Glissez le coin pour redimensionner",
+              "length_over_limit": "Trop long pour être enregistré.",
+              "length_count": "{{value0}} / {{value1}} caractères",
+              "size_count": "{{value0}} / {{value1}}",
+              "prompt_over_host_limit": "Trop long pour cet hôte. Mettez à jour Orca sur l’hôte pour enregistrer des prompts plus longs."
             },
             "TerminalQuickCommandDialogFooter": {
               "2e2b958dfc": "Enregistrer",

@@ -3005,7 +3005,11 @@
               "command_label": "명령",
               "agent_toolbar_hint": "/목표, 기술, 경로 지원",
               "agent_footer_hint": "여러 줄로 된 프롬프트는 괜찮습니다. 집중하세요.",
-              "resize_hint": "크기를 조정하려면 모서리를 드래그하세요."
+              "resize_hint": "크기를 조정하려면 모서리를 드래그하세요.",
+              "length_over_limit": "너무 길어서 저장할 수 없습니다.",
+              "length_count": "{{value0}} / {{value1}}자",
+              "size_count": "{{value0}} / {{value1}}",
+              "prompt_over_host_limit": "이 호스트에는 너무 깁니다. 더 긴 프롬프트를 저장하려면 호스트의 Orca를 업데이트하세요."
             },
             "TerminalQuickCommandDialogFooter": {
               "2e2b958dfc": "저장",

@@ -33,6 +33,10 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     null
   )
   const [quickCommandsSupported, setQuickCommandsSupported] = useState<boolean | null>(null)
+  // Why: an older host's character cap; null until a host says it has one.
+  const [quickCommandAgentPromptMaxLength, setQuickCommandAgentPromptMaxLength] = useState<
+    number | null
+  >(null)
   // Structured-session features are negotiated with the same host capability probe as
   // the other session surfaces; consumers never maintain a second status cache.
   const [agentSessionHostSupport, setAgentSessionHostSupport] =
@@ -131,6 +135,8 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     setAgentSessionHistorySupported,
     quickCommandsSupported,
     setQuickCommandsSupported,
+    quickCommandAgentPromptMaxLength,
+    setQuickCommandAgentPromptMaxLength,
     agentSessionHostSupport,
     setAgentSessionHostSupport,
     browserScreencastSupportedRef,

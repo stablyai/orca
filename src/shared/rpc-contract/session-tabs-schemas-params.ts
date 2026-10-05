@@ -5,7 +5,7 @@ import { OptionalBoolean } from './rpc-param-primitives'
 import { sleepingAgentLaunchConfigSchema } from '../workspace-session-sleeping-agents'
 import type { TuiAgent } from '../tui-agent'
 import { isTuiAgent } from '../tui-agent-config'
-import { MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../terminal-quick-commands'
+import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../terminal-quick-command-prompt-limit'
 
 export const WorktreeTabSelector = z.object({
   worktree: z
@@ -149,10 +149,11 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
     })
     .optional(),
   // Why: agent prompts must be quoted and injected for the host shell (native,
-  // WSL, or SSH) instead of pasted from the mobile client before the TUI is ready.
+  // WSL, or SSH) instead of pasted from the mobile client before the TUI is ready. Only phones
+  // without agent.launch reach this path, and their quick-command lists stop at the legacy cap.
   agentPrompt: z
     .string()
-    .max(MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH)
+    .max(LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH)
     .refine((value) => value.trim().length > 0, { message: 'Agent prompt cannot be empty' })
     .optional(),
   // Why: `agent` is the legacy preset field; `launchAgent` is the launch-plan
