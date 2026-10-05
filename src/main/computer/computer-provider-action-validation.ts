@@ -21,6 +21,16 @@ export async function validateComputerProviderActionParams(
   method: ComputerProviderActionMethod,
   params: Record<string, unknown>
 ): Promise<string> {
+  if (params.ifSnapshotId !== undefined) {
+    requireNonEmptyString(params, 'ifSnapshotId')
+    if (!['click', 'performSecondaryAction', 'setValue'].includes(method)) {
+      throw new RuntimeClientError('unsupported_capability', 'Guarded action is not supported')
+    }
+    requireNonNegativeInteger(params, 'elementIndex')
+    if (params.restoreWindow === true || params.physical !== undefined) {
+      throw new RuntimeClientError('precondition_failed', 'Guarded actions cannot restore a window')
+    }
+  }
   const app = requireNonEmptyString(params, 'app')
   validateWindowTarget(params)
   switch (method) {

@@ -7,6 +7,7 @@ export const COMPUTER_ERROR_CODES = {
   window_not_focused: 'window_not_focused',
   window_stale: 'window_stale',
   provider_incompatible: 'provider_incompatible',
+  precondition_failed: 'precondition_failed',
   unsupported_capability: 'unsupported_capability',
   permission_denied: 'permission_denied',
   element_not_found: 'element_not_found',
@@ -86,6 +87,7 @@ export type ComputerScreenshotStatus =
     }
 
 export type ComputerActionMetadata = {
+  precondition?: { state: 'matched'; snapshotId: string }
   path: 'accessibility' | 'synthetic' | 'clipboard'
   actionName?: string | null
   fallbackReason?: string | null
@@ -130,6 +132,14 @@ export type ComputerProviderCapabilities = {
   provider: string
   providerVersion: string
   protocolVersion: number
+  guardedActions?: {
+    version: 1
+    rpcVersion?: 1
+    actions: ('click' | 'performSecondaryAction' | 'setValue')[]
+    physicalClick: boolean
+    guarantee: 'serialized_detected_mismatch'
+    humanInputAtomic: false
+  }
   supports: {
     apps: {
       list: boolean

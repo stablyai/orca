@@ -19,7 +19,7 @@ import {
   verifyDesktopAction
 } from './desktop-script-action'
 import { validateComputerProviderActionParams } from './computer-provider-action-validation'
-import { execBridge, mapBridgeError } from './desktop-script-provider-bridge'
+import { checkedBridgeResponse, execBridge } from './desktop-script-provider-bridge'
 import {
   optionalNumberParam,
   optionalStringParam,
@@ -28,6 +28,8 @@ import {
 import {
   desktopScriptPlatform,
   resolveDesktopScriptProviderPath,
+  requireDesktopScriptPlatform,
+  requireDesktopScriptProviderPath,
   type DesktopScriptPlatform
 } from './desktop-script-provider-paths'
 import type {
@@ -40,6 +42,12 @@ import { DesktopScriptSnapshotStore } from './desktop-script-snapshot-store'
 import { normalizeBridgeApp, renderSnapshot } from './desktop-script-snapshot-rendering'
 import { normalizeComputerActionResult } from './computer-action-verification-normalization'
 import { RuntimeClientError } from './runtime-client-error'
+import {
+  guardedDesktopSnapshot,
+  guardedDesktopActionReceipt,
+  guardedDesktopActionResult
+} from './desktop-script-snapshot-guard'
+import { snapshotNamespace } from './desktop-script-snapshot-cache'
 
 export function shouldUseDesktopScriptProvider(): boolean {
   return desktopScriptPlatform() !== null && resolveDesktopScriptProviderPath() !== null
@@ -51,8 +59,8 @@ export class DesktopScriptProviderClient {
   private providerCapabilities: ComputerProviderCapabilities | null = null
 
   constructor(
-    private readonly platform: DesktopScriptPlatform = requiredPlatform(),
-    private readonly scriptPath: string = requiredScriptPath(),
+    private readonly platform: DesktopScriptPlatform = requireDesktopScriptPlatform(),
+    private readonly scriptPath: string = requireDesktopScriptProviderPath(),
     private readonly runtimeHost: DesktopScriptRuntimeHost | null = defaultRuntimeHost(
       platform,
       scriptPath
@@ -118,6 +126,7 @@ export class DesktopScriptProviderClient {
     const app = stringParam(params, 'app')
     const response = await this.callBridge({
       tool: 'get_app_state',
+      guard_scope: snapshotNamespace(params),
       app,
       windowId: optionalNumberParam(params, 'windowId'),
       windowIndex: optionalNumberParam(params, 'windowIndex'),
@@ -134,7 +143,11 @@ export class DesktopScriptProviderClient {
     const app = await validateComputerProviderActionParams(method, params)
     const explicitWindowId = optionalNumberParam(params, 'windowId')
     const explicitWindowIndex = optionalNumberParam(params, 'windowIndex')
-    const current = this.snapshotStore.current(app, explicitWindowId, params)
+    const ifSnapshotId = optionalStringParam(params, 'ifSnapshotId')
+    const current =
+      ifSnapshotId === undefined
+        ? this.snapshotStore.current(app, explicitWindowId, params)
+        : guardedDesktopSnapshot(this.snapshotStore, await this.readCapabilities(), method, params)
     const actionWindowTarget = desktopActionWindowTarget(
       explicitWindowId,
       explicitWindowIndex,
@@ -146,6 +159,9 @@ export class DesktopScriptProviderClient {
     await this.ensureActionSupported(method)
     const response = await this.callBridge({
       tool: bridgeTool(method),
+      ...(ifSnapshotId !== undefined
+        ? { if_snapshot_id: ifSnapshotId, guard_scope: snapshotNamespace(params) }
+        : {}),
       app,
       element,
       fromElement,
@@ -170,7 +186,7 @@ export class DesktopScriptProviderClient {
       noScreenshot: params.noScreenshot === true,
       restoreWindow: params.restoreWindow === true
     })
-    const action = verifyDesktopAction(
+    let action = verifyDesktopAction(
       desktopActionMetadataFromResponse(
         response.action,
         method,
@@ -183,6 +199,10 @@ export class DesktopScriptProviderClient {
       response.snapshot,
       element
     )
+    action = guardedDesktopActionReceipt(action, ifSnapshotId)
+    if (ifSnapshotId !== undefined) {
+      return guardedDesktopActionResult(action, ifSnapshotId)
+    }
     if (isWindowChangedAction(action)) {
       this.snapshotStore.forgetWindowTarget(app, params, current)
     }
@@ -221,6 +241,9 @@ export class DesktopScriptProviderClient {
           throw error
         }
       }
+    }
+    if (request.if_snapshot_id !== undefined) {
+      throw new RuntimeClientError('precondition_failed', 'Snapshot precondition did not match')
     }
     return await this.callOneShotBridge(request)
   }
@@ -275,36 +298,10 @@ export class DesktopScriptProviderClient {
   }
 }
 
-function checkedBridgeResponse(response: BridgeResponse, stderr: string): BridgeResponse {
-  if (!response.ok) {
-    throw mapBridgeError(response.error ?? stderr)
-  }
-  return response
-}
-
 // Why Windows only: the Linux provider is a python3 one-shot with no serve mode.
 function defaultRuntimeHost(
   platform: DesktopScriptPlatform,
   scriptPath: string
 ): DesktopScriptRuntimeHost | null {
   return platform === 'windows' ? new DesktopScriptRuntimeHost(scriptPath) : null
-}
-
-function requiredPlatform(): DesktopScriptPlatform {
-  const platform = desktopScriptPlatform()
-  if (!platform) {
-    throw new RuntimeClientError('accessibility_error', 'desktop script provider is not available')
-  }
-  return platform
-}
-
-function requiredScriptPath(): string {
-  const scriptPath = resolveDesktopScriptProviderPath()
-  if (!scriptPath) {
-    throw new RuntimeClientError(
-      'accessibility_error',
-      'desktop script provider script was not found'
-    )
-  }
-  return scriptPath
 }

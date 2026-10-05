@@ -46,6 +46,74 @@ describe('orca computer action CLI routing', () => {
     process.exitCode = undefined
   })
 
+  it.each([
+    { command: 'click', method: 'click', actionFlags: ['--element-index', '0'] },
+    {
+      command: 'perform-secondary-action',
+      method: 'performSecondaryAction',
+      actionFlags: ['--element-index', '0', '--action', 'invoke']
+    },
+    {
+      command: 'set-value',
+      method: 'setValue',
+      actionFlags: ['--element-index', '0', '--value', '']
+    }
+  ])('negotiates and forwards exact guards for %s', async ({ command, method, actionFlags }) => {
+    queueFixtures(
+      callMock,
+      okFixture('capabilities', {
+        guardedActions: { version: 1, rpcVersion: 1, actions: [method] }
+      }),
+      okFixture('action', sampleSnapshot())
+    )
+    await main(
+      [
+        'computer',
+        command,
+        '--app',
+        'Editor',
+        '--session',
+        'manual',
+        ...actionFlags,
+        '--if-snapshot-id',
+        'opaque-id',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+    expect(callMock).toHaveBeenNthCalledWith(1, 'computer.capabilities', {})
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      `computer.${method}`,
+      expect.objectContaining({ ifSnapshotId: 'opaque-id' })
+    )
+  })
+
+  it('rejects a host that exposes provider support but cannot prove guard forwarding', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('capabilities', { guardedActions: { version: 1, actions: ['click'] } })
+    )
+    await main(
+      [
+        'computer',
+        'click',
+        '--app',
+        'Editor',
+        '--session',
+        'manual',
+        '--element-index',
+        '0',
+        '--if-snapshot-id',
+        'id',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+    expect(callMock).not.toHaveBeenCalledWith('computer.click', expect.anything())
+    expect(process.exitCode).toBe(1)
+  })
+
   it('does not resolve worktree when --session is explicit', async () => {
     queueFixtures(callMock, okFixture('req_click', sampleSnapshot()))
 

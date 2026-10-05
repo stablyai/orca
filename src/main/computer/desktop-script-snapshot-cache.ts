@@ -7,6 +7,7 @@ export const MAX_CACHED_DESKTOP_SNAPSHOTS = 32
 export const MAX_CACHED_DESKTOP_SNAPSHOT_AGE_MS = 2 * 60 * 1000
 
 export type CachedSnapshotEntry = {
+  namespace: string
   snapshot: BridgeSnapshot
   keys: string[]
   createdAtMs: number

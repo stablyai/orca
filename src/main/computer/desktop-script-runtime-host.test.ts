@@ -140,6 +140,50 @@ describe('DesktopScriptRuntimeHost', () => {
     vi.restoreAllMocks()
   })
 
+  it('negotiates guards with the current provider inside the serialized action turn', async () => {
+    const { host, children } = createHost()
+    const guarded = host.request({ tool: 'click', app: 'Editor', if_snapshot_id: 'opaque' })
+    const queued = host.request({ tool: 'set_value', app: 'Editor', value: 'later' })
+    await settle()
+    expect(children[0].requests().map((request) => request.tool)).toEqual(['handshake'])
+    children[0].respond({
+      ok: true,
+      capabilities: { guardedActions: { version: 1, actions: ['click'] } }
+    })
+    await settle()
+    expect(children[0].requests().map((request) => request.tool)).toEqual(['handshake', 'click'])
+    children[0].respond({
+      ok: true,
+      action: { path: 'accessibility', precondition: { state: 'matched', snapshotId: 'opaque' } }
+    })
+    await expect(guarded).resolves.toMatchObject({ ok: true })
+    await settle()
+    expect(children[0].requests().map((request) => request.tool)).toEqual([
+      'handshake',
+      'click',
+      'set_value'
+    ])
+    children[0].respond({ ok: true })
+    await queued
+    host.dispose()
+  })
+
+  it('never writes a guarded effect to an old or downgraded provider', async () => {
+    const { host, children } = createHost()
+    const guarded = host.request({ tool: 'click', app: 'Editor', if_snapshot_id: 'opaque' })
+    await settle()
+    children[0].respond({ ok: true, capabilities: {} })
+    await expect(guarded).rejects.toMatchObject({ code: 'unsupported_capability' })
+    expect(children[0].requests().map((request) => request.tool)).toEqual(['handshake'])
+    children[0].exit(0)
+    const restarted = host.request({ tool: 'click', app: 'Editor', if_snapshot_id: 'opaque' })
+    await settle()
+    children[1].respond({ ok: true, capabilities: {} })
+    await expect(restarted).rejects.toMatchObject({ code: 'unsupported_capability' })
+    expect(children[1].requests().map((request) => request.tool)).toEqual(['handshake'])
+    host.dispose()
+  })
+
   it('starts one helper for many operations and never writes an operation file', async () => {
     const { host, children, specs } = createHost()
 

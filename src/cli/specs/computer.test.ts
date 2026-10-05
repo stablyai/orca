@@ -1,8 +1,32 @@
 import { describe, expect, it } from 'vitest'
 
+import { parseArgs } from '../args'
+
 import { COMPUTER_COMMAND_SPECS } from './computer'
 
 describe('computer command specs', () => {
+  it('accepts snapshot IDs as values only on the three supported actions', () => {
+    const supported = ['click', 'perform-secondary-action', 'set-value']
+    for (const spec of COMPUTER_COMMAND_SPECS) {
+      expect(spec.allowedFlags.includes('if-snapshot-id')).toBe(supported.includes(spec.path[1]))
+    }
+    const parsed = parseArgs(
+      [
+        'computer',
+        'click',
+        '--app',
+        'Editor',
+        '--element-index',
+        '0',
+        '--if-snapshot-id',
+        'opaque-id'
+      ],
+      [['computer', 'click']],
+      COMPUTER_COMMAND_SPECS
+    )
+    expect(parsed.flags.get('if-snapshot-id')).toBe('opaque-id')
+  })
+
   it('does not advertise ignored worktree/session scoping for app and window listing', () => {
     const listApps = COMPUTER_COMMAND_SPECS.find(
       (spec) => spec.path.join(' ') === 'computer list-apps'

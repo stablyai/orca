@@ -46,9 +46,10 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
     path: ['computer', 'click'],
     summary: 'Click an app element or window coordinate, optionally with modifiers',
     usage:
-      'orca computer click --app <app> (--element-index <n> | --x <x> --y <y>) [--window-id <id> | --window-index <n>] [--click-count <n>] [--mouse-button <left|right|middle>] [--modifiers <modifier-chord>] [--restore-window] [--no-screenshot] [--json]',
+      'orca computer click --app <app> (--element-index <n> | --x <x> --y <y>) [--if-snapshot-id <id>] [--window-id <id> | --window-index <n>] [--click-count <n>] [--mouse-button <left|right|middle>] [--modifiers <modifier-chord>] [--restore-window] [--no-screenshot] [--json]',
     allowedFlags: [
       ...COMPUTER_ACTION_FLAGS,
+      'if-snapshot-id',
       'element-index',
       'x',
       'y',
@@ -61,8 +62,8 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
     path: ['computer', 'perform-secondary-action'],
     summary: 'Perform an advertised secondary accessibility action',
     usage:
-      'orca computer perform-secondary-action --app <app> --element-index <n> --action <name> [--window-id <id> | --window-index <n>] [--restore-window] [--no-screenshot] [--json]',
-    allowedFlags: [...COMPUTER_ACTION_FLAGS, 'element-index', 'action']
+      'orca computer perform-secondary-action --app <app> --element-index <n> --action <name> [--if-snapshot-id <id>] [--window-id <id> | --window-index <n>] [--restore-window] [--no-screenshot] [--json]',
+    allowedFlags: [...COMPUTER_ACTION_FLAGS, 'if-snapshot-id', 'element-index', 'action']
   },
   {
     path: ['computer', 'scroll'],
@@ -118,7 +119,13 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
     path: ['computer', 'set-value'],
     summary: 'Set the value of a settable app element',
     usage:
-      'orca computer set-value --app <app> --element-index <n> (--value <text> | --value-stdin) [--window-id <id> | --window-index <n>] [--restore-window] [--no-screenshot] [--json]',
-    allowedFlags: [...COMPUTER_ACTION_FLAGS, 'element-index', 'value', 'value-stdin']
+      'orca computer set-value --app <app> --element-index <n> (--value <text> | --value-stdin) [--if-snapshot-id <id>] [--window-id <id> | --window-index <n>] [--restore-window] [--no-screenshot] [--json]',
+    allowedFlags: [
+      ...COMPUTER_ACTION_FLAGS,
+      'if-snapshot-id',
+      'element-index',
+      'value',
+      'value-stdin'
+    ]
   }
 ]

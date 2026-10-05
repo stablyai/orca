@@ -56,6 +56,7 @@ export function getComputerActionObserveFlags(flags: Map<string, string | boolea
 }
 
 export function getComputerClickActionFlags(flags: Map<string, string | boolean>): {
+  ifSnapshotId?: string
   elementIndex?: number
   x?: number
   y?: number
@@ -66,6 +67,7 @@ export function getComputerClickActionFlags(flags: Map<string, string | boolean>
   const rawModifiers = flags.get('modifiers')
   const modifiers = typeof rawModifiers === 'string' ? rawModifiers : undefined
   const result = {
+    ...getComputerGuardFlag(flags),
     elementIndex: getOptionalNonNegativeIntegerFlag(flags, 'element-index'),
     x: getOptionalNumberFlag(flags, 'x'),
     y: getOptionalNumberFlag(flags, 'y'),
@@ -85,10 +87,12 @@ export function getComputerClickActionFlags(flags: Map<string, string | boolean>
 }
 
 export function getComputerSecondaryActionFlags(flags: Map<string, string | boolean>): {
+  ifSnapshotId?: string
   elementIndex: number
   action: string
 } {
   return {
+    ...getComputerGuardFlag(flags),
     elementIndex: getRequiredNonNegativeIntegerFlag(flags, 'element-index'),
     action: getRequiredStringFlag(flags, 'action')
   }
@@ -164,10 +168,12 @@ export function getComputerHotkeyActionFlags(flags: Map<string, string | boolean
 export async function getComputerSetValueActionFlags(
   flags: Map<string, string | boolean>
 ): Promise<{
+  ifSnapshotId?: string
   elementIndex: number
   value: string
 }> {
   return {
+    ...getComputerGuardFlag(flags),
     elementIndex: getRequiredNonNegativeIntegerFlag(flags, 'element-index'),
     value: await getTextPayload(flags, 'value')
   }
@@ -230,4 +236,11 @@ function getRequiredNonNegativeIntegerFlag(
     throw new RuntimeClientError('invalid_argument', `Missing required --${name}`)
   }
   return value
+}
+
+function getComputerGuardFlag(flags: Map<string, string | boolean>): { ifSnapshotId?: string } {
+  if (!flags.has('if-snapshot-id')) {
+    return {}
+  }
+  return { ifSnapshotId: getRequiredStringFlag(flags, 'if-snapshot-id') }
 }
