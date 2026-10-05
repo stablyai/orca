@@ -30,7 +30,8 @@ function paint(paragraphs: string[], cols: number, marker = '● '): string {
   return rows.join('\n')
 }
 
-const at = (startCol: number, cols: number) => ({ startCol, cols })
+const at = (startCol: number, cols: number) => ({ startCol, cols, joinWrappedRows: true })
+const inShell = (startCol: number, cols: number) => ({ startCol, cols, joinWrappedRows: false })
 
 const PROSE = [
   'The retry limit is now five and the backoff starts at two seconds instead of half a second, which keeps the queue from flooding the upstream service during an outage.',
@@ -149,6 +150,30 @@ describe('cleanTerminalSelection', () => {
     expect(cleanTerminalSelection(cjk, at(0, 20))).toBe('漢字漢字漢字漢字漢字漢字')
     const notFull = ['● 漢字漢字', '  字漢字'].join('\n')
     expect(cleanTerminalSelection(notFull, at(0, 20))).toBe(['漢字漢字', '字漢字'].join('\n'))
+  })
+
+  it('keeps code fence contents on their own lines', () => {
+    const fence = ['● ```ts', '  const foo = 123456', '  return 4', '  ```'].join('\n')
+    expect(cleanTerminalSelection(fence, at(0, 20))).toBe(
+      ['```ts', 'const foo = 123456', 'return 4', '```'].join('\n')
+    )
+  })
+
+  it('only trims the gutter of a pane not known to run an agent', () => {
+    const indented = ['  123456789012345678', '  status OK'].join('\n')
+    expect(cleanTerminalSelection(indented, inShell(0, 20))).toBe(
+      ['123456789012345678', 'status OK'].join('\n')
+    )
+    expect(cleanTerminalSelection(paint([PROSE[0]], 40), inShell(0, 40))).toBe(
+      paint([PROSE[0]], 40, '  ')
+        .split('\n')
+        .map((row) => row.slice(2))
+        .join('\n')
+    )
+  })
+
+  it('drops an empty marker row together with its line break', () => {
+    expect(cleanTerminalSelection(['● ', '  Hello'].join('\n'), at(0, 20))).toBe('Hello')
   })
 
   it('without geometry behaves like the gutter pass', () => {

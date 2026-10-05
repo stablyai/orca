@@ -52,6 +52,8 @@ export type TerminalSelectionGeometry = {
   // 0-based column of the first selected cell; above 0 the first line is a partial row.
   startCol: number
   cols: number
+  // Only when the pane is known to run an agent: indented shell output can look wrapped too.
+  joinWrappedRows: boolean
 }
 
 // Claude Code marks replies with ⏺ or ● (depends on the platform) and echoes prompts after ❯.
@@ -114,7 +116,8 @@ function continues(row: Row, next: Row, wrapWidth: number): boolean {
 /**
  * Clipboard text for a terminal selection: the agent gutter dropped (also when the
  * selection starts mid-line or on the marker row) and, given the geometry, rows the
- * agent hard-wrapped joined back into their paragraph. Non-agent text is left as is.
+ * agent hard-wrapped joined back into their paragraph when `joinWrappedRows` says the pane
+ * runs an agent. Text without a gutter is left as is.
  */
 export function cleanTerminalSelection(
   selection: string,
@@ -163,6 +166,19 @@ export function cleanTerminalSelection(
   for (const row of rows) {
     row.text = row.text.trimEnd()
   }
+  if (markerFirst && rows.length > 1 && rows[0].text === '') {
+    rows.shift()
+  }
+  // Rows inside a code fence, and the fence lines themselves, keep their line breaks.
+  let fenceOpen = false
+  const fenced = rows.map(({ text }) => {
+    const isFence = text.trimStart().startsWith('```')
+    const inside = fenceOpen || isFence
+    if (isFence) {
+      fenceOpen = !fenceOpen
+    }
+    return inside
+  })
   // Measured on Claude Code 2.1: Ink fills rows up to and including the last column.
   const wrapWidth = geometry.cols
   const out: string[] = []
@@ -170,7 +186,8 @@ export function cleanTerminalSelection(
   let joined = current.text
   for (let i = 1; i < rows.length; i++) {
     const next = rows[i]
-    if (continues(current, next, wrapWidth)) {
+    const joinable = geometry.joinWrappedRows && !fenced[i - 1] && !fenced[i]
+    if (joinable && continues(current, next, wrapWidth)) {
       // A row with no space that fills the width is a long token (URL, path) cut mid-word.
       const midToken = !/\s/.test(current.text.trim()) && current.endCol >= wrapWidth
       joined = joined.trimEnd() + (midToken ? '' : ' ') + next.text.trimStart()

@@ -1,6 +1,7 @@
 import type { Terminal } from '@xterm/xterm'
 import { useAppStore } from '@/store/index'
 import { cleanTerminalSelection } from '../../../../../shared/terminal/output/terminal-selection-gutter'
+import { terminalShowsAgentOutput } from './terminal-agent-output-probe'
 
 type SelectionTerminal = Pick<Terminal, 'getSelection'> &
   Partial<Pick<Terminal, 'getSelectionPosition' | 'cols'>>
@@ -8,7 +9,7 @@ type SelectionTerminal = Pick<Terminal, 'getSelection'> &
 /**
  * The selection text every terminal clipboard path should write: screen cells
  * minus the left gutter the agent CLI painted them behind (#19770), with rows
- * the agent hard-wrapped joined back into paragraphs.
+ * the agent hard-wrapped joined back into paragraphs when the pane runs an agent.
  */
 export function readTerminalClipboardSelection(terminal: SelectionTerminal): string {
   const selection = terminal.getSelection()
@@ -26,6 +27,7 @@ export function readTerminalClipboardSelection(terminal: SelectionTerminal): str
   const start = startFirst ? range.start : range.end
   return cleanTerminalSelection(selection, {
     startCol: start.x,
-    cols: terminal.cols
+    cols: terminal.cols,
+    joinWrappedRows: terminalShowsAgentOutput(terminal)
   })
 }
