@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
@@ -11,7 +11,10 @@ import {
   resolveMarkdownDocLink
 } from './markdown-doc-links'
 import { selectMarkdownDocumentWorktreePath } from './markdown-document-worktree-path-selector'
-import { requestSharedMarkdownDocumentList } from './markdown-document-list-request'
+import {
+  getMarkdownDocumentListRequestKey,
+  requestSharedMarkdownDocumentList
+} from './markdown-document-list-request'
 
 type OpenMarkdownDocumentOptions = {
   anchor?: string | null
@@ -59,16 +62,40 @@ export function useMarkdownDocuments(
   const worktreePath = useAppStore((s) => selectMarkdownDocumentWorktreePath(s, worktreeId))
   const openFile = useAppStore((s) => s.openFile)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
-  const [markdownDocumentsByWorktree, setMarkdownDocumentsByWorktree] = useState<
-    Record<string, MarkdownDocument[]>
-  >({})
+  const [documentSnapshot, setDocumentSnapshot] = useState<{
+    requestKey: string
+    documents: MarkdownDocument[]
+  } | null>(null)
   const requestRef = useRef(0)
 
   const connectionId = getConnectionId(worktreeId)
+  const documentRequestKey = getMarkdownDocumentListRequestKey(
+    {
+      settings: settingsForRuntimeOwner(
+        useAppStore.getState().settings,
+        activeFile.runtimeEnvironmentId
+      ),
+      worktreeId,
+      worktreePath: worktreePath ?? undefined,
+      connectionId: connectionId ?? undefined
+    },
+    worktreePath ?? ''
+  )
+  const currentRequestKeyRef = useRef<string | null>(documentRequestKey)
+  useLayoutEffect(() => {
+    currentRequestKeyRef.current = documentRequestKey
+  }, [documentRequestKey])
+  // Suspense hides layout effects while a current scan is still valid.
+  useEffect(
+    () => () => {
+      currentRequestKeyRef.current = null
+    },
+    []
+  )
 
   const refreshMarkdownDocuments = useCallback(
     async (requireFresh = false): Promise<void> => {
-      if (!worktreeId || !worktreePath) {
+      if (!worktreeId || !worktreePath || currentRequestKeyRef.current !== documentRequestKey) {
         return
       }
 
@@ -88,24 +115,24 @@ export function useMarkdownDocuments(
           worktreePath,
           { requireFresh }
         )
-        if (requestRef.current !== requestId) {
+        if (
+          requestRef.current !== requestId ||
+          currentRequestKeyRef.current !== documentRequestKey
+        ) {
           return
         }
-        setMarkdownDocumentsByWorktree((prev) => ({
-          ...prev,
-          [worktreeId]: documents
-        }))
+        setDocumentSnapshot({ requestKey: documentRequestKey, documents })
       } catch (err) {
         console.error('Failed to list markdown documents:', err)
-        if (requestRef.current === requestId) {
-          setMarkdownDocumentsByWorktree((prev) => ({
-            ...prev,
-            [worktreeId]: []
-          }))
+        if (
+          requestRef.current === requestId &&
+          currentRequestKeyRef.current === documentRequestKey
+        ) {
+          setDocumentSnapshot({ requestKey: documentRequestKey, documents: [] })
         }
       }
     },
-    [activeFile.runtimeEnvironmentId, connectionId, worktreeId, worktreePath]
+    [activeFile.runtimeEnvironmentId, connectionId, documentRequestKey, worktreeId, worktreePath]
   )
 
   const openMarkdownDocument = useCallback(
@@ -183,8 +210,8 @@ export function useMarkdownDocuments(
   }, [activeFile.id, isMarkdown, viewMode, refreshMarkdownDocuments])
 
   const markdownDocuments = useMemo(
-    () => (worktreeId ? (markdownDocumentsByWorktree[worktreeId] ?? []) : []),
-    [worktreeId, markdownDocumentsByWorktree]
+    () => (documentSnapshot?.requestKey === documentRequestKey ? documentSnapshot.documents : []),
+    [documentRequestKey, documentSnapshot]
   )
 
   const previewProps = useMemo(
