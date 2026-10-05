@@ -18,6 +18,7 @@ import {
   getGitHubModeButtons,
   getLinearModeOptions,
   getJiraPresets,
+  getMantisBTPresets,
   getGitLabIssueFilters,
   getGitLabMRFilters,
   getLinearViewOptions,
@@ -38,6 +39,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     linearStatus,
     preflightStatus,
     jiraStatus,
+    mantisBTStatus,
     preflightStatusCurrent,
     linearConnected
   } = model
@@ -129,6 +131,13 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     selectedJiraSiteId && selectedJiraSiteId !== 'all'
       ? (jiraSites.find((site) => site.id === selectedJiraSiteId) ?? null)
       : null
+  const mantisBTSites = useMemo(() => mantisBTStatus.sites ?? [], [mantisBTStatus.sites])
+  const selectedMantisBTSiteId =
+    mantisBTStatus.selectedSiteId ?? mantisBTStatus.activeSiteId ?? mantisBTSites[0]?.id ?? null
+  const selectedMantisBTSite =
+    selectedMantisBTSiteId && selectedMantisBTSiteId !== 'all'
+      ? (mantisBTSites.find((site) => site.id === selectedMantisBTSiteId) ?? null)
+      : null
   const preferredVisibleTaskProviders = useMemo(
     () => normalizeVisibleTaskProviders(settings?.visibleTaskProviders),
     [settings?.visibleTaskProviders]
@@ -156,6 +165,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
   const githubModeButtons = getGitHubModeButtons()
   const linearModeOptions = getLinearModeOptions()
   const jiraPresets = getJiraPresets()
+  const mantisBTPresets = getMantisBTPresets()
   const gitLabIssueFilters = getGitLabIssueFilters()
   const gitLabMRFilters = getGitLabMRFilters()
   const linearViewOptions = getLinearViewOptions()
@@ -257,6 +267,12 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
   nextModel.linearDisplayPropertyOptions = linearDisplayPropertyOptions
   nextModel.visibleSourceOptions = visibleSourceOptions
   nextModel.hideTaskSource = hideTaskSource
-  return nextModel
+  return {
+    ...nextModel,
+    mantisBTSites,
+    selectedMantisBTSiteId,
+    selectedMantisBTSite,
+    mantisBTPresets
+  }
 }
 export type TaskPageRepoSelectionModel = ReturnType<typeof useTaskPageRepoSelection>

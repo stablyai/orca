@@ -1,5 +1,5 @@
 import type { JiraIssue } from '../../../shared/jira-types'
-import { parseJiraStatusError } from '../../../shared/jira-status-error'
+import { parseHttpStatusError } from '../../../shared/http-status-error'
 
 export type TaskPageJiraLoadError = {
   title: string
@@ -55,13 +55,13 @@ function getIssueSearchErrorSummary(message: string, code: number | null): strin
 
 /** Jira's reason when it rejected the request as malformed (HTTP 400); null for other failures. */
 export function getJiraBadRequestReason(error: unknown): string | null {
-  const status = parseJiraStatusError(getErrorMessage(error))
+  const status = parseHttpStatusError(getErrorMessage(error))
   return status?.code === 400 ? status.details : null
 }
 
 export function createTaskPageJiraLoadFailureState(error: unknown): TaskPageJiraLoadFailureState {
   const message = getErrorMessage(error)
-  const status = parseJiraStatusError(message)
+  const status = parseHttpStatusError(message)
   const code = status?.code ?? inferErrorCode(message)
   const summary = getIssueSearchErrorSummary(message, code)
   return {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildJiraWorkspaceSource,
   buildLinearWorkspaceSource,
+  buildMantisBTWorkspaceSource,
   buildWorkspaceSourceSelection,
   getWorkspaceSourceName,
   getWorkspaceSourceProvider,
@@ -50,6 +51,34 @@ describe('workspace source policy', () => {
     })
   })
 
+  it('builds a numeric MantisBT identity from the issue id, not a placeholder', () => {
+    expect(
+      buildMantisBTWorkspaceSource({
+        id: '456',
+        summary: 'Fix login bug',
+        url: 'https://mantis.company.com/view.php?id=456'
+      })
+    ).toEqual({
+      provider: 'mantisBT',
+      type: 'issue',
+      number: 456,
+      title: 'Fix login bug',
+      url: 'https://mantis.company.com/view.php?id=456'
+    })
+    expect(
+      buildWorkspaceSourceSelection({
+        linkedWorkItem: buildMantisBTWorkspaceSource({
+          id: '456',
+          summary: 'Fix login bug',
+          url: 'https://mantis.company.com/view.php?id=456'
+        })
+      })
+    ).toMatchObject({
+      kind: 'mantisbt',
+      label: '#456 Fix login bug'
+    })
+  })
+
   it('preserves global work-item sources across repo changes', () => {
     expect(shouldPreserveWorkspaceSourceOnRepoChange(linear)).toBe(true)
     expect(
@@ -71,6 +100,15 @@ describe('workspace source policy', () => {
         url: 'https://acme.atlassian.net/browse/FUS-1',
         jiraIdentifier: 'FUS-1'
       })
+    ).toBe(true)
+    expect(
+      shouldPreserveWorkspaceSourceOnRepoChange(
+        buildMantisBTWorkspaceSource({
+          id: '456',
+          summary: 'Fix login bug',
+          url: 'https://mantis.company.com/view.php?id=456'
+        })
+      )
     ).toBe(true)
     expect(
       shouldPreserveWorkspaceSourceOnRepoChange({

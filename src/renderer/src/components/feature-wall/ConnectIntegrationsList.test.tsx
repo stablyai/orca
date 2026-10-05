@@ -29,6 +29,12 @@ type StoreState = {
   checkJiraConnection: () => Promise<void>
   testJiraConnection: () => Promise<{ ok: boolean; error?: string }>
   disconnectJira: () => Promise<void>
+  mantisBTStatus: { connected: boolean; sites?: unknown[] }
+  mantisBTStatusChecked: boolean
+  mantisBTStatusContextKey: string | null
+  checkMantisBTConnection: () => Promise<void>
+  testMantisBTConnection: () => Promise<{ ok: boolean; error?: string }>
+  disconnectMantisBT: () => Promise<void>
 }
 
 const { storeState } = vi.hoisted(() => ({
@@ -50,6 +56,10 @@ vi.mock('@/components/linear-api-key-dialog', () => ({
 
 vi.mock('@/components/jira-connect-dialog', () => ({
   JiraConnectDialog: () => null
+}))
+
+vi.mock('@/components/mantisbt-connect-dialog', () => ({
+  MantisBTConnectDialog: () => null
 }))
 
 function makePreflightStatus(overrides: Partial<PreflightStatus> = {}): PreflightStatus {
@@ -107,7 +117,13 @@ function installStore(preflightStatus: PreflightStatus): void {
     jiraStatusContextKey: providerContextKey,
     checkJiraConnection: vi.fn(async () => {}),
     testJiraConnection: vi.fn(async () => ({ ok: true })),
-    disconnectJira: vi.fn(async () => {})
+    disconnectJira: vi.fn(async () => {}),
+    mantisBTStatus: { connected: false, sites: [] },
+    mantisBTStatusChecked: true,
+    mantisBTStatusContextKey: providerContextKey,
+    checkMantisBTConnection: vi.fn(async () => {}),
+    testMantisBTConnection: vi.fn(async () => ({ ok: true })),
+    disconnectMantisBT: vi.fn(async () => {})
   }
 }
 
@@ -179,12 +195,26 @@ describe('ConnectIntegrationsList', () => {
 
     expect(markup).toContain('GitHub')
     expect(markup).toContain('issues available as tasks')
-    expect(markup).toContain('add Linear or Jira if your team plans work there')
+    expect(markup).toContain('add Linear, Jira, or MantisBT if your team plans work there')
     expect(markup).not.toContain('Use GitHub issues')
-    // The step is done but stays expanded so Linear/Jira remain discoverable
-    // for teams that plan work in a dedicated tracker.
+    // The step is done but stays expanded so Linear/Jira/MantisBT remain
+    // discoverable for teams that plan work in a dedicated tracker.
     expect(markup).toContain('Add Linear access')
     expect(markup).toContain('Connect Jira')
+    expect(markup).toContain('Connect MantisBT')
+  })
+
+  it('collapses the task step to its summary when MantisBT connects first', async () => {
+    installStore(makePreflightStatus())
+    if (!storeState.current) {
+      throw new Error('Store state was not installed')
+    }
+    storeState.current.mantisBTStatus = { connected: true, sites: [] }
+
+    const { markup } = await renderConnectIntegrationsList()
+
+    expect(markup).toContain('connected for tasks')
+    expect(markup).not.toContain('Connect MantisBT')
   })
 
   it('offers GitHub and GitLab as task sources when review came from a non-task provider', async () => {
@@ -203,6 +233,7 @@ describe('ConnectIntegrationsList', () => {
     expect(markup).toContain('glab auth login')
     expect(markup).toContain('Linear')
     expect(markup).toContain('Jira')
+    expect(markup).toContain('MantisBT')
   })
 
   it('lists the code host alongside a connected tracker in the task summary', async () => {

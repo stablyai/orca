@@ -37,6 +37,13 @@ import { useTaskPageLinearListEffects } from '../use-task-page-linear-list-effec
 import { useTaskPageLinearInOrcaEffects } from '../use-task-page-linear-in-orca-effects'
 import { useTaskPageLinearCollectionEffects } from '../use-task-page-linear-collection-effects'
 import { useTaskPageJiraListEffects } from '../use-task-page-jira-list-effects'
+import { useTaskPageMantisBTDetailRouting } from '../use-task-page-mantisbt-detail-routing'
+import { useTaskPageMantisBTConnectState } from '../use-task-page-mantisbt-connect-state'
+import { useTaskPageMantisBTListState } from '../use-task-page-mantisbt-list-state'
+import { useTaskPageMantisBTProjectList } from '../use-task-page-mantisbt-project-list'
+import { useTaskPageMantisBTListProjection } from '../use-task-page-mantisbt-list-projection'
+import { useTaskPageMantisBTListEffects } from '../use-task-page-mantisbt-list-effects'
+import { useTaskPageMantisBTComposerActions } from '../use-task-page-mantisbt-composer-actions'
 import { useTaskPageComposerActions } from '../use-task-page-composer-actions'
 import { TaskPageSurface } from './Surface'
 
@@ -79,6 +86,18 @@ export default function TaskPage(): React.JSX.Element {
   const stage36 = useTaskPageLinearInOrcaEffects(stage35)
   const stage37 = useTaskPageLinearCollectionEffects(stage36)
   const stage38 = useTaskPageJiraListEffects(stage37)
-  const stage39 = useTaskPageComposerActions(stage38)
+  // Why: MantisBT stages are chained as one unbroken tail so each hook's
+  // exact-typed output threads through — inserting them earlier would let an
+  // intervening Jira/Linear/GitHub stage's own `model`-shaped cast erase the
+  // MantisBT fields from the static type (the fields still exist at runtime,
+  // but downstream call sites would no longer see them).
+  const stage38a = useTaskPageMantisBTDetailRouting(stage38)
+  const stage38b = useTaskPageMantisBTConnectState(stage38a)
+  const stage38c = useTaskPageMantisBTListState(stage38b)
+  const stage38c1 = useTaskPageMantisBTProjectList(stage38c)
+  const stage38d = useTaskPageMantisBTListProjection(stage38c1)
+  const stage38e = useTaskPageMantisBTListEffects(stage38d)
+  const stage38f = useTaskPageMantisBTComposerActions(stage38e)
+  const stage39 = useTaskPageComposerActions(stage38f)
   return <TaskPageSurface model={stage39} />
 }

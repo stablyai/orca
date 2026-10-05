@@ -3,6 +3,7 @@ import type { AppState } from '../../types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../../shared/jira-types'
+import type { MantisBTIssue } from '../../../../../shared/mantisbt-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { TaskProvider } from '../../../../../shared/task-providers'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
@@ -67,6 +68,8 @@ export type TaskPageData = {
   openLinearSourceContext?: TaskSourceContext | null
   openJiraIssue?: JiraIssue
   openJiraSourceContext?: TaskSourceContext | null
+  openMantisBTIssue?: MantisBTIssue
+  openMantisBTSourceContext?: TaskSourceContext | null
 }
 
 export type NewWorkspaceDraft = {
@@ -81,7 +84,7 @@ export type NewWorkspaceDraft = {
   note: string
   attachments: string[]
   linkedWorkItem: {
-    provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+    provider?: 'github' | 'gitlab' | 'linear' | 'jira' | 'mantisBT'
     type: 'issue' | 'pr' | 'mr'
     number: number
     title: string

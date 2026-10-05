@@ -7,6 +7,7 @@ import { TaskPageJiraIssueDialog } from './jira/IssueDialog'
 import { TaskPageGitLabDialog } from './gitlab/Dialog'
 import { TaskPageLinearConnectDialog } from './linear/ConnectDialog'
 import { TaskPageJiraConnectDialog } from './jira/ConnectDialog'
+import { TaskPageMantisBTConnectDialog } from './mantisbt/ConnectDialog'
 export function TaskPageSurface({
   model
 }: {
@@ -29,6 +30,8 @@ export function TaskPageSurface({
       <TaskPageLinearConnectDialog model={model} />
 
       <TaskPageJiraConnectDialog model={model} />
+
+      <TaskPageMantisBTConnectDialog model={model} />
     </div>
   )
 }

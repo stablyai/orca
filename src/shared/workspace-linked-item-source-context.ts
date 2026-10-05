@@ -36,6 +36,29 @@ export function isWorkspaceLinkedItemSourceContextMatch(
   if (itemProvider !== context.provider) {
     return false
   }
+  if (itemProvider === 'mantisBT') {
+    const identity = context.providerIdentity
+    if (
+      item.type !== 'issue' ||
+      identity?.provider !== 'mantisBT' ||
+      !identity.siteUrl ||
+      !item.url
+    ) {
+      return false
+    }
+    try {
+      const itemUrl = new URL(item.url)
+      const siteUrl = new URL(identity.siteUrl)
+      // Why: issue ids are per-installation, and installs often share an origin under sub-paths.
+      const sitePath = siteUrl.pathname.replace(/\/+$/g, '')
+      return (
+        itemUrl.origin === siteUrl.origin &&
+        (sitePath === '' || itemUrl.pathname.startsWith(`${sitePath}/`))
+      )
+    } catch {
+      return false
+    }
+  }
   if (itemProvider !== 'jira') {
     return true
   }

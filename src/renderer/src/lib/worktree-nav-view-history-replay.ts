@@ -21,7 +21,9 @@ export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): v
         openLinearIssue: undefined,
         openLinearSourceContext: undefined,
         openJiraIssue: undefined,
-        openJiraSourceContext: undefined
+        openJiraSourceContext: undefined,
+        openMantisBTIssue: undefined,
+        openMantisBTSourceContext: undefined
       }
     }))
     return
@@ -41,7 +43,9 @@ export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): v
         openLinearIssue: undefined,
         openLinearSourceContext: undefined,
         openJiraIssue: undefined,
-        openJiraSourceContext: undefined
+        openJiraSourceContext: undefined,
+        openMantisBTIssue: undefined,
+        openMantisBTSourceContext: undefined
       }
     }))
     return
@@ -62,7 +66,9 @@ export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): v
         openLinearIssue: undefined,
         openLinearSourceContext: undefined,
         openJiraIssue: undefined,
-        openJiraSourceContext: undefined
+        openJiraSourceContext: undefined,
+        openMantisBTIssue: undefined,
+        openMantisBTSourceContext: undefined
       }
     }))
     return
@@ -82,7 +88,31 @@ export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): v
         openLinearIssue: undefined,
         openLinearSourceContext: undefined,
         openJiraIssue: entry.issue,
-        openJiraSourceContext: entry.sourceContext
+        openJiraSourceContext: entry.sourceContext,
+        openMantisBTIssue: undefined,
+        openMantisBTSourceContext: undefined
+      }
+    }))
+    return
+  }
+  if (entry.source === 'mantisBT') {
+    useAppStore.setState((state) => ({
+      activeView: 'tasks',
+      githubTaskDrawerWorkItem: null,
+      taskPageData: {
+        ...state.taskPageData,
+        taskSource: 'mantisBT',
+        openGitHubWorkItem: undefined,
+        openGitHubSourceContext: undefined,
+        openGitHubInitialTab: undefined,
+        openGitLabWorkItem: undefined,
+        openGitLabSourceContext: undefined,
+        openLinearIssue: undefined,
+        openLinearSourceContext: undefined,
+        openJiraIssue: undefined,
+        openJiraSourceContext: undefined,
+        openMantisBTIssue: entry.issue,
+        openMantisBTSourceContext: entry.sourceContext
       }
     }))
     return
@@ -101,7 +131,9 @@ export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): v
       openLinearIssue: entry.issue,
       openLinearSourceContext: entry.sourceContext,
       openJiraIssue: undefined,
-      openJiraSourceContext: undefined
+      openJiraSourceContext: undefined,
+      openMantisBTIssue: undefined,
+      openMantisBTSourceContext: undefined
     }
   }))
 }

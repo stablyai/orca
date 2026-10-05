@@ -3,6 +3,7 @@ import type { AppState } from '../types'
 import { findWorktreeById } from './worktree-helpers'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { JiraIssue } from '../../../../shared/jira-types'
+import type { MantisBTIssue } from '../../../../shared/mantisbt-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import {
@@ -46,6 +47,12 @@ export type WorktreeNavHistoryTaskDetailEntry =
       kind: 'task-detail'
       source: 'jira'
       issue: JiraIssue
+      sourceContext?: TaskSourceContext | null
+    }
+  | {
+      kind: 'task-detail'
+      source: 'mantisBT'
+      issue: MantisBTIssue
       sourceContext?: TaskSourceContext | null
     }
 export type WorktreeNavHistoryViewEntry =
@@ -125,6 +132,13 @@ function getHistoryEntryKey(entry: WorktreeNavHistoryEntry): string {
         ? getTaskSourceCacheScope(entry.sourceContext)
         : 'legacy'
     return `view:task-detail:jira:${sourceScope}:${entry.issue.siteId ?? 'selected'}:${entry.issue.key}`
+  }
+  if (entry.source === 'mantisBT') {
+    const sourceScope =
+      entry.sourceContext?.provider === 'mantisBT'
+        ? getTaskSourceCacheScope(entry.sourceContext)
+        : 'legacy'
+    return `view:task-detail:mantisbt:${sourceScope}:${entry.issue.siteId}:${entry.issue.id}`
   }
   const sourceScope =
     entry.sourceContext?.provider === 'linear'

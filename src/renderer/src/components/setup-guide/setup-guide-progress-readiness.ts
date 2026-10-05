@@ -15,6 +15,7 @@ export type SetupGuideProgressReadinessInput = {
   preflightStatusChecked: boolean
   linearStatusChecked: boolean
   jiraStatusChecked: boolean
+  mantisBTStatusChecked: boolean
   browserUseSkillDiscoveryLoading: boolean
   computerUseSkillDiscoveryLoading: boolean
   orchestrationSkillDiscoveryLoading: boolean
@@ -85,6 +86,7 @@ export function getSetupGuideProgressReady(input: SetupGuideProgressReadinessInp
     input.preflightStatusChecked &&
     input.linearStatusChecked &&
     input.jiraStatusChecked &&
+    input.mantisBTStatusChecked &&
     !input.browserUseSkillDiscoveryLoading &&
     !input.computerUseSkillDiscoveryLoading &&
     !input.orchestrationSkillDiscoveryLoading &&
