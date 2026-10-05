@@ -1,3 +1,7 @@
+import remarkGfm from 'remark-gfm'
+import remarkParse from 'remark-parse'
+import { unified } from 'unified'
+import type { Nodes } from 'mdast'
 import { defaultSchema } from 'rehype-sanitize'
 import { normalizeDetailsOpeningTag } from './details-markdown-html'
 import { getRichMarkdownRoundTripOutput } from './markdown-round-trip'
@@ -36,6 +40,8 @@ export type MarkdownRichModeEligibilityDecision = {
 }
 
 const KNOWN_MARKDOWN_HTML_TAG_NAMES = new Set(defaultSchema.tagNames ?? [])
+const MAX_RICH_MARKDOWN_PROBE_CHARS = 50_000
+const REFERENCE_LINK_CANDIDATE = /^\uFEFF?[ \t>*+\-\d.)]*\[/m
 
 const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
   {
@@ -59,7 +65,8 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
         'Editable only in code mode because this file contains reference-style links.'
       )
     },
-    pattern: /^\[[^\]]+\]:\s+\S+/m
+    // Large documents retain conservative colon matching.
+    pattern: /^\uFEFF?[ \t>*+\-\d.)]*\[(?:\\[\s\S]|[^\\[\]])+\]:/m
   },
   {
     reason: 'footnotes',
@@ -114,16 +121,25 @@ export function getMarkdownRichModeUnsupportedReason(
     if (matcher.reason === 'html-or-jsx') {
       continue
     }
-    if (matcher.pattern.test(contentWithoutCode)) {
-      return matcher.reason
+    const confirmsReference =
+      matcher.reason === 'reference-links' && body.length <= MAX_RICH_MARKDOWN_PROBE_CHARS
+    const candidate = confirmsReference ? body : contentWithoutCode
+    const pattern = confirmsReference ? REFERENCE_LINK_CANDIDATE : matcher.pattern
+    if (!pattern.test(candidate)) {
+      continue
     }
+    if (matcher.reason === 'reference-links' && !hasLinkReferenceDefinition(body)) {
+      continue
+    }
+    return matcher.reason
   }
 
   if (hasHtml) {
     // Why: the round-trip check creates a throwaway TipTap Editor synchronously
     // on the main thread. For large files this blocks for seconds, so we skip it and conservatively block rich mode for HTML files
     // above this threshold.
-    const roundTripOutput = body.length <= 50_000 ? getRichMarkdownRoundTripOutput(body) : null
+    const roundTripOutput =
+      body.length <= MAX_RICH_MARKDOWN_PROBE_CHARS ? getRichMarkdownRoundTripOutput(body) : null
     if (roundTripOutput && preservesEmbeddedHtml(contentWithoutCode, roundTripOutput)) {
       return null
     }
@@ -155,6 +171,26 @@ export function getMarkdownRichModeEligibility(params: {
     exceedsSizeLimit: decision.exceedsSizeLimit,
     unsupportedMessage: resolveMarkdownRichModeUnsupportedMessage(decision.unsupportedReason)
   }
+}
+
+const linkReferenceDefinitionProcessor = unified().use(remarkParse).use(remarkGfm)
+
+// Unparsed documents keep the existing conservative Source fallback.
+function hasLinkReferenceDefinition(content: string): boolean {
+  if (content.length > MAX_RICH_MARKDOWN_PROBE_CHARS) {
+    return true
+  }
+  try {
+    return containsDefinitionNode(linkReferenceDefinitionProcessor.parse(content))
+  } catch {
+    return true
+  }
+}
+
+function containsDefinitionNode(node: Nodes): boolean {
+  return (
+    node.type === 'definition' || ('children' in node && node.children.some(containsDefinitionNode))
+  )
 }
 
 function hasHtmlOrJsx(content: string, pattern: RegExp): boolean {

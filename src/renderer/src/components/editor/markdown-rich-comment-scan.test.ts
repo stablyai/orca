@@ -25,7 +25,7 @@ describe('rich Markdown comment scanning', () => {
     ['`<!--complete-->`', null],
     ['```html\n<!--complete-->\n```', null],
     ['<!--complete-->\n[a]: https://example.com', 'reference-links'],
-    ['<!--complete-->\n[^a]: footnote', 'reference-links']
+    ['<!--complete-->\n[^a]: footnote', 'footnotes']
   ] as const)('preserves the decision for %j', (content, expected) => {
     vi.mocked(getRichMarkdownRoundTripOutput).mockReturnValue(null)
     expect(getMarkdownRichModeUnsupportedReason(content)).toBe(expected)
