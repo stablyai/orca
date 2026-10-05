@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { MOBILE_PUSH_APNS_ENVIRONMENTS, MOBILE_PUSH_PLATFORMS } from '../../mobile-push-contract'
+import {
+  MOBILE_PUSH_APNS_ENVIRONMENTS,
+  MOBILE_PUSH_PLATFORMS,
+  MOBILE_PUSH_SEALED_CONTENT_VERSIONS
+} from '../../mobile-push-contract'
 
 export const NotificationUnsubscribeParams = z.object({
   subscriptionId: z
@@ -37,7 +41,10 @@ export const NotificationRegisterPushParams = z
     platform: z.enum(MOBILE_PUSH_PLATFORMS),
     token: z.string().min(1).max(4096),
     apnsEnvironment: z.enum(MOBILE_PUSH_APNS_ENVIRONMENTS).optional(),
-    filter: NotificationPushFilterParams
+    filter: NotificationPushFilterParams,
+    // Sent only to hosts advertising NOTIFICATIONS_REMOTE_PUSH_SEALED_RUNTIME_CAPABILITY,
+    // because older hosts reject unknown keys here.
+    sealedContent: z.enum(MOBILE_PUSH_SEALED_CONTENT_VERSIONS).optional()
   })
   // Device identity is handler-owned; reject caller-supplied deviceId instead of silently dropping it.
   .strict()

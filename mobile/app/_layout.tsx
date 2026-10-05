@@ -1,6 +1,7 @@
 import { startAndroidForegroundPushPresentation } from '../src/notifications/foreground-delivery/android-foreground-push'
 import { registerPushDismissalTask } from '../src/notifications/dismissal/push-background-dismissal'
 import { readNativeNotificationData } from '../src/notifications/payload-identity/native-notification-data'
+import { readablePushData } from '../src/notifications/payload-identity/push-sealed-payload'
 import {
   notificationViewingOfRoute,
   setNotificationViewingWorkspace
@@ -115,7 +116,8 @@ export default function RootLayout() {
 
     async function getNavigationTarget(notification: Notifications.Notification) {
       const hosts = await loadHostCatalog().catch(() => null)
-      const data = readNativeNotificationData(notification.request)
+      // A sealed placeholder Orca never replaced still routes to its worktree.
+      const data = await readablePushData(readNativeNotificationData(notification.request))
       // Gateway pushes identify hosts by key fingerprint; without catalog resolution, never fall back to their raw hostId.
       const routeData = pushNotificationRouteData(
         data,
