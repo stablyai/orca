@@ -230,6 +230,7 @@ export function useStructuredAgentSession(args: {
     workingStartedAt: transportState.turnTiming.workingStartedAt,
     settledTurns: transportState.turnTiming.settledTurns,
     turnActivity: transportState.turnActivity,
+    providerStarting,
     backgroundTasks: transportState.backgroundTasks,
     turnId: transportState.turnId,
     canStop,

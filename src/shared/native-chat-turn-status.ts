@@ -8,6 +8,7 @@ import type { AgentTurnOutcome } from './agent-turn-outcome'
 
 export const NATIVE_CHAT_TURN_STATUS_COPY = {
   thinking: 'Thinking',
+  starting: 'Starting…',
   working: 'Working…',
   workingFor: 'Working for {{value0}}',
   workedFor: 'Worked for {{value0}}',
@@ -79,30 +80,33 @@ export type NativeChatLiveTurnIndicator = {
 
 export type NativeChatActiveTurnLabel =
   | { source: 'activity'; text: string }
-  | { source: 'status'; key: 'thinking' | 'working' }
+  | { source: 'status'; key: 'thinking' | 'starting' | 'working' }
+
+export type NativeChatActiveTurnLabelInput = {
+  activityText?: string | null
+  thinking: boolean
+  /** The host reports the agent has not finished starting, so nothing has answered the send. */
+  starting?: boolean
+}
 
 /** The live tail line's label. Provider activity wins because it is the only text
- *  that says what the turn is actually doing; reasoning is next. It never carries
+ *  that says what the turn is actually doing; reasoning is next, and either one means
+ *  the agent already answered, whatever a lagging startup phase says. It never carries
  *  the clock — the turn bar owns that. Shared so desktop and mobile cannot disagree. */
 export function describeNativeChatActiveTurnLabel({
   activityText,
-  thinking
-}: {
-  activityText?: string | null
-  thinking: boolean
-}): NativeChatActiveTurnLabel {
+  thinking,
+  starting = false
+}: NativeChatActiveTurnLabelInput): NativeChatActiveTurnLabel {
   const text = activityText?.trim()
   if (text) {
     return { source: 'activity', text }
   }
-  return { source: 'status', key: thinking ? 'thinking' : 'working' }
+  return { source: 'status', key: thinking ? 'thinking' : starting ? 'starting' : 'working' }
 }
 
 /** The live tail line's label in English. For platforms without i18n (mobile). */
-export function formatNativeChatActiveTurnLabel(input: {
-  activityText?: string | null
-  thinking: boolean
-}): string {
+export function formatNativeChatActiveTurnLabel(input: NativeChatActiveTurnLabelInput): string {
   const label = describeNativeChatActiveTurnLabel(input)
   return label.source === 'activity' ? label.text : NATIVE_CHAT_TURN_STATUS_COPY[label.key]
 }

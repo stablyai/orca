@@ -94,6 +94,7 @@ type StructuredSessionMessageListProps = {
   onLinkClick?: (...args: unknown[]) => void
   awaitingInput?: 'shown' | 'unshown' | null
   isWorking?: boolean
+  agentStarting?: boolean
   runtimeContext?: unknown
   session?: { hasMore: boolean; loadingEarlier: boolean; loadEarlier: () => Promise<void> }
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
@@ -176,6 +177,7 @@ export function createStructuredSessionMocks() {
           sessionId: string
           target: { kind: 'local' } | { kind: 'environment'; environmentId: string }
           transportEnabled?: boolean
+          providerStarting?: boolean
         }) => {
           mocks.controllerProps = props
           const outbox = useStructuredAgentSessionOutbox({
@@ -221,6 +223,7 @@ export function createStructuredSessionMocks() {
             send: outbox.send,
             retry: outbox.retry,
             isWorking: mocks.isWorking,
+            providerStarting: props.providerStarting === true,
             backgroundTasks: {
               show: mocks.showBackgroundTasks || mocks.monitoringBackgroundTasks,
               isMonitoring: mocks.monitoringBackgroundTasks,

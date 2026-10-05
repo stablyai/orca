@@ -4,22 +4,30 @@ import type { NativeChatTurnActivity } from '../../../../shared/native-chat-turn
 import { describeNativeChatActiveTurnLabel } from '../../../../shared/native-chat-turn-status'
 
 /** The live turn's tail line: a spinner plus what the turn is doing right now —
- *  the provider's activity text, else that it is reasoning, else plain "Working…".
- *  The clock lives in the turn bar under the user's message, not here. */
+ *  the provider's activity text, else that it is reasoning, else "Starting…" while the
+ *  agent starts, else plain "Working…". The clock lives in the turn bar under the user's message. */
 export function NativeChatTurnActivityLine({
   activity,
-  thinking
+  thinking,
+  starting = false
 }: {
   activity?: NativeChatTurnActivity | null
   thinking: boolean
+  starting?: boolean
 }): React.JSX.Element {
-  const resolved = describeNativeChatActiveTurnLabel({ activityText: activity?.text, thinking })
+  const resolved = describeNativeChatActiveTurnLabel({
+    activityText: activity?.text,
+    thinking,
+    starting
+  })
   const label =
     resolved.source === 'activity'
       ? resolved.text
       : resolved.key === 'thinking'
         ? translate('components.native-chat.status.thinking', 'Thinking')
-        : translate('components.native-chat.status.working', 'Working…')
+        : resolved.key === 'starting'
+          ? translate('components.native-chat.status.starting', 'Starting…')
+          : translate('components.native-chat.status.working', 'Working…')
 
   return (
     <div

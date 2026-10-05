@@ -17669,6 +17669,7 @@
       "status": {
         "responding": "L'agent répond",
         "working": "Fonctionnement…",
+        "starting": "Démarrage…",
         "thinking": "Réflexion",
         "workingFor": "En cours depuis {{value0}}",
         "workedFor": "A travaillé pendant {{value0}}",

@@ -15126,7 +15126,8 @@
       "status": {
         "responding": "El agente está respondiendo",
         "interruptedAfter": "Interrumpido tras {{value0}}",
-        "failedAfter": "Falló tras {{value0}}"
+        "failedAfter": "Falló tras {{value0}}",
+        "starting": "Iniciando…"
       },
       "jumpToLatest": "Saltar a lo último",
       "toggle": {

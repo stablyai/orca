@@ -87,6 +87,28 @@ describe('describeNativeChatActiveTurnLabel', () => {
       key: 'working'
     })
   })
+
+  it('names the starting agent in place of plain working', () => {
+    expect(describeNativeChatActiveTurnLabel({ thinking: false, starting: true })).toEqual({
+      source: 'status',
+      key: 'starting'
+    })
+  })
+
+  // Reasoning or activity means the agent already answered; the startup phase can lag behind it.
+  it('lets what the agent reports beat a startup phase', () => {
+    expect(
+      describeNativeChatActiveTurnLabel({
+        activityText: 'Reading a.ts',
+        thinking: false,
+        starting: true
+      })
+    ).toEqual({ source: 'activity', text: 'Reading a.ts' })
+    expect(describeNativeChatActiveTurnLabel({ thinking: true, starting: true })).toEqual({
+      source: 'status',
+      key: 'thinking'
+    })
+  })
 })
 
 describe('formatNativeChatActiveTurnLabel', () => {
@@ -96,6 +118,7 @@ describe('formatNativeChatActiveTurnLabel', () => {
     ).toBe('Running pnpm test')
     expect(formatNativeChatActiveTurnLabel({ thinking: true })).toBe('Thinking')
     expect(formatNativeChatActiveTurnLabel({ thinking: false })).toBe('Working…')
+    expect(formatNativeChatActiveTurnLabel({ thinking: false, starting: true })).toBe('Starting…')
   })
 })
 

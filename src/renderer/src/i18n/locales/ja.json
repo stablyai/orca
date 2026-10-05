@@ -17606,6 +17606,7 @@
       "status": {
         "responding": "Agent が応答中です",
         "working": "処理中…",
+        "starting": "起動中…",
         "thinking": "考え",
         "workingFor": "{{value0}} 処理中",
         "workedFor": "{{value0}} で完了",

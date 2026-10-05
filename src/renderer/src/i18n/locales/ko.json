@@ -17606,6 +17606,7 @@
       "status": {
         "responding": "Agent이 응답 중입니다.",
         "working": "작업 중…",
+        "starting": "시작 중…",
         "thinking": "생각",
         "workingFor": "{{value0}} 작업 중",
         "workedFor": "{{value0}} 작업 완료",
