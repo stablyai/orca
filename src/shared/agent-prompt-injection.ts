@@ -7,6 +7,22 @@ export const AGENT_PROMPT_BRACKETED_PASTE_START = '\x1b[200~'
 export const AGENT_PROMPT_BRACKETED_PASTE_END = '\x1b[201~'
 export const AGENT_PROMPT_SUBMIT = '\r'
 
+export function usesBracketedPasteForAgentPrompt(agent: TuiAgent | null | undefined): boolean {
+  return agent !== 'grok'
+}
+
+export function buildAgentPromptBodyBytes(
+  prompt: string,
+  agent?: TuiAgent | null,
+  leadLine?: string
+): string {
+  if (usesBracketedPasteForAgentPrompt(agent)) {
+    return buildAgentPromptPasteBytes(prompt, leadLine)
+  }
+  // Plain input must contain no Enter bytes before the scheduled submit.
+  return sanitizeAgentPromptText(prompt).replace(/\r\n?/g, '\n')
+}
+
 /** Why unknown agents keep the lead: an unidentified Claude still needs it, while known non-Claude
  *  TUIs get pre-lead bytes because Codex drops typed text that shares the paste's write (STA-8200). */
 export function agentPromptTakesLeadLine(agent: TerminalAgent | null | undefined): boolean {
