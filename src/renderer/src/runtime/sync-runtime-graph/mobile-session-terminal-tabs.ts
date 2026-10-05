@@ -1,4 +1,5 @@
 import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/layout-serialization'
+import { readTerminalPresentationToken } from '@/store/slices/tabs/terminal-presentation-stamp'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-types'
@@ -138,6 +139,11 @@ export function buildMobileTerminalSurfaceTabs(
         : {}),
       parentLayout: publishedParentLayout,
       ...(chatPair.viewMode ? { viewMode: chatPair.viewMode } : {}),
+      // Why the store's binding, not the live capture: the host checks the token against it.
+      presentationToken: readTerminalPresentationToken(
+        terminal.id,
+        savedPtyIdsByLeafId[leafId] ?? (leafIds.length <= 1 ? terminal.ptyId : undefined)
+      ),
       isActive: isDesktopTabActive && leafId === activeLeafId
     }
   })

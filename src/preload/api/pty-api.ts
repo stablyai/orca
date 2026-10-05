@@ -4,6 +4,7 @@ import type {
 } from '../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { NativeChatInputWriteResult } from '../../shared/native-chat-input-action'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { PtyListedSession, PtySessionListScope } from '../../shared/pty-listed-session'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
@@ -79,6 +80,13 @@ export type PtyApi = {
   }>
   write: (id: string, data: string, inputKind: TerminalInputKind) => void
   writeAccepted: (id: string, data: string, inputKind: TerminalInputKind) => Promise<boolean>
+  /** Chat composer input: refused after the host proves the agent exited; never a raw fallback. */
+  writeChatInput: (
+    id: string,
+    data: string,
+    inputKind: TerminalInputKind,
+    actionId: string
+  ) => Promise<NativeChatInputWriteResult>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void
   claimViewport: (id: string, cols: number, rows: number) => void

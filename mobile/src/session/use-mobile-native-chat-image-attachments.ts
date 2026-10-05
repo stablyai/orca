@@ -30,6 +30,7 @@ import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
+import { createMobileChatInputAction } from './mobile-native-chat-input-guard'
 import { useMobileNativeChatImageUpload } from './use-mobile-native-chat-image-upload'
 
 type CurrentRef<T> = { readonly current: T }
@@ -211,11 +212,13 @@ export function useMobileNativeChatImageAttachments({
               onSendError('Message not sent (disconnected)')
               return false
             }
+            const healChatInput = createMobileChatInputAction(client)
             const healed = await healMobileNativeChatStaleInput({
               client,
               terminal: staleTerminal,
               deviceToken: deviceTokenRef.current,
-              deadline
+              deadline,
+              ...(healChatInput ? { chatInput: healChatInput } : {})
             })
             // A tab switch during the clear would send this text to a terminal the
             // clear never touched, so abort rather than reroute it.
@@ -237,7 +240,9 @@ export function useMobileNativeChatImageAttachments({
         }
         try {
           const seededLaunchDraft = readSeededLaunchDraft()
+          const pasteChatInput = createMobileChatInputAction(client)
           const pasted = await pasteMobileNativeChatImagePaths({
+            ...(pasteChatInput ? { chatInput: pasteChatInput } : {}),
             client,
             terminal: handle,
             agent,

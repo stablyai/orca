@@ -1,3 +1,4 @@
+import type { NativeChatInputAction } from '../../../src/shared/native-chat-input-action'
 import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send'
 import type { MobileNativeChatRpcSender } from './mobile-native-chat-send'
 
@@ -44,6 +45,7 @@ export async function healMobileNativeChatStaleInput(args: {
   /** Budget shared with the write this heal precedes, so a hung clear can't spend a
    *  full send timeout and leave the following write free to spend another. */
   readonly deadline?: number
+  readonly chatInput?: NativeChatInputAction
 }): Promise<boolean> {
   if (!isMobileNativeChatInputStale(args.terminal)) {
     return true
@@ -56,7 +58,8 @@ export async function healMobileNativeChatStaleInput(args: {
       deviceToken: args.deviceToken,
       imagePaths: [],
       followedByText: false,
-      ...(args.deadline === undefined ? {} : { deadline: args.deadline })
+      ...(args.deadline === undefined ? {} : { deadline: args.deadline }),
+      ...(args.chatInput ? { chatInput: args.chatInput } : {})
     })
   } catch {
     // Leave marked for the next attempt.

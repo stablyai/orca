@@ -49,6 +49,7 @@ export function finalizeRuntimeMobileSessionTabsResult(
         }
       : {}),
     tabs: normalizedTabs,
-    chatViewHostOwned: true
+    chatViewHostOwned: true,
+    chatViewAgentExitHostOwned: true
   }
 }

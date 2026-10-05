@@ -8,6 +8,7 @@ import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
+import { createMobileChatInputAction } from './mobile-native-chat-input-guard'
 
 export function sendMobileNativeChatPermissionResponse(args: {
   client: RpcClient
@@ -15,6 +16,7 @@ export function sendMobileNativeChatPermissionResponse(args: {
   deviceToken: string | null
   text: string
 }): Promise<MobileNativeChatSendOutcome> {
+  const guardedAction = createMobileChatInputAction(args.client)
   // Why: approval choices are already complete terminal control sequences;
   // appending Return changes both numbered choices and Escape denial.
   return sendMobileNativeChatMessageWithOutcome({
@@ -22,7 +24,10 @@ export function sendMobileNativeChatPermissionResponse(args: {
     terminal: args.terminal,
     text: args.text,
     enter: false,
-    ...(args.deviceToken ? { mobileClient: { id: args.deviceToken, type: 'mobile' as const } } : {})
+    ...(args.deviceToken
+      ? { mobileClient: { id: args.deviceToken, type: 'mobile' as const } }
+      : {}),
+    ...(guardedAction ? { chatInput: guardedAction } : {})
   })
 }
 

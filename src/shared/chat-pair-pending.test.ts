@@ -270,3 +270,44 @@ describe('createChatPairPendingWrites', () => {
     expect(rig.failures).toEqual([])
   })
 })
+
+describe('pending pair settlement for a waiting send (click-then-send)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('is null with nothing pending and resolves with the adopted host reply', async () => {
+    const rig = createRig()
+    expect(rig.machine.settled('tab')).toBeNull()
+    rig.machine.submit('tab', { viewMode: 'chat', leafId: 'A' }, CHAT_A)
+    const settled = rig.machine.settled('tab')
+    rig.sent[0]!.resolve({ chatView: { viewMode: 'chat', chatLeafId: 'A' } })
+    await expect(settled).resolves.toEqual({ kind: 'applied', pair: CHAT_A })
+  })
+
+  it('fails a waiting send when a newer switch supersedes it, the write fails, or it is dropped', async () => {
+    const rig = createRig()
+    rig.machine.submit('tab', { viewMode: 'chat', leafId: 'A' }, CHAT_A)
+    const superseded = rig.machine.settled('tab')
+    rig.machine.submit('tab', { viewMode: 'terminal', leafId: null }, TERMINAL)
+    await expect(superseded).resolves.toEqual({ kind: 'failed' })
+    const failed = rig.machine.settled('tab')
+    rig.sent[1]!.reject(new Error('refused'))
+    await expect(failed).resolves.toEqual({ kind: 'failed' })
+    rig.machine.submit('tab', { viewMode: 'chat', leafId: 'A' }, CHAT_A)
+    const dropped = rig.machine.settled('tab')
+    rig.machine.drop('tab')
+    await expect(dropped).resolves.toEqual({ kind: 'failed' })
+  })
+
+  it('reports a host that normalized the switch to terminal, so the send writes nothing', async () => {
+    const rig = createRig()
+    rig.machine.submit('tab', { viewMode: 'chat', leafId: 'A' }, CHAT_A)
+    const settled = rig.machine.settled('tab')
+    rig.sent[0]!.resolve({ chatView: { viewMode: 'terminal', chatLeafId: null } })
+    await expect(settled).resolves.toEqual({ kind: 'applied', pair: { viewMode: 'terminal' } })
+  })
+})

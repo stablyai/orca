@@ -14,6 +14,7 @@ import {
   A,
   B,
   C,
+  PARENT,
   TERMINAL_TAB_ID,
   WT,
   applyHostSnapshot,
@@ -23,6 +24,12 @@ import {
   resetPairedStore,
   storedPair
 } from '@/runtime/terminal-chat-pair-host-test-rig'
+
+import {
+  noteHostPresentationToken,
+  resetHostPresentationTokenHistoryForTest
+} from '@/runtime/host-presentation-token-history'
+import type { AgentExitObservationOrigin } from '../../../../shared/agent-exit-retirement'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
@@ -52,7 +59,9 @@ function makeManager(leaves: string[]) {
 /** The pane's chat hooks over the real store, with the foundation's own pair source. */
 function renderPane(leaves: string[] = [A, B]) {
   const { manager, container } = makeManager(leaves)
-  const onAgentExitedRef = { current: (_leafId: string) => {} }
+  const onAgentExitedRef = {
+    current: (_leafId: string, _origin?: AgentExitObservationOrigin) => {}
+  }
   const paneTitlesRef: { current: Record<number, string> } = { current: {} }
   const pusher = createRemotePaneLayoutPusher()
   const hook = renderHook(() => {
@@ -144,6 +153,7 @@ function chatReply(leafId: string | null, superseded = false) {
 let host: ReturnType<typeof installFakeHost>
 beforeEach(() => {
   resetPairedStore()
+  resetHostPresentationTokenHistoryForTest()
   host = installFakeHost()
   useAppStore.setState({
     runtimePaneTitlesByTabId: { [TERMINAL_TAB_ID]: { 1: 'codex', 2: 'codex', 3: 'codex' } }
@@ -241,6 +251,52 @@ describe('a paired desktop pane on a host-owned pair', () => {
       ['host-tab-1', 'terminal']
     ])
     expect(hook.result.current.isChatViewMode).toBe(false)
+  })
+
+  it('asks an exit-owning host to retire only this pane, fenced by the token held when the exit was seen (R1C-1)', async () => {
+    hostSays({ viewMode: 'chat', owner: A, exitMarker: true, token: 'h.1' })
+    const { hook, onAgentExitedRef } = renderPane()
+    await settle()
+    act(() => onAgentExitedRef.current(A, { ptyId: null, observedAtMs: Date.now() }))
+    await settle()
+    // Why: a conditional terminal write for A, never a retarget to B.
+    expect(host.pairWrites().map((write) => write.params)).toEqual([
+      expect.objectContaining({
+        tabId: `${PARENT}::${A}`,
+        viewMode: 'terminal',
+        agentExit: { presentationToken: 'h.1' }
+      })
+    ])
+    expect(hook.result.current.chatLeafId).toBe(A)
+    hostSays({ viewMode: 'terminal', exitMarker: true, token: 'h.2' })
+    await settle()
+    expect(hook.result.current.isChatViewMode).toBe(false)
+  })
+
+  it('fences a delayed exit with the token held when its bytes arrived, not the newest (R4.2-1)', async () => {
+    hostSays({ viewMode: 'chat', owner: A, exitMarker: true })
+    const { onAgentExitedRef } = renderPane()
+    await settle()
+    // The exit is seen under h.1; the user's switch back to chat(A) publishes h.2 before it drains.
+    noteHostPresentationToken({ worktreeId: WT, hostTabId: PARENT, leafId: A }, 'h.1', 1_000)
+    noteHostPresentationToken({ worktreeId: WT, hostTabId: PARENT, leafId: A }, 'h.2', 3_000)
+    act(() => onAgentExitedRef.current(A, { ptyId: null, observedAtMs: 2_000 }))
+    await settle()
+    expect(host.pairWrites().map((write) => write.params.agentExit)).toEqual([
+      { presentationToken: 'h.1' }
+    ])
+  })
+
+  it('still asks the host to retire this pane when it held no token (RD5-1)', async () => {
+    hostSays({ viewMode: 'chat', owner: A, exitMarker: true })
+    const { onAgentExitedRef } = renderPane()
+    await settle()
+    act(() => onAgentExitedRef.current(A, { ptyId: null, observedAtMs: 1 }))
+    await settle()
+    // Why no token: the host then retires only while this leaf owns chat, never retargeting.
+    expect(host.pairWrites().map((write) => write.params)).toEqual([
+      expect.objectContaining({ tabId: `${PARENT}::${A}`, viewMode: 'terminal', agentExit: {} })
+    ])
   })
 
   it('does not exit chat for a host owner that is not mounted here yet', async () => {

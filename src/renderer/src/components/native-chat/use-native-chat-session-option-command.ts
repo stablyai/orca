@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
+import { createNativeChatWriteAction } from './native-chat-pty-input'
 import {
   nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget
@@ -86,19 +87,22 @@ export function useNativeChatSessionOptionCommand(args: {
           // submit immediately so historical output cannot satisfy the match.
           observer.arm()
         }
+        const chatAction = createNativeChatWriteAction(target.terminalTabId ?? '')
         const accepted =
           agent === 'codex'
             ? await typeNativeChatCommand(
                 target.settings,
                 target.ptyId,
                 command,
-                sendController.signal
+                sendController.signal,
+                chatAction
               )
             : await sendNativeChatMessageVerified(
                 target.settings,
                 target.ptyId,
                 command,
-                sendController.signal
+                sendController.signal,
+                chatAction
               )
         if (!accepted) {
           throw new Error('The terminal did not accept the command.')

@@ -14,6 +14,8 @@ export type PendingPtySideEffect = {
   titleScanEffect: 'none' | 'stale-probe' | 'ignored-cursor-native'
   containsBell: boolean
   suppressAttentionEvents: boolean
+  /** When these bytes arrived; an exit they reveal is ordered by it, not by the later drain. */
+  observedAtMs?: number
 }
 
 type PtyOutputSideEffectQueueOptions = {
@@ -115,6 +117,7 @@ export function createPtyOutputSideEffectQueue({
       !effect.containsBell
     ) {
       prior.titleScanEffect = effect.titleScanEffect
+      prior.observedAtMs = effect.observedAtMs ?? prior.observedAtMs
       return
     }
     evictOldestIfFull()

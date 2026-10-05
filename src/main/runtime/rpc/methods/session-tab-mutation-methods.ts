@@ -111,6 +111,9 @@ export const SESSION_TAB_MUTATION_METHODS = [
         ...(params.viewMode !== undefined ? { viewMode: params.viewMode } : {}),
         ...(params.viewMode !== undefined && params.chatViewWrite
           ? { chatViewWrite: params.chatViewWrite }
+          : {}),
+        ...(params.viewMode === 'terminal' && params.agentExit
+          ? { agentExit: params.agentExit }
           : {})
       })
     }

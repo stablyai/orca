@@ -132,3 +132,20 @@ describe('status-row change detection', () => {
     expect(probe.mutations).toHaveLength(2)
   })
 })
+
+describe('owner presence signal (F2)', () => {
+  it('signals a presence-only change that the IPC row equality hides, and nothing for an equal owner', () => {
+    const probe = new RowMutationProbe()
+    const changes: unknown[] = []
+    probe.subscribeAgentPresenceChanges((change) => changes.push(change.presence))
+    const before = row({ agentPresence: { agent: 'claude' } })
+    const owner = { pid: 4242, platform: 'darwin' as const, startTime: 'birth' }
+    probe.commit(before, row({ agentPresence: { agent: 'claude', process: owner } }))
+    probe.commit(
+      row({ agentPresence: { agent: 'claude', process: owner } }),
+      row({ agentPresence: { agent: 'claude', process: { ...owner } } })
+    )
+    expect(probe.mutations).toHaveLength(0)
+    expect(changes).toEqual([{ agent: 'claude', process: owner }])
+  })
+})

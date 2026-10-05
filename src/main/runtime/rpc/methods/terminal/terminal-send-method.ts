@@ -189,6 +189,7 @@ export const TERMINAL_SEND_METHODS = [
             }
           : assertSendPreconditions
       const useSettledAgentPrompt =
+        params.chatInput === undefined &&
         params.agentPrompt === true &&
         hasText &&
         params.enter === true &&
@@ -237,6 +238,7 @@ export const TERMINAL_SEND_METHODS = [
                 signal,
                 // Why: a wire write carries no provenance beyond a client's own query reply.
                 inputKind: params.inputKind === 'query-reply' ? 'query-reply' : 'driving',
+                ...(params.chatInput ? { chatInput: params.chatInput } : {}),
                 ...(reserveWrite ? { reserveWrite } : {}),
                 ...(params.inputKind !== 'query-reply' && mobileFloorClientId
                   ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }

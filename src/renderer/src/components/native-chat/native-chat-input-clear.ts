@@ -1,5 +1,6 @@
 // Clearing the agent's unsubmitted input line before a chat send writes its body.
-import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import { sendNativeChatPtyInput } from './native-chat-pty-input'
+import type { RuntimeChatInputAction } from '@/runtime/runtime-chat-input-send'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-tui-input-clear'
 
@@ -22,6 +23,8 @@ export type NativeChatSendOptions = {
   onWriteRejected?: () => void
   /** A write's acknowledgment was lost; it may or may not have landed. */
   onWriteUnconfirmed?: () => void
+  /** Every write was settled as accepted by the host. */
+  onWritesAccepted?: () => void
   /** Bytes that empty the agent's input line. Defaults to a single Ctrl+U. */
   clearInput?: string
   /**
@@ -31,6 +34,8 @@ export type NativeChatSendOptions = {
    * pasting on top of residue.
    */
   confirmCleared?: () => boolean
+  /** The composer action every write of this send carries. */
+  chatAction?: RuntimeChatInputAction
 }
 
 type RuntimeSettings = ReturnType<typeof getSettingsForAgentTabRuntimeOwner>
@@ -40,11 +45,11 @@ export function clearUnsubmittedAgentInput(
   ptyId: string,
   options?: NativeChatSendOptions
 ): void {
-  sendRuntimePtyInput(
+  sendNativeChatPtyInput(
     settings,
     ptyId,
     options?.clearInput ?? NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
-    'driving'
+    options?.chatAction
   )
 }
 
@@ -77,7 +82,7 @@ export function clearThenWrite(
       // An unreadable terminal is unconfirmed; the maximal clear remains safe.
     }
     if (!cleared) {
-      sendRuntimePtyInput(settings, ptyId, AGENT_TUI_CLEAR_INPUT_MAX, 'driving')
+      sendNativeChatPtyInput(settings, ptyId, AGENT_TUI_CLEAR_INPUT_MAX, options.chatAction)
     }
     writeBody()
   })

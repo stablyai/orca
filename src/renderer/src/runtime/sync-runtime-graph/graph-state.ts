@@ -51,6 +51,7 @@ export const graphState = {
     string,
     {
       inputs: MobileSessionWorktreeInputs
+      presentationIntentRevision: number
       content: unknown
       snapshot: RuntimeMobileSessionTabsSnapshot
     }

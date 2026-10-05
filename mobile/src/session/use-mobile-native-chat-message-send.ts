@@ -10,6 +10,7 @@ import {
 import type { CatalogCommandDelivery } from '../../../src/shared/agent-session-option-catalog'
 import { isSlashCommandDraft } from '../../../src/shared/native-chat-slash-commands'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
+import { createMobileChatInputAction } from './mobile-native-chat-input-guard'
 import { classifyMobileNativeChatSend } from './mobile-native-chat-send-classification'
 import {
   acquireMobileNativeChatTerminalWrite,
@@ -118,11 +119,15 @@ export function useMobileNativeChatMessageSend(args: {
       // time, not hand it a fresh timeout and pin the composer for twice as long.
       // An image send already opened one covering its paste — keep spending that.
       const deadline = sharedDeadline ?? openMobileNativeChatSendBudget()
+      // One action id for heal, clear and body.
+      const chatInput = createMobileChatInputAction(client)
+      const chatInputField = chatInput ? { chatInput } : {}
       const healArgs = {
         client,
         terminal: handle,
         deviceToken: deviceTokenRef.current,
-        deadline
+        deadline,
+        ...chatInputField
       }
       if (!(await healMobileNativeChatStaleInput(healArgs))) {
         onSendError('Message not sent')
@@ -151,6 +156,7 @@ export function useMobileNativeChatMessageSend(args: {
             ? buildAgentTuiClearInputForText(seededLaunchDraft.text)
             : AGENT_TUI_CLEAR_INPUT_LINE,
           deadline,
+          ...chatInputField,
           ...(deviceTokenRef.current
             ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
             : {})
@@ -177,6 +183,7 @@ export function useMobileNativeChatMessageSend(args: {
             command: text,
             ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
             ...(mobileClient ? { mobileClient } : {}),
+            ...chatInputField,
             deadline
           })
         : await sendMobileNativeChatMessageWithOutcome({
@@ -185,7 +192,8 @@ export function useMobileNativeChatMessageSend(args: {
             text,
             ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
             deadline,
-            ...(mobileClient ? { mobileClient } : {})
+            ...(mobileClient ? { mobileClient } : {}),
+            ...chatInputField
           })
       // Why (desktop parity): a slash/skill send dispatches into the agent's own
       // TUI, not the conversation — the transcript never echoes it as a user
@@ -293,12 +301,14 @@ export function useMobileNativeChatMessageSend(args: {
           const mobileClient = deviceTokenRef.current
             ? { id: deviceTokenRef.current, type: 'mobile' as const }
             : undefined
+          const chatInput = createMobileChatInputAction(client)
           if (
             !(await healMobileNativeChatStaleInput({
               client,
               terminal,
               deviceToken: deviceTokenRef.current,
-              deadline
+              deadline,
+              ...(chatInput ? { chatInput } : {})
             }))
           ) {
             return 'rejected'
@@ -308,6 +318,7 @@ export function useMobileNativeChatMessageSend(args: {
             terminal,
             command: text,
             ...(mobileClient ? { mobileClient } : {}),
+            ...(chatInput ? { chatInput } : {}),
             deadline
           })
         }

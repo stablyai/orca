@@ -8,6 +8,7 @@ import {
   chatPairsEqual,
   createChatPairPendingWrites,
   type ChatPairPendingWrites,
+  type ChatPairSettlement,
   type ChatPairWriteRequest
 } from '../../../shared/chat-pair-pending'
 import {
@@ -138,6 +139,14 @@ export function enqueueChatPair(
   }
   getPendingWrites().submit({ worktreeId, terminalTabId }, request, target)
   return target
+}
+
+/** The answer to this desktop's pending switch on a tab, or null when none is pending. */
+export function awaitPendingChatPairSettlement(
+  worktreeId: string,
+  terminalTabId: string
+): Promise<ChatPairSettlement> | null {
+  return pendingWrites?.settled({ worktreeId, terminalTabId }) ?? null
 }
 
 /**

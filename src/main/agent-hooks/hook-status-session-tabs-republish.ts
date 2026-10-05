@@ -1,13 +1,20 @@
 import type { AgentHookServer } from './server'
+import type { AgentPresenceChange } from './server/server-row-ownership'
 
 type SessionTabsRepublisher = {
   getTerminalWorktreeIdForHandle(handle: string): string | null
   getTerminalWorktreeIdForPaneKey(paneKey: string): string | null
   scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(worktreeId: string): void
   touchMobileSessionTabsForWorktree(worktreeId: string): void
+  /** Optional so older runtime doubles keep compiling: a pane's canonical owner changed. */
+  noteAgentOwnerPresenceChange?(change: AgentPresenceChange): void
 }
 
-type StatusStore = Pick<AgentHookServer, 'subscribeStatusFreshness' | 'subscribeStatusRowMutations'>
+type StatusStore = Pick<
+  AgentHookServer,
+  'subscribeStatusFreshness' | 'subscribeStatusRowMutations'
+> &
+  Partial<Pick<AgentHookServer, 'subscribeAgentPresenceChanges'>>
 
 /**
  * Republish `session.tabs` whenever a pane's status row changes.
@@ -50,6 +57,11 @@ export function installHookStatusSessionTabsRepublish(
       runtime.touchMobileSessionTabsForWorktree(worktreeId)
     }
   })
+  // Why separate: live status rows only republish; only an owner change can change an exit verdict.
+  const unsubscribePresence =
+    statusStore.subscribeAgentPresenceChanges?.((change) => {
+      getRuntime()?.noteAgentOwnerPresenceChange?.(change)
+    }) ?? (() => {})
   const unsubscribeFreshness = statusStore.subscribeStatusFreshness((status) => {
     const runtime = getRuntime()
     if (!runtime) {
@@ -63,5 +75,6 @@ export function installHookStatusSessionTabsRepublish(
   return () => {
     unsubscribeMutations()
     unsubscribeFreshness()
+    unsubscribePresence()
   }
 }

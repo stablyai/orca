@@ -12,7 +12,24 @@ export function snapshotHostOwnsChatPair(
   return snapshot.chatViewHostOwned === true && terminalPtyMode === 'remote'
 }
 
-/** Rewrites the worktree's marker from every applied paired snapshot; absence is an old host. */
+function withWorktreeFlag(
+  current: Record<string, true>,
+  worktreeId: string,
+  on: boolean
+): Record<string, true> {
+  if (on === (current[worktreeId] === true)) {
+    return current
+  }
+  const next = { ...current }
+  if (on) {
+    next[worktreeId] = true
+  } else {
+    delete next[worktreeId]
+  }
+  return next
+}
+
+/** Rewrites the worktree's markers from every applied paired snapshot; absence is an old host. */
 export function withChatViewHostMarker(
   state: WebSessionTabsSyncState,
   patch: WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>,
@@ -22,18 +39,23 @@ export function withChatViewHostMarker(
   if (options?.terminalPtyMode === 'local') {
     return patch
   }
-  const current = state.chatViewHostOwnedByWorktree ?? {}
   const hostOwned = snapshotHostOwnsChatPair(snapshot)
-  if (hostOwned === (current[snapshot.worktree] === true)) {
+  const pairMarkers = state.chatViewHostOwnedByWorktree ?? {}
+  const exitMarkers = state.chatViewAgentExitHostOwnedByWorktree ?? {}
+  const nextPairMarkers = withWorktreeFlag(pairMarkers, snapshot.worktree, hostOwned)
+  const nextExitMarkers = withWorktreeFlag(
+    exitMarkers,
+    snapshot.worktree,
+    hostOwned && snapshot.chatViewAgentExitHostOwned === true
+  )
+  if (nextPairMarkers === pairMarkers && nextExitMarkers === exitMarkers) {
     return patch
   }
-  const next = { ...current }
-  if (hostOwned) {
-    next[snapshot.worktree] = true
-  } else {
-    delete next[snapshot.worktree]
+  const markers = {
+    ...(nextPairMarkers !== pairMarkers ? { chatViewHostOwnedByWorktree: nextPairMarkers } : {}),
+    ...(nextExitMarkers !== exitMarkers
+      ? { chatViewAgentExitHostOwnedByWorktree: nextExitMarkers }
+      : {})
   }
-  return patch === state
-    ? { chatViewHostOwnedByWorktree: next }
-    : { ...patch, chatViewHostOwnedByWorktree: next }
+  return patch === state ? markers : { ...patch, ...markers }
 }

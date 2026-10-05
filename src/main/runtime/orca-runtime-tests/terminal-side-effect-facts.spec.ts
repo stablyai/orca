@@ -443,7 +443,10 @@ describe('terminal side-effect fact channel', () => {
     runtime.onPtyData('pty-1', '\x1b]0;other cwd\x07', 102)
 
     await vi.waitFor(() =>
-      expect(batches.flatMap((batch) => batch.facts)).toContainEqual({ kind: 'agent-exited' })
+      expect(batches.flatMap((batch) => batch.facts)).toContainEqual({
+        kind: 'agent-exited',
+        observedAtMs: expect.any(Number)
+      })
     )
     expect(getForegroundProcess).toHaveBeenCalledTimes(2)
   })
@@ -470,7 +473,10 @@ describe('terminal side-effect fact channel', () => {
 
     await vi.waitFor(() => expect(getForegroundProcess).toHaveBeenCalledTimes(2))
     await vi.waitFor(() =>
-      expect(batches.flatMap((batch) => batch.facts)).toContainEqual({ kind: 'agent-exited' })
+      expect(batches.flatMap((batch) => batch.facts)).toContainEqual({
+        kind: 'agent-exited',
+        observedAtMs: expect.any(Number)
+      })
     )
   })
 
@@ -511,7 +517,10 @@ describe('terminal side-effect fact channel', () => {
       runtime.onPtyData('pty-1', '\x1b]0;~/repo\x07', 100)
 
       await vi.waitFor(() =>
-        expect(batches.flatMap((batch) => batch.facts)).toContainEqual({ kind: 'agent-exited' })
+        expect(batches.flatMap((batch) => batch.facts)).toContainEqual({
+          kind: 'agent-exited',
+          observedAtMs: expect.any(Number)
+        })
       )
     }
   )

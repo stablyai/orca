@@ -1,3 +1,7 @@
+import type {
+  AgentExitRetirementCondition,
+  AgentExitRetirementDisposition
+} from './agent-exit-retirement'
 import type { RuntimeSessionTabChatView } from './runtime-session-contracts'
 
 /** Clients treat this as delivery-unknown: the renderer may still have applied the pair. */
@@ -16,10 +20,15 @@ export type TerminalChatViewRequest = {
   /** The host's owner for a parent-addressed chat, used only when the tab holds no valid owner;
    *  null: no pane of a split may own chat. */
   ownerPickLeafId?: string | null
+  /** An agent exit in `leafId`: retire that pane's chat and a sole pane's launch hint only while
+   *  the condition holds (bound PTY, no newer presentation). Never moves chat elsewhere. */
+  agentExit?: Omit<AgentExitRetirementCondition, 'leafId'>
 }
 
 export type TerminalChatViewResponse = {
   requestId: string
   chatView?: RuntimeSessionTabChatView
+  /** For an `agentExit` request: what the renderer's conditional retirement did. */
+  agentExitDisposition?: AgentExitRetirementDisposition
   error?: string
 }

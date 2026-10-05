@@ -3,7 +3,12 @@ import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { nativeChatTerminalWrite } from './mobile-session-write-operations'
+import {
+  terminalSendDeliveryUnknownSchema,
+  terminalSendPartialRefusalSchema
+} from '../terminal/terminal-reply-schema'
 import { typeAgentTuiCommand } from '../../../src/shared/agent-tui-command-typing'
+import type { NativeChatInputAction } from '../../../src/shared/native-chat-input-action'
 
 /** What a native-chat write takes, named from an operation so no module names the raw port. */
 export type MobileNativeChatRpcSender = Parameters<typeof nativeChatTerminalWrite.request>[0]
@@ -21,6 +26,8 @@ type MobileNativeChatSendArgs = {
   /** Exact host launch draft this submitting write resolves when accepted. */
   resolvedLaunchDraft?: { text: string; createdAt: number }
   mobileClient?: MobileTerminalClient
+  /** The user action every write carries, so a host that proved the agent exited refuses them. */
+  chatInput?: NativeChatInputAction
   /** Shared budget for a whole user action (heal → paste → text, or one selector's
    *  keystroke sequence). Omit to give this write its own full budget. */
   deadline?: number
@@ -66,7 +73,8 @@ export async function sendMobileNativeChatMessageWithOutcome(
         text: args.text,
         enter: args.enter ?? true,
         ...(args.resolvedLaunchDraft ? { resolvedLaunchDraft: args.resolvedLaunchDraft } : {}),
-        ...(args.mobileClient ? { client: args.mobileClient } : {})
+        ...(args.mobileClient ? { client: args.mobileClient } : {}),
+        ...(args.chatInput ? { chatInput: args.chatInput } : {})
       },
       // The budget covers this whole write, reconnect wait included — a chat send
       // that spends its ceiling waiting to connect and then starts a fresh clock
@@ -74,7 +82,13 @@ export async function sendMobileNativeChatMessageWithOutcome(
       { timeoutMs, budgetSpansConnect: true }
     )
     if (nativeChatTerminalWrite.interpret(response) !== true) {
-      return 'rejected'
+      // Why: a lost settlement or a refusal after a settled prefix may have delivered part of the
+      // message; a retry must not be invited as if nothing was sent.
+      return response.ok &&
+        (terminalSendDeliveryUnknownSchema.safeParse(response.result).success ||
+          terminalSendPartialRefusalSchema.safeParse(response.result).success)
+        ? 'unknown'
+        : 'rejected'
     }
     reportWorkerTerminalUserInput(args.client, args.terminal)
     return 'accepted'
@@ -102,6 +116,7 @@ export async function typeMobileNativeChatCommandWithOutcome(args: {
   command: string
   resolvedLaunchDraft?: { text: string; createdAt: number }
   mobileClient?: MobileTerminalClient
+  chatInput?: NativeChatInputAction
   deadline?: number
 }): Promise<MobileNativeChatWriteOutcome> {
   let writeIndex = 0
@@ -119,6 +134,7 @@ export async function typeMobileNativeChatCommandWithOutcome(args: {
           ? { resolvedLaunchDraft: args.resolvedLaunchDraft }
           : {}),
         ...(args.mobileClient ? { mobileClient: args.mobileClient } : {}),
+        ...(args.chatInput ? { chatInput: args.chatInput } : {}),
         ...(args.deadline === undefined ? {} : { deadline: args.deadline })
       })
     }
@@ -139,6 +155,7 @@ export async function clearMobileNativeChatInput(args: {
   terminal: string
   clearInput: string
   mobileClient?: MobileTerminalClient
+  chatInput?: NativeChatInputAction
   deadline?: number
 }): Promise<boolean> {
   const timeoutMs =
@@ -153,7 +170,8 @@ export async function clearMobileNativeChatInput(args: {
         terminal: args.terminal,
         text: args.clearInput,
         enter: false,
-        ...(args.mobileClient ? { client: args.mobileClient } : {})
+        ...(args.mobileClient ? { client: args.mobileClient } : {}),
+        ...(args.chatInput ? { chatInput: args.chatInput } : {})
       },
       { timeoutMs, budgetSpansConnect: true }
     )

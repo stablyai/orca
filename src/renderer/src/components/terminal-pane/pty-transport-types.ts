@@ -295,6 +295,7 @@ export type IpcPtyTransportOptions = {
   onBell?: () => void
   onAgentBecameIdle?: (title: string) => void
   onAgentBecameWorking?: () => void
-  onAgentExited?: () => void
+  /** `observedAtMs`: when the bytes revealing the exit arrived (before any queued drain). */
+  onAgentExited?: (origin?: { observedAtMs?: number }) => void
   onAgentStatus?: (payload: ParsedAgentStatusPayload) => void
 }

@@ -723,7 +723,10 @@ describe('connectPanePty', () => {
     agentExitedHandler()
 
     expect(deps.setCacheTimerStartedAt).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1), null)
-    expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(LEAF_1)
+    expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(
+      LEAF_1,
+      expect.objectContaining({ observedAtMs: expect.any(Number) })
+    )
     expect(mockStoreState.removeAgentStatus).not.toHaveBeenCalled()
   })
 })

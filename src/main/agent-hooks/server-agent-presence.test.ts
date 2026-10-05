@@ -344,3 +344,115 @@ describe('host-owned hook presence', () => {
     expect(state(server)).toBe('working')
   })
 })
+
+describe('owner presence signal for the execution host (F2)', () => {
+  it('signals each owner start and end once, not every status update (R1E-2)', async () => {
+    const server = await createServer()
+    const changes: string[] = []
+    server.subscribeAgentPresenceChanges((change) => {
+      changes.push(`${change.presence?.agent}:${change.presence?.ended ? 'ended' : 'live'}`)
+    })
+    await hook(server, 'SessionStart')
+    for (let index = 0; index < 5; index += 1) {
+      await hook(server, 'PostToolUse')
+    }
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(changes).toEqual(['claude:live', 'claude:ended'])
+  })
+
+  it('signals an ended owner even when another caller probed first and no row remains', async () => {
+    const server = await createServer()
+    await hook(server, 'SessionStart')
+    const ended = vi.fn()
+    server.subscribeAgentPresenceChanges((change) => {
+      if (change.presence?.ended) {
+        ended(change.presence.process?.pid)
+      }
+    })
+    probe.mockResolvedValueOnce('exited')
+    await expect(server.checkAgentPresence(PANE)).resolves.toBe('exited')
+    // The canonical end is now recorded; a later probe answers null, yet the signal was sent.
+    await expect(server.checkAgentPresence(PANE)).resolves.toBeNull()
+    expect(ended).toHaveBeenCalledWith(4001)
+  })
+
+  it('signals a probed end even when no resumable remnant row survives it', async () => {
+    const server = await createServer()
+    // No session id: nothing to resume, so the ended owner keeps no row.
+    await hook(server, 'UserPromptSubmit', '')
+    const ended = vi.fn()
+    server.subscribeAgentPresenceChanges((change) => {
+      if (change.presence?.ended) {
+        ended(change.presence.process?.pid)
+      }
+    })
+    probe.mockResolvedValueOnce('exited')
+    await expect(server.checkAgentPresence(PANE)).resolves.toBe('exited')
+    expect(visible(server)).toBe(false)
+    expect(ended).toHaveBeenCalledWith(4001)
+  })
+
+  it('does not treat /clear or /resume as an end', async () => {
+    const server = await createServer()
+    const changes: string[] = []
+    server.subscribeAgentPresenceChanges((change) => {
+      changes.push(change.presence?.ended ? 'ended' : 'live')
+    })
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'clear')
+    await hook(server, 'SessionEnd', 'session-a', 'resume')
+    expect(changes).toEqual(['live'])
+  })
+})
+
+describe('a host-proven end of an owner no hook identified (R2-4)', () => {
+  async function codex(server: AgentHookServer, event: string, session: string): Promise<void> {
+    const response = await postHookEvent(
+      server,
+      buildBody({ hook_event_name: event, session_id: session, model: 'gpt-5.4' }),
+      '/hook/codex'
+    )
+    expect(response.status).toBe(204)
+  }
+
+  it.each([
+    ['headless', false],
+    ['after the desktop already dropped the row', true]
+  ])(
+    'ends the Codex owner so the next Codex in the shell is a new owner (%s)',
+    async (_, dropped) => {
+      const server = await createServer()
+      const changes: string[] = []
+      server.subscribeAgentPresenceChanges((change) =>
+        changes.push(`${change.presence?.agent}:${change.presence?.ended ? 'ended' : 'live'}`)
+      )
+      await codex(server, 'SessionStart', 'codex-a')
+      await codex(server, 'Stop', 'codex-a')
+      if (dropped) {
+        server.reconcileEndedProcessForPaneKeys([PANE], { preserveResumeIdentity: true })
+      }
+      server.recordHostProvenAgentEnd(PANE, 'codex', Date.now() + 1)
+      expect(visible(server)).toBe(false)
+      await codex(server, 'SessionStart', 'codex-b')
+      expect(changes).toEqual(['codex:live', 'codex:ended', 'codex:live'])
+    }
+  )
+
+  it("leaves another agent's owner and an identified owner to their own evidence", async () => {
+    const server = await createServer()
+    await hook(server, 'SessionStart')
+    server.recordHostProvenAgentEnd(PANE, 'codex', Date.now() + 1)
+    server.recordHostProvenAgentEnd(PANE, 'claude', Date.now() + 1)
+    expect(state(server)).not.toBeNull()
+  })
+
+  it('never ends a newer Codex whose hook arrived while the end was being checked (R3Y-2)', async () => {
+    const server = await createServer()
+    await codex(server, 'SessionStart', 'codex-a')
+    await codex(server, 'Stop', 'codex-a')
+    const checkStartedAtMs = Date.now()
+    await codex(server, 'SessionStart', 'codex-b')
+    server.recordHostProvenAgentEnd(PANE, 'codex', checkStartedAtMs)
+    expect(visible(server)).toBe(true)
+  })
+})

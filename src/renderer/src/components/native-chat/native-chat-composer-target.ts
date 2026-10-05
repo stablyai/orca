@@ -5,6 +5,8 @@ import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft
 export type NativeChatResolvedTarget = {
   ptyId: string
   settings: ReturnType<typeof getSettingsForAgentTabRuntimeOwner>
+  /** The chat's terminal tab; decides whether its host guards tagged chat writes. */
+  terminalTabId?: string
 }
 
 /** Upper bound for clipboard text pulled into the composer via Cmd/Ctrl+V, so a

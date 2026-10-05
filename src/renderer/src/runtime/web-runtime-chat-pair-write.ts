@@ -38,12 +38,7 @@ export async function setWebRuntimeChatPair(args: {
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     throw new WebRuntimeChatPairUnavailableError()
   }
-  const parentTabId =
-    resolveHostSessionTabIdForWebSessionTab(state, {
-      environmentId,
-      worktreeId: args.worktreeId,
-      tabId: args.terminalTabId
-    }) ?? toHostSessionTabId(args.terminalTabId)
+  const parentTabId = resolveWebRuntimeHostTabId(state, environmentId, args)
   const response = await captureRuntimeEnvironmentCall(environmentId)({
     method: 'session.tabs.setTabProps',
     params: {
@@ -58,4 +53,50 @@ export async function setWebRuntimeChatPair(args: {
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: marker hosts reply with RuntimeSessionTabPropsResult; a reply without chatView is treated as a failure by the caller.
   return unwrapRuntimeRpcResult(response as RuntimeRpcResponse<RuntimeSessionTabPropsResult>)
+}
+
+/**
+ * A pane's observed agent exit on a paired host that owns exits: asks the host to turn that
+ * pane's chat terminal only while its presentation still carries `presentationToken`, or, with
+ * no token held, only while that pane still owns chat.
+ */
+export async function retireWebRuntimeAgentExitChat(args: {
+  worktreeId: string
+  terminalTabId: string
+  leafId: string
+  presentationToken: string | null
+}): Promise<RuntimeSessionTabPropsResult> {
+  const state = useAppStore.getState()
+  const environmentId = getRuntimeEnvironmentIdForWorktree(state, args.worktreeId) ?? null
+  if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
+    throw new WebRuntimeChatPairUnavailableError()
+  }
+  const parentTabId = resolveWebRuntimeHostTabId(state, environmentId, args)
+  const response = await captureRuntimeEnvironmentCall(environmentId)({
+    method: 'session.tabs.setTabProps',
+    params: {
+      worktree: toRuntimeWorktreeSelector(args.worktreeId),
+      tabId: `${parentTabId}${HOST_TERMINAL_SURFACE_SEPARATOR}${args.leafId}`,
+      viewMode: 'terminal',
+      agentExit: args.presentationToken ? { presentationToken: args.presentationToken } : {}
+    },
+    timeoutMs: 15_000
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: marker hosts reply with RuntimeSessionTabPropsResult; the caller only logs a failure.
+  return unwrapRuntimeRpcResult(response as RuntimeRpcResponse<RuntimeSessionTabPropsResult>)
+}
+
+/** The host's parent tab id for a paired worktree's local terminal tab. */
+export function resolveWebRuntimeHostTabId(
+  state: ReturnType<typeof useAppStore.getState>,
+  environmentId: string,
+  args: { worktreeId: string; terminalTabId: string }
+): string {
+  return (
+    resolveHostSessionTabIdForWebSessionTab(state, {
+      environmentId,
+      worktreeId: args.worktreeId,
+      tabId: args.terminalTabId
+    }) ?? toHostSessionTabId(args.terminalTabId)
+  )
 }

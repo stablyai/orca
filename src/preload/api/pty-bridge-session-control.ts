@@ -2,6 +2,7 @@ import { ipcRenderer } from 'electron'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { NativeChatInputWriteResult } from '../../shared/native-chat-input-action'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -77,6 +78,13 @@ export const ptySessionControlApi = {
   },
   writeAccepted: (id: string, data: string, inputKind: TerminalInputKind): Promise<boolean> =>
     ipcRenderer.invoke('pty:writeAccepted', { id, data, inputKind }),
+  writeChatInput: (
+    id: string,
+    data: string,
+    inputKind: TerminalInputKind,
+    actionId: string
+  ): Promise<NativeChatInputWriteResult> =>
+    ipcRenderer.invoke('pty:writeChatInput', { id, data, inputKind, actionId }),
   onWriteUnavailable: (callback: (payload: { id: string }) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: { id: string }): void =>
       callback(payload)

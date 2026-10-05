@@ -54,8 +54,12 @@ const mocks = vi.hoisted(() => ({
   markNativeChatLaunchDraftAdopted: vi.fn()
 }))
 
+// Why: every composer write now carries its action; these tests check routing, not the id.
+const CHAT_ACTION = expect.objectContaining({ actionId: expect.stringMatching(/^chat-/) })
+
 vi.mock('../../store', () => {
   const state = {
+    tabsByWorktree: {},
     dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
     agentStatusByPaneKey: {},
@@ -437,7 +441,7 @@ describe('NativeChatComposer', () => {
       'pty-1',
       'hello',
       ['/tmp/pasted.png'],
-      undefined
+      { chatAction: CHAT_ACTION }
     )
   })
 
@@ -454,7 +458,12 @@ describe('NativeChatComposer', () => {
 
     act(() => mocks.fieldProps?.onSend?.())
 
-    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith({}, 'pty-1', '/status')
+    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      '/status',
+      CHAT_ACTION
+    )
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
 
@@ -471,7 +480,9 @@ describe('NativeChatComposer', () => {
 
     act(() => mocks.fieldProps?.onSend?.())
 
-    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '$ref-oss', undefined)
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '$ref-oss', {
+      chatAction: CHAT_ACTION
+    })
     expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
   })
 
@@ -488,7 +499,9 @@ describe('NativeChatComposer', () => {
 
     act(() => mocks.fieldProps?.onSend?.())
 
-    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/clear', undefined)
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/clear', {
+      chatAction: CHAT_ACTION
+    })
     expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
   })
 
@@ -779,7 +792,8 @@ describe('NativeChatComposer', () => {
       {},
       'pty-1',
       '/model opus',
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
+      CHAT_ACTION
     )
     expect(onSlashCommand).toHaveBeenCalledWith('/model opus')
     expect(onOptimisticSend).not.toHaveBeenCalled()
@@ -812,7 +826,8 @@ describe('NativeChatComposer', () => {
       {},
       'pty-1',
       '/model fable',
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
+      CHAT_ACTION
     )
     expect(mocks.createClaudeModelSwitchConfirmationObserver).toHaveBeenCalledWith({
       ptyId: 'pty-1',
@@ -852,7 +867,8 @@ describe('NativeChatComposer', () => {
       {},
       'pty-1',
       '/model',
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
+      CHAT_ACTION
     )
     expect(mocks.sendNativeChatMessageVerified).not.toHaveBeenCalled()
     expect(onSwitchToTerminal).toHaveBeenCalledOnce()

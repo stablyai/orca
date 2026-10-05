@@ -86,6 +86,8 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
         paneKey: string
       ) => Promise<'live' | 'unverifiable' | 'exited' | null>
       reconcileAgentStatusForEndedProcess?: (paneKeys: Iterable<string>) => void
+      /** The execution host proved this pane's `agent` run ended (an owner no hook identified). */
+      recordHostProvenAgentEnd?: (paneKey: string, agent: string, checkStartedAtMs: number) => void
       canRecoverPersistentLocalPtys?: () => boolean
       // Why: the device registry lives on the RPC server, which is constructed with this runtime;
       // a closure defers the lookup past that ordering instead of inverting ownership.
@@ -230,6 +232,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       deps?.retireAgentHookCompatibilityAuthority ?? null
     this.checkHookAgentPresenceFn = deps?.checkHookAgentPresence ?? null
     this.reconcileAgentStatusForEndedProcessFn = deps?.reconcileAgentStatusForEndedProcess ?? null
+    this.recordHostProvenAgentEndFn = deps?.recordHostProvenAgentEnd ?? null
     this.canRecoverPersistentLocalPtysFn = deps?.canRecoverPersistentLocalPtys ?? (() => true)
     this.getPairedDeviceNameFn = deps?.getPairedDeviceName ?? (() => null)
     // Why: configure the shared AiVault scan cache from a serve-mode-reachable

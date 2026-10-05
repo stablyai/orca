@@ -24,3 +24,19 @@ export function resolveChatPairAuthority(
   }
   return state.chatViewHostOwnedByWorktree?.[worktreeId] === true ? 'host' : 'legacy'
 }
+
+/**
+ * True when the host turns this worktree's chat tabs to terminal on a proven agent exit and
+ * refuses tagged chat writes after it: this desktop's own host (same build), or a paired host
+ * that says so. Otherwise this desktop keeps its mounted pane's exit route.
+ */
+export function hostOwnsChatAgentExit(
+  state: ChatPairAuthorityState & { chatViewAgentExitHostOwnedByWorktree?: Record<string, true> },
+  worktreeId: string
+): boolean {
+  const authority = resolveChatPairAuthority(state, worktreeId)
+  return (
+    authority === 'local' ||
+    (authority === 'host' && state.chatViewAgentExitHostOwnedByWorktree?.[worktreeId] === true)
+  )
+}

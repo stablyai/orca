@@ -133,9 +133,11 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
         // main is the single byte parser for local/SSH PTYs; the renderer
         // store handler decides what the facts mean (notification policy).
         onAgentBecameWorking: () => {
+          this.noteNativeChatAgentEvidence(ptyId)
           this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-working' })
         },
         onAgentBecameIdle: (title, meta) => {
+          this.noteNativeChatAgentEvidence(ptyId)
           this.recordTerminalSideEffectFact(ptyId, {
             kind: 'agent-idle',
             title,
@@ -150,6 +152,8 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
         },
         onCommandFinished: (exitCode: number | null) => {
           void this.recheckHookAgentPresenceForPty(ptyId)
+          // Why before the retire below: a finished launch command is a reason to look, not proof.
+          this.nudgeAgentExitCheck(ptyId)
           this.retirePtyAgentLaunchAuthority(ptyId)
           this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
           this.openCodeRunLifetime.onCommandFinished(ptyId, exitCode)

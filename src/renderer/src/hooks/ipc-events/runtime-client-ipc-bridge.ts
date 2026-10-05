@@ -14,6 +14,7 @@ import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environ
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import { withAgentExitReceiptTime } from '../../../../shared/terminal-side-effect-facts'
 import { useAppStore } from '../../store'
 import { createRuntimeClientEventsSync } from '../runtime-client-events-sync'
 import {
@@ -84,7 +85,8 @@ export function registerRuntimeClientIpcBridge(
     if (event.type === 'terminalSideEffects') {
       dispatchTerminalSideEffectBatch({
         ...event.batch,
-        ptyId: toRemoteRuntimePtyId(event.batch.ptyId, environmentId)
+        ptyId: toRemoteRuntimePtyId(event.batch.ptyId, environmentId),
+        facts: withAgentExitReceiptTime(event.batch.facts, Date.now())
       })
       return
     }

@@ -21,6 +21,7 @@ import type { ReplayingPanesRef } from './replay-guard'
 import type { TerminalLinkActionRequester } from './terminal-link-action-request'
 import type { TerminalLinkRoutingPreferenceRequester } from './terminal-url-link-hit-testing'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
+import type { AgentExitObservationOrigin } from '../../../../shared/agent-exit-retirement'
 
 export type TerminalPaneStartup = Exclude<PtyPaneStartup, null>
 
@@ -73,7 +74,7 @@ export type UseTerminalPaneLifecycleDeps = {
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string, exitCode?: number) => void>
-  onAgentExitedRef: React.RefObject<(leafId: string) => void>
+  onAgentExitedRef: React.RefObject<(leafId: string, origin?: AgentExitObservationOrigin) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   onPtyErrorClearedRef?: React.RefObject<(paneId: number, message?: string) => void>
   onPaneProcessDied?: (processExit: PaneProcessExit) => void

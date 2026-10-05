@@ -197,6 +197,15 @@ export const uiTerminalAndSessionTabsApi = {
   respondTerminalChatView: (response) => {
     ipcRenderer.send('ui:terminalChatViewResponse', response)
   },
+  onNativeChatTargetRead: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
+      callback(request)
+    ipcRenderer.on('ui:nativeChatTargetRead', listener)
+    return () => ipcRenderer.removeListener('ui:nativeChatTargetRead', listener)
+  },
+  respondNativeChatTargetRead: (response) => {
+    ipcRenderer.send('ui:nativeChatTargetReadResponse', response)
+  },
   onMoveSessionTab: (
     callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
   ): (() => void) => {

@@ -44,7 +44,8 @@ describe('useNativeChatSessionOptionCommand', () => {
       {},
       'pty-1',
       '/model',
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
+      expect.objectContaining({ actionId: expect.stringMatching(/^chat-/) })
     )
     expect(sendNativeChatMessageVerified).not.toHaveBeenCalled()
   })
@@ -57,7 +58,8 @@ describe('useNativeChatSessionOptionCommand', () => {
       {},
       'pty-1',
       '/model sonnet',
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
+      expect.objectContaining({ actionId: expect.stringMatching(/^chat-/) })
     )
     expect(typeNativeChatCommand).not.toHaveBeenCalled()
   })

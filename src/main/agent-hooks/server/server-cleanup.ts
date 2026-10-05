@@ -158,6 +158,14 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
         this.notifyStatusChangeListeners()
       }
       this.commitStatusRowMutation(previous, retained)
+      if (options?.endedPresence && !retained) {
+        // Why: the owner's end is a fact even when no resumable remnant keeps a row for it.
+        this.notifyAgentPresenceChange({
+          paneKey: resolvedPaneKey,
+          previous: undefined,
+          presence: options.endedPresence
+        })
+      }
       cleared += 1
     }
     return cleared

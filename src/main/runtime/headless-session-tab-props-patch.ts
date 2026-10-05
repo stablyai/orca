@@ -8,18 +8,23 @@ export type HeadlessSessionTabProps = {
   isPinned?: boolean
   viewMode?: 'terminal' | 'chat'
   chatLeafId?: string | null
+  /** Null retires the tab's launch hint (its agent was proven to have exited). */
+  launchAgent?: null
 }
 
-function withTabProps<T extends { color?: string | null; isPinned?: boolean; viewMode?: string }>(
-  tab: T,
-  props: HeadlessSessionTabProps
-): T {
-  return {
+function withTabProps<
+  T extends { color?: string | null; isPinned?: boolean; viewMode?: string; launchAgent?: unknown }
+>(tab: T, props: HeadlessSessionTabProps): T {
+  const next = {
     ...tab,
     ...(props.color !== undefined ? { color: props.color } : {}),
     ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
     ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
   }
+  if (props.launchAgent === null) {
+    delete next.launchAgent
+  }
+  return next
 }
 
 function withChatOwner(

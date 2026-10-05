@@ -24,7 +24,8 @@ export type PtyOutputTitleObserver = {
   processObservedTitles: (
     titles: string[],
     titleScanEffect: PendingPtySideEffect['titleScanEffect'],
-    suppressAgentTracker: boolean
+    suppressAgentTracker: boolean,
+    observedAtMs?: number
   ) => void
   clearStaleTitleTimer: () => void
   reset: () => void
@@ -40,6 +41,8 @@ export function createPtyOutputTitleObserver({
   let lastEmittedTitle: string | null =
     initialAgentTitle !== undefined ? normalizeTerminalTitle(initialAgentTitle) : null
   let staleTitleTimer: ReturnType<typeof setTimeout> | null = null
+  // Why: the tracker's exit callback takes no args; the drain names the bytes' arrival time here.
+  let titleObservedAtMs: number | undefined
   const initialTrackerTitle =
     initialAgentTitle !== undefined && !isCursorNativeAgentTitle(initialAgentTitle)
       ? initialAgentTitle
@@ -49,7 +52,9 @@ export function createPtyOutputTitleObserver({
       ? createAgentStatusTracker(
           (title) => onAgentBecameIdle?.(title),
           onAgentBecameWorking,
-          onAgentExited,
+          onAgentExited
+            ? () => onAgentExited({ observedAtMs: titleObservedAtMs ?? Date.now() })
+            : undefined,
           initialTrackerTitle
         )
       : null
@@ -86,11 +91,13 @@ export function createPtyOutputTitleObserver({
   function processObservedTitles(
     titles: string[],
     titleScanEffect: PendingPtySideEffect['titleScanEffect'],
-    suppressAgentTracker: boolean
+    suppressAgentTracker: boolean,
+    observedAtMs?: number
   ): void {
     if (!onTitleChange) {
       return
     }
+    titleObservedAtMs = observedAtMs
     if (titles.length > 0) {
       clearStaleTitleTimer()
       for (const title of titles) {
@@ -110,8 +117,10 @@ export function createPtyOutputTitleObserver({
       isWorkingTitle(lastEmittedTitle)
     ) {
       clearStaleTitleTimer()
+      const probedAtMs = observedAtMs
       staleTitleTimer = setTimeout(() => {
         staleTitleTimer = null
+        titleObservedAtMs = probedAtMs
         if (isWorkingTitle(lastEmittedTitle)) {
           const cleared = clearWorkingIndicators(lastEmittedTitle ?? '')
           lastEmittedTitle = cleared

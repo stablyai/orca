@@ -8,6 +8,8 @@ import {
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { resolveChatPairAuthority } from '@/store/slices/tabs/terminal-chat-pair-authority'
+import { readTerminalChatPair } from '@/store/slices/tabs/terminal-chat-pair-state'
+import { readNativeChatTargetFromStore } from '@/store/slices/tabs/terminal-chat-target-read'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
@@ -120,7 +122,7 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
 
   unsubs.push(
     window.api.ui.onTerminalChatViewRequest(
-      ({ requestId, worktreeId, tabId, leafId, viewMode, ownerPickLeafId }) => {
+      ({ requestId, worktreeId, tabId, leafId, viewMode, ownerPickLeafId, agentExit }) => {
         const state = useAppStore.getState()
         // Why: a worktree another Orca host owns is only mirrored here; its pair is not ours to write.
         if (resolveChatPairAuthority(state, worktreeId) !== 'local') {
@@ -130,13 +132,24 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
           })
           return
         }
+        if (agentExit && leafId) {
+          const agentExitDisposition = state.retireTerminalChatForAgentExit(tabId, {
+            ...agentExit,
+            leafId
+          })
+          const chatView = readTerminalChatPair(useAppStore.getState(), tabId)
+          window.api.ui.respondTerminalChatView(
+            chatView
+              ? { requestId, chatView, agentExitDisposition }
+              : { requestId, agentExitDisposition, error: TERMINAL_CHAT_VIEW_TAB_NOT_FOUND_ERROR }
+          )
+          return
+        }
         // Why synchronous: IPC arrival order is the host's admit order, so apply before replying.
-        const chatView = state.applyTerminalChatPair(
-          tabId,
-          leafId,
-          viewMode,
-          ownerPickLeafId !== undefined ? { ownerPickLeafId } : undefined
-        )
+        const chatView = state.applyTerminalChatPair(tabId, leafId, viewMode, {
+          intent: true,
+          ...(ownerPickLeafId !== undefined ? { ownerPickLeafId } : {})
+        })
         window.api.ui.respondTerminalChatView(
           chatView
             ? { requestId, chatView }
@@ -144,6 +157,16 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         )
       }
     )
+  )
+
+  unsubs.push(
+    window.api.ui.onNativeChatTargetRead(({ requestId, ptyId }) => {
+      // Why synchronous and read-only: main checks again after this reply, right before writing.
+      window.api.ui.respondNativeChatTargetRead({
+        requestId,
+        read: readNativeChatTargetFromStore(useAppStore.getState(), ptyId)
+      })
+    })
   )
 
   unsubs.push(

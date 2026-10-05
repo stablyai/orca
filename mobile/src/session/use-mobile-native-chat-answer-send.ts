@@ -14,6 +14,7 @@ import {
   sendMobileNativeChatMessageWithOutcome
 } from './mobile-native-chat-send'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
+import { createMobileChatInputAction } from './mobile-native-chat-input-guard'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
@@ -159,6 +160,8 @@ export function useMobileNativeChatAnswerSend(args: {
         // It bounds transport time only: each deliberate pacing wait is credited back
         // below, so a long multi-question answer still gets a full budget to write in.
         let deadline = openMobileNativeChatSendBudget()
+        // One action id for every group of this answer, so a proven exit stops the rest.
+        const chatInput = createMobileChatInputAction(client)
         const sendTerminal = async (body: string, enter: boolean): Promise<boolean> => {
           const activeRoute = activeRouteRef.current
           if (
@@ -176,6 +179,7 @@ export function useMobileNativeChatAnswerSend(args: {
             text: body,
             enter,
             deadline,
+            ...(chatInput ? { chatInput } : {}),
             ...(deviceTokenRef.current
               ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
               : {})
@@ -239,7 +243,8 @@ export function useMobileNativeChatAnswerSend(args: {
               client,
               terminal: handle,
               deviceToken: deviceTokenRef.current,
-              deadline
+              deadline,
+              ...(chatInput ? { chatInput } : {})
             }))
           ) {
             if (generationRef.current === generation) {

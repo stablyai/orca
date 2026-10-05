@@ -19,6 +19,7 @@ import type { PtyTransportRecoveryState } from './pty-transport-types'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-terminal-recovery'
 import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
+import type { AgentExitObservationOrigin } from '../../../../shared/agent-exit-retirement'
 
 export type PtyPaneStartup = {
   command: string
@@ -86,7 +87,7 @@ export type PtyConnectionDeps = {
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string, exitCode?: number) => void>
-  onAgentExitedRef: React.RefObject<(leafId: string) => void>
+  onAgentExitedRef: React.RefObject<(leafId: string, origin?: AgentExitObservationOrigin) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   onPtyErrorClearedRef?: React.RefObject<(paneId: number, message?: string) => void>
   onPaneProcessDied?: (processExit: PaneProcessExit) => void

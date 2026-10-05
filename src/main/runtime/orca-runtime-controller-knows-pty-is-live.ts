@@ -105,6 +105,8 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
       inputKind: TerminalInputKind
+      /** A chat composer write: settled, admitted per chunk from the committed presentation. */
+      chatInput?: { actionId: string }
     }
   ): Promise<RuntimeTerminalSend> {
     const pty = this.getLivePtyForHandle(handle)
@@ -115,6 +117,12 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       const payload = buildTerminalSendPayload(action)
       if (payload === null) {
         throw new Error('invalid_terminal_send')
+      }
+      if (options.chatInput) {
+        // Why the check inside: the action's place in the PTY's chat order is taken first.
+        return this.writeNativeChatInputAction(handle, pty.pty.ptyId, action, options, () =>
+          assertTerminalInputWithinLimitWithYield(action.text)
+        )
       }
       await assertTerminalInputWithinLimitWithYield(action.text)
       await this.writeTerminalAction(pty.pty.ptyId, action, payload, options)
@@ -133,15 +141,26 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
     if (payload === null) {
       throw new Error('invalid_terminal_send')
     }
-    await assertTerminalInputWithinLimitWithYield(action.text)
     // Why: leaf.writable mirrors the renderer graph, which can still answer for
     // a prior process's ptyId — and provider writes to unknown ids are accepted
     // no-ops. Only controller-proven absence rejects; unknown proceeds (a
     // restored daemon session takes writes before its pane remounts).
-    if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
-      throw new Error('terminal_not_writable')
+    const assertLeafWritable = async (): Promise<void> => {
+      await assertTerminalInputWithinLimitWithYield(action.text)
+      if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
+        throw new Error('terminal_not_writable')
+      }
     }
-
+    if (options.chatInput) {
+      return this.writeNativeChatInputAction(
+        handle,
+        leaf.ptyId,
+        action,
+        options,
+        assertLeafWritable
+      )
+    }
+    await assertLeafWritable()
     await this.writeTerminalAction(leaf.ptyId, action, payload, options)
 
     return {

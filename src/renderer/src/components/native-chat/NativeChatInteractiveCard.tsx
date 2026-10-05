@@ -102,6 +102,8 @@ export function NativeChatInteractiveCard({
             dismissTimerRef.current = null
           }
           const keepRejectedAnswerVisible = (): void => {
+            // Why: an unpaced answer can be refused before its fixed dismissal fires.
+            clearDismissTimer()
             submittingRef.current = false
             setSubmitting(false)
           }

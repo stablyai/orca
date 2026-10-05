@@ -1,3 +1,4 @@
+import { noteMobileChatInputGuard } from './mobile-native-chat-input-guard'
 import {
   pendingSelectionHandle,
   pendingSelectionTabId,
@@ -99,6 +100,10 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       setSessionTabs((prev) => (mobileSessionTabsEqual(prev, nextTabs) ? prev : nextTabs))
       // Why here: a marker-only change (host upgraded in place) must reach the view with no row delta.
       setChatViewHostOwned(result.chatViewHostOwned === true)
+      noteMobileChatInputGuard(
+        clientRef.current,
+        result.chatViewHostOwned === true && result.chatViewAgentExitHostOwned === true
+      )
       const terminalTabs = getTerminalRecordsFromSessionTabs(nextTabs)
       const terminalTabHandles = terminalTabs.map((terminal) => terminal.handle)
       defaultTerminalHandlesToLiveInput(terminalTabHandles)

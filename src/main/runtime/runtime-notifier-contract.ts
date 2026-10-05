@@ -1,3 +1,8 @@
+import type {
+  AgentExitRetirementCondition,
+  AgentExitRetirementDisposition
+} from '../../shared/agent-exit-retirement'
+import type { NativeChatTargetRead } from '../../shared/native-chat-target-read'
 import type { RuntimeSessionTabChatView } from '../../shared/runtime-session-contracts'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
@@ -106,6 +111,14 @@ export type RuntimeNotifier = {
     viewMode: 'terminal' | 'chat',
     ownerPickLeafId?: string | null
   ): Promise<RuntimeSessionTabChatView>
+  /** An agent exit's conditional retirement in the renderer that owns the tab. */
+  retireAgentExitChatView?(
+    worktreeId: string,
+    tabId: string,
+    condition: AgentExitRetirementCondition
+  ): Promise<AgentExitRetirementDisposition>
+  /** Read-only, per composer write chunk: may chat input still reach `ptyId`? */
+  readNativeChatTarget?(ptyId: string): Promise<NativeChatTargetRead>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
   /**
    * Acts only on the host's own window: 'host'/'all' move it, 'caller'/'clients' open without moving

@@ -56,6 +56,7 @@ export function buildWindowApi(args: {
         onSplitTerminal: () => () => {},
         onRenameTerminal: () => () => {},
         onTerminalChatViewRequest: () => () => {},
+        onNativeChatTargetRead: () => () => {},
         onFocusTerminal: () => () => {},
         onFocusEditorTab: () => () => {},
         onCloseSessionTab: () => () => {},

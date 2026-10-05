@@ -29,6 +29,7 @@ import {
   pruneTabGroupLayout
 } from './mobile-session-group-projection'
 import { buildMobileTerminalSurfaceTabs } from './mobile-session-terminal-tabs'
+import { readTerminalPresentationIntentRevision } from '@/store/slices/tabs/terminal-presentation-stamp'
 import { buildMobileMarkdownTab, buildMobileFileTab } from './mobile-session-editor-tabs'
 import { buildMobileBrowserTab } from './mobile-session-browser-tabs'
 import type { MobileSessionPublicationInputs } from './types'
@@ -65,6 +66,8 @@ export function buildMobileSessionTabSnapshots(
     ...state.openFiles.map((file) => file.worktreeId)
   ])
   const snapshots: RuntimeMobileSessionTabsSnapshot[] = []
+  // Why: an intent changes published tokens without changing any input the cache compares.
+  const presentationIntentRevision = readTerminalPresentationIntentRevision()
 
   for (const worktreeId of worktreeIds) {
     const workspaceScope = parseWorkspaceKey(worktreeId)
@@ -82,7 +85,11 @@ export function buildMobileSessionTabSnapshots(
       ambiguousTerminalTabIds
     )
     const cached = graphState.mobileSessionSnapshotCacheByWorktree.get(worktreeId)
-    if (cached && canReuseMobileSessionSnapshot(cached.inputs, inputs)) {
+    if (
+      cached &&
+      cached.presentationIntentRevision === presentationIntentRevision &&
+      canReuseMobileSessionSnapshot(cached.inputs, inputs)
+    ) {
       snapshots.push(cached.snapshot)
       continue
     }
@@ -222,6 +229,7 @@ export function buildMobileSessionTabSnapshots(
             }
       graphState.mobileSessionSnapshotCacheByWorktree.set(worktreeId, {
         inputs,
+        presentationIntentRevision,
         content,
         snapshot
       })
@@ -235,7 +243,12 @@ export function buildMobileSessionTabSnapshots(
       snapshotVersion: candidateVersion,
       ...content
     }
-    graphState.mobileSessionSnapshotCacheByWorktree.set(worktreeId, { inputs, content, snapshot })
+    graphState.mobileSessionSnapshotCacheByWorktree.set(worktreeId, {
+      inputs,
+      presentationIntentRevision,
+      content,
+      snapshot
+    })
     snapshots.push(snapshot)
   }
   for (const worktreeId of graphState.mobileSessionSnapshotCacheByWorktree.keys()) {

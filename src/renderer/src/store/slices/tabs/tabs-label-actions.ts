@@ -16,6 +16,9 @@ import {
   writeHostOwnedChatPair
 } from './terminal-chat-pair-routing'
 import { locateTerminalTab } from '../../terminals/terminal-tab-location'
+import { resolveAgentExitRetirement } from './terminal-chat-exit-retirement'
+import { noteTerminalPresentationIntent } from './terminal-presentation-stamp'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 
 export function createTabsLabelActions(
   set: TabsSliceSet,
@@ -25,6 +28,7 @@ export function createTabsLabelActions(
   | 'reorderUnifiedTabs'
   | 'setTabLabel'
   | 'applyTerminalChatPair'
+  | 'retireTerminalChatForAgentExit'
   | 'setTabViewMode'
   | 'toggleTabViewMode'
   | 'setTabCustomLabel'
@@ -81,6 +85,12 @@ export function createTabsLabelActions(
           options
         )
       }
+      if (options?.intent) {
+        // Why even to the shown value: a user's or client's switch orders after older exits.
+        noteTerminalPresentationIntent(terminalTabId)
+        // Why: a same-value switch changes no state, yet its new token must reach paired clients.
+        scheduleRuntimeGraphSync()
+      }
       const toggle: { committed: { from: 'terminal' | 'chat'; to: 'terminal' | 'chat' } | null } = {
         committed: null
       }
@@ -106,10 +116,25 @@ export function createTabsLabelActions(
       return readTerminalChatPair(get(), terminalTabId)
     },
 
+    retireTerminalChatForAgentExit: (terminalTabId, condition) => {
+      const outcome: { disposition: ReturnType<typeof resolveAgentExitRetirement>['disposition'] } =
+        { disposition: 'missing' }
+      // Why inside set: the condition check and the pair + hint patch are one store turn.
+      set((state) => {
+        const resolved = resolveAgentExitRetirement(state, terminalTabId, condition)
+        outcome.disposition = resolved.disposition
+        return resolved.patch ?? state
+      })
+      if (outcome.disposition === 'applied') {
+        scheduleRuntimeGraphSync()
+      }
+      return outcome.disposition
+    },
+
     setTabViewMode: (tabId, mode) => {
       const owned = findStoreOwnedTerminalTab(get(), tabId)
       if (owned) {
-        get().applyTerminalChatPair(owned.tab.entityId, null, mode)
+        get().applyTerminalChatPair(owned.tab.entityId, null, mode, { intent: true })
         return
       }
       set((state) => {
@@ -137,7 +162,10 @@ export function createTabsLabelActions(
             ? resolveEffectiveChatPair(get(), owned.worktreeId, owned.tab.entityId).viewMode
             : owned.tab.viewMode
         const nextMode = currentMode === 'chat' ? 'terminal' : 'chat'
-        get().applyTerminalChatPair(owned.tab.entityId, null, nextMode, { userToggle: true })
+        get().applyTerminalChatPair(owned.tab.entityId, null, nextMode, {
+          userToggle: true,
+          intent: true
+        })
         return
       }
       let toggled: {

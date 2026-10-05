@@ -250,6 +250,29 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
     expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled()
     expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
   })
+
+  it('keeps a pasted-label answer the host refused, past its fixed dismissal (F2)', () => {
+    vi.useFakeTimers()
+    try {
+      let settleDelivery: ((delivered: boolean) => void) | undefined
+      mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
+        settleDelivery = onDeliverySettled
+        return { settleAfterMs: 500, waitsForVerifiedDelivery: false }
+      })
+      renderCard()
+
+      chooseSpacesAndSubmit()
+      act(() => settleDelivery?.(false))
+      act(() => {
+        vi.advanceTimersByTime(1_000)
+      })
+
+      expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled()
+      expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 // A headless host, a relay gap, or a replay can leave the pane with no live

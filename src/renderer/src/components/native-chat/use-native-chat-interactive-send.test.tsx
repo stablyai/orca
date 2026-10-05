@@ -31,8 +31,15 @@ vi.mock('../../store', () => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  sendRuntimePtyInput: (...args: unknown[]) => mocks.sendRuntimePtyInput(...args)
+vi.mock('./native-chat-pty-input', () => ({
+  createNativeChatWriteAction: (_tabId: string, onRefused?: () => void) => ({
+    actionId: 'chat-action',
+    hostGuarded: true,
+    refused: false,
+    ...(onRefused ? { onRefused } : {})
+  }),
+  sendNativeChatPtyInput: (settings: unknown, ptyId: string, data: string) =>
+    mocks.sendRuntimePtyInput(settings, ptyId, data, 'driving')
 }))
 
 vi.mock('@/lib/agent-paste-draft', () => ({
@@ -75,7 +82,13 @@ describe('useNativeChatInteractiveSend', () => {
     expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith(
       { terminalTabId: 'tab-1' },
       'pty-1',
-      'B'
+      'B',
+      expect.objectContaining({
+        chatAction: expect.objectContaining({ actionId: 'chat-action' }),
+        onWriteRejected: expect.any(Function),
+        onWritesAccepted: expect.any(Function),
+        onWriteUnconfirmed: expect.any(Function)
+      })
     )
     expect(mocks.sendNativeChatAskAnswer).not.toHaveBeenCalled()
   })
@@ -93,7 +106,8 @@ describe('useNativeChatInteractiveSend', () => {
       { terminalTabId: 'tab-1' },
       'pty-1',
       [{ raw: '2' }],
-      expect.any(Function)
+      expect.any(Function),
+      expect.objectContaining({ actionId: 'chat-action' })
     )
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
@@ -110,7 +124,8 @@ describe('useNativeChatInteractiveSend', () => {
       { terminalTabId: 'tab-1' },
       'pty-1',
       [{ raw: '2' }],
-      expect.any(Function)
+      expect.any(Function),
+      expect.objectContaining({ actionId: 'chat-action' })
     )
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
@@ -230,7 +245,8 @@ describe('useNativeChatInteractiveSend', () => {
         { terminalTabId: 'tab-1' },
         'pty-1',
         [{ raw: '2' }],
-        expect.any(Function)
+        expect.any(Function),
+        expect.objectContaining({ actionId: 'chat-action' })
       )
       expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
     }
@@ -323,5 +339,32 @@ describe('useNativeChatInteractiveSend', () => {
 
     act(() => result.current.cancelPending())
     expect(mocks.cancel).not.toHaveBeenCalled()
+  })
+})
+
+describe('useNativeChatInteractiveSend refusals (F2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.storeState = { agentStatusByPaneKey: { [PANE_KEY]: waitingQuestion } }
+    const handle = { cancel: mocks.cancel, settleAfterMs: 500 }
+    mocks.sendNativeChatAskAnswer.mockReturnValue(handle)
+    mocks.sendNativeChatMessage.mockReturnValue(handle)
+  })
+
+  it('reports a pasted-label answer by its settled writes, never a fixed timer (R1B-4)', () => {
+    const settled = vi.fn()
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'grok')
+    )
+    let sent: { waitsForVerifiedDelivery: boolean } | undefined
+    act(() => {
+      sent = result.current.sendAnswer(PROMPT, [{ indices: [1] }], settled)
+    })
+    expect(sent?.waitsForVerifiedDelivery).toBe(true)
+    const [, , , options] = mocks.sendNativeChatMessage.mock.calls[0] ?? []
+    options?.onWriteRejected?.()
+    expect(settled).toHaveBeenLastCalledWith(false)
+    options?.onWritesAccepted?.()
+    expect(settled).toHaveBeenLastCalledWith(true)
   })
 })

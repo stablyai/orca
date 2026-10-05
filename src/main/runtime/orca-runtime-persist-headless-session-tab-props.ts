@@ -26,8 +26,11 @@ import type {
   RuntimeSessionTabPropsResult
 } from '../../shared/runtime-session-contracts'
 import { resolveTerminalChatPairWrite } from '../../shared/terminal-tab-view-mode'
+import { HeadlessPresentationStamps } from './headless-presentation-stamps'
 
 export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWithCloseHeadlessMobileTerminalTab {
+  protected readonly headlessPresentationStamps = new HeadlessPresentationStamps()
+
   protected persistHeadlessSessionTabProps(
     worktreeId: string,
     tabId: string,
@@ -79,7 +82,9 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
     parentTabId: string,
     leafId: string | null,
     viewMode: 'terminal' | 'chat',
-    props: Pick<HeadlessSessionTabProps, 'color' | 'isPinned'>
+    props: Pick<HeadlessSessionTabProps, 'color' | 'isPinned' | 'launchAgent'>,
+    /** A client's switch: when accepted, even to the shown value, it orders after older exits. */
+    options: { intent?: boolean } = {}
   ): void {
     const state = readHeadlessChatPairState(
       this.getWorkspaceSessionForWorktree(worktreeId),
@@ -98,10 +103,23 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
       leafId: state.hasLayout ? leafId : null,
       ...(state.hasLayout ? { pickOwner: () => this.pickChatOwnerLeafForLayout(state.layout) } : {})
     })
+    const intentAccepted =
+      options.intent === true && (next?.viewMode ?? state.pair.viewMode ?? 'terminal') === viewMode
+    if (intentAccepted) {
+      // Why before publishing: the snapshot below must carry the new token.
+      this.headlessPresentationStamps.bump(worktreeId, parentTabId)
+    }
     if (!next) {
-      if (props.color !== undefined || props.isPinned !== undefined) {
+      if (
+        props.color !== undefined ||
+        props.isPinned !== undefined ||
+        props.launchAgent !== undefined
+      ) {
         this.persistHeadlessSessionTabProps(worktreeId, parentTabId, props)
         this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, parentTabId, props)
+      } else if (intentAccepted) {
+        // Why: a same-value switch publishes nothing, yet paired clients need its new token.
+        this.touchMobileSessionTabsForWorktree(worktreeId)
       }
       return
     }

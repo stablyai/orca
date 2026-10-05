@@ -24,6 +24,7 @@ import type { PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalErrorsByPaneId } from './terminal-error-accumulation'
 import { selectTerminalPaneHostState } from './terminal-pane-host-state'
 import { useTerminalPaneChatPairSource } from './use-terminal-pane-chat-pair-source'
+import type { AgentExitObservationOrigin } from '../../../../shared/agent-exit-retirement'
 
 export function useTerminalPaneFoundation(
   props: TerminalPaneProps,
@@ -127,7 +128,9 @@ export function useTerminalPaneFoundation(
     useState<ExecutionHostId>(LOCAL_EXECUTION_HOST_ID)
   const { chatLeafId, pendingChatPair, savedLayout, setChatLeafId, storeOwnsChatPair } =
     useTerminalPaneChatPairSource(tabId, chatPairAuthority)
-  const onAgentExitedRef = useRef<(leafId: string) => void>(() => {})
+  const onAgentExitedRef = useRef<(leafId: string, origin?: AgentExitObservationOrigin) => void>(
+    () => {}
+  )
   const [tabWideAgentHintLeafId, setTabWideAgentHintLeafId] = useState<string | null | undefined>(
     undefined
   )

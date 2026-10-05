@@ -10,6 +10,8 @@ import { buildMobileSessionTabSnapshots } from '@/runtime/sync-runtime-graph/mob
 import { useAppStore } from '../../store'
 import { EMPTY_LAYOUT } from './layout-serialization'
 
+import type { AgentExitObservationOrigin } from '../../../../shared/agent-exit-retirement'
+
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('../../store', async () => {
   const { createTestStore } = await import('../../store/slices/store-test-helpers')
@@ -24,6 +26,7 @@ const B = '22222222-2222-4222-8222-222222222222'
 type FakePane = { id: number; leafId: string; container: HTMLElement }
 
 /** Mirrors PaneManager's synchronous close: pane removal, then onLayoutChanged → persist. */
+
 function makeManager(onLayoutChanged: () => void) {
   const container = document.createElement('div')
   const split = document.createElement('div')
@@ -110,6 +113,9 @@ function published(tabId: string) {
 function renderPane(tabId: string) {
   const persistRef: { current: () => void } = { current: () => {} }
   const { manager, container } = makeManager(() => persistRef.current())
+  const onAgentExitedRef: {
+    current: (leafId: string, origin?: AgentExitObservationOrigin) => void
+  } = { current: () => {} }
   const hook = renderHook(() => {
     // Same source the pane foundation uses on a local worktree.
     const savedLayout = useAppStore((state) => state.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
@@ -118,7 +124,7 @@ function renderPane(tabId: string) {
       managerRef: { current: manager },
       containerRef: { current: container },
       nativeChatTranscriptIsLocalReadable: true,
-      onAgentExitedRef: { current: vi.fn() },
+      onAgentExitedRef,
       paneCount: manager.getPanes().length,
       tabId,
       worktreeId: WT,
@@ -173,7 +179,7 @@ function renderPane(tabId: string) {
     ])
     return { ...chat, ...layout, chatLeafId }
   })
-  return { hook, manager }
+  return { hook, manager, onAgentExitedRef }
 }
 
 beforeEach(() => {
@@ -226,6 +232,67 @@ describe('closing the chat-owning pane on a local tab', () => {
       hook.rerender()
     })
     expect(storePair(tabId)).toEqual({ viewMode: 'terminal', owner: undefined })
+  })
+})
+
+describe("a confirmed agent exit on this desktop's own tab (F2)", () => {
+  it('turns the pane chat terminal once and never moves it to an eligible sibling (R1C-1)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: 1_000 })
+    try {
+      const tabId = seedTab({ viewMode: 'chat', owner: A })
+      useAppStore.setState({ runtimePaneTitlesByTabId: { [tabId]: { 1: 'codex', 2: 'codex' } } })
+      const { onAgentExitedRef } = renderPane(tabId)
+      await act(async () => {})
+      vi.setSystemTime(5_000)
+      act(() => onAgentExitedRef.current(A, { ptyId: null, observedAtMs: 5_000 }))
+      await act(async () => {})
+      expect(storePair(tabId)).toEqual({ viewMode: 'terminal', owner: undefined })
+      expect(published(tabId)).toEqual([
+        { viewMode: 'terminal', owner: undefined },
+        { viewMode: 'terminal', owner: undefined }
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("is not superseded by the tab bar's hint clear for the same exit (R2-1)", async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: 1_000 })
+    try {
+      const tabId = seedTab({ viewMode: 'chat', owner: A })
+      const { onAgentExitedRef } = renderPane(tabId)
+      await act(async () => {})
+      // Seen at 5 s; useTabAgent clears the launch hint from the same evidence before the fact lands.
+      vi.setSystemTime(5_020)
+      act(() => useAppStore.getState().clearTabLaunchAgent(tabId))
+      vi.setSystemTime(5_080)
+      act(() => onAgentExitedRef.current(A, { ptyId: null, observedAtMs: 5_000 }))
+      await act(async () => {})
+      expect(storePair(tabId)).toEqual({ viewMode: 'terminal', owner: undefined })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores an exit observed before the user chose chat again on that pane (R4.1-2)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: 1_000 })
+    try {
+      const tabId = seedTab({ viewMode: 'chat', owner: A })
+      const { onAgentExitedRef } = renderPane(tabId)
+      await act(async () => {})
+      // The exit is seen at 2 s, then terminal -> chat(A) commits before the fact is delivered.
+      vi.setSystemTime(3_000)
+      act(() =>
+        useAppStore.getState().applyTerminalChatPair(tabId, null, 'terminal', { intent: true })
+      )
+      act(() => useAppStore.getState().applyTerminalChatPair(tabId, A, 'chat', { intent: true }))
+      await act(async () => {})
+      act(() => onAgentExitedRef.current(A, { ptyId: null, observedAtMs: 2_000 }))
+      await act(async () => {})
+      expect(storePair(tabId)).toEqual({ viewMode: 'chat', owner: A })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
@@ -309,5 +376,22 @@ describe('the local route never enters chat', () => {
     })
     await act(async () => {})
     expect(storePair(tabId)).toEqual({ viewMode: 'terminal', owner: undefined })
+  })
+})
+
+describe("a same-value switch on this desktop's tab (R2-3)", () => {
+  it('republishes the pane token even though no store field changed', () => {
+    const tabId = seedTab({ viewMode: 'chat', owner: A })
+    const tokenOfA = () =>
+      buildMobileSessionTabSnapshots(useAppStore.getState())
+        .flatMap((snapshot) => snapshot.tabs)
+        .find((tab) => tab.type === 'terminal' && tab.parentTabId === tabId && tab.leafId === A)
+    const before = tokenOfA()
+    expect(before?.type === 'terminal' && before.presentationToken).toBeTruthy()
+    useAppStore.getState().applyTerminalChatPair(tabId, A, 'chat', { intent: true })
+    const after = tokenOfA()
+    expect(after?.type === 'terminal' ? after.presentationToken : null).not.toBe(
+      before?.type === 'terminal' ? before.presentationToken : null
+    )
   })
 })

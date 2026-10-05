@@ -6,6 +6,7 @@ import {
 } from './mobile-native-chat-send'
 import { nativeChatTerminalWrite } from './mobile-session-write-operations'
 import type { MobileNativeChatRpcSender } from './mobile-native-chat-send'
+import type { NativeChatInputAction } from '../../../src/shared/native-chat-input-action'
 
 // Give the agent TUI a beat to register each bracketed image paste before the
 // message text + Enter arrive, so the image attaches instead of being treated as
@@ -33,6 +34,8 @@ type PasteImagesArgs = {
    *  ONE logical line — callers holding a parked multi-line launch draft must
    *  pass a burst, or its earlier lines survive and glue onto the message. */
   readonly clearInput?: string
+  /** The user action this paste belongs to; every write carries it. */
+  readonly chatInput?: NativeChatInputAction
 }
 
 /** Clears the agent's unsubmitted input line, then pastes each uploaded image
@@ -48,12 +51,16 @@ export async function pasteMobileNativeChatImagePaths({
   imagePaths,
   followedByText,
   deadline: sharedDeadline,
-  clearInput
+  clearInput,
+  chatInput
 }: PasteImagesArgs): Promise<boolean> {
   const mobileClient: MobileTerminalClient | null = deviceToken
     ? { id: deviceToken, type: 'mobile' }
     : null
-  const clientField = mobileClient ? { client: mobileClient } : {}
+  const clientField = {
+    ...(mobileClient ? { client: mobileClient } : {}),
+    ...(chatInput ? { chatInput } : {})
+  }
   // Why: this is a sequential loop, so a per-write budget multiplies by the number
   // of images — the composer stays `sending` the whole time. Budget the sequence
   // once and let each write draw from what's left.

@@ -14,6 +14,8 @@ import {
   resolveNativeChatLeafRoute
 } from '../native-chat/native-chat-leaf-routing'
 import { useTerminalPaneChatPairActions } from './use-terminal-pane-chat-pair-actions'
+import { retirePaneChatForObservedAgentExit } from './terminal-pane-agent-exit-retirement'
+import type { AgentExitObservationOrigin } from '../../../../shared/agent-exit-retirement'
 import type { TerminalPaneTitleController } from './use-terminal-pane-title-state'
 
 export function useTerminalPaneChatState(controller: TerminalPaneTitleController) {
@@ -166,8 +168,12 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       worktreeId
     })
   const handleConfirmedAgentExit = useCallback(
-    (leafId: string): void => {
+    (leafId: string, origin?: AgentExitObservationOrigin): void => {
       if (leafId !== chatLeafId) {
+        return
+      }
+      // Why: on a host that owns exits this pane's chat only turns terminal, never retargets.
+      if (retirePaneChatForObservedAgentExit({ worktreeId, tabId, leafId, origin })) {
         return
       }
       const panes = managerRef.current?.getPanes() ?? []
@@ -185,7 +191,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       )
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [applyNativeChatLeafRoute, chatLeafId, isChatEligibleForLeaf, isChatViewMode]
+    [applyNativeChatLeafRoute, chatLeafId, isChatEligibleForLeaf, isChatViewMode, tabId, worktreeId]
   )
   useEffect(() => {
     onAgentExitedRef.current = handleConfirmedAgentExit

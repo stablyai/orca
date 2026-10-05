@@ -50,7 +50,14 @@ export type ChatPairPendingWrites<Key> = {
   drop: (key: Key) => void
   pendingKeys: () => Key[]
   pendingPair: (key: Key) => TerminalChatPair | null
+  /**
+   * Resolves when the latest write for `key` is answered: the host pair it adopted, or `failed`
+   * on a failure, drop or newer write. Null when no write is pending (the committed pair applies).
+   */
+  settled: (key: Key) => Promise<ChatPairSettlement> | null
 }
+
+export type ChatPairSettlement = { kind: 'applied'; pair: TerminalChatPair } | { kind: 'failed' }
 
 type Entry<Key> = {
   key: Key
@@ -61,6 +68,15 @@ type Entry<Key> = {
   hostAtSubmit: TerminalChatPair | null
   retried: boolean
   deadline: unknown
+  waiters: ((settlement: ChatPairSettlement) => void)[]
+}
+
+function release<Key>(entry: Entry<Key>, settlement: ChatPairSettlement): void {
+  const waiters = entry.waiters
+  entry.waiters = []
+  for (const waiter of waiters) {
+    waiter(settlement)
+  }
 }
 
 export function chatPairsEqual(a: TerminalChatPair, b: TerminalChatPair): boolean {
@@ -123,6 +139,7 @@ export function createChatPairPendingWrites<Key>(
       deps.clearTimer(entry.deadline)
     }
     entries.delete(id)
+    release(entry, { kind: 'failed' })
     deps.showPending(entry.key, null)
   }
 
@@ -138,6 +155,7 @@ export function createChatPairPendingWrites<Key>(
     }
     // Why adopt: the host normalizes (parent chat keeps its owner; a refused write names the current pair).
     entry.target = chatPairFromChatView(reply.chatView)
+    release(entry, { kind: 'applied', pair: entry.target })
     const host = deps.readHostPair(entry.key)
     if (!host || hostShowsTarget(host, entry)) {
       remove(id, entry)
@@ -193,6 +211,10 @@ export function createChatPairPendingWrites<Key>(
       if (previous && previous.deadline !== null) {
         deps.clearTimer(previous.deadline)
       }
+      if (previous) {
+        // Why: a newer switch decides what a waiting send may write; the older answer cannot.
+        release(previous, { kind: 'failed' })
+      }
       lastSeq += 1
       const entry: Entry<Key> = {
         key,
@@ -201,7 +223,8 @@ export function createChatPairPendingWrites<Key>(
         target,
         hostAtSubmit: deps.readHostPair(key),
         retried: false,
-        deadline: null
+        deadline: null,
+        waiters: []
       }
       entries.set(id, entry)
       deps.showPending(key, target)
@@ -228,6 +251,17 @@ export function createChatPairPendingWrites<Key>(
       }
     },
     pendingKeys: () => [...entries.values()].map((entry) => entry.key),
-    pendingPair: (key) => entries.get(deps.keyId(key))?.target ?? null
+    pendingPair: (key) => entries.get(deps.keyId(key))?.target ?? null,
+    settled: (key) => {
+      const entry = entries.get(deps.keyId(key))
+      if (!entry) {
+        return null
+      }
+      // Why: an adopted reply already answered; it is waiting only for the snapshot to show it.
+      if (entry.deadline !== null) {
+        return Promise.resolve({ kind: 'applied', pair: entry.target })
+      }
+      return new Promise((resolve) => entry.waiters.push(resolve))
+    }
   }
 }

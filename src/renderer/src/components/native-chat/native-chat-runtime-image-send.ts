@@ -1,7 +1,7 @@
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
 import { agentImagePasteWrites, formatAgentImagePath } from '../../../../shared/agent-image-paste'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import { sendNativeChatPtyInput } from './native-chat-pty-input'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import { NATIVE_CHAT_SUBMIT_DELAY_MS } from '../../../../shared/native-chat-answer-stepping'
 import {
@@ -71,20 +71,25 @@ export function sendNativeChatMessageWithImageAttachments(
           ),
           trimmedText.length > 0
         )) {
-          sendRuntimePtyInput(settings, ptyId, payload, 'driving')
+          sendNativeChatPtyInput(settings, ptyId, payload, options?.chatAction)
         }
         if (trimmedText.length > 0) {
           delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
-            sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text), 'driving')
+            sendNativeChatPtyInput(
+              settings,
+              ptyId,
+              buildNativeChatPasteBytes(text),
+              options?.chatAction
+            )
             delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-              sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+              sendNativeChatPtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, options?.chatAction)
               markSubmitted()
             })
           })
           return
         }
         delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-          sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+          sendNativeChatPtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, options?.chatAction)
           markSubmitted()
         })
       })

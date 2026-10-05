@@ -113,7 +113,8 @@ export function useTerminalPaneChatPairActions(args: {
       if (storeOwnsChatPair) {
         const leavesChat = effectiveChatViewMode && chatLeafId === leafId
         applyTerminalChatPair(tabId, leavesChat ? null : leafId, leavesChat ? 'terminal' : 'chat', {
-          userToggle: true
+          userToggle: true,
+          intent: true
         })
         return
       }
@@ -143,7 +144,7 @@ export function useTerminalPaneChatPairActions(args: {
       return
     }
     if (storeOwnsChatPair) {
-      applyTerminalChatPair(tabId, null, 'terminal')
+      applyTerminalChatPair(tabId, null, 'terminal', { intent: true })
       return
     }
     setChatLeafId(null)

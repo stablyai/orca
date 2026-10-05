@@ -1,3 +1,7 @@
+import type {
+  NativeChatTargetReadRequest,
+  NativeChatTargetReadResponse
+} from '../../shared/native-chat-target-read'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -222,6 +226,9 @@ export type UiCommandEventApi = {
   respondSessionTabClose: (response: SessionTabCloseResponse) => void
   onTerminalChatViewRequest: (callback: (request: TerminalChatViewRequest) => void) => () => void
   respondTerminalChatView: (response: TerminalChatViewResponse) => void
+  /** Main asks, per composer write chunk, whether committed state lets chat input reach a PTY. */
+  onNativeChatTargetRead: (callback: (request: NativeChatTargetReadRequest) => void) => () => void
+  respondNativeChatTargetRead: (response: NativeChatTargetReadResponse) => void
   onMoveSessionTab: (
     callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
   ) => () => void

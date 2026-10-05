@@ -16,6 +16,7 @@ import { applyWorktreeRecordUpdates } from './apply-worktree-records'
 import { applyActiveStateUpdates } from './apply-active-state'
 import { buildWebSessionTabsFinalPatch } from './apply-final-patch'
 import { withChatViewHostMarker } from './chat-view-host-marker'
+import { noteHostPresentationToken } from '../host-presentation-token-history'
 
 /** Reconcile one host frame through the staged terminal/browser/layout pipeline. */
 export function applyWebSessionTabsSnapshotWithContext(
@@ -49,6 +50,17 @@ export function applyWebSessionTabsSnapshotWithContext(
   const browserRecords = applyBrowserRecordUpdates(terminalRecords)
   const worktreeRecords = applyWorktreeRecordUpdates(browserRecords)
   const activeState = applyActiveStateUpdates(worktreeRecords)
+  if (rawSnapshot.chatViewHostOwned && rawSnapshot.chatViewAgentExitHostOwned) {
+    for (const tab of rawSnapshot.tabs) {
+      if (tab.type === 'terminal') {
+        noteHostPresentationToken(
+          { worktreeId, hostTabId: tab.parentTabId, leafId: tab.leafId },
+          tab.presentationToken,
+          now
+        )
+      }
+    }
+  }
   return withChatViewHostMarker(
     state,
     buildWebSessionTabsFinalPatch(activeState),

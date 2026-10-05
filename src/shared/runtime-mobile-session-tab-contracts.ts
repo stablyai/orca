@@ -25,6 +25,9 @@ export type RuntimeMobileSessionTerminalTab = {
   color?: string | null
   isPinned?: boolean
   viewMode?: 'terminal' | 'chat'
+  /** Opaque ordering token for the parent tab's presentation; a paired client fences its exit
+   *  retirement with the one it held when the exit was observed. Absent from older hosts. */
+  presentationToken?: string
   launchDraft?: string
   launchDraftCreatedAt?: number
   isActive: boolean

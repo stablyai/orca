@@ -13,6 +13,10 @@ import type {
   StatusRowMutationListener
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
+import {
+  isSameAgentProcess,
+  type AgentProcessPresence
+} from '../../../shared/agent-process-presence'
 import { AgentHookServerListeners } from './server-listeners'
 
 function toMutationIdentity(
@@ -62,9 +66,58 @@ function wslDistroForWorktree(worktreeId: string | undefined): string | null {
   return worktreePath ? (parseWslUncPath(worktreePath)?.distro ?? null) : null
 }
 
+/** A pane's canonical owner changed (owner, process, ended or removed), whatever the IPC row did. */
+export type AgentPresenceChange = {
+  paneKey: string
+  previous: AgentProcessPresence | undefined
+  presence: AgentProcessPresence | undefined
+}
+export type AgentPresenceChangeListener = (change: AgentPresenceChange) => void
+
+function samePresence(
+  a: AgentProcessPresence | undefined,
+  b: AgentProcessPresence | undefined
+): boolean {
+  if (a === b) {
+    return true
+  }
+  if (!a || !b || a.agent !== b.agent || a.ended !== b.ended) {
+    return false
+  }
+  return a.process && b.process ? isSameAgentProcess(a.process, b.process) : a.process === b.process
+}
+
 export abstract class AgentHookServerRowOwnership extends AgentHookServerListeners {
+  private readonly agentPresenceChangeListeners = new Set<AgentPresenceChangeListener>()
+
   _resetRowOwnershipForTests(): void {
     this.paneKeyByTerminalHandle.clear()
+  }
+
+  /** Host-only: owner/process/ended transitions, including ones the IPC projection omits. */
+  subscribeAgentPresenceChanges(listener: AgentPresenceChangeListener): () => void {
+    this.agentPresenceChangeListeners.add(listener)
+    return () => {
+      this.agentPresenceChangeListeners.delete(listener)
+    }
+  }
+
+  /** Host-only read of a pane's canonical owner descriptor, ended owners included. */
+  getAgentPresenceForPaneKey(paneKey: string): AgentProcessPresence | undefined {
+    return this.state.lastStatusByPaneKey.get(this.resolvePaneKeyAlias(paneKey))?.agentPresence
+  }
+
+  protected notifyAgentPresenceChange(change: AgentPresenceChange): void {
+    if (samePresence(change.previous, change.presence)) {
+      return
+    }
+    for (const listener of this.agentPresenceChangeListeners) {
+      try {
+        listener(change)
+      } catch (error) {
+        console.error('[agent-hooks] agent presence listener threw', error)
+      }
+    }
   }
 
   subscribeStatusRowMutations(listener: StatusRowMutationListener): () => void {
@@ -125,6 +178,25 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     }
     if (after?.terminalHandle) {
       this.paneKeyByTerminalHandle.set(after.terminalHandle, after.paneKey)
+    }
+    const paneKey = after?.paneKey ?? before?.paneKey
+    if (paneKey && before?.paneKey === after?.paneKey) {
+      // Why before the IPC equality check: the projection omits agentPresence entirely.
+      this.notifyAgentPresenceChange({
+        paneKey,
+        previous: before?.agentPresence,
+        presence: after?.agentPresence
+      })
+    } else {
+      for (const row of [before, after]) {
+        if (row) {
+          this.notifyAgentPresenceChange({
+            paneKey: row.paneKey,
+            previous: row === before ? row.agentPresence : undefined,
+            presence: row === after ? row.agentPresence : undefined
+          })
+        }
+      }
     }
     if (!emit || semanticRowsEqual(before, after)) {
       return false

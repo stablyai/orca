@@ -226,4 +226,27 @@ describe('useTabAgent process signals', () => {
     expect(latestHookAgent).toBe('aider')
     expect(clearTabLaunchAgent).not.toHaveBeenCalled()
   })
+
+  it('drops cached evidence when the pane is rebound to a new PTY', async () => {
+    const launchedTab = { ...baseTab, launchAgent: 'aider' as const }
+    const root = await renderHookProbe(launchedTab)
+    await setPaneForeground({ agent: 'aider', shellForeground: false })
+    // The pane respawns: the new PTY's first observation is its shell.
+    await act(async () => {
+      useAppStore
+        .getState()
+        .setPaneForegroundAgent(PANE_KEY, { agent: null, shellForeground: true })
+      useAppStore.setState((state) => ({
+        ptyIdsByTabId: { 'tab-1': ['pty-2'] },
+        terminalLayoutsByTabId: {
+          'tab-1': {
+            ...state.terminalLayoutsByTabId['tab-1']!,
+            ptyIdsByLeafId: { [LEAF_ID]: 'pty-2' }
+          }
+        }
+      }))
+      root.render(createElement(HookProbe, { tab: { ...launchedTab, ptyId: 'pty-2' } }))
+    })
+    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
+  })
 })

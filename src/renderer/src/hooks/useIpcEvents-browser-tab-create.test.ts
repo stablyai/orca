@@ -168,6 +168,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},
           onTerminalChatViewRequest: () => () => {},
+          onNativeChatTargetRead: () => () => {},
           onFocusTerminal: () => () => {},
           onFocusEditorTab: () => () => {},
           onCloseSessionTab: () => () => {},

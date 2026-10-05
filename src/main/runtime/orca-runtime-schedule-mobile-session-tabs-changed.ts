@@ -82,7 +82,8 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
           activeTabId: null,
           activeTabType: null,
           tabs: [],
-          chatViewHostOwned: true
+          chatViewHostOwned: true,
+          chatViewAgentExitHostOwned: true
         },
         clientNavigationId
       )

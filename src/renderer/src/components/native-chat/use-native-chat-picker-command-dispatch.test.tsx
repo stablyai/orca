@@ -4,6 +4,8 @@ import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { EMPTY_HISTORY } from './native-chat-composer-state'
 
+const CHAT_ACTION = expect.objectContaining({ actionId: expect.stringMatching(/^chat-/) })
+
 const sendNativeChatMessage = vi.fn()
 const sendNativeChatTypedCommand = vi.fn()
 
@@ -60,7 +62,7 @@ describe('useNativeChatPickerCommandDispatch', () => {
     const hook = renderDispatch('codex')
     act(() => hook.result.current(COMMAND))
 
-    expect(sendNativeChatTypedCommand).toHaveBeenCalledWith({}, 'pty-1', '/status')
+    expect(sendNativeChatTypedCommand).toHaveBeenCalledWith({}, 'pty-1', '/status', CHAT_ACTION)
     expect(sendNativeChatMessage).not.toHaveBeenCalled()
   })
 
@@ -68,7 +70,9 @@ describe('useNativeChatPickerCommandDispatch', () => {
     const hook = renderDispatch(agent)
     act(() => hook.result.current(COMMAND))
 
-    expect(sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/status')
+    expect(sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/status', {
+      chatAction: CHAT_ACTION
+    })
     expect(sendNativeChatTypedCommand).not.toHaveBeenCalled()
   })
 })

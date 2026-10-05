@@ -134,7 +134,11 @@ export const SetTabProps = WorktreeTabSelector.extend({
   // Orders one client process's pair writes at the host; meaningful only with viewMode.
   chatViewWrite: z
     .object({ writerId: z.string().min(1).max(64), seq: z.number().int().positive() })
-    .optional()
+    .optional(),
+  // An observed agent exit: turn the addressed leaf's chat terminal, only while the pane still
+  // carries this presentation token when one is given (without one: only while that leaf owns
+  // chat). Only with viewMode 'terminal' and a leaf-addressed tabId.
+  agentExit: z.object({ presentationToken: z.string().min(1).max(128).optional() }).optional()
 })
 
 export const CreateTerminalTab = WorktreeTabSelector.extend({

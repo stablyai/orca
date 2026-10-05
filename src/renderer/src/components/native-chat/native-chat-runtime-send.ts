@@ -3,10 +3,8 @@
 // byte builders in native-chat-send.ts so those stay IO-free and unit-testable.
 
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
-import {
-  sendRuntimePtyInput,
-  sendRuntimePtyInputVerified
-} from '@/runtime/runtime-terminal-inspection'
+import { sendNativeChatPtyInput, sendNativeChatPtyInputVerified } from './native-chat-pty-input'
+import type { RuntimeChatInputAction } from '@/runtime/runtime-chat-input-send'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AskAnswerKeyGroup } from './native-chat-interactive-prompt'
 import {
@@ -61,7 +59,7 @@ export function sendNativeChatMessage(
   text: string,
   options?: NativeChatSendOptions
 ): NativeChatSendHandle {
-  if (options?.onWriteRejected) {
+  if (options?.onWriteRejected || options?.onWritesAccepted) {
     return sendNativeChatObservedWrites(
       settings,
       ptyId,
@@ -83,11 +81,16 @@ export function sendNativeChatMessage(
         if (isCancelled()) {
           return
         }
-        sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text), 'driving')
+        sendNativeChatPtyInput(
+          settings,
+          ptyId,
+          buildNativeChatPasteBytes(text),
+          options?.chatAction
+        )
         // Schedule from the actual body write: an overdue clear-confirm callback
         // must not collapse the required body-to-Enter gap after a renderer stall.
         delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-          sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+          sendNativeChatPtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, options?.chatAction)
           markSubmitted()
         })
       })
@@ -130,7 +133,8 @@ export async function sendNativeChatMessageVerified(
   settings: RuntimeSettings,
   ptyId: string,
   text: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  chatAction?: RuntimeChatInputAction
 ): Promise<boolean> {
   // Why: chat sends hold a delayed Enter for 500ms. Opening the model picker in
   // that window used to let that Enter hit Claude's confirmation UI, so
@@ -143,16 +147,16 @@ export async function sendNativeChatMessageVerified(
 
   // Why: option commands await remote/SSH acceptance so the Enter cannot race
   // ahead of the body while a model-change observer is already armed.
-  const bodyAccepted = await sendRuntimePtyInputVerified(
+  const bodyAccepted = await sendNativeChatPtyInputVerified(
     settings,
     ptyId,
     buildNativeChatPasteBytes(text),
-    'driving'
+    chatAction
   )
   if (!bodyAccepted || signal?.aborted || !(await waitForNativeChatSubmit(signal))) {
     return false
   }
-  return sendRuntimePtyInputVerified(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+  return sendNativeChatPtyInputVerified(settings, ptyId, NATIVE_CHAT_SUBMIT, chatAction)
 }
 
 /** Types a slash command as individual keys so Codex opens its command palette. */
@@ -160,7 +164,8 @@ export async function typeNativeChatCommand(
   settings: RuntimeSettings,
   ptyId: string,
   command: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  chatAction?: RuntimeChatInputAction
 ): Promise<boolean> {
   cancelNativeChatPtySends(ptyId)
   await waitForNativeChatPtyIdle(ptyId)
@@ -168,7 +173,9 @@ export async function typeNativeChatCommand(
     command,
     signal,
     write: async (key) =>
-      (await sendRuntimePtyInputVerified(settings, ptyId, key, 'driving')) ? 'accepted' : 'rejected'
+      (await sendNativeChatPtyInputVerified(settings, ptyId, key, chatAction))
+        ? 'accepted'
+        : 'rejected'
   })
   return outcome === 'accepted'
 }
@@ -177,7 +184,8 @@ export async function typeNativeChatCommand(
 export function sendNativeChatTypedCommand(
   settings: RuntimeSettings,
   ptyId: string,
-  command: string
+  command: string,
+  chatAction?: RuntimeChatInputAction
 ): NativeChatSendHandle {
   const controller = new AbortController()
   return enqueueNativeChatPtySend(
@@ -185,8 +193,9 @@ export function sendNativeChatTypedCommand(
     (command.length + 1) * AGENT_TUI_COMMAND_KEY_INTERVAL_MS,
     ({ isCancelled, markSubmitted }) => {
       const finish = (outcome: 'accepted' | 'rejected' | 'unknown'): void => {
-        if (!isCancelled() && outcome !== 'accepted') {
-          clearUnsubmittedAgentInput(settings, ptyId)
+        // Why: after a refusal nothing was typed into the agent, and cleanup keys must not reach a shell.
+        if (!isCancelled() && outcome !== 'accepted' && !chatAction?.refused) {
+          clearUnsubmittedAgentInput(settings, ptyId, { chatAction })
         }
         markSubmitted()
       }
@@ -197,7 +206,7 @@ export function sendNativeChatTypedCommand(
           if (isCancelled()) {
             return 'rejected'
           }
-          return (await sendRuntimePtyInputVerified(settings, ptyId, key, 'driving'))
+          return (await sendNativeChatPtyInputVerified(settings, ptyId, key, chatAction))
             ? 'accepted'
             : 'rejected'
         }
@@ -206,7 +215,7 @@ export function sendNativeChatTypedCommand(
     {
       onCancelUnsubmitted: () => {
         controller.abort()
-        clearUnsubmittedAgentInput(settings, ptyId)
+        clearUnsubmittedAgentInput(settings, ptyId, { chatAction })
       }
     }
   )
@@ -214,8 +223,12 @@ export function sendNativeChatTypedCommand(
 
 /** Submit a TUI prompt with no body (Enter only) — e.g. a plain submit when the
  *  composer is empty. */
-export function submitNativeChatPrompt(settings: RuntimeSettings, ptyId: string): void {
-  sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+export function submitNativeChatPrompt(
+  settings: RuntimeSettings,
+  ptyId: string,
+  chatAction?: RuntimeChatInputAction
+): void {
+  sendNativeChatPtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, chatAction)
 }
 
 /**
@@ -227,7 +240,8 @@ export function sendNativeChatAskAnswer(
   settings: RuntimeSettings,
   ptyId: string,
   groups: AskAnswerKeyGroup[],
-  onSettled?: (delivered: boolean) => void
+  onSettled?: (delivered: boolean) => void,
+  chatAction?: RuntimeChatInputAction
 ): NativeChatSendHandle {
   if (groups.length === 0) {
     return { cancel: () => {}, settleAfterMs: 0 }
@@ -243,10 +257,10 @@ export function sendNativeChatAskAnswer(
           // Why: inference must use the remote host's acceptance result, not
           // the fire-and-forget renderer dispatch result.
           verifiedWrites.push(
-            sendRuntimePtyInputVerified(settings, ptyId, bytes, 'driving').catch(() => false)
+            sendNativeChatPtyInputVerified(settings, ptyId, bytes, chatAction).catch(() => false)
           )
         } else {
-          sendRuntimePtyInput(settings, ptyId, bytes, 'driving')
+          sendNativeChatPtyInput(settings, ptyId, bytes, chatAction)
         }
       }, index * NATIVE_CHAT_QUESTION_STEP_MS)
     )

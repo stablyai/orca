@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '../../store'
-import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import { createNativeChatWriteAction, sendNativeChatPtyInput } from './native-chat-pty-input'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AgentType } from '../../../../shared/native-chat-types'
 import {
@@ -47,7 +47,7 @@ export type NativeChatInteractiveSend = {
 /**
  * Reuse the desktop composer's exact send path for the interactive cards:
  * resolve this tab's live ptyId + runtime owner settings, then write bytes via
- * `sendRuntimePtyInput` (which branches local pty:write vs remote runtime RPC,
+ * `sendNativeChatPtyInput` (which branches the local chat-input IPC vs remote runtime RPC,
  * so SSH panes work unchanged). Selector answers use their respective
  * selector keystrokes via `sendNativeChatAskAnswer`; other agents still go through
  * `sendNativeChatMessage`. Control strings (option digits, ESC) are written raw.
@@ -78,11 +78,11 @@ export function useNativeChatInteractiveSend(
       if (!targetPtyId) {
         return
       }
-      sendRuntimePtyInput(
+      sendNativeChatPtyInput(
         getSettingsForAgentTabRuntimeOwner(terminalTabId),
         targetPtyId,
         raw,
-        'driving'
+        createNativeChatWriteAction(terminalTabId)
       )
     },
     [terminalTabId, targetPtyId]
@@ -134,6 +134,8 @@ export function useNativeChatInteractiveSend(
             onDeliverySettled?.(delivered)
           }
         : undefined
+      // Why: paced answers report through onSettled; a pasted label reports its settled writes.
+      const chatAction = createNativeChatWriteAction(terminalTabId)
       const handle: NativeChatSendHandle = stepsAnswer
         ? sendNativeChatAskAnswer(
             settings,
@@ -141,9 +143,17 @@ export function useNativeChatInteractiveSend(
             buildsCodexAnswer
               ? buildCodexAskAnswerKeys(prompt, selections)
               : buildAskAnswerKeys(prompt, selections),
-            onSettled
+            onSettled,
+            chatAction
           )
-        : sendNativeChatMessage(settings, targetPtyId, formatAskAnswer(prompt, selections))
+        : sendNativeChatMessage(settings, targetPtyId, formatAskAnswer(prompt, selections), {
+            chatAction,
+            // Why settled, not a fixed timer: a slow host's refusal must keep the answer actionable.
+            onWriteRejected: () => onDeliverySettled?.(false),
+            onWritesAccepted: () => onDeliverySettled?.(true),
+            // Why dismiss: it may have landed; inviting a resend could answer twice.
+            onWriteUnconfirmed: () => onDeliverySettled?.(true)
+          })
       // Why: native-chat answer writes bypass xterm.onData. Infer only after
       // every paced selector write has fired, so an early digit in a multi-step
       // answer cannot dismiss the wait or cancel the remaining writes.
@@ -151,7 +161,7 @@ export function useNativeChatInteractiveSend(
       inFlightRef.current = handle
       return {
         settleAfterMs: handle.settleAfterMs,
-        waitsForVerifiedDelivery: onSettled !== undefined
+        waitsForVerifiedDelivery: onSettled !== undefined || onDeliverySettled !== undefined
       }
     },
     [terminalTabId, paneKey, targetPtyId, agent, cancelInFlight]

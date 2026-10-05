@@ -92,7 +92,8 @@ export function createPtyOutputProcessor({
       titleObserver.processObservedTitles(
         effect.titles,
         effect.titleScanEffect,
-        effect.suppressAttentionEvents
+        effect.suppressAttentionEvents,
+        effect.observedAtMs
       )
       if (onBell && effect.containsBell) {
         onBell()
@@ -133,6 +134,7 @@ export function createPtyOutputProcessor({
     if (!shouldEmitEmptyTitleScan && deliveredPayloads.length === 0 && !containsBell) {
       return
     }
+    const observedAtMs = Date.now()
 
     if (deliveredPayloads.length === 0 && titles.length === 0) {
       sideEffects.enqueue({
@@ -140,7 +142,8 @@ export function createPtyOutputProcessor({
         titles: [],
         titleScanEffect,
         containsBell,
-        suppressAttentionEvents
+        suppressAttentionEvents,
+        observedAtMs
       })
     } else {
       enqueueOrderedEffects(
@@ -148,7 +151,8 @@ export function createPtyOutputProcessor({
         titles,
         shouldEmitEmptyTitleScan ? titleScanEffect : 'none',
         containsBell,
-        suppressAttentionEvents
+        suppressAttentionEvents,
+        observedAtMs
       )
     }
     sideEffects.scheduleDrain()
@@ -159,7 +163,8 @@ export function createPtyOutputProcessor({
     titles: string[],
     emptyTitleScanEffect: PendingPtySideEffect['titleScanEffect'],
     containsBell: boolean,
-    suppressAttentionEvents: boolean
+    suppressAttentionEvents: boolean,
+    observedAtMs: number
   ): void {
     for (const payload of payloads) {
       sideEffects.enqueue({
@@ -167,7 +172,8 @@ export function createPtyOutputProcessor({
         titles: [],
         titleScanEffect: 'none',
         containsBell: false,
-        suppressAttentionEvents
+        suppressAttentionEvents,
+        observedAtMs
       })
     }
     if (titles.length === 0 && emptyTitleScanEffect !== 'none') {
@@ -176,7 +182,8 @@ export function createPtyOutputProcessor({
         titles: [],
         titleScanEffect: emptyTitleScanEffect,
         containsBell: false,
-        suppressAttentionEvents
+        suppressAttentionEvents,
+        observedAtMs
       })
     }
     for (const title of titles) {
@@ -185,7 +192,8 @@ export function createPtyOutputProcessor({
         titles: [title],
         titleScanEffect: 'none',
         containsBell: false,
-        suppressAttentionEvents
+        suppressAttentionEvents,
+        observedAtMs
       })
     }
     if (containsBell) {
@@ -194,7 +202,8 @@ export function createPtyOutputProcessor({
         titles: [],
         titleScanEffect: 'none',
         containsBell: true,
-        suppressAttentionEvents
+        suppressAttentionEvents,
+        observedAtMs
       })
     }
   }

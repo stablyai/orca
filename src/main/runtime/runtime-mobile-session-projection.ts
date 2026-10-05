@@ -25,6 +25,15 @@ import {
   terminalTitleBlocksExplicitAgentStatus
 } from './runtime-worktree-status-projection'
 
+function appendRowForKey<T>(rowsByKey: Map<string, T[]>, key: string, row: T): void {
+  const rows = rowsByKey.get(key)
+  if (rows) {
+    rows.push(row)
+  } else {
+    rowsByKey.set(key, [row])
+  }
+}
+
 export function projectRuntimeMobileSessionTabs(
   snapshot: RuntimeMobileSessionTabsSnapshot,
   host: RuntimeMobileSessionProjectionHost
@@ -60,19 +69,9 @@ export function projectRuntimeMobileSessionTabs(
       statusRowsByPaneKey = new Map()
       statusRowsByTerminalHandle = new Map()
       for (const row of host.getStatusSnapshot()) {
-        const paneRows = statusRowsByPaneKey.get(row.paneKey)
-        if (paneRows) {
-          paneRows.push(row)
-        } else {
-          statusRowsByPaneKey.set(row.paneKey, [row])
-        }
+        appendRowForKey(statusRowsByPaneKey, row.paneKey, row)
         if (row.terminalHandle) {
-          const handleRows = statusRowsByTerminalHandle.get(row.terminalHandle)
-          if (handleRows) {
-            handleRows.push(row)
-          } else {
-            statusRowsByTerminalHandle.set(row.terminalHandle, [row])
-          }
+          appendRowForKey(statusRowsByTerminalHandle, row.terminalHandle, row)
         }
       }
     }
@@ -308,6 +307,7 @@ export function projectRuntimeMobileSessionTabs(
       ...(tab.color != null ? { color: tab.color } : {}),
       ...(tab.isPinned ? { isPinned: true } : {}),
       ...(tab.viewMode ? { viewMode: tab.viewMode } : {}),
+      ...(tab.presentationToken ? { presentationToken: tab.presentationToken } : {}),
       ...(tab.launchDraft ? { launchDraft: tab.launchDraft } : {}),
       ...(tab.launchDraftCreatedAt !== undefined
         ? { launchDraftCreatedAt: tab.launchDraftCreatedAt }

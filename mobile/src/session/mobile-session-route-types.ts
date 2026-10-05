@@ -85,6 +85,9 @@ export type SessionTabsResult = {
   navigationIntent?: 'follow'
   /** The host owns each tab's chat/terminal pair; absent on hosts that predate it. */
   chatViewHostOwned?: true
+  /** The host turns a chat tab to terminal on a proven agent exit and refuses tagged chat writes
+   *  after it; absent on hosts that predate it. */
+  chatViewAgentExitHostOwned?: true
 }
 
 export type RuntimeStatusResult = {

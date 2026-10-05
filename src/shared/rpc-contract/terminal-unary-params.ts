@@ -7,6 +7,7 @@ import {
   listSupportedWindowsShellOverrides
 } from '../windows-terminal-shell'
 import { TERMINAL_PANE_SPLIT_SOURCES } from '../feature-education-telemetry'
+import { NATIVE_CHAT_INPUT_ACTION_ID_MAX_LENGTH } from '../native-chat-input-action'
 
 export const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle'),
@@ -114,6 +115,11 @@ export const TerminalSend = TerminalHandle.extend({
     })
     .optional(),
   requireAgentStatus: z.enum(['sendable']).optional(),
+  // Why: a chat composer write; every write of one user action carries the same id so a proven
+  // agent exit cancels the rest of that action. Older hosts strip it and write as before.
+  chatInput: z
+    .object({ actionId: z.string().min(1).max(NATIVE_CHAT_INPUT_ACTION_ID_MAX_LENGTH) })
+    .optional(),
   // Why: terminal-generated replies are valid input but must not transfer the shared terminal floor.
   inputKind: z.enum(['query-reply']).optional(),
   // Why: identifies the caller for the driver state machine; when absent (older clients) the server falls back to the most recent mobile actor (docs/mobile-presence-lock.md).

@@ -1,5 +1,6 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
+import { createNativeChatWriteAction, nativeChatMessageNotSentText } from './native-chat-pty-input'
 import {
   emitNativeChatMessageSent,
   emitNativeChatPickerItemAccepted,
@@ -57,10 +58,14 @@ export function useNativeChatPickerCommandDispatch(args: {
       if (!target || disabled || isDispatchingSessionOption) {
         return
       }
+      // Why the notice: a refused command has no message row; the composer's line names it once.
+      const chatAction = createNativeChatWriteAction(target.terminalTabId ?? '', () =>
+        setNotice(nativeChatMessageNotSentText())
+      )
       trackPendingSend(
         agent === 'codex'
-          ? sendNativeChatTypedCommand(target.settings, target.ptyId, text)
-          : sendNativeChatMessage(target.settings, target.ptyId, text)
+          ? sendNativeChatTypedCommand(target.settings, target.ptyId, text, chatAction)
+          : sendNativeChatMessage(target.settings, target.ptyId, text, { chatAction })
       )
       emitNativeChatPickerItemAccepted({ agent, itemKind: 'command' })
       // Why: picker dispatch is a catalog-verified command send; it must leave

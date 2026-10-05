@@ -11,6 +11,10 @@ import { ptyOwnership } from '../provider/ownership-state'
 import { tryGetProviderForPty } from '../provider/registry'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import { interactiveOutputCharsByPty, lastInputAtByPty } from '../delivery/visibility-state'
+import {
+  NATIVE_CHAT_INPUT_ACTION_ID_MAX_LENGTH,
+  type NativeChatInputWriteResult
+} from '../../../../shared/native-chat-input-action'
 
 export function isMainWindowPtyIpcEvent(
   event: IpcMainEvent | IpcMainInvokeEvent,
@@ -27,6 +31,7 @@ export function isMainWindowPtyIpcEvent(
 }
 
 export type PtyWritePayload = { id: string; data: string; inputKind: TerminalInputKind }
+export type PtyChatInputPayload = PtyWritePayload & { actionId: string }
 export type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
 
 export function createPtyWriteInput(deps: {
@@ -35,7 +40,12 @@ export function createPtyWriteInput(deps: {
 }): {
   writePtyInput: (args: PtyWritePayload) => boolean | Promise<boolean>
   writePtyInputAccepted: (args: PtyWritePayload) => boolean | Promise<boolean>
+  writePtyChatInput: (
+    args: PtyChatInputPayload,
+    viewportClaim?: Promise<boolean>
+  ) => Promise<NativeChatInputWriteResult>
   isPtyWritePayload: (value: unknown) => value is PtyWritePayload
+  isPtyChatInputPayload: (value: unknown) => value is PtyChatInputPayload
   isPtyViewportClaimPayload: (value: unknown) => value is PtyViewportClaimPayload
   isPtyWriteEventFromMainWindow: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean
 } {
@@ -192,9 +202,57 @@ export function createPtyWriteInput(deps: {
     }
   }
 
+  const isPtyChatInputPayload = (value: unknown): value is PtyChatInputPayload => {
+    if (!isPtyWritePayload(value) || !('actionId' in value)) {
+      return false
+    }
+    const { actionId } = value
+    return (
+      typeof actionId === 'string' &&
+      actionId.length > 0 &&
+      actionId.length <= NATIVE_CHAT_INPUT_ACTION_ID_MAX_LENGTH
+    )
+  }
+
+  // Why not writePtyInputAccepted: that ack cannot settle SSH writes, and its callers fell back to
+  // a raw write, which would type a refused chat message into a shell.
+  const writePtyChatInput = async (
+    args: PtyChatInputPayload,
+    viewportClaim?: Promise<boolean>
+  ): Promise<NativeChatInputWriteResult> => {
+    if (!runtime || runtime.getDriver(args.id).kind === 'mobile') {
+      return { accepted: false, bytesWritten: 0 }
+    }
+    try {
+      // Why every wait inside: the action joins its PTY's chat order the moment it arrives.
+      return await runtime.writeNativeChatInputToPty(
+        args.id,
+        args.data,
+        args.inputKind,
+        args.actionId,
+        async () => {
+          if (viewportClaim && !(await viewportClaim)) {
+            return false
+          }
+          const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(args.data)
+          if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
+            return false
+          }
+          lastInputAtByPty.set(args.id, performance.now())
+          interactiveOutputCharsByPty.set(args.id, 0)
+          return true
+        }
+      )
+    } catch {
+      return { accepted: false, bytesWritten: 0, deliveryUnknown: true }
+    }
+  }
+
   return {
     writePtyInput,
     writePtyInputAccepted,
+    writePtyChatInput,
+    isPtyChatInputPayload,
     isPtyWritePayload,
     isPtyViewportClaimPayload,
     isPtyWriteEventFromMainWindow

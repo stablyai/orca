@@ -91,9 +91,11 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     return verdicts.includes('exited') ? 'exited' : null
   }
 
-  protected confirmPtyAgentExit(ptyId: string, recoverCompletedHook = false): void {
+  protected confirmPtyAgentExit(ptyId: string, recoverCompletedHook = false, at = Date.now()) {
     const current = this.ptysById.get(ptyId)
     const incarnation = current?.incarnationId
+    // Why captured before the awaits: a later presentation change must supersede this exit.
+    const fact = { kind: 'agent-exited' as const, observedAtMs: at }
     void this.recheckHookAgentPresenceForPty(ptyId).then((verdict) => {
       if (this.ptysById.get(ptyId) !== current || current?.incarnationId !== incarnation) {
         return
@@ -101,9 +103,9 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
       // Why: without an identified owner (null) the foreground read keeps today's rules; with one
       // whose process cannot be checked right now, silence from that read is never an exit.
       if (verdict === null || verdict === 'unverifiable') {
-        this.confirmLegacyPtyAgentExit(ptyId, recoverCompletedHook, verdict === 'unverifiable')
+        this.confirmLegacyPtyAgentExit(ptyId, recoverCompletedHook, verdict, fact)
       } else if (verdict === 'exited' && !recoverCompletedHook) {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
+        this.recordTerminalSideEffectFact(ptyId, fact)
       } else if (verdict === 'live') {
         this.restoreDisprovedAgentExit(ptyId)
       } else {
@@ -120,6 +122,7 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     if (!current || restoredStatus === null || restoredStatus === undefined) {
       return
     }
+    this.noteNativeChatAgentEvidence(ptyId)
     current.lastAgentStatus = restoredStatus
     if (restoredStatus === 'idle') {
       this.resolvePtyTuiIdleWaiters(current, ptyId)
@@ -145,8 +148,10 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
   private confirmLegacyPtyAgentExit(
     ptyId: string,
     recoverCompletedHook: boolean,
-    keepOnSilence: boolean
+    verdict: 'unverifiable' | null,
+    fact: { kind: 'agent-exited'; observedAtMs: number }
   ): void {
+    const keepOnSilence = verdict === 'unverifiable'
     const pty = this.ptysById.get(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
     if (
@@ -163,7 +168,7 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
       if (keepOnSilence) {
         this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
       } else if (!recoverCompletedHook) {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
+        this.recordTerminalSideEffectFact(ptyId, fact)
       }
       return
     }
@@ -210,7 +215,7 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
         typeof result.process === 'string'
       if (!keepOnSilence || answered) {
         if (!recoverCompletedHook) {
-          this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
+          this.recordTerminalSideEffectFact(ptyId, fact)
         }
       } else {
         this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()

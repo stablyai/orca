@@ -101,6 +101,7 @@ export function buildTerminalCreateWindow(args: {
         onSplitTerminal: () => () => {},
         onRenameTerminal: () => () => {},
         onTerminalChatViewRequest: () => () => {},
+        onNativeChatTargetRead: () => () => {},
         onFocusTerminal: (
           listener: (data: {
             tabId: string

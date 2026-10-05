@@ -1,3 +1,7 @@
+import type {
+  AgentExitRetirementCondition,
+  AgentExitRetirementDisposition
+} from '../../../../../shared/agent-exit-retirement'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type {
@@ -20,6 +24,9 @@ export type TabsSlice = {
   layoutByWorktree: Record<string, TabGroupLayoutNode>
   /** Paired worktrees whose latest applied host snapshot says the host owns the chat pair. */
   chatViewHostOwnedByWorktree: Record<string, true>
+  /** Paired worktrees whose host turns a chat tab to terminal itself on a proven agent exit and
+   *  refuses tagged chat writes after it (`chatViewAgentExitHostOwned`). */
+  chatViewAgentExitHostOwnedByWorktree: Record<string, true>
   /** This desktop's unconfirmed chat-pair writes on host-owned worktrees, by terminal tab id. */
   pendingChatPairByTabId: Record<string, TerminalChatPair>
   createUnifiedTab: (
@@ -118,8 +125,19 @@ export type TabsSlice = {
       /** A host relay's owner for a parent-addressed chat, used only when the tab has none;
        *  null: no pane of a split may own chat. */
       ownerPickLeafId?: string | null
+      /** A user's or client's switch: orders after older agent exits, even to the shown value.
+       *  Automatic route claims and normalizations omit it. */
+      intent?: boolean
     }
   ) => RuntimeSessionTabChatView | null
+  /**
+   * A pane's agent exit: turns that pane's chat terminal and clears a sole pane's launch hint in
+   * one store turn, never moving chat elsewhere; a newer presentation change supersedes it.
+   */
+  retireTerminalChatForAgentExit: (
+    terminalTabId: string,
+    condition: AgentExitRetirementCondition
+  ) => AgentExitRetirementDisposition
   /** Set a tab's view mode (terminal vs native chat). Patches only that tab. */
   setTabViewMode: (tabId: string, mode: 'terminal' | 'chat') => void
   /** Flip a tab between terminal and native-chat renderings; the live TerminalPane stays mounted. */

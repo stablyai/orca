@@ -142,7 +142,11 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       if (!targetPtyId) {
         return null
       }
-      return { ptyId: targetPtyId, settings: getSettingsForAgentTabRuntimeOwner(terminalTabId) }
+      return {
+        ptyId: targetPtyId,
+        settings: getSettingsForAgentTabRuntimeOwner(terminalTabId),
+        terminalTabId
+      }
     }, [targetPtyId, terminalTabId])
 
     const [hasPty, disabled] = structuredTransport
