@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 import { formatMarkdownReviewNotes, type MarkdownReviewNote } from '@/lib/markdown-review-notes'
 import { installOpenDraftAddReviewNoteGuard } from './editor-shortcuts'
 import { NotesSendMenu } from './NotesSendMenu'
+import { useClaudeSubmitGestureMatch } from '@/components/native-chat/use-claude-submit-gesture'
 
 export function MarkdownPreviewSingleNoteSendMenu({
   worktreeId,
@@ -57,6 +58,7 @@ export function MarkdownPreviewAnnotationComposer({
   const [submitting, setSubmitting] = useState(false)
   const mountedRef = useMountedRef()
   const composerRef = useRef<HTMLDivElement | null>(null)
+  const matchesSubmitGesture = useClaudeSubmitGestureMatch()
 
   // Why: scope the add-review-note chord to this composer subtree.
   useEffect(() => {
@@ -122,7 +124,7 @@ export function MarkdownPreviewAnnotationComposer({
             onCancel()
             return
           }
-          if (event.key === 'Enter' && !event.nativeEvent.isComposing && !event.shiftKey) {
+          if (!event.nativeEvent.isComposing && matchesSubmitGesture(event)) {
             event.preventDefault()
             void submit()
           }

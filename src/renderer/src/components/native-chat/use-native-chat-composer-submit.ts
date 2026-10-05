@@ -30,6 +30,9 @@ export function useNativeChatComposerSubmit(args: {
   structuredTransport?: NativeChatStructuredComposerTransport
   draft: string
   caret: number
+  /** Hold the send until the user's Claude submit keybinding has resolved, so a
+   *  fast send can't go out with the default CR before a remapped gesture is known. */
+  submitGesturePending: boolean
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   disabled: boolean
   sendPty: () => void
@@ -39,7 +42,7 @@ export function useNativeChatComposerSubmit(args: {
   setHistory: (updater: (previous: HistoryState) => HistoryState) => void
 }): { send: () => void; goalMode: NativeChatComposerGoalMode } {
   const { caret, disabled, draft, imageAttachments, sendPty, sendStructured } = args
-  const { setCaret, setDraft, setHistory, structuredTransport } = args
+  const { setCaret, setDraft, setHistory, structuredTransport, submitGesturePending } = args
   const threadGoal = structuredTransport?.threadGoal
   const [entered, setEntered] = useState(false)
   const active = entered && threadGoal !== undefined
@@ -108,7 +111,7 @@ export function useNativeChatComposerSubmit(args: {
   ])
 
   const send = useCallback(() => {
-    if (imageAttachments.some((attachment) => attachment.pending)) {
+    if (submitGesturePending || imageAttachments.some((attachment) => attachment.pending)) {
       return
     }
     if (threadGoal && structuredTransport && isBareStructuredAgentSessionGoalCommand(draft)) {
@@ -137,6 +140,7 @@ export function useNativeChatComposerSubmit(args: {
     setDraft,
     setGoal,
     structuredTransport,
+    submitGesturePending,
     threadGoal
   ])
 

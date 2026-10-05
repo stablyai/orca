@@ -13,6 +13,7 @@ import { useNativeChatDraft } from './use-native-chat-draft'
 import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft-adoption'
 import { NativeChatComposerField } from './NativeChatComposerField'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
+import { useComposerSubmitGesture } from './use-claude-submit-gesture'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
 import { useNativeChatExternalAttachments } from './use-native-chat-external-attachments'
@@ -150,6 +151,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       ? [true, !canSend]
       : [targetPtyId !== null, targetPtyId === null || !canSend]
 
+    const { matchesSubmitKey, submitGesturePending } = useComposerSubmitGesture(agent, targetPtyId)
+
     const syncCaret = useCallback((el: NativeChatComposerInput) => {
       setCaret(el.selectionStart ?? el.value.length)
     }, [])
@@ -186,9 +189,10 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     // A pasted image has no agent-readable path until its save lands; sending
     // mid-save would ship the message without the image the chip promises.
     const hasPendingAttachment = imageAttachments.some((attachment) => attachment.pending)
+    const isEmptyDraft = draft.trim() === '' && imageAttachments.length === 0
     const sendButtonDisabled = isWorking
       ? !hasPty || !onStop
-      : disabled || hasPendingAttachment || (draft.trim() === '' && imageAttachments.length === 0)
+      : disabled || hasPendingAttachment || submitGesturePending || isEmptyDraft
 
     const { attachExternalPaths, resolveAttachmentOwner } = useNativeChatExternalAttachments({
       terminalTabId,
@@ -290,6 +294,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       structuredTransport,
       draft,
       caret,
+      submitGesturePending,
       imageAttachments,
       disabled,
       sendPty,
@@ -337,6 +342,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       draft,
       history,
       isComposing: imeEnterGesture.isComposing,
+      matchesSubmitKey,
       completePickerItem: goalMode.interceptPick(completeItem),
       dispatchPickerCommand: goalMode.interceptPick(dispatchPickerCommand),
       dismissPicker: dismiss,

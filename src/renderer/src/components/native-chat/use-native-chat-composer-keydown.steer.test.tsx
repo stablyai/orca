@@ -39,6 +39,7 @@ function setup(
       hasAttachments: composer.hasAttachments ?? false,
       history: EMPTY_HISTORY,
       isComposing: () => false,
+      matchesSubmitKey: (event) => event.key === 'Enter' && !event.shiftKey,
       ...(steerQueued ? { steerQueued } : {}),
       ...callbacks
     })

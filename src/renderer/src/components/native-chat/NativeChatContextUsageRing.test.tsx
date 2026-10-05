@@ -258,6 +258,7 @@ describe('NativeChatContextUsageRing', () => {
         draft: '',
         history: EMPTY_HISTORY,
         isComposing: () => false,
+        matchesSubmitKey: (event) => event.key === 'Enter' && !event.shiftKey,
         completePickerItem: vi.fn(),
         dispatchPickerCommand: vi.fn(),
         dismissPicker: vi.fn(),

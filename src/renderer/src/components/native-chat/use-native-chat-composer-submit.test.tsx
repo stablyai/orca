@@ -47,6 +47,7 @@ function harness(options: {
         structuredTransport: options.lane === 'pty' ? undefined : structuredTransport,
         draft: props.draft,
         caret: props.caret,
+        submitGesturePending: false,
         imageAttachments: options.imageAttachments ?? [],
         disabled: false,
         ...calls

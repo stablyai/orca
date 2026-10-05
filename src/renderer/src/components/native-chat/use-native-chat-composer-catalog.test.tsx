@@ -133,6 +133,7 @@ it('Enter completes a known pre-init skill while still dispatching a built-in co
         draft: '/',
         history: EMPTY_HISTORY,
         isComposing: () => false,
+        matchesSubmitKey: (event) => event.key === 'Enter' && !event.shiftKey,
         completePickerItem: complete,
         dispatchPickerCommand: dispatch,
         dismissPicker: vi.fn(),

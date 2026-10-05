@@ -7,6 +7,7 @@ import {
   type NativeChatPickerItem
 } from './native-chat-composer-state'
 import { isMacPlatform } from './native-chat-shortcut'
+import type { SubmitKeyEvent } from './use-claude-submit-gesture'
 
 export type UseNativeChatComposerKeyDownArgs = {
   autocomplete: ComposerAutocomplete
@@ -16,6 +17,7 @@ export type UseNativeChatComposerKeyDownArgs = {
   hasAttachments?: boolean
   history: HistoryState
   isComposing: () => boolean
+  matchesSubmitKey: (event: SubmitKeyEvent) => boolean
   completePickerItem: (item: NativeChatPickerItem) => void
   dispatchPickerCommand: (item: Extract<NativeChatPickerItem, { kind: 'command' }>) => void
   dismissPicker: (triggerKey: string) => void
@@ -37,6 +39,7 @@ export function useNativeChatComposerKeyDown({
   hasAttachments = false,
   history,
   isComposing,
+  matchesSubmitKey,
   completePickerItem,
   dispatchPickerCommand,
   dismissPicker,
@@ -99,15 +102,18 @@ export function useNativeChatComposerKeyDown({
         interrupt()
         return
       }
+      // Cmd/Ctrl+Enter from an empty composer steers the newest queued draft
+      // before any submit. Platform primary modifier only (AGENTS.md): ⌘ on Mac,
+      // Ctrl elsewhere.
       if (event.key === 'Enter' && !event.shiftKey) {
-        // Platform primary modifier only (AGENTS.md): ⌘ on Mac, Ctrl elsewhere.
         const steerChord = isMacPlatform() ? event.metaKey : event.ctrlKey
-        // Only from an empty composer: the chord never sends a card past what the user just wrote.
         const composerEmpty = draft.trim() === '' && !hasAttachments
         if (steerChord && composerEmpty && steerQueued?.()) {
           event.preventDefault()
           return
         }
+      }
+      if (matchesSubmitKey(event)) {
         event.preventDefault()
         send()
         return
@@ -143,6 +149,7 @@ export function useNativeChatComposerKeyDown({
       history,
       interrupt,
       isComposing,
+      matchesSubmitKey,
       send,
       steerQueued,
       setActiveSuggestion,
