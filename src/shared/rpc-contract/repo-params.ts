@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 import { createRepoUpdateSchema } from './repo-update-params'
 import { RepoSelector } from './github-repo-target-params'
+import { sanitizeRepoIcon } from '../repo-icon'
 import { PROJECT_GROUP_FOLDER_ERROR, isProjectGroupFolderValid } from '../project-group-folder'
 
 export const RepoPath = z.object({
@@ -58,7 +59,11 @@ export const ProjectGroupUpdate = z.object({
     color: OptionalString.nullable().optional(),
     parentPath: OptionalString.nullable()
       .optional()
-      .refine(isProjectGroupFolderValid, PROJECT_GROUP_FOLDER_ERROR)
+      .refine(isProjectGroupFolderValid, PROJECT_GROUP_FOLDER_ERROR),
+    icon: z
+      .unknown()
+      .transform((value) => sanitizeRepoIcon(value))
+      .optional()
   })
 })
 

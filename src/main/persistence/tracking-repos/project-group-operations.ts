@@ -5,6 +5,8 @@ import {
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName
 } from '../../../shared/project-groups'
+import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
+import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { removeWorkspaceSessionOwnerEverywhere } from '../restoring-sessions/session-owner-removal'
 
@@ -81,7 +83,11 @@ export class ProjectGroupPersistenceOperations {
       group.tabOrder = updates.tabOrder
     }
     if (updates.color !== undefined) {
-      group.color = typeof updates.color === 'string' ? updates.color : null
+      // Why: matches the repo badge pipeline, which stores a normalized hex or nothing.
+      group.color = normalizeRepoBadgeColor(updates.color)
+    }
+    if (updates.icon !== undefined) {
+      group.icon = sanitizeRepoIcon(updates.icon) ?? null
     }
     group.updatedAt = Date.now()
     this.scheduleSave()

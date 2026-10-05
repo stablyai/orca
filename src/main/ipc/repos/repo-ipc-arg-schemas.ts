@@ -4,6 +4,7 @@ import { TaskSourceContextSchema } from '../../../shared/task-source-context-sch
 import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-linked-item-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import { DiffCommentSchema } from '../../../shared/diff-comment-schema'
+import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
 import {
   PROJECT_GROUP_FOLDER_ERROR,
@@ -29,7 +30,11 @@ export const ProjectGroupUpdateArgs = z.object({
       .string()
       .nullable()
       .optional()
-      .refine(isProjectGroupFolderValid, PROJECT_GROUP_FOLDER_ERROR)
+      .refine(isProjectGroupFolderValid, PROJECT_GROUP_FOLDER_ERROR),
+    icon: z
+      .unknown()
+      .transform((value) => sanitizeRepoIcon(value))
+      .optional()
   })
 })
 

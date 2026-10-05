@@ -72,6 +72,16 @@ describe('project-groups', () => {
     })
   })
 
+  it('normalizes a persisted group colour and icon on load', () => {
+    const [kept, dropped] = normalizeProjectGroups([
+      { id: 'a', name: 'A', color: '#ABC', icon: { type: 'emoji', emoji: '🎧' } },
+      { id: 'b', name: 'B', color: 'red; background: url()', icon: { type: 'nonsense' } }
+    ])
+
+    expect(kept).toMatchObject({ color: '#aabbcc', icon: { type: 'emoji', emoji: '🎧' } })
+    expect(dropped).toMatchObject({ color: null, icon: null })
+  })
+
   it('preserves normalized execution ownership for persisted groups', () => {
     const groups = normalizeProjectGroups([
       { id: 'runtime', name: 'Runtime', tabOrder: 1, executionHostId: 'runtime:env-1' },

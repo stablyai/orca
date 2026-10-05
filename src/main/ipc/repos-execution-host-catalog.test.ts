@@ -208,6 +208,18 @@ describe('projectGroups IPC validation', () => {
     expect(mockStore.updateProjectGroup).toHaveBeenCalledWith('group-1', { parentPath: null })
   })
 
+  it('sanitizes a project group icon and forwards the colour', () => {
+    handlers.get('projectGroups:update')!(null, {
+      groupId: 'group-1',
+      updates: { color: '#aabbcc', icon: { type: 'emoji', emoji: '🎧' } }
+    })
+
+    expect(mockStore.updateProjectGroup).toHaveBeenCalledWith('group-1', {
+      color: '#aabbcc',
+      icon: { type: 'emoji', emoji: '🎧' }
+    })
+  })
+
   it('rejects a relative project group folder before persistence', () => {
     // Why: the runtime may run with a different cwd than the client, so a relative path lands elsewhere.
     expect(() =>

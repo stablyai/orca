@@ -1,3 +1,5 @@
+import type { RepoIcon } from './repo-icon'
+
 export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration'
 
 export type ProjectGroup = {
@@ -13,13 +15,15 @@ export type ProjectGroup = {
   tabOrder: number
   isCollapsed: boolean
   color: string | null
+  /** Optional like Repo.repoIcon: absent means fall back to the generic folder glyph. */
+  icon?: RepoIcon | null
   createdAt: number
   updatedAt: number
 }
 
 /** Fields a client may change on a project group, declared once so every layer agrees. */
 export type ProjectGroupUpdate = Partial<
-  Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'parentPath'>
+  Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'parentPath' | 'icon'>
 >
 
 export type NestedRepoScanOptions = {

@@ -61,3 +61,37 @@ describe('Store project group folder', () => {
     )
   })
 })
+
+describe('Store project group colour and icon', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+  })
+
+  afterEach(async () => {
+    await closeTestStores()
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('normalizes a project group colour to hex and drops garbage', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({ name: 'Platform', createdFrom: 'manual' })
+
+    expect(store.updateProjectGroup(group.id, { color: '#ABC' })?.color).toBe('#aabbcc')
+    // Why: the field previously stored any string, so anything could reach a style attribute.
+    expect(
+      store.updateProjectGroup(group.id, { color: 'red; background: url()' })?.color
+    ).toBeNull()
+  })
+
+  it('sanitizes a project group icon and rejects an unsupported shape', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({ name: 'Platform', createdFrom: 'manual' })
+
+    expect(
+      store.updateProjectGroup(group.id, { icon: { type: 'emoji', emoji: '🎧' } })?.icon
+    ).toEqual({ type: 'emoji', emoji: '🎧' })
+    expect(
+      store.updateProjectGroup(group.id, { icon: { type: 'nonsense' } } as never)?.icon
+    ).toBeNull()
+  })
+})
