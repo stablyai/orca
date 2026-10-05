@@ -2,6 +2,7 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
 } from './agent-session-background-task-wire'
+import type { AgentSessionFrameSideFields } from './agent-session-frame-side-fields'
 import type { AgentSessionRewindReason, AgentSessionRewindSupport } from './agent-session-rewind'
 import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
@@ -157,9 +158,6 @@ export type AgentSessionJournalBatch = {
   submissions: AgentJournalSubmission[]
 }
 
-/** Host wall clock (ms epoch) stamped once per published frame; see `AgentSessionHistoryPage`. */
-type AgentSessionHostClockField = { hostNow?: number }
-
 export type AgentSessionSubscribeEvent =
   | ({
       type: 'snapshot'
@@ -175,7 +173,7 @@ export type AgentSessionSubscribeEvent =
       commands?: AgentSessionSlashCommand[] | null
       /** Latest provider-authored turn activity; optional for mixed-version hosts. */
       activity?: AgentSessionTurnActivity | null
-    } & AgentSessionHostClockField)
+    } & AgentSessionFrameSideFields)
   | ({
       type: 'batch'
       sessionId: string
@@ -192,7 +190,7 @@ export type AgentSessionSubscribeEvent =
       commands?: AgentSessionSlashCommand[] | null
       /** Additive ephemeral state; it never creates or advances journal rows. */
       activity?: AgentSessionTurnActivity | null
-    } & AgentSessionHostClockField)
+    } & AgentSessionFrameSideFields)
   | ({
       type: 'reset'
       sessionId: string
@@ -207,7 +205,7 @@ export type AgentSessionSubscribeEvent =
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
       activity?: AgentSessionTurnActivity | null
-    } & AgentSessionHostClockField)
+    } & AgentSessionFrameSideFields)
   | { type: 'end' }
 
 // ─── Status feed ────────────────────────────────────────────────────────────

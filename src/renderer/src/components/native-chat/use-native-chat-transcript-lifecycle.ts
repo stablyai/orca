@@ -1,23 +1,30 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { NativeChatTurnLifecycle } from '../../../../shared/native-chat-types'
+import type { NativeChatAsyncQuestionsView } from '../../../../shared/native-chat-async-questions'
+import { useNativeChatAsyncQuestionsView } from './use-native-chat-async-questions-view'
 
 type TranscriptLifecycleState = {
   lifecycle?: NativeChatTurnLifecycle
 }
 
 type TranscriptLifecycleControl = {
-  reset: () => void
+  /** A new source also drops its async questions; the same source keeps them until re-derived. */
+  reset: (newSource?: boolean) => void
   replace: (lifecycle: NativeChatTurnLifecycle | undefined) => void
   append: (lifecycle: NativeChatTurnLifecycle | undefined) => void
   revision: () => number
   replaceFromPagination: (lifecycle: NativeChatTurnLifecycle | undefined, revision: number) => void
+  /** The stream's other provider-published side state: host-derived async questions. */
+  applyAsyncQuestionsFrame: ReturnType<typeof useNativeChatAsyncQuestionsView>[1]
 }
 
 export function useNativeChatTranscriptLifecycle(): readonly [
   NativeChatTurnLifecycle | undefined,
-  TranscriptLifecycleControl
+  TranscriptLifecycleControl,
+  NativeChatAsyncQuestionsView
 ] {
   const [state, setState] = useState<TranscriptLifecycleState>({})
+  const [asyncQuestions, applyAsyncQuestionsFrame] = useNativeChatAsyncQuestionsView()
   // Why: pagination may resolve after a live completion; its older boundary
   // can update history only when no live lifecycle write won the race.
   const revisionRef = useRef(0)
@@ -26,7 +33,15 @@ export function useNativeChatTranscriptLifecycle(): readonly [
     revisionRef.current += 1
     setState({ lifecycle })
   }, [])
-  const reset = useCallback((): void => replace(undefined), [replace])
+  const reset = useCallback(
+    (newSource = false): void => {
+      replace(undefined)
+      if (newSource) {
+        applyAsyncQuestionsFrame(null)
+      }
+    },
+    [applyAsyncQuestionsFrame, replace]
+  )
   const append = useCallback((lifecycle: NativeChatTurnLifecycle | undefined): void => {
     if (!lifecycle) {
       return
@@ -47,8 +62,8 @@ export function useNativeChatTranscriptLifecycle(): readonly [
   )
 
   const control = useMemo<TranscriptLifecycleControl>(
-    () => ({ reset, replace, append, revision, replaceFromPagination }),
-    [append, replace, replaceFromPagination, reset, revision]
+    () => ({ reset, replace, append, revision, replaceFromPagination, applyAsyncQuestionsFrame }),
+    [append, replace, replaceFromPagination, reset, revision, applyAsyncQuestionsFrame]
   )
-  return [state.lifecycle, control]
+  return [state.lifecycle, control, asyncQuestions]
 }

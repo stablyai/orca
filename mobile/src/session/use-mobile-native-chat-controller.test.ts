@@ -15,6 +15,7 @@ const holdUnconfirmedSend = vi.fn()
 // and transcript state; defaults keep the send-seam tests unchanged.
 const viewMode = { isTabChatView: (_tabId: string) => true }
 const sessionState = { messages: [] as unknown[], status: 'ready', transcriptLoading: false }
+const NO_ASYNC_QUESTIONS = { asyncQuestions: { state: 'absent' as const } }
 const structuredSendWithOutcome = vi.fn()
 const structuredCancel = vi.fn()
 const structuredCancelPrompt = vi.fn(async () => true)
@@ -62,7 +63,6 @@ const structuredSessionState = {
   messages: [] as unknown[],
   status: 'ready',
   transcriptLoading: false,
-  error: undefined,
   hasMore: false,
   loadingEarlier: false,
   loadEarlier: vi.fn()
@@ -84,12 +84,13 @@ vi.mock('./use-mobile-session-view-mode', () => ({
   })
 }))
 vi.mock('./use-mobile-native-chat-session', () => ({
-  useMobileNativeChatSession: () => sessionState
+  useMobileNativeChatSession: () => ({ ...sessionState, ...NO_ASYNC_QUESTIONS })
 }))
 vi.mock('./use-mobile-structured-agent-session', () => ({
   useMobileStructuredAgentSession: () => ({
-    session: structuredSessionState,
+    session: { ...structuredSessionState, ...NO_ASYNC_QUESTIONS },
     ...structuredActivity,
+    submissions: [],
     queued: { cards: [], send: vi.fn(), delete: vi.fn(), edit: vi.fn() },
     sendWithOutcome: structuredSendWithOutcome,
     cancel: structuredCancel,
@@ -314,7 +315,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       accepted = await controller!.handleNativeChatSend('look', ['file:///a.jpg'])
     })
     expect(accepted).toBe(true)
-    expect(acceptSend).toHaveBeenCalledWith(ORIGIN, 'look', ['file:///a.jpg'])
+    expect(acceptSend).toHaveBeenCalledWith(ORIGIN, 'look', ['file:///a.jpg'], undefined)
     // Optimistic clear happens at send time, never a restore on success.
     expect(clearDraftForSend).toHaveBeenCalledWith(ORIGIN, 'look')
     expect(restoreRejectedDraft).not.toHaveBeenCalled()

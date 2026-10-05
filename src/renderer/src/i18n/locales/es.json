@@ -17859,6 +17859,15 @@
         "queuePaused": "Cola en pausa",
         "resume": "Reanudar"
       },
+      "decision": {
+        "unsupported": "Esta solicitud necesita una versión más reciente de Orca."
+      },
+      "asyncQuestions": {
+        "dismiss": "Descartar",
+        "more": "{{count}} preguntas más en la transcripción",
+        "more_one": "{{count}} pregunta más en la transcripción",
+        "more_other": "{{count}} preguntas más en la transcripción"
+      },
       "receipt": {
         "cancelled": "Cancelado",
         "unavailable": "Respuesta seleccionada no disponible",

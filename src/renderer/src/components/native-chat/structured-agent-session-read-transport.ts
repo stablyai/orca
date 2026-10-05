@@ -98,6 +98,9 @@ export function startStructuredAgentSessionReadTransport(args: {
   let opening = false
   let openGeneration = 0
   let stateGeneration = 0
+  // A deriving host attaches the async-question set to a resumed subscription's first frame, so
+  // its absence there means a host that never publishes it: the set held from before is stale.
+  let resumedOwesAsyncQuestions = false
   let unsubscribe = (): void => {}
   let shouldStopCoalescedEvent = (): boolean => true
   const coalescer = createStructuredAgentSessionEventCoalescer((event) => {
@@ -159,9 +162,14 @@ export function startStructuredAgentSessionReadTransport(args: {
     return () =>
       !isCurrentOpenGeneration(readOpenGeneration) || readStateGeneration !== stateGeneration
   }
-  const handleEvent = (event: AgentSessionSubscribeEvent, eventOpenGeneration: number): void => {
+  const handleEvent = (received: AgentSessionSubscribeEvent, eventOpenGeneration: number): void => {
     if (!isCurrentOpenGeneration(eventOpenGeneration)) {
       return
+    }
+    let event = received
+    if (resumedOwesAsyncQuestions && event.type !== 'end') {
+      resumedOwesAsyncQuestions = false
+      event = event.asyncQuestions ? event : { ...event, asyncQuestions: { state: 'absent' } }
     }
     clearUnattachedReadGrace()
     // Not on connect: a local subscribe resolves before the host's open refuses.
@@ -209,6 +217,7 @@ export function startStructuredAgentSessionReadTransport(args: {
       }
       let closedDuringOpen = false
       const cursor = args.getCursor()
+      resumedOwesAsyncQuestions = Boolean(cursor)
       const handle = await subscribeStructuredAgentSession(
         args.target,
         { sessionId: args.sessionId, ...(cursor ? { cursor } : {}) },

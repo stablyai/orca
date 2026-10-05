@@ -15,6 +15,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { createAgentSessionCatchUpReader } from './agent-session-history-page'
 import {
+  asyncQuestionsFrameReserveBytes,
   subscriberQueuedMessagesChanged,
   type SubscriberFieldHooks
 } from './agent-session-subscriber-frame-fields'
@@ -54,10 +55,13 @@ export function deliverToSubscriber(
   }
   // Caught up, so there are no rows to read: every publish behind a commit's own delivery.
   if (!journal.isReadOnly && sameJournalCursor(subscriber.cursor, journal.cursor())) {
-    emitCaughtUp(port, subscriber, emitCheckpoint, shared)
+    emitCaughtUp(port, subscriber, emitCheckpoint, shared, journal)
     return
   }
-  const readPage = createAgentSessionCatchUpReader(journal)
+  const readPage = createAgentSessionCatchUpReader(
+    journal,
+    asyncQuestionsFrameReserveBytes(port.hooks, subscriber.sessionId, journal)
+  )
   while (true) {
     const result = readPage({
       sessionId: subscriber.sessionId,
@@ -81,7 +85,7 @@ export function deliverToSubscriber(
     const page = result.page
     const advanced = page.window.nextCursor.sequence > subscriber.cursor.sequence
     if (!advanced) {
-      emitCaughtUp(port, subscriber, emitCheckpoint, shared)
+      emitCaughtUp(port, subscriber, emitCheckpoint, shared, journal)
       return
     }
     port.emit(
@@ -117,13 +121,24 @@ function emitCaughtUp(
     hostNow: number
     backgroundTasks?: AgentSessionBackgroundTaskState | null
     activity?: AgentSessionTurnActivity | null
-  }
+  },
+  journal: AgentSessionJournal
 ): void {
   const commandsChanged =
     port.hooks.readCommands !== undefined &&
     (port.hooks.readCommands(subscriber.sessionId) ?? null) !== subscriber.commands
   const queuedChanged = subscriberQueuedMessagesChanged(port.hooks, subscriber)
-  if (emitCheckpoint || shared.activity !== undefined || commandsChanged || queuedChanged) {
+  // A resumed cursor that is already caught up still owes the async-question set.
+  const asyncQuestions = port.hooks.readAsyncQuestions?.(subscriber.sessionId, journal)
+  const asyncQuestionsChanged =
+    asyncQuestions !== undefined && asyncQuestions !== subscriber.asyncQuestions
+  if (
+    emitCheckpoint ||
+    shared.activity !== undefined ||
+    commandsChanged ||
+    queuedChanged ||
+    asyncQuestionsChanged
+  ) {
     port.emit(subscriber, {
       type: 'batch',
       sessionId: subscriber.sessionId,

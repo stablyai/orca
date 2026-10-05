@@ -3,7 +3,6 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
-import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
@@ -11,7 +10,8 @@ import { mobileNativeChatStreamPreview } from './mobile-native-chat-streaming-ga
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
 import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
-import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
+import { useMobileNativeChatDecisionCards } from './use-mobile-native-chat-decision-cards'
+import { useMobileNativeChatAsyncQuestions } from './use-mobile-native-chat-async-questions'
 import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
@@ -152,28 +152,16 @@ export function useMobileNativeChatController(args: {
   const {
     permission: legacyNativeChatPermission,
     question: legacyQuestion,
-    detectedAsk: nativeChatDetectedAsk,
-    ask: nativeChatAskPrompt
-  } = useMobileNativeChatPrompts({
+    ask: nativeChatAskPrompt,
+    askKey: nativeChatAskKey,
+    dismissAsk: dismissNativeChatAsk
+  } = useMobileNativeChatDecisionCards({
     enabled: activeChatResolution != null && !activeChatStructured,
     status: nativeChatStatus,
-    messages: nativeChatSession.messages,
-    transcriptLoading: nativeChatSession.transcriptLoading
-  })
-  // A never-read transcript cannot prove that a dismissed prompt cleared.
-  const nativeChatTranscriptSettled =
-    nativeChatSession.status === 'ready' ||
-    (nativeChatSession.status === 'error' && nativeChatSession.messages.length > 0)
-  const {
-    askKey: nativeChatAskKey,
-    showAsk: showNativeChatAsk,
-    dismissAsk: dismissNativeChatAsk
-  } = useMobileNativeChatAskDismiss({
-    ask: nativeChatAskPrompt,
-    detectedAsk: nativeChatDetectedAsk,
+    session: nativeChatSession,
     scopeKey: activeSessionTabId,
     sessionKey: activeChatSessionId,
-    observing: showNativeChat && (nativeChatDetectedAsk != null || nativeChatTranscriptSettled)
+    visible: showNativeChat
   })
 
   // Every chat write gates on both: the lease proves the input floor is ours, and
@@ -238,6 +226,17 @@ export function useMobileNativeChatController(args: {
     holdUnconfirmedSend,
     restoreRejectedDraft,
     onSendError
+  })
+
+  const nativeChatAsyncQuestions = useMobileNativeChatAsyncQuestions({
+    scopeKey: JSON.stringify([activeSessionTabId, activeChatSessionId]),
+    view: nativeChatSession.asyncQuestions,
+    structured: activeChatStructured,
+    answerTerminal: legacyHandleNativeChatQuestionAnswer,
+    answerStructured: structuredNativeChatSend.answer,
+    pending: chatPending,
+    messages: nativeChatSession.messages,
+    submissions: structuredNativeChat.submissions
   })
 
   const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
@@ -308,7 +307,8 @@ export function useMobileNativeChatController(args: {
       ? structuredNativeChat.permission
       : legacyNativeChatPermission,
     nativeChatQuestion: activeChatStructured ? structuredNativeChat.question : legacyQuestion,
-    nativeChatAsk: !activeChatStructured && showNativeChatAsk ? nativeChatAskPrompt : null,
+    nativeChatAsyncQuestions,
+    nativeChatAsk: activeChatStructured ? null : nativeChatAskPrompt,
     nativeChatAskKey,
     dismissNativeChatAsk,
     handleNativeChatAnswerAsk: answerAsk,
@@ -324,7 +324,7 @@ export function useMobileNativeChatController(args: {
     loadNativeChatFiles,
     handleNativeChatQuestionAnswer: activeChatStructured
       ? structuredNativeChat.respondQuestion
-      : legacyHandleNativeChatQuestionAnswer,
+      : async (text: string) => (await legacyHandleNativeChatQuestionAnswer(text)) !== 'rejected',
     handleNativeChatSend: activeChatStructured
       ? structuredNativeChatSend.send
       : handleNativeChatSend,

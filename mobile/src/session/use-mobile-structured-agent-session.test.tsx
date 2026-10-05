@@ -413,7 +413,8 @@ describe('useMobileStructuredAgentSession', () => {
     }
 
     await vi.waitFor(() => expect(hook.permission).not.toBeNull())
-    await vi.waitFor(() => expect(hook.question).not.toBeNull())
+    // One shared projection: the first pending prompt in journal order, as on desktop.
+    expect(hook.question).toBeNull()
     await vi.waitFor(() => expect(hook.optionSnapshot.length).toBeGreaterThan(0))
 
     expect(hook.permission).toMatchObject({
@@ -423,12 +424,6 @@ describe('useMobileStructuredAgentSession', () => {
         { label: 'Allow once', send: expect.any(String) },
         { label: 'Deny', send: expect.any(String) }
       ]
-    })
-    expect(hook.question).toMatchObject({
-      question: 'Pick destination',
-      allowOther: true,
-      optionTokens: [expect.any(String), expect.any(String)],
-      freeTextToken: expect.any(String)
     })
     expect(hook.optionSurface.getSnapshot()).toEqual(hook.optionSnapshot)
 
@@ -471,6 +466,19 @@ describe('useMobileStructuredAgentSession', () => {
       expect.any(Object)
     )
 
+    act(() =>
+      listener?.({
+        ...snapshotEvent(3),
+        page: { ...snapshotEvent(3).page, items: [questionItem()] }
+      })
+    )
+    await vi.waitFor(() => expect(hook.question).not.toBeNull())
+    expect(hook.question).toMatchObject({
+      question: 'Pick destination',
+      allowOther: true,
+      optionTokens: [expect.any(String), expect.any(String)],
+      freeTextToken: expect.any(String)
+    })
     await act(async () => {
       expect(
         await hook.respondQuestion(formatQuestionFreeTextAnswer(hook.question!, 'custom answer'))
@@ -563,14 +571,17 @@ describe('useMobileStructuredAgentSession', () => {
         ...snapshotEvent(3),
         page: {
           ...snapshotEvent(3).page,
-          items: [
-            approvalItemWithIdentity('approval-old', 4),
-            questionItemWithIdentity('question-old', 8)
-          ]
+          items: [approvalItemWithIdentity('approval-old', 4)]
         }
       })
     )
     const approvalToken = hook!.permission!.options[0]!.send
+    act(() =>
+      listener?.({
+        ...snapshotEvent(3),
+        page: { ...snapshotEvent(3).page, items: [questionItemWithIdentity('question-old', 8)] }
+      })
+    )
     const questionToken = hook!.question!.optionTokens[0]!
     const freeText = formatQuestionFreeTextAnswer(hook!.question!, 'old answer')
 
@@ -658,6 +669,12 @@ describe('useMobileStructuredAgentSession', () => {
     })
     onSendError.mockClear()
 
+    act(() =>
+      listener?.({
+        ...snapshotEvent(3),
+        page: { ...snapshotEvent(3).page, items: [questionItem()] }
+      })
+    )
     await act(async () => {
       expect(await hook!.respondQuestion(hook!.question!.optionTokens[0]!)).toBe(false)
     })

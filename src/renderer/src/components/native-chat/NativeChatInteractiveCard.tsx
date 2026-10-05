@@ -144,6 +144,10 @@ export function NativeChatInteractiveCard({
     <NativeChatApprovalCard
       approval={card.approval}
       onChoose={(raw) => {
+        // An unsupported card has no options, so nothing reaches the agent from it.
+        if (card.kind !== 'approval') {
+          return
+        }
         setDismissedKey(cardKey)
         sendRaw(raw)
       }}

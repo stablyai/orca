@@ -512,3 +512,37 @@ describe('thread goal fields', () => {
     }
   })
 })
+
+describe('async question metadata on a text block', () => {
+  const block = {
+    type: 'text',
+    text: 'Color?',
+    asyncQuestions: { providerItemId: 'call-1', questions: [{ title: 'Color?', options: ['Red'] }] }
+  }
+  const item = {
+    itemId: 'i',
+    revision: 1,
+    sequence: 1,
+    observedAt: 1,
+    body: { kind: 'message', role: 'assistant', blocks: [block] }
+  }
+
+  it('is admitted and the original object keeps the key', () => {
+    expect(isAdmissibleAgentJournalRenderItem(item)).toBe(true)
+    expect(isAdmissibleAgentJournalItemBody(item.body)).toBe(true)
+    expect(item.body.blocks[0]).toBe(block)
+    expect(JSON.parse(JSON.stringify(item)).body.blocks[0].asyncQuestions).toEqual(
+      block.asyncQuestions
+    )
+  })
+
+  it('admits a row whose metadata this build cannot read, so the row is never dropped', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'x', asyncQuestions: { questions: 'nope' } }]
+      })
+    ).toBe(true)
+  })
+})

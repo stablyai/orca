@@ -150,6 +150,22 @@ describe('NativeChatStructuredSession', () => {
     expect(mocks.fileLinkClick).toHaveBeenCalledWith(event, 'file:///repo/src/a.ts')
   })
 
+  it('folds async question rows by its own view: all of them while the host still derives it', () => {
+    mocks.asyncQuestions = { state: 'pending' }
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-async"
+        sessionId="session-async"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+
+    expect(mocks.messageListProps?.asyncCallsFolded).toBe('all')
+  })
+
   // The list defaults to visible, so a dropped prop silently re-arms auto-scroll
   // on reveal and drags a reader who left a hidden pane detached to the bottom.
   it.each([true, false])('tells the transcript the pane is visible: %s', (isVisible) => {

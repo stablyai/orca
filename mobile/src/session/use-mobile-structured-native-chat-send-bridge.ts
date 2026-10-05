@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/structured-agent-session-composer'
+import type { NativeChatAsyncAnswerSendResult } from '../../../src/shared/native-chat-async-question-card-state'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
 
@@ -17,7 +18,8 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     text: string,
     images?: string[],
     deadline?: number,
-    attachments?: readonly StructuredNativeChatAttachment[]
+    attachments?: readonly StructuredNativeChatAttachment[],
+    options?: { queue?: boolean; onAccepted?: (clientMessageId: string) => void }
   ) => Promise<MobileNativeChatSendOutcome>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
@@ -37,6 +39,9 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     deadline?: number,
     attachments?: readonly StructuredNativeChatAttachment[]
   ) => Promise<MobileNativeChatSendOutcome>
+  /** An async question answer: an ordinary message that never touches the composer draft. An
+   *  accepted one names its journal submission, whose state the card reads from then on. */
+  answer: (text: string) => Promise<NativeChatAsyncAnswerSendResult>
 } {
   const {
     acceptSend,
@@ -114,5 +119,33 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     ) => (await sendWithOutcome(text, images, deadline, attachments)) !== 'rejected',
     [sendWithOutcome]
   )
-  return { send, sendWithOutcome }
+  const answer = useCallback(
+    async (text: string): Promise<NativeChatAsyncAnswerSendResult> => {
+      const origin = captureSendOrigin(text.trimEnd())
+      if (!origin) {
+        onSendError('Answer not sent (disconnected)')
+        return 'rejected'
+      }
+      const accepted: { clientMessageId?: string } = {}
+      // Into the running turn, as the agent's own app delivers an answer, never held to its end.
+      const outcome = await sendStructured(text, undefined, undefined, undefined, {
+        queue: false,
+        onAccepted: (clientMessageId) => {
+          accepted.clientMessageId = clientMessageId
+        }
+      })
+      if (outcome === 'accepted') {
+        acceptSend(origin, text.trimEnd())
+      } else if (outcome === 'unknown') {
+        holdUnconfirmedSend(origin, text.trimEnd(), () =>
+          onSendError('Delivery unconfirmed — check chat before retrying')
+        )
+      }
+      return outcome === 'accepted' && accepted.clientMessageId !== undefined
+        ? { outcome, receipt: accepted.clientMessageId }
+        : outcome
+    },
+    [acceptSend, captureSendOrigin, holdUnconfirmedSend, onSendError, sendStructured]
+  )
+  return { send, sendWithOutcome, answer }
 }

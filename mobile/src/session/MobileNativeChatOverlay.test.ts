@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { NativeChatAsyncQuestionsView } from '../../../src/shared/native-chat-async-questions'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
@@ -12,6 +13,9 @@ vi.mock('react-native', () => ({
 
 vi.mock('./MobileNativeChatView', () => ({ MobileNativeChatView: 'ChatView' }))
 vi.mock('./MobileNativeChatQueuedMessages', () => ({ MobileNativeChatQueuedMessages: 'Queued' }))
+vi.mock('./MobileNativeChatAsyncQuestions', () => ({
+  MobileNativeChatAsyncQuestions: 'AsyncQuestions'
+}))
 
 function assistantTurn(id: string, text: string): NativeChatMessage {
   return { id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp: 0, source: 'hook' }
@@ -25,13 +29,21 @@ type Tick = {
   streamingText?: string
   streamLive?: boolean
   identity?: string
+  blocking?: 'nativeChatAsk' | 'nativeChatPermission' | 'nativeChatQuestion'
+  asyncQuestions?: NativeChatAsyncQuestionsView
 }
+
+const asyncQuestionsModel = { open: [{ key: 'q-a', index: 0, title: 'Which name?' }] }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the overlay reads only these controller members; the rest of the controller is unreachable from it.
   const controller = {
     showNativeChat: tick.show ?? true,
-    nativeChatSession: { messages: tick.messages ?? [], status: 'ready' },
+    nativeChatSession: {
+      messages: tick.messages ?? [],
+      status: 'ready',
+      asyncQuestions: tick.asyncQuestions ?? { state: 'absent' }
+    },
     nativeChatAgent: 'claude',
     nativeChatAgentWorking: tick.streamLive ?? false,
     nativeChatStreamingText: tick.streamingText,
@@ -49,7 +61,9 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
       pause: null,
       resume: vi.fn(),
       sessionKey: 'session-a'
-    }
+    },
+    nativeChatAsyncQuestions: asyncQuestionsModel,
+    ...(tick.blocking ? { [tick.blocking]: { id: 'blocking' } } : {})
   } as unknown as MobileNativeChatController
   return createElement(MobileNativeChatOverlay, {
     controller,
@@ -183,5 +197,99 @@ describe('MobileNativeChatOverlay streaming gate', () => {
     })
 
     expect(streaming()).toBeNull()
+  })
+})
+
+describe('MobileNativeChatOverlay async question placement', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  /** The prompt-slot cards handed to the chat view, rendered, as their element types in order. */
+  async function slotCards(tick: Tick): Promise<{ type: string; model?: unknown }[]> {
+    await act(async () => {
+      renderer = create(overlayElement(tick))
+    })
+    const view = renderer!.root.find((node) => node.type === 'ChatView')
+    const rendered: { slot?: ReactTestRenderer } = {}
+    await act(async () => {
+      rendered.slot = create(view.props.queuedSlot.cards)
+    })
+    const nodes = rendered.slot!.root.findAll((node) => typeof node.type === 'string')
+    const cards = nodes.map((node) => ({ type: String(node.type), model: node.props.model }))
+    act(() => rendered.slot?.unmount())
+    return cards
+  }
+
+  it('adds the async card to the prompt slot after the queued cards, beside the composer', async () => {
+    const cards = await slotCards({})
+
+    expect(cards.map((card) => card.type)).toEqual(['Queued', 'AsyncQuestions'])
+    expect(cards[1]?.model).toBe(asyncQuestionsModel)
+  })
+
+  it.each(['nativeChatAsk', 'nativeChatPermission', 'nativeChatQuestion'] as const)(
+    'leaves the prompt slot to a blocking %s card',
+    async (blocking) => {
+      const cards = await slotCards({ blocking })
+
+      expect(cards.map((card) => card.type)).toEqual(['Queued'])
+    }
+  )
+})
+
+describe('MobileNativeChatOverlay async question tool rows', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  const asking: NativeChatMessage[] = [
+    assistantTurn('a1', 'Which name?'),
+    {
+      id: 'c1',
+      role: 'assistant',
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'request_user_input_async',
+          input: '{"questions":[{"title":"Which name?","options":["core","base"]}]}',
+          callId: 'call-1'
+        }
+      ],
+      timestamp: 0,
+      source: 'hook'
+    }
+  ]
+
+  async function foldedText(asyncQuestions: NativeChatAsyncQuestionsView): Promise<string> {
+    await act(async () => {
+      renderer = create(overlayElement({ messages: asking, asyncQuestions }))
+    })
+    return JSON.stringify(renderer!.root.find((node) => node.type === 'ChatView').props.folded)
+  }
+
+  it('folds the call away only while the card shows its questions', async () => {
+    const shown = await foldedText({
+      state: 'ready',
+      questions: [
+        { key: '["request_user_input_async","call-1",0]', index: 0, title: 'Which name?' }
+      ]
+    })
+    expect(shown).not.toContain('request_user_input_async')
+    act(() => renderer?.unmount())
+    // An older host publishes no set: the row and its options stay, as before.
+    const absent = await foldedText({ state: 'absent' })
+    expect(absent).toContain('request_user_input_async')
+    expect(absent).toContain('base')
+  })
+
+  it('folds the call away while the host is still deriving, so a cold open never flashes it', async () => {
+    expect(await foldedText({ state: 'pending' })).not.toContain('request_user_input_async')
   })
 })

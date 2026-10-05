@@ -247,6 +247,51 @@ describe('nativeChat:readSession handler', () => {
     }
   })
 
+  it('pushes host-derived Codex async questions: pending on the snapshot, then ready', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-async-'))
+    tempRoots.push(root)
+    const filePath = join(root, 'rollout-async.jsonl')
+    const questions = [{ title: 'Color?', options: ['Red'] }]
+    await writeFile(
+      filePath,
+      `${jsonLines([
+        { type: 'event_msg', payload: { type: 'user_message', message: 'go' } },
+        {
+          type: 'event_msg',
+          payload: {
+            type: 'item_completed',
+            item: {
+              type: 'AgentMessage',
+              id: 'call-1',
+              content: [{ type: 'Text', text: 'Color?' }],
+              delivery: 'async',
+              questions
+            }
+          }
+        }
+      ])}\n`
+    )
+    registerNativeChatHandlers()
+    const subscribe = listeners.get('nativeChat:subscribe')
+    const frames: { type: string; asyncQuestions?: unknown }[] = []
+    const sender = Object.assign(new EventEmitter(), {
+      id: 7,
+      isDestroyed: () => false,
+      send: (_channel: string, payload: { frame: { type: string; asyncQuestions?: unknown } }) =>
+        frames.push(payload.frame)
+    })
+    subscribe!(
+      { sender },
+      { subscriptionId: 'sub-async', agent: 'codex', sessionId: 's', transcriptPath: filePath }
+    )
+    await waitFor(() => frames.some((frame) => frame.type === 'appended' && frame.asyncQuestions))
+    expect(frames[0]).toMatchObject({ type: 'snapshot', asyncQuestions: { state: 'pending' } })
+    expect(frames.find((frame) => frame.type === 'appended')).toMatchObject({
+      asyncQuestions: { state: 'ready', questions: [{ title: 'Color?', options: ['Red'] }] }
+    })
+    sender.emit('destroyed')
+  })
+
   it('settles the view with a pending frame while the transcript is unflushed', async () => {
     // The user-visible bug: a session that has not been prompted never writes
     // its JSONL, so with no frame at all the chat view spins indefinitely.

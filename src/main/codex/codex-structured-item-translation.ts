@@ -1,6 +1,7 @@
 import { toolExecutionMetadata, toolWebSearchResults } from '../../shared/native-chat-tool-identity'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
+import { attachCodexAsyncQuestions } from '../../shared/codex-async-question-item'
 import {
   boundInlineText,
   boundToolInput,
@@ -234,7 +235,8 @@ export function codexJournalItem(
   started?: CodexThreadItem
 ): CodexJournalItem {
   if (item.type === 'userMessage' || item.type === 'agentMessage') {
-    const blocks = codexMessageBlocks(item)
+    // A user message never carries `delivery: "async"`, so this attaches only to async asks.
+    const blocks = attachCodexAsyncQuestions(codexMessageBlocks(item), item, item.id)
     return {
       body:
         blocks.length === 0

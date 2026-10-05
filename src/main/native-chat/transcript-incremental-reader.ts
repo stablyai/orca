@@ -14,6 +14,8 @@ export type IncrementalTranscriptState = {
   pendingStart: number
   pendingBytes: number
   droppingOversizedRecord: boolean
+  /** The first bytes of the record being dropped, for readers that inspect its envelope. */
+  oversizedHead: Buffer | null
 }
 
 export function createIncrementalTranscriptState(): IncrementalTranscriptState {
@@ -22,7 +24,8 @@ export function createIncrementalTranscriptState(): IncrementalTranscriptState {
     pendingChunks: [],
     pendingStart: 0,
     pendingBytes: 0,
-    droppingOversizedRecord: false
+    droppingOversizedRecord: false,
+    oversizedHead: null
   }
 }
 
@@ -32,7 +35,14 @@ export function resetIncrementalTranscriptState(state: IncrementalTranscriptStat
   state.pendingStart = 0
   state.pendingBytes = 0
   state.droppingOversizedRecord = false
+  state.oversizedHead = null
 }
+
+/** Sees the head of each record dropped for size (it is never decoded). */
+export type OversizedTranscriptRecordObserver = (head: Buffer, fallbackId: string) => void
+
+/** Head bytes kept from a dropped record. */
+const OVERSIZED_RECORD_HEAD_BYTES = 4096
 
 export async function readIncrementalTranscriptMessages(
   filePath: string,
@@ -41,7 +51,8 @@ export async function readIncrementalTranscriptMessages(
   onBatch?: (messages: NativeChatMessage[]) => void,
   decodeLifecycle?: (line: string, fallbackId: string) => NativeChatTurnLifecycle | null,
   onLifecycle?: (lifecycle: NativeChatTurnLifecycle) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onOversizedRecord?: OversizedTranscriptRecordObserver
 ): Promise<NativeChatMessage[]> {
   const end = (await wslGatedStat(filePath, 'exact', signal)).size
   if (end <= state.offset) {
@@ -64,6 +75,11 @@ export async function readIncrementalTranscriptMessages(
         retainPart(chunk.subarray(segmentStart, newline))
         if (!state.droppingOversizedRecord) {
           decodeLine()
+        } else if (state.oversizedHead) {
+          onOversizedRecord?.(
+            state.oversizedHead,
+            transcriptFallbackId(filePath, state.pendingStart)
+          )
         }
         resetPendingLine(absoluteOffset + newline + 1)
         segmentStart = newline + 1
@@ -88,6 +104,10 @@ export async function readIncrementalTranscriptMessages(
     }
     state.pendingBytes += part.length
     if (state.pendingBytes > MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES) {
+      // Copies only the head: a sliced join would pin the whole record until its line ends.
+      state.oversizedHead = onOversizedRecord
+        ? Buffer.concat([...state.pendingChunks, part], OVERSIZED_RECORD_HEAD_BYTES)
+        : null
       state.pendingChunks.length = 0
       state.droppingOversizedRecord = true
       return
@@ -99,6 +119,7 @@ export async function readIncrementalTranscriptMessages(
     state.pendingChunks.length = 0
     state.pendingBytes = 0
     state.droppingOversizedRecord = false
+    state.oversizedHead = null
     state.pendingStart = nextStart
   }
 
@@ -127,4 +148,30 @@ export async function readIncrementalTranscriptMessages(
       onBatch(messages.splice(0))
     }
   }
+}
+
+/** Incremental read that also reports the newest turn lifecycle record it passed. */
+export async function readIncrementalTranscriptWithLifecycle(
+  filePath: string,
+  state: IncrementalTranscriptState,
+  decode: NativeChatLineDecoder,
+  decodeLifecycle: ((line: string, fallbackId: string) => NativeChatTurnLifecycle | null) | null,
+  signal: AbortSignal,
+  onBatch?: (messages: NativeChatMessage[]) => void,
+  onOversizedRecord?: OversizedTranscriptRecordObserver
+): Promise<{ messages: NativeChatMessage[]; lifecycle?: NativeChatTurnLifecycle }> {
+  let lifecycle: NativeChatTurnLifecycle | undefined
+  const messages = await readIncrementalTranscriptMessages(
+    filePath,
+    state,
+    decode,
+    onBatch,
+    decodeLifecycle ?? undefined,
+    (nextLifecycle) => {
+      lifecycle = nextLifecycle
+    },
+    signal,
+    onOversizedRecord
+  )
+  return lifecycle ? { messages, lifecycle } : { messages }
 }

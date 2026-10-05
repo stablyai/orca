@@ -18073,7 +18073,16 @@
       "structuredSessionHostDeclined": "{{value0}} ouvert dans un terminal",
       "structuredSessionHostDeclinedDescription": "Ce serveur ne peut pas exécuter de discussion {{value0}} dans cet espace de travail.",
       "structuredSessionHostUnreachable": "Impossible de joindre {{value0}}",
-      "structuredSessionHostUnreachableDescription": "Orca n'a pas ouvert de discussion {{value0}}. Vérifiez la connexion au serveur et réessayez."
+      "structuredSessionHostUnreachableDescription": "Orca n'a pas ouvert de discussion {{value0}}. Vérifiez la connexion au serveur et réessayez.",
+      "decision": {
+        "unsupported": "Cette demande nécessite une version plus récente d'Orca."
+      },
+      "asyncQuestions": {
+        "dismiss": "Ignorer",
+        "more": "{{count}} autres questions dans la transcription",
+        "more_one": "{{count}} autre question dans la transcription",
+        "more_other": "{{count}} autres questions dans la transcription"
+      }
     },
     "tab": {
       "bar": {

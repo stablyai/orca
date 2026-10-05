@@ -15,7 +15,10 @@ import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
-import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
+import type {
+  MobileNativeChatAcceptSend,
+  MobileNativeChatSendOrigin
+} from './use-mobile-native-chat-drafts'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import {
   AGENT_TUI_CLEAR_INPUT_LINE,
@@ -34,8 +37,12 @@ export type MobileNativeChatMessageSend = {
     images?: string[],
     deadline?: number
   ) => Promise<MobileNativeChatSendOutcome>
-  /** Answer to an agent question — never touches the composer draft. */
-  answerQuestion: (text: string) => Promise<boolean>
+  /** Answer to an agent question — never touches the composer draft; settles honestly. An async
+   *  question card's answers ride its echo by key, so the card holds them until it lands. */
+  answerQuestion: (
+    text: string,
+    asyncAnswers?: Readonly<Record<string, string>>
+  ) => Promise<MobileNativeChatSendOutcome>
   /** Session-option command dispatch (e.g. `/model sonnet`) — never touches the
    *  composer draft; callers need the outcome to track dispatched state. */
   dispatchCommand: (
@@ -62,7 +69,7 @@ export function useMobileNativeChatMessageSend(args: {
   readSeededLaunchDraftSeed: () => MobileNativeChatLaunchDraftSeed | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
-  acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
+  acceptSend: MobileNativeChatAcceptSend
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
     text: string,
@@ -92,7 +99,8 @@ export function useMobileNativeChatMessageSend(args: {
       images: string[] | undefined,
       syncComposer: boolean,
       recordControlSend: boolean,
-      sharedDeadline?: number
+      sharedDeadline?: number,
+      asyncAnswers?: Readonly<Record<string, string>>
     ): Promise<MobileNativeChatSendOutcome> => {
       // The host writes trailing whitespace verbatim onto the agent's input line,
       // where it can glue the next rapid send onto this one (#14262). Only the
@@ -211,7 +219,7 @@ export function useMobileNativeChatMessageSend(args: {
       if (classification === 'chat') {
         // `images` are local preview URIs for the optimistic echo only — the actual
         // image bytes already rode along as a bracketed paste before this text send.
-        acceptSend(origin, text, images)
+        acceptSend(origin, text, images, asyncAnswers)
       } else if (recordControlSend) {
         // The session-option catalog can recognize controls omitted from the
         // autocomplete catalog (for example Claude `/model` and `/fast`).
@@ -255,14 +263,17 @@ export function useMobileNativeChatMessageSend(args: {
   // it takes the per-terminal write lock itself: an answer landing mid-flight
   // in an image paste sequence would interleave bytes into the PTY.
   const answerQuestion = useCallback(
-    async (text: string): Promise<boolean> => {
+    async (
+      text: string,
+      asyncAnswers?: Readonly<Record<string, string>>
+    ): Promise<MobileNativeChatSendOutcome> => {
       const terminal = handleRef.current
       if (terminal && !acquireMobileNativeChatTerminalWrite(terminal)) {
         onSendError('Answer not sent')
-        return false
+        return 'rejected'
       }
       try {
-        return (await sendMessage(text, undefined, false, true)) !== 'rejected'
+        return await sendMessage(text, undefined, false, true, undefined, asyncAnswers)
       } finally {
         if (terminal) {
           releaseMobileNativeChatTerminalWrite(terminal)

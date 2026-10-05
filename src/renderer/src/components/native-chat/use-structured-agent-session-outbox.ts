@@ -281,6 +281,21 @@ export function useStructuredAgentSessionOutbox(args: {
     [sessionId]
   )
 
+  /** A card answer: never touches the composer, and a withdrawal returns it to the card. */
+  const sendAsyncAnswer = useCallback(
+    (text: string, answers: Record<string, string>): string | null => {
+      const entry = appendStructuredAgentSessionOutboxMessage(sessionId, text, [], undefined, {
+        kind: 'async-answer',
+        edits: answers
+      })
+      setError(
+        entry ? null : agentSessionWriteNoticeText(STRUCTURED_AGENT_SESSION_OUTBOX_NOT_SAVED)
+      )
+      return entry?.clientMessageId ?? null
+    },
+    [sessionId]
+  )
+
   const { withdrawUnsent } = useStructuredAgentSessionOutboxOwnership({
     sessionId,
     submissions,
@@ -306,6 +321,7 @@ export function useStructuredAgentSessionOutbox(args: {
     error,
     failedHere,
     send,
+    sendAsyncAnswer,
     retry,
     withdrawUnsent
   }

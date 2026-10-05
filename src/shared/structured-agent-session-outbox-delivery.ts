@@ -6,6 +6,7 @@
 // host without queueing always has.
 
 import type { StructuredAgentSessionOutboxEntry } from './structured-agent-session-outbox'
+import { isStructuredAgentSessionAsyncAnswer } from './structured-agent-session-outbox-origin'
 
 /** What the connected host says about queued messages; `unknown` until it has answered, and after
  *  a failed probe. */
@@ -20,7 +21,8 @@ export type StructuredAgentSessionQueueDelivery = {
 /** Whether this entry's next request asks to be queued. An attempted id asks exactly what it sent,
  *  except of a host known not to queue, which rejects the field before its operation ledger, so
  *  nothing there was recorded with it. A first attempt asks only of a host known to queue, with
- *  the setting on, for plain text that is not a launch prompt. */
+ *  the setting on, for plain text that is not a launch prompt or an async question answer (which
+ *  steers into the running turn, as the agent's own app delivers it). */
 export function structuredAgentSessionEntryAsksToQueue(
   entry: StructuredAgentSessionOutboxEntry,
   host: StructuredAgentSessionQueueDelivery
@@ -32,6 +34,7 @@ export function structuredAgentSessionEntryAsksToQueue(
     host.capability === 'supported' &&
     host.enabled &&
     entry.source !== 'launch' &&
+    !isStructuredAgentSessionAsyncAnswer(entry) &&
     entry.body.blocks.every((block) => block.type === 'text')
   )
 }

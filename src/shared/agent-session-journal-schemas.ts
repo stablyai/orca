@@ -15,6 +15,7 @@
 
 import { z } from 'zod'
 import { AgentSessionContextUsageSchema } from './agent-session-context-usage-schema'
+import { BoundedPayload, ProviderFrame, TextBlock } from './agent-session-journal-text-block-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
@@ -22,19 +23,6 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
-
-const BoundedPayload = z.object({
-  head: z.string(),
-  byteLength: z.number(),
-  digest: z.string(),
-  truncated: z.boolean()
-})
-
-const ProviderFrame = z.object({
-  provider: z.string(),
-  kind: z.string(),
-  payload: BoundedPayload
-})
 
 const ToolMetadata = {
   mcpIdentity: z.object({ server: z.string(), tool: z.string() }).optional(),
@@ -73,13 +61,7 @@ const SubagentEntry = z.object({
  *  payload does not. */
 const Block = z.union([
   z.discriminatedUnion('type', [
-    z.object({
-      type: z.literal('text'),
-      text: z.string(),
-      presentation: z.string().optional(),
-      tone: z.string().optional(),
-      providerFrame: ProviderFrame.optional()
-    }),
+    TextBlock,
     // `input: undefined` loses its key under JSON.stringify, so a persisted
     // canonical tool call may lack it entirely.
     z.object({

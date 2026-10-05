@@ -55,6 +55,13 @@ describe('a first attempt', () => {
       structuredAgentSessionEntryAttempt(launch, host('supported')).wire.sentDelivery
     ).toBeNull()
   })
+
+  it('never queues an async question answer: it steers into the running turn', () => {
+    const answer = entry({ origin: { kind: 'async-answer', edits: { k: 'Blue' } } })
+    const attempt = structuredAgentSessionEntryAttempt(answer, host('supported'))
+    expect(attempt.wire.sentDelivery).toBeNull()
+    expect(attempt.stored.sentDelivery).toBeNull()
+  })
 })
 
 describe('a replay of an attempted id', () => {

@@ -1,3 +1,4 @@
+import type { NativeChatAsyncQuestionsField } from '../../shared/native-chat-async-questions'
 import type {
   AgentType,
   NativeChatMessage,
@@ -22,6 +23,8 @@ export type NativeChatSubscriptionFrame =
       hasMore: boolean
       error?: string
       lifecycle?: NativeChatTurnLifecycle
+      /** Host-derived pending async questions (Codex); absent from older hosts. */
+      asyncQuestions?: NativeChatAsyncQuestionsField
       /** No transcript exists behind this window yet — render it, but do not
        *  treat it as a settled read of the session's history. */
       pending?: boolean
@@ -31,11 +34,13 @@ export type NativeChatSubscriptionFrame =
       messages: NativeChatMessage[]
       hasMore: boolean
       lifecycle?: NativeChatTurnLifecycle
+      asyncQuestions?: NativeChatAsyncQuestionsField
     }
   | {
       type: 'appended'
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
+      asyncQuestions?: NativeChatAsyncQuestionsField
     }
 
 /** Wire payload for the `nativeChat:appended` push channel. */

@@ -7,6 +7,7 @@ import type {
   NativeChatTurnLifecycle
 } from '../../../../shared/native-chat-types'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
+import type { NativeChatAsyncQuestionsView } from '../../../../shared/native-chat-async-questions'
 
 export type ReadState =
   | { phase: 'loading' }
@@ -44,4 +45,6 @@ export type NativeChatLiveSession = NativeChatSession & {
    *  outranks (and so hides) 'loading', which would let a consumer deciding from
    *  an empty list treat an in-flight transcript as real history. */
   readPhase: ReadState['phase']
+  /** Host-derived pending async questions; absent from older hosts and other lanes. */
+  asyncQuestions?: NativeChatAsyncQuestionsView
 }

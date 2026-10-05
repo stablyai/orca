@@ -5,6 +5,7 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat-types'
+import type { NativeChatAsyncQuestionsField } from '../../shared/native-chat-async-questions'
 import { clearNativeChatTranscriptCache } from '../native-chat/transcript-read-cache'
 import type { ReadTranscriptResult } from '../native-chat/transcript-reader'
 import {
@@ -65,6 +66,7 @@ export type NativeChatAppendedPayload = {
         hasMore: boolean
         error?: string
         lifecycle?: NativeChatTurnLifecycle
+        asyncQuestions?: NativeChatAsyncQuestionsField
         /** No transcript exists behind this window yet — render it, but do not
          *  treat it as a settled read of the session's history. */
         pending?: boolean
@@ -74,11 +76,13 @@ export type NativeChatAppendedPayload = {
         messages: NativeChatMessage[]
         hasMore: boolean
         lifecycle?: NativeChatTurnLifecycle
+        asyncQuestions?: NativeChatAsyncQuestionsField
       }
     | {
         type: 'appended'
         messages: NativeChatMessage[]
         lifecycle?: NativeChatTurnLifecycle
+        asyncQuestions?: NativeChatAsyncQuestionsField
       }
 }
 
@@ -207,7 +211,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
       }
       sender.send('nativeChat:appended', payload)
     },
-    onInitialSnapshot: (messages, hasMore, _beforeOffset, error, lifecycle) => {
+    onInitialSnapshot: (messages, hasMore, _beforeOffset, error, lifecycle, asyncQuestions) => {
       if (!canPublish()) {
         return
       }
@@ -220,12 +224,13 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
           messages,
           hasMore,
           ...(error ? { error } : {}),
-          ...(lifecycle ? { lifecycle } : {})
+          ...(lifecycle ? { lifecycle } : {}),
+          ...(asyncQuestions ? { asyncQuestions } : {})
         }
       }
       sender.send('nativeChat:appended', payload)
     },
-    onReplace: (messages, hasMore, _beforeOffset, lifecycle) => {
+    onReplace: (messages, hasMore, _beforeOffset, lifecycle, asyncQuestions) => {
       if (!canPublish()) {
         return
       }
@@ -235,11 +240,12 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
           type: 'replacement',
           messages,
           hasMore,
-          ...(lifecycle ? { lifecycle } : {})
+          ...(lifecycle ? { lifecycle } : {}),
+          ...(asyncQuestions ? { asyncQuestions } : {})
         }
       } satisfies NativeChatAppendedPayload)
     },
-    onAppend: (messages, lifecycle) => {
+    onAppend: (messages, lifecycle, asyncQuestions) => {
       if (!canPublish()) {
         return
       }
@@ -248,7 +254,8 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
         frame: {
           type: 'appended',
           messages,
-          ...(lifecycle ? { lifecycle } : {})
+          ...(lifecycle ? { lifecycle } : {}),
+          ...(asyncQuestions ? { asyncQuestions } : {})
         }
       }
       sender.send('nativeChat:appended', payload)

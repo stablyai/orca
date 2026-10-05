@@ -1,4 +1,6 @@
 import { useMemo } from 'react'
+import { nativeChatAsyncCallsFolded } from '../../../src/shared/native-chat-async-questions'
+import { MobileNativeChatAsyncQuestions } from './MobileNativeChatAsyncQuestions'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
@@ -53,7 +55,15 @@ export function MobileNativeChatOverlay({
   keyboardInset
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
-  const folded = useMemo(() => foldMobileNativeChatMessages(session.messages), [session.messages])
+  // The card hides only behind a blocking card, briefly, so the rows fold whenever it would show.
+  const asyncCallsFolded = useMemo(
+    () => nativeChatAsyncCallsFolded(session.asyncQuestions),
+    [session.asyncQuestions]
+  )
+  const folded = useMemo(
+    () => foldMobileNativeChatMessages(session.messages, asyncCallsFolded),
+    [asyncCallsFolded, session.messages]
+  )
   const streaming = useMobileNativeChatStreamingBubble(
     folded,
     controller.nativeChatStreamingText,
@@ -72,6 +82,21 @@ export function MobileNativeChatOverlay({
   })
   if (!controller.showNativeChat) {
     return null
+  }
+  // Non-blocking: only in the prompt slot when no blocking card holds it; the composer stays.
+  // One tree either way, so a blocking card coming or going never remounts the queued cards.
+  const blockingCard =
+    controller.nativeChatAsk ?? controller.nativeChatPermission ?? controller.nativeChatQuestion
+  const promptSlot = {
+    ...queuedSlot,
+    cards: (
+      <>
+        {queuedSlot.cards}
+        {blockingCard ? null : (
+          <MobileNativeChatAsyncQuestions model={controller.nativeChatAsyncQuestions} />
+        )}
+      </>
+    )
   }
   return (
     <View style={styles.overlay}>
@@ -100,7 +125,7 @@ export function MobileNativeChatOverlay({
         onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
         permission={controller.nativeChatPermission}
         onRespondPermission={controller.handleNativeChatRespondPermission}
-        queuedSlot={queuedSlot}
+        queuedSlot={promptSlot}
         onOpenFile={onOpenFile}
         hasMore={session.hasMore}
         loadingEarlier={session.loadingEarlier}

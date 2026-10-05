@@ -3,6 +3,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
+import type { NativeChatAsyncCallsFolded } from '../../../../shared/native-chat-async-questions'
 import type { NativeChatSubagentRow } from '../../../../shared/native-chat-transcript-projection'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
@@ -11,11 +12,13 @@ import { omitNativeChatThreadGoalRows } from './native-chat-thread-goal-rows'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 
 /** The conversation rows the list draws, and each subagent's rows apart, placed in turns by
- *  the journal when the lane has one. */
+ *  the journal when the lane has one. `asyncCallsFolded` is the view's, which knows whether
+ *  its card can show. */
 export function useNativeChatTranscriptProjection(
   session: NativeChatLiveSession,
   journalItems: readonly AgentJournalRenderItem[] | undefined,
-  journalSubmissions: readonly AgentJournalSubmission[] | undefined
+  journalSubmissions: readonly AgentJournalSubmission[] | undefined,
+  asyncCallsFolded: NativeChatAsyncCallsFolded | undefined
 ): {
   messages: NativeChatMessage[]
   subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
@@ -30,9 +33,10 @@ export function useNativeChatTranscriptProjection(
     () =>
       projectMessages(
         session.messages,
-        journalItems ? { items: journalItems, submissions: journalSubmissions ?? [] } : null
+        journalItems ? { items: journalItems, submissions: journalSubmissions ?? [] } : null,
+        asyncCallsFolded
       ),
-    [journalItems, journalSubmissions, projectMessages, session.messages]
+    [asyncCallsFolded, journalItems, journalSubmissions, projectMessages, session.messages]
   )
   const messages = useMemo(() => {
     const projected = projectNativeChatTaskListFrames(projection.conversation)

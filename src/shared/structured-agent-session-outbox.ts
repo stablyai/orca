@@ -15,6 +15,10 @@ import {
   type StructuredAgentSessionSendMutation
 } from './structured-agent-session-send-mutation'
 import { parseStructuredAgentSessionOutboxQueueFields } from './structured-agent-session-outbox-delivery'
+import {
+  parseStructuredAgentSessionOutboxOrigin,
+  type StructuredAgentSessionOutboxOrigin
+} from './structured-agent-session-outbox-origin'
 
 /** `rejected`: settled as not delivered. The drain never sends it again and nothing queues behind
  *  it. One the host refused unrecorded waits for the user's Retry. One it recorded owes no delivery
@@ -46,6 +50,8 @@ export type StructuredAgentSessionOutboxEntry = {
    *  is sent again or delivered, instead of outliving it as a separate error. On a `queued` entry
    *  it is also the hold (structured-agent-session-outbox-admission). */
   lastFailure?: StructuredAgentSessionAttemptFailure
+  /** Absent for composer sends. */
+  origin?: StructuredAgentSessionOutboxOrigin
 }
 
 /** A host's rejection fact as a message keeps it: never its provider detail, whose log text is not
@@ -255,6 +261,7 @@ export function parseStructuredAgentSessionOutboxEntry(
         : null,
     ...(entry.source === 'launch' ? { source: 'launch' as const } : {}),
     ...parseStructuredAgentSessionOutboxQueueFields(entry),
+    ...parseStructuredAgentSessionOutboxOrigin(entry.origin),
     ...(lastFailure ? { lastFailure } : {})
   }
 }

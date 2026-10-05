@@ -13,6 +13,8 @@ export type MobileNativeChatStreamFrame = {
   pending?: boolean
   error?: string
   message?: string
+  /** Host-derived pending async questions (read defensively by the session hook). */
+  asyncQuestions?: unknown
 }
 
 export type AppliedMobileNativeChatFrame =

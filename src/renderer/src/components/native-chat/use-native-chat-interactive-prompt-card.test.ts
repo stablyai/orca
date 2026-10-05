@@ -65,4 +65,42 @@ describe('useNativeChatInteractivePromptCard', () => {
 
     expect(result.current).toMatchObject({ kind: 'approval' })
   })
+
+  it('gates an approval and a live question by the paused state (STA-3144)', () => {
+    const approval = JSON.stringify({ approval: { tool: 'Bash', summary: 'ls' } })
+    setStatus({ state: 'working', toolName: 'Bash', interactivePrompt: approval })
+    const { result } = renderHook(() =>
+      useNativeChatInteractivePromptCard({
+        paneKey,
+        messages: NO_MESSAGES,
+        transcriptSettled: true
+      })
+    )
+    expect(result.current).toBeNull()
+    act(() => setStatus({ state: 'waiting', toolName: 'Bash', interactivePrompt: approval }))
+    expect(result.current).toMatchObject({ kind: 'approval' })
+
+    const ask = JSON.stringify({ questions: [{ question: 'Pick?', options: [{ label: 'A' }] }] })
+    act(() => setStatus({ state: 'done', toolName: 'AskUserQuestion', interactivePrompt: ask }))
+    expect(result.current).toBeNull()
+  })
+
+  it('shows an unsupported request with no options while paused', () => {
+    setStatus({
+      state: 'blocked',
+      toolName: 'Plan',
+      interactivePrompt: JSON.stringify({ choice: { title: 'Implement this plan?' } })
+    })
+    const { result } = renderHook(() =>
+      useNativeChatInteractivePromptCard({
+        paneKey,
+        messages: NO_MESSAGES,
+        transcriptSettled: true
+      })
+    )
+    expect(result.current).toMatchObject({
+      kind: 'unsupported',
+      approval: { title: 'Implement this plan?', options: [] }
+    })
+  })
 })

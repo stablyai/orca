@@ -3,6 +3,12 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
+import type { NativeChatAsyncQuestionsField } from './native-chat-async-questions'
+import {
+  asyncQuestionsField,
+  hostClockField,
+  queuePublicationField
+} from './structured-agent-session-reducer-side-fields'
 import type {
   AgentSessionBackgroundTaskState,
   AgentSessionSlashCommand,
@@ -62,6 +68,8 @@ export type StructuredAgentSessionState = {
   queuePause?: AgentSessionQueuePause | null
   commands?: AgentSessionSlashCommand[] | null
   activity?: AgentSessionTurnActivity | null
+  /** Host-derived pending async questions; absent = older host (or none published yet). */
+  asyncQuestions?: NativeChatAsyncQuestionsField
   /** Absent until a frame from a host that stamps `hostNow` has been applied. */
   hostClock?: StructuredAgentHostClock
   /** Every subagent a roster row this client received named, by agent id; not trimmed with
@@ -91,29 +99,6 @@ export const EMPTY_STRUCTURED_AGENT_SESSION: StructuredAgentSessionState = {
   retainedItemCap: MAX_RETAINED_ITEMS,
   hasOlder: false,
   status: 'idle'
-}
-
-/** A frame without `hostNow` (older host) leaves the previous sample in place. */
-function hostClockField(
-  hostNow: number | undefined,
-  receivedAt: number,
-  previous: StructuredAgentHostClock | undefined
-): { hostClock?: StructuredAgentHostClock } {
-  const hostClock = hostNow !== undefined ? { hostNow, receivedAt } : previous
-  return hostClock ? { hostClock } : {}
-}
-
-type QueuePublication = Pick<StructuredAgentSessionState, 'queuedMessages' | 'queuePause'>
-
-/** First claim with a list wins, and its pause rides with it; no claim at all leaves both absent
- *  (older host). */
-function queuePublicationField(...claims: QueuePublication[]): QueuePublication {
-  for (const claim of claims) {
-    if (claim.queuedMessages !== undefined) {
-      return { queuedMessages: claim.queuedMessages, queuePause: claim.queuePause ?? null }
-    }
-  }
-  return {}
 }
 
 function replacePage(
@@ -262,6 +247,7 @@ export function reduceStructuredAgentSession(
         event.activity
       ),
       commands: event.commands,
+      ...asyncQuestionsField(event.asyncQuestions),
       // A snapshot omits the list when unchanged since the last frame sent to this subscriber.
       ...queuePublicationField(event, event.page, state),
       ...hostClockField(event.hostNow, receivedAt, state.hostClock)
@@ -297,6 +283,7 @@ export function reduceStructuredAgentSession(
     (event.commands === undefined || event.commands === state.commands) &&
     (event.queuedMessages === undefined || event.queuedMessages === state.queuedMessages) &&
     (event.queuePause === undefined || event.queuePause === state.queuePause) &&
+    event.asyncQuestions === undefined &&
     backgroundTaskStatesEqual(backgroundTasks, state.backgroundTasks) &&
     activity?.turnId === state.activity?.turnId &&
     activity?.text === state.activity?.text &&
@@ -332,6 +319,7 @@ export function reduceStructuredAgentSession(
     error: undefined,
     readRefusal: undefined,
     commands: event.commands !== undefined ? event.commands : state.commands,
+    ...asyncQuestionsField(event.asyncQuestions),
     ...queuePublicationField(event, state),
     ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
     ...(activity !== undefined ? { activity } : {}),

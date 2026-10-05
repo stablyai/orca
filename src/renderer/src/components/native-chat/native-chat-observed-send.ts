@@ -15,7 +15,9 @@ export function sendNativeChatObservedWrites(
   writes: readonly { data: string; delayBeforeMs: number }[],
   options: NativeChatSendOptions
 ) {
-  return enqueueNativeChatPtySend(
+  // Set as the completing write goes out: a cancel before its acknowledgement can't unsend it.
+  let completingWriteIssued = false
+  const handle = enqueueNativeChatPtySend(
     ptyId,
     writes.reduce((total, write) => total + write.delayBeforeMs, 0) +
       clearConfirmDurationMs(options),
@@ -34,6 +36,7 @@ export function sendNativeChatObservedWrites(
           if (isCancelled()) {
             return
           }
+          completingWriteIssued ||= index === writes.length - 1
           void sendRuntimePtyInputVerified(settings, ptyId, write.data, 'driving')
             .then((accepted) => {
               if (isCancelled()) {
@@ -66,4 +69,5 @@ export function sendNativeChatObservedWrites(
     },
     { onCancelUnsubmitted: () => clearUnsubmittedAgentInput(settings, ptyId, options) }
   )
+  return { ...handle, completingWriteIssued: () => completingWriteIssued }
 }

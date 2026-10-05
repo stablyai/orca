@@ -6,6 +6,7 @@ import type {
 } from '../../../src/shared/native-chat-ask'
 import type { detectAgentPermission } from './mobile-native-chat-permission'
 import type { parseAgentQuestion } from './mobile-native-chat-question'
+import type { MobileNativeChatAsyncQuestionsModel } from './use-mobile-native-chat-async-questions'
 import type {
   NativeChatLiveTurnIndicator,
   NativeChatSettledTurns
@@ -49,6 +50,8 @@ export type MobileNativeChatController = {
   nativeChatStreamScopeKey: string
   nativeChatPermission: ReturnType<typeof detectAgentPermission>
   nativeChatQuestion: ReturnType<typeof parseAgentQuestion>
+  /** Host-derived async questions card (non-blocking; shown when no blocking card is). */
+  nativeChatAsyncQuestions: MobileNativeChatAsyncQuestionsModel
   /** The pending ask, already null while dismissed (dismissal lives here so it
    *  survives the chat-view subtree unmounting on a view toggle). */
   nativeChatAsk: ReturnType<typeof parseAskFromStatus>

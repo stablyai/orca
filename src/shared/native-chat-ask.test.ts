@@ -223,3 +223,26 @@ describe('resolveNativeChatAsk', () => {
     )
   })
 })
+
+describe('Codex async question tools are never a blocking ask', () => {
+  const questions = [{ question: 'Color?', title: 'Color?', options: ['Red', 'Blue'] }]
+
+  it('refuses both async tool names for string and object input, options included', () => {
+    for (const name of ['request_user_input_async', 'send_user_message_async']) {
+      expect(
+        extractPendingAsk([message('s', [call(name, JSON.stringify({ questions }))])])
+      ).toBeNull()
+      expect(extractPendingAsk([message('o', [call(name, { questions })])])).toBeNull()
+      expect(parseAskFromStatus(JSON.stringify({ questions }), name)).toBeNull()
+    }
+  })
+
+  it('finds a Codex string-input request_user_input', () => {
+    const input = JSON.stringify({
+      questions: [{ question: 'Which branch?', options: [{ label: 'main' }] }]
+    })
+    expect(extractPendingAsk([message('c', [call('request_user_input', input)])])).toMatchObject({
+      questions: [{ question: 'Which branch?' }]
+    })
+  })
+})

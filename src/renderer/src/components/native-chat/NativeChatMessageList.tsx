@@ -12,6 +12,7 @@ import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat-turn-activity'
+import type { NativeChatAsyncCallsFolded } from '../../../../shared/native-chat-async-questions'
 import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
 import {
   NativeChatDisclosureContext,
@@ -83,7 +84,8 @@ export function NativeChatMessageList({
   deliveryNotices,
   awaitingInput = null,
   turnActivity,
-  runtimeContext
+  runtimeContext,
+  asyncCallsFolded
 }: {
   session: NativeChatLiveSession
   journalItems?: readonly AgentJournalRenderItem[]
@@ -110,6 +112,8 @@ export function NativeChatMessageList({
   awaitingInput?: NativeChatAwaitingInput | null
   turnActivity?: NativeChatTurnActivity | null
   runtimeContext?: RuntimeFileOperationArgs | null
+  /** The async question calls the pane's card answers, so their raw rows fold away. */
+  asyncCallsFolded?: NativeChatAsyncCallsFolded
 }): React.JSX.Element {
   const [navigationRequest, setNavigationRequest] = useState<NativeChatNavigationRequest | null>(
     null
@@ -137,7 +141,8 @@ export function NativeChatMessageList({
   const { messages, subagentRows } = useNativeChatTranscriptProjection(
     session,
     journalItems,
-    journalSubmissions
+    journalSubmissions,
+    asyncCallsFolded
   )
   const {
     sections: subagentSections,

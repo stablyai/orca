@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
+import { projectUnsupportedDecision } from './mobile-native-chat-unsupported-decision'
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -43,6 +44,21 @@ describe('MobileNativeChatPermission', () => {
 
     expect(onRespond).toHaveBeenCalledOnce()
     await act(async () => resolveResponse(true))
+  })
+
+  it('shows an unsupported request with its own text and one line, and no option to press', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatPermission, {
+          permission: projectUnsupportedDecision('Implement this plan?'),
+          onRespond: vi.fn(async () => true)
+        })
+      )
+    })
+    const rendered = JSON.stringify(renderer?.toJSON())
+    expect(rendered).toContain('Implement this plan?')
+    expect(rendered).toContain('This request needs a newer version of Orca.')
+    expect(renderer?.root.findAllByType('Pressable')).toHaveLength(0)
   })
 
   it('passes the rendered prompt identity to cancel', async () => {

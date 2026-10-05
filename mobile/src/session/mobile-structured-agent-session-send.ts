@@ -36,6 +36,8 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   delivery?: 'queue-if-active'
   deadline?: number
   onError: (message: string) => void
+  /** Told the journal submission an accepted send became, which says where it stands from now. */
+  onAccepted?: (clientMessageId: string) => void
   /** Internal: the one fresh-id resend after a withdrawn replay. */
   resendingAfterWithdrawal?: true
   /** Internal: that resend when the withdrawn id's record could not be cleared. It bypasses the
@@ -190,6 +192,13 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   }
   if (outcome.error !== null) {
     input.onError(outcome.error)
+  }
+  if (
+    outcome.outcome === 'accepted' &&
+    result.status === 'accepted' &&
+    'submission' in result.value
+  ) {
+    input.onAccepted?.(result.value.submission.clientMessageId)
   }
   return outcome.outcome
 }

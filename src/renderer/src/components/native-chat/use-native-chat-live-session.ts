@@ -23,6 +23,7 @@ import { useNativeChatHookStatus } from './use-native-chat-hook-status'
 import { useNativeChatAssembledMessages } from './use-native-chat-assembled-messages'
 import { createNativeChatReadRetryTimer } from './native-chat-read-retry-timer'
 import { openNativeChatTranscriptStream } from './native-chat-stream-teardown'
+import { nextNativeChatSubscriptionId } from './native-chat-subscription-id'
 
 export type { NativeChatLiveSession, ReadState } from './native-chat-live-session-contract'
 
@@ -42,13 +43,6 @@ export type UseNativeChatLiveSessionArgs = {
 
 // Stable empty-base reference so a non-ready read doesn't churn the base axis.
 const EMPTY_MESSAGES: readonly NativeChatMessage[] = []
-
-let subscriptionCounter = 0
-
-function nextSubscriptionId(): string {
-  subscriptionCounter += 1
-  return `native-chat-${subscriptionCounter}-${Date.now()}`
-}
 
 // Why: a new session's transcript can take minutes to appear on disk (#8401).
 // Only a guess at the flush delay — a host that reports the transcript pending
@@ -82,7 +76,8 @@ export function useNativeChatLiveSession(
   const [hasMore, setHasMore] = useState(false)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
   const [olderHistoryGeneration, setOlderHistoryGeneration] = useState(0)
-  const [transcriptLifecycle, transcriptLifecycleControl] = useNativeChatTranscriptLifecycle()
+  const [transcriptLifecycle, transcriptLifecycleControl, asyncQuestions] =
+    useNativeChatTranscriptLifecycle()
   // The active read window; raised by loadEarlier to page in older history.
   const limitRef = useRef(NATIVE_CHAT_INITIAL_LIMIT)
 
@@ -124,7 +119,7 @@ export function useNativeChatLiveSession(
     if (!enabled) {
       if (sourceChanged) {
         limitRef.current = NATIVE_CHAT_INITIAL_LIMIT
-        transcriptLifecycleControl.reset()
+        transcriptLifecycleControl.reset(true)
         setRead({ phase: 'loading' })
         replaceList(appendMergerRef.current, [])
         setAppended([])
@@ -132,7 +127,7 @@ export function useNativeChatLiveSession(
       }
       return () => undefined
     }
-    transcriptLifecycleControl.reset()
+    transcriptLifecycleControl.reset(sourceChanged)
     if (!sessionId) {
       // No session id yet: surface live hook state on an empty transcript; backfills once the id arrives.
       setRead({ phase: 'ready', messages: [] })
@@ -201,7 +196,7 @@ export function useNativeChatLiveSession(
 
     loadSession(0)
 
-    const subscriptionId = nextSubscriptionId()
+    const subscriptionId = nextNativeChatSubscriptionId()
     const closeStream = openNativeChatTranscriptStream(
       transport,
       {
@@ -215,6 +210,7 @@ export function useNativeChatLiveSession(
         if (cancelled || !latestEnabled.current) {
           return
         }
+        transcriptLifecycleControl.applyAsyncQuestionsFrame(frame)
         if (frame.type === 'snapshot' || frame.type === 'replacement') {
           // Why: snapshots and inode replacements are authoritative generations; older pagination must not repaint them.
           transcriptEpochRef.current += 1
@@ -351,7 +347,8 @@ export function useNativeChatLiveSession(
       loadingEarlier,
       olderHistoryGeneration,
       loadEarlier,
-      readPhase: read.phase
+      readPhase: read.phase,
+      asyncQuestions
     }
   }, [
     normalizedMessages,
@@ -367,6 +364,7 @@ export function useNativeChatLiveSession(
     loadingEarlier,
     olderHistoryGeneration,
     loadEarlier,
-    appended
+    appended,
+    asyncQuestions
   ])
 }

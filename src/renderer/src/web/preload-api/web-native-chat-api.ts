@@ -1,4 +1,5 @@
 import type { NativeChatApi, NativeChatAppendedMessages } from '../../../../preload/api-types'
+import { readNativeChatAsyncQuestionsFrameField } from '../../../../shared/native-chat-async-questions'
 import { buildNativeChatUnsubscribe } from '../../../../shared/native-chat-stream-unsubscribe'
 import {
   parseRuntimeNativeChatReadSessionResult,
@@ -74,6 +75,8 @@ export function createWebNativeChatApi(): NativeChatApi {
                 pending?: boolean
               }
               const lifecycle = parseRuntimeNativeChatTurnLifecycle(result?.lifecycle)
+              const asyncQuestions = readNativeChatAsyncQuestionsFrameField(response.result)
+              const asyncField = asyncQuestions ? { asyncQuestions } : {}
               // No transcript behind this window yet — forwarded so the view can stop spinning, but it is not the settled initial read.
               const pending = result?.pending === true
               if (
@@ -92,6 +95,7 @@ export function createWebNativeChatApi(): NativeChatApi {
                     hasMore: result.hasMore ?? result.messages.length >= (args.limit ?? 300),
                     ...(result.error ? { error: result.error } : {}),
                     ...(lifecycle ? { lifecycle } : {}),
+                    ...asyncField,
                     ...(pending ? { pending: true } : {})
                   })
                 } else if (result.type === 'snapshot') {
@@ -101,6 +105,7 @@ export function createWebNativeChatApi(): NativeChatApi {
                     hasMore: result.hasMore ?? false,
                     ...(result.error ? { error: result.error } : {}),
                     ...(lifecycle ? { lifecycle } : {}),
+                    ...asyncField,
                     ...(pending ? { pending: true } : {})
                   })
                 } else {
@@ -110,12 +115,14 @@ export function createWebNativeChatApi(): NativeChatApi {
                           type: 'replacement',
                           messages: result.messages,
                           hasMore: result.hasMore ?? false,
-                          ...(lifecycle ? { lifecycle } : {})
+                          ...(lifecycle ? { lifecycle } : {}),
+                          ...asyncField
                         }
                       : {
                           type: 'appended',
                           messages: result.messages,
-                          ...(lifecycle ? { lifecycle } : {})
+                          ...(lifecycle ? { lifecycle } : {}),
+                          ...asyncField
                         }
                   )
                 }

@@ -29,7 +29,7 @@ export function nativeChatPendingContentKey(
   return imagePaths.length > 0 ? `images:${JSON.stringify(imagePaths)}` : 'empty'
 }
 
-function nativeChatUserMessageContentKey(message: NativeChatMessage): string | null {
+export function nativeChatUserMessageContentKey(message: NativeChatMessage): string | null {
   if (message.role !== 'user') {
     return null
   }

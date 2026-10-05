@@ -1,4 +1,5 @@
 import { nativeChatApprovalAcceptKey } from '../../../src/shared/native-chat-agent-support'
+import { parseNativeChatDecisionEnvelope } from '../../../src/shared/native-chat-decision-envelope'
 import type {
   AgentJournalApprovalMatchedAskRule,
   AgentJournalApprovalSubject
@@ -9,7 +10,9 @@ import type {
 // structured permission event on mobile. We detect them heuristically so the
 // native chat can render tappable Allow/Deny buttons instead of forcing the
 // user to type into the composer. Be conservative: only fire when the agent is
-// actually paused (blocked/waiting) AND the text reads like an approval ask.
+// actually paused (blocked/waiting) AND the text reads like an approval ask, and
+// only when the shared resolver allows guessing at all (no envelope, no ask, no
+// pending async question).
 
 /** A detected permission prompt, rendered as a card with tappable options.
  *  Each option's `send` is the literal string to write back to the agent
@@ -30,46 +33,30 @@ export type MobileChatPermission = {
 
 const ESCAPE = String.fromCharCode(27)
 
-/** Parse the live `agentStatus.interactivePrompt` approval envelope
- *  (`{ approval: { tool, summary } }`, emitted by the host on a PermissionRequest)
- *  into an Allow/Deny card. This is the reliable, agent-emitted signal — unlike
- *  detectAgentPermission it doesn't depend on heuristic text parsing. The default
- *  sends (number for allow, Escape for deny) match the common TUI approval prompt;
- *  detectAgentPermission still takes precedence when it can read the real numbered
- *  options from the prompt text. */
-export function parseApprovalFromStatus(
-  interactivePrompt: string | undefined | null,
+/** Labels for an approval the shared envelope reader placed. The default sends (number for
+ *  allow, Escape for deny) match the common TUI approval prompt. */
+export function mobileApprovalFromDecision(
+  decision: { tool: string; summary?: string; subject?: AgentJournalApprovalSubject },
   agent?: string
-): MobileChatPermission | null {
-  if (!interactivePrompt) {
-    return null
-  }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(interactivePrompt)
-  } catch {
-    return null
-  }
-  if (!parsed || typeof parsed !== 'object') {
-    return null
-  }
-  const approval = (parsed as { approval?: unknown }).approval
-  if (!approval || typeof approval !== 'object') {
-    return null
-  }
-  const tool = (approval as { tool?: unknown }).tool
-  if (typeof tool !== 'string' || tool.length === 0) {
-    return null
-  }
-  const summary = (approval as { summary?: unknown }).summary
+): MobileChatPermission {
   return {
-    title: `Allow ${tool}?`,
-    detail: typeof summary === 'string' && summary.length > 0 ? summary : undefined,
+    title: `Allow ${decision.tool}?`,
+    ...(decision.summary ? { detail: decision.summary } : {}),
+    ...(decision.subject ? { subject: decision.subject } : {}),
     options: [
       { label: 'Allow', send: nativeChatApprovalAcceptKey(agent) },
       { label: 'Deny', send: ESCAPE }
     ]
   }
+}
+
+/** The approval card an envelope describes, if it is one (parsed by the shared reader). */
+export function parseApprovalFromStatus(
+  interactivePrompt: string | undefined | null,
+  agent?: string
+): MobileChatPermission | null {
+  const envelope = parseNativeChatDecisionEnvelope(interactivePrompt)
+  return envelope.kind === 'approval' ? mobileApprovalFromDecision(envelope, agent) : null
 }
 
 type PermissionInput = {

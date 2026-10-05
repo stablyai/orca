@@ -18197,7 +18197,16 @@
       "structuredSessionHostDeclined": "Opened {{value0}} in a terminal",
       "structuredSessionHostDeclinedDescription": "This server can't run a {{value0}} chat in this workspace.",
       "structuredSessionHostUnreachable": "Could not reach {{value0}}",
-      "structuredSessionHostUnreachableDescription": "Orca did not open a {{value0}} chat. Check the connection to the server and try again."
+      "structuredSessionHostUnreachableDescription": "Orca did not open a {{value0}} chat. Check the connection to the server and try again.",
+      "decision": {
+        "unsupported": "This request needs a newer version of Orca."
+      },
+      "asyncQuestions": {
+        "dismiss": "Dismiss",
+        "more": "{{count}} more questions in the transcript",
+        "more_one": "{{count}} more question in the transcript",
+        "more_other": "{{count}} more questions in the transcript"
+      }
     },
     "tab": {
       "bar": {

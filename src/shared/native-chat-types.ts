@@ -17,6 +17,7 @@ import type {
   AgentJournalProducerLinkage
 } from './agent-session-journal-types'
 import type { AgentType } from './agent-status-types'
+import type { CodexAsyncQuestion } from './codex-async-question-item'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 
 export type { AgentType }
@@ -58,6 +59,15 @@ export type NativeChatTextBlock = {
   }
   /** On a status line that reports a failure: what failed, typed. */
   failure?: AgentSessionFailureFact
+  /** Non-blocking questions this message asked (Codex `request_user_input_async`). Hosts
+   *  derive the pending set from it; clients read only that published set. */
+  asyncQuestions?: NativeChatMessageAsyncQuestions
+}
+
+export type NativeChatMessageAsyncQuestions = {
+  /** The provider's item id (Codex: the asking call's id), when the record carries one. */
+  providerItemId?: string
+  questions: CodexAsyncQuestion[]
 }
 
 /** A tool invocation by the agent. `input` is the (already-serialized) tool

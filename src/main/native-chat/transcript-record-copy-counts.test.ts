@@ -140,4 +140,32 @@ describe('native transcript record copies', () => {
     expect(state.pendingBytes).toBe(0)
     expect(state.offset).toBe(Buffer.byteLength(complete) + next.length)
   })
+
+  it('keeps only the head of a record too large to read, never a join of all of it', async () => {
+    const big = `{"type":"event_msg","payload":{"text":"${'x'.repeat(3 * 1024 * 1024)}"}}`
+    const head = big.slice(0, 4096)
+    // Several appends, so the record arrives as many parts before it crosses the cap.
+    const path = await transcript('')
+    for (let at = 0; at < big.length; at += 256 * 1024) {
+      await appendFile(path, big.slice(at, at + 256 * 1024))
+    }
+    await appendFile(path, '\n{"after":true}\n')
+    const heads: Buffer[] = []
+    const messages = await readIncrementalTranscriptMessages(
+      path,
+      createIncrementalTranscriptState(),
+      decode,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      (observed) => heads.push(observed)
+    )
+    expect(heads.map((observed) => observed.toString('utf8'))).toEqual([head])
+    // The head owns its bytes rather than viewing a multi-megabyte join.
+    expect(heads[0]!.buffer.byteLength).toBeLessThanOrEqual(64 * 1024)
+    expect(messages.map((message) => message.blocks)).toEqual([
+      [{ type: 'text', text: '{"after":true}' }]
+    ])
+  })
 })

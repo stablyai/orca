@@ -1,7 +1,7 @@
 // The structured composer's one send seam: a slash command dispatches as a
 // conversation command, and everything else goes out as an
 // `agentSession.send` — carrying `delivery: 'queue-if-active'` only when the
-// host advertises the queue.
+// host advertises the queue and the caller didn't ask to reach the running turn.
 
 import { useCallback } from 'react'
 import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
@@ -26,6 +26,13 @@ export type StructuredMobileSendAttachment = StructuredAgentSessionAttachment & 
   contentFingerprint?: string
 }
 
+export type StructuredMobileSendOptions = {
+  /** False: deliver into the running turn (an async question answer), never as a queued draft. */
+  queue?: boolean
+  /** Told the journal submission an accepted send became. */
+  onAccepted?: (clientMessageId: string) => void
+}
+
 export function useMobileStructuredSendWithOutcome(args: {
   agent: string | null
   callerIdentity: string
@@ -45,7 +52,8 @@ export function useMobileStructuredSendWithOutcome(args: {
   text: string,
   images?: string[],
   deadline?: number,
-  attachments?: readonly StructuredMobileSendAttachment[]
+  attachments?: readonly StructuredMobileSendAttachment[],
+  options?: StructuredMobileSendOptions
 ) => Promise<MobileNativeChatSendOutcome> {
   const {
     agent,
@@ -65,7 +73,8 @@ export function useMobileStructuredSendWithOutcome(args: {
       text: string,
       images?: string[],
       deadline?: number,
-      attachments?: readonly StructuredMobileSendAttachment[]
+      attachments?: readonly StructuredMobileSendAttachment[],
+      options?: StructuredMobileSendOptions
     ): Promise<MobileNativeChatSendOutcome> => {
       const currentFence = stateRef.current.fence
       if (!client || !sessionId || !enabled || currentFence === null) {
@@ -116,9 +125,12 @@ export function useMobileStructuredSendWithOutcome(args: {
         expectedRuntimeFence: currentFence,
         text,
         attachments: sendAttachments,
-        ...(queueCapable ? { delivery: 'queue-if-active' as const } : {}),
+        ...(queueCapable && options?.queue !== false
+          ? { delivery: 'queue-if-active' as const }
+          : {}),
         deadline,
-        onError: onSendError
+        onError: onSendError,
+        ...(options?.onAccepted ? { onAccepted: options.onAccepted } : {})
       })
     },
     [

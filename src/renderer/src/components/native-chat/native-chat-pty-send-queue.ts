@@ -12,6 +12,8 @@ export type NativeChatPtySendQueueHandle = {
   settled: Promise<void>
   bodyStarted: () => boolean
   finished: () => boolean
+  /** Whether the completing write (Enter) fired; false after any cancel that beat it. */
+  submitted: () => boolean
 }
 
 export type EnqueueNativeChatPtySendOptions = {
@@ -47,6 +49,7 @@ export function resetNativeChatPtySendQueuesForTests(): void {
     }
   }
   ptyQueues.clear()
+  optionHolds.clear()
 }
 
 /** Abort every in-flight/queued chat send on this PTY (clears delayed Enter). */
@@ -58,6 +61,32 @@ export function cancelNativeChatPtySends(ptyId: string): void {
   for (const handle of state.handles) {
     handle.cancel()
   }
+}
+
+// PTYs an option command (model switch, /effort) currently owns, with a count per PTY.
+const optionHolds = new Map<string, number>()
+
+/** Marks `ptyId` as owned by an option command until the returned release runs. */
+export function holdNativeChatPtyForOption(ptyId: string): () => void {
+  optionHolds.set(ptyId, (optionHolds.get(ptyId) ?? 0) + 1)
+  let released = false
+  return () => {
+    if (released) {
+      return
+    }
+    released = true
+    const remaining = (optionHolds.get(ptyId) ?? 1) - 1
+    if (remaining > 0) {
+      optionHolds.set(ptyId, remaining)
+    } else {
+      optionHolds.delete(ptyId)
+    }
+  }
+}
+
+/** Whether an option command owns `ptyId`: a message sent now could land in its picker. */
+export function nativeChatPtyHeldForOption(ptyId: string): boolean {
+  return optionHolds.has(ptyId)
 }
 
 /** Wait until every chat sequence on this PTY has finished or been cancelled. */
@@ -183,7 +212,8 @@ export function enqueueNativeChatPtySend(
     settleAfterMs,
     settled,
     bodyStarted: () => bodyStarted,
-    finished: () => finished
+    finished: () => finished,
+    submitted: () => submitted
   }
   state.handles.add(handle)
   return handle

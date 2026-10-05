@@ -5,6 +5,7 @@ import {
   type StructuredAgentSessionAttachment,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
+import type { StructuredAgentSessionOutboxOrigin } from '../../../../shared/structured-agent-session-outbox-origin'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
@@ -200,7 +201,8 @@ export function appendStructuredAgentSessionOutboxMessage(
   sessionId: string,
   text: string,
   attachments: readonly StructuredAgentSessionAttachment[] = [],
-  source?: 'launch'
+  source?: 'launch',
+  origin?: StructuredAgentSessionOutboxOrigin
 ): StructuredAgentSessionOutboxEntry | null {
   const entry = {
     ...createStructuredAgentSessionOutboxEntry({
@@ -210,7 +212,8 @@ export function appendStructuredAgentSessionOutboxMessage(
       attachments,
       queuedAt: Date.now()
     }),
-    ...(source ? { source } : {})
+    ...(source ? { source } : {}),
+    ...(origin ? { origin } : {})
   }
   return commitStructuredAgentSessionOutbox(
     sessionId,

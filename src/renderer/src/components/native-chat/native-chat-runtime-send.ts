@@ -43,6 +43,10 @@ export type NativeChatSendHandle = {
   settleAfterMs: number
   /** Actual completion, which can outlive the nominal schedule if the renderer stalls. */
   settled?: Promise<void>
+  /** Whether the completing write (Enter) fired, when the send path tracks it. */
+  submitted?: () => boolean
+  /** Whether Enter was handed to the runtime, acknowledged or not (observed sends). */
+  completingWriteIssued?: () => boolean
 }
 
 type RuntimeSettings = ReturnType<typeof getSettingsForAgentTabRuntimeOwner>

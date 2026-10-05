@@ -129,6 +129,64 @@ describe('structured agent-session read transport generations', () => {
     }
   })
 
+  it("drops a held async-question set when a resumed host's first frame doesn't carry one", async () => {
+    vi.useFakeTimers()
+    try {
+      let state = EMPTY_STRUCTURED_AGENT_SESSION
+      const transport = startStructuredAgentSessionReadTransport({
+        applyEvent: (event) => {
+          state = reduceStructuredAgentSession(state, { type: 'event', event })
+        },
+        applyError: vi.fn(),
+        getCursor: () => state.cursor,
+        onHistoryReadInvalidated: () => undefined,
+        sessionId: 'session-a',
+        target
+      })
+      const ready = { state: 'ready' as const, questions: [{ key: 'k', index: 0, title: 'A?' }] }
+      const batch = (sequence: number, extra = {}): AgentSessionSubscribeEvent => ({
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence },
+          items: [],
+          removedItemIds: [],
+          submissions: []
+        },
+        ...extra
+      })
+      const first = snapshot(100)
+      attempts[0].onEvent(first.type === 'snapshot' ? { ...first, asyncQuestions: ready } : first)
+      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+      await flushPromises()
+      await vi.advanceTimersByTimeAsync(100)
+      expect(state.asyncQuestions).toEqual(ready)
+
+      // Resumed against a host that publishes the set: later batches without it keep it.
+      attempts[0].onClose()
+      await vi.advanceTimersByTimeAsync(1_000)
+      attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
+      await flushPromises()
+      attempts[1].onEvent(batch(101, { asyncQuestions: ready }))
+      await vi.advanceTimersByTimeAsync(100)
+      attempts[1].onEvent(batch(102))
+      await vi.advanceTimersByTimeAsync(100)
+      expect(state.asyncQuestions).toEqual(ready)
+
+      // Resumed against a host that never publishes it (a downgrade): the held set goes.
+      attempts[1].onClose()
+      await vi.advanceTimersByTimeAsync(1_000)
+      attempts[2].closed.resolve({ unsubscribe: attempts[2].unsubscribe })
+      await flushPromises()
+      attempts[2].onEvent(batch(103))
+      await vi.advanceTimersByTimeAsync(100)
+      expect(state.asyncQuestions).toEqual({ state: 'absent' })
+      transport.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('ignores opening frames after disposal and a replacement transport starts', async () => {
     const applyEvent = vi.fn()
     const applyError = vi.fn()

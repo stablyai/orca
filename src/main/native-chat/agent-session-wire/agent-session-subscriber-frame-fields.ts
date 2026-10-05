@@ -9,17 +9,29 @@ import type {
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
+import {
+  nativeChatAsyncQuestionsFieldBytes,
+  type NativeChatAsyncQuestionsField
+} from '../../../shared/native-chat-async-questions'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 export type SubscriberFieldState = {
   sessionId: string
   commands?: AgentSessionSlashCommand[] | null
   /** The last queue publication actually SENT. */
   queuePublication?: QueuePublication
+  /** The last pending async-question set actually SENT. */
+  asyncQuestions?: NativeChatAsyncQuestionsField
 }
 
 export type SubscriberFieldHooks = {
   readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
   readQueuePublication?: (sessionId: string) => QueuePublication | undefined
+  /** Host-derived from the whole journal, so it never depends on the page a client holds. */
+  readAsyncQuestions?: (
+    sessionId: string,
+    journal: AgentSessionJournal
+  ) => NativeChatAsyncQuestionsField | undefined
 }
 
 export type SubscriberFrame = {
@@ -27,6 +39,30 @@ export type SubscriberFrame = {
   commands: AgentSessionSlashCommand[] | null
   attachedQueued: boolean
   queued: QueuePublication | undefined
+  /** Set when this frame carries the async-question set. */
+  asyncQuestions: NativeChatAsyncQuestionsField | undefined
+}
+
+// The published field is identity-stable while the set is unchanged, so its size is measured once.
+const fieldBytes = new WeakMap<NativeChatAsyncQuestionsField, number>()
+
+/** Bytes the async-question field takes from a frame's history page: its actual size, since
+ *  only these frames carry it (other pages keep the whole budget). */
+export function asyncQuestionsFrameReserveBytes(
+  hooks: SubscriberFieldHooks,
+  sessionId: string,
+  journal: AgentSessionJournal
+): number {
+  const field = hooks.readAsyncQuestions?.(sessionId, journal)
+  if (!field) {
+    return 0
+  }
+  let bytes = fieldBytes.get(field)
+  if (bytes === undefined) {
+    bytes = nativeChatAsyncQuestionsFieldBytes(field)
+    fieldBytes.set(field, bytes)
+  }
+  return bytes
 }
 
 /** Builds the frame to emit; the caller stores the returned refs only after the
@@ -35,7 +71,8 @@ export function buildSubscriberFrame(
   hooks: SubscriberFieldHooks,
   subscriber: SubscriberFieldState,
   event: AgentSessionSubscribeEvent,
-  withholdQueued: boolean
+  withholdQueued: boolean,
+  journal?: AgentSessionJournal
 ): SubscriberFrame {
   const commands = hooks.readCommands?.(subscriber.sessionId) ?? null
   const includeCommands =
@@ -49,17 +86,30 @@ export function buildSubscriberFrame(
     queued !== undefined &&
     event.type !== 'end' &&
     (event.type !== 'batch' || queued !== subscriber.queuePublication)
+  // Rides with the queue publication: whole on hydration, on batches only when it changed. A
+  // subscription's first frame always carries it, even mid catch-up: a resumed client reads its
+  // absence there as a host that never publishes it.
+  const firstPublication = subscriber.asyncQuestions === undefined
+  const asyncQuestions =
+    (withholdQueued && !firstPublication) || !journal || event.type === 'end'
+      ? undefined
+      : hooks.readAsyncQuestions?.(subscriber.sessionId, journal)
+  const attachedAsync =
+    asyncQuestions !== undefined &&
+    (event.type !== 'batch' || asyncQuestions !== subscriber.asyncQuestions)
   return {
     frame: {
       ...event,
       ...(includeCommands ? { commands: commands ?? null } : {}),
       ...(attachedQueued && queued
         ? { queuedMessages: queued.queuedMessages, queuePause: queued.queuePause }
-        : {})
+        : {}),
+      ...(attachedAsync ? { asyncQuestions } : {})
     },
     commands,
     attachedQueued,
-    queued
+    queued,
+    asyncQuestions: attachedAsync ? asyncQuestions : undefined
   }
 }
 

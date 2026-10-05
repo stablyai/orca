@@ -18009,7 +18009,16 @@
       "structuredSessionHostDeclined": "{{value0}}을(를) 터미널에서 열었습니다",
       "structuredSessionHostDeclinedDescription": "이 서버는 이 워크스페이스에서 {{value0}} 채팅을 실행할 수 없습니다.",
       "structuredSessionHostUnreachable": "{{value0}}에 연결할 수 없습니다",
-      "structuredSessionHostUnreachableDescription": "Orca가 {{value0}} 채팅을 열지 않았습니다. 서버 연결을 확인하고 다시 시도하세요."
+      "structuredSessionHostUnreachableDescription": "Orca가 {{value0}} 채팅을 열지 않았습니다. 서버 연결을 확인하고 다시 시도하세요.",
+      "decision": {
+        "unsupported": "이 요청을 처리하려면 최신 버전의 Orca가 필요합니다."
+      },
+      "asyncQuestions": {
+        "dismiss": "닫기",
+        "more": "대화 기록에 질문이 {{count}}개 더 있습니다",
+        "more_one": "대화 기록에 질문이 {{count}}개 더 있습니다",
+        "more_other": "대화 기록에 질문이 {{count}}개 더 있습니다"
+      }
     },
     "tab": {
       "bar": {

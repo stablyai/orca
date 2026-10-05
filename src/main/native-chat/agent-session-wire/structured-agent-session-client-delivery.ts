@@ -1,4 +1,5 @@
 import { AgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import { readStructuredAgentSessionAsyncQuestions } from './structured-agent-session-status-journal-projection'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -57,6 +58,8 @@ export class StructuredAgentSessionClientDelivery {
       readCommands: (sessionId) => this.readCommands(sessionId),
       readQueuePublication: (sessionId) =>
         tryReadQueuePublication(sessions.get(sessionId)?.journal),
+      readAsyncQuestions: (sessionId, journal) =>
+        readStructuredAgentSessionAsyncQuestions(journal, sessions.get(sessionId)?.params.provider),
       onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal)
     })
   }

@@ -13,6 +13,11 @@ import {
   type MobileNativeChatStreamFrame
 } from './mobile-native-chat-stream-frame'
 import { structuredSessionRandomUuid } from './structured-session-operation-id'
+import {
+  NATIVE_CHAT_ASYNC_QUESTIONS_ABSENT,
+  reduceNativeChatAsyncQuestionsView,
+  type NativeChatAsyncQuestionsView
+} from '../../../src/shared/native-chat-async-questions'
 
 export type MobileNativeChatStatus =
   | 'idle'
@@ -41,6 +46,8 @@ export type MobileNativeChatSession = {
   loadingEarlier: boolean
   /** Grow the window to page in older history. */
   loadEarlier: () => void
+  /** Host-derived pending async questions for this transcript; `absent` from older hosts. */
+  asyncQuestions: NativeChatAsyncQuestionsView
 }
 
 // Small first page for a fast first paint; grows by a page as the user scrolls.
@@ -65,6 +72,11 @@ export function useMobileNativeChatSession(args: {
 }): MobileNativeChatSession {
   const { client, sourceIdentity, agent, sessionId, transcriptPath } = args
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
+  // Tagged with the transcript it came from, so a just-switched chat never shows another's set.
+  const [asyncQuestions, setAsyncQuestions] = useState<{
+    identity: string
+    view: NativeChatAsyncQuestionsView
+  }>({ identity: '', view: NATIVE_CHAT_ASYNC_QUESTIONS_ABSENT })
   const identity = encodeNativeChatTranscriptIdentity([
     sourceIdentity,
     agent,
@@ -183,6 +195,13 @@ export function useMobileNativeChatSession(args: {
           setError(applied.error)
           return
         }
+        setAsyncQuestions((current) => ({
+          identity,
+          view: reduceNativeChatAsyncQuestionsView(
+            current.identity === identity ? current.view : NATIVE_CHAT_ASYNC_QUESTIONS_ABSENT,
+            frame
+          )
+        }))
         if (frame.type === 'snapshot' && !applied.pending) {
           // A pending window has no transcript behind it, so the snapshot that
           // follows is still this subscription's base, not a reconnect replay.
@@ -322,6 +341,10 @@ export function useMobileNativeChatSession(args: {
     error,
     hasMore,
     loadingEarlier,
-    loadEarlier
+    loadEarlier,
+    asyncQuestions:
+      asyncQuestions.identity === identity
+        ? asyncQuestions.view
+        : NATIVE_CHAT_ASYNC_QUESTIONS_ABSENT
   }
 }

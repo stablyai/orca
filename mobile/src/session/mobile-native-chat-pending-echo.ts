@@ -1,4 +1,7 @@
-import { normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
+import { nativeChatAsyncAnswerEchoHolding } from '../../../src/shared/native-chat-async-answer-progress'
+import { isNoiseMessage } from '../../../src/shared/native-chat-noise'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { normalizeReconcileText, normalizedUserText } from './mobile-native-chat-draft-reconcile'
 
 export type MobileNativeChatPendingMessage = {
   id: string
@@ -6,6 +9,11 @@ export type MobileNativeChatPendingMessage = {
   expectedOccurrence: number
   /** Local preview URIs carried by the send for its optimistic echo. */
   images?: string[]
+  /** An async question card's answers, by question key: the card holds them while this waits. */
+  asyncAnswers?: Readonly<Record<string, string>>
+  /** With `asyncAnswers`: normalized texts of the echoes still waiting when it was sent, whose
+   *  rows may land after it without saying anything about it. */
+  queuedAhead?: readonly string[]
   baselineTailMessageId: string | null
   /** Whether the transcript this baseline was captured from was already this
    *  session's own history. A send issued mid-hydration is captured unresolved
@@ -46,7 +54,8 @@ export function appendMobileNativeChatPending(
   id: string,
   origin: MobileNativeChatSendOrigin,
   text: string,
-  images?: string[]
+  images?: string[],
+  asyncAnswers?: Readonly<Record<string, string>>
 ): PendingByKey {
   const current = previous[key] ?? []
   // Count outstanding repeats with the same normalized key.
@@ -73,10 +82,40 @@ export function appendMobileNativeChatPending(
             : origin.baselineOccurrences + earlierOutstanding + 1,
         baselineTailMessageId: origin.baselineTailMessageId,
         baselineResolved: origin.baselineResolved,
-        ...(images?.length ? { images } : {})
+        ...(images?.length ? { images } : {}),
+        ...(asyncAnswers
+          ? {
+              asyncAnswers,
+              queuedAhead: current.map((pending) => normalizeReconcileText(pending.text))
+            }
+          : {})
       }
     ]
   }
+}
+
+/** Whether an answer echo still holds its answers: until its row lands, or until the agent
+ *  records a user row that neither it nor an echo queued ahead of it accounts for. Without a
+ *  known baseline in `messages` nothing can be read, so it keeps holding. */
+export function mobileNativeChatAnswerEchoHolding(
+  echo: MobileNativeChatPendingMessage,
+  messages: readonly NativeChatMessage[]
+): boolean {
+  const tail =
+    echo.baselineTailMessageId === null
+      ? -1
+      : messages.findIndex((message) => message.id === echo.baselineTailMessageId)
+  if (!echo.baselineResolved || (echo.baselineTailMessageId !== null && tail === -1)) {
+    return true
+  }
+  const rows = messages.slice(tail + 1).flatMap((message) => {
+    const text = isNoiseMessage(message) ? null : normalizedUserText(message)
+    return text ? [text] : []
+  })
+  return nativeChatAsyncAnswerEchoHolding(
+    { text: normalizeReconcileText(echo.text), queuedAhead: echo.queuedAhead },
+    rows
+  )
 }
 
 export function mergeWaitingSessionPending(

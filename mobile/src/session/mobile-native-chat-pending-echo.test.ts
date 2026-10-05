@@ -6,6 +6,7 @@ import {
 } from './mobile-native-chat-draft-reconcile'
 import {
   appendMobileNativeChatPending,
+  mobileNativeChatAnswerEchoHolding,
   type MobileNativeChatSendOrigin
 } from './mobile-native-chat-pending-echo'
 import { retireLandedMobileNativeChatPending } from './mobile-native-chat-pending-retirement'
@@ -139,5 +140,40 @@ describe('mobile pending echoes whose text normalizes to nothing', () => {
 
     expect(pending[KEY]).toHaveLength(1)
     expect(pending[KEY]?.[0]?.expectedOccurrence).toBe(1)
+  })
+})
+
+describe('an async answer echo', () => {
+  const KEY = 'host\0worktree\0tab\0session'
+
+  it('records the echoes still waiting ahead of it, and is let go only by a row they and it do not account for', () => {
+    const baseline = [userTurn('m1', 'go')]
+    const ahead = appendMobileNativeChatPending(
+      {},
+      KEY,
+      'p1',
+      sendOrigin('do this', baseline),
+      'do this'
+    )
+    const withAnswer = appendMobileNativeChatPending(
+      ahead,
+      KEY,
+      'p2',
+      sendOrigin('Question: a?\nAnswer: one', baseline),
+      'Question: a?\nAnswer: one',
+      undefined,
+      { a: 'one' }
+    )
+    const answer = withAnswer[KEY]![1]!
+    expect(answer.queuedAhead).toEqual(['do this'])
+    expect(ahead[KEY]![0]!.queuedAhead).toBeUndefined()
+    expect(
+      mobileNativeChatAnswerEchoHolding(answer, [...baseline, userTurn('m2', 'do this')])
+    ).toBe(true)
+    expect(
+      mobileNativeChatAnswerEchoHolding(answer, [...baseline, userTurn('m2', 'something else')])
+    ).toBe(false)
+    // A baseline the loaded page no longer holds can't be read: keep holding.
+    expect(mobileNativeChatAnswerEchoHolding(answer, [userTurn('m2', 'something else')])).toBe(true)
   })
 })

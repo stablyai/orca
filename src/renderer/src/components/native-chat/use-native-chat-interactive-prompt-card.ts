@@ -1,17 +1,19 @@
 import { useMemo } from 'react'
 import { useAppStore } from '../../store'
-import { resolveNativeChatAsk } from '../../../../shared/native-chat-ask'
+import { NATIVE_CHAT_ASYNC_QUESTIONS_ABSENT } from '../../../../shared/native-chat-async-questions'
+import { resolveTerminalChatDecision } from '../../../../shared/native-chat-pending-decision'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
-  parseInteractivePrompt,
+  interactivePromptCardFromDecision,
   type InteractivePromptCard
 } from './native-chat-interactive-prompt'
 
 /**
- * The prompt a terminal-backed pane can draw as a card: a tool approval from the
- * live status, else a question from the live status or, failing that, from the
- * transcript's unresolved ask (headless host, relay gap, replay, reconnect — a
- * pane parked on a selector must not take the next message as its answer, #11761).
+ * The prompt a terminal-backed pane can draw as a card, from the shared resolver: an
+ * approval or unplaceable request only while the agent waits (STA-3144), else a live
+ * question while it waits or, failing that, the transcript's unresolved ask (headless
+ * host, relay gap, replay, reconnect — a pane parked on a selector must not take the
+ * next message as its answer, #11761).
  */
 export function useNativeChatInteractivePromptCard({
   paneKey,
@@ -33,21 +35,16 @@ export function useNativeChatInteractivePromptCard({
     const entry = s.agentStatusByPaneKey[paneKey]
     return entry?.interactivePrompt ? (entry.toolName ?? null) : null
   })
+  const state = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.state)
   const agent = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.agentType)
   return useMemo(() => {
-    const statusCard = parseInteractivePrompt(
-      interactivePrompt,
-      interactiveToolName ?? undefined,
-      agent
-    )
-    if (statusCard?.kind === 'approval') {
-      return statusCard
-    }
-    const prompt = resolveNativeChatAsk({
-      liveAsk: statusCard?.prompt ?? null,
+    const { decision } = resolveTerminalChatDecision({
+      status: { state, interactivePrompt, toolName: interactiveToolName },
       messages,
-      transcriptSettled
+      transcriptSettled,
+      // Desktop runs no prose heuristics, so the async set does not gate anything here.
+      asyncQuestions: NATIVE_CHAT_ASYNC_QUESTIONS_ABSENT
     })
-    return prompt ? { kind: 'question' as const, prompt } : null
-  }, [interactivePrompt, interactiveToolName, agent, messages, transcriptSettled])
+    return interactivePromptCardFromDecision(decision, agent)
+  }, [state, interactivePrompt, interactiveToolName, agent, messages, transcriptSettled])
 }

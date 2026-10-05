@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { NATIVE_CHAT_ASYNC_QUESTIONS_ABSENT } from '../../../../shared/native-chat-async-questions'
 import { activeStructuredAgentSessionTurnId } from '../../../../shared/structured-agent-session-projection'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../../shared/structured-agent-session-main-agent-working'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
@@ -46,6 +47,9 @@ export function useStructuredAgentSessionTransportState(
     // null = no drafts or no claim; the projection treats both as an empty list.
     queuedMessages: (enabled ? state.queuedMessages : null) ?? null,
     queuePause: (enabled ? state.queuePause : null) ?? null,
+    /** Absent from older hosts (and while disabled): the card then shows nothing. */
+    asyncQuestions:
+      (enabled ? state.asyncQuestions : undefined) ?? NATIVE_CHAT_ASYNC_QUESTIONS_ABSENT,
     backgroundTasks: structuredSessionBackgroundTasksView(
       enabled ? state.backgroundTasks : null,
       turnId

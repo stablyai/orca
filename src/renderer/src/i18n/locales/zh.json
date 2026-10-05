@@ -17974,7 +17974,16 @@
       "structuredSessionHostDeclined": "已在终端中打开 {{value0}}",
       "structuredSessionHostDeclinedDescription": "此服务器无法在此工作区中运行 {{value0}} 聊天。",
       "structuredSessionHostUnreachable": "无法连接到 {{value0}}",
-      "structuredSessionHostUnreachableDescription": "Orca 未打开 {{value0}} 聊天。请检查与服务器的连接，然后重试。"
+      "structuredSessionHostUnreachableDescription": "Orca 未打开 {{value0}} 聊天。请检查与服务器的连接，然后重试。",
+      "decision": {
+        "unsupported": "此请求需要更新版本的 Orca。"
+      },
+      "asyncQuestions": {
+        "dismiss": "忽略",
+        "more": "记录中还有 {{count}} 个问题",
+        "more_one": "记录中还有 {{count}} 个问题",
+        "more_other": "记录中还有 {{count}} 个问题"
+      }
     },
     "tab": {
       "bar": {

@@ -18,8 +18,9 @@ vi.mock('./mobile-native-chat-send', () => ({
   MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS: 15_000,
   MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS: 2_000
 }))
+const healStaleInput = vi.fn()
 vi.mock('./mobile-native-chat-stale-input', () => ({
-  healMobileNativeChatStaleInput: () => Promise.resolve(true)
+  healMobileNativeChatStaleInput: (...args: unknown[]) => healStaleInput(...args)
 }))
 
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
@@ -29,6 +30,7 @@ import {
   resetMobileNativeChatTerminalWritesForTests
 } from './mobile-native-chat-terminal-write-lock'
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
+import { formatAsyncQuestionReply } from '../../../src/shared/native-chat-async-questions'
 
 type Send = ReturnType<typeof useMobileNativeChatMessageSend>
 
@@ -93,6 +95,8 @@ describe('useMobileNativeChatMessageSend', () => {
     clearInputWrite.mockResolvedValue(true)
     typeCommandWithOutcome.mockReset()
     typeCommandWithOutcome.mockResolvedValue('accepted')
+    healStaleInput.mockReset()
+    healStaleInput.mockResolvedValue(true)
     acceptSend.mockReset()
     captureSendOrigin.mockClear()
     clearDraftForSend.mockReset()
@@ -378,11 +382,11 @@ describe('useMobileNativeChatMessageSend', () => {
     // An image paste sequence is mid-flight into the same PTY.
     expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
 
-    let result: boolean | undefined
+    let result: string | undefined
     await act(async () => {
       result = await api!.answerQuestion('1')
     })
-    expect(result).toBe(false)
+    expect(result).toBe('rejected')
     expect(sendWithOutcome).not.toHaveBeenCalled()
     expect(onSendError).toHaveBeenCalledWith('Answer not sent')
 
@@ -390,7 +394,7 @@ describe('useMobileNativeChatMessageSend', () => {
     await act(async () => {
       result = await api!.answerQuestion('1')
     })
-    expect(result).toBe(true)
+    expect(result).toBe('accepted')
     // The answer released its own hold on the way out.
     expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
     releaseMobileNativeChatTerminalWrite('term')
@@ -444,4 +448,92 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(sendWithOutcome).not.toHaveBeenCalled()
     expect(restoreRejectedDraft.mock.calls[0]![1]).toBe(draft)
   })
+
+  it('answers an async question as an ordinary message, never a typed Codex command', async () => {
+    mount(() => null, 'codex')
+    let result: string | undefined
+    await act(async () => {
+      result = await api!.answerQuestion(
+        formatAsyncQuestionReply([{ title: '/model', answer: 'gpt-5' }])
+      )
+    })
+    expect(result).toBe('accepted')
+    expect(typeCommandWithOutcome).not.toHaveBeenCalled()
+    expect(sentArgs().text).toBe('Question: /model\nAnswer: gpt-5')
+    expect(clearArgs().clearInput).toBe('\x15')
+    expect(onCommandSend).not.toHaveBeenCalled()
+    expect(clearDraftForSend).not.toHaveBeenCalled()
+  })
+
+  it('heals an orphaned image paste before clearing the line or writing the answer', async () => {
+    mount(() => null, 'codex')
+    await act(async () => {
+      await api!.answerQuestion('Question: Color?\nAnswer: Red')
+    })
+    expect(healStaleInput).toHaveBeenCalledWith(expect.objectContaining({ terminal: 'term' }))
+    const healedAt = healStaleInput.mock.invocationCallOrder[0]!
+    expect(healedAt).toBeLessThan(clearInputWrite.mock.invocationCallOrder[0]!)
+    expect(healedAt).toBeLessThan(sendWithOutcome.mock.invocationCallOrder[0]!)
+  })
+
+  it('sends nothing when the orphaned paste cannot be healed', async () => {
+    healStaleInput.mockResolvedValue(false)
+    mount(() => null, 'codex')
+    let result: string | undefined
+    await act(async () => {
+      result = await api!.answerQuestion('Question: Color?\nAnswer: Red')
+    })
+    expect(result).toBe('rejected')
+    expect(clearInputWrite).not.toHaveBeenCalled()
+    expect(sendWithOutcome).not.toHaveBeenCalled()
+    expect(clearDraftForSend).not.toHaveBeenCalled()
+    expect(restoreRejectedDraft).not.toHaveBeenCalled()
+    // The write lock is released for the next send.
+    expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
+    releaseMobileNativeChatTerminalWrite('term')
+  })
+
+  // Composer images live in the image-attachments hook, whose send is the only path that
+  // forwards them; an answer carries none and echoes without image previews.
+  it('carries no composer attachments with an answer', async () => {
+    mount(() => null, 'codex')
+    await act(async () => {
+      await api!.answerQuestion('Question: Color?\nAnswer: Red')
+    })
+    expect(acceptSend).toHaveBeenCalledWith(
+      expect.anything(),
+      'Question: Color?\nAnswer: Red',
+      undefined,
+      undefined
+    )
+  })
+
+  it('carries an async question card’s answers on the answer’s echo', async () => {
+    mount(() => null, 'codex')
+    await act(async () => {
+      await api!.answerQuestion('Question: Color?\nAnswer: Red', { color: 'Red' })
+    })
+    expect(acceptSend).toHaveBeenCalledWith(
+      expect.anything(),
+      'Question: Color?\nAnswer: Red',
+      undefined,
+      { color: 'Red' }
+    )
+  })
+
+  it.each(['unknown', 'rejected'] as const)(
+    'returns %s honestly from an answer and leaves the draft alone',
+    async (outcome) => {
+      sendWithOutcome.mockResolvedValue(outcome)
+      mount(() => null, 'codex')
+      let result: string | undefined
+      await act(async () => {
+        result = await api!.answerQuestion('Question: Color?\nAnswer: Red')
+      })
+      expect(result).toBe(outcome)
+      expect(clearDraftForSend).not.toHaveBeenCalled()
+      expect(restoreRejectedDraft).not.toHaveBeenCalled()
+      expect(holdUnconfirmedSend).toHaveBeenCalledTimes(outcome === 'unknown' ? 1 : 0)
+    }
+  )
 })

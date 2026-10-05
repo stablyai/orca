@@ -7,7 +7,11 @@ import {
 } from './native-chat-composer-target'
 import { pushHistory, type HistoryState } from './native-chat-composer-state'
 import { sendNativeChatMessageVerified, typeNativeChatCommand } from './native-chat-runtime-send'
-import { cancelNativeChatPtySends, waitForNativeChatPtyIdle } from './native-chat-pty-send-queue'
+import {
+  cancelNativeChatPtySends,
+  holdNativeChatPtyForOption,
+  waitForNativeChatPtyIdle
+} from './native-chat-pty-send-queue'
 import {
   createClaudeModelSwitchConfirmationObserver,
   type ClaudeModelSwitchConfirmationObserver
@@ -58,6 +62,8 @@ export function useNativeChatSessionOptionCommand(args: {
       activeSendsRef.current.add(sendController)
       // Why: block composer chat sends for the whole drain+observe+verify window.
       setIsDispatching(true)
+      // Why: the async question card sends outside this composer and must see the hold too.
+      const releasePty = holdNativeChatPtyForOption(target.ptyId)
       let observer: ClaudeModelSwitchConfirmationObserver | null = null
       try {
         // Why: chat sends keep a delayed Enter for 500ms. Drain them *before*
@@ -116,6 +122,7 @@ export function useNativeChatSessionOptionCommand(args: {
         const outcome = observer ? await observer.result : undefined
         return { outcome }
       } finally {
+        releasePty()
         activeSendsRef.current.delete(sendController)
         setIsDispatching(activeSendsRef.current.size > 0)
         if (observer) {

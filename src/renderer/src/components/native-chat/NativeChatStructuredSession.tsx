@@ -4,6 +4,12 @@ import { dispatchStructuredAgentSessionComposerCommand } from '../../../../share
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
+import { NativeChatAsyncQuestionsCard } from './NativeChatAsyncQuestionsCard'
+import { resolveStructuredSessionDecision } from '../../../../shared/native-chat-pending-decision'
+import { structuredApprovalCard } from './structured-native-chat-decision'
+import { unsupportedChatApproval } from './native-chat-interactive-prompt'
+import { useStructuredNativeChatAsyncQuestions } from './use-structured-native-chat-async-questions'
+import { nativeChatAsyncCallsFolded } from '../../../../shared/native-chat-async-questions'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatLoadingCue } from './NativeChatLoadingCue'
@@ -135,24 +141,20 @@ export function NativeChatStructuredSession(
     rootRef,
     { sessionId: props.sessionId, isVisible: props.isVisible }
   )
-  const prompt = controller.prompts[0] ?? null
-  const approvalBody = prompt?.body.kind === 'approval' ? prompt.body : null
-  const approval = approvalBody
-    ? {
-        title: approvalBody.title,
-        ...(approvalBody.displayName ? { displayName: approvalBody.displayName } : {}),
-        ...(approvalBody.description ? { description: approvalBody.description } : {}),
-        ...(approvalBody.decisionReason ? { decisionReason: approvalBody.decisionReason } : {}),
-        ...(approvalBody.blockedPath ? { blockedPath: approvalBody.blockedPath } : {}),
-        ...(approvalBody.matchedAskRule ? { matchedAskRule: approvalBody.matchedAskRule } : {}),
-        ...(approvalBody.subject ? { subject: approvalBody.subject } : {}),
-        ...(approvalBody.detail ? { detail: approvalBody.detail } : {}),
-        options: approvalBody.options.map((option) => ({
-          label: option.label,
-          send: option.id
-        }))
-      }
-    : null
+  // One shared projection with the phone: first pending prompt in journal order.
+  const decision = resolveStructuredSessionDecision(controller.prompts)
+  const prompt = decision?.item ?? null
+  const approval =
+    decision?.kind === 'approval'
+      ? structuredApprovalCard(decision.item.body)
+      : decision?.kind === 'unsupported'
+        ? unsupportedChatApproval(decision.text)
+        : null
+  const asyncQuestionsCard = useStructuredNativeChatAsyncQuestions(paneKey, controller)
+  const asyncCallsFolded = useMemo(
+    () => nativeChatAsyncCallsFolded(controller.asyncQuestions),
+    [controller.asyncQuestions]
+  )
   const cancelPrompt = () => {
     if (controller.turnId && prompt) {
       void controller.cancel(controller.turnId, {
@@ -168,7 +170,7 @@ export function NativeChatStructuredSession(
     isFocusedGroup: props.isFocusedGroup,
     composerReady: prompt === null
   })
-  const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
+  const questionBody = decision?.kind === 'question' ? decision.item.body : null
   const questions = questionBody ? agentSessionPromptQuestions(questionBody) : []
   const structuredTransport = useMemo(() => {
     const threadGoal = controller.threadGoal
@@ -270,6 +272,7 @@ export function NativeChatStructuredSession(
             allowFileUriLinks={onLinkClick !== undefined}
             runtimeContext={imageRuntimeContext}
             deliveryNotices={deliveryNotices}
+            asyncCallsFolded={asyncCallsFolded}
           />
         )}
       </div>
@@ -317,7 +320,12 @@ export function NativeChatStructuredSession(
         <NativeChatApprovalCard
           key={`${prompt.itemId}:${prompt.revision}`}
           approval={approval}
-          onChoose={(optionId) => void controller.respond(prompt, { kind: 'option', optionId })}
+          onChoose={(optionId) => {
+            // An unsupported request has no options; nothing is ever approved from it.
+            if (decision?.kind === 'approval') {
+              void controller.respond(prompt, { kind: 'option', optionId })
+            }
+          }}
           onCancel={cancelPrompt}
           shouldFocus={props.isVisible && props.isFocusedGroup}
           onLinkClick={onLinkClick}
@@ -356,6 +364,7 @@ export function NativeChatStructuredSession(
           onCancel={cancelPrompt}
         />
       ) : null}
+      {prompt ? null : <NativeChatAsyncQuestionsCard model={asyncQuestionsCard} />}
       {prompt ? null : (
         <NativeChatComposer
           ref={composerRef}

@@ -4,6 +4,8 @@ import type {
   AgentJournalApprovalMatchedAskRule,
   AgentJournalApprovalSubject
 } from '../../../../shared/agent-session-journal-types'
+import { parseNativeChatDecisionEnvelope } from '../../../../shared/native-chat-decision-envelope'
+import type { NativeChatTerminalDecision } from '../../../../shared/native-chat-pending-decision'
 import {
   buildAskAnswerKeys,
   buildCodexAskAnswerKeys,
@@ -49,41 +51,31 @@ export type ChatApproval = {
 export type InteractivePromptCard =
   | { kind: 'question'; prompt: AskPrompt }
   | { kind: 'approval'; approval: ChatApproval }
+  | { kind: 'unsupported'; approval: ChatApproval }
   | null
 
 const ESCAPE = String.fromCharCode(27)
 
-/** Parse the desktop-only approval envelope; question parsing stays cross-platform. */
-export function parseApprovalFromStatus(
-  interactivePrompt: string | undefined | null,
+/** Shown, never approvable: the request's own words and one line, with no options. */
+export function unsupportedChatApproval(text: string | undefined): ChatApproval {
+  const line = translate(
+    'components.native-chat.decision.unsupported',
+    'This request needs a newer version of Orca.'
+  )
+  return text ? { title: text, description: line, options: [] } : { title: line, options: [] }
+}
+
+/** Labels for an approval decision; the parse lives in the shared envelope reader. */
+export function chatApprovalFromDecision(
+  decision: { tool: string; summary?: string; subject?: AgentJournalApprovalSubject },
   agent?: string
-): ChatApproval | null {
-  if (!interactivePrompt) {
-    return null
-  }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(interactivePrompt)
-  } catch {
-    return null
-  }
-  if (!parsed || typeof parsed !== 'object') {
-    return null
-  }
-  const approval = (parsed as { approval?: unknown }).approval
-  if (!approval || typeof approval !== 'object') {
-    return null
-  }
-  const tool = (approval as { tool?: unknown }).tool
-  if (typeof tool !== 'string' || tool.length === 0) {
-    return null
-  }
-  const summary = (approval as { summary?: unknown }).summary
+): ChatApproval {
   return {
     title: translate('components.native-chat.approval.title', 'Allow {{value0}}?', {
-      value0: tool
+      value0: decision.tool
     }),
-    detail: typeof summary === 'string' && summary.length > 0 ? summary : undefined,
+    ...(decision.summary ? { detail: decision.summary } : {}),
+    ...(decision.subject ? { subject: decision.subject } : {}),
     options: [
       {
         label: translate('components.native-chat.approval.allow', 'Allow'),
@@ -94,15 +86,37 @@ export function parseApprovalFromStatus(
   }
 }
 
+export function interactivePromptCardFromDecision(
+  decision: NativeChatTerminalDecision | null,
+  agent?: string
+): InteractivePromptCard {
+  if (!decision) {
+    return null
+  }
+  if (decision.kind === 'question') {
+    return { kind: 'question', prompt: decision.prompt }
+  }
+  if (decision.kind === 'approval') {
+    return { kind: 'approval', approval: chatApprovalFromDecision(decision, agent) }
+  }
+  return { kind: 'unsupported', approval: unsupportedChatApproval(decision.text) }
+}
+
+/** The approval card for an envelope that is an approval, else null. */
+export function parseApprovalFromStatus(
+  interactivePrompt: string | undefined | null,
+  agent?: string
+): ChatApproval | null {
+  const envelope = parseNativeChatDecisionEnvelope(interactivePrompt)
+  return envelope.kind === 'approval' ? chatApprovalFromDecision(envelope, agent) : null
+}
+
+/** The card an envelope alone describes, ungated (callers apply the paused gate). */
 export function parseInteractivePrompt(
   interactivePrompt: string | undefined | null,
   toolName?: string,
   agent?: string
 ): InteractivePromptCard {
-  const prompt = parseAskFromStatus(interactivePrompt, toolName)
-  if (prompt) {
-    return { kind: 'question', prompt }
-  }
-  const approval = parseApprovalFromStatus(interactivePrompt, agent)
-  return approval ? { kind: 'approval', approval } : null
+  const envelope = parseNativeChatDecisionEnvelope(interactivePrompt, toolName)
+  return envelope.kind === 'none' ? null : interactivePromptCardFromDecision(envelope, agent)
 }

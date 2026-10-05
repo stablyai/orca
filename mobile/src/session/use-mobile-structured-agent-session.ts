@@ -16,7 +16,11 @@ import {
   projectStructuredPermission,
   projectStructuredQuestion
 } from './mobile-structured-agent-prompts'
+import { projectUnsupportedStructuredPrompt } from './mobile-native-chat-unsupported-decision'
+import { resolveStructuredSessionDecision } from '../../../src/shared/native-chat-pending-decision'
+import { NATIVE_CHAT_ASYNC_QUESTIONS_ABSENT } from '../../../src/shared/native-chat-async-questions'
 import type { RpcClient } from '../transport/rpc-client'
+import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
@@ -34,7 +38,8 @@ import {
 import { useMobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 import {
   useMobileStructuredSendWithOutcome,
-  type StructuredMobileSendAttachment
+  type StructuredMobileSendAttachment,
+  type StructuredMobileSendOptions
 } from './use-mobile-structured-send-with-outcome'
 import {
   useMobileStructuredQueuedMessageControls,
@@ -45,6 +50,8 @@ type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
     session: MobileNativeChatSession
     isWorking: boolean
+    /** The journal's submissions: an async question answer's hold is read from its own. */
+    submissions: readonly AgentJournalSubmission[]
     turnId: string | null
     /** What labels the live turn's one indicator row. */
     turnIndicator: NativeChatLiveTurnIndicator
@@ -52,7 +59,8 @@ type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions
       text: string,
       images?: string[],
       deadline?: number,
-      attachments?: readonly StructuredMobileSendAttachment[]
+      attachments?: readonly StructuredMobileSendAttachment[],
+      options?: StructuredMobileSendOptions
     ) => Promise<MobileNativeChatSendOutcome>
     cancel: () => void
     permission: MobileChatPermission | null
@@ -186,21 +194,25 @@ export function useMobileStructuredAgentSession(args: {
   const thinking = isStructuredAgentSessionThinking(state.items)
   const turnIndicator = useMemo(() => ({ thinking, activityText }), [thinking, activityText])
   const status = state.status === 'idle' ? 'idle' : state.status
-  const approvalPrompt = useMemo(
-    () => state.items.find(pendingStructuredApproval) ?? null,
+  // The shared projection: the first pending prompt in journal order, as on desktop.
+  const decision = useMemo(
+    () =>
+      resolveStructuredSessionDecision(
+        state.items.filter(
+          (item) => pendingStructuredApproval(item) || pendingStructuredQuestion(item)
+        )
+      ),
     [state.items]
   )
-  const questionPrompt = useMemo(
-    () => state.items.find(pendingStructuredQuestion) ?? null,
-    [state.items]
-  )
+  const approvalPrompt = decision?.kind === 'approval' ? decision.item : null
+  const questionPrompt = decision?.kind === 'question' ? decision.item : null
   const queued = useMobileStructuredQueuedMessageControls({
     queueCapable,
     sessionKey,
     queuedMessages,
     queuePause,
     submissions: state.submissions,
-    pendingPrompt: approvalPrompt !== null || questionPrompt !== null,
+    pendingPrompt: decision !== null,
     mutate,
     appendComposerText,
     onSendError,
@@ -241,9 +253,11 @@ export function useMobileStructuredAgentSession(args: {
       error: state.error,
       hasMore: state.hasOlder,
       loadingEarlier: loadingOlder,
-      loadEarlier
+      loadEarlier,
+      asyncQuestions: state.asyncQuestions ?? NATIVE_CHAT_ASYNC_QUESTIONS_ABSENT
     },
     isWorking: isStructuredAgentSessionMainAgentWorking(turnId, state.submissions, state.fence),
+    submissions: state.submissions,
     turnId,
     turnIndicator,
     ...turnTiming,
@@ -253,7 +267,10 @@ export function useMobileStructuredAgentSession(args: {
     },
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
       requestCancel(prompt ?? pendingStructuredPromptIdentity(stateRef.current.items)),
-    permission: projectStructuredPermission(approvalPrompt),
+    permission:
+      decision?.kind === 'unsupported'
+        ? projectUnsupportedStructuredPrompt(decision.item, decision.text)
+        : projectStructuredPermission(approvalPrompt),
     question: projectStructuredQuestion(questionPrompt, groupedDraft),
     respondPermission,
     respondQuestion,

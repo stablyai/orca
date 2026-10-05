@@ -3,6 +3,8 @@
 // user turn lands in the transcript. Kept separate from the view so the prune
 // rule (match on normalized user-message content) is unit-testable without React.
 
+import { nativeChatAsyncAnswerEchoHolding } from '../../../../shared/native-chat-async-answer-progress'
+import { isNoiseMessage } from '../../../../shared/native-chat-noise'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
@@ -16,6 +18,7 @@ import {
   nativeChatPendingMatchKey,
   nativeChatPendingMatchingAfter,
   nativeChatPendingOccurrence,
+  nativeChatUserMessageContentKey,
   selectPendingIndicesRepresentedByUserRows,
   type NativeChatGluedUserRow,
   type NativeChatUserRow
@@ -33,6 +36,11 @@ export type NativeChatPendingSend = {
   text: string
   /** Image paths that were sent through the TUI image attachment paste path. */
   imagePaths?: string[]
+  /** An async question card's answers, by question key: the card holds them while this waits. */
+  asyncAnswers?: Readonly<Record<string, string>>
+  /** With `asyncAnswers`: content keys of the sends still open when it was recorded, whose rows
+   *  may land after it without saying anything about it. */
+  queuedAhead?: readonly string[]
   /** Epoch ms when the send was issued, so the queued bubble sorts to the end. */
   sentAt: number
   /** Last authoritative transcript message visible when this send was issued.
@@ -215,6 +223,25 @@ export function prunePendingSends(
     return openIndex === -1 || !gluedRepresented.has(openIndex)
   })
   return next.length === pending.length ? pending : next
+}
+
+/** Whether an answer echo still holds its answers: until its row lands, or until the agent
+ *  records a user row that neither it nor a send queued ahead of it accounts for. */
+export function nativeChatPendingAnswerHolding(
+  entry: NativeChatPendingSend,
+  messages: readonly NativeChatMessage[]
+): boolean {
+  if (entry.delivery) {
+    return false
+  }
+  const rows = messagesAfterPendingBoundary(messages, entry).flatMap((message) => {
+    const key = isNoiseMessage(message) ? null : nativeChatUserMessageContentKey(message)
+    return key ? [key] : []
+  })
+  return nativeChatAsyncAnswerEchoHolding(
+    { text: nativeChatPendingContentKey(entry), queuedAhead: entry.queuedAhead },
+    rows
+  )
 }
 
 /**

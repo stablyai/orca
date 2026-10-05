@@ -33,6 +33,14 @@ import { MobileNativeChatDraftEditGenerations } from './mobile-native-chat-draft
 
 export type { MobileNativeChatPendingMessage, MobileNativeChatSendOrigin }
 
+/** Echoes an accepted send; an async question answer's echo carries its answers by key. */
+export type MobileNativeChatAcceptSend = (
+  origin: MobileNativeChatSendOrigin,
+  text: string,
+  images?: string[],
+  asyncAnswers?: Readonly<Record<string, string>>
+) => void
+
 const NO_PENDING_MESSAGES: MobileNativeChatPendingMessage[] = []
 const NO_IMAGE_PREVIEWS: Record<string, string[]> = {}
 
@@ -79,7 +87,7 @@ export function useMobileNativeChatDrafts(args: {
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   /** Put the text back after a definite rejection, unless newer edits exist. */
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
-  acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
+  acceptSend: MobileNativeChatAcceptSend
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
     text: string,
@@ -209,8 +217,8 @@ export function useMobileNativeChatDrafts(args: {
     )
   }, [])
 
-  const acceptSend = useCallback(
-    (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => {
+  const acceptSend: MobileNativeChatAcceptSend = useCallback(
+    (origin, text, images, asyncAnswers) => {
       if (!origin.pendingKey && !images?.length) {
         return
       }
@@ -219,11 +227,19 @@ export function useMobileNativeChatDrafts(args: {
       const key = origin.pendingKey
       if (key) {
         setPendingBySession((previous) =>
-          appendMobileNativeChatPending(previous, key, id, origin, text, images)
+          appendMobileNativeChatPending(previous, key, id, origin, text, images, asyncAnswers)
         )
       } else {
         setPendingWaitingForSession((previous) =>
-          appendMobileNativeChatPending(previous, origin.draftKey, id, origin, text, images)
+          appendMobileNativeChatPending(
+            previous,
+            origin.draftKey,
+            id,
+            origin,
+            text,
+            images,
+            asyncAnswers
+          )
         )
       }
     },

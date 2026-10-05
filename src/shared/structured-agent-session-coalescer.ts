@@ -35,6 +35,10 @@ function mergeBatch(
       : left.queuedMessages !== undefined
         ? { queuedMessages: left.queuedMessages, queuePause: left.queuePause ?? null }
         : {}),
+    // Whole-set publication, latest wins.
+    ...(right.asyncQuestions !== undefined || left.asyncQuestions !== undefined
+      ? { asyncQuestions: right.asyncQuestions ?? left.asyncQuestions }
+      : {}),
     sessionId: right.sessionId,
     batch: {
       cursor: right.batch.cursor,

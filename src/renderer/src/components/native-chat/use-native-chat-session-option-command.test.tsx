@@ -12,6 +12,7 @@ vi.mock('./native-chat-runtime-send', () => ({
 }))
 vi.mock('./native-chat-pty-send-queue', () => ({
   cancelNativeChatPtySends: vi.fn(),
+  holdNativeChatPtyForOption: vi.fn(() => () => {}),
   waitForNativeChatPtyIdle: vi.fn()
 }))
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))

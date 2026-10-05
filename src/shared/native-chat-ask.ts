@@ -4,6 +4,7 @@ import type {
   AskQuestion,
   InteractiveQuestionParser
 } from './native-chat-ask-types'
+import { isAskUserQuestionTool } from './agent-question-answered-intent'
 import { isInterruptedStatusMessage, type NativeChatMessage } from './native-chat-types'
 
 export type { AskOption, AskPrompt, AskQuestion, InteractiveQuestionParser }
@@ -81,7 +82,21 @@ for (const name of ['AskUserQuestion', 'ask_user_question', 'askUserQuestion']) 
   QUESTION_TOOL_PARSERS.set(name, parseCanonicalQuestionsInput)
 }
 
+/** Codex's non-blocking question tools: the agent keeps working, so they are never a blocking ask. */
+export const CODEX_ASYNC_QUESTION_TOOL_NAMES: ReadonlySet<string> = new Set([
+  'request_user_input_async',
+  'send_user_message_async'
+])
+
+export function isCodexAsyncQuestionTool(toolName: string | undefined): boolean {
+  return toolName !== undefined && CODEX_ASYNC_QUESTION_TOOL_NAMES.has(toolName)
+}
+
 function parseToolInput(toolName: string | undefined, input: unknown): AskPrompt | null {
+  // Why: the canonical fallback accepts any tool name, so async calls must be refused by name.
+  if (isCodexAsyncQuestionTool(toolName)) {
+    return null
+  }
   const parser = toolName ? QUESTION_TOOL_PARSERS.get(toolName) : undefined
   return (parser ? parser(input) : null) ?? parseCanonicalQuestionsInput(input)
 }
@@ -112,6 +127,18 @@ export function parseAskFromToolInput(
     : parseToolInput(toolName, input)
 }
 
+/** Decodes JSON-string input (Codex) only for question tools, so an unrelated tool whose
+ *  string arguments happen to carry `questions` never becomes a card. */
+function parsePendingAskCall(toolName: string | undefined, input: unknown): AskPrompt | null {
+  if (typeof input !== 'string') {
+    return parseToolInput(toolName, input)
+  }
+  const isQuestionTool =
+    (toolName !== undefined && QUESTION_TOOL_PARSERS.has(toolName)) ||
+    isAskUserQuestionTool(toolName)
+  return isQuestionTool ? parseAskFromToolInput(toolName, input) : null
+}
+
 /** Resolve the newest question tool that has not received its FIFO tool result.
  *  Transcript replay parses each tool-call through the same registered-parser +
  *  canonical-shape fallback as live status, so a question tool that rendered
@@ -136,7 +163,7 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
     }
     for (const block of message.blocks) {
       if (block.type === 'tool-call') {
-        const parsed = parseToolInput(block.name, block.input)
+        const parsed = parsePendingAskCall(block.name, block.input)
         if (parsed) {
           pending = parsed
           pendingDepth = outstanding

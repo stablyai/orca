@@ -18009,7 +18009,16 @@
       "structuredSessionHostDeclined": "{{value0}} をターミナルで開きました",
       "structuredSessionHostDeclinedDescription": "このサーバーはこのワークスペースで {{value0}} チャットを実行できません。",
       "structuredSessionHostUnreachable": "{{value0}} に接続できませんでした",
-      "structuredSessionHostUnreachableDescription": "Orca は {{value0}} チャットを開きませんでした。サーバーへの接続を確認して、もう一度お試しください。"
+      "structuredSessionHostUnreachableDescription": "Orca は {{value0}} チャットを開きませんでした。サーバーへの接続を確認して、もう一度お試しください。",
+      "decision": {
+        "unsupported": "このリクエストには新しいバージョンの Orca が必要です。"
+      },
+      "asyncQuestions": {
+        "dismiss": "閉じる",
+        "more": "トランスクリプトに他に {{count}} 件の質問があります",
+        "more_one": "トランスクリプトに他に {{count}} 件の質問があります",
+        "more_other": "トランスクリプトに他に {{count}} 件の質問があります"
+      }
     },
     "tab": {
       "bar": {

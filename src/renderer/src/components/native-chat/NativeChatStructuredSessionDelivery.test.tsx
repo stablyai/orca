@@ -7,6 +7,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import React, { forwardRef, useImperativeHandle, useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import { NATIVE_CHAT_ASYNC_QUESTIONS_ABSENT } from '../../../../shared/native-chat-async-questions'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
 import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
@@ -87,6 +88,8 @@ vi.mock('./use-structured-agent-session', async () => {
         submissions: mocks.submissions,
         send: outbox.send,
         retry: outbox.retry,
+        sendAsyncAnswer: outbox.sendAsyncAnswer,
+        asyncQuestions: NATIVE_CHAT_ASYNC_QUESTIONS_ABSENT,
         isWorking: false,
         isMonitoringBackgroundTasks: mocks.monitoringBackgroundTasks,
         supportsBackgroundTaskStop: mocks.supportsBackgroundTaskStop,

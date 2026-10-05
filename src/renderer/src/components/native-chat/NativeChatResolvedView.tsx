@@ -13,6 +13,12 @@ import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 import { useNativeChatInteractivePromptCard } from './use-native-chat-interactive-prompt-card'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
+import { NativeChatAsyncQuestionsCard } from './NativeChatAsyncQuestionsCard'
+import { useNativeChatTerminalAsyncQuestions } from './use-native-chat-terminal-async-questions'
+import {
+  NATIVE_CHAT_NO_ASYNC_CALLS_FOLDED,
+  nativeChatAsyncCallsFolded
+} from '../../../../shared/native-chat-async-questions'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import { shouldClearNativeChatWorkingSuppression } from './native-chat-working-suppression'
 import { resolveNativeChatTerminalTurn } from './native-chat-terminal-turn'
@@ -173,9 +179,9 @@ export function NativeChatResolvedView({
     clearNativeChatLaunchPrompt(terminalTabId)
   }, [clearNativeChatLaunchPrompt, paneLaunchPrompt, session.messages, terminalTabId])
   const onOptimisticSend = useCallback(
-    (text: string, imagePaths?: string[]) => {
+    (text: string, imagePaths?: string[], asyncAnswers?: Readonly<Record<string, string>>) => {
       setWorkingInterrupted(false)
-      return record(text, imagePaths)
+      return record(text, imagePaths, asyncAnswers)
     },
     [record]
   )
@@ -220,6 +226,28 @@ export function NativeChatResolvedView({
     messages: sessionAfterCommandBoundaries.messages,
     transcriptSettled: session.readPhase === 'ready'
   })
+  const { model: asyncQuestionsCard, cancelPendingAnswers } = useNativeChatTerminalAsyncQuestions({
+    paneKey,
+    sessionId,
+    agent,
+    terminalTabId,
+    targetPtyId,
+    canSend,
+    view: session.asyncQuestions,
+    pending,
+    messages: session.messages,
+    recordOptimistic: onOptimisticSend,
+    optimisticOutcome: delivery
+  })
+  // The phone holding the terminal hides the card for as long as it holds it, so the rows stay.
+  const asyncCardAvailable = canSend
+  const asyncCallsFolded = useMemo(
+    () =>
+      asyncCardAvailable && session.asyncQuestions
+        ? nativeChatAsyncCallsFolded(session.asyncQuestions)
+        : NATIVE_CHAT_NO_ASYNC_CALLS_FOLDED,
+    [asyncCardAvailable, session.asyncQuestions]
+  )
 
   // The streaming preview bubble (if any) sits after the transcript but before
   // the optimistic user echoes — same order mobile uses.
@@ -298,7 +326,8 @@ export function NativeChatResolvedView({
     // the echo cache here so a cancelled prompt cannot stick as a ghost bubble.
     clear()
     interactiveSend.cancel()
-  }, [interactiveSend, clear])
+    cancelPendingAnswers()
+  }, [interactiveSend, clear, cancelPendingAnswers])
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
     fileLinkContext,
     rootRef,
@@ -366,6 +395,7 @@ export function NativeChatResolvedView({
             onLinkClick={onLinkClick}
             allowFileUriLinks={fileLinkContext !== null}
             deliveryNotices={deliveryNotices}
+            asyncCallsFolded={asyncCallsFolded}
           />
         )}
       </div>
@@ -379,6 +409,10 @@ export function NativeChatResolvedView({
         onShowingQuestionChange={setQuestionActive}
         answerInputRef={questionAnswerInputRef}
       />
+      {/* Non-blocking: never inside the blocking card's lifecycle, and the composer stays. */}
+      {promptCard === null && asyncCardAvailable ? (
+        <NativeChatAsyncQuestionsCard model={asyncQuestionsCard} />
+      ) : null}
       {/* canSend reflects the mobile presence-lock: when a mobile client holds
           the pty, the composer shows its guarded state instead of racing the
           mobile driver (R8). */}

@@ -2741,6 +2741,10 @@
         "awaitingUnnamed": "Awaiting user input",
         "questionCount": "{{value0}} questions"
       },
+      "asyncQuestions": {
+        "more_one": "{{count}} more question in the transcript",
+        "more_other": "{{count}} more questions in the transcript"
+      },
       "composer": {
         "effort": "Effort",
         "imageUnsupported": "Image paste is not supported for this agent."
