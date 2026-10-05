@@ -7426,6 +7426,18 @@ export class RelayAssignmentStore {
         [sourceCellId, targetCellId],
         'pool-default'
       )
+      // The counter is written as an absolute, so its units are read after the
+      // cell lock: a lease committed since the read above already bumped it.
+      const cellUnits = new Map(
+        (
+          await transaction.query(
+            `SELECT cell_id, SUM(request_units) AS units
+             FROM relay_assignment_activity_leases
+             WHERE cell_id IN (?, ?) GROUP BY cell_id`,
+            [sourceCellId, targetCellId]
+          )
+        ).map((row) => [text(row, 'cell_id'), integer(row, 'units')])
+      )
       const assignmentKeys = new Set(
         assignments.map((row) =>
           assignmentKey(text(row, 'user_id'), text(row, 'relay_host_id'))
@@ -7435,7 +7447,6 @@ export class RelayAssignmentStore {
         string,
         { counts: Record<AssignmentActivityKind, number>; leaseExpiresAt: number }
       >()
-      const cellUnits = new Map<string, number>()
 
       for (const lease of leases) {
         const key = assignmentKey(text(lease, 'user_id'), text(lease, 'relay_host_id'))
@@ -7451,7 +7462,6 @@ export class RelayAssignmentStore {
         current.counts[kind]++
         current.leaseExpiresAt = Math.max(current.leaseExpiresAt, integer(lease, 'expires_at'))
         assignmentCounts.set(key, current)
-        cellUnits.set(cellId, (cellUnits.get(cellId) ?? 0) + integer(lease, 'request_units'))
       }
 
       for (const row of assignments) {

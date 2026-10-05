@@ -65,7 +65,8 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   canJump,
   compactMode,
   disableMarkUnread = false,
-  showJumpAction = true
+  showJumpAction = true,
+  previewSuppressed = false
 }: {
   thread: AgentPaneThread
   selected: boolean
@@ -78,6 +79,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   compactMode: boolean
   disableMarkUnread?: boolean
   showJumpAction?: boolean
+  previewSuppressed?: boolean
 }): React.JSX.Element {
   const { taskTitle, statusLine, statusKind, needsAttention, workspaceLabel } =
     activityThreadRowCopy(thread)
@@ -89,6 +91,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
       thread={thread}
       onJumpToWorkspace={onJump}
       canJumpToWorkspace={canJump}
+      suppressed={previewSuppressed}
     >
       <div
         data-current={selected ? 'true' : undefined}

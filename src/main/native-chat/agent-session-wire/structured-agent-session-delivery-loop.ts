@@ -26,10 +26,7 @@ import {
   structuredAgentSessionStartFailure,
   type StructuredAgentSessionStartFailureCause
 } from './structured-agent-session-failure-text'
-import {
-  isStructuredAgentSessionPreviousExitUnverifiable,
-  type StructuredAgentSessionResumeOutcome
-} from './structured-agent-session-agent-start'
+import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
 import type {
   StructuredAgentSessionChildEndCause,
   StructuredAgentSessionEndedChild,
@@ -42,10 +39,6 @@ import {
 } from './structured-agent-session-start-failure-row'
 import { failedProviderChildStart } from './structured-agent-session-provider-child'
 import { handOverSubmission } from './structured-agent-session-turns'
-import {
-  recordStructuredAgentSessionWindDownWait,
-  structuredAgentSessionWindDownWaitHolds
-} from './structured-agent-session-wind-down-wait-row'
 import { structuredAgentSessionCommandRunning } from './structured-agent-session-command-turn'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
@@ -121,16 +114,8 @@ export class StructuredAgentSessionDeliveryLoop {
           return
         }
         if (!prepared.ok) {
-          const { refusal, diagnostic } = prepared
-          // A conversation no agent ever ran, such as a cleared chat's, failed to start, not restart.
-          const newSession = this.deps.record(sessionId)?.providerHandleChain.length === 0
-          const cause = {
-            refusal,
-            ...(diagnostic ? { diagnostic } : {}),
-            ...(newSession ? { newSession: true as const } : {})
-          }
           await this.deps.serialize(sessionId, () =>
-            this.fail(sessionId, { startKey: null, cause })
+            this.fail(sessionId, this.refusedStart(sessionId, prepared))
           )
           return
         }
@@ -188,23 +173,15 @@ export class StructuredAgentSessionDeliveryLoop {
     if (!oldest || (session.child && structuredAgentSessionCommandRunning(session.journal))) {
       return this.stop(sessionId)
     }
-    // Already waiting on a stop that could not prove its child gone: a new message retries it, and
-    // any other retry that lands wakes this loop itself, so the waiting row's own commit does not.
-    // Another operation's retry may have failed first, so the row is made sure of here too.
-    if (structuredAgentSessionWindDownWaitHolds(session)) {
-      await recordStructuredAgentSessionWindDownWait(session, sessionId, this.deps)
-      return this.stop(sessionId)
-    }
     const failedStart = startThatFailedWhileQueued(session, oldest)
     if (failedStart) {
       return this.fail(sessionId, failedStart)
     }
     const ready = await this.deps.ensureProviderChild(sessionId, oldest.clientMessageId)
-    if (!ready.ok && isStructuredAgentSessionPreviousExitUnverifiable(ready.refusal)) {
-      // The start retried that stop first and still could not prove the exit: the message waits,
-      // saying why, rather than being refused. The row is written once per unproven child.
-      await recordStructuredAgentSessionWindDownWait(session, sessionId, this.deps)
-      return this.stop(sessionId)
+    if (!ready.ok && ready.refusal.details?.reason === 'previousExitUnverifiable') {
+      // Failed in the step that was refused: a message accepted, or an exit proven, after it must
+      // not be failed for a verdict that no longer holds.
+      return this.fail(sessionId, this.refusedStart(sessionId, ready))
     }
     if (!ready.ok) {
       return ready
@@ -270,6 +247,23 @@ export class StructuredAgentSessionDeliveryLoop {
       next
     )
     return 'continue'
+  }
+
+  /** A start the session refused, as the failure every queued message it was for is rejected with. */
+  private refusedStart(
+    sessionId: string,
+    { refusal, diagnostic }: Extract<StructuredAgentSessionResumeOutcome, { ok: false }>
+  ): StartFailure {
+    // A conversation no agent ever ran, such as a cleared chat's, failed to start, not restart.
+    const newSession = this.deps.record(sessionId)?.providerHandleChain.length === 0
+    return {
+      startKey: null,
+      cause: {
+        refusal,
+        ...(diagnostic ? { diagnostic } : {}),
+        ...(newSession ? { newSession: true as const } : {})
+      }
+    }
   }
 
   private async fail(sessionId: string, failure: StartFailure): Promise<'stop'> {

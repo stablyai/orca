@@ -16672,7 +16672,6 @@
           "770d458144": "Agrupar por",
           "795cbf26e2": "Filtrar...",
           "4616ea39fd": "Ir al workspace",
-          "threadListOptionsFiltered": "Opciones de lista de hilos, filtros activos",
           "showSearch": "Mostrar búsqueda",
           "markThreadRead": "Marcar hilo como leído",
           "59b131fbd9": "Marcar hilo como no leído",
@@ -17484,6 +17483,7 @@
         "providerStartFailed": "{{agent}} se detuvo antes de terminar de iniciarse.",
         "runCommandAgain": "Vuelva a ejecutar /{{command}}.",
         "sendToTryAgain": "Envíe su mensaje para volver a intentarlo.",
+        "sendAgainToTryOnceMore": "Vuelva a enviar su mensaje para intentarlo de nuevo.",
         "couldNotStart": "{{agent}} no pudo iniciarse.",
         "couldNotRestart": "{{agent}} no pudo reiniciarse.",
         "notSignedIn": "{{agent}} no tiene la sesión iniciada con la cuenta seleccionada.",
@@ -17537,7 +17537,7 @@
         "providerRateLimited": "{{agent}} alcanzó un límite de solicitudes y está reintentando.",
         "providerRetrying": "{{agent}} tuvo un problema temporal y está reintentando.",
         "providerRetryingQuoted": "{{agent}} está reintentando: {{detail}}.",
-        "previousExitUnverifiable": "Es posible que {{agent}} siga en ejecución desde antes. Sus mensajes se enviarán cuando se detenga."
+        "previousExitUnverifiable": "No se pudo detener la ejecución anterior de {{agent}}."
       },
       "writeNotice": {
         "notDoneReadHistory": "No se pudo cargar el historial de este chat.",
@@ -17954,6 +17954,12 @@
         "subtitle": "Los archivos se añaden a tu mensaje como rutas que el agente puede leer."
       },
       "copyCode": "Copiar código",
+      "context": {
+        "unavailable": "El uso del contexto aún no se conoce. Estará disponible cuando el agente vuelva a responder.",
+        "summary": "Contexto: {{used}} / {{window}} tokens ({{percent}} %), estimado a partir de la última respuesta.",
+        "used": "Contexto: {{used}} tokens usados, estimado a partir de la última respuesta.",
+        "unreported": "El uso del contexto no está disponible para esta sesión."
+      },
       "goal": {
         "placeholder": "Describe tu objetivo y define resultados medibles para obtener mejores resultados",
         "clear": "Borrar objetivo",

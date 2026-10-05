@@ -27,6 +27,10 @@ import {
   SKILL_UPLOAD_CAPABILITY
 } from './skill-install-capability'
 export { SKILL_INSTALL_RESULT_V2_CAPABILITY } from './skill-install-capability'
+import {
+  AGENT_LAUNCH_RUNTIME_CAPABILITIES,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
+} from './agent-launch-runtime-capability'
 
 // Why: declares the Orca runtime RPC compatibility contract. Desktop,
 // headless server, CLI, and mobile builds may drift in app version, but
@@ -309,30 +313,6 @@ export const AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
 // Hosts without this capability have no notifications.registerPush RPC.
 export const NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY = 'notifications.remote-push.v1' as const
 
-/**
- * `agent.launch` exists: one host-side method that decides structured-vs-terminal and creates the
- * surface, instead of each client routing for itself.
- *
- * Negotiated rather than assumed because a client that cannot see it must keep using
- * `worktree.create` + `startupAgent`, which stays supported verbatim. The reverse skew is the
- * dangerous one: `worktree.create` returns `agentTerminalHandle` only when a startup agent was
- * requested, so a host that quietly routed that call to a structured session would hand an old
- * client a response with no handle and no error.
- *
- * Advertising it is a statement that the client understands EITHER outcome, since the host is what
- * picks: a structured session it can open, or a terminal agent. A client that renders only one of
- * the two keeps using the surface-specific methods.
- */
-// v2 makes prompt delivery an outcome union and top-level warnings the only supported shape.
-export const AGENT_LAUNCH_RUNTIME_CAPABILITY = 'agent.launch.v2' as const
-
-// Optional identity support on agent.launch; mobile replay across replacement hosts requires the new method.
-export const AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY = 'agent.launch.replay.v1' as const
-
-// agent.launchReplay requires the ledger; older replacement hosts must reject the method.
-export const AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY =
-  'agent.launch.replay-required.v1' as const
-
 // Generic native clients include the CLI and must not claim Electron-only page
 // placement support.
 export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
@@ -452,9 +432,7 @@ export const RUNTIME_CAPABILITIES = [
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY
+  ...AGENT_LAUNCH_RUNTIME_CAPABILITIES
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

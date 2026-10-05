@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { appendReturnedDraftText } from '../../../../shared/returned-draft-text'
 import {
-  appendNativeChatDraftText,
   readNativeChatDraftCache,
   subscribeToNativeChatDraftAppend,
   writeNativeChatDraftCache
@@ -45,7 +45,7 @@ export function useNativeChatDraft(
         pendingAppendRef.current = {
           scopeKey,
           text:
-            pending?.scopeKey === scopeKey ? appendNativeChatDraftText(pending.text, text) : text
+            pending?.scopeKey === scopeKey ? appendReturnedDraftText(pending.text, text) : text
         }
       }),
     [isComposing, scopeKey]
@@ -61,7 +61,7 @@ export function useNativeChatDraft(
         writeNativeChatDraftCache(
           scopeKey,
           pending?.scopeKey === scopeKey
-            ? appendNativeChatDraftText(resolved, pending.text)
+            ? appendReturnedDraftText(resolved, pending.text)
             : resolved
         )
         return resolved
@@ -74,7 +74,7 @@ export function useNativeChatDraft(
     const pending = pendingAppendRef.current
     pendingAppendRef.current = null
     if (pending?.scopeKey === scopeKey) {
-      setDraft((previous) => appendNativeChatDraftText(previous, pending.text))
+      setDraft((previous) => appendReturnedDraftText(previous, pending.text))
     }
   }, [scopeKey, setDraft])
 

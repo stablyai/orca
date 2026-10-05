@@ -212,6 +212,7 @@ export type RemoveWorktreeResult = {
   /** The catalog this removal produced; additive, older hosts omit it. */
   catalogVersion?: WorktreeCatalogVersion
   preservedBranch?: PreservedWorktreeBranch
+  nestedPreservedBranches?: (PreservedWorktreeBranch & { worktreeId: string })[]
   /** Present only when a FAILED archive hook was explicitly waived for this removal (#19334). */
   archiveHookOverride?: ArchiveHookOverride
   /** The host accepted the removal and is still deleting the checkout. Sent only to clients that

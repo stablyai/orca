@@ -142,7 +142,7 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.composerText).toBe('ping')
   })
 
-  it('does not clobber newer edits when restoring a rejected send', async () => {
+  it('appends a rejected send after edits typed while it was in flight', async () => {
     await mount('a')
     act(() => state?.setComposerText('ping'))
     const origin = state?.captureSendOrigin('ping')
@@ -157,10 +157,10 @@ describe('useMobileNativeChatDrafts', () => {
         state?.restoreRejectedDraft(origin, 'ping')
       }
     })
-    expect(state?.composerText).toBe('newer edit')
+    expect(state?.composerText).toBe('newer edit\n\nping')
   })
 
-  it('preserves an intentional clear after a newer edit while a rejection is pending', async () => {
+  it('returns a rejected send even after a newer edit was cleared', async () => {
     await mount('a')
     act(() => state?.setComposerText('ping'))
     const origin = state?.captureSendOrigin('ping')
@@ -177,7 +177,7 @@ describe('useMobileNativeChatDrafts', () => {
       }
     })
 
-    expect(state?.composerText).toBe('')
+    expect(state?.composerText).toBe('ping')
   })
 
   it('restores a rejected send onto its originating tab only', async () => {

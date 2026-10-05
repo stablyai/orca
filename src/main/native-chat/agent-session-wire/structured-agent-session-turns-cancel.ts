@@ -101,9 +101,9 @@ export type StructuredAgentSessionStopWindDown = {
 
 /**
  * A session-ending Stop's second step, queued behind its first in the same tick so nothing sent
- * meanwhile reaches the child it ends. The Stop has answered: a failure here is reported. The next
- * operation that reaches the agent retries the wind-down it leaves owed, and so does the idle
- * sweep's next tick.
+ * meanwhile reaches the child it ends. The Stop has answered: a failure here is reported. A close
+ * it could not prove keeps the child on record, and the next operation that reaches the agent
+ * joins that close.
  */
 export async function endStoppedStructuredAgentSession(
   ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'adapter'>,

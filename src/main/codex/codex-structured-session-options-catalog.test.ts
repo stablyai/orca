@@ -53,7 +53,6 @@ function storeSession(
     },
     backgroundTasks: new CodexBackgroundTaskTracker('thread-1'),
     ended: false,
-    requestedClose: false,
     fence: 1,
     acquisitionGeneration: 'generation-1',
     threadId: 'thread-1',

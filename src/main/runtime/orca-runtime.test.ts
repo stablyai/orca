@@ -47,6 +47,7 @@ await import('./orca-runtime-tests/terminal-creation-and-readiness-part-05.spec'
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-06.spec')
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-07.spec')
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-08.spec')
+await import('./orca-runtime-tests/agent-launch-prompt-submit.spec')
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-09.spec')
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-10.spec')
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-11.spec')

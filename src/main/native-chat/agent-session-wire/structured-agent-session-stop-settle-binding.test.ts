@@ -194,4 +194,22 @@ describe("a person's close pressed before its send's turn showed", () => {
     expect(later).toMatchObject({ state: 'interrupted' })
     expect(later).not.toHaveProperty('outcome')
   })
+
+  // The first close's kill is unproven and its settle closes with it; asking again re-kills, so a
+  // turn that ask's end cuts is the person's again.
+  it('binds the turn a repeated close cuts after a first close that came back unproven', async () => {
+    rig = await createQueuedMessageTestRig()
+    const sent = await rig.workingSend()
+    const close = () => rig.host['lifetime'].stopAgent(HOST_TEST_SESSION, { cause: 'user-close' })
+    rig.closeSession.mockResolvedValueOnce(false)
+    await expect(close()).rejects.toThrow()
+    rig.closeSession.mockImplementationOnce(async () => {
+      await turnOpens(sent)
+      return true
+    })
+
+    await close()
+
+    expect(openedTurn()).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
+  })
 })

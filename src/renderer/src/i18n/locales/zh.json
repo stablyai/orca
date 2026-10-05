@@ -16672,7 +16672,6 @@
           "770d458144": "分组方式",
           "795cbf26e2": "筛选...",
           "4616ea39fd": "跳转到工作区",
-          "threadListOptionsFiltered": "线程列表选项，筛选器已启用",
           "showSearch": "显示搜索",
           "markThreadRead": "将话题标记为已读",
           "59b131fbd9": "将话题标记为未读",
@@ -17484,6 +17483,7 @@
         "providerStartFailed": "{{agent}} 在完成启动前已停止。",
         "runCommandAgain": "请重新运行 /{{command}}。",
         "sendToTryAgain": "请发送您的消息以重试。",
+        "sendAgainToTryOnceMore": "请重新发送您的消息，再试一次。",
         "couldNotStart": "{{agent}} 无法启动。",
         "couldNotRestart": "{{agent}} 无法重新启动。",
         "notSignedIn": "{{agent}} 未使用所选账户登录。",
@@ -17537,7 +17537,7 @@
         "providerRateLimited": "{{agent}} 已被限流，正在重试。",
         "providerRetrying": "{{agent}} 遇到临时问题，正在重试。",
         "providerRetryingQuoted": "{{agent}} 正在重试：{{detail}}。",
-        "previousExitUnverifiable": "之前的 {{agent}} 可能仍在运行。它停止后，您的消息就会发送。"
+        "previousExitUnverifiable": "无法停止之前的 {{agent}}。"
       },
       "writeNotice": {
         "notDoneReadHistory": "无法加载此聊天的历史记录。",
@@ -17917,6 +17917,12 @@
         "subtitle": "文件将作为代理可以读取的路径添加到您的消息中。"
       },
       "copyCode": "复制代码",
+      "context": {
+        "unavailable": "上下文用量暂时未知，将在智能体下次响应后提供。",
+        "summary": "上下文：{{used}}/{{window}} token（{{percent}}%），根据上一次响应的估算值。",
+        "used": "上下文：已用 {{used}} token，根据上一次响应的估算值。",
+        "unreported": "此会话无法提供上下文用量。"
+      },
       "goal": {
         "placeholder": "描述您的目标，定义可衡量的结果以获得最佳结果",
         "clear": "明确的目标",

@@ -261,7 +261,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   'qwen-code': {
     // Why: package is qwen-code but its installed CLI binary on PATH is `qwen`.
     detectCmd: 'qwen',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    // Why: on Windows (and Node < 20) Qwen ignores Enter until 500 ms after a paste (0.24.7
+    // `pasteWorkaround`), so the Enter 50 ms after it is dropped; on an empty composer it is a no-op.
+    submitRetryDelayMs: 1200
   },
   rovo: {
     detectCmd: 'rovo',

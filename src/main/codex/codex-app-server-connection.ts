@@ -79,6 +79,7 @@ export async function openCodexAppServerConnection(
   let exitObserved = false
   let closing = false
   let exitReported = false
+  let processTreeUnproven = false
   const exitProof = new RetryableProcessExitProof()
   /** First terminal cause, or null while the transport is still usable. Set once:
    *  a child that dies reaches us through several listeners, and the specific
@@ -126,9 +127,9 @@ export async function openCodexAppServerConnection(
     // Transport/protocol failures make the connection unusable immediately so
     // callers do not hang, but recovery must not treat that as a child exit
     // until the execution host has observed `exit`/`close`.
-    if (exitObserved && !closing && !exitReported) {
+    if (exitObserved && !exitReported) {
       exitReported = true
-      handlers.onExit?.(terminalError)
+      handlers.onExit?.(terminalError, { expected: closing })
     }
   }
 
@@ -257,11 +258,10 @@ export async function openCodexAppServerConnection(
         )
         if (!exited) {
           const treeExited = await terminateProcessTree()
-          if (!treeExited) {
-            dispatcher.failPending(new Error('codex app-server process-tree exit was not proven'))
-            return false
-          }
           await waitForProcessExitUntil(exitPromise, FORCED_EXIT_MS)
+          // The lease follows the root, which is gone: a child left behind is reported by the
+          // owner, and blocks nothing.
+          processTreeUnproven = !treeExited && exitObserved
         }
       }
       dispatcher.failPending(new Error('codex app-server connection closed'))
@@ -275,6 +275,9 @@ export async function openCodexAppServerConnection(
     },
     get closed() {
       return closing || exited || terminalError !== null
+    },
+    get processTreeUnproven() {
+      return processTreeUnproven
     },
     request,
     notify,

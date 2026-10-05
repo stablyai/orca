@@ -197,6 +197,24 @@ describe('createUISlice agent send target mode', () => {
     })
   })
 
+  it('switches out of the activity view because send targets render on workspace cards', () => {
+    const store = createAgentSendStore()
+    seedAgentSendState(store)
+    store.getState().setSidebarBody('agents')
+
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'All unsent notes',
+      launchSource: 'notes_send'
+    })
+
+    expect(store.getState().sidebarBody).toBe('workspaces')
+    expect(store.getState().pendingRevealWorktree).toMatchObject({ worktreeId })
+  })
+
   it('disables sidebar target rows that need permission', async () => {
     const store = createAgentSendStore()
     seedAgentSendState(store)

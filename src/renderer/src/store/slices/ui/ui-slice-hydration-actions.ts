@@ -157,6 +157,10 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
               ? persistedAgentsFilterRepoIds
               : persistedAgentsFilterRepoIds.filter((repoId) => validRepoIds.has(repoId))
           ),
+          agentsHideWorkspacesFromOtherDevices: ui.agentsHideWorkspacesFromOtherDevices === true,
+          agentsHideAutomationGeneratedWorkspaces:
+            ui.agentsHideAutomationGeneratedWorkspaces === true,
+          agentsHideCliCreatedWorkspaces: ui.agentsHideCliCreatedWorkspaces === true,
           agentsShowChildAgents: ui.agentsShowChildAgents === true,
           agentsCompactMode: ui.agentsCompactMode !== false,
           agentsShowSearch: ui.agentsShowSearch !== false,

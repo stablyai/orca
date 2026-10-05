@@ -16696,7 +16696,6 @@
           "770d458144": "グループ化",
           "795cbf26e2": "フィルター…",
           "4616ea39fd": "ワークスペースにジャンプ",
-          "threadListOptionsFiltered": "スレッドリストのオプション、フィルターが有効",
           "showSearch": "検索を表示",
           "markThreadRead": "スレッドを既読としてマーク",
           "59b131fbd9": "スレッドを未読としてマークする",
@@ -17543,6 +17542,7 @@
         "providerStartFailed": "{{agent}} は起動が完了する前に停止しました。",
         "runCommandAgain": "/{{command}} をもう一度実行してください。",
         "sendToTryAgain": "もう一度試すには、メッセージを送信してください。",
+        "sendAgainToTryOnceMore": "メッセージをもう一度送信して、再度お試しください。",
         "couldNotStart": "{{agent}} を起動できませんでした。",
         "couldNotRestart": "{{agent}} を再起動できませんでした。",
         "notSignedIn": "{{agent}} は選択したアカウントでサインインしていません。",
@@ -17596,7 +17596,7 @@
         "providerRateLimited": "{{agent}} はレート制限を受けているため、再試行しています。",
         "providerRetrying": "{{agent}} で一時的な問題が発生したため、再試行しています。",
         "providerRetryingQuoted": "{{agent}} は再試行しています: {{detail}}。",
-        "previousExitUnverifiable": "以前の {{agent}} がまだ実行中の可能性があります。停止するとメッセージが送信されます。"
+        "previousExitUnverifiable": "以前の {{agent}} を停止できませんでした。"
       },
       "writeNotice": {
         "notDoneReadHistory": "このチャットの履歴を読み込めませんでした。",
@@ -17976,6 +17976,12 @@
         "subtitle": "ファイルは、Agent が読み取ることができるパスとしてメッセージに追加されます。"
       },
       "copyCode": "コードをコピーする",
+      "context": {
+        "unavailable": "コンテキストの使用量はまだ不明です。Agent が次に応答すると表示されます。",
+        "summary": "コンテキスト: {{used}} / {{window}} トークン ({{percent}}%)、最後の応答から推定。",
+        "used": "コンテキスト: {{used}} トークン使用済み、最後の応答から推定。",
+        "unreported": "このセッションではコンテキストの使用量を表示できません。"
+      },
       "goal": {
         "placeholder": "目標を説明し、最良の結果を得るために測定可能な結果を​​定義する",
         "clear": "明確な目標",

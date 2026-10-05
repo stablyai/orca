@@ -19,7 +19,7 @@
  * harmless, and does nothing to reunite a caller with a surface a dead attempt left behind.
  */
 
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
 import type {
   AgentLaunchIntent,
@@ -154,22 +154,25 @@ async function runAgentLaunch(
   terminalSpawn?: TerminalSpawnDispatch
 ): Promise<AgentLaunchResult> {
   const callerNavigationId = agentLaunchCallerNavigationId(intent.target, context)
-  const result = await executeAgentLaunch({
+  return executeAgentLaunch({
     runtime: context.runtime,
     intent,
     surfaces: agentLaunchSurfaceFactory(
       context,
       attachOperationId,
       operationCallerKey,
-      callerNavigationId === null,
+      callerNavigationId !== null,
       terminalSpawn
     ),
-    workspaces: agentLaunchWorkspaceFactory(context, intent.agent)
+    workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
+    // The tab is shown as it is published, not after a prompt that can take a minute to land.
+    ...(callerNavigationId !== null
+      ? {
+          onSurfacePublished: (surface) =>
+            selectAgentLaunchTabForCaller(context.runtime, surface, callerNavigationId)
+        }
+      : {})
   })
-  if (callerNavigationId !== null) {
-    selectAgentLaunchTabForCaller(context.runtime, result, callerNavigationId)
-  }
-  return result
 }
 
 /**

@@ -10,6 +10,7 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
 } from './agent-session-background-task-wire'
+import type { AgentSessionTokenUsage } from './agent-session-context-usage'
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import type {
   AgentJournalMessageSendMode,
@@ -207,9 +208,18 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   source: NativeChatSource
   /** Optional provider row cursor; split projections share it for whole-row paging. */
   transcriptOffset?: number
+  /** Model id that produced an assistant response, as the provider API names it. */
+  model?: string
+  /** The agent's provider that served `model`, where the agent records one. */
+  provider?: string
+  /** On assistant responses whose accounting reflects the prompt the model read. */
+  usage?: AgentSessionTokenUsage
   /** Optional explicit turn key. When present, two messages with the same
    *  `turnId` are treated as the same turn for dedup regardless of `id`. */
   turnId?: string
+  /** `id` of the transcript row this one follows in the agent's own conversation
+   *  tree, where the decoder carries the agent's link. Absent from older hosts. */
+  parentId?: string
   /** How a user message was delivered when it was not an ordinary prompt. */
   sentAs?: AgentJournalMessageSendMode
   /** Accepted but not yet handed to the agent: drawn after everything the agent has done. */

@@ -2,8 +2,8 @@
 #   attributes      a fresh agent the host builds; carries agentStartedTelemetry
 #   resume          continues an existing agent session; not a new start
 #   mobile-followup the phone's session-tab launch; attribution is a separate follow-up
-# The shared execution-host builder also serves bare commands; only fresh-agent callers supply attribution.
-src/main/opencode/opencode-model-startup-plan.ts 2 attributes
-src/main/runtime/runtime-worktree-agent-startup.ts 3 attributes
+# The shared execution-host builders also serve bare commands; only fresh-agent callers supply attribution.
+src/main/opencode/opencode-model-startup-plan.ts 3 attributes
+src/main/runtime/runtime-worktree-agent-startup.ts 4 attributes
 src/main/runtime/orca-runtime-get-agent-session-execution-namespace.ts 1 resume
 src/main/runtime/orca-runtime-resolve-mobile-session-terminal-command.ts 1 mobile-followup

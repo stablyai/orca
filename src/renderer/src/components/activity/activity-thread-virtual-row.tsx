@@ -2,6 +2,7 @@ import type React from 'react'
 import { translate } from '@/i18n/i18n'
 import { clearActivityThread, isClearableActivityThread } from './activity-clear-completed'
 import { ActivityStatusGroupHeader } from './activity-thread-controls'
+import { ActivityThreadContextMenu } from './activity-thread-context-menu'
 import { ActivityThreadRow } from './activity-thread-row'
 import type { ActivityVirtualItemDescriptor } from './activity-thread-virtual-items'
 
@@ -53,21 +54,38 @@ export function ActivityThreadVirtualRow({
       </div>
     )
   }
+  const canJump = canJumpToWorkspace(item.thread)
+  const disableMarkUnread = item.thread.paneKey === selectedPaneKey && !allowMarkUnreadWhenSelected
   return (
-    <div className="pb-0.5">
-      <ActivityThreadRow
-        thread={item.thread}
-        selected={item.thread.paneKey === selectedPaneKey}
-        onSelect={onSelectThread}
-        onJump={onJumpToWorkspace}
-        onMarkRead={onMarkThreadRead}
-        onMarkUnread={onMarkThreadUnread}
-        onClear={isClearableActivityThread(item.thread) ? clearActivityThread : undefined}
-        canJump={canJumpToWorkspace(item.thread)}
-        compactMode={compactMode}
-        disableMarkUnread={item.thread.paneKey === selectedPaneKey && !allowMarkUnreadWhenSelected}
-        showJumpAction={showJumpAction}
-      />
-    </div>
+    <ActivityThreadContextMenu
+      thread={item.thread}
+      canJump={canJump}
+      disableMarkUnread={disableMarkUnread}
+      onOpen={onSelectThread}
+      onJump={onJumpToWorkspace}
+      onMarkRead={onMarkThreadRead}
+      onMarkUnread={onMarkThreadUnread}
+    >
+      {(menuOpen) => (
+        // Why the menu wraps this wrapper, not the row: the row is already the hover-card
+        // trigger, and stacking two Radix triggers on one node composes their refs.
+        <div className="pb-0.5">
+          <ActivityThreadRow
+            thread={item.thread}
+            selected={item.thread.paneKey === selectedPaneKey}
+            onSelect={onSelectThread}
+            onJump={onJumpToWorkspace}
+            onMarkRead={onMarkThreadRead}
+            onMarkUnread={onMarkThreadUnread}
+            onClear={isClearableActivityThread(item.thread) ? clearActivityThread : undefined}
+            canJump={canJump}
+            compactMode={compactMode}
+            disableMarkUnread={disableMarkUnread}
+            showJumpAction={showJumpAction}
+            previewSuppressed={menuOpen}
+          />
+        </div>
+      )}
+    </ActivityThreadContextMenu>
   )
 }

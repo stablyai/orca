@@ -2,6 +2,9 @@ import { toast } from 'sonner'
 import { Button } from '../ui/button'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
 import { translate } from '@/i18n/i18n'
+import { DeleteNestedWorktreesDialog } from './DeleteNestedWorktreesDialog'
+import { isNestedWorktreeRemovalError } from '../../../../shared/worktree/nested-removal'
+import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import {
   isLockedWorktreeRemovalError,
   type WorktreeForceDeleteReason
@@ -20,6 +23,8 @@ type DeleteWorktreeFailureToastOptions = {
   onDeleteAnyway: () => void
   worktreeId: string
   worktreeName: string
+  nestedRemovalTarget?: WorktreeRemovalTarget
+  onNestedDeleted?: () => void
 }
 
 function deleteWorktreeFailureToastId(worktreeId: string): string {
@@ -34,7 +39,10 @@ function DeleteWorktreeFailureToastBody({
   onViewChanges,
   onForceDelete,
   onDeleteAnyway,
-  toastId
+  toastId,
+  nestedRemovalTarget,
+  worktreeName,
+  onNestedDeleted
 }: {
   description?: string
   canForceDelete: boolean
@@ -44,6 +52,9 @@ function DeleteWorktreeFailureToastBody({
   onForceDelete: () => void
   onDeleteAnyway: () => void
   toastId: string
+  nestedRemovalTarget?: WorktreeRemovalTarget
+  worktreeName: string
+  onNestedDeleted?: () => void
 }): React.JSX.Element {
   const viewChanges = (): void => {
     toast.dismiss(toastId)
@@ -68,6 +79,14 @@ function DeleteWorktreeFailureToastBody({
           <Button type="button" variant="outline" size="sm" onClick={viewChanges}>
             {translate('auto.components.sidebar.delete.worktree.flow.7488ed8711', 'View')}
           </Button>
+        ) : null}
+        {nestedRemovalTarget ? (
+          <DeleteNestedWorktreesDialog
+            target={nestedRemovalTarget}
+            worktreeName={worktreeName}
+            onDeleted={onNestedDeleted}
+            dismissToast={() => toast.dismiss(toastId)}
+          />
         ) : null}
         {canForceDelete ? (
           <Button type="button" variant="destructive" size="sm" onClick={forceDelete}>
@@ -98,7 +117,9 @@ export function showDeleteWorktreeFailureToast({
   onForceDelete,
   onDeleteAnyway,
   worktreeId,
-  worktreeName
+  worktreeName,
+  nestedRemovalTarget,
+  onNestedDeleted
 }: DeleteWorktreeFailureToastOptions): void {
   const toastCopy = getDeleteWorktreeToastCopy(
     worktreeName,
@@ -108,6 +129,10 @@ export function showDeleteWorktreeFailureToast({
   )
   const showToast = toastCopy.isDestructive ? toast.error : toast.info
   const id = deleteWorktreeFailureToastId(worktreeId)
+  const nestedTarget =
+    isNestedWorktreeRemovalError(error) && window.api?.worktrees.previewNestedRemoval
+      ? nestedRemovalTarget
+      : undefined
 
   // Why: Sonner's native action/cancel slots share the title row and squeeze
   // multi-line delete errors. Custom content gives the copy its own line.
@@ -123,10 +148,13 @@ export function showDeleteWorktreeFailureToast({
         onForceDelete={onForceDelete}
         onDeleteAnyway={onDeleteAnyway}
         toastId={id}
+        nestedRemovalTarget={nestedTarget}
+        worktreeName={worktreeName}
+        onNestedDeleted={onNestedDeleted}
       />
     ),
     // A toast offering a destructive choice must not expire before the user reads the reason.
-    duration: canForceDelete || canWaiveArchiveHook === true ? Infinity : 10000,
+    duration: canForceDelete || canWaiveArchiveHook === true || nestedTarget ? Infinity : 10000,
     dismissible: true
   })
 }

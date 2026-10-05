@@ -311,9 +311,10 @@ describe('a Stop that names no turn', () => {
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
 
     expect(closeSession).toHaveBeenCalledExactlyOnceWith(SESSION)
+    // Bookkeeping after the proven exit: reported, never the Stop's failure.
     expect(log.entries).toContainEqual(
       expect.objectContaining({
-        fields: expect.objectContaining({ scope: 'stop-child', sessionId: SESSION })
+        fields: expect.objectContaining({ scope: 'exit-wind-down', sessionId: SESSION })
       })
     )
     expect((await submission(id))?.dispatchState).toBe('rejected')

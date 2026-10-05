@@ -215,6 +215,23 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
     expect(content).toContain('Performance investigation notes')
   })
 
+  it('keeps the preview closed while suppressed by the row menu', async () => {
+    const renderCard = (suppressed: boolean) =>
+      root.render(
+        <TooltipProvider>
+          <ActivityThreadHoverCard thread={createTestThread()} suppressed={suppressed}>
+            <div data-testid="hover-trigger">Hover Target</div>
+          </ActivityThreadHoverCard>
+        </TooltipProvider>
+      )
+
+    await act(async () => renderCard(true))
+    expect(container.querySelector('[data-testid="hover-card-content"]')).toBeNull()
+
+    await act(async () => renderCard(false))
+    expect(container.querySelector('[data-testid="hover-card-content"]')).not.toBeNull()
+  })
+
   it('allows clicking row while preventing inner hover interactions from bubbling', async () => {
     const onSelect = vi.fn()
     const thread = createTestThread()

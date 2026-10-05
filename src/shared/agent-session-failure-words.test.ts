@@ -151,6 +151,28 @@ describe('the words written beside a failure fact', () => {
     ).toBe("Codex couldn't start. Start a new chat to continue.")
   })
 
+  it('says a start refused beside a process Orca could not stop in its own words', () => {
+    const refused = (context: { command?: 'compact'; retryControl?: boolean } = {}) =>
+      agentSessionFailureSentence(
+        {
+          kind: 'restartFailed',
+          refusal: {
+            code: 'agent_session_ownership_unknown',
+            details: { reason: 'previousExitUnverifiable' }
+          }
+        },
+        'rejection',
+        { agentName: 'Claude', ...context }
+      )
+    expect(refused()).toBe(
+      "Couldn't stop Claude from before. Send your message again to try once more."
+    )
+    expect(refused({ command: 'compact' })).toBe(
+      "Couldn't stop Claude from before. Run /compact again."
+    )
+    expect(refused({ retryControl: true })).toBe("Couldn't stop Claude from before.")
+  })
+
   it('names the exit a row reports differently from the message it left unsent', () => {
     expect(
       agentSessionFailureWords({ kind: 'providerExited' }, { surface: 'row', agentName: 'Claude' })
