@@ -15,6 +15,9 @@ export type SharedControlTestServer = {
   requests: { id: string; method: string; params?: unknown }[]
   auths: unknown[]
   connectionCount: () => number
+  /** Sockets still open right now, unlike the cumulative `connectionCount`. */
+  openClientCount: () => number
+  endpointPort: () => number
   flushDelayedResponses: () => void
   closeClients: () => void
 }
@@ -144,6 +147,8 @@ export async function createSharedControlTestServer(
     requests,
     auths,
     connectionCount: () => connectionCount,
+    openClientCount: () => wss.clients.size,
+    endpointPort: () => address.port,
     flushDelayedResponses: () => delayedResponses.splice(0).forEach((send) => send()),
     closeClients: () => wss.clients.forEach((client) => client.close(4001, 'test close'))
   }

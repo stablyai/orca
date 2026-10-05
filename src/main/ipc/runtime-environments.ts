@@ -13,6 +13,7 @@ import {
   getRuntimeEnvironmentStatusOwner
 } from './runtime-environment-request-connections'
 import { registerRuntimeEnvironmentRecoveryHandler } from './runtime-environment-recovery-handler'
+import { setRuntimeEnvironmentRemovalWatch } from './runtime-environment-removal-watch'
 import {
   advanceRuntimeEnvironmentTransportGeneration,
   getRuntimeEnvironmentTransportGeneration
@@ -98,6 +99,10 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
   })
   registerRuntimeEnvironmentRecoveryHandler()
   registerRuntimeEnvironmentPassiveHandlers(getUserDataPath)
+  setRuntimeEnvironmentRemovalWatch({
+    getUserDataPath,
+    retire: invalidateRuntimeEnvironmentTransport
+  })
   for (const environment of listEnvironments(getUserDataPath())) {
     if (!isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
       getRuntimeEnvironmentStatusOwner(getUserDataPath(), environment.id).activate()
