@@ -87,6 +87,8 @@ export type BrowserPageConversionOrigin =
       browserRuntimeEnvironmentId?: string | null
     }
 
+export type BrowserPageDesktopBackend = 'webview' | 'owned-view'
+
 export type BrowserPage = {
   id: string
   workspaceId: string
@@ -100,6 +102,8 @@ export type BrowserPage = {
   canGoForward: boolean
   loadError: BrowserLoadError | null
   createdAt: number
+  /** Selected at creation; absent persisted records retain the legacy webview backend. */
+  desktopBackend?: BrowserPageDesktopBackend
   // Why: remote-owned worktrees can still host client-local fallback browser
   // pages until headless remote runtimes support real browser panes.
   browserRuntimeEnvironmentId?: string | null

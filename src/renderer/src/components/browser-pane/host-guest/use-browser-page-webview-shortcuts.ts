@@ -1,4 +1,5 @@
 import { useEffect, type MutableRefObject } from 'react'
+import type { BrowserPageSurface } from './browser-page-surface'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings'
@@ -7,7 +8,6 @@ import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-t
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import {
   addBrowserPageZoomEventListener,
-  applyBrowserPageZoom,
   rememberExplicitBrowserPageZoomLevel,
   type BrowserPageZoomCommand,
   type BrowserPageZoomDirection
@@ -24,7 +24,7 @@ export function useBrowserPageWebviewShortcuts({
   isActive,
   chromeShortcutScope,
   isActiveRef,
-  webviewRef,
+  surface,
   paneZoomLevelRef,
   setBrowserDefaultZoomLevel,
   showBrowserZoomFeedback,
@@ -35,7 +35,7 @@ export function useBrowserPageWebviewShortcuts({
   isActive: boolean
   chromeShortcutScope: BrowserChromeShortcutScope
   isActiveRef: MutableRefObject<boolean>
-  webviewRef: MutableRefObject<Electron.WebviewTag | null>
+  surface: BrowserPageSurface
   paneZoomLevelRef: MutableRefObject<number>
   setBrowserDefaultZoomLevel: (level: number) => void
   showBrowserZoomFeedback: (level: number) => void
@@ -67,14 +67,14 @@ export function useBrowserPageWebviewShortcuts({
       e.stopImmediatePropagation()
       // Why: Logitech Options+ side-button remaps arrive as these chords on macOS; route through the same nav path as the toolbar.
       if (direction === 'back') {
-        webviewRef.current?.goBack()
+        void surface.goBack()
       } else {
-        webviewRef.current?.goForward()
+        void surface.goForward()
       }
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [chromeShortcutScope, keybindings, webviewRef, workspaceId])
+  }, [chromeShortcutScope, keybindings, surface, workspaceId])
 
   // Browser history shortcuts (IPC path: focus inside webview guest)
   // Why: a focused webview is a separate WebContents, so main forwards the chords back here.
@@ -88,12 +88,12 @@ export function useBrowserPageWebviewShortcuts({
       }
       // Why: Logitech Options+ side-button remaps arrive as these chords on macOS; route through the same nav path as the toolbar.
       if (direction === 'back') {
-        webviewRef.current?.goBack()
+        void surface.goBack()
       } else {
-        webviewRef.current?.goForward()
+        void surface.goForward()
       }
     })
-  }, [browserTabId, isActive, webviewRef])
+  }, [browserTabId, isActive, surface])
 
   // Cmd/Ctrl+R — reload (renderer path: focus on browser chrome, not in guest)
   // Why: guest shortcut forwarding never fires when focus is on browser chrome, so handle the chord directly here.
@@ -160,13 +160,21 @@ export function useBrowserPageWebviewShortcuts({
         return
       }
       // Why: reset targets 100% like Chromium; the configured default is a new-tab seed, not a reset target.
-      const nextLevel = applyBrowserPageZoom(webviewRef.current, direction)
-      if (nextLevel !== null) {
+      const applyZoomLevel = (nextLevel: number | null): void => {
+        if (nextLevel === null || !isActiveRef.current) {
+          return
+        }
         paneZoomLevelRef.current = nextLevel
         rememberExplicitBrowserPageZoomLevel(browserTabId, nextLevel)
         setBrowserDefaultZoomLevel(nextLevel)
         showBrowserZoomFeedback(nextLevel)
       }
+      const result = surface.stepZoom(direction)
+      if (typeof result === 'number' || result === null) {
+        applyZoomLevel(result)
+        return
+      }
+      void result.then(applyZoomLevel)
     }
     const handleZoom = ({ browserPageId, direction }: BrowserPageZoomCommand): void => {
       if (browserPageId === browserTabId) {
@@ -186,6 +194,6 @@ export function useBrowserPageWebviewShortcuts({
     paneZoomLevelRef,
     setBrowserDefaultZoomLevel,
     showBrowserZoomFeedback,
-    webviewRef
+    surface
   ])
 }

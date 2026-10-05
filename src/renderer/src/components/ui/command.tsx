@@ -7,6 +7,7 @@ import { SearchIcon } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
+import { useNativeViewOcclusionRef } from '@/hooks/useNativeViewOcclusion'
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
@@ -43,11 +44,13 @@ function CommandDialog({
   commandProps?: React.ComponentProps<typeof CommandPrimitive>
 }) {
   const { className: commandClassName, ...commandRootProps } = commandProps ?? {}
+  const overlayRef = useNativeViewOcclusionRef<HTMLDivElement>(undefined, true)
 
   return (
     <DialogPrimitive.Root {...props}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
+          ref={overlayRef}
           // Why: matches the DialogOverlay recipe — deeper scrim + 2px backdrop
           // blur so the dark canvas lifts off the command palette. A flat
           // bg-black/50 disappears in dark mode.

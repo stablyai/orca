@@ -4,6 +4,7 @@ import * as React from 'react'
 import { Popover as PopoverPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
+import { useNativeViewOcclusionRef } from '@/hooks/useNativeViewOcclusion'
 
 // React delegates wheel passively, so native defaultPrevented may not reflect synthetic cancellation.
 const consumerPreventedWheelEvents = new WeakSet<WheelEvent>()
@@ -125,6 +126,7 @@ function PopoverContent({
   portalContainer?: HTMLElement | null
   wheelScroll?: boolean
 }) {
+  const occlusionRef = useNativeViewOcclusionRef<HTMLDivElement>()
   const handleConsumerWheel = React.useCallback(
     (event: React.WheelEvent<HTMLDivElement>): void => {
       onWheel?.(event)
@@ -147,7 +149,12 @@ function PopoverContent({
   const setContentRef = React.useCallback(
     (node: HTMLDivElement | null) => {
       if (node) {
-        return attachPopoverContent(node, portalContainer, forwardedRef)
+        const detachPopover = attachPopoverContent(node, portalContainer, forwardedRef)
+        const detachOcclusion = occlusionRef(node)
+        return () => {
+          detachOcclusion?.()
+          detachPopover()
+        }
       }
       if (typeof forwardedRef === 'function') {
         forwardedRef(null)
@@ -156,7 +163,7 @@ function PopoverContent({
       }
       return undefined
     },
-    [forwardedRef, portalContainer]
+    [forwardedRef, occlusionRef, portalContainer]
   )
 
   return (

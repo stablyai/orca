@@ -3,6 +3,7 @@ import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipb
 import { AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES } from './agent-browser-bridge-types'
 import type { BrowserBackResult, BrowserReloadResult } from '../../shared/runtime-types'
 import { AgentBrowserBridgeMouseCommands } from './agent-browser-bridge-mouse-commands'
+import { browserCaptureIdle } from './browser-capture-idle'
 
 export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBridgeMouseCommands {
   // ── Clipboard commands ──
@@ -140,6 +141,7 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
       if (!wc) {
         throw new BrowserError('browser_no_tab', 'Tab is no longer available')
       }
+      browserCaptureIdle.assertCaptureAllowed(wc)
       wc.reload()
       await new Promise<void>((resolve) => {
         let settled = false

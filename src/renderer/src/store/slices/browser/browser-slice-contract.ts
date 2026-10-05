@@ -7,6 +7,7 @@ import type {
   BrowserHistoryEntry,
   BrowserLoadError,
   BrowserPage,
+  BrowserPageDesktopBackend,
   BrowserPageDocLocation,
   BrowserSessionProfile,
   BrowserViewportPresetId,
@@ -32,6 +33,7 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { RuntimeBrowserPlacement } from '../../../../../shared/runtime-browser-placement'
 
 export type CreateBrowserTabOptions = {
+  desktopBackend?: BrowserPageDesktopBackend
   activate?: boolean
   browserPageId?: string
   title?: string
@@ -51,6 +53,7 @@ export type CreateBrowserTabOptions = {
 }
 
 export type CreateBrowserPageOptions = {
+  desktopBackend?: BrowserPageDesktopBackend
   activate?: boolean
   title?: string
   browserRuntimeEnvironmentId?: string | null

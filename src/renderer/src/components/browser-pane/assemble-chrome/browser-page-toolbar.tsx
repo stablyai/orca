@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import type { BrowserReloadTrigger } from '../navigate/browser-reload-action'
+import type { BrowserPageSurface } from '../host-guest/browser-page-surface'
 import BrowserAddressBar from './BrowserAddressBar'
 import { BrowserChromeToolbar } from './browser-chrome-toolbar'
 import { BrowserImportHintButton } from './BrowserImportHintButton'
@@ -37,7 +38,7 @@ export function BrowserPageToolbar({
   convertedFrom,
   convertedTo,
   loading,
-  webviewRef,
+  surface,
   reloadMenuOpen,
   setReloadMenuOpen,
   reloadButtonLabel,
@@ -77,7 +78,7 @@ export function BrowserPageToolbar({
   /** Set on a page Back returned to; Forward re-crosses it once guest history runs out. */
   convertedTo?: BrowserPageConversionOrigin | null
   loading: boolean
-  webviewRef: RefObject<Electron.WebviewTag | null>
+  surface: BrowserPageSurface
   reloadMenuOpen: boolean
   setReloadMenuOpen: Dispatch<SetStateAction<boolean>>
   reloadButtonLabel: string
@@ -128,7 +129,7 @@ export function BrowserPageToolbar({
         // instead of going dead.
         goBack: () => {
           if (canGoBack) {
-            webviewRef.current?.goBack()
+            void surface.goBack()
             return
           }
           if (convertedFrom) {
@@ -137,7 +138,7 @@ export function BrowserPageToolbar({
         },
         goForward: () => {
           if (canGoForward) {
-            webviewRef.current?.goForward()
+            void surface.goForward()
             return
           }
           if (convertedTo) {

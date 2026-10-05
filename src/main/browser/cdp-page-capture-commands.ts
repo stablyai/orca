@@ -3,6 +3,7 @@ import type { WebContents } from 'electron'
 import { captureScreenshot, type CapturePaintHold } from './cdp-screenshot'
 import { buildPrintToPdfOptions, CdpPdfStreamStore } from './cdp-print-to-pdf'
 import type { CdpClientResponseWriter } from './cdp-client-response-writer'
+import { browserCaptureIdle } from './browser-capture-idle'
 
 /**
  * Page capture output: Electron-native Page.printToPDF (inline and ReturnAsStream),
@@ -35,7 +36,12 @@ export class CdpPageCaptureCommands {
       return
     }
     try {
-      const pdf = await this.webContents.printToPDF(buildPrintToPdfOptions(params))
+      const pdf = await browserCaptureIdle.runCapture(this.webContents, () =>
+        browserCaptureIdle.trackNative(
+          this.webContents,
+          this.webContents.printToPDF(buildPrintToPdfOptions(params))
+        )
+      )
       // Why: printToPDF can resolve after the client disconnected (or was
       // replaced). Bail before registering a stream so its buffer isn't
       // orphaned in pdfStreams past the disconnect's clear() until the TTL.

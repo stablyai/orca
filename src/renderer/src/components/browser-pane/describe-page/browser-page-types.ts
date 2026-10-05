@@ -3,6 +3,7 @@ import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-type
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import type { GrabModeHook } from '../annotate/useGrabMode'
 import type { BrowserOverlayViewport } from './browser-annotation-geometry'
+import type { BrowserPageSurface } from '../host-guest/browser-page-surface'
 
 export type BrowserTabPageState = Partial<
   Pick<
@@ -18,6 +19,22 @@ export type BrowserPageUrlSetter = (
 ) => void
 
 export type BrowserChromeShortcutScope = 'focused' | 'inactive' | 'owned-target'
+
+export type BrowserPagePaneProps = {
+  browserTab: BrowserPageState
+  workspaceId: string
+  worktreeId: string
+  sessionProfileId: string | null
+  sessionPartition: string | null
+  isActive: boolean
+  chromeShortcutScope: BrowserChromeShortcutScope
+  isAutomationVisible: boolean
+  isMobileDriven: boolean
+  isRemotelyViewed: boolean
+  inputLocked: boolean
+  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
+  onSetUrl: BrowserPageUrlSetter
+}
 
 export type { GrabIntent } from '../../../../../shared/browser-grab-types'
 
@@ -53,6 +70,7 @@ export type BrowserPageGrabAnnotationsOptions = {
   trackingContainer?: HTMLDivElement | null
   trackingScroller?: HTMLDivElement | null
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
+  surface?: BrowserPageSurface
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
   browserAnnotationsLength: number
   setBrowserAnnotationTrayOpen: Dispatch<SetStateAction<boolean>>

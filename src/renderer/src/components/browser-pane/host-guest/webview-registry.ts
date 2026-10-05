@@ -4,6 +4,7 @@ import {
   removeBrowserPageViewport
 } from './browser-page-viewport'
 import { forgetExplicitBrowserPageZoomLevel } from './browser-page-zoom'
+import { closeDesktopBrowserPage, hasDesktopBrowserPage } from './desktop-browser-page-registry'
 import {
   acquireWebviewsDragPassthrough,
   isWebviewDragPassthroughActive,
@@ -276,6 +277,14 @@ function removePersistentWebview(
 }
 
 export function destroyPersistentWebview(browserTabId: string): Promise<void> {
+  if (hasDesktopBrowserPage(browserTabId)) {
+    return closeDesktopBrowserPage(browserTabId).then(() =>
+      removePersistentWebview(browserTabId, {
+        preserveViewport: false,
+        preserveZoom: false
+      })
+    )
+  }
   return removePersistentWebview(browserTabId, {
     preserveViewport: false,
     preserveZoom: false
@@ -286,5 +295,13 @@ export function replacePersistentWebview(
   browserTabId: string,
   { preserveViewport = false }: { preserveViewport?: boolean } = {}
 ): Promise<void> {
+  if (hasDesktopBrowserPage(browserTabId)) {
+    return closeDesktopBrowserPage(browserTabId).then(() =>
+      removePersistentWebview(browserTabId, {
+        preserveViewport,
+        preserveZoom: true
+      })
+    )
+  }
   return removePersistentWebview(browserTabId, { preserveViewport, preserveZoom: true })
 }

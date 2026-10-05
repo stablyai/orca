@@ -3,6 +3,7 @@ import type { WebContents } from 'electron'
 import type { CdpClientResponseWriter } from './cdp-client-response-writer'
 import type { CdpSyntheticSessionRegistry } from './cdp-synthetic-session-registry'
 import type { CdpDebuggerChannel } from './cdp-debugger-channel'
+import { browserCaptureIdle } from './browser-capture-idle'
 
 const LIFECYCLE_PRIMING_TIMEOUT_MS = 1_000
 
@@ -60,11 +61,13 @@ export class CdpPageNavigationCommands {
       return
     }
     try {
-      if (params.ignoreCache === true) {
-        this.webContents.reloadIgnoringCache()
-      } else {
-        this.webContents.reload()
-      }
+      await browserCaptureIdle.runCapture(this.webContents, async () => {
+        if (params.ignoreCache === true) {
+          this.webContents.reloadIgnoringCache()
+        } else {
+          this.webContents.reload()
+        }
+      })
       this.responder.sendResult(clientId, {}, client)
     } catch (err) {
       this.responder.sendError(clientId, err instanceof Error ? err.message : String(err), client)

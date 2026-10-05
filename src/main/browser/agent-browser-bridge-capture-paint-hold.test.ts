@@ -51,6 +51,7 @@ vi.mock('./cdp-bridge', () => ({
 }))
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
+import { browserCaptureIdle } from './browser-capture-idle'
 import {
   createSucceedWith,
   mockBrowserManager,
@@ -77,6 +78,29 @@ describe('AgentBrowserBridge', () => {
     })
     bridge = new AgentBrowserBridge(mockBrowserManager())
     bridge.setActiveTab(100)
+  })
+
+  it('keeps an actual PDF operation admitted until its native promise settles', async () => {
+    let finishPdf!: (value: Buffer) => void
+    const pending = new Promise<Buffer>((resolve) => {
+      finishPdf = resolve
+    })
+    const printToPDF = vi.fn(() => pending)
+    const wc = { ...mockWebContents(100), printToPDF }
+    webContentsFromIdMock.mockReturnValue(wc)
+    succeedWith({ snapshot: 'tree' })
+    const pdf = bridge.pdf()
+    await vi.waitFor(() => expect(printToPDF).toHaveBeenCalledOnce())
+    let acquired = false
+    const waiting = browserCaptureIdle.reserve(wc).then((lease) => {
+      acquired = true
+      return lease
+    })
+    expect(acquired).toBe(false)
+    finishPdf(Buffer.from('pdf'))
+    await expect(pdf).resolves.toEqual({ data: Buffer.from('pdf').toString('base64') })
+    const lease = await waiting
+    lease.release()
   })
 
   it('never holds paint for commands that do not capture pixels', async () => {

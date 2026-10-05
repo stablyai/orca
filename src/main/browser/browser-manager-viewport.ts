@@ -6,6 +6,7 @@ import {
 } from '../../shared/browser-annotation-viewport-bridge'
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
 import { BrowserManagerDownloadLifecycle } from './browser-manager-download-lifecycle'
+import { browserCaptureIdle } from './browser-capture-idle'
 import { sendGuestCdpCommand } from './guest-cdp-command'
 
 // Why no maxTouchPoints: Chromium rejects values outside 1..16 even when disabling, which left
@@ -142,59 +143,74 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
       return false
     }
 
-    try {
-      if (!guest.debugger.isAttached()) {
-        guest.debugger.attach('1.3')
-      }
-    } catch (err) {
-      // Why: attach throws if DevTools is open on the guest; log context so this failure mode is diagnosable.
-      console.warn('[browser-manager] setViewportOverride: failed to attach debugger', {
-        browserTabId,
-        webContentsId,
-        error: err instanceof Error ? err.message : String(err)
-      })
-      return false
-    }
+    return browserCaptureIdle
+      .runWhenCaptureAllowed(guest, async () => {
+        // The reservation may have replaced or destroyed the guest while this request waited.
+        if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
+          return false
+        }
+        if (guest.isDestroyed()) {
+          this.unregisterGuest(browserTabId)
+          return false
+        }
+        try {
+          if (!guest.debugger.isAttached()) {
+            guest.debugger.attach('1.3')
+          }
+        } catch (err) {
+          // Why: attach throws if DevTools is open on the guest; log context so this failure mode is diagnosable.
+          console.warn('[browser-manager] setViewportOverride: failed to attach debugger', {
+            browserTabId,
+            webContentsId,
+            error: err instanceof Error ? err.message : String(err)
+          })
+          return false
+        }
 
-    const dbg = guest.debugger
-    const metricsApplied = await this.runViewportEmulationStep(
-      browserTabId,
-      'device metrics',
-      () =>
-        override
-          ? sendGuestCdpCommand(guest, 'Emulation.setDeviceMetricsOverride', {
-              width: override.width,
-              height: override.height,
-              deviceScaleFactor: override.deviceScaleFactor,
-              mobile: override.mobile
-            })
-          : dbg.sendCommand('Emulation.clearDeviceMetricsOverride', {})
-    )
-    // Why record before any further await: a debugger detach clears the metrics, and its handler
-    // must land after this write, not be overwritten by it.
-    if (metricsApplied) {
-      this.recordAppliedViewportOverride(browserTabId, webContentsId, override)
-    }
-    const touchApplied = await this.runViewportEmulationStep(browserTabId, 'touch emulation', () =>
-      dbg.sendCommand(
-        'Emulation.setTouchEmulationEnabled',
-        override?.mobile ? { enabled: true, maxTouchPoints: 5 } : TOUCH_EMULATION_DISABLED
-      )
-    )
-    if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
-      return false
-    }
-    // Why: identity follows the device metrics Chromium actually holds, not the request, so a failed
-    // metrics write never pairs a phone identity with a desktop viewport, or the reverse.
-    const identityApplied = await this.runViewportEmulationStep(browserTabId, 'identity', () =>
-      this.retargetTabIdentity(guest, this.resolveTabNavigationUrl(guest))
-    )
-    return (
-      metricsApplied &&
-      touchApplied &&
-      identityApplied &&
-      this.webContentsIdByTabId.get(browserTabId) === webContentsId
-    )
+        const metricsApplied = await this.runViewportEmulationStep(
+          browserTabId,
+          'device metrics',
+          () =>
+            override
+              ? sendGuestCdpCommand(guest, 'Emulation.setDeviceMetricsOverride', {
+                  width: override.width,
+                  height: override.height,
+                  deviceScaleFactor: override.deviceScaleFactor,
+                  mobile: override.mobile
+                })
+              : sendGuestCdpCommand(guest, 'Emulation.clearDeviceMetricsOverride', {})
+        )
+        // Why record before any further await: a debugger detach clears the metrics, and its handler
+        // must land after this write, not be overwritten by it.
+        if (metricsApplied) {
+          this.recordAppliedViewportOverride(browserTabId, webContentsId, override)
+        }
+        const touchApplied = await this.runViewportEmulationStep(
+          browserTabId,
+          'touch emulation',
+          () =>
+            sendGuestCdpCommand(
+              guest,
+              'Emulation.setTouchEmulationEnabled',
+              override?.mobile ? { enabled: true, maxTouchPoints: 5 } : TOUCH_EMULATION_DISABLED
+            )
+        )
+        if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
+          return false
+        }
+        // Why: identity follows the device metrics Chromium actually holds, not the request, so a failed
+        // metrics write never pairs a phone identity with a desktop viewport, or the reverse.
+        const identityApplied = await this.runViewportEmulationStep(browserTabId, 'identity', () =>
+          this.retargetTabIdentity(guest, this.resolveTabNavigationUrl(guest))
+        )
+        return (
+          metricsApplied &&
+          touchApplied &&
+          identityApplied &&
+          this.webContentsIdByTabId.get(browserTabId) === webContentsId
+        )
+      })
+      .catch(() => false)
   }
 
   private async runViewportEmulationStep(

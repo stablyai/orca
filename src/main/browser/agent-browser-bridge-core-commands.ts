@@ -15,6 +15,7 @@ import {
   waitForAbortedNavigationReplacement
 } from './agent-browser-bridge-process'
 import { AgentBrowserBridgeQueue } from './agent-browser-bridge-queue'
+import { browserCaptureIdle } from './browser-capture-idle'
 
 export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQueue {
   async snapshot(worktreeId?: string, browserPageId?: string): Promise<BrowserSnapshotResult> {
@@ -71,6 +72,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         const navigationDeadline = Date.now() + EMBEDDED_NAVIGATION_TIMEOUT_MS
         let navigationTimeout: ReturnType<typeof setTimeout> | null = null
         try {
+          browserCaptureIdle.assertCaptureAllowed(wc)
           await Promise.race([
             wc.loadURL(navigationUrl),
             new Promise<never>((_resolve, reject) => {

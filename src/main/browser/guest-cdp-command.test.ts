@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserError } from './browser-error'
+import { browserCaptureIdle } from './browser-capture-idle'
 import { sendGuestCdpCommand } from './guest-cdp-command'
 
 function makeGuest(state: { crashed?: boolean; destroyed?: boolean } = {}) {
@@ -15,6 +16,14 @@ function makeGuest(state: { crashed?: boolean; destroyed?: boolean } = {}) {
     debugger: { sendCommand }
   }
   return { guest, sendCommand }
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
 }
 
 describe('sendGuestCdpCommand', () => {
@@ -53,5 +62,32 @@ describe('sendGuestCdpCommand', () => {
       ['Emulation.setVisibleSize', { width: 2, height: 3 }],
       ['DOM.enable', {}, 'iframe-session']
     ])
+  })
+
+  it('waits for an already admitted raw command before a reservation can move', async () => {
+    const raw = deferred<{ ok: boolean }>()
+    const { guest, sendCommand } = makeGuest()
+    sendCommand.mockReturnValue(raw.promise)
+    const command = sendGuestCdpCommand(guest, 'Emulation.setVisibleSize', { width: 2, height: 3 })
+    const reservation = browserCaptureIdle.reserve(guest)
+
+    expect(() => browserCaptureIdle.assertCaptureAllowed(guest)).toThrow('reserved')
+    raw.resolve({ ok: true })
+    await expect(command).resolves.toEqual({ ok: true })
+    const lease = await reservation
+    lease.release()
+  })
+
+  it('allows an exact reservation to issue a metric command without a nested reserve', async () => {
+    const { guest, sendCommand } = makeGuest()
+    const lease = await browserCaptureIdle.reserve(guest)
+
+    await expect(
+      sendGuestCdpCommand(guest, 'Emulation.setVisibleSize', { width: 2, height: 3 }, undefined, {
+        reservation: lease
+      })
+    ).resolves.toEqual({ ok: true })
+    expect(sendCommand).toHaveBeenCalledTimes(1)
+    lease.release()
   })
 })

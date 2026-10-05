@@ -8,6 +8,8 @@ import {
 } from './agent-browser-bridge-mouse'
 import { acquireElectronDebugger } from './electron-debugger-lease'
 import { AgentBrowserBridgePointerCommands } from './agent-browser-bridge-pointer-commands'
+import { browserCaptureIdle } from './browser-capture-idle'
+import { sendGuestCdpCommand } from './guest-cdp-command'
 
 export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridgePointerCommands {
   // ── Mouse commands ──
@@ -37,43 +39,52 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
         const cdpModifiers = cdpMouseModifierMask(modifiers)
         const lease = acquireElectronDebugger(wc)
         try {
-          wc.focus()
-          const point =
-            cdpButton === 'left'
-              ? // Why: DOM activation can't carry Cmd/Ctrl/Alt/Shift, so modifier clicks use the adjusted point and let CDP dispatch the event.
-                await resolveMobileTouchClickPoint(wc.debugger, x, y, radius, cdpModifiers === 0)
-              : { x, y, adjusted: false, handled: false }
-          // Why: land the tap as one atomic op — separate move/down/up CLI calls visibly hover and can miss small controls.
-          // Why: mobile-emulated BrowserViews can ignore CDP mouse clicks, so the runtime may already have activated DOM controls.
-          if (!point.handled) {
-            await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
-              type: 'mousePressed',
-              x: point.x,
-              y: point.y,
-              button: cdpButton,
-              buttons,
-              modifiers: cdpModifiers,
-              clickCount: 1
-            })
-            await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
-              type: 'mouseReleased',
-              x: point.x,
-              y: point.y,
-              button: cdpButton,
-              buttons: 0,
-              modifiers: cdpModifiers,
-              clickCount: 1
-            })
-          }
-          return {
-            clicked: {
-              x: point.x,
-              y: point.y,
-              button: cdpButton,
-              adjusted: point.adjusted,
-              handled: point.handled
+          return await browserCaptureIdle.runCapture(wc, async () => {
+            wc.focus()
+            const point =
+              cdpButton === 'left'
+                ? // Why: DOM activation can't carry Cmd/Ctrl/Alt/Shift, so modifier clicks use the adjusted point and let CDP dispatch the event.
+                  await resolveMobileTouchClickPoint(
+                    wc.debugger,
+                    x,
+                    y,
+                    radius,
+                    cdpModifiers === 0,
+                    wc
+                  )
+                : { x, y, adjusted: false, handled: false }
+            // Why: land the tap as one atomic op — separate move/down/up CLI calls visibly hover and can miss small controls.
+            // Why: mobile-emulated BrowserViews can ignore CDP mouse clicks, so the runtime may already have activated DOM controls.
+            if (!point.handled) {
+              await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', {
+                type: 'mousePressed',
+                x: point.x,
+                y: point.y,
+                button: cdpButton,
+                buttons,
+                modifiers: cdpModifiers,
+                clickCount: 1
+              })
+              await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', {
+                type: 'mouseReleased',
+                x: point.x,
+                y: point.y,
+                button: cdpButton,
+                buttons: 0,
+                modifiers: cdpModifiers,
+                clickCount: 1
+              })
             }
-          }
+            return {
+              clicked: {
+                x: point.x,
+                y: point.y,
+                button: cdpButton,
+                adjusted: point.adjusted,
+                handled: point.handled
+              }
+            }
+          })
         } finally {
           lease.release()
         }

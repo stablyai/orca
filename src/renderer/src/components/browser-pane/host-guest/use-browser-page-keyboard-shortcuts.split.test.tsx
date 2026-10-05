@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type {
   BrowserHistoryNavigateCommand,
@@ -10,6 +10,7 @@ import type { BrowserPageZoomCommand } from '../../../../../shared/browser-page-
 import { paneChannel } from '../client-hosted-browser-pane-test-rig'
 import type { BrowserChromeShortcutScope, GrabIntent } from '../describe-page/browser-page-types'
 import { useBrowserPageKeyboardShortcuts } from './use-browser-page-keyboard-shortcuts'
+import { createWebviewBrowserPageSurface } from './browser-page-webview-surface'
 
 // Why: the chords are Cmd on macOS and Ctrl elsewhere, so the platform cannot be left to the runner.
 const MAC_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
@@ -59,6 +60,7 @@ function PaneHarness({
 }): React.JSX.Element {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook only calls the history and zoom members the fake provides.
   const webviewRef = useRef(spies.webview as unknown as Electron.WebviewTag)
+  const surface = useMemo(() => createWebviewBrowserPageSurface(webviewRef), [])
   const isActiveRef = useRef(true)
   const paneZoomLevelRef = useRef(0)
   useBrowserPageKeyboardShortcuts({
@@ -68,7 +70,7 @@ function PaneHarness({
     chromeShortcutScope: scope,
     isActiveRef,
     markupIsActive,
-    webviewRef,
+    surface,
     paneZoomLevelRef,
     setBrowserDefaultZoomLevel: vi.fn(),
     showBrowserZoomFeedback: vi.fn(),

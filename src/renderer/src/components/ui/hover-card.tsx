@@ -4,6 +4,7 @@ import * as React from 'react'
 import { HoverCard as HoverCardPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
+import { useNativeViewOcclusionRef } from '@/hooks/useNativeViewOcclusion'
 
 function HoverCard({ ...props }: React.ComponentProps<typeof HoverCardPrimitive.Root>) {
   return <HoverCardPrimitive.Root data-slot="hover-card" {...props} />
@@ -19,9 +20,11 @@ function HoverCardContent({
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof HoverCardPrimitive.Content>) {
+  const occlusionRef = useNativeViewOcclusionRef<HTMLDivElement>()
   return (
     <HoverCardPrimitive.Portal data-slot="hover-card-portal">
       <HoverCardPrimitive.Content
+        ref={occlusionRef}
         data-slot="hover-card-content"
         align={align}
         sideOffset={sideOffset}

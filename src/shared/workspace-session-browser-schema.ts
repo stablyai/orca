@@ -7,7 +7,7 @@ import type { BrowserWorkspace } from './browser-workspace-types'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 import { normalizeWorkspaceDocHistoryEntries } from './workspace-doc-history'
 import { isDocPreviewUrl } from './doc-preview-scheme'
-import { salvagingArray } from './zod-salvage'
+import { openEnum, salvagingArray } from './zod-salvage'
 
 const browserLoadErrorSchema = z.object({
   code: z.number(),
@@ -90,6 +90,7 @@ export const browserPageSchema = z.object({
   canGoForward: z.boolean(),
   loadError: browserLoadErrorSchema.nullable(),
   createdAt: z.number(),
+  desktopBackend: openEnum(['webview', 'owned-view'], 'webview').optional(),
   // Why: explicit null marks a browser page as client-local even when its
   // worktree is remote-owned; older sessions omit it and keep inferred runtime.
   browserRuntimeEnvironmentId: z.string().nullable().optional(),

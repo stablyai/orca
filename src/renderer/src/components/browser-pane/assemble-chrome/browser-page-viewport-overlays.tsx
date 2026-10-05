@@ -8,6 +8,7 @@ import type {
   BrowserPage as BrowserPageState
 } from '../../../../../shared/browser-workspace-types'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
+import type { BrowserPageSurface } from '../host-guest/browser-page-surface'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
 import { useSshWorkspaceProbeSkipRecheck } from '../use-ssh-workspace-browser-route'
 import BrowserFind from './BrowserFind'
@@ -27,6 +28,7 @@ export function BrowserPageViewportOverlays({
   findOpen,
   setFindOpen,
   webviewRef,
+  surface,
   showFailureOverlay,
   browserTab,
   failureExternalUrl,
@@ -52,6 +54,7 @@ export function BrowserPageViewportOverlays({
   findOpen: boolean
   setFindOpen: Dispatch<SetStateAction<boolean>>
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
+  surface: BrowserPageSurface
   showFailureOverlay: boolean
   browserTab: BrowserPageState
   failureExternalUrl: string | null
@@ -82,12 +85,13 @@ export function BrowserPageViewportOverlays({
         markupPortalContainer={markupPortalContainer}
         containerRef={containerRef}
         webviewRef={webviewRef}
+        surface={surface}
         browserOverlayViewport={browserOverlayViewport}
         worktreeId={worktreeId}
         currentUrl={browserTab.url}
       />
       <BrowserPageZoomIndicator state={browserZoomIndicatorState} percent={browserZoomPercent} />
-      <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} webviewRef={webviewRef} />
+      <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} surface={surface} />
       {showFailureOverlay && browserTab.loadError ? (
         <BrowserLoadFailureOverlay
           loadError={browserTab.loadError}
@@ -96,7 +100,7 @@ export function BrowserPageViewportOverlays({
           httpsRecoveryUrl={toHttpsRecoveryUrl(failedNavigationUrl)}
           onRetry={() => {
             const webview = webviewRef.current
-            if (!webview) {
+            if (!webview && !surface) {
               return
             }
             onUpdatePageStateRef.current(browserTab.id, { loading: true })
@@ -104,7 +108,28 @@ export function BrowserPageViewportOverlays({
               retryGuestRecoveryRef.current()
               return
             }
-            retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
+            if (surface) {
+              if (!surface.isAttached()) {
+                retryGuestRecoveryRef.current()
+                return
+              }
+              retryBrowserTabLoad(
+                surface,
+                browserTab,
+                onUpdatePageStateRef.current,
+                retryGuestRecoveryRef.current
+              )
+            } else if (webview) {
+              retryBrowserTabLoad(
+                {
+                  navigate: (url) => {
+                    webview.src = url
+                  }
+                },
+                browserTab,
+                onUpdatePageStateRef.current
+              )
+            }
           }}
           onTryHttps={navigateToUrl}
           onCopy={(url) => {

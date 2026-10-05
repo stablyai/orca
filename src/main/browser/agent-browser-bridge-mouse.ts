@@ -1,5 +1,6 @@
 import type { WebContents } from 'electron'
 import type { BrowserMouseModifier } from './agent-browser-bridge-types'
+import { sendGuestCdpCommand } from './guest-cdp-command'
 
 type CdpMouseButton = 'left' | 'middle' | 'right'
 
@@ -196,18 +197,22 @@ export async function resolveMobileTouchClickPoint(
   x: number,
   y: number,
   radius: number | undefined,
-  allowDomActivation: boolean
+  allowDomActivation: boolean,
+  webContents?: WebContents
 ): Promise<BrowserClickPoint> {
   const fallback = { x, y, adjusted: false, handled: false }
   if (typeof radius !== 'number' || !Number.isFinite(radius) || radius <= 0) {
     return fallback
   }
   try {
-    const result = await dbg.sendCommand('Runtime.evaluate', {
+    const params = {
       expression: mobileTouchClickExpression(x, y, radius, allowDomActivation),
       returnByValue: true,
       silent: true
-    })
+    }
+    const result = await (webContents
+      ? sendGuestCdpCommand(webContents, 'Runtime.evaluate', params)
+      : dbg.sendCommand('Runtime.evaluate', params))
     const raw = result && typeof result === 'object' ? (result as Record<string, unknown>) : null
     const evaluated = raw?.result && typeof raw.result === 'object' ? raw.result : null
     return readClickPoint((evaluated as Record<string, unknown> | null)?.value, fallback)

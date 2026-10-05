@@ -54,6 +54,7 @@ export function useBrowserPageGrabAnnotations({
   trackingContainer,
   trackingScroller,
   webviewRef,
+  surface,
   setBrowserOverlayViewport,
   browserAnnotationsLength,
   setBrowserAnnotationTrayOpen
@@ -124,8 +125,7 @@ export function useBrowserPageGrabAnnotations({
       const containerRect = containerRef.current?.getBoundingClientRect()
       if (payload) {
         const rect = payload.target.rectViewport
-        const webview = webviewRef.current
-        const webviewRect = webview?.getBoundingClientRect()
+        const webviewRect = surface?.getBounds() ?? webviewRef.current?.getBoundingClientRect()
         const offsetX = (webviewRect?.left ?? 0) - (containerRect?.left ?? 0)
         const offsetY = (webviewRect?.top ?? 0) - (containerRect?.top ?? 0)
         x = offsetX + rect.x + rect.width / 2
@@ -143,7 +143,7 @@ export function useBrowserPageGrabAnnotations({
       setGrabToast({ message, type, x, y, below, payload: payload ?? null })
       grabToastTimerRef.current = setTimeout(() => dismissGrabToast(), 2000)
     },
-    [containerRef, dismissGrabToast, mountedRef, webviewRef]
+    [containerRef, dismissGrabToast, mountedRef, surface, webviewRef]
   )
 
   // The picker supports clipboard copying and independently dismissible annotation drafts.

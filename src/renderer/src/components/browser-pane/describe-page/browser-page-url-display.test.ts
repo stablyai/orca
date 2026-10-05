@@ -63,7 +63,7 @@ describe('browser page URL display', () => {
     const webview = { src: 'chrome-error://chromewebdata/' }
     const onUpdatePageState = vi.fn()
     retryBrowserTabLoad(
-      webview as Electron.WebviewTag,
+      webview,
       {
         id: 'page-1',
         url: 'https://example.com/app',

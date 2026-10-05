@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import type { Debugger, WebContents } from 'electron'
 import { readBrowserScreencastImageSize } from './browser-screencast-image-size'
 import { sendDebuggerCommand } from './browser-screencast-debugger-command'
+import { browserCaptureIdle } from './browser-capture-idle'
 import type {
   BrowserScreencastOptions,
   PendingScreencastFrame
@@ -66,89 +67,103 @@ export function createBrowserScreencastSnapshotCapture(
     if (isSnapshotStale(initialOnly, generation)) {
       return
     }
-    try {
-      const viewportWidth = positiveInteger(options.viewportWidth)
-      const viewportHeight = positiveInteger(options.viewportHeight)
-      let image: Uint8Array | null = null
-      await applyDeviceMetricsOverride()
-      if (isSnapshotStale(initialOnly, generation)) {
-        return
-      }
-      if (viewportWidth && viewportHeight && typeof webContents.capturePage === 'function') {
+    return browserCaptureIdle
+      .runCapture(webContents, async () => {
         try {
-          // Why: CDP captureScreenshot can tile BrowserView surfaces under
-          // mobile emulation; Electron captures the actual visible viewport.
-          const nativeImage = await webContents.capturePage({
-            x: 0,
-            y: 0,
-            width: viewportWidth,
-            height: viewportHeight
-          })
-          const capture = scaleSnapshotToFit(nativeImage, options)
-          const buffer =
-            options.format === 'png' ? capture.toPNG() : capture.toJPEG(options.quality)
-          if (buffer.byteLength > 0) {
-            image = new Uint8Array(buffer)
+          const viewportWidth = positiveInteger(options.viewportWidth)
+          const viewportHeight = positiveInteger(options.viewportHeight)
+          let image: Uint8Array | null = null
+          await applyDeviceMetricsOverride()
+          if (isSnapshotStale(initialOnly, generation)) {
+            return
           }
-        } catch {
-          image = null
-        }
-      }
-      // Why: Page.startScreencast may not produce a frame for an already-painted
-      // blank/static page, which leaves remote browser clients showing only the shell.
-      if (!image) {
-        const result = await sendDebuggerCommand(dbg, 'Page.captureScreenshot', {
-          format: options.format,
-          ...(options.format === 'jpeg' ? { quality: options.quality } : {}),
-          ...(viewportWidth && viewportHeight
-            ? {
-                // Why: mobile emulation + DPR can make Chromium capture a larger
-                // surface than the visual viewport. Clipping keeps fallback frames
-                // in the same coordinate space as live screencast frames.
-                clip: {
+          if (viewportWidth && viewportHeight && typeof webContents.capturePage === 'function') {
+            try {
+              // Why: CDP captureScreenshot can tile BrowserView surfaces under
+              // mobile emulation; Electron captures the actual visible viewport.
+              const nativeCapture = Promise.resolve(
+                webContents.capturePage({
                   x: 0,
                   y: 0,
                   width: viewportWidth,
-                  height: viewportHeight,
-                  scale: 1
-                }
+                  height: viewportHeight
+                })
+              )
+              const nativeImage = await browserCaptureIdle.trackNative(webContents, nativeCapture)
+              const capture = scaleSnapshotToFit(nativeImage, options)
+              const buffer =
+                options.format === 'png' ? capture.toPNG() : capture.toJPEG(options.quality)
+              if (buffer.byteLength > 0) {
+                image = new Uint8Array(buffer)
               }
-            : {}),
-          captureBeyondViewport: false
-        })
-        if (isSnapshotStale(initialOnly, generation)) {
-          return
+            } catch {
+              image = null
+            }
+          }
+          // Why: Page.startScreencast may not produce a frame for an already-painted
+          // blank/static page, which leaves remote browser clients showing only the shell.
+          if (!image) {
+            const result = await sendDebuggerCommand(
+              dbg,
+              'Page.captureScreenshot',
+              {
+                format: options.format,
+                ...(options.format === 'jpeg' ? { quality: options.quality } : {}),
+                ...(viewportWidth && viewportHeight
+                  ? {
+                      // Why: mobile emulation + DPR can make Chromium capture a larger
+                      // surface than the visual viewport. Clipping keeps fallback frames
+                      // in the same coordinate space as live screencast frames.
+                      clip: {
+                        x: 0,
+                        y: 0,
+                        width: viewportWidth,
+                        height: viewportHeight,
+                        scale: 1
+                      }
+                    }
+                  : {}),
+                captureBeyondViewport: false
+              },
+              webContents
+            )
+            if (isSnapshotStale(initialOnly, generation)) {
+              return
+            }
+            const payload =
+              result && typeof result === 'object' ? (result as Record<string, unknown>) : {}
+            const data = typeof payload.data === 'string' ? payload.data : null
+            if (!data) {
+              return
+            }
+            image = new Uint8Array(Buffer.from(data, 'base64'))
+          }
+          if (isSnapshotStale(initialOnly, generation)) {
+            return
+          }
+          const imageSize = readBrowserScreencastImageSize(image, options.format)
+          const baseMetadata =
+            viewportWidth && viewportHeight
+              ? { deviceWidth: viewportWidth, deviceHeight: viewportHeight }
+              : imageSize
+                ? { deviceWidth: imageSize.width, deviceHeight: imageSize.height }
+                : {}
+          queueFrame({
+            // Why: static pages may only produce this fallback capture. Without
+            // dimensions, mobile clients stretch it to the phone aspect ratio.
+            metadata: {
+              ...baseMetadata,
+              ...(imageSize ? { imageWidth: imageSize.width, imageHeight: imageSize.height } : {})
+            },
+            image
+          })
+        } catch {
+          // Best effort only: live Page.screencastFrame events still drive the stream.
         }
-        const payload =
-          result && typeof result === 'object' ? (result as Record<string, unknown>) : {}
-        const data = typeof payload.data === 'string' ? payload.data : null
-        if (!data) {
-          return
-        }
-        image = new Uint8Array(Buffer.from(data, 'base64'))
-      }
-      if (isSnapshotStale(initialOnly, generation)) {
-        return
-      }
-      const imageSize = readBrowserScreencastImageSize(image, options.format)
-      const baseMetadata =
-        viewportWidth && viewportHeight
-          ? { deviceWidth: viewportWidth, deviceHeight: viewportHeight }
-          : imageSize
-            ? { deviceWidth: imageSize.width, deviceHeight: imageSize.height }
-            : {}
-      queueFrame({
-        // Why: static pages may only produce this fallback capture. Without
-        // dimensions, mobile clients stretch it to the phone aspect ratio.
-        metadata: {
-          ...baseMetadata,
-          ...(imageSize ? { imageWidth: imageSize.width, imageHeight: imageSize.height } : {})
-        },
-        image
       })
-    } catch {
-      // Best effort only: live Page.screencastFrame events still drive the stream.
-    }
+      .catch(() => {
+        // A lifecycle reservation temporarily declines best-effort snapshot frames.
+      })
   }
 
   return {

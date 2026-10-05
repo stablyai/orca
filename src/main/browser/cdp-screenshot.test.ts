@@ -2,6 +2,7 @@ import type { WebContents } from 'electron'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { captureFullPageScreenshot, captureScreenshot } from './cdp-screenshot'
+import { browserCaptureIdle } from './browser-capture-idle'
 
 function createMockWebContents() {
   const mock = {
@@ -18,12 +19,70 @@ function createMockWebContents() {
 }
 
 const noHold = (): (() => void) => () => {}
-const PROBE = {
-  format: 'jpeg',
-  quality: 1,
-  clip: { x: 0, y: 0, width: 1, height: 1, scale: 1 }
-}
 const TIMEOUT_MESSAGE = 'Screenshot timed out — the browser page did not draw a frame.'
+
+function pendingValue<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((complete) => {
+    resolve = complete
+  })
+  return { promise, resolve }
+}
+
+describe('capture surface reservation', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('waits across layout, primary capture and a late native pulse before allowing a move', async () => {
+    vi.useFakeTimers()
+    const contents = createMockWebContents()
+    const layout = pendingValue<{ cssContentSize: { width: number; height: number } }>()
+    const primary = pendingValue<{ data: string }>()
+    const native = pendingValue<{ isEmpty: () => boolean }>()
+    contents.debugger.sendCommand.mockImplementation((method: string) =>
+      method === 'Page.getLayoutMetrics' ? layout.promise : primary.promise
+    )
+    contents.capturePage.mockReturnValue(native.promise)
+    const capture = captureFullPageScreenshot(contents.guest, 'png', noHold)
+    let movable = false
+    const move = browserCaptureIdle.reserve(contents.guest).then((lease) => {
+      movable = true
+      return lease
+    })
+    await Promise.resolve()
+    expect(movable).toBe(false)
+    layout.resolve({ cssContentSize: { width: 1152, height: 2728 } })
+    await vi.advanceTimersByTimeAsync(250)
+    expect(contents.capturePage).toHaveBeenCalledOnce()
+    expect(movable).toBe(false)
+    primary.resolve({ data: 'full-page' })
+    await expect(capture).resolves.toEqual({ data: 'full-page', format: 'png' })
+    expect(movable).toBe(false)
+    native.resolve({ isEmpty: () => true })
+    const lease = await move
+    expect(movable).toBe(true)
+    lease.release()
+  })
+
+  it('retains an unanswered layout request after the caller times out', async () => {
+    vi.useFakeTimers()
+    const contents = createMockWebContents()
+    const layout = pendingValue<{ cssContentSize: { width: number; height: number } }>()
+    contents.debugger.sendCommand.mockReturnValue(layout.promise)
+    const capture = captureFullPageScreenshot(contents.guest, 'png', noHold)
+    const failed = expect(capture).rejects.toThrow('page did not respond')
+    await vi.advanceTimersByTimeAsync(8000)
+    await failed
+    expect(browserCaptureIdle.isIdle(contents.guest)).toBe(false)
+    const move = browserCaptureIdle.reserve(contents.guest)
+    layout.resolve({ cssContentSize: { width: 1152, height: 2728 } })
+    const lease = await move
+    expect(contents.debugger.sendCommand).toHaveBeenCalledTimes(1)
+    expect(contents.capturePage).not.toHaveBeenCalled()
+    lease.release()
+  })
+})
 
 describe('captureScreenshot', () => {
   afterEach(() => {
@@ -68,59 +127,155 @@ describe('captureScreenshot', () => {
     expect(events.filter((event) => event === 'release')).toHaveLength(1)
   })
 
-  it('sends the capture once and probes until the held page produces a frame', async () => {
+  it('keeps capture idle busy after the caller deadline until the primary and native promises settle', async () => {
     vi.useFakeTimers()
     const webContents = createMockWebContents()
-    // Undrawn: the capture hangs until a later request makes the page draw a frame.
-    let drawFrame: (() => void) | null = null
-    webContents.debugger.sendCommand
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            drawFrame = () => resolve({ data: 'drawn-png' })
-          })
-      )
-      .mockImplementationOnce(() => new Promise(() => {}))
-      .mockImplementationOnce(() => {
-        drawFrame?.()
-        return Promise.resolve({ data: 'probe' })
-      })
+    let resolvePrimary: ((value: { data: string }) => void) | undefined
+    let resolveNative: ((value: { isEmpty: () => boolean }) => void) | undefined
+    webContents.debugger.sendCommand.mockImplementation(
+      () =>
+        new Promise<{ data: string }>((resolve) => {
+          resolvePrimary = resolve
+        })
+    )
+    webContents.capturePage.mockImplementation(
+      () =>
+        new Promise<{ isEmpty: () => boolean }>((resolve) => {
+          resolveNative = resolve
+        })
+    )
 
     const capture = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
-    await vi.advanceTimersByTimeAsync(750)
+    const failed = expect(capture).rejects.toThrow(TIMEOUT_MESSAGE)
+    await vi.advanceTimersByTimeAsync(8000)
+    await failed
+    expect(browserCaptureIdle.isIdle(webContents.guest)).toBe(false)
+
+    const settled = browserCaptureIdle.waitForIdle(webContents.guest)
+    resolveNative?.({ isEmpty: () => true })
+    resolvePrimary?.({ data: 'late-primary' })
+    await settled
+    expect(browserCaptureIdle.isIdle(webContents.guest)).toBe(true)
+  })
+
+  it('uses one hidden native frame pulse instead of repeating the CDP capture', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    let resolveCapture: ((value: { data: string }) => void) | undefined
+    webContents.debugger.sendCommand.mockImplementationOnce(
+      () =>
+        new Promise<{ data: string }>((resolve) => {
+          resolveCapture = resolve
+        })
+    )
+    webContents.capturePage.mockImplementation(() => {
+      resolveCapture?.({ data: 'drawn-png' })
+      return Promise.resolve({ isEmpty: () => false })
+    })
+
+    const capture = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
+    await vi.advanceTimersByTimeAsync(250)
 
     await expect(capture).resolves.toEqual({ data: 'drawn-png' })
     expect(webContents.debugger.sendCommand.mock.calls).toEqual([
-      ['Page.captureScreenshot', { format: 'png' }],
-      ['Page.captureScreenshot', PROBE],
-      ['Page.captureScreenshot', PROBE]
+      ['Page.captureScreenshot', { format: 'png' }]
     ])
-    expect(webContents.capturePage).not.toHaveBeenCalled()
+    expect(webContents.capturePage).toHaveBeenCalledWith(undefined, {
+      stayHidden: true,
+      stayAwake: false
+    })
   })
 
-  it('never repeats the full capture while a slow one is in flight', async () => {
+  it('does not start another native frame pulse while the prior one remains unresolved', async () => {
     vi.useFakeTimers()
-    let resolveCapture: ((value: unknown) => void) | null = null
     const webContents = createMockWebContents()
-    webContents.debugger.sendCommand
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveCapture = resolve
-          })
-      )
-      .mockImplementation(() => new Promise(() => {}))
-    const fullPage = { format: 'png', captureBeyondViewport: true }
+    let resolveCapture: ((value: { data: string }) => void) | undefined
+    let resolveNative: (() => void) | undefined
+    webContents.debugger.sendCommand.mockImplementationOnce(
+      () =>
+        new Promise<{ data: string }>((resolve) => {
+          resolveCapture = resolve
+        })
+    )
+    webContents.capturePage.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveNative = () => resolve({ isEmpty: () => false })
+        })
+    )
 
-    const capture = captureScreenshot(webContents.guest, fullPage, noHold)
-    await vi.advanceTimersByTimeAsync(480)
-    resolveCapture!({ data: 'slow-png' })
+    const capture = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
+    await vi.advanceTimersByTimeAsync(4000)
 
+    expect(webContents.capturePage).toHaveBeenCalledTimes(1)
+    resolveNative?.()
+    resolveCapture?.({ data: 'slow-png' })
     await expect(capture).resolves.toEqual({ data: 'slow-png' })
+  })
+
+  it('absorbs synchronous and asynchronous native pulse failures without replacing the CDP result', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    let resolveCapture: ((value: { data: string }) => void) | undefined
+    webContents.debugger.sendCommand.mockImplementationOnce(
+      () =>
+        new Promise<{ data: string }>((resolve) => {
+          resolveCapture = resolve
+        })
+    )
+    webContents.capturePage
+      .mockImplementationOnce(() => {
+        throw new Error('synchronous native pulse failure')
+      })
+      .mockRejectedValueOnce(new Error('asynchronous native pulse failure'))
+      .mockImplementationOnce(() => {
+        resolveCapture?.({ data: 'primary-cdp-result' })
+        return Promise.resolve({ isEmpty: () => true })
+      })
+
+    const capture = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
+    await vi.advanceTimersByTimeAsync(1750)
+
+    await expect(capture).resolves.toEqual({ data: 'primary-cdp-result' })
+    expect(webContents.debugger.sendCommand).toHaveBeenCalledTimes(1)
+    expect(webContents.capturePage).toHaveBeenCalledTimes(3)
+  })
+
+  it('keeps clipped JPEG parameters on the sole CDP capture while native output is discarded', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    const params = {
+      format: 'jpeg',
+      quality: 73,
+      clip: { x: 8, y: 16, width: 320, height: 240, scale: 2 },
+      captureBeyondViewport: false,
+      fromSurface: false
+    }
+    let resolveCapture: ((value: { data: string }) => void) | undefined
+    webContents.debugger.sendCommand.mockImplementation(() => {
+      if (!resolveCapture) {
+        return new Promise<{ data: string }>((resolve) => {
+          resolveCapture = resolve
+        })
+      }
+      return Promise.resolve({ data: 'unexpected-second-cdp-capture' })
+    })
+    webContents.capturePage.mockImplementation(() => {
+      resolveCapture?.({ data: 'clipped-jpeg' })
+      return Promise.resolve({ isEmpty: () => false })
+    })
+
+    const capture = captureScreenshot(webContents.guest, params, noHold)
+    await vi.advanceTimersByTimeAsync(250)
+
+    await expect(capture).resolves.toEqual({ data: 'clipped-jpeg' })
     expect(webContents.debugger.sendCommand.mock.calls).toEqual([
-      ['Page.captureScreenshot', fullPage],
-      ['Page.captureScreenshot', PROBE]
+      ['Page.captureScreenshot', params]
     ])
+    expect(webContents.capturePage).toHaveBeenCalledWith(undefined, {
+      stayHidden: true,
+      stayAwake: false
+    })
   })
 
   it('stops probing at the deadline', async () => {
@@ -136,14 +291,29 @@ describe('captureScreenshot', () => {
 
     await vi.advanceTimersByTimeAsync(60_000)
     expect(webContents.debugger.sendCommand.mock.calls).toEqual([
-      ['Page.captureScreenshot', { format: 'png' }],
-      ['Page.captureScreenshot', PROBE],
-      ['Page.captureScreenshot', PROBE],
-      ['Page.captureScreenshot', PROBE],
-      ['Page.captureScreenshot', PROBE]
+      ['Page.captureScreenshot', { format: 'png' }]
     ])
+    expect(webContents.capturePage).toHaveBeenCalledWith(undefined, {
+      stayHidden: true,
+      stayAwake: false
+    })
   })
 
+  it('clears frame probes when the initial CDP send throws synchronously', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    webContents.debugger.sendCommand.mockImplementation(() => {
+      throw new Error('synchronous primary failure')
+    })
+
+    await expect(captureScreenshot(webContents.guest, { format: 'png' }, noHold)).rejects.toThrow(
+      'synchronous primary failure'
+    )
+    await vi.advanceTimersByTimeAsync(8000)
+
+    expect(webContents.capturePage).not.toHaveBeenCalled()
+    expect(browserCaptureIdle.isIdle(webContents.guest)).toBe(true)
+  })
   it('fails at once on a CDP error, without retrying or falling back', async () => {
     vi.useFakeTimers()
     const webContents = createMockWebContents()
@@ -187,58 +357,98 @@ describe('captureScreenshot', () => {
     await settled
   })
 
-  it('falls back to capturePage when Page.captureScreenshot stalls', async () => {
-    vi.useFakeTimers()
-    const webContents = createMockWebContents()
-    webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
-    webContents.capturePage.mockResolvedValueOnce({
-      isEmpty: () => false,
-      toPNG: () => Buffer.from('fallback-png')
-    })
+  it.each(['png', 'jpeg'] as const)(
+    'falls back to native %s when Page.captureScreenshot stalls',
+    async (format) => {
+      vi.useFakeTimers()
+      const webContents = createMockWebContents()
+      webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
+      const toPNG = vi.fn(() => Buffer.from('fallback-png'))
+      const toJPEG = vi.fn(() => Buffer.from('fallback-jpeg'))
+      let nativePulseCount = 0
+      webContents.capturePage.mockImplementation(async () => {
+        nativePulseCount += 1
+        if (nativePulseCount <= 4) {
+          return { isEmpty: () => true }
+        }
+        return { isEmpty: () => false, toPNG, toJPEG }
+      })
 
-    const capture = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
-    await vi.advanceTimersByTimeAsync(8000)
+      const capture = captureScreenshot(webContents.guest, { format, quality: 37 }, noHold)
+      await vi.advanceTimersByTimeAsync(8000)
 
-    await expect(capture).resolves.toEqual({
-      data: Buffer.from('fallback-png').toString('base64')
-    })
-    expect(webContents.capturePage).toHaveBeenCalledTimes(1)
-  })
-
-  it('crops the fallback image when the request includes a visible clip rect', async () => {
-    vi.useFakeTimers()
-    const croppedImage = {
-      isEmpty: () => false,
-      toPNG: () => Buffer.from('cropped-png')
+      await expect(capture).resolves.toEqual({
+        data: Buffer.from(`fallback-${format}`).toString('base64')
+      })
+      if (format === 'jpeg') {
+        expect(toJPEG).toHaveBeenCalledWith(37)
+        expect(toPNG).not.toHaveBeenCalled()
+      } else {
+        expect(toPNG).toHaveBeenCalledTimes(1)
+        expect(toJPEG).not.toHaveBeenCalled()
+      }
+      expect(webContents.capturePage).toHaveBeenCalledTimes(5)
     }
-    const webContents = createMockWebContents()
-    webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
-    const crop = vi.fn(() => croppedImage)
-    webContents.capturePage.mockResolvedValueOnce({
-      isEmpty: () => false,
-      getSize: () => ({ width: 400, height: 300 }),
-      crop,
-      toPNG: () => Buffer.from('full-png')
-    })
+  )
 
-    const capture = captureScreenshot(
-      webContents.guest,
-      { format: 'png', clip: { x: 10, y: 20, width: 100, height: 50, scale: 2 } },
-      noHold
-    )
-    await vi.advanceTimersByTimeAsync(8000)
+  it.each([
+    { format: 'png', scale: 1 },
+    { format: 'png', scale: 2 },
+    { format: 'jpeg', scale: 1 },
+    { format: 'jpeg', scale: 2 }
+  ] as const)(
+    'declines $format fallback clip at scale $scale without encoding another region',
+    async ({ format, scale }) => {
+      vi.useFakeTimers()
+      const toPNG = vi.fn(() => Buffer.from('cropped-png'))
+      const toJPEG = vi.fn(() => Buffer.from('cropped-jpeg'))
+      const croppedImage = {
+        isEmpty: () => false,
+        toPNG,
+        toJPEG
+      }
+      const webContents = createMockWebContents()
+      webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
+      const crop = vi.fn(() => croppedImage)
+      let nativePulseCount = 0
+      webContents.capturePage.mockImplementation(async () => {
+        nativePulseCount += 1
+        if (nativePulseCount <= 4) {
+          return { isEmpty: () => true }
+        }
+        return {
+          isEmpty: () => false,
+          getSize: () => ({ width: 400, height: 300 }),
+          crop,
+          toPNG,
+          toJPEG
+        }
+      })
 
-    await expect(capture).resolves.toEqual({
-      data: Buffer.from('cropped-png').toString('base64')
-    })
-    expect(crop).toHaveBeenCalledWith({ x: 20, y: 40, width: 200, height: 100 })
-  })
+      const capture = captureScreenshot(
+        webContents.guest,
+        { format, clip: { x: 10, y: 20, width: 100, height: 50, scale } },
+        noHold
+      )
+      const settled = capture.then(
+        (result) => ({ result }),
+        (error: unknown) => ({ error })
+      )
+      await vi.advanceTimersByTimeAsync(8000)
+      await expect(settled).resolves.toEqual({ error: new Error(TIMEOUT_MESSAGE) })
+
+      expect(crop).not.toHaveBeenCalled()
+      expect(toPNG).not.toHaveBeenCalled()
+      expect(toJPEG).not.toHaveBeenCalled()
+      expect(webContents.capturePage).toHaveBeenCalledTimes(5)
+    }
+  )
 
   it('keeps the timeout error when the request needs beyond-viewport pixels', async () => {
     vi.useFakeTimers()
     const webContents = createMockWebContents()
     webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
-    webContents.capturePage.mockResolvedValueOnce({
+    webContents.capturePage.mockResolvedValueOnce({ isEmpty: () => true }).mockResolvedValueOnce({
       isEmpty: () => false,
       getSize: () => ({ width: 400, height: 300 }),
       crop: vi.fn(),
@@ -263,7 +473,7 @@ describe('captureScreenshot', () => {
     vi.useFakeTimers()
     const webContents = createMockWebContents()
     webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
-    webContents.capturePage.mockResolvedValueOnce({ isEmpty: () => true })
+    webContents.capturePage.mockResolvedValue({ isEmpty: () => true })
 
     const capture = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
     const settled = expect(capture).rejects.toThrow(TIMEOUT_MESSAGE)
@@ -275,7 +485,7 @@ describe('captureScreenshot', () => {
     vi.useFakeTimers()
     const webContents = createMockWebContents()
     webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
-    webContents.capturePage.mockResolvedValueOnce({
+    webContents.capturePage.mockResolvedValue({
       isEmpty: () => {
         throw new Error('native image unavailable')
       }
@@ -287,21 +497,18 @@ describe('captureScreenshot', () => {
     await settled
   })
 
-  it('reports the timeout when both CDP and fallback capture stall', async () => {
+  it('reports the timeout without starting fallback capture when a pulse remains unresolved', async () => {
     vi.useFakeTimers()
     const webContents = createMockWebContents()
     webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
     webContents.capturePage.mockImplementation(() => new Promise(() => {}))
-    const onSettled = vi.fn()
 
     const capture = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
-    capture.catch(onSettled)
+    const settled = expect(capture).rejects.toThrow(TIMEOUT_MESSAGE)
     await vi.advanceTimersByTimeAsync(8000)
-    expect(webContents.capturePage).toHaveBeenCalledTimes(1)
-    expect(onSettled).not.toHaveBeenCalled()
 
-    await vi.advanceTimersByTimeAsync(1000)
-    await expect(capture).rejects.toThrow(TIMEOUT_MESSAGE)
+    expect(webContents.capturePage).toHaveBeenCalledTimes(1)
+    await settled
   })
 })
 
@@ -333,6 +540,45 @@ describe('captureFullPageScreenshot', () => {
     ).rejects.toThrow('Target closed')
     expect(release).toHaveBeenCalledTimes(1)
   })
+
+  it.each(['png', 'jpeg'] as const)(
+    'preserves %s full-page geometry in draw-triggering probes',
+    async (format) => {
+      vi.useFakeTimers()
+      const webContents = createMockWebContents()
+      const clip = { x: 0, y: 0, width: 640, height: 1280, scale: 1 }
+      const params = { format, captureBeyondViewport: true, clip }
+      let resolveCapture: ((value: { data: string }) => void) | undefined
+      webContents.debugger.sendCommand.mockImplementation((method: string) => {
+        if (method === 'Page.getLayoutMetrics') {
+          return Promise.resolve({ cssContentSize: { width: 640, height: 1280 } })
+        }
+        if (!resolveCapture) {
+          return new Promise<{ data: string }>((resolve) => {
+            resolveCapture = resolve
+          })
+        }
+        return Promise.resolve({ data: 'unexpected second CDP capture' })
+      })
+      webContents.capturePage.mockImplementationOnce(async () => {
+        resolveCapture?.({ data: `${format}-full-page` })
+        return { isEmpty: () => true }
+      })
+
+      const capture = captureFullPageScreenshot(webContents.guest, format, noHold)
+      await vi.advanceTimersByTimeAsync(250)
+
+      await expect(capture).resolves.toEqual({ data: `${format}-full-page`, format })
+      expect(webContents.debugger.sendCommand.mock.calls).toEqual([
+        ['Page.getLayoutMetrics', {}],
+        ['Page.captureScreenshot', params]
+      ])
+      expect(webContents.capturePage).toHaveBeenCalledWith(undefined, {
+        stayHidden: true,
+        stayAwake: false
+      })
+    }
+  )
 
   it('uses cssContentSize so HiDPI pages are captured at the real page size', async () => {
     const webContents = createMockWebContents()
@@ -384,5 +630,129 @@ describe('captureFullPageScreenshot', () => {
       captureBeyondViewport: true,
       clip: { x: 0, y: 0, width: 800, height: 1600, scale: 1 }
     })
+  })
+})
+
+describe('shared native frame admission', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('keeps an unresolved native pulse from one invocation from overlapping the next on the same guest', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    let resolveFirstCapture: ((value: { data: string }) => void) | undefined
+    let resolveSecondCapture: ((value: { data: string }) => void) | undefined
+    let resolveNative: (() => void) | undefined
+    let screenshotCalls = 0
+    webContents.debugger.sendCommand.mockImplementation(() => {
+      screenshotCalls += 1
+      return new Promise<{ data: string }>((resolve) => {
+        if (screenshotCalls === 1) {
+          resolveFirstCapture = resolve
+        } else {
+          resolveSecondCapture = resolve
+        }
+      })
+    })
+    webContents.capturePage.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveNative = () => resolve({ isEmpty: () => false })
+        })
+    )
+
+    const first = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(webContents.capturePage).toHaveBeenCalledTimes(1)
+    resolveFirstCapture?.({ data: 'first' })
+    await expect(first).resolves.toEqual({ data: 'first' })
+
+    const second = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(webContents.capturePage).toHaveBeenCalledTimes(1)
+
+    resolveNative?.()
+    await vi.advanceTimersByTimeAsync(500)
+    expect(webContents.capturePage).toHaveBeenCalledTimes(2)
+    resolveSecondCapture?.({ data: 'second' })
+    await expect(second).resolves.toEqual({ data: 'second' })
+  })
+
+  it('does not launch fallback capturePage while a prior invocation pulse remains unresolved', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    let resolveFirstCapture: ((value: { data: string }) => void) | undefined
+    let resolveNative: (() => void) | undefined
+    let screenshotCalls = 0
+    webContents.debugger.sendCommand.mockImplementation(() => {
+      screenshotCalls += 1
+      if (screenshotCalls === 1) {
+        return new Promise<{ data: string }>((resolve) => {
+          resolveFirstCapture = resolve
+        })
+      }
+      return new Promise(() => {})
+    })
+    webContents.capturePage.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveNative = () => resolve({ isEmpty: () => false })
+        })
+    )
+
+    const first = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
+    await vi.advanceTimersByTimeAsync(250)
+    resolveFirstCapture?.({ data: 'first' })
+    await expect(first).resolves.toEqual({ data: 'first' })
+
+    const second = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
+    const settled = expect(second).rejects.toThrow(TIMEOUT_MESSAGE)
+    await vi.advanceTimersByTimeAsync(9000)
+    await settled
+    expect(webContents.capturePage).toHaveBeenCalledTimes(1)
+    resolveNative?.()
+  })
+
+  it('admits native pulses independently for distinct guests', async () => {
+    vi.useFakeTimers()
+    const first = createMockWebContents()
+    const second = createMockWebContents()
+    first.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
+    second.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
+    first.capturePage.mockImplementation(() => new Promise(() => {}))
+    second.capturePage.mockImplementation(() => new Promise(() => {}))
+
+    const captureFirst = captureScreenshot(first.guest, { format: 'png' }, noHold)
+    const captureSecond = captureScreenshot(second.guest, { format: 'png' }, noHold)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(first.capturePage).toHaveBeenCalledTimes(1)
+    expect(second.capturePage).toHaveBeenCalledTimes(1)
+    captureFirst.catch(() => {})
+    captureSecond.catch(() => {})
+  })
+
+  it('releases admission after a rejected or synchronous native capture failure', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    let resolveCapture: ((value: { data: string }) => void) | undefined
+    webContents.debugger.sendCommand.mockImplementation(
+      () =>
+        new Promise<{ data: string }>((resolve) => {
+          resolveCapture = resolve
+        })
+    )
+    webContents.capturePage
+      .mockImplementationOnce(() => {
+        throw new Error('sync failure')
+      })
+      .mockRejectedValueOnce(new Error('async failure'))
+      .mockImplementationOnce(() => Promise.resolve({ isEmpty: () => false }))
+
+    const capture = captureScreenshot(webContents.guest, { format: 'png' }, noHold)
+    await vi.advanceTimersByTimeAsync(1750)
+    expect(webContents.capturePage).toHaveBeenCalledTimes(3)
+    resolveCapture?.({ data: 'primary' })
+    await expect(capture).resolves.toEqual({ data: 'primary' })
   })
 })

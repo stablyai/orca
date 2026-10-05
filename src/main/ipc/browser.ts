@@ -20,8 +20,11 @@ import {
   respondToBrowserWebAuthnAccountRequest
 } from '../browser/browser-webauthn-account-picker'
 import type { BrowserWebAuthnAccountResponse } from '../../shared/browser-webauthn-account'
+import { createDesktopBrowserViewService } from '../browser/desktop-browser-view-runtime'
+import { registerDesktopBrowserViewHandlers } from './desktop-browser-view-ipc'
 
 let agentBrowserBridgeRef: AgentBrowserBridge | null = null
+const desktopViewService = createDesktopBrowserViewService(() => agentBrowserBridgeRef)
 
 export type BrowserGuestArgs = {
   browserPageId: string
@@ -36,6 +39,7 @@ export function setAgentBrowserBridgeRef(bridge: AgentBrowserBridge | null): voi
 }
 
 export function registerBrowserHandlers(): void {
+  registerDesktopBrowserViewHandlers(desktopViewService)
   resetGrabModeState()
   ipcMain.removeHandler('browser:registerGuest')
   ipcMain.removeHandler('browser:isGuestRegistered')
@@ -162,7 +166,11 @@ export function registerBrowserHandlers(): void {
     // the grab disposal below drops the intent an in-flight preview grab compares by identity —
     // that grab would then answer ok without ever arming. A document page withdraws by revoking
     // its grant, so its id arriving here is misaddressed however it got here.
-    if (typeof args?.browserPageId !== 'string' || isWorkspaceDocPageId(args.browserPageId)) {
+    if (
+      typeof args?.browserPageId !== 'string' ||
+      isWorkspaceDocPageId(args.browserPageId) ||
+      browserManager.isOwnedViewPage(args.browserPageId)
+    ) {
       return false
     }
     // Why: notify bridge before unregistering so it can destroy the session

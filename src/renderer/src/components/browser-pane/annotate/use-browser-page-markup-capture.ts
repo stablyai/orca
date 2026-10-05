@@ -1,4 +1,5 @@
 import { useCallback, type MutableRefObject } from 'react'
+import type { BrowserPageSurface } from '../host-guest/browser-page-surface'
 import { deliverMarkupToClipboard } from './markup-clipboard-delivery'
 import {
   useMarkupMode,
@@ -7,25 +8,28 @@ import {
 } from './useMarkupMode'
 
 export function useBrowserPageMarkupCapture(
-  webviewRef: MutableRefObject<Electron.WebviewTag | null>
+  webviewRef: MutableRefObject<Electron.WebviewTag | null>,
+  surface?: BrowserPageSurface
 ): MarkupModeController {
   return useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
       const webview = webviewRef.current
-      if (!webview) {
+      const rect = surface ? surface.getBounds() : webview?.getBoundingClientRect()
+      if (!rect) {
         return null
       }
-      const rect = webview.getBoundingClientRect()
       if (rect.width <= 0 || rect.height <= 0) {
         return null
       }
       return {
-        source: { kind: 'webview', webview },
+        source: surface
+          ? { kind: 'surface', capture: surface.captureViewport }
+          : { kind: 'webview', webview: webview! },
         cssWidth: rect.width,
         cssHeight: rect.height,
         outputScale: window.devicePixelRatio || 1
       }
-    }, [webviewRef]),
+    }, [surface, webviewRef]),
     onDeliver: deliverMarkupToClipboard
   })
 }

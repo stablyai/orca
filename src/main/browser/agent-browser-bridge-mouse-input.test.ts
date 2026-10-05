@@ -51,6 +51,7 @@ vi.mock('./cdp-bridge', () => ({
 }))
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
+import { browserCaptureIdle } from './browser-capture-idle'
 import {
   mockBrowserManager,
   mockWebContents,
@@ -73,6 +74,54 @@ describe('AgentBrowserBridge', () => {
     })
     bridge = new AgentBrowserBridge(mockBrowserManager())
     bridge.setActiveTab(100)
+  })
+
+  it('does not focus or click a guest while its owned view is reserved for capture', async () => {
+    const wc = mockWebContents(100)
+    webContentsFromIdMock.mockReturnValue(wc)
+    const lease = await browserCaptureIdle.reserve(wc)
+    try {
+      await expect(bridge.mouseClick(10, 20, 'left', undefined, 'tab-1', 18)).rejects.toThrow(
+        'reserved'
+      )
+      expect(wc.focus).not.toHaveBeenCalled()
+      expect(wc.debugger.sendCommand).not.toHaveBeenCalled()
+    } finally {
+      lease.release()
+    }
+  })
+
+  it('finishes mouse release before an intervening capture reservation can acquire the guest', async () => {
+    const wc = mockWebContents(100)
+    webContentsFromIdMock.mockReturnValue(wc)
+    let finishPress!: () => void
+    const pressed = new Promise<void>((resolve) => {
+      finishPress = resolve
+    })
+    wc.debugger.sendCommand.mockImplementation((_method, params) =>
+      params !== null &&
+      typeof params === 'object' &&
+      'type' in params &&
+      params.type === 'mousePressed'
+        ? pressed
+        : Promise.resolve({})
+    )
+    const click = bridge.mouseClick(10, 20, 'right', undefined, 'tab-1')
+    await vi.waitFor(() => expect(wc.debugger.sendCommand).toHaveBeenCalledOnce())
+    let acquired = false
+    const waiting = browserCaptureIdle.reserve(wc).then((lease) => {
+      acquired = true
+      return lease
+    })
+    expect(acquired).toBe(false)
+    finishPress()
+    await click
+    const lease = await waiting
+    expect(wc.debugger.sendCommand).toHaveBeenLastCalledWith(
+      'Input.dispatchMouseEvent',
+      expect.objectContaining({ type: 'mouseReleased' })
+    )
+    lease.release()
   })
 
   it('uses the runtime mobile tap path when a nearby DOM target is handled', async () => {

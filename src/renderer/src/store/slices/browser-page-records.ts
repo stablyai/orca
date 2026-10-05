@@ -1,5 +1,6 @@
 import type {
   BrowserPage,
+  BrowserPageDesktopBackend,
   BrowserPageDocLocation,
   BrowserWorkspace
 } from '../../../../shared/browser-workspace-types'
@@ -56,7 +57,8 @@ export function buildBrowserPage(
   title?: string,
   browserRuntimeEnvironmentId?: string | null,
   browserPageId?: string,
-  docLocation?: BrowserPageDocLocation
+  docLocation?: BrowserPageDocLocation,
+  desktopBackend?: BrowserPageDesktopBackend
 ): BrowserPage {
   // Why the url is overridden rather than trusted: this is the one place a page's url is minted,
   // and it is read by persistence, the mobile publisher, history and the address bar. A grant URL
@@ -76,6 +78,7 @@ export function buildBrowserPage(
     canGoForward: false,
     loadError: null,
     createdAt: Date.now(),
+    ...(desktopBackend ? { desktopBackend } : {}),
     ...(browserRuntimeEnvironmentId !== undefined ? { browserRuntimeEnvironmentId } : {}),
     ...(docLocation ? { docLocation } : {})
   }

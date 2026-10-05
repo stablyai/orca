@@ -48,10 +48,15 @@ export function getOpenableExternalUrl(currentUrl: string): string | null {
   return normalizeExternalBrowserUrl(redactKagiSessionToken(currentUrl))
 }
 
+export type BrowserPageRetryTarget =
+  | { navigate: (url: string) => void | Promise<void> }
+  | { src: string }
+
 export function retryBrowserTabLoad(
-  webview: Electron.WebviewTag | null,
+  webview: BrowserPageRetryTarget | null,
   browserTab: BrowserPageState,
-  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
+  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void,
+  onNavigationError?: () => void
 ): void {
   if (!webview) {
     return
@@ -69,5 +74,9 @@ export function retryBrowserTabLoad(
     loading: true,
     title: retryUrl
   })
-  webview.src = retryUrl
+  if ('navigate' in webview) {
+    void Promise.resolve(webview.navigate(retryUrl)).catch(() => onNavigationError?.())
+  } else {
+    webview.src = retryUrl
+  }
 }

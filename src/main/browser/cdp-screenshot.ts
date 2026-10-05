@@ -1,4 +1,8 @@
 import type { WebContents } from 'electron'
+import { browserCaptureIdle, type BrowserCaptureReservation } from './browser-capture-idle'
+import { getLayoutClip } from './cdp-screenshot-layout'
+import { getDesktopOwnedBrowserCapture } from './desktop-owned-browser-capture-registry'
+import { encodeNativeImageScreenshot } from './cdp-screenshot-native-image'
 
 /** Draws a hidden guest for the duration of a capture; returns its release. */
 export type CapturePaintHold = () => () => void
@@ -6,119 +10,51 @@ export type CapturePaintHold = () => () => void
 const SCREENSHOT_TIMEOUT_MS = 8000
 // Why: offsets from the capture start; the last leaves a full-page capture (~0.5 s on a tall page) time before the deadline.
 const FRAME_PROBE_OFFSETS_MS = [250, 750, 1750, 3750]
-// Why: a 1x1 request is cheap; the frame it makes the page produce also answers the pending capture.
-const FRAME_PROBE_PARAMS = {
-  format: 'jpeg',
-  quality: 1,
-  clip: { x: 0, y: 0, width: 1, height: 1, scale: 1 }
-}
 const FALLBACK_CAPTURE_TIMEOUT_MS = 1000
 const SCREENSHOT_TIMEOUT_MESSAGE = 'Screenshot timed out — the browser page did not draw a frame.'
 
-function applyFallbackClip(
-  image: Electron.NativeImage,
-  params: Record<string, unknown> | undefined
-): Electron.NativeImage | null {
-  if (params?.captureBeyondViewport) {
-    // Why: capturePage() can only see the currently painted viewport. If the
-    // caller asked for beyond-viewport pixels, returning a viewport-sized image
-    // would silently lie about what was captured.
-    return null
-  }
-
-  const clip = params?.clip
-  if (!clip || typeof clip !== 'object') {
-    return image
-  }
-  const clipRect = clip as Record<string, unknown>
-
-  const x = typeof clipRect.x === 'number' ? clipRect.x : Number.NaN
-  const y = typeof clipRect.y === 'number' ? clipRect.y : Number.NaN
-  const width = typeof clipRect.width === 'number' ? clipRect.width : Number.NaN
-  const height = typeof clipRect.height === 'number' ? clipRect.height : Number.NaN
-  const scale =
-    typeof clipRect.scale === 'number' && Number.isFinite(clipRect.scale) && clipRect.scale > 0
-      ? clipRect.scale
-      : 1
-
-  if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
-    return null
-  }
-
-  const cropRect = {
-    x: Math.round(x * scale),
-    y: Math.round(y * scale),
-    width: Math.round(width * scale),
-    height: Math.round(height * scale)
-  }
-  const imageSize = image.getSize()
-  if (
-    cropRect.x < 0 ||
-    cropRect.y < 0 ||
-    cropRect.width <= 0 ||
-    cropRect.height <= 0 ||
-    cropRect.x + cropRect.width > imageSize.width ||
-    cropRect.y + cropRect.height > imageSize.height
-  ) {
-    return null
-  }
-
-  return image.crop(cropRect)
+type NativeCaptureAdmission = {
+  promise: Promise<Electron.NativeImage>
 }
 
-function encodeNativeImageScreenshot(
-  image: Electron.NativeImage,
-  params: Record<string, unknown> | undefined
-): { data: string } | null {
-  if (image.isEmpty()) {
+// Why: native capturePage mutates the guest's presentation state and cannot be cancelled. The
+// lease must outlive a single CDP request, otherwise a later request can overlap a discarded
+// pulse that is still settling after its original caller returned.
+const nativeCaptureAdmissions = new WeakMap<WebContents, NativeCaptureAdmission>()
+
+function startAdmittedNativeCapture(
+  webContents: WebContents
+): Promise<Electron.NativeImage> | null {
+  if (nativeCaptureAdmissions.has(webContents)) {
     return null
   }
 
-  const clippedImage = applyFallbackClip(image, params)
-  if (!clippedImage || clippedImage.isEmpty()) {
+  let promise: Promise<Electron.NativeImage>
+  try {
+    promise = Promise.resolve(
+      webContents.capturePage(undefined, { stayHidden: true, stayAwake: false })
+    )
+  } catch {
     return null
   }
 
-  const format = params?.format === 'jpeg' ? 'jpeg' : 'png'
-  const quality =
-    typeof params?.quality === 'number' && Number.isFinite(params.quality)
-      ? Math.max(0, Math.min(100, Math.round(params.quality)))
-      : undefined
-  const buffer = format === 'jpeg' ? clippedImage.toJPEG(quality ?? 90) : clippedImage.toPNG()
-  return { data: buffer.toString('base64') }
+  const trackedPromise = browserCaptureIdle.trackNative(webContents, promise)
+  const admission = { promise: trackedPromise }
+  nativeCaptureAdmissions.set(webContents, admission)
+  void promise.then(
+    () => {
+      if (nativeCaptureAdmissions.get(webContents) === admission) {
+        nativeCaptureAdmissions.delete(webContents)
+      }
+    },
+    () => {
+      if (nativeCaptureAdmissions.get(webContents) === admission) {
+        nativeCaptureAdmissions.delete(webContents)
+      }
+    }
+  )
+  return trackedPromise
 }
-
-function getLayoutClip(metrics: {
-  cssContentSize?: { width?: number; height?: number }
-  contentSize?: { width?: number; height?: number }
-}): { x: number; y: number; width: number; height: number; scale: number } | null {
-  // Why: Page.captureScreenshot clip coordinates are in CSS pixels. On HiDPI
-  // Electron guests, `contentSize` can reflect device pixels, which makes
-  // Chromium tile the page into a duplicated 2x2 grid. Prefer cssContentSize
-  // and only fall back to contentSize when older Chromium builds omit it.
-  const size = metrics.cssContentSize ?? metrics.contentSize
-  const width = size?.width
-  const height = size?.height
-  if (
-    typeof width !== 'number' ||
-    !Number.isFinite(width) ||
-    width <= 0 ||
-    typeof height !== 'number' ||
-    !Number.isFinite(height) ||
-    height <= 0
-  ) {
-    return null
-  }
-
-  return {
-    x: 0,
-    y: 0,
-    width: Math.ceil(width),
-    height: Math.ceil(height),
-    scale: 1
-  }
-}
-
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   let timer: NodeJS.Timeout | null = null
   return Promise.race([
@@ -134,16 +70,16 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
 }
 
 // Why: a request made before the held page is drawn never resolves, and an offscreen drawn page can
-// skip one; a later request makes the page produce a frame, which answers every pending request.
-// So the capture is sent once and cheap probes follow until it answers. Resolves null when no frame
-// arrives by the deadline; a CDP error is an answer. Unanswered probes settle on the next frame or
-// reject on detach.
+// skip one; a later native capture makes the page produce a frame without issuing another CDP capture
+// that could retain the full-page viewport. Resolves null when no frame arrives by the deadline; a CDP
+// error is an answer. Native probe pixels are discarded and never become the screenshot result.
 function captureUntilDrawn(
   webContents: WebContents,
   params: Record<string, unknown>
 ): Promise<{ data: string } | null> {
   return new Promise((resolve, reject) => {
     let settled = false
+    let nativeProbeInFlight = false
     const finish = (settle: () => void): void => {
       if (settled) {
         return
@@ -169,12 +105,46 @@ function captureUntilDrawn(
       } catch {
         // Some guest teardown paths reject repaint requests. Fall through to CDP.
       }
-      return webContents.debugger.sendCommand('Page.captureScreenshot', requestParams)
+      try {
+        return browserCaptureIdle.trackPrimary(
+          webContents,
+          webContents.debugger.sendCommand('Page.captureScreenshot', requestParams)
+        )
+      } catch (error) {
+        finish(() => reject(error instanceof Error ? error : new Error(String(error))))
+        return null
+      }
+    }
+    const pulseNativeFrame = (): void => {
+      if (settled) {
+        return
+      }
+      if (webContents.isDestroyed()) {
+        finish(() => reject(new Error('WebContents destroyed')))
+        return
+      }
+      if (!webContents.debugger.isAttached()) {
+        finish(() => reject(new Error('Debugger detached')))
+        return
+      }
+      if (nativeProbeInFlight) {
+        return
+      }
+      nativeProbeInFlight = true
+      const nativeProbe = startAdmittedNativeCapture(webContents)
+      if (!nativeProbe) {
+        nativeProbeInFlight = false
+        return
+      }
+      void nativeProbe
+        .catch(() => {})
+        .finally(() => {
+          // Why: the module lease outlives this invocation; this flag only suppresses its own timers.
+          nativeProbeInFlight = false
+        })
     }
     const deadline = setTimeout(() => finish(() => resolve(null)), SCREENSHOT_TIMEOUT_MS)
-    const probes = FRAME_PROBE_OFFSETS_MS.map((offsetMs) =>
-      setTimeout(() => send(FRAME_PROBE_PARAMS)?.catch(() => {}), offsetMs)
-    )
+    const probes = FRAME_PROBE_OFFSETS_MS.map((offsetMs) => setTimeout(pulseNativeFrame, offsetMs))
     send(params)?.then(
       (result) => finish(() => resolve(result?.data ? { data: result.data } : null)),
       (error: unknown) =>
@@ -183,7 +153,27 @@ function captureUntilDrawn(
   })
 }
 
-export async function captureFullPageScreenshot(
+export function captureFullPageScreenshot(
+  webContents: WebContents,
+  format: 'png' | 'jpeg',
+  holdPaint: CapturePaintHold,
+  reservation?: BrowserCaptureReservation
+): Promise<{ data: string; format: 'png' | 'jpeg' }> {
+  const ownedCapture = !reservation && getDesktopOwnedBrowserCapture(webContents)
+  if (ownedCapture) {
+    return ownedCapture({ kind: 'full-page', format }, holdPaint).then((result) => ({
+      ...result,
+      format
+    }))
+  }
+  return browserCaptureIdle.runCapture(
+    webContents,
+    () => captureFullPageScreenshotOnSurface(webContents, format, holdPaint),
+    reservation
+  )
+}
+
+async function captureFullPageScreenshotOnSurface(
   webContents: WebContents,
   format: 'png' | 'jpeg',
   holdPaint: CapturePaintHold
@@ -199,7 +189,10 @@ export async function captureFullPageScreenshot(
   try {
     // Why: layout works on an undrawn page, so only the pixel capture waits for a frame.
     const layoutMetrics: Promise<Parameters<typeof getLayoutClip>[0]> =
-      webContents.debugger.sendCommand('Page.getLayoutMetrics', {})
+      browserCaptureIdle.trackPrimary(
+        webContents,
+        webContents.debugger.sendCommand('Page.getLayoutMetrics', {})
+      )
     const metrics = await withTimeout(
       layoutMetrics,
       SCREENSHOT_TIMEOUT_MS,
@@ -225,7 +218,27 @@ export async function captureFullPageScreenshot(
 
 // Why: Page.captureScreenshot honours clip and beyond-viewport params that capturePage() can't.
 // Bounded so agent-browser doesn't hang on its 30s CDP timeout if the debugger stalls.
-export async function captureScreenshot(
+export function captureScreenshot(
+  webContents: WebContents,
+  params: Record<string, unknown> | undefined,
+  holdPaint: CapturePaintHold,
+  reservation?: BrowserCaptureReservation
+): Promise<{ data: string }> {
+  const ownedCapture =
+    !reservation &&
+    params?.captureBeyondViewport === true &&
+    getDesktopOwnedBrowserCapture(webContents)
+  if (ownedCapture) {
+    return ownedCapture({ kind: 'screenshot', params }, holdPaint)
+  }
+  return browserCaptureIdle.runCapture(
+    webContents,
+    () => captureScreenshotOnSurface(webContents, params, holdPaint),
+    reservation
+  )
+}
+
+async function captureScreenshotOnSurface(
   webContents: WebContents,
   params: Record<string, unknown> | undefined,
   holdPaint: CapturePaintHold
@@ -261,13 +274,14 @@ export async function captureScreenshot(
       return frame
     }
     // Why: capturePage is only a best-effort fallback for a page that never answered.
-    const fallback = await withTimeout(
-      Promise.resolve().then(() => webContents.capturePage()),
-      FALLBACK_CAPTURE_TIMEOUT_MS,
-      SCREENSHOT_TIMEOUT_MESSAGE
-    )
-      .then((image) => encodeNativeImageScreenshot(image, params))
-      .catch(() => null)
+    // Why: never overlap a retained pulse or queue work beyond the fallback deadline. A busy native
+    // admission preserves the existing timeout result; its image belongs to the earlier request.
+    const admittedFallback = startAdmittedNativeCapture(webContents)
+    const fallback = admittedFallback
+      ? await withTimeout(admittedFallback, FALLBACK_CAPTURE_TIMEOUT_MS, SCREENSHOT_TIMEOUT_MESSAGE)
+          .then((image) => encodeNativeImageScreenshot(image, params))
+          .catch(() => null)
+      : null
     if (fallback) {
       return fallback
     }

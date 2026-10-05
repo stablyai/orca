@@ -23,6 +23,7 @@ import {
   loadPairedBrowserTabCreator
 } from './paired-browser-tab-creator'
 import { findGroupAndWorktree } from '../tab-group-state'
+import { resolveNewDesktopBrowserBackend } from './browser-desktop-backend-selection'
 
 export function createBrowserTabActions(
   set: BrowserSliceSet,
@@ -52,7 +53,8 @@ export function createBrowserTabActions(
         options?.title,
         options?.browserRuntimeEnvironmentId,
         browserPageId,
-        options?.docLocation
+        options?.docLocation,
+        resolveNewDesktopBrowserBackend(get, worktreeId, options, options?.sessionPartition)
       )
       if (!options?.browserRuntimeEnvironmentId && !options?.docLocation) {
         admitBrowserPageMount(page.id)
