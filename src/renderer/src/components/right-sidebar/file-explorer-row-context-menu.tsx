@@ -28,12 +28,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { openFileInBrowserTab } from '@/lib/file-preview'
 import { translate } from '@/i18n/i18n'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
-import {
-  getRevealInFileManagerLabel,
-  isRevealInFileManagerBlocked,
-  revealInFileManager
-} from '@/lib/reveal-in-file-manager'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getRevealInFileManagerLabel, revealInFileManager } from '@/lib/reveal-in-file-manager'
 import type { FileExplorerRowProps } from './FileExplorerRow'
 import {
   shouldShowCollapseFolderAction,
@@ -119,12 +114,9 @@ export function FileExplorerRowContextMenu({
     supportsFolderDownload
   )
   const showCopyFileAction = shouldShowCopyFileAction(node, connectionId, selectionSize)
-  const revealBlocked = useAppStore((s) =>
-    isRevealInFileManagerBlocked(s.settings, {
-      connectionId,
-      runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(s, s.activeWorktreeId)
-    })
-  )
+  // Why: the host that listed this row owns its path; a globally focused
+  // runtime does not make a local workspace's files remote.
+  const revealBlocked = node.operationOwner?.kind !== 'local'
   const handleOpenInOrcaBrowser = useCallback(() => {
     if (!activeWorktreeId) {
       return

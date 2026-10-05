@@ -10,12 +10,10 @@ const items = vi.hoisted(() => ({ list: [] as ItemProps[] }))
 const storeState = vi.hoisted(
   (): {
     activeWorktreeId: string
-    activeWorkspaceExecutionHostId: 'local' | `runtime:${string}` | null
     openMarkdownPreview: () => void
     settings: { activeRuntimeEnvironmentId: string | null }
   } => ({
     activeWorktreeId: 'wt-1',
-    activeWorkspaceExecutionHostId: null,
     openMarkdownPreview: () => {},
     settings: { activeRuntimeEnvironmentId: null }
   })
@@ -60,20 +58,21 @@ vi.mock('./file-explorer-row-file-transfer', () => ({
   downloadRemoteFile: vi.fn()
 }))
 
-const fileNode: TreeNode = {
-  name: 'index.ts',
-  path: '/repo/src/index.ts',
-  relativePath: 'src/index.ts',
-  isDirectory: false,
-  depth: 1
+function fileNode(operationOwner: TreeNode['operationOwner']): TreeNode {
+  return {
+    name: 'index.ts',
+    path: '/repo/src/index.ts',
+    relativePath: 'src/index.ts',
+    isDirectory: false,
+    depth: 1,
+    operationOwner
+  }
 }
 
-function renderRevealItem(
-  owner: Pick<React.ComponentProps<typeof FileExplorerRowContextMenu>, 'connectionId'> = {}
-): ItemProps | undefined {
+function renderRevealItem(operationOwner: TreeNode['operationOwner']): ItemProps | undefined {
   renderToStaticMarkup(
     <FileExplorerRowContextMenu
-      node={fileNode}
+      node={fileNode(operationOwner)}
       isExpanded={false}
       deleteShortcutLabel=""
       targetDir="/repo/src"
@@ -92,7 +91,6 @@ function renderRevealItem(
       onOpenInTerminal={vi.fn()}
       onCollapseFolderSubtree={vi.fn()}
       onFindInFolder={vi.fn()}
-      {...owner}
     />
   )
   return items.list.find((item) =>
@@ -108,13 +106,15 @@ describe('FileExplorerRowContextMenu reveal in file manager', () => {
   beforeEach(() => {
     items.list = []
     storeState.activeWorktreeId = 'wt-1'
-    storeState.activeWorkspaceExecutionHostId = null
     storeState.settings.activeRuntimeEnvironmentId = null
     revealInFileManager.mockReset()
   })
 
-  it('reveals a local row through the shared reveal action', () => {
-    const reveal = renderRevealItem()
+  it('reveals a locally listed row while a remote runtime is focused', () => {
+    // Why: a globally focused remote runtime used to block reveal for local rows too.
+    storeState.settings.activeRuntimeEnvironmentId = 'env-1'
+
+    const reveal = renderRevealItem({ kind: 'local' })
 
     expect(reveal?.disabled).toBe(false)
     expect(showsLocalOnlyHint(reveal)).toBe(false)
@@ -122,29 +122,23 @@ describe('FileExplorerRowContextMenu reveal in file manager', () => {
     expect(revealInFileManager).toHaveBeenCalledWith('/repo/src/index.ts')
   })
 
-  it('disables reveal as local-only for a row on an SSH host', () => {
-    const reveal = renderRevealItem({ connectionId: 'ssh-1' })
-
-    expect(reveal?.disabled).toBe(true)
-    expect(showsLocalOnlyHint(reveal)).toBe(true)
-  })
-
-  it.each([
-    ['worktree', 'wt-1'],
-    ['folder workspace', 'folder:fw-1']
-  ])('disables reveal as local-only for a row in a %s a remote runtime owns', (_kind, id) => {
-    storeState.activeWorktreeId = id
-    storeState.activeWorkspaceExecutionHostId = 'runtime:env-1'
-
-    const reveal = renderRevealItem()
-
-    expect(reveal?.disabled).toBe(true)
-    expect(showsLocalOnlyHint(reveal)).toBe(true)
-  })
-
-  it('reveals a row in a local folder workspace', () => {
+  it('reveals a locally listed row in a folder workspace', () => {
     storeState.activeWorktreeId = 'folder:fw-1'
 
-    expect(renderRevealItem()?.disabled).toBe(false)
+    expect(renderRevealItem({ kind: 'local' })?.disabled).toBe(false)
+  })
+
+  const nonLocalOwners: [string, TreeNode['operationOwner']][] = [
+    ['runtime', { kind: 'runtime', environmentId: 'env-1', executionHostId: 'runtime:env-1' }],
+    ['ssh', { kind: 'ssh', connectionId: 'ssh-1' }],
+    ['unresolved', { kind: 'unresolved' }],
+    ['unstamped', undefined]
+  ]
+
+  it.each(nonLocalOwners)('disables reveal as local-only for a %s row', (_label, owner) => {
+    const reveal = renderRevealItem(owner)
+
+    expect(reveal?.disabled).toBe(true)
+    expect(showsLocalOnlyHint(reveal)).toBe(true)
   })
 })
