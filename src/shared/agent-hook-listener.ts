@@ -1,3 +1,4 @@
+import { decodeHookResumeSession } from './agent-resume-identity'
 import { readAgentProcessIdentity } from './agent-process-presence'
 import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
@@ -296,7 +297,9 @@ export function normalizeHookPayload(
             state.claudeActiveSessionCronPaneKeys.has(paneKey)
         }
       : {}),
-    ...(providerSession ? { providerSession } : {}),
+    ...(providerSession
+      ? { providerSession: decodeHookResumeSession(providerSession, source, null) }
+      : {}),
     ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
     payload: transportPayload
   }

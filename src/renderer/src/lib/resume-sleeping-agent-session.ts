@@ -1,8 +1,6 @@
 import { useAppStore } from '@/store'
-import {
-  agentProviderSessionsEqual,
-  type SleepingAgentSessionRecord
-} from '../../../shared/agent-session-resume'
+import { sameResumeTarget } from '../../../shared/agent-resume-identity'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import {
@@ -106,8 +104,12 @@ function activeOrQueuedResumeClaimsProviderSession(
     const tabId = getAgentStatusTabId(entry)
     const pane = parsePaneKey(entry.paneKey)
     if (
-      entry.agentType !== record.agent ||
-      !agentProviderSessionsEqual(record.agent, entry.providerSession, record.providerSession)
+      !sameResumeTarget(
+        entry.agentType,
+        entry.providerSession,
+        record.agent,
+        record.providerSession
+      )
     ) {
       continue
     }
@@ -149,10 +151,10 @@ function activeOrQueuedResumeClaimsProviderSession(
   for (const [tabId, startup] of Object.entries(state.pendingStartupByTabId)) {
     if (
       worktreeTabIds.has(tabId) &&
-      startup.launchAgent === record.agent &&
-      agentProviderSessionsEqual(
-        record.agent,
+      sameResumeTarget(
+        startup.launchAgent,
         startup.resumeProviderSession,
+        record.agent,
         record.providerSession
       )
     ) {
@@ -164,8 +166,12 @@ function activeOrQueuedResumeClaimsProviderSession(
     if (
       worktreeTabIds.has(tabId) &&
       claim.worktreeId === record.worktreeId &&
-      claim.launchAgent === record.agent &&
-      agentProviderSessionsEqual(record.agent, claim.providerSession, record.providerSession)
+      sameResumeTarget(
+        claim.launchAgent,
+        claim.providerSession,
+        record.agent,
+        record.providerSession
+      )
     ) {
       return true
     }

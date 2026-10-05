@@ -1,3 +1,4 @@
+import { agentResumeIdentitiesEqual } from '../../../../shared/agent-resume-identity'
 import type {
   SleepingAgentSessionRecord,
   SleepingAgentLaunchConfig
@@ -37,6 +38,10 @@ export function sleepingRecordsEquivalentIgnoringCaptureTime(
     existing.worktreeId === next.worktreeId &&
     existing.agent === next.agent &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession) &&
+    agentResumeIdentitiesEqual(
+      existing.providerSession.resumeIdentity,
+      next.providerSession.resumeIdentity
+    ) &&
     existing.prompt === next.prompt &&
     existing.state === next.state &&
     existing.updatedAt === next.updatedAt &&
@@ -64,6 +69,10 @@ export function recoveryRecordMatches(
     existing.state === next.state &&
     agentMainAgentVerdict(existing) === agentMainAgentVerdict(next) &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession) &&
+    agentResumeIdentitiesEqual(
+      existing.providerSession.resumeIdentity,
+      next.providerSession.resumeIdentity
+    ) &&
     launchConfigsEqual(existing.launchConfig, next.launchConfig)
   )
 }

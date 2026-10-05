@@ -10,6 +10,7 @@ import type {
   RuntimeEnsureAgentSessionResult
 } from '../../shared/agent-session-host-authority'
 import { canonicalizeAgentSessionIdentity } from './agent-session-claim-identity'
+import { resolveResumeAgent } from '../../shared/agent-resume-identity'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
@@ -107,7 +108,11 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       throw new Error('runtime_unavailable')
     }
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
-    const namespace = this.getAgentSessionExecutionNamespace(workspace, request.agent)
+    // Why: an older client sends its display agent with the host's owner label; the owner launches,
+    // and settings it sent for the display agent must not cross to the owner.
+    const agent = resolveResumeAgent(request.agent, request.providerSession)
+    const sameAgent = agent === request.agent
+    const namespace = this.getAgentSessionExecutionNamespace(workspace, agent)
     if (
       !namespace ||
       !(await this.executionOwnerSupportsAgentSessionOperation(workspace, 'resume', _caller.signal))
@@ -123,7 +128,7 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       canonicalWorktreeId: workspace.id
     })
     const settings = this.store.getSettings()
-    if (!isTuiAgentEnabled(request.agent, settings.disabledTuiAgents)) {
+    if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before resuming.')
     }
     const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
@@ -135,18 +140,19 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       isRemote,
       terminalWindowsShell: settings.terminalWindowsShell
     })
+    const launchPreferences = sameAgent ? request.launchPreferences : undefined
     const startup = buildAgentResumeStartupPlan({
-      agent: request.agent,
+      agent,
       providerSession: identity.providerSession,
       cmdOverrides: settings.agentCmdOverrides ?? {},
       agentArgs:
-        request.agentArgs !== undefined
+        sameAgent && request.agentArgs !== undefined
           ? request.agentArgs
-          : resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
-      ompResumeFilePath: request.ompResumeFilePath,
-      sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
-      sessionOptionsOverrideAgentArgs: Boolean(request.launchPreferences),
+          : resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
+      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      ompResumeFilePath: sameAgent ? request.ompResumeFilePath : undefined,
+      sessionOptions: this.toAgentSessionOptions(launchPreferences),
+      sessionOptionsOverrideAgentArgs: Boolean(launchPreferences),
       platform,
       shell,
       isRemote
@@ -162,7 +168,7 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       env: startup.env,
       launchConfig: startup.launchConfig,
       startupCommandDelivery: startup.startupCommandDelivery,
-      launchAgent: request.agent,
+      launchAgent: agent,
       terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
       presentation: request.presentation ?? 'background',
       tabId: request.placement?.tabId,

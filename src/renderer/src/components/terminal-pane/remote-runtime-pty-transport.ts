@@ -1,3 +1,7 @@
+import {
+  providerSessionForResumeRequest,
+  resolveResumeAgent
+} from '../../../../shared/agent-resume-identity'
 import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
 import { withRemoteReattachInputBuffer } from './remote-reattach-input-buffer'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
@@ -2220,10 +2224,15 @@ export function createRemoteRuntimePtyTransport(
           options.startupCommandDelivery ?? startupCommandDelivery
         const envToSend = options.env ?? env
         const envToDeleteToSend = options.envToDelete ?? envToDelete
-        const launchConfigToSend = options.launchConfig ?? launchConfig
         const resumeProviderSessionToSend = options.resumeProviderSession ?? resumeProviderSession
         const launchTokenToSend = options.launchToken ?? launchToken
-        const launchAgentToSend = options.launchAgent ?? launchAgent
+        const displayAgent = options.launchAgent ?? launchAgent
+        const launchAgentToSend =
+          displayAgent && resumeProviderSessionToSend
+            ? resolveResumeAgent(displayAgent, resumeProviderSessionToSend)
+            : displayAgent
+        const sameAgent = launchAgentToSend === displayAgent
+        const launchConfigToSend = sameAgent ? (options.launchConfig ?? launchConfig) : undefined
         const legacyCreateParams = {
           worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
           clientMutationId: terminalCreateMutationId,
@@ -2280,12 +2289,14 @@ export function createRemoteRuntimePtyTransport(
                       ...keyboardOptions,
                       worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                       agent: launchAgentToSend!,
-                      providerSession: resumeProviderSessionToSend,
+                      providerSession: providerSessionForResumeRequest(resumeProviderSessionToSend),
                       ...(launchConfigToSend?.ompResumeFilePath
                         ? { ompResumeFilePath: launchConfigToSend.ompResumeFilePath }
                         : {}),
-                      ...(agentArgsOverride !== undefined ? { agentArgs: agentArgsOverride } : {}),
-                      ...(agentLaunchPreferences
+                      ...(sameAgent && agentArgsOverride !== undefined
+                        ? { agentArgs: agentArgsOverride }
+                        : {}),
+                      ...(sameAgent && agentLaunchPreferences
                         ? { launchPreferences: agentLaunchPreferences }
                         : {}),
                       placement: { tabId, leafId },

@@ -1,3 +1,4 @@
+import { inheritAgentResumeIdentity } from '../../../shared/agent-resume-identity'
 import { transitionHookPresence } from '../../../shared/agent-hook-presence-transition'
 import {
   reconcileRemoteCodexState,
@@ -83,8 +84,13 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (terminalOwnedPayload.providerSessionOnly) {
       // Why: identity-only rows survive replay but must not emit prompt telemetry or a fabricated status.
       onAccepted?.()
+      const ownedPayload = inheritAgentResumeIdentity(
+        terminalOwnedPayload,
+        previous,
+        terminalOwnedPayload.payload.agentType
+      )
       const enriched = {
-        ...this.attachStatusTiming(terminalOwnedPayload, now),
+        ...this.attachStatusTiming(ownedPayload, now),
         observation: this.stampObservation(terminalOwnedPayload, origin, now)
       }
       this.clearAssistantMessageRetry(enriched.paneKey)
@@ -159,13 +165,11 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
-    const identityResolvedPayload =
-      identity.agentType === rootContextPreservingPayload.payload.agentType
-        ? rootContextPreservingPayload
-        : {
-            ...rootContextPreservingPayload,
-            payload: { ...rootContextPreservingPayload.payload, agentType: identity.agentType }
-          }
+    const identityResolvedPayload = inheritAgentResumeIdentity(
+      rootContextPreservingPayload,
+      previous,
+      identity.agentType
+    )
     const attachedPayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
     // Why before the permission hold: that hold adopts the event's `mainAgent`, and a relay's
     // restatement of a main agent the desktop cancelled must not replace the cancel.

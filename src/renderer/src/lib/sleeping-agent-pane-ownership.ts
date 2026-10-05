@@ -1,6 +1,7 @@
 import type { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { agentTurnEndedUncleanly } from '../../../shared/agent-main-agent-verdict'
+import { resolveResumeAgent } from '../../../shared/agent-resume-identity'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -12,8 +13,10 @@ import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
 export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): string {
-  const base = `${record.worktreeId}\0${record.agent}\0${record.providerSession.key}\0${record.providerSession.id}`
-  return record.agent === 'pi' || record.agent === 'prime-agent'
+  // Why: keyed on the agent the wake would launch, so a mixed-label record and its owner's record collide.
+  const agent = resolveResumeAgent(record.agent, record.providerSession)
+  const base = `${record.worktreeId}\0${agent}\0${record.providerSession.key}\0${record.providerSession.id}`
+  return agent === 'pi' || agent === 'prime-agent'
     ? `${base}\0${record.providerSession.transcriptPath ?? ''}`
     : base
 }
