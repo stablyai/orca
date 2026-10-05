@@ -143,6 +143,14 @@ describe('cleanTerminalSelection', () => {
     expect(cleanTerminalSelection(shell, at(0, 40))).toBe(shell)
   })
 
+  it('counts wide characters as two cells when deciding a row was wrapped', () => {
+    // Nine CJK characters fill the 18 cells after the marker; counted as one cell each they would not.
+    const cjk = ['● 漢字漢字漢字漢字漢', '  字漢字'].join('\n')
+    expect(cleanTerminalSelection(cjk, at(0, 20))).toBe('漢字漢字漢字漢字漢字漢字')
+    const notFull = ['● 漢字漢字', '  字漢字'].join('\n')
+    expect(cleanTerminalSelection(notFull, at(0, 20))).toBe(['漢字漢字', '字漢字'].join('\n'))
+  })
+
   it('without geometry behaves like the gutter pass', () => {
     const midLine = ['answer starts here', '  and continues'].join('\n')
     expect(cleanTerminalSelection(midLine)).toBe(midLine)
