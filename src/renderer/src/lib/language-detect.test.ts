@@ -80,6 +80,7 @@ describe('detectLanguage', () => {
   it('maps Quarto and R Markdown files to the quarto language id', () => {
     expect(detectLanguage('slides/talk.qmd')).toBe('quarto')
     expect(detectLanguage('analysis/report.Rmd')).toBe('quarto')
+    expect(detectLanguage('/home/remote/report.rmarkdown')).toBe('quarto')
     expect(detectLanguage('C:\\repo\\NOTES.QMD')).toBe('quarto')
     expect(detectLanguage('README.md')).toBe('markdown')
   })

@@ -42,8 +42,8 @@ describe('registerQuartoLanguage', () => {
   it('registers the quarto language, tokenizer, and configuration once', () => {
     const monaco = createMonacoMock()
 
-    registerQuartoLanguage(monaco as never)
-    registerQuartoLanguage(monaco as never)
+    registerQuartoLanguage(monaco)
+    registerQuartoLanguage(monaco)
 
     expect(monaco.languages.register).toHaveBeenCalledTimes(1)
     expect(monaco.languages.register).toHaveBeenCalledWith(
@@ -157,11 +157,7 @@ describe('registerQuartoLanguage', () => {
     expect(tokenTypeAt(heading, 0)).toBe('keyword')
   })
 
-  it('enters an embed only at the start of a line, so the embed-entry budget does not apply', () => {
-    // Why: `monarch-embed-entry-budget` guards grammars that enter an embed
-    // mid-line — a `<script>` tag, a `{expr}` — where each entry holds a JS stack
-    // frame until the line ends. A Quarto cell opens on a whole fence line, so
-    // however long a line inside the cell is, it adds no further entries.
+  it('keeps long executable-cell lines at a single embed entry', () => {
     const tokenizer = createMonarchTokenizer(QUARTO_LANGUAGE_ID, quartoMonarchLanguage)
     const { maxNestedDepth, error } = measureNestedDepth(tokenizer, [
       `${FENCE}{python}`,
