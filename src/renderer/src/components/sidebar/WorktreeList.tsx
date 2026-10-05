@@ -179,7 +179,9 @@ const WorktreeList = React.memo(function WorktreeList({
   })
   const selection = useSidebarWorktreeSelection({
     sectionRows: rowModel.sectionRows,
-    pinnedDisplayPolicy
+    pinnedDisplayPolicy,
+    activeWorktreeId,
+    activeWorkspaceExecutionHostId
   })
   const statusMutations = useWorktreeStatusMutations({
     manualOrderCatalog,
