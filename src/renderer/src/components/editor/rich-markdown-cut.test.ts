@@ -2,7 +2,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
-import type { EditorView } from '@tiptap/pm/view'
 import StarterKit from '@tiptap/starter-kit'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
@@ -202,35 +201,28 @@ describe('rich markdown cut handler behavior', () => {
       const nextLineFrom = paraStart + text.indexOf('Omega')
       const cursorPos = lineFrom + 'Middle'.length
 
-      let viewState = editor.state.apply(
-        editor.state.tr.setSelection(TextSelection.create(editor.state.doc, cursorPos))
-      )
+      editor.mount(document.createElement('div'))
+      const view = editor.view
+      view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, cursorPos)))
 
       const paragraphElement = document.createElement('p')
       vi.spyOn(paragraphElement, 'getBoundingClientRect').mockReturnValue(
         DOMRect.fromRect({ x: 20, y: 0, width: 600, height: 60 })
       )
-      const view = {
-        get state() {
-          return viewState
-        },
-        dispatch: vi.fn((tr) => {
-          viewState = viewState.apply(tr)
-        }),
-        domAtPos: vi.fn(() => ({ node: paragraphElement, offset: 0 })),
-        coordsAtPos: vi.fn((pos: number) => {
-          if (pos === paraStart) {
-            return { top: 0, bottom: 20, left: 20, right: 20 }
-          }
-          if (pos === paraEnd) {
-            return { top: 40, bottom: 60, left: 280, right: 280 }
-          }
-          return { top: 20, bottom: 40, left: 120, right: 120 }
-        }),
-        posAtCoords: vi.fn((coords: { top: number }) => {
-          return { pos: coords.top < 40 ? lineFrom : nextLineFrom, inside: -1 }
-        })
-      } as unknown as EditorView
+      vi.spyOn(view, 'domAtPos').mockReturnValue({ node: paragraphElement, offset: 0 })
+      vi.spyOn(view, 'coordsAtPos').mockImplementation((pos) => {
+        if (pos === paraStart) {
+          return { top: 0, bottom: 20, left: 20, right: 20 }
+        }
+        if (pos === paraEnd) {
+          return { top: 40, bottom: 60, left: 280, right: 280 }
+        }
+        return { top: 20, bottom: 40, left: 120, right: 120 }
+      })
+      vi.spyOn(view, 'posAtCoords').mockImplementation((coords) => ({
+        pos: coords.top < 40 ? lineFrom : nextLineFrom,
+        inside: -1
+      }))
 
       const clipboard = createClipboardEventMock()
       const handled = handleRichMarkdownCut(view, clipboard.event)
@@ -257,20 +249,13 @@ describe('rich markdown cut handler behavior', () => {
     const editor = createEditor('Body text to cut.\n')
     try {
       const pos = 1
-      let viewState = editor.state.apply(
-        editor.state.tr.setSelection(TextSelection.create(editor.state.doc, pos))
-      )
-      const view = {
-        get state() {
-          return viewState
-        },
-        dispatch: vi.fn((tr) => {
-          viewState = viewState.apply(tr)
-        }),
-        domAtPos: vi.fn(() => ({ node: document.createElement('p'), offset: 0 })),
-        coordsAtPos: vi.fn(() => ({ top: 0, bottom: 20, left: 0, right: 20 })),
-        posAtCoords: vi.fn(() => null)
-      } as unknown as EditorView
+      editor.mount(document.createElement('div'))
+      const view = editor.view
+      view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, pos)))
+      vi.spyOn(view, 'dispatch')
+      vi.spyOn(view, 'domAtPos').mockReturnValue({ node: document.createElement('p'), offset: 0 })
+      vi.spyOn(view, 'coordsAtPos').mockReturnValue({ top: 0, bottom: 20, left: 0, right: 20 })
+      vi.spyOn(view, 'posAtCoords').mockReturnValue(null)
 
       const clipboard = createClipboardEventMock({ failReadback: true })
       const handled = handleRichMarkdownCut(view, clipboard.event)

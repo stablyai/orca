@@ -1,5 +1,7 @@
+// @vitest-environment happy-dom
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { Editor } from '@tiptap/react'
+import { Editor } from '@tiptap/react'
+import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import type { DocLinkMenuState } from './rich-markdown-commands'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
@@ -90,6 +92,31 @@ function createConfigParams(overrides: Partial<EditorConfigParams> = {}): Editor
 describe('createRichMarkdownEditorConfig', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('copies Markdown through the configured DOM listener and keeps HTML', () => {
+    const params = createConfigParams()
+    const config = createRichMarkdownEditorConfig(params)
+    const editor = new Editor({
+      element: document.createElement('div'),
+      extensions: createRichMarkdownExtensions({ codec: params.codec }),
+      content: '**owned fixture**',
+      contentType: 'markdown',
+      editorProps: config.editorProps
+    })
+    params.editorRef.current = editor
+    try {
+      editor.commands.setTextSelection({ from: 1, to: 14 })
+      const clipboardData = new DataTransfer()
+      const event = new ClipboardEvent('copy', { clipboardData, bubbles: true, cancelable: true })
+      editor.view.dom.dispatchEvent(event)
+      expect(clipboardData.getData('text/plain')).toBe('**owned fixture**')
+      expect(clipboardData.getData('text/html')).toContain('<strong>owned fixture</strong>')
+      expect(event.defaultPrevented).toBe(true)
+    } finally {
+      editor.destroy()
+      params.editorRef.current = null
+    }
   })
 
   it('disables browser spellcheck when the rich Markdown setting is off', () => {

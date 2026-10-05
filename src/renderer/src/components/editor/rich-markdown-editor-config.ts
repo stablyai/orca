@@ -22,6 +22,7 @@ import {
   type RichMarkdownRuntimeSettings
 } from './rich-markdown-editor-click-routing'
 import { createRichMarkdownKeyHandler } from './rich-markdown-key-handler'
+import { serializeRichMarkdownSliceToMarkdown } from './rich-markdown-clipboard-markdown-text'
 import { commitRichMarkdownSerialization } from './rich-markdown-serialization-commit'
 import {
   createRichMarkdownImageResolverContext,
@@ -141,6 +142,9 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       handleDOMEvents: {
         cut: handleRichMarkdownCut
       },
+      // Plain-text targets need Markdown syntax rather than flattened visible text.
+      clipboardTextSerializer: (slice, view) =>
+        serializeRichMarkdownSliceToMarkdown(editorRef.current, slice, view.state.selection.$from),
       handlePaste: (view, event, slice) =>
         handleRichMarkdownPaste({
           editor: editorRef.current,
