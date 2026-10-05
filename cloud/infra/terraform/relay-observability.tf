@@ -49,13 +49,13 @@ locals {
     }
     # Why: `db=orca_relay,` keeps auth on the shared instance out. NOWAIT refusals ("could not
     # obtain lock") are excluded: sweeps step aside by design at ~160/min even with rehome paused.
-    reservation_drift = {
-      description = "Cells whose reserved_requests disagreed with their lease units when reconciliation corrected them; should trend to zero."
-      filter      = "((resource.type=\"cloud_run_revision\" AND (${local.relay_service_log_filter})) OR resource.type=\"gce_instance\") AND jsonPayload.event=\"orca_relay_reservation_drift\""
-    }
     cloud_sql_lock_timeouts = {
       description = "Relay statements Postgres cancelled after waiting out their lock timeout; a burst means one transaction is holding rows every other relay process needs."
       filter      = "resource.type=\"cloudsql_database\" AND resource.labels.database_id=\"${var.project_id}:${local.relay_database_instance_name}\" AND textPayload:\"db=orca_relay,\" AND textPayload:\"canceling statement due to lock timeout\""
+    }
+    reservation_drift = {
+      description = "Cells whose reserved_requests disagreed with their lease units when reconciliation corrected them; should trend to zero."
+      filter      = "((resource.type=\"cloud_run_revision\" AND (${local.relay_service_log_filter})) OR resource.type=\"gce_instance\") AND jsonPayload.event=\"orca_relay_reservation_drift\""
     }
   }
 

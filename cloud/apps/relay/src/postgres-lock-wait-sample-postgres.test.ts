@@ -38,7 +38,9 @@ describePostgres('PostgreSQL lock-wait sample', () => {
     await directorDatabase?.close()
   })
 
-  it('attributes a director waiting on a cell-held relay_cells row', async () => {
+  // Every waiter after the first is blocked by the first waiter's tuple lock, so
+  // only the root of the chain names the cell transaction that holds the row.
+  it('attributes a convoy of directors to the cell holding the relay_cells row', async () => {
     expect(await readPostgresLockWaitSample(directorDatabase)).toEqual([])
 
     let release!: () => void
@@ -54,19 +56,21 @@ describePostgres('PostgreSQL lock-wait sample', () => {
       await released
     })
     await holding
-    const waiter = directorDatabase.transaction(async (transaction) => {
-      await transaction.queryLocked(`SELECT * FROM relay_cells WHERE cell_id = ?`, [cell.id])
-    })
+    const waiters = Array.from({ length: 3 }, () =>
+      directorDatabase.transaction(async (transaction) => {
+        await transaction.queryLocked(`SELECT * FROM relay_cells WHERE cell_id = ?`, [cell.id])
+      })
+    )
 
     try {
       await expect
         .poll(async () => await readPostgresLockWaitSample(directorDatabase), { timeout: 900 })
         .toEqual([
-          { waiterRole: 'director', table: 'relay_cells', holderRole: 'cell', waiters: 1 }
+          { waiterRole: 'director', table: 'relay_cells', holderRole: 'cell', waiters: 3 }
         ])
     } finally {
       release()
-      await Promise.all([holder, waiter])
+      await Promise.all([holder, ...waiters])
     }
   })
 })

@@ -89,12 +89,17 @@ const migrationInventoryTimer = roleOwnsAssignmentMaintenance(config.role)
     }, 5 * 60_000)
   : null
 // Directors only: one role's view covers every backend, and cells roll separately.
+// Single-flight, so a slow database never stacks samples on the 3-slot pool.
+let lockWaitSampling = false
 const lockWaitSampleTimer = roleOwnsAssignmentMaintenance(config.role)
   ? setInterval(() => {
-      if (database.dialect !== 'postgres') return
+      if (database.dialect !== 'postgres' || lockWaitSampling) return
+      lockWaitSampling = true
       void runRelayBackgroundOperation(async () => {
         observability.recordDatabaseLockWaitSample(await readPostgresLockWaitSample(database))
-      }, '[orca-relay] lock wait sample failed')
+      }, '[orca-relay] lock wait sample failed').finally(() => {
+        lockWaitSampling = false
+      })
     }, 5_000)
   : null
 cleanupTimer?.unref()
