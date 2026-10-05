@@ -1,6 +1,11 @@
 import type { MutableRefObject } from 'react'
-import type { editor } from 'monaco-editor'
-import { editorSelectionCache, scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import type { editor, ISelection } from 'monaco-editor'
+import {
+  editorSelectionCache,
+  editorViewStateCache,
+  scrollTopCache,
+  setWithLRU
+} from '@/lib/scroll-cache'
 
 type MonacoViewStateTrackingParams = {
   editorInstance: editor.IStandaloneCodeEditor
@@ -41,19 +46,53 @@ export function installMonacoViewStateTracking(params: MonacoViewStateTrackingPa
 }
 
 export function restoreMonacoViewState(
-  editorInstance: editor.IStandaloneCodeEditor,
+  editorInstance: Pick<
+    editor.IStandaloneCodeEditor,
+    | 'setSelections'
+    | 'setScrollTop'
+    | 'focus'
+    | 'onDidDispose'
+    | 'onDidChangeModel'
+    | 'restoreViewState'
+  >,
   viewStateKey: string
 ): void {
   const savedSelections = editorSelectionCache.get(viewStateKey)
   const savedScrollTop = scrollTopCache.get(viewStateKey)
-  if (savedScrollTop !== undefined || savedSelections) {
-    // Why: Monaco renders synchronously so one RAF suffices; focus inside it to avoid a scroll-0 flash before restore.
-    requestAnimationFrame(() => {
-      if (savedSelections) {
-        editorInstance.setSelections(savedSelections)
+  const savedViewState = editorViewStateCache.get(viewStateKey)
+  if (savedViewState || savedScrollTop !== undefined || savedSelections) {
+    let restoreFrame: number | null = null
+    let active = true
+    const cancelRestore = (): void => {
+      if (!active) {
+        return
       }
-      if (savedScrollTop !== undefined) {
-        editorInstance.setScrollTop(savedScrollTop)
+      active = false
+      if (restoreFrame !== null) {
+        cancelAnimationFrame(restoreFrame)
+        restoreFrame = null
+      }
+      subscriptions.forEach((subscription) => subscription.dispose())
+    }
+    const subscriptions = [
+      editorInstance.onDidDispose(cancelRestore),
+      editorInstance.onDidChangeModel(cancelRestore)
+    ]
+    restoreFrame = requestAnimationFrame(() => {
+      restoreFrame = null
+      if (!active) {
+        return
+      }
+      cancelRestore()
+      if (savedViewState) {
+        editorInstance.restoreViewState(savedViewState)
+      } else {
+        if (savedSelections) {
+          editorInstance.setSelections(savedSelections)
+        }
+        if (savedScrollTop !== undefined) {
+          editorInstance.setScrollTop(savedScrollTop)
+        }
       }
       editorInstance.focus()
     })
@@ -64,11 +103,20 @@ export function restoreMonacoViewState(
 
 // Why: takes the ref, not the instance — the caller runs this from an effect cleanup, where reading `.current` inline trips the ref-in-cleanup lint.
 export function snapshotMonacoViewState(
-  editorRef: MutableRefObject<editor.IStandaloneCodeEditor | null>,
+  editorRef: MutableRefObject<
+    | (Pick<editor.IStandaloneCodeEditor, 'getScrollTop' | 'saveViewState'> & {
+        getSelections(): readonly ISelection[] | null
+      })
+    | null
+  >,
   viewStateKey: string
 ): void {
   const ed = editorRef.current
   if (ed) {
+    const viewState = ed.saveViewState()
+    if (viewState) {
+      setWithLRU(editorViewStateCache, viewStateKey, viewState)
+    }
     setWithLRU(scrollTopCache, viewStateKey, ed.getScrollTop())
     const selections = ed.getSelections()
     if (selections) {

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   diffViewStateCache,
   editorSelectionCache,
+  editorViewStateCache,
+  richMarkdownSelectionCache,
   pdfViewPositionCache,
   scrollTopCache
 } from '@/lib/scroll-cache'
@@ -141,6 +143,8 @@ function buildScenario(): {
 beforeEach(() => {
   scrollTopCache.clear()
   editorSelectionCache.clear()
+  editorViewStateCache.clear()
+  richMarkdownSelectionCache.clear()
   diffViewStateCache.clear()
   pdfViewPositionCache.clear()
 })
@@ -193,6 +197,21 @@ describe('disposeClosedEditorTabs', () => {
     scrollTopCache.set('/repo/a.ts:rich', 30)
     scrollTopCache.set('/repo/b.ts::pane-1', 40)
     editorSelectionCache.set('/repo/a.ts::pane-2', [] as never)
+    const viewState = {
+      cursorState: [],
+      viewState: {
+        scrollLeft: 0,
+        firstPosition: { lineNumber: 1, column: 1 },
+        firstPositionDeltaTop: 0
+      },
+      contributionsState: {}
+    }
+    editorViewStateCache.set('/repo/a.ts', viewState)
+    editorViewStateCache.set('/repo/a.ts::pane-2', viewState)
+    editorViewStateCache.set('/repo/b.ts::pane-1', viewState)
+    richMarkdownSelectionCache.set('/repo/a.ts:rich', { from: 4, to: 7 })
+    richMarkdownSelectionCache.set('/repo/a.ts::pane-2:rich', { from: 9, to: 4 })
+    richMarkdownSelectionCache.set('/repo/b.ts::pane-1:rich', { from: 4, to: 7 })
     pdfViewPositionCache.set('/repo/a.ts:pdf', {
       pageNumber: 1,
       top: 0,
@@ -210,6 +229,8 @@ describe('disposeClosedEditorTabs', () => {
 
     expect([...scrollTopCache.keys()]).toEqual(['/repo/b.ts::pane-1'])
     expect(editorSelectionCache.size).toBe(0)
+    expect([...editorViewStateCache.keys()]).toEqual(['/repo/b.ts::pane-1'])
+    expect([...richMarkdownSelectionCache.keys()]).toEqual(['/repo/b.ts::pane-1:rich'])
     expect(pdfViewPositionCache.size).toBe(0)
   })
 

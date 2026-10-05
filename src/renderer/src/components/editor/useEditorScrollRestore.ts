@@ -1,9 +1,10 @@
 import { useLayoutEffect, type RefObject } from 'react'
 import type { Editor } from '@tiptap/react'
-import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import { TextSelection } from '@tiptap/pm/state'
+import { richMarkdownSelectionCache, scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 
 /**
- * Saves and restores scroll position for the rich markdown editor.
+ * Saves and restores scroll position and text selection for the rich markdown editor.
  * Extracted to keep the editor component under the max-lines lint limit.
  */
 export function useEditorScrollRestore(
@@ -84,4 +85,29 @@ export function useEditorScrollRestore(
     // editor is null on the first render, so the retry loop would start before
     // content is mounted and exhaust its 30 frames before Tiptap hydrates.
   }, [scrollContainerRef, scrollCacheKey, editor])
+
+  useLayoutEffect(() => {
+    if (!editor || editor.isDestroyed) {
+      return
+    }
+    const savedSelection = richMarkdownSelectionCache.get(scrollCacheKey)
+    if (savedSelection) {
+      editor.commands.setTextSelection(savedSelection)
+    }
+    return () => {
+      if (editor.isDestroyed) {
+        return
+      }
+      const selection = editor.state.selection
+      if (selection instanceof TextSelection) {
+        // Keep the moving end of a backwards selection when the editor remounts.
+        setWithLRU(richMarkdownSelectionCache, scrollCacheKey, {
+          from: selection.anchor,
+          to: selection.head
+        })
+      } else {
+        richMarkdownSelectionCache.delete(scrollCacheKey)
+      }
+    }
+  }, [editor, scrollCacheKey])
 }

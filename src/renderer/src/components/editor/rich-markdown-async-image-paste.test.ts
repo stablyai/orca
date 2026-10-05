@@ -354,11 +354,11 @@ describe('rich Markdown asynchronous image paste', () => {
     pasteImage(editor)
     await flushPromises()
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-    expect(editor.state.selection.from).toBe(1)
+    expect(editor.state.selection.from).toBe(7)
     pending.resolve(imported())
     await flushPromises()
     editor.commands.insertContent('continued ')
-    expect(editor.getMarkdown()).toBe('continued hello ![](image.png)')
+    expect(editor.getMarkdown()).toBe('hello ![](image.png)continued ')
     cancelFocus()
   })
 

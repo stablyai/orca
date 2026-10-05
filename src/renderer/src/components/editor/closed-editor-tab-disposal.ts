@@ -1,6 +1,8 @@
 import type { OpenFile } from '@/store/slices/editor'
 import {
   editorSelectionCache,
+  editorViewStateCache,
+  richMarkdownSelectionCache,
   diffViewStateCache,
   pdfViewPositionCache,
   scrollTopCache
@@ -100,6 +102,8 @@ export function disposeClosedEditorTabCaches(
         scrollTopCache.delete(`${closedFile.filePath}:preview`)
         scrollTopCache.delete(`${closedFile.filePath}:mermaid-diagram`)
         editorSelectionCache.delete(closedFile.filePath)
+        editorViewStateCache.delete(closedFile.filePath)
+        richMarkdownSelectionCache.delete(`${closedFile.filePath}:rich`)
         scrollTopOwners.push(closedFile.filePath)
         editorSelectionOwners.push(closedFile.filePath)
         closedPdfFilePaths.push(closedFile.filePath)
@@ -122,6 +126,8 @@ export function disposeClosedEditorTabCaches(
   }
   deletePaneScopedCacheEntries(scrollTopCache, scrollTopOwners)
   deletePaneScopedCacheEntries(editorSelectionCache, editorSelectionOwners)
+  deletePaneScopedCacheEntries(editorViewStateCache, editorSelectionOwners)
+  deletePaneScopedCacheEntries(richMarkdownSelectionCache, editorSelectionOwners)
   deletePaneScopedCacheEntries(diffViewStateCache, diffViewStateOwners)
   sweepClosedPdfViewPositions(pdfViewPositionCache, closedPdfFilePaths)
 }

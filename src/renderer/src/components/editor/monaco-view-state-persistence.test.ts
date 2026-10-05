@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { editor, ISelection } from 'monaco-editor'
-import { editorSelectionCache, scrollTopCache } from '@/lib/scroll-cache'
+import { editorSelectionCache, editorViewStateCache, scrollTopCache } from '@/lib/scroll-cache'
 import {
   installMonacoViewStateTracking,
   restoreMonacoViewState,
@@ -24,6 +24,7 @@ const selections: readonly ISelection[] = [
 
 beforeEach(() => {
   editorSelectionCache.clear()
+  editorViewStateCache.clear()
   scrollTopCache.clear()
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     callback(0)
@@ -39,8 +40,9 @@ describe('Monaco view state persistence', () => {
   it('restores selected ranges and their direction after a tab remount', () => {
     const sourceEditor = {
       getScrollTop: () => 320,
-      getSelections: () => selections
-    } as unknown as editor.IStandaloneCodeEditor
+      getSelections: () => selections,
+      saveViewState: () => null
+    }
     snapshotMonacoViewState({ current: sourceEditor }, 'file.ts::tab-1')
 
     const setSelections = vi.fn()
@@ -49,8 +51,11 @@ describe('Monaco view state persistence', () => {
     const remountedEditor = {
       setSelections,
       setScrollTop,
-      focus
-    } as unknown as editor.IStandaloneCodeEditor
+      focus,
+      restoreViewState: vi.fn(),
+      onDidDispose: () => ({ dispose: vi.fn() }),
+      onDidChangeModel: () => ({ dispose: vi.fn() })
+    } satisfies Parameters<typeof restoreMonacoViewState>[0]
     restoreMonacoViewState(remountedEditor, 'file.ts::tab-1')
 
     expect(setSelections).toHaveBeenCalledWith(selections)
