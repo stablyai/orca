@@ -81,14 +81,13 @@ export class StructuredAgentSessionHost {
     () => this.deps,
     (sessionId) => this.queued.onJournalActivity(sessionId),
     (sessionId) => this.restartResume.onAgentStarted(sessionId),
-    (sessionId) => this.backgroundTasks.publish(sessionId)
+    (sessionId) => this.backgroundTasks.publish(sessionId),
+    (sessionId) => this.backgroundTasks.read(sessionId)
   )
   private readonly subscribers = this.clientDelivery.subscribers
   private readonly tasks = new StructuredAgentSessionTaskQueue()
   private readonly runtimeState: StructuredAgentSessionHostRuntimeState
-  private readonly reconcileLeases: (
-    sessionId: string
-  ) => Promise<SessionWire.AgentSessionWireRefusal | null>
+  private readonly reconcileLeases: ReturnType<typeof createRestartReconciler>
   private readonly restore: ReturnType<typeof createStructuredAgentSessionHostRestore>
   private readonly lifetime: StructuredAgentSessionConversationLifetime
   private readonly conversationDelivery: ReturnType<
@@ -264,8 +263,10 @@ export class StructuredAgentSessionHost {
 
   // Trigger inlined rather than imported: `AgentSessionResumeTrigger` in shared is the canonical
   // type, and this file has no line budget left for the import.
-  /** Quit: no exit or recovery settled after this starts a child or hands a message over. */
-  stopDelivery = (): void => this.conversationDelivery.dispose()
+  /** Quit: no exit or recovery settled after this starts a child or hands a message over, and the
+   *  queue hands no card over. */
+  stopDelivery = (): void =>
+    [this.conversationDelivery, this.queued.drain].forEach((d) => d.dispose())
 
   async flushAllStreamedEvents(options?: { trigger?: 'quit' | 'update' }): Promise<void> {
     this.stopDelivery()

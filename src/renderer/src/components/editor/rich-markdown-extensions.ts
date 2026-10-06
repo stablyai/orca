@@ -44,6 +44,7 @@ import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
 import { createCachedLowlight } from './rich-markdown-lowlight-cache'
 import { documentResourceAccess } from '@/lib/local-file-access'
+import { resolveRichMarkdownImageUrl } from './rich-markdown-image-context'
 
 const lowlight = createCachedLowlight(createLowlight(common))
 
@@ -171,7 +172,7 @@ export function createRichMarkdownExtensions({
                 }
               )
             } else if (src) {
-              img.src = src
+              img.src = resolveRichMarkdownImageUrl(this.storage, src)
             } else {
               img.removeAttribute('src')
             }

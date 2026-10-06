@@ -34,6 +34,7 @@ import { resolveClaudeCommand } from '../codex-cli/command'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
+import type { ClaudeThinkingDisplaySupport } from './claude-thinking-display-support'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { CLAUDE_STRUCTURED_AGENT } from './claude-structured-agent-definition'
 
@@ -136,6 +137,8 @@ export type ClaudeStructuredLaunchResolverDeps = {
   authSwitchSettleTimeoutMs?: number
   /** Account state for the managed-account gate; null when it cannot be read, which refuses. */
   readManagedAccountGate?: () => ClaudeManagedAccountGateSettings | null
+  /** Whether this CLI takes the thinking-display flag. Absent ⇒ the flag is never passed. */
+  thinkingDisplay?: Pick<ClaudeThinkingDisplaySupport, 'argsFor'>
   /** Whether Claude wrote a transcript for this id; defaults to the transcript resolver. */
   hasTranscript?: (input: {
     providerSessionId: string
@@ -155,6 +158,67 @@ async function claudeTranscriptExists(input: {
 
 export type ClaudeStructuredInvocation = { command: string; env: Record<string, string> }
 
+type ClaudeEnvDeps = Pick<
+  ClaudeStructuredLaunchResolverDeps,
+  'resolveCommand' | 'resolveEnv' | 'resolveInheritedEnv'
+>
+
+/** What a child's env is built from, before any auth policy applies to it. */
+export type ClaudeChildEnvSources = {
+  command: string
+  overlay: Record<string, string> | undefined
+  inheritedEnv: Record<string, string>
+}
+
+export async function resolveClaudeChildEnvSources(
+  deps: ClaudeEnvDeps
+): Promise<ClaudeChildEnvSources> {
+  const command = (deps.resolveCommand ?? resolveClaudeCommand)()
+  const overlay = await deps.resolveEnv?.()
+  const inheritedEnv = deps.resolveInheritedEnv
+    ? await deps.resolveInheritedEnv()
+    : cloneDefinedEnv(process.env)
+  return { command, overlay: overlay ? cloneDefinedEnv(overlay) : undefined, inheritedEnv }
+}
+
+// Why the overlay merges onto the inherited env rather than replacing it: the child
+// still needs PATH and the rest of the shell environment, and withCliRuntimeOnPath
+// derives PATH from what it is handed. Ambient Anthropic auth is stripped from the
+// inherited half only when a managed account owns the credential; a system-auth
+// user's own key is their sign-in and must reach the child.
+function claudeChildEnv(
+  sources: ClaudeChildEnvSources,
+  stripAuthEnv: boolean,
+  decorateEnv: (env: Record<string, string>) => Record<string, string> = (env) => env
+): Record<string, string> {
+  return withCliRuntimeOnPath(
+    sources.command,
+    decorateEnv({
+      ...applyClaudeEnvPatch(
+        withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform),
+        {},
+        { stripAuthEnv, platform: process.platform }
+      ),
+      ...sources.overlay
+    }),
+    { platform: process.platform }
+  )
+}
+
+/** The env a `--version` probe runs with: the launch's own env, PATH and shims included, minus the
+ *  Claude auth variables, auth-like custom headers and an inherited CLAUDE_CONFIG_DIR, which asking
+ *  a version needs none of. Everything else is what this same binary receives at launch anyway. */
+export function claudeProbeEnv(sources: ClaudeChildEnvSources): Record<string, string> {
+  return applyClaudeEnvPatch(
+    claudeChildEnv(sources, true),
+    {},
+    {
+      stripAuthEnv: true,
+      platform: process.platform
+    }
+  )
+}
+
 /**
  * The one place a structured Claude child's binary and environment are
  * resolved. The session launch and the session-less catalog probe both build
@@ -163,49 +227,30 @@ export type ClaudeStructuredInvocation = { command: string; env: Record<string, 
  * drift there heals on the next refresh.
  */
 export async function resolveClaudeStructuredInvocation(
-  deps: Pick<
-    ClaudeStructuredLaunchResolverDeps,
-    'resolveCommand' | 'resolveEnv' | 'resolveInheritedEnv' | 'resolveAuthPolicy'
-  > & { authSwitchSettleTimeoutMs?: number },
-  decorateEnv: (env: Record<string, string>) => Record<string, string> = (env) => env
+  deps: ClaudeEnvDeps &
+    Pick<ClaudeStructuredLaunchResolverDeps, 'resolveAuthPolicy'> & {
+      authSwitchSettleTimeoutMs?: number
+    },
+  decorateEnv: (env: Record<string, string>) => Record<string, string> = (env) => env,
+  /** Already resolved by a caller that needed them earlier; read again otherwise. */
+  resolvedSources?: ClaudeChildEnvSources
 ): Promise<ClaudeStructuredInvocation> {
-  const command = (deps.resolveCommand ?? resolveClaudeCommand)()
+  const sources = resolvedSources ?? (await resolveClaudeChildEnvSources(deps))
   const auth = await deps.resolveAuthPolicy()
-  const overlay = await deps.resolveEnv?.()
-  const inheritedEnv = deps.resolveInheritedEnv
-    ? await deps.resolveInheritedEnv()
-    : cloneDefinedEnv(process.env)
   // A switch can begin while the policy and overlay resolve, exactly as it can
   // during the terminal preflight's prepareClaudeAuth — recheck after the awaits.
   await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
   // Under a managed account the pinned credential is the only auth this launch may
   // use, so an explicit override is refused rather than silently beating the pin.
-  if (auth.stripAuthEnv && hasClaudeAuthEnvConflict(overlay)) {
+  if (auth.stripAuthEnv && hasClaudeAuthEnvConflict(sources.overlay)) {
     throw new AgentSessionPreSpawnError(new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE), {
       reason: 'managedAccountEnvOverride'
     })
   }
-  // Why the overlay merges onto the inherited env rather than replacing it: the child
-  // still needs PATH and the rest of the shell environment, and withCliRuntimeOnPath
-  // derives PATH from what it is handed. Ambient Anthropic auth is stripped from the
-  // inherited half only when a managed account owns the credential; a system-auth
-  // user's own key is their sign-in and must reach the child.
-  const env = withCliRuntimeOnPath(
-    command,
-    decorateEnv({
-      ...applyClaudeEnvPatch(
-        withoutInheritedClaudeConfigDir(inheritedEnv, process.platform),
-        {},
-        {
-          stripAuthEnv: auth.stripAuthEnv,
-          platform: process.platform
-        }
-      ),
-      ...(overlay ? cloneDefinedEnv(overlay) : {})
-    }),
-    { platform: process.platform }
-  )
-  return { command, env }
+  return {
+    command: sources.command,
+    env: claudeChildEnv(sources, auth.stripAuthEnv, decorateEnv)
+  }
 }
 
 /**
@@ -283,6 +328,14 @@ export function createClaudeStructuredLaunchResolver(
       ? head.nativeId
       : claudeSessionIdForOrcaSession(identity.sessionId)
     const continuesChain = head !== null
+    const cwd = await deps.resolveWorkspacePath(record.location.workspaceId)
+    const sources = await resolveClaudeChildEnvSources(deps)
+    // Asked as soon as the spawn's cwd and PATH are known, so it overlaps what is left to resolve.
+    const thinkingDisplay = deps.thinkingDisplay?.argsFor({
+      command: sources.command,
+      cwd,
+      env: claudeProbeEnv(sources)
+    })
     // A start that failed before its first turn wrote no transcript, and `--resume` of an absent
     // one exits; launch that id fresh instead. With a transcript, `--session-id` would collide.
     const resumesTranscript =
@@ -296,13 +349,18 @@ export function createClaudeStructuredLaunchResolver(
     const permission = claudeStructuredPermissionOptions(
       (await deps.resolvePermissionMode?.()) ?? 'default'
     )
-    const { command, env } = await resolveClaudeStructuredInvocation(deps, (base) =>
-      // Every structured session speaks orchestration as itself: its injected id and the Orca CLI.
-      structuredSessionChildIdentityEnv(record.sessionId, {
-        ...base,
-        // The turn translator relies on Claude's authoritative idle frame when no result arrives.
-        [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1'
-      })
+    const thinkingDisplayArgs = (await thinkingDisplay) ?? {}
+    // Last: it rechecks the account switch, which may have begun during any await above.
+    const { command, env } = await resolveClaudeStructuredInvocation(
+      deps,
+      (base) =>
+        // Every structured session speaks orchestration as itself: its injected id and the Orca CLI.
+        structuredSessionChildIdentityEnv(record.sessionId, {
+          ...base,
+          // The turn translator relies on Claude's authoritative idle frame when no result arrives.
+          [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1'
+        }),
+      sources
     )
     return {
       pathToClaudeCodeExecutable: command,
@@ -315,12 +373,13 @@ export function createClaudeStructuredLaunchResolver(
         extraArgs: {
           ...configuredArgs.extraArgs,
           ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs,
-          ...permission.extraArgs
+          ...permission.extraArgs,
+          ...thinkingDisplayArgs
         },
         // Claude owns where a resumed conversation continues; the stored leaf is Orca's bookkeeping.
         ...(resumesTranscript ? { resume: providerSessionId } : { sessionId: providerSessionId })
       },
-      cwd: await deps.resolveWorkspacePath(record.location.workspaceId),
+      cwd,
       env,
       claudeConfigDir: record.accountHome.path,
       providerSessionId,

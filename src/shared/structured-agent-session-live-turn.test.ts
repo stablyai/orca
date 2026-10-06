@@ -30,6 +30,20 @@ describe('isStructuredAgentSessionThinking', () => {
     expect(isStructuredAgentSessionThinking([turnStart, reasoning(2)])).toBe(true)
   })
 
+  it("reads a reasoning row's own state when its host keeps one", () => {
+    const withState = (state: 'running' | 'completed'): AgentJournalRenderItem =>
+      item('reasoning-state', 2, {
+        kind: 'message',
+        role: 'reasoning',
+        blocks: [{ type: 'text', text: 'Weighing two approaches' }],
+        state,
+        ...(state === 'completed' ? { completedAt: 3 } : {})
+      })
+    expect(isStructuredAgentSessionThinking([turnStart, withState('running')])).toBe(true)
+    // Ended reasoning stays the newest row while Claude streams a tool's input after it.
+    expect(isStructuredAgentSessionThinking([turnStart, withState('completed')])).toBe(false)
+  })
+
   it('is false once a tool call, a message or a diff lands after the reasoning', () => {
     const after = (body: AgentJournalRenderItem['body']): boolean =>
       isStructuredAgentSessionThinking([turnStart, reasoning(2), item('after', 3, body)])

@@ -67,8 +67,8 @@ export type MobileNativeChatController = {
   }) => Promise<boolean>
   handleNativeChatRespondPermission: (text: string) => Promise<boolean>
   handleNativeChatStop: () => void
-  /** Host-held queued drafts shown as cards above the composer (structured lane,
-   *  capable host only; empty otherwise). */
+  /** Host-held queued drafts shown as cards above the composer (structured lane; any host
+   *  that publishes them). */
   nativeChatQueued: MobileStructuredQueuedMessageControls
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void

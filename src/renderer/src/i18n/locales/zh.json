@@ -11,6 +11,9 @@
     "retrying": "正在重试..."
   },
   "settings": {
+    "chat": {
+      "description": "选择聊天的外观。"
+    },
     "terminal": {
       "optionLayoutAlt": "ABC 或 U.S. — Option 键发送 Alt/Esc 序列",
       "optionLayoutCompose": "此布局使用 Option 键输入 @、€、[、] 等字符",
@@ -67,8 +70,7 @@
         "wide": "宽",
         "full": "全宽",
         "pixels": "px",
-        "reset": "重置",
-        "summary": "{{fontSize}}px · {{width}}宽度"
+        "reset": "重置"
       }
     },
     "browser": {
@@ -17531,6 +17533,7 @@
   },
   "components": {
     "native-chat": {
+      "reasoning": "推理",
       "contextMenu": {
         "copyOrcaSessionId": "复制 Orca 会话 ID",
         "orcaSessionIdCopied": "已复制 Orca 会话 ID",
@@ -18064,6 +18067,7 @@
         "turnOffQueueing": "关闭排队",
         "withdrawnHold": "在发送前已停止",
         "pausedSendFailed": "无法发送。点按发送以重试。",
+        "pausedKept": "尚未发送。点按发送即可发送。",
         "paused": "已暂停",
         "queuePausedStopped": "因你中断了操作，队列已暂停",
         "queuePausedRestarted": "因 Orca 重新启动，队列已暂停",
@@ -18071,6 +18075,8 @@
         "queuePaused": "队列已暂停",
         "resume": "继续"
       },
+      "thought": "已思考",
+      "thoughtForDuration": "思考了 {{duration}}",
       "structuredSessionHostDeclined": "已在终端中打开 {{value0}}",
       "structuredSessionHostDeclinedDescription": "此服务器无法在此工作区中运行 {{value0}} 聊天。",
       "structuredSessionHostUnreachable": "无法连接到 {{value0}}",

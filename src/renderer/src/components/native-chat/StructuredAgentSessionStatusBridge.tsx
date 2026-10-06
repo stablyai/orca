@@ -77,6 +77,20 @@ export function useStructuredAgentSessionHostExecutionPhase(
   )
 }
 
+/** Only the host's rewind recovery latch, so a chat re-renders when that changes, not on every status. */
+export function useStructuredAgentSessionRewindBlockedReason(
+  sessionId: string,
+  target: RuntimeClientTarget
+): NonNullable<AgentSessionStatusSummary['rewindBlockedReason']> | null {
+  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
+  useEffect(() => feed.activate(), [feed])
+  return useSyncExternalStore(
+    feed.subscribe,
+    () => feed.getSnapshot().get(sessionId)?.rewindBlockedReason ?? null,
+    () => null
+  )
+}
+
 /** The host's child records for the row, and the legacy roster readers of `subagents` keep. A host
  *  that publishes views is copied verbatim; only an older host's task list is converted here. */
 function childWorkFor(summary: AgentSessionStatusSummary): {

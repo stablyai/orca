@@ -226,6 +226,7 @@ export function LinearIssueTextEditor({
         <div className="relative">
           <LinearIssueMarkdownDescriptionEditor
             value={descriptionDraft}
+            imageUrls={issue.descriptionImageUrls}
             onChange={updateDescriptionDraft}
             onSave={saveDescriptionValue}
             density={density}

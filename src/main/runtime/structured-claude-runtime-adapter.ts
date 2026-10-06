@@ -18,12 +18,16 @@ import {
 import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { ClaudeAtRestCommandCatalog } from '../claude/claude-at-rest-commands'
+import { openClaudeStreamJsonConnection } from '../claude/claude-stream-json-connection'
+import type { ClaudeThinkingDisplaySupport } from '../claude/claude-thinking-display-support'
 
 export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveClaudeLaunchArgs: () => Promise<string[]> | string[]
   resolveClaudeCommand?: () => string
+  /** Whether a Claude CLI takes the thinking-display flag; absent never passes it. */
+  claudeThinkingDisplay?: ClaudeThinkingDisplaySupport
   resolveClaudeLaunchEnv?: () => Promise<Record<string, string>> | Record<string, string>
   /** The env a Claude child inherits before auth stripping; absent inherits Orca's own. */
   resolveClaudeInheritedEnv?: () => Promise<Record<string, string>>
@@ -96,7 +100,8 @@ export function createStructuredClaudeRuntimeAdapter(
         : {}),
       ...(deps.readClaudeManagedAccountGate
         ? { readManagedAccountGate: deps.readClaudeManagedAccountGate }
-        : {})
+        : {}),
+      ...(deps.claudeThinkingDisplay ? { thinkingDisplay: deps.claudeThinkingDisplay } : {})
     }),
     persistHandle: async ({ sessionId, providerSessionId, leafUuid, fence }) => {
       const currentFence = store.getRecord(sessionId)?.lease.runtimeFence ?? fence
@@ -136,8 +141,38 @@ export function createStructuredClaudeRuntimeAdapter(
     ...(deps.onSessionIdle ? { onSessionIdle: deps.onSessionIdle } : {}),
     ...(deps.onChildWorkEvidence ? { onChildWorkEvidence: deps.onChildWorkEvidence } : {}),
     ...(deps.logger ? { logger: deps.logger } : {}),
-    ...(deps.openClaudeConnection ? { openConnection: deps.openClaudeConnection } : {}),
+    ...openClaudeConnectionOf(deps),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
     ...(deps.modelCatalog ? { modelCatalog: deps.modelCatalog } : {})
   })
+}
+
+/** The child's connection, watched for a CLI refusing the thinking-display flag, so the start that
+ *  failed on it is the last one to pass it. */
+export function openClaudeConnectionOf(
+  deps: Pick<StructuredClaudeRuntimeAdapterDeps, 'openClaudeConnection' | 'claudeThinkingDisplay'>
+): Pick<ClaudeStructuredSessionAdapterDeps, 'openConnection'> {
+  const support = deps.claudeThinkingDisplay
+  if (!support) {
+    return deps.openClaudeConnection ? { openConnection: deps.openClaudeConnection } : {}
+  }
+  const open = deps.openClaudeConnection ?? openClaudeStreamJsonConnection
+  return {
+    openConnection: (launch, handlers = {}, ...rest) =>
+      open(
+        launch,
+        {
+          ...handlers,
+          // Every argument passes through, so one the connection adds later still reaches the session.
+          onExit: (...args) => {
+            support.observeExit(
+              { command: launch.pathToClaudeCodeExecutable, cwd: launch.cwd },
+              args[0]
+            )
+            handlers.onExit?.(...args)
+          }
+        },
+        ...rest
+      )
+  }
 }

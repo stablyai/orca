@@ -1,3 +1,18 @@
+import { ORCHESTRATION_RUNTIME_CAPABILITIES } from './orchestration-runtime-capabilities'
+export {
+  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
+  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION,
+  ORCHESTRATION_CONTRACT_VERSION,
+  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY
+} from './orchestration-runtime-capabilities'
 import { AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES } from './agent-session-resume-runtime-capabilities'
 import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from './qoder-terminal-create-capability'
 export {
@@ -66,25 +81,6 @@ export const WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY =
 export const REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY =
   'repo.search-qualified-refs.v1' as const
 export const REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY = 'remote-runtime.shared-control.v1' as const
-export const ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY = 'orchestration.federation.v1' as const
-export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY =
-  'orchestration.federation-control-mail.v1' as const
-export const ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY =
-  'orchestration.federation-lifecycle-settlement.v1' as const
-export const ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY =
-  'orchestration.worker-stop-verdict.v1' as const
-export const ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY =
-  'orchestration.worker-launch-preferences.v1' as const
-export const ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY =
-  'orchestration.federation-structured-read.v1' as const
-export const ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY =
-  'orchestration.federation-fleet-snapshot.v1' as const
-export const ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY =
-  'orchestration.federation-release-archive.v1' as const
-export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION = 2 as const
-export const ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION = 3 as const
-export const ORCHESTRATION_CONTRACT_VERSION = 1 as const
-export const ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY = 'orchestration.contract.v1' as const
 export const FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY =
   'folder-workspace.path-status.v1' as const
 export const LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY =
@@ -219,14 +215,16 @@ export const AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY =
 export const AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY =
   'agent-session.send-answers-proof.v1' as const
 // Why: `agentSession.send`'s params are strict, so an older host rejects `delivery`; and only a
-// capable client can render the `queued` result arm, the draft list, and returned cards. DARK ON
-// PURPOSE — not in RUNTIME_CAPABILITIES: advertising still requires the integrated Codex steer
-// matrix (#21062) in the shipped host, and the desktop and phone clients that render the queue.
+// capable client can render the `queued` result arm. It gates `delivery: 'queue-if-active'` and
+// the client's queueing setting and chord, never the published draft list or its card actions: a
+// host without it still publishes a message it kept unsent across a restart or a close, and both
+// clients show that card and call its actions. DARK ON PURPOSE — not in RUNTIME_CAPABILITIES:
+// advertising still requires the integrated Codex steer matrix (#21062) in the shipped host.
 // v1 includes `submission.queuedMessageId` on every draft hand-off: a client reads that link and
 // never compares a draft id with a submission id. It also publishes the queue's pause once, as
 // `queuePause` beside the list, lifted by `agentSession.queuedMessagesResume` or the user's next
-// turn; cards carry a hold of their own only when their conversion failed. The host mechanism lands first; the constant
-// gates the rollout.
+// turn; a card carries a hold of its own when its conversion failed (`send_failed`) or the host
+// kept it unsent (`kept`). The host mechanism lands first; the constant gates the rollout.
 export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
   'agent-session.queued-messages.v1' as const
 // Why: paired clients advertise Claude-structured support so the host can gate its agent-specific
@@ -271,6 +269,8 @@ export const AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY =
   'agent-session.conversation-outline.v1' as const
 // The RPC is registered unconditionally; per-session rewind support is a separate check.
 export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1' as const
+// Why: the rewind UI relies on the next send settling an in-doubt rewind, even with the agent up.
+export const AGENT_SESSION_REWIND_RECOVERY_CAPABILITY = 'agent-session.rewind-recovery.v1' as const
 // Readers must understand a monitoring roster with no available stop control.
 // Why: a `turn` journal item replaced the status row that used to carry a turn's lifecycle. A
 // client that predates it would render the unknown kind as text, so the host publishes the legacy
@@ -355,15 +355,7 @@ export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
   'runtime.environments.v1',
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
-  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
-  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+  ...ORCHESTRATION_RUNTIME_CAPABILITIES,
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -417,6 +409,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,

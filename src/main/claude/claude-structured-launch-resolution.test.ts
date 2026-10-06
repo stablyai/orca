@@ -1,6 +1,6 @@
 import { chmodSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
@@ -13,9 +13,11 @@ import {
   CLAUDE_SESSION_STATE_EVENTS_ENV,
   CLAUDE_STRUCTURED_BASE_OPTIONS,
   claudeSessionIdForOrcaSession,
-  createClaudeStructuredLaunchResolver
+  createClaudeStructuredLaunchResolver,
+  type ClaudeStructuredLaunchResolverDeps
 } from './claude-structured-launch-resolution'
 import { claudeStructuredPermissionModeForSettings } from './claude-structured-permission-mode'
+import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from '../claude-accounts/live-pty-gate'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'orca-session-1'
@@ -584,5 +586,104 @@ describe('claude structured launch resolution', () => {
         resolverFor(RESUMABLE)({ identity: identityAt('leaf-current') })
       ).resolves.toMatchObject({ providerSessionId: 'provider-current' })
     })
+  })
+})
+
+describe('readable Claude thinking', () => {
+  const launchWith = (
+    thinkingDisplay?: ClaudeStructuredLaunchResolverDeps['thinkingDisplay'],
+    authSwitchSettleTimeoutMs?: number,
+    command = '/usr/local/bin/claude',
+    launchArgs: string[] = []
+  ) =>
+    createClaudeStructuredLaunchResolver({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: launch resolution reads only getRecord.
+      store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+      resolveWorkspacePath: async (id) => `/repos/${id}`,
+      resolveLaunchArgs: () => launchArgs,
+      resolveCommand: () => command,
+      resolveAuthPolicy: () => ({ stripAuthEnv: false }),
+      resolveEnv: () => ({ PROJECT_SHIM: '1', ANTHROPIC_API_KEY: 'sk-user' }),
+      hasTranscript: async () => false,
+      ...(thinkingDisplay ? { thinkingDisplay } : {}),
+      ...(authSwitchSettleTimeoutMs === undefined ? {} : { authSwitchSettleTimeoutMs })
+    })({ identity: IDENTITY })
+
+  // Whether the CLI's directory holds a `node` decides if the runtime pairing puts that directory
+  // first on PATH (Linux CI's /usr/local/bin does, a Mac's usually does not), so both are pinned.
+  it.each([
+    ['without a sibling Node runtime', false],
+    ['with a sibling Node runtime', true]
+  ])(
+    'probes the CLI the launch runs, on its PATH and shims, without its credentials (%s)',
+    async (_, sibling) => {
+      const argsFor = vi.fn(
+        async (_launch: { command: string; cwd: string; env: Record<string, string> }) => ({
+          'thinking-display': 'summarized'
+        })
+      )
+      const binDir = join(mkdtempSync(join(tmpdir(), 'orca-claude-probe-')), 'bin')
+      const command = join(binDir, process.platform === 'win32' ? 'claude.cmd' : 'claude')
+      makeExecutable(command)
+      if (sibling) {
+        makeExecutable(join(binDir, process.platform === 'win32' ? 'node.cmd' : 'node'))
+      }
+      const launch = await launchWith({ argsFor }, undefined, command)
+      const asked = argsFor.mock.calls[0]?.[0]
+      expect(asked).toMatchObject({ command, cwd: '/repos/workspace-1' })
+      const segments = (env: Record<string, string> | undefined) =>
+        (env?.PATH ?? env?.Path ?? '').split(delimiter)
+      // The launch's PATH is the probe's plus Orca's own CLI directory, which holds no `claude` or
+      // runtime, so both resolve the same binary and the same shims in the same order.
+      const orcaCliDir = launch.env?.ORCA_CLI_COMMAND ? dirname(launch.env.ORCA_CLI_COMMAND) : null
+      expect(segments(launch.env).filter((dir) => dir !== orcaCliDir)).toEqual(segments(asked?.env))
+      expect(segments(asked?.env)[0] === binDir).toBe(sibling)
+      expect(asked?.env).toMatchObject({ PROJECT_SHIM: '1' })
+      expect(asked?.env).not.toHaveProperty('ANTHROPIC_API_KEY')
+      // The launch keeps the credential the user gave it.
+      expect(launch.env).toMatchObject({ ANTHROPIC_API_KEY: 'sk-user' })
+      expect(launch.options.extraArgs).toEqual({
+        'replay-user-messages': null,
+        'thinking-display': 'summarized'
+      })
+      expect(launch.options).not.toHaveProperty('thinking')
+    }
+  )
+
+  it('passes nothing when the CLI is not known to take the flag, or nothing can say', async () => {
+    const launch = await launchWith({ argsFor: async () => ({}) })
+    expect(launch.options.extraArgs).toEqual({ 'replay-user-messages': null })
+    expect((await launchWith()).options.extraArgs).toEqual({ 'replay-user-messages': null })
+  })
+
+  it('keeps saved Arguments beside readable thinking, with the display left to Orca', async () => {
+    const launch = await launchWith(
+      { argsFor: async () => ({ 'thinking-display': 'summarized' }) },
+      undefined,
+      undefined,
+      ['--effort', 'high', '--thinking-display', 'omitted']
+    )
+    expect(launch.options.extraArgs).toEqual({
+      effort: 'high',
+      'replay-user-messages': null,
+      'thinking-display': 'summarized'
+    })
+  })
+
+  it('still rechecks an account switch that began while the probe ran', async () => {
+    try {
+      const launch = launchWith(
+        {
+          argsFor: async () => {
+            beginClaudeAuthSwitch()
+            return {}
+          }
+        },
+        10
+      )
+      await expect(launch).rejects.toMatchObject({ reason: 'accountSwitchInProgress' })
+    } finally {
+      endClaudeAuthSwitch()
+    }
   })
 })

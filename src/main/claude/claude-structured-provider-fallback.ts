@@ -5,6 +5,7 @@ import {
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { CLAUDE_STREAM_JSON_FRAME_KINDS } from '../native-chat/agent-session-wire/claude-stream-json-frame-schema'
+import { classifyProviderFrame } from '../native-chat/agent-session-wire/provider-frame-disposition'
 import {
   type UnhandledProviderFrameJournalItemOptions,
   readableProviderFrameText,
@@ -32,6 +33,24 @@ export function claudeProviderFrameKind(message: Record<string, unknown>): strin
   const subtype = claudeText(message.subtype)
   const eventType = claudeText(claudeRecord(message.event)?.type)
   return ['message', type, subtype ?? eventType].filter(Boolean).join(':')
+}
+
+// Telemetry the translator never journals: the token tally Claude sends after every thinking delta,
+// stream deltas no stream registry carries (signatures, tool input), and keep-alive pings.
+const PROGRESS_FRAME_KINDS: ReadonlySet<string> = new Set([
+  'message:system:thinking_tokens',
+  'message:stream_event:content_block_delta',
+  'message:stream_event:ping'
+])
+
+/** A frame that writes no row, so nothing streamed has to be journaled ahead of it. A failure it
+ *  reports still surfaces as a row, so it is not one. */
+export function isClaudeProgressFrame(message: Record<string, unknown>): boolean {
+  const kind = claudeProviderFrameKind(message)
+  return (
+    PROGRESS_FRAME_KINDS.has(kind) &&
+    classifyProviderFrame('claude', kind, message) !== 'error-surface'
+  )
 }
 
 const SETTLED_RESULT_KINDS: ReadonlySet<string> = new Set(

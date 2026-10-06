@@ -7,6 +7,7 @@ import {
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION
 } from '../../../shared/agent-session-journal-types'
 import type {
+  AgentSessionBackgroundTaskState,
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
@@ -115,8 +116,12 @@ describe('AgentSessionSubscribers', () => {
       stateDirectory: join(root, 'clock-journal')
     })
     let now = 1_000
+    let roster: AgentSessionBackgroundTaskState | null = null
     const events: AgentSessionSubscribeEvent[] = []
-    const subscribers = new AgentSessionSubscribers({ now: () => (now += 1) })
+    const subscribers = new AgentSessionSubscribers({
+      now: () => (now += 1),
+      readBackgroundTasks: () => roster
+    })
     const emit = (event: AgentSessionSubscribeEvent): void => {
       events.push(event)
     }
@@ -128,7 +133,11 @@ describe('AgentSessionSubscribers', () => {
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     subscribers.publish(SESSION, journal)
-    subscribers.backgroundTasks(SESSION, null, 1)
+    roster = {
+      state: 'monitoring',
+      tasks: [{ id: 'task-1', kind: 'command', description: 'run the build' }]
+    }
+    subscribers.republishBackgroundTasks(SESSION, 1)
     subscribers.snapshot(SESSION, journal, 1)
 
     expect(events.map((event) => ('hostNow' in event ? event.hostNow : null))).toEqual([
@@ -296,23 +305,24 @@ describe('AgentSessionSubscribers', () => {
       },
       stateDirectory: join(root, 'background-journal')
     })
-    const subscribers = new AgentSessionSubscribers()
+    let roster: AgentSessionBackgroundTaskState | null = null
+    const subscribers = new AgentSessionSubscribers({ readBackgroundTasks: () => roster })
     const events: AgentSessionSubscribeEvent[] = []
     subscribers.open({
       id: 'subscriber-1',
       sessionId: SESSION,
       journal,
       fence: 1,
-      backgroundTasks: null,
       emit: (event) => events.push(event)
     })
     const cursor = journal.cursor()
 
-    const backgroundTasks = {
-      state: 'monitoring' as const,
-      tasks: [{ id: 'task-1', kind: 'command' as const, description: 'run the build' }]
+    const backgroundTasks: AgentSessionBackgroundTaskState = {
+      state: 'monitoring',
+      tasks: [{ id: 'task-1', kind: 'command', description: 'run the build' }]
     }
-    subscribers.backgroundTasks(SESSION, backgroundTasks, 2)
+    roster = backgroundTasks
+    subscribers.republishBackgroundTasks(SESSION, 2)
 
     expect(journal.cursor()).toEqual(cursor)
     expect(events.at(-1)).toEqual({

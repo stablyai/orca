@@ -47,6 +47,7 @@ vi.mock('lucide-react-native', () => ({
 }))
 
 vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
+vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
 vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
@@ -177,13 +178,11 @@ describe('MobileNativeChatView', () => {
       return (renderedRow(id) as { props: Record<string, unknown> }).props
     }
 
+    /** What the live footer line says: its label inputs, read off the line the view hands it. */
     function footerProps(): Record<string, unknown> | null {
       const list = renderer!.root.find((node) => String(node.type) === 'FlatList')
-      const footer = list.props.ListFooterComponent as
-        | { props: Record<string, unknown> }
-        | null
-        | undefined
-      return footer?.props ?? null
+      const line = list.props.ListFooterComponent?.props.line
+      return line ? { thinking: line.thinking, activityText: line.activityText } : null
     }
 
     function workingIndicators(): ReactTestInstance[] {

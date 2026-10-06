@@ -159,6 +159,21 @@ describe('queued message cards', () => {
     ).toBe('awaiting-answer')
   })
 
+  // A kept card is held on its own, like a failed one: the host sends the cards behind it.
+  it('a card behind a kept or a send_failed card is not held by it', () => {
+    const cards = projectQueuedMessageCards(
+      [
+        draft('failed', 1, { paused: true, pausedReason: 'send_failed' }),
+        draft('after-failed', 2),
+        draft('kept', 3, { paused: true, pausedReason: 'kept' }),
+        draft('behind', 4)
+      ],
+      [],
+      IDLE
+    )
+    expect(cards.map((card) => card.hold)).toEqual(['paused', 'turn', 'paused', 'turn'])
+  })
+
   it('steers the newest card', () => {
     const cards = projectQueuedMessageCards([draft('a', 1), draft('b', 2)], [], IDLE)
     expect(newestSteerableQueuedMessageCard(cards)?.messageId).toBe('b')

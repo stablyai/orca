@@ -5,8 +5,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { AppearanceChatSection } from './AppearanceChatSection'
-import { getChatAppearanceEntriesByKey } from './chat-appearance-search'
-import { getAppearancePaneSearchEntries } from './appearance-search'
+import {
+  getChatAppearanceEntriesByKey,
+  getChatAppearanceSearchEntries
+} from './chat-appearance-search'
 import { matchesSettingsSearch } from './settings-search'
 
 const mocks = vi.hoisted(
@@ -46,7 +48,7 @@ function persistInMock(settings: GlobalSettings) {
   })
 }
 
-describe('chat appearance settings card', () => {
+describe('chat appearance settings controls', () => {
   it.each([
     { platform: 'darwin', increase: '⌘=', decrease: '⌘-' },
     { platform: 'win32', increase: 'Ctrl+=', decrease: 'Ctrl+-' },
@@ -142,8 +144,8 @@ describe('chat appearance settings card', () => {
     await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(2))
     expect(mocks.state.settings?.nativeChatAppearance).toEqual({ contrast: 151 })
   })
-  it('indexes each row and width choice in Appearance settings search', () => {
-    const entries = getAppearancePaneSearchEntries()
+  it('indexes each row and width choice in Chat settings search', () => {
+    const entries = getChatAppearanceSearchEntries()
     for (const query of [
       'Chat',
       'Code text size',

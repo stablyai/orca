@@ -65,7 +65,8 @@ describe('rewind keeps each retained row attributed', () => {
       agentId: 'child-thread',
       parentAgentId: 'root',
       producerKind: 'agent',
-      observedAt: 2
+      // When the row was first seen, not when the rewind re-read it.
+      observedAt: 1
     })
   })
 

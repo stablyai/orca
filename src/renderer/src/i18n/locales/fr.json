@@ -110,6 +110,9 @@
     "retrying": "Nouvelle tentative…"
   },
   "settings": {
+    "chat": {
+      "description": "Choisissez l’apparence des chats."
+    },
     "terminal": {
       "optionLayoutAlt": "ABC ou U.S. — Option envoie des séquences Alt/Esc",
       "optionLayoutCompose": "la disposition utilise Option pour composer des caractères comme @, €, [, ]",
@@ -166,8 +169,7 @@
         "wide": "Large",
         "full": "Pleine",
         "pixels": "px",
-        "reset": "Réinitialiser",
-        "summary": "{{fontSize}}px · Largeur {{width}}"
+        "reset": "Réinitialiser"
       }
     },
     "browser": {
@@ -17630,6 +17632,7 @@
   },
   "components": {
     "native-chat": {
+      "reasoning": "Raisonnement",
       "contextMenu": {
         "copyOrcaSessionId": "Copier l'ID de session Orca",
         "orcaSessionIdCopied": "ID de session Orca copié",
@@ -18163,6 +18166,7 @@
         "turnOffQueueing": "Désactiver la file d'attente",
         "withdrawnHold": "Arrêté avant l'envoi",
         "pausedSendFailed": "Envoi impossible. Appuyez sur Envoyer pour réessayer.",
+        "pausedKept": "Pas encore envoyé. Appuyez sur Envoyer pour l'envoyer.",
         "paused": "En pause",
         "queuePausedStopped": "File d'attente en pause, car vous avez interrompu",
         "queuePausedRestarted": "File d'attente en pause, car Orca a redémarré",
@@ -18170,6 +18174,8 @@
         "queuePaused": "File d'attente en pause",
         "resume": "Reprendre"
       },
+      "thought": "A réfléchi",
+      "thoughtForDuration": "A réfléchi pendant {{duration}}",
       "structuredSessionHostDeclined": "{{value0}} ouvert dans un terminal",
       "structuredSessionHostDeclinedDescription": "Ce serveur ne peut pas exécuter de discussion {{value0}} dans cet espace de travail.",
       "structuredSessionHostUnreachable": "Impossible de joindre {{value0}}",

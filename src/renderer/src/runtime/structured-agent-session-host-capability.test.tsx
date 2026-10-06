@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
-  AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY
+  AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RECOVERY_CAPABILITY
 } from '../../../shared/protocol-version'
 
 const mocks = vi.hoisted(() => ({
@@ -27,6 +29,7 @@ vi.mock('./runtime-host-contact-regained', () => ({
 import { setLocalRuntimeCapabilitiesForTests } from './local-runtime-capabilities'
 import {
   useStructuredAgentSessionHostQueuesMessagesState,
+  useStructuredAgentSessionHostRecoversRewindOnSend,
   useStructuredAgentSessionHostStopsConversation
 } from './structured-agent-session-host-capability'
 
@@ -95,5 +98,34 @@ describe('the queued-messages capability, three-state', () => {
       useStructuredAgentSessionHostQueuesMessagesState({ kind: 'local' })
     )
     expect(result.current).toBe('unknown')
+  })
+})
+
+describe('whether a host settles an in-doubt rewind on the next send', () => {
+  it('reads the local runtime, which only rewinding is not enough for', () => {
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_REWIND_RUNTIME_CAPABILITY])
+    expect(
+      renderHook(() => useStructuredAgentSessionHostRecoversRewindOnSend({ kind: 'local' })).result
+        .current
+    ).toBe(false)
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_REWIND_RECOVERY_CAPABILITY])
+    expect(
+      renderHook(() => useStructuredAgentSessionHostRecoversRewindOnSend({ kind: 'local' })).result
+        .current
+    ).toBe(true)
+  })
+
+  it.each([true, false])('asks a remote host, which answers %s', async (supported) => {
+    mocks.supports.mockResolvedValueOnce(supported)
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionHostRecoversRewindOnSend({
+        kind: 'environment',
+        environmentId: 'env-1'
+      })
+    )
+    await waitFor(() =>
+      expect(mocks.supports).toHaveBeenCalledWith('env-1', AGENT_SESSION_REWIND_RECOVERY_CAPABILITY)
+    )
+    await waitFor(() => expect(result.current).toBe(supported))
   })
 })

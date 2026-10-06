@@ -4,22 +4,36 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import type { NativeChatRewindSurface } from './use-native-chat-rewind'
+
+const confirm = vi.hoisted(() => vi.fn())
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => confirm
+}))
 
 afterEach(cleanup)
 
-function renderMessage(role: NativeChatMessage['role'], timestamp: number | null = 0) {
+function renderMessage(
+  role: NativeChatMessage['role'],
+  timestamp: number | null = 0,
+  rewind?: NativeChatRewindSurface
+) {
   return render(
-    <MessageRow
-      message={{
-        id: 'message',
-        role,
-        timestamp,
-        source: 'transcript',
-        blocks: [{ type: 'text', text: 'Message text' }]
-      }}
-      expandSignal={false}
-      onScrollMessageToTop={vi.fn()}
-    />
+    <TooltipProvider>
+      <MessageRow
+        message={{
+          id: 'message',
+          role,
+          timestamp,
+          source: 'transcript',
+          blocks: [{ type: 'text', text: 'Message text' }]
+        }}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+        rewind={rewind}
+      />
+    </TooltipProvider>
   )
 }
 
@@ -48,6 +62,20 @@ describe('MessageRow control visibility', () => {
     await waitFor(() => {
       expect(writeClipboardText).toHaveBeenCalledWith('const answer = 42\n')
     })
+  })
+
+  it('composes the edit-from-here action into the user hover/focus strip', () => {
+    const request = vi.fn()
+    renderMessage('user', 0, { disabledReason: null, request })
+    const copy = screen.getByRole('button', { name: 'Copy message' })
+    const time = screen.getByRole('time')
+    const edit = screen.getByRole('button', { name: 'Rewind to here' })
+    expect(Array.from(copy.parentElement!.children)).toEqual([copy, time, edit])
+    expect(copy.parentElement).toHaveClass('can-hover:opacity-0', 'group-hover:opacity-100')
+    edit.focus()
+    expect(edit).toHaveFocus()
+    fireEvent.click(edit)
+    expect(request).toHaveBeenCalledWith('message', confirm)
   })
 
   it('copies the sent message text from a user bubble', async () => {
@@ -87,11 +115,16 @@ describe('MessageRow control visibility', () => {
     expect(screen.queryAllByRole('button')).toHaveLength(role === 'assistant' ? 2 : 1)
   })
 
-  it.each(['reasoning', 'system'] as const)('preserves chrome-free %s rows', (role) => {
-    renderMessage(role)
-    expect(screen.queryByRole('time')).toBeNull()
-    expect(screen.queryByRole('button')).toBeNull()
-  })
+  it.each(['reasoning', 'system'] as const)(
+    'omits timestamp and agent controls on %s rows',
+    (role) => {
+      renderMessage(role)
+      expect(screen.queryByRole('time')).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Copy message' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Scroll this message to top' })).toBeNull()
+      expect(screen.queryAllByRole('button')).toHaveLength(role === 'reasoning' ? 1 : 0)
+    }
+  )
 })
 
 describe('MessageRow send mode', () => {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
   type RuntimeCapability
 } from '../../../shared/protocol-version'
 import type { RuntimeClientTarget } from './runtime-client-target'
@@ -93,8 +94,16 @@ export function useStructuredAgentSessionHostStopsConversation(
   )
 }
 
-/** Whether the host holds mid-turn sends as drafts: only then may a client send `delivery`
- *  or call the queuedMessage RPCs. */
+/** Whether the host settles a rewind left in doubt on the next send, agent running or not: only
+ *  then may a client offer a rewind, which hands an in-doubt prompt back for that send. */
+export function useStructuredAgentSessionHostRecoversRewindOnSend(
+  target: RuntimeClientTarget
+): boolean {
+  return useStructuredAgentSessionHostCapability(target, AGENT_SESSION_REWIND_RECOVERY_CAPABILITY)
+}
+
+/** Whether the host holds mid-turn sends as drafts: only then may a client send `delivery`. The
+ *  published cards and their queuedMessage actions are not gated on it. */
 export function useStructuredAgentSessionHostQueuesMessages(target: RuntimeClientTarget): boolean {
   return useStructuredAgentSessionHostQueuesMessagesState(target) === 'supported'
 }
