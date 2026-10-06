@@ -263,8 +263,10 @@ export class StructuredAgentSessionHost {
 
   // Trigger inlined rather than imported: `AgentSessionResumeTrigger` in shared is the canonical
   // type, and this file has no line budget left for the import.
-  /** Quit: no exit or recovery settled after this starts a child or hands a message over. */
-  stopDelivery = (): void => this.conversationDelivery.dispose()
+  /** Quit: no exit or recovery settled after this starts a child or hands a message over, and the
+   *  queue hands no card over. */
+  stopDelivery = (): void =>
+    [this.conversationDelivery, this.queued.drain].forEach((d) => d.dispose())
 
   async flushAllStreamedEvents(options?: { trigger?: 'quit' | 'update' }): Promise<void> {
     this.stopDelivery()

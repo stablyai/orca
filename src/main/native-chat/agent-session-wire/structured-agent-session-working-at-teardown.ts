@@ -182,7 +182,7 @@ export function structuredAgentSessionWorkingAtStop(input: {
     return null
   }
   const snapshot = session.journal.snapshot()
-  // A queued message reached no agent, so it is no work to resume: quit rejects it as never sent.
+  // A queued message reached no agent, so it is no work to resume: the next open settles it.
   const handedOver = snapshot.submissions.filter(
     (submission) => !isQueuedAgentJournalSubmission(submission)
   )

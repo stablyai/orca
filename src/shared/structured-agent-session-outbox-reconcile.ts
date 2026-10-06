@@ -27,6 +27,13 @@ export function reconcileStructuredAgentSessionOutbox(
     if (submission?.dispatchState === 'accepted' || dispatchWasWithdrawn(submission)) {
       return []
     }
+    // The host kept it as a card, which carries the text from here, edited or deleted included.
+    if (
+      submission?.dispatchState === 'rejected' &&
+      submission.keptAsQueuedMessageId !== undefined
+    ) {
+      return []
+    }
     if (submission?.dispatchState === 'rejected') {
       // Its row draws it once loaded; until then the entry does, as the host recorded it. An older
       // host leaves that row where it was sent, which may be outside the loaded window.

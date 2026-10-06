@@ -23,7 +23,7 @@ export type MobileNativeChatSendOrigin = {
   baselineTailMessageId: string | null
   baselineResolved: boolean
   /** Queued-draft cards already on screen at send time, so an earlier identical
-   *  card cannot confirm this send. Structured lane on a queue-capable host only. */
+   *  card cannot confirm this send. Structured lane, on any host that publishes cards. */
   baselineQueuedMessageIds?: readonly string[]
 }
 

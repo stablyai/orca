@@ -11,6 +11,7 @@ import type {
   AgentJournalTurnScope,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionMessageSource } from '../../../shared/agent-session-message-source'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
 import type { JournalRow } from './journal-row-schema'
@@ -43,6 +44,7 @@ export type ResolveDispatchInput = {
      *  `agentSessionFailureWords`, never written by hand. */
     | ({
         state: 'rejected'
+        keptAsQueuedMessageId?: string
         answeredInTurn?: AgentJournalAnsweredTurnIdentity
       } & AgentJournalDispatchRejection)
     | { state: 'unknown'; reason?: string | null }
@@ -99,6 +101,8 @@ export type JournalSubmissionInput = {
   queuedMessageId?: string
   /** Who asked for this turn (`JournalSubmissionRow.origin`). */
   origin?: 'client' | 'host'
+  /** Who it is from (`JournalSubmissionRow.source`); the row keeps the kind only. */
+  source?: Pick<AgentSessionMessageSource, 'kind'>
 }
 
 /** A submission append that converts a queued draft, in one transaction. */

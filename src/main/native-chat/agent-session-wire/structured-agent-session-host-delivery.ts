@@ -3,7 +3,7 @@
 // with a message queued has a delivery loop — and the open is where a loop for leftovers wakes.
 
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { abandonQueuedStructuredAgentSessionMessages } from './structured-agent-session-host-lifetime'
+import { holdClosedStructuredAgentSessionSends } from './structured-agent-session-host-lifetime'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   openStructuredAgentSessionConversation,
@@ -65,10 +65,10 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     ensureProviderChild: input.ensureProviderChild,
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(deps.store, sessionId),
-    abandonQueued: async (sessionId, which) => {
+    holdClosed: async (sessionId, which) => {
       const session = sessions.get(sessionId)
       return session
-        ? abandonQueuedStructuredAgentSessionMessages(deps, sessionId, session.journal, which)
+        ? holdClosedStructuredAgentSessionSends(deps, sessionId, session.journal, which)
         : true
     },
     failureTextContext: (sessionId) =>
