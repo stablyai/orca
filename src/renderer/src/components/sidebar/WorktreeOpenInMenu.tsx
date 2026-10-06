@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React from 'react'
 import { ExternalLink, FolderOpen } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -297,23 +297,6 @@ export async function openWorktreePath(args: {
   }
 }
 
-function useOpenInWorktreePath({
-  worktreePath,
-  connectionId,
-  runtimeEnvironmentId
-}: {
-  worktreePath: string
-  connectionId?: string | null
-  runtimeEnvironmentId: string | null
-}): (target: 'file-manager' | 'external-editor', command?: string) => Promise<void> {
-  return useCallback(
-    async (target, command) => {
-      await openWorktreePath({ target, worktreePath, connectionId, runtimeEnvironmentId, command })
-    },
-    [connectionId, runtimeEnvironmentId, worktreePath]
-  )
-}
-
 export function WorktreeOpenInMenuItems({
   worktreeId,
   executionHostId,
@@ -328,11 +311,6 @@ export function WorktreeOpenInMenuItems({
   // Why: a folder workspace's synthetic repo has no connectionId, so the caller's prop misses SSH.
   const ownerConnectionId =
     useAppStore((s) => getConnectionIdFromState(s, worktreeId)) ?? connectionId
-  const openInWorktreePath = useOpenInWorktreePath({
-    worktreePath,
-    connectionId: ownerConnectionId,
-    runtimeEnvironmentId
-  })
   const openInApplications = useAppStore(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
@@ -354,7 +332,13 @@ export function WorktreeOpenInMenuItems({
             key={entry.id}
             onClick={stopMenuPropagation}
             onSelect={() => {
-              void openInWorktreePath(entry.target, entry.command)
+              void openWorktreePath({
+                target: entry.target,
+                worktreePath,
+                connectionId: ownerConnectionId,
+                runtimeEnvironmentId,
+                command: entry.command
+              })
             }}
             disabled={disabled || availability.disabled}
           >
