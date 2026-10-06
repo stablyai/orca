@@ -68,7 +68,7 @@ export class AntigravityAccountService {
           updatedAt: timestamp
         }
         vault.accounts.push(account)
-        await this.store.write(vault, operation)
+        await this.saveVault(vault, operation)
       }
       return this.state({ vault, current })
     })
@@ -101,7 +101,7 @@ export class AntigravityAccountService {
       }
       latest.selectedAccountId = id
       this.updateSnapshot(latest, readback)
-      await this.store.write(latest, operation)
+      await this.saveVault(latest, operation)
       return this.state({ vault: latest, current: readback })
     })
   }
@@ -132,7 +132,7 @@ export class AntigravityAccountService {
         this.updateSnapshot(latest, readback)
       }
       latest.accounts = latest.accounts.filter((entry) => entry.id !== id)
-      await this.store.write(latest, operation)
+      await this.saveVault(latest, operation)
       return this.state({ vault: latest, current: readback })
     })
   }
@@ -157,9 +157,17 @@ export class AntigravityAccountService {
     // Re-read after native I/O so a delayed read never restores an older vault.
     const vault = await this.store.read(operation)
     if (current && this.updateSnapshot(vault, current)) {
-      await this.store.write(vault, operation)
+      await this.saveVault(vault, operation)
     }
     return { vault, current }
+  }
+
+  private async saveVault(
+    vault: AntigravityAccountVault,
+    operation: AntigravityAccountOperation
+  ): Promise<void> {
+    remainingAccountOperationMs(operation)
+    await this.store.write(vault, operation)
   }
 
   private updateSnapshot(

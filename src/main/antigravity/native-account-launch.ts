@@ -1,10 +1,14 @@
+import { withAntigravityAccountOperation } from './native-account-operation'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { isAntigravityFileStorageHost } from './native-credential-backend'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
-import { getAntigravityAccountService, getAntigravityAccountVaultPath } from './native-account-host'
+import {
+  prepareAntigravityAccountTargetForLaunch,
+  getAntigravityAccountVaultPath
+} from './native-account-host'
 
 export async function prepareAntigravityAccountForLaunch(args: {
   launchAgent?: string
@@ -26,7 +30,9 @@ export async function prepareAntigravityAccountForLaunch(args: {
   if (!existsSync(path)) {
     return
   }
-  if (!(await createEncryptedAntigravityAccountStore(path).read()).selectedAccountId) {
+  if (
+    !(await Promise.resolve(createEncryptedAntigravityAccountStore(path).read())).selectedAccountId
+  ) {
     return
   }
   const env = args.envIsComplete ? { ...args.env } : { ...process.env, ...args.env }
@@ -43,5 +49,7 @@ export async function prepareAntigravityAccountForLaunch(args: {
       'This agy launch uses a different credential authority from the selected Antigravity account.'
     )
   }
-  await getAntigravityAccountService({ runtime: 'host' }).prepareForLaunch()
+  await withAntigravityAccountOperation((operation) =>
+    prepareAntigravityAccountTargetForLaunch({ runtime: 'host' }, operation)
+  )
 }

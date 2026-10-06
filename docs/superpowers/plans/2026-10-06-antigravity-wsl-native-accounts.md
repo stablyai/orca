@@ -269,14 +269,14 @@ operation: AntigravityAccountOperation): Promise<ResolvedAntigravityWslTarget | 
 同时在共享类型增加 `expectedAuthorityId?: string` 与可选的
 `resolvedTarget: { runtime: 'wsl'; wslDistro: string; authorityId: string }`；任务 7 再接入 schema 和 UI。
 
-- [ ] **Step 1: 写失败测试。** 单次 default 解析后模拟默认发行版改变，后续 guest 调用仍
+- [x] **Step 1: 写失败测试。** 单次 default 解析后模拟默认发行版改变，后续 guest 调用仍
   明确指定原发行版；列表后 UID/HOME 或默认改变使修改拒绝。Map 中 Ubuntu/ubuntu
   只构建一个 service，构建失败可重试；Host、两个发行版的 vault、选定 id 和队列隔离。
   对后台仍持锁的超时写入：刷新只读、第二次修改被拒绝；锁释放后必须先回读原生和 vault。
-- [ ] **Step 2: 验证失败。** `pnpm test src/main/antigravity/native-account-host.test.ts
+- [x] **Step 2: 验证失败。** `pnpm test src/main/antigravity/native-account-host.test.ts
   src/main/antigravity/native-wsl-account-recovery.test.ts src/main/runtime/rpc/methods/antigravity-accounts.test.ts`。
   预期现有 WSL 拒绝、缺少分发或未定义目标绑定断言失败。
-- [ ] **Step 3: 实现分发。** runAntigravityAccountOperation 创建共享 15 秒 operation，解析
+- [x] **Step 3: 实现分发。** runAntigravityAccountOperation 创建共享 15 秒 operation，解析
   目标、在任何 store/backend 访问前检查修改绑定、复用作用域服务队列并执行现有业务方法。
   WSL 路径按 scopeHash，响应在摘要上附 resolvedTarget；Host 不附新请求必需项。
   更新四个 RPC handler 使用该入口；缺少 accountId 的 Select/Remove 拒绝。
@@ -285,10 +285,10 @@ operation: AntigravityAccountOperation): Promise<ResolvedAntigravityWslTarget | 
   mock，保持原来的 WSL skip 直到任务 8，避免 getService 返回类型变化造成编译失败。
   backend 对提交超时或不完整响应标记需核实；后续动作先获取 guest 锁并回读，失败保持
   拒绝，禁止自动 rollback/replay。移除旧的直接同步 getService 调用并更新 mock。
-- [ ] **Step 4: 验证通过。** 重跑上述测试及 `pnpm test src/main/antigravity`。
+- [x] **Step 4: 验证通过。** 重跑上述测试及 `pnpm test src/main/antigravity`。
   断言 Add/Select/Remove/Refresh/Prepare 同作用域共享队列，错误刷新不消除原错误或
   发布虚假的 selectedAccountId；`pnpm tc:node` 通过。
-- [ ] **Step 5: 提交。** 提交 `feat(antigravity): route account operations by WSL authority`。
+- [x] **Step 5: 提交。** 提交 `feat(antigravity): route account operations by WSL authority`。
 
 ## Task 7: RPC 绑定、能力协商与设置页状态
 

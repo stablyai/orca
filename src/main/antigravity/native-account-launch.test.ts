@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync } from 'node:fs'
 import { prepareAntigravityAccountForLaunch } from './native-account-launch'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
-import { getAntigravityAccountService } from './native-account-host'
+import { prepareAntigravityAccountTargetForLaunch } from './native-account-host'
 
 const { prepareForLaunch } = vi.hoisted(() => ({ prepareForLaunch: vi.fn() }))
 vi.mock('node:fs', () => ({ existsSync: vi.fn() }))
@@ -12,12 +12,15 @@ vi.mock('../../shared/app-environment', () => ({
 vi.mock('./native-account-store', () => ({ createEncryptedAntigravityAccountStore: vi.fn() }))
 vi.mock('./native-account-host', () => ({
   getAntigravityAccountVaultPath: () => '/task/vault',
-  getAntigravityAccountService: vi.fn(() => ({ prepareForLaunch }))
+  prepareAntigravityAccountTargetForLaunch: vi.fn(async () => {
+    await prepareForLaunch()
+    return null
+  })
 }))
 
 beforeEach(() => {
   vi.mocked(existsSync).mockReset().mockReturnValue(true)
-  vi.mocked(getAntigravityAccountService).mockClear()
+  vi.mocked(prepareAntigravityAccountTargetForLaunch).mockClear()
   vi.mocked(createEncryptedAntigravityAccountStore).mockReturnValue({
     read: () => ({ accounts: [], selectedAccountId: 'selected' }),
     write: vi.fn()
@@ -50,13 +53,13 @@ describe('native account verification before agy launch', () => {
     await prepareAntigravityAccountForLaunch({ launchAgent: 'antigravity', isWsl: true })
     await prepareAntigravityAccountForLaunch({ launchAgent: 'codex' })
     expect(existsSync).not.toHaveBeenCalled()
-    expect(getAntigravityAccountService).not.toHaveBeenCalled()
+    expect(prepareAntigravityAccountTargetForLaunch).not.toHaveBeenCalled()
   })
 
   it('does not read native credentials when no account selection exists', async () => {
     vi.mocked(existsSync).mockReturnValue(false)
     await prepareAntigravityAccountForLaunch({ launchAgent: 'antigravity' })
-    expect(getAntigravityAccountService).not.toHaveBeenCalled()
+    expect(prepareAntigravityAccountTargetForLaunch).not.toHaveBeenCalled()
   })
 
   it('blocks a launch using an overridden credential home without silently replacing its account', async () => {
