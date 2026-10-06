@@ -434,6 +434,64 @@ describe('OrcaRuntimeService', () => {
     expect(surface?.type === 'terminal' && surface.viewMode).toBe('chat')
   })
 
+  it('forwards renderer-authoritative viewMode changes to the window owner', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const setSessionTabProps = vi.fn()
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn(),
+      setSessionTabProps
+    })
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer:test',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: 'host-tab::leaf:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'host-tab::leaf:1',
+              parentTabId: 'host-tab',
+              leafId: 'leaf:1',
+              title: 'Terminal',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+    Object.defineProperty(runtime, 'getAvailableAuthoritativeWindow', { value: () => ({}) })
+
+    await runtime.setMobileSessionTabProps(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'host-tab::leaf:1',
+      viewMode: 'chat'
+    })
+
+    expect(setSessionTabProps).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'host-tab', {
+      viewMode: 'chat'
+    })
+    expect(
+      getSession().tabsByWorktree[TEST_WORKTREE_ID]!.find((tab) => tab.id === 'host-tab')
+    ).not.toHaveProperty('viewMode')
+  })
+
   it('still persists tab props in serve mode after syncWindowGraph(0) (gate does not fire)', async () => {
     // Why: serve's syncWindowGraph(0,...) sets authoritativeWindowId=0, but BrowserWindow.fromId(0) is null, so the renderer-authoritative gate must not fire.
     const session = makeWorkspaceSessionWithHeadlessTerminal()

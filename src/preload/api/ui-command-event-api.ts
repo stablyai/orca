@@ -219,6 +219,15 @@ export type UiCommandEventApi = {
   onMoveSessionTab: (
     callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
   ) => () => void
+  onSetSessionTabProps?: (
+    callback: (data: {
+      requestId: string
+      worktreeId: string
+      tabId: string
+      viewMode?: 'terminal' | 'chat'
+    }) => void
+  ) => () => void
+  respondSessionTabProps?: (response: { requestId: string; error?: string }) => void
   onOpenFileFromMobile: (
     callback: (data: {
       worktreeId: string

@@ -16,6 +16,7 @@ import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-rel
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
 import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
+import { requestSessionTabPropsFromRenderer } from './session-tab-props-request-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
 
 let runtimeNotifierTokenCounter = 0
@@ -169,6 +170,8 @@ export function registerRuntimeWindowLifecycle(
       requestSessionTabCloseFromRenderer(mainWindow, tabId, worktreeId),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
       send('ui:moveSessionTab', { worktreeId, ...move }),
+    setSessionTabProps: (worktreeId, tabId, props) =>
+      requestSessionTabPropsFromRenderer(mainWindow, tabId, worktreeId, props),
     openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId?, navigation?) =>
       send('ui:openFileFromMobile', {
         worktreeId,

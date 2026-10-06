@@ -12,8 +12,34 @@ import {
   resolvePinnedTabLabel
 } from '../../store/pinned-tab-close-guard'
 import { useAppStore } from '../../store'
+import { findTabAndWorktree, patchTab } from '../../store/slices/tab-group-state'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
+import { patchTerminalTabRow } from '../../store/slices/tabs/tabs-host-mirroring'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+
+export function applySessionTabProps(args: {
+  worktreeId: string
+  tabId: string
+  viewMode?: 'terminal' | 'chat'
+}): void {
+  if (args.viewMode === undefined) {
+    return
+  }
+  const localTabId = resolveWindowTabIdForHostTab(args.worktreeId, args.tabId)
+  const state = useAppStore.getState()
+  const found = findTabAndWorktree(state.unifiedTabsByWorktree, localTabId)
+  if (!found || found.worktreeId !== args.worktreeId || found.tab.contentType !== 'terminal') {
+    throw new Error('session_tab_not_found')
+  }
+  useAppStore.setState((state) => ({
+    ...patchTab(state.unifiedTabsByWorktree, localTabId, { viewMode: args.viewMode }),
+    ...patchTerminalTabRow(state.tabsByWorktree, localTabId, { viewMode: args.viewMode })
+  }))
+  // The direct authoritative patch bypasses the normal tab action, so explicitly publish the
+  // updated viewMode before the next stale graph snapshot can overwrite the two local rows.
+  scheduleRuntimeGraphSync()
+}
 
 export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
@@ -124,4 +150,20 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
       })
     })
   )
+
+  if (window.api.ui.onSetSessionTabProps) {
+    unsubs.push(
+      window.api.ui.onSetSessionTabProps(({ requestId, worktreeId, tabId, viewMode }) => {
+        try {
+          applySessionTabProps({ worktreeId, tabId, viewMode })
+          window.api.ui.respondSessionTabProps?.({ requestId })
+        } catch (error) {
+          window.api.ui.respondSessionTabProps?.({
+            requestId,
+            error: error instanceof Error ? error.message : 'session_tab_props_failed'
+          })
+        }
+      })
+    )
+  }
 }
