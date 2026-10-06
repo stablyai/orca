@@ -1,3 +1,4 @@
+import { noteSharedControlOutbound } from './remote-runtime-shared-control-open'
 import * as sharedControlProtocol from './remote-runtime-shared-control-protocol'
 import * as sharedControlState from './remote-runtime-shared-control-state'
 import { closeSharedControlConnectionSubscription } from './remote-runtime-shared-control-subscription-close'
@@ -31,6 +32,7 @@ export function sendSharedControlRequest(args: {
     reject: (id, error) =>
       sharedControlState.rejectSharedControlPendingRequest(args.pendingRequests, id, error)
   })
+  noteSharedControlOutbound(args.ws)
 }
 
 export function sendSharedControlSubscription(args: {

@@ -12,14 +12,22 @@ export const REMOTE_RUNTIME_SOCKET_PING_INTERVAL_MS = 10_000
 // Why: just under two server heartbeat periods (15s), so a dead link is
 // detected on a similar horizon to the server's own ping/terminate reaper.
 export const REMOTE_RUNTIME_SOCKET_LIVENESS_TIMEOUT_MS = 25_000
+// Why: a request may be the user's first act after sleep or a Wi-Fi change; if nothing comes back
+// soon after it, probe so a dead return path surfaces in seconds instead of after the request timeout.
+export const REMOTE_RUNTIME_SOCKET_SEND_PROBE_QUIET_MS = 2_000
+export const REMOTE_RUNTIME_SOCKET_SEND_PROBE_TIMEOUT_MS = 5_000
 
 export type RemoteRuntimeSocketLivenessOptions = {
   pingIntervalMs?: number
   livenessTimeoutMs?: number
+  sendProbeQuietMs?: number
+  sendProbeTimeoutMs?: number
 }
 
 export type RemoteRuntimeSocketLivenessMonitor = {
   noteActivity: () => void
+  /** Probes the socket if nothing arrives soon after a send; at most one probe is outstanding. */
+  noteOutbound: () => void
   stop: () => void
 }
 
@@ -33,8 +41,13 @@ export function startRemoteRuntimeSocketLiveness(args: {
   const pingIntervalMs = args.options?.pingIntervalMs ?? REMOTE_RUNTIME_SOCKET_PING_INTERVAL_MS
   const livenessTimeoutMs =
     args.options?.livenessTimeoutMs ?? REMOTE_RUNTIME_SOCKET_LIVENESS_TIMEOUT_MS
+  const sendProbeQuietMs =
+    args.options?.sendProbeQuietMs ?? REMOTE_RUNTIME_SOCKET_SEND_PROBE_QUIET_MS
+  const sendProbeTimeoutMs =
+    args.options?.sendProbeTimeoutMs ?? REMOTE_RUNTIME_SOCKET_SEND_PROBE_TIMEOUT_MS
   let lastTickAt = now()
   let probeSentAt: number | null = null
+  let sendProbe: ReturnType<typeof setTimeout> | null = null
   let stopped = false
 
   const timer = setInterval(() => {
@@ -60,11 +73,7 @@ export function startRemoteRuntimeSocketLiveness(args: {
       tryPing()
     }
   }, pingIntervalMs)
-  // Why: mobile typechecks shared code with DOM timer types where unref is absent.
-  const unrefable = timer as unknown as { unref?: () => void }
-  if (typeof unrefable.unref === 'function') {
-    unrefable.unref()
-  }
+  unrefTimer(timer)
 
   function stop(): void {
     if (stopped) {
@@ -72,6 +81,47 @@ export function startRemoteRuntimeSocketLiveness(args: {
     }
     stopped = true
     clearInterval(timer)
+    clearSendProbe()
+  }
+
+  function clearSendProbe(): void {
+    if (sendProbe !== null) {
+      clearTimeout(sendProbe)
+      sendProbe = null
+    }
+  }
+
+  function noteOutbound(): void {
+    if (stopped || sendProbe !== null) {
+      return
+    }
+    // Why wait first: a reply within the quiet window proves the path, so healthy sends never ping.
+    sendProbe = setTimeout(() => {
+      sendProbe = null
+      if (!stopped) {
+        startSendProbe()
+      }
+    }, sendProbeQuietMs)
+    unrefTimer(sendProbe)
+  }
+
+  function startSendProbe(): void {
+    const sentAt = now()
+    tryPing()
+    sendProbe = setTimeout(() => {
+      sendProbe = null
+      if (stopped) {
+        return
+      }
+      // Why: a deadline that fired late (sleep, throttling) never gave the socket its window.
+      if (now() - sentAt > sendProbeTimeoutMs * 1.5) {
+        startSendProbe()
+        return
+      }
+      stop()
+      args.onDead()
+    }, sendProbeTimeoutMs)
+    unrefTimer(sendProbe)
   }
 
   function tryPing(): void {
@@ -85,7 +135,21 @@ export function startRemoteRuntimeSocketLiveness(args: {
   return {
     noteActivity: () => {
       probeSentAt = null
+      clearSendProbe()
     },
+    noteOutbound,
     stop
+  }
+}
+
+function unrefTimer(timer: unknown): void {
+  // Why unknown: mobile typechecks shared code with DOM timer types, where timers are numbers.
+  if (
+    typeof timer === 'object' &&
+    timer !== null &&
+    'unref' in timer &&
+    typeof timer.unref === 'function'
+  ) {
+    timer.unref()
   }
 }

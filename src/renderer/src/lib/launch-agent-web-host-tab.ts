@@ -12,6 +12,8 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentPromptDelivery } from '../../../shared/agent-session-host-authority'
 import { translate } from '@/i18n/i18n'
 import { toAgentLaunchPreferences } from '../../../shared/agent-launch-preferences'
+import { formatAgentTypeLabel } from '../../../shared/agent-type-label'
+import { notifyUnconfirmedWebRuntimeTerminalCreate } from '@/lib/web-runtime-terminal-create-feedback'
 
 function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
   const state = useAppStore.getState()
@@ -113,6 +115,10 @@ export function launchAgentInWebHostTab(args: {
             { value0: agent }
           )
       )
+      return { delivered: false, failureNotified: true }
+    }
+    if (outcome.status === 'unconfirmed') {
+      notifyUnconfirmedWebRuntimeTerminalCreate(formatAgentTypeLabel(agent))
       return { delivered: false, failureNotified: true }
     }
     useAppStore.getState().setActiveTabType('terminal', worktreeId)

@@ -19,6 +19,7 @@ import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-e
 import { translate } from '@/i18n/i18n'
 import { getActiveWorktreeRuntimeEnvironmentId } from './terminal-workspace-model'
 import type { TerminalColdActivationController } from './terminal-cold-activation'
+import { notifyWebRuntimeTerminalCreateOutcome } from '@/lib/web-runtime-terminal-create-feedback'
 
 export function useTerminalCreateActions(controller: TerminalColdActivationController) {
   const {
@@ -47,7 +48,7 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
           targetGroupId,
           command: shellOverride,
           activate: true
-        })
+        }).then(notifyWebRuntimeTerminalCreateOutcome)
         return
       }
       if (!shellOverride && targetGroupId) {

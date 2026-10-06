@@ -24,6 +24,7 @@ import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import { renderTabBarItems } from './tab-bar-item-surface'
 import { TabBarStaticCreateMenu } from './tab-bar-static-create-menu'
 import ClientHostedBrowserTabRows from './ClientHostedBrowserTabRows'
+import PendingRemoteTerminalTabRows from './PendingRemoteTerminalTabRows'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
@@ -164,6 +165,11 @@ export function renderTabBarSurface({
                 includeTopTabBorder={includeTopTabBorder}
               />
             ) : null}
+            <PendingRemoteTerminalTabRows
+              worktreeId={worktreeId}
+              groupId={resolvedGroupId}
+              includeTopTabBorder={includeTopTabBorder}
+            />
           </div>
           <TabStripScrollIndicator
             metrics={tabStripOverflowState}

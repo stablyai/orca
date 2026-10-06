@@ -567,6 +567,40 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     connection.close()
   })
 
+  it('probes a quiet socket on request and replaces it long before the request timeout', async () => {
+    // Why: the dead return path from sleep or a Wi-Fi change — requests still reach the host but
+    // nothing comes back, so neither the reply nor a pong ever arrives.
+    const server = await createServer({
+      disableAutoPong: true,
+      silentMethods: ['session.tabs.createTerminal']
+    })
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
+      liveness: {
+        pingIntervalMs: 60_000,
+        livenessTimeoutMs: 60_000,
+        sendProbeQuietMs: 50,
+        sendProbeTimeoutMs: 200
+      }
+    })
+    await connection.request('worktree.ps', undefined, 1000)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    const startedAt = Date.now()
+    await expect(
+      connection.request('session.tabs.createTerminal', null, 10_000)
+    ).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
+    expect(Date.now() - startedAt).toBeLessThan(5_000)
+    expect(
+      server.requests.filter((request) => request.method === 'session.tabs.createTerminal')
+    ).toHaveLength(1)
+
+    await expect(connection.request('worktree.ps', undefined, 5_000)).resolves.toMatchObject({
+      ok: true
+    })
+    expect(server.connectionCount()).toBe(2)
+    connection.close()
+  })
+
   it('keeps unrelated pending requests alive when one request times out', async () => {
     const server = await createServer({
       silentMethods: ['worktree.hang'],

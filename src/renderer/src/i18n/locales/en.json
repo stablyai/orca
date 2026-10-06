@@ -19025,5 +19025,19 @@
   },
   "fileSearch": {
     "failed": "Search failed. Try again."
+  },
+  "tabBar": {
+    "pendingRemoteTerminal": {
+      "tooltip": "Waiting for the remote host to start this terminal"
+    }
+  },
+  "runtime": {
+    "webRuntimeSession": {
+      "createUnconfirmedNamed": "Couldn't confirm {{value0}} started on the remote host",
+      "createUnconfirmed": "Couldn't confirm the terminal started on the remote host",
+      "createUnconfirmedDetail": "The connection dropped before the host answered. If it started, its tab appears when the connection recovers.",
+      "createFailed": "Couldn't open a terminal on the remote host.",
+      "pendingTerminalLabel": "Terminal"
+    }
   }
 }

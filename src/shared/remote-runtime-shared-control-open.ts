@@ -12,6 +12,15 @@ import {
   type RemoteRuntimeSocketLivenessOptions
 } from './remote-runtime-socket-liveness'
 
+const sendProbes = new WeakMap<WebSocket, () => void>()
+
+/** Lets liveness probe a socket a request just went out on; no-op without liveness. */
+export function noteSharedControlOutbound(ws: WebSocket | null): void {
+  if (ws) {
+    sendProbes.get(ws)?.()
+  }
+}
+
 export function openSharedControlSocket(
   pairing: PairingOffer,
   callbacks: {
@@ -91,6 +100,7 @@ export function openSharedControlSocket(
     options: liveness.options
   })
   noteActivity = monitor.noteActivity
+  sendProbes.set(ws, monitor.noteOutbound)
 
   return {
     ok: true,

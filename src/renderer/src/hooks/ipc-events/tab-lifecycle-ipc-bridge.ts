@@ -16,6 +16,7 @@ import {
 } from '@/lib/floating-workspace-guest-bridge'
 
 import { useAppStore } from '../../store'
+import { notifyWebRuntimeTerminalCreateOutcome } from '@/lib/web-runtime-terminal-create-feedback'
 function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined): string | null {
   return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
 }
@@ -40,6 +41,7 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
           activate: true
         })
         if (outcome.status === 'created' || isWebRuntimeSessionActive(environmentId)) {
+          notifyWebRuntimeTerminalCreateOutcome(outcome)
           return
         }
         const newTab = store.createTab(worktreeId)

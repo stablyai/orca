@@ -13,6 +13,8 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 export type WebRuntimeTerminalCreateOutcome =
   | { status: 'created' }
   | { status: 'failed'; message: string }
+  // The request may have reached the host but no answer did; a retry could create a second one.
+  | { status: 'unconfirmed'; message: string }
 
 export type CreateWebRuntimeSessionTerminalArgs = {
   worktreeId: string

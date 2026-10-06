@@ -121,7 +121,8 @@ describe('createWebRuntimeSessionTerminal', () => {
         agent: 'codex',
         activate: false,
         select: true,
-        navigation: 'caller'
+        navigation: 'caller',
+        clientMutationId: expect.any(String)
       },
       timeoutMs: 15_000
     })
@@ -303,7 +304,8 @@ describe('createWebRuntimeSessionTerminal', () => {
         launchAgent: 'codex',
         activate: false,
         select: true,
-        navigation: 'caller'
+        navigation: 'caller',
+        clientMutationId: expect.any(String)
       },
       timeoutMs: 15_000
     })
@@ -377,7 +379,8 @@ describe('createWebRuntimeSessionTerminal', () => {
         launchAgent: 'codex',
         activate: false,
         select: true,
-        navigation: 'caller'
+        navigation: 'caller',
+        clientMutationId: expect.any(String)
       },
       timeoutMs: 15_000
     })

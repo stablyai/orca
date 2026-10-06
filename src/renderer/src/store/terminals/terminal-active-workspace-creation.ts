@@ -29,13 +29,19 @@ export function createActiveWorkspaceTerminalActions(
         ? worktreeRoute.route.runtimeEnvironmentId
         : getRuntimeEnvironmentIdForWorktree(state, worktreeId)
       if (runtimeEnvironmentId) {
-        const { createWebRuntimeSessionTerminal } = await import('@/runtime/web-runtime-session')
-        await createWebRuntimeSessionTerminal({
-          worktreeId,
-          environmentId: runtimeEnvironmentId,
-          targetGroupId: groupId,
-          activate: true
-        })
+        const [{ createWebRuntimeSessionTerminal }, { notifyWebRuntimeTerminalCreateOutcome }] =
+          await Promise.all([
+            import('@/runtime/web-runtime-session'),
+            import('@/lib/web-runtime-terminal-create-feedback')
+          ])
+        notifyWebRuntimeTerminalCreateOutcome(
+          await createWebRuntimeSessionTerminal({
+            worktreeId,
+            environmentId: runtimeEnvironmentId,
+            targetGroupId: groupId,
+            activate: true
+          })
+        )
         return
       }
       if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {

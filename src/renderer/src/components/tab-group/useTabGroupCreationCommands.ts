@@ -16,6 +16,7 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
+import { notifyWebRuntimeTerminalCreateOutcome } from '@/lib/web-runtime-terminal-create-feedback'
 
 export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null | undefined): void {
   if (!createdTerminal) {
@@ -159,6 +160,7 @@ export function useTabGroupCreationCommands({
           activate: true
         })
         if (outcome.status === 'created' || isWebRuntimeSessionActive(environmentId)) {
+          notifyWebRuntimeTerminalCreateOutcome(outcome)
           return
         }
         const terminal = createTab(worktreeId, groupId, shellOverride)

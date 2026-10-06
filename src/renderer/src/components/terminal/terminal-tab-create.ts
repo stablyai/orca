@@ -5,6 +5,7 @@ import {
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import { notifyWebRuntimeTerminalCreateOutcome } from '@/lib/web-runtime-terminal-create-feedback'
 
 export function createNewTerminalTab(
   activeWorktreeId: string | null,
@@ -30,7 +31,7 @@ export function createNewTerminalTab(
       command: shellOverride,
       ...(options?.startupCwd ? { cwd: options.startupCwd } : {}),
       activate: true
-    })
+    }).then(notifyWebRuntimeTerminalCreateOutcome)
     return
   }
   const newTab = state.createTab(
