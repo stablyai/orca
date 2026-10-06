@@ -71,7 +71,7 @@ describe("Don't Save in the unsaved-changes dialogs on a never-saved untitled no
     storeHolder.store = null
   })
 
-  it('main window removes the empty placeholder', async () => {
+  it('main window discards the draft and retains the empty backing file', async () => {
     const { result } = renderHook(() =>
       useTerminalEditorCloseDialogActions(mainWindowDialogController(FILE_ID))
     )
@@ -79,10 +79,11 @@ describe("Don't Save in the unsaved-changes dialogs on a never-saved untitled no
     await act(() => result.current.handleSaveDialogDiscard())
 
     expect(store.getState().openFiles).toHaveLength(0)
-    await vi.waitFor(() => expect(disk.files.has(FILE_ID)).toBe(false))
+    expect(store.getState().editorDrafts[FILE_ID]).toBeUndefined()
+    expect(disk.files.get(FILE_ID)).toBe('')
   })
 
-  it('floating panel removes the empty placeholder', async () => {
+  it('floating panel discards the draft and retains the empty backing file', async () => {
     const { result } = renderHook(() =>
       useTerminalSaveDialog({
         openFiles: store.getState().openFiles,
@@ -98,6 +99,7 @@ describe("Don't Save in the unsaved-changes dialogs on a never-saved untitled no
     })
 
     expect(store.getState().openFiles).toHaveLength(0)
-    await vi.waitFor(() => expect(disk.files.has(FILE_ID)).toBe(false))
+    expect(store.getState().editorDrafts[FILE_ID]).toBeUndefined()
+    expect(disk.files.get(FILE_ID)).toBe('')
   })
 })

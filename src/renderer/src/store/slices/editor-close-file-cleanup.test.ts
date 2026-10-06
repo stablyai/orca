@@ -44,7 +44,7 @@ function mirroredEditorUnifiedTab(id: string, entityId: string, worktreeId: stri
   }
 }
 
-describe('createEditorSlice untitled cleanup routing', () => {
+describe('createEditorSlice untitled retention routing', () => {
   const runtimeEnvironmentCallMock = vi.fn()
   const runtimeEnvironmentTransportCallMock = vi.fn()
   const localDeletePathMock = vi.fn()
@@ -115,7 +115,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
     } as Partial<AppState>)
   }
 
-  it('closeFile deletes untouched remote untitled files through runtime file RPC', async () => {
+  it('closeFile retains untouched remote untitled files through runtime file RPC', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
     store.getState().openFile({
@@ -129,24 +129,12 @@ describe('createEditorSlice untitled cleanup routing', () => {
 
     store.getState().closeFile('/remote/wt/untitled.md')
 
-    await vi.waitFor(() => {
-      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'files.delete',
-        params: {
-          worktree: 'id:wt-1',
-          relativePath: 'untitled.md',
-          recursive: undefined,
-          expectedExecutionHostId: 'local'
-        },
-        expectedEnvironmentPairingRevision: undefined,
-        timeoutMs: 15_000
-      })
-    })
+    await flushAsyncRemoteRefresh()
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
     expect(localDeletePathMock).not.toHaveBeenCalled()
   })
 
-  it('closeAllFiles deletes untouched remote untitled files through runtime file RPC', async () => {
+  it('closeAllFiles retains untouched remote untitled files through runtime file RPC', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
     store.getState().openFile({
@@ -160,20 +148,8 @@ describe('createEditorSlice untitled cleanup routing', () => {
 
     store.getState().closeAllFiles()
 
-    await vi.waitFor(() => {
-      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'files.delete',
-        params: {
-          worktree: 'id:wt-1',
-          relativePath: 'untitled.md',
-          recursive: undefined,
-          expectedExecutionHostId: 'local'
-        },
-        expectedEnvironmentPairingRevision: undefined,
-        timeoutMs: 15_000
-      })
-    })
+    await flushAsyncRemoteRefresh()
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
     expect(localDeletePathMock).not.toHaveBeenCalled()
   })
 
@@ -192,16 +168,8 @@ describe('createEditorSlice untitled cleanup routing', () => {
 
     store.getState().closeFile('/remote/wt/untitled.md')
 
-    await vi.waitFor(() =>
-      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
-        expect.objectContaining({ method: 'files.stat' })
-      )
-    )
-    // Why: a macrotask drains the whole stat → cleanup microtask chain, however many hops the runtime client adds.
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'files.delete' })
-    )
+    await flushAsyncRemoteRefresh()
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
     expect(localDeletePathMock).not.toHaveBeenCalled()
   })
 
@@ -229,7 +197,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
     expect(localDeletePathMock).not.toHaveBeenCalled()
   })
 
-  it('closeFile deletes untouched remote untitled files in their owning runtime after switching local', async () => {
+  it('closeFile retains untouched remote untitled files in their owning runtime after switching local', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
     store.getState().openFile({
@@ -244,24 +212,12 @@ describe('createEditorSlice untitled cleanup routing', () => {
 
     store.getState().closeFile('/remote/wt/untitled.md')
 
-    await vi.waitFor(() => {
-      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'files.delete',
-        params: {
-          worktree: 'id:wt-1',
-          relativePath: 'untitled.md',
-          recursive: undefined,
-          expectedExecutionHostId: 'local'
-        },
-        expectedEnvironmentPairingRevision: undefined,
-        timeoutMs: 15_000
-      })
-    })
+    await flushAsyncRemoteRefresh()
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
     expect(localDeletePathMock).not.toHaveBeenCalled()
   })
 
-  it('closeFile deletes untouched remote untitled files in their owning runtime after switching environments', async () => {
+  it('closeFile retains untouched remote untitled files in their owning runtime after switching environments', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
     store.getState().openFile({
@@ -276,20 +232,8 @@ describe('createEditorSlice untitled cleanup routing', () => {
 
     store.getState().closeFile('/remote/wt/untitled.md')
 
-    await vi.waitFor(() => {
-      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'files.delete',
-        params: {
-          worktree: 'id:wt-1',
-          relativePath: 'untitled.md',
-          recursive: undefined,
-          expectedExecutionHostId: 'local'
-        },
-        expectedEnvironmentPairingRevision: undefined,
-        timeoutMs: 15_000
-      })
-    })
+    await flushAsyncRemoteRefresh()
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
     expect(localDeletePathMock).not.toHaveBeenCalled()
   })
 

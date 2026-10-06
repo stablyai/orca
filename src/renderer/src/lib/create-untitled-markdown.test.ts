@@ -69,6 +69,29 @@ describe('createUntitledMarkdownFile', () => {
     expect(pathExists).toHaveBeenCalledTimes(3)
   })
 
+  it('uses a fresh browser-safe name after the numbered notes are occupied', async () => {
+    const occupied = new Set(
+      Array.from(
+        { length: 100 },
+        (_, index) => `/repo/untitled${index === 0 ? '' : `-${index + 1}`}.md`
+      )
+    )
+    const pathExists = vi.fn(async ({ filePath }: { filePath: string }) => occupied.has(filePath))
+    const createFile = vi.fn(async ({ filePath }: { filePath: string }) => {
+      if (occupied.has(filePath)) {
+        throw new Error('EEXIST')
+      }
+      occupied.add(filePath)
+    })
+    vi.stubGlobal('window', { api: { fs: { pathExists, createFile } } })
+
+    const note = await createUntitledMarkdownFile('/repo', 'wt-1')
+
+    expect(note.relativePath).toMatch(/^untitled-[0-9a-f-]{36}\.md$/)
+    expect(occupied.size).toBe(101)
+    expect(createFile).toHaveBeenCalledTimes(1)
+  })
+
   it('throws a descriptive error when untitled names are exhausted', async () => {
     const pathExists = vi.fn(async () => true)
     const stat = vi.fn().mockResolvedValue({ size: 0, isDirectory: false, mtime: 1 })
@@ -82,11 +105,11 @@ describe('createUntitledMarkdownFile', () => {
     })
 
     await expect(createUntitledMarkdownFile('/repo', 'wt-1')).rejects.toThrow(
-      'Unable to create untitled markdown file after 100 attempts.'
+      'Unable to create untitled markdown file after 101 attempts.'
     )
 
     expect(createFile).not.toHaveBeenCalled()
-    expect(pathExists).toHaveBeenCalledTimes(100)
+    expect(pathExists).toHaveBeenCalledTimes(101)
   })
 
   it('passes connectionId to pathExists and createFile for SSH worktrees', async () => {

@@ -15,6 +15,7 @@ import {
 } from './markdown-document-templates'
 import { requestMarkdownTemplateSelection } from './markdown-template-picker-request'
 import { joinPath } from './path'
+import { createBrowserUuid } from './browser-uuid'
 import type { EditorFileOperationProvenance } from './editor-file-operation-owner'
 
 export type UntitledMarkdownFileInfo = {
@@ -54,7 +55,8 @@ export async function createUntitledMarkdownFile(
 ): Promise<UntitledMarkdownFileInfo> {
   const baseName = 'untitled'
   const ext = '.md'
-  const MAX_ATTEMPTS = 100
+  const NAMED_ATTEMPTS = 100
+  const MAX_ATTEMPTS = NAMED_ATTEMPTS + 1
   const context = {
     settings,
     worktreeId,
@@ -82,7 +84,10 @@ export async function createUntitledMarkdownFile(
   // Why: existence probing must go through the same runtime/SSH-aware file
   // surface as creation; the shell probe only sees the client filesystem.
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-    const fileName = attempt === 1 ? `${baseName}${ext}` : `${baseName}-${attempt}${ext}`
+    let fileName = attempt === 1 ? `${baseName}${ext}` : `${baseName}-${attempt}${ext}`
+    if (attempt > NAMED_ATTEMPTS) {
+      fileName = `${baseName}-${createBrowserUuid()}${ext}`
+    }
     const filePath = joinPath(worktreePath, fileName)
 
     assertCurrent()

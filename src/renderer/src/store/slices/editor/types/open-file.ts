@@ -93,7 +93,7 @@ export type OpenFile = {
   worktreeId: string
   language: string
   isDirty: boolean
-  // Why: remote untitled cleanup must target the creating environment even if the user later switches runtime.
+  /** Owning paired runtime captured when the tab opened. */
   runtimeEnvironmentId?: string | null
   /** SSH target that owns an absolute path outside the worktree. */
   externalSshTargetId?: string
@@ -118,7 +118,7 @@ export type OpenFile = {
   conflictReview?: ConflictReviewState
   isPreview?: boolean // preview tabs are replaced when another file is single-clicked
   isUntitled?: boolean // true for files created via "New Markdown" that haven't been renamed yet
-  // Why: templated New Markdown files have real content at creation, unlike blank placeholders that can be discarded.
+  // Legacy close-cleanup flag retained for restored sessions and older peers.
   deleteUntouchedOnClose?: boolean
   // Why: external delete/rename of an open file keeps the tab (strikethrough label); 'changed' = rewritten on disk under unsaved edits → changed-on-disk banner (#7265).
   externalMutation?: 'deleted' | 'renamed' | 'changed'

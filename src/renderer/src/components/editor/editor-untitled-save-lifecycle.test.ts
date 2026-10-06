@@ -65,13 +65,13 @@ describe('untitled note save lifecycle', () => {
   it.each([
     ['before its empty content loads', (): void => {}],
     ['after its empty content loads', (): void => loadFromDisk(store, '')]
-  ])('still deletes an untouched untitled note closed %s', async (_when, load) => {
+  ])('retains an untouched untitled note closed %s', async (_when, load) => {
     load()
 
     store.getState().closeFile(FILE_ID)
 
-    await vi.waitFor(() => expect(disk.files.has(FILE_ID)).toBe(false))
-    expect(isReopenable(store)).toBe(false)
+    expect(disk.files.get(FILE_ID)).toBe('')
+    expect(isReopenable(store)).toBe(true)
   })
 
   it.each([
@@ -98,7 +98,6 @@ describe('untitled note save lifecycle', () => {
       typeInto(store, 'my note')
 
       await saveAndClose()
-      // Why: drain any stat → delete chain the close scheduled before asserting the note survived.
       await vi.advanceTimersByTimeAsync(0)
 
       expect(store.getState().openFiles).toHaveLength(0)
@@ -110,7 +109,7 @@ describe('untitled note save lifecycle', () => {
     }
   })
 
-  it('deletes the note when its last save emptied it', async () => {
+  it('keeps the note reopenable when its last save emptied it', async () => {
     const cleanup = attachEditorAutosaveController(store)
     try {
       typeInto(store, 'a')
@@ -121,7 +120,8 @@ describe('untitled note save lifecycle', () => {
 
       store.getState().closeFile(FILE_ID)
 
-      await vi.waitFor(() => expect(disk.files.has(FILE_ID)).toBe(false))
+      expect(disk.files.get(FILE_ID)).toBe('')
+      expect(isReopenable(store)).toBe(true)
     } finally {
       cleanup()
     }
@@ -148,7 +148,6 @@ describe('untitled note save lifecycle', () => {
       const discarded = discardEditorFileChangesAndClose(FILE_ID)
       finishWrite()
       await discarded
-      // Why: the superseded save left the tab looking like a placeholder, so only the size check keeps the note.
       await vi.advanceTimersByTimeAsync(0)
 
       expect(store.getState().openFiles).toHaveLength(0)
@@ -171,21 +170,20 @@ describe('untitled note save lifecycle', () => {
 
     store.getState().closeFile(FILE_ID)
 
-    // Why: a macrotask drains the stat → delete chain before asserting nothing was removed.
     await vi.advanceTimersByTimeAsync(0)
     expect(disk.files.get(FILE_ID)).toBe('agent text')
     expect(disk.fs.deletePath).not.toHaveBeenCalled()
-    // Why: a background tab never reloaded the write, so only the size check knew it was a real note.
-    expect(isReopenable(store)).toBe(reloaded)
+    expect(isReopenable(store)).toBe(true)
   })
 
-  it("removes a never-saved note's placeholder on Don't Save", async () => {
+  it("keeps the empty backing file after Don't Save discards never-saved edits", async () => {
     loadFromDisk(store, '')
     typeInto(store, 'typed but never saved')
 
     await discardEditorFileChangesAndClose(FILE_ID)
 
     expect(store.getState().openFiles).toHaveLength(0)
-    await vi.waitFor(() => expect(disk.files.has(FILE_ID)).toBe(false))
+    expect(disk.files.get(FILE_ID)).toBe('')
+    expect(isReopenable(store)).toBe(true)
   })
 })
