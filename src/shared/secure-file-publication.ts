@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { chmod, lstat, mkdir, open, rename, rm } from 'node:fs/promises'
+import { chmod, lstat, mkdir, open, realpath, rename, rm } from 'node:fs/promises'
 import { dirname, join, relative, sep } from 'node:path'
 import { restrictWindowsPath } from './secure-path-windows-acl'
 
@@ -53,9 +53,12 @@ export async function writeProtectedFileAtomic(
   const directory = dirname(path)
   const created = await mkdir(directory, { recursive: true, mode: 0o700 })
   if (created) {
-    let current = created
+    // Windows mkdir can return the long spelling of an 8.3 input path.
+    const firstCreated = process.platform === 'win32' ? await realpath(created) : created
+    const finalDirectory = process.platform === 'win32' ? await realpath(directory) : directory
+    let current = firstCreated
     await protect(current, true, operation)
-    for (const segment of relative(created, directory).split(sep).filter(Boolean)) {
+    for (const segment of relative(firstCreated, finalDirectory).split(sep).filter(Boolean)) {
       current = join(current, segment)
       await protect(current, true, operation)
     }

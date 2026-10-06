@@ -23,13 +23,60 @@ it does not contact the client keychain. The file must be private and regular. A
 `cache/antigravity-keyring-unavailable` marker makes authority uncertain: Orca refuses instead
 of assuming that the keychain or file wins.
 
-Native Windows Credential Manager, native Linux Secret Service, and operations directed from
-Windows Orca to a selected WSL distro are explicitly unsupported pending verified adapters.
+Native Windows Credential Manager and native Linux Secret Service remain unsupported.
+Windows Orca now routes selected WSL distro operations through the guest file adapter described below.
 Windows file bypass is also refused until private ACL protection is verified.
 Windows' `gemini:antigravity` raw blob and 2560-byte limit are different from the Mac wrapper;
 Linux uses the login collection with `service=gemini`, `username=antigravity`. No dependency,
 PowerShell compilation, credential-home flag, or cross-host fallback is invented here.
 A separate SSH relay has no Accounts RPC; use a paired owning runtime that implements it.
+
+## Windows-selected WSL accounts
+
+The Windows execution owner advertises `accounts.antigravity-native-wsl.v1`. Clients check
+that capability before any WSL operation. Each response contains the concrete distro and an
+opaque authority binding; Add, Select and Remove must send that binding back. The host resolves
+the actual distro, login UID and canonical login HOME again before acting. A changed default
+distro, user or HOME rejects the mutation and asks for a fresh list. Host requests keep their
+original shape for older hosts. Remote clients never apply their local account snapshots.
+
+The adapter reads `~/.gemini/antigravity-cli/antigravity-oauth-token` inside the guest, using
+`runWslProcess` and `--exec`. HOME must be canonical, owned by the guest user and on a Linux
+filesystem; DrvFS and symlink HOME are refused. The token and lock must be regular, single-link,
+user-owned files with exactly `0600`; newly created directories use `0700`. Parent directories
+must not be group/other writable. Fixed scripts require the ordinary GNU/Linux tools `id`,
+`stat`, `base64`, `cmp`, `head`, `mktemp`, `flock`, `mv`, `sync`, `readlink`, `tr`, `date`,
+`chmod`, `mkdir`, `rm`, `dirname` and `find`, plus `/proc` descriptor metadata. Unsupported
+filesystems or missing tools fail closed. Reads are capped at 64 KiB and verify opened-file
+metadata before and after reading. Raw credential JSON travels only over bounded stdin/stdout,
+with a nonce and strict UTF-8/base64 decoding; it never goes into argv, environment or errors.
+
+WSL snapshots stay on Windows under `userData/antigravity-accounts/wsl/<scope hash>/vault`.
+The hash includes the concrete distro, UID and canonical HOME, and encrypted contents repeat
+that scope for verification. Meaningful OS encryption and checked private Windows ACLs are
+required before guest mutation. Vault publication is asynchronous, checks cancellation before
+rename, and reports failures after publication as requiring verification. Windows 8.3 and long
+path spellings are canonicalized when protecting newly created directory chains. Host snapshots
+retain their existing format. A reinstall with the same distro name, UID and HOME cannot be
+distinguished from the prior installation; snapshots are never automatically restored.
+
+One 15-second budget includes queuing, target probes, ACL protection and guest operations;
+clients allow 20 seconds. A guest advisory lock serializes cooperating Orca processes. Writes
+use private staging, expected-byte comparison, file sync, rename and readback. Observed conflicts
+preserve the current file. A failed WSL mutation blocks further mutations and new managed
+launches until Accounts refresh verifies both native credentials and vault; there is no replay
+or rollback. Independently running agy does not participate in Orca's lock, so the final check
+and rename are not compare-and-swap. Directory sync is attempted in the guest; on Windows the
+vault file is synced, but directory fsync is not promised.
+
+Desktop IPC, headless runtime and the local PTY provider verify a selected account before a
+new WSL launch, then pin the checked distro into actual spawn arguments and process metadata.
+Preparation never writes an old credential snapshot into the guest. An unselected scope keeps
+ordinary startup, and a missing WSL vault root skips guest probes. Windows HOME is not guest
+HOME. Selected-account launches reject transported authority variables through WSLENV and
+unverifiable command wrappers (including user/HOME overrides). Interactive commands, shell
+aliases/functions and changes after verification remain outside the guard. WSL quota retrieval
+remains disabled; account management does not depend on quota access.
 
 ## Identity and snapshots
 
@@ -88,3 +135,28 @@ installed agy 1.2.14 consumed that verified file credential under its SSH bypass
 `command.name=usage`, `num_turns=0`, no conversation. The real native item remained unchanged.
 This proves the Mac adapter mechanics and actual CLI file authority, not a second-account
 native-keychain switch, native Windows/Linux switching, or WSL/SSH relay deployment.
+
+## WSL implementation verification (2026-10-06)
+
+Linux/WSL unit and private POSIX script tests cover routing, protocol bounds, permissions,
+conflicts, cancellation recovery, encrypted scope separation and stale renderer responses.
+Windows Node 24.20.0 on Windows 10.0.26200, WSL 2.7.12 and Ubuntu 24.04 additionally exercised
+fresh explicit/default target resolution, nonexistent-distro refusal, synthetic account
+save/select/remove/launch reconciliation, token refresh, 0600/0700 modes, expected-byte conflict,
+unsafe-mode refusal and native vault ACL readback. This used the production WSL runner and
+credential script with a private temporary guest HOME; normal guest credentials were checked
+by digest before and after cleanup. The test envelope was synthetic, so this does not prove
+the production OS encryption provider or signed-in agy behavior.
+
+Real Windows lifecycle tests require `ORCA_BACKGROUND_LAUNCH=1`,
+`ORCA_REAL_ANTIGRAVITY_WSL_ACCOUNTS_TEST=1` and an explicit `ORCA_WSL_TEST_DISTRO`.
+They use private temporary HOME/userData, never change profiles or default distro settings,
+and compare the normal credential digest. Set `ORCA_WSL_SECOND_TEST_DISTRO` for a distinct
+second isolated target. Without those flags the tests skip. Native protected-publication and
+ACL tests run only on Windows. Do not enable the older WSL runner's profile-changing real-test
+flag against a developer distro.
+
+Release acceptance remains pending for two real distros, real signed-in agy identity,
+production OS encryption and hidden-renderer Electron CDP visual proof. Only Ubuntu 24.04 is
+available in this session; the required electron skill could not be located, and no application
+window was launched. Mocked-platform tests and skipped checks do not count as that evidence.

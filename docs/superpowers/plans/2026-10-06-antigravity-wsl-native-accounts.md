@@ -367,7 +367,7 @@ Modify `docs/reference/antigravity-native-accounts.md` 与此计划。UI 视觉�
 跨发行版实测还要求 `ORCA_WSL_SECOND_TEST_DISTRO` 指向第二个明确的隔离目标；未配置
 就单独 skip 并记录跨发行版证据缺口，不能在现有用户发行版临时修改账号。
 
-- [ ] **Step 1: 创建隔离验收测试。** fixtures 为明确测试目标、临时 HOME 和临时 userData
+- [x] **Step 1: 创建隔离验收测试。** fixtures 为明确测试目标、临时 HOME 和临时 userData
   构建合成账号；失败/cleanup 也验证正常 HOME/Host 凭据未改。任何会修改真实目标的
   测试要求显式隔离设置，没有设置就 skip，不修改 ~/.profile、真实凭据或默认发行版。
   before/after 的无泄漏断言用文件摘要比较，不打印 token 或账户标识符。
@@ -414,8 +414,9 @@ Modify `docs/reference/antigravity-native-accounts.md` 与此计划。UI 视觉�
 | 10：17 项验收 | 1–9 测试加真实环境与质量报告；逐项回填设计清单 |
 | 11–12：取舍与限制 | 9 的更新参考文档和 PR；保留同名重装、外部竞争等限制 |
 
-本次产物是设计和实施计划进入 Git；产品功能、代码测试、真实 Windows/WSL/UI 验收
-均未完成。估计实现 5–8 工作日，取决于隔离 Windows/WSL 与真实 agy 测试环境可用性。
+任务 1–8 已实现并分步提交；任务 9 已建立隔离验收测试并完成单个 Ubuntu 24.04 的
+Windows→WSL 合成账号实测。双发行版、真实 agy 登录身份、生产 OS 加密提供方和隐藏
+Electron UI 验收仍待专用环境；这些项目不计入已通过验证。详见原生账号参考文档的验证记录。
 
 ## 执行交接
 
@@ -423,5 +424,5 @@ Modify `docs/reference/antigravity-native-accounts.md` 与此计划。UI 视觉�
 store、backend 和启动接口紧密相连。用户也可以选择 subagent-driven-development，
 逐任务实现和独立评审，成本更高。选择执行方式前不启动子代理或产品实施。
 
-用户下一步审阅本计划并选择执行方式。开始实施后每次更新报告一个当前任务、已通过
-验证和下一个动作；每任务一个可审查提交，最终对整个 feature 差异再作一次审查。
+用户已批准直接执行。当前在任务 9 完成最终门禁和整个 feature 的独立审查；
+上游 PR 关联 stablyai/orca#25847，并保留未完成真实验收项。
