@@ -81,6 +81,7 @@ function resolveNativeFileDrop(event: DragEvent): NativeDropResolution | null {
         nativeFileDropDir: entry.dataset.nativeFileDropDir,
         composerScopeKey: entry.dataset.composerScopeKey,
         terminalTabId: entry.dataset.terminalTabId,
+        terminalPreviewSurfaceId: entry.dataset.terminalPreviewSurfaceId,
         terminalPaneLeafId: entry.dataset.terminalPaneLeafId ?? entry.dataset.leafId
       })
     }

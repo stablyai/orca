@@ -12,8 +12,8 @@ page covers the changes that do _not_ bump it and are therefore easy to get wron
 ## Rule 1 — a new optional JSON field on an existing frame is safe
 
 Every JSON payload is parsed with a decoder that ignores unknown keys (zod `.strip()`
-on RPC params, `JSON.parse` on stream frames). An older peer that has never heard of
-the field simply does not read it.
+on RPC params — with the `ui.set` exception below — `JSON.parse` on stream frames). An
+older peer that has never heard of the field simply does not read it.
 
 Safe:
 
@@ -21,6 +21,17 @@ Safe:
 // host adds a field; older clients ignore it
 encodeTerminalStreamJson({ kind, cols, rows, hiddenOutputReason })
 ```
+
+**Exception — `ui.set` is `.strict()`.** `UiUpdate` in
+`src/main/runtime/rpc/methods/client-ui-schemas.ts` tolerates unknown _values_ but rejects
+unknown _keys_, and it rejects the whole batch: a new persisted-UI key sent to an old host
+takes every sidebar width and filter in the same patch down with it. A new persisted-UI key
+therefore ships behind a runtime capability, listed in
+`src/shared/host-gated-ui-fields.ts`: the web `ui.set` seam strips the key until the paired
+host advertises the capability, and the debounced writer quarantines keys a host still
+refuses with `invalid_argument` instead of re-diffing them into every later patch. A field
+the client must never send at all (it is keyed to hosts only that client knows) belongs in
+`PAIRING_LOCAL_UI_FIELDS` instead.
 
 **The field is safe only for as long as every reader treats it as optional.** The
 moment a newer client _requires_ it, that client is broken against every host that

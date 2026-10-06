@@ -27,6 +27,7 @@ export function launchStructuredAgentFromNewTab(args: {
   plan: AgentSessionLaunchPlan
   worktreeId: string
   groupId?: string
+  activate?: boolean
   beforeSurfaceOpen?: LaunchAgentInNewTabArgs['beforeSurfaceOpen']
   openTerminal: (terminalPlan: AgentSessionLaunchPlan) => {
     promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
@@ -37,6 +38,7 @@ export function launchStructuredAgentFromNewTab(args: {
   if (!paired) {
     const structured = launchAgentInStructuredNewTab({
       plan,
+      ...(args.activate !== undefined ? { activate: args.activate } : {}),
       ...(beforeSurfaceOpen
         ? {
             beforeOpen: (sessionId?: string) =>
@@ -67,6 +69,7 @@ export function launchStructuredAgentFromNewTab(args: {
   const launch = beginStructuredAgentSessionProvisionalLaunch({
     plan,
     hooks: {},
+    ...(args.activate !== undefined ? { activate: args.activate } : {}),
     target: { worktreeId: args.worktreeId, executionHostId: paired.executionHostId },
     ...(args.groupId ? { targetGroupId: args.groupId } : {}),
     onHostDeclined: () => {

@@ -125,6 +125,7 @@ export type RuntimePtyTitleTrackerEntry = {
 export type RuntimeHeadlessTerminal = {
   emulator: HeadlessEmulator
   outputSequence: number
+  rendererHydrationSequence?: number
   writeChain: Promise<void>
   ownership: PtyShellOwnershipMirror
   /** The grid a reattach reflowed the model onto, until a PTY resize off it repaints the TUI. */

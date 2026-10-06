@@ -23,7 +23,10 @@ import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-initial-v
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
-import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
+import {
+  resolveStructuredAgentSessionOwner,
+  structuredAgentSessionTargetForHost
+} from '@/runtime/structured-agent-session-owner'
 import { pairedHostClientCapabilities } from '@/runtime/paired-host-client-capabilities'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 
@@ -38,7 +41,7 @@ export type ProspectiveWorkspace = {
   kind: ProspectiveWorkspaceKind
   repoId?: string
   worktreeId?: string
-  /** Only for workspaces that do not exist yet; with `worktreeId` the store's owner resolution wins. */
+  /** Explicit host selected by a caller listing workspaces across hosts. */
   executionHostId?: string
   runtimeEnvironmentId?: string | null
 }
@@ -69,7 +72,7 @@ export { workspaceKindForWorktreeId }
 
 function resolveExecutionHostId(store: AgentLaunchRouteStore, workspace: ProspectiveWorkspace) {
   if (workspace.worktreeId) {
-    return getExecutionHostIdForWorktree(store, workspace.worktreeId)
+    return workspace.executionHostId ?? getExecutionHostIdForWorktree(store, workspace.worktreeId)
   }
   if (workspace.runtimeEnvironmentId) {
     return toRuntimeExecutionHostId(workspace.runtimeEnvironmentId)
@@ -109,6 +112,10 @@ function resolveTranscriptIsLocalReadable(
   workspace: ProspectiveWorkspace,
   executionHostId: string
 ): boolean {
+  const host = parseExecutionHostId(executionHostId)
+  if (workspace.executionHostId) {
+    return host?.kind === 'ssh' ? isNativeChatTranscriptLocalReadable(host.targetId) : true
+  }
   if (workspace.worktreeId) {
     const connectionId = getConnectionIdFromState(store, workspace.worktreeId)
     // Why: right after creation the worktree row has not landed, and only `undefined` — "cannot
@@ -119,7 +126,6 @@ function resolveTranscriptIsLocalReadable(
         : connectionId
     )
   }
-  const host = parseExecutionHostId(executionHostId)
   return host?.kind === 'ssh' ? isNativeChatTranscriptLocalReadable(host.targetId) : true
 }
 
@@ -131,15 +137,19 @@ export function buildAgentLaunchRouteInput(
   const { agent, workspace, tuiCustomization } = args
   // The host a chat here would be created on; a workspace the catalog cannot pin to one host has
   // no host to answer for it yet.
-  const owner = workspace.worktreeId
-    ? resolveStructuredAgentSessionOwner(store, workspace.worktreeId)
-    : undefined
+  const owner =
+    workspace.worktreeId && !workspace.executionHostId
+      ? resolveStructuredAgentSessionOwner(store, workspace.worktreeId)
+      : undefined
   const executionHostId = owner ?? resolveExecutionHostId(store, workspace)
   return {
     agent,
     settings: store.settings,
     executionHostId,
-    hostCapabilities: owner === null ? null : resolveHostCapabilities(store, executionHostId),
+    hostCapabilities:
+      owner === null || !structuredAgentSessionTargetForHost(executionHostId)
+        ? null
+        : resolveHostCapabilities(store, executionHostId),
     ...(parseExecutionHostId(executionHostId)?.kind === 'runtime'
       ? { clientCapabilities: pairedHostClientCapabilities() }
       : {}),

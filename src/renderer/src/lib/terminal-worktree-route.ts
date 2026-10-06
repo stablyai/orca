@@ -1,6 +1,6 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-setup-terminal-worktree-id'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
 import {
@@ -8,7 +8,10 @@ import {
   getRuntimeEnvironmentIdForWorktree,
   type WorktreeRuntimeOwnerState
 } from './worktree-runtime-owner'
-import { resolveWorktreeOperationRouteResult } from './worktree-operation-route'
+import {
+  resolveWorktreeOperationRouteResult,
+  resolveWorktreeOperationRouteForHost
+} from './worktree-operation-route'
 import { getSingleFocusedRuntimeEnvironmentId } from './single-runtime-legacy-owner'
 
 export type TerminalWorktreeRoute = {
@@ -52,11 +55,18 @@ function ownershipForRuntimeEnvironmentId(
 export function resolveTerminalHostOwnership(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined,
-  purpose: TerminalHostOwnershipPurpose
+  purpose: TerminalHostOwnershipPurpose,
+  executionHostId?: ExecutionHostId
 ): TerminalHostOwnership {
   if (!worktreeId) {
     // Why: a tab with no owning row proves nothing about its host, so teardown cannot claim its PTY.
     return purpose === 'teardown' ? UNRESOLVED_TERMINAL_HOST : LOCAL_OR_SSH_TERMINAL_HOST
+  }
+  if (executionHostId) {
+    const route = resolveWorktreeOperationRouteForHost(state, worktreeId, executionHostId)
+    return route
+      ? ownershipForRuntimeEnvironmentId(route.runtimeEnvironmentId)
+      : UNRESOLVED_TERMINAL_HOST
   }
   if (
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
@@ -132,9 +142,10 @@ function resolveFloatingScopeOwnership(
 
 export function resolveTerminalWorktreeRoute(
   state: AppState,
-  worktreeId: string | null | undefined
+  worktreeId: string | null | undefined,
+  executionHostId?: ExecutionHostId
 ): TerminalWorktreeRoute | null {
-  const ownership = resolveTerminalHostOwnership(state, worktreeId, 'spawn')
+  const ownership = resolveTerminalHostOwnership(state, worktreeId, 'spawn', executionHostId)
   return ownership.kind === 'unresolved'
     ? null
     : { runtimeEnvironmentId: ownership.runtimeEnvironmentId }

@@ -175,6 +175,7 @@ async function startHost(): Promise<void> {
     resolveWorkspacePath: async () => root,
     resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
     resolveCodexCommand: () => 'codex',
+    resolveLaunchArgs: () => [],
     resolveEnvironment: async () => ({ PATH: process.env.PATH }),
     resolveLaunchArgs: () => [],
     openCodexConnection: openConnection,

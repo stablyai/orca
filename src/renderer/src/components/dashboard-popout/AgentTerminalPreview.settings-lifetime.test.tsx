@@ -34,6 +34,7 @@ vi.mock('@xterm/xterm', () => ({
     resize = vi.fn()
     reset = vi.fn()
     onData = vi.fn(() => ({ dispose: vi.fn() }))
+    loadAddon = vi.fn()
     constructor(options: ITerminalOptions) {
       this.options = options
       harness.instances.push(this)
@@ -50,7 +51,12 @@ vi.mock('@/lib/keyboard-layout/use-effective-mac-option-as-alt', () => ({
   useEffectiveMacOptionAsAlt: (value: string) => value
 }))
 vi.mock('./preview-grid-claim', () => ({
-  createPreviewGridClaim: () => ({ schedule: vi.fn(), dispose: vi.fn() })
+  createPreviewGridClaim: () => ({
+    schedule: vi.fn(),
+    dispose: vi.fn(),
+    getApplied: () => null,
+    noteAppliedFromSnapshot: vi.fn()
+  })
 }))
 vi.mock('./preview-terminal-box-fit', () => ({
   createPreviewBoxFit: () => ({ schedule: vi.fn(), dispose: vi.fn() })
@@ -152,7 +158,10 @@ describe('preview terminal settings lifetime', () => {
     for (let index = 1; index <= 10; index += 1) {
       await updateSettings({ editorAutoSaveDelayMs: 1000 + index })
     }
-    expect(connect).toHaveBeenCalledExactlyOnceWith('pty-1', { scrollbackRows: 24 })
+    expect(connect).toHaveBeenCalledExactlyOnceWith('pty-1', {
+      scrollbackRows: 24,
+      surfaceId: expect.any(String)
+    })
     expect(harness.instances).toHaveLength(1)
     expect(terminal().options.theme).toBe(theme)
     expect(unsubscribe).not.toHaveBeenCalled()
@@ -185,7 +194,7 @@ describe('preview terminal settings lifetime', () => {
       await act(async () => {})
       await updateSettings(updates)
       expect(connect).toHaveBeenCalledTimes(2)
-      expect(unsubscribe).toHaveBeenCalledExactlyOnceWith('pty-1')
+      expect(unsubscribe).toHaveBeenCalledExactlyOnceWith('pty-1', expect.any(String))
       expect(terminal().dispose).toHaveBeenCalledOnce()
       expect(harness.instances).toHaveLength(2)
       if ('terminalMinimumContrastRatio' in updates) {
@@ -264,7 +273,7 @@ describe('preview terminal settings lifetime', () => {
     await act(async () => gate.resolve(connection))
     expect(harness.instances).toHaveLength(0)
     expect(connect).toHaveBeenCalledOnce()
-    expect(unsubscribe).toHaveBeenCalledExactlyOnceWith('ssh:host@@pty-1')
+    expect(unsubscribe).toHaveBeenCalledExactlyOnceWith('ssh:host@@pty-1', expect.any(String))
   })
 
   it('keeps a hidden mounted preview connected through unrelated settings updates', async () => {

@@ -1,6 +1,10 @@
 import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
 import { getUtf8ChunkEndIndex } from '../../../../shared/utf8-byte-limits'
 import {
+  captureDictationPreviewTarget,
+  type DictationPreviewTarget
+} from './dictation-preview-target'
+import {
   TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES,
   TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
   TEXT_CONTROL_PASTE_MAX_BYTES,
@@ -10,6 +14,7 @@ import {
 } from '@/lib/text-control-paste'
 
 export type DictationInsertionTarget =
+  | DictationPreviewTarget
   | { kind: 'terminal'; tabId: string; paneId: number }
   | { kind: 'text'; element: HTMLInputElement | HTMLTextAreaElement }
   | { kind: 'contentEditable'; element: HTMLElement }
@@ -22,6 +27,10 @@ export function captureInsertionTarget(): DictationInsertionTarget | null {
   }
 
   if (activeElement.classList.contains('xterm-helper-textarea')) {
+    const previewTarget = captureDictationPreviewTarget(activeElement)
+    if (previewTarget) {
+      return previewTarget
+    }
     const paneElement = activeElement.closest('.pane[data-pane-id]') as HTMLElement | null
     const tabElement = activeElement.closest('[data-terminal-tab-id]') as HTMLElement | null
     const paneId = Number(paneElement?.dataset.paneId)
@@ -44,6 +53,10 @@ export function captureInsertionTarget(): DictationInsertionTarget | null {
 }
 
 export function insertText(text: string, target: DictationInsertionTarget): void {
+  if (target.kind === 'terminal-preview') {
+    void target.insertText(text).catch(() => {})
+    return
+  }
   if (target.kind === 'terminal') {
     document.dispatchEvent(
       new CustomEvent('dictation:insertText', {

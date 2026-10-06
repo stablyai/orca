@@ -96,6 +96,24 @@ function stageLocalStructuredHost(): void {
 describe('buildAgentLaunchRouteInput', () => {
   beforeEach(stageLocalStructuredHost)
 
+  it('uses the explicitly selected SSH host even when the catalog resolves the same workspace locally', () => {
+    const input = buildAgentLaunchRouteInput(store(), {
+      agent: 'codex',
+      workspace: { kind: 'git-worktree', worktreeId: 'wt-1', executionHostId: 'ssh:selected' }
+    })
+    expect(input.executionHostId).toBe('ssh:selected')
+    expect(input.hostCapabilities).toBeNull()
+    expect(input.nativeChatTranscriptIsLocalReadable).toBe(false)
+    expect(input.projectRuntime).toBeUndefined()
+    expect(mocks.getExecutionHostIdForWorktree).not.toHaveBeenCalled()
+    expect(
+      routeFor(store(), {
+        agent: 'codex',
+        workspace: { kind: 'git-worktree', worktreeId: 'wt-1', executionHostId: 'ssh:selected' }
+      })
+    ).not.toBe('structured-native-chat')
+  })
+
   it('gathers the full input set for an existing local git worktree', () => {
     mocks.getLocalProjectExecutionRuntimeContext.mockReturnValue(WSL_RUNTIME)
     const appStore = store()
@@ -389,6 +407,20 @@ describe('buildAgentLaunchRouteInput', () => {
         buildAgentLaunchRouteInput(pairedStore(CURRENT_SERVER), args).hostCapabilities
       ).toEqual(CURRENT_SERVER)
       expect(routeFor(pairedStore(CURRENT_SERVER), args)).toBe('structured-native-chat')
+    })
+
+    it('honors a selected server when the same workspace resolves locally', () => {
+      mocks.getExecutionHostIdForWorktree.mockReturnValue('local')
+      const selectedArgs = {
+        ...args,
+        workspace: { ...args.workspace, executionHostId: 'runtime:server-1' }
+      }
+      const appStore = pairedStore(CURRENT_SERVER)
+      const input = buildAgentLaunchRouteInput(appStore, selectedArgs)
+      expect(input.executionHostId).toBe('runtime:server-1')
+      expect(input.hostCapabilities).toEqual(CURRENT_SERVER)
+      expect(routeFor(appStore, selectedArgs)).toBe('structured-native-chat')
+      expect(mocks.getExecutionHostIdForWorktree).not.toHaveBeenCalled()
     })
 
     it('treats a server that has not reported its status as unknown', () => {

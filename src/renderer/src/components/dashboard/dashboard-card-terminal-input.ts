@@ -139,6 +139,8 @@ export function resolveDashboardCardTerminalInput(
     ...(protectedPaste?.windowsInputRecordNewline
       ? { windowsInputRecordPasteNewline: protectedPaste.windowsInputRecordNewline }
       : {}),
+    ...(connectionId ? { connectionId } : {}),
+    ...(runtimeEnvironmentId ? { runtimeEnvironmentId } : {}),
     ctrlEnterCsiU: hasCtrlEnterCsiUAuthorityForPane(state, args.paneKey),
     kittyKeyboardAdvertised: !shouldDisableKittyKeyboardForTerminal({
       ...windowsPtyContext,

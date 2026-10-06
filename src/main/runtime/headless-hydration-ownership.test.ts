@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest'
+import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { deferred, makeDeferred } from './orca-runtime-test-fixtures.spec'
 import {
   createHydrationRuntime,
@@ -25,6 +26,27 @@ function prepare() {
   })
   return { runtime, snapshot, serialize }
 }
+
+it.each(['success', 'null', 'reject'] as const)(
+  'reports renderer hydration to subscribers after %s and permits retry after failure',
+  async (outcome) => {
+    const { runtime, snapshot, serialize } = prepare()
+    const hydration = runtime.maybeHydrateHeadlessFromRenderer(PTY_ID)
+    expect(hydration).not.toBeNull()
+    expect(runtime.maybeHydrateHeadlessFromRenderer(PTY_ID)).toBeNull()
+    if (outcome === 'reject') {
+      snapshot.reject(new Error('Renderer unavailable'))
+    } else {
+      snapshot.resolve(outcome === 'success' ? RETIRED_SNAPSHOT : null)
+    }
+    await expect(hydration).resolves.toBe(outcome === 'success')
+    if (outcome !== 'success') {
+      serialize.mockResolvedValue(RETIRED_SNAPSHOT)
+      await expect(runtime.maybeHydrateHeadlessFromRenderer(PTY_ID)).resolves.toBe(true)
+    }
+    expect(runtime.maybeHydrateHeadlessFromRenderer(PTY_ID)).toBeNull()
+  }
+)
 
 it('does not start renderer hydration after the model retires before its callback', async () => {
   const { runtime, snapshot, serialize } = prepare()
@@ -69,7 +91,9 @@ it.each(['success', 'null', 'reject'] as const)(
       snapshot.resolve(outcome === 'success' ? RETIRED_SNAPSHOT : null)
     }
     await current.writeChain
-    expect(runtime.retainedState().hydration).toBe('done')
+    expect(runtime.retainedState().hydration).toBe(
+      outcome === 'success' ? 'done' : 'awaiting-serializer'
+    )
     expect(current.emulator.getVisibleLines().join('\n')).toContain('CURRENT-LIVE')
     expect(current.emulator.getVisibleLines().join('\n').includes('RETIRED-SEED')).toBe(
       outcome === 'success'
@@ -109,17 +133,22 @@ it('skips late title and completion bookkeeping after disposal during the seed w
   const old = runtime.model()
   const started = makeDeferred()
   const release = makeDeferred()
-  const original = old.emulator.write.bind(old.emulator)
-  vi.spyOn(old.emulator, 'write').mockImplementationOnce(async (data) => {
+  const write = vi.spyOn(HeadlessEmulator.prototype, 'write').mockImplementationOnce(async () => {
     started.resolve()
     await release.promise
-    return original(data)
   })
   await vi.waitFor(() => expect(serialize).toHaveBeenCalledOnce())
   snapshot.resolve(RETIRED_SNAPSHOT)
   await started.promise
+  const candidate = write.mock.contexts[0]
+  if (!(candidate instanceof HeadlessEmulator)) {
+    throw new Error('Expected a staged headless emulator')
+  }
+  expect(candidate).not.toBe(old.emulator)
+  const dispose = vi.spyOn(candidate, 'dispose')
   retire(runtime)
   release.resolve()
   await old.writeChain
+  expect(dispose).toHaveBeenCalledOnce()
   expect(runtime.retainedState()).toEqual(EMPTY_RETAINED_STATE)
 })

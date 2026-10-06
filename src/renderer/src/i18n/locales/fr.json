@@ -18780,6 +18780,13 @@
       "finished": "terminé"
     }
   },
+  "sessionGrid": {
+    "wheel": {
+      "label": "Molette sur les terminaux",
+      "focus": "Selon le focus",
+      "focusHint": "Fait défiler le terminal ayant le focus ; sinon, la grille. {{shift}} + molette inverse la cible."
+    }
+  },
   "sidebar": {
     "revealFiltered": {
       "title": "Révéler l'espace de travail caché ?",

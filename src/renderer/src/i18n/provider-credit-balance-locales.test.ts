@@ -10,7 +10,6 @@ import ko from './locales/ko.json'
 import zh from './locales/zh.json'
 
 const catalogs = {
-  es: { catalog: es, compactBalanceMessage: 'saldo 12.50' },
   fr: { catalog: fr, compactBalanceMessage: 'solde 12.50' },
   ja: { catalog: ja, compactBalanceMessage: '残高 12.50' },
   ko: { catalog: ko, compactBalanceMessage: '잔액 12.50' },
@@ -38,6 +37,37 @@ function balanceKey(suffix: string): string {
 }
 
 describe('provider credit balance sparse target catalogs', () => {
+  it('uses the completed Spanish translations and interpolates balance values', async () => {
+    const instance = createInstance()
+    await instance.init({
+      lng: 'es',
+      fallbackLng: 'en',
+      resources: { en: { translation: enRuntimeRequired }, es: { translation: es } },
+      interpolation: { escapeValue: false }
+    })
+    expect(
+      balanceMessages.map(([suffix, defaultValue]) =>
+        instance.t(balanceKey(suffix), { defaultValue, value0: '12.50' })
+      )
+    ).toEqual([
+      'Sin límite',
+      '12.50 créditos',
+      'Saldo de Zen',
+      'Saldo',
+      '12.50 disponibles',
+      'Créditos de uso',
+      'Saldo: 12.50',
+      'Créditos',
+      'Sin límite',
+      '12.50 créditos disponibles',
+      'Esta respuesta de uso no incluye el saldo.'
+    ])
+    expect(instance.t(balanceKey('tooltip.87b5bda4d3'), { value0: 500 })).toBe(
+      '500 créditos disponibles'
+    )
+    expect(instance.t(balanceKey('StatusBar.4fba7dc1e7'), { value0: '12.50' })).toBe('saldo 12.50')
+  })
+
   it.each(Object.entries(catalogs))(
     '%s omits copied English balance entries',
     async (locale, { catalog }) => {

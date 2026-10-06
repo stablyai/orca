@@ -53,7 +53,8 @@ function createTerminalTuiMouseWheelReplayState(): TerminalTuiMouseWheelReplaySt
   }
 }
 
-function isReplayedWheelEvent(event: WheelEvent): boolean {
+/** A wheel this module re-dispatched as line-mode TUI reports; surfaces above the terminal must let it through. */
+export function isReplayedWheelEvent(event: WheelEvent): boolean {
   return (event as ReplayedWheelEvent)[REPLAYED_WHEEL_EVENT_PROPERTY] === true
 }
 

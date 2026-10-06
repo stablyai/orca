@@ -35,7 +35,7 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
         // Why the identity check: queued writeChain links can parse after
         // disposeHeadlessTerminal, and daemon respawns reuse session ids — a
         // stale link's reply must never reach a successor PTY under this id.
-        if (state !== null && this.headlessTerminals.get(ptyId) === state) {
+        if (state !== null && this.headlessTerminals.get(ptyId)?.emulator === emulator) {
           if (
             !shouldForwardHeadlessTerminalQueryReply(this.ptysById.get(ptyId)?.launchAgent, reply)
           ) {
@@ -69,14 +69,14 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
         const lifecycleGeneration = this.getPtyLifecycleGeneration(ptyId)
         if (
           !controller?.confirmShellForeground ||
-          this.headlessTerminals.get(ptyId) !== constructed
+          this.headlessTerminals.get(ptyId)?.emulator !== emulator
         ) {
           return false
         }
         const confirmed = await controller.confirmShellForeground(ptyId)
         return (
           confirmed &&
-          this.headlessTerminals.get(ptyId) === constructed &&
+          this.headlessTerminals.get(ptyId)?.emulator === emulator &&
           this.getPtyLifecycleGeneration(ptyId) === lifecycleGeneration
         )
       })

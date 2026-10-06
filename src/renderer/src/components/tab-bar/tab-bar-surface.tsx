@@ -284,7 +284,7 @@ export function renderTabBarSurface({
               <QuickLaunchAgentMenuItems
                 worktreeId={worktreeId}
                 groupId={resolvedGroupId}
-                onFocusTerminal={queueTerminalTabFocusAfterNewTabMenuClose}
+                onLaunched={queueTerminalTabFocusAfterNewTabMenuClose}
               />
             </>
           ) : null}

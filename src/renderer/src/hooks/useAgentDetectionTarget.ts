@@ -7,7 +7,7 @@ import {
   type WorktreeRuntimeOwnerState
 } from '@/lib/worktree-runtime-owner'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AgentDetectionTarget } from './useDetectedAgents'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
@@ -34,11 +34,28 @@ type AgentDetectionOwnerState = Parameters<typeof getConnectionIdFromState>[0] &
  */
 export function getAgentDetectionTargetKeyForWorktree(
   state: AgentDetectionOwnerState,
-  worktreeId: string | null
+  worktreeId: string | null,
+  /**
+   * The host the user PICKED, from a surface that lists one row per host — `worktreeId`
+   * carries no host component, so nothing below can tell two publications apart.
+   */
+  pickedExecutionHostId?: ExecutionHostId
 ): string | undefined {
+  const picked = parseExecutionHostId(pickedExecutionHostId)
+  if (picked?.kind === 'ssh') {
+    return `ssh:${picked.targetId}`
+  }
+  if (picked?.kind === 'runtime') {
+    return `runtime:${picked.environmentId}`
+  }
   if (worktreeId === null) {
     return AGENT_DETECTION_LOCAL_TARGET_KEY
   }
+  // Why a `local` pick does not win outright: `local` in a workspace catalog means "nothing
+  // named a host", which is exactly what the resolution below answers — and it may answer
+  // with a focused runtime. It speaks only where that resolution has no answer at all, which
+  // is the id two hosts publish: without it the picker's local row lists no agents.
+  const pickedLocalFallback = picked ? getLocalAgentDetectionTargetKey(worktreeId) : undefined
   if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
     const explicitRuntimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(
       state,
@@ -50,12 +67,12 @@ export function getAgentDetectionTargetKeyForWorktree(
     // Why: a hostless folder can span local and SSH children, so keep the
     // ambiguity gate before applying its focused-runtime fallback.
     if (getConnectionIdFromState(state, worktreeId) === undefined) {
-      return undefined
+      return pickedLocalFallback
     }
   } else if (getResolvedExecutionHostIdForWorktree(state, worktreeId) === null) {
     // Why: repo rows can hydrate before a restored remote worktree; that gap
     // must stay unresolved instead of probing the repo row's local owner.
-    return undefined
+    return pickedLocalFallback
   }
   const executionHost = parseExecutionHostId(getExecutionHostIdForWorktree(state, worktreeId))
   if (executionHost?.kind === 'ssh') {
@@ -103,8 +120,11 @@ export function parseAgentDetectionTargetKey(
 }
 
 export function useAgentDetectionTargetForWorktree(
-  worktreeId: string | null
+  worktreeId: string | null,
+  pickedExecutionHostId?: ExecutionHostId
 ): AgentDetectionTarget | undefined {
-  const key = useAppStore((s) => getAgentDetectionTargetKeyForWorktree(s, worktreeId))
+  const key = useAppStore((s) =>
+    getAgentDetectionTargetKeyForWorktree(s, worktreeId, pickedExecutionHostId)
+  )
   return useMemo(() => parseAgentDetectionTargetKey(key), [key])
 }

@@ -63,6 +63,14 @@ export function createWorktreePurgeOmitters(
       })
     )
   }
+  // Preserve list identity when no retired tab appears in grid preferences.
+  const omitTabIdsFromList = (ids: string[]): string[] => {
+    if (!ids) {
+      return ids
+    }
+    const retired = (id: string): boolean => doomedTabIds.has(id) && !survivingTabIds.has(id)
+    return ids.some(retired) ? ids.filter((id) => !retired(id)) : ids
+  }
   const omitByBrowserWorkspaceId = <T>(obj: Record<string, T>): Record<string, T> =>
     omitRecordKeys(obj, doomedBrowserWorkspaceIds)
   const omitByPageId = <T>(obj: Record<string, T>): Record<string, T> =>
@@ -78,6 +86,7 @@ export function createWorktreePurgeOmitters(
     omitRetiredDirectSshLedgerByTabId,
     omitByPtyId,
     omitByPaneKeyTabPrefix,
+    omitTabIdsFromList,
     omitByBrowserWorkspaceId,
     omitByPageId,
     omitByFileId

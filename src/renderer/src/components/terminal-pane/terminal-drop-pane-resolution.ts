@@ -1,9 +1,9 @@
-import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { TerminalDropPane, TerminalDropSurface } from './terminal-drop-surface'
 
 export function resolveNativeTerminalDropPane(
-  manager: PaneManager,
+  manager: TerminalDropSurface,
   paneLeafId: string | undefined
-): ManagedPane | null {
+): TerminalDropPane | null {
   const panes = manager.getPanes()
   if (paneLeafId) {
     const targetedPane = panes.find((pane) => pane.leafId === paneLeafId)
@@ -15,9 +15,9 @@ export function resolveNativeTerminalDropPane(
 }
 
 export function resolveInternalTerminalDropPane(
-  manager: PaneManager,
+  manager: TerminalDropSurface,
   dropTarget: EventTarget | null | undefined
-): ManagedPane | null {
+): TerminalDropPane | null {
   const panes = manager.getPanes()
   if (dropTarget) {
     const targetedPane = panes.find((pane) => paneContainsDropTarget(pane, dropTarget))
@@ -28,7 +28,7 @@ export function resolveInternalTerminalDropPane(
   return manager.getActivePane() ?? panes[0] ?? null
 }
 
-function paneContainsDropTarget(pane: ManagedPane, dropTarget: EventTarget): boolean {
+function paneContainsDropTarget(pane: TerminalDropPane, dropTarget: EventTarget): boolean {
   try {
     // Why: synthetic drag targets are not always DOM Nodes, but browser drops are.
     return pane.container.contains(dropTarget as Node)

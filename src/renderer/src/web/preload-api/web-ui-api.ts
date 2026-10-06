@@ -4,8 +4,13 @@ import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clip
 import type { ReadClipboardTextOptions } from '../../../../shared/clipboard-text'
 import { normalizeFeatureInteractions } from '../../../../shared/feature-interactions'
 import type { FeatureInteractionId } from '../../../../shared/feature-interactions'
+import {
+  hasHostGatedUiFields,
+  omitUnsupportedHostGatedUiFields
+} from '../../../../shared/host-gated-ui-fields'
 import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
 import type { PairedUiState } from '../../../../shared/pairing-local-ui-fields'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import {
   clipboardHasImage,
   readClipboardImagePngBase64,
@@ -21,17 +26,67 @@ import {
   mergeWebUIState
 } from './web-preference-normalization'
 import { readLocalWebUIState } from './web-preferences-store'
-import { callRuntimeResult } from './web-runtime-calls'
+import { callRuntimeResult, getRemoteRuntimeStatus } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
+
+// Why a TTL and not a permanent answer: the host can be updated in place under a paired
+// browser, and a gated key stripped forever would never reach the host that now accepts it.
+const HOST_UI_CAPABILITIES_TTL_MS = 5 * 60_000
+let hostUiCapabilities: {
+  environmentId: string
+  readAt: number
+  capabilities: readonly string[]
+} | null = null
+
+async function readHostUiCapabilities(): Promise<readonly string[] | null> {
+  const environment = requireActiveEnvironmentOrNull()
+  if (!environment) {
+    return null
+  }
+  if (
+    hostUiCapabilities?.environmentId === environment.id &&
+    Date.now() - hostUiCapabilities.readAt < HOST_UI_CAPABILITIES_TTL_MS
+  ) {
+    return hostUiCapabilities.capabilities
+  }
+  const status = await getRemoteRuntimeStatus().catch(() => null)
+  if (!status) {
+    return null
+  }
+  const capabilities = status.capabilities ?? []
+  hostUiCapabilities = { environmentId: environment.id, readAt: Date.now(), capabilities }
+  return capabilities
+}
+
+/** Reset the host capability cache; exported for tests. */
+export function resetHostUiCapabilitiesForTest(): void {
+  hostUiCapabilities = null
+}
+
+// Why strip here too when the host also strips pairing-local keys: an old host predating that
+// strip would otherwise persist this browser's runtime:web-* keys over the desktop profile's
+// order. Host-gated keys are asked about only when present, so ordinary writes cost no extra RPC.
+async function toHostUiUpdate(
+  updates: Partial<PersistedUIState>
+): Promise<Partial<PairedUiState>> {
+  const hostUpdates = omitPairingLocalUiFields(updates)
+  if (!hasHostGatedUiFields(hostUpdates)) {
+    return hostUpdates
+  }
+  return omitUnsupportedHostGatedUiFields(hostUpdates, await readHostUiCapabilities())
+}
 
 /** Combines browser-local preferences with host persistence; acknowledged writes remain distinct from best-effort writes. */
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
   const explorerRoots = createWebExplorerRootSync()
   /** Captures the target host and strips browser-local or unsupported fields before sending a UI update. */
-  const prepareHostUpdates = (updates: Parameters<PreloadApi['ui']['set']>[0]) => {
+  const prepareHostUpdates = async (updates: Parameters<PreloadApi['ui']['set']>[0]) => {
     const environmentId = requireActiveEnvironmentOrNull()?.id
-    const hostUpdates = omitPairingLocalUiFields(updates)
+    const hostUpdates = await toHostUiUpdate(updates)
+    if (requireActiveEnvironmentOrNull()?.id !== environmentId) {
+      throw new Error('UI persistence environment changed during capability discovery')
+    }
     explorerRoots.prepare(environmentId, hostUpdates)
     return { environmentId, hostUpdates }
   }
@@ -76,8 +131,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       zoomLevel = next.uiZoomLevel
       // Why strip here too when the host also strips: an old host predating that strip would
       // otherwise persist this browser's runtime:web-* keys over the desktop profile's order.
-      const { environmentId, hostUpdates } = prepareHostUpdates(updates)
       try {
+        const { environmentId, hostUpdates } = await prepareHostUpdates(updates)
         await callRuntimeResult('ui.set', hostUpdates, 15_000)
         explorerRoots.acknowledge(environmentId, hostUpdates)
       } catch {
@@ -89,7 +144,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
-      const { environmentId, hostUpdates } = prepareHostUpdates(updates)
+      const { environmentId, hostUpdates } = await prepareHostUpdates(updates)
       await callRuntimeResult('ui.set', hostUpdates, 15_000)
       explorerRoots.acknowledge(environmentId, hostUpdates)
       if (

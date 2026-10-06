@@ -228,3 +228,51 @@ it.each([false, true])('preserves manual unread across return signals (web=%s)',
   expect(useAppStore.getState().manuallyUnreadTurnsByPaneKey[pane]).toBe(turn)
   expect(dismiss).not.toHaveBeenCalled()
 })
+
+it('keeps a selected grid card bell unread while away and clears only that card on return', async () => {
+  useAppStore.setState({
+    activeView: 'sessions',
+    activeWorktreeId: 'another-workspace',
+    activeSessionGridTabId: 'away-tab',
+    sessionsGridFilter: 'all',
+    sessionsGridHiddenTabIds: [],
+    agentStatusByPaneKey: {},
+    unreadAgentCompletionPanes: {},
+    unreadTerminalTabs: { 'away-tab': true, 'other-tab': true }
+  })
+  const clearWorkspace = vi.spyOn(useAppStore.getState(), 'clearWorktreeUnread')
+  renderHook(() => useAutoAckViewedAgent())
+  await act(async () => {})
+  expect(readAway).toHaveBeenCalledTimes(1)
+  expect(useAppStore.getState().unreadTerminalTabs['away-tab']).toBe(true)
+  readAway.mockResolvedValue(false)
+  await act(async () => window.dispatchEvent(new Event('focus')))
+  expect(useAppStore.getState().unreadTerminalTabs['away-tab']).toBeUndefined()
+  expect(useAppStore.getState().unreadTerminalTabs['other-tab']).toBe(true)
+  // The other card still owns unread attention in this workspace.
+  expect(clearWorkspace).not.toHaveBeenCalledWith('away-workspace')
+  expect(clearWorkspace).not.toHaveBeenCalledWith('another-workspace')
+})
+
+it('rechecks the selected grid card when a pending presence query resolves', async () => {
+  useAppStore.setState({
+    activeView: 'sessions',
+    activeSessionGridTabId: 'away-tab',
+    sessionsGridFilter: 'all',
+    sessionsGridHiddenTabIds: []
+  })
+  let resolve!: (away: boolean) => void
+  readAway.mockImplementation(
+    () =>
+      new Promise((r) => {
+        resolve = r
+      })
+  )
+  renderHook(() => useAutoAckViewedAgent())
+  act(() => useAppStore.setState({ activeSessionGridTabId: null }))
+  await act(async () => resolve(false))
+  expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe('agent-completion')
+  readAway.mockResolvedValue(false)
+  await act(async () => useAppStore.setState({ activeSessionGridTabId: 'away-tab' }))
+  expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBeUndefined()
+})

@@ -82,6 +82,7 @@ vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
 vi.mock('@/lib/keyboard-layout/use-effective-mac-option-as-alt', () => ({
   useEffectiveMacOptionAsAlt: (value: string) => value
 }))
+vi.mock('./preview-terminal-links', () => ({ installPreviewTerminalLinks: () => vi.fn() }))
 vi.mock('./preview-terminal-ligatures', () => ({ syncPreviewTerminalLigatures: vi.fn() }))
 vi.mock('./preview-terminal-compatibility', () => ({
   installPreviewTerminalCompatibility: () => vi.fn()
@@ -198,7 +199,7 @@ it('releases every frame after 64 actual preview unmounts', async () => {
   }
   expect(fit).not.toHaveBeenCalled()
   expect(frames.size).toBe(0)
-  expect(cancelFrame).toHaveBeenCalledTimes(64)
+  expect(cancelFrame).toHaveBeenCalledTimes(128)
   expect(cancelFrame).toHaveBeenCalledWith(0)
 })
 
@@ -234,14 +235,15 @@ it('retains the replacement frame on the same DOM and ignores retired parsed wri
   flushFrames()
   await act(async () => {
     await vi.advanceTimersByTimeAsync(200)
+    flushFrames()
   })
   expect(connect).toHaveBeenCalledTimes(2)
-  expect(unsubscribe).toHaveBeenCalledExactlyOnceWith('pty-1')
+  expect(unsubscribe).toHaveBeenCalledExactlyOnceWith('pty-1', expect.any(String))
   expect(old?.dispose).toHaveBeenCalledOnce()
   expect(replacement?.container).toBe(old?.container)
   expect(replacement?.container?.style.transform).toBe('scale(0.625)')
   expect(replacement?.container?.style.transformOrigin).toBe('top left')
-  expect(fit).toHaveBeenCalledExactlyOnceWith('pty-1', 50, 15)
+  expect(fit).toHaveBeenCalledExactlyOnceWith('pty-1', 50, 15, expect.any(String))
   expect(frames.size).toBe(0)
   expect([pending, afterOldWrites]).toEqual([1, 1])
 })
@@ -254,15 +256,16 @@ it('keeps live replay writes coalesced and fits the latest cursor and dimensions
   for (const callback of terminal?.writeCallbacks.splice(0) ?? []) {
     callback()
   }
-  expect(frames.size).toBe(1)
+  expect(frames.size).toBe(2)
   flushFrames()
   await act(async () => {
     await vi.advanceTimersByTimeAsync(200)
+    flushFrames()
   })
   expect(connect).toHaveBeenCalledOnce()
   expect(unsubscribe).not.toHaveBeenCalled()
   expect(terminal?.dispose).not.toHaveBeenCalled()
   expect(terminal?.container?.style.transform).toBe('scale(0.75)')
   expect(terminal?.container?.style.transformOrigin).toBe('top left')
-  expect(fit).toHaveBeenCalledExactlyOnceWith('pty-live', 60, 15)
+  expect(fit).toHaveBeenCalledExactlyOnceWith('pty-live', 60, 15, expect.any(String))
 })

@@ -251,6 +251,20 @@ function CommandSeparator({
   )
 }
 
+/** Right-aligned shortcut label; the same treatment as DropdownMenuShortcut. */
+function CommandShortcut({ className, ...props }: React.ComponentProps<'span'>) {
+  return (
+    <span
+      data-slot="command-shortcut"
+      className={cn(
+        'ml-auto shrink-0 whitespace-nowrap text-[11px] tracking-normal text-muted-foreground/85',
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
 export {
   Command,
   CommandDialog,
@@ -259,5 +273,6 @@ export {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator
+  CommandSeparator,
+  CommandShortcut
 }

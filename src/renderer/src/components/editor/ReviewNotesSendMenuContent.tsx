@@ -207,7 +207,7 @@ export function ReviewNotesSendMenuContent({
       <QuickLaunchAgentMenuItems
         worktreeId={worktreeId}
         groupId={groupId}
-        onFocusTerminal={focusTerminalTabSurface}
+        onLaunched={focusTerminalTabSurface}
         prompt={prompt}
         promptDelivery={promptDelivery}
         launchSource={launchSource}

@@ -107,6 +107,7 @@ export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLiveP
       rows: number
       cwd?: string | null
       oscLinks?: TerminalOscLinkRange[]
+      kittyKeyboardFlags?: number
     },
     trailingOutput: { data: string; seq: number }[] = []
   ): void {
@@ -120,7 +121,11 @@ export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLiveP
       ptyId,
       snapshot.data,
       { cols: snapshot.cols, rows: snapshot.rows },
-      { cwd: snapshot.cwd, oscLinks: snapshot.oscLinks }
+      {
+        cwd: snapshot.cwd,
+        oscLinks: snapshot.oscLinks,
+        kittyKeyboardFlags: snapshot.kittyKeyboardFlags
+      }
     )
     // Why: a hidden pane answers at its own size; later bytes paint the PTY grid.
     const ptyGrid = this.getTerminalSize(ptyId)

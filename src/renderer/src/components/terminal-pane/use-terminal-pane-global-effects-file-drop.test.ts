@@ -114,6 +114,7 @@ type DropCallback = (data: {
   target: string
   tabId?: string
   paneLeafId?: string
+  previewSurfaceId?: string
 }) => void
 
 function useMountForFileDrop(
@@ -199,6 +200,17 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     onFileDrop({ paths: ['/tmp/image.png'], target: 'terminal', tabId: 'tab-2' })
 
+    expect(mocks.handleTerminalFileDrop).not.toHaveBeenCalled()
+  })
+
+  it('ignores preview-addressed drops even for the same terminal tab', () => {
+    const { onFileDrop } = useMountForFileDrop()
+    onFileDrop({
+      paths: ['/tmp/file.txt'],
+      target: 'terminal',
+      tabId: 'tab-1',
+      previewSurfaceId: 'preview-a'
+    })
     expect(mocks.handleTerminalFileDrop).not.toHaveBeenCalled()
   })
 
