@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
 import RunTargetCombobox from '@/components/new-workspace/RunTargetCombobox'
 import { translate } from '@/i18n/i18n'
+import type { LocalCapacityCause } from '@/lib/default-run-target-suggestion'
 import type {
   EphemeralVmRecipeOption,
   NeedsProjectHostOption,
@@ -27,6 +28,7 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   | 'selectedRepoConnectInProgress'
   | 'onConnectSelectedRepo'
   | 'selectedProjectHostSetupId'
+  | 'runTargetSuggestionCauses'
   | 'onEphemeralVmRecipeChange'
   | 'selectedEphemeralVmRecipeId'
   | 'ephemeralVmRecipeError'
@@ -48,6 +50,42 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   selectedProjectName: string
 }
 
+// Why: one translated fragment per cause, so a translator never has to reorder English prose.
+// Exhaustive: a new cause fails typecheck here until it has copy.
+const SUGGESTION_CAUSE_COPY: Record<LocalCapacityCause, () => string> = {
+  onBattery: () =>
+    translate(
+      'auto.components.new.workspace.RunTargetCombobox.suggestedCauseOnBattery',
+      'on battery'
+    ),
+  lowMemory: () =>
+    translate(
+      'auto.components.new.workspace.RunTargetCombobox.suggestedCauseLowMemory',
+      'low on memory'
+    ),
+  lowCpu: () =>
+    translate(
+      'auto.components.new.workspace.RunTargetCombobox.suggestedCauseLowCpu',
+      'short on CPU cores'
+    )
+}
+
+function formatSuggestionCauses(causes: readonly LocalCapacityCause[]): string {
+  const fragments = causes.map((cause) => SUGGESTION_CAUSE_COPY[cause]())
+  if (fragments.length <= 1) {
+    return fragments[0] ?? ''
+  }
+  const separator = translate(
+    'auto.components.new.workspace.RunTargetCombobox.suggestedCauseSeparator',
+    ', '
+  )
+  const conjunction = translate(
+    'auto.components.new.workspace.RunTargetCombobox.suggestedCauseConjunction',
+    ' and '
+  )
+  return `${fragments.slice(0, -1).join(separator)}${conjunction}${fragments.at(-1) ?? ''}`
+}
+
 export function NewWorkspaceComposerProjectSection({
   disabled = false,
   projectOptions = EMPTY_PROJECT_OPTIONS,
@@ -64,6 +102,7 @@ export function NewWorkspaceComposerProjectSection({
   shouldShowRunTargetPicker,
   projectHostSetupOptions,
   selectedProjectHostSetupId,
+  runTargetSuggestionCauses = null,
   handleProjectHostSetupChange,
   ephemeralVmRecipes,
   selectedEphemeralVmRecipeId = null,
@@ -159,6 +198,15 @@ export function NewWorkspaceComposerProjectSection({
             onConnectHost={handleConnectRunTargetHost}
             onSetLocation={handleSetLocation}
           />
+          {runTargetSuggestionCauses && runTargetSuggestionCauses.length > 0 ? (
+            <p className="text-[11px] text-muted-foreground">
+              {translate(
+                'auto.components.new.workspace.RunTargetCombobox.suggestedBecause',
+                'Suggested because this machine is {{reason}}',
+                { reason: formatSuggestionCauses(runTargetSuggestionCauses) }
+              )}
+            </p>
+          ) : null}
           {ephemeralVmRecipeError ? (
             <p className="whitespace-pre-line text-[11px] text-destructive">
               {ephemeralVmRecipeError}

@@ -6,6 +6,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaVmRecipe } from '../../../../shared/orca-yaml-hook-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
+import type { LocalCapacityCause } from '@/lib/default-run-target-suggestion'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
 import type { WorkspaceCreationTargetResolution } from '@/lib/project-host-workspace-target'
@@ -41,6 +42,8 @@ export type ComposerRuntimeTargetModel = {
   selectedRepoProjectId: string | null
   selectedProjectId: string | null
   selectedProjectHostSetupId: string | null
+  /** Why a runner was suggested and chosen; null when the user's target stands. */
+  runTargetSuggestionCauses: LocalCapacityCause[] | null
   projectHostSetupOptions: ProjectHostSetupOption[]
   projectOptions: NewWorkspaceProjectOption[]
   selectedRepoSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null

@@ -29,6 +29,7 @@ export function renderServersSettingsSection(context: SettingsRenderContext): Re
       {view.isSectionMounted('servers') ? (
         <RuntimeEnvironmentsPane
           settings={model.settings}
+          updateSettings={model.updateSettings}
           setActiveRuntimeEnvironmentPreference={model.setActiveRuntimeEnvironmentPreference}
           canGeneratePairingUrl={!model.isWebClient}
           allowLocalRuntime={!model.isWebClient}

@@ -9,6 +9,7 @@ export type ComposerCardSourceProps = Pick<
   | 'selectedRepoIsGit'
   | 'projectHostSetupOptions'
   | 'selectedProjectHostSetupId'
+  | 'runTargetSuggestionCauses'
   | 'ephemeralVmRecipes'
   | 'selectedEphemeralVmRecipeId'
   | 'ephemeralVmRecipeError'

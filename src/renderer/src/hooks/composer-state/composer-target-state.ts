@@ -45,6 +45,7 @@ export function useComposerTargetState(
     projects: composerTargetStore.projects,
     repoId: initialTargetState.repoId,
     repos: composerTargetStore.repos,
+    runtimeStatusByEnvironmentId: composerTargetStore.runtimeStatusByEnvironmentId,
     selectedProjectGroup: initialTargetState.selectedProjectGroup,
     selectedProjectHostSetupOverrideId: initialTargetState.selectedProjectHostSetupOverrideId,
     settings: composerTargetStore.settings,

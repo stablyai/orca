@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { SettingsSwitchRow } from './SettingsFormControls'
 import {
   getActiveServerModeDescription,
   getHostModelCapabilitySummary,
@@ -21,10 +22,12 @@ type RuntimeActiveServerSectionProps = {
   activeValue: string
   environments: PublicKnownRuntimeEnvironment[]
   detailsByEnvironmentId: Record<string, RuntimeHostDetails>
+  preferRunnerWhenLocalWeak: boolean
   isBusy: boolean
   isLoading: boolean
   onToggleAdvanced: () => void
   onValueChange: (value: string) => void
+  onPreferRunnerWhenLocalWeakChange: (value: boolean) => void
   onRefresh: () => void
 }
 
@@ -37,10 +40,12 @@ export function RuntimeActiveServerSection({
   activeValue,
   environments,
   detailsByEnvironmentId,
+  preferRunnerWhenLocalWeak,
   isBusy,
   isLoading,
   onToggleAdvanced,
   onValueChange,
+  onPreferRunnerWhenLocalWeakChange,
   onRefresh
 }: RuntimeActiveServerSectionProps): React.JSX.Element {
   return (
@@ -206,6 +211,21 @@ export function RuntimeActiveServerSection({
           </div>
         </div>
       </div>
+
+      {/* Why: outside the Advanced disclosure, since it changes what new workspaces do. */}
+      <SettingsSwitchRow
+        className="px-1"
+        label={translate(
+          'auto.components.settings.RuntimeEnvironmentsPane.preferRunnerWhenLocalWeakTitle',
+          'Prefer a runner when this machine is weak'
+        )}
+        description={translate(
+          'auto.components.settings.RuntimeEnvironmentsPane.preferRunnerWhenLocalWeakDescription',
+          'New workspaces default to a connected runner when this machine is on battery, low on memory, or short on CPU cores. You can still pick any run target.'
+        )}
+        checked={preferRunnerWhenLocalWeak}
+        onChange={() => onPreferRunnerWhenLocalWeakChange(!preferRunnerWhenLocalWeak)}
+      />
     </div>
   )
 }

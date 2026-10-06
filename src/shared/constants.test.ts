@@ -106,6 +106,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').compactWorktreeCards).toBe(false)
   })
 
+  it('prefers a remote runner when the local host looks weak by default', () => {
+    expect(getDefaultSettings('/tmp').preferRunnerWhenLocalWeak).toBe(true)
+  })
+
   it('keeps per-workspace environments disabled by default', () => {
     expect(getDefaultSettings('/tmp').experimentalEphemeralVms).toBe(false)
   })

@@ -78,6 +78,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     resolvedSetupDecision,
     reuseEligibleBranch,
     reuseSelectedBranch,
+    runTargetSuggestionCauses,
     selectedEphemeralVmRecipeId,
     selectedProjectHostSetupId,
     selectedProjectId,
@@ -147,6 +148,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     onProjectChange: handleProjectChange,
     projectHostSetupOptions: isProjectGroupTarget ? [] : projectHostSetupOptions,
     selectedProjectHostSetupId: isProjectGroupTarget ? null : selectedProjectHostSetupId,
+    runTargetSuggestionCauses: isProjectGroupTarget ? null : runTargetSuggestionCauses,
     onProjectHostSetupChange: handleProjectHostSetupChange,
     ephemeralVmRecipes: isProjectGroupTarget || !ephemeralVmsEnabled ? [] : ephemeralVmRecipes,
     selectedEphemeralVmRecipeId:

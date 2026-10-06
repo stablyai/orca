@@ -13,6 +13,7 @@ const {
   registerMemoryHandlersMock,
   registerNotebookHandlersMock,
   registerNotificationHandlersMock,
+  registerLocalCapacitySignalHandlerMock,
   registerDeveloperPermissionHandlersMock,
   registerComputerUsePermissionHandlersMock,
   registerSettingsHandlersMock,
@@ -82,6 +83,7 @@ const {
   registerMemoryHandlersMock: vi.fn(),
   registerNotebookHandlersMock: vi.fn(),
   registerNotificationHandlersMock: vi.fn(),
+  registerLocalCapacitySignalHandlerMock: vi.fn(),
   registerDeveloperPermissionHandlersMock: vi.fn(),
   registerComputerUsePermissionHandlersMock: vi.fn(),
   registerSettingsHandlersMock: vi.fn(),
@@ -217,6 +219,10 @@ vi.mock('../notebook', () => ({
 
 vi.mock('../notifications', () => ({
   registerNotificationHandlers: registerNotificationHandlersMock
+}))
+
+vi.mock('../local-capacity-signal-handler', () => ({
+  registerLocalCapacitySignalHandler: registerLocalCapacitySignalHandlerMock
 }))
 
 vi.mock('../developer-permissions', () => ({
@@ -431,6 +437,7 @@ describe('registerCoreHandlers', () => {
     registerMemoryHandlersMock.mockReset()
     registerNotebookHandlersMock.mockReset()
     registerNotificationHandlersMock.mockReset()
+    registerLocalCapacitySignalHandlerMock.mockReset()
     registerDeveloperPermissionHandlersMock.mockReset()
     registerComputerUsePermissionHandlersMock.mockReset()
     registerSettingsHandlersMock.mockReset()
@@ -570,6 +577,7 @@ describe('registerCoreHandlers', () => {
     expect(registerMemoryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerNotebookHandlersMock).toHaveBeenCalledWith(store)
     expect(registerNotificationHandlersMock).toHaveBeenCalledWith(store, runtime)
+    expect(registerLocalCapacitySignalHandlerMock).toHaveBeenCalled()
     expect(registerDeveloperPermissionHandlersMock).toHaveBeenCalled()
     expect(registerComputerUsePermissionHandlersMock).toHaveBeenCalled()
     expect(registerDashboardPopoutHandlersMock).toHaveBeenCalledWith(store, undefined)

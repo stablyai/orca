@@ -8447,6 +8447,8 @@
           "troubleshootStepShare": "On the other computer, open Share this host.",
           "troubleshootStepAddress": "Choose Another device and select its Tailscale or LAN address.",
           "troubleshootStepRegenerate": "Generate a new access link and use only the newest link here.",
+          "preferRunnerWhenLocalWeakTitle": "Prefer a runner when this machine is weak",
+          "preferRunnerWhenLocalWeakDescription": "New workspaces default to a connected runner when this machine is on battery, low on memory, or short on CPU cores. You can still pick any run target.",
           "troubleshootTunnel": "Using an SSH local forward? Return to Connect to a host, paste the loopback link, then enable “I am using an SSH tunnel” under Advanced.",
           "cloudVmWorkflow": "Cloud VM",
           "cloudVmWorkflowHelp": "Manage recipe-created cloud machines"
@@ -14298,7 +14300,13 @@
           "RunTargetCombobox": {
             "listLabel": "Run targets",
             "label": "Run on",
-            "browse": "Browse run targets"
+            "browse": "Browse run targets",
+            "suggestedBecause": "Suggested because this machine is {{reason}}",
+            "suggestedCauseOnBattery": "on battery",
+            "suggestedCauseLowMemory": "low on memory",
+            "suggestedCauseLowCpu": "short on CPU cores",
+            "suggestedCauseSeparator": ", ",
+            "suggestedCauseConjunction": " and "
           }
         }
       },

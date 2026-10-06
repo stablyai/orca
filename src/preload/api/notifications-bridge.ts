@@ -8,6 +8,7 @@ import type {
   NotificationSoundPathResult,
   NotificationSoundResult
 } from '../../shared/notification-settings-types'
+import type { LocalCapacitySignal } from '../../shared/local-capacity-signal-types'
 import type { PreloadApi } from '../api-types'
 
 // Why: cache one shared Audio + blob URL per sound path so notifications do not re-read large files.
@@ -28,6 +29,8 @@ function disposeCachedNotificationSound(): void {
 export const notificationsApi = {
   getDesktopAwayState: (): Promise<boolean | undefined> =>
     ipcRenderer.invoke('notifications:getDesktopAwayState'),
+  getLocalCapacitySignal: (): Promise<LocalCapacitySignal> =>
+    ipcRenderer.invoke('system:getLocalCapacitySignal'),
   dispatch: (args: Record<string, unknown>): Promise<NotificationDispatchResult> =>
     ipcRenderer.invoke('notifications:dispatch', args),
   dismiss: (ids: string[], paneKeys?: string[]): Promise<NotificationDismissResult> =>

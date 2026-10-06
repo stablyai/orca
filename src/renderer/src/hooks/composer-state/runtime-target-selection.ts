@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { getFolderSourceRepos } from '@/components/sidebar/folder-workspace-composer-helpers'
 import { parseExecutionHostId, getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { getSelectedRepoSshGate } from '@/lib/new-workspace-ssh-gate'
+import { useRunnerDefaultTarget } from './runner-default-target'
 import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/folder-workspace-composer-path-status'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -31,6 +32,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     projects,
     repoId,
     repos,
+    runtimeStatusByEnvironmentId,
     selectedProjectGroup,
     selectedProjectHostSetupOverrideId,
     settings,
@@ -92,7 +94,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     [folderDetectedIds]
   )
 
-  const selectedWorkspaceTarget = useMemo(
+  const baseSelectedWorkspaceTarget = useMemo(
     () =>
       resolveWorkspaceCreationTarget({
         eligibleRepos,
@@ -115,8 +117,9 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
   )
 
   const selectedRepo =
-    selectedWorkspaceTarget.status === 'ready' && selectedWorkspaceTarget.target.repoId === repoId
-      ? selectedWorkspaceTarget.target.repo
+    baseSelectedWorkspaceTarget.status === 'ready' &&
+    baseSelectedWorkspaceTarget.target.repoId === repoId
+      ? baseSelectedWorkspaceTarget.target.repo
       : eligibleRepos.find((repo) => repo.id === repoId)
 
   const selectedRepoIsGit = selectedRepo ? isGitRepoKind(selectedRepo) : false
@@ -157,17 +160,16 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     terminalWindowsShell: settings?.terminalWindowsShell
   })
 
+  // Why: the runner suggestion keeps the project, so the base resolution names it — that keeps the
+  // candidate list (below) off the target it feeds, instead of a cycle between the two.
   const selectedRepoProjectId =
-    selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.projectId : null
+    baseSelectedWorkspaceTarget.status === 'ready'
+      ? baseSelectedWorkspaceTarget.target.projectId
+      : null
 
   const selectedProjectId = selectedProjectGroup
     ? `project-group:${selectedProjectGroup.id}`
     : selectedRepoProjectId
-
-  const selectedProjectHostSetupId =
-    !selectedProjectGroup && selectedWorkspaceTarget.status === 'ready'
-      ? selectedWorkspaceTarget.target.projectHostSetupId
-      : null
 
   const projectHostSetupOptions = useMemo(
     () =>
@@ -179,6 +181,27 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
       }),
     [eligibleRepos, hostOptions, projectHostSetups, selectedRepoProjectId]
   )
+
+  const { target: selectedWorkspaceTarget, causes: runTargetSuggestionCauses } =
+    useRunnerDefaultTarget({
+      settings,
+      hostOptions: projectHostSetupOptions,
+      sshConnectionStates,
+      runtimeStatusByEnvironmentId,
+      selectedProjectHostSetupOverrideId,
+      workspaceHostScope,
+      baseTarget: baseSelectedWorkspaceTarget,
+      eligibleRepos,
+      projects,
+      projectHostSetups,
+      repoId,
+      actionableHostIds
+    })
+
+  const selectedProjectHostSetupId =
+    !selectedProjectGroup && selectedWorkspaceTarget.status === 'ready'
+      ? selectedWorkspaceTarget.target.projectHostSetupId
+      : null
 
   const projectOptions = useMemo(
     () =>
@@ -271,6 +294,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     selectedRepoProjectId,
     selectedProjectId,
     selectedProjectHostSetupId,
+    runTargetSuggestionCauses,
     projectHostSetupOptions,
     projectOptions,
     selectedRepoSettings,
