@@ -27,6 +27,17 @@ describe('detectPiAgentKindFromCommand', () => {
     expect(detectPiAgentKindFromCommand('prime-agent.cmd')).toBe('prime-agent')
   })
 
+  it('returns "omo" for OmO Native launches and not the senpi binary', () => {
+    expect(detectPiAgentKindFromCommand('omo')).toBe('omo')
+    expect(detectPiAgentKindFromCommand('omo --resume')).toBe('omo')
+    expect(detectPiAgentKindFromCommand('/usr/local/bin/omo')).toBe('omo')
+    expect(detectPiAgentKindFromCommand('OMO.EXE')).toBe('omo')
+    // omo only — raw 'senpi' defaults to ~/.senpi/agent, a different home.
+    expect(detectPiAgentKindFromCommand('senpi')).not.toBe('omo')
+    expect(detectExplicitPiAgentKindFromCommand('senpi')).not.toBe('omo')
+    expect(detectExplicitPiAgentKindFromCommand('senpi')).toBeNull()
+  })
+
   it('returns "omp" for omp launched via an absolute path', () => {
     expect(detectPiAgentKindFromCommand('/usr/local/bin/omp')).toBe('omp')
     expect(detectPiAgentKindFromCommand('~/bin/omp.sh')).toBe('omp')
@@ -65,6 +76,8 @@ describe('detectExplicitPiAgentKindFromCommand', () => {
     expect(detectExplicitPiAgentKindFromCommand('/usr/local/bin/omp.sh')).toBe('omp')
     expect(detectExplicitPiAgentKindFromCommand('PI.CMD')).toBe('pi')
     expect(detectExplicitPiAgentKindFromCommand('prime-agent.exe')).toBe('prime-agent')
+    expect(detectExplicitPiAgentKindFromCommand('omo')).toBe('omo')
+    expect(detectExplicitPiAgentKindFromCommand('omo --resume')).toBe('omo')
   })
 
   it('does not classify bare shells or other agents as Pi launches', () => {
@@ -82,5 +95,6 @@ describe('detectExplicitPiAgentKindFromCommand', () => {
     expect(detectExplicitPiAgentKindFromCommand('prime-agent "compare pi and omp"')).toBe(
       'prime-agent'
     )
+    expect(detectExplicitPiAgentKindFromCommand('omo "compare omp"')).toBe('omo')
   })
 })

@@ -114,6 +114,7 @@ async function scanOneSshHost(
         includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions,
         remoteHome: hostInfo.remoteHome,
         hostPlatform: hostInfo.hostPlatform,
+        omoSessionsDir: hostInfo.omoSessionsDir,
         ...(args?.includeAntigravityIdeSessions === true
           ? { includeAntigravityIdeSessions: true }
           : {}),

@@ -33,7 +33,7 @@ export function resolvePiAgentSourceDir(
     return sourceDir
   }
 
-  if (kind === 'prime-agent') {
+  if (kind === 'prime-agent' || kind === 'omo') {
     return (
       readEnvWithProcessFallback(baseEnv, primaryKey) ??
       readSessionShellStartupEnvVar(primaryKey, baseEnv)
@@ -73,6 +73,11 @@ export function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiA
     delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
     return
   }
+  if (kind === 'omo') {
+    delete baseEnv.ORCA_OMO_SOURCE_AGENT_DIR
+    delete baseEnv.ORCA_OMO_STATUS_EXTENSION
+    return
+  }
   delete baseEnv.ORCA_PI_CODING_AGENT_DIR
   delete baseEnv.ORCA_PI_SOURCE_AGENT_DIR
 }
@@ -101,6 +106,14 @@ export function exposePiManagedExtensionEnv(
       baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = managedEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     } else {
       delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
+    }
+    return
+  }
+  if (kind === 'omo') {
+    if (managedEnv.ORCA_OMO_SOURCE_AGENT_DIR) {
+      baseEnv.ORCA_OMO_SOURCE_AGENT_DIR = managedEnv.ORCA_OMO_SOURCE_AGENT_DIR
+    } else {
+      delete baseEnv.ORCA_OMO_SOURCE_AGENT_DIR
     }
     return
   }

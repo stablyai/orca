@@ -111,6 +111,7 @@ const ICONABLE_AGENT_TYPES: Record<TerminalAgent, true> = {
   pi: true,
   omp: true,
   'prime-agent': true,
+  omo: true,
   qoder: true,
   'qoder-cn': true,
   gemini: true,

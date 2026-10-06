@@ -8,13 +8,13 @@ import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 
-/** Maps a Pi-family hook event (Pi, OMP, Prime) onto a pane status: lifecycle
+/** Maps a Pi-family hook event (Pi, OMP, Prime, OmO) onto a pane status: lifecycle
  *  events become `working` / `done`, an ask tool becomes `blocked`, and OMP's
  *  `model` stamp and the extension's live `subagents` ride along. Returns null
  *  for events that carry no status. */
 export function normalizePiCompatibleEvent(
   state: HookListenerState,
-  agentType: 'pi' | 'omp' | 'prime-agent',
+  agentType: 'pi' | 'omp' | 'prime-agent' | 'omo',
   eventName: unknown,
   promptText: string,
   paneKey: string,

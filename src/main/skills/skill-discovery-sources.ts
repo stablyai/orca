@@ -134,6 +134,14 @@ export function buildSkillDiscoverySources(
       'prime-agent'
     ),
     source(
+      'home-omo',
+      'OmO home',
+      pathApi.join(home, '.omo', 'agent', 'skills'),
+      'home',
+      ['agent-skills'],
+      'omo'
+    ),
+    source(
       'home-gemini',
       'Gemini home',
       pathApi.join(home, '.gemini', 'skills'),

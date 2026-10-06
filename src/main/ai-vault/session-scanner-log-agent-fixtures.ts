@@ -160,6 +160,24 @@ export async function writeLogAgentFixtures(
   const ompSessionFile = await writeOmpScannerFixture(roots.ompSessionsDir)
   const primeAgentSessionFile = await writePrimeAgentScannerFixture(roots.primeAgentSessionsDir)
 
+  await mkdir(roots.omoSessionsDir, { recursive: true })
+  await writeFile(
+    join(roots.omoSessionsDir, 'omo-session.jsonl'),
+    jsonlBody([
+      {
+        type: 'session',
+        id: 'omo-session',
+        timestamp: '2026-05-01T10:08:30.000Z',
+        cwd: '/tmp/omo'
+      },
+      {
+        type: 'message',
+        timestamp: '2026-05-01T10:08:31.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'OmO title' }] }
+      }
+    ])
+  )
+
   await mkdir(roots.droidSessionsDir, { recursive: true })
   await writeFile(
     join(roots.droidSessionsDir, 'droid-session.jsonl'),

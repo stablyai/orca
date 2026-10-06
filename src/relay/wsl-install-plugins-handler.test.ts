@@ -57,6 +57,52 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     })
   })
 
+  it('materializes the requested OMP extension in the guest home', () => {
+    withHome((home) => {
+      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
+        HOME: home,
+        ORCA_WSL_HOOK_INSTANCE: 'inst-omp'
+      })
+      const source = '// @orca-managed-pi-extension\nexport default {}\n'
+      const res = install({ ompExtensionSource: source, launchKind: 'omp' })
+      expect(res.overlayDirs.omp).toBe(
+        join(home, '.omp', 'agent', 'extensions', 'orca-agent-status.ts')
+      )
+      expect(
+        readFileSync(join(home, '.omp', 'agent', 'extensions', 'orca-agent-status.ts'), 'utf8')
+      ).toContain(source)
+    })
+  })
+
+  it('materializes the requested OmO extension into the guest ~/.omo/agent dir', () => {
+    withHome((home) => {
+      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
+        HOME: home,
+        ORCA_WSL_HOOK_INSTANCE: 'inst-omo'
+      })
+      const source = '// @orca-managed-pi-extension\nexport default {}\n'
+      const res = install({ omoExtensionSource: source, launchKind: 'omo' })
+      expect(res.installed.omo).toBe(true)
+      // Why: OmO's carrier is the real agent dir (ORCA_OMO_SOURCE_AGENT_DIR), not OMP's status path.
+      expect(res.overlayDirs.omo).toBe(join(home, '.omo', 'agent'))
+      const extension = join(home, '.omo', 'agent', 'extensions', 'orca-agent-status.ts')
+      expect(readFileSync(extension, 'utf8')).toContain(source)
+    })
+  })
+
+  it('installs nothing for a launch kind whose source was not shipped', () => {
+    withHome((home) => {
+      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
+        HOME: home,
+        ORCA_WSL_HOOK_INSTANCE: 'inst-omo'
+      })
+      const res = install({ launchKind: 'omo' })
+      expect(res.installed.omo).toBe(false)
+      expect(res.overlayDirs.omo).toBeUndefined()
+      expect(existsSync(join(home, '.omo'))).toBe(false)
+    })
+  })
+
   it('writes the OpenCode 2 plugin to its separate overlay', () => {
     withHome((home) => {
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {

@@ -142,6 +142,14 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       homepageUrl: 'https://github.com/PrimeIntellect-ai/prime-agent'
     },
     {
+      id: 'omo',
+      label: translate('auto.lib.agent.catalog.omo_label', 'OmO'),
+      cmd: 'omo',
+      searchAliases: ['oh-my-openagent', 'omo-ai', 'omo native'],
+      faviconDomain: 'omo.dev',
+      homepageUrl: 'https://omo.dev'
+    },
+    {
       id: 'gemini',
       label: translate('auto.lib.agent.catalog.12e6baa4f7', 'Gemini'),
       cmd: 'gemini',

@@ -20,6 +20,7 @@ export const AGENT_KIND_VALUES = [
   'pi',
   'omp',
   'prime-agent',
+  'omo',
   'qoder',
   'qoder-cn',
   'gemini',

@@ -8,9 +8,13 @@ import {
 } from '../../../daemon/pty-subprocess/spawn-environment'
 import { getInheritedAgentHookEnvKeysToDelete } from './pi-agent'
 import { buildPtyHostEnv } from './assembly'
+import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager'
 import type { BuildPtyHostEnvOptions } from './types'
 
-const fixture = vi.hoisted(() => ({ userData: '', guestOverlay: '' }))
+const fixture = vi.hoisted(() => {
+  const guestAgentPaths: Record<string, string> = {}
+  return { userData: '', guestOverlay: '', guestAgentPaths }
+})
 vi.mock('../../../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => fixture.userData, onWillQuit: vi.fn() })
 }))
@@ -22,7 +26,9 @@ vi.mock('../../../agent-hooks/wsl-hook-relay-manager', () => ({
     ensureForDistro: vi.fn(),
     getGuestEndpointFilePath: () => '/guest/endpoint.json',
     getOpenCodeOverlayDir: () => fixture.guestOverlay,
-    getGuestAgentPath: () => null
+    // Why: kind-keyed so a WSL Pi/OMP/OmO launch can be told apart by the env it receives.
+    getGuestAgentPath: (_distro: string | null, kind: string) =>
+      fixture.guestAgentPaths[kind] ?? null
   }
 }))
 vi.mock('../../../pi/titlebar-extension-service', () => ({
@@ -47,6 +53,11 @@ beforeEach(() => {
   mkdirSync(home)
   fixture.userData = join(root, 'user-data')
   fixture.guestOverlay = join(root, 'guest-overlay')
+  fixture.guestAgentPaths = {
+    pi: join(root, 'guest-pi-agent'),
+    omp: join(root, 'guest-omp-status.ts'),
+    omo: join(root, 'guest-omo-agent')
+  }
   config = join(xdg, 'opencode')
   custom = join(root, 'custom')
   mkdirSync(join(custom, 'plugins'), { recursive: true })
@@ -276,6 +287,30 @@ describe('OpenCode installation uses the current enabled agents', () => {
       expect(env.OPENCODE_CONFIG_DIR).toBe(primary === custom ? custom : undefined)
       expect(env.ORCA_OPENCODE_AGENT).toBeUndefined()
     }
+  })
+
+  it('hands each WSL Pi, OMP, and OmO launch its own guest agent path', () => {
+    const pi = buildPtyHostEnv('wsl-pi', {}, { ...options, isWsl: true, launchCommand: 'pi' })
+    expect(pi.ORCA_PI_SOURCE_AGENT_DIR).toBe(fixture.guestAgentPaths.pi)
+    expect(pi.ORCA_OMP_STATUS_EXTENSION).toBeUndefined()
+    expect(pi.ORCA_OMO_SOURCE_AGENT_DIR).toBeUndefined()
+
+    const omp = buildPtyHostEnv('wsl-omp', {}, { ...options, isWsl: true, launchCommand: 'omp' })
+    expect(omp.ORCA_OMP_STATUS_EXTENSION).toBe(fixture.guestAgentPaths.omp)
+    expect(omp.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+    expect(omp.ORCA_OMO_SOURCE_AGENT_DIR).toBeUndefined()
+
+    const omo = buildPtyHostEnv('wsl-omo', {}, { ...options, isWsl: true, launchCommand: 'omo' })
+    // Why: OmO installs into its real agent dir, so the guest dir is the source dir.
+    expect(omo.ORCA_OMO_SOURCE_AGENT_DIR).toBe(fixture.guestAgentPaths.omo)
+    expect(omo.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+    expect(omo.ORCA_OMP_STATUS_EXTENSION).toBeUndefined()
+
+    expect(vi.mocked(wslHookRelayManager.ensureForDistro).mock.calls).toEqual([
+      [null, null, 'pi'],
+      [null, null, 'omp'],
+      [null, null, 'omo']
+    ])
   })
 
   it('does not write a native plugin for WSL or inject a disabled guest overlay', () => {

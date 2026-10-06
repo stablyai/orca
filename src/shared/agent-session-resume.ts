@@ -21,6 +21,7 @@ export const RESUMABLE_TUI_AGENTS = [
   'devin',
   'omp',
   'prime-agent',
+  'omo',
   'copilot',
   'cursor',
   'kimi',
@@ -188,7 +189,8 @@ export function agentProviderSessionsEqual(
   return (
     left.key === right.key &&
     left.id === right.id &&
-    ((agent !== 'pi' && agent !== 'prime-agent') || left.transcriptPath === right.transcriptPath)
+    ((agent !== 'pi' && agent !== 'prime-agent' && agent !== 'omo') ||
+      left.transcriptPath === right.transcriptPath)
   )
 }
 
@@ -244,7 +246,8 @@ export function extractAgentProviderSession(
       return id ? { key: 'session_id', id } : null
     }
     case 'pi':
-    case 'prime-agent': {
+    case 'prime-agent':
+    case 'omo': {
       const id = readSessionId(payload, ['session_id'])
       const providerSession = id
         ? withTranscriptPath({ key: 'session_id', id }, payload, ['session_file'])

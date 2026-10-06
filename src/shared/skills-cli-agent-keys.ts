@@ -25,6 +25,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   pi: 'pi',
   omp: null,
   'prime-agent': null,
+  // Why: the community skills CLI has no confirmed `--agent` key for OmO Native.
+  omo: null,
   qoder: 'qoder',
   'qoder-cn': 'qoder-cn',
   gemini: 'gemini-cli',

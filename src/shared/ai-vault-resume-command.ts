@@ -37,7 +37,7 @@ export function buildAiVaultResumeCommand(args: {
   // discovered under, where an id-prefix lookup scoped to the default store
   // would miss it. Falls back to the id if no path is known.
   const resumeTarget =
-    (agent === 'omp' || agent === 'prime-agent') && resumeFilePath?.trim()
+    (agent === 'omp' || agent === 'prime-agent' || agent === 'omo') && resumeFilePath?.trim()
       ? resumeFilePath.trim()
       : sessionId
   const sessionArg =
@@ -218,6 +218,9 @@ function buildAgentResumeInvocation(
     // required — resuming from another directory is rejected by the CLI.
     // falls through
     case 'kimi':
+      return `${baseCommand} --session ${sessionArg}`
+    case 'omo':
+      // Why: `omo --resume` opens the picker. A known transcript must use `--session`.
       return `${baseCommand} --session ${sessionArg}`
     case 'copilot':
       return `${baseCommand} --resume=${sessionArg}`

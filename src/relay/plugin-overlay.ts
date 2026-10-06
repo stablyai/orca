@@ -23,12 +23,25 @@ import { materializeOmpFreshConfig } from '../shared/omp-fresh-config'
 // implementation rooted at $HOME/.orca-relay/ for OpenCode and at the remote
 // Pi/OMP homes for those agents.
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { writeOverlayOpenCodePluginAtomically } from '../shared/opencode-plugin-atomic-write'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { safeRemoveOverlay } from '../main/pty/overlay-mirror'
 import type { PiAgentKind } from '../shared/pi-agent-kind'
+import {
+  openCodeTuiPluginDirName,
+  writeOpenCodeTuiPlugin
+} from '../shared/opencode-tui-plugin-install'
 import {
   installOpenCodePluginInCanonicalConfig,
   isRelayOpenCodeOverlayPath,
@@ -36,10 +49,16 @@ import {
 } from './opencode-canonical-config'
 import { writeRelayOmpStatusExtension } from './omp-status-extension'
 import {
-  openCodeTuiPluginDirName,
-  writeOpenCodeTuiPlugin
-} from '../shared/opencode-tui-plugin-install'
-type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
+  clearPluginOverlayDirs,
+  isUsableId,
+  ORCA_MANAGED_EXTENSION_MARKER,
+  PI_AGENT_HOME_DIR_NAME,
+  safeDirName,
+  withOrcaManagedPiExtensionMarker,
+  writeManagedExtension,
+  writeOmoPrefillExtension
+} from './plugin-overlay-files'
+type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent' | 'omo'>
 const RELAY_HOOKS_DIR = '.orca-relay'
 const OPENCODE_OVERLAY_SUBDIR = 'opencode-overlays'
 const OPENCODE2_OVERLAY_SUBDIR = 'opencode2-overlays'
@@ -59,32 +78,6 @@ const PI_AGENT_SUBDIR = 'agent'
 const OMP_MANAGED_STATUS_EXTENSION_DIR = 'omp-managed-status-extension'
 // Why: bare-shell OMP still needs ORCA_OMP_STATUS_EXTENSION without mkdir ~/.omp.
 // Mirror local userData/omp-managed-status-extension under the relay home root.
-const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
-function withOrcaManagedPiExtensionMarker(source: string): string {
-  return source.includes(ORCA_MANAGED_EXTENSION_MARKER)
-    ? source
-    : `// ${ORCA_MANAGED_EXTENSION_MARKER}\n${source}`
-}
-// Why: source-dir resolution is keyed off the launching agent (Pi or OMP).
-// Both consume `PI_CODING_AGENT_DIR` but default to different `~/.<kind>/agent`
-// paths on the remote disk. The renderer-chosen launch command flows in via
-// the relay PtyEnvAugmenter ctx; never derived from disk presence (a
-// cross-agent fallback shadows the other agent's user extensions when both
-// are installed).
-const PI_AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
-  pi: '.pi',
-  omp: '.omp',
-  'prime-agent': '.prime'
-}
-function safeDirName(input: string): string {
-  // Why: paneKey embeds tabId:paneId where tabId may itself contain
-  // filesystem-unsafe characters in some Orca builds. Hash to a fixed-width
-  // hex name so any input produces a portable directory name.
-  return createHash('sha256').update(input).digest('hex').slice(0, 32)
-}
-function isUsableId(id: string): boolean {
-  return typeof id === 'string' && id.length > 0 && id.length <= 1024
-}
 export type PluginSources = {
   opencodeStartupPromptSource?: string
   /** Empty string revokes future installs; omission preserves the cached source. */
@@ -97,6 +90,10 @@ export type PluginSources = {
   ompExtensionSource?: string
   /** Source body of Prime Agent's `orca-agent-status.ts` to install in its real agent dir. */
   primeAgentExtensionSource?: string
+  /** Source body of OmO Native's `orca-agent-status.ts` to install in ~/.omo/agent. */
+  omoExtensionSource?: string
+  /** Source body of OmO Native's `orca-prefill.ts`, installed beside that status extension. */
+  omoPrefillExtensionSource?: string
 }
 /** Result of installing Pi-compatible status into a real agent home or OMP fallback path. */
 export type MaterializePiResult = {
@@ -124,8 +121,10 @@ export class PluginOverlayManager {
   private piExtensionSources: Record<PiAgentKind, string | null> = {
     pi: null,
     omp: null,
-    'prime-agent': null
+    'prime-agent': null,
+    omo: null
   }
+  private omoPrefillExtensionSource: string | null = null
   private homeDir: string
   private opencodeRoot: string
   private opencode2Root: string
@@ -166,6 +165,14 @@ export class PluginOverlayManager {
     if (typeof sources.primeAgentExtensionSource === 'string') {
       this.piExtensionSources['prime-agent'] = withOrcaManagedPiExtensionMarker(
         sources.primeAgentExtensionSource
+      )
+    }
+    if (typeof sources.omoExtensionSource === 'string') {
+      this.piExtensionSources.omo = withOrcaManagedPiExtensionMarker(sources.omoExtensionSource)
+    }
+    if (typeof sources.omoPrefillExtensionSource === 'string') {
+      this.omoPrefillExtensionSource = withOrcaManagedPiExtensionMarker(
+        sources.omoPrefillExtensionSource
       )
     }
   }
@@ -287,14 +294,6 @@ export class PluginOverlayManager {
     return join(this.homeDir, root, PI_AGENT_SUBDIR)
   }
 
-  private canOverwritePiExtension(path: string): boolean {
-    try {
-      return readFileSync(path, 'utf8').includes(ORCA_MANAGED_EXTENSION_MARKER)
-    } catch {
-      return true
-    }
-  }
-
   materializeOmpFreshConfig(): string {
     return materializeOmpFreshConfig(
       join(this.homeDir, RELAY_HOOKS_DIR, OMP_MANAGED_STATUS_EXTENSION_DIR)
@@ -331,10 +330,15 @@ export class PluginOverlayManager {
       const extensionsDir = join(sourceAgentDir, 'extensions')
       mkdirSync(extensionsDir, { recursive: true })
       const extensionPath = join(extensionsDir, PI_EXTENSION_FILE)
-      if (!this.canOverwritePiExtension(extensionPath)) {
+      if (!writeManagedExtension(extensionPath, extensionSource, ORCA_MANAGED_EXTENSION_MARKER)) {
         return null
       }
-      writeFileSync(extensionPath, extensionSource)
+      writeOmoPrefillExtension(
+        kind,
+        extensionsDir,
+        this.omoPrefillExtensionSource,
+        ORCA_MANAGED_EXTENSION_MARKER
+      )
       return {
         sourceAgentDir,
         statusExtensionPath: extensionPath
@@ -348,18 +352,11 @@ export class PluginOverlayManager {
   }
 
   clearOverlay(id: string): void {
-    if (!isUsableId(id)) {
-      return
-    }
-    const safe = safeDirName(id)
-    for (const root of [this.opencodeRoot, this.opencode2Root, ...Object.values(this.piRoots)]) {
-      try {
-        safeRemoveOverlay(join(root, safe), root)
-      } catch (err) {
-        process.stderr.write(
-          `[plugin-overlay] failed to remove overlay dir ${join(root, safe)}: ${err instanceof Error ? err.message : String(err)}\n`
-        )
-      }
+    if (isUsableId(id)) {
+      clearPluginOverlayDirs(
+        [this.opencodeRoot, this.opencode2Root, ...Object.values(this.piRoots)],
+        safeDirName(id)
+      )
     }
   }
 }

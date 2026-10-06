@@ -42,6 +42,11 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' && providerSession.transcriptPath
         ? ['prime-agent', '--resume', providerSession.transcriptPath]
         : null
+        case 'omo':
+      // Why: `omo --resume` opens the session picker. A known transcript must use `--session <path|id>`.
+      return providerSession.key === 'session_id' && providerSession.transcriptPath
+        ? ['omo', '--session', providerSession.transcriptPath]
+        : null
     case 'mimo-code':
       return providerSession.key === 'session_id' ? ['mimo', '--session', id] : null
     case 'droid':

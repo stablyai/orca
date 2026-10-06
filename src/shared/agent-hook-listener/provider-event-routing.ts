@@ -66,6 +66,7 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'pi':
     case 'omp':
     case 'prime-agent':
+    case 'omo':
       return eventName === 'before_agent_start'
     case 'droid':
       return eventName === 'UserPromptSubmit'
@@ -195,6 +196,7 @@ export function extractToolFields(
     case 'pi':
     case 'omp':
     case 'prime-agent':
+    case 'omo':
       return extractPiToolFields(eventName, hookPayload, source)
     case 'droid':
       return extractDroidToolFields(eventName, hookPayload)

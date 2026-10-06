@@ -121,7 +121,9 @@ describe('SshRelaySession managed hooks', () => {
       opencode2PluginSource: expect.stringContaining('/hook/opencode2'),
       piExtensionSource: expect.stringContaining('/hook/pi'),
       ompExtensionSource: expect.stringContaining('/hook/omp'),
-      primeAgentExtensionSource: expect.stringContaining('/hook/prime-agent')
+      primeAgentExtensionSource: expect.stringContaining('/hook/prime-agent'),
+      omoExtensionSource: expect.stringContaining('/hook/omo'),
+      omoPrefillExtensionSource: expect.stringContaining('process.env.ORCA_OMO_PREFILL')
     })
     expect(sftp).not.toHaveBeenCalled()
     expect(muxRequestMock.mock.invocationCallOrder[pluginsIndex]).toBeLessThan(

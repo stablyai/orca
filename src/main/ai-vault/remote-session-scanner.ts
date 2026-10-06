@@ -58,6 +58,7 @@ export async function scanRemoteAiVaultSessions(args: {
   remoteHome: string
   hostPlatform: RemoteHostPlatform
   includeAntigravityIdeSessions?: boolean
+  omoSessionsDir?: string
   limit?: number
   unlimited?: boolean
   scopePaths?: readonly string[]
@@ -83,11 +84,10 @@ export async function scanRemoteAiVaultSessions(args: {
     (
       await mapRemoteScanBatches(
         [
-          ...remoteSessionSources(
-            args.remoteHome,
-            args.hostPlatform,
-            args.includeAntigravityIdeSessions
-          ),
+          ...remoteSessionSources(args.remoteHome, args.hostPlatform, {
+            includeAntigravityIdeSessions: args.includeAntigravityIdeSessions,
+            omoSessionsDir: args.omoSessionsDir
+          }),
           ...remoteOpenCodeSources(
             provider.openCode,
             limit * REMOTE_PARSE_CANDIDATE_MULTIPLIER +

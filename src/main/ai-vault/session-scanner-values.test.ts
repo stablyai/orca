@@ -90,6 +90,14 @@ describe('AI Vault session scanner text values', () => {
     expect(normalizeAgentSessionsDir('/agents/.omp/agent/sessions', '.omp')).toBe(
       '/agents/.omp/agent/sessions'
     )
+
+    expect(normalizeAgentSessionsDir('/agents/.omo', '.omo')).toBe('/agents/.omo/agent/sessions')
+    expect(normalizeAgentSessionsDir('/agents/.omo/agent', '.omo')).toBe(
+      '/agents/.omo/agent/sessions'
+    )
+    expect(normalizeAgentSessionsDir('/agents/.omo/agent/sessions', '.omo')).toBe(
+      '/agents/.omo/agent/sessions'
+    )
   })
 
   // Prime Agent's env var is its agent dir verbatim and the CLI writes to

@@ -31,6 +31,7 @@ import {
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
 import { applyManagedDataAccountEnvironment } from '../../../managed-data-accounts/launch-environment'
 import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'
+import { applyWslGuestAgentSourceEnv } from './wsl-guest-agent-env'
 
 /**
  * Mutates `baseEnv` in place with all host-local PTY env vars and returns it.
@@ -72,6 +73,8 @@ export function buildPtyHostEnv(
     opts.agentStatusHooksEnabled && isTuiAgentEnabled('omp', opts.disabledTuiAgents)
   const shouldInstallPrimeAgentExtensions =
     opts.agentStatusHooksEnabled && isTuiAgentEnabled('prime-agent', opts.disabledTuiAgents)
+  const shouldInstallOmoExtensions =
+    opts.agentStatusHooksEnabled && isTuiAgentEnabled('omo', opts.disabledTuiAgents)
   // Why: source shadows are agent-scoped; trusting the other kind's source reintroduces Pi/OMP extension-state shadowing.
   const preexistingPiAgentDir = resolvePiAgentSourceDir(baseEnv, 'pi')
   const preexistingOmpAgentDir =
@@ -82,6 +85,10 @@ export function buildPtyHostEnv(
     piAgentKind === 'prime-agent'
       ? resolvePiAgentSourceDir(baseEnv, 'prime-agent')
       : resolveScopedPiAgentSourceDir(baseEnv, 'prime-agent')
+  const preexistingOmoAgentDir =
+    piAgentKind === 'omo'
+      ? resolvePiAgentSourceDir(baseEnv, 'omo')
+      : resolveScopedPiAgentSourceDir(baseEnv, 'omo')
 
   const openCodeAgent = applyOpenCodeStatusPluginEnv(
     id,
@@ -121,7 +128,9 @@ export function buildPtyHostEnv(
       // Why: hook POSTs to 127.0.0.1 die inside WSL's NAT namespace; use the guest-resident relay's endpoint instead of the Windows one.
       const distro = opts.wslDistro ?? null
       const wslLaunchKind =
-        explicitPiAgentKind === 'pi' || explicitPiAgentKind === 'omp'
+        explicitPiAgentKind === 'pi' ||
+        explicitPiAgentKind === 'omp' ||
+        explicitPiAgentKind === 'omo'
           ? explicitPiAgentKind
           : undefined
       wslHookRelayManager.ensureForDistro(distro, opts.selectedCodexHomePath, wslLaunchKind)
@@ -151,6 +160,7 @@ export function buildPtyHostEnv(
     clearPiAgentShadowEnv(baseEnv, 'pi')
     clearPiAgentShadowEnv(baseEnv, 'omp')
     clearPiAgentShadowEnv(baseEnv, 'prime-agent')
+    clearPiAgentShadowEnv(baseEnv, 'omo')
     // Why: bare shells historically defaulted to Pi + OMP shadow prep and
     // created ~/.<agent>/agent even when the user never launches those agents
     // (#10196). Only create default homes on an explicit Pi/OMP launch;
@@ -192,6 +202,14 @@ export function buildPtyHostEnv(
       Object.assign(baseEnv, primeEnv)
       exposePiManagedExtensionEnv(baseEnv, 'prime-agent', primeEnv)
     }
+
+    if (shouldInstallOmoExtensions && piAgentKind === 'omo' && !opts.isWsl) {
+      const omoEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingOmoAgentDir, 'omo', {
+        materializeDefaultHome: explicitPiAgentKind === 'omo'
+      })
+      Object.assign(baseEnv, omoEnv)
+      exposePiManagedExtensionEnv(baseEnv, 'omo', omoEnv)
+    }
   } else {
     // Why: nested PTYs must not inherit stale source or overlay state from another agent.
     restoreOrStripOverlayEnv(baseEnv, {
@@ -210,21 +228,12 @@ export function buildPtyHostEnv(
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
     delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
+    delete baseEnv.ORCA_OMO_SOURCE_AGENT_DIR
+    delete baseEnv.ORCA_OMO_STATUS_EXTENSION
   }
 
   if (opts.isWsl && opts.agentStatusHooksEnabled) {
-    const distro = opts.wslDistro ?? null
-    if (explicitPiAgentKind === 'pi') {
-      const guestPiDir = wslHookRelayManager.getGuestAgentPath(distro, 'pi')
-      if (guestPiDir) {
-        baseEnv.ORCA_PI_SOURCE_AGENT_DIR = guestPiDir
-      }
-    } else if (explicitPiAgentKind === 'omp') {
-      const guestOmpExtension = wslHookRelayManager.getGuestAgentPath(distro, 'omp')
-      if (guestOmpExtension) {
-        baseEnv.ORCA_OMP_STATUS_EXTENSION = guestOmpExtension
-      }
-    }
+    applyWslGuestAgentSourceEnv(baseEnv, opts.wslDistro ?? null, explicitPiAgentKind)
   }
 
   // Why: keep the Codex home override PTY-scoped so dev/prod Orcas don't share hooks through ~/.codex.

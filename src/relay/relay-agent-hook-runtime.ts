@@ -187,6 +187,15 @@ export class RelayAgentHookRuntime {
         env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = result.sourceAgentDir
       }
     }
+    if (kind === 'omo') {
+      const sourceDir = resolvePiSourceAgentDir(context.env, context.shell, 'omo')
+      const result = this.pluginOverlay.materializePi(overlayId, sourceDir, 'omo', {
+        materializeDefaultHome: explicitKind === 'omo'
+      })
+      if (result?.sourceAgentDir) {
+        env.ORCA_OMO_SOURCE_AGENT_DIR = result.sourceAgentDir
+      }
+    }
     return env
   }
 
@@ -205,19 +214,25 @@ export class RelayAgentHookRuntime {
       const pi = params.piExtensionSource
       const omp = params.ompExtensionSource
       const primeAgent = params.primeAgentExtensionSource
+      const omo = params.omoExtensionSource
+      const omoPrefill = params.omoPrefillExtensionSource
       assertPluginSourceUnderByteCap('opencodeStartupPromptSource', startupPrompt)
       assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
       assertPluginSourceUnderByteCap('opencode2PluginSource', opencode2)
       assertPluginSourceUnderByteCap('piExtensionSource', pi)
       assertPluginSourceUnderByteCap('ompExtensionSource', omp)
       assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
+      assertPluginSourceUnderByteCap('omoExtensionSource', omo)
+      assertPluginSourceUnderByteCap('omoPrefillExtensionSource', omoPrefill)
       this.pluginOverlay.setSources({
         opencodeStartupPromptSource: typeof startupPrompt === 'string' ? startupPrompt : undefined,
         opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
         opencode2PluginSource: typeof opencode2 === 'string' ? opencode2 : undefined,
         piExtensionSource: typeof pi === 'string' ? pi : undefined,
         ompExtensionSource: typeof omp === 'string' ? omp : undefined,
-        primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
+        primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined,
+        omoExtensionSource: typeof omo === 'string' ? omo : undefined,
+        omoPrefillExtensionSource: typeof omoPrefill === 'string' ? omoPrefill : undefined
       })
       // Why: a running OpenCode 2 service reloads a changed plugin file, so an Orca upgrade
       // reaches it on connect instead of at the next pane spawn. Never creates an install.
@@ -239,7 +254,8 @@ export class RelayAgentHookRuntime {
           opencode2: this.pluginOverlay.hasOpenCode2Source(),
           pi: this.pluginOverlay.hasPiSource('pi'),
           omp: this.pluginOverlay.hasPiSource('omp'),
-          primeAgent: this.pluginOverlay.hasPiSource('prime-agent')
+          primeAgent: this.pluginOverlay.hasPiSource('prime-agent'),
+          omo: this.pluginOverlay.hasPiSource('omo')
         }
       }
     })

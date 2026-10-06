@@ -1,8 +1,8 @@
 // Guest-side handler for AGENT_HOOK_INSTALL_PLUGINS_METHOD: caches the plugin
 // source the Windows host ships over the wire and materializes OpenCode's
 // config overlay inside the guest. Extracted from the relay entrypoint so it is
-// unit-testable without binding the hook server. Scope is OpenCode only for
-// now; the payload/response shape matches the SSH relay so Pi/OMP are additive.
+// unit-testable without binding the hook server. The payload/response shape
+// matches the SSH relay; Pi/OMP/OmO install only when the launch kind asks.
 import { existsSync } from 'node:fs'
 
 import { getRelayOpenCodePluginPath, type PluginOverlayManager } from './plugin-overlay'
@@ -22,8 +22,15 @@ export type InstallPluginsResult = {
     pi: boolean
     omp: boolean
     primeAgent: boolean
+    omo: boolean
   }
-  overlayDirs: { opencode?: string; opencode2?: string; pi?: string; omp?: string }
+  overlayDirs: {
+    opencode?: string
+    opencode2?: string
+    pi?: string
+    omp?: string
+    omo?: string
+  }
 }
 
 export type InstallPluginsHandler = (params: Record<string, unknown>) => InstallPluginsResult
@@ -50,6 +57,8 @@ export function createInstallPluginsHandler(
     const pi = params.piExtensionSource
     const omp = params.ompExtensionSource
     const primeAgent = params.primeAgentExtensionSource
+    const omo = params.omoExtensionSource
+    const omoPrefill = params.omoPrefillExtensionSource
     // Why: bound per-source bytes so a buggy/hostile host can't OOM the guest relay.
     assertPluginSourceUnderByteCap('opencodeStartupPromptSource', startupPrompt)
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
@@ -57,19 +66,26 @@ export function createInstallPluginsHandler(
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
     assertPluginSourceUnderByteCap('ompExtensionSource', omp)
     assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
+    assertPluginSourceUnderByteCap('omoExtensionSource', omo)
+    assertPluginSourceUnderByteCap('omoPrefillExtensionSource', omoPrefill)
     pluginOverlay.setSources({
       opencodeStartupPromptSource: typeof startupPrompt === 'string' ? startupPrompt : undefined,
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
       opencode2PluginSource: typeof opencode2 === 'string' ? opencode2 : undefined,
       piExtensionSource: typeof pi === 'string' ? pi : undefined,
       ompExtensionSource: typeof omp === 'string' ? omp : undefined,
-      primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
+      primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined,
+      omoExtensionSource: typeof omo === 'string' ? omo : undefined,
+      omoPrefillExtensionSource: typeof omoPrefill === 'string' ? omoPrefill : undefined
     })
     let opencodeDir: string | undefined
     const launchKind =
-      params.launchKind === 'pi' || params.launchKind === 'omp' ? params.launchKind : undefined
+      params.launchKind === 'pi' || params.launchKind === 'omp' || params.launchKind === 'omo'
+        ? params.launchKind
+        : undefined
     let piDir: string | undefined
     let ompDir: string | undefined
+    let omoDir: string | undefined
     if (pluginOverlay.hasOpenCodeSource()) {
       // An omitted source leaves the manager's cache untouched, so it counts as unchanged.
       const incoming = typeof opencode === 'string' ? opencode : null
@@ -126,16 +142,26 @@ export function createInstallPluginsHandler(
     }
     // Materialize only the explicitly requested agent. Bare shells must not create
     // ~/.pi/agent or ~/.omp/agent (#10196).
-    if (launchKind === 'pi' || launchKind === 'omp') {
-      const source = launchKind === 'pi' ? pi : omp
+    if (launchKind === 'pi' || launchKind === 'omp' || launchKind === 'omo') {
+      const source = launchKind === 'pi' ? pi : launchKind === 'omp' ? omp : omo
       if (typeof source === 'string') {
-        const result = pluginOverlay.materializePi(`wsl-${launchKind}`, undefined, launchKind, {
+        const existingAgentDir =
+          launchKind === 'omo' &&
+          typeof env.OMO_CODING_AGENT_DIR === 'string' &&
+          env.OMO_CODING_AGENT_DIR.length > 0
+            ? env.OMO_CODING_AGENT_DIR
+            : undefined
+        const result = pluginOverlay.materializePi(`wsl-${launchKind}`, existingAgentDir, launchKind, {
           materializeDefaultHome: true
         })
         if (launchKind === 'pi') {
           piDir = result?.sourceAgentDir
-        } else {
+        } else if (launchKind === 'omp') {
           ompDir = result?.statusExtensionPath
+        } else {
+          // Why: OmO consumes the same ORCA_<KIND>_SOURCE_AGENT_DIR contract as Pi,
+          // not OMP's status-only fallback, so the real ~/.omo/agent dir is the carrier.
+          omoDir = result?.sourceAgentDir
         }
       }
     }
@@ -165,13 +191,15 @@ export function createInstallPluginsHandler(
         opencode2: pluginOverlay.hasOpenCode2Source(),
         pi: pluginOverlay.hasPiSource('pi'),
         omp: pluginOverlay.hasPiSource('omp'),
-        primeAgent: pluginOverlay.hasPiSource('prime-agent')
+        primeAgent: pluginOverlay.hasPiSource('prime-agent'),
+        omo: pluginOverlay.hasPiSource('omo')
       },
       overlayDirs: {
         ...(opencodeDir ? { opencode: opencodeDir } : {}),
         ...(opencode2Dir ? { opencode2: opencode2Dir } : {}),
         ...(piDir ? { pi: piDir } : {}),
-        ...(ompDir ? { omp: ompDir } : {})
+        ...(ompDir ? { omp: ompDir } : {}),
+        ...(omoDir ? { omo: omoDir } : {})
       }
     }
   }

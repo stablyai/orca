@@ -44,6 +44,7 @@ export type AiVaultScanOptions = {
   piSessionsDir?: string
   ompSessionsDir?: string
   primeAgentSessionsDir?: string
+  omoSessionsDir?: string
   droidSessionsDir?: string
   droidProjectsDir?: string
   clineSessionsDir?: string

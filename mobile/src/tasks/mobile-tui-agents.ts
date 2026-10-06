@@ -27,6 +27,7 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   zcode: 'zcode.z.ai',
   omp: 'omp.sh',
   'prime-agent': 'primeintellect.ai',
+  omo: 'omo.dev',
   qoder: 'qoder.com',
   'qoder-cn': 'qoder.cn',
   gemini: 'gemini.google.com',

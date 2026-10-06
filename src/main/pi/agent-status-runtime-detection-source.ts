@@ -33,7 +33,7 @@ export function getPiOmpRuntimeDetectionSourceLines(configuredHookPath: string):
 }
 
 export function getPiAgentStatusRuntimeDetectionSourceLines(kind: PiAgentKind): string[] {
-  if (kind === 'prime-agent') {
+  if (kind === 'prime-agent' || kind === 'omo') {
     return [
       `const CONFIGURED_HOOK_PATH = '/hook/${kind}'`,
       '',

@@ -8,6 +8,7 @@ import { RemoteRuntimeUnavailableError } from './ssh-relay-runtime-resolution'
 import { SshPlainSshModeSession } from './ssh-plain-ssh-session'
 import type { RemoteOpenCodeRuntimePreparation } from './ssh-relay-opencode-runtime-retry'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { readRemoteOmoSessionsDirCommand } from './ssh-remote-commands'
 import { writeStringsViaSftp } from './sftp-upload'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import { isRelayEndpointHeldError } from './ssh-relay-endpoint-incumbent'
@@ -43,6 +44,7 @@ import {
 import { AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES } from '../../shared/agent-status-legacy-adapter'
 import { _internals as openCodeInternals } from '../opencode/hook-service'
 import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
+import { getPiPrefillExtensionSource } from '../pi/prefill-extension-source'
 import {
   registerSshPtyProvider,
   unregisterSshPtyProvider,
@@ -210,6 +212,28 @@ type RemoteCliBridgeEnv = {
   credentialFile?: string
   hostPlatform: RemoteHostPlatform
   pathDelimiter?: ':' | ';'
+  omoSessionsDir?: string
+}
+
+// Optional OmO history override: fail-open, short timeout. The probe must not
+// gate relay ready (or openPtyConsumerSession) — apply the result asynchronously.
+const REMOTE_OMO_SESSIONS_DIR_PROBE_TIMEOUT_MS = 5_000
+
+async function readOptionalRemoteOmoSessionsDir(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform
+): Promise<string | undefined> {
+  try {
+    const raw = (
+      await execCommand(conn, readRemoteOmoSessionsDirCommand(hostPlatform), {
+        timeoutMs: REMOTE_OMO_SESSIONS_DIR_PROBE_TIMEOUT_MS,
+        wrapCommand: !isWindowsRemoteHost(hostPlatform)
+      })
+    ).trim()
+    return raw || undefined
+  } catch {
+    return undefined
+  }
 }
 
 type ExpectedPtyIdentity = { paneKey?: string; tabId?: string }
@@ -284,6 +308,7 @@ export type SshRelayAiVaultHostInfo = {
   executionHostId: ExecutionHostId
   remoteHome: string
   hostPlatform: RemoteHostPlatform
+  omoSessionsDir?: string
 }
 
 function normalizeRelayGracePeriodSeconds(graceTimeSeconds: number | undefined): number {
@@ -468,7 +493,8 @@ export class SshRelaySession {
       targetId: this.targetId,
       executionHostId: toSshExecutionHostId(this.targetId),
       remoteHome: env.remoteHome,
-      hostPlatform: env.hostPlatform
+      hostPlatform: env.hostPlatform,
+      ...(env.omoSessionsDir ? { omoSessionsDir: env.omoSessionsDir } : {})
     }
   }
 
@@ -580,6 +606,10 @@ export class SshRelaySession {
         prepareOpenCodeRuntime
       } = deployed
       this.hostPlatform = hostPlatform ?? null
+      // Start OmO probe early without awaiting — must not gate ready or openPtyConsumerSession.
+      const omoSessionsDirPromise = hostPlatform
+        ? readOptionalRemoteOmoSessionsDir(conn, hostPlatform)
+        : Promise.resolve(undefined)
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
           ? {
@@ -667,6 +697,19 @@ export class SshRelaySession {
       verifyRelayAttempt(mux, isAttemptCurrent, 'establish')
       this.watchMuxForRelayLoss(mux)
       verifyRelayAttempt(mux, isAttemptCurrent, 'establish')
+      // Probe must not gate ready — apply omoSessionsDir asynchronously when it settles.
+      void omoSessionsDirPromise.then((omoSessionsDir) => {
+        if (
+          !omoSessionsDir ||
+          !this.remoteCliBridgeEnv ||
+          this.isDisposed() ||
+          this.mux !== mux ||
+          mux.isDisposed()
+        ) {
+          return
+        }
+        this.remoteCliBridgeEnv = { ...this.remoteCliBridgeEnv, omoSessionsDir }
+      })
       this._state = 'ready'
       this.startPortScanning()
       this._onReady?.(this.targetId)
@@ -747,6 +790,10 @@ export class SshRelaySession {
         prepareOpenCodeRuntime
       } = deployed
       this.hostPlatform = hostPlatform ?? null
+      // Start OmO probe early without awaiting — must not gate ready or openPtyConsumerSession.
+      const omoSessionsDirPromise = hostPlatform
+        ? readOptionalRemoteOmoSessionsDir(conn, hostPlatform)
+        : Promise.resolve(undefined)
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
           ? {
@@ -843,6 +890,20 @@ export class SshRelaySession {
       verifyRelayAttempt(mux, isAttemptCurrent, 'reconnect')
       this.watchMuxForRelayLoss(mux)
       verifyRelayAttempt(mux, isAttemptCurrent, 'reconnect')
+      // Probe must not gate ready — apply omoSessionsDir asynchronously when it settles.
+      void omoSessionsDirPromise.then((omoSessionsDir) => {
+        if (
+          !omoSessionsDir ||
+          !this.remoteCliBridgeEnv ||
+          this.abortController !== abortController ||
+          this.isDisposed() ||
+          this.mux !== mux ||
+          mux.isDisposed()
+        ) {
+          return
+        }
+        this.remoteCliBridgeEnv = { ...this.remoteCliBridgeEnv, omoSessionsDir }
+      })
       this._state = 'ready'
       this.startPortScanning()
       this._onReady?.(this.targetId)
@@ -1638,7 +1699,10 @@ export class SshRelaySession {
               ? {
                   piExtensionSource: getPiAgentStatusExtensionSource('pi'),
                   ompExtensionSource: getPiAgentStatusExtensionSource('omp'),
-                  primeAgentExtensionSource: getPiAgentStatusExtensionSource('prime-agent')
+                  primeAgentExtensionSource: getPiAgentStatusExtensionSource('prime-agent'),
+                  omoExtensionSource: getPiAgentStatusExtensionSource('omo'),
+                  // Why: this extension reads ORCA_OMO_PREFILL, so an SSH install needs it too.
+                  omoPrefillExtensionSource: getPiPrefillExtensionSource('omo')
                 }
               : {})
           },
