@@ -11,7 +11,6 @@ import {
   buildNativeChatRailItems,
   mergeNativeChatRailOutline,
   selectNativeChatRailTicks,
-  NATIVE_CHAT_RAIL_MIN_ITEMS,
   type NativeChatRailItem,
   type NativeChatRailOutlineEntry
 } from './native-chat-message-rail-items'
@@ -135,7 +134,7 @@ export function useNativeChatMessageRail({
       ticks,
       items,
       activeId,
-      visible: wideEnough && items.length >= NATIVE_CHAT_RAIL_MIN_ITEMS
+      visible: wideEnough && items.length > 0
     }),
     [ticks, items, activeId, wideEnough]
   )

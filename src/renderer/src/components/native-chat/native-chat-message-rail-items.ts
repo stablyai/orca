@@ -13,9 +13,6 @@ import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
  *  read at a glance, which is the only thing the rail is for. */
 export const NATIVE_CHAT_RAIL_MAX_TICKS = 20
 
-/** Below this a rail is noise — two ticks say nothing a scrollbar doesn't. */
-export const NATIVE_CHAT_RAIL_MIN_ITEMS = 3
-
 export type NativeChatRailItem = {
   id: string
   /** Index into the slot list, i.e. the virtualizer's own index. Null while the
